@@ -1,0 +1,14 @@
+[package]
+name = "rusted_gumtree_gen_ts_javascript"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tree-sitter = "0.19.5"
+rusted_gumtree_core = { path = "../../../core" }
+
+
+[build-dependencies]
+cc="*"
