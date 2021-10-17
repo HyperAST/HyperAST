@@ -6,8 +6,12 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tree-sitter = "0.19.5"
-
+tree-sitter = "0.20.0"
+atomic-counter = "1.0.1"
+num = "0.4.0"
+bitvec = "0.22.3"
+rusted_gumtree_core = { path = "../../../core"}
+# rusted_gumtree_core = { path = "../../core" }
 
 [build-dependencies]
 cc="*"

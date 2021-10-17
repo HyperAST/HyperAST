@@ -1,0 +1,437 @@
+use std::{fmt::Debug, marker::PhantomData};
+
+use num_traits::PrimInt;
+
+use crate::{matchers::{
+        decompressed_tree_store::{
+            BreathFirst, BreathFirstContigousSiblings, DecompressedTreeStore,
+            DecompressedWithParent,
+        },
+        mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
+    }, tree::tree::Stored, utils::sequence_algorithms::longest_common_subsequence};
+
+pub trait Actions {
+    fn len(&self) -> usize;
+}
+
+pub struct ActionsVec<A>(Vec<A>);
+
+#[derive(PartialEq, Eq)]
+pub enum SimpleAction<Src, Dst> {
+    Delete {
+        tree: Src,
+    },
+    Update {
+        src: Src,
+        dst: Dst,
+        label: Label,
+    },
+    Move {
+        sub: Src,
+        parent: Dst,
+        idx: usize,
+    },
+    Insert {
+        sub: Src,
+        parent: Dst,
+        idx: usize,
+    },
+    // Duplicate { sub: Src, parent: Dst, idx: usize },
+    MoveUpdate {
+        sub: Src,
+        parent: Dst,
+        idx: usize,
+        label: Label,
+    },
+}
+
+impl<IdD> Actions for ActionsVec<IdD> {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+pub trait TestActions<IdD> {
+    fn has_items(&self, items: &[SimpleAction<IdD, IdD>]) -> bool;
+}
+
+impl<IdD: std::cmp::PartialEq> TestActions<IdD> for ActionsVec<SimpleAction<IdD, IdD>> {
+    fn has_items(&self, items: &[SimpleAction<IdD, IdD>]) -> bool {
+        items.iter().all(|x| self.0.contains(x))
+    }
+}
+
+/// try to use it to differentiate src and dst situations
+trait Duet {
+    type Src;
+    type Dst;
+}
+
+pub struct ScriptGenerator<
+    IdD: PrimInt + Debug,
+    T: Stored,
+    SS, //:DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
+    SD, //:DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
+> {
+    origMappings: DefaultMappingStore<IdD>,
+    origDst: IdD,
+    origSrc: IdD,
+    src_arena: SS,
+    dst_arena: SD,
+    cpyMappings: DefaultMappingStore<IdD>,
+    inserted: Vec<Inserted<T::TreeId, IdD>>,
+    actions: ActionsVec<SimpleAction<IdD, IdD>>,
+
+    srcInOrder: InOrderNodes<IdD>,
+    dstInOrder: InOrderNodes<IdD>,
+
+    phantom: PhantomData<*const T>,
+}
+
+struct Inserted<IdC, IdD> {
+    original: IdC,
+    parent: IdD,
+}
+
+struct InOrderNodes<IdD> {
+    a: IdD,
+}
+
+
+struct SuperTree {
+
+}
+
+struct SuperTreeStore {
+
+}
+
+/// id for nodes in multi ast
+// type IdM = u32;
+type Label = u16;
+
+/// FEATURE: share parents
+const COMPRESSION: bool = false;
+
+impl<
+        IdD: PrimInt + Debug,
+        T: Stored,
+        // SS: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD> +,
+        // SD: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD> + BreathFirst,
+    > ScriptGenerator<IdD, T, SS<IdD>, SD<IdD>>
+{
+    pub fn compute_actions(ms: DefaultMappingStore<IdD>) -> ActionsVec<SimpleAction<IdD, IdD>> {
+        let mut s = Self::new();
+        s.init_cpy(ms);
+        s.generate();
+        s.actions
+    }
+
+    fn new() -> Self {
+        todo!()
+    }
+
+    fn init_cpy(&mut self, ms: DefaultMappingStore<IdD>) {
+        todo!();
+        // copy mapping
+        // copy src
+        // relate src to copied src
+    }
+
+    fn generate(&mut self) {
+        // fake root ?
+        // fake root link ?
+
+        self.ins_mov_upd();
+
+        self.del();
+    }
+
+    fn ins_mov_upd(&mut self) {
+        if COMPRESSION {
+            todo!()
+        }
+        self.auxilary_ins_mov_upd();
+    }
+
+    fn auxilary_ins_mov_upd(&mut self) {
+        for x in self.bfs_dst() {
+            let w;
+            let y = self.dst_arena.parent(&x).unwrap();
+            let z = self.cpyMappings.get_src(&y);
+
+            if self.cpyMappings.is_dst(&x) {
+                // insertion
+                let k = self.findPos(&x, &y);
+                w = self.make_inserted_node(&x, &z, &k);
+                self.insert_child_set_parent(&w, &z, &k);
+                self.cpyMappings.link(w, x);
+                let action = SimpleAction::Insert {
+                    sub: x,
+                    parent: z,
+                    idx: k,
+                };
+                self.actions.push(action);
+            } else {
+                w = self.cpyMappings.get_src(&x);
+                if x != self.origDst {
+                    let v = self.src_arena.parent(&w).unwrap();
+                    let w_l = self.src_arena.label(&w);
+                    let x_l = self.dst_arena.label(&x);
+
+                    if w_l != x_l && z != v {
+                        // rename + move
+                        let k = self.findPos(&x, &y);
+                        self.insert_child_set_parent(&w, &z, &k);
+                        self.cpyMappings.link(w, x);
+                        let action = SimpleAction::MoveUpdate {
+                            sub: x,
+                            parent: z,
+                            idx: k,
+                            label: x_l,
+                        };
+                        self.actions.push(action);
+                    } else if w_l != x_l {
+                        // rename
+                        self.cpyMappings.link(w, x);
+                        self.rename(&w, &z, &x_l);
+                        let action = SimpleAction::Update {
+                            src: w,
+                            dst: x,
+                            label: x_l,
+                        };
+                        self.actions.push(action);
+                    } else if z != v {
+                        // move
+                        let k = self.findPos(&x, &y);
+                        self.insert_child_set_parent(&w, &z, &k);
+                        self.cpyMappings.link(w, x);
+                        let action = SimpleAction::Move {
+                            sub: x,
+                            parent: z,
+                            idx: k,
+                        };
+                        self.actions.push(action);
+                    } else {
+                        // not changed
+                        // and no changes to parents
+                        // postentially try to share parent in super ast
+                        if COMPRESSION {
+                            todo!()
+                        }
+                    }
+                    self.mdForMiddle(&x, &w);
+                }
+            }
+
+            self.srcInOrder.push(w);
+            self.dstInOrder.push(x);
+            self.alignChildren(&w, &x);
+        }
+    }
+
+    fn del(&self) {
+        for w in self.postOrderCpySrc() {
+            if self.cpyMappings.is_src(&w) {
+                self.delete(&w);
+                let action = SimpleAction::Delete { tree: w };
+                self.actions.push(action);
+            } else {
+                // not modified
+                // all parents were not modified
+                // maybe do the resources sharing now
+                if COMPRESSION {
+                    todo!()
+                }
+            }
+        }
+        if COMPRESSION {
+            // postorder compression ?
+            todo!()
+        }
+    }
+
+    pub(crate) fn alignChildren(&mut self, w: &IdD, x: &IdD) {
+        let w_c = self.src_arena.children(w);
+        self.srcInOrder.removeAll(&w_c);
+        let x_c = self.dst_arena.children(x);
+        self.dstInOrder.removeAll(&x_c);
+
+        let mut s1 = vec![];
+        for c in &w_c {
+            if self.cpyMappings.is_src(c) {
+                if w_c.contains(&self.cpyMappings.get_src(c)) {
+                    s1.push(*c);
+                }
+            }
+        }
+        let mut s2 = vec![];
+        for c in &x_c {
+            if self.cpyMappings.is_dst(c) {
+                if x_c.contains(&self.cpyMappings.get_dst(c)) {
+                    s2.push(*c);
+                }
+            }
+        }
+
+        let lcs = self.lcs(&s1, &s2);
+
+        for m in &lcs {
+            self.srcInOrder.push(m.0);
+            self.dstInOrder.push(m.1);
+        }
+        for a in &s1 {
+            for b in &s2 {
+                if self.cpyMappings.has(&a, &b) && !lcs.contains(&(*a, *b)) {
+                    let k = self.findPos(b, x);
+                    let action = SimpleAction::Move {
+                        sub: *a,
+                        parent: *w,
+                        idx: k,
+                    };
+                    self.apply_move(&action);
+                    self.actions.push(action);
+                    self.srcInOrder.push(*a);
+                    self.dstInOrder.push(*b);
+                }
+            }
+        }
+    }
+
+    /// find position of x in parent on dst_arena
+    pub(crate) fn findPos(&self, x: &IdD, parent: &IdD) -> usize {
+        let y = parent;
+        let siblings = self.dst_arena.children(y);
+
+        for c in &siblings {
+            if self.dstInOrder.contains(c) {
+                if c == x {
+                    return 0;
+                } else {
+                    break;
+                }
+            }
+        }
+        let xpos = self.src_arena.child_postion(x);//child.positionInParent();
+        let mut v: Option<IdD> = None;
+        for i in 0..xpos {
+            let c: &IdD = &siblings[i];
+            if self.dstInOrder.contains(c) {
+                v = Some(*c);
+            };
+        }
+
+        if v.is_none() {
+            return 0;
+        }
+
+        let u = self.cpyMappings.get_src(&v.unwrap());
+        let upos = self.src_arena.child_postion(&u);
+        upos + 1
+    }
+
+    pub(crate) fn lcs(&self, src_children: &[IdD], dst_children: &[IdD]) -> Vec<(IdD, IdD)> {
+            longest_common_subsequence(src_children, dst_children, |src, dst| self.cpyMappings.has(src, dst))
+    }
+
+    pub(crate) fn mdForMiddle(&self, x: &IdD, w: &IdD) {
+        // todo maybe later
+    }
+
+    pub(crate) fn make_inserted_node(&self, x: &IdD, z: &IdD, k: &usize) -> IdD {
+        todo!()
+    }
+
+    pub(crate) fn insert_child_set_parent(&self, w: &IdD, z: &IdD, k: &usize) {
+        todo!()
+    }
+
+    pub(crate) fn rename(&self, w: &IdD, z: &IdD, x_l: &Label) {
+        todo!()
+    }
+
+    pub(crate) fn delete(&self, w: &IdD) {
+        todo!()
+    }
+
+    pub(crate) fn apply_move(&self, action: &SimpleAction<IdD, IdD>) {
+        // let oldk = self.src_arena.child_postion(&a);
+        todo!()
+    }
+
+    pub(crate) fn postOrderCpySrc(&self) -> Vec<IdD> {
+        todo!()
+    }
+
+    fn bfs_dst(&self) -> Vec<IdD> {
+        todo!()
+    }
+}
+
+pub(crate) struct SS<IdD> {
+    a: IdD,
+}
+pub(crate) struct SD<IdD> {
+    a: IdD,
+}
+
+impl<IdD> SD<IdD> {
+    pub(crate) fn parent(&self, x: &IdD) -> Option<IdD> {
+        todo!()
+    }
+
+    pub(crate) fn label(&self, x: &IdD) -> Label {
+        todo!()
+    }
+
+    pub(crate) fn children(&self, x: &IdD) -> Vec<IdD> {
+        todo!()
+    }
+}
+impl<IdD> SS<IdD> {
+    pub(crate) fn parent(&self, w: &IdD) -> Option<IdD> {
+        todo!()
+    }
+
+    pub(crate) fn label(&self, w: &IdD) -> Label {
+        todo!()
+    }
+
+    fn children(&self, w: &IdD) -> Vec<IdD> {
+        todo!()
+    }
+
+    pub(crate) fn child_postion(&self, a: &IdD) -> usize {
+        todo!()
+    }
+}
+
+impl<IdD> ActionsVec<SimpleAction<IdD, IdD>> {
+    pub(crate) fn push(&self, action: SimpleAction<IdD, IdD>) {
+        todo!()
+    }
+}
+
+impl<IdD> InOrderNodes<IdD> {
+    fn removeAll(&self, w: &Vec<IdD>) {
+        todo!()
+    }
+
+    pub(crate) fn push(&self, arg0: IdD) {
+        todo!()
+    }
+
+    fn contains(&self, c: &IdD) -> bool {
+        todo!()
+    }
+}
+
+
+
+impl SuperTree {
+
+}
+
+impl SuperTreeStore {
+    
+}
