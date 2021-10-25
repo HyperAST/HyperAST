@@ -2,26 +2,14 @@ use std::ops::Index;
 
 use num_traits::{zero, PrimInt};
 
-use crate::{
-    matchers::{
-        decompressed_tree_store::{
-            BreathFirst, CompletePostOrder, DecompressedTreeStore, Initializable as _,
-            SimpleZsTree as ZsTree,
-        },
-        heuristic::gt::{
+use crate::{matchers::{decompressed_tree_store::{BreathFirst, CompletePostOrder, DecompressedTreeStore, Initializable as _, ShallowDecompressedTreeStore, SimpleZsTree as ZsTree}, heuristic::gt::{
             bottom_up_matcher::BottomUpMatcher,
             greedy_bottom_up_matcher::GreedyBottomUpMatcher,
             greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
-        },
-        mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
-        optimal::zs::ZsMatcher,
-    },
-    tests::{
+        }, mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore}, optimal::zs::ZsMatcher}, tests::{
         examples::{example_bottom_up, example_gumtree},
         simple_tree::{vpair_to_stores, Tree, NS},
-    },
-    tree::tree::LabelStore,
-};
+    }, tree::tree::LabelStore};
 
 #[test]
 fn test_min_height_threshold() {

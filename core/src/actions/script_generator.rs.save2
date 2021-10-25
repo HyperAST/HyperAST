@@ -285,7 +285,7 @@ pub struct ScriptGenerator<
     // origMappings: &'a DefaultMappingStore<IdD>,
     origDst: IdD,
     src_arena: &'a SS,
-    mid_arena: (),//SuperTreeStore<T::TreeId>,
+    // mid_arena: (),//SuperTreeStore<T::TreeId>,
     dst_arena: &'a SD,
     // ori_to_copy: DefaultMappingStore<IdD>,
     cpyMappings: DefaultMappingStore<IdD>,

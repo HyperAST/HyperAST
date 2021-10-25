@@ -7,7 +7,7 @@ use crate::tree::tree::{NodeStore, Stored, Tree, WithChildren, WithStats};
 pub mod bottom_up_matcher;
 pub mod greedy_bottom_up_matcher;
 pub mod greedy_subtree_matcher;
-pub mod optimized_greedy_subtree_matcher;
+// pub mod optimized_greedy_subtree_matcher;
 pub mod simple_bottom_up_matcher;
 pub mod simple_bottom_up_matcher2;
 

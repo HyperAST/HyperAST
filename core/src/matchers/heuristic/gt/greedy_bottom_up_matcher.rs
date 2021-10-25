@@ -159,7 +159,7 @@ impl<
     pub(crate) fn execute(&mut self) {
         assert_eq!(
             self.internal.src_arena.root(),
-            self.internal.src_arena.node_count() - one()
+            cast::<_,IdD>(self.internal.src_arena.len()).unwrap() - one()
         );
         assert!(self.internal.src_arena.len() > 0);
         // todo caution about, it is in postorder and it depends on decomp store

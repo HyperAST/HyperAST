@@ -3,16 +3,7 @@ use std::{collections::VecDeque, fmt::Debug, marker::PhantomData};
 use num_traits::{cast, one, zero, PrimInt};
 use str_distance::DistanceMetric;
 
-use crate::{
-    matchers::{
-        decompressed_tree_store::{
-            DecompressedTreeStore, Initializable as _, PostOrderKeyRoots, SimpleZsTree as ZsTree,
-        },
-        mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
-        matcher::Matcher,
-    },
-    tree::tree::{LabelStore, NodeStore, Tree, WithHashs},
-};
+use crate::{matchers::{decompressed_tree_store::{DecompressedTreeStore, Initializable as _, PostOrderKeyRoots, ShallowDecompressedTreeStore, SimpleZsTree as ZsTree}, mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore}, matcher::Matcher}, tree::tree::{LabelStore, NodeStore, Tree, WithHashs}};
 
 pub struct ZsMatcher<
     'a,
@@ -120,7 +111,7 @@ impl<
         let mut tree_pairs: VecDeque<(IdD, IdD)> = Default::default(); //ArrayDeque<int[]>
 
         // push the pair of trees (ted1,ted2) to stack
-        tree_pairs.push_front((self.src_arena.node_count(), self.dst_arena.node_count()));
+        tree_pairs.push_front((cast::<_,IdD>(self.src_arena.len()).unwrap(), cast::<_,IdD>(self.dst_arena.len()).unwrap()));
 
         while !tree_pairs.is_empty() {
             let tree_pair = tree_pairs.pop_front().unwrap();

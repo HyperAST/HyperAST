@@ -1,6 +1,8 @@
 use std::{fmt::Debug, marker::PhantomData};
 
+use crate::actions::script_generator::CompressedTreePath;
 use crate::matchers::heuristic::gt::height;
+use crate::matchers::mapping_store::MonoMappingStore;
 use crate::tree::tree::HashKind;
 use crate::{
     matchers::{
@@ -17,8 +19,8 @@ use num_traits::{cast, one, zero, PrimInt};
 
 pub struct GreedySubtreeMatcher<
     'a,
-    D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
-    IdD: PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
+    D: DecompressedTreeStore<T::TreeId, Ele> + DecompressedWithParent<Ele>,
+    IdD: PrimInt + Debug, // + Into<usize> + std::ops::SubAssign + Debug,
     T: Tree,      // + WithHashs,
     S: NodeStore<T>,
     const MIN_HEIGHT: usize, // = 2
@@ -34,7 +36,7 @@ fn bbox(len: usize) -> bitvec::prelude::BitBox {
 
 impl<
         'a,
-        D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
+        D: DecompressedTreeStore<T::TreeId, Ele> + DecompressedWithParent<Ele>,
         IdD: PrimInt + Debug, // + Into<usize> + std::ops::SubAssign,
         T: Tree + WithHashs,
         S: NodeStore<T>,
@@ -46,7 +48,7 @@ impl<
         // label_store: &'a LS,
         src: &'a T::TreeId,
         dst: &'a T::TreeId,
-        mappings: DefaultMappingStore<IdD>,
+        mappings: PathRecMappingStore<DefaultMappingStore<IdD>>,
     ) -> Self {
         let mut matcher = Self {
             // label_store,
@@ -151,8 +153,8 @@ impl<
 }
 impl<
         'a,
-        D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
-        IdD: PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
+        D: DecompressedTreeStore<T::TreeId, Ele> + DecompressedWithParent<Ele>,
+        IdD: PrimInt+ Debug, // + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree,      // + WithHashs,
         S: NodeStore<T>,
         const MIN_HEIGHT: usize,
@@ -165,11 +167,12 @@ impl<
 }
 
 type Mapping<T> = (T, T);
+type Ele = CompressedTreePath<u16>;
 
 pub struct SubtreeMatcher<
     'a,
-    D: DecompressedTreeStore<T::TreeId, IdD>, // + DecompressedWithParent<IdD>,
-    IdD: PrimInt,                             // + Into<usize> + std::ops::SubAssign + Debug,
+    D: DecompressedTreeStore<T::TreeId, Ele>, // + DecompressedWithParent<IdD>,
+    IdD: PrimInt+Debug,                             // + Into<usize> + std::ops::SubAssign + Debug,
     T: Tree,                                  // + WithHashs,
     S: NodeStore<T>,
     const MIN_HEIGHT: usize,
@@ -177,12 +180,12 @@ pub struct SubtreeMatcher<
     pub(super) node_store: &'a S,
     pub(crate) src_arena: D,
     pub(crate) dst_arena: D,
-    pub(crate) mappings: DefaultMappingStore<IdD>,
+    pub(crate) mappings: PathRecMappingStore<DefaultMappingStore<IdD>>,
     pub(super) phantom: PhantomData<*const T>,
 }
 impl<
         'a,
-        D: DecompressedTreeStore<T::TreeId, IdD>, //+ DecompressedWithParent<IdD>,
+        D: DecompressedTreeStore<T::TreeId, Ele>, //+ DecompressedWithParent<IdD>,
         IdD: PrimInt + Debug,                     // + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
         S: NodeStore<T>,
@@ -204,12 +207,12 @@ impl<
             dst_to_srcs: vec![None; self.dst_arena.len()],
         };
 
-        let mut src_trees = PriorityTreeList::<D, IdD, T, S, MIN_HEIGHT>::new(
+        let mut src_trees = PriorityTreeList::<D, T, S, MIN_HEIGHT>::new(
             self.node_store,
             &self.src_arena,
             self.src_arena.root(),
         );
-        let mut dst_trees = PriorityTreeList::<D, IdD, T, S, MIN_HEIGHT>::new(
+        let mut dst_trees = PriorityTreeList::<D, T, S, MIN_HEIGHT>::new(
             self.node_store,
             &self.dst_arena,
             self.dst_arena.root(),
@@ -280,7 +283,24 @@ impl<
         let (src_d, src_l) = self.sim_aux_shared(src, self.src_arena);
         let (dst_d, dst_l) = self.sim_aux_shared(dst, self.dst_arena);
         let max_pos_diff = std::cmp::max(src_l, dst_l);
-        
+
+        let jaccard = similarity_metrics::jaccard_similarity(&src_d, &dst_d, &self.mappings);
+        let (src_po, pos_src) = self.sim_aux(src, self.src_arena);
+        let (dst_po, pos_dst) = self.sim_aux(dst, self.dst_arena);
+        let po: f64 = 1.0_f64
+            - (cast::<_, f64>(src_po.max(dst_po) - dst_po.min(src_po)).unwrap()
+                / cast::<_, f64>(self.get_max_tree_size()).unwrap());
+        let pos: f64 = 1.0_f64
+            - (cast::<_, f64>(pos_src.max(pos_dst) - pos_dst.min(pos_src)).unwrap()
+                / max_pos_diff as f64);
+        100. * jaccard + 10. * pos + po
+    }
+
+    fn similarity2(&self, src: &IdD, dst: &IdD) -> f64 {
+        let (src_d, src_l) = self.sim_aux_shared(src, self.src_arena);
+        let (dst_d, dst_l) = self.sim_aux_shared(dst, self.dst_arena);
+        let max_pos_diff = std::cmp::max(src_l, dst_l);
+
         let jaccard = similarity_metrics::jaccard_similarity(&src_d, &dst_d, &self.mappings);
         let (src_po, pos_src) = self.sim_aux(src, self.src_arena);
         let (dst_po, pos_dst) = self.sim_aux(dst, self.dst_arena);
@@ -349,8 +369,22 @@ impl<
     }
 }
 
-struct PriorityTreeList<'a, D, IdD, T: Tree, S, const MIN_HEIGHT: usize> {
-    trees: Vec<Option<Vec<IdD>>>, //List<ITree>[]
+/// data necessary to compute similarity
+struct SimData<'a, IdD, Idx> {
+    // position in parent
+    pos: Idx,
+    // position that makes sens globally (default: postorder, faster: parents dist (ie. sum dist from least common ancestor))
+    po: usize,
+    // descendants, only need mapped ones
+    d: &'a [IdD], 
+    // // parent
+    // p: IdD,
+    // number of descendants, including unmapped
+    l: usize,
+}
+
+struct PriorityTreeList<'a, D, T: Tree, S, const MIN_HEIGHT: usize> {
+    trees: Vec<Option<Vec<Ele>>>, //List<ITree>[]
 
     store: &'a S,
     arena: &'a D,
@@ -364,14 +398,13 @@ struct PriorityTreeList<'a, D, IdD, T: Tree, S, const MIN_HEIGHT: usize> {
 
 impl<
         'a,
-        D: DecompressedTreeStore<T::TreeId, IdD>,
-        IdD: PrimInt,
+        D: DecompressedTreeStore<T::TreeId, Ele>,
         T: Tree,
         S: NodeStore<T>,
         const MIN_HEIGHT: usize,
-    > PriorityTreeList<'a, D, IdD, T, S, MIN_HEIGHT>
+    > PriorityTreeList<'a, D, T, S, MIN_HEIGHT>
 {
-    pub(super) fn new(store: &'a S, arena: &'a D, tree: IdD) -> Self {
+    pub(super) fn new(store: &'a S, arena: &'a D, tree: Ele) -> Self {
         let h = height(store, &arena.original(&tree));
         let list_size = if h >= MIN_HEIGHT {
             h + 1 - MIN_HEIGHT
@@ -398,12 +431,12 @@ impl<
         self.max_height - idx
     }
 
-    fn add_tree(&mut self, tree: IdD) {
+    fn add_tree(&mut self, tree: Ele) {
         let h = height(self.store, &self.arena.original(&tree)) as usize;
         self.add_tree2(tree, h)
     }
 
-    fn add_tree2(&mut self, tree: IdD, h: usize) {
+    fn add_tree2(&mut self, tree: Ele, h: usize) {
         if h >= MIN_HEIGHT {
             let idx = self.idx(h);
             if self.trees[idx].is_none() {
@@ -413,7 +446,7 @@ impl<
         }
     }
 
-    pub(super) fn open(&mut self) -> Option<Vec<IdD>> {
+    pub(super) fn open(&mut self) -> Option<Vec<Ele>> {
         if let Some(pop) = self.pop() {
             for tree in &pop {
                 self.open_tree(tree);
@@ -425,7 +458,7 @@ impl<
         }
     }
 
-    pub(super) fn pop(&mut self) -> Option<Vec<IdD>> {
+    pub(super) fn pop(&mut self) -> Option<Vec<Ele>> {
         if self.current_idx < 0 {
             None
         } else {
@@ -433,7 +466,7 @@ impl<
         }
     }
 
-    pub(super) fn open_tree(&mut self, tree: &IdD) {
+    pub(super) fn open_tree(&mut self, tree: &Ele) {
         for c in self.arena.children(self.store, tree) {
             self.add_tree(c);
         }
@@ -530,5 +563,57 @@ mod Decompressed {
         fn path(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<u32> {
             todo!()
         }
+    }
+}
+
+#[derive(Debug,Clone)]
+struct PathRecMappingStore<B:MonoMappingStore> {
+    backup:B,
+}
+
+impl<B:MonoMappingStore> PathRecMappingStore<B> {
+    fn link_rec(&mut self, src: <PathRecMappingStore<B> as MappingStore>::Ele, dst: <PathRecMappingStore<B> as MappingStore>::Ele) {
+        todo!()
+    }
+}
+
+impl<B:MonoMappingStore> MappingStore for PathRecMappingStore<B> {
+    type Ele=CompressedTreePath<u16>;
+
+    fn topit(&mut self, left: usize, right: usize) {
+        todo!()
+    }
+
+    fn len(&self) -> usize {
+        todo!()
+    }
+
+    fn has(&self, src: &Self::Ele, dst: &Self::Ele) -> bool {
+        todo!()
+    }
+
+    fn link(&mut self, src: Self::Ele, dst: Self::Ele) {
+        todo!()
+    }
+
+    fn cut(&mut self, src: Self::Ele, dst: Self::Ele) {
+        todo!()
+    }
+
+    fn is_src(&self, src: &Self::Ele) -> bool {
+        todo!()
+    }
+
+    fn is_dst(&self, dst: &Self::Ele) -> bool {
+        todo!()
+    }
+}
+impl<B:MonoMappingStore> MonoMappingStore for PathRecMappingStore<B> {
+    fn get_src(&self, dst: &Self::Ele) -> Self::Ele {
+        todo!()
+    }
+
+    fn get_dst(&self, src: &Self::Ele) -> Self::Ele {
+        todo!()
     }
 }

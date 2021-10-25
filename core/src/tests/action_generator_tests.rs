@@ -1,14 +1,19 @@
 use num_traits::zero;
 
 use crate::{
-    actions::script_generator::{self, Actions, SimpleAction, TestActions},
+    actions::{
+        bfs_wrapper,
+        script_generator::{self, Actions, SimpleAction, TestActions},
+    },
     matchers::{
-        decompressed_tree_store::{CompletePostOrder, DecompressedTreeStore, Initializable},
+        decompressed_tree_store::{
+            CompletePostOrder, DecompressedTreeStore, Initializable, ShallowDecompressedTreeStore,
+        },
         mapping_store::{DefaultMappingStore, MappingStore},
     },
     tests::{
         examples::{example_action, example_gt_java_code},
-        simple_tree::{vpair_to_stores, Tree},
+        simple_tree::{vpair_to_stores, Tree, NS},
     },
     tree::tree::{LabelStore, Labeled, NodeStore},
 };
@@ -149,13 +154,13 @@ fn testWithActionExampleNoMove() {
     // for (Action a : actions)
     //     System.out.println(a.toString());
 }
-
+type IdD = u16;
 #[test]
 fn testWithZsCustomExample() {
     let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_java_code());
     let mut ms = DefaultMappingStore::new();
-    let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &src);
-    let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &dst);
+    let src_arena = CompletePostOrder::<_, IdD>::new(&node_store, &src);
+    let dst_arena = CompletePostOrder::<_, IdD>::new(&node_store, &dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
     ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
@@ -190,8 +195,18 @@ fn testWithZsCustomExample() {
         dst_arena.child(&node_store, dst, &[0, 1, 3]),
     );
 
-    let actions = script_generator::ScriptGenerator::<_,Tree,_,_>//,CompletePostOrder::<_,u16>,CompletePostOrder::<_,u16>>
-    ::compute_actions(ms);
+    let actions = script_generator::ScriptGenerator::<
+        _,
+        Tree,
+        _,
+        bfs_wrapper::SD<_, _, CompletePostOrder<_, IdD>>,
+        NS<Tree>,
+    >::compute_actions(
+        &node_store,
+        &src_arena,
+        &bfs_wrapper::SD::from(&node_store, &dst_arena),
+        &ms,
+    );
 
     assert_eq!(5, actions.len());
     assert!(actions.has_items(&[
@@ -204,22 +219,25 @@ fn testWithZsCustomExample() {
         // new Move(src, dst, 0),
         SimpleAction::Move {
             sub: *src,
-            parent: *dst,
+            parent: Some(*dst),
             idx: 0,
         },
         // new Insert(dst.getChild("0.1.1"), src.getChild("1"), 1),
         SimpleAction::Insert {
             sub: todo!(),
-            parent: src_arena.child(&node_store, src, &[0, 1, 1]),
+            parent: Some(src_arena.child(&node_store, src, &[0, 1, 1])),
             idx: 1,
         },
         // new Update(src.getChild("1.3"), "r2"),
         SimpleAction::Update {
             src: src_arena.child(&node_store, src, &[1, 3]),
             dst: dst_arena.child(&node_store, dst, &[0, 1, 3]),
-            label: node_store
+            old: node_store
+                .get_node_at_id(&src_arena.child(&node_store, src, &[0, 3]))
+                .get_label(),
+            new: node_store
                 .get_node_at_id(&dst_arena.child(&node_store, dst, &[0, 1, 3]))
-                .get_label()
+                .get_label(),
         }, // label: "r2".to_owned()},
         // new Delete(src.getChild("1.1"))
         SimpleAction::Delete {

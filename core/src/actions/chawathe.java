@@ -439,7 +439,7 @@ public class MyScriptGenerator extends VersionedEditScriptGenerator {
 
         for (ITree b : s2) { // iterate through s2 first, to ensure left-to-right insertions
             for (ITree a : s1) {
-                if (cpyMappings.has(a, b)) {
+                if (oriMappings.has(a, b)) {
                     if (!lcs.contains(new Mapping(a, b))) {
                         int k = findPos2(b, x);//x.getChildPosition(b);
                         AbstractVersionedTree newTree = new VersionedTree(b, this.afterVersion);

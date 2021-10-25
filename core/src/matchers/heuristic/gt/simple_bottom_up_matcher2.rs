@@ -2,16 +2,7 @@ use std::{cell::Ref, collections::HashMap, fmt::Debug, marker::PhantomData};
 
 use num_traits::{cast, zero, PrimInt, ToPrimitive};
 
-use crate::{
-    matchers::{
-        decompressed_tree_store::BreathFirstContigousSiblings,
-        mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
-        matcher::{self, Matcher},
-        similarity_metrics,
-    },
-    tree::tree::{HashKind, NodeStore, Tree, Typed, WithHashs},
-    utils::sequence_algorithms::longest_common_subsequence,
-};
+use crate::{matchers::{decompressed_tree_store::{BreathFirstContigousSiblings, DecompressedWithParent}, mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore}, matcher::{self, Matcher}, similarity_metrics}, tree::tree::{HashKind, NodeStore, Tree, Typed, WithHashs}, utils::sequence_algorithms::longest_common_subsequence};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
@@ -19,7 +10,7 @@ use super::bottom_up_matcher::BottomUpMatcher;
 
 pub struct SimpleBottomUpMatcher<
     'a,
-    D: BreathFirstContigousSiblings<T::TreeId, IdD>,
+    D: BreathFirstContigousSiblings<T::TreeId, IdD> + DecompressedWithParent<IdD>,
     IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
     T: Tree + WithHashs,
     S: NodeStore<T>,
@@ -30,7 +21,7 @@ pub struct SimpleBottomUpMatcher<
 
 impl<
         'a,
-        D: 'a + BreathFirstContigousSiblings<T::TreeId, IdD>,
+        D: 'a + BreathFirstContigousSiblings<T::TreeId, IdD> + DecompressedWithParent<IdD>,
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
         S: NodeStore<T>,
@@ -66,7 +57,7 @@ impl<
 
 impl<
         'a,
-        D: 'a + BreathFirstContigousSiblings<T::TreeId, IdD>,
+        D: 'a + BreathFirstContigousSiblings<T::TreeId, IdD> + DecompressedWithParent<IdD>,
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
         S: NodeStore<T>,
