@@ -2,7 +2,6 @@ use std::{cell::Ref, mem::MaybeUninit, ops::Index};
 
 use stack_graphs::arena::Handle;
 
-
 // pub trait Store<'a,T:'a>: Index<Handle<T>,Output = Ref<'a,T>> {
 
 //     fn get_or_insert(&mut self) -> Handle<T>;
@@ -27,14 +26,8 @@ impl<T: 'static> Index<Handle<T>> for Store<T> {
     }
 }
 
-
-
-
-
 #[cfg(test)]
 mod tests {
     #[test]
-    fn test() {
-
-    }
+    fn test() {}
 }

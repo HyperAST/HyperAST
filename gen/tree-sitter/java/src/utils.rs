@@ -1,5 +1,8 @@
 use core::fmt;
-use std::{collections::hash_map::DefaultHasher, hash::{BuildHasher, Hash, Hasher}};
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{BuildHasher, Hash, Hasher},
+};
 
 pub(crate) fn hash<T: Hash>(x: &T) -> u64 {
     let mut state = DefaultHasher::default();
@@ -16,7 +19,6 @@ where
     value.hash(state);
     state.finish()
 }
-
 
 pub(crate) fn clamp_u64_to_u32(x: &u64) -> u32 {
     (((x & 0xffff0000) >> 32) as u32) ^ ((x & 0xffff) as u32)
@@ -35,7 +37,9 @@ impl fmt::Display for MemoryUsage {
 impl std::ops::Sub for MemoryUsage {
     type Output = MemoryUsage;
     fn sub(self, rhs: MemoryUsage) -> MemoryUsage {
-        MemoryUsage { allocated: self.allocated - rhs.allocated }
+        MemoryUsage {
+            allocated: self.allocated - rhs.allocated,
+        }
     }
 }
 
@@ -62,14 +66,17 @@ pub fn memusage_linux() -> MemoryUsage {
     if mallinfo2 == 0 {
         // mallinfo2 does not exist, use mallinfo.
         let alloc = unsafe { libc::mallinfo() }.uordblks as isize;
-        MemoryUsage { allocated: Bytes(alloc) }
+        MemoryUsage {
+            allocated: Bytes(alloc),
+        }
     } else {
         let mallinfo2: fn() -> libc::mallinfo2 = unsafe { std::mem::transmute(mallinfo2) };
         let alloc = mallinfo2().uordblks as isize;
-        MemoryUsage { allocated: Bytes(alloc) }
+        MemoryUsage {
+            allocated: Bytes(alloc),
+        }
     }
 }
-
 
 #[derive(Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct Bytes(isize);

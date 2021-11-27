@@ -1,9 +1,17 @@
 use num_traits::cast;
 
-use crate::{matchers::{decompressed_tree_store::{CompletePostOrder, DecompressedTreeStore, ShallowDecompressedTreeStore, SimpleZsTree}, mapping_store::{DefaultMappingStore, MappingStore}, optimal::zs::ZsMatcher}, tests::{
+use crate::{
+    matchers::{
+        decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore, SimpleZsTree},
+        mapping_store::{DefaultMappingStore, MappingStore},
+        optimal::zs::ZsMatcher,
+    },
+    tests::{
         examples::{example_gt_java_code, example_gt_slides, example_zs_paper},
         simple_tree::{vpair_to_stores, Tree, LS, NS},
-    }, tree::tree::{LabelStore, NodeStore}};
+    },
+    tree::tree::{LabelStore, NodeStore},
+};
 
 #[test]
 fn test_zs_paper_for_initial_layout() {

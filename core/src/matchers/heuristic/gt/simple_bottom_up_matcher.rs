@@ -1,18 +1,17 @@
-use std::{cell::Ref, collections::HashMap, marker::PhantomData};
+use std::marker::PhantomData;
 
-use num_traits::{cast, PrimInt, ToPrimitive};
+use num_traits::ToPrimitive;
 
 use crate::{
     matchers::{
         decompressed_tree_store::{
             BreathFirstContiguousSiblings, DecompressedTreeStore, DecompressedWithParent,
         },
-        mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
+        mapping_store::{DefaultMappingStore, MappingStore},
         matcher::Matcher,
         similarity_metrics,
     },
-    tree::tree::{HashKind, NodeStore, Tree, Typed, WithHashs},
-    utils::sequence_algorithms::longest_common_subsequence,
+    tree::tree::{NodeStore, Tree, WithHashs},
 };
 
 use super::bottom_up_matcher::BottomUpMatcher;
@@ -29,7 +28,7 @@ pub struct SimpleBottomUpMatcher<
         + DecompressedWithParent<IdD>
         + BreathFirstContiguousSiblings<T::TreeId, IdD>,
     T: Tree + WithHashs,
-    S: for<'b> NodeStore<'b,T>,
+    S: for<'b> NodeStore<'b, T>,
     // const SIM_THRESHOLD: u64 = (0.4).bytes(),
 > {
     internal: BottomUpMatcher<'a, D, IdD, T, S>,
@@ -47,7 +46,7 @@ impl<
             + DecompressedWithParent<IdD>
             + BreathFirstContiguousSiblings<T::TreeId, IdD>,
         T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b,T>,
+        S: for<'b> NodeStore<'b, T>,
     > Matcher<'a, D, T, S> for SimpleBottomUpMatcher<'a, D, T, S>
 {
     type Store = DefaultMappingStore<IdD>;
@@ -85,7 +84,7 @@ impl<
             + DecompressedWithParent<IdD>
             + BreathFirstContiguousSiblings<T::TreeId, IdD>,
         T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b,T>,
+        S: for<'b> NodeStore<'b, T>,
     > SimpleBottomUpMatcher<'a, D, T, S>
 {
     fn execute(&mut self) {

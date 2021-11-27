@@ -33,7 +33,9 @@ pub enum SyntaxNodeHashsKinds {
 
 impl<T: PrimInt> Debug for SyntaxNodeHashs<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,"H: {:?}/{:?}/{:?}",
+        write!(
+            f,
+            "H: {:?}/{:?}/{:?}",
             &self.structt.to_usize().unwrap(),
             &self.label.to_usize().unwrap(),
             &self.syntax.to_usize().unwrap(),

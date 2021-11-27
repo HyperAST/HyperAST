@@ -135,7 +135,7 @@ pub struct ScriptGenerator<
     T: Stored + Labeled + WithChildren,
     SS,
     SD: BreathFirstIterable<'a, T::TreeId, IdD> + DecompressedWithParent<IdD>,
-    S: for<'b> NodeStore<'b,T>,
+    S: for<'b> NodeStore<'b, T>,
 > where
     T::TreeId: PrimInt,
 {
@@ -165,7 +165,7 @@ impl<
         SD: DecompressedTreeStore<T::TreeId, IdD>
             + DecompressedWithParent<IdD>
             + BreathFirstIterable<'a, T::TreeId, IdD>,
-        S: for<'b> NodeStore<'b,T>,
+        S: for<'b> NodeStore<'b, T>,
     > ScriptGenerator<'a, IdD, T, SS, SD, S>
 where
     T::Label: Copy,

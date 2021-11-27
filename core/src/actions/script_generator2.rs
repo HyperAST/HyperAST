@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Error};
+use std::fmt::Debug;
 
 use bitvec::order::Lsb0;
 use num_traits::{cast, PrimInt};
@@ -97,7 +97,7 @@ pub struct ScriptGenerator<
     T: Stored + Labeled + WithChildren,
     SS,
     SD: BreathFirstIterable<'a, T::TreeId, IdD> + DecompressedWithParent<IdD>,
-    S: for<'b> NodeStore<'b,T>,
+    S: for<'b> NodeStore<'b, T>,
 > where
     T::Label: Debug,
     T::TreeId: Debug,
@@ -128,7 +128,7 @@ impl<
         SD: DecompressedTreeStore<T::TreeId, IdD>
             + DecompressedWithParent<IdD>
             + BreathFirstIterable<'a, T::TreeId, IdD>,
-        S: for<'b> NodeStore<'b,T>,
+        S: for<'b> NodeStore<'b, T>,
     > ScriptGenerator<'a, IdD, T, SS, SD, S>
 where
     T::Label: Debug + Copy,
@@ -220,8 +220,7 @@ where
                 };
                 w = self.make_inserted_node(&x, &z);
                 let path = if let Some(z) = z {
-                    self.path(z)
-                    .extend(&[k])
+                    self.path(z).extend(&[k])
                     // self.src_arena_dont_use
                     // .path(&self.src_arena_dont_use.root(), &z)
                 } else {

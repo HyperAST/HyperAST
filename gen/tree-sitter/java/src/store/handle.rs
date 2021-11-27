@@ -1,14 +1,8 @@
-use std::cell::Cell;
-use std::cell::Ref;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::marker::PhantomData;
-use std::mem::MaybeUninit;
 use std::num::NonZeroU32;
-use std::ops::Index;
 
 use controlled_option::Niche;
 

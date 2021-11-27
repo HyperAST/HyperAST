@@ -1,17 +1,11 @@
 use std::{
-    borrow::Borrow,
     cell::{Ref, RefCell},
-    fmt::Debug,
     marker::PhantomData,
-    rc::Rc,
 };
 
 use num_traits::{cast, PrimInt};
 
-use crate::tree::{
-    self,
-    tree::{HashKind, LabelStore, Labeled, NodeStore, Stored, WithChildren, WithHashs},
-};
+use crate::tree::tree::{HashKind, LabelStore, Labeled, NodeStore, WithChildren};
 
 pub(crate) struct ST<K> {
     kind: K,
@@ -72,12 +66,12 @@ pub(crate) fn vpair_to_stores<'a>((src, dst): (ST<u8>, ST<u8>)) -> (LS<u16>, NS<
 }
 
 fn make_stores<'a>() -> (LS<u16>, NS<Tree>) {
-    let mut label_store = LS::<u16> {
+    let label_store = LS::<u16> {
         // v: RefCell::new(vec![b"".to_vec()]),
         v: Default::default(),
         phantom: PhantomData,
     };
-    let mut compressed_node_store = NS::<Tree> {
+    let compressed_node_store = NS::<Tree> {
         v: RefCell::new(vec![]),
     };
     (label_store, compressed_node_store)
@@ -154,7 +148,7 @@ impl HashKind for H {
 impl crate::tree::tree::WithHashs for Tree {
     type HK = H;
     type HP = u8;
-    fn hash(&self, kind: &H) -> u8 {
+    fn hash(&self, _kind: &H) -> u8 {
         0
     }
 }
@@ -250,7 +244,7 @@ pub(crate) struct LS<I: PrimInt> {
 impl<'a, I: PrimInt> LabelStore<crate::tree::tree::OwnedLabel> for LS<I> {
     type I = I;
     fn get_or_insert<T: AsRef<crate::tree::tree::OwnedLabel>>(&mut self, node: T) -> Self::I {
-        let mut a = &mut self.v;
+        let a = &mut self.v;
         let b = a
             .iter()
             .enumerate()

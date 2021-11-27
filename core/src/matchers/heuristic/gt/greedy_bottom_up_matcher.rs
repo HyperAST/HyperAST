@@ -1,13 +1,13 @@
-use std::{fmt::Debug, marker::PhantomData, ops::Deref};
+use std::{fmt::Debug, marker::PhantomData};
 
-use num_traits::{cast, one, zero, PrimInt};
+use num_traits::{cast, one, PrimInt};
 
 use crate::{
     matchers::{
         decompressed_tree_store::{
             DecompressedTreeStore, DecompressedWithParent, PostOrder, SimpleZsTree,
         },
-        mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
+        mapping_store::{DefaultMappingStore, MappingStore},
         optimal::zs::ZsMatcher,
         similarity_metrics,
     },
@@ -22,7 +22,7 @@ pub struct GreedyBottomUpMatcher<
     D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD> + PostOrder<T::TreeId, IdD>,
     IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
     T: Tree + WithHashs,
-    S: for<'b> NodeStore<'b,T>,
+    S: for<'b> NodeStore<'b, T>,
     LS: LabelStore<OwnedLabel, I = T::Label>,
     const SIZE_THRESHOLD: usize,  // = 1000,
     const SIM_THRESHOLD_NUM: u64, // = 1,
@@ -44,7 +44,7 @@ impl<
             + PostOrder<T::TreeId, IdD>,
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b,T>,
+        S: for<'b> NodeStore<'b, T>,
         LS: LabelStore<OwnedLabel, I = T::Label>,
         const SIZE_THRESHOLD: usize,  // = 1000,
         const SIM_THRESHOLD_NUM: u64, // = 1,
@@ -75,7 +75,7 @@ impl<
             + PostOrder<T::TreeId, IdD>,
         IdD: 'a + PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b,T>,
+        S: for<'b> NodeStore<'b, T>,
         LS: 'a + LabelStore<OwnedLabel, I = T::Label>,
         const SIZE_THRESHOLD: usize, // = 1000,
         // Integer.parseInt(System.getProperty("gt.bum.szt", "1000"));

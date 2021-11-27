@@ -1,8 +1,10 @@
 use std::hash::Hash;
 
-use rusted_gumtree_core::tree::tree::NodeStore;
-
-use crate::{full::FullNode, hashed::{inner_node_hash, HashedCompressedNode, SyntaxNodeHashs}, nodes::{CompressedNode, NodeIdentifier, SimpleNode1, Space}, utils::{self, clamp_u64_to_u32}};
+use crate::{
+    hashed::{inner_node_hash, SyntaxNodeHashs},
+    nodes::{SimpleNode1, Space},
+    utils::{self, clamp_u64_to_u32},
+};
 
 pub type Spaces = Vec<Space>;
 
@@ -131,10 +133,10 @@ pub fn label_for_cursor(text: &[u8], node: &tree_sitter::Node) -> Option<Vec<u8>
     label
 }
 
-pub fn hash_for_node<T:Hash,U>(
+pub fn hash_for_node<T: Hash, U>(
     hashs: &SyntaxNodeHashs<u32>,
     size: &u32,
-    node: &SimpleNode1<U,T>,
+    node: &SimpleNode1<U, T>,
 ) -> SyntaxNodeHashs<u32> {
     let hashed_kind = &clamp_u64_to_u32(&utils::hash(&node.kind));
     let hashed_label = &clamp_u64_to_u32(&utils::hash(&node.label));

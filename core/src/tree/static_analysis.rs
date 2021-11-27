@@ -40,10 +40,7 @@ pub(crate) struct Velocity {
     pub(crate) y: f32,
 }
 
-use specs::{
-    storage::BTreeStorage, Builder, Component, DispatcherBuilder, ReadStorage, System, VecStorage,
-    World, WorldExt, WriteStorage,
-};
+use specs::{storage::BTreeStorage, Component, ReadStorage, System, VecStorage, WriteStorage};
 
 use super::tree::Type;
 

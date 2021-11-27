@@ -1,11 +1,6 @@
 ///! second attempt at compressing subtrees
 ///! does not compressed due to first attempt of vec_map_store unable to correctly compare nodes
-
-use std::{
-    cell::Ref,
-    fmt::Debug,
-    vec,
-};
+use std::{cell::Ref, fmt::Debug, vec};
 
 use rusted_gumtree_core::tree::tree::{
     LabelStore as LabelStoreTrait, NodeStore as NodeStoreTrait, OwnedLabel, Type,
@@ -38,19 +33,19 @@ pub struct JavaTreeGen {
 #[derive(Debug)]
 pub struct LabelStore {
     count: usize,
-    internal: VecMapStore<OwnedLabel, LabelIdentifier>,
+    // internal: VecMapStore<OwnedLabel, LabelIdentifier>,
 }
 
 impl LabelStoreTrait<OwnedLabel> for LabelStore {
     type I = LabelIdentifier;
 
-    fn get_or_insert<T:AsRef<OwnedLabel>>(&mut self, node: T) -> Self::I {
+    fn get_or_insert<T: AsRef<OwnedLabel>>(&mut self, _node: T) -> Self::I {
         self.count += 1;
         // self.internal.get_or_insert(node)
         todo!()
     }
 
-    fn resolve(&self, id: &Self::I) -> &OwnedLabel {
+    fn resolve(&self, _id: &Self::I) -> &OwnedLabel {
         // self.internal.resolve(id)
         todo!()
     }
@@ -62,8 +57,8 @@ pub struct NodeStore {
     internal: VecMapStore<HashedNode, NodeIdentifier>,
 }
 
-impl<'a> NodeStoreTrait<'a,HashedNode> for NodeStore {
-    type D = Ref<'a,HashedNode>;
+impl<'a> NodeStoreTrait<'a, HashedNode> for NodeStore {
+    type D = Ref<'a, HashedNode>;
     fn get_or_insert(&mut self, node: HashedNode) -> NodeIdentifier {
         self.count += 1;
         self.internal.get_or_insert(node)
@@ -161,7 +156,7 @@ pub struct SimpleStores {
 }
 
 impl<'a> TreeGen for JavaTreeGen {
-    type Node1 = SimpleNode1<NodeIdentifier,OwnedLabel>;
+    type Node1 = SimpleNode1<NodeIdentifier, OwnedLabel>;
     type Acc = AccumulatorWithIndentation;
     type Stores = SimpleStores;
 
@@ -392,7 +387,7 @@ impl JavaTreeGen {
     fn compress_label(
         label_store: &mut LabelStore,
         n1: <Self as TreeGen>::Node1,
-    ) -> CompressedNode<NodeIdentifier,LabelIdentifier> {
+    ) -> CompressedNode<NodeIdentifier, LabelIdentifier> {
         let label_id = match n1.label {
             Some(l) => Some(label_store.get_or_insert(&l)),
             None => None,
@@ -639,7 +634,7 @@ impl LabelStore {
     pub(crate) fn new() -> Self {
         Self {
             count: 0,
-            internal: VecMapStore::new(vec![]),
+            // internal: VecMapStore::new(vec![]),
         }
     }
 }

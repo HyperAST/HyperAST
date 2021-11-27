@@ -1,4 +1,4 @@
-use std::{cell::Ref, collections::VecDeque, fmt::Debug, marker::PhantomData, ops::Deref};
+use std::{collections::VecDeque, fmt::Debug, marker::PhantomData};
 
 use num_traits::{cast, one, zero, PrimInt};
 use str_distance::DistanceMetric;
@@ -9,7 +9,7 @@ use crate::{
             DecompressedTreeStore, Initializable as _, PostOrderKeyRoots,
             ShallowDecompressedTreeStore, SimpleZsTree as ZsTree,
         },
-        mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
+        mapping_store::{DefaultMappingStore, MappingStore},
         matcher::Matcher,
     },
     tree::tree::{LabelStore, NodeStore, OwnedLabel, Tree, WithHashs},

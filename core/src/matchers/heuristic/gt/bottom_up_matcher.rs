@@ -1,6 +1,6 @@
-use std::{cell::Ref, collections::HashMap, fmt::Debug, marker::PhantomData, ops::Deref};
+use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
 
-use num_traits::{cast, zero, PrimInt, ToPrimitive};
+use num_traits::{zero, PrimInt, ToPrimitive};
 
 use crate::{
     matchers::{
@@ -18,7 +18,7 @@ pub struct BottomUpMatcher<
     D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
     IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
     T: Tree + WithHashs,
-    S: for<'b> NodeStore<'b,T>,
+    S: for<'b> NodeStore<'b, T>,
     // const SIM_THRESHOLD: u64 = (0.4).bytes(),
 > {
     pub(super) node_store: &'a S,
@@ -33,7 +33,7 @@ impl<
         D: 'a + DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b,T>,
+        S: for<'b> NodeStore<'b, T>,
     > BottomUpMatcher<'a, D, IdD, T, S>
 {
     pub(super) fn getDstCandidates(&self, src: &IdD) -> Vec<IdD> {
@@ -59,8 +59,7 @@ impl<
                 }
                 visited[parent.to_usize().unwrap()] = true;
                 let p = &self.dst_arena.original(&parent);
-                if self.node_store.resolve(p).get_type()
-                    == self.node_store.resolve(s).get_type()
+                if self.node_store.resolve(p).get_type() == self.node_store.resolve(s).get_type()
                     && !(self.mappings.is_dst(&parent) || parent == self.dst_arena.root())
                 {
                     candidates.push(parent);

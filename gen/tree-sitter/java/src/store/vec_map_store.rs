@@ -1,11 +1,9 @@
 use std::{
-    any::TypeId,
-    cell::{Ref, RefCell, RefMut},
-    collections::{hash_map::DefaultHasher, HashSet},
+    cell::RefCell,
+    collections::hash_map::DefaultHasher,
     fmt::Debug,
     hash::{BuildHasher, Hash, Hasher},
     marker::PhantomData,
-    ops::{Deref, DerefMut},
     rc::Rc,
 };
 
@@ -13,11 +11,6 @@ use crate::{
     compat::{DefaultHashBuilder, HashMap},
     utils::make_hash,
 };
-
-use atomic_counter::{AtomicCounter, ConsistentCounter};
-use num::PrimInt;
-
-use super::handle::Handle;
 
 pub struct VecHasher<T: Hash> {
     state: u64,
@@ -46,7 +39,7 @@ impl<T: Hash> Hasher for VecHasher<T> {
         self.node_table.borrow()[i as usize].hash(&mut self.default);
         self.state = self.default.finish();
     }
-    fn write(&mut self, bytes: &[u8]) {
+    fn write(&mut self, _bytes: &[u8]) {
         // for &byte in bytes {
         //     self.state = self.state.rotate_left(8) ^ u64::from(byte);
         // }
@@ -178,7 +171,7 @@ pub struct SymbolU32<T> {
 impl<T> Debug for SymbolU32<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use string_interner::Symbol;
-        write!(f,"${}", &self.internal.to_usize())
+        write!(f, "${}", &self.internal.to_usize())
         // f.debug_struct("SymbolU32")
         //     .field("internal", &self.internal)
         //     .finish()
@@ -288,7 +281,8 @@ impl<T, S: Symbol<T>> Backend<T> for VecBackend<T, S> {
     }
 
     fn intern(&mut self, node: T) -> Self::Symbol {
-        let s = Symbol::try_from_usize(self.internal.len()).expect("not enough symbol, you should take a bigger set");
+        let s = Symbol::try_from_usize(self.internal.len())
+            .expect("not enough symbol, you should take a bigger set");
         self.internal.push(node);
         s
     }
@@ -319,7 +313,7 @@ impl<T, S: Symbol<T>> Default for VecBackend<T, S> {
     }
 }
 
-pub type DefaultBackend<T,I> = VecBackend<T,I>;
+pub type DefaultBackend<T, I> = VecBackend<T, I>;
 
 pub struct VecMapStore<T: Hash, I: Symbol<T>, B = DefaultBackend<T, I>, H = DefaultHashBuilder>
 where
@@ -391,8 +385,7 @@ where
     B: Backend<T, Symbol = I>,
     H: BuildHasher,
 {
-    pub fn get_or_intern_using(&mut self, node: T, intern_fn: fn(&mut B, T) -> I) -> I
-    {
+    pub fn get_or_intern_using(&mut self, node: T, intern_fn: fn(&mut B, T) -> I) -> I {
         let Self {
             dedup,
             hasher,
@@ -426,11 +419,10 @@ where
         };
         symbol
     }
-    
+
     #[inline]
     pub fn get_or_intern(&mut self, node: T) -> I
-    where
-    {
+where {
         self.get_or_intern_using(node, B::intern)
     }
 

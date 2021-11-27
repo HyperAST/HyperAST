@@ -1,8 +1,9 @@
 ///! store nodes in Vec<Rc<Node>> without compression
+use std::{collections::HashMap, fmt::Debug, hash::Hash, rc::Rc, vec};
 
-use std::{collections::HashMap, fmt::Debug, hash::{Hash, Hasher}, rc::Rc, vec};
-
-use rusted_gumtree_core::tree::tree::{self, LabelStore as LabelStoreTrait, NodeStore as NodeStoreTrait, Stored, Type, VersionedNodeStore};
+use rusted_gumtree_core::tree::tree::{
+    LabelStore as LabelStoreTrait, NodeStore as NodeStoreTrait, Type, VersionedNodeStore,
+};
 use string_interner::{DefaultSymbol, StringInterner};
 use tree_sitter::{Language, Parser, TreeCursor};
 
@@ -10,10 +11,7 @@ use crate::{
     full::FullNode,
     hashed::{HashedCompressedNode, NodeHashs, SyntaxNodeHashs, SyntaxNodeHashsKinds},
     nodes::{CompressedNode, HashSize, SimpleNode1, Space},
-    store::{
-        vec_map_store::{SymbolU32, VecMapStore},
-        TypeStore,
-    },
+    store::TypeStore,
     tree_gen::{
         compute_indentation, get_spacing, has_final_space, hash_for_node, label_for_cursor, Acc,
         AccIndentation, Spaces, TreeGen,
@@ -394,8 +392,7 @@ impl JavaTreeGen {
                 label: 0,
                 syntax: utils::clamp_u64_to_u32(&utils::hash(&relativized)),
             };
-            let node =
-                CompressedNode::<NodeIdentifier, _>::Spaces(relativized.into_boxed_slice());
+            let node = CompressedNode::<NodeIdentifier, _>::Spaces(relativized.into_boxed_slice());
             let spaces_leaf = HashedNode::new(hashs, node);
             let compressed_node = node_store.get_or_insert(spaces_leaf);
             let full_spaces_node = FullNode {
@@ -515,7 +512,10 @@ impl JavaTreeGen {
         };
         let _full_node = java_tree_gen.generate_default(text, tree.walk());
 
-        java_tree_gen.stores.node_store.as_root((0,1,0),_full_node.local.compressed_node.clone());
+        java_tree_gen
+            .stores
+            .node_store
+            .as_root((0, 1, 0), _full_node.local.compressed_node.clone());
 
         // print_tree_structure(
         //     &java_tree_gen.stores.node_store,

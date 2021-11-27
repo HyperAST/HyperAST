@@ -1,4 +1,3 @@
-
 use std::cell::Ref;
 use std::hash::Hash;
 use std::ops::Deref;
@@ -54,7 +53,7 @@ pub enum Type {
     RightBrace,
 
     // to cat
-    ExpressionStatement
+    ExpressionStatement,
 }
 
 // impl std::fmt::Display for Type {
@@ -160,7 +159,7 @@ pub trait TreePath {}
 //         type H:NodeHandle<Target=T>;
 
 //         fn get_or_insert(&mut self, node: T) -> T::TreeId;
-    
+
 //         fn resolve(&self, id: &T::TreeId) -> &Self::H;
 //     }
 
@@ -177,7 +176,6 @@ pub trait TreePath {}
 //         compressed_len:usize,
 //         _phantom:PhantomData<*const T>,
 //     }
-
 
 //     trait Trait<'a,T> {}
 
@@ -202,7 +200,7 @@ pub trait TreePath {}
 
 // }
 pub trait NodeStore<'a, T: Stored> {
-    type D:Deref<Target=T>;
+    type D: Deref<Target = T>;
 
     fn get_or_insert(&mut self, node: T) -> T::TreeId;
 
@@ -213,22 +211,24 @@ pub trait NodeStore<'a, T: Stored> {
 }
 
 pub trait VersionedNodeStore<'a, T: Stored>: NodeStore<'a, T>
-where T::TreeId: Clone {
-    fn insert_as_root(&mut self, version:(u8,u8,u8), node: T) -> T::TreeId {
+where
+    T::TreeId: Clone,
+{
+    fn insert_as_root(&mut self, version: (u8, u8, u8), node: T) -> T::TreeId {
         let r = self.get_or_insert(node);
         self.as_root(version, r.clone());
         r
     }
 
-    fn as_root(&mut self, version:(u8,u8,u8), node: T::TreeId);
+    fn as_root(&mut self, version: (u8, u8, u8), node: T::TreeId);
 }
 
 pub type OwnedLabel = Vec<u8>;
 
-pub trait LabelStore<L:?Sized> {
+pub trait LabelStore<L: ?Sized> {
     type I: Copy + Eq;
 
-    fn get_or_insert<T:AsRef<L>>(&mut self, node: T) -> Self::I;
+    fn get_or_insert<T: AsRef<L>>(&mut self, node: T) -> Self::I;
 
     fn resolve(&self, id: &Self::I) -> &L;
 }

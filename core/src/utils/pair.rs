@@ -25,11 +25,6 @@ where
     }
 }
 
-fn f() {
-    let p = Pair { 0: 0, 1: "a" };
-    let p2 = Pair { 0: 0, 1: "b" };
-}
-
 // public JSitterJavaTreeGenerator() {
 //     super();
 //     NodeType nodetype = new NodeType("source_file");

@@ -1,5 +1,3 @@
-use num_traits::PrimInt;
-
 use crate::{
     actions::{
         bfs_wrapper,
@@ -93,7 +91,7 @@ fn test_with_action_example() {
         &ms,
     );
 
-    let lab = |x: &IdD| {
+    let _lab = |x: &IdD| {
         std::str::from_utf8(&label_store.resolve(&node_store.resolve(x).get_label()))
             .unwrap()
             .to_owned()

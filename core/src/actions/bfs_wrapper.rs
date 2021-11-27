@@ -1,8 +1,17 @@
 use std::marker::PhantomData;
 
-use num_traits::{PrimInt, cast};
+use num_traits::{cast, PrimInt};
 
-use crate::{matchers::decompressed_tree_store::{BreathFirstContiguousSiblings, BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, Initializable, PostOrder, ShallowDecompressedTreeStore}, tree::{tree::{self, NodeStore, Tree, WithChildren}, tree_path::CompressedTreePath}};
+use crate::{
+    matchers::decompressed_tree_store::{
+        BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, Initializable,
+        PostOrder, ShallowDecompressedTreeStore,
+    },
+    tree::{
+        tree::{NodeStore, Tree, WithChildren},
+        tree_path::CompressedTreePath,
+    },
+};
 
 pub(crate) struct SD<'a, IdC, IdD, D: DecompressedTreeStore<IdC, IdD>> {
     map: Vec<IdD>,
@@ -12,7 +21,7 @@ pub(crate) struct SD<'a, IdC, IdD, D: DecompressedTreeStore<IdC, IdD>> {
     phantom: PhantomData<*const IdC>,
 }
 
-impl<'a, IdC, IdD:PrimInt, D: PostOrder<IdC, IdD>> SD<'a, IdC, IdD, D> {
+impl<'a, IdC, IdD: PrimInt, D: PostOrder<IdC, IdD>> SD<'a, IdC, IdD, D> {
     // pub(crate) fn parent(&self, x: &IdD) -> Option<IdD> {
     //     todo!()
     // }
@@ -28,15 +37,15 @@ impl<'a, IdC, IdD:PrimInt, D: PostOrder<IdC, IdD>> SD<'a, IdC, IdD, D> {
     // fn original(&self, x: &IdD) -> IdC {
     //     todo!()
     // }
-    pub fn from<T: WithChildren<TreeId=IdC>, S: for<'b> NodeStore<'b,T>>(
+    pub fn from<T: WithChildren<TreeId = IdC>, S: for<'b> NodeStore<'b, T>>(
         s: &'a S,
         x: &'a D,
     ) -> Self {
         let mut map = Vec::with_capacity(x.len());
         // let mut fc = vec![num_traits::zero();x.len()];
-        let mut rev = vec![num_traits::zero();x.len()];
+        let mut rev = vec![num_traits::zero(); x.len()];
         let mut i = 0;
-        rev[cast::<_,usize>(x.root()).unwrap()] = cast(i).unwrap();
+        rev[cast::<_, usize>(x.root()).unwrap()] = cast(i).unwrap();
         map.push(x.root());
 
         while map.len() < x.len() {
@@ -45,7 +54,7 @@ impl<'a, IdC, IdD:PrimInt, D: PostOrder<IdC, IdD>> SD<'a, IdC, IdD, D> {
             // if cs.is_empty() {
             //     fc.push(cast(map.len()).unwrap());
             // }
-            rev[cast::<_,usize>(*curr).unwrap()] = cast(i).unwrap();
+            rev[cast::<_, usize>(*curr).unwrap()] = cast(i).unwrap();
             map.extend(cs);
             i += 1;
         }
@@ -68,17 +77,17 @@ impl<'a, IdC, IdD, D: DecompressedTreeStore<IdC, IdD>> Initializable<IdC, IdD>
         T: Tree<TreeId = IdC>, // + WithHashs<HK = HK, HP = HP>,
         // HK: HashKind,
         // HP: PrimInt,
-        S: for<'b> NodeStore<'b,T>,
+        S: for<'b> NodeStore<'b, T>,
     >(
-        store: &S,
-        root: &IdC,
+        _store: &S,
+        _root: &IdC,
     ) -> Self {
         panic!()
     }
 }
 // TODO back should be owned to disallow mutability from elsewhere
-impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<IdC, IdD>> ShallowDecompressedTreeStore<IdC, IdD>
-    for SD<'a, IdC, IdD, D>
+impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<IdC, IdD>>
+    ShallowDecompressedTreeStore<IdC, IdD> for SD<'a, IdC, IdD, D>
 {
     fn len(&self) -> usize {
         self.map.len()
@@ -97,65 +106,56 @@ impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<IdC, IdD>> ShallowDecompres
         num_traits::zero()
     }
 
-    fn path<Idx:PrimInt>(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<Idx> {
+    fn path<Idx: PrimInt>(&self, _parent: &IdD, _descendant: &IdD) -> CompressedTreePath<Idx> {
         todo!()
     }
 
-    fn child<
-        T: WithChildren<TreeId = IdC>,
-        S: for<'b> NodeStore<'b,T>,
-    >(
+    fn child<T: WithChildren<TreeId = IdC>, S: for<'b> NodeStore<'b, T>>(
         &self,
-        store: &S,
-        x: &IdD,
-        p: &[T::ChildIdx],
+        _store: &S,
+        _x: &IdD,
+        _p: &[T::ChildIdx],
     ) -> IdD {
         todo!()
     }
 
-    fn children<
-        T: WithChildren<TreeId = IdC>,
-        S: for<'b> NodeStore<'b,T>,
-    >(
+    fn children<T: WithChildren<TreeId = IdC>, S: for<'b> NodeStore<'b, T>>(
         &self,
         store: &S,
         x: &IdD,
     ) -> Vec<IdD> {
         // self.back.children(store,&self.map[cast::<_,usize>(*x).unwrap()])
-        self.back.children(store,x)
+        self.back.children(store, x)
     }
 }
 
-impl<'a, IdC, IdD:PrimInt, D: DecompressedTreeStore<IdC, IdD>> DecompressedTreeStore<IdC, IdD>
+impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<IdC, IdD>> DecompressedTreeStore<IdC, IdD>
     for SD<'a, IdC, IdD, D>
 {
-    fn descendants<T: Tree<TreeId = IdC>, S: for<'b> NodeStore<'b,T>>(
+    fn descendants<T: Tree<TreeId = IdC>, S: for<'b> NodeStore<'b, T>>(
         &self,
-        store: &S,
-        x: &IdD,
+        _store: &S,
+        _x: &IdD,
     ) -> Vec<IdD> {
         todo!()
     }
 
-    fn descendants_count<
-        T: Tree<TreeId = IdC>,
-        S: for<'b> NodeStore<'b,T>,
-    >(
+    fn descendants_count<T: Tree<TreeId = IdC>, S: for<'b> NodeStore<'b, T>>(
         &self,
-        store: &S,
-        x: &IdD,
+        _store: &S,
+        _x: &IdD,
     ) -> usize {
         todo!()
     }
 
-    fn first_descendant(&self, i: &IdD) -> IdD {
+    fn first_descendant(&self, _i: &IdD) -> IdD {
         todo!()
     }
 }
-impl<'a, IdC, IdD:PrimInt, D: DecompressedTreeStore<IdC, IdD> + DecompressedWithParent<IdD>> DecompressedWithParent<IdD>
-    for SD<'a, IdC, IdD, D>
+impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<IdC, IdD> + DecompressedWithParent<IdD>>
+    DecompressedWithParent<IdD> for SD<'a, IdC, IdD, D>
 {
-    fn has_parent(&self, id: &IdD) -> bool {
+    fn has_parent(&self, _id: &IdD) -> bool {
         todo!()
     }
 
@@ -163,10 +163,7 @@ impl<'a, IdC, IdD:PrimInt, D: DecompressedTreeStore<IdC, IdD> + DecompressedWith
         self.back.parent(id)
     }
 
-    fn position_in_parent<
-        T: WithChildren,
-        S: for<'b> NodeStore<'b,T>,
-    >(
+    fn position_in_parent<T: WithChildren, S: for<'b> NodeStore<'b, T>>(
         &self,
         store: &S,
         c: &IdD,
@@ -175,29 +172,27 @@ impl<'a, IdC, IdD:PrimInt, D: DecompressedTreeStore<IdC, IdD> + DecompressedWith
     }
 }
 
-impl<'a,IdC, IdD:'static+PrimInt, D: DecompressedTreeStore<IdC, IdD>> BreathFirstIterable<'a, IdC, IdD>
-    for SD<'a, IdC, IdD, D>
+impl<'a, IdC, IdD: 'static + PrimInt, D: DecompressedTreeStore<IdC, IdD>>
+    BreathFirstIterable<'a, IdC, IdD> for SD<'a, IdC, IdD, D>
 {
     type It = Iter<'a, IdD>;
 
     fn iter_bf(&'a self) -> Iter<'a, IdD> {
         Iter {
-            curr: 0, 
+            curr: 0,
             len: self.map.len(),
             map: &self.map,
         }
     }
 }
 
-
-
 pub struct Iter<'a, IdD> {
-    curr:usize,
-    len:usize,
-    map:&'a [IdD],
+    curr: usize,
+    len: usize,
+    map: &'a [IdD],
 }
 
-impl<'a, IdD:PrimInt> Iterator for Iter<'a,IdD> {
+impl<'a, IdD: PrimInt> Iterator for Iter<'a, IdD> {
     type Item = IdD;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -206,9 +201,7 @@ impl<'a, IdD:PrimInt> Iterator for Iter<'a,IdD> {
         } else {
             let r = self.curr;
             self.curr = r + 1;
-            Some(self.map[cast::<_,usize>(r).unwrap()])
+            Some(self.map[cast::<_, usize>(r).unwrap()])
         }
     }
-
-
 }

@@ -1,15 +1,15 @@
 use core::fmt;
 use std::io::{stdout, Write};
 
-use pretty_assertions::{assert_eq, assert_ne};
+use pretty_assertions::assert_eq;
 
 use tree_sitter::{Language, Parser};
 
 use crate::{
     java_tree_gen::spaces_after_lb,
     java_tree_gen_no_compress::{
-        print_tree_labels, print_tree_syntax, serialize, Accumulator, HashedNode, JavaTreeGen,
-        LabelStore, NodeStore, SimpleStores,
+        print_tree_labels, print_tree_syntax, serialize, JavaTreeGen, LabelStore, NodeStore,
+        SimpleStores,
     },
     store::TypeStore,
     tree_gen::TreeGen,
@@ -69,7 +69,7 @@ fn test_equals() {
         source_code1.as_bytes()
     };
     let tree = parser.parse(text, None).unwrap();
-    let full_node = java_tree_gen.generate_default(text, tree.walk());
+    let _full_node = java_tree_gen.generate_default(text, tree.walk());
 
     let text = {
         let source_code1 = "
@@ -79,7 +79,7 @@ fn test_equals() {
         source_code1.as_bytes()
     };
     let tree = parser.parse(text, None).unwrap();
-    let full_node = java_tree_gen.generate_default(text, tree.walk());
+    let _full_node = java_tree_gen.generate_default(text, tree.walk());
 
     let text = {
         let source_code1 = "
@@ -93,7 +93,7 @@ fn test_equals() {
     };
     let tree = parser.parse(text, None).unwrap();
     println!("{}", tree.root_node().to_sexp());
-    let full_node = java_tree_gen.generate_default(text, tree.walk());
+    let _full_node = java_tree_gen.generate_default(text, tree.walk());
 }
 #[test]
 fn test_special() {
@@ -158,7 +158,7 @@ fn test_special() {
         let tree = parser.parse(text, None).unwrap();
         println!("{}", tree.root_node().to_sexp());
 
-        let full_node = java_tree_gen.generate_default(text, tree.walk());
+        let _full_node = java_tree_gen.generate_default(text, tree.walk());
 
         let text = {
             let source_code1 = "class A {

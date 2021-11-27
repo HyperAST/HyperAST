@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, path::Path};
+use std::path::Path;
 
 use git2::{RemoteCallbacks, Repository, Revwalk};
 
@@ -6,11 +6,10 @@ fn main() {
     let url = "https://github.com/INRIA/spoon";
     let path = "/home/quentin/resources/repo/INRIA/spoon";
 
-
     let mut callbacks = RemoteCallbacks::new();
 
     callbacks.transfer_progress(|x| {
-        println!("transfer {}/{}",x.received_objects(),x.total_objects());
+        println!("transfer {}/{}", x.received_objects(), x.total_objects());
         true
     });
 
@@ -23,7 +22,7 @@ fn main() {
             Ok(repo) => repo,
             Err(e) => panic!("failed to open: {}", e),
         };
-        println!("fetch: {}",&path);
+        println!("fetch: {}", &path);
         {
             let mut remote = repository.find_remote("origin").unwrap();
             remote.fetch(&["main"], Some(&mut fo), None).unwrap();
@@ -39,7 +38,7 @@ fn main() {
 
         builder.fetch_options(fo);
 
-        println!("clone: {}",&path);
+        println!("clone: {}", &path);
         let repository = match builder.clone(url, Path::new(path).join(".git").as_path()) {
             Ok(repo) => repo,
             Err(e) => panic!("failed to clone: {}", e),

@@ -1,7 +1,7 @@
 #[derive(Debug)]
-pub struct FullNode<Global,Local> {
-    pub(crate) global: Global,    
-    pub(crate) local: Local, 
+pub struct FullNode<Global, Local> {
+    pub(crate) global: Global,
+    pub(crate) local: Local,
 }
 
 // pub struct FullNode {

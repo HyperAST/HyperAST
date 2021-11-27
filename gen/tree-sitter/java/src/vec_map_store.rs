@@ -1,7 +1,13 @@
-use std::{any::TypeId, cell::{Ref, RefCell, RefMut}, collections::{hash_map::DefaultHasher, HashSet}, fmt::Debug, hash::{BuildHasher, Hash, Hasher}, marker::PhantomData, ops::{Deref, DerefMut}, rc::Rc};
+use std::{
+    cell::{Ref, RefCell},
+    collections::{hash_map::DefaultHasher, HashSet},
+    fmt::Debug,
+    hash::{BuildHasher, Hash, Hasher},
+    ops::DerefMut,
+    rc::Rc,
+};
 
 use atomic_counter::{AtomicCounter, ConsistentCounter};
-use num::PrimInt;
 
 pub struct VecHasher<T: Hash> {
     state: u64,
@@ -30,7 +36,7 @@ impl<T: Hash> Hasher for VecHasher<T> {
         self.node_table.borrow()[i as usize].hash(&mut self.default);
         self.state = self.default.finish();
     }
-    fn write(&mut self, bytes: &[u8]) {
+    fn write(&mut self, _bytes: &[u8]) {
         // for &byte in bytes {
         //     self.state = self.state.rotate_left(8) ^ u64::from(byte);
         // }

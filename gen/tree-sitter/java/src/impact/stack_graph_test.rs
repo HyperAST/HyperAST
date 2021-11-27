@@ -1,12 +1,8 @@
-use stack_graphs::{
-    arena::Handle,
-    graph::{File, Node, NodeID, StackGraph, Symbol},
-    paths::SymbolStack,
-};
+use stack_graphs::graph::{NodeID, StackGraph};
 
 mod types {
     use stack_graphs::arena::Handle;
-    use stack_graphs::graph::{File as _File, Node as _Node, StackGraph, Symbol as _Symbol};
+    use stack_graphs::graph::{File as _File, Node as _Node, Symbol as _Symbol};
 
     pub type File = Handle<_File>;
     pub type Node = Handle<_Node>;
@@ -20,7 +16,7 @@ fn test() {
     let sym_dot = graph.add_symbol(".");
     let sym_main = graph.add_symbol("__main__");
     let sym_a = graph.add_symbol("a");
-    let sym_b = graph.add_symbol("b");
+    let _sym_b = graph.add_symbol("b");
     let sym_foo = graph.add_symbol("foo");
 
     let main_file = graph.get_or_create_file("main.py");

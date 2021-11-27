@@ -700,7 +700,7 @@ impl NodeStore {
     pub(crate) fn new() -> Self {
         Self {
             count: 0,
-            roots:Default::default(),
+            roots: Default::default(),
             internal: VecMapStore::new(),
         }
     }

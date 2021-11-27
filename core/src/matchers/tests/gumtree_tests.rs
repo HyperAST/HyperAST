@@ -1,31 +1,24 @@
-use std::ops::Index;
-
-use num_traits::{zero, PrimInt};
-
 use crate::{
     matchers::{
         decompressed_tree_store::{
-            BreathFirst, CompletePostOrder, DecompressedTreeStore, Initializable as _,
-            ShallowDecompressedTreeStore, SimpleZsTree as ZsTree,
+            CompletePostOrder, Initializable as _, ShallowDecompressedTreeStore,
         },
         heuristic::gt::{
             bottom_up_matcher::BottomUpMatcher,
             greedy_bottom_up_matcher::GreedyBottomUpMatcher,
             greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
         },
-        mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
-        optimal::zs::ZsMatcher,
+        mapping_store::{DefaultMappingStore, MappingStore},
     },
     tests::{
         examples::{example_bottom_up, example_gumtree},
         simple_tree::{vpair_to_stores, Tree, NS},
     },
-    tree::tree::LabelStore,
 };
 
 #[test]
 fn test_min_height_threshold() {
-    let (label_store, node_store, src, dst) = vpair_to_stores(example_gumtree());
+    let (_label_store, node_store, src, dst) = vpair_to_stores(example_gumtree());
     let mappings = DefaultMappingStore::new();
     // GreedySubtreeMatcher.MIN_HEIGHT = 0;
     let mapper = GreedySubtreeMatcher::<CompletePostOrder<_, u16>, _, _, _, 0>::matchh(

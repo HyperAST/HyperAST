@@ -1,6 +1,5 @@
 ///! first attempt at compressing subtrees
 ///! trash, just keep it for now beause of some ideas at the end
-
 use std::{
     cell::Ref,
     collections::hash_map::DefaultHasher,
@@ -37,17 +36,17 @@ pub struct JavaTreeGen {
 // type SpacesStoreD = SpacesStore<u16, 4>;
 
 pub struct LabelStore {
-    internal: VecMapStore<OwnedLabel, LabelIdentifier>,
+    // internal: VecMapStore<OwnedLabel, LabelIdentifier>,
 }
 
 impl LabelStoreTrait<OwnedLabel> for LabelStore {
     type I = LabelIdentifier;
-    fn get_or_insert<T:AsRef<OwnedLabel>>(&mut self, node: T) -> Self::I {
+    fn get_or_insert<T: AsRef<OwnedLabel>>(&mut self, _node: T) -> Self::I {
         // self.internal.get_or_insert(node)
         todo!()
     }
 
-    fn resolve(&self, id: &Self::I) -> &OwnedLabel {
+    fn resolve(&self, _id: &Self::I) -> &OwnedLabel {
         // self.internal.resolve(id)
         todo!()
     }
@@ -57,8 +56,8 @@ pub struct NodeStore {
     internal: VecMapStore<HashedNode, NodeIdentifier>,
 }
 
-impl<'a> NodeStoreTrait<'a,HashedNode> for NodeStore {
-    type D = Ref<'a,HashedNode>;
+impl<'a> NodeStoreTrait<'a, HashedNode> for NodeStore {
+    type D = Ref<'a, HashedNode>;
     fn get_or_insert(&mut self, node: HashedNode) -> NodeIdentifier {
         self.internal.get_or_insert(node)
     }
@@ -698,7 +697,7 @@ impl NodeStore {
 impl LabelStore {
     pub(crate) fn new() -> Self {
         Self {
-            internal: VecMapStore::new(vec![]),
+            // internal: VecMapStore::new(vec![]),
         }
     }
 }

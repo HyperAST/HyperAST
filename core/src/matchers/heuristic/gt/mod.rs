@@ -1,8 +1,6 @@
-#![feature(specialization)]
+use num_traits::PrimInt;
 
-use num_traits::{PrimInt, cast, zero};
-
-use crate::tree::tree::{NodeStore, Stored, Tree, WithChildren, WithStats};
+use crate::tree::tree::{NodeStore, WithChildren};
 
 pub mod bottom_up_matcher;
 pub mod greedy_bottom_up_matcher;
@@ -61,7 +59,10 @@ pub(crate) struct ComputeStruct2 {}
 //     }
 // }
 
-fn size<T: WithChildren, S: for<'a> NodeStore<'a, T>>(store: &S, x: &T::TreeId) -> usize where T::TreeId:PrimInt {
+fn size<T: WithChildren, S: for<'a> NodeStore<'a, T>>(store: &S, x: &T::TreeId) -> usize
+where
+    T::TreeId: PrimInt,
+{
     let cs = store.resolve(&x).get_children().to_owned();
     let mut z = 0;
     for x in &cs {
@@ -71,7 +72,10 @@ fn size<T: WithChildren, S: for<'a> NodeStore<'a, T>>(store: &S, x: &T::TreeId) 
 }
 
 /// todo specilize if T impl [WithStats]
-fn height<T: WithChildren, S: for<'a> NodeStore<'a, T>>(store: &S, x: &T::TreeId) -> usize where T::TreeId:PrimInt {
+fn height<T: WithChildren, S: for<'a> NodeStore<'a, T>>(store: &S, x: &T::TreeId) -> usize
+where
+    T::TreeId: PrimInt,
+{
     let cs = store.resolve(&x).get_children().to_owned();
     if cs.is_empty() {
         return 0;

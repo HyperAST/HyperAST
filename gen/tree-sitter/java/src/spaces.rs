@@ -1,17 +1,7 @@
-use std::{
-    cell::{Cell, Ref, RefCell},
-    panic,
-};
+use std::panic;
 
 use bitvec::{
-    array::BitArray,
-    bits, bitvec,
-    order::Lsb0,
-    prelude::BitVec,
-    slice::{BitRefIter, BitSlice},
-    store::BitStore,
-    vec::IntoIter,
-    BitArr,
+    array::BitArray, bits, order::Lsb0, prelude::BitVec, slice::BitRefIter, store::BitStore,
 };
 
 use crate::vec_map_store::{ArrayOffset, Convertible, VecMapStore};

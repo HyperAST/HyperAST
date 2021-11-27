@@ -65,7 +65,7 @@ fn test_equals() {
     };
     let tree = parser.parse(text, None).unwrap();
     let mut acc_stack = vec![Acc::new(java_tree_gen.type_store.get("file"))];
-    let full_node = java_tree_gen.generate(text, tree.walk(), &mut acc_stack);
+    let _full_node = java_tree_gen.generate(text, tree.walk(), &mut acc_stack);
 
     let text = {
         let source_code1 = "
@@ -76,7 +76,7 @@ fn test_equals() {
     };
     let tree = parser.parse(text, None).unwrap();
     let mut acc_stack = vec![Acc::new(java_tree_gen.type_store.get("file"))];
-    let full_node = java_tree_gen.generate(text, tree.walk(), &mut acc_stack);
+    let _full_node = java_tree_gen.generate(text, tree.walk(), &mut acc_stack);
 
     // let text = {
     //     let source_code1 = "
