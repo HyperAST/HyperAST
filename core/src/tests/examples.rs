@@ -210,7 +210,7 @@ pub(crate) fn example_action() -> (ST<u8>, ST<u8>) {
         "Z",
         vec![
             ST::new_l_c(0, "b", vec![ST::new_l(0, "c"), ST::new_l(0, "d")]),
-            ST::new_l_c(0, "h", vec![ST::new_l_c(0, "e", vec![ST::new_l(0, "Y")])]),
+            ST::new_l_c(0, "h", vec![ST::new_l_c(0, "e", vec![ST::new_l(0, "y")])]),
             ST::new_l_c(0, "x", vec![ST::new_l(0, "w")]),
             ST::new_l_c(
                 0,

@@ -1,12 +1,4 @@
-use std::{
-    any::TypeId,
-    cell::{Ref, RefCell, RefMut},
-    collections::{hash_map::DefaultHasher, HashSet},
-    fmt::Debug,
-    hash::{BuildHasher, Hash, Hasher},
-    marker::PhantomData,
-    rc::Rc,
-};
+use std::{any::TypeId, cell::{Ref, RefCell, RefMut}, collections::{hash_map::DefaultHasher, HashSet}, fmt::Debug, hash::{BuildHasher, Hash, Hasher}, marker::PhantomData, ops::{Deref, DerefMut}, rc::Rc};
 
 use atomic_counter::{AtomicCounter, ConsistentCounter};
 use num::PrimInt;
@@ -19,23 +11,23 @@ pub struct VecHasher<T: Hash> {
 
 impl<T: Hash> Hasher for VecHasher<T> {
     fn write_u8(&mut self, i: u8) {
-        &&self.node_table.borrow()[i as usize].hash(&mut self.default);
+        self.node_table.borrow()[i as usize].hash(&mut self.default);
         self.state = self.default.finish();
     }
     fn write_u16(&mut self, i: u16) {
-        &&self.node_table.borrow()[i as usize].hash(&mut self.default);
+        self.node_table.borrow()[i as usize].hash(&mut self.default);
         self.state = self.default.finish();
     }
     fn write_u32(&mut self, i: u32) {
-        &&self.node_table.borrow()[i as usize].hash(&mut self.default);
+        self.node_table.borrow()[i as usize].hash(&mut self.default);
         self.state = self.default.finish();
     }
     fn write_u64(&mut self, i: u64) {
-        &&self.node_table.borrow()[i as usize].hash(&mut self.default);
+        self.node_table.borrow()[i as usize].hash(&mut self.default);
         self.state = self.default.finish();
     }
     fn write_usize(&mut self, i: usize) {
-        &&self.node_table.borrow()[i as usize].hash(&mut self.default);
+        self.node_table.borrow()[i as usize].hash(&mut self.default);
         self.state = self.default.finish();
     }
     fn write(&mut self, bytes: &[u8]) {
@@ -193,7 +185,7 @@ impl<I: ArrayOffset> PartialEq for VecMapStoreEntry<I> {
 impl<I: ArrayOffset> Eq for VecMapStoreEntry<I> {}
 
 impl<T: Hash, I: ArrayOffset> VecMapStore<T, I> {
-    pub fn get_id_or_insert_node(&mut self, node: T) -> I {
+    pub fn get_or_insert(&mut self, node: T) -> I {
         let entry: VecMapStoreEntry<I> = VecMapStoreEntry {
             node: Convertible::from(0),
         };
@@ -214,8 +206,8 @@ impl<T: Hash, I: ArrayOffset> VecMapStore<T, I> {
             };
             {
                 let mut nt = self.node_table.borrow_mut();
-                nt.push(filling);
-                nt.swap(0, l);
+                nt.deref_mut().push(filling);
+                nt.deref_mut().swap(0, l);
 
                 assert_eq!(c + 1, nt.len());
             };
@@ -230,7 +222,7 @@ impl<T: Hash, I: ArrayOffset> VecMapStore<T, I> {
     //     b
     // }
 
-    pub fn get_node_at_id<'b>(&'b self, id: &I) -> Ref<T> {
+    pub fn resolve<'b>(&'b self, id: &I) -> Ref<T> {
         //Ref<'b,Vec<T>> {
         Ref::map(self.node_table.borrow(), |x| &x[id.to()])
     }

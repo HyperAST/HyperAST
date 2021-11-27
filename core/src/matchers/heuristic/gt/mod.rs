@@ -1,6 +1,6 @@
 #![feature(specialization)]
 
-use num_traits::{cast, zero};
+use num_traits::{PrimInt, cast, zero};
 
 use crate::tree::tree::{NodeStore, Stored, Tree, WithChildren, WithStats};
 
@@ -15,32 +15,32 @@ pub(crate) struct ComputeStruct {}
 pub(crate) struct ComputeStruct2 {}
 
 // pub(crate) trait ComputeTreeStats<T: Node> {
-//     fn size<S: NodeStore<T>>(store: &S, x: T::TreeId) -> T::TreeId;
-//     fn height<S: NodeStore<T>>(store: &S, x: T::TreeId) -> T::TreeId;
+//     fn size<S: for<'a> NodeStore<'a, T>>(store: &S, x: T::TreeId) -> T::TreeId;
+//     fn height<S: for<'a> NodeStore<'a, T>>(store: &S, x: T::TreeId) -> T::TreeId;
 // }
 
 // // impl<T: Node> ComputeTreeStats<T> for ComputeStruct {
-// //     fn size<S: NodeStore<T>>(store: &S, x: T::TreeId) -> T::TreeId {
+// //     fn size<S: for<'a> NodeStore<'a, T>>(store: &S, x: T::TreeId) -> T::TreeId {
 // //         1
 // //     }
 
-// //     fn height<S: NodeStore<T>>(store: &S, x: T::TreeId) -> T::TreeId {
+// //     fn height<S: for<'a> NodeStore<'a, T>>(store: &S, x: T::TreeId) -> T::TreeId {
 // //         1
 // //     }
 // // }
 
 // impl<IdC,T: WithStats> ComputeTreeStats<T> for ComputeStruct {
-//     fn size<S: NodeStore<T>>(store: &S, x: IdC) -> usize {
+//     fn size<S: for<'a> NodeStore<'a, T>>(store: &S, x: IdC) -> usize {
 //         cast(store.get_node_at_id(&x).descendants_count()).unwrap()
 //     }
 
-//     fn height<S: NodeStore<T>>(store: &S, x: IdC) -> usize {
+//     fn height<S: for<'a> NodeStore<'a, T>>(store: &S, x: IdC) -> usize {
 //         cast(store.get_node_at_id(&x).height()).unwrap()
 //     }
 // }
 
 // impl<T: WithChildren> ComputeTreeStats<T> for ComputeStruct2 {
-//     fn size<S: NodeStore<T>>(store: &S, x: T::TreeId) -> T::TreeId {
+//     fn size<S: for<'a> NodeStore<'a, T>>(store: &S, x: T::TreeId) -> T::TreeId {
 //         let cs = store.get_node_at_id(&x).get_children().to_owned();
 
 //         let mut z:T::TreeId = num_traits::zero();
@@ -50,7 +50,7 @@ pub(crate) struct ComputeStruct2 {}
 //         z + num_traits::one()
 //     }
 
-//     fn height<S: NodeStore<T>>(store: &S, x: T::TreeId) -> T::TreeId {
+//     fn height<S: for<'a> NodeStore<'a, T>>(store: &S, x: T::TreeId) -> T::TreeId {
 //         let cs = store.get_node_at_id(&x).get_children().to_owned();
 
 //         let mut z:T::TreeId = num_traits::zero();
@@ -61,8 +61,8 @@ pub(crate) struct ComputeStruct2 {}
 //     }
 // }
 
-fn size<T: WithChildren, S: NodeStore<T>>(store: &S, x: &T::TreeId) -> usize {
-    let cs = store.get_node_at_id(&x).get_children().to_owned();
+fn size<T: WithChildren, S: for<'a> NodeStore<'a, T>>(store: &S, x: &T::TreeId) -> usize where T::TreeId:PrimInt {
+    let cs = store.resolve(&x).get_children().to_owned();
     let mut z = 0;
     for x in &cs {
         z = z + size(store, x);
@@ -71,8 +71,8 @@ fn size<T: WithChildren, S: NodeStore<T>>(store: &S, x: &T::TreeId) -> usize {
 }
 
 /// todo specilize if T impl [WithStats]
-fn height<T: WithChildren, S: NodeStore<T>>(store: &S, x: &T::TreeId) -> usize {
-    let cs = store.get_node_at_id(&x).get_children().to_owned();
+fn height<T: WithChildren, S: for<'a> NodeStore<'a, T>>(store: &S, x: &T::TreeId) -> usize where T::TreeId:PrimInt {
+    let cs = store.resolve(&x).get_children().to_owned();
     if cs.is_empty() {
         return 0;
     }

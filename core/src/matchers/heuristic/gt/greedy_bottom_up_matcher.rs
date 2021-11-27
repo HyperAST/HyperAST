@@ -1,4 +1,4 @@
-use std::{fmt::Debug, marker::PhantomData};
+use std::{fmt::Debug, marker::PhantomData, ops::Deref};
 
 use num_traits::{cast, one, zero, PrimInt};
 
@@ -11,7 +11,7 @@ use crate::{
         optimal::zs::ZsMatcher,
         similarity_metrics,
     },
-    tree::tree::{LabelStore, NodeStore, Tree, WithHashs},
+    tree::tree::{LabelStore, NodeStore, OwnedLabel, Tree, WithHashs},
 };
 
 use super::bottom_up_matcher::BottomUpMatcher;
@@ -22,8 +22,8 @@ pub struct GreedyBottomUpMatcher<
     D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD> + PostOrder<T::TreeId, IdD>,
     IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
     T: Tree + WithHashs,
-    S: NodeStore<T>,
-    LS: LabelStore<I = T::Label>,
+    S: for<'b> NodeStore<'b,T>,
+    LS: LabelStore<OwnedLabel, I = T::Label>,
     const SIZE_THRESHOLD: usize,  // = 1000,
     const SIM_THRESHOLD_NUM: u64, // = 1,
     const SIM_THRESHOLD_DEN: u64, // = 2,
@@ -44,8 +44,8 @@ impl<
             + PostOrder<T::TreeId, IdD>,
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: NodeStore<T>,
-        LS: LabelStore<I = T::Label>,
+        S: for<'b> NodeStore<'b,T>,
+        LS: LabelStore<OwnedLabel, I = T::Label>,
         const SIZE_THRESHOLD: usize,  // = 1000,
         const SIM_THRESHOLD_NUM: u64, // = 1,
         const SIM_THRESHOLD_DEN: u64, // = 2,
@@ -73,10 +73,10 @@ impl<
             + DecompressedTreeStore<T::TreeId, IdD>
             + DecompressedWithParent<IdD>
             + PostOrder<T::TreeId, IdD>,
-        IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
+        IdD: 'a + PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: NodeStore<T>,
-        LS: LabelStore<I = T::Label>,
+        S: for<'b> NodeStore<'b,T>,
+        LS: 'a + LabelStore<OwnedLabel, I = T::Label>,
         const SIZE_THRESHOLD: usize, // = 1000,
         // Integer.parseInt(System.getProperty("gt.bum.szt", "1000"));
         const SIM_THRESHOLD_NUM: u64, // = 1,
@@ -94,6 +94,8 @@ impl<
         SIM_THRESHOLD_NUM,
         SIM_THRESHOLD_DEN,
     >
+where
+    T::TreeId: 'a + PrimInt,
 {
     pub fn new(
         node_store: &'a S,
@@ -159,7 +161,7 @@ impl<
     pub(crate) fn execute(&mut self) {
         assert_eq!(
             self.internal.src_arena.root(),
-            cast::<_,IdD>(self.internal.src_arena.len()).unwrap() - one()
+            cast::<_, IdD>(self.internal.src_arena.len()).unwrap() - one()
         );
         assert!(self.internal.src_arena.len() > 0);
         // todo caution about, it is in postorder and it depends on decomp store
@@ -214,13 +216,13 @@ impl<
     fn src_has_children(&mut self, src: IdD) -> bool {
         self.internal
             .node_store
-            .get_node_at_id(&self.internal.src_arena.original(&src))
+            .resolve(&self.internal.src_arena.original(&src))
             .has_children()
     }
 
     pub(crate) fn last_chance_match_zs<IdDZs>(&mut self, src: IdD, dst: IdD)
     where
-        IdDZs: PrimInt + Debug + Into<usize> + std::ops::SubAssign,
+        IdDZs: 'a + PrimInt + Debug + Into<usize> + std::ops::SubAssign,
     {
         let src_offset = self.internal.src_arena.first_descendant(&src);
         let dst_offset = self.internal.dst_arena.first_descendant(&dst);
@@ -236,14 +238,17 @@ impl<
         let dst = self.internal.dst_arena.original(&dst);
         if src_s < cast(SIZE_THRESHOLD).unwrap() || dst_s < cast(SIZE_THRESHOLD).unwrap() {
             let mappings = DefaultMappingStore::<IdDZs>::new();
-            let matcher = ZsMatcher::<SimpleZsTree<T::TreeId, IdDZs>, _, _, _, _>::matchh(
-                self.internal.node_store,
-                self.label_store,
-                &src,
-                &dst,
-                mappings,
-            );
-            let mappings = matcher.mappings;
+            let mappings = {
+                let matcher = ZsMatcher::<'a, SimpleZsTree<T::TreeId, IdDZs>, _, _, _, _>::matchh(
+                    self.internal.node_store,
+                    self.label_store,
+                    src,
+                    dst,
+                    mappings,
+                );
+
+                matcher.mappings
+            };
             for (i, t) in mappings
                 .src_to_dst
                 .iter()
@@ -260,12 +265,12 @@ impl<
                     let tsrc = self
                         .internal
                         .node_store
-                        .get_node_at_id(&self.internal.src_arena.original(&src))
+                        .resolve(&self.internal.src_arena.original(&src))
                         .get_type();
                     let tdst = self
                         .internal
                         .node_store
-                        .get_node_at_id(&self.internal.dst_arena.original(&dst))
+                        .resolve(&self.internal.dst_arena.original(&dst))
                         .get_type();
 
                     if tsrc == tdst {

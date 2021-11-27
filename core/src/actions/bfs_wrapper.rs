@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use num_traits::{PrimInt, cast};
 
-use crate::{matchers::decompressed_tree_store::{BreathFirstContigousSiblings, BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, Initializable, PostOrder, ShallowDecompressedTreeStore}, tree::{tree::{self, NodeStore, Tree, WithChildren}, tree_path::CompressedTreePath}};
+use crate::{matchers::decompressed_tree_store::{BreathFirstContiguousSiblings, BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, Initializable, PostOrder, ShallowDecompressedTreeStore}, tree::{tree::{self, NodeStore, Tree, WithChildren}, tree_path::CompressedTreePath}};
 
 pub(crate) struct SD<'a, IdC, IdD, D: DecompressedTreeStore<IdC, IdD>> {
     map: Vec<IdD>,
@@ -28,7 +28,7 @@ impl<'a, IdC, IdD:PrimInt, D: PostOrder<IdC, IdD>> SD<'a, IdC, IdD, D> {
     // fn original(&self, x: &IdD) -> IdC {
     //     todo!()
     // }
-    pub fn from<T: WithChildren<TreeId=IdC>, S: NodeStore<T>>(
+    pub fn from<T: WithChildren<TreeId=IdC>, S: for<'b> NodeStore<'b,T>>(
         s: &'a S,
         x: &'a D,
     ) -> Self {
@@ -68,7 +68,7 @@ impl<'a, IdC, IdD, D: DecompressedTreeStore<IdC, IdD>> Initializable<IdC, IdD>
         T: Tree<TreeId = IdC>, // + WithHashs<HK = HK, HP = HP>,
         // HK: HashKind,
         // HP: PrimInt,
-        S: NodeStore<T>,
+        S: for<'b> NodeStore<'b,T>,
     >(
         store: &S,
         root: &IdC,
@@ -97,13 +97,13 @@ impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<IdC, IdD>> ShallowDecompres
         num_traits::zero()
     }
 
-    fn path(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<u32> {
+    fn path<Idx:PrimInt>(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<Idx> {
         todo!()
     }
 
     fn child<
         T: WithChildren<TreeId = IdC>,
-        S: NodeStore<T>,
+        S: for<'b> NodeStore<'b,T>,
     >(
         &self,
         store: &S,
@@ -115,7 +115,7 @@ impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<IdC, IdD>> ShallowDecompres
 
     fn children<
         T: WithChildren<TreeId = IdC>,
-        S: NodeStore<T>,
+        S: for<'b> NodeStore<'b,T>,
     >(
         &self,
         store: &S,
@@ -129,7 +129,7 @@ impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<IdC, IdD>> ShallowDecompres
 impl<'a, IdC, IdD:PrimInt, D: DecompressedTreeStore<IdC, IdD>> DecompressedTreeStore<IdC, IdD>
     for SD<'a, IdC, IdD, D>
 {
-    fn descendants<T: Tree<TreeId = IdC>, S: NodeStore<T>>(
+    fn descendants<T: Tree<TreeId = IdC>, S: for<'b> NodeStore<'b,T>>(
         &self,
         store: &S,
         x: &IdD,
@@ -139,7 +139,7 @@ impl<'a, IdC, IdD:PrimInt, D: DecompressedTreeStore<IdC, IdD>> DecompressedTreeS
 
     fn descendants_count<
         T: Tree<TreeId = IdC>,
-        S: NodeStore<T>,
+        S: for<'b> NodeStore<'b,T>,
     >(
         &self,
         store: &S,
@@ -165,13 +165,13 @@ impl<'a, IdC, IdD:PrimInt, D: DecompressedTreeStore<IdC, IdD> + DecompressedWith
 
     fn position_in_parent<
         T: WithChildren,
-        S: NodeStore<T>,
+        S: for<'b> NodeStore<'b,T>,
     >(
         &self,
         store: &S,
         c: &IdD,
     ) -> T::ChildIdx {
-        todo!()
+        self.back.position_in_parent(store, c)
     }
 }
 

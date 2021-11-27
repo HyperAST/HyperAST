@@ -17,7 +17,7 @@ use crate::tree::tree::{HashKind, NodeStore, Tree, WithHashs};
 //     }
 // }
 
-pub trait Matcher<'a, D, T: Tree + WithHashs, S: NodeStore<T>> {
+pub trait Matcher<'a, D, T: Tree + WithHashs, S: NodeStore<'a,T>> {
     type Store;
     type Ele;
 

@@ -8,19 +8,19 @@ use crate::{matchers::{decompressed_tree_store::{CompletePostOrder, Decompressed
 #[test]
 fn test_zs_paper_for_initial_layout() {
     let (label_store, ..) = vpair_to_stores(example_zs_paper());
-    assert_eq!(label_store.get_node_at_id(&0).to_owned(), b"");
+    assert_eq!(label_store.resolve(&0).to_owned(), b"");
 }
 
 #[test]
 fn test_with_custom_example() {
     let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_java_code());
-    assert_eq!(label_store.get_node_at_id(&0).to_owned(), b"");
+    assert_eq!(label_store.resolve(&0).to_owned(), b"");
     let mappings = DefaultMappingStore::new();
     let mapper = ZsMatcher::<SimpleZsTree<u16, u16>, Tree, u16, NS<Tree>, LS<u16>>::matchh(
         &node_store,
         &label_store,
-        &src,
-        &dst,
+        src,
+        dst,
         mappings,
     );
     let ZsMatcher {
@@ -45,15 +45,15 @@ fn test_with_custom_example() {
                     Some((
                         {
                             let g = src_arena.original(&cast(i).unwrap());
-                            let n = node_store.get_node_at_id(&g).label;
-                            std::str::from_utf8(&label_store.get_node_at_id(&n).to_owned())
+                            let n = node_store.resolve(&g).label;
+                            std::str::from_utf8(&label_store.resolve(&n).to_owned())
                                 .unwrap()
                                 .to_owned()
                         },
                         {
                             let g = dst_arena.original(&(*t - 1));
-                            let n = node_store.get_node_at_id(&g).label;
-                            let a = label_store.get_node_at_id(&n).to_owned();
+                            let n = node_store.resolve(&g).label;
+                            let a = label_store.resolve(&n).to_owned();
                             std::str::from_utf8(&a).unwrap().to_owned()
                         },
                     ))
@@ -85,13 +85,13 @@ fn test_with_custom_example() {
 #[test]
 fn test_with_custom_example2() {
     let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_java_code());
-    assert_eq!(label_store.get_node_at_id(&0).to_owned(), b"");
+    assert_eq!(label_store.resolve(&0).to_owned(), b"");
     let mappings = DefaultMappingStore::new();
     let mapper = ZsMatcher::<CompletePostOrder<u16, u16>, Tree, u16, NS<Tree>, LS<u16>>::matchh(
         &node_store,
         &label_store,
-        &src,
-        &dst,
+        src,
+        dst,
         mappings,
     );
     let ZsMatcher {
@@ -128,13 +128,13 @@ fn test_with_custom_example2() {
 #[test]
 fn test_with_slide_example() {
     let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_slides());
-    assert_eq!(label_store.get_node_at_id(&0).to_owned(), b"");
+    assert_eq!(label_store.resolve(&0).to_owned(), b"");
     let mappings = DefaultMappingStore::new();
     let mapper = ZsMatcher::<SimpleZsTree<u16, u16>, Tree, u16, NS<Tree>, LS<u16>>::matchh(
         &node_store,
         &label_store,
-        &src,
-        &dst,
+        src,
+        dst,
         mappings,
     );
     let ZsMatcher {
@@ -168,13 +168,13 @@ fn test_with_slide_example() {
 #[test]
 fn test_with_slide_example2() {
     let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_slides());
-    assert_eq!(label_store.get_node_at_id(&0).to_owned(), b"");
+    assert_eq!(label_store.resolve(&0).to_owned(), b"");
     let mappings = DefaultMappingStore::new();
     let mapper = ZsMatcher::<CompletePostOrder<u16, u16>, Tree, u16, NS<Tree>, LS<u16>>::matchh(
         &node_store,
         &label_store,
-        &src,
-        &dst,
+        src,
+        dst,
         mappings,
     );
     let ZsMatcher {

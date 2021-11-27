@@ -5,7 +5,7 @@ use num_traits::{cast, PrimInt, ToPrimitive};
 use crate::{
     matchers::{
         decompressed_tree_store::{
-            BreathFirstContigousSiblings, DecompressedTreeStore, DecompressedWithParent,
+            BreathFirstContiguousSiblings, DecompressedTreeStore, DecompressedWithParent,
         },
         mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
         matcher::Matcher,
@@ -27,9 +27,9 @@ pub struct SimpleBottomUpMatcher<
     'a,
     D: DecompressedTreeStore<T::TreeId, IdD>
         + DecompressedWithParent<IdD>
-        + BreathFirstContigousSiblings<T::TreeId, IdD>,
+        + BreathFirstContiguousSiblings<T::TreeId, IdD>,
     T: Tree + WithHashs,
-    S: NodeStore<T>,
+    S: for<'b> NodeStore<'b,T>,
     // const SIM_THRESHOLD: u64 = (0.4).bytes(),
 > {
     internal: BottomUpMatcher<'a, D, IdD, T, S>,
@@ -45,9 +45,9 @@ impl<
         D: 'a
             + DecompressedTreeStore<T::TreeId, IdD>
             + DecompressedWithParent<IdD>
-            + BreathFirstContigousSiblings<T::TreeId, IdD>,
+            + BreathFirstContiguousSiblings<T::TreeId, IdD>,
         T: Tree + WithHashs,
-        S: NodeStore<T>,
+        S: for<'b> NodeStore<'b,T>,
     > Matcher<'a, D, T, S> for SimpleBottomUpMatcher<'a, D, T, S>
 {
     type Store = DefaultMappingStore<IdD>;
@@ -83,9 +83,9 @@ impl<
         D: 'a
             + DecompressedTreeStore<T::TreeId, IdD>
             + DecompressedWithParent<IdD>
-            + BreathFirstContigousSiblings<T::TreeId, IdD>,
+            + BreathFirstContiguousSiblings<T::TreeId, IdD>,
         T: Tree + WithHashs,
-        S: NodeStore<T>,
+        S: for<'b> NodeStore<'b,T>,
     > SimpleBottomUpMatcher<'a, D, T, S>
 {
     fn execute(&mut self) {

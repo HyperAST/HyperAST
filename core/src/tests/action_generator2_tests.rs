@@ -1,7 +1,9 @@
+use num_traits::PrimInt;
+
 use crate::{
     actions::{
         bfs_wrapper,
-        script_generator::{self, Actions, SimpleAction, TestActions},
+        script_generator2::{Act, Actions, ScriptGenerator, SimpleAction, TestActions},
     },
     matchers::{
         decompressed_tree_store::{CompletePostOrder, Initializable, ShallowDecompressedTreeStore},
@@ -11,7 +13,7 @@ use crate::{
         examples::{example_action, example_gt_java_code},
         simple_tree::{vpair_to_stores, Tree, NS},
     },
-    tree::tree::{LabelStore, Labeled, NodeStore},
+    tree::tree::{LabelStore, Labeled, NodeStore, Stored, WithChildren},
 };
 use std::fmt;
 
@@ -78,7 +80,7 @@ fn test_with_action_example() {
         })
     );
 
-    let actions = script_generator::ScriptGenerator::<
+    let actions = ScriptGenerator::<
         _,
         Tree,
         _,
@@ -99,133 +101,106 @@ fn test_with_action_example() {
 
     println!("{:?}", actions);
 
-    let a = SimpleAction::Update {
-        src: from_src(&[]),
-        dst: from_dst(&[]),
-        old: *node_store
-            .resolve(&src_arena.original(&from_src(&[])))
-            .get_label(),
-        new: *node_store
+    let a = make_update(
+        *node_store
             .resolve(&dst_arena.original(&from_dst(&[])))
             .get_label(),
-    };
+        &[],
+    ); // root renamed
 
     assert!(actions.has_actions(&[a,]));
 
-    // Action a = actions.get(0);
-    // assertTrue(a instanceof Insert);
-    // Insert i = (Insert) a;
-    // assertEquals("h", i.getNode().getLabel());
-    // assertEquals("a", i.getParent().getLabel());
-    // assertEquals(2, i.getPosition());
-
-    let tmp = from_dst(&[1]);
-    println!("{}", lab(&tmp));
-    let a = SimpleAction::Insert {
-        sub: dst_arena.original(&from_dst(&[1])),
-        parent: Some(*dst),
-        idx: 2, // FIXME should be 1? in future ( due to parent ref issue)
-    };
+    let a = make_insert(
+        dst_arena.original(&from_dst(&[1])),
+        &[2], /* FIXME should be 1? */
+    ); // h at a.2
     println!("{:?}", a);
     assert!(actions.has_actions(&[a]));
 
-    // a = actions.get(1);
-    // assertTrue(a instanceof TreeInsert);
-    // TreeInsert ti = (TreeInsert) a;
-    // assertEquals("x", ti.getNode().getLabel());
-    // assertEquals("a", ti.getParent().getLabel());
-    // assertEquals(3, ti.getPosition());
-    let a = SimpleAction::Insert {
-        sub: dst_arena.original(&from_dst(&[2])),
-        parent: Some(*dst),
-        idx: 3, // FIXME 2 ?
-    };
+    let a = make_insert(
+        dst_arena.original(&from_dst(&[2])),
+        &[3], /* FIXME should be 2? */
+    ); // x at a.3
+    println!("{:?}", a);
     assert!(actions.has_actions(&[a,]));
 
-    // // a = actions.get(2);
-    // // assertTrue(a instanceof Move);
-    // // Move m = (Move) a;
-    // // assertEquals("e", m.getNode().getLabel());
-    // // assertEquals("h", m.getParent().getLabel());
-    // // assertEquals(0, m.getPosition());
-    let a = SimpleAction::Move {
-        sub: from_src(&[1]),
-        parent: Some(from_dst(&[1])),
-        idx: 0,
-    };
+    let a = make_move(&[0], &[2, 0]); // e to h.0
+    println!("{:?}", a);
     assert!(actions.has_actions(&[a,]));
 
-    // a = actions.get(3);
-    // assertTrue(a instanceof Insert);
-    // Insert i2 = (Insert) a;
-    // assertEquals("u", i2.getNode().getLabel());
-    // assertEquals("j", i2.getParent().getLabel());
-    // assertEquals(0, i2.getPosition());
-    let a = SimpleAction::Insert {
-        sub: dst_arena.original(&from_dst(&[3, 0])),
-        parent: Some(from_dst(&[3])),
-        idx: 0,
-    };
+    // ins u at j.0
+    let a = make_insert(dst_arena.original(&from_dst(&[3, 0])), &[5, 0]);
+    println!("{:?}", a);
     assert!(actions.has_actions(&[a,]));
 
-    // a = actions.get(4);
-    // assertTrue(a instanceof Update);
-    // Update u = (Update) a;
-    // assertEquals("f", u.getNode().getLabel());
-    // assertEquals("y", u.getValue());
-    let a = SimpleAction::Update {
-        src: from_src(&[0, 0]),
-        dst: from_dst(&[1, 0, 0]),
-        old: *node_store
-            .resolve(&src_arena.original(&from_src(&[0, 0])))
-            .get_label(),
-        new: *node_store
+    // upd f to y
+    let a = make_update(
+        *node_store
             .resolve(&dst_arena.original(&from_dst(&[1, 0, 0])))
             .get_label(),
-    };
+        &[0, 0],
+    );
+    println!("{:?}", a);
     assert!(actions.has_actions(&[a,]));
 
-    // a = actions.get(5);
-    // assertTrue(a instanceof Insert);
-    // Insert i3 = (Insert) a;
-    // assertEquals("v", i3.getNode().getLabel());
-    // assertEquals("u", i3.getParent().getLabel());
-    // assertEquals(0, i3.getPosition());
-    assert!(actions.has_actions(&[SimpleAction::Insert {
-        sub: dst_arena.original(&from_dst(&[3, 0, 0])),
-        parent: Some(from_dst(&[3, 0])),
-        idx: 0
-    },]));
-
-    // a = actions.get(6);
-    // assertTrue(a instanceof Move);
-    // Move m2 = (Move) a;
-    // assertEquals("k", m2.getNode().getLabel());
-    // assertEquals("v", m2.getParent().getLabel());
-    // assertEquals(0, m.getPosition());
-    let a = SimpleAction::Move {
-        sub: from_src(&[4, 0]),
-        parent: Some(from_dst(&[3, 0, 0])),
-        idx: 0,
-    };
+    // ins u at v.0
+    let a = make_insert(dst_arena.original(&from_dst(&[3, 0, 0])), &[5, 0, 0]);
+    println!("{:?}", a);
     assert!(actions.has_actions(&[a,]));
 
-    // a = actions.get(7);
-    // assertTrue(a instanceof TreeDelete);
-    // TreeDelete td = (TreeDelete) a;
-    // assertEquals("g", td.getNode().getLabel());
-    assert!(actions.has_actions(&[SimpleAction::Delete {
-        tree: from_src(&[2]),
-    },]));
+    // mov k to v.0
+    let a = make_move(&[4, 0], &[5, 0, 0, 0]);
+    println!("{:?}", a);
+    assert!(actions.has_actions(&[a,]));
 
-    // a = actions.get(8);
-    // assertTrue(a instanceof Delete);
-    // Delete d = (Delete) a;
-    // assertEquals("i", d.getNode().getLabel());
-    assert!(actions.has_actions(&[SimpleAction::Delete {
-        tree: from_src(&[3]),
-    },]));
+    // del g
+    let a = make_delete(&[2]);
+    println!("{:?}", a);
+    assert!(actions.has_actions(&[a,]));
+
+    // del i
+    let a = make_delete(&[3]);
+    println!("{:?}", a);
+    assert!(actions.has_actions(&[a,]));
+
     assert_eq!(12, actions.len()); // FIXME should be 9 if actions are compressed
+}
+
+fn make_move<T: Stored + Labeled + WithChildren>(
+    from: &[T::ChildIdx],
+    to: &[T::ChildIdx],
+) -> SimpleAction<T> {
+    SimpleAction {
+        path: to.into(),
+        action: Act::Move { from: from.into() },
+    }
+}
+
+fn make_delete<T: Stored + Labeled + WithChildren>(path: &[T::ChildIdx]) -> SimpleAction<T> {
+    SimpleAction {
+        path: path.into(),
+        action: Act::Delete {},
+    }
+}
+
+fn make_insert<T: Stored + Labeled + WithChildren>(
+    sub: T::TreeId,
+    path: &[T::ChildIdx],
+) -> SimpleAction<T> {
+    SimpleAction {
+        path: path.into(),
+        action: Act::Insert { sub },
+    }
+}
+
+fn make_update<T: Stored + Labeled + WithChildren>(
+    new: T::Label,
+    path: &[T::ChildIdx],
+) -> SimpleAction<T> {
+    SimpleAction {
+        path: path.into(),
+        action: Act::Update { new },
+    }
 }
 
 #[test]
@@ -285,7 +260,7 @@ fn test_with_zs_custom_example() {
     // ms.addMapping(src.getChild("1.3"), dst.getChild("0.1.3"));
     ms.link(from_src(&[1, 3]), from_dst(&[0, 1, 3]));
 
-    let actions = script_generator::ScriptGenerator::<
+    let actions = ScriptGenerator::<
         _,
         Tree,
         _,
@@ -298,48 +273,70 @@ fn test_with_zs_custom_example() {
         &ms,
     );
 
-    // new Delete(src.getChild("1.1"))
-    assert!(actions.has_actions(&[SimpleAction::Delete {
-        tree: from_src(&[1, 1]),
-    },]));
+    println!("{:?}", actions);
 
-    assert!(actions.has_actions(&[
-        // new Insert(dst, null, 0),
-        SimpleAction::Insert {
-            sub: dst_arena.original(&dst),
-            parent: None,
-            idx: 0,
-        },
-    ]));
-    assert!(actions.has_actions(&[
-        // new Move(src, dst, 0),
-        SimpleAction::Move {
-            sub: *src,
-            parent: Some(*dst),
-            idx: 0,
-        },
-    ]));
-    assert!(actions.has_actions(&[
-        // new Update(src.getChild("1.3"), "r2"),
-        SimpleAction::Update {
-            src: from_src(&[1, 3]),
-            dst: from_dst(&[0, 1, 3]),
-            old: *node_store
-                .resolve(&src_arena.original(&from_src(&[1, 3])))
-                .get_label(),
-            new: *node_store
-                .resolve(&dst_arena.original(&from_dst(&[0, 1, 3])))
-                .get_label(),
-        }, // label: "r2".to_owned()},
-    ]));
-    assert!(actions.has_actions(&[
-        // new Insert(dst.getChild("0.1.1"), src.getChild("1"), 1),
-        SimpleAction::Insert {
-            sub: dst_arena.original(&from_dst(&[0, 1, 1])),
-            parent: Some(from_dst(&[0, 1])),
-            idx: 1,
-        },
-    ]));
+    // // new Delete(src.getChild("1.1"))
+    // assert!(actions.has_actions(&[SimpleAction::Delete {
+    //     tree: from_src(&[1, 1]),
+    // },]));
+    let a = make_delete(&[1, 1]);
+    println!("{:?}", a);
+    assert!(actions.has_actions(&[a,]));
+
+    // assert!(actions.has_actions(&[
+    //     // new Insert(dst, null, 0),
+    //     SimpleAction::Insert {
+    //         sub: dst_arena.original(&dst),
+    //         parent: None,
+    //         idx: 0,
+    //     },
+    // ]));
+    let a = make_insert(dst_arena.original(&dst), &[]);
+    println!("{:?}", a);
+    assert!(actions.has_actions(&[a,]));
+    // assert!(actions.has_actions(&[
+    //     // new Move(src, dst, 0),
+    //     SimpleAction::Move {
+    //         sub: *src,
+    //         parent: Some(*dst),
+    //         idx: 0,
+    //     },
+    // ]));
+    let a = make_move(&[], &[0]);
+    println!("{:?}", a);
+    assert!(actions.has_actions(&[a,]));
+    // assert!(actions.has_actions(&[
+    //     // new Update(src.getChild("1.3"), "r2"),
+    //     SimpleAction::Update {
+    //         src: from_src(&[1, 3]),
+    //         dst: from_dst(&[0, 1, 3]),
+    //         old: node_store
+    //             .get_node_at_id(&src_arena.original(&from_src(&[1, 3])))
+    //             .get_label(),
+    //         new: node_store
+    //             .get_node_at_id(&dst_arena.original(&from_dst(&[0, 1, 3])))
+    //             .get_label(),
+    //     }, // label: "r2".to_owned()},
+    // ]));
+    let a = make_update(
+        *node_store
+            .resolve(&dst_arena.original(&from_dst(&[0, 1, 3])))
+            .get_label(),
+        &[],
+    );
+    println!("{:?}", a);
+    assert!(actions.has_actions(&[a,]));
+    // assert!(actions.has_actions(&[
+    //     // new Insert(dst.getChild("0.1.1"), src.getChild("1"), 1),
+    //     SimpleAction::Insert {
+    //         sub: dst_arena.original(&from_dst(&[0, 1, 1])),
+    //         parent: Some(from_dst(&[0, 1])),
+    //         idx: 1,
+    //     },
+    // ]));
+    let a = make_insert(dst_arena.original(&from_dst(&[0, 1, 1])), &[0, 1, 1]);
+    println!("{:?}", a);
+    assert!(actions.has_actions(&[a,]));
     assert_eq!(5, actions.len());
 
     // assert_eq!(

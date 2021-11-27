@@ -6,10 +6,8 @@ use crate::{
     matchers::{
         decompressed_tree_store::{DecompressedTreeStore, DecompressedWithParent},
         mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
-        matcher::{self, Matcher},
-        similarity_metrics,
     },
-    tree::tree::{HashKind, LabelStore, NodeStore, Tree, Typed, WithHashs},
+    tree::tree::{HashKind, NodeStore, Tree, Typed, WithHashs},
     utils::sequence_algorithms::longest_common_subsequence,
 };
 
@@ -20,7 +18,7 @@ pub struct BottomUpMatcher<
     D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
     IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
     T: Tree + WithHashs,
-    S: NodeStore<T>,
+    S: for<'b> NodeStore<'b,T>,
     // const SIM_THRESHOLD: u64 = (0.4).bytes(),
 > {
     pub(super) node_store: &'a S,
@@ -35,7 +33,7 @@ impl<
         D: 'a + DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: NodeStore<T>,
+        S: for<'b> NodeStore<'b,T>,
     > BottomUpMatcher<'a, D, IdD, T, S>
 {
     pub(super) fn getDstCandidates(&self, src: &IdD) -> Vec<IdD> {
@@ -61,8 +59,8 @@ impl<
                 }
                 visited[parent.to_usize().unwrap()] = true;
                 let p = &self.dst_arena.original(&parent);
-                if self.node_store.get_node_at_id(p).get_type()
-                    == self.node_store.get_node_at_id(s).get_type()
+                if self.node_store.resolve(p).get_type()
+                    == self.node_store.resolve(s).get_type()
                     && !(self.mappings.is_dst(&parent) || parent == self.dst_arena.root())
                 {
                     candidates.push(parent);
@@ -81,7 +79,7 @@ impl<
         } else if !(src == &zero() || dst == &zero()) {
             if self
                 .node_store
-                .get_node_at_id(
+                .resolve(
                     &self
                         .src_arena
                         .original(&self.src_arena.parent(src).unwrap()),
@@ -89,7 +87,7 @@ impl<
                 .get_type()
                 == self
                     .node_store
-                    .get_node_at_id(
+                    .resolve(
                         &self
                             .dst_arena
                             .original(&self.dst_arena.parent(dst).unwrap()),
@@ -179,12 +177,12 @@ impl<
         // todo with longestCommonSubsequenceWithIsomorphism
         self.lcs_matching(src, dst, |s, src, dst| {
             let a = {
-                let r = s.node_store.get_node_at_id(&s.src_arena.original(src));
+                let r = s.node_store.resolve(&s.src_arena.original(src));
                 let h = r.hash(h);
                 h
             };
             let b = {
-                let r = s.node_store.get_node_at_id(&s.dst_arena.original(dst));
+                let r = s.node_store.resolve(&s.dst_arena.original(dst));
                 let h = r.hash(h);
                 h
             };
@@ -205,7 +203,7 @@ impl<
         for c in self.src_arena.children(self.node_store, src) {
             let t = &self
                 .node_store
-                .get_node_at_id(&self.src_arena.original(&c))
+                .resolve(&self.src_arena.original(&c))
                 .get_type();
             if !src_histogram.contains_key(t) {
                 src_histogram.insert(*t, vec![]);
@@ -217,7 +215,7 @@ impl<
         for c in self.dst_arena.children(self.node_store, dst) {
             let t = &self
                 .node_store
-                .get_node_at_id(&self.dst_arena.original(&c))
+                .resolve(&self.dst_arena.original(&c))
                 .get_type();
             if !dst_histogram.contains_key(t) {
                 dst_histogram.insert(*t, vec![]);

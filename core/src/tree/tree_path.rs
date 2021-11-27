@@ -1,7 +1,6 @@
-use std::marker::PhantomData;
+use std::{fmt::Debug, marker::PhantomData};
 
-use num_traits::{PrimInt, cast};
-
+use num_traits::{cast, PrimInt};
 
 pub trait TreePath<'a, Idx> {
     type ItemIterator: Iterator<Item = Idx>;
@@ -53,6 +52,19 @@ impl<Idx: PrimInt> PartialEq for CompressedTreePath<Idx> {
 
 impl<Idx: PrimInt> Eq for CompressedTreePath<Idx> {}
 
+impl<Idx: PrimInt> Debug for CompressedTreePath<Idx> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.iter()
+                .map(|x| cast::<_, usize>(x).unwrap().to_string())
+                .fold(String::new(), |a, b| if a.len() == 0 { a } else { a + "." }
+                    + &b)
+        )
+    }
+}
+
 impl<Idx: PrimInt> CompressedTreePath<Idx> {
     fn iter(&self) -> impl Iterator<Item = Idx> + '_ {
         Iter {
@@ -82,23 +94,23 @@ impl<'a, Idx: 'a + PrimInt> TreePath<'a, Idx> for CompressedTreePath<Idx> {
     }
 }
 
-impl<Idx: PrimInt> From<Vec<Idx>> for CompressedTreePath<Idx> {
-    fn from(x: Vec<Idx>) -> Self {
+impl<Idx: PrimInt> From<&[Idx]> for CompressedTreePath<Idx> {
+    fn from(x: &[Idx]) -> Self {
         let mut v: Vec<u8> = vec![];
         let mut side = false;
         for x in x {
-            let mut a: usize = cast(x).unwrap();
+            let mut a: usize = cast(*x).unwrap();
             loop {
                 let mut br = false;
                 let b = if a >= 128 {
                     a = a - 128;
-                    2 ^ 4 - 1 as u8
+                    16 - 1 as u8
                 } else if a >= 32 {
                     a = a - 32;
-                    2 ^ 4 - 2 as u8
-                } else if a >= 2 ^ 4 - 2 {
-                    a = a - 2 ^ 4 - 3;
-                    2 ^ 4 - 3 as u8
+                    16 - 2 as u8
+                } else if a >= 16 - 2 {
+                    a = a - 16 - 3;
+                    16 - 3 as u8
                 } else {
                     br = true;
                     a as u8
@@ -119,6 +131,11 @@ impl<Idx: PrimInt> From<Vec<Idx>> for CompressedTreePath<Idx> {
             bits: v.into_boxed_slice(),
             phantom: PhantomData,
         }
+    }
+}
+impl<Idx: PrimInt> From<Vec<Idx>> for CompressedTreePath<Idx> {
+    fn from(x: Vec<Idx>) -> Self {
+        x.as_slice().into()
     }
 }
 
@@ -158,12 +175,12 @@ impl<'a, Idx: 'a + PrimInt> Iterator for Iter<'a, Idx> {
                 a & 0b00001111
             };
             let mut br = false;
-            let b = if a == 2 ^ 4 - 1 {
+            let b = if a == 16 - 1 {
                 128
-            } else if a == 2 ^ 4 - 2 {
+            } else if a == 16 - 2 {
                 32
-            } else if a == 2 ^ 4 - 3 {
-                2 ^ 4 - 2
+            } else if a == 16 - 3 {
+                16 - 2
             } else {
                 br = true;
                 a

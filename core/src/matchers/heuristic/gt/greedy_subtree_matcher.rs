@@ -25,7 +25,7 @@ pub struct GreedySubtreeMatcher<
     D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
     IdD: PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
     T: Tree,      // + WithHashs,
-    S: NodeStore<T>,
+    S: for<'b> NodeStore<'b,T>,
     const MIN_HEIGHT: usize, // = 2
 > {
     internal: SubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>,
@@ -41,9 +41,9 @@ impl<
         D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
         IdD: PrimInt + Debug, // + Into<usize> + std::ops::SubAssign,
         T: Tree + WithHashs,
-        S: NodeStore<T>,
+        S: for<'b> NodeStore<'b,T>,
         const MIN_HEIGHT: usize, // = 2
-    > GreedySubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>
+    > GreedySubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT> where T::TreeId:PrimInt
 {
     pub fn matchh(
         node_store: &'a S,
@@ -161,7 +161,7 @@ impl<
         D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
         IdD: PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree,      // + WithHashs,
-        S: NodeStore<T>,
+        S: for<'b> NodeStore<'b,T>,
         const MIN_HEIGHT: usize,
     > Into<SubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>>
     for GreedySubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>
@@ -178,7 +178,7 @@ pub struct SubtreeMatcher<
     D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
     IdD: PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
     T: Tree,      // + WithHashs,
-    S: NodeStore<T>,
+    S: for<'b> NodeStore<'b,T>,
     const MIN_HEIGHT: usize,
 > {
     pub(super) node_store: &'a S,
@@ -192,9 +192,9 @@ impl<
         D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
         IdD: PrimInt + Debug, // + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: NodeStore<T>,
+        S: for<'b> NodeStore<'b,T>,
         const MIN_HEIGHT: usize,
-    > SubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>
+    > SubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT> where T::TreeId:PrimInt
 {
     pub(crate) fn add_mapping_recursively(&mut self, src: &IdD, dst: &IdD) {
         self.mappings.link(*src, *dst);
@@ -295,14 +295,14 @@ impl<
             one()
         } else {
             self.node_store
-                .get_node_at_id(&self.src_arena.original(&p_src))
+                .resolve(&self.src_arena.original(&p_src))
                 .child_count()
         };
         let max_dst_pos = if self.dst_arena.has_parent(dst) {
             one()
         } else {
             self.node_store
-                .get_node_at_id(&self.dst_arena.original(&p_dst))
+                .resolve(&self.dst_arena.original(&p_dst))
                 .child_count()
         };
         let max_pos_diff = std::cmp::max(max_src_pos, max_dst_pos);
@@ -330,7 +330,7 @@ impl<
         if src == dst {
             return true;
         }
-        let src = self.node_store.get_node_at_id(src);
+        let src = self.node_store.resolve(src);
         let src_h = src.hash(&T::HK::label());
         let src_t = src.get_type();
         let src_l = if src.has_label() {
@@ -340,7 +340,7 @@ impl<
         };
         let src_c = src.get_children().to_owned();
 
-        let dst = self.node_store.get_node_at_id(dst);
+        let dst = self.node_store.resolve(dst);
 
         let dst_h = dst.hash(&T::HK::label());
         if src_h != dst_h {
@@ -389,9 +389,9 @@ impl<
         D: DecompressedTreeStore<T::TreeId, IdD>,
         IdD: PrimInt,
         T: Tree,
-        S: NodeStore<T>,
+        S: for<'b> NodeStore<'b,T>,
         const MIN_HEIGHT: usize,
-    > PriorityTreeList<'a, D, IdD, T, S, MIN_HEIGHT>
+    > PriorityTreeList<'a, D, IdD, T, S, MIN_HEIGHT>  where T::TreeId:PrimInt
 {
     pub(super) fn new(store: &'a S, arena: &'a D, tree: IdD) -> Self {
         let h = height(store, &arena.original(&tree));

@@ -1,0 +1,1252 @@
+use std::{
+    cell::Ref,
+    collections::hash_map::DefaultHasher,
+    fmt::Debug,
+    hash::{Hash, Hasher},
+    panic, vec,
+};
+
+use rusted_gumtree_core::tree::tree::{
+    LabelStore as LabelStoreTrait, NodeStore as NodeStoreTrait, OwnedLabel, Type,
+};
+use tree_sitter::{Language, Parser, TreeCursor};
+
+use crate::{
+    hashed::{inner_node_hash, HashedCompressedNode, HashedNode, NodeHashs, SyntaxNodeHashs},
+    nodes::{CompressedNode, LabelIdentifier, NodeIdentifier, Space, TypeIdentifier},
+    vec_map_store::VecMapStore,
+};
+
+// use std::any::TypeId;
+// use std::process::Command;
+// use std::{io::BufReader, rc::Rc, str::FromStr};
+
+// use atomic_counter::RelaxedCounter;
+// use num::PrimInt;
+// use rusted_gumtree_core::tree::static_analysis::{Declaration, QualifiedName};
+// use rusted_gumtree_core::tree::tree::{Label, Type};
+
+extern "C" {
+    fn tree_sitter_java() -> Language;
+}
+
+pub struct JavaTreeGen {
+    pub line_break: Vec<u8>,
+    pub stores: SimpleStores,
+}
+
+// type SpacesStoreD = SpacesStore<u16, 4>;
+
+pub struct LabelStore {
+    internal: VecMapStore<OwnedLabel, LabelIdentifier>,
+}
+
+impl LabelStoreTrait for LabelStore {
+    type I = LabelIdentifier;
+    fn get_id_or_insert_node(&mut self, node: OwnedLabel) -> LabelIdentifier {
+        self.internal.get_id_or_insert_node(node)
+    }
+
+    fn get_node_at_id<'b>(&'b self, id: &LabelIdentifier) -> Ref<OwnedLabel> {
+        self.internal.get_node_at_id(id)
+    }
+}
+
+pub struct NodeStore {
+    internal: VecMapStore<HashedNode, NodeIdentifier>,
+}
+
+impl NodeStoreTrait<HashedNode> for NodeStore {
+    fn get_id_or_insert_node(&mut self, node: HashedNode) -> NodeIdentifier {
+        self.internal.get_id_or_insert_node(node)
+    }
+
+    fn get_node_at_id<'b>(&'b self, id: &NodeIdentifier) -> Ref<HashedNode> {
+        self.internal.get_node_at_id(id)
+    }
+}
+
+#[derive(Debug)]
+pub struct FullNode {
+    compressed_node: NodeIdentifier,
+    depth: usize,    //g
+    position: usize, //g
+    metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
+}
+
+impl FullNode {
+    pub fn id(&self) -> &NodeIdentifier {
+        &self.compressed_node
+    }
+}
+pub trait Acc {
+    type Node;
+    fn push(&mut self, full_node: Self::Node);
+}
+
+pub trait AccIndentation: Acc {
+    fn indentation<'a>(&'a self) -> &'a Spaces;
+}
+
+#[derive(Default, Debug)]
+struct SubTreeMetrics<U: NodeHashs> {
+    hashs: U,
+    size: u32,
+    height: u32,
+}
+
+pub struct Accumulator {
+    kind: Type,
+    children: Vec<NodeIdentifier>,
+    metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
+}
+pub struct AccumulatorWithIndentation {
+    simple: Accumulator,
+    padding_start: usize,
+    indentation: Spaces,
+}
+
+impl Accumulator {
+    pub(crate) fn new(kind: Type) -> Self {
+        Self {
+            kind,
+            children: vec![],
+            metrics: Default::default(),
+        }
+    }
+}
+
+impl Acc for Accumulator {
+    type Node = FullNode;
+    fn push(&mut self, full_node: Self::Node) {
+        self.children.push(full_node.compressed_node);
+        self.metrics.height = self.metrics.height.max(full_node.metrics.height);
+        self.metrics.size += full_node.metrics.size;
+        self.metrics.hashs.acc(&full_node.metrics.hashs);
+    }
+}
+
+impl AccumulatorWithIndentation {
+    pub(crate) fn new(kind: Type) -> Self {
+        Self {
+            simple: Accumulator::new(kind),
+            padding_start: 0,
+            indentation: Space::format_indentation(&"\n".as_bytes().to_vec()),
+        }
+    }
+}
+
+impl Acc for AccumulatorWithIndentation {
+    type Node = FullNode;
+    fn push(&mut self, full_node: Self::Node) {
+        self.simple.push(full_node);
+    }
+}
+
+impl AccIndentation for AccumulatorWithIndentation {
+    fn indentation<'a>(&'a self) -> &'a Spaces {
+        &self.indentation
+    }
+}
+
+pub struct TypeStore {}
+
+impl TypeStore {
+    pub fn get(&mut self, kind: &str) -> TypeIdentifier {
+        Type::new(kind)
+    }
+}
+
+fn hash<T: Hash>(x: &T) -> u64 {
+    let mut state = DefaultHasher::default();
+    x.hash(&mut state);
+    state.finish()
+}
+
+fn clamp_u64_to_u32(x: &u64) -> u32 {
+    (((x & 0xffff0000) >> 32) as u32) ^ ((x & 0xffff) as u32)
+}
+
+type Label = Vec<u8>;
+
+pub struct SimpleNode1<Child> {
+    kind: TypeIdentifier,
+    label: Option<Label>,
+    children: Vec<Child>,
+}
+
+pub struct SimpleStores {
+    pub label_store: LabelStore,
+    pub type_store: TypeStore,
+    pub node_store: NodeStore,
+}
+
+// pub struct Stack<Root,Other> {
+//     pub root: Root,
+//     stack: Vec<Other>,
+// }
+
+// impl<Root:Acc,Other> Stack<Root,Other> {
+//     fn push(&mut self, other:Other) {
+//         self.stack.push(other)
+//     }
+
+//     fn pop(&mut self) -> Option<Other> {
+//         self.stack.pop()
+//     }
+// }
+
+pub trait TreeGen {
+    type Node1;
+    type Acc: AccIndentation;
+    type Stores;
+
+    fn init_val(&mut self, text: &[u8], node: &tree_sitter::Node) -> Self::Acc;
+
+    fn pre(
+        &mut self,
+        text: &[u8],
+        node: &tree_sitter::Node,
+        stack: &Vec<Self::Acc>,
+        sum_byte_length: usize,
+    ) -> <Self as TreeGen>::Acc;
+
+    fn post(
+        &mut self,
+        parent: &mut <Self as TreeGen>::Acc,
+        depth: usize,
+        position: usize,
+        text: &[u8],
+        node: &tree_sitter::Node,
+        acc: <Self as TreeGen>::Acc,
+    ) -> <<Self as TreeGen>::Acc as Acc>::Node;
+
+    fn stores(&mut self) -> &mut Self::Stores;
+
+    fn gen(&mut self, text: &[u8], mut stack: &mut Vec<Self::Acc>, cursor: &mut TreeCursor) {
+        //-> <<Self as TreeGen>::Acc as Acc>::Node {
+
+        let mut has = Has::Down;
+        let mut position = 0;
+        let mut depth = 1;
+        let mut sum_byte_length;
+
+        loop {
+            sum_byte_length = cursor.node().start_byte();
+            if has != Has::Up && cursor.goto_first_child() {
+                println!("down: {:?}", cursor.node().kind());
+                has = Has::Down;
+                position += 1;
+                depth += 1;
+
+                let n = self.pre(text, &cursor.node(), &stack, sum_byte_length);
+
+                stack.push(n);
+            } else {
+                let acc = stack.pop().unwrap();
+                depth -= 1;
+
+                let full_node = if let Some(parent) = stack.last_mut() {
+                    Some(self.post(parent, depth, position, text, &cursor.node(), acc))
+                } else {
+                    stack.push(acc);
+                    None
+                };
+
+                sum_byte_length = cursor.node().end_byte();
+                if cursor.goto_next_sibling() {
+                    has = Has::Right;
+                    let parent = stack.last_mut().unwrap();
+                    parent.push(full_node.unwrap());
+                    position += 1;
+                    depth += 1;
+                    let n = self.pre(text, &cursor.node(), &stack, sum_byte_length);
+                    stack.push(n);
+                } else {
+                    has = Has::Up;
+                    if cursor.goto_parent() {
+                        if let Some(full_node) = full_node {
+                            stack.last_mut().unwrap().push(full_node);
+                        } else {
+                            return;
+                        }
+                    } else {
+                        panic!()
+                    }
+                }
+            }
+        }
+    }
+
+    fn label_for_cursor(text: &[u8], cursor: &TreeCursor) -> Option<Vec<u8>> {
+        let node = cursor.node();
+        let pos = node.start_byte();
+        let end = node.end_byte();
+        let label = {
+            if node.child(0).is_some() {
+                None
+            } else if node.is_named() {
+                let t = &text[pos..end];
+                Some(t.to_vec())
+            } else {
+                None
+            }
+        };
+        label
+    }
+}
+
+impl<'a> TreeGen for JavaTreeGen {
+    type Node1 = SimpleNode1<NodeIdentifier>;
+    type Acc = AccumulatorWithIndentation;
+    type Stores = SimpleStores;
+
+    fn stores(&mut self) -> &mut Self::Stores {
+        &mut self.stores
+    }
+
+    fn pre(
+        &mut self,
+        text: &[u8],
+        node: &tree_sitter::Node,
+        stack: &Vec<Self::Acc>,
+        sum_byte_length: usize,
+    ) -> <Self as TreeGen>::Acc {
+        let type_store = &mut self.stores().type_store;
+        let parent_indentation = &stack.last().unwrap().indentation();
+        let kind = type_store.get(node.kind());
+
+        let indent = JavaTreeGen::compute_indentation(
+            &self.line_break,
+            text,
+            node.start_byte(),
+            sum_byte_length,
+            &parent_indentation,
+        );
+        AccumulatorWithIndentation {
+            simple: Accumulator {
+                kind,
+                children: vec![],
+                metrics: Default::default(),
+            },
+            padding_start: sum_byte_length,
+            indentation: indent,
+        }
+    }
+    fn post(
+        &mut self,
+        parent: &mut <Self as TreeGen>::Acc,
+        depth: usize,
+        position: usize,
+        text: &[u8],
+        node: &tree_sitter::Node,
+        acc: <Self as TreeGen>::Acc,
+    ) -> <<Self as TreeGen>::Acc as Acc>::Node {
+        let node_store = &mut self.stores.node_store;
+        let label_store = &mut self.stores.label_store;
+
+        println!("{}", node.kind());
+
+        Self::handle_spacing(
+            acc.padding_start,
+            node.start_byte(),
+            text,
+            node_store,
+            &(depth + 1),
+            position,
+            parent,
+        );
+
+        let (node, metrics) = {
+            let label = Self::label_for_cursor(text, &node);
+            let acc = acc.simple;
+            let node = SimpleNode1 {
+                kind: acc.kind,
+                label,
+                children: acc.children,
+            };
+            let metrics = acc.metrics;
+            (node, metrics)
+        };
+        let (compressible_node, metrics) = {
+            let hashs = Self::hash_for_node(&metrics.hashs, &metrics.size, &node);
+
+            let metrics = SubTreeMetrics {
+                size: metrics.size + 1,
+                height: metrics.height + 1,
+                hashs,
+            };
+
+            let node = Self::compress_label(label_store, node);
+
+            (HashedCompressedNode::new(hashs, node), metrics)
+        };
+
+        let compressed_node = Self::compress(node_store, compressible_node);
+        let full_node = FullNode {
+            compressed_node,
+            depth,
+            position,
+            metrics,
+        };
+        full_node
+    }
+
+    fn init_val(&mut self, text: &[u8], node: &tree_sitter::Node) -> Self::Acc {
+        let type_store = &mut self.stores().type_store;
+        let kind = type_store.get(node.kind());
+
+        let indent = JavaTreeGen::compute_indentation(
+            &self.line_break,
+            text,
+            node.start_byte(),
+            0,
+            &Space::format_indentation(&self.line_break),
+        );
+        AccumulatorWithIndentation {
+            simple: Accumulator {
+                kind,
+                children: vec![],
+                metrics: Default::default(),
+            },
+            padding_start: 0,
+            indentation: indent,
+        }
+    }
+}
+
+pub type Spaces = Vec<Space>;
+
+impl JavaTreeGen {
+    pub fn new() -> Self {
+        Self {
+            line_break: "\n".as_bytes().to_vec(),
+            stores: SimpleStores {
+                label_store: LabelStore::new(),
+                type_store: TypeStore {},
+                node_store: NodeStore::new(HashedCompressedNode::new(
+                    SyntaxNodeHashs::default(),
+                    CompressedNode::Spaces(vec![].into_boxed_slice()),
+                )),
+            },
+        }
+    }
+
+    pub fn generate_default(&mut self, text: &[u8], mut cursor: TreeCursor) -> FullNode {
+        // self.generate(text, cursor)
+        let mut stack = vec![];
+        stack.push(self.init_val(text, &cursor.node()));
+        let sum_byte_length = cursor.node().end_byte();
+        cursor.goto_first_child();
+        self.gen(text, &mut stack, &mut cursor);
+
+        let mut acc = stack.pop().unwrap();
+
+        Self::handle_final_space(
+            &0,
+            sum_byte_length,
+            text,
+            &mut self.stores.node_store,
+            acc.simple.metrics.size as usize + 1,
+            &mut acc,
+        );
+        let mut r = AccumulatorWithIndentation::new(self.stores().type_store.get("file"));
+
+        let full_node = self.post(
+            &mut r,
+            0,
+            acc.simple.metrics.size as usize,
+            text,
+            &cursor.node(),
+            acc,
+        );
+
+        // let stores = &mut self.stores;
+        // Self::handle_final_space(
+        //     &0,
+        //     sum_byte_length,
+        //     text,
+        //     &mut stores.node_store,
+        //     full_node.position + 1,
+        //     &mut r,
+        // );
+
+        // let (node, metrics) = {
+        //     let acc = r.simple;
+        //     let node = SimpleNode1 {
+        //         kind: acc.kind,
+        //         label: None,
+        //         children: acc.children,
+        //     };
+        //     let metrics = acc.metrics;
+        //     (node, metrics)
+        // };
+
+        // let (compressible_node, metrics) = {
+        //     let hashs = Self::hash_for_node(&metrics.hashs, &metrics.size, &node);
+
+        //     let metrics = SubTreeMetrics {
+        //         size: metrics.size + 1,
+        //         height: metrics.height + 1,
+        //         hashs,
+        //     };
+
+        //     let node = Self::compress_label(&mut stores.label_store, node);
+
+        //     (HashedCompressedNode::new(hashs, node), metrics)
+        // };
+
+        // let compressed_node = Self::compress(&mut stores.node_store, compressible_node);
+        // let full_node = FullNode {
+        //     compressed_node,
+        //     depth: 0,
+        //     position: full_node.position + 1,
+        //     metrics,
+        // };
+
+        full_node
+    }
+
+    pub fn generate(
+        &mut self,
+        text: &[u8],
+        mut cursor: TreeCursor,
+        // stack: &mut Vec<AccumulatorWithIndentation>,
+    ) -> FullNode {
+        let mut stack = vec![];
+        stack.push(AccumulatorWithIndentation {
+            simple: Accumulator {
+                kind: self.stores.type_store.get(cursor.node().kind()),
+                children: vec![],
+                metrics: Default::default(),
+            },
+            padding_start: 0,
+            indentation: JavaTreeGen::compute_indentation(
+                &self.line_break,
+                text,
+                cursor.node().start_byte(),
+                0,
+                &Space::format_indentation(&self.line_break),
+            ),
+        });
+
+        let mut has = Has::Down;
+        let mut position = 0;
+        let mut depth = 1;
+        let mut sum_byte_length; // = cursor.node().start_byte();
+
+        loop {
+            sum_byte_length = cursor.node().start_byte();
+            if has != Has::Up && cursor.goto_first_child() {
+                let parent_indentation = &stack.last().unwrap().indentation;
+                println!("down: {:?}", cursor.node().kind());
+                has = Has::Down;
+                position += 1;
+                depth += 1;
+
+                let kind = self.stores.type_store.get(cursor.node().kind());
+
+                let indent = JavaTreeGen::compute_indentation(
+                    &self.line_break,
+                    text,
+                    cursor.node().start_byte(),
+                    sum_byte_length,
+                    &parent_indentation,
+                );
+                stack.push(AccumulatorWithIndentation {
+                    simple: Accumulator {
+                        kind,
+                        children: vec![],
+                        metrics: Default::default(),
+                    },
+                    padding_start: sum_byte_length,
+                    indentation: indent,
+                });
+            } else {
+                let acc = stack.pop().unwrap();
+                let parent_indentation = acc.indentation;
+
+                // Self::handle_final_space(
+                //     &depth,
+                //     sum_byte_length,
+                //     text,
+                //     &mut self.node_store,
+                //     position,
+                //     &mut stack.last_mut().unwrap(),
+                // );
+
+                let (node, metrics) = {
+                    {
+                        let parent = stack.last_mut().unwrap();
+                        // let old_indentation = &acc.indentation;
+                        Self::handle_spacing(
+                            acc.padding_start,
+                            cursor.node().start_byte(),
+                            text,
+                            &mut self.stores.node_store,
+                            &depth,
+                            position,
+                            parent,
+                        );
+                    }
+
+                    depth -= 1;
+
+                    let label = Self::label_for_cursor(text, &cursor.node());
+                    let acc = acc.simple;
+                    let node = SimpleNode1 {
+                        kind: acc.kind,
+                        label,
+                        children: acc.children,
+                    };
+                    let metrics = acc.metrics;
+
+                    (node, metrics)
+                };
+
+                let (compressible_node, metrics) = {
+                    let hashs = Self::hash_for_node(&metrics.hashs, &metrics.size, &node);
+
+                    let node = Self::compress_label(&mut self.stores.label_store, node);
+
+                    let metrics = SubTreeMetrics {
+                        size: metrics.size + 1,
+                        height: metrics.height + 1,
+                        hashs,
+                    };
+
+                    (HashedCompressedNode::new(hashs, node), metrics)
+                };
+                let compressed_node =
+                    Self::compress(&mut self.stores.node_store, compressible_node);
+                let full_node = FullNode {
+                    compressed_node,
+                    depth,
+                    position,
+                    metrics,
+                };
+
+                sum_byte_length = cursor.node().end_byte();
+                if cursor.goto_next_sibling() {
+                    has = Has::Right;
+                    let parent = stack.last_mut().unwrap();
+                    parent.push(full_node);
+                    position += 1;
+                    depth += 1;
+                    let kind = self.stores.type_store.get(cursor.node().kind());
+                    stack.push(AccumulatorWithIndentation {
+                        simple: Accumulator {
+                            kind,
+                            children: vec![],
+                            metrics: Default::default(),
+                        },
+                        padding_start: sum_byte_length,
+                        indentation: JavaTreeGen::compute_indentation(
+                            &self.line_break,
+                            text,
+                            // &cursor,
+                            cursor.node().start_byte(),
+                            sum_byte_length,
+                            &parent_indentation,
+                        ),
+                    });
+                } else {
+                    has = Has::Up;
+                    if cursor.goto_parent() {
+                        let parent = stack.last_mut().unwrap();
+                        parent.push(full_node);
+                    } else {
+                        return full_node;
+                    }
+                }
+            }
+        }
+    }
+
+    fn compute_indentation<'a>(
+        line_break: &Vec<u8>,
+        text: &'a [u8],
+        // cursor: &TreeCursor,
+        pos: usize,
+        padding_start: usize,
+        parent_indentation: &'a [Space],
+    ) -> Vec<Space> {
+        let spaces = {
+            // let node = cursor.node();
+            // let pos = node.start_byte();
+            &text[padding_start..pos]
+        };
+        let spaces_after_lb = spaces_after_lb(&*line_break, spaces);
+        match spaces_after_lb {
+            Some(s) => Space::format_indentation(s),
+            None => parent_indentation.to_vec(),
+        }
+    }
+
+    fn label_for_cursor(text: &[u8], node: &tree_sitter::Node) -> Option<Vec<u8>> {
+        let node = node;
+        let pos = node.start_byte();
+        let end = node.end_byte();
+        let label = {
+            if node.child(0).is_some() {
+                None
+            } else if node.is_named() {
+                let t = &text[pos..end];
+                Some(t.to_vec())
+            } else {
+                None
+            }
+        };
+        label
+    }
+
+    fn compress(node_store: &mut NodeStore, compressible_node: HashedNode) -> u32 {
+        node_store.get_id_or_insert_node(compressible_node)
+    }
+
+    fn compress_label(
+        label_store: &mut LabelStore,
+        n1: <Self as TreeGen>::Node1,
+    ) -> CompressedNode {
+        let label_id = match n1.label {
+            Some(l) => Some(label_store.get_id_or_insert_node(l)),
+            None => None,
+        };
+        CompressedNode::new(n1.kind, label_id, n1.children)
+    }
+
+    fn hash_for_node(
+        hashs: &SyntaxNodeHashs<u32>,
+        size: &u32,
+        node: &<Self as TreeGen>::Node1,
+    ) -> SyntaxNodeHashs<u32> {
+        let hashed_kind = &clamp_u64_to_u32(&hash(&node.kind));
+        let hashed_label = &clamp_u64_to_u32(&hash(&node.label));
+        SyntaxNodeHashs {
+            structt: inner_node_hash(hashed_kind, &0, size, &hashs.structt),
+            label: inner_node_hash(hashed_kind, hashed_label, size, &hashs.label),
+            syntax: inner_node_hash(hashed_kind, hashed_label, size, &hashs.syntax),
+        }
+    }
+
+    fn handle_spacing(
+        padding_start: usize,
+        pos: usize,
+        text: &[u8],
+        node_store: &mut NodeStore,
+        depth: &usize,
+        position: usize,
+        parent: &mut <Self as TreeGen>::Acc,
+    ) {
+        if padding_start != pos {
+            println!("{:?}", &text[padding_start..pos]);
+            println!("{:?}", std::str::from_utf8(&text[padding_start..pos]));
+            let spaces = Space::format_indentation(&text[padding_start..pos]);
+            let relativized = Space::replace_indentation(parent.indentation(), &spaces);
+            let hashs = SyntaxNodeHashs {
+                structt: 0,
+                label: 0,
+                syntax: clamp_u64_to_u32(&hash(&relativized)),
+            };
+            let node = CompressedNode::Spaces(relativized.into_boxed_slice());
+            let spaces_leaf = HashedCompressedNode::new(hashs, node);
+            let compressed_node = Self::compress(node_store, spaces_leaf);
+            let full_spaces_node = FullNode {
+                compressed_node,
+                depth: *depth,
+                position,
+                metrics: SubTreeMetrics {
+                    size: 1,
+                    height: 1,
+                    hashs,
+                },
+            };
+            parent.push(full_spaces_node);
+        };
+    }
+
+    fn handle_final_space(
+        depth: &usize,
+        sum_byte_length: usize,
+        text: &[u8],
+        node_store: &mut NodeStore,
+        position: usize,
+        acc: &mut <Self as TreeGen>::Acc,
+    ) {
+        // TODO not sure about depth
+        if *depth == 0 && sum_byte_length < text.len() {
+            // end of tree but not end of file,
+            // thus to be a bijection, we need to get the last spaces
+            let spaces = Space::format_indentation(&text[sum_byte_length..]);
+
+            let relativized = Space::replace_indentation(&[], &spaces);
+
+            let spaces_leaf = HashedCompressedNode::new(
+                SyntaxNodeHashs {
+                    structt: 0,
+                    label: 0,
+                    syntax: clamp_u64_to_u32(&hash(&relativized)),
+                },
+                CompressedNode::Spaces(relativized.into_boxed_slice()),
+            );
+            let hashs = spaces_leaf.hashs.clone();
+            let full_spaces_node = FullNode {
+                compressed_node: node_store.get_id_or_insert_node(spaces_leaf),
+                depth: *depth,
+                position,
+                metrics: SubTreeMetrics {
+                    size: 1,
+                    height: 1,
+                    hashs,
+                },
+            };
+            acc.push(full_spaces_node);
+        }
+    }
+
+    pub fn main() {
+        let mut parser = Parser::new();
+        parser.set_language(unsafe { tree_sitter_java() }).unwrap();
+
+        let text = {
+            let source_code1 = "class A {void test() {}}";
+            source_code1.as_bytes()
+        };
+        // let mut parser: Parser, old_tree: Option<&Tree>
+        let tree = parser.parse(text, None).unwrap();
+        let mut java_tree_gen = JavaTreeGen {
+            line_break: "\n".as_bytes().to_vec(),
+            stores: SimpleStores {
+                label_store: LabelStore::new(),
+                type_store: TypeStore {},
+                node_store: NodeStore::new(HashedCompressedNode::new(
+                    SyntaxNodeHashs {
+                        structt: 0,
+                        label: 0,
+                        syntax: 0,
+                    },
+                    CompressedNode::Spaces(vec![].into_boxed_slice()),
+                )),
+            },
+        };
+        let _full_node = java_tree_gen.generate_default(text, tree.walk());
+
+        print_tree_structure(
+            &java_tree_gen.stores.node_store,
+            &_full_node.compressed_node,
+        );
+
+        let tree = parser.parse(text, Some(&tree)).unwrap();
+        let _full_node = java_tree_gen.generate_default(text, tree.walk());
+    }
+    // fn generate<'a>(&mut self, text: &'a [u8], tc: TreeContext, init_acc:ChildrenAcc<'a>) -> FullNode {
+    //     let mut tree = self.parser.parse(text, self.old_tree.as_ref()).unwrap();
+    //     println!("{}", tree.root_node().to_sexp());
+    //     let full_node = self.build_compressed(text, &mut tree, tc, init_acc);
+    //     self.old_tree = Option::Some(tree);
+    //     full_node
+    // }
+}
+
+pub fn print_tree_structure(node_store: &NodeStore, id: &NodeIdentifier) {
+    let node = node_store.get_node_at_id(id);
+    // let children: Option<Vec<NodeIdentifier>> =
+    match &node.node {
+        CompressedNode::Type(kind) => {
+            print!("{}", kind.to_string());
+            // None
+        }
+        CompressedNode::Label { kind, label: _ } => {
+            print!("({})", kind.to_string());
+            // None
+        }
+        CompressedNode::Children2 { kind, children } => {
+            print!("({} ", kind.to_string());
+            for id in children {
+                print_tree_structure(node_store, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Children { kind, children } => {
+            print!("({} ", kind.to_string());
+            let children = children.clone();
+            for id in children.iter() {
+                print_tree_structure(node_store, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Spaces(_) => (),
+    };
+}
+
+pub fn print_tree_labels(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
+    let node = node_store.get_node_at_id(id);
+    // let children: Option<Vec<NodeIdentifier>> =
+    match &node.node {
+        CompressedNode::Type(kind) => {
+            print!("{}", kind.to_string());
+            // None
+        }
+        CompressedNode::Label { kind, label } => {
+            let s = &label_store.get_node_at_id(label);
+            if s.len() > 20 {
+                print!(
+                    "({}='{}...')",
+                    kind.to_string(),
+                    std::str::from_utf8(&s[..20]).unwrap()
+                );
+            } else {
+                print!(
+                    "({}='{}')",
+                    kind.to_string(),
+                    std::str::from_utf8(s).unwrap()
+                );
+            }
+            // None
+        }
+        CompressedNode::Children2 { kind, children } => {
+            print!("({} ", kind.to_string());
+            for id in children {
+                print_tree_labels(node_store, label_store, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Children { kind, children } => {
+            print!("({} ", kind.to_string());
+            let children = children.clone();
+            for id in children.iter() {
+                print_tree_labels(node_store, label_store, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Spaces(_) => (),
+    };
+}
+
+pub fn print_tree_syntax(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
+    let node = node_store.get_node_at_id(id);
+    // let children: Option<Vec<NodeIdentifier>> =
+    match &node.node {
+        CompressedNode::Type(kind) => {
+            print!("{}", kind.to_string());
+            // None
+        }
+        CompressedNode::Label { kind, label } => {
+            let s = &label_store.get_node_at_id(label);
+            if s.len() > 20 {
+                print!(
+                    "({}='{}...')",
+                    kind.to_string(),
+                    std::str::from_utf8(&s[..20]).unwrap()
+                );
+            } else {
+                print!(
+                    "({}='{}')",
+                    kind.to_string(),
+                    std::str::from_utf8(s).unwrap()
+                );
+            }
+            // None
+        }
+        CompressedNode::Children2 { kind, children } => {
+            print!("({} ", kind.to_string());
+            for id in children {
+                print_tree_syntax(node_store, label_store, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Children { kind, children } => {
+            print!("({} ", kind.to_string());
+            let children = children.clone();
+            for id in children.iter() {
+                print_tree_syntax(node_store, label_store, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Spaces(s) => {
+            print!("(_ ");
+            let a = &**s;
+            a.iter().for_each(|a| print!("{:?}", a));
+            print!(")");
+        }
+    };
+}
+
+pub fn serialize<W: std::fmt::Write>(
+    node_store: &NodeStore,
+    label_store: &LabelStore,
+    id: &NodeIdentifier,
+    out: &mut W,
+    parent_indent: &str,
+) -> Option<String> {
+    let node = node_store.get_node_at_id(id);
+    match &node.node {
+        CompressedNode::Type(kind) => {
+            out.write_str(&kind.to_string()).unwrap();
+            // out.write_fmt(format_args!("{}",kind.to_string())).unwrap();
+            None
+        }
+        CompressedNode::Label { kind: _, label } => {
+            let s = &label_store.get_node_at_id(label);
+            out.write_str(&std::str::from_utf8(s).unwrap()).unwrap();
+            // write!(&mut out, "{}", std::str::from_utf8(s).unwrap()).unwrap();
+            None
+        }
+        CompressedNode::Children2 { kind: _, children } => {
+            let ind = serialize(node_store, label_store, &children[0], out, parent_indent)
+                .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
+            serialize(node_store, label_store, &children[1], out, &ind);
+            None
+        }
+        CompressedNode::Children { kind: _, children } => {
+            let children = &(**children);
+            // writeln!(out, "{:?}", children).unwrap();
+            // writeln!(out, "{:?}", kind).unwrap();
+            let mut it = children.iter();
+            let mut ind = serialize(
+                node_store,
+                label_store,
+                &it.next().unwrap(),
+                out,
+                parent_indent,
+            )
+            .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
+            for id in it {
+                ind = serialize(node_store, label_store, &id, out, &ind)
+                    .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
+            }
+            None
+        }
+        CompressedNode::Spaces(s) => {
+            let a = &**s;
+            let mut b = String::new();
+            // let mut b = format!("{:#?}", a);
+            // fmt::format(args)
+            a.iter()
+                .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
+            // std::io::Write::write_all(out, "<|".as_bytes()).unwrap();
+            // std::io::Write::write_all(out, parent_indent.replace("\n", "n").as_bytes()).unwrap();
+            // std::io::Write::write_all(out, "|>".as_bytes()).unwrap();
+            out.write_str(&b).unwrap();
+            Some(if b.contains("\n") {
+                b
+            } else {
+                parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
+            })
+        }
+    }
+}
+
+#[derive(PartialEq, Eq)]
+enum Has {
+    Down,
+    Up,
+    Right,
+}
+
+pub(crate) fn spaces_after_lb<'b>(lb: &[u8], spaces: &'b [u8]) -> Option<&'b [u8]> {
+    spaces
+        .windows(lb.len())
+        .rev()
+        .position(|window| window == lb)
+        .and_then(|i| Some(&spaces[spaces.len() - i - 1..]))
+}
+
+impl NodeStore {
+    pub(crate) fn new(filling_element: HashedCompressedNode<SyntaxNodeHashs<u32>>) -> Self {
+        Self {
+            internal: VecMapStore::new(filling_element),
+        }
+    }
+}
+
+impl LabelStore {
+    pub(crate) fn new() -> Self {
+        Self {
+            internal: VecMapStore::new(vec![]),
+        }
+    }
+}
+
+// pub(crate) fn format_indentation_windows(spaces: &[u8]) -> Vec<Spaces> {
+//     const line_break:&[u8] = "\r\n".as_bytes();
+//     let mut it = spaces.windows(line_break.len());
+//     let mut r: Vec<Spaces> = vec![];
+//     loop {
+//         match it.next() {
+//             Some(x) => {
+//                 if x == line_break {
+//                     r.push(Spaces::LineBreak);
+//                     for _ in 0..line_break.len() {
+//                         it.next();
+//                     }
+//                 } else if ' ' as u8 == x[0] {
+//                     r.push(Spaces::Space);
+//                 } else if '\t' as u8 == x[0] {
+//                     r.push(Spaces::Tabulation);
+//                 } else {
+//                     println!("not a space: {:?}", String::from_utf8(x.to_vec()));
+//                     panic!()
+//                 }
+//             }
+//             None => return r,
+//         }
+//     }
+// }
+
+// pub(crate) fn replace_indentation_old<'b>(indentation: &[u8], spaces: &'b [u8]) -> Vec<Spaces> {
+//     let mut it = spaces.windows(indentation.len());
+//     // .windows(|i| Some(&spaces[spaces.len() - i..]));
+//     let mut r: Vec<Spaces> = vec![];
+//     // let mut old = 0;
+//     loop {
+//         match it.next() {
+//             Some(x) => {
+//                 if x == indentation {
+//                     r.push(Spaces::ParentIndentation);
+//                     for _ in 0..indentation.len() {
+//                         it.next();
+//                     }
+//                 } else if ' ' as u8 == x[0] {
+//                     r.push(Spaces::Space);
+//                 // } else if '\n' as u8 == x[0] {
+//                 //     r.push(Spaces::NewLine);
+//                 // } else if '\r' as u8 == x[0] {
+//                 //     r.push(Spaces::CariageReturn);
+//                 } else if '\t' as u8 == x[0] {
+//                     r.push(Spaces::Tabulation);
+//                 } else {
+//                     println!("not a space: {:?}", String::from_utf8(x.to_vec()));
+//                     panic!()
+//                 }
+//             }
+//             None => return r,
+//         }
+//     }
+// }
+
+// #[derive(Default)]
+// struct LabelStore {
+//     hash_table: HashSet<String>,
+// }
+
+// impl LabelStore {
+//     fn get(&mut self, label: &str) -> &str {
+//         if self.hash_table.contains(label) {
+//             self.hash_table.get(label).unwrap()
+//         } else {
+//             self.hash_table.insert(label.to_owned());
+//             self.hash_table.get(label).unwrap()
+//         }
+//     }
+// }
+
+// pub struct VecHasher<T: Hash> {
+//     state: u64,
+//     node_table: Rc<Vec<T>>,
+//     default: DefaultHasher,
+// }
+
+// impl<T: Hash> Hasher for VecHasher<T> {
+//     fn write_u16(&mut self, i: u16) {
+//         let a = &self.node_table;
+//         let b = &a[i as usize];
+//         b.hash(&mut self.default);
+//         self.state = self.default.finish();
+//     }
+//     fn write(&mut self, bytes: &[u8]) {
+//         // for &byte in bytes {
+//         //     self.state = self.state.rotate_left(8) ^ u64::from(byte);
+//         // }
+//         panic!()
+//     }
+
+//     fn finish(&self) -> u64 {
+//         self.state
+//     }
+// }
+
+// impl<T: Hash> VecHasher<T> {
+//     fn hash_identifier(&mut self, id: &NodeIdentifier) {}
+// }
+
+// pub(crate) struct BuildVecHasher<T> {
+//     node_table: Rc<Vec<T>>,
+// }
+
+// impl<T: Hash> std::hash::BuildHasher for BuildVecHasher<T> {
+//     type Hasher = VecHasher<T>;
+//     fn build_hasher(&self) -> VecHasher<T> {
+//         VecHasher {
+//             state: 0,
+//             node_table: self.node_table.clone(),
+//             default: DefaultHasher::new(),
+//         }
+//     }
+// }
+
+// struct NodeStore {
+//     hash_table: HashSet<NodeStoreEntry, BuildVecHasher<CompressedNode>>,
+//     node_table: Rc<Vec<CompressedNode>>,
+//     counter: ConsistentCounter,
+// }
+
+// impl Default for NodeStore {
+//     fn default() -> Self {
+//         let node_table: Rc<Vec<CompressedNode>> = Default::default();
+//         Self {
+//             hash_table: std::collections::HashSet::with_hasher(BuildVecHasher {
+//                 node_table: node_table.clone(),
+//             }),
+//             node_table,
+//             counter: Default::default(),
+//         }
+//     }
+// }
+
+// struct NodeStoreEntry {
+//     node: NodeIdentifier,
+// }
+
+// impl Hash for NodeStoreEntry {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         state.write_u16(self.node);
+//         // CustomHasher::hash_identifier(state, &self.node);
+//         // self.hash(state);
+//     }
+//     // fn hash(&self, state: &mut VecHasher<CompressibleNode>) {
+//     //     // if TypeId::of::<H>() == TypeId::of::<VecHasher<CompressibleNode>>() {
+
+//     //     // }
+//     //     // CustomHasher::hash_identifier(state, &self.node);
+//     //     // self.hash(state);
+//     // }
+// }
+
+// impl PartialEq for NodeStoreEntry {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.node == other.node
+//     }
+// }
+
+// impl Eq for NodeStoreEntry {}
+
+// impl NodeStore {
+//     fn get_id_or_insert_node(&mut self, node: CompressedNode) -> NodeIdentifier {
+//         let entry = NodeStoreEntry { node: 0 };
+//         if self.hash_table.contains(&entry) {
+//             self.hash_table.get(&entry).unwrap().node
+//         } else {
+//             let entry_to_insert = NodeStoreEntry {
+//                 node: self.counter.get() as NodeIdentifier,
+//             };
+//             self.counter.inc();
+//             self.hash_table.insert(entry_to_insert);
+//             self.hash_table.get(&entry).unwrap().node
+//         }
+//     }
+
+//     fn get_node_at_id(&self, id: &NodeIdentifier) -> &CompressedNode {
+//         &self.node_table[*id as usize]
+//     }
+// }

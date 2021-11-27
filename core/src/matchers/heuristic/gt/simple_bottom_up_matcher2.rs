@@ -2,7 +2,7 @@ use std::{cell::Ref, collections::HashMap, fmt::Debug, marker::PhantomData};
 
 use num_traits::{cast, zero, PrimInt, ToPrimitive};
 
-use crate::{matchers::{decompressed_tree_store::{BreathFirstContigousSiblings, DecompressedWithParent}, mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore}, matcher::{self, Matcher}, similarity_metrics}, tree::tree::{HashKind, NodeStore, Tree, Typed, WithHashs}, utils::sequence_algorithms::longest_common_subsequence};
+use crate::{matchers::{decompressed_tree_store::{BreathFirstContiguousSiblings, DecompressedWithParent}, mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore}, matcher::{self, Matcher}, similarity_metrics}, tree::tree::{HashKind, NodeStore, Tree, Typed, WithHashs}, utils::sequence_algorithms::longest_common_subsequence};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
@@ -10,10 +10,10 @@ use super::bottom_up_matcher::BottomUpMatcher;
 
 pub struct SimpleBottomUpMatcher<
     'a,
-    D: BreathFirstContigousSiblings<T::TreeId, IdD> + DecompressedWithParent<IdD>,
+    D: BreathFirstContiguousSiblings<T::TreeId, IdD> + DecompressedWithParent<IdD>,
     IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
     T: Tree + WithHashs,
-    S: NodeStore<T>,
+    S: for<'b> NodeStore<'b,T>,
     // const SIM_THRESHOLD: u64 = (0.4).bytes(),
 > {
     internal: BottomUpMatcher<'a, D, IdD, T, S>,
@@ -21,10 +21,10 @@ pub struct SimpleBottomUpMatcher<
 
 impl<
         'a,
-        D: 'a + BreathFirstContigousSiblings<T::TreeId, IdD> + DecompressedWithParent<IdD>,
+        D: 'a + BreathFirstContiguousSiblings<T::TreeId, IdD> + DecompressedWithParent<IdD>,
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: NodeStore<T>,
+        S: for<'b> NodeStore<'b,T>,
     > Matcher<'a, D, T, S> for SimpleBottomUpMatcher<'a, D, IdD, T, S>
 {
     type Store = DefaultMappingStore<IdD>;
@@ -57,10 +57,10 @@ impl<
 
 impl<
         'a,
-        D: 'a + BreathFirstContigousSiblings<T::TreeId, IdD> + DecompressedWithParent<IdD>,
+        D: 'a + BreathFirstContiguousSiblings<T::TreeId, IdD> + DecompressedWithParent<IdD>,
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: NodeStore<T>,
+        S: for<'b> NodeStore<'b,T>,
     > SimpleBottomUpMatcher<'a, D, IdD, T, S>
 {
     fn execute(&mut self) {

@@ -2,19 +2,30 @@ use std::ops::Index;
 
 use num_traits::{zero, PrimInt};
 
-use crate::{matchers::{decompressed_tree_store::{BreathFirst, CompletePostOrder, DecompressedTreeStore, Initializable as _, ShallowDecompressedTreeStore, SimpleZsTree as ZsTree}, heuristic::gt::{
+use crate::{
+    matchers::{
+        decompressed_tree_store::{
+            BreathFirst, CompletePostOrder, DecompressedTreeStore, Initializable as _,
+            ShallowDecompressedTreeStore, SimpleZsTree as ZsTree,
+        },
+        heuristic::gt::{
             bottom_up_matcher::BottomUpMatcher,
             greedy_bottom_up_matcher::GreedyBottomUpMatcher,
             greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
-        }, mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore}, optimal::zs::ZsMatcher}, tests::{
+        },
+        mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
+        optimal::zs::ZsMatcher,
+    },
+    tests::{
         examples::{example_bottom_up, example_gumtree},
         simple_tree::{vpair_to_stores, Tree, NS},
-    }, tree::tree::LabelStore};
+    },
+    tree::tree::LabelStore,
+};
 
 #[test]
 fn test_min_height_threshold() {
     let (label_store, node_store, src, dst) = vpair_to_stores(example_gumtree());
-    assert_eq!(label_store.get_node_at_id(&0).to_owned(), b"");
     let mappings = DefaultMappingStore::new();
     // GreedySubtreeMatcher.MIN_HEIGHT = 0;
     let mapper = GreedySubtreeMatcher::<CompletePostOrder<_, u16>, _, _, _, 0>::matchh(
@@ -29,26 +40,17 @@ fn test_min_height_threshold() {
         mappings: ms1,
         ..
     } = mapper.into();
+
     {
         let src = &src_arena.root();
         let dst = &dst_arena.root();
+        let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
+        let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
 
-        assert!(ms1.has(
-            &src_arena.child(&node_store, src, &[1]),
-            &dst_arena.child(&node_store, dst, &[0])
-        ));
-        assert!(ms1.has(
-            &src_arena.child(&node_store, src, &[1, 0]),
-            &dst_arena.child(&node_store, dst, &[0, 0])
-        ));
-        assert!(ms1.has(
-            &src_arena.child(&node_store, src, &[1, 1]),
-            &dst_arena.child(&node_store, dst, &[0, 1])
-        ));
-        assert!(ms1.has(
-            &src_arena.child(&node_store, src, &[2]),
-            &dst_arena.child(&node_store, dst, &[2])
-        ));
+        assert!(ms1.has(&from_src(&[1]), &from_dst(&[0])));
+        assert!(ms1.has(&from_src(&[1, 0]), &from_dst(&[0, 0])));
+        assert!(ms1.has(&from_src(&[1, 1]), &from_dst(&[0, 1])));
+        assert!(ms1.has(&from_src(&[2]), &from_dst(&[2])));
         assert_eq!(4, ms1.len());
     }
     let mappings = DefaultMappingStore::new();
@@ -67,25 +69,19 @@ fn test_min_height_threshold() {
     } = mapper.into();
     let src = &src_arena.root();
     let dst = &dst_arena.root();
-    assert!(ms2.has(
-        &src_arena.child(&node_store, src, &[1]),
-        &dst_arena.child(&node_store, dst, &[0])
-    ));
-    assert!(ms2.has(
-        &src_arena.child(&node_store, src, &[1, 0]),
-        &dst_arena.child(&node_store, dst, &[0, 0])
-    ));
-    assert!(ms2.has(
-        &src_arena.child(&node_store, src, &[1, 1]),
-        &dst_arena.child(&node_store, dst, &[0, 1])
-    ));
+
+    let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
+    let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
+
+    assert!(ms2.has(&from_src(&[1]), &from_dst(&[0])));
+    assert!(ms2.has(&from_src(&[1, 0]), &from_dst(&[0, 0])));
+    assert!(ms2.has(&from_src(&[1, 1]), &from_dst(&[0, 1])));
     assert_eq!(3, ms2.len());
 }
 
 #[test]
 fn test_sim_and_size_threshold() {
     let (label_store, node_store, src, dst) = vpair_to_stores(example_bottom_up());
-    assert_eq!(label_store.get_node_at_id(&0).to_owned(), b"");
     let mut ms: DefaultMappingStore<u16> = DefaultMappingStore::new();
     let src = &src;
     let dst = &dst;
@@ -94,26 +90,16 @@ fn test_sim_and_size_threshold() {
     let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
+    let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
+    let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
     println!("rootsrc: {:?}", src);
     println!("rootdst: {:?}", dst);
 
     ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
-    ms.link(
-        src_arena.child(&node_store, src, &[0, 2, 0]),
-        dst_arena.child(&node_store, dst, &[0, 2, 0]),
-    );
-    ms.link(
-        src_arena.child(&node_store, src, &[0, 2, 1]),
-        dst_arena.child(&node_store, dst, &[0, 2, 1]),
-    );
-    ms.link(
-        src_arena.child(&node_store, src, &[0, 2, 2]),
-        dst_arena.child(&node_store, dst, &[0, 2, 2]),
-    );
-    ms.link(
-        src_arena.child(&node_store, src, &[0, 2, 3]),
-        dst_arena.child(&node_store, dst, &[0, 2, 3]),
-    );
+    ms.link(from_src(&[0, 2, 0]), from_dst(&[0, 2, 0]));
+    ms.link(from_src(&[0, 2, 1]), from_dst(&[0, 2, 1]));
+    ms.link(from_src(&[0, 2, 2]), from_dst(&[0, 2, 2]));
+    ms.link(from_src(&[0, 2, 3]), from_dst(&[0, 2, 3]));
     for (f, s) in ms.iter() {
         assert!(ms.has(&f, &s), "{} -x-> {}", f, s);
     }
@@ -166,18 +152,14 @@ fn test_sim_and_size_threshold() {
     } = mapper.into();
     let src = &src_arena.root();
     let dst = &dst_arena.root();
+    let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
+    let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
     assert!(ms2.has(src, dst));
     for (f, s) in ms.iter() {
         assert!(ms2.has(&f, &s));
     }
-    assert!(ms2.has(
-        &src_arena.child(&node_store, src, &[0]),
-        &dst_arena.child(&node_store, dst, &[0])
-    ));
-    assert!(ms2.has(
-        &src_arena.child(&node_store, src, &[0, 2]),
-        &dst_arena.child(&node_store, dst, &[0, 2])
-    ));
+    assert!(ms2.has(&from_src(&[0]), &from_dst(&[0])));
+    assert!(ms2.has(&from_src(&[0, 2]), &from_dst(&[0, 2])));
     assert_eq!(7, ms2.len());
 
     let ms3 = ms.clone();
@@ -197,27 +179,17 @@ fn test_sim_and_size_threshold() {
     } = mapper.into();
     let src = &src_arena.root();
     let dst = &dst_arena.root();
+    let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
+    let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
     assert_eq!(9, ms3.len());
     for (f, s) in ms.iter() {
         assert!(ms3.has(&f, &s));
     }
     assert!(ms3.has(src, dst));
-    assert!(ms3.has(
-        &src_arena.child(&node_store, src, &[0]),
-        &dst_arena.child(&node_store, dst, &[0])
-    ));
-    assert!(ms3.has(
-        &src_arena.child(&node_store, src, &[0, 0]),
-        &dst_arena.child(&node_store, dst, &[0, 0])
-    ));
-    assert!(ms3.has(
-        &src_arena.child(&node_store, src, &[0, 1]),
-        &dst_arena.child(&node_store, dst, &[0, 1])
-    ));
-    assert!(ms3.has(
-        &src_arena.child(&node_store, src, &[0, 2]),
-        &dst_arena.child(&node_store, dst, &[0, 2])
-    ));
+    assert!(ms3.has(&from_src(&[0]), &from_dst(&[0])));
+    assert!(ms3.has(&from_src(&[0, 0]), &from_dst(&[0, 0])));
+    assert!(ms3.has(&from_src(&[0, 1]), &from_dst(&[0, 1])));
+    assert!(ms3.has(&from_src(&[0, 2]), &from_dst(&[0, 2])));
 }
 
 // test mapping stores

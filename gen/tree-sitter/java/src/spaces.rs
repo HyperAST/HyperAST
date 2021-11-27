@@ -29,12 +29,12 @@ pub(crate) struct SpacesStore<T: BitStore + ArrayOffset, const U: usize> {
     large: VecMapStore<BitVec<Lsb0, T>, T>,
 }
 
-impl<T: BitStore + ArrayOffset + Copy> SpacesStore<T, 4> {
+impl<T: BitStore + ArrayOffset + Clone> SpacesStore<T, 4> {
     pub fn store(&mut self, s: &[u8]) -> Spaces<T> {
         Spaces::from(self, s)
     }
 
-    pub fn store_relativised(&mut self, parent: &[u8], s: &[u8]) -> Spaces<T> {
+    pub fn store_relativized(&mut self, parent: &[u8], s: &[u8]) -> Spaces<T> {
         Spaces::realtivised(self, parent, s)
     }
 
@@ -42,7 +42,7 @@ impl<T: BitStore + ArrayOffset + Copy> SpacesStore<T, 4> {
         s.get_as_iter(self, |it| Spaces::bit_iter_to_str(it, "0"))
     }
 
-    pub fn get_unrelativised(&mut self, parent: &[u8], s: &Spaces<T>) -> String {
+    pub fn get_unrelativized(&mut self, parent: &[u8], s: &Spaces<T>) -> String {
         s.get_as_iter(self, |it| {
             Spaces::bit_iter_to_str(it, std::str::from_utf8(parent).unwrap())
         })
@@ -103,7 +103,7 @@ impl<Small: BitStore + ArrayOffset + Copy> Spaces<Small> {
             id.set(0, false);
             id.set(1, false);
             let i = id.as_raw_slice()[0].to() >> 2;
-            let x = spaces_store.medium.get_node_at_id(&Convertible::from(i));
+            let x = spaces_store.medium.resolve(&Convertible::from(i));
             f(x.iter().by_ref())
         } else {
             // big
@@ -111,13 +111,13 @@ impl<Small: BitStore + ArrayOffset + Copy> Spaces<Small> {
             id.set(0, false);
             id.set(1, false);
             let i = id.as_raw_slice()[0].to() >> 2;
-            let x = spaces_store.large.get_node_at_id(&Convertible::from(i));
+            let x = spaces_store.large.resolve(&Convertible::from(i));
             f(x.iter().by_ref())
         }
     }
 }
 
-impl<Small: BitStore + ArrayOffset + Copy> Spaces<Small> {
+impl<Small: BitStore + ArrayOffset + Clone> Spaces<Small> {
     fn from(spaces_store: &mut SpacesStore<Small, 4>, x: &[u8]) -> Self {
         let mut r: BitVec<Lsb0, Small> = BitVec::new();
         r.push(true);
@@ -189,7 +189,7 @@ impl<Small: BitStore + ArrayOffset + Copy> Spaces<Small> {
                 *b.get(3).unwrap_or(z),
             ];
 
-            let i = spaces_store.medium.get_id_or_insert_node(BitArray::new(a));
+            let i = spaces_store.medium.get_or_insert(BitArray::new(a));
 
             let mut data: BitArray<Lsb0, Small> =
                 BitArray::new(Convertible::from(Convertible::to(&i) << 2));
@@ -197,7 +197,7 @@ impl<Small: BitStore + ArrayOffset + Copy> Spaces<Small> {
             data.set(1, true);
             Self { data }
         } else {
-            let i = spaces_store.large.get_id_or_insert_node(r);
+            let i = spaces_store.large.get_or_insert(r);
             let mut data: BitArray<Lsb0, Small> =
                 BitArray::new(Convertible::from(Convertible::to(&i) << 2));
             data.set(0, false);
@@ -218,22 +218,22 @@ fn aux_eq(x: u8, c: char) -> usize {
 
 type BigSpacesIndentifier = u16;
 
-pub(crate) enum CompressedNode {
-    Type(u16),
-    Label {
-        label: u16,
-        kind: u16,
-    },
-    Children2 {
-        child1: u16,
-        child2: u16,
-        kind: u16,
-    },
-    Children {
-        // children: Box<[u16]>,
-    },
-    Spaces(Spaces<u16>),
-}
+// pub(crate) enum CompressedNode {
+//     Type(u16),
+//     Label {
+//         label: u16,
+//         kind: u16,
+//     },
+//     Children2 {
+//         child1: u16,
+//         child2: u16,
+//         kind: u16,
+//     },
+//     Children {
+//         // children: Box<[u16]>,
+//     },
+//     Spaces(Spaces<u16>),
+// }
 
 #[cfg(test)]
 mod tests {
@@ -247,7 +247,7 @@ mod tests {
         println!("{}", size_of::<Vec<u8>>());
         println!("{}", size_of::<std::mem::ManuallyDrop<Box<[u8]>>>());
         println!("{}", size_of::<std::mem::ManuallyDrop<u64>>());
-        println!("{}", size_of::<CompressedNode>());
+        // println!("{}", size_of::<CompressedNode>());
         println!("{}", size_of::<u16>());
     }
 
@@ -289,8 +289,8 @@ mod tests {
     }
 
     fn rel(spaces_store: &mut SpacesStore<u16, 4>, parent: &str, input: &str) {
-        let r = spaces_store.store_relativised(parent.as_bytes(), input.as_bytes());
-        let output = spaces_store.get_unrelativised(&parent.as_bytes(), &r);
+        let r = spaces_store.store_relativized(parent.as_bytes(), input.as_bytes());
+        let output = spaces_store.get_unrelativized(&parent.as_bytes(), &r);
         assert_eq!(input, output);
     }
 
@@ -339,9 +339,9 @@ mod tests {
         input: &str,
         expected: &str,
     ) {
-        let r = spaces_store.store_relativised(parent.as_bytes(), input.as_bytes());
+        let r = spaces_store.store_relativized(parent.as_bytes(), input.as_bytes());
         println!("{}", spaces_store.get(&r));
-        let output = spaces_store.get_unrelativised(&parent_new.as_bytes(), &r);
+        let output = spaces_store.get_unrelativized(&parent_new.as_bytes(), &r);
         assert_eq!(expected, output);
     }
 

@@ -1,9 +1,10 @@
+
 use std::cell::Ref;
 use std::hash::Hash;
+use std::ops::Deref;
 use std::str::FromStr;
 
 use num_traits::PrimInt;
-use strum_macros::Display;
 use strum_macros::EnumString;
 use strum_macros::ToString;
 
@@ -27,6 +28,7 @@ pub enum Type {
     Identifier,
     //literal
     HexIntegerLiteral,
+    DecimalIntegerLiteral,
     //declarations
     ClassDeclaration,
     MethodDeclaration,
@@ -50,6 +52,9 @@ pub enum Type {
     LeftBrace,
     #[strum(serialize = "]")]
     RightBrace,
+
+    // to cat
+    ExpressionStatement
 }
 
 // impl std::fmt::Display for Type {
@@ -58,7 +63,7 @@ pub enum Type {
 pub trait Node {}
 
 pub trait Stored: Node {
-    type TreeId: PrimInt;
+    type TreeId: Eq;
 }
 
 pub trait Typed {
@@ -116,7 +121,7 @@ pub trait WithHashs {
 
 pub trait Labeled {
     type Label: Eq;
-    fn get_label(&self) -> Self::Label;
+    fn get_label<'a>(&'a self) -> &'a Self::Label;
 }
 
 pub trait Tree: Typed + Labeled + WithChildren {
@@ -138,21 +143,92 @@ impl Type {
 
 pub trait TreePath {}
 
-pub trait NodeStore<T: Stored> {
-    fn get_id_or_insert_node(&mut self, node: T) -> T::TreeId;
+// mod a {
+//     use super::*;
+//     use std::{borrow::Borrow, marker::PhantomData, ops::Deref, rc::Rc};
 
-    fn get_node_at_id<'b>(&'b self, id: &T::TreeId) -> Ref<T>;
+//     fn f() {
+//         let r: Rc<u32> = Rc::new(3);
+
+//         let a: &u32 = r.borrow();
+//     }
+
+//     pub trait NodeHandle:Deref {
+//     }
+
+//     pub trait NodeStore<T: Stored> {
+//         type H:NodeHandle<Target=T>;
+
+//         fn get_or_insert(&mut self, node: T) -> T::TreeId;
+    
+//         fn resolve(&self, id: &T::TreeId) -> &Self::H;
+//     }
+
+//     struct NH<T> {
+
+//         _phantom:PhantomData<*const T>,
+//     }
+
+//     struct NS<T,U> {
+//         pending:(),
+//         /// given a threshold, nodes are put here and shared between all trees
+//         /// extension of it is simple just allocate a new subVec
+//         compressed: Vec<[U;256]>,
+//         compressed_len:usize,
+//         _phantom:PhantomData<*const T>,
+//     }
+
+
+//     trait Trait<'a,T> {}
+
+//     struct Tr<'a, T> {
+//         phantom:PhantomData<*const &'a T>,
+//     }
+
+//     impl<'a,T> Trait<'a,T> for Tr<'a,T> {
+//     }
+
+//     trait Foo<T> {
+//         type Assoc<'a>: Trait<'a,T>;
+//     }
+
+//     struct Bar<T> {
+//         phantom:PhantomData<*const T>,
+//     }
+
+//     // impl<T:'a> Foo<T> for Bar<T> where for <'a> T:'a {
+//     //     type Assoc<'a> = Tr<'a, T>;
+//     // }
+
+// }
+pub trait NodeStore<'a, T: Stored> {
+    type D:Deref<Target=T>;
+
+    fn get_or_insert(&mut self, node: T) -> T::TreeId;
+
+    fn resolve(&'a self, id: &T::TreeId) -> Self::D;
 
     // fn size(&self, id: &T::TreeId) -> usize;
     // fn height(&self, id: &T::TreeId) -> usize;
 }
 
+pub trait VersionedNodeStore<'a, T: Stored>: NodeStore<'a, T>
+where T::TreeId: Clone {
+    fn insert_as_root(&mut self, version:(u8,u8,u8), node: T) -> T::TreeId {
+        let r = self.get_or_insert(node);
+        self.as_root(version, r.clone());
+        r
+    }
+
+    fn as_root(&mut self, version:(u8,u8,u8), node: T::TreeId);
+}
+
 pub type OwnedLabel = Vec<u8>;
 
-pub trait LabelStore {
-    type I: PrimInt;
+pub trait LabelStore<L:?Sized> {
+    type I: Copy + Eq;
 
-    fn get_id_or_insert_node(&mut self, node: OwnedLabel) -> Self::I;
+    fn get_or_insert<T:AsRef<L>>(&mut self, node: T) -> Self::I;
 
-    fn get_node_at_id<'b>(&'b self, id: &Self::I) -> Ref<OwnedLabel>;
+    fn resolve(&self, id: &Self::I) -> &L;
 }

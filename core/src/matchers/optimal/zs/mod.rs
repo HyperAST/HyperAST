@@ -1,17 +1,27 @@
-use std::{collections::VecDeque, fmt::Debug, marker::PhantomData};
+use std::{cell::Ref, collections::VecDeque, fmt::Debug, marker::PhantomData, ops::Deref};
 
 use num_traits::{cast, one, zero, PrimInt};
 use str_distance::DistanceMetric;
 
-use crate::{matchers::{decompressed_tree_store::{DecompressedTreeStore, Initializable as _, PostOrderKeyRoots, ShallowDecompressedTreeStore, SimpleZsTree as ZsTree}, mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore}, matcher::Matcher}, tree::tree::{LabelStore, NodeStore, Tree, WithHashs}};
+use crate::{
+    matchers::{
+        decompressed_tree_store::{
+            DecompressedTreeStore, Initializable as _, PostOrderKeyRoots,
+            ShallowDecompressedTreeStore, SimpleZsTree as ZsTree,
+        },
+        mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
+        matcher::Matcher,
+    },
+    tree::tree::{LabelStore, NodeStore, OwnedLabel, Tree, WithHashs},
+};
 
 pub struct ZsMatcher<
     'a,
-    D: DecompressedTreeStore<T::TreeId, IdD>,
+    D: 'a + DecompressedTreeStore<T::TreeId, IdD>,
     T: Tree + WithHashs,
     IdD: PrimInt + Into<usize>,
-    S: NodeStore<T>,
-    LS: LabelStore<I = T::Label>,
+    S: for<'b> NodeStore<'b, T>,
+    LS: LabelStore<OwnedLabel, I = T::Label>,
 > {
     compressed_node_store: &'a S,
     label_store: &'a LS,
@@ -26,52 +36,12 @@ pub struct ZsMatcher<
 
 impl<
         'a,
-        T: Tree<TreeId = IdC> + WithHashs,
-        IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
-        IdC: PrimInt,
-        S: NodeStore<T>,
-        LS: LabelStore<I = T::Label>,
-    > Matcher<'a, ZsTree<T::TreeId, IdD>, T, S>
-    for ZsMatcher<'a, ZsTree<T::TreeId, IdD>, T, IdD, S, LS>
-{
-    type Store = DefaultMappingStore<IdD>;
-
-    type Ele = IdD;
-
-    fn matchh(
-        compressed_node_store: &'a S,
-        src: &'a T::TreeId,
-        dst: &'a T::TreeId,
-        mappings: Self::Store,
-    ) -> Self::Store {
-        todo!();
-        // let mut matcher = ZsMatcher::<'a, ZsTree<T,HK,HP,IdC,IdD>, T, HK, HP, IdC,IdD, S,LS> {
-        //     compressed_node_store,
-        //     src_arena: ZsTree::new(compressed_node_store, src),
-        //     dst_arena: ZsTree::new(compressed_node_store, dst),
-        //     mappings,
-        //     phantom: PhantomData,
-        //     tree_dist: vec![],
-        //     forest_dist: vec![],
-        //     label_store: todo!(),
-        // };
-        // matcher
-        //     .mappings
-        //     .topit(matcher.src_arena.len(), matcher.dst_arena.len());
-        // println!("aaa");
-        // ZsMatcher::execute(&mut matcher);
-        // matcher.mappings
-    }
-}
-
-impl<
-        'a,
         D: 'a + DecompressedTreeStore<T::TreeId, IdD> + PostOrderKeyRoots<T::TreeId, IdD>,
         T: Tree<TreeId = IdC> + WithHashs,
         IdC: PrimInt,
         IdD: 'a + PrimInt + Into<usize> + std::ops::SubAssign + Debug,
-        S: NodeStore<T>,
-        LS: LabelStore<I = T::Label>,
+        S: for<'b> NodeStore<'b, T>,
+        LS: LabelStore<OwnedLabel, I = T::Label>,
     > ZsMatcher<'a, D, T, IdD, S, LS>
 {
     fn f_dist(&self, row: IdD, col: IdD) -> f64 {
@@ -81,14 +51,14 @@ impl<
     pub fn matchh(
         compressed_node_store: &'a S,
         label_store: &'a LS,
-        src: &'a T::TreeId,
-        dst: &'a T::TreeId,
+        src: T::TreeId,
+        dst: T::TreeId,
         mappings: DefaultMappingStore<IdD>,
     ) -> ZsMatcher<'a, ZsTree<T::TreeId, IdD>, T, IdD, S, LS> {
         let mut matcher = ZsMatcher::<'a, ZsTree<T::TreeId, IdD>, T, IdD, S, LS> {
             compressed_node_store,
-            src_arena: ZsTree::new(compressed_node_store, src),
-            dst_arena: ZsTree::new(compressed_node_store, dst),
+            src_arena: ZsTree::new(compressed_node_store, &src),
+            dst_arena: ZsTree::new(compressed_node_store, &dst),
             mappings,
             phantom: PhantomData,
             tree_dist: vec![],
@@ -111,7 +81,10 @@ impl<
         let mut tree_pairs: VecDeque<(IdD, IdD)> = Default::default(); //ArrayDeque<int[]>
 
         // push the pair of trees (ted1,ted2) to stack
-        tree_pairs.push_front((cast::<_,IdD>(self.src_arena.len()).unwrap(), cast::<_,IdD>(self.dst_arena.len()).unwrap()));
+        tree_pairs.push_front((
+            cast::<_, IdD>(self.src_arena.len()).unwrap(),
+            cast::<_, IdD>(self.dst_arena.len()).unwrap(),
+        ));
 
         while !tree_pairs.is_empty() {
             let tree_pair = tree_pairs.pop_front().unwrap();
@@ -153,11 +126,11 @@ impl<
                         // if both subforests are trees, map nodes
                         let t_src = self
                             .compressed_node_store
-                            .get_node_at_id(&self.src_arena.tree(&row))
+                            .resolve(&self.src_arena.tree(&row))
                             .get_type();
                         let t_dst = self
                             .compressed_node_store
-                            .get_node_at_id(&self.dst_arena.tree(&col))
+                            .resolve(&self.dst_arena.tree(&col))
                             .get_type();
                         if t_src == t_dst {
                             self.mappings.link(row, col);
@@ -264,23 +237,23 @@ impl<
     }
 
     fn get_update_cost(&self, n1: T::TreeId, n2: T::TreeId) -> f64 {
-        let t1 = self.compressed_node_store.get_node_at_id(&n1).get_type();
-        let t2 = self.compressed_node_store.get_node_at_id(&n2).get_type();
+        let t1 = self.compressed_node_store.resolve(&n1).get_type();
+        let t2 = self.compressed_node_store.resolve(&n2).get_type();
         if t1 == t2 {
             // todo relax comparison on types ?
             let l1 = {
-                let r = self.compressed_node_store.get_node_at_id(&n1);
+                let r = self.compressed_node_store.resolve(&n1);
                 if !r.has_label() {
                     return 1.0;
                 };
-                &self.label_store.get_node_at_id(&r.get_label()).to_owned()
+                self.label_store.resolve(&r.get_label()).to_owned()
             };
             let l2 = {
-                let r = self.compressed_node_store.get_node_at_id(&n2);
+                let r = self.compressed_node_store.resolve(&n2);
                 if !r.has_label() {
                     return 1.0;
                 };
-                &self.label_store.get_node_at_id(&r.get_label()).to_owned()
+                self.label_store.resolve(&r.get_label()).to_owned()
             };
             const S: usize = 3;
             let l1 = {
@@ -304,6 +277,45 @@ impl<
     }
 }
 
+impl<
+        'a,
+        T: Tree<TreeId = IdC> + WithHashs,
+        IdD: 'a + PrimInt + Into<usize> + std::ops::SubAssign + Debug,
+        IdC: 'a + PrimInt,
+        S: for<'b> NodeStore<'b, T>,
+        LS: LabelStore<OwnedLabel, I = T::Label>,
+    > Matcher<'a, ZsTree<T::TreeId, IdD>, T, S>
+    for ZsMatcher<'a, ZsTree<T::TreeId, IdD>, T, IdD, S, LS>
+{
+    type Store = DefaultMappingStore<IdD>;
+
+    type Ele = IdD;
+
+    fn matchh(
+        compressed_node_store: &'a S,
+        src: &'a T::TreeId,
+        dst: &'a T::TreeId,
+        mappings: Self::Store,
+    ) -> Self::Store {
+        todo!();
+        // let mut matcher = ZsMatcher::<'a, ZsTree<T,HK,HP,IdC,IdD>, T, HK, HP, IdC,IdD, S,LS> {
+        //     compressed_node_store,
+        //     src_arena: ZsTree::new(compressed_node_store, src),
+        //     dst_arena: ZsTree::new(compressed_node_store, dst),
+        //     mappings,
+        //     phantom: PhantomData,
+        //     tree_dist: vec![],
+        //     forest_dist: vec![],
+        //     label_store: todo!(),
+        // };
+        // matcher
+        //     .mappings
+        //     .topit(matcher.src_arena.len(), matcher.dst_arena.len());
+        // println!("aaa");
+        // ZsMatcher::execute(&mut matcher);
+        // matcher.mappings
+    }
+}
 // pub trait ZsStore<IdC: PrimInt, IdD: PrimInt + Into<usize>>: PostOrder<IdC, IdD> {
 //     // fn lld(&self, last_row: IdD) -> IdD;
 //     // fn tree(&self, row: IdD) -> IdC;
@@ -345,7 +357,7 @@ impl<
 //         T: Tree<TreeId = IdC> + WithHashs<HK = HK, HP = HP>,
 //         HK: HashKind,
 //         HP: PrimInt,
-//         S: NodeStore<T>,
+//         S: for<'b> NodeStore<'b,T>,
 //     >(
 //         store: &S,
 //         root: &IdC,
@@ -446,7 +458,7 @@ impl<
 //         todo!()
 //     }
 
-//     fn child<T: Tree<TreeId = IdC>, S: NodeStore<T>>(
+//     fn child<T: Tree<TreeId = IdC>, S: for<'b> NodeStore<'b,T>>(
 //         &self,
 //         store: &S,
 //         x: IdD,
@@ -455,13 +467,13 @@ impl<
 //         todo!()
 //     }
 
-//     fn descendants<T: Tree<TreeId = IdC>, S: NodeStore<T>>(&self, store: &S, x: IdD) -> Vec<IdD> {
+//     fn descendants<T: Tree<TreeId = IdC>, S: for<'b> NodeStore<'b,T>>(&self, store: &S, x: IdD) -> Vec<IdD> {
 //         todo!()
 //     }
 
 //     fn children<
 //         T: Tree<TreeId = IdC>,
-//         S: NodeStore<T>,
+//         S: for<'b> NodeStore<'b,T>,
 //     >(
 //         &self,
 //         store: &S,
@@ -513,7 +525,7 @@ mod tests {
     #[test]
     fn test_zs_paper_for_initial_layout() {
         let (label_store, compressed_node_store, src, dst) = vpair_to_stores(example_zs_paper());
-        assert_eq!(label_store.get_node_at_id(&0).to_owned(), b"");
+        assert_eq!(label_store.resolve(&0).to_owned(), b"");
         let src_arena = {
             let a = ZsTree::<u16, u16>::new(&compressed_node_store, &src);
             // // assert_eq!(a.id_compressed, vec![0, 1, 2, 3, 4, 5]);
@@ -581,7 +593,7 @@ mod tests {
 //         T: Tree<TreeId = IdC> + WithHashs<HK = HK, HP = HP>,
 //         HK: HashKind,
 //         HP: PrimInt,
-//         S: NodeStore<T>,
+//         S: for<'b> NodeStore<'b,T>,
 //     >(
 //         store: &S,
 //         curr: &IdC,
@@ -608,7 +620,7 @@ mod tests {
 //         T: Tree<TreeId = IdC> + WithHashs<HK = HK, HP = HP>,
 //         HK: HashKind,
 //         HP: PrimInt,
-//         S: NodeStore<T>,
+//         S: for<'b> NodeStore<'b,T>,
 //     >(
 //         store: &S,
 //         root: &IdC,

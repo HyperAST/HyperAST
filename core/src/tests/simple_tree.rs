@@ -1,13 +1,16 @@
 use std::{
+    borrow::Borrow,
     cell::{Ref, RefCell},
+    fmt::Debug,
     marker::PhantomData,
+    rc::Rc,
 };
 
 use num_traits::{cast, PrimInt};
 
 use crate::tree::{
     self,
-    tree::{HashKind, LabelStore, NodeStore, Stored, WithChildren, WithHashs},
+    tree::{HashKind, LabelStore, Labeled, NodeStore, Stored, WithChildren, WithHashs},
 };
 
 pub(crate) struct ST<K> {
@@ -51,26 +54,27 @@ fn store(ls: &mut LS<u16>, ns: &mut NS<Tree>, node: &ST<u8>) -> u16 {
     let lid = node
         .label
         .as_ref()
-        .map(|x| ls.get_id_or_insert_node(x.to_owned().into_bytes()))
+        .map(|x| ls.get_or_insert(&x.to_owned().into_bytes()))
         .unwrap_or(0);
     let t = Tree {
         t: node.kind,
         label: lid,
         children: node.children.iter().map(|x| store(ls, ns, x)).collect(),
     };
-    ns.get_id_or_insert_node(t)
+    ns.get_or_insert(t)
 }
 
-pub(crate) fn vpair_to_stores((src, dst): (ST<u8>, ST<u8>)) -> (LS<u16>, NS<Tree>, u16, u16) {
+pub(crate) fn vpair_to_stores<'a>((src, dst): (ST<u8>, ST<u8>)) -> (LS<u16>, NS<Tree>, u16, u16) {
     let (mut label_store, mut compressed_node_store) = make_stores();
     let src = store(&mut label_store, &mut compressed_node_store, &src);
     let dst = store(&mut label_store, &mut compressed_node_store, &dst);
     (label_store, compressed_node_store, src, dst)
 }
 
-fn make_stores() -> (LS<u16>, NS<Tree>) {
+fn make_stores<'a>() -> (LS<u16>, NS<Tree>) {
     let mut label_store = LS::<u16> {
-        v: RefCell::new(vec![b"".to_vec()]),
+        // v: RefCell::new(vec![b"".to_vec()]),
+        v: Default::default(),
         phantom: PhantomData,
     };
     let mut compressed_node_store = NS::<Tree> {
@@ -96,8 +100,8 @@ impl crate::tree::tree::Typed for Tree {
 impl crate::tree::tree::Labeled for Tree {
     type Label = u16;
 
-    fn get_label(&self) -> Self::Label {
-        self.label
+    fn get_label(&self) -> &Self::Label {
+        &self.label
     }
 }
 impl crate::tree::tree::Node for Tree {}
@@ -159,8 +163,35 @@ pub(crate) struct NS<T: WithChildren> {
     v: RefCell<Vec<T>>,
 }
 
-impl<T: WithChildren + Eq> NodeStore<T> for NS<T> {
-    fn get_id_or_insert_node(&mut self, node: T) -> T::TreeId {
+impl<T: WithChildren + Labeled> NS<T>
+where
+    T::Label: PrimInt,
+{
+    pub(crate) fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        ls: &LS<T::Label>,
+    ) -> std::fmt::Result {
+        self.v.borrow().iter().enumerate().for_each(|(i, x)| {
+            write!(
+                f,
+                "[{}]: {}\n",
+                i,
+                std::str::from_utf8(&ls.resolve(&x.get_label())).unwrap()
+            )
+            .unwrap()
+        });
+        write!(f, "")
+        // f.debug_struct("NS").field("v", &self.v).finish()
+    }
+}
+
+impl<'a, T: 'a + WithChildren + Eq> NodeStore<'a, T> for NS<T>
+where
+    T::TreeId: PrimInt,
+{
+    type D = Ref<'a, T>;
+    fn get_or_insert(&mut self, node: T) -> T::TreeId {
         let mut a = self.v.borrow_mut();
         if let Some(i) = a
             .iter()
@@ -175,40 +206,71 @@ impl<T: WithChildren + Eq> NodeStore<T> for NS<T> {
         }
     }
 
-    fn get_node_at_id<'b>(&'b self, id: &T::TreeId) -> Ref<T> {
+    fn resolve(&'a self, id: &T::TreeId) -> Self::D {
         Ref::map((&self.v).borrow(), |x| {
             &x[cast::<T::TreeId, usize>(*id).unwrap()]
         })
     }
 }
 
+// pub(crate) struct NS<T: WithChildren> {
+//     v: Vec<Rc<T>>,
+// }
+
+// impl<T: WithChildren + Eq> NS<T> where T::TreeId:PrimInt {
+//     fn get_or_insert(&mut self, node: T) -> T::TreeId {
+//         let mut a = self.v;
+//         if let Some(i) = a
+//             .iter()
+//             .enumerate()
+//             .find_map(|(i, x)| if x.as_ref() == &node { Some(i) } else { None })
+//         {
+//             cast(i).unwrap()
+//         } else {
+//             let l = a.len();
+//             a.push(Rc::new(node));
+//             cast(l).unwrap()
+//         }
+//     }
+
+//     fn resolve<'b>(&'b self, id: &T::TreeId) -> &'b T {
+//         // Ref::map((&self.v).borrow(), |x| {
+//         //     &x[cast::<T::TreeId, usize>(*id).unwrap()]
+//         // })
+//         &self.v[cast::<T::TreeId, usize>(*id).unwrap()]
+//     }
+// }
+
 pub(crate) struct LS<I: PrimInt> {
-    v: RefCell<Vec<crate::tree::tree::OwnedLabel>>,
+    // v: RefCell<Vec<crate::tree::tree::OwnedLabel>>,
+    v: Vec<crate::tree::tree::OwnedLabel>,
     phantom: PhantomData<*const I>,
 }
 
-impl<I: PrimInt> LabelStore for LS<I> {
+impl<'a, I: PrimInt> LabelStore<crate::tree::tree::OwnedLabel> for LS<I> {
     type I = I;
-    fn get_id_or_insert_node(&mut self, node: crate::tree::tree::OwnedLabel) -> Self::I {
-        let mut a = self.v.borrow_mut();
+    fn get_or_insert<T: AsRef<crate::tree::tree::OwnedLabel>>(&mut self, node: T) -> Self::I {
+        let mut a = &mut self.v;
         let b = a
             .iter()
             .enumerate()
-            .find_map(|(i, x)| if x == &node { Some(i) } else { None })
+            .find_map(|(i, x)| if x.eq(node.as_ref()) { Some(i) } else { None })
             .to_owned();
         if let Some(i) = b {
             cast(i).unwrap()
         } else {
             let l = a.len();
-            a.push(node);
+            a.push(node.as_ref().to_owned());
             cast(l).unwrap()
         }
     }
 
-    fn get_node_at_id<'b>(&'b self, id: &Self::I) -> Ref<crate::tree::tree::OwnedLabel> {
-        Ref::map((&self.v).borrow(), |x| {
-            &x[cast::<Self::I, usize>(*id).unwrap()]
-        })
+    fn resolve(&self, id: &Self::I) -> &crate::tree::tree::OwnedLabel {
+        &self.v[cast::<Self::I, usize>(*id).unwrap()]
+        // let a:Ref<'a,_> = self.v.borrow();
+        // Ref::map(a, |x| {
+        //     &x[cast::<Self::I, usize>(*id).unwrap()]
+        // }).deref()
     }
 }
 

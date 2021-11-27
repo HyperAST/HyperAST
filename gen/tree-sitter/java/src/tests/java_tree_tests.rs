@@ -1,18 +1,16 @@
 use core::fmt;
-use std::{
-    io::{stderr, stdout, Stdout, Write},
-    marker::PhantomData,
-};
+use std::io::{stdout, Write};
 
 use tree_sitter::{Language, Parser};
 
 use crate::{
+    hashed::{HashedCompressedNode, SyntaxNodeHashs},
     java_tree_gen::{
-        print_tree_labels, print_tree_structure, print_tree_syntax, serialize, spaces_after_lb,
-        Acc, CompressedNode, HashedCompressedNode, JavaTreeGen, LabelStore, NodeStore, Spaces,
-        SyntaxNodeHashs, TypeStore,
+        print_tree_labels, print_tree_syntax, serialize, spaces_after_lb, Acc, JavaTreeGen,
+        LabelStore, NodeStore,
     },
-    vec_map_store::VecMapStore,
+    nodes::CompressedNode,
+    store::TypeStore,
 };
 
 // use crate::java_tree_gen::{JavaTreeGen, TreeContext, TreeGenerator};
@@ -46,7 +44,7 @@ fn test_equals() {
     };
     let tree = parser.parse(text, None).unwrap();
     let mut acc_stack = vec![Acc::new(java_tree_gen.type_store.get("file"))];
-    let (full_node) = java_tree_gen.generate(text, tree.walk(), &mut acc_stack);
+    let full_node = java_tree_gen.generate(text, tree.walk(), &mut acc_stack);
     println!("{}", tree.root_node().to_sexp());
     // print_tree_structure(&java_tree_gen.node_store, &full_node.id());
     print_tree_labels(
@@ -67,7 +65,7 @@ fn test_equals() {
     };
     let tree = parser.parse(text, None).unwrap();
     let mut acc_stack = vec![Acc::new(java_tree_gen.type_store.get("file"))];
-    let (full_node) = java_tree_gen.generate(text, tree.walk(), &mut acc_stack);
+    let full_node = java_tree_gen.generate(text, tree.walk(), &mut acc_stack);
 
     let text = {
         let source_code1 = "
@@ -78,7 +76,7 @@ fn test_equals() {
     };
     let tree = parser.parse(text, None).unwrap();
     let mut acc_stack = vec![Acc::new(java_tree_gen.type_store.get("file"))];
-    let (full_node) = java_tree_gen.generate(text, tree.walk(), &mut acc_stack);
+    let full_node = java_tree_gen.generate(text, tree.walk(), &mut acc_stack);
 
     // let text = {
     //     let source_code1 = "
@@ -125,7 +123,7 @@ fn test_special() {
     println!("{}", tree.root_node().to_sexp());
 
     let mut acc_stack = vec![Acc::new(java_tree_gen.type_store.get("file"))];
-    let (full_node) = java_tree_gen.generate(text, tree.walk(), &mut acc_stack);
+    let full_node = java_tree_gen.generate(text, tree.walk(), &mut acc_stack);
 
     println!("debug full node: {:?}", &full_node);
     // let mut out = String::new();
@@ -155,7 +153,7 @@ impl<W: std::io::Write> std::fmt::Write for IoOut<W> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.out
             .write_all(s.as_bytes())
-            .map_err(|x| std::fmt::Error)
+            .map_err(|_| std::fmt::Error)
     }
 }
 
