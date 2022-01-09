@@ -1,9 +1,9 @@
 ///! second attempt at compressing subtrees
 ///! does not compressed due to first attempt of vec_map_store unable to correctly compare nodes
-use std::{cell::Ref, fmt::Debug, vec};
+use std::{cell::Ref, fmt::Debug, vec, borrow::Borrow};
 
 use rusted_gumtree_core::tree::tree::{
-    LabelStore as LabelStoreTrait, NodeStore as NodeStoreTrait, OwnedLabel, Type,
+    LabelStore as LabelStoreTrait, NodeStore as NodeStoreTrait, NodeStoreMut as NodeStoreMutTrait, OwnedLabel, Type,
 };
 use tree_sitter::{Language, Parser, TreeCursor};
 
@@ -13,7 +13,7 @@ use crate::{
     nodes::{CompressedNode, LabelIdentifier, NodeIdentifier, SimpleNode1, Space},
     store::TypeStore,
     tree_gen::{
-        compute_indentation, get_spacing, has_final_space, hash_for_node, label_for_cursor, Acc,
+        compute_indentation, get_spacing, has_final_space, hash_for_node, label_for_cursor, Accumulator,
         AccIndentation, Spaces, TreeGen,
     },
     utils,
@@ -39,7 +39,7 @@ pub struct LabelStore {
 impl LabelStoreTrait<OwnedLabel> for LabelStore {
     type I = LabelIdentifier;
 
-    fn get_or_insert<T: AsRef<OwnedLabel>>(&mut self, _node: T) -> Self::I {
+    fn get_or_insert<T: Borrow<OwnedLabel>>(&mut self, _node: T) -> Self::I {
         self.count += 1;
         // self.internal.get_or_insert(node)
         todo!()
@@ -57,15 +57,17 @@ pub struct NodeStore {
     internal: VecMapStore<HashedNode, NodeIdentifier>,
 }
 
-impl<'a> NodeStoreTrait<'a, HashedNode> for NodeStore {
-    type D = Ref<'a, HashedNode>;
-    fn get_or_insert(&mut self, node: HashedNode) -> NodeIdentifier {
-        self.count += 1;
-        self.internal.get_or_insert(node)
-    }
+impl<'a> NodeStoreTrait<'a, NodeIdentifier,Ref<'a, HashedNode>> for NodeStore {
 
-    fn resolve(&'a self, id: &NodeIdentifier) -> Self::D {
+    fn resolve(&'a self, id: &NodeIdentifier) -> Ref<'a, HashedNode> {
         self.internal.resolve(id)
+    }
+}
+impl<'a> NodeStoreMutTrait<'a, HashedNode,Ref<'a, HashedNode>> for NodeStore {
+}
+impl<'a> NodeStore {
+    fn get_or_insert(&mut self, node: HashedNode) -> NodeIdentifier {
+        self.internal.get_or_insert(node)
     }
 }
 
@@ -96,19 +98,19 @@ impl<U: NodeHashs> SubTreeMetrics<U> {
     }
 }
 
-pub struct Accumulator {
+pub struct BasicAccumulator {
     kind: Type,
     children: Vec<NodeIdentifier>,
     metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
 }
 
 pub struct AccumulatorWithIndentation {
-    simple: Accumulator,
+    simple: BasicAccumulator,
     padding_start: usize,
     indentation: Spaces,
 }
 
-impl Accumulator {
+impl BasicAccumulator {
     pub(crate) fn new(kind: Type) -> Self {
         Self {
             kind,
@@ -118,7 +120,7 @@ impl Accumulator {
     }
 }
 
-impl Acc for Accumulator {
+impl Accumulator for BasicAccumulator {
     type Node = FullNode<Global, Local>;
     fn push(&mut self, full_node: Self::Node) {
         self.children.push(full_node.local.compressed_node);
@@ -129,14 +131,14 @@ impl Acc for Accumulator {
 impl AccumulatorWithIndentation {
     pub(crate) fn new(kind: Type) -> Self {
         Self {
-            simple: Accumulator::new(kind),
+            simple: BasicAccumulator::new(kind),
             padding_start: 0,
             indentation: Space::format_indentation(&"\n".as_bytes().to_vec()),
         }
     }
 }
 
-impl Acc for AccumulatorWithIndentation {
+impl Accumulator for AccumulatorWithIndentation {
     type Node = FullNode<Global, Local>;
     fn push(&mut self, full_node: Self::Node) {
         self.simple.push(full_node);
@@ -159,6 +161,7 @@ impl<'a> TreeGen for JavaTreeGen {
     type Node1 = SimpleNode1<NodeIdentifier, OwnedLabel>;
     type Acc = AccumulatorWithIndentation;
     type Stores = SimpleStores;
+    type Text = [u8];
 
     fn stores(&mut self) -> &mut Self::Stores {
         &mut self.stores
@@ -183,7 +186,7 @@ impl<'a> TreeGen for JavaTreeGen {
             &parent_indentation,
         );
         AccumulatorWithIndentation {
-            simple: Accumulator {
+            simple: BasicAccumulator {
                 kind,
                 children: vec![],
                 metrics: Default::default(),
@@ -200,7 +203,7 @@ impl<'a> TreeGen for JavaTreeGen {
         text: &[u8],
         node: &tree_sitter::Node,
         acc: <Self as TreeGen>::Acc,
-    ) -> <<Self as TreeGen>::Acc as Acc>::Node {
+    ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
 
@@ -264,7 +267,7 @@ impl<'a> TreeGen for JavaTreeGen {
             &Space::format_indentation(&self.line_break),
         );
         AccumulatorWithIndentation {
-            simple: Accumulator {
+            simple: BasicAccumulator {
                 kind,
                 children: vec![],
                 metrics: Default::default(),

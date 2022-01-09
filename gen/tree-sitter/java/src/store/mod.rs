@@ -5,6 +5,8 @@ use crate::nodes::TypeIdentifier;
 pub mod handle;
 pub mod radix_hash_store;
 pub mod vec_map_store;
+pub mod ecs;
+pub mod mapped_world;
 
 pub struct TypeStore {}
 

@@ -11,7 +11,7 @@ use crate::{
         optimal::zs::ZsMatcher,
         similarity_metrics,
     },
-    tree::tree::{LabelStore, NodeStore, OwnedLabel, Tree, WithHashs},
+    tree::tree::{LabelStore, NodeStore, SlicedLabel, Tree, WithHashs},
 };
 
 use super::bottom_up_matcher::BottomUpMatcher;
@@ -21,9 +21,9 @@ pub struct GreedyBottomUpMatcher<
     'a,
     D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD> + PostOrder<T::TreeId, IdD>,
     IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
-    T: Tree + WithHashs,
-    S: for<'b> NodeStore<'b, T>,
-    LS: LabelStore<OwnedLabel, I = T::Label>,
+    T: 'a + Tree + WithHashs,
+    S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+    LS: LabelStore<SlicedLabel, I = T::Label>,
     const SIZE_THRESHOLD: usize,  // = 1000,
     const SIM_THRESHOLD_NUM: u64, // = 1,
     const SIM_THRESHOLD_DEN: u64, // = 2,
@@ -44,8 +44,8 @@ impl<
             + PostOrder<T::TreeId, IdD>,
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b, T>,
-        LS: LabelStore<OwnedLabel, I = T::Label>,
+        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+        LS: LabelStore<SlicedLabel, I = T::Label>,
         const SIZE_THRESHOLD: usize,  // = 1000,
         const SIM_THRESHOLD_NUM: u64, // = 1,
         const SIM_THRESHOLD_DEN: u64, // = 2,
@@ -75,8 +75,8 @@ impl<
             + PostOrder<T::TreeId, IdD>,
         IdD: 'a + PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b, T>,
-        LS: 'a + LabelStore<OwnedLabel, I = T::Label>,
+        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+        LS: 'a + LabelStore<SlicedLabel, I = T::Label>,
         const SIZE_THRESHOLD: usize, // = 1000,
         // Integer.parseInt(System.getProperty("gt.bum.szt", "1000"));
         const SIM_THRESHOLD_NUM: u64, // = 1,

@@ -2,14 +2,13 @@ use rusted_gumtree_core::matchers::{
     decompressed_tree_store::CompletePostOrder, mapping_store::DefaultMappingStore,
     optimal::zs::ZsMatcher,
 };
-use rusted_gumtree_gen_ts_java::hashed::{HashedCompressedNode, SyntaxNodeHashs};
 use tree_sitter::{Language, Parser};
 
 extern "C" {
     fn tree_sitter_java() -> Language;
 }
 
-fn main() {
+fn main_compress() {
     use rusted_gumtree_gen_ts_java::java_tree_gen_full_compress::{
         JavaTreeGen, LabelStore, NodeStore, SimpleStores,
     };
@@ -121,8 +120,9 @@ fn main() {
     //     // stdout().flush().unwrap();
 }
 
-fn main_old() {
-    use rusted_gumtree_gen_ts_java::java_tree_gen::{JavaTreeGen, LabelStore, NodeStore};
+fn main() {
+    use rusted_gumtree_gen_ts_java::java_tree_gen_no_compress_arena::{JavaTreeGen, LabelStore, NodeStore,SimpleStores,HashedNode};
+    // tree_sitter_cli::generate::parse_grammar;
 
     println!("Hello, world!");
 
@@ -169,24 +169,25 @@ fn main_old() {
 
     let JavaTreeGen {
         line_break: _,
-        label_store,
-        type_store: _,
-        node_store,
-    } = java_tree_gen;
+        stores : SimpleStores {
+            node_store,
+            label_store,
+            type_store: _,
+        } } = java_tree_gen;
 
     let mapping_store = DefaultMappingStore::new();
     // let a = SimpleBottomUpMatcher::<
     let a = ZsMatcher::<
-        CompletePostOrder<u32, u16>,
-        HashedCompressedNode<SyntaxNodeHashs<u32>, _, u32>,
+        CompletePostOrder<_, u16>,
+        HashedNode,
         u16,
         NodeStore,
         LabelStore,
     >::matchh(
         &node_store,
         &label_store,
-        *full_node_src.id(),
-        *full_node_dst.id(),
+        *full_node_src.local().id(),
+        *full_node_dst.local().id(),
         mapping_store,
     );
     a.mappings

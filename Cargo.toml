@@ -1,2 +1,2 @@
 [workspace]
-members = ["core", "gen/tree-sitter/*","client","benchmark"]
+members = ["core", "gen/tree-sitter/*","client","benchmark","tree-sitter_types"]

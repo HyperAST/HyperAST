@@ -37,7 +37,7 @@ impl<'a, IdC, IdD: PrimInt, D: PostOrder<IdC, IdD>> SD<'a, IdC, IdD, D> {
     // fn original(&self, x: &IdD) -> IdC {
     //     todo!()
     // }
-    pub fn from<T: WithChildren<TreeId = IdC>, S: for<'b> NodeStore<'b, T>>(
+    pub fn from<T: WithChildren<TreeId = IdC>, S: for<'b> NodeStore<'b, T::TreeId, &'b T>>(
         s: &'a S,
         x: &'a D,
     ) -> Self {
@@ -77,7 +77,7 @@ impl<'a, IdC, IdD, D: DecompressedTreeStore<IdC, IdD>> Initializable<IdC, IdD>
         T: Tree<TreeId = IdC>, // + WithHashs<HK = HK, HP = HP>,
         // HK: HashKind,
         // HP: PrimInt,
-        S: for<'b> NodeStore<'b, T>,
+        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
     >(
         _store: &S,
         _root: &IdC,
@@ -110,7 +110,7 @@ impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<IdC, IdD>>
         todo!()
     }
 
-    fn child<T: WithChildren<TreeId = IdC>, S: for<'b> NodeStore<'b, T>>(
+    fn child<T: WithChildren<TreeId = IdC>, S: for<'b> NodeStore<'b, IdC, &'b T>>(
         &self,
         _store: &S,
         _x: &IdD,
@@ -119,7 +119,7 @@ impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<IdC, IdD>>
         todo!()
     }
 
-    fn children<T: WithChildren<TreeId = IdC>, S: for<'b> NodeStore<'b, T>>(
+    fn children<T: WithChildren<TreeId = IdC>, S: for<'b> NodeStore<'b, T::TreeId, &'b T>>(
         &self,
         store: &S,
         x: &IdD,
@@ -132,7 +132,7 @@ impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<IdC, IdD>>
 impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<IdC, IdD>> DecompressedTreeStore<IdC, IdD>
     for SD<'a, IdC, IdD, D>
 {
-    fn descendants<T: Tree<TreeId = IdC>, S: for<'b> NodeStore<'b, T>>(
+    fn descendants<T: Tree<TreeId = IdC>, S: for<'b> NodeStore<'b, T::TreeId, &'b T>>(
         &self,
         _store: &S,
         _x: &IdD,
@@ -140,7 +140,7 @@ impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<IdC, IdD>> DecompressedTree
         todo!()
     }
 
-    fn descendants_count<T: Tree<TreeId = IdC>, S: for<'b> NodeStore<'b, T>>(
+    fn descendants_count<T: Tree<TreeId = IdC>, S: for<'b> NodeStore<'b, T::TreeId, &'b T>>(
         &self,
         _store: &S,
         _x: &IdD,
@@ -163,7 +163,7 @@ impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<IdC, IdD> + DecompressedWit
         self.back.parent(id)
     }
 
-    fn position_in_parent<T: WithChildren, S: for<'b> NodeStore<'b, T>>(
+    fn position_in_parent<T: WithChildren, S: for<'b> NodeStore<'b, T::TreeId, &'b T>>(
         &self,
         store: &S,
         c: &IdD,

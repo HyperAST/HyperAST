@@ -116,26 +116,25 @@ fn test_equals() {
 }
 #[test]
 fn test_special() {
+    let mut parser = Parser::new();
+
     {
-        let mut parser = Parser::new();
+        let language = unsafe { tree_sitter_java() };
+        parser.set_language(language).unwrap();
+    }
 
-        {
-            let language = unsafe { tree_sitter_java() };
-            parser.set_language(language).unwrap();
-        }
+    // let mut parser: Parser, old_tree: Option<&Tree>
+    let mut java_tree_gen = JavaTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: SimpleStores {
+            label_store: LabelStore::new(),
+            type_store: TypeStore {},
+            node_store: NodeStore::new(),
+        },
+    };
 
-        // let mut parser: Parser, old_tree: Option<&Tree>
-        let mut java_tree_gen = JavaTreeGen {
-            line_break: "\n".as_bytes().to_vec(),
-            stores: SimpleStores {
-                label_store: LabelStore::new(),
-                type_store: TypeStore {},
-                node_store: NodeStore::new(),
-            },
-        };
-
-        let text = {
-            let source_code1 = "class A {
+    let text = {
+        let source_code1 = "class A {
     class A0 {
         int a = 0xffff;
     }
@@ -164,31 +163,57 @@ fn test_special() {
          b;
      }
  }
-    }
-";
-            // let source_code1 = "class A {
-            //     class A0 {
-            //         int a = 0xffff;
-            // }
-            //     }
-            // ";
-            source_code1.as_bytes()
-        };
-        let tree = parser.parse(text, None).unwrap();
-        println!("{}", tree.root_node().to_sexp());
+    }";
+        // let source_code1 = "class A {
+        //     class A0 {
+        //         int a = 0xffff;
+        // }
+        //     }
+        // ";
+        source_code1.as_bytes()
+    };
+    let tree = parser.parse(text, None).unwrap();
+    println!("{}", tree.root_node().to_sexp());
 
-        let _full_node = java_tree_gen.generate_default(text, tree.walk());
+    let _full_node = java_tree_gen.generate_default(text, tree.walk());
 
-        let text = {
-            let source_code1 = "class A {
+    let text = {
+        let source_code1 = "class A {
     class A0 {
         int a = 0xffff;
     }
     class B { int a = 0xfffa;
               int b = 0xfffa;
-
+              
+              Object test0() {
+                    return factory.getModel().getAllModules().stream()
+                    .map(module -> getPackageFromModule(qualifiedName, module))
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .orElse(null);
+              }
               void test() {
-                a;
+                while (Arrays.asList(SmPLLexer.TokenType.MetavarIdentifier, SmPLLexer.TokenType.WhenMatches).contains(tokens.get(pos).getType())) {
+                    switch (tokens.get(pos).getType()) {
+                        case MetavarIdentifier:
+                            if (genericMetavarTypes.contains(metavarType)) {
+                                output.append(metavarType).append(\"(\").append(tokens.get(pos).getText().strip()).append(\");\\n\");
+                            } else {
+                                output.append(metavarType).append(\" \").append(tokens.get(pos).getText().strip()).append(\";\\n\");
+                            }
+                            break;
+    
+                        case WhenMatches:
+                            output.append(\"constraint(\\\"regex-match\\\", \" + tokens.get(pos + 1).getText() + \");\\n\");
+                            ++pos;
+                            break;
+    
+                        default:
+                            throw new IllegalStateException(\"impossible\");
+                    }
+    
+                    ++pos;
+                }
               }
     } class C { int a = 0xffff;
            int b = 0xffff;
@@ -209,64 +234,57 @@ fn test_special() {
          a;
      }
  }
-    }
-";
-            // let source_code1 = "class A {
-            //     class A0 {
-            //         int a = 0xffff;
-            // }
-            //     }
-            // ";
-            source_code1.as_bytes()
-        };
-        let tree = parser.parse(text, None).unwrap();
-        println!("{}", tree.root_node().to_sexp());
-        let full_node = java_tree_gen.generate_default(text, tree.walk());
+    }";
+        // let source_code1 = "class A {
+        //     class A0 {
+        //         int a = 0xffff;
+        // }
+        //     }
+        // ";
+        source_code1.as_bytes()
+    };
+    let tree = parser.parse(text, None).unwrap();
+    println!("{}", tree.root_node().to_sexp());
+    let full_node = java_tree_gen.generate_default(text, tree.walk());
 
-        println!("debug full node: {:?}", &full_node);
-        // let mut out = String::new();
-        let mut out = IoOut { stream: stdout() };
-        serialize(
-            &java_tree_gen.stores.node_store,
-            &java_tree_gen.stores.label_store,
-            &full_node.local.compressed_node,
-            &mut out,
-            &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
-        );
-        println!();
-        print_tree_syntax(
-            &java_tree_gen.stores.node_store,
-            &java_tree_gen.stores.label_store,
-            &full_node.local.compressed_node,
-        );
-        println!();
-        stdout().flush().unwrap();
+    println!("debug full node: {:?}", &full_node);
+    // let mut out = String::new();
+    let mut out = IoOut { stream: stdout() };
+    serialize(
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
+        &full_node.local.compressed_node,
+        &mut out,
+        &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
+    );
+    println!();
+    print_tree_syntax(
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
+        &full_node.local.compressed_node,
+    );
+    println!();
+    stdout().flush().unwrap();
 
-        let mut out = BuffOut {
-            buff: "".to_owned(),
-        };
-        serialize(
-            &java_tree_gen.stores.node_store,
-            &java_tree_gen.stores.label_store,
-            &full_node.local.compressed_node,
-            &mut out,
-            &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
-        );
-        assert_eq!(std::str::from_utf8(text).unwrap(), out.buff);
+    let mut out = BuffOut {
+        buff: "".to_owned(),
+    };
+    serialize(
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
+        &full_node.local.compressed_node,
+        &mut out,
+        &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
+    );
+    assert_eq!(std::str::from_utf8(text).unwrap(), out.buff);
 
-        println!("{:?}", java_tree_gen.stores().label_store);
-        println!("{:?}", java_tree_gen.stores().node_store);
-        let mu = memusage_linux();
-        println!("mu:   {}", mu);
+    println!("{:?}", java_tree_gen.stores().label_store);
+    println!("{:?}", java_tree_gen.stores().node_store);
 
-        println!("{:#?}", java_tree_gen.stores().label_store);
-        println!("{:#?}", java_tree_gen.stores().node_store);
-
-        let mu = memusage_linux();
-        println!("mu after {}", mu);
-    }
     let mu = memusage_linux();
-    println!("mu end {}", mu);
+    drop(java_tree_gen);
+    let mu = mu - memusage_linux();
+    println!("mu {}", mu);
 }
 
 struct IoOut<W: std::io::Write> {

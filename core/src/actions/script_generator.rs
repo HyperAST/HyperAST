@@ -132,10 +132,10 @@ struct MidNode<IdC, IdD> {
 pub struct ScriptGenerator<
     'a,
     IdD: PrimInt + Debug,
-    T: Stored + Labeled + WithChildren,
+    T: 'a + Stored + Labeled + WithChildren,
     SS,
     SD: BreathFirstIterable<'a, T::TreeId, IdD> + DecompressedWithParent<IdD>,
-    S: for<'b> NodeStore<'b, T>,
+    S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
 > where
     T::TreeId: PrimInt,
 {
@@ -158,14 +158,14 @@ pub struct ScriptGenerator<
 impl<
         'a,
         IdD: PrimInt + Debug,
-        T: Stored + Labeled + WithChildren,
+        T: 'a + Stored + Labeled + WithChildren,
         SS: DecompressedTreeStore<T::TreeId, IdD>
             + DecompressedWithParent<IdD>
             + PostOrder<T::TreeId, IdD>,
         SD: DecompressedTreeStore<T::TreeId, IdD>
             + DecompressedWithParent<IdD>
             + BreathFirstIterable<'a, T::TreeId, IdD>,
-        S: for<'b> NodeStore<'b, T>,
+        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
     > ScriptGenerator<'a, IdD, T, SS, SD, S>
 where
     T::Label: Copy,

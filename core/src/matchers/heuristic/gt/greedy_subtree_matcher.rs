@@ -25,7 +25,7 @@ pub struct GreedySubtreeMatcher<
     D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
     IdD: PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
     T: Tree,      // + WithHashs,
-    S: for<'b> NodeStore<'b, T>,
+    S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
     const MIN_HEIGHT: usize, // = 2
 > {
     internal: SubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>,
@@ -41,7 +41,7 @@ impl<
         D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
         IdD: PrimInt + Debug, // + Into<usize> + std::ops::SubAssign,
         T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b, T>,
+        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
         const MIN_HEIGHT: usize, // = 2
     > GreedySubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>
 where
@@ -163,7 +163,7 @@ impl<
         D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
         IdD: PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree,      // + WithHashs,
-        S: for<'b> NodeStore<'b, T>,
+        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
         const MIN_HEIGHT: usize,
     > Into<SubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>>
     for GreedySubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>
@@ -180,7 +180,7 @@ pub struct SubtreeMatcher<
     D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
     IdD: PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
     T: Tree,      // + WithHashs,
-    S: for<'b> NodeStore<'b, T>,
+    S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
     const MIN_HEIGHT: usize,
 > {
     pub(super) node_store: &'a S,
@@ -194,7 +194,7 @@ impl<
         D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
         IdD: PrimInt + Debug, // + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b, T>,
+        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
         const MIN_HEIGHT: usize,
     > SubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>
 where
@@ -393,7 +393,7 @@ impl<
         D: DecompressedTreeStore<T::TreeId, IdD>,
         IdD: PrimInt,
         T: Tree,
-        S: for<'b> NodeStore<'b, T>,
+        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
         const MIN_HEIGHT: usize,
     > PriorityTreeList<'a, D, IdD, T, S, MIN_HEIGHT>
 where

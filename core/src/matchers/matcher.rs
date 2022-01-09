@@ -1,4 +1,4 @@
-use crate::tree::tree::{NodeStore, Tree, WithHashs};
+use crate::tree::tree::{NodeStore, Tree, WithHashs, Stored};
 
 // #[cfg(test)]
 // mod tests {
@@ -15,7 +15,7 @@ use crate::tree::tree::{NodeStore, Tree, WithHashs};
 //     }
 // }
 
-pub trait Matcher<'a, D, T: Tree + WithHashs, S: NodeStore<'a, T>> {
+pub trait Matcher<'a, D, T: 'a + Stored + Tree + WithHashs, S: NodeStore<'a, T::TreeId, &'a T>> {
     type Store;
     type Ele;
 

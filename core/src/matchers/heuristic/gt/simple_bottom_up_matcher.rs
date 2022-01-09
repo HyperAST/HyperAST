@@ -28,7 +28,7 @@ pub struct SimpleBottomUpMatcher<
         + DecompressedWithParent<IdD>
         + BreathFirstContiguousSiblings<T::TreeId, IdD>,
     T: Tree + WithHashs,
-    S: for<'b> NodeStore<'b, T>,
+    S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
     // const SIM_THRESHOLD: u64 = (0.4).bytes(),
 > {
     internal: BottomUpMatcher<'a, D, IdD, T, S>,
@@ -45,8 +45,8 @@ impl<
             + DecompressedTreeStore<T::TreeId, IdD>
             + DecompressedWithParent<IdD>
             + BreathFirstContiguousSiblings<T::TreeId, IdD>,
-        T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b, T>,
+        T: 'a + Tree + WithHashs,
+        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
     > Matcher<'a, D, T, S> for SimpleBottomUpMatcher<'a, D, T, S>
 {
     type Store = DefaultMappingStore<IdD>;
@@ -84,7 +84,7 @@ impl<
             + DecompressedWithParent<IdD>
             + BreathFirstContiguousSiblings<T::TreeId, IdD>,
         T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b, T>,
+        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
     > SimpleBottomUpMatcher<'a, D, T, S>
 {
     fn execute(&mut self) {

@@ -8,12 +8,34 @@ use crate::{
 
 pub type Spaces = Vec<Space>;
 
-pub trait Acc {
+pub trait Accumulator {
     type Node;
     fn push(&mut self, full_node: Self::Node);
 }
 
-pub trait AccIndentation: Acc {
+
+pub struct BasicAccumulator<T,Id> {
+    pub(crate) kind: T,
+    pub(crate) children: Vec<Id>,
+}
+
+impl<T,Id> BasicAccumulator<T,Id> {
+    pub(crate) fn new(kind: T) -> Self {
+        Self {
+            kind,
+            children: vec![],
+        }
+    }
+}
+
+impl<T,Id> Accumulator for BasicAccumulator<T,Id> {
+    type Node = Id;
+    fn push(&mut self, node: Self::Node) {
+        self.children.push(node);
+    }
+}
+
+pub trait AccIndentation: Accumulator {
     fn indentation<'a>(&'a self) -> &'a Spaces;
 }
 
@@ -21,12 +43,13 @@ pub trait TreeGen {
     type Node1;
     type Acc: AccIndentation;
     type Stores;
+    type Text: ?Sized;
 
-    fn init_val(&mut self, text: &[u8], node: &tree_sitter::Node) -> Self::Acc;
+    fn init_val(&mut self, text: &Self::Text, node: &tree_sitter::Node) -> Self::Acc;
 
     fn pre(
         &mut self,
-        text: &[u8],
+        text: &Self::Text,
         node: &tree_sitter::Node,
         stack: &Vec<Self::Acc>,
         sum_byte_length: usize,
@@ -37,16 +60,16 @@ pub trait TreeGen {
         parent: &mut <Self as TreeGen>::Acc,
         depth: usize,
         position: usize,
-        text: &[u8],
+        text: &Self::Text,
         node: &tree_sitter::Node,
         acc: <Self as TreeGen>::Acc,
-    ) -> <<Self as TreeGen>::Acc as Acc>::Node;
+    ) -> <<Self as TreeGen>::Acc as Accumulator>::Node;
 
     fn stores(&mut self) -> &mut Self::Stores;
 
     fn gen(
         &mut self,
-        text: &[u8],
+        text: &Self::Text,
         stack: &mut Vec<Self::Acc>,
         cursor: &mut tree_sitter::TreeCursor,
     ) -> usize {
@@ -94,7 +117,7 @@ pub trait TreeGen {
                             return sum_byte_length;
                         }
                     } else {
-                        panic!()
+                        return sum_byte_length;
                     }
                 }
             }

@@ -1,10 +1,21 @@
-use std::fmt::{Debug, Display, Write};
+use std::{
+    borrow::Borrow,
+    fmt::{Debug, Display, Write},
+    io::stdout,
+    marker::PhantomData,
+};
 
 use rusted_gumtree_core::tree::tree::Type;
 
 pub type TypeIdentifier = Type;
 
 type Label = Vec<u8>;
+
+pub trait RefContainer {
+    type Ref: ?Sized;
+    type Result;
+    fn check<U:Borrow<Self::Ref>+AsRef<[u8]>>(&self, rf: U) -> Self::Result;
+}
 
 pub struct SimpleNode1<Child, Label> {
     pub(crate) kind: TypeIdentifier,
@@ -26,14 +37,42 @@ pub enum Space {
     ParentIndentation,
 }
 
-#[derive(Debug)]
-pub(crate) enum CompressedNode<NodeId, LabelId> {
+#[derive(Debug,Clone)]
+pub enum CompressedNode<NodeId, LabelId> {
     Type(Type),
     Label { label: LabelId, kind: Type },
     Children2 { children: [NodeId; 2], kind: Type },
     Children { children: Box<[NodeId]>, kind: Type },
     Spaces(Box<[Space]>),
 }
+
+pub(crate) enum SimpNode<NodeId, LabelId> {
+    Type(Type),
+    Label { label: LabelId, kind: Type },
+    Children { children: Box<[NodeId]>, kind: Type },
+    Spaces(Box<[Space]>),
+}
+
+mod TypeBaggableNodes {
+    use std::marker::PhantomData;
+
+    struct Keyword<Type> {
+        kind: Type,
+    }
+
+    struct UnsizedNode<Type, NodeId, LabelId> {
+        // kind: Type,
+        _phantom: PhantomData<*const (Type, NodeId, LabelId)>,
+        bytes: [u8],
+        // children: [MyUnion<LabelId,NodeId>],
+    }
+}
+
+// #[repr(C)]
+// union MyUnion<NodeId, LabelId> {
+//     node: std::mem::ManuallyDrop<NodeId>,
+//     label: std::mem::ManuallyDrop<LabelId>,
+// }
 
 impl<N: PartialEq, L: PartialEq> PartialEq for CompressedNode<N, L> {
     fn eq(&self, other: &Self) -> bool {
@@ -150,8 +189,7 @@ impl<N: Eq + Clone, L> rusted_gumtree_core::tree::tree::WithChildren for Compres
             CompressedNode::Children2 { children, kind: _ } if *idx == 1 => children[1].clone(),
             CompressedNode::Children { children, kind: _ } => children[*idx as usize].clone(),
             _ => panic!(),
-        };
-        todo!()
+        }
     }
 
     // fn descendants_count(&self) -> Self::TreeId {
@@ -280,15 +318,22 @@ impl Debug for Space {
     }
 }
 const LB: char = '\n';
+const CR: char = '\r';
 impl Space {
     pub(crate) fn format_indentation(spaces: &[u8]) -> Vec<Space> {
         spaces
             .iter()
             .map(|x| match *x as char {
                 ' ' => Space::Space,
+                '\u{000C}' => Space::Space,
                 LB => Space::LineBreak,
                 '\t' => Space::Tabulation,
-                _ => panic!(),
+                CR => Space::Space,
+                x => {
+                    use std::io::Write;
+                    stdout().write(&[x as u8]).unwrap();
+                    panic!("{}", x as u8)
+                }
             })
             .collect()
     }
@@ -348,4 +393,229 @@ impl Space {
     //         }
     //     }
     // }
+}
+
+trait DisplayTreeStruct<IdN: Clone, IdL>: Display {
+    fn node(&self, id: &IdN) -> CompressedNode<IdN, IdL>;
+
+    fn print_tree_structure(&self, id: &IdN) {
+        match self.node(id) {
+            CompressedNode::Type(kind) => {
+                print!("{}", kind.to_string());
+                // None
+            }
+            CompressedNode::Label { kind, label: _ } => {
+                print!("({})", kind.to_string());
+                // None
+            }
+            CompressedNode::Children2 { kind, children } => {
+                print!("({} ", kind.to_string());
+                for id in children.iter() {
+                    self.print_tree_structure(id);
+                }
+                print!(")");
+            }
+            CompressedNode::Children { kind, children } => {
+                print!("({} ", kind.to_string());
+                let children = children.clone();
+                for id in children.iter() {
+                    self.print_tree_structure(id);
+                }
+                print!(")");
+            }
+            CompressedNode::Spaces(_) => (),
+        };
+    }
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "[{}]", todo!())
+        } else {
+            write!(f, "[{} drop scopes]", todo!())
+        }
+    }
+}
+pub fn print_tree_structure<
+    IdN,
+    IdL,
+    T: Borrow<CompressedNode<IdN, IdL>>,
+    F: Copy + Fn(&IdN) -> T,
+>(
+    f: F,
+    id: &IdN,
+) {
+    match f(id).borrow() {
+        CompressedNode::Type(kind) => {
+            print!("{}", kind.to_string());
+            // None
+        }
+        CompressedNode::Label { kind, label: _ } => {
+            print!("({})", kind.to_string());
+            // None
+        }
+        CompressedNode::Children2 { kind, children } => {
+            print!("({} ", kind.to_string());
+            for id in children {
+                print_tree_structure(f, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Children { kind, children } => {
+            print!("({} ", kind.to_string());
+            let children = children.clone();
+            for id in children.iter() {
+                print_tree_structure(f, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Spaces(_) => (),
+    };
+}
+
+pub fn print_tree_labels<
+    IdN,
+    IdL,
+    T: Borrow<CompressedNode<IdN, IdL>>,
+    F: Copy + Fn(&IdN) -> T,
+    G: Copy + Fn(&IdL) -> String,
+>(
+    f: F,
+    g: G,
+    id: &IdN,
+) {
+    match f(id).borrow() {
+        CompressedNode::Type(kind) => {
+            print!("{}", kind.to_string());
+            // None
+        }
+        CompressedNode::Label { kind, label } => {
+            let s = g(label);
+            if s.len() > 20 {
+                print!("({}='{}...')", kind.to_string(), &s[..20]);
+            } else {
+                print!("({}='{}')", kind.to_string(), s);
+            }
+            // None
+        }
+        CompressedNode::Children2 { kind, children } => {
+            print!("({} ", kind.to_string());
+            for id in children {
+                print_tree_labels(f, g, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Children { kind, children } => {
+            print!("({} ", kind.to_string());
+            let children = children.clone();
+            for id in children.iter() {
+                print_tree_labels(f, g, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Spaces(_) => (),
+    };
+}
+
+pub fn print_tree_syntax<
+    IdN,
+    IdL,
+    T: Borrow<CompressedNode<IdN, IdL>>,
+    F: Copy + Fn(&IdN) -> T,
+    G: Copy + Fn(&IdL) -> String,
+>(
+    f: F,
+    g: G,
+    id: &IdN,
+) {
+    match f(id).borrow() {
+        CompressedNode::Type(kind) => {
+            print!("{}", kind.to_string());
+            // None
+        }
+        CompressedNode::Label { kind, label } => {
+            let s = &g(label);
+            if s.len() > 20 {
+                print!("({}='{}...')", kind.to_string(), &s[..20]);
+            } else {
+                print!("({}='{}')", kind.to_string(), s);
+            }
+            // None
+        }
+        CompressedNode::Children2 { kind, children } => {
+            print!("({} ", kind.to_string());
+            for id in children {
+                print_tree_syntax(f, g, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Children { kind, children } => {
+            print!("({} ", kind.to_string());
+            let children = children.clone();
+            for id in children.iter() {
+                print_tree_syntax(f, g, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Spaces(s) => {
+            print!("(_ ");
+            let a = &*s;
+            a.iter().for_each(|a| print!("{:?}", a));
+            print!(")");
+        }
+    };
+}
+
+pub fn serialize<
+    IdN,
+    IdL,
+    T: Borrow<CompressedNode<IdN, IdL>>,
+    F: Copy + Fn(&IdN) -> T,
+    G: Copy + Fn(&IdL) -> String,
+    W: std::fmt::Write,
+>(
+    f: F,
+    g: G,
+    id: &IdN,
+    out: &mut W,
+    parent_indent: &str,
+) -> Option<String> {
+    match f(id).borrow() {
+        CompressedNode::Type(kind) => {
+            out.write_str(&kind.to_string()).unwrap();
+            None
+        }
+        CompressedNode::Label { kind: _, label } => {
+            let s = g(label);
+            out.write_str(&s).unwrap();
+            None
+        }
+        CompressedNode::Children2 { kind: _, children } => {
+            let ind = serialize(f, g, &children[0], out, parent_indent)
+                .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
+            serialize(f, g, &children[1], out, &ind);
+            None
+        }
+        CompressedNode::Children { kind: _, children } => {
+            let children = &(*children);
+            let mut it = children.iter();
+            let mut ind = serialize(f, g, &it.next().unwrap(), out, parent_indent)
+                .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
+            for id in it {
+                ind = serialize(f, g, &id, out, &ind)
+                    .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
+            }
+            None
+        }
+        CompressedNode::Spaces(s) => {
+            let a = &*s;
+            let mut b = String::new();
+            a.iter()
+                .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
+            out.write_str(&b).unwrap();
+            Some(if b.contains("\n") {
+                b
+            } else {
+                parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
+            })
+        }
+    }
 }

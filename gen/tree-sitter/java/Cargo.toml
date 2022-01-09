@@ -2,6 +2,7 @@
 name = "rusted_gumtree_gen_ts_java"
 version = "0.1.0"
 edition = "2021"
+include = ["/src", "tree-sitter-java/"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -11,14 +12,24 @@ atomic-counter = "1.0.1"
 num = "0.4.0"
 bitvec = "0.22.3"
 stack-graphs = "0.3.0"
-rusted_gumtree_core = { path = "../../../core" }
 controlled-option = "0.4.1"
 string-interner = "0.14.0"
 cfg-if = "1.0"
 hashbrown = { version = "0.11.2", default-features = false, features = ["ahash"] }
+fasthash="0.4.0"
 
+rusted_gumtree_core = { path = "../../../core" }
+tree-sitter_types = { path = "../../../tree-sitter_types" }
 
 libc = "0.2"
+
+# promizing to store subtrees efficiently
+zerocopy="0.6.1"
+
+legion = "0.4.0"
+tuples = "=1.4.1"
+
+enumset = "1.0.8"
 
 [build-dependencies]
 cc = "*"

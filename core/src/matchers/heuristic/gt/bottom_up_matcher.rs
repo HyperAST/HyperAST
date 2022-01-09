@@ -18,7 +18,7 @@ pub struct BottomUpMatcher<
     D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
     IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
     T: Tree + WithHashs,
-    S: for<'b> NodeStore<'b, T>,
+    S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
     // const SIM_THRESHOLD: u64 = (0.4).bytes(),
 > {
     pub(super) node_store: &'a S,
@@ -33,7 +33,7 @@ impl<
         D: 'a + DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b, T>,
+        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
     > BottomUpMatcher<'a, D, IdD, T, S>
 {
     pub(super) fn getDstCandidates(&self, src: &IdD) -> Vec<IdD> {

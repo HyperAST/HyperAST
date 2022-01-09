@@ -94,6 +94,17 @@ pub struct HashedCompressedNode<U: NodeHashs, N, L> {
     pub(crate) node: CompressedNode<N, L>,
 }
 
+impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L> rusted_gumtree_core::tree::tree::Node
+    for HashedCompressedNode<U, N, L>
+{
+}
+
+impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq, L> rusted_gumtree_core::tree::tree::Stored
+    for HashedCompressedNode<U, N, L>
+{
+    type TreeId = N;
+}
+
 impl<U: NodeHashs + PartialEq, N: PartialEq, L: PartialEq> PartialEq
     for HashedCompressedNode<U, N, L>
 {
@@ -103,15 +114,6 @@ impl<U: NodeHashs + PartialEq, N: PartialEq, L: PartialEq> PartialEq
 }
 
 impl<U: NodeHashs + PartialEq, N: Eq, L: Eq> Eq for HashedCompressedNode<U, N, L> {}
-
-impl<U: NodeHashs, N, L> Hash for HashedCompressedNode<U, N, L>
-where
-    U::Hash: Hash,
-{
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.hashs.hash(&Default::default()).hash(state);
-    }
-}
 
 impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L> rusted_gumtree_core::tree::tree::Typed
     for HashedCompressedNode<U, N, L>
@@ -131,17 +133,6 @@ impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L: Eq> rusted_gumtree_core::t
     fn get_label(&self) -> &L {
         self.node.get_label()
     }
-}
-
-impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L> rusted_gumtree_core::tree::tree::Node
-    for HashedCompressedNode<U, N, L>
-{
-}
-
-impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq, L> rusted_gumtree_core::tree::tree::Stored
-    for HashedCompressedNode<U, N, L>
-{
-    type TreeId = N;
 }
 
 impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L>
@@ -166,17 +157,6 @@ impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L>
     }
 }
 
-impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L> rusted_gumtree_core::tree::tree::WithHashs
-    for HashedCompressedNode<U, N, L>
-{
-    type HK = U::Kind;
-    type HP = T;
-
-    fn hash(&self, kind: &Self::HK) -> T {
-        self.hashs.hash(kind)
-    }
-}
-
 impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L: Eq>
     rusted_gumtree_core::tree::tree::Tree for HashedCompressedNode<U, N, L>
 {
@@ -186,6 +166,26 @@ impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L: Eq>
 
     fn has_label(&self) -> bool {
         self.node.has_label()
+    }
+}
+
+impl<U: NodeHashs, N, L> Hash for HashedCompressedNode<U, N, L>
+where
+    U::Hash: Hash,
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.hashs.hash(&Default::default()).hash(state);
+    }
+}
+
+impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L> rusted_gumtree_core::tree::tree::WithHashs
+    for HashedCompressedNode<U, N, L>
+{
+    type HK = U::Kind;
+    type HP = T;
+
+    fn hash(&self, kind: &Self::HK) -> T {
+        self.hashs.hash(kind)
     }
 }
 

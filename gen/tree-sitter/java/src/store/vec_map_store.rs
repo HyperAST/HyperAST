@@ -1,5 +1,5 @@
 use std::{
-    cell::RefCell,
+    cell::{Ref, RefCell},
     collections::hash_map::DefaultHasher,
     fmt::Debug,
     hash::{BuildHasher, Hash, Hasher},
@@ -153,7 +153,8 @@ impl ArrayOffset for usize {
 //     dedup: HashMap<<B as Backend>::Symbol, (), ()>;
 // }
 
-pub trait Symbol<T>: Copy + Eq {
+pub trait Symbol<T>: Copy + Eq {}
+pub trait VecSymbol<T>: Symbol<T> {
     /// Creates a symbol from a `usize`.
     ///
     /// Returns `None` if `index` is out of bounds for the symbol.
@@ -197,7 +198,9 @@ impl<T> PartialEq for SymbolU32<T> {
 
 impl<T> Eq for SymbolU32<T> {}
 
-impl<T> Symbol<T> for SymbolU32<T> {
+impl<T> Symbol<T> for SymbolU32<T> {}
+
+impl<T> VecSymbol<T> for SymbolU32<T> {
     fn try_from_usize(index: usize) -> Option<Self> {
         use string_interner::Symbol;
         string_interner::symbol::SymbolU32::try_from_usize(index).and_then(|internal| {
@@ -214,13 +217,23 @@ impl<T> Symbol<T> for SymbolU32<T> {
     }
 }
 
+pub trait AsNodeEntityRef {
+    type Ref<'a>
+    where
+        Self: 'a;
+    fn eq(&self, other: &Self::Ref<'_>) -> bool;
+}
+pub trait AsNodeEntityRefSelf: AsNodeEntityRef {
+    fn as_ref(&self) -> Self::Ref<'_>;
+}
+
 /// Come from string-interner
 /// Types implementing this trait may act as backends for the string interner.
 ///
 /// The job of a backend is to actually store, manage and organize the interned
 /// strings. Different backends have different trade-offs. Users should pick
 /// their backend with hinsight of their personal use-case.
-pub trait Backend<T>: Default {
+pub trait Backend<T: AsNodeEntityRef>: Default {
     /// The symbol used by the string interner backend.
     type Symbol: Symbol<T>;
 
@@ -243,7 +256,7 @@ pub trait Backend<T>: Default {
     fn shrink_to_fit(&mut self);
 
     /// Resolves the given symbol to its original string contents.
-    fn resolve(&self, symbol: Self::Symbol) -> Option<&T>;
+    fn resolve(&self, symbol: Self::Symbol) -> Option<T::Ref<'_>>;
 
     /// Resolves the given symbol to its original string contents.
     ///
@@ -254,7 +267,7 @@ pub trait Backend<T>: Default {
     /// by the [`intern`](`Backend::intern`) or
     /// [`intern_static`](`Backend::intern_static`) methods of the same
     /// interner backend.
-    unsafe fn resolve_unchecked(&self, symbol: Self::Symbol) -> &T;
+    unsafe fn resolve_unchecked(&self, symbol: Self::Symbol) -> T::Ref<'_>;
 }
 
 pub struct VecBackend<T, S: Symbol<T>> {
@@ -262,7 +275,7 @@ pub struct VecBackend<T, S: Symbol<T>> {
     phantom: PhantomData<*const S>,
 }
 
-impl<T: Debug, S: Symbol<T>> Debug for VecBackend<T, S> {
+impl<T: AsNodeEntityRef + Debug, S: Symbol<T>> Debug for VecBackend<T, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VecBackend")
             .field("internal", &self.internal)
@@ -270,7 +283,9 @@ impl<T: Debug, S: Symbol<T>> Debug for VecBackend<T, S> {
     }
 }
 
-impl<T, S: Symbol<T>> Backend<T> for VecBackend<T, S> {
+impl<T: AsNodeEntityRefSelf, S: VecSymbol<T>> Backend<T> for VecBackend<T, S>
+// where T: for<'a> AsNodeEntityRef<Ref<'a>=&'a T> ,
+{
     type Symbol = S;
 
     fn with_capacity(cap: usize) -> Self {
@@ -281,7 +296,7 @@ impl<T, S: Symbol<T>> Backend<T> for VecBackend<T, S> {
     }
 
     fn intern(&mut self, node: T) -> Self::Symbol {
-        let s = Symbol::try_from_usize(self.internal.len())
+        let s = Self::Symbol::try_from_usize(self.internal.len())
             .expect("not enough symbol, you should take a bigger set");
         self.internal.push(node);
         s
@@ -291,12 +306,12 @@ impl<T, S: Symbol<T>> Backend<T> for VecBackend<T, S> {
         self.internal.shrink_to_fit()
     }
 
-    fn resolve(&self, symbol: Self::Symbol) -> Option<&T> {
-        self.internal.get(symbol.to_usize())
+    fn resolve(&self, symbol: Self::Symbol) -> Option<T::Ref<'_>> {
+        self.internal.get(symbol.to_usize()).map(|x| x.as_ref())
     }
 
-    unsafe fn resolve_unchecked(&self, symbol: Self::Symbol) -> &T {
-        self.internal.get_unchecked(symbol.to_usize())
+    unsafe fn resolve_unchecked(&self, symbol: Self::Symbol) -> T::Ref<'_> {
+        self.internal.get_unchecked(symbol.to_usize()).as_ref()
     }
 
     fn len(&self) -> usize {
@@ -315,8 +330,12 @@ impl<T, S: Symbol<T>> Default for VecBackend<T, S> {
 
 pub type DefaultBackend<T, I> = VecBackend<T, I>;
 
-pub struct VecMapStore<T: Hash, I: Symbol<T>, B = DefaultBackend<T, I>, H = DefaultHashBuilder>
-where
+pub struct VecMapStore<
+    T: Hash + AsNodeEntityRef,
+    I: Symbol<T>,
+    B = DefaultBackend<T, I>,
+    H = DefaultHashBuilder,
+> where
     B: Backend<T>,
     H: BuildHasher,
 {
@@ -326,7 +345,22 @@ where
     phantom: PhantomData<*const T>,
 }
 
-impl<T: Hash, I: Symbol<T>, B, H> VecMapStore<T, I, B, H>
+impl<T: Hash + AsNodeEntityRef, I: Symbol<T>, B, H> Default for VecMapStore<T, I, B, H>
+where
+    B: Backend<T>,
+    H: BuildHasher + Default,
+{
+    fn default() -> Self {
+        Self {
+            dedup: Default::default(),
+            hasher: Default::default(),
+            backend: Default::default(),
+            phantom: Default::default(),
+        }
+    }
+}
+
+impl<T: Hash + AsNodeEntityRef, I: Symbol<T>, B, H> VecMapStore<T, I, B, H>
 where
     B: Backend<T, Symbol = I>,
     H: BuildHasher + Default,
@@ -345,7 +379,8 @@ where
     }
 }
 
-impl<T: Hash + Debug, I: Symbol<T> + Debug, B, H> Debug for VecMapStore<T, I, B, H>
+impl<T: Hash + Debug + AsNodeEntityRef, I: Symbol<T> + Debug, B, H> Debug
+    for VecMapStore<T, I, B, H>
 where
     B: Backend<T> + Debug,
     <B as Backend<T>>::Symbol: Symbol<T> + Debug,
@@ -359,7 +394,11 @@ where
     }
 }
 
-impl<T: Hash + Eq, I: Symbol<T>> VecMapStore<T, I> {
+impl<T: Hash + Eq + AsNodeEntityRef, I: Symbol<T>, B> VecMapStore<T, I, B>
+where
+    B: Backend<T, Symbol = I>,
+    for<'a> T::Ref<'a>: Hash + Eq,
+{
     pub fn get<U: AsRef<T>>(&mut self, node: U) -> Option<I> {
         let node = node.as_ref();
         let Self {
@@ -374,16 +413,17 @@ impl<T: Hash + Eq, I: Symbol<T>> VecMapStore<T, I> {
             .from_hash(hash, |symbol| {
                 // SAFETY: This is safe because we only operate on symbols that
                 //         we receive from our backend making them valid.
-                node == unsafe { backend.resolve_unchecked(*symbol) }
+                AsNodeEntityRef::eq(node, &unsafe { backend.resolve_unchecked(*symbol) })
             })
             .map(|(&symbol, &())| symbol)
     }
 }
 
-impl<T: Hash + Eq, I: Symbol<T>, B, H> VecMapStore<T, I, B, H>
+impl<T: Hash + Eq + AsNodeEntityRef, I: Symbol<T>, B, H> VecMapStore<T, I, B, H>
 where
     B: Backend<T, Symbol = I>,
     H: BuildHasher,
+    for<'a> T::Ref<'a>: Hash + Eq,
 {
     pub fn get_or_intern_using(&mut self, node: T, intern_fn: fn(&mut B, T) -> I) -> I {
         let Self {
@@ -393,12 +433,13 @@ where
             ..
         } = self;
         let hash = make_hash(hasher, &node);
+        let a = &dedup.len();
         let entry = dedup.raw_entry_mut().from_hash(hash, |symbol| {
             // SAFETY: This is safe because we only operate on symbols that
             //         we receive from our backend making them valid.
             // node.eq(unsafe { backend.resolve_unchecked(*symbol) })
             let tmp = unsafe { backend.resolve_unchecked(*symbol) };
-            if node.eq(tmp) {
+            if AsNodeEntityRef::eq(&node, &tmp) {
                 true
             } else {
                 false
@@ -413,7 +454,7 @@ where
                     // SAFETY: This is safe because we only operate on symbols that
                     //         we receive from our backend making them valid.
                     let node = unsafe { backend.resolve_unchecked(*symbol) };
-                    make_hash(hasher, node)
+                    make_hash(hasher, &node)
                 })
             }
         };
@@ -426,7 +467,7 @@ where {
         self.get_or_intern_using(node, B::intern)
     }
 
-    pub fn resolve(&self, id: &I) -> &T {
+    pub fn resolve(&self, id: &I) -> T::Ref<'_> {
         self.backend.resolve(*id).unwrap()
     }
 }

@@ -12,16 +12,16 @@ use crate::{
         mapping_store::{DefaultMappingStore, MappingStore},
         matcher::Matcher,
     },
-    tree::tree::{LabelStore, NodeStore, OwnedLabel, Tree, WithHashs},
+    tree::tree::{LabelStore, NodeStore, SlicedLabel, Tree, WithHashs},
 };
 
 pub struct ZsMatcher<
     'a,
     D: 'a + DecompressedTreeStore<T::TreeId, IdD>,
-    T: Tree + WithHashs,
+    T: 'a + Tree + WithHashs,
     IdD: PrimInt + Into<usize>,
-    S: for<'b> NodeStore<'b, T>,
-    LS: LabelStore<OwnedLabel, I = T::Label>,
+    S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+    LS: LabelStore<SlicedLabel, I = T::Label>,
 > {
     compressed_node_store: &'a S,
     label_store: &'a LS,
@@ -38,10 +38,10 @@ impl<
         'a,
         D: 'a + DecompressedTreeStore<T::TreeId, IdD> + PostOrderKeyRoots<T::TreeId, IdD>,
         T: Tree<TreeId = IdC> + WithHashs,
-        IdC: PrimInt,
+        IdC:Clone,
         IdD: 'a + PrimInt + Into<usize> + std::ops::SubAssign + Debug,
-        S: for<'b> NodeStore<'b, T>,
-        LS: LabelStore<OwnedLabel, I = T::Label>,
+        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+        LS: LabelStore<SlicedLabel, I = T::Label>,
     > ZsMatcher<'a, D, T, IdD, S, LS>
 {
     fn f_dist(&self, row: IdD, col: IdD) -> f64 {
@@ -196,16 +196,16 @@ impl<
             let odi = cast(di).unwrap();
             let srctree = sa.tree(&odi);
             let lldsrc2 = sa.lld(&odi);
-            let cost_del = self.get_deletion_cost(srctree);
+            let cost_del = self.get_deletion_cost(&srctree);
             self.forest_dist[di][llddst - 1] = self.forest_dist[di - 1][llddst - 1] + cost_del;
             for dj in llddst..j.into() + 1 {
                 let odj = cast(dj).unwrap();
                 let dsttree = da.tree(&odj);
                 let llddst2 = da.lld(&odj);
-                let cost_ins = self.get_insertion_cost(dsttree);
+                let cost_ins = self.get_insertion_cost(&dsttree);
                 self.forest_dist[lldsrc - 1][dj] = self.forest_dist[lldsrc - 1][dj - 1] + cost_ins;
                 if lldsrc2 == sa.lld(&i) && (llddst2 == da.lld(&j)) {
-                    let cost_upd = self.get_update_cost(srctree, dsttree);
+                    let cost_upd = self.get_update_cost(&srctree, &dsttree);
                     self.forest_dist[di][dj] = f64::min(
                         f64::min(
                             self.forest_dist[di - 1][dj] + cost_del,
@@ -228,28 +228,28 @@ impl<
         }
     }
 
-    fn get_deletion_cost(&self, _di: T::TreeId) -> f64 {
+    fn get_deletion_cost(&self, _di: &T::TreeId) -> f64 {
         1.0
     }
 
-    fn get_insertion_cost(&self, _dj: T::TreeId) -> f64 {
+    fn get_insertion_cost(&self, _dj: &T::TreeId) -> f64 {
         1.0
     }
 
-    fn get_update_cost(&self, n1: T::TreeId, n2: T::TreeId) -> f64 {
-        let t1 = self.compressed_node_store.resolve(&n1).get_type();
-        let t2 = self.compressed_node_store.resolve(&n2).get_type();
+    fn get_update_cost(&self, n1: &T::TreeId, n2: &T::TreeId) -> f64 {
+        let t1 = self.compressed_node_store.resolve(n1).get_type();
+        let t2 = self.compressed_node_store.resolve(n2).get_type();
         if t1 == t2 {
             // todo relax comparison on types ?
             let l1 = {
-                let r = self.compressed_node_store.resolve(&n1);
+                let r = self.compressed_node_store.resolve(n1);
                 if !r.has_label() {
                     return 1.0;
                 };
                 self.label_store.resolve(&r.get_label()).to_owned()
             };
             let l2 = {
-                let r = self.compressed_node_store.resolve(&n2);
+                let r = self.compressed_node_store.resolve(n2);
                 if !r.has_label() {
                     return 1.0;
                 };
@@ -279,11 +279,11 @@ impl<
 
 impl<
         'a,
-        T: Tree<TreeId = IdC> + WithHashs,
+        T: 'a + Tree<TreeId = IdC> + WithHashs,
         IdD: 'a + PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         IdC: 'a + PrimInt,
-        S: for<'b> NodeStore<'b, T>,
-        LS: LabelStore<OwnedLabel, I = T::Label>,
+        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+        LS: LabelStore<SlicedLabel, I = T::Label>,
     > Matcher<'a, ZsTree<T::TreeId, IdD>, T, S>
     for ZsMatcher<'a, ZsTree<T::TreeId, IdD>, T, IdD, S, LS>
 {

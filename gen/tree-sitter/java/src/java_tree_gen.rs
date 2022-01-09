@@ -5,11 +5,11 @@ use std::{
     collections::hash_map::DefaultHasher,
     fmt::Debug,
     hash::{Hash, Hasher},
-    vec,
+    vec, borrow::Borrow,
 };
 
 use rusted_gumtree_core::tree::tree::{
-    LabelStore as LabelStoreTrait, NodeStore as NodeStoreTrait, OwnedLabel, Type,
+    LabelStore as LabelStoreTrait, NodeStore as NodeStoreTrait, NodeStoreMut as NodeStoreMutTrait, OwnedLabel, Type,
 };
 use tree_sitter::{Language, Parser, TreeCursor};
 
@@ -41,7 +41,7 @@ pub struct LabelStore {
 
 impl LabelStoreTrait<OwnedLabel> for LabelStore {
     type I = LabelIdentifier;
-    fn get_or_insert<T: AsRef<OwnedLabel>>(&mut self, _node: T) -> Self::I {
+    fn get_or_insert<T: Borrow<OwnedLabel>>(&mut self, _node: T) -> Self::I {
         // self.internal.get_or_insert(node)
         todo!()
     }
@@ -56,14 +56,18 @@ pub struct NodeStore {
     internal: VecMapStore<HashedNode, NodeIdentifier>,
 }
 
-impl<'a> NodeStoreTrait<'a, HashedNode> for NodeStore {
-    type D = Ref<'a, HashedNode>;
+impl<'a> NodeStoreTrait<'a, NodeIdentifier,Ref<'a, HashedNode>> for NodeStore {
+
+    fn resolve(&'a self, id: &NodeIdentifier) -> Ref<'a, HashedNode> {
+        self.internal.resolve(id)
+    }
+}
+
+impl<'a> NodeStoreMutTrait<'a, HashedNode,Ref<'a, HashedNode>> for NodeStore {
+}
+impl<'a> NodeStore {
     fn get_or_insert(&mut self, node: HashedNode) -> NodeIdentifier {
         self.internal.get_or_insert(node)
-    }
-
-    fn resolve(&'a self, id: &NodeIdentifier) -> Self::D {
-        self.internal.resolve(id)
     }
 }
 

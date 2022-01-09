@@ -1,3 +1,5 @@
+use crate::tree_gen::Accumulator;
+
 #[derive(Debug)]
 pub struct FullNode<Global, Local> {
     pub(crate) global: Global,
@@ -13,8 +15,8 @@ pub struct FullNode<Global, Local> {
 //     hashs: SyntaxNodeHashs<u32>,
 // }
 
-// impl FullNode {
-//     pub fn id(&self) -> &NodeIdentifier {
-//         &self.compressible_node
-//     }
-// }
+impl<Global, Local> FullNode<Global, Local> {
+    pub fn local(&self) -> &Local {
+        &self.local
+    }
+}
