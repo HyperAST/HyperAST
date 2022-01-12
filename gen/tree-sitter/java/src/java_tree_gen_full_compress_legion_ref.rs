@@ -607,7 +607,7 @@ impl<'a> TreeGen for JavaTreeGen {
                 (None, Some(label_store.get_or_insert(label.as_str())))
             } else if acc.simple.kind.is_literal() {
                 let tl = acc.simple.kind.literal_type();
-                let tl = label_store.get_or_insert(tl);
+                // let tl = label_store.get_or_insert(tl);
                 (
                     Some(PartialAnalysis::init(&acc.simple.kind, Some(tl), |x| {
                         label_store.get_or_insert(x)
@@ -617,7 +617,7 @@ impl<'a> TreeGen for JavaTreeGen {
             } else {
                 let rf = label_store.get_or_insert(label.as_str());
                 (
-                    Some(PartialAnalysis::init(&acc.simple.kind, Some(rf), |x| {
+                    Some(PartialAnalysis::init(&acc.simple.kind, Some(label.as_str()), |x| {
                         label_store.get_or_insert(x)
                     })),
                     Some(rf),
@@ -629,9 +629,9 @@ impl<'a> TreeGen for JavaTreeGen {
             if let Some(ana) = acc.ana {
                 todo!("{:?} {:?}", acc.simple.kind, ana)
             }
-            let rf = label_store.get_or_insert(label.as_str());
+            // let rf = label_store.get_or_insert(label.as_str());
             (
-                Some(PartialAnalysis::init(&acc.simple.kind, Some(rf), |x| {
+                Some(PartialAnalysis::init(&acc.simple.kind, Some(label.as_str()), |x| {
                     label_store.get_or_insert(x)
                 })),
                 None,
@@ -641,6 +641,7 @@ impl<'a> TreeGen for JavaTreeGen {
             (Some(ana), None)
         } else if acc.simple.kind == Type::TS86
             || acc.simple.kind == Type::TS81
+            || acc.simple.kind == Type::Asterisk
             || acc.simple.kind == Type::Dimensions
         {
             (
@@ -674,17 +675,17 @@ impl<'a> TreeGen for JavaTreeGen {
             || acc.simple.kind == Type::InterfaceBody
             || acc.simple.kind == Type::SwitchBlock
             || acc.simple.kind == Type::ClassBody
+            || acc.simple.kind == Type::EnumBody
             || acc.simple.kind == Type::AnnotationTypeBody
             || acc.simple.kind == Type::TypeArguments
             || acc.simple.kind == Type::ArrayInitializer
-            || acc.simple.kind == Type::Asterisk
             || acc.simple.kind == Type::ReturnStatement
-        // case of "return;"
+            || acc.simple.kind == Type::Scope
         {
             // TODO maybe do something later?
             (None, None)
         } else {
-            println!("{:?}", &acc.simple.kind);
+            // println!("{:?}", &acc.simple.kind);
             assert!(
                 acc.simple.children.is_empty()
                     || !acc
@@ -742,12 +743,23 @@ impl<'a> TreeGen for JavaTreeGen {
             Some(ana) if &acc.simple.kind == &Type::ClassBody => {
                 println!("refs in class body");
                 ana.print_refs(&self.stores.label_store);
-                Some(ana.resolve())
+                println!("decls in class body");
+                ana.print_decls(&self.stores.label_store);
+                let ana = ana.resolve();
+                println!("refs in class body after resolution");
+                ana.print_refs(&self.stores.label_store);
+                Some(ana)
             }
             Some(ana) if &acc.simple.kind == &Type::ClassDeclaration => {
                 println!("refs in class decl");
                 ana.print_refs(&self.stores.label_store);
-                Some(ana.resolve())
+                println!("decls in class decl");
+                ana.print_decls(&self.stores.label_store);
+                let ana = ana.resolve();
+                println!("refs in class decl after resolution");
+                ana.print_refs(&self.stores.label_store);
+                // TODO assert that ana.solver.refs does not contains mentions to ?.this
+                Some(ana)
             }
             Some(ana) if &acc.simple.kind == &Type::MethodDeclaration => {
                 println!("refs in method decl:");
@@ -757,10 +769,24 @@ impl<'a> TreeGen for JavaTreeGen {
                 ana.print_refs(&self.stores.label_store);
                 Some(ana)
             }
+            Some(ana) if &acc.simple.kind == &Type::ConstructorDeclaration => {
+                println!("refs in construtor decl:");
+                ana.print_refs(&self.stores.label_store);
+                println!("decls in construtor decl");
+                ana.print_decls(&self.stores.label_store);
+                let ana = ana.resolve();
+                println!("refs in construtor decl after resolution:");
+                ana.print_refs(&self.stores.label_store);
+                Some(ana)
+            }
             Some(ana) if &acc.simple.kind == &Type::Program => {
                 println!("refs in program");
                 ana.print_refs(&self.stores.label_store);
-                Some(ana.resolve())
+                println!("decls in program");
+                ana.print_decls(&self.stores.label_store);
+                let ana = ana.resolve();
+                // TODO assert that ana.solver.refs does not contains mentions to ?.this
+                Some(ana)
             }
             Some(ana) => Some(ana), // TODO
             None => None,
@@ -1132,7 +1158,11 @@ impl JavaTreeGen {
 
     fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {
         let label_store = &mut self.stores.label_store;
-        if kind == &Type::Program || kind == &Type::ClassBody {
+        if kind == &Type:: ClassBody
+        || kind == &Type::PackageDeclaration 
+        || kind == &Type::ClassDeclaration || kind == &Type::EnumDeclaration 
+        || kind == &Type::InterfaceDeclaration|| kind == &Type::AnnotationTypeDeclaration
+        || kind == &Type::Program {
             Some(PartialAnalysis::init(kind, None, |x| {
                 label_store.get_or_insert(x)
             }))

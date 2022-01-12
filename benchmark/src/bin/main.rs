@@ -112,7 +112,7 @@ fn bench_1_aux(
         let tree = commit.tree().unwrap();
         tree.walk(git2::TreeWalkMode::PostOrder, |x, y| {
             if y.kind().unwrap().eq(&ObjectType::Blob)
-                && y.name().unwrap_or("").ends_with(".java")
+                && y.name().unwrap_or("").ends_with("Long.java")
                 && if repo_name == "INRIA/spoon" {
                     spoon_filter(x)
                 } else {
@@ -124,7 +124,7 @@ fn bench_1_aux(
                 if full_nodes.contains_key(&a.id()) {
                 } else if let Ok(z) = std::str::from_utf8(a.content()) {
                     println!("{}{}", x, y.name().unwrap_or(""));
-                    // println!("content: {}", z);
+                    println!("content: {}", z);
 
                     use tree_sitter::{Language, Parser};
 

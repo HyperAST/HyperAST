@@ -28,6 +28,10 @@ impl<'a> Iterator for Iter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         match self.refs.next() {
             Some(b) => {
+                match &self.nodes[b] {
+                    RefsEnum::Primitive(_)=>panic!(),
+                    _=>(),
+                };
                 let r = ExplorableRef {
                     rf: b,
                     nodes: self.nodes,
@@ -87,6 +91,95 @@ struct ExplorableDecl<'a> {
     nodes: &'a Nodes,
 }
 
+
+struct DisplayDecl<'a, 'b, LS: LabelStore<str>> {
+    decl: (&'a Declarator<RefPtr>, &'a DeclType<RefPtr>),
+    nodes: &'a Nodes,
+    leafs: &'b LS,
+}
+
+impl<'a, 'b, LS: LabelStore<str>> DisplayDecl<'a, 'b, LS> {
+    fn with(&self, decl: (&'a Declarator<RefPtr>, &'a DeclType<RefPtr>)) -> Self {
+        Self {
+            decl,
+            nodes: self.nodes,
+            leafs: self.leafs,
+        }
+    }
+}
+
+impl<'a, 'b, LS: LabelStore<str>> From<(ExplorableDecl<'a>, &'b LS)> for DisplayDecl<'a, 'b, LS> {
+    fn from((s, leafs): (ExplorableDecl<'a>, &'b LS)) -> Self {
+        Self {
+            decl: s.decl,
+            nodes: s.nodes,
+            leafs,
+        }
+    }
+}
+
+impl<'a, 'b, LS: LabelStore<str, I = LabelPtr>> Display for DisplayDecl<'a, 'b, LS> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (k,v) = &self.decl;
+        let kr = match k.node() {
+            None => DisplayRef {
+                leafs:self.leafs,
+                rf: 0,
+                nodes: &self.nodes,
+            },
+            Some(rf) => DisplayRef {
+                leafs:self.leafs,
+                rf: *rf,
+                nodes: &self.nodes,
+            },
+        };
+        match v {
+            DeclType::Runtime(b) => {
+                // TODO print more things
+                write!(f,"   {:?}: {} ?", k, kr)?;
+                for v in b.iter() {
+                    let r = ExplorableRef {
+                        rf: *v,
+                        nodes: &self.nodes,
+                    };
+                    let r:DisplayRef<'a,'b,LS> = (r,self.leafs).into();
+                    write!(f,"+ {}", r)?;
+                }
+                Ok(())
+            }
+            DeclType::Compile(v, s, b) => {
+                // TODO print more things
+                let r = ExplorableRef {
+                    rf: *v,
+                    nodes: &self.nodes,
+                };
+                let r:DisplayRef<'a,'b,LS> = (r,self.leafs).into();
+                write!(f,"   {:?}: {} => {:?} {}", k, kr,v, r)?;
+                if let Some(s) = s {
+                    let s = DisplayRef {
+                        leafs:self.leafs,
+                        rf: *s,
+                        nodes: &self.nodes,
+                    };
+                    write!(f," extends {}", s)?;
+                };
+                if b.len() > 0 {
+                    write!(f," implements {:?}", s)?;
+                }
+                for v in b.iter() {
+                    let v = DisplayRef {
+                        leafs:self.leafs,
+                        rf: *v,
+                        nodes: &self.nodes,
+                    };
+                    write!(f," {}, ", v)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 struct ExplorableRef<'a> {
     rf: RefPtr,
     nodes: &'a Nodes,
@@ -115,6 +208,21 @@ impl<'a> ExplorableRef<'a> {
             RefsEnum::Primitive(i) => {
                 out.extend(b"p");
                 out.extend(i.to_string().as_bytes())},
+            RefsEnum::Array(o) => {
+                assert_ne!(*o, self.rf);
+                self.with(*o).ser(out);
+                out.extend(b"[]");
+            }
+            RefsEnum::This(o) => {
+                assert_ne!(*o, self.rf);
+                self.with(*o).ser(out);
+                out.extend(b".pthis");
+            }
+            RefsEnum::Super(o) => {
+                assert_ne!(*o, self.rf);
+                self.with(*o).ser(out);
+                out.extend(b".psuper");
+            }
             RefsEnum::ScopedIdentifier(o, i) => {
                 assert_ne!(*o, self.rf);
                 self.with(*o).ser(out);
@@ -146,7 +254,7 @@ impl<'a> ExplorableRef<'a> {
                 out.extend(b);
                 out.push(b"("[0]);
                 match p {
-                    Arguments::Unknown => out.push(b"."[0]),
+                    Arguments::Unknown => out.extend(b"..."),
                     Arguments::Given(p) => {
                         for p in p.deref() {
                             assert_ne!(*p, self.rf);
@@ -162,7 +270,7 @@ impl<'a> ExplorableRef<'a> {
                 self.with(*i).ser(out);
                 out.extend(b"#(");
                 match p {
-                    Arguments::Unknown => out.push(0),
+                    Arguments::Unknown => out.extend(b"..."),
                     Arguments::Given(p) => {
                         for p in p.deref() {
                             assert_ne!(*p, self.rf);
@@ -223,7 +331,19 @@ impl<'a, 'b, LS: LabelStore<str, I = LabelPtr>> Display for DisplayRef<'a, 'b, L
         match &self.nodes[self.rf] {
             RefsEnum::Root => write!(f, "/"),
             RefsEnum::MaybeMissing => write!(f, "?"),
-            RefsEnum::Primitive(i) => Display::fmt(i,f),
+            RefsEnum::Primitive(i) => {write!(f, "p")?;Display::fmt(i,f)},
+            RefsEnum::Array(o) => {
+                write!(f, "{}", self.with(*o))?;
+                write!(f, "[]")
+            }
+            RefsEnum::This(o) => {
+                write!(f, "{}", self.with(*o))?;
+                write!(f, ".pthis")
+            }
+            RefsEnum::Super(o) => {
+                write!(f, "{}", self.with(*o))?;
+                write!(f, ".psuper")
+            }
             RefsEnum::ScopedIdentifier(o, i) => {
                 write!(f, "{}", self.with(*o))?;
                 write!(f, ".{}", self.leafs.resolve(i))
@@ -270,7 +390,7 @@ impl<'a, 'b, LS: LabelStore<str, I = LabelPtr>> Display for DisplayRef<'a, 'b, L
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum RefsEnum<Node: Eq + Hash, Leaf: Eq + Hash> {
     Root,
-    MaybeMissing,
+    MaybeMissing, // TODO replace ? with ~
     ScopedIdentifier(Node, Leaf),
     // TODO ArrayAccess(Node)
     // TODO Anonymous(Id)
@@ -282,6 +402,9 @@ pub enum RefsEnum<Node: Eq + Hash, Leaf: Eq + Hash> {
 
     // specific to java
     Primitive(Primitive),
+    Array(Node),
+    This(Node),
+    Super(Node),
 }
 
 
@@ -299,8 +422,8 @@ pub enum Primitive {
     Void,
 }
 
-impl Primitive {
-    fn new(s:&Type) -> Self {
+impl From<Type> for Primitive {
+    fn from(s:Type) -> Self {
         match s {
             Type::BooleanType => Self::Boolean,
             Type::VoidType => Self::Void,
@@ -319,6 +442,27 @@ impl Primitive {
             Type::CharacterLiteral => Self::Char,
             Type::NullLiteral => Self::Null,
             _ => panic!("{:?}",s),
+        }
+    }
+}
+
+impl From<&str> for Primitive {
+    fn from(s:&str) -> Self {
+        match s {
+            "boolean" => Self::Boolean,
+            "void" => Self::Void,
+            "float" => Self::Float,
+            "double" => Self::Double,
+            "byte" => Self::Byte,
+            "char" => Self::Char,
+            "short" => Self::Short,
+            "int" => Self::Int,
+            "long" => Self::Long,
+            // Literals
+            "true" => Self::Boolean,
+            "false" => Self::Boolean,
+            "null" => Self::Null,
+            s => panic!("{:?}",s),
         }
     }
 }
@@ -388,11 +532,14 @@ impl<Node: Eq + Hash, Leaf: Eq + Hash> RefsEnum<Node, Leaf> {
             (RefsEnum::Root, RefsEnum::Root) => true,
             (RefsEnum::MaybeMissing, RefsEnum::MaybeMissing) => true,
             (RefsEnum::Primitive(i), RefsEnum::Primitive(j)) => i == j,
+            (RefsEnum::Array(_), RefsEnum::Array(_)) => true,
+            (RefsEnum::This(_), RefsEnum::This(_)) => true,
+            (RefsEnum::Super(_), RefsEnum::Super(_)) => true,
             (RefsEnum::ScopedIdentifier(_, i), RefsEnum::ScopedIdentifier(_, j)) => i == j,
             (RefsEnum::MethodReference(_, i), RefsEnum::MethodReference(_, j)) => i == j,
             (RefsEnum::ConstructorReference(i), RefsEnum::ConstructorReference(j)) => i == j,
-            (RefsEnum::Invocation(_, i, _), RefsEnum::Invocation(_, j, _)) => i == j,
-            (RefsEnum::ConstructorInvocation(_, _), RefsEnum::ConstructorInvocation(_, _)) => true,
+            (RefsEnum::Invocation(_, i, _), RefsEnum::Invocation(_, j, _)) => i == j, // TODO count parameters
+            (RefsEnum::ConstructorInvocation(_, _), RefsEnum::ConstructorInvocation(_, _)) => true, // TODO count parameters
             _ => false,
         }
     }
@@ -420,14 +567,16 @@ pub fn leaf_state(t: &Type, label: Option<LabelPtr>) -> State<RefPtr, LabelPtr> 
         panic!();
     } else if t == &Type::ScopedTypeIdentifier {
         panic!();
+    } else if t == &Type::Asterisk {
+        State::Asterisk
     } else if t == &Type::ArgumentList {
         State::Arguments(vec![])
     } else if t == &Type::FormalParameters {
         State::FormalParameters(vec![])
     } else if t == &Type::Super {
-        State::Super(label.unwrap())
+        panic!("{:?} {:?}",t,label);
     } else if t == &Type::This {//t.is_instance_ref() {
-        State::This(label.unwrap())
+        panic!("{:?} {:?}",t,label);
     } else if t == &Type::TypeIdentifier {
         State::SimpleTypeIdentifier(label.unwrap())
     } else if t.is_identifier() {
@@ -444,7 +593,7 @@ pub fn leaf_state(t: &Type, label: Option<LabelPtr>) -> State<RefPtr, LabelPtr> 
         assert_eq!(t, &Type::Comment);
         State::Todo
     };
-    println!("init: {:?} {:?}", t, r);
+    // println!("init: {:?} {:?}", t, r);
     r
 }
 
@@ -483,6 +632,7 @@ pub struct Solver {
     nodes: Nodes,
     refs: bitvec::vec::BitVec,
     decls: HashMap<Declarator<RefPtr>, DeclType<RefPtr>>,
+    root: Option<RefPtr>,
 }
 
 impl Default for Solver {
@@ -492,6 +642,7 @@ impl Default for Solver {
             nodes: Nodes(vec![RefsEnum::Root, RefsEnum::MaybeMissing]),
             refs: Default::default(),
             decls: Default::default(),
+            root:None,
         }
     }
 }
@@ -520,7 +671,15 @@ impl Solver {
     }
 
     fn intern_ref(&mut self, other: RefsEnum<RefPtr, LabelPtr>) -> RefPtr {
+        match other {
+            RefsEnum::Primitive(_)=> panic!(),
+            _=>(),
+        };
         let r = self.intern(other);
+        match &self.nodes[r] {
+            RefsEnum::Primitive(_)=> panic!(),
+            _=>(),
+        };
         if r >= self.refs.len() {
             self.refs.resize(r + 1, false);
         }
@@ -537,36 +696,43 @@ impl Solver {
     }
 
     pub(crate) fn solve_node_with(&mut self, t: usize, p: usize) -> usize {
+        macro_rules! refs {
+            ( $x:expr ) => {
+                if t < self.refs.len() && self.refs[t] {
+                    self.intern_ref($x)
+                } else {
+                    self.intern($x)
+                }
+            }
+        }
         match self.nodes[t].clone() {
             RefsEnum::Root => panic!("fully qualified node cannot be qualified further"),
             RefsEnum::MaybeMissing => p,
+            RefsEnum::This(i) => {
+                let x = self.solve_node_with(i, p);
+                let tmp = RefsEnum::This(x);
+                refs!(tmp)
+            }
+            RefsEnum::Super(i) => {
+                let x = self.solve_node_with(i, p);
+                let tmp = RefsEnum::Super(x);
+                refs!(tmp)
+            }
             RefsEnum::ScopedIdentifier(i, y) => {
                 let x = self.solve_node_with(i, p);
                 let tmp = RefsEnum::ScopedIdentifier(x, y);
-                if t < self.refs.len() && self.refs[t] {
-                    self.intern_ref(tmp)
-                } else {
-                    self.intern(tmp)
-                }
+                refs!(tmp)
             }
             RefsEnum::Invocation(o,i, args) => {
                 let x = self.solve_node_with(o, p);
                 let tmp = RefsEnum::Invocation(x,i, args);
-                if t < self.refs.len() && self.refs[t] {
-                    self.intern_ref(tmp)
-                } else {
-                    self.intern(tmp)
-                }
+                refs!(tmp)
 
             },
             RefsEnum::ConstructorInvocation(o, args) => {
                 let x = self.solve_node_with(o, p);
                 let tmp = RefsEnum::ConstructorInvocation(x, args);
-                if t < self.refs.len() && self.refs[t] {
-                    self.intern_ref(tmp)
-                } else {
-                    self.intern(tmp)
-                }
+                refs!(tmp)
 
             },
             x => todo!("not sure how {:?} should be handled",x),
@@ -622,7 +788,20 @@ impl Solver {
             RefsEnum::Root => self.intern(RefsEnum::Root),
             RefsEnum::MaybeMissing => self.intern(RefsEnum::MaybeMissing),
             RefsEnum::Primitive(i) => self.intern(RefsEnum::Primitive(*i)),
+            RefsEnum::Array(o) => {
+                let o = self.local_solve_intern_external(cache, other.with(*o));
+                self.intern(RefsEnum::Array(o))
+            }
+            RefsEnum::This(o) => {
+                let o = self.local_solve_intern_external(cache, other.with(*o));
+                self.intern(RefsEnum::This(o))
+            }
+            RefsEnum::Super(o) => {
+                let o = self.local_solve_intern_external(cache, other.with(*o));
+                self.intern(RefsEnum::Super(o))
+            }
             RefsEnum::ScopedIdentifier(o, i) => {
+                println!("try solve scoped id: {:?}", other);
                 let o = self.local_solve_intern_external(cache, other.with(*o));
                 self.intern(RefsEnum::ScopedIdentifier(o, *i))
             }
@@ -651,6 +830,7 @@ impl Solver {
                 self.intern(RefsEnum::Invocation(o, *i, p))
             }
             RefsEnum::ConstructorInvocation(o, p) => {
+                println!("try solve constructor: {:?}", other);
                 let i = self.local_solve_intern_external(cache, other.with(*o));
                 let p = match p {
                     Arguments::Unknown => Arguments::Unknown,
@@ -694,11 +874,41 @@ impl Solver {
         if let Some(x) = cache.get(&other) {
             return *x;
         }
-        println!("other: {:?}", other);
+        // println!("other: {:?}", other);
         let r = match self.nodes[other].clone() {
             RefsEnum::Root => Some(other),
-            RefsEnum::MaybeMissing => Some(other),
+            RefsEnum::MaybeMissing => Some(if let Some(p)=self.root {p} else {other}),
             RefsEnum::Primitive(i) => Some(self.intern(RefsEnum::Primitive(i))),
+            RefsEnum::Array(o) => {
+                let r = if let Some(o) = self.solve_aux(cache, o) {
+                    Some(self.intern(RefsEnum::Array(o)))
+                } else {
+                    None
+                };
+                // TODO there should be more/other things to do
+                cache.insert(other, r);
+                r
+            }
+            RefsEnum::This(o) => {
+                let r = if let Some(o) = self.solve_aux(cache, o) {
+                    Some(self.intern(RefsEnum::This(o)))
+                } else {
+                    None
+                };
+                // TODO there should be more/other things to do
+                cache.insert(other, r);
+                r
+            }
+            RefsEnum::Super(o) => {
+                let r = if let Some(o) = self.solve_aux(cache, o) {
+                    Some(self.intern(RefsEnum::Super(o)))
+                } else {
+                    None
+                };
+                // TODO there should be more/other things to do
+                cache.insert(other, r);
+                r
+            }
             RefsEnum::ScopedIdentifier(o, i) => {
                 let r = if let Some(o) = self.solve_aux(cache, o) {
                     Some(self.intern(RefsEnum::ScopedIdentifier(o, i)))
@@ -715,7 +925,7 @@ impl Solver {
                     // TODO should not need
                     match r {
                         DeclType::Compile(r, _, _) => {
-                            println!("solved local variable: {:?}", r);
+                            // println!("solved local variable: {:?}", r);
                             self.solve_aux(cache, r)
                         }
                         _ => todo!(),
@@ -723,21 +933,21 @@ impl Solver {
                 } else if let Some(r) = (&self.decls).get(&Declarator::Field(r)).cloned() {
                     match r {
                         DeclType::Compile(r, _, _) => {
-                            println!("solved field: {:?}", r);
+                            // println!("solved field: {:?}", r);
                             self.solve_aux(cache, r)
                         }
                         _ => todo!(),
                     }
                 } else if let Some(r) = (&self.decls).get(&Declarator::Type(r)).cloned() {
-                    println!("solved class: {:?}", r);
+                    //println!("solved class: {:?}", r);
                     // None // TODO not 100% sure Some of None
                     match r {
                         DeclType::Compile(r, _, _) => {
-                            println!("solved class: {:?}", r);
-                            Some(r)
+                            //println!("solved class: {:?}", r);
+                            None//Some(r)
                         }
                         DeclType::Runtime(b) => {
-                            println!("solved runtime: {:?}", b);
+                            //println!("solved runtime: {:?}", b);
                             None
                         }
                         x => todo!("{:?}",x),
@@ -765,7 +975,7 @@ impl Solver {
                 let r = if let Some(r) = (&self.decls).get(&Declarator::Executable(r)).cloned() {
                     match r {
                         DeclType::Compile(r, _, _) => {
-                            println!("solved method ref: {:?}", r);
+                            //println!("solved method ref: {:?}", r);
                             self.solve_aux(cache, r)
                         }
                         _ => todo!(),
@@ -792,7 +1002,7 @@ impl Solver {
                 let r = if let Some(r) = (&self.decls).get(&Declarator::Executable(r)).cloned() {
                     match r {
                         DeclType::Compile(r, _, _) => {
-                            println!("solved constructor ref: {:?}", r);
+                            //println!("solved constructor ref: {:?}", r);
                             self.solve_aux(cache, r)
                         }
                         _ => todo!(),
@@ -843,7 +1053,7 @@ impl Solver {
                 let r = if let Some(r) = (&self.decls).get(&Declarator::Executable(r)).cloned() {
                     match r {
                         DeclType::Compile(r, _, _) => {
-                            println!("solved method: {:?}", r);
+                            //println!("solved method: {:?}", r);
                             self.solve_aux(cache, r)
                         }
                         _ => todo!(),
@@ -856,7 +1066,11 @@ impl Solver {
                 r
             }
             RefsEnum::ConstructorInvocation(o, p) => {
-                let r = if let Some(i) = self.solve_aux(cache, o) {
+                let sup = match self.nodes[o] {
+                    RefsEnum::Super(_) => true,
+                    _ => false,
+                };
+                let r = if let Some(o) = self.solve_aux(cache, o) {
                     let mut b = true;
                     let p = match p {
                         Arguments::Unknown => Arguments::Unknown,
@@ -876,9 +1090,26 @@ impl Solver {
                             Arguments::Given(p)
                         }
                     };
+                    let o = if sup {
+                        let r = self.intern(RefsEnum::ConstructorInvocation(o, Arguments::Unknown));
+                        if let Some(r) = (&self.decls).get(&Declarator::Executable(r)).cloned() {
+                            match r {
+                                DeclType::Compile(r, s, i) => {
+                                    //println!("solved super constructor type: {:?} {:?} {:?}", r, s, i);
+                                    r
+                                }
+                                _ => todo!(),
+                            }
+                            // TODO if outside class body should return None ?
+                        } else {
+                            o
+                        }
+                    } else {
+                        o
+                    };
                     if b {
-                        let r = self.intern(RefsEnum::ConstructorInvocation(i, p));
-                        assert_ne!(r,i);
+                        let r = self.intern(RefsEnum::ConstructorInvocation(o, p));
+                        assert_ne!(r,o);
                         Some(r)
                     } else {
                         None
@@ -896,7 +1127,7 @@ impl Solver {
                 let r = if let Some(r) = (&self.decls).get(&Declarator::Executable(r)).cloned() {
                     match r {
                         DeclType::Compile(r, s, i) => {
-                            println!("solved constructor: {:?} {:?} {:?}", r, s, i);
+                            //println!("solved constructor: {:?} {:?} {:?}", r, s, i);
                             self.solve_aux(cache, r)
                         }
                         _ => todo!(),
@@ -992,6 +1223,24 @@ impl Solver {
             RefsEnum::Root => self.intern(RefsEnum::Root),
             RefsEnum::MaybeMissing => self.intern(RefsEnum::MaybeMissing),
             RefsEnum::Primitive(i) => self.intern(RefsEnum::Primitive(*i)),
+            RefsEnum::Array(o) => {
+                let tmp = o;
+                let o = self.intern_external(cache, other.with(*o));
+                assert!(self.nodes[o].similar(other.with(*tmp).as_ref()));
+                self.intern(RefsEnum::Array(o))
+            }
+            RefsEnum::This(o) => {
+                let tmp = o;
+                let o = self.intern_external(cache, other.with(*o));
+                assert!(self.nodes[o].similar(other.with(*tmp).as_ref()));
+                self.intern(RefsEnum::This(o))
+            }
+            RefsEnum::Super(o) => {
+                let tmp = o;
+                let o = self.intern_external(cache, other.with(*o));
+                assert!(self.nodes[o].similar(other.with(*tmp).as_ref()));
+                self.intern(RefsEnum::Super(o))
+            }
             RefsEnum::ScopedIdentifier(o, i) => {
                 let tmp = o;
                 let o = self.intern_external(cache, other.with(*o));
@@ -1002,16 +1251,16 @@ impl Solver {
                 let tmp = o;
                 let o = self.intern_external(cache, other.with(*o));
                 assert!(self.nodes[o].similar(other.with(*tmp).as_ref()));
-                println!("{:?}", o);
-                println!("{:?}", self.nodes);
+                // println!("{:?}", o);
+                // println!("{:?}", self.nodes);
                 self.intern(RefsEnum::MethodReference(o, *i))
             }
             RefsEnum::ConstructorReference(o) => {
                 let tmp = o;
                 let o = self.intern_external(cache, other.with(*o));
                 assert!(self.nodes[o].similar(other.with(*tmp).as_ref()));
-                println!("{:?}", o);
-                println!("{:?}", self.nodes);
+                // println!("{:?}", o);
+                // println!("{:?}", self.nodes);
                 self.intern(RefsEnum::ConstructorReference(o))
             }
             RefsEnum::Invocation(o, i, p) => {
@@ -1055,13 +1304,13 @@ impl Solver {
             self.nodes[r],
             other.as_ref()
         );
-        println!(
-            "{:?}",
-            ExplorableRef {
-                rf:r,
-                nodes: &self.nodes,
-            }
-        );
+        // println!(
+        //     "{:?}",
+        //     ExplorableRef {
+        //         rf:r,
+        //         nodes: &self.nodes,
+        //     }
+        // );
         cache.insert(other.rf, r);
         if let Some(x) = cache.get(&other.rf) {
             assert!(
@@ -1074,13 +1323,13 @@ impl Solver {
                 other
             );
 
-            println!(
-                "{:?}",
-                ExplorableRef {
-                    rf:*x,
-                    nodes: &self.nodes,
-                }
-            );
+            // println!(
+            //     "{:?}",
+            //     ExplorableRef {
+            //         rf:*x,
+            //         nodes: &self.nodes,
+            //     }
+            // );
             return *x;
         }
         r
@@ -1095,10 +1344,23 @@ impl Solver {
         for r in solver.iter_refs() {
             // TODO make it imperative ?
             let r = self.intern_external(&mut cached.cache, r);
-            if r >= self.refs.len() {
-                self.refs.resize(r + 1, false);
-            }
-            self.refs.set(r, true);
+            match &self.nodes[r] {
+                RefsEnum::Primitive(_)=> {}
+                RefsEnum::Array(o) => {
+                    if let RefsEnum::Primitive(_) = &self.nodes[*o] {} else {
+                        if r >= self.refs.len() {
+                            self.refs.resize(r + 1, false);
+                        }
+                        self.refs.set(r, true);
+                    }
+                }
+                _=> {
+                    if r >= self.refs.len() {
+                        self.refs.resize(r + 1, false);
+                    }
+                    self.refs.set(r, true);
+                },
+            };
         }
         // no need to extend decls, handled specifically given state
         cached
@@ -1115,10 +1377,23 @@ impl Solver {
         for r in solver.iter_refs() {
             // TODO make it imperative ?
             let r = self.local_solve_intern_external(&mut cached.cache, r);
-            if r >= self.refs.len() {
-                self.refs.resize(r + 1, false);
-            }
-            self.refs.set(r, true);
+            match &self.nodes[r] {
+                RefsEnum::Primitive(_)=> {}
+                RefsEnum::Array(o) => {
+                    if let RefsEnum::Primitive(_) = &self.nodes[*o] {} else {
+                        if r >= self.refs.len() {
+                            self.refs.resize(r + 1, false);
+                        }
+                        self.refs.set(r, true);
+                    }
+                }
+                _=> {
+                    if r >= self.refs.len() {
+                        self.refs.resize(r + 1, false);
+                    }
+                    self.refs.set(r, true);
+                },
+            };
         }
         // TODO extend decls ?
         // for r in solver.iter_decls() {
@@ -1140,16 +1415,22 @@ impl Solver {
             nodes: self.nodes.clone(),
             refs: Default::default(),
             decls: self.decls.clone(),
+            root: self.root,
         };
-        self.print_decls();
+        // self.print_decls();
         let mut cache = Default::default();
         for s in self.iter_refs() {
             // TODO make it imperative ?
             if let Some(s) = r.solve_aux(&mut cache, s.rf) {
-                if s >= r.refs.len() {
-                    r.refs.resize(s + 1, false);
-                }
-                r.refs.set(s, true);
+                match &r.nodes[s] {
+                    RefsEnum::Primitive(_)=> {}
+                    _=> {
+                        if s >= r.refs.len() {
+                            r.refs.resize(s + 1, false);
+                        }
+                        r.refs.set(s, true);
+                    },
+                };
             }
         }
         // TODO try better
@@ -1216,12 +1497,47 @@ pub enum DeclType<Node> {
     Compile(Node, Option<Node>, Box<[Node]>),
 }
 
+impl<Node:Copy> DeclType<Node>{
+pub fn map<N,FN:Fn(Node)->N>(&self, f:FN) -> DeclType<N>
+where
+ {
+     match self {
+        DeclType::Runtime(b) => DeclType::Runtime(b.iter().map(|x| f(*x)).collect()),
+        DeclType::Compile(t, s, i) => DeclType::Compile(f(*t),s.map(|x| f(x)),i.iter().map(|x| f(*x)).collect()),
+    }
+ }
+}
+
 impl PartialAnalysis {
     // apply before commiting/saving subtree
-    pub fn resolve(self) -> Self {
+    pub fn resolve(mut self) -> Self {
+        if let State::File{asterisk_imports, package,..} = self.current_node.clone() {
+            if asterisk_imports.is_empty() {
+                self.solver.root = None;//TODO ?package;
+            }
+        }
+        let mut solver = self.solver.resolve();
+        match &self.current_node {
+            State::File {..}=> {
+                let mut r = bitvec::vec::BitVec::<Lsb0,usize>::default();
+                r.resize(solver.refs.len(),false);
+                let mm = solver.intern(RefsEnum::MaybeMissing);
+                for i in solver.refs.iter_ones() {
+                    match solver.nodes[i] {
+                        RefsEnum::ConstructorInvocation(o,_) if o == mm => {panic!();}, // not possible ?
+                        RefsEnum::Invocation(o,_,_) if o == mm => {},
+                        _ => {r.set(i,true); },
+                    }
+                }
+                // TODO also remove the ones that refs the one s removed as they cannot really be resolved anymore
+                solver.refs = r;
+            },
+            _=>(),
+        };
+
         Self {
             current_node: self.current_node,
-            solver: self.solver.resolve(),
+            solver,
         }
     }
 
@@ -1245,51 +1561,55 @@ impl PartialAnalysis {
     }
 
     pub fn refs_count(&self) -> usize {
-        self.solver.refs.len()
+        self.solver.refs.count_ones()
     }
 
-    // pub fn decls<'a>(&'a self) -> impl Iterator<Item = (&'a Declarator, &'a LabelValue)> {
-    //     // self.solver.decls.iter()
-    //     todo!()
-    // }
+    pub fn print_decls<LS: LabelStore<str, I = LabelPtr>>(&self, leafs: &LS) {
+        let it = self.solver.iter_decls().map(move |x| {
+            let r: DisplayDecl<LS> = (x, leafs).into();
+            r
+        });
+        for x in it {
+            println!("    {}", x);
+        }
+    }
 
     pub fn decls_count(&self) -> usize {
         self.solver.decls.len()
     }
 
-    pub fn init<F:FnMut(&str)-> LabelPtr>(kind: &Type, label: Option<LabelPtr>, mut intern_label: F) -> Self {
+    pub fn init<F:FnMut(&str)-> LabelPtr>(kind: &Type, label: Option<&str>, mut intern_label: F) -> Self {
         
         let mut solver: Solver = Default::default();
         if kind == &Type::Program {
-            macro_rules! scoped {
-                ( $o:expr, $i:expr ) => {
-                   {
-                       let o = $o;
-                       let i = $i;
-                       solver.intern(RefsEnum::ScopedIdentifier(o, i))
-                    }
-                }
-            }
-            macro_rules! import {
-                ( $($p:expr),* ) => {
-                    {
-                        let t = solver.intern(RefsEnum::Root);
-                        $(
-                            let i = intern_label($p);
-                            let t = scoped!(t, i);
-                        )*
-                        let i = scoped!(solver.intern(RefsEnum::MaybeMissing), i);
-                        let d = Declarator::Type(i);
-                        solver.add_decl_simple(d, t);
-                    }
-                }
-            }
-
-            import!("java","lang","String");
-            import!("java","lang","Object");
+            // default_imports(&mut solver, intern_label);
 
             PartialAnalysis {
                 current_node: State::None,
+                solver,
+            }
+        } else if kind == &Type::PackageDeclaration {
+            default_imports(&mut solver, |x| intern_label(x));
+
+            let i = solver.intern(RefsEnum::Root);
+            let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("java")));
+            let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("lang")));
+            PartialAnalysis {
+                current_node: State::ScopedIdentifier(i),
+                solver,
+            }
+        } else if kind == &Type::This {
+            let i = solver.intern(RefsEnum::MaybeMissing);
+            let i = solver.intern(RefsEnum::This(i));
+            PartialAnalysis {
+                current_node: State::This(i),
+                solver,
+            }
+        } else if kind == &Type::Super {
+            let i = solver.intern(RefsEnum::MaybeMissing);
+            let i = solver.intern(RefsEnum::Super(i));
+            PartialAnalysis {
+                current_node: State::Super(i),
                 solver,
             }
         } else if kind.is_literal() {
@@ -1300,7 +1620,7 @@ impl PartialAnalysis {
                 let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("String")));
                 i
             } else {
-                let p = Primitive::new(kind);
+                let p = Primitive::from(label.unwrap()); 
                 let i = solver.intern(RefsEnum::Primitive(p));
                 i
             };
@@ -1309,7 +1629,8 @@ impl PartialAnalysis {
                 solver,
             }
         } else if kind.is_primitive() {
-            let p = Primitive::new(kind);
+            println!("{:?}",label);
+            let p = Primitive::from(label.unwrap());
             let i = solver.intern(RefsEnum::Primitive(p));
             // let i = label.unwrap();
             // let t = solver.intern(RefsEnum::MaybeMissing);
@@ -1319,30 +1640,54 @@ impl PartialAnalysis {
                 solver,
             }
             // panic!("{:?} {:?}",kind,label);
+        } else if kind == &Type::ClassDeclaration
+        || kind == &Type::EnumDeclaration 
+        || kind == &Type::InterfaceDeclaration
+        || kind == &Type::AnnotationTypeDeclaration {
+            let r = solver.intern(RefsEnum::Root);
+            let i = solver.intern(RefsEnum::ScopedIdentifier(r, intern_label("java")));
+            let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("lang")));
+            let s = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("Object")));
+
+            let d = solver.intern(RefsEnum::Super(r));
+            let d = solver.intern(RefsEnum::ConstructorInvocation(d,Arguments::Unknown));
+            let d = Declarator::Executable(d);
+            solver.add_decl_simple(d, s);
+
+            PartialAnalysis {
+                current_node: State::TypeDeclaration {
+                    visibility: Visibility::None,
+                    identifier: DeclType::Compile(0,Some(s),vec![].into_boxed_slice()),
+                    members: vec![],
+                },
+                solver,
+            }
         } else if kind == &Type::ClassBody {
-            {
-                let i = intern_label("this");
-                let t = solver.intern(RefsEnum::MaybeMissing);
-                let i = solver.intern(RefsEnum::ScopedIdentifier(t, i));
-                let t = solver.intern(RefsEnum::Root);
-                let t = solver.intern(RefsEnum::ConstructorInvocation(t,Arguments::Given(vec![].into_boxed_slice())));
-                let d = Declarator::Variable(i);
-                solver.add_decl_simple(d, t);
-            }
-            {
-                let t = solver.intern(RefsEnum::MaybeMissing);
-                let i = solver.intern(RefsEnum::ConstructorInvocation(t,Arguments::Given(vec![].into_boxed_slice())));
-                let t = solver.intern(RefsEnum::Root);
-                let t = solver.intern(RefsEnum::ConstructorInvocation(t,Arguments::Given(vec![].into_boxed_slice())));
-                let d = Declarator::Executable(i);
-                solver.add_decl_simple(d, t);
-            }
+            // TODO constructor solve
+            // {
+            //     let t = solver.intern(RefsEnum::MaybeMissing);
+            //     let t = solver.intern(RefsEnum::This(t));
+            //     let i = solver.intern(RefsEnum::ConstructorInvocation(t,Arguments::Given(vec![].into_boxed_slice())));
+            //     let t = solver.intern(RefsEnum::Root);
+            //     let t = solver.intern(RefsEnum::This(t));
+            //     let d = Declarator::Executable(i);
+            //     solver.add_decl_simple(d, t);
+            // }
+            // {
+            //     let t = solver.intern(RefsEnum::MaybeMissing);
+            //     let i = solver.intern(RefsEnum::ConstructorInvocation(t,Arguments::Given(vec![].into_boxed_slice())));
+            //     let t = solver.intern(RefsEnum::Root);
+            //     let t = solver.intern(RefsEnum::This(t));
+            //     let d = Declarator::Executable(i);
+            //     solver.add_decl_simple(d, t);
+            // }
 
             PartialAnalysis {
                 current_node: State::None,
                 solver,
             }
         } else {
+            let label = label.map(|x|intern_label(x));
             PartialAnalysis {
                 current_node: leaf_state(kind, label),
                 solver,
@@ -1352,15 +1697,6 @@ impl PartialAnalysis {
     }
 
     pub fn acc(self, kind: &Type, acc: &mut Self) {
-        let mut remapper =
-            if kind == &Type::Block 
-            || kind == &Type::ConstructorBody 
-            || kind == &Type::SwitchBlock {
-                acc.solver.local_solve_extend(&self.solver)
-            } else {
-                acc.solver.extend(&self.solver)
-            };
-
         let current_node = self.current_node;
         println!(
             "{:?} {:?} {:?}\n**{:?}",
@@ -1369,16 +1705,31 @@ impl PartialAnalysis {
             &current_node,
             acc.refs().collect::<Vec<_>>()
         );
+        let mut remapper =
+            if kind == &Type::ForStatement 
+            || kind == &Type::EnhancedForStatement 
+            || kind == &Type::TryWithResourcesStatement
+            || kind == &Type::Scope
+            || kind == &Type::ConstructorBody 
+            || kind == &Type::SwitchBlock {
+                acc.solver.local_solve_extend(&self.solver)
+            } else if kind == &Type::ClassDeclaration 
+            || kind == &Type::InterfaceDeclaration 
+            || kind == &Type::EnumDeclaration {
+                acc.solver.extend(&self.solver) // TODO handle decl hierarchical shadowing iff acc body
+
+                // Also divide rest of acc in:
+                // - type declarations
+                // - bodies / member containers
+                // - expressions
+                // - statements/blocks
+                // - simple lists
+            } else {
+                acc.solver.extend(&self.solver)
+            };
+
         macro_rules! mm {
             () => {acc.solver.intern(RefsEnum::MaybeMissing)}
-        }
-        macro_rules! symbol {
-            ( $i:expr ) => {
-                {
-                    let o = mm!();
-                    acc.solver.intern(RefsEnum::ScopedIdentifier(o, $i))
-                }
-            }
         }
         macro_rules! scoped {
             ( $o:expr, $i:expr ) => {
@@ -1390,10 +1741,34 @@ impl PartialAnalysis {
         }
         macro_rules! sync {
             ( $i:expr ) => {
-                remapper.intern_external(&mut acc.solver, $i)
+                remapper.intern_external(&mut acc.solver, $i.0)
             };
         }
-        acc.current_node = match (acc.current_node.take(), current_node) {
+        macro_rules! spec {
+            ( $o:expr, $i:expr ) => {
+                {let i = $i;
+                let o = $o;
+                match acc.solver.nodes[i].clone() {
+                    RefsEnum::This(i) => {
+                        assert_eq!(i,mm!());
+                        acc.solver.intern_ref(RefsEnum::This(o))
+                    },
+                    RefsEnum::Super(i) => {
+                        assert_eq!(i,mm!());
+                        acc.solver.intern_ref(RefsEnum::Super(o))
+                    },
+                    x => panic!("{:?}",x),
+                }}
+            };
+        }
+
+        #[derive(Debug, PartialEq, Eq, Clone,Hash)]
+        struct Old<T>(T) where
+        T: std::cmp::Eq + std::hash::Hash + Clone;
+
+
+
+        acc.current_node = match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
             (rest, State::Annotation)if kind == &Type::Modifiers => {
                 State::Modifiers(Visibility::None,enum_set!())
             }
@@ -1405,11 +1780,10 @@ impl PartialAnalysis {
                 State::Arguments(vec![])
             }
             (rest, State::None) if kind == &Type::Block => {
-                println!("dlen: {:?}", acc.solver.decls.len());
-                println!("{:?}", acc.solver.decls);
+                // println!("dlen: {:?}", acc.solver.decls.len());
+                // println!("{:?}", acc.solver.decls);
                 rest
             }
-
 
             //program
             (
@@ -1423,18 +1797,38 @@ impl PartialAnalysis {
                 // no package declaration at start of java file
                 State::Declaration {
                     visibility,
-                    kind: t,
-                    identifier: d,
+                    kind: sync!(t),
+                    identifier: d.with_changed_node(|x|sync!(x)),
                 }
             }
             (State::None, State::PackageDeclaration(p))
                 if kind == &Type::Program =>
             {
+                for (d,t) in &self.solver.decls {
+                    let d = d.with_changed_node(|x| sync!(Old(*x)));
+                    let t = match t {
+                        DeclType::Runtime(b) => DeclType::Runtime(
+                            b.iter().map(|x| sync!(Old(*x))).collect()
+                        ),
+                        DeclType::Compile(t, s, i) => DeclType::Compile(
+                            sync!(Old(*t)), 
+                            s.map(|x| sync!(Old(x))), 
+                            i.iter().map(|x| sync!(Old(*x))).collect()
+                        ),
+                    };
+                    acc.solver.add_decl(d, t);
+                }
                 State::File {
                     package: Some(sync!(p)),
+                    asterisk_imports: vec![],
+                    top_level: None,
                     content: vec![],
                 }
             }
+            (
+                State::None,
+                State::None,
+            ) if kind == &Type::Program => State::None,
             (
                 State::None,
                 State::TypeDeclaration {
@@ -1446,45 +1840,68 @@ impl PartialAnalysis {
                 // TODO check for file's class? visibility ? etc
                 // TODO maybe bubleup members
                 let mut content = vec![];
-                match d {
+                let top_level = match d {
                     DeclType::Compile(d,_,_) => {
                         let d = sync!(d);
                         let i = Declarator::Type(d);
                         content.push((i.clone(), d));
                         acc.solver.add_decl_simple(i.clone(), d);
+                        if let Visibility::Public = visibility {
+                            Some((
+                                i,d
+                            ))
+                        } else {
+                            None
+                        }
                     }
                     _ => panic!(),
-                }
+                };
 
                 State::File {
                     package: None,
+                    asterisk_imports: vec![],
+                    top_level,
                     content,
                 }
             }
             (
                 State::File {
                     package: p,
+                    mut asterisk_imports,
+                    top_level,
                     mut content,
                 },
-                State::ImportDeclaration(i),
-            ) if kind == &Type::Program => {
-                let i = sync!(i);
-                let (o, i) = match &acc.solver.nodes[i] {
+                State::ImportDeclaration{
+                    identifier:i,
+                    sstatic,
+                    asterisk,
+                },
+            ) if kind == &Type::Program => {// TODO do something with sstatic and asterisk
+                let d = sync!(i);
+                let (o, i) = match &acc.solver.nodes[d] {
                     RefsEnum::ScopedIdentifier(o, i) => (*o, *i),
                     _ => panic!("must be a scoped id in an import"),
                 };
-                let c = scoped!(o,i);
-                let r = mm!();
-                let d = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
-                acc.solver.add_decl_simple(Declarator::Type(d), c);
+                if !asterisk {// TODO static
+                    asterisk_imports.push(d);
+                } else {
+                    let c = scoped!(o,i);
+                    let r = mm!();
+                    let d = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                    acc.solver.add_decl_simple(Declarator::Type(d), c);
+                }
                 State::File {
                     package: p,
+                    asterisk_imports,
+                    top_level,
                     content,
                 }
             }
             (
                 State::File {
                     package: p,
+                    asterisk_imports,
+                    top_level,
                     mut content,
                 },
                 State::TypeDeclaration {
@@ -1495,6 +1912,7 @@ impl PartialAnalysis {
             ) if kind == &Type::Program => {
                 // TODO check for file's class? visibility? etc
                 // TODO maybe bubleup members
+                // TODO remove asterisk import if declared in file
                 let identifier = match (identifier, p) {
                     (DeclType::Compile(d,_,_), Some(p)) => {
                         let d = sync!(d);
@@ -1518,65 +1936,83 @@ impl PartialAnalysis {
                 };
                 for (d, t) in members {
                     let d = d.with_changed_node(|i| sync!(*i));
-                    let t = sync!(t);
+                    let t = sync!(t); // TODO try solving t
 
                     match &d {
                         Declarator::Executable(d)=> 
                         {
-                            {
-                                let d = Declarator::Executable(*d);
-                                acc.solver.add_decl_simple(d, t);
-                            }
+                            // TODO constructor solve
                             if let Some(p) = p{
                                 let solved = acc.solver.solve_node_with(*d, p);
-                                let d = Declarator::Executable(solved);
+                                let d = Declarator::Executable(*d);
+                                acc.solver.add_decl_simple(d, solved);
+                                let d = Declarator::Executable(t);
                                 acc.solver.add_decl_simple(d.clone(), t);
                                 content.push((d, t));
+                            } else {
+                                let d = Declarator::Executable(*d);
+                                acc.solver.add_decl_simple(d, t);
                             }
                         }
                         Declarator::Field(d)=> 
                         {
-                            {
-                                let d = Declarator::Field(*d);
-                                acc.solver.add_decl_simple(d, t);
-                            }
                             if let Some(p) = p{
                                 let solved = acc.solver.solve_node_with(*d, p);
                                 let d = Declarator::Field(solved);
                                 acc.solver.add_decl_simple(d.clone(), t);
                                 content.push((d, t));
+                            } else {
+                                let d = Declarator::Field(*d);
+                                acc.solver.add_decl_simple(d, t);
                             }
                         }
                         Declarator::Type(d)=> 
                         {
-                            {
-                                let d = Declarator::Type(*d);
-                                acc.solver.add_decl_simple(d, t);
-                            }
                             if let Some(p) = p{
                                 let solved = acc.solver.solve_node_with(*d, p);
+                                let d = Declarator::Type(*d);
+                                acc.solver.add_decl_simple(d, solved);
                                 let d = Declarator::Type(solved);
-                                acc.solver.add_decl_simple(d.clone(), t);
+                                acc.solver.add_decl_simple(d.clone(), solved);
                                 content.push((d, t));
+                            } else {
+                                let d = Declarator::Type(*d);
+                                acc.solver.add_decl_simple(d, t);
                             }
                         }
                         x => panic!("{:?}",x)
                     }
                 }
+                let top_level = if let Visibility::Public = visibility {
+                    assert!(top_level.is_none());
+                    let d = Declarator::Type(identifier);
+                    Some((
+                        d,identifier
+                    ))
+                } else if let Some(_) = top_level {
+                    top_level
+                } else {
+                    None
+                };
                 State::File {
                     package: p,
+                    asterisk_imports,
+                    top_level,
                     content,
                 }
             }
             // package
-            (State::None, State::ScopedIdentifier(i))
+            (State::ScopedIdentifier(jl), State::ScopedIdentifier(i))
                 if kind == &Type::PackageDeclaration =>
             {
                 // TODO complete refs
                 let i = sync!(i);
+                if jl==i {
+                    acc.solver.decls = Default::default();
+                }
                 State::PackageDeclaration(i)
             }
-            (State::None, State::SimpleIdentifier(i))
+            (State::ScopedIdentifier(_), State::SimpleIdentifier(i))
                 if kind == &Type::PackageDeclaration =>
             {
                 // TODO complete refs
@@ -1610,18 +2046,52 @@ impl PartialAnalysis {
                 if kind == &Type::ImportDeclaration =>
             {
                 let i = sync!(i);
-                State::ImportDeclaration(i)
+                if i >= acc.solver.refs.len() {
+                    acc.solver.refs.resize(i + 1, false);
+                }
+                acc.solver.refs.set(i, true);
+                State::ImportDeclaration{
+                    identifier:i,
+                    sstatic:false,
+                    asterisk: false,
+                }
             }
             (State::None, State::Modifiers(v, n))
                 if kind == &Type::ImportDeclaration =>
             {
                 State::Modifiers(v, n)
             }
-            (State::Modifiers(v, n), State::ScopedIdentifier(i))
+            (State::Modifiers(Visibility::None, n), State::ScopedIdentifier(i))
                 if kind == &Type::ImportDeclaration =>
             {
+                // println!("{:?}",n);
+                assert_eq!(n,enum_set!(NonVisibility::Static));
                 let i = sync!(i);
-                State::ImportDeclaration(i) // TODO use static
+
+                if i >= acc.solver.refs.len() {
+                    acc.solver.refs.resize(i + 1, false);
+                }
+                acc.solver.refs.set(i, true);
+                State::ImportDeclaration{
+                    identifier:i,
+                    sstatic:true,
+                    asterisk: false,
+                } // TODO use static
+            }
+            (State::ImportDeclaration{
+                identifier:i,
+                sstatic,
+                asterisk:false,
+            }, State::Asterisk)
+                if kind == &Type::ImportDeclaration =>
+            {
+                // TODO say we import members/classes
+                acc.solver.refs.set(i,false);
+                State::ImportDeclaration{
+                    identifier:i,
+                    sstatic,
+                    asterisk:true,
+                }
             }
             (State::Declarations(p), State::None)
                 if kind == &Type::LambdaExpression =>
@@ -1754,7 +2224,8 @@ impl PartialAnalysis {
                 if kind == &Type::MethodDeclaration =>
             {
                 for (t, b) in t {
-                    let t = scoped!(mm!(),t);
+                    let r = mm!();
+                    let t = acc.solver.intern(RefsEnum::ScopedIdentifier(r,t));
                     let b = b
                         .into_iter()
                         .map(|t| sync!(*t))
@@ -1774,7 +2245,8 @@ impl PartialAnalysis {
                 if kind == &Type::MethodDeclaration =>
             {
                 for (t, b) in t {
-                    let t = scoped!(mm!(),t);
+                    let r = mm!();
+                    let t = acc.solver.intern(RefsEnum::ScopedIdentifier(r,t));
                     let b = b
                         .into_iter()
                         .map(|t| sync!(*t))
@@ -1884,6 +2356,22 @@ impl PartialAnalysis {
                 },
                 State::None,
             ) if kind == &Type::ConstructorDeclaration => {
+                let t = identifier.unwrap();
+                let r = mm!();
+                let t = acc.solver.intern(RefsEnum::ScopedIdentifier(r,t));
+                let p: Box<[RefPtr]> = parameters.into_iter().map(|(_, t)| *t).collect();
+                {
+                    let p = p.clone();
+                    let i = acc.solver.intern(RefsEnum::MaybeMissing);
+                    let i = acc.solver.intern(RefsEnum::This(i));
+                    let i = acc.solver.intern(RefsEnum::ConstructorInvocation(i,Arguments::Given(p)));
+                    let d = Declarator::Executable(i);
+                    acc.solver.add_decl_simple(d, t);
+                }{
+                    let i = acc.solver.intern(RefsEnum::ConstructorInvocation(t,Arguments::Given(p)));
+                    let d = Declarator::Executable(i);
+                    acc.solver.add_decl_simple(d, t);
+                }
                 State::ConstructorImplementation {
                     visibility,
                     identifier,
@@ -1916,7 +2404,7 @@ impl PartialAnalysis {
                 },
                 State::None,
             ) if kind == &Type::MethodDeclaration => {
-                let p = p.into_iter().map(|(i, t)| *t).collect();
+                let p: Box<[RefPtr]> = p.into_iter().map(|(i, t)| *t).collect();
                 let r = mm!();
                 let i = acc
                     .solver
@@ -1944,56 +2432,59 @@ impl PartialAnalysis {
             (_, State::None) if kind == &Type::MethodInvocation => todo!(),
             // (x, State::None) => x,
             (x, y) if kind == &Type::Error => panic!("{:?} {:?} {:?}", kind, x, y),
-            (State::None, State::SimpleIdentifier(i))
+            (State::TypeDeclaration {
+                visibility,
+                identifier,
+                members,
+            }, State::SimpleIdentifier(i))
                 if kind == &Type::ClassDeclaration
                     || kind == &Type::EnumDeclaration
                     || kind == &Type::AnnotationTypeDeclaration
                     || kind == &Type::InterfaceDeclaration =>
             {
-                let i = scoped!(mm!(),i);
-                let d = Declarator::Type(i);
-                acc.solver.add_decl_simple(d.clone(), i);
-                {
-                    let t = acc.solver.intern(RefsEnum::Root);
-                    let t = acc.solver.intern(RefsEnum::ConstructorInvocation(t,Arguments::Given(vec![].into_boxed_slice())));
-                    let t = Declarator::Executable(t);
-                    acc.solver.add_decl_simple(t, i);
-                }
+                let (s,is) = match identifier {
+                    DeclType::Compile(0,s,is)=> (s,is),
+                    _=> panic!(),
+                };
+                let r = mm!();
+                let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r,i));
                 State::TypeDeclaration {
-                    visibility: Visibility::None,
-                    identifier: DeclType::Compile(i,None,vec![].into_boxed_slice()),
-                    members: vec![],
+                    visibility,
+                    identifier: DeclType::Compile(i,s,is),
+                    members,
                 }
             }
-            (State::Modifiers(v, n), State::SimpleIdentifier(i))
+            (State::TypeDeclaration{
+                visibility,
+                identifier,
+                members,
+            }, State::Modifiers(v, n))
                 if kind == &Type::ClassDeclaration
                     || kind == &Type::EnumDeclaration
                     || kind == &Type::AnnotationTypeDeclaration
                     || kind == &Type::InterfaceDeclaration =>
             {
-                let i = scoped!(mm!(),i);
-                let d = Declarator::Type(i);
-                acc.solver.add_decl_simple(d.clone(), i);
-                {
-                    let t = acc.solver.intern(RefsEnum::Root);
-                    let t = acc.solver.intern(RefsEnum::ConstructorInvocation(t,Arguments::Given(vec![].into_boxed_slice())));
-                    let t = Declarator::Executable(t);
-                    acc.solver.add_decl_simple(t, i);
-                }
+                let (s,is) = match identifier {
+                    DeclType::Compile(0,s,is)=> (s,is),
+                    _=> panic!(),
+                };
                 State::TypeDeclaration {
                     visibility: v,
-                    identifier: DeclType::Compile(i,None,vec![].into_boxed_slice()),
-                    members: vec![],
+                    identifier: DeclType::Compile(0,s,is),
+                    members,
                 }
             }
             (State::None, State::SimpleIdentifier(i))
                 if kind == &Type::EnumConstant =>
             {
-                let i = scoped!(mm!(),i);
+                let r = mm!();
+                let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r,i));
                 let i = Declarator::Field(i);
+                let t = acc.solver.intern(RefsEnum::This(r));
+                acc.solver.intern_ref(RefsEnum::ConstructorInvocation(t,Arguments::Unknown));
                 State::Declaration {
                     visibility: Visibility::None,
-                    kind: mm!(),
+                    kind: t,
                     identifier: i,
                 }
             }
@@ -2004,6 +2495,7 @@ impl PartialAnalysis {
             }, State::Arguments(_))
                 if kind == &Type::EnumConstant =>
             {
+                // TODO make ref of constructor
                 // TODO use arguments ie they are calls to enum constructor
                 State::Declaration {
                     visibility,
@@ -2059,10 +2551,27 @@ impl PartialAnalysis {
                 || kind == &Type::EnumDeclaration
                 || kind == &Type::InterfaceDeclaration =>
             {
-                let i = match &identifier {
+                let id = match &identifier {
                     DeclType::Compile(i,_,_)=> *i,
                     _=> panic!(),
                 };
+                {
+                    // ?.A -> ?.A
+                    let d = Declarator::Type(id);
+                    acc.solver.add_decl_simple(d, id);
+                }
+                {
+                    // ?.A.this -> ?.A
+                    let d = acc.solver.intern(RefsEnum::This(id));
+                    let d = Declarator::Type(d);
+                    acc.solver.add_decl_simple(d, id);
+                    // TODO this one? ?.S.super -> ?.S
+                }
+                {// ?.A#() -> ?.A
+                    let d = acc.solver.intern(RefsEnum::ConstructorInvocation(id,Arguments::Given(vec![].into_boxed_slice())));
+                    let d = Declarator::Executable(d);
+                    acc.solver.add_decl_simple(d, id);
+                }
                 for (d, t) in ds {
                     let d = d.with_changed_node(|i| sync!(*i));
                     let t = sync!(t);
@@ -2070,34 +2579,62 @@ impl PartialAnalysis {
                     match &d {
                         Declarator::Executable(d)=> 
                         {
-                            match &acc.solver.nodes[*d] {
-                                RefsEnum::ConstructorInvocation(_,_) => {
-                                    {let d = Declarator::Executable(*d);
-                                    acc.solver.add_decl(d, identifier.clone());}
-                                    // let solved = acc.solver.solve_node_with(*d, i);
-                                    // let d = Declarator::Executable(solved);
-                                    // acc.solver.add_decl(d.clone(), identifier.clone());
-                                    // members.push((d, i));
+                            match acc.solver.nodes[*d].clone() {
+                                RefsEnum::ConstructorInvocation(o,p) => {
+                                    // constructor solve
+                                    {// TODO test if it does ?.A#(p) => ?.A
+                                        let d = Declarator::Executable(*d);
+                                        acc.solver.add_decl(d, identifier.clone());
+                                    }
+                                    {
+                                        // TODO not sure how to change o
+                                        // given class A, it might be better to solve ?.this#(p) here to ?.A.this#(p) and in general ?.A.this -> ?A.
+                                        let solved = acc.solver.intern(RefsEnum::ConstructorInvocation(id,p));
+                                        // acc.solver.solve_node_with(*d, i); // to spec ?.this#(p)
+                                        let d = Declarator::Executable(solved);
+                                        acc.solver.add_decl(d.clone(), identifier.clone());
+                                        members.push((d, id));
+                                    }
                                 },
-                                RefsEnum::Invocation(_, _,_) => {
-                                    {let d = Declarator::Executable(*d);
-                                    acc.solver.add_decl_simple(d, t);}
-                                    let solved = acc.solver.solve_node_with(*d, i);
-                                    let d = Declarator::Executable(solved);
-                                    acc.solver.add_decl_simple(d.clone(), t);
-                                    // members.push((d, t));
+                                RefsEnum::Invocation(o, i,p) => {
+                                    {
+                                        let d = Declarator::Executable(*d);
+                                        acc.solver.add_decl_simple(d, t);
+                                    }
+                                    {
+                                        let solved = acc.solver.solve_node_with(*d, id);
+                                        let d = Declarator::Executable(solved);
+                                        acc.solver.add_decl_simple(d.clone(), t);
+                                        members.push((d, t));
+                                    }
+                                    {
+                                        let r = mm!();
+                                        let r = acc.solver.intern(RefsEnum::This(r));
+                                        let solved = acc.solver.solve_node_with(*d, id);
+                                        let d = Declarator::Executable(solved);
+                                        acc.solver.add_decl_simple(d.clone(), t);
+                                        members.push((d, t));
+                                    }
                                 },
                                 x => todo!("{:?}",x),
                             }
                         }
                         Declarator::Field(d)=> 
                         {
-                            {
+                            {// ?.d => t
                                 let d = Declarator::Field(*d);
                                 acc.solver.add_decl_simple(d, t);
                             }
-                            {
-                                let solved = acc.solver.solve_node_with(*d, i);
+                            {// ?.id.d => t
+                                let solved = acc.solver.solve_node_with(*d, id);
+                                let d = Declarator::Field(solved);
+                                acc.solver.add_decl_simple(d.clone(), t);
+                                members.push((d, t));
+                            }
+                            {// ?.this.d => t
+                                let r = mm!();
+                                let r = acc.solver.intern(RefsEnum::This(r));
+                                let solved = acc.solver.solve_node_with(*d, r);
                                 let d = Declarator::Field(solved);
                                 acc.solver.add_decl_simple(d.clone(), t);
                                 members.push((d, t));
@@ -2110,7 +2647,15 @@ impl PartialAnalysis {
                                 acc.solver.add_decl_simple(d, t);
                             }
                             {
-                                let solved = acc.solver.solve_node_with(*d, i);
+                                let solved = acc.solver.solve_node_with(*d, id);
+                                let d = Declarator::Type(solved);
+                                acc.solver.add_decl_simple(d.clone(), t);
+                                members.push((d, t));
+                            }
+                            {
+                                let r = mm!();
+                                let r = acc.solver.intern(RefsEnum::This(r));
+                                let solved = acc.solver.solve_node_with(*d, r);
                                 let d = Declarator::Type(solved);
                                 acc.solver.add_decl_simple(d.clone(), t);
                                 members.push((d, t));
@@ -2139,7 +2684,8 @@ impl PartialAnalysis {
                 || kind == &Type::InterfaceDeclaration =>
             {
                 for (d, t) in ps {
-                    let d = scoped!(mm!(),d);
+                    let r = mm!();
+                    let d = acc.solver.intern(RefsEnum::ScopedIdentifier(r,d));
                     let d = Declarator::Type(d);
                     let t = t
                         .into_iter()
@@ -2161,9 +2707,25 @@ impl PartialAnalysis {
                     identifier: i,
                     mut members,
                 },
-                State::ScopedTypeIdentifier(t),
+                State::ScopedTypeIdentifier(s),
             ) if kind == &Type::ClassDeclaration => {
-                // TODO use superclass value
+                let s = sync!(s);
+                let i = match i {
+                    DeclType::Compile(t, _, i) => {
+
+                        // ?.super#constructor(...) -> ?.S
+                        let r = mm!();
+                        let d = acc.solver.intern(RefsEnum::Super(r));
+                        let d = acc.solver.intern(RefsEnum::ConstructorInvocation(d,Arguments::Unknown));
+                        let d = Declarator::Executable(d);
+                        acc.solver.add_decl_simple(d, s);
+                        // TODO this one? ?.S.super#constructor(...) -> ?.S
+
+                        DeclType::Compile(t, Some(s), i)
+                    },
+                    x => panic!("{:?}",x),
+                };
+                // TODO use superclass value more
                 State::TypeDeclaration {
                     visibility,
                     identifier: i,
@@ -2173,12 +2735,19 @@ impl PartialAnalysis {
             (
                 State::TypeDeclaration {
                     visibility,
-                    identifier: i,
+                    identifier,
                     mut members,
                 },
-                State::Interfaces(t),
+                State::Interfaces(i),
             ) if kind == &Type::ClassDeclaration || kind == &Type::InterfaceDeclaration => {
-                // TODO use interfaces
+                let i = i.into_iter().map(|x| sync!(x)).collect();
+                let i = match identifier {
+                    DeclType::Compile(t, s, _) => {
+                        DeclType::Compile(t, s, i)
+                    },
+                    x => panic!("{:?}",x),
+                };
+                // TODO use interfaces value more
                 State::TypeDeclaration {
                     visibility,
                     identifier: i,
@@ -2193,7 +2762,7 @@ impl PartialAnalysis {
                 },
                 State::None,
             ) if kind == &Type::ClassDeclaration || kind == &Type::InterfaceDeclaration || kind == &Type::EnumDeclaration => {
-                // TODO use interfaces
+
                 State::TypeDeclaration {
                     visibility,
                     identifier: i,
@@ -2220,57 +2789,45 @@ impl PartialAnalysis {
                 if kind == &Type::LocalVariableDeclaration =>
             {
                 let t = sync!(t);
-                State::Declaration {
-                    visibility: Visibility::None,
-                    kind: t,
-                    identifier: Declarator::None,
-                }
+                State::ScopedTypeIdentifier(t)
             }
             (
-                State::Declaration {
-                    visibility,
-                    kind: t,
-                    identifier: _,
-                },
+                State::ScopedTypeIdentifier(t),
                 State::Declarator(Declarator::Variable(i)),
             ) if kind == &Type::LocalVariableDeclaration => {
                 let i = sync!(i);
                 let i = Declarator::Variable(i);
-                State::Declaration {
-                    visibility,
-                    kind: t,
-                    identifier: i,
-                }
+                let v = vec![(i,t)];
+                State::Declarations(v)
+            }
+            (
+                State::Declarations(v),
+                State::Declarator(Declarator::Variable(i)),
+            ) if kind == &Type::LocalVariableDeclaration => {
+                let (_,t) = v[0];
+                let i = sync!(i);
+                let i = Declarator::Variable(i);
+                let mut v = v.clone();
+                v.push((i,t));
+                State::Declarations(v)
             }
             (State::None, State::SimpleTypeIdentifier(t))
                 if kind == &Type::LocalVariableDeclaration =>
             { 
                 let t = scoped!(mm!(),t);
-                State::Declaration {
-                    visibility: Visibility::None,
-                    kind: t,
-                    identifier: Declarator::None,
-                }
+                State::ScopedTypeIdentifier(t)
             }
             (State::Modifiers(v,n), State::SimpleTypeIdentifier(t))
                 if kind == &Type::LocalVariableDeclaration =>
             { 
                 let t = scoped!(mm!(),t);
-                State::Declaration {
-                    visibility: v,
-                    kind: t,
-                    identifier: Declarator::None,
-                }
+                State::ScopedTypeIdentifier(t)
             }
             (State::Modifiers(v,n), State::ScopedTypeIdentifier(t))
                 if kind == &Type::LocalVariableDeclaration =>
             {
                 let t = sync!(t);
-                State::Declaration {
-                    visibility: v,
-                    kind: t,
-                    identifier: Declarator::None,
-                }
+                State::ScopedTypeIdentifier(t)
             }
             (State::Declarator(Declarator::Variable(v)), _)
                 if kind == &Type::VariableDeclarator =>
@@ -2381,6 +2938,36 @@ impl PartialAnalysis {
                 }
             }
             (
+                State::None,
+                State::SimpleTypeIdentifier(t),
+            ) if kind == &Type::FieldDeclaration || kind == &Type::ConstantDeclaration => {
+                // TODO simple type identifier should be a type identifier ie. already scoped
+                let t = scoped!(mm!(),t);
+                let i = Declarator::None;
+                // not used directly
+                // acc.solver.add_decl_simple(i.clone(), t);
+                State::Declaration {
+                    visibility: Visibility::None,
+                    kind: t,
+                    identifier: i,
+                }
+            }
+            (
+                State::None,
+                State::ScopedTypeIdentifier(t),
+            ) if kind == &Type::FieldDeclaration || kind == &Type::ConstantDeclaration => {
+                // TODO simple type identifier should be a type identifier ie. already scoped
+                let t = sync!(t);
+                let i = Declarator::None;
+                // not used directly
+                // acc.solver.add_decl_simple(i.clone(), t);
+                State::Declaration {
+                    visibility: Visibility::None,
+                    kind: t,
+                    identifier: i,
+                }
+            }
+            (
                 State::Modifiers(v, n),
                 State::SimpleTypeIdentifier(t),
             ) if kind == &Type::AnnotationTypeElementDeclaration => {
@@ -2419,7 +3006,8 @@ impl PartialAnalysis {
                 State::SimpleIdentifier(i),
             ) if kind == &Type::AnnotationTypeElementDeclaration => {
                 // TODO simple type identifier should be a type identifier ie. already scoped
-                let i = scoped!(mm!(),i);
+                let r = mm!();
+                let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r,i));
                 let i = Declarator::Field(i);
                 // not used directly
                 // acc.solver.add_decl_simple(i.clone(), t);
@@ -2527,7 +3115,7 @@ impl PartialAnalysis {
             (State::None, State::CatchTypes(v))
                 if kind == &Type::CatchFormalParameter =>
             {
-                State::CatchTypes(v)
+                State::CatchTypes(v.iter().map(|x|sync!(x)).collect())
             }
             (State::CatchTypes(v), State::SimpleIdentifier(i))
                 if kind == &Type::CatchFormalParameter =>
@@ -2544,7 +3132,8 @@ impl PartialAnalysis {
                     identifier: i,
                 },
             ) if kind == &Type::CatchClause => {
-                let i = scoped!(mm!(),i);
+                let r = mm!();
+                let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r,i));
                 let d = Declarator::Variable(i);
                 // TODO send whole intersection
                 // let b = b.into_iter().map(|t|
@@ -2578,7 +3167,8 @@ impl PartialAnalysis {
                 State::ScopedTypeIdentifier(t),
                 State::SimpleIdentifier(i),
             ) if kind == &Type::FormalParameter => {
-                let i = scoped!(mm!(),i);
+                let r = mm!();
+                let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r,i));
                 let i = Declarator::Variable(i);
                 State::Declaration {
                     visibility: Visibility::None,
@@ -2632,22 +3222,20 @@ impl PartialAnalysis {
             (State::None, State::SimpleTypeIdentifier(i))
             if kind == &Type::ArrayCreationExpression =>
             {
-                let i = scoped!(mm!(),i);
-                State::ScopedIdentifier(i)
+                let r = mm!();
+                let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r,i));
+                let i = acc
+                    .solver
+                    .intern(RefsEnum::ConstructorInvocation(i, Arguments::Unknown));
+                State::ConstructorInvocation(i)
             }
             (State::None, State::ScopedTypeIdentifier(i))
                 if kind == &Type::ArrayCreationExpression =>
             {
                 let i = sync!(i);
-                State::ScopedIdentifier(i)
-            }
-            (State::ScopedIdentifier(i), State::Dimensions)
-                if kind == &Type::ArrayCreationExpression =>
-            {
                 let i = acc
                     .solver
-                    .intern_ref(RefsEnum::ConstructorInvocation(i, Arguments::Unknown));
-                // TODO use dimension
+                    .intern(RefsEnum::ConstructorInvocation(i, Arguments::Unknown));
                 State::ConstructorInvocation(i)
             }
             (State::ConstructorInvocation(i), State::None)
@@ -2655,53 +3243,53 @@ impl PartialAnalysis {
             {
                 State::ConstructorInvocation(i)
             }
-            (State::ConstructorInvocation(i), State::ScopedIdentifier(_))
+            (State::ConstructorInvocation(i), rest)
                 if kind == &Type::ArrayCreationExpression =>
             {
-                // TODO use the dimension expr
-                State::ConstructorInvocation(i)
-            }
-            (State::ConstructorInvocation(i), State::LiteralType(_))
-                if kind == &Type::ArrayCreationExpression =>
-            {
-                // TODO use the dimension expr
-                State::ConstructorInvocation(i)
-            }
-            (State::ConstructorInvocation(i), State::Dimensions)
-                if kind == &Type::ArrayCreationExpression =>
-            {
-                // TODO use the dimension expr
-                State::ConstructorInvocation(i)
-            }
-            (State::ScopedIdentifier(i), State::LiteralType(_))
-                if kind == &Type::ArrayCreationExpression =>
-            {
+                match rest {
+                    State::Dimensions => (),
+                    State::ScopedIdentifier(_) => (),
+                    State::LiteralType(_) => (),
+                    State::SimpleIdentifier(i) => {scoped!(mm!(),i);},
+                    x => todo!("{:?}",x),
+                };
+                let (o,p) = match &acc.solver.nodes[i] {
+                    RefsEnum::ConstructorInvocation(o,p) => (*o,p.clone()),
+                    x => todo!("{:?}",x),
+                };
                 let i = acc
                     .solver
-                    .intern_ref(RefsEnum::ConstructorInvocation(i, Arguments::Unknown));
-                // TODO use dimension
-                State::ConstructorInvocation(i)
-            }
-            (
-                State::ScopedIdentifier(i),
-                State::FieldIdentifier(_),
-            ) if kind == &Type::ArrayCreationExpression => {
+                    .intern(RefsEnum::Array(o));
                 let i = acc
                     .solver
-                    .intern_ref(RefsEnum::ConstructorInvocation(i, Arguments::Unknown));
-                // TODO use dimension
+                    .intern(RefsEnum::ConstructorInvocation(i, p));
                 State::ConstructorInvocation(i)
             }
-            (
-                State::ScopedIdentifier(i),
-                State::ScopedIdentifier(_),
-            ) if kind == &Type::ArrayCreationExpression => {
-                let i = acc
-                    .solver
-                    .intern_ref(RefsEnum::ConstructorInvocation(i, Arguments::Unknown));
-                // TODO use dimension
-                State::ConstructorInvocation(i)
-            }
+            // // (State::ConstructorInvocation(i), State::LiteralType(_))
+            // //     if kind == &Type::ArrayCreationExpression =>
+            // // {
+            // //     // TODO use the dimension expr
+            // //     State::ConstructorInvocation(i)
+            // // }
+            // (State::ScopedIdentifier(i), State::LiteralType(_))
+            //     if kind == &Type::ArrayCreationExpression =>
+            // {
+            //     let i = acc
+            //         .solver
+            //         .intern_ref(RefsEnum::ConstructorInvocation(i, Arguments::Unknown));
+            //     // TODO use dimension
+            //     State::ConstructorInvocation(i)
+            // }
+            // (
+            //     State::ScopedIdentifier(i),
+            //     State::FieldIdentifier(_),
+            // ) if kind == &Type::ArrayCreationExpression => {
+            //     let i = acc
+            //         .solver
+            //         .intern_ref(RefsEnum::ConstructorInvocation(i, Arguments::Unknown));
+            //     // TODO use dimension
+            //     State::ConstructorInvocation(i)
+            // }
             (State::None, expr)
                 if kind == &Type::ElementValueArrayInitializer =>
             {
@@ -2724,7 +3312,7 @@ impl PartialAnalysis {
                 match expr {
                     State::LiteralType(t) => (),
                     State::SimpleIdentifier(t) => {scoped!(mm!(),t);},
-                    State::This(t) => {scoped!(mm!(),t);},
+                    State::This(t) => (),
                     State::ScopedIdentifier(_) => (),
                     State::FieldIdentifier(_) => (),
                     State::Invocation(_) => (),
@@ -2851,7 +3439,7 @@ impl PartialAnalysis {
                 match expr {
                     State::LiteralType(t) => (),
                     State::SimpleIdentifier(t) => {scoped!(mm!(),t);},
-                    State::This(t) => {scoped!(mm!(),t);},
+                    State::This(t) => (),
                     State::ScopedIdentifier(_) => (),
                     State::FieldIdentifier(_) => (),
                     State::Invocation(_) => (),
@@ -2867,7 +3455,7 @@ impl PartialAnalysis {
                 let i = match expr {
                     State::LiteralType(t) => sync!(t),
                     State::SimpleIdentifier(t) => scoped!(mm!(),t),
-                    State::This(t) => scoped!(mm!(),t),
+                    State::This(i) => sync!(i),
                     State::ScopedIdentifier(i) => sync!(i),
                     State::FieldIdentifier(i) => sync!(i),
                     State::Invocation(i) => sync!(i),
@@ -2886,7 +3474,7 @@ impl PartialAnalysis {
             (State::ScopedIdentifier(o), State::This(i))
                 if kind == &Type::FieldAccess =>
             {
-                let i = scoped!(o, i);
+                let i = sync!(i);
                 State::ScopedIdentifier(i)
             }
             // MethodInvocation f()
@@ -2916,8 +3504,8 @@ impl PartialAnalysis {
                 let i = match expr {
                     State::LiteralType(t) => sync!(t),
                     State::SimpleIdentifier(t) => panic!("should be handled specifically"),
-                    State::This(t) => scoped!(mm!(),t),
-                    State::Super(t) => scoped!(mm!(),t),
+                    State::This(i) => sync!(i),
+                    State::Super(i) => sync!(i),
                     State::ScopedIdentifier(i) => sync!(i),
                     State::FieldIdentifier(i) => sync!(i),
                     State::Invocation(i) => sync!(i),
@@ -2933,8 +3521,8 @@ impl PartialAnalysis {
             ) if kind == &Type::MethodInvocation => {
                 match expr {
                     State::SimpleIdentifier(i) => State::InvocationId(o, i),
-                    State::This(i) => State::ScopedIdentifier(scoped!(o,i)),
-                    State::Super(i) => State::ScopedIdentifier(scoped!(o,i)),
+                    State::This(i) => State::ScopedIdentifier(spec!(o,sync!(i))),
+                    State::Super(i) => State::ScopedIdentifier(spec!(o,sync!(i))),
                     x => panic!("{:?}",x),
                 }
             }
@@ -2944,8 +3532,8 @@ impl PartialAnalysis {
             ) if kind == &Type::MethodInvocation => {
                 match expr {
                     State::SimpleIdentifier(i) => State::InvocationId(scoped!(mm!(),o), i),
-                    State::This(i) => State::ScopedIdentifier(scoped!(scoped!(mm!(),o),i)),
-                    State::Super(i) => State::ScopedIdentifier(scoped!(scoped!(mm!(),o),i)),
+                    State::This(i) => State::ScopedIdentifier(spec!(scoped!(mm!(),o),sync!(i))),
+                    State::Super(i) => State::ScopedIdentifier(spec!(scoped!(mm!(),o),sync!(i))),
                     x => panic!("{:?}",x),
                 }
             }
@@ -2968,7 +3556,7 @@ impl PartialAnalysis {
                 let i = match expr {
                     State::LiteralType(t) => sync!(t),
                     State::SimpleIdentifier(t) => scoped!(mm!(),t),
-                    State::This(t) => scoped!(mm!(),t),
+                    State::This(t) => sync!(t),
                     State::ScopedTypeIdentifier(i) => sync!(i), // TODO fix related to getting type alias from tree-sitter API
                     State::ScopedIdentifier(i) => sync!(i),
                     State::FieldIdentifier(i) => panic!("not possible"),
@@ -3000,9 +3588,9 @@ impl PartialAnalysis {
             if kind == &Type::ExplicitConstructorInvocation =>
             {
                 match &expr {
-                    State::SimpleIdentifier(_) => expr,
-                    State::This(_) => expr,
-                    State::Super(_) => expr,
+                    State::SimpleIdentifier(i) => State::SimpleIdentifier(*i),
+                    State::This(i) => State::This(sync!(*i)),
+                    State::Super(i) => State::Super(sync!(*i)),
                     x => panic!("{:?}",x)
                 }
             }
@@ -3017,13 +3605,13 @@ impl PartialAnalysis {
                 if kind == &Type::ExplicitConstructorInvocation =>
             {
                 panic!("used?");
-                let i = scoped!(o,i);
+                let i = spec!(o,sync!(i));
                 State::ScopedIdentifier(i)
             }
             (State::SimpleIdentifier(o), State::Super(i))
                 if kind == &Type::ExplicitConstructorInvocation =>
             {
-                let i = scoped!(scoped!(mm!(),o),i);
+                let i = spec!(scoped!(mm!(),o),sync!(i));
                 State::ScopedIdentifier(i)
             }
             (expr, State::Arguments(p))
@@ -3031,8 +3619,8 @@ impl PartialAnalysis {
             {
                 let i = match expr {
                     State::ScopedIdentifier(i) => i,
-                    State::Super(i) => scoped!(mm!(),i),
-                    State::This(i) => scoped!(mm!(),i),
+                    State::Super(i) => i,
+                    State::This(i) => i,
                     _=> panic!()
                 };
                 let p = p
@@ -3198,44 +3786,60 @@ impl PartialAnalysis {
                     parameters: p,
                 },
             ) if kind == &Type::ClassBody || kind == &Type::EnumBodyDeclarations => {
-                let r = mm!();
-                let t = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i.unwrap()));
-                let p = p.into_iter().map(|(_, t)| sync!(*t)).collect();
-                let i = acc.solver.intern(RefsEnum::ConstructorInvocation(
-                    t,
-                    Arguments::Given(p),
-                ));
-                let r = acc.solver.intern(RefsEnum::Root);
-                let t = acc.solver.intern(RefsEnum::ConstructorInvocation(r,Arguments::Given(vec![].into_boxed_slice())));
-                let d = Declarator::Executable(i);
-                acc.solver.add_decl_simple(d.clone(), t);
                 let mut v = match rest {
                     State::Declarations(u) => u,
                     State::None => vec![],
                     _ => panic!(),
                 };
+                let p = p.into_iter().map(|(_, t)| sync!(*t)).collect();
+                let t = i.unwrap();
+                let r = mm!();
+                let t = acc.solver.intern(RefsEnum::ScopedIdentifier(r,t));
+                let i = acc.solver.intern(RefsEnum::MaybeMissing);
+                let i = acc.solver.intern(RefsEnum::This(i));
+                let i = acc.solver.intern(RefsEnum::ConstructorInvocation(i,Arguments::Given(p)));
+                let d = Declarator::Executable(i);
+                // TODO constructor solve
+                acc.solver.add_decl_simple(d.clone(), t);
                 v.push((d, t));
+
                 // TODO make a member declaration and make use of visibilty
                 State::Declarations(v)
             }
+            // (
+            //     rest,
+            //     State::None,
+            // ) if kind == &Type::Block || kind == &Type::SwitchBlockStatementGroup => {
+            //     let t = sync!(t);
+            //     let d = d.with_changed_node(|i| sync!(*i));
+            //     match rest {
+            //         State::None => (),
+            //         _ => panic!(),
+            //     }
+            //     match &d {
+            //         Declarator::Variable(_) => acc.solver.add_decl_simple(d, t),
+            //         _ => todo!(),
+            //     };
+            //     // we do not need declarations outside of the map to solve local variable
+            //     // because a local variable declaration is never visible from outside
+            //     State::None
+            // }
             (
                 rest,
-                State::Declaration {
-                    visibility,
-                    kind: t,
-                    identifier: d,
-                },
-            ) if kind == &Type::Block || kind == &Type::SwitchBlockStatementGroup => {
-                let t = sync!(t);
-                let d = d.with_changed_node(|i| sync!(*i));
-                match rest {
-                    State::None => (),
-                    _ => panic!(),
+                State::Declarations(v),
+            ) if kind == &Type::Scope || kind == &Type::ForStatement => {
+                for (d,t) in v {
+                    let t = sync!(t);
+                    let d = d.with_changed_node(|i| sync!(*i));
+                    match rest {
+                        State::None => (),
+                        _ => panic!(),
+                    }
+                    match &d {
+                        Declarator::Variable(_) => acc.solver.add_decl_simple(d, t),
+                        _ => todo!(),
+                    };
                 }
-                match &d {
-                    Declarator::Variable(_) => acc.solver.add_decl_simple(d, t),
-                    _ => todo!(),
-                };
                 // we do not need declarations outside of the map to solve local variable
                 // because a local variable declaration is never visible from outside
                 State::None
@@ -3247,7 +3851,7 @@ impl PartialAnalysis {
                     identifier: d,
                     members: _,
                 },
-            ) if kind == &Type::Block => {
+            ) if kind == &Type::Scope => {
                 match d {
                     DeclType::Runtime(_) => panic!(),
                     DeclType::Compile(t, _, _) => {
@@ -3263,6 +3867,12 @@ impl PartialAnalysis {
                 // we do not need declarations outside of the map to solve local variable
                 // because a local variable declaration is never visible from outside
                 // TODO declarations needed in MethodDeclaration
+                State::None
+            }
+            (
+                State::None,
+                State::None,
+            ) if kind == &Type::Scope => {
                 State::None
             }
             (State::None, rest) if kind == &Type::SynchronizedStatement => {
@@ -3350,84 +3960,70 @@ impl PartialAnalysis {
             {
                 State::None
             }
-            (
-                State::None,
-                State::Declaration {
-                    visibility,
-                    kind: t,
-                    identifier: d,
-                },
-            ) if kind == &Type::ForStatement => {
-                let t = sync!(t);
-                let d = d.with_changed_node(|i| sync!(*i));
-                State::Declaration {
-                    visibility,
-                    kind: t,
-                    identifier: d,
-                }
+            // (
+            //     State::None,
+            //     State::Declaration {
+            //         visibility,
+            //         kind: t,
+            //         identifier: d,
+            //     },
+            // ) if kind == &Type::ForStatement => {
+            //     let t = sync!(t);
+            //     let d = d.with_changed_node(|i| sync!(*i));
+            //     State::Declaration {a
+            //         visibility,
+            //         kind: t,
+            //         identifier: d,
+            //     }
+            // }
+            (State::None, State::SimpleIdentifier(i))
+            if kind == &Type::ForStatement || kind == &Type::DoStatement =>
+            {
+                scoped!(mm!(),i);
+                State::None
             }
-            (State::None, State::ScopedIdentifier(i))
+            (State::None, _)
                 if kind == &Type::ForStatement || kind == &Type::DoStatement =>
             {
                 State::None
             }
-            (State::None, State::None)
-                if kind == &Type::ForStatement =>
-            {
-                State::None
-            }
-            (State::None, State::LiteralType(_))
-                if kind == &Type::ForStatement || kind == &Type::DoStatement =>
-            {
-                State::None
-            }
-            (
-                State::Declaration {
-                    visibility,
-                    kind: t,
-                    identifier: d,
-                },
-                State::ScopedIdentifier(_),
-            ) if kind == &Type::ForStatement => State::Declaration {
-                visibility,
-                kind: t,
-                identifier: d,
-            },
-            (
-                State::Declaration {
-                    visibility,
-                    kind: t,
-                    identifier: d,
-                },
-                State::Invocation(_),
-            ) if kind == &Type::ForStatement => State::Declaration {
-                visibility,
-                kind: t,
-                identifier: d,
-            },
-            (
-                State::Declaration {
-                    visibility,
-                    kind: t,
-                    identifier: d,
-                },
-                State::LiteralType(i),
-            ) if kind == &Type::ForStatement => {
-                    let i = sync!(i);
-                    State::Declaration {
-                    visibility,
-                    kind: t,
-                    identifier: d,
-                }
-            },
-            (
-                State::Declaration {
-                    visibility,
-                    kind: t,
-                    identifier: d,
-                },
-                State::None,
-            ) if kind == &Type::ForStatement => State::None,
+            // (State::None, State::ScopedIdentifier(i))
+            //     if kind == &Type::ForStatement || kind == &Type::DoStatement =>
+            // {
+            //     State::None
+            // }
+            // (State::None, State::None)
+            //     if kind == &Type::ForStatement =>
+            // {
+            //     State::None
+            // }
+            // (State::None, State::LiteralType(_))
+            //     if kind == &Type::ForStatement || kind == &Type::DoStatement =>
+            // {
+            //     State::None
+            // }
+            // (
+            //     State::Declaration {..},
+            //     State::ScopedIdentifier(_),
+            // ) if kind == &Type::ForStatement => State::None,
+            // (
+            //     State::Declaration {..},
+            //     State::Invocation(_),
+            // ) if kind == &Type::ForStatement => State::None,
+            // (
+            //     State::Declaration {..},
+            //     State::LiteralType(i),
+            // ) if kind == &Type::ForStatement => {
+            //         State::None
+            // },
+            // (
+            //     State::Declaration {
+            //         visibility,
+            //         kind: t,
+            //         identifier: d,
+            //     },
+            //     State::None,
+            // ) if kind == &Type::ForStatement => State::None,
 
 
 
@@ -3449,7 +4045,8 @@ impl PartialAnalysis {
                 State::ScopedTypeIdentifier(t),
                 State::SimpleIdentifier(i),
             ) if kind == &Type::EnhancedForStatement => {
-                let i = scoped!(mm!(),i);
+                let r = mm!();
+                let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r,i));
                 let i = Declarator::Variable(i);
                 acc.solver.add_decl_simple(i.clone(), t);
                 // TODO also make a special state for variable declarations
@@ -3469,7 +4066,8 @@ impl PartialAnalysis {
                 },
                 State::SimpleIdentifier(i),
             ) if kind == &Type::EnhancedForStatement => {
-                let i = scoped!(mm!(),i);
+                let r = mm!();
+                let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r,i));
                 State::Declaration {
                     visibility,
                     kind: t,
@@ -3484,7 +4082,7 @@ impl PartialAnalysis {
                 },
                 State::This(i),
             ) if kind == &Type::EnhancedForStatement => {
-                let i = scoped!(mm!(),i);
+                let i = sync!(i);
                 State::Declaration {
                     visibility,
                     kind: t,
@@ -3660,7 +4258,7 @@ impl PartialAnalysis {
             (State::Declarations(p), State::This(i))
                 if kind == &Type::LambdaExpression =>
             {
-                let i = scoped!(mm!(),i);
+                let i = sync!(i);
                 // TODO solve references to parameters
                 let i = mm!();
                 State::LambdaExpression(i)
@@ -3669,7 +4267,7 @@ impl PartialAnalysis {
                 if kind == &Type::LambdaExpression =>
             {
                 // TODO solve references to parameters
-                let i = sync!(t);
+                let t = sync!(t);
                 State::LiteralType(t)
             }
             (rest, State::SimpleTypeIdentifier(i)) if kind == &Type::Throws => {
@@ -3874,8 +4472,8 @@ impl PartialAnalysis {
                     x => panic!("{:?}", x),
                 };
                 v.push(i);
-                println!("{:?}", acc.solver.nodes);
-                println!("{:?}", acc.solver.nodes[i]);
+                // println!("{:?}", acc.solver.nodes);
+                // println!("{:?}", acc.solver.nodes[i]);
                 State::Arguments(v)
             }
             (rest, State::LambdaExpression(i)) if kind == &Type::ArgumentList => {
@@ -3898,7 +4496,7 @@ impl PartialAnalysis {
                 let i = match expr {
                     State::LiteralType(t) => sync!(t),
                     State::SimpleIdentifier(t) => scoped!(mm!(),t),
-                    State::This(t) => scoped!(mm!(),t),
+                    State::This(t) => sync!(t),
                     State::ScopedIdentifier(i) => sync!(i),
                     State::FieldIdentifier(i) => sync!(i),
                     State::Invocation(i) => sync!(i),
@@ -4070,7 +4668,7 @@ impl PartialAnalysis {
             {
                 let i = match expr {
                     State::LiteralType(t) => sync!(t),
-                    State::This(i) => scoped!(mm!(),i),
+                    State::This(i) => sync!(i),
                     State::SimpleIdentifier(t) => scoped!(mm!(),t),
                     State::SimpleTypeIdentifier(t) => scoped!(mm!(),t), // should not append
                     State::ScopedIdentifier(i) => sync!(i),
@@ -4090,7 +4688,7 @@ impl PartialAnalysis {
                 // should be ScopedTypeIdentifier but cannot get alias from treesitter rust API cleanly
                 let i = match expr {
                     State::LiteralType(t) => sync!(t),
-                    State::This(i) => scoped!(mm!(),i),
+                    State::This(i) => sync!(i),
                     State::SimpleIdentifier(t) => scoped!(mm!(),t),
                     State::SimpleTypeIdentifier(t) => scoped!(mm!(),t), // should not append
                     State::ScopedIdentifier(i) => sync!(i),
@@ -4179,7 +4777,7 @@ impl PartialAnalysis {
                 || kind == &Type::InstanceofExpression
                 || kind == &Type::ParenthesizedExpression =>
             {
-                let i = scoped!(mm!(),i);
+                let i = sync!(i);
                 State::ScopedIdentifier(i)
             }
             (State::ScopedIdentifier(_), State::LiteralType(t))
@@ -4250,18 +4848,18 @@ impl PartialAnalysis {
                     State::ScopedIdentifier(i)
                 }
                 State::This(i) => {
-                    let i = scoped!(mm!(),i);
+                    let i = sync!(i);
                     State::ScopedIdentifier(i)
                 }
                 State::ConstructorInvocation(i) => {
-                    State::ConstructorInvocation(i)
+                    State::ConstructorInvocation(sync!(i))
                 }
-                State::Invocation(i) => State::Invocation(i),
+                State::Invocation(i) => State::Invocation(sync!(i)),
                 State::ScopedIdentifier(i) => {
-                    State::ScopedIdentifier(i)
+                    State::ScopedIdentifier(sync!(i))
                 }
                 State::FieldIdentifier(i) => {
-                    State::FieldIdentifier(i)
+                    State::FieldIdentifier(sync!(i))
                 }
                 State::None => panic!(),
                 _ => todo!(),
@@ -4443,7 +5041,7 @@ impl PartialAnalysis {
             (State::ScopedIdentifier(i), State::This(t))
                 if kind == &Type::BinaryExpression =>
             {
-                let t = scoped!(mm!(),t);
+                let t = sync!(t);
                 State::ScopedIdentifier(i)
             }
             (State::FieldIdentifier(i), State::ScopedIdentifier(_))
@@ -4479,7 +5077,6 @@ impl PartialAnalysis {
             (State::This(i), State::Invocation(_))
                 if kind == &Type::BinaryExpression =>
             {
-                let i = scoped!(mm!(),i);
                 State::ScopedIdentifier(i)
             }
             (State::Invocation(i), State::LiteralType(_))
@@ -4490,7 +5087,7 @@ impl PartialAnalysis {
             (State::Invocation(i), State::This(t))
                 if kind == &Type::BinaryExpression =>
             {
-                let t = scoped!(mm!(),t);
+                let t = sync!(t);
                 State::Invocation(i)
             }
             (State::Invocation(i), State::ScopedIdentifier(_))
@@ -4796,11 +5393,12 @@ impl PartialAnalysis {
             (State::ScopedTypeIdentifier(i), State::Dimensions)
                 if kind == &Type::ArrayType =>
             {
+                let i = acc.solver.intern(RefsEnum::Array(i));
                 State::ScopedTypeIdentifier(i)
             }
             (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
         };
-        println!("result for {:?} is {:?}", kind, acc.current_node);
+        // println!("result for {:?} is {:?}", kind, acc.current_node);
     }
 }
 
@@ -4831,8 +5429,9 @@ where
 {
     Todo,
     None,
-    Super(Leaf),
-    This(Leaf),
+    Asterisk,
+    Super(Node),
+    This(Node),
     Condition,
     Dimensions,
     Throws,
@@ -4859,6 +5458,8 @@ where
     PackageDeclaration(Node),
     File {
         package: Option<Node>,
+        asterisk_imports:Vec<Node>,
+        top_level: Option<(Declarator<Node>, Node)>,
         content: Vec<(Declarator<Node>, Node)>,
     },
     /// b.f() or A.f()
@@ -4869,7 +5470,11 @@ where
     Arguments(Vec<Node>),
     /// A#constructor()
     ConstructorInvocation(Node),
-    ImportDeclaration(Node),
+    ImportDeclaration{
+        sstatic:bool,
+        identifier:Node,
+        asterisk:bool,
+    },
     /// a.b
     FieldIdentifier(Node),
     Interfaces(Vec<Node>),
@@ -4940,7 +5545,9 @@ where
         }
     }
 
-    fn with_changed_node<F: FnOnce(&Node) -> Node>(&self, f: F) -> Self {
+    fn with_changed_node<N,F: FnOnce(&Node) -> N>(&self, f: F) -> Declarator<N>
+    where N: Eq + Hash,
+    {
         match self {
             Declarator::None => Declarator::None,
             Declarator::Package(i) => Declarator::Package(f(i)),
@@ -4955,10 +5562,233 @@ where
 
 impl<Node, Leaf> State<Node, Leaf>
 where
-    Leaf: std::cmp::Eq + std::hash::Hash,
-    Node: std::cmp::Eq + std::hash::Hash,
+    Leaf: std::cmp::Eq + std::hash::Hash + Copy,
+    Node: std::cmp::Eq + std::hash::Hash + Copy,
 {
     pub fn take(&mut self) -> Self {
         std::mem::replace(self, State::None)
     }
+    pub fn map<N,L,FN:Fn(Node)->N,FL:Fn(Leaf)->L>(&self, f:FN,g:FL) -> State<N, L>
+    where
+    L: std::cmp::Eq + std::hash::Hash,
+    N: std::cmp::Eq + std::hash::Hash,
+     {
+        match self {
+            State::Todo => State::Todo,
+            State::None => State::None,
+            State::Asterisk => State::Asterisk,
+            State::Condition => State::Condition,
+            State::Dimensions => State::Dimensions,
+            State::Throws => State::Throws,
+            State::Root => State::Root,
+            State::Annotation => State::Annotation,
+            State::TypeBound => State::TypeBound,
+            State::SimpleIdentifier(l) => State::SimpleIdentifier(g(*l)),
+            State::SimpleTypeIdentifier(l) => State::SimpleTypeIdentifier(g(*l)),
+
+            State::Super(i) => State::Super(f(*i)),
+            State::This(i) => State::This(f(*i)),
+            State::ScopedTypeIdentifier(i) => State::ScopedTypeIdentifier(f(*i)),
+            State::WildcardExtends(i) => State::WildcardExtends(f(*i)),
+            State::WildcardSuper(i) => State::WildcardSuper(f(*i)),
+            State::GenericType(i) => State::GenericType(f(*i)),
+            State::LiteralType(i) => State::LiteralType(f(*i)),
+            State::ScopedIdentifier(i) => State::ScopedIdentifier(f(*i)),
+            State::PackageDeclaration(i) => State::PackageDeclaration(f(*i)),
+            State::Invocation(i) => State::Invocation(f(*i)),
+            State::MethodReference(i) => State::MethodReference(f(*i)),
+            State::LambdaExpression(i) => State::LambdaExpression(f(*i)),
+            State::ConstructorInvocation(i) => State::ConstructorInvocation(f(*i)),
+            State::FieldIdentifier(i) => State::FieldIdentifier(f(*i)),
+            State::Declarator(d) => State::Declarator(d.with_changed_node(|x| f(*x))),
+            State::Interfaces(v) => State::Interfaces(v.iter().map(|x| f(*x)).collect()),
+            State::Arguments(v) => State::Arguments(v.iter().map(|x| f(*x)).collect()),
+            State::CatchTypes(v) => State::CatchTypes(v.iter().map(|x| f(*x)).collect()),
+            State::TypeParameters(v) => State::TypeParameters(v.iter().map(|(x,y)| ((g(*x),y.iter().map(|x| f(*x)).collect()))).collect()),
+            State::Declarations(v) => State::Declarations(v.iter().map(|(x,y)| (x.with_changed_node(|x| f(*x)),f(*y))).collect()),
+            State::FormalParameters(v) => State::FormalParameters(v.iter().map(|(x,y)| (f(*x),f(*y))).collect()),
+            State::TypeOfValue(_) => todo!(),
+            State::ElementValuePair(x, y) => State::ElementValuePair(g(*x), f(*y)),
+            State::InvocationId(x, y) => State::InvocationId(f(*x), g(*y)),
+            State::Modifiers(x, y) => State::Modifiers(x.clone(), y.clone()),
+            State::ImportDeclaration { sstatic, identifier:i, asterisk } => State::ImportDeclaration{
+                sstatic:*sstatic,
+                identifier: f(*i),
+                asterisk:*asterisk,
+            },
+            State::CatchParameter {
+                kinds:v,
+                identifier:i } =>  State::CatchParameter {
+                    kinds:v.iter().map(|x| f(*x)).collect(),
+                    identifier:g(*i) 
+                },
+
+            State::File {
+                package:p,
+                asterisk_imports,
+                top_level:t,
+                content:v } => State::File {
+                    package: p.map(|x|f(x)),
+                    asterisk_imports:asterisk_imports.iter().map(|x| f(*x)).collect(),
+                    top_level: t.clone().map(|(x,y)| (x.with_changed_node(|x| f(*x)),f(y))),
+                    content:v.iter().map(|(x,y)| (x.with_changed_node(|x| f(*x)),f(*y))).collect()
+                },
+            State::Declaration {
+                visibility,
+                kind:t,
+                identifier:d } => State::Declaration {
+                    visibility: visibility.clone(),
+                    kind:f(*t),
+                    identifier:d.with_changed_node(|x| f(*x)) },
+            State::MethodImplementation {
+                visibility,
+                kind:t,
+                identifier:i,
+                parameters:p } => State::MethodImplementation {
+                    visibility: visibility.clone(),
+                    kind:t.map(|x|f(x)),
+                    identifier:i.map(|x|g(x)),
+                    parameters: p.iter().map(|(x,y)| (f(*x),f(*y))).collect() },
+            State::ConstructorImplementation {
+                visibility,
+                identifier:i,
+                parameters:p } => State::ConstructorImplementation {
+                    visibility: visibility.clone(),
+                    identifier:i.map(|x|g(x)),
+                    parameters: p.iter().map(|(x,y)| (f(*x),f(*y))).collect() },
+            State::TypeDeclaration {
+                visibility,
+                identifier:d,
+                members:v } => State::TypeDeclaration {
+                    visibility: visibility.clone(),
+                    identifier:d.map(|x|f(x)),
+                    members:v.iter().map(|(x,y)| (x.with_changed_node(|x| f(*x)),f(*y))).collect() },
+        }
+    }
+}
+
+
+
+fn default_imports<F:FnMut(&str)-> LabelPtr>(solver:&mut Solver,mut intern_label: F) {
+    macro_rules! scoped {
+        ( $o:expr, $i:expr ) => {
+           {
+               let o = $o;
+               let i = $i;
+               solver.intern(RefsEnum::ScopedIdentifier(o, i))
+            }
+        }
+    }
+    macro_rules! import {
+        ( $($p:expr),* ) => {
+            {
+                let t = solver.intern(RefsEnum::Root);
+                $(
+                    let i = intern_label($p);
+                    let t = scoped!(t, i);
+                )*
+                let i = scoped!(solver.intern(RefsEnum::MaybeMissing), i);
+                let d = Declarator::Type(i);
+                solver.add_decl_simple(d, t);
+            }
+        }
+    }
+    // import!("java","lang","Appendable");
+    // import!("java","lang","AutoCloseable");
+    // import!("java","lang","CharSequence");
+    // import!("java","lang","Cloneable");
+    // import!("java","lang","Comparable");//<T>
+    // import!("java","lang","Iterable");//<T>
+    // import!("java","lang","Readable");
+    // import!("java","lang","Runnable");
+    // import!("java","lang","Thread","UncaughtExceptionHandler");
+    // import!("java","lang","Byte");
+    // import!("java","lang","Character");
+    // import!("java","lang","Character","Subset");
+    // import!("java","lang","Character","UnicodeBlock");
+    // import!("java","lang","Class");//<T>
+    // import!("java","lang","ClassLoader");
+    // import!("java","lang","ClassValue");//<T>
+    // import!("java","lang","Compiler");
+    // import!("java","lang","Double");
+    // import!("java","lang","Enum"); //<E extends Enum<E>>
+    // import!("java","lang","Float");
+    // import!("java","lang","InheritableThreadLocal");//<T>
+    // import!("java","lang","Integer");
+    // import!("java","lang","Long");
+    // import!("java","lang","Math");
+    // import!("java","lang","Number");
+    // import!("java","lang","Object");
+    // import!("java","lang","Package");
+    // import!("java","lang","Process");
+    // import!("java","lang","ProcessBuilder");
+    // import!("java","lang","ProcessBuilder","Redirect");
+    // import!("java","lang","Runtime");
+    // import!("java","lang","RuntimePermission");
+    // import!("java","lang","SecurityManager");
+    // import!("java","lang","Short");
+    // import!("java","lang","StackTraceElement");
+    // import!("java","lang","StrictMath");
+    // import!("java","lang","String");
+    // import!("java","lang","StringBuffer");
+    // import!("java","lang","StringBuilder");
+    // import!("java","lang","System");
+    // import!("java","lang","Thread");
+    // import!("java","lang","ThreadGroup");
+    // import!("java","lang","ThreadLocal");//<T>
+    // import!("java","lang","Throwable");
+    // import!("java","lang","Void");
+    // import!("java","lang","ProcessBuilder","Redirect","Type");
+    // import!("java","lang","Thread","State");
+    // import!("java","lang","ArrayIndexOutOfBoundsException");
+    // import!("java","lang","ArrayStoreException");
+    // import!("java","lang","ClassCastException");
+    // import!("java","lang","ClassNotFoundException");
+    // import!("java","lang","CloneNotSupportedException");
+    // import!("java","lang","EnumConstantNotPresentException");
+    // import!("java","lang","Exception");
+    // import!("java","lang","IllegalAccessException");
+    // import!("java","lang","IllegalArgumentException");
+    // import!("java","lang","IllegalMonitorStateException");
+    // import!("java","lang","IllegalStateException");
+    // import!("java","lang","IllegalThreadStateException");
+    // import!("java","lang","IndexOutOfBoundsException");
+    // import!("java","lang","InstantiationException");
+    // import!("java","lang","InterruptedException");
+    // import!("java","lang","NegativeArraySizeException");
+    // import!("java","lang","NoSuchFieldException");
+    // import!("java","lang","NoSuchMethodException");
+    // import!("java","lang","NullPointerException");
+    // import!("java","lang","NumberFormatException");
+    // import!("java","lang","ReflectiveOperationException");
+    // import!("java","lang","RuntimeException");
+    // import!("java","lang","SecurityException");
+    // import!("java","lang","StringIndexOutOfBoundsException");
+    // import!("java","lang","TypeNotPresentException");
+    // import!("java","lang","UnsupportedOperationException");
+    // import!("java","lang","AssertionError");
+    // import!("java","lang","BootstrapMethodError");
+    // import!("java","lang","ClassCircularityError");
+    // import!("java","lang","ClassFormatError");
+    // import!("java","lang","Error");
+    // import!("java","lang","ExceptionInInitializerError");
+    // import!("java","lang","IllegalAccessError");
+    // import!("java","lang","IncompatibleClassChangeError");
+    // import!("java","lang","InstantiationError");
+    // import!("java","lang","InternalError");
+    // import!("java","lang","LinkageError");
+    // import!("java","lang","NoClassDefFoundError");
+    // import!("java","lang","NoSuchFieldError");
+    // import!("java","lang","NoSuchMethodError");
+    // import!("java","lang","OutOfMemoryError");
+    // import!("java","lang","StackOverflowError");
+    // import!("java","lang","ThreadDeath");
+    // import!("java","lang","UnknownError");
+    // import!("java","lang","UnsatisfiedLinkError");
+    // import!("java","lang","UnsupportedClassVersionError");
+    // import!("java","lang","VerifyError");
+    // import!("java","lang","VirtualMachineError");
+    // import!("java","lang","Override");
+    // import!("java","lang","SafeVarargs");
+    // import!("java","lang","SuppressWarnings");
 }

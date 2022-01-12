@@ -65,6 +65,7 @@ pub enum Type {
     Expression,
     PrimaryExpression,
     Statement,
+    Scope,
     AnnotatedType,
     Annotation,
     AnnotationArgumentList,
@@ -431,7 +432,7 @@ impl Type {
         }
     }
     pub fn literal_type(&self) -> &str {
-        // TODO make the difference btw int/long and float/dooble
+        // TODO make the difference btw int/long and float/double
         match self {
             Self::Literal => panic!(),
             Self::True => "boolean",
@@ -455,6 +456,14 @@ impl Type {
             Self::VoidType => true,
             Self::FloatingPointType => true,
             Self::IntegralType => true,
+            _ => false,
+        }
+    }
+    pub fn is_type_declaration(&self) -> bool {
+        match self {
+            Self::ClassDeclaration => true,
+            Self::EnumDeclaration => true,
+            Self::InterfaceDeclaration => true,
             _ => false,
         }
     }

@@ -28,22 +28,13 @@ extern "C" {
     fn tree_sitter_java() -> Language;
 }
 
-#[test]
-fn test_equals() {
+fn run(text: &[u8]) {
     let mut parser = Parser::new();
 
     {
         let language = unsafe { tree_sitter_java() };
         parser.set_language(language).unwrap();
     }
-
-    // let text = {
-    //     let source_code1 = "
-    //     class A {void test() {}}
-    //     ";
-    //     source_code1.as_bytes()
-    // };
-    // // let mut parser: Parser, old_tree: Option<&Tree>
     let mut java_tree_gen = JavaTreeGen {
         line_break: "\n".as_bytes().to_vec(),
         stores: SimpleStores {
@@ -51,74 +42,6 @@ fn test_equals() {
             type_store: TypeStore {},
             node_store: NodeStore::new(),
         },
-    };
-    // let tree = parser.parse(text, None).unwrap();
-    // // let mut acc_stack = vec![Accumulator::new(java_tree_gen.stores.type_store.get("file"))];
-
-    // let full_node = java_tree_gen.generate_default(text, tree.walk());
-    // println!("{}", tree.root_node().to_sexp());
-    // // print_tree_structure(&java_tree_gen.node_store, &full_node.compressed_node);
-    // print_tree_labels(
-    //     &java_tree_gen.stores.node_store,
-    //     &java_tree_gen.stores.label_store,
-    //     &full_node.local.compressed_node,
-    // );
-    // println!();
-    // println!();
-    // println!();
-
-    // let text = {
-    //     let source_code1 = "
-    //     class A {
-
-    //     }";
-    //     source_code1.as_bytes()
-    // };
-    // let tree = parser.parse(text, None).unwrap();
-    // let _full_node = java_tree_gen.generate_default(text, tree.walk());
-
-    // let text = {
-    //     let source_code1 = "
-    //     class A {
-    //         int a = 0xffff;
-    //     }";
-    //     source_code1.as_bytes()
-    // };
-    // let tree = parser.parse(text, None).unwrap();
-    // let _full_node = java_tree_gen.generate_default(text, tree.walk());
-
-    let text = {
-        let source_code1 = "package q.w.e;
-import a.z.e.r.t.y.ControlFlowGraph;
-import a.z.e.r.Exc;
-import a.z.e.r.t.y.ControlFlowBuilder;
-class A {
-    A() {
-        this();
-    }
-    int a = 0;
-    void test(int x) {
-        x;
-        a;
-        test(1);
-        A b = new A();
-        String s = \"\";
-        b;
-        b.a;
-        B.c;
-        b.a;
-        b;
-        b.test(a);
-        A method = null;
-        ControlFlowBuilder builder = new ControlFlowBuilder();
-        builder.set(new Exc());
-        builder.build(method);
-        ControlFlowGraph cfg = builder.getResult();
-    }
-}
-class B {long c = 0}";
-        // let source_code1 = B;
-        source_code1.as_bytes()
     };
     let tree = parser.parse(text, None).unwrap();
     println!("{}", tree.root_node().to_sexp());
@@ -141,7 +64,54 @@ class B {long c = 0}";
         &mut out,
         &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
     );
+
+} 
+#[test]
+fn test_cases() {
+    let cases = [CASE_1,CASE_2,CASE_3,CASE_4,CASE_5,CASE_6,CASE_7,CASE_8,CASE_9,CASE_10];
+    for case in cases {
+        run(case.as_bytes())
+    }
+}
+
+#[test]
+fn test_equals() {
+    let text = CASE_11.as_bytes();
+    let mut parser = Parser::new();
+
+    {
+        let language = unsafe { tree_sitter_java() };
+        parser.set_language(language).unwrap();
+    }
+    let mut java_tree_gen = JavaTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: SimpleStores {
+            label_store: LabelStore::new(),
+            type_store: TypeStore {},
+            node_store: NodeStore::new(),
+        },
+    };
+    let tree = parser.parse(text, None).unwrap();
+    println!("{}", tree.root_node().to_sexp());
+    let full_node = java_tree_gen.generate_default(text, tree.walk());
+
     println!();
+    print_tree_syntax(
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
+        &full_node.local.compressed_node,
+    );
+    println!();
+    stdout().flush().unwrap();
+
+    let mut out = IoOut { stream: stdout() };
+    serialize(
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
+        &full_node.local.compressed_node,
+        &mut out,
+        &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
+    );
 
     {
         // playing with refs
@@ -429,39 +399,46 @@ fn test_spaces_after_lb_special() {
 }
 
 
-
-static B:&'static str ="
+/// historic regression test for static analysis
+static CASE_1:&'static str ="
 class A {
     char[] c = new char[] { (char) x };
 }
 ";
 
-static A:&'static str = "
-/*
- * Copyright (c) 2002, 2018, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the \"Classpath\" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
- */
+/// mostly simple resolutions
+static CASE_2:&'static str ="package q.w.e;
+import a.z.e.r.t.y.ControlFlowGraph;
+import a.z.e.r.Exc;
+import a.z.e.r.t.y.ControlFlowBuilder;
+class A {
+    A() {
+        this();
+    }
+    int a = 0;
+    void test(int x) {
+        x;
+        a;
+        test(1);
+        A b = new A();
+        String s = \"\";
+        b;
+        b.a;
+        B.c;
+        b.a;
+        b;
+        b.test(a);
+        A method = null;
+        ControlFlowBuilder builder = new ControlFlowBuilder();
+        builder.set(new Exc());
+        builder.build(method);
+        ControlFlowGraph cfg = builder.getResult();
+    }
+}
+class B {long c = 0}";
 
+/// a part from java.lang.Character.java
+static CASE_3:&'static str ="
 package java.lang;
 
 import java.util.Arrays;
@@ -471,647 +448,1030 @@ import java.util.Locale;
 
 import jdk.internal.HotSpotIntrinsicCandidate;
 
-/**
- * The {@code Character} class wraps a value of the primitive
- * type {@code char} in an object. An object of type
- * {@code Character} contains a single field whose type is
- * {@code char}.
- * <p>
- * In addition, this class provides several methods for determining
- * a character's category (lowercase letter, digit, etc.) and for converting
- * characters from uppercase to lowercase and vice versa.
- * <p>
- * Character information is based on the Unicode Standard, version 10.0.0.
- * <p>
- * The methods and data of class {@code Character} are defined by
- * the information in the <i>UnicodeData</i> file that is part of the
- * Unicode Character Database maintained by the Unicode
- * Consortium. This file specifies various properties including name
- * and general category for every defined Unicode code point or
- * character range.
- * <p>
- * The file and its description are available from the Unicode Consortium at:
- * <ul>
- * <li><a href=\"http://www.unicode.org\">http://www.unicode.org</a>
- * </ul>
- *
- * <h3><a id=\"unicode\">Unicode Character Representations</a></h3>
- *
- * <p>The {@code char} data type (and therefore the value that a
- * {@code Character} object encapsulates) are based on the
- * original Unicode specification, which defined characters as
- * fixed-width 16-bit entities. The Unicode Standard has since been
- * changed to allow for characters whose representation requires more
- * than 16 bits.  The range of legal <em>code point</em>s is now
- * U+0000 to U+10FFFF, known as <em>Unicode scalar value</em>.
- * (Refer to the <a
- * href=\"http://www.unicode.org/reports/tr27/#notation\"><i>
- * definition</i></a> of the U+<i>n</i> notation in the Unicode
- * Standard.)
- *
- * <p><a id=\"BMP\">The set of characters from U+0000 to U+FFFF</a> is
- * sometimes referred to as the <em>Basic Multilingual Plane (BMP)</em>.
- * <a id=\"supplementary\">Characters</a> whose code points are greater
- * than U+FFFF are called <em>supplementary character</em>s.  The Java
- * platform uses the UTF-16 representation in {@code char} arrays and
- * in the {@code String} and {@code StringBuffer} classes. In
- * this representation, supplementary characters are represented as a pair
- * of {@code char} values, the first from the <em>high-surrogates</em>
- * range, (&#92;uD800-&#92;uDBFF), the second from the
- * <em>low-surrogates</em> range (&#92;uDC00-&#92;uDFFF).
- *
- * <p>A {@code char} value, therefore, represents Basic
- * Multilingual Plane (BMP) code points, including the surrogate
- * code points, or code units of the UTF-16 encoding. An
- * {@code int} value represents all Unicode code points,
- * including supplementary code points. The lower (least significant)
- * 21 bits of {@code int} are used to represent Unicode code
- * points and the upper (most significant) 11 bits must be zero.
- * Unless otherwise specified, the behavior with respect to
- * supplementary characters and surrogate {@code char} values is
- * as follows:
- *
- * <ul>
- * <li>The methods that only accept a {@code char} value cannot support
- * supplementary characters. They treat {@code char} values from the
- * surrogate ranges as undefined characters. For example,
- * {@code Character.isLetter('\\u005CuD840')} returns {@code false}, even though
- * this specific value if followed by any low-surrogate value in a string
- * would represent a letter.
- *
- * <li>The methods that accept an {@code int} value support all
- * Unicode characters, including supplementary characters. For
- * example, {@code Character.isLetter(0x2F81A)} returns
- * {@code true} because the code point value represents a letter
- * (a CJK ideograph).
- * </ul>
- *
- * <p>In the Java SE API documentation, <em>Unicode code point</em> is
- * used for character values in the range between U+0000 and U+10FFFF,
- * and <em>Unicode code unit</em> is used for 16-bit
- * {@code char} values that are code units of the <em>UTF-16</em>
- * encoding. For more information on Unicode terminology, refer to the
- * <a href=\"http://www.unicode.org/glossary/\">Unicode Glossary</a>.
- *
- * @author  Lee Boynton
- * @author  Guy Steele
- * @author  Akira Tanaka
- * @author  Martin Buchholz
- * @author  Ulf Zibis
- * @since   1.0
- */
 public final
 class Character implements java.io.Serializable, Comparable<Character> {
 
-
-    /**
-     *
-     *
-     */
     public static boolean isLowerCase(char ch) {
         return isLowerCase((int)ch);
     }
 
-    /**
-     *
-     */
     public static boolean isLowerCase(int codePoint) {
         return getType(codePoint) == Character.LOWERCASE_LETTER ||
-               CharacterData.of(codePoint).isOtherLowercase(codePoint);
-    }
+               CharacterData.of(codePoint).isOtherLowercase(codePoint);    }
 
-    /**
-     *
-     *
-     */
     public static boolean isUpperCase(char ch) {
         return isUpperCase((int)ch);
     }
 
-    /**
-     *
-     */
     public static boolean isUpperCase(int codePoint) {
         return getType(codePoint) == Character.UPPERCASE_LETTER ||
-               CharacterData.of(codePoint).isOtherUppercase(codePoint);
-    }
+               CharacterData.of(codePoint).isOtherUppercase(codePoint);    }
 
-    /**
-     *
-     *
-     */
     public static boolean isTitleCase(char ch) {
         return isTitleCase((int)ch);
     }
 
-    /**
-     *
-     */
     public static boolean isTitleCase(int codePoint) {
         return getType(codePoint) == Character.TITLECASE_LETTER;
     }
 
-    /**
-     *
-     *
-     *
-     */
     public static boolean isDigit(char ch) {
-        return isDigit((int)ch);
-    }
+        return isDigit((int)ch);    }
 
-    /**
-     *
-     *
-     */
     public static boolean isDigit(int codePoint) {
-        return getType(codePoint) == Character.DECIMAL_DIGIT_NUMBER;
-    }
+        return getType(codePoint) == Character.DECIMAL_DIGIT_NUMBER;    }
 
-    /**
-     *
-     *
-     */
     public static boolean isDefined(char ch) {
         return isDefined((int)ch);
     }
 
-    /**
-     *
-     */
     public static boolean isDefined(int codePoint) {
         return getType(codePoint) != Character.UNASSIGNED;
     }
 
-    /**
-     *
-     *
-     *
-     */
     public static boolean isLetter(char ch) {
-        return isLetter((int)ch);
-    }
+        return isLetter((int)ch);    }
 
-    /**
-     *
-     *
-     */
     public static boolean isLetter(int codePoint) {
         return ((((1 << Character.UPPERCASE_LETTER) |
             (1 << Character.LOWERCASE_LETTER) |
             (1 << Character.TITLECASE_LETTER) |
             (1 << Character.MODIFIER_LETTER) |
             (1 << Character.OTHER_LETTER)) >> getType(codePoint)) & 1)
-            != 0;
-    }
+            != 0;    }
 
-    /**
-     *
-     *
-     */
     public static boolean isLetterOrDigit(char ch) {
         return isLetterOrDigit((int)ch);
     }
+}";
 
-    /**
-     *
-     */
-    public static boolean isLetterOrDigit(int codePoint) {
-        return ((((1 << Character.UPPERCASE_LETTER) |
-            (1 << Character.LOWERCASE_LETTER) |
-            (1 << Character.TITLECASE_LETTER) |
-            (1 << Character.MODIFIER_LETTER) |
-            (1 << Character.OTHER_LETTER) |
-            (1 << Character.DECIMAL_DIGIT_NUMBER)) >> getType(codePoint)) & 1)
-            != 0;
+/// about super
+static CASE_4:&'static str ="
+package java.lang;
+
+public
+class AbstractMethodError extends IncompatibleClassChangeError {
+
+    public AbstractMethodError() {
+        super();
     }
 
-    /**
-     *
-     */
-    @Deprecated(since=\"1.1\")
-    public static boolean isJavaLetter(char ch) {
-        return isJavaIdentifierStart(ch);
+    public AbstractMethodError(String s) {
+        super(s);
     }
+}
+";
+/// about constructor in java.lang with String as parameters
+static CASE_5:&'static str ="
+package java.lang;//azer.ty;
 
-    /**
-     *
-     */
-    @Deprecated(since=\"1.1\")
-    public static boolean isJavaLetterOrDigit(char ch) {
-        return isJavaIdentifierPart(ch);
-    }
+public final
+class Character {
 
-    /**
-     *
-     */
-    public static boolean isAlphabetic(int codePoint) {
-        return (((((1 << Character.UPPERCASE_LETTER) |
-            (1 << Character.LOWERCASE_LETTER) |
-            (1 << Character.TITLECASE_LETTER) |
-            (1 << Character.MODIFIER_LETTER) |
-            (1 << Character.OTHER_LETTER) |
-            (1 << Character.LETTER_NUMBER)) >> getType(codePoint)) & 1) != 0) ||
-            CharacterData.of(codePoint).isOtherAlphabetic(codePoint);
-    }
+    public static final class UnicodeBlock {
 
-    /**
-     *
-     */
-    public static boolean isIdeographic(int codePoint) {
-        return CharacterData.of(codePoint).isIdeographic(codePoint);
-    }
-
-    /**
-     *
-     *
-     */
-    public static boolean isJavaIdentifierStart(char ch) {
-        return isJavaIdentifierStart((int)ch);
-    }
-
-    /**
-     *
-     */
-    public static boolean isJavaIdentifierStart(int codePoint) {
-        return CharacterData.of(codePoint).isJavaIdentifierStart(codePoint);
-    }
-
-    /**
-     *
-     *
-     */
-    public static boolean isJavaIdentifierPart(char ch) {
-        return isJavaIdentifierPart((int)ch);
-    }
-
-    /**
-     *
-     */
-    public static boolean isJavaIdentifierPart(int codePoint) {
-        return CharacterData.of(codePoint).isJavaIdentifierPart(codePoint);
-    }
-
-    /**
-     *
-     *
-     */
-    public static boolean isUnicodeIdentifierStart(char ch) {
-        return isUnicodeIdentifierStart((int)ch);
-    }
-
-    /**
-     */
-    public static boolean isUnicodeIdentifierStart(int codePoint) {
-        return CharacterData.of(codePoint).isUnicodeIdentifierStart(codePoint);
-    }
-
-    /**
-     *
-     *
-     */
-    public static boolean isUnicodeIdentifierPart(char ch) {
-        return isUnicodeIdentifierPart((int)ch);
-    }
-
-    /**
-     */
-    public static boolean isUnicodeIdentifierPart(int codePoint) {
-        return CharacterData.of(codePoint).isUnicodeIdentifierPart(codePoint);
-    }
-
-    /**
-     *
-     *
-     *
-     */
-    public static boolean isIdentifierIgnorable(char ch) {
-        return isIdentifierIgnorable((int)ch);
-    }
-
-    /**
-     *
-     *
-     */
-    public static boolean isIdentifierIgnorable(int codePoint) {
-        return CharacterData.of(codePoint).isIdentifierIgnorable(codePoint);
-    }
-
-    /**
-     *
-     *
-     *
-     */
-    public static char toLowerCase(char ch) {
-        return (char)toLowerCase((int)ch);
-    }
-
-    /**
-     *
-     *
-     *
-     *
-     */
-    public static int toLowerCase(int codePoint) {
-        return CharacterData.of(codePoint).toLowerCase(codePoint);
-    }
-
-    /**
-     *
-     *
-     *
-     */
-    public static char toUpperCase(char ch) {
-        return (char)toUpperCase((int)ch);
-    }
-
-    /**
-     *
-     *
-     *
-     *
-     */
-    public static int toUpperCase(int codePoint) {
-        return CharacterData.of(codePoint).toUpperCase(codePoint);
-    }
-
-    /**
-     *
-     *
-     */
-    public static char toTitleCase(char ch) {
-        return (char)toTitleCase((int)ch);
-    }
-
-    /**
-     *
-     *
-     */
-    public static int toTitleCase(int codePoint) {
-        return CharacterData.of(codePoint).toTitleCase(codePoint);
-    }
-
-    /**
-     *
-     *
-     */
-    public static int digit(char ch, int radix) {
-        return digit((int)ch, radix);
-    }
-
-    /**
-     *
-     *
-     */
-    public static int digit(int codePoint, int radix) {
-        return CharacterData.of(codePoint).digit(codePoint, radix);
-    }
-
-    /**
-     *
-     *
-     */
-    public static int getNumericValue(char ch) {
-        return getNumericValue((int)ch);
-    }
-
-    /**
-     *
-     */
-    public static int getNumericValue(int codePoint) {
-        return CharacterData.of(codePoint).getNumericValue(codePoint);
-    }
-
-    /**
-     *
-     */
-    @Deprecated(since=\"1.1\")
-    public static boolean isSpace(char ch) {
-        return (ch <= 0x0020) &&
-            (((((1L << 0x0009) |
-            (1L << 0x000A) |
-            (1L << 0x000C) |
-            (1L << 0x000D) |
-            (1L << 0x0020)) >> ch) & 1L) != 0);
-    }
-
-
-    /**
-     *
-     *
-     */
-    public static boolean isSpaceChar(char ch) {
-        return isSpaceChar((int)ch);
-    }
-
-    /**
-     *
-     *
-     */
-    public static boolean isSpaceChar(int codePoint) {
-        return ((((1 << Character.SPACE_SEPARATOR) |
-                  (1 << Character.LINE_SEPARATOR) |
-                  (1 << Character.PARAGRAPH_SEPARATOR)) >> getType(codePoint)) & 1)
-            != 0;
-    }
-
-    /**
-     *
-     *
-     */
-    public static boolean isWhitespace(char ch) {
-        return isWhitespace((int)ch);
-    }
-
-    /**
-     *
-     */
-    public static boolean isWhitespace(int codePoint) {
-        return CharacterData.of(codePoint).isWhitespace(codePoint);
-    }
-
-    /**
-     *
-     *
-     *
-     */
-    public static boolean isISOControl(char ch) {
-        return isISOControl((int)ch);
-    }
-
-    /**
-     *
-     */
-    public static boolean isISOControl(int codePoint) {
-        // Optimized form of:
-        //     (codePoint >= 0x00 && codePoint <= 0x1F) ||
-        //     (codePoint >= 0x7F && codePoint <= 0x9F);
-        return codePoint <= 0x9F &&
-            (codePoint >= 0x7F || (codePoint >>> 5 == 0));
-    }
-
-    /**
-     *
-     *
-     */
-    public static int getType(char ch) {
-        return getType((int)ch);
-    }
-
-    /**
-     *
-     */
-    public static int getType(int codePoint) {
-        return CharacterData.of(codePoint).getType(codePoint);
-    }
-
-    /**
-     *
-     */
-    public static char forDigit(int digit, int radix) {
-        if ((digit >= radix) || (digit < 0)) {
-            return '\\0';
+        private UnicodeBlock(String idName, String alias) {
         }
-        if ((radix < Character.MIN_RADIX) || (radix > Character.MAX_RADIX)) {
-            return '\\0';
+
+        public static final UnicodeBlock  BASIC_LATIN =
+        new UnicodeBlock(\"BASIC_LATIN\",
+                         \"BASIC LATIN\");
+
+    }
+}
+";
+
+/// about self import
+static CASE_6:&'static str ="
+package java.lang;
+
+import static java.lang.StackStreamFactory.WalkerState.*;
+final class StackStreamFactory {
+    enum WalkerState {
+        NEW; 
+    }
+}
+";
+
+/// about hierarchical resolutions
+static CASE_7:&'static str ="
+package p;
+
+class A {
+	long a = 0;
+	class D {
+
+	}
+}
+
+class D {
+	
+}
+class E {
+	
+}
+class F{}
+
+class B extends A implements C {
+	// a can be ambiguous between A and C
+	long b = a;
+	// if decl Both in A and C, D and E are ambiguous
+	D d=null; // /.p.A.D
+	E e=null; // /.p.C.E
+	F f=null; // /.p.F
+}
+
+interface C {
+	int c = 0;
+	class E {
+		
+	}
+}
+";
+
+static CASE_8:&'static str ="package q.w.e;
+class A {
+    Integer a = 0;
+    <T> void test(T x) {
+        test(1);
+        A b = new A();
+        b.test(a);
+        test(a);
+        String s = \"\";
+        b.test(s);
+    }
+}";
+
+static CASE_9:&'static str ="
+class D {
+	int a = 1;
+    int f() {
+		a = 3;
+		int a = 5;
+		return a + this.a;
+	}
+}
+";
+
+static CASE_10:&'static str ="package a;
+public class A {
+    public void f() {
+        int second = 0;
+        second = second;
+        second = second;
+    }
+}
+";
+
+static CASE_11:&'static str ="package a;
+public class A {
+    public static long f() {
+        int start = 0, len = 0;
+        A x = new A(start);
+    }
+}
+";
+
+static A:&'static str = "
+package java.lang;
+
+import java.lang.annotation.Native;
+import java.math.*;
+import java.util.Objects;
+import jdk.internal.HotSpotIntrinsicCandidate;
+
+import static java.lang.String.COMPACT_STRINGS;
+import static java.lang.String.LATIN1;
+import static java.lang.String.UTF16;
+
+
+public final class Long extends Number implements Comparable<Long> {
+
+    @Native public static final long MIN_VALUE = 0x8000000000000000L;
+
+
+    @Native public static final long MAX_VALUE = 0x7fffffffffffffffL;
+
+
+    @SuppressWarnings(\"unchecked\")
+    public static final Class<Long>     TYPE = (Class<Long>) Class.getPrimitiveClass(\"long\");
+
+
+    public static String toString(long i, int radix) {
+        if (radix < Character.MIN_RADIX || radix > Character.MAX_RADIX)
+            radix = 10;
+        if (radix == 10)
+            return toString(i);
+
+        if (COMPACT_STRINGS) {
+            byte[] buf = new byte[65];
+            int charPos = 64;
+            boolean negative = (i < 0);
+
+            if (!negative) {
+                i = -i;
+            }
+
+            while (i <= -radix) {
+                buf[charPos--] = (byte)Integer.digits[(int)(-(i % radix))];
+                i = i / radix;
+            }
+            buf[charPos] = (byte)Integer.digits[(int)(-i)];
+
+            if (negative) {
+                buf[--charPos] = '-';
+            }
+            return StringLatin1.newString(buf, charPos, (65 - charPos));
         }
-        if (digit < 10) {
-            return (char)('0' + digit);
+        return toStringUTF16(i, radix);
+    }
+
+    private static String toStringUTF16(long i, int radix) {
+        byte[] buf = new byte[65 * 2];
+        int charPos = 64;
+        boolean negative = (i < 0);
+        if (!negative) {
+            i = -i;
         }
-        return (char)('a' - 10 + digit);
+        while (i <= -radix) {
+            StringUTF16.putChar(buf, charPos--, Integer.digits[(int)(-(i % radix))]);
+            i = i / radix;
+        }
+        StringUTF16.putChar(buf, charPos, Integer.digits[(int)(-i)]);
+        if (negative) {
+            StringUTF16.putChar(buf, --charPos, '-');
+        }
+        return StringUTF16.newString(buf, charPos, (65 - charPos));
     }
 
-    /**
-     *
-     *
-     *
-     */
-    public static byte getDirectionality(char ch) {
-        return getDirectionality((int)ch);
+
+    public static String toUnsignedString(long i, int radix) {
+        if (i >= 0)
+            return toString(i, radix);
+        else {
+            switch (radix) {
+            case 2:
+                return toBinaryString(i);
+
+            case 4:
+                return toUnsignedString0(i, 2);
+
+            case 8:
+                return toOctalString(i);
+
+            case 10:
+
+                long quot = (i >>> 1) / 5;
+                long rem = i - quot * 10;
+                return toString(quot) + rem;
+
+            case 16:
+                return toHexString(i);
+
+            case 32:
+                return toUnsignedString0(i, 5);
+
+            default:
+                return toUnsignedBigInteger(i).toString(radix);
+            }
+        }
     }
 
-    /**
-     *
-     *
-     */
-    public static byte getDirectionality(int codePoint) {
-        return CharacterData.of(codePoint).getDirectionality(codePoint);
+
+    private static BigInteger toUnsignedBigInteger(long i) {
+        if (i >= 0L)
+            return BigInteger.valueOf(i);
+        else {
+            int upper = (int) (i >>> 32);
+            int lower = (int) i;
+
+            // return (upper << 32) + lower
+            return (BigInteger.valueOf(Integer.toUnsignedLong(upper))).shiftLeft(32).
+                add(BigInteger.valueOf(Integer.toUnsignedLong(lower)));
+        }
     }
 
-    /**
-     *
-     *
-     */
-    public static boolean isMirrored(char ch) {
-        return isMirrored((int)ch);
+
+    public static String toHexString(long i) {
+        return toUnsignedString0(i, 4);
     }
 
-    /**
-     *
-     */
-    public static boolean isMirrored(int codePoint) {
-        return CharacterData.of(codePoint).isMirrored(codePoint);
+
+    public static String toOctalString(long i) {
+        return toUnsignedString0(i, 3);
     }
 
-    /**
-     *
 
-     */
-    public int compareTo(Character anotherCharacter) {
-        return compare(this.value, anotherCharacter.value);
+    public static String toBinaryString(long i) {
+        return toUnsignedString0(i, 1);
     }
 
-    /**
-     *
-     */
-    public static int compare(char x, char y) {
-        return x - y;
+
+    static String toUnsignedString0(long val, int shift) {
+        // assert shift > 0 && shift <=5 : \"Illegal shift value\";
+        int mag = Long.SIZE - Long.numberOfLeadingZeros(val);
+        int chars = Math.max(((mag + (shift - 1)) / shift), 1);
+        if (COMPACT_STRINGS) {
+            byte[] buf = new byte[chars];
+            formatUnsignedLong0(val, shift, buf, 0, chars);
+            return new String(buf, LATIN1);
+        } else {
+            byte[] buf = new byte[chars * 2];
+            formatUnsignedLong0UTF16(val, shift, buf, 0, chars);
+            return new String(buf, UTF16);
+        }
     }
 
-    /**
-     *
-     */
-    static int toUpperCaseEx(int codePoint) {
-        assert isValidCodePoint(codePoint);
-        return CharacterData.of(codePoint).toUpperCaseEx(codePoint);
+
+
+    /** byte[]/LATIN1 version    */
+    static void formatUnsignedLong0(long val, int shift, byte[] buf, int offset, int len) {
+        int charPos = offset + len;
+        int radix = 1 << shift;
+        int mask = radix - 1;
+        do {
+            buf[--charPos] = (byte)Integer.digits[((int) val) & mask];
+            val >>>= shift;
+        } while (charPos > offset);
     }
 
-    /**
-     *
-     */
-    static char[] toUpperCaseCharArray(int codePoint) {
-        // As of Unicode 6.0, 1:M uppercasings only happen in the BMP.
-        assert isBmpCodePoint(codePoint);
-        return CharacterData.of(codePoint).toUpperCaseCharArray(codePoint);
+    /** byte[]/UTF16 version    */
+    private static void formatUnsignedLong0UTF16(long val, int shift, byte[] buf, int offset, int len) {
+        int charPos = offset + len;
+        int radix = 1 << shift;
+        int mask = radix - 1;
+        do {
+            StringUTF16.putChar(buf, --charPos, Integer.digits[((int) val) & mask]);
+            val >>>= shift;
+        } while (charPos > offset);
     }
 
-    /**
-     *
-     */
-    public static final int SIZE = 16;
+    static String fastUUID(long lsb, long msb) {
+        if (COMPACT_STRINGS) {
+            byte[] buf = new byte[36];
+            formatUnsignedLong0(lsb,        4, buf, 24, 12);
+            formatUnsignedLong0(lsb >>> 48, 4, buf, 19, 4);
+            formatUnsignedLong0(msb,        4, buf, 14, 4);
+            formatUnsignedLong0(msb >>> 16, 4, buf, 9,  4);
+            formatUnsignedLong0(msb >>> 32, 4, buf, 0,  8);
 
-    /**
-     *
-     */
+            buf[23] = '-';
+            buf[18] = '-';
+            buf[13] = '-';
+            buf[8]  = '-';
+
+            return new String(buf, LATIN1);
+        } else {
+            byte[] buf = new byte[72];
+
+            formatUnsignedLong0UTF16(lsb,        4, buf, 24, 12);
+            formatUnsignedLong0UTF16(lsb >>> 48, 4, buf, 19, 4);
+            formatUnsignedLong0UTF16(msb,        4, buf, 14, 4);
+            formatUnsignedLong0UTF16(msb >>> 16, 4, buf, 9,  4);
+            formatUnsignedLong0UTF16(msb >>> 32, 4, buf, 0,  8);
+
+            StringUTF16.putChar(buf, 23, '-');
+            StringUTF16.putChar(buf, 18, '-');
+            StringUTF16.putChar(buf, 13, '-');
+            StringUTF16.putChar(buf,  8, '-');
+
+            return new String(buf, UTF16);
+        }
+    }
+
+
+    public static String toString(long i) {
+        int size = stringSize(i);
+        if (COMPACT_STRINGS) {
+            byte[] buf = new byte[size];
+            getChars(i, size, buf);
+            return new String(buf, LATIN1);
+        } else {
+            byte[] buf = new byte[size * 2];
+            StringUTF16.getChars(i, size, buf);
+            return new String(buf, UTF16);
+        }
+    }
+
+
+    public static String toUnsignedString(long i) {
+        return toUnsignedString(i, 10);
+    }
+
+
+    static int getChars(long i, int index, byte[] buf) {
+        long q;
+        int r;
+        int charPos = index;
+
+        boolean negative = (i < 0);
+        if (!negative) {
+            i = -i;
+        }
+
+        // Get 2 digits/iteration using longs until quotient fits into an int
+        while (i <= Integer.MIN_VALUE) {
+            q = i / 100;
+            r = (int)((q * 100) - i);
+            i = q;
+            buf[--charPos] = Integer.DigitOnes[r];
+            buf[--charPos] = Integer.DigitTens[r];
+        }
+
+        // Get 2 digits/iteration using ints
+        int q2;
+        int i2 = (int)i;
+        while (i2 <= -100) {
+            q2 = i2 / 100;
+            r  = (q2 * 100) - i2;
+            i2 = q2;
+            buf[--charPos] = Integer.DigitOnes[r];
+            buf[--charPos] = Integer.DigitTens[r];
+        }
+
+        // We know there are at most two digits left at this point.
+        q2 = i2 / 10;
+        r  = (q2 * 10) - i2;
+        buf[--charPos] = (byte)('0' + r);
+
+        // Whatever left is the remaining digit.
+        if (q2 < 0) {
+            buf[--charPos] = (byte)('0' - q2);
+        }
+
+        if (negative) {
+            buf[--charPos] = (byte)'-';
+        }
+        return charPos;
+    }
+
+
+    static int stringSize(long x) {
+        int d = 1;
+        if (x >= 0) {
+            d = 0;
+            x = -x;
+        }
+        long p = -10;
+        for (int i = 1; i < 19; i++) {
+            if (x > p)
+                return i + d;
+            p = 10 * p;
+        }
+        return 19 + d;
+    }
+
+
+    public static long parseLong(String s, int radix)
+              throws NumberFormatException
+    {
+        if (s == null) {
+            throw new NumberFormatException(\"null\");
+        }
+
+        if (radix < Character.MIN_RADIX) {
+            throw new NumberFormatException(\"radix \" + radix +
+                                            \" less than Character.MIN_RADIX\");
+        }
+        if (radix > Character.MAX_RADIX) {
+            throw new NumberFormatException(\"radix \" + radix +
+                                            \" greater than Character.MAX_RADIX\");
+        }
+
+        boolean negative = false;
+        int i = 0, len = s.length();
+        long limit = -Long.MAX_VALUE;
+
+        if (len > 0) {
+            char firstChar = s.charAt(0);
+            if (firstChar < '0') { // Possible leading \"+\" or \"-\"
+                if (firstChar == '-') {
+                    negative = true;
+                    limit = Long.MIN_VALUE;
+                } else if (firstChar != '+') {
+                    throw NumberFormatException.forInputString(s);
+                }
+
+                if (len == 1) { // Cannot have lone \"+\" or \"-\"
+                    throw NumberFormatException.forInputString(s);
+                }
+                i++;
+            }
+            long multmin = limit / radix;
+            long result = 0;
+            while (i < len) {
+                // Accumulating negatively avoids surprises near MAX_VALUE
+                int digit = Character.digit(s.charAt(i++),radix);
+                if (digit < 0 || result < multmin) {
+                    throw NumberFormatException.forInputString(s);
+                }
+                result *= radix;
+                if (result < limit + digit) {
+                    throw NumberFormatException.forInputString(s);
+                }
+                result -= digit;
+            }
+            return negative ? result : -result;
+        } else {
+            throw NumberFormatException.forInputString(s);
+        }
+    }
+
+
+    public static long parseLong(CharSequence s, int beginIndex, int endIndex, int radix)
+                throws NumberFormatException {
+        s = Objects.requireNonNull(s);
+
+        if (beginIndex < 0 || beginIndex > endIndex || endIndex > s.length()) {
+            throw new IndexOutOfBoundsException();
+        }
+        if (radix < Character.MIN_RADIX) {
+            throw new NumberFormatException(\"radix \" + radix +
+                    \" less than Character.MIN_RADIX\");
+        }
+        if (radix > Character.MAX_RADIX) {
+            throw new NumberFormatException(\"radix \" + radix +
+                    \" greater than Character.MAX_RADIX\");
+        }
+
+        boolean negative = false;
+        int i = beginIndex;
+        long limit = -Long.MAX_VALUE;
+
+        if (i < endIndex) {
+            char firstChar = s.charAt(i);
+            if (firstChar < '0') { // Possible leading \"+\" or \"-\"
+                if (firstChar == '-') {
+                    negative = true;
+                    limit = Long.MIN_VALUE;
+                } else if (firstChar != '+') {
+                    throw NumberFormatException.forCharSequence(s, beginIndex,
+                            endIndex, i);
+                }
+                i++;
+            }
+            if (i >= endIndex) { // Cannot have lone \"+\", \"-\" or \"\"
+                throw NumberFormatException.forCharSequence(s, beginIndex,
+                        endIndex, i);
+            }
+            long multmin = limit / radix;
+            long result = 0;
+            while (i < endIndex) {
+                // Accumulating negatively avoids surprises near MAX_VALUE
+                int digit = Character.digit(s.charAt(i), radix);
+                if (digit < 0 || result < multmin) {
+                    throw NumberFormatException.forCharSequence(s, beginIndex,
+                            endIndex, i);
+                }
+                result *= radix;
+                if (result < limit + digit) {
+                    throw NumberFormatException.forCharSequence(s, beginIndex,
+                            endIndex, i);
+                }
+                i++;
+                result -= digit;
+            }
+            return negative ? result : -result;
+        } else {
+            throw new NumberFormatException(\"\");
+        }
+    }
+
+
+    public static long parseLong(String s) throws NumberFormatException {
+        return parseLong(s, 10);
+    }
+
+
+    public static long parseUnsignedLong(String s, int radix)
+                throws NumberFormatException {
+        if (s == null)  {
+            throw new NumberFormatException(\"null\");
+        }
+
+        int len = s.length();
+        if (len > 0) {
+            char firstChar = s.charAt(0);
+            if (firstChar == '-') {
+                throw new
+                    NumberFormatException(String.format(\"Illegal leading minus sign \" +
+                                                       \"on unsigned string %s.\", s));
+            } else {
+                if (len <= 12 || // Long.MAX_VALUE in Character.MAX_RADIX is 13 digits
+                    (radix == 10 && len <= 18) ) { // Long.MAX_VALUE in base 10 is 19 digits
+                    return parseLong(s, radix);
+                }
+
+                // No need for range checks on len due to testing above.
+                long first = parseLong(s, 0, len - 1, radix);
+                int second = Character.digit(s.charAt(len - 1), radix);
+                if (second < 0) {
+                    throw new NumberFormatException(\"Bad digit at end of \" + s);
+                }
+                long result = first * radix + second;
+
+
+                int guard = radix * (int) (first >>> 57);
+                if (guard >= 128 ||
+                    (result >= 0 && guard >= 128 - Character.MAX_RADIX)) {
+
+                    throw new NumberFormatException(String.format(\"String value %s exceeds \" +
+                                                                  \"range of unsigned long.\", s));
+                }
+                return result;
+            }
+        } else {
+            throw NumberFormatException.forInputString(s);
+        }
+    }
+
+
+    public static long parseUnsignedLong(CharSequence s, int beginIndex, int endIndex, int radix)
+                throws NumberFormatException {
+        s = Objects.requireNonNull(s);
+
+        if (beginIndex < 0 || beginIndex > endIndex || endIndex > s.length()) {
+            throw new IndexOutOfBoundsException();
+        }
+        int start = beginIndex, len = endIndex - beginIndex;
+
+        if (len > 0) {
+            char firstChar = s.charAt(start);
+            if (firstChar == '-') {
+                throw new NumberFormatException(String.format(\"Illegal leading minus sign \" +
+                        \"on unsigned string %s.\", s.subSequence(start, start + len)));
+            } else {
+                if (len <= 12 || // Long.MAX_VALUE in Character.MAX_RADIX is 13 digits
+                    (radix == 10 && len <= 18) ) { // Long.MAX_VALUE in base 10 is 19 digits
+                    return parseLong(s, start, start + len, radix);
+                }
+
+                // No need for range checks on end due to testing above.
+                long first = parseLong(s, start, start + len - 1, radix);
+                int second = Character.digit(s.charAt(start + len - 1), radix);
+                if (second < 0) {
+                    throw new NumberFormatException(\"Bad digit at end of \" +
+                            s.subSequence(start, start + len));
+                }
+                long result = first * radix + second;
+
+
+                int guard = radix * (int) (first >>> 57);
+                if (guard >= 128 ||
+                        (result >= 0 && guard >= 128 - Character.MAX_RADIX)) {
+
+                    throw new NumberFormatException(String.format(\"String value %s exceeds \" +
+                            \"range of unsigned long.\", s.subSequence(start, start + len)));
+                }
+                return result;
+            }
+        } else {
+            throw NumberFormatException.forInputString(\"\");
+        }
+    }
+
+
+    public static long parseUnsignedLong(String s) throws NumberFormatException {
+        return parseUnsignedLong(s, 10);
+    }
+
+
+    public static Long valueOf(String s, int radix) throws NumberFormatException {
+        return Long.valueOf(parseLong(s, radix));
+    }
+
+
+    public static Long valueOf(String s) throws NumberFormatException
+    {
+        return Long.valueOf(parseLong(s, 10));
+    }
+
+    private static class LongCache {
+        private LongCache(){}
+
+        static final Long cache[] = new Long[-(-128) + 127 + 1];
+
+        static {
+            for(int i = 0; i < cache.length; i++)
+                cache[i] = new Long(i - 128);
+        }
+    }
+
+
+    @HotSpotIntrinsicCandidate
+    public static Long valueOf(long l) {
+        final int offset = 128;
+        if (l >= -128 && l <= 127) { // will cache
+            return LongCache.cache[(int)l + offset];
+        }
+        return new Long(l);
+    }
+
+
+    public static Long decode(String nm) throws NumberFormatException {
+        int radix = 10;
+        int index = 0;
+        boolean negative = false;
+        Long result;
+
+        if (nm.length() == 0)
+            throw new NumberFormatException(\"Zero length string\");
+        char firstChar = nm.charAt(0);
+        // Handle sign, if present
+        if (firstChar == '-') {
+            negative = true;
+            index++;
+        } else if (firstChar == '+')
+            index++;
+
+        // Handle radix specifier, if present
+        if (nm.startsWith(\"0x\", index) || nm.startsWith(\"0X\", index)) {
+            index += 2;
+            radix = 16;
+        }
+        else if (nm.startsWith(\"#\", index)) {
+            index ++;
+            radix = 16;
+        }
+        else if (nm.startsWith(\"0\", index) && nm.length() > 1 + index) {
+            index ++;
+            radix = 8;
+        }
+
+        if (nm.startsWith(\"-\", index) || nm.startsWith(\"+\", index))
+            throw new NumberFormatException(\"Sign character in wrong position\");
+
+        try {
+            result = Long.valueOf(nm.substring(index), radix);
+            result = negative ? Long.valueOf(-result.longValue()) : result;
+        } catch (NumberFormatException e) {
+            // If number is Long.MIN_VALUE, we'll end up here. The next line
+            // handles this case, and causes any genuine format error to be
+            // rethrown.
+            String constant = negative ? (\"-\" + nm.substring(index))
+                                       : nm.substring(index);
+            result = Long.valueOf(constant, radix);
+        }
+        return result;
+    }
+
+
+    private final long value;
+
+
+    @Deprecated(since=\"9\")
+    public Long(long value) {
+        this.value = value;
+    }
+
+
+    @Deprecated(since=\"9\")
+    public Long(String s) throws NumberFormatException {
+        this.value = parseLong(s, 10);
+    }
+
+
+    public byte byteValue() {
+        return (byte)value;
+    }
+
+
+    public short shortValue() {
+        return (short)value;
+    }
+
+
+    public int intValue() {
+        return (int)value;
+    }
+
+
+    @HotSpotIntrinsicCandidate
+    public long longValue() {
+        return value;
+    }
+
+
+    public float floatValue() {
+        return (float)value;
+    }
+
+
+    public double doubleValue() {
+        return (double)value;
+    }
+
+
+    public String toString() {
+        return toString(value);
+    }
+
+
+    @Override
+    public int hashCode() {
+        return Long.hashCode(value);
+    }
+
+
+    public static int hashCode(long value) {
+        return (int)(value ^ (value >>> 32));
+    }
+
+
+    public boolean equals(Object obj) {
+        if (obj instanceof Long) {
+            return value == ((Long)obj).longValue();
+        }
+        return false;
+    }
+
+
+    public static Long getLong(String nm) {
+        return getLong(nm, null);
+    }
+
+
+    public static Long getLong(String nm, long val) {
+        Long result = Long.getLong(nm, null);
+        return (result == null) ? Long.valueOf(val) : result;
+    }
+
+
+    public static Long getLong(String nm, Long val) {
+        String v = null;
+        try {
+            v = System.getProperty(nm);
+        } catch (IllegalArgumentException | NullPointerException e) {
+        }
+        if (v != null) {
+            try {
+                return Long.decode(v);
+            } catch (NumberFormatException e) {
+            }
+        }
+        return val;
+    }
+
+
+    public int compareTo(Long anotherLong) {
+        return compare(this.value, anotherLong.value);
+    }
+
+
+    public static int compare(long x, long y) {
+        return (x < y) ? -1 : ((x == y) ? 0 : 1);
+    }
+
+
+    public static int compareUnsigned(long x, long y) {
+        return compare(x + MIN_VALUE, y + MIN_VALUE);
+    }
+
+
+
+    public static long divideUnsigned(long dividend, long divisor) {
+        if (divisor < 0L) { // signed comparison
+            // Answer must be 0 or 1 depending on relative magnitude
+            // of dividend and divisor.
+            return (compareUnsigned(dividend, divisor)) < 0 ? 0L :1L;
+        }
+
+        if (dividend > 0) //  Both inputs non-negative
+            return dividend/divisor;
+        else {
+
+            return toUnsignedBigInteger(dividend).
+                divide(toUnsignedBigInteger(divisor)).longValue();
+        }
+    }
+
+
+    public static long remainderUnsigned(long dividend, long divisor) {
+        if (dividend > 0 && divisor > 0) { // signed comparisons
+            return dividend % divisor;
+        } else {
+            if (compareUnsigned(dividend, divisor) < 0) // Avoid explicit check for 0 divisor
+                return dividend;
+            else
+                return toUnsignedBigInteger(dividend).
+                    remainder(toUnsignedBigInteger(divisor)).longValue();
+        }
+    }
+
+    // Bit Twiddling
+
+
+    @Native public static final int SIZE = 64;
+
+
     public static final int BYTES = SIZE / Byte.SIZE;
 
-    /**
-     *
-     */
+
+    public static long highestOneBit(long i) {
+        return i & (MIN_VALUE >>> numberOfLeadingZeros(i));
+    }
+
+
+    public static long lowestOneBit(long i) {
+        // HD, Section 2-1
+        return i & -i;
+    }
+
+
     @HotSpotIntrinsicCandidate
-    public static char reverseBytes(char ch) {
-        return (char) (((ch & 0xFF00) >> 8) | (ch << 8));
+    public static int numberOfLeadingZeros(long i) {
+        // HD, Figure 5-6
+         if (i <= 0)
+            return i == 0 ? 64 : 0;
+        int n = 1;
+        int x = (int)(i >>> 32);
+        if (x == 0) { n += 32; x = (int)i; }
+        if (x >>> 16 == 0) { n += 16; x <<= 16; }
+        if (x >>> 24 == 0) { n +=  8; x <<=  8; }
+        if (x >>> 28 == 0) { n +=  4; x <<=  4; }
+        if (x >>> 30 == 0) { n +=  2; x <<=  2; }
+        n -= x >>> 31;
+        return n;
     }
 
-    /**
-     *
-     *
-     *
-     *
-     *
-     *
-     */
-    public static String getName(int codePoint) {
-        if (!isValidCodePoint(codePoint)) {
-            throw new IllegalArgumentException(
-                String.format(\"Not a valid Unicode code point: 0x%X\", codePoint));
-        }
-        String name = CharacterName.getInstance().getName(codePoint);
-        if (name != null)
-            return name;
-        if (getType(codePoint) == UNASSIGNED)
-            return null;
-        UnicodeBlock block = UnicodeBlock.of(codePoint);
-        if (block != null)
-            return block.toString().replace('_', ' ') + \" \"
-                   + Integer.toHexString(codePoint).toUpperCase(Locale.ROOT);
-        // should never come here
-        return Integer.toHexString(codePoint).toUpperCase(Locale.ROOT);
+
+    @HotSpotIntrinsicCandidate
+    public static int numberOfTrailingZeros(long i) {
+        // HD, Figure 5-14
+        int x, y;
+        if (i == 0) return 64;
+        int n = 63;
+        y = (int)i; if (y != 0) { n = n -32; x = y; } else x = (int)(i>>>32);
+        y = x <<16; if (y != 0) { n = n -16; x = y; }
+        y = x << 8; if (y != 0) { n = n - 8; x = y; }
+        y = x << 4; if (y != 0) { n = n - 4; x = y; }
+        y = x << 2; if (y != 0) { n = n - 2; x = y; }
+        return n - ((x << 1) >>> 31);
     }
 
-    /**
-     *
-     *
-     *
-     *
-     *
-     *
-     */
-    public static int codePointOf(String name) {
-        name = name.trim().toUpperCase(Locale.ROOT);
-        int cp = CharacterName.getInstance().getCodePoint(name);
-        if (cp != -1)
-            return cp;
-        try {
-            int off = name.lastIndexOf(' ');
-            if (off != -1) {
-                cp = Integer.parseInt(name, off + 1, name.length(), 16);
-                if (isValidCodePoint(cp) && name.equals(getName(cp)))
-                    return cp;
-            }
-        } catch (Exception x) {}
-        throw new IllegalArgumentException(\"Unrecognized character name :\" + name);
+
+     @HotSpotIntrinsicCandidate
+     public static int bitCount(long i) {
+        // HD, Figure 5-2
+        i = i - ((i >>> 1) & 0x5555555555555555L);
+        i = (i & 0x3333333333333333L) + ((i >>> 2) & 0x3333333333333333L);
+        i = (i + (i >>> 4)) & 0x0f0f0f0f0f0f0f0fL;
+        i = i + (i >>> 8);
+        i = i + (i >>> 16);
+        i = i + (i >>> 32);
+        return (int)i & 0x7f;
+     }
+
+
+    public static long rotateLeft(long i, int distance) {
+        return (i << distance) | (i >>> -distance);
     }
+
+
+    public static long rotateRight(long i, int distance) {
+        return (i >>> distance) | (i << -distance);
+    }
+
+
+    public static long reverse(long i) {
+        // HD, Figure 7-1
+        i = (i & 0x5555555555555555L) << 1 | (i >>> 1) & 0x5555555555555555L;
+        i = (i & 0x3333333333333333L) << 2 | (i >>> 2) & 0x3333333333333333L;
+        i = (i & 0x0f0f0f0f0f0f0f0fL) << 4 | (i >>> 4) & 0x0f0f0f0f0f0f0f0fL;
+
+        return reverseBytes(i);
+    }
+
+
+    public static int signum(long i) {
+        // HD, Section 2-7
+        return (int) ((i >> 63) | (-i >>> 63));
+    }
+
+
+    @HotSpotIntrinsicCandidate
+    public static long reverseBytes(long i) {
+        i = (i & 0x00ff00ff00ff00ffL) << 8 | (i >>> 8) & 0x00ff00ff00ff00ffL;
+        return (i << 48) | ((i & 0xffff0000L) << 16) |
+            ((i >>> 16) & 0xffff0000L) | (i >>> 48);
+    }
+
+
+    public static long sum(long a, long b) {
+        return a + b;
+    }
+
+
+    public static long max(long a, long b) {
+        return Math.max(a, b);
+    }
+
+
+    public static long min(long a, long b) {
+        return Math.min(a, b);
+    }
+
+    @Native private static final long serialVersionUID = 4290774380558885855L;
 }
 ";
 
