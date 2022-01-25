@@ -210,7 +210,6 @@ where
             self.internal.src_arena.root(),
             self.internal.dst_arena.root(),
         );
-        // todo!()
     }
 
     fn src_has_children(&mut self, src: IdD) -> bool {

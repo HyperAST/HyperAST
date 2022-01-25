@@ -109,6 +109,10 @@ impl rusted_gumtree_core::tree::tree::WithChildren for HashedSubtreePlus {
         self.content.get_child(idx)
     }
 
+    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
+        self.content.get_child_rev(idx)
+    }
+
     fn get_children<'a>(&'a self) -> &'a [Self::TreeId] {
         self.content.get_children()
     }

@@ -20,9 +20,9 @@ pub trait NodeHashs {
 
 #[derive(Default, Clone, Copy, Eq)]
 pub struct SyntaxNodeHashs<T: PrimInt> {
-    pub(crate) structt: T,
-    pub(crate) label: T,
-    pub(crate) syntax: T,
+    pub structt: T,
+    pub label: T,
+    pub syntax: T,
 }
 
 pub enum SyntaxNodeHashsKinds {
@@ -148,6 +148,10 @@ impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L>
         self.node.get_child(idx)
     }
 
+    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
+    self.node.get_child_rev(idx)
+    }
+
     // fn descendants_count(&self) -> Self::TreeId {
     //     self.node.descendants_count()
     // }
@@ -215,7 +219,7 @@ static LEAVE: u32 = {
 };
 static BASE: &u32 = &33u32;
 
-pub(crate) fn inner_node_hash(kind: &u32, label: &u32, size: &u32, middle_hash: &u32) -> u32 {
+pub fn inner_node_hash(kind: &u32, label: &u32, size: &u32, middle_hash: &u32) -> u32 {
     let mut left = 1u32;
     left = 31 * left + kind;
     left = 31 * left + label;

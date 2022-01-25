@@ -125,6 +125,10 @@ impl WithChildren for Tree {
         self.children[*idx as usize]
     }
 
+    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
+        self.children[self.children.len()-(*idx as usize)-1]
+    }
+
     fn get_children(&self) -> &[Self::TreeId] {
         &self.children
     }

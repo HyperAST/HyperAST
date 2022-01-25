@@ -192,6 +192,15 @@ impl<N: Eq + Clone, L> rusted_gumtree_core::tree::tree::WithChildren for Compres
         }
     }
 
+    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
+        match self {
+            CompressedNode::Children2 { children, kind: _ } if *idx == 1 => children[0].clone(),
+            CompressedNode::Children2 { children, kind: _ } if *idx == 0 => children[1].clone(),
+            CompressedNode::Children { children, kind: _ } => children[children.len()-1-(*idx as usize)].clone(),
+            _ => panic!(),
+        }
+    }
+
     // fn descendants_count(&self) -> Self::TreeId {
     //     match self {
     //         CompressedNode::Children2 {

@@ -6,7 +6,6 @@ impl<'a, T> NodeStore<'a, T::TreeId, &'a T> for Arena<T>
 where
     T: 'a + Stored<TreeId = stack_graphs::arena::Handle<T>>,
 {
-
     fn resolve(&'a self, id: &T::TreeId) -> &'a T {
         self.0.get(*id)
     }

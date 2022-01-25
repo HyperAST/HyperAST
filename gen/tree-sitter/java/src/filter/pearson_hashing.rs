@@ -51,3 +51,23 @@ pub fn pearson_mod<T:Borrow<[u8]>,const MOD:u8>(x0:usize,x:T) -> u8 {
 
     return ret;
 }
+// TODO make better hash function
+pub fn xor_rot<T:Borrow<[u8]>>(x0:usize,x:T) -> u16 {
+    let mut ret = T[x0] as u16;
+
+    for b in x.borrow() {
+        ret = (ret ^ (*b as u16)).rotate_left(6);
+    }
+
+    return ret;
+}
+
+pub fn xor_rot_mod<T:Borrow<[u8]>,const MOD:u16>(x0:usize,x:T) -> u16 {
+    let mut ret = T[x0] as u16;
+
+    for b in x.borrow() {
+        ret = (ret ^ (*b as u16)).rotate_left(6)%MOD;
+    }
+
+    return ret;
+}

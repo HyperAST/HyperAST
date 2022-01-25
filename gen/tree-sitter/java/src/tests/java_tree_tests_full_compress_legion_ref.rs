@@ -64,11 +64,13 @@ fn run(text: &[u8]) {
         &mut out,
         &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
     );
-
-} 
+}
 #[test]
 fn test_cases() {
-    let cases = [CASE_1,CASE_2,CASE_3,CASE_4,CASE_5,CASE_6,CASE_7,CASE_8,CASE_9,CASE_10];
+    let cases = [
+        CASE_1, CASE_2, CASE_3, CASE_4, CASE_5, CASE_6, CASE_7, CASE_8, CASE_9, CASE_10, CASE_11,
+        CASE_12, CASE_13,
+    ];
     for case in cases {
         run(case.as_bytes())
     }
@@ -76,7 +78,7 @@ fn test_cases() {
 
 #[test]
 fn test_equals() {
-    let text = CASE_11.as_bytes();
+    let text = CASE_22.as_bytes();
     let mut parser = Parser::new();
 
     {
@@ -117,11 +119,11 @@ fn test_equals() {
         // playing with refs
         let a = &full_node.local.compressed_node;
 
-        let b = java_tree_gen.stores.node_store.resolve(a);
+        let b = java_tree_gen.stores.node_store.resolve(*a);
         match full_node.local.ana.as_ref() {
             Some(x) => {
                 println!("refs:",);
-                    x.print_refs(&java_tree_gen.stores.label_store);
+                x.print_refs(&java_tree_gen.stores.label_store);
             }
             None => println!("None"),
         };
@@ -131,7 +133,7 @@ fn test_equals() {
         let c = b.check(d);
 
         let s = std::str::from_utf8(d).unwrap();
-        println!("{}",java_tree_gen.stores.label_store);
+        println!("{}", java_tree_gen.stores.label_store);
         match c {
             BloomResult::MaybeContain => println!("Maybe contains {}", s),
             BloomResult::DoNotContain => println!("Do not contains {}", s),
@@ -332,7 +334,7 @@ public class A {
     assert_eq!(std::str::from_utf8(text).unwrap(), out.buff);
 
     println!("{:?}", java_tree_gen.stores().node_store);
-    println!("{}",java_tree_gen.stores.label_store);
+    println!("{}", java_tree_gen.stores.label_store);
 
     let mu = memusage_linux();
     drop(java_tree_gen);
@@ -398,16 +400,15 @@ fn test_spaces_after_lb_special() {
     )
 }
 
-
 /// historic regression test for static analysis
-static CASE_1:&'static str ="
+static CASE_1: &'static str = "
 class A {
     char[] c = new char[] { (char) x };
 }
 ";
 
 /// mostly simple resolutions
-static CASE_2:&'static str ="package q.w.e;
+static CASE_2: &'static str = "package q.w.e;
 import a.z.e.r.t.y.ControlFlowGraph;
 import a.z.e.r.Exc;
 import a.z.e.r.t.y.ControlFlowBuilder;
@@ -438,7 +439,7 @@ class A {
 class B {long c = 0}";
 
 /// a part from java.lang.Character.java
-static CASE_3:&'static str ="
+static CASE_3: &'static str = "
 package java.lang;
 
 import java.util.Arrays;
@@ -506,7 +507,7 @@ class Character implements java.io.Serializable, Comparable<Character> {
 }";
 
 /// about super
-static CASE_4:&'static str ="
+static CASE_4: &'static str = "
 package java.lang;
 
 public
@@ -522,7 +523,7 @@ class AbstractMethodError extends IncompatibleClassChangeError {
 }
 ";
 /// about constructor in java.lang with String as parameters
-static CASE_5:&'static str ="
+static CASE_5: &'static str = "
 package java.lang;//azer.ty;
 
 public final
@@ -542,7 +543,7 @@ class Character {
 ";
 
 /// about self import
-static CASE_6:&'static str ="
+static CASE_6: &'static str = "
 package java.lang;
 
 import static java.lang.StackStreamFactory.WalkerState.*;
@@ -554,7 +555,7 @@ final class StackStreamFactory {
 ";
 
 /// about hierarchical resolutions
-static CASE_7:&'static str ="
+static CASE_7: &'static str = "
 package p;
 
 class A {
@@ -589,7 +590,7 @@ interface C {
 }
 ";
 
-static CASE_8:&'static str ="package q.w.e;
+static CASE_8: &'static str = "package q.w.e;
 class A {
     Integer a = 0;
     <T> void test(T x) {
@@ -602,7 +603,7 @@ class A {
     }
 }";
 
-static CASE_9:&'static str ="
+static CASE_9: &'static str = "
 class D {
 	int a = 1;
     int f() {
@@ -613,7 +614,7 @@ class D {
 }
 ";
 
-static CASE_10:&'static str ="package a;
+static CASE_10: &'static str = "package a;
 public class A {
     public void f() {
         int second = 0;
@@ -623,7 +624,7 @@ public class A {
 }
 ";
 
-static CASE_11:&'static str ="package a;
+static CASE_11: &'static str = "package a;
 public class A {
     public static long f() {
         int start = 0, len = 0;
@@ -631,6 +632,234 @@ public class A {
     }
 }
 ";
+
+// TODO handle fall through variable declaration
+static CASE_12: &'static str = "package a;
+public class A {
+    public static long f() {
+        switch (VM.initLevel()) {
+            case 0:
+            case 1:
+            case 2:
+                // the system class loader is the built-in app class loader during startup
+                return getBuiltinAppClassLoader();
+            case 3:
+                String msg = null;
+                throw new IllegalStateException(msg);
+            default:
+                // system fully initialized
+                assert VM.isBooted() && scl != null;
+                SecurityManager sm = System.getSecurityManager();
+                if (sm != null) {
+                    checkClassLoaderPermission(scl, Reflection.getCallerClass());
+                }
+                return scl;
+        }
+    }
+}
+";
+
+static CASE_13: &'static str = "package a;
+public class A {
+    public A(byte ascii[], int hibyte) {
+        this(ascii, hibyte, 0, ascii.length);
+    }
+    public A(byte[] bytes) {
+        this(bytes, 0, bytes.length);
+    }
+
+    private final byte[] value;
+
+    byte length() {
+        return value.length;
+    }
+
+    byte length2() {
+        return this.value.length;
+    }
+
+    byte length3() {
+        byte v1[] = null;
+        return v1.length;
+    }
+}
+";
+
+static CASE_14: &'static str = "package q.w.e;
+import a.z.e.r.*;
+import a.z.e.r.Y;
+class A {
+    Integer a = 0;
+    <T> void test(T x) {
+        test(1);
+        A b = new A();
+        b.test(a);
+        test(a);
+        String s = \"\";
+        b.test(s);
+        Y y;
+    }
+}";
+
+static CASE_15: &'static str = "package q.w.e;
+class A<V> {
+    public Enumeration<V> elements() {
+        return this.<V>getEnumeration(VALUES);
+    }
+}";
+
+static CASE_16: &'static str = "package q.w.e;
+class A {
+    public <V> Enumeration<V> elements(V x) {
+        return this.<V>getEnumeration(VALUES);
+    }
+}";
+
+static CASE_17: &'static str = "package q.w.e;
+enum SSLCipher {
+    // exportable ciphers
+    @SuppressWarnings({\"unchecked\", \"rawtypes\"})
+    B_NULL(\"NULL\", NULL_CIPHER, 0, 0, 0, 0, true, true,
+        (Map.Entry<ReadCipherGenerator,
+                ProtocolVersion[]>[])(new Map.Entry[] {
+            new SimpleImmutableEntry<ReadCipherGenerator, ProtocolVersion[]>(
+                new NullReadCipherGenerator(),
+                ProtocolVersion.PROTOCOLS_OF_NONE
+            ),
+            new SimpleImmutableEntry<ReadCipherGenerator, ProtocolVersion[]>(
+                new NullReadCipherGenerator(),
+                ProtocolVersion.PROTOCOLS_TO_13
+            )
+        }),
+        (Map.Entry<WriteCipherGenerator,
+                ProtocolVersion[]>[])(new Map.Entry[] {
+            new SimpleImmutableEntry<WriteCipherGenerator, ProtocolVersion[]>(
+                new NullWriteCipherGenerator(),
+                ProtocolVersion.PROTOCOLS_OF_NONE
+            ),
+            new SimpleImmutableEntry<WriteCipherGenerator, ProtocolVersion[]>(
+                new NullWriteCipherGenerator(),
+                ProtocolVersion.PROTOCOLS_TO_13
+            )
+        })),
+";
+
+static CASE_18: &'static str = "
+module java.compiler {
+    exports javax.annotation.processing;
+    exports javax.lang.model;
+    exports javax.lang.model.element;
+    exports javax.lang.model.type;
+    exports javax.lang.model.util;
+    exports javax.tools;
+
+    uses javax.tools.DocumentationTool;
+    uses javax.tools.JavaCompiler;
+}";
+
+static CASE_19: &'static str = "package q.w.e;
+class A {
+    static class BnM extends Node {
+        int[] buffer;
+        int[] lastOcc;
+        int[] optoSft;
+        static Node optimize(Node node) {
+
+            int[] optoSft = new int[patternLength];
+            optoSft[j-1] = i;
+            while (j > 0) {
+                optoSft[--j] = i;
+            }
+            optoSft[patternLength-1] = 1;
+            if (node instanceof SliceS)
+                return new BnMS(src, lastOcc, optoSft, node.next);
+        }
+        BnM(int[] src, int[] lastOcc, int[] optoSft, Node next) {
+            this.buffer = src;
+            this.lastOcc = lastOcc;
+            this.optoSft = optoSft;
+            this.next = next;
+        }
+        boolean match(Matcher matcher, int i, CharSequence seq) {
+            i += Math.max(j + 1 - lastOcc[ch&0x7F], optoSft[j]);
+        }
+    }
+    static final class BnMS extends BnM {
+        BnMS(int[] src, int[] lastOcc, int[] optoSft, Node next) {
+            super(src, lastOcc, optoSft, next);
+            for (int cp : buffer) {
+                lengthInChars += Character.charCount(cp);
+            }
+        }
+        boolean match(Matcher matcher, int i, CharSequence seq) {
+            i += Math.max(j + 1 - lastOcc[ch&0x7F], optoSft[j]);
+        }
+    }
+}";
+static CASE_20: &'static str = "package q.w.e;
+class A {
+    static class BnM extends Node {
+        static Node optimize(Node node) {
+            return null;
+        }
+    }
+}";
+
+static CASE_21: &'static str = "package q.w.e;
+class A {
+    static class BnM extends Node {
+        int[] optoSft;
+    }
+    static final class BnMS extends BnM {
+        boolean match() {
+            optoSft[j];
+        }
+    }
+}";
+
+static CASE_22: &'static str = "package q.w.e;
+class A {
+    public interface Cleanable {
+        void clean();
+    }
+}";
+
+enum D {
+    F(&'static str),
+    D(&'static [(&'static str, &'static D)]),
+}
+
+static PACKAGE_CASE_0: D = D::D(&[(
+    "q",
+    &D::D(&[(
+        "w",
+        &D::D(&[
+            (
+                "A.java",
+                &D::F(
+                    "package q.w;
+class A {
+    static class BnM extends Node {
+        int[] optoSft;
+    }
+    static final class BnMS extends BnM {
+        boolean match() {
+            optoSft[j];
+        }
+    }
+}",
+                ),
+            ),
+            (
+                "Node.java",
+                &D::F(
+                    "package q.w;
+class Node {}",
+                ),
+            ),
+        ]),
+    )]),
+)]);
 
 static A:&'static str = "
 package java.lang;
@@ -1474,5 +1703,3 @@ public final class Long extends Number implements Comparable<Long> {
     @Native private static final long serialVersionUID = 4290774380558885855L;
 }
 ";
-
-

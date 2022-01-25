@@ -68,6 +68,10 @@ impl rusted_gumtree_core::tree::tree::WithChildren for HashedNode {
         self.0.get_child(idx)
     }
 
+    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
+        self.0.get_child_rev(idx)
+    }
+
     fn get_children<'a>(&'a self) -> &'a [Self::TreeId] {
         self.0.get_children()
     }

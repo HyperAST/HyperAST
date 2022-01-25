@@ -8,11 +8,14 @@ use num_traits::PrimInt;
 use strum_macros::EnumString;
 use strum_macros::ToString;
 
+use crate::utils;
+
 /// for now the types shared between all languages
 #[derive(Debug, EnumString, ToString)]
 #[strum(serialize_all = "snake_case")]
 #[derive(Hash, Clone, Copy, PartialEq, Eq)]
 pub enum Type {
+    Directory,
     Spaces,
     // //structural
     // File,
@@ -65,7 +68,6 @@ pub enum Type {
     Expression,
     PrimaryExpression,
     Statement,
-    Scope,
     AnnotatedType,
     Annotation,
     AnnotationArgumentList,
@@ -464,7 +466,9 @@ impl Type {
             Self::ClassDeclaration => true,
             Self::EnumDeclaration => true,
             Self::InterfaceDeclaration => true,
-            _ => false,
+            Self::AnnotationTypeDeclaration => true,
+            Self::EnumConstant => true, // TODO need more eval 
+        _ => false,
         }
     }
     // pub fn primitive_to_str(&self) -> &str {
@@ -492,6 +496,100 @@ impl Type {
             _ => false,
         }
     }
+
+    pub fn is_type_body(&self) -> bool {
+        self == &Type::ClassBody
+        || self == &Type::InterfaceBody
+        || self == &Type::AnnotationTypeBody
+        || self == &Type::EnumBody
+        || self == &Type::EnumBodyDeclarations
+    }
+
+    pub fn is_value_member(&self) -> bool {
+        self == &Type::FieldDeclaration
+        || self == &Type::ConstantDeclaration
+        // || self == &Type::EnumConstant
+        || self == &Type::AnnotationTypeElementDeclaration
+    }
+
+    pub fn is_executable_member(&self) -> bool {
+        self == &Type::MethodDeclaration
+        || self == &Type::ConstructorDeclaration
+    }
+
+    pub fn is_statement(&self) -> bool {
+        self.is_declarative_statement()
+        || self.is_structural_statement()
+        || self.is_simple_statement()
+        || self.is_block_related()
+    }
+
+    pub fn is_declarative_statement(&self) -> bool {
+        self == &Type::LocalVariableDeclaration
+        || self == &Type::TryWithResourcesStatement
+        || self == &Type::CatchClause
+        || self == &Type::ForStatement
+        || self == &Type::EnhancedForStatement
+    }
+
+    pub fn is_structural_statement(&self) -> bool {
+        self == &Type::SwitchStatement
+        || self == &Type::WhileStatement
+        || self == &Type::DoStatement
+        || self == &Type::IfStatement
+        || self == &Type::TryStatement
+        || self == &Type::FinallyClause
+        || self == &Type::TryWithResourcesExtendedStatement
+    }
+    
+    pub fn is_block_related(&self) -> bool {
+        self == &Type::StaticInitializer
+        || self == &Type::ConstructorBody
+        || self == &Type::Block
+        || self == &Type::SwitchBlock
+        || self == &Type::SwitchBlockStatementGroup
+    }
+
+    pub fn is_simple_statement(&self) -> bool {
+        self == &Type::ExpressionStatement
+        || self == &Type::AssertStatement
+        || self == &Type::ThrowStatement
+        || self == &Type::ReturnStatement
+        || self == &Type::LabeledStatement
+        || self == &Type::SynchronizedStatement
+        || self == &Type::ContinueStatement
+        || self == &Type::BreakStatement
+        || self == &Type::SynchronizedStatement
+    }
+
+    pub fn is_parameter(&self) -> bool {
+        self == &Type::Resource
+        || self == &Type::FormalParameter
+        || self == &Type::SpreadParameter
+        || self == &Type::CatchFormalParameter
+        || self == &Type::TypeParameter
+    }
+
+    pub fn is_expression(&self) -> bool {
+        self == &Type::TernaryExpression
+        || self == &Type::BinaryExpression
+        || self == &Type::UnaryExpression
+        || self == &Type::AssignmentExpression
+        // || self == &Type::VariableDeclarator
+        || self == &Type::InstanceofExpression
+        || self == &Type::ArrayCreationExpression
+        || self == &Type::ObjectCreationExpression
+        || self == &Type::LambdaExpression
+        || self == &Type::CastExpression
+        || self == &Type::UpdateExpression
+        || self == &Type::ParenthesizedExpression
+        || self == &Type::MethodInvocation
+        || self == &Type::MethodReference
+        || self == &Type::ExplicitConstructorInvocation
+        || self == &Type::ClassLiteral
+        || self == &Type::FieldAccess
+        || self == &Type::ArrayAccess
+    }
 }
 
 // impl std::fmt::Display for Type {
@@ -513,6 +611,7 @@ pub trait WithChildren: Node + Stored {
 
     fn child_count(&self) -> Self::ChildIdx;
     fn get_child(&self, idx: &Self::ChildIdx) -> Self::TreeId;
+    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId;
     fn get_children(&self) -> &[Self::TreeId];
 }
 

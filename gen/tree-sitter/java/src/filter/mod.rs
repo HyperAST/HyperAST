@@ -6,7 +6,7 @@ use bitvec::{order::Lsb0, store::BitStore, view::BitViewSized};
 
 use crate::filter::pearson_hashing::pearson;
 
-use self::pearson_hashing::pearson_mod;
+use self::pearson_hashing::{pearson_mod, xor_rot_mod};
 
 #[derive(PartialEq, Eq)]
 pub enum BloomSize {
@@ -16,6 +16,10 @@ pub enum BloomSize {
     B64,
     B128,
     B256,
+    B512,
+    B1024,
+    B2048,
+    Much,
 }
 
 pub trait BF<T: ?Sized> {
@@ -219,6 +223,81 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 4]> {
         println!("{}", self.bits);
         for i in 0..=dups {
             let a = pearson(i, item.as_ref());
+            let b = a;
+            if !self.bits[b as usize] {
+                return BloomResult::DoNotContain;
+            }
+        }
+        BloomResult::MaybeContain
+    }
+}
+
+//TODO
+impl BF<[u8]> for Bloom<&'static [u8], [u64; 8]> {
+    type Result = BloomResult;
+    const Size:BloomSize = BloomSize::B512;
+
+    fn insert<U: AsRef<[u8]>>(&mut self, dups: usize, item: U) {
+        for i in 0..=dups {
+            let a = xor_rot_mod::<_,512>(i, item.as_ref());
+            let b = a;
+            self.bits.set(b as usize, true);
+        }
+    }
+
+    fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
+        println!("{}", self.bits);
+        for i in 0..=dups {
+            let a = xor_rot_mod::<_,512>(i, item.as_ref());
+            let b = a;
+            if !self.bits[b as usize] {
+                return BloomResult::DoNotContain;
+            }
+        }
+        BloomResult::MaybeContain
+    }
+}
+impl BF<[u8]> for Bloom<&'static [u8], [u64; 16]> {
+    type Result = BloomResult;
+    const Size:BloomSize = BloomSize::B1024;
+
+    fn insert<U: AsRef<[u8]>>(&mut self, dups: usize, item: U) {
+        for i in 0..=dups {
+            let a = xor_rot_mod::<_,1024>(i, item.as_ref());
+            let b = a;
+            self.bits.set(b as usize, true);
+        }
+    }
+
+    fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
+        println!("{}", self.bits);
+        for i in 0..=dups {
+            let a = xor_rot_mod::<_,1024>(i, item.as_ref());
+            let b = a;
+            if !self.bits[b as usize] {
+                return BloomResult::DoNotContain;
+            }
+        }
+        BloomResult::MaybeContain
+    }
+}
+
+impl BF<[u8]> for Bloom<&'static [u8], [u64; 32]> {
+    type Result = BloomResult;
+    const Size:BloomSize = BloomSize::B2048;
+
+    fn insert<U: AsRef<[u8]>>(&mut self, dups: usize, item: U) {
+        for i in 0..=dups {
+            let a = xor_rot_mod::<_,2048>(i, item.as_ref());
+            let b = a;
+            self.bits.set(b as usize, true);
+        }
+    }
+
+    fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
+        println!("{}", self.bits);
+        for i in 0..=dups {
+            let a = xor_rot_mod::<_,2048>(i, item.as_ref());
             let b = a;
             if !self.bits[b as usize] {
                 return BloomResult::DoNotContain;

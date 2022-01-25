@@ -216,6 +216,11 @@ impl<'a> rusted_gumtree_core::tree::tree::WithChildren for HashedNodeRef<'a> {
     fn get_child(&self, idx: &Self::ChildIdx) -> Self::TreeId {
         self.0.get_component::<Vec<legion::Entity>>().unwrap()[num::cast::<_, usize>(*idx).unwrap()]
     }
+    
+    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
+        let v = self.0.get_component::<Vec<legion::Entity>>().unwrap();
+        v[v.len()-1-num::cast::<_, usize>(*idx).unwrap()]
+    }
 
     fn get_children<'b>(&'b self) -> &'b [Self::TreeId] {
         self.0
