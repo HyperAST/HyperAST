@@ -45,7 +45,7 @@ fn run(text: &[u8]) {
     };
     let tree = parser.parse(text, None).unwrap();
     println!("{}", tree.root_node().to_sexp());
-    let full_node = java_tree_gen.generate_default(text, tree.walk());
+    let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
     println!();
     print_tree_syntax(
@@ -78,7 +78,7 @@ fn test_cases() {
 
 #[test]
 fn test_equals() {
-    let text = CASE_22.as_bytes();
+    let text = CASE_11_bis.as_bytes();
     let mut parser = Parser::new();
 
     {
@@ -95,7 +95,7 @@ fn test_equals() {
     };
     let tree = parser.parse(text, None).unwrap();
     println!("{}", tree.root_node().to_sexp());
-    let full_node = java_tree_gen.generate_default(text, tree.walk());
+    let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
     println!();
     print_tree_syntax(
@@ -204,7 +204,7 @@ public class A {
     let tree = parser.parse(text, None).unwrap();
     println!("{}", tree.root_node().to_sexp());
 
-    let _full_node = java_tree_gen.generate_default(text, tree.walk());
+    let _full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
     let text = {
         let source_code1 = "class A {
@@ -300,7 +300,7 @@ public class A {
     };
     let tree = parser.parse(text, None).unwrap();
     println!("{}", tree.root_node().to_sexp());
-    let full_node = java_tree_gen.generate_default(text, tree.walk());
+    let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
     println!("debug full node: {:?}", &full_node);
     // let mut out = String::new();
@@ -633,6 +633,15 @@ public class A {
 }
 ";
 
+static CASE_11_bis: &'static str = "package a;
+public class A {
+    int start, len;
+    public static long f() {
+        A x = new A(start);
+    }
+}
+";
+
 // TODO handle fall through variable declaration
 static CASE_12: &'static str = "package a;
 public class A {
@@ -824,11 +833,13 @@ class A {
     }
 }";
 
+
 enum D {
     F(&'static str),
     D(&'static [(&'static str, &'static D)]),
 }
 
+// TODO make a case where there is a late resolve (in dir/package) to check if decls uses fully qual types
 static PACKAGE_CASE_0: D = D::D(&[(
     "q",
     &D::D(&[(

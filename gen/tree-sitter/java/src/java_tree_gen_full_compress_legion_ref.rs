@@ -27,7 +27,7 @@ use crate::{
     filter::{Bloom, BloomResult, BloomSize},
     full::FullNode,
     hashed::{self, NodeHashs, SyntaxNodeHashs, SyntaxNodeHashsKinds},
-    impact::elements::*,
+    impact::{element::RefsEnum, elements::*, partial_analysis::PartialAnalysis},
     nodes::{self, CompressedNode, HashSize, RefContainer, SimpleNode1, Space},
     store::{vec_map_store::Symbol, TypeStore},
     tree_gen::{
@@ -223,7 +223,9 @@ impl<'a> rusted_gumtree_core::tree::tree::Labeled for HashedNodeRef<'a> {
     type Label = LabelIdentifier;
 
     fn get_label(&self) -> &LabelIdentifier {
-        self.0.get_component::<LabelIdentifier>().expect("check with self.has_label()")
+        self.0
+            .get_component::<LabelIdentifier>()
+            .expect("check with self.has_label()")
     }
 }
 
@@ -859,6 +861,14 @@ impl<'a> TreeGen for JavaTreeGen {
                 // TODO assert that ana.solver.refs does not contains mentions to ?.this
                 Some(ana)
             }
+            // Some(ana) if &acc.simple.kind == &Type::Directory => {
+            //     println!("refs in directory");
+            //     ana.print_refs(&self.stores.label_store);
+            //     println!("decls in directory");
+            //     ana.print_decls(&self.stores.label_store);
+            //     let ana = ana.resolve();
+            //     Some(ana)
+            // }
             Some(ana) => Some(ana), // TODO
             None => None,
         };
@@ -1123,8 +1133,9 @@ impl JavaTreeGen {
         }
     }
 
-    pub fn generate_default(
+    pub fn generate_file(
         &mut self,
+        name: &[u8],
         text: &[u8],
         mut cursor: TreeCursor,
     ) -> FullNode<Global, Local> {
@@ -1143,7 +1154,76 @@ impl JavaTreeGen {
             &mut acc,
         );
         let mut r = Acc::new(self.stores().type_store.get("file"));
+        {
+            // handle file name
+            let hashed_kind = &clamp_u64_to_u32(&utils::hash(&Type::FileName));
+            let hashed_label = &clamp_u64_to_u32(&utils::hash(name));
+            let hsyntax = hashed::inner_node_hash(
+                hashed_kind,
+                hashed_label,
+                &0,
+                &0,
+            );
+            let hashable = &hsyntax;
+            let nameid = self
+                .stores
+                .label_store
+                .get_or_insert(std::str::from_utf8(name).unwrap());
+            let eq = |x: EntryRef| {
+                let t = x.get_component::<Type>().ok();
+                if &t != &Some(&Type::FileName) {
+                    return false;
+                }
+                let l = x.get_component::<LabelIdentifier>().ok();
+                if l != Some(&nameid) {
+                    return false;
+                }
+                true
+            };
+            let insertion = self.stores.node_store.prepare_insertion(&hashable, eq);
 
+            let hashs = SyntaxNodeHashs {
+                structt: hashed::inner_node_hash(
+                    hashed_kind,
+                    &0,
+                    &0,
+                    &0,
+                ),
+                label: hashed::inner_node_hash(
+                    hashed_kind,
+                    hashed_label,
+                    &0,
+                    &0,
+                ),
+                syntax: hsyntax,
+            };
+
+            let compressed_node = if let Some(id) = insertion.occupied_id() {
+                id
+            } else {
+                let vacant = insertion.vacant();
+                NodeStore::insert_after_prepare(
+                    vacant,
+                    (Type::FileName, hashs, nameid, BloomSize::None), // None not sure
+                )
+            };
+
+            let metrics = SubTreeMetrics {
+                size: 1,
+                height: 1,
+                hashs,
+            };
+
+            let full_node = FullNode {
+                global: Global { depth:0, position:0 },
+                local: Local {
+                    compressed_node,
+                    metrics,
+                    ana:Default::default(),
+                },
+            };
+            r.push(full_node);
+        }
         let full_node = self.post(
             &mut r,
             0,
@@ -1212,7 +1292,7 @@ impl JavaTreeGen {
                 node_store: NodeStore::new(),
             },
         };
-        let _full_node = java_tree_gen.generate_default(text, tree.walk());
+        let _full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
         // print_tree_structure(
         //     &java_tree_gen.stores.node_store,
@@ -1220,7 +1300,7 @@ impl JavaTreeGen {
         // );
 
         let tree = parser.parse(text, Some(&tree)).unwrap();
-        let _full_node = java_tree_gen.generate_default(text, tree.walk());
+        let _full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     }
 
     fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {
@@ -1325,292 +1405,5 @@ impl LabelStore {
         };
         r.get_or_insert("length"); // TODO verify/model statically
         r
-    }
-}
-
-/// impl smthing more efficient by dispatching earlier
-/// make a comparator that only take scopedIdentifier, one that only take ...
-/// fo the node identifier it is less obvious
-pub fn eq_node_ref(d: ExplorableRef, java_tree_gen: &JavaTreeGen, x: NodeIdentifier) -> bool {
-    match d.as_ref() {
-        RefsEnum::Root => todo!(),
-        RefsEnum::MaybeMissing => todo!(),
-        RefsEnum::ScopedIdentifier(o, i) => {
-            eq_node_scoped_id(d.with(*o),i,java_tree_gen, x)
-        }
-        RefsEnum::MethodReference(_, _) => todo!(),
-        RefsEnum::ConstructorReference(_) => todo!(),
-        RefsEnum::Invocation(_, _, _) => todo!(),
-        RefsEnum::ConstructorInvocation(_, _) => todo!(),
-        RefsEnum::Primitive(_) => todo!(),
-        RefsEnum::Array(_) => todo!(),
-        RefsEnum::This(_) => todo!(),
-        RefsEnum::Super(_) => todo!(),
-        RefsEnum::ArrayAccess(_) => todo!(),
-        RefsEnum::Mask(_, _) => todo!(),
-    }
-}
-
-pub fn eq_node_scoped_id(o: ExplorableRef,i:&LabelIdentifier, java_tree_gen: &JavaTreeGen, x: NodeIdentifier) -> bool {
-    let b = java_tree_gen.stores.node_store.resolve(x);
-    let t = b.get_type();
-    if t == Type::MethodInvocation {
-        let x = b.get_child(&0);
-        let b = java_tree_gen.stores.node_store.resolve(x);
-        let t = b.get_type();
-        if t == Type::TypeIdentifier {
-            if b.has_label() {
-                let l = b.get_label();
-                if l != i {
-                    false // TODO
-                } else {
-                    true // TODO
-                }
-            } else {
-                todo!()
-            }
-        } else if t == Type::Identifier {
-            if b.has_label() {
-                let l = b.get_label();
-                if l != i {
-                    false // TODO
-                } else {
-                    true // TODO
-                }
-            } else {
-                todo!()
-            }
-        } else if t == Type::FieldAccess {
-            false // should be handled after
-        } else if t == Type::ScopedTypeIdentifier {
-            false // should be handled after
-        } else if t == Type::ScopedIdentifier {
-            false // should be handled after
-        } else if t == Type::MethodInvocation {
-            false // should be handled after
-        } else if t == Type::ArrayAccess {
-            false // should be handled after
-        } else if t == Type::ObjectCreationExpression {
-            false // should be handled after
-        } else if t == Type::ParenthesizedExpression {
-            false // should be handled after
-        } else if t == Type::TernaryExpression {
-            false // should be handled after
-        } else if t == Type::StringLiteral {
-            false // should be handled after
-        } else if t == Type::This {
-            false // TODO not exactly sure but if scoped should be handled after
-        } else if t == Type::Super {
-            false // TODO not exactly sure but if scoped should be handled after
-        } else if t == Type::ClassLiteral {
-            false // out of scope for tool ie. reflexivity
-        } else {
-            todo!("{:?}",t)
-        }
-    } else if t == Type::ObjectCreationExpression {
-        let (b,t) = {
-            let mut i = 0;
-            let mut r;
-            let mut t;
-            loop {
-                let x = b.get_child(&i);
-                r = java_tree_gen.stores.node_store.resolve(x);
-                t = r.get_type();
-                if t == Type::TS74 {
-                    // find new
-                    // TODO but should alse construct the fully qualified name in the mean time
-                    i+=1;
-                    break;
-                }
-                i+=1;
-            }
-            loop {
-                let x = b.get_child(&i);
-                r = java_tree_gen.stores.node_store.resolve(x);
-                t = r.get_type();
-                if t != Type::Spaces && t != Type::Comment && t != Type::MarkerAnnotation && t != Type::Annotation {
-                    break;
-                }
-                i+=1;
-            }
-            (r,t)
-        };
-        if t == Type::TypeIdentifier {
-            if b.has_label() {
-                let l = b.get_label();
-                if l != i {
-                    false // TODO
-                } else {
-                    true // TODO
-                }
-            } else {
-                todo!()
-            }
-        } else if t == Type::GenericType {
-            false // should be handled after
-        } else if t == Type::ScopedTypeIdentifier {
-            false // should be handled after
-        } else {
-            todo!("{:?}",t)
-        }
-    } else if t == Type::FormalParameter || t == Type::LocalVariableDeclaration {
-        // let (r,t) = {
-        //     let mut i = 0;
-        //     let mut r;
-        //     let mut t;
-        //     loop {
-        //         let x = b.get_child(&i);
-        //         r = java_tree_gen.stores.node_store.resolve(x);
-        //         t = r.get_type();
-        //         if t != Type::Modifiers {
-        //             break;
-        //         }
-        //         i+=1;
-        //     }
-        //     (r,t)
-        // };
-        let (r,t) = {
-            let x = b.get_child(&0);
-            let r = java_tree_gen.stores.node_store.resolve(x);
-            let t = r.get_type();
-            if t == Type::Modifiers {
-                let x = b.get_child(&2);
-                let r = java_tree_gen.stores.node_store.resolve(x);
-                let t = r.get_type();
-                (r,t)
-            } else {
-                (r,t)
-            }
-        };
-        if t == Type::TypeIdentifier {
-            if r.has_label() {
-                let l = r.get_label();
-                if l != i {
-                    false // TODO
-                } else {
-                    true // TODO
-                }
-            } else {
-                todo!()
-            }
-        } else if t == Type::ScopedTypeIdentifier {
-            false // should be handled after
-        } else if t == Type::GenericType {
-            false // should be handled after
-        } else if t == Type::ArrayType {
-            false // TODO not sure
-        } else if t == Type::IntegralType {
-            false // TODO not sure
-        } else if t == Type::BooleanType {
-            false // TODO not sure
-        } else {
-            todo!("{:?}",t)
-        }
-    } else if t == Type::GenericType {
-        let x = b.get_child(&0);
-        let b = java_tree_gen.stores.node_store.resolve(x);
-        let t = b.get_type();
-        if t == Type::TypeIdentifier {
-            if b.has_label() {
-                let l = b.get_label();
-                if l != i {
-                    false // TODO
-                } else {
-                    true // TODO
-                }
-            } else {
-                todo!()
-            }
-        } else if t == Type::ScopedTypeIdentifier {
-            false // should be handled after
-        } else {
-            todo!("{:?}",t)
-        }
-    } else if t == Type::ScopedTypeIdentifier {
-        let x = b.get_child_rev(&0);
-        let b = java_tree_gen.stores.node_store.resolve(x);
-        let t = b.get_type();
-        if t == Type::TypeIdentifier {
-            if b.has_label() {
-                let l = b.get_label();
-                if l != i {
-                    false // TODO
-                } else {
-                    true // TODO
-                }
-            } else {
-                todo!()
-            }
-        } else if t == Type::ScopedTypeIdentifier {
-            false // TODO should check the fully qual name
-        } else if t == Type::GenericType {
-            false // TODO should check the fully qual name
-        } else {
-            todo!("{:?}",t)
-        }
-    } else {
-        todo!("{:?}",t)
-    }
-    
-
-}
-
-pub fn eq_root_scoped(d: ExplorableRef, java_tree_gen: &JavaTreeGen, b: HashedNodeRef) -> bool {
-    match d.as_ref() {
-        RefsEnum::Root => todo!(),
-        RefsEnum::ScopedIdentifier(o, i) => {
-            let t = b.get_type();
-            if t == Type::ScopedIdentifier {
-                let mut bo = false;
-                for x in b.get_children().iter().rev() {
-                    // print_tree_syntax(
-                    //     &java_tree_gen.stores.node_store,
-                    //     &java_tree_gen.stores.label_store,
-                    //     &x,
-                    // );
-                    // println!();
-                    let b = java_tree_gen.stores.node_store.resolve(*x);
-                    let t = b.get_type();
-                    if t == Type::ScopedIdentifier {
-                        if !eq_root_scoped(d.with(*o),java_tree_gen,b) {
-                            return false
-                        }
-                    } else if t == Type::Identifier {
-                        if bo {
-                            return eq_root_scoped(d.with(*o),java_tree_gen,b);
-                        }
-                        if b.has_label() {
-                            let l = b.get_label();
-                            if l != i {
-                                return false
-                            } else {
-                            }
-                        } else {
-                            panic!()
-                        }
-                        bo = true;
-                    }
-                }
-                true
-            } else if t == Type::Identifier {
-                if b.has_label() {
-                    let l = b.get_label();
-                    if l != i {
-                        false
-                    } else {
-                        if let RefsEnum::Root = d.with(*o).as_ref() {
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                } else {
-                    panic!()
-                }
-            } else {
-                todo!("{:?}",t)
-            }
-        }
-        _ => panic!(),
     }
 }

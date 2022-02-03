@@ -1,5 +1,5 @@
 [package]
-name = "rusted_gumtree_benchmark"
+name = "rusted_gumtree_cvs_git"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,9 +8,8 @@ edition = "2021"
 [dependencies]
 git2 = "0.13.24"
 tree-sitter = "0.20.0"
-rusted_gumtree_core = { path = "../core" }
-rusted_gumtree_gen_ts_java = { path = "../gen/tree-sitter/java" }
-rusted_gumtree_cvs_git = { path = "../cvs/git" }
+rusted_gumtree_core = { path = "../../core" }
+rusted_gumtree_gen_ts_java = { path = "../../gen/tree-sitter/java" }
 pommes = "0.0.2"
 
 
@@ -21,7 +20,3 @@ serde-xml-rs = "0.5.1"
 
 # [profile.release]
 # debug = 1
-
-[[bin]]
-name = "bench"
-path = "src/bin/main.rs"

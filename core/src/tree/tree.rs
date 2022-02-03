@@ -16,6 +16,7 @@ use crate::utils;
 #[derive(Hash, Clone, Copy, PartialEq, Eq)]
 pub enum Type {
     Directory,
+    FileName,
     Spaces,
     // //structural
     // File,
@@ -146,6 +147,7 @@ pub enum Type {
     Resource,
     ResourceSpecification,
     ReturnStatement,
+    ScopedAbsoluteIdentifier,
     ScopedIdentifier,
     ScopedTypeIdentifier,
     SpreadParameter,

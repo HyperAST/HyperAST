@@ -1,0 +1,5283 @@
+use std::{collections::HashMap, fmt::Display, hash::Hash, ops::Deref};
+
+use bitvec::order::Lsb0;
+use enumset::{enum_set, EnumSet, EnumSetType};
+use rusted_gumtree_core::tree::tree::{LabelStore, Type};
+
+use crate::impact::element::{Arguments, ExplorableRef};
+
+use super::{
+    declaration::{DeclType, Declarator, DisplayDecl},
+    element::{IdentifierFormat, LabelPtr, RawLabelPtr, RefPtr, RefsEnum},
+    java_element::Primitive,
+    label_value::LabelValue,
+    reference::DisplayRef,
+    solver::{MultiResult, Solver},
+};
+
+pub fn leaf_state(
+    t: &Type,
+    label: Option<LabelPtr>,
+    id_format: Option<IdentifierFormat>,
+) -> State<RefPtr, LabelPtr> {
+    let r = if t == &Type::Comment {
+        State::None
+    } else if t.is_primitive() {
+        // State::SimpleTypeIdentifier(label.unwrap())
+        panic!("{:?} {:?}", t, label);
+    } else if t.is_literal() {
+        // State::LiteralType(label.unwrap())
+        panic!("{:?} {:?}", t, label);
+    } else if t == &Type::ScopedIdentifier {
+        panic!();
+    } else if t == &Type::ScopedTypeIdentifier {
+        panic!();
+    } else if t == &Type::Asterisk {
+        State::Asterisk
+    } else if t == &Type::ArgumentList {
+        State::Arguments(vec![])
+    } else if t == &Type::FormalParameters {
+        State::FormalParameters(vec![])
+    } else if t == &Type::Super {
+        panic!("{:?} {:?}", t, label);
+    } else if t == &Type::This {
+        //t.is_instance_ref() {
+        panic!("{:?} {:?}", t, label);
+    } else if t == &Type::TypeIdentifier {
+        // assert!(!id_format.unwrap());
+        State::SimpleTypeIdentifier(label.unwrap())
+    // } else if t.is_identifier() {
+    } else if t == &Type::Identifier {
+        State::SimpleIdentifier(id_format.unwrap(), label.unwrap())
+    } else if t == &Type::Spaces {
+        State::None
+    } else if t == &Type::Block {
+        State::None
+    } else if t == &Type::ElementValueArrayInitializer {
+        State::None
+    } else if t == &Type::Dimensions {
+        State::Dimensions
+    } else if t == &Type::TS86 {
+        State::Modifiers(Visibility::None, enum_set!(NonVisibility::Static))
+    } else if t == &Type::TS81 {
+        State::Modifiers(Visibility::Public, enum_set!())
+    } else {
+        assert_eq!(t, &Type::Comment);
+        State::Todo
+    };
+    // println!("init: {:?} {:?}", t, r);
+    r
+}
+
+#[derive(Debug, Clone)]
+pub struct PartialAnalysis {
+    current_node: State<RefPtr, LabelPtr>,
+    pub solver: Solver,
+}
+
+impl Default for PartialAnalysis {
+    fn default() -> Self {
+        Self {
+            current_node: State::None,
+            solver: Default::default(),
+        }
+    }
+}
+
+impl PartialAnalysis {
+    // apply before commiting/saving subtree
+    pub fn resolve(mut self) -> Self {
+        let mut cache: HashMap<usize, MultiResult<RefPtr>> = Default::default();
+        if let State::File {
+            asterisk_imports,
+            package,
+            ..
+        } = self.current_node.clone()
+        {
+            let root = self.solver.intern(RefsEnum::Root);
+            let mm = self.solver.intern(RefsEnum::MaybeMissing);
+            let mask = self.solver.intern(RefsEnum::Mask(mm, Default::default()));
+            let jlang = asterisk_imports[0];
+
+            if let Some(package) = package {
+                if asterisk_imports.is_empty() {
+                    // self.solver.root = package;
+                    // cache.insert(mm, Some(package));
+                    panic!();
+                } else {
+                    // TODO explain usage
+                    cache.insert(
+                        mask,
+                        [package, root]
+                            .iter()
+                            .map(|x| *x)
+                            .collect::<MultiResult<RefPtr>>(),
+                    );
+                    // TODO explain usage
+                    if package == jlang {
+                        let a = asterisk_imports[1..].iter().map(|imp| {
+                            self.solver.intern(RefsEnum::Mask(
+                                *imp,
+                                vec![package, root].into_boxed_slice(),
+                            ))
+                        });
+                        let a = a.chain([package, root].into_iter());
+                        cache.insert(mm, a.collect());
+                    } else {
+                        let a = asterisk_imports.iter().map(|imp| {
+                            self.solver.intern(RefsEnum::Mask(
+                                *imp,
+                                vec![package, root].into_boxed_slice(),
+                            ))
+                        });
+                        let a = a.chain([package, root].into_iter());
+                        cache.insert(mm, a.collect());
+                    };
+                }
+            } else {
+                cache.insert(
+                    mask,
+                    [mm].iter().map(|x| *x).collect::<MultiResult<RefPtr>>(),
+                );
+            }
+        }
+
+        let (mut cache, mut solver) = self.solver.resolve(cache);
+        match &mut self.current_node {
+            State::File {
+                package,
+                global,
+                local,
+                ..
+            } => {
+                for x in global {
+                    x.1 = match &x.1 {
+                        DeclType::Runtime(t) => {
+                            let mut r = vec![];
+                            for y in t.iter() {
+                                for z in solver.solve_aux(&mut cache, *y).iter() {
+                                    if !r.contains(z) {
+                                        r.push(*z);
+                                    }
+                                }
+                            }
+                            DeclType::Runtime(r.into())
+                        }
+                        DeclType::Compile(t, s, i) => {
+                            if let Some(p) = package {
+                                let mut r = vec![];
+                                for y in s.iter() {
+                                    if let Some(t) = cache.get(y) {
+                                        for z in t.iter() {
+                                            if !r.contains(z) {
+                                                r.push(*z);
+                                            }
+                                        }
+                                    }
+                                }
+                                let s = r.into();
+                                let mut r = vec![];
+                                for y in i.iter() {
+                                    if let Some(t) = cache.get(y) {
+                                        for z in t.iter() {
+                                            if !r.contains(z) {
+                                                r.push(*z);
+                                            }
+                                        }
+                                    }
+                                }
+                                let i = r.into();
+                                DeclType::Compile(
+                                    solver.try_solve_node_with(*t, *p).unwrap_or(*t),
+                                    s,
+                                    i,
+                                )
+                            } else {
+                                todo!()
+                                // DeclType::Compile(
+                                //     *t,
+                                //     s.as_ref().map(|x|*x),
+                                //     i.iter().map(|x|*x).collect(),
+                                // )
+                            }
+                        }
+                    };
+                }
+                for x in local {
+                    x.1 = match &x.1 {
+                        DeclType::Runtime(t) => {
+                            let mut r = vec![];
+                            for y in t.iter() {
+                                for z in solver.solve_aux(&mut cache, *y).iter() {
+                                    if !r.contains(z) {
+                                        r.push(*z);
+                                    }
+                                }
+                            }
+                            DeclType::Runtime(r.into())
+                        }
+                        DeclType::Compile(t, s, i) => {
+                            if let Some(p) = package {
+                                let mut r = vec![];
+                                for y in s.iter() {
+                                    if let Some(t) = cache.get(y) {
+                                        for z in t.iter() {
+                                            if !r.contains(z) {
+                                                r.push(*z);
+                                            }
+                                        }
+                                    }
+                                }
+                                let s = r.into();
+                                let mut r = vec![];
+                                for y in i.iter() {
+                                    if let Some(t) = cache.get(y) {
+                                        for z in t.iter() {
+                                            if !r.contains(z) {
+                                                r.push(*z);
+                                            }
+                                        }
+                                    }
+                                }
+                                let i = r.into();
+                                DeclType::Compile(
+                                    solver.try_solve_node_with(*t, *p).unwrap_or(*t),
+                                    s,
+                                    i,
+                                )
+                            } else {
+                                todo!()
+                                // DeclType::Compile(
+                                //     *t,
+                                //     s.as_ref().map(|x|*x),
+                                //     i.iter().map(|x|*x).collect(),
+                                // )
+                            }
+                        }
+                    };
+                }
+
+                // let mut r = bitvec::vec::BitVec::<Lsb0, usize>::default();
+                // r.resize(solver.refs.len(), false);
+                // let mm = solver.intern(RefsEnum::MaybeMissing);
+                // for i in solver.refs.iter_ones() {
+                //     match solver.nodes[i] {
+                //         RefsEnum::ConstructorInvocation(o, _) if o == mm => {
+                //             panic!();
+                //         } // not possible ?
+                //         RefsEnum::Invocation(o, _, _) if o == mm => {}
+                //         _ => {
+                //             r.set(i, true);
+                //         }
+                //     }
+                // }
+                // // TODO also remove the ones that refs the one s removed as they cannot really be resolved anymore
+                // solver.refs = r;
+            }
+            _ => (),
+        };
+
+        Self {
+            current_node: self.current_node,
+            solver,
+        }
+    }
+
+    pub fn refs(&self) -> impl Iterator<Item = LabelValue> + '_ {
+        self.solver.refs()
+    }
+    pub fn display_refs<'a, LS: LabelStore<str, I = RawLabelPtr>>(
+        &'a self,
+        leafs: &'a LS,
+    ) -> impl Iterator<Item = impl Display + 'a> + 'a {
+        self.solver.iter_refs().map(move |x| {
+            let r: DisplayRef<LS> = (x, leafs).into();
+            r
+        })
+    }
+
+    pub fn print_refs<LS: LabelStore<str, I = RawLabelPtr>>(&self, leafs: &LS) {
+        for x in self.display_refs(leafs) {
+            println!("    {}", x);
+        }
+    }
+
+    pub fn refs_count(&self) -> usize {
+        self.solver.refs.count_ones()
+    }
+
+    pub fn print_decls<LS: LabelStore<str, I = RawLabelPtr>>(&self, leafs: &LS) {
+        let it = self.solver.iter_decls().map(move |x| {
+            let r: DisplayDecl<LS> = (x, leafs).into();
+            r
+        });
+        for x in it {
+            println!("    {}", x);
+        }
+    }
+
+    pub fn decls_count(&self) -> usize {
+        self.solver.decls_count()
+    }
+
+    pub fn init<F: FnMut(&str) -> RawLabelPtr>(
+        kind: &Type,
+        label: Option<&str>,
+        mut intern_label: F,
+    ) -> Self {
+        let mut solver: Solver = Default::default();
+        let mut intern_label = |x| LabelPtr::new(intern_label(x), IdentifierFormat::from(x));
+        if kind == &Type::Directory {
+            PartialAnalysis {
+                current_node: State::None,
+                solver,
+            }
+        } else if kind == &Type::Program {
+            // default_imports(&mut solver, intern_label);
+
+            let i = solver.intern(RefsEnum::Root);
+            let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("java")));
+            let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("lang")));
+            PartialAnalysis {
+                current_node: State::File {
+                    package: None,
+                    asterisk_imports: vec![i],
+                    global: vec![],
+                    local: vec![],
+                },
+                solver,
+            }
+        } else if kind == &Type::PackageDeclaration {
+            // default_imports(&mut solver, |x| intern_label(x));
+
+            // let i = solver.intern(RefsEnum::Root);
+            // let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("java")));
+            // let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("lang")));
+            PartialAnalysis {
+                current_node: State::None, //ScopedIdentifier(i),
+                solver,
+            }
+        } else if kind == &Type::This {
+            let i = solver.intern(RefsEnum::MaybeMissing);
+            let i = solver.intern(RefsEnum::This(i));
+            PartialAnalysis {
+                current_node: State::This(i),
+                solver,
+            }
+        } else if kind == &Type::Super {
+            let i = solver.intern(RefsEnum::MaybeMissing);
+            let i = solver.intern(RefsEnum::Super(i));
+            PartialAnalysis {
+                current_node: State::Super(i),
+                solver,
+            }
+        } else if kind.is_literal() {
+            let i = if kind == &Type::StringLiteral {
+                let i = solver.intern(RefsEnum::Root);
+                let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("java")));
+                let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("lang")));
+                let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("String")));
+                i
+            } else {
+                let p = Primitive::from(label.unwrap());
+                let i = solver.intern(RefsEnum::Primitive(p));
+                i
+            };
+            PartialAnalysis {
+                current_node: State::LiteralType(i),
+                solver,
+            }
+        } else if kind.is_primitive() {
+            // println!("{:?}", label);
+            let p = Primitive::from(label.unwrap());
+            let i = solver.intern(RefsEnum::Primitive(p));
+            // let i = label.unwrap();
+            // let t = solver.intern(RefsEnum::MaybeMissing);
+            // let i = solver.intern(RefsEnum::ScopedIdentifier(t, i));
+            PartialAnalysis {
+                current_node: State::ScopedTypeIdentifier(i),
+                solver,
+            }
+            // panic!("{:?} {:?}",kind,label);
+        } else if kind.is_type_declaration() {
+            let r = solver.intern(RefsEnum::Root);
+            let i = solver.intern(RefsEnum::ScopedIdentifier(r, intern_label("java")));
+            let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("lang")));
+            let s = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("Object")));
+
+            let d = solver.intern(RefsEnum::Super(r));
+            let d = solver.intern(RefsEnum::ConstructorInvocation(d, Arguments::Unknown));
+            let d = Declarator::Executable(d);
+            solver.add_decl(d, DeclType::Runtime(vec![s].into()));
+
+            PartialAnalysis {
+                current_node: State::TypeDeclaration {
+                    visibility: Visibility::None,
+                    identifier: DeclType::Compile(0, vec![s].into_boxed_slice(), vec![].into_boxed_slice()),
+                    members: vec![],
+                },
+                solver,
+            }
+        } else if kind == &Type::ClassBody {
+            // TODO constructor solve
+            // {
+            //     let t = solver.intern(RefsEnum::MaybeMissing);
+            //     let t = solver.intern(RefsEnum::This(t));
+            //     let i = solver.intern(RefsEnum::ConstructorInvocation(t,Arguments::Given(vec![].into_boxed_slice())));
+            //     let t = solver.intern(RefsEnum::Root);
+            //     let t = solver.intern(RefsEnum::This(t));
+            //     let d = Declarator::Executable(i);
+            //     solver.add_decl_simple(d, t);
+            // }
+            // {
+            //     let t = solver.intern(RefsEnum::MaybeMissing);
+            //     let i = solver.intern(RefsEnum::ConstructorInvocation(t,Arguments::Given(vec![].into_boxed_slice())));
+            //     let t = solver.intern(RefsEnum::Root);
+            //     let t = solver.intern(RefsEnum::This(t));
+            //     let d = Declarator::Executable(i);
+            //     solver.add_decl_simple(d, t);
+            // }
+
+            PartialAnalysis {
+                current_node: State::None,
+                solver,
+            }
+        } else {
+            let is_lowercase = label.map(|x| x.into());
+            let label = label.map(|x| intern_label(x));
+            PartialAnalysis {
+                current_node: leaf_state(kind, label, is_lowercase),
+                solver,
+            }
+        }
+    }
+
+    pub fn acc(self, kind: &Type, acc: &mut Self) {
+        let current_node = self.current_node;
+        println!(
+            "{:?} {:?} {:?}\n**{:?}",
+            &kind,
+            &acc.current_node,
+            &current_node,
+            acc.refs().collect::<Vec<_>>()
+        );
+
+        macro_rules! mm {
+            () => {
+                acc.solver.intern(RefsEnum::MaybeMissing)
+            };
+        }
+        macro_rules! scoped {
+            ( $o:expr, $i:expr ) => {{
+                let o = $o;
+                acc.solver.intern_ref(RefsEnum::ScopedIdentifier(o, $i))
+            }};
+        }
+        macro_rules! spec {
+            ( $o:expr, $i:expr ) => {{
+                let i = $i;
+                let o = $o;
+                match acc.solver.nodes[i].clone() {
+                    RefsEnum::This(i) => {
+                        assert_eq!(i, mm!());
+                        acc.solver.intern_ref(RefsEnum::This(o))
+                    }
+                    RefsEnum::Super(i) => {
+                        assert_eq!(i, mm!());
+                        acc.solver.intern_ref(RefsEnum::Super(o))
+                    }
+                    x => panic!("{:?}", x),
+                }
+            }};
+        }
+
+        #[derive(Debug, PartialEq, Eq, Clone, Hash)]
+        struct Old<T>(T)
+        where
+            T: std::cmp::Eq + std::hash::Hash + Clone;
+
+        //main organization top down, through type kind
+        acc.current_node = if kind == &Type::Error {
+            panic!("{:?} {:?} {:?}", kind, acc.current_node, current_node)
+        } else if kind == &Type::Program {
+            // TODO should do things with RefsEnum:Mask
+            let mut remapper = acc.solver.extend(&self.solver);
+            macro_rules! sync {
+                ( $i:expr ) => {
+                    remapper.intern_external(&mut acc.solver, $i.0)
+                };
+            }
+            match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                // (
+                //     State::File {
+                //         package: p,
+                //         asterisk_imports,
+                //         mut global,
+                //         mut local,
+                //     },
+                //     State::Declaration {
+                //         visibility,
+                //         kind: t,
+                //         identifier: d,
+                //     },
+                // ) => {
+                //     // no package declaration at start of java file
+                //     if let Visibility::Public = visibility {
+                //         &mut global
+                //     } else {
+                //         &mut local
+                //     }
+                //     .push((d.with_changed_node(|x| sync!(x)), sync!(t)));
+                //     State::File {
+                //         package: p,
+                //         asterisk_imports,
+                //         global,
+                //         local,
+                //     }
+                // }
+                (
+                    State::File {
+                        package: None,
+                        asterisk_imports,
+                        global,
+                        mut local,
+                    },
+                    State::PackageDeclaration(p),
+                ) => {
+                    // for (d, t) in &self.solver.decls {
+                    //     let d = d.with_changed_node(|x| sync!(Old(*x)));
+                    //     let t = match t {
+                    //         DeclType::Runtime(b) => {
+                    //             DeclType::Runtime(b.iter().map(|x| sync!(Old(*x))).collect())
+                    //         }
+                    //         DeclType::Compile(t, s, i) => DeclType::Compile(
+                    //             sync!(Old(*t)),
+                    //             s.map(|x| sync!(Old(x))),
+                    //             i.iter().map(|x| sync!(Old(*x))).collect(),
+                    //         ),
+                    //     };
+                    //     acc.solver.add_decl(d, t);
+                    // }
+                    State::File {
+                        package: Some(sync!(p)),
+                        asterisk_imports,
+                        global,
+                        local,
+                    }
+                }
+                (
+                    State::File {
+                        package: p,
+                        asterisk_imports,
+                        global,
+                        mut local,
+                    },
+                    State::None,
+                ) if kind == &Type::Program => State::None,
+                // (
+                //     State::File {
+                //         package: p,
+                //         asterisk_imports,
+                //         top_level,
+                //         mut content,
+                //     },
+                //     State::TypeDeclaration {
+                //         visibility,
+                //         identifier: d,
+                //         members: _,
+                //     },
+                // ) => {
+                //     // TODO check for file's class? visibility ? etc
+                //     // TODO maybe bubleup members
+                //     let top_level = match d {
+                //         DeclType::Compile(d, _, _) => {
+                //             let d = sync!(d);
+                //             let i = Declarator::Type(d);
+                //             content.push((i.clone(), d));
+                //             acc.solver.add_decl_simple(i.clone(), d);
+                //             if let Visibility::Public = visibility {
+                //                 Some((i, d))
+                //             } else {
+                //                 None
+                //             }
+                //         }
+                //         _ => panic!(),
+                //     };
+
+                //     State::File {
+                //         package: p,
+                //         asterisk_imports,
+                //         top_level,
+                //         content,
+                //     }
+                // }
+                (
+                    State::File {
+                        package: p,
+                        mut asterisk_imports,
+                        global,
+                        mut local,
+                    },
+                    State::ImportDeclaration {
+                        identifier: i,
+                        sstatic,
+                        asterisk,
+                    },
+                ) => {
+                    // TODO do something with sstatic and asterisk
+                    let d = sync!(i);
+                    let (o, i) = match &acc.solver.nodes[d] {
+                        RefsEnum::ScopedIdentifier(o, i) => (*o, *i),
+                        _ => panic!("must be a scoped id in an import"),
+                    };
+                    if asterisk {
+                        // TODO static
+                        asterisk_imports.push(d);
+                    } else {
+                        let c = scoped!(o, i);
+                        let r = mm!();
+                        let d = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                        acc.solver.add_decl(Declarator::Type(d), DeclType::Runtime(vec![c].into()));
+                    }
+                    State::File {
+                        package: p,
+                        asterisk_imports,
+                        global,
+                        local,
+                    }
+                }
+                (
+                    State::File {
+                        package: p,
+                        asterisk_imports,
+                        mut global,
+                        mut local,
+                    },
+                    State::TypeDeclaration {
+                        visibility,
+                        identifier,
+                        members,
+                    },
+                ) => {
+                    // check for file's class? visibility? etc
+                    // TODO maybe bubleup members
+                    // remove asterisk import if declared in file
+                    let identifier = match (identifier, p) {
+                        (DeclType::Compile(d, sup, int), Some(p)) => {
+                            let d = sync!(d);
+                            let sup = sup.iter().map(|x| sync!(*x)).collect();
+                            let int = int.iter().map(|x| sync!(*x)).collect();
+                            let solved = acc.solver.try_solve_node_with(d, p).unwrap();
+                            let i = Declarator::Type(solved);
+                            let solved = DeclType::Compile(solved, sup, int);
+                            if let Visibility::Public = visibility {
+                                global.push((i.clone(), solved.clone()));
+                            } else {
+                                local.push((i.clone(), solved.clone()));
+                            }
+                            acc.solver.add_decl(i.clone(), solved.clone());
+                            let i = Declarator::Type(d);
+                            if let Visibility::Public = visibility {
+                                global.push((i.clone(), solved.clone()));
+                            } else {
+                                local.push((i.clone(), solved.clone()));
+                            }
+                            acc.solver.add_decl(i.clone(), solved);
+                            d
+                        }
+                        (DeclType::Compile(d, sup, int), None) => {
+                            let d = sync!(d);
+                            let i = Declarator::Type(d);
+                            let sup = sup.iter().map(|x| sync!(*x)).collect();
+                            let int = int.iter().map(|x| sync!(*x)).collect();
+                            let t = DeclType::Compile(d, sup, int);
+                            if let Visibility::Public = visibility {
+                                global.push((i.clone(), t.clone()));
+                            } else {
+                                local.push((i.clone(), t.clone()));
+                            }
+                            acc.solver.add_decl(i.clone(), t);
+                            d
+                        }
+                        _ => panic!(),
+                    };
+                    println!("{}", members.len());
+                    for (v, d, t) in members {
+                        let d = d.with_changed_node(|i| sync!(*i));
+                        let t = t.map(|x| sync!(x)); // TODO try solving t
+                                                     // println!("d:{:?} t:{:?}", &d, &t);
+
+                        let container =
+                            if Visibility::Public == visibility && Visibility::Public == v {
+                                &mut global
+                            } else {
+                                &mut local
+                            };
+
+                        match &d {
+                            Declarator::Executable(d) => {
+                                // TODO constructor solve
+                                if let Some(p) = p {
+                                    // let t = acc.solver.try_solve_node_with(t, p).unwrap_or(t);
+                                    {
+                                        let d = Declarator::Executable(*d);
+                                        acc.solver.add_decl(d, t.clone());
+                                    }
+                                    let solved = acc.solver.try_solve_node_with(*d, p).unwrap();
+                                    let d = Declarator::Executable(solved);
+                                    acc.solver.add_decl(d.clone(), t.clone());
+                                    container.push((d, t));
+                                } else {
+                                    let d = Declarator::Executable(*d);
+                                    acc.solver.add_decl(d, t);
+                                }
+                            }
+                            Declarator::Field(d) => {
+                                if let Some(p) = p {
+                                    // let t = acc.solver.try_solve_node_with(t, p).unwrap_or(t);
+                                    {
+                                        let d = Declarator::Field(*d);
+                                        acc.solver.add_decl(d, t.clone());
+                                    }
+                                    let solved = acc.solver.try_solve_node_with(*d, p).unwrap();
+                                    let d = Declarator::Field(solved);
+                                    acc.solver.add_decl(d.clone(), t.clone());
+                                    container.push((d, t));
+                                } else {
+                                    let d = Declarator::Field(*d);
+                                    acc.solver.add_decl(d, t);
+                                }
+                            }
+                            Declarator::Type(d) => {
+                                if let Some(p) = p {
+                                    let solved = acc.solver.try_solve_node_with(*d, p).unwrap();
+                                    let d = Declarator::Type(*d);
+                                    acc.solver.add_decl(d, t.clone()); // TODO try_solve_node_with in resolve when we have a case where we avec seen the declaration ie. DeclType::Compile
+                                    let d = Declarator::Type(solved);
+                                    acc.solver.add_decl(d.clone(), t.clone());
+                                    container.push((d, t));
+                                } else {
+                                    let d = Declarator::Type(*d);
+                                    acc.solver.add_decl(d, t);
+                                }
+                            }
+                            x => panic!("{:?}", x),
+                        }
+                    }
+                    // let global = if let Visibility::Public = visibility {
+                    //     assert!(global.is_none());
+                    //     let d = Declarator::Type(identifier);
+                    //     Some((d, identifier))
+                    // } else if let Some(_) = global {
+                    //     global
+                    // } else {
+                    //     None
+                    // };
+                    State::File {
+                        package: p,
+                        asterisk_imports,
+                        global,
+                        local,
+                    }
+                }
+                (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            }
+        } else if kind == &Type::PackageDeclaration {
+            let mut remapper = acc.solver.extend(&self.solver);
+            macro_rules! sync {
+                ( $i:expr ) => {
+                    remapper.intern_external(&mut acc.solver, $i.0)
+                };
+            }
+            match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                (State::None, State::ScopedIdentifier(i)) => {
+                    // TODO complete refs
+                    let i = sync!(i);
+                    // if jl == i {
+                    //     acc.solver.decls = Default::default();
+                    // }
+                    State::PackageDeclaration(i)
+                }
+                (State::None, State::SimpleIdentifier(case, i)) => {
+                    // TODO complete refs
+                    let o = acc.solver.intern(RefsEnum::Root);
+                    let i = acc.solver.intern(RefsEnum::ScopedIdentifier(o, i));
+                    State::PackageDeclaration(i)
+                }
+                (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            }
+        } else if kind == &Type::ImportDeclaration {
+            let mut remapper = acc.solver.extend(&self.solver);
+            macro_rules! sync {
+                ( $i:expr ) => {
+                    remapper.intern_external(&mut acc.solver, $i.0)
+                };
+            }
+            match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                (State::None, State::Modifiers(v, n)) => State::Modifiers(v, n),
+                (State::Modifiers(Visibility::None, n), State::ScopedIdentifier(i)) => {
+                    // println!("{:?}",n);
+                    assert_eq!(n, enum_set!(NonVisibility::Static));
+                    let i = sync!(i);
+
+                    if i >= acc.solver.refs.len() {
+                        acc.solver.refs.resize(i + 1, false);
+                    }
+                    acc.solver.refs.set(i, true);
+                    State::ImportDeclaration {
+                        identifier: i,
+                        sstatic: true,
+                        asterisk: false,
+                    } // TODO use static
+                }
+                (State::None, State::ScopedIdentifier(i)) => {
+                    let i = sync!(i);
+                    if i >= acc.solver.refs.len() {
+                        acc.solver.refs.resize(i + 1, false);
+                    }
+                    acc.solver.refs.set(i, true);
+                    // println!(
+                    //     "@@{:?}",
+                    //     ExplorableRef {
+                    //         rf: i,
+                    //         nodes: &self.solver.nodes
+                    //     }
+                    // );
+                    State::ImportDeclaration {
+                        identifier: i,
+                        sstatic: false,
+                        asterisk: false,
+                    }
+                }
+                (
+                    State::ImportDeclaration {
+                        identifier: i,
+                        sstatic,
+                        asterisk: false,
+                    },
+                    State::Asterisk,
+                ) => {
+                    // TODO say we import members/classes
+                    acc.solver.refs.set(i, false);
+                    State::ImportDeclaration {
+                        identifier: i,
+                        sstatic,
+                        asterisk: true,
+                    }
+                }
+                (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            }
+        } else if kind.is_type_declaration() {
+            match current_node.map(|x| Old(x), |x| x) {
+                State::Modifiers(v, n) => {
+                    let mut remapper = acc.solver.extend(&self.solver);
+                    if let State::TypeDeclaration { visibility, .. } = &mut acc.current_node {
+                        *visibility = v;
+                        acc.current_node.take()
+                    } else if State::None == acc.current_node {
+                        assert_eq!(kind, &Type::EnumConstant);
+                        State::TypeDeclaration {
+                            visibility: Visibility::None,
+                            identifier: DeclType::Compile(0, vec![].into_boxed_slice(), vec![].into_boxed_slice()),
+                            members: vec![],
+                        }
+                    } else {
+                        panic!("{:?} {:?}", kind, acc.current_node)
+                    }
+                }
+                State::SimpleIdentifier(case, i) => {
+                    // assert!(!case);
+                    if let State::TypeDeclaration { identifier, .. } = &mut acc.current_node {
+                        if let DeclType::Compile(ii, _, _) = identifier {
+                            let r = mm!();
+                            let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                            *ii = i;
+                        } else {
+                            panic!("{:?}", acc.current_node)
+                        }
+                        acc.current_node.take()
+                    } else {
+                        assert_eq!(kind, &Type::EnumConstant);
+                        let r = mm!();
+                        let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                        State::TypeDeclaration {
+                            visibility: Visibility::None,
+                            identifier: DeclType::Compile(i, vec![].into_boxed_slice(), vec![].into_boxed_slice()),
+                            members: vec![],
+                        }
+                    }
+                }
+                State::Arguments(_) => {
+                    assert_eq!(kind, &Type::EnumConstant);
+                    // TODO materialize the construtor call
+                    acc.current_node.take()
+                }
+                State::TypeParameters(ps) => {
+                    assert!(kind == &Type::ClassDeclaration || kind == &Type::InterfaceDeclaration);
+                    let mut remapper = acc.solver.extend(&self.solver);
+                    macro_rules! sync {
+                        ( $i:expr ) => {
+                            remapper.intern_external(&mut acc.solver, $i.0)
+                        };
+                    }
+                    // println!("typeParams {:?}", ps);
+                    for (d, t) in ps {
+                        let r = mm!();
+                        let d = acc.solver.intern(RefsEnum::ScopedIdentifier(r, d));
+                        let d = Declarator::Type(d);
+                        let t = t.into_iter().map(|t| sync!(*t)).collect();
+                        acc.solver.add_decl(d.clone(), DeclType::Runtime(t));
+                    }
+                    // println!("decls after added typeParams");
+                    // acc.solver.print_decls();
+                    // TODO use generics when creating ref from decl ie. searching for impacts
+                    acc.current_node.take()
+                }
+                State::ScopedTypeIdentifier(s) => {
+                    assert_eq!(kind, &Type::ClassDeclaration);
+                    let mut remapper = acc.solver.extend(&self.solver);
+                    macro_rules! sync {
+                        ( $i:expr ) => {
+                            remapper.intern_external(&mut acc.solver, $i.0)
+                        };
+                    }
+                    if let State::TypeDeclaration { identifier: i, .. } = &mut acc.current_node {
+                        let s = sync!(s);
+                        match i {
+                            DeclType::Compile(_, ss, _) => {
+                                // ?.super#constructor(...) -> ?.S
+                                let r = mm!();
+                                let d = acc.solver.intern(RefsEnum::Super(r));
+                                let d = acc
+                                    .solver
+                                    .intern(RefsEnum::ConstructorInvocation(d, Arguments::Unknown));
+                                let d = Declarator::Executable(d);
+                                acc.solver.add_decl(d, DeclType::Runtime(vec![s].into()));
+                                // TODO this one? ?.S.super#constructor(...) -> ?.S
+
+                                *ss = vec![s].into_boxed_slice()
+                            }
+                            x => panic!("{:?}", x),
+                        };
+                        // TODO use superclass value more
+                    } else {
+                        panic!()
+                    }
+                    acc.current_node.take()
+                }
+                State::Interfaces(i) => {
+                    assert!(
+                        kind == &Type::ClassDeclaration
+                            || kind == &Type::InterfaceDeclaration
+                            || kind == &Type::EnumDeclaration,
+                        "{:?}",
+                        kind
+                    );
+                    let mut remapper = acc.solver.extend(&self.solver);
+                    macro_rules! sync {
+                        ( $i:expr ) => {
+                            remapper.intern_external(&mut acc.solver, $i.0)
+                        };
+                    }
+                    if let State::TypeDeclaration { identifier, .. } = &mut acc.current_node {
+                        let i = i.into_iter().map(|x| sync!(x)).collect();
+                        match identifier {
+                            DeclType::Compile(_, _, ii) => *ii = i,
+                            x => panic!("{:?}", x),
+                        };
+                        // TODO use superclass value more
+                    } else {
+                        panic!()
+                    }
+                    acc.current_node.take()
+                }
+                State::None => {
+                    // TODO there might be things to do but need tests
+                    let mut remapper = acc.solver.extend(&self.solver);
+                    // let (cache, solver) = acc.solver.hierarchy_solve_extend(&self.solver);
+                    // acc.solver = solver;
+                    // macro_rules! sync {
+                    //     ( $i:expr ) => {{
+                    //         let other = $i.0;
+                    //         let other = ExplorableRef {
+                    //             rf: other,
+                    //             nodes: &acc.solver.nodes,
+                    //         };
+                    //         acc.solver.intern_external(&mut cache, other)
+                    //     }};
+                    // }
+                    acc.current_node.take()
+                }
+                State::Declarations(ds) => {
+                    if let State::TypeDeclaration {
+                        identifier,
+                        members,
+                        ..
+                    } = &mut acc.current_node
+                    {
+                        let id = match &identifier {
+                            DeclType::Compile(i, _, _) => *i,
+                            _ => panic!(),
+                        };
+                        // prime cache
+                        let mut extend_cache = HashMap::<usize, usize>::default();
+                        if let Some(mm) = self.solver.get(RefsEnum::MaybeMissing) {
+                            assert!(
+                                !(self.solver.refs.len() > mm && self.solver.refs[mm]),
+                                "not sure what to do there"
+                            );
+                            // then ? -> ?.{A.B,C} and ?.this -> ?.A
+                            let r = mm!();
+                            let t = {
+                                let d = acc.solver.intern(RefsEnum::This(r));
+                                let d = Declarator::Type(d);
+
+                                acc.solver.add_decl(d, identifier.clone()); //TODO also put it in cache
+
+                                match &identifier {
+                                    DeclType::Compile(i, s, is) => {
+                                        let mut t = vec![*i];
+                                        t.extend(s.iter());
+                                        t.extend(is.iter());
+                                        t.into_boxed_slice()
+                                    }
+                                    _ => panic!(),
+                                }
+                            };
+                            println!("class decl cache {:?}", &t);
+                            // if let DeclType::Compile(_, Some(s), _) = &identifier {
+                            //     let d = Declarator::Type(*s);
+                            //     acc.solver.add_decl_simple(d, *s);
+                            // }
+
+                            for id in t.iter() {
+                                let i = match &acc.solver.nodes[*id] {
+                                    RefsEnum::ScopedIdentifier(_, i) => i.clone(),
+                                    _ => panic!(),
+                                };
+                                // ?.X -> ?.X to protect from masking
+                                if let Some(x) = self.solver.get(RefsEnum::ScopedIdentifier(mm, i))
+                                {
+                                    extend_cache.insert(x, *id);
+                                }
+                            }
+
+                            // temporary
+                            if let Some(i) = self.solver.get(RefsEnum::Super(mm)) {
+                                extend_cache.insert(i, id);
+                            }
+
+                            let mask = acc.solver.intern(RefsEnum::Mask(r, t));
+                            extend_cache.insert(mm, mask);
+                        }
+                        // // then stash refs from decl
+                        // let hierarchical_decls_refs: Vec<_> = acc.solver.refs.iter_ones().collect();
+                        // acc.solver.refs = Default::default(); // TODO not sure;
+
+                        // then extend refs from body with a primed cache
+                        let mut remapper = acc.solver.extend_map(&self.solver, &mut extend_cache);
+                        macro_rules! sync {
+                            ( $i:expr ) => {
+                                remapper.intern_external(&mut acc.solver, $i.0)
+                            };
+                        }
+                        // then handle members considering prev thing ie. either ?.this -> ?.A or ? -> ?.{B,C}
+                        // then resolve
+                        // then pop ref stash extend new solver with them
+                        // {
+                        //     // ?.this -> ?.A
+                        // }
+                        // // TODO an extend that replace ? -> ?.{B,C}
+                        // // idem for the following types
+                        // // then only call resolve with:
+                        // { // for A extends B implements C
+                        //      // ?.B -> ?.B
+                        //      // ?.C -> ?.C
+                        //      // ?.super -> ?.B
+                        //      // ?.B.super -> ?.B
+                        //      // ?.C.super -> ?.C
+                        // }
+                        {
+                            // ?.super -> ?.super
+                            let r = mm!();
+                            let i = acc.solver.intern(RefsEnum::Super(r));
+                            let d = Declarator::Type(i);
+                            acc.solver.add_decl(d, identifier.clone());
+                        }
+                        {
+                            // ?.A -> ?.A
+                            let d = Declarator::Type(id);
+                            acc.solver.add_decl(d, identifier.clone());
+                        }
+                        {
+                            // ?.A.this -> ?.A
+                            //     let d = acc.solver.intern(RefsEnum::This(id));
+                            //     let d = Declarator::Type(d);
+                            //     acc.solver.add_decl(d, identifier.clone());
+                            //     // TODO this one? ?.S.super -> ?.S
+                        }
+                        {
+                            // ?.A#() -> ?.A
+                            // let d = acc.solver.intern(RefsEnum::ConstructorInvocation(
+                            //     id,
+                            //     Arguments::Given(vec![].into_boxed_slice()),
+                            // ));
+                            // let d = Declarator::Executable(d);
+                            // acc.solver.add_decl(d, identifier.clone());
+                        }
+                        {
+                            // ?.this#(...) -> ?.A
+                            // let d = mm!();
+                            // let d = acc.solver.intern(RefsEnum::This(d));
+                            // let d = acc
+                            //     .solver
+                            //     .intern(RefsEnum::ConstructorInvocation(d, Arguments::Unknown));
+                            // let d = Declarator::Executable(d);
+                            // acc.solver.add_decl(d, identifier.clone());
+                        }
+                        {
+                            // ?.this -> ?.A
+                            let d = mm!();
+                            let d = acc.solver.intern(RefsEnum::This(d));
+                            let d = Declarator::Type(d);
+                            acc.solver.add_decl(d, identifier.clone());
+                        }
+                        // let (mut cache, solver) = acc.solver.hierarchy_solve_extend(&self.solver);
+                        // acc.solver = solver;
+                        // macro_rules! sync {
+                        //     ( $i:expr ) => {{
+                        //         let other = $i.0;
+                        //         let other = ExplorableRef {
+                        //             rf: other,
+                        //             nodes: &self.solver.nodes,
+                        //         };
+                        //         acc.solver
+                        //             .hierarchy_solve_intern_external(&mut cache, other)
+                        //             .unwrap()
+                        //     }};
+                        // }
+                        // println!("adding members");
+                        for (v, d, t) in ds {
+                            let d = d.with_changed_node(|i| sync!(*i));
+                            let t = t.map(|x| sync!(x));
+                            // println!("d:{:?} t:{:?}", &d, &t);
+                            match &d {
+                                Declarator::Executable(d) => {
+                                    match acc.solver.nodes[*d].clone() {
+                                        RefsEnum::ConstructorInvocation(o, p) => {
+                                            // constructor solve
+                                            {
+                                                // TODO test if it does ?.A#(p) => ?.A
+                                                let d = Declarator::Executable(*d);
+                                                acc.solver.add_decl(d, identifier.clone());
+                                            }
+                                            {
+                                                // TODO not sure how to change o
+                                                // given class A, it might be better to solve ?.this#(p) here to ?.A.this#(p) and in general ?.A.this -> ?A.
+                                                let solved = acc
+                                                    .solver
+                                                    .intern(RefsEnum::ConstructorInvocation(id, p));
+                                                // acc.solver.solve_node_with(*d, i); // to spec ?.this#(p)
+                                                let d = Declarator::Executable(solved);
+                                                acc.solver.add_decl(d.clone(), identifier.clone());
+                                                members.push((v, d, t));
+                                                // members.push((v, d, id));
+                                            }
+                                        }
+                                        RefsEnum::Invocation(o, i, p) => {
+                                            {
+                                                let d = Declarator::Executable(*d);
+                                                acc.solver.add_decl(d, t.clone());
+                                            }
+                                            {
+                                                let solved =
+                                                    acc.solver.try_solve_node_with(*d, id).unwrap();
+                                                let d = Declarator::Executable(solved);
+                                                acc.solver.add_decl(d.clone(), t.clone());
+                                                members.push((v, d, t.clone()));
+                                            }
+                                            {
+                                                let r = mm!();
+                                                let r = acc.solver.intern(RefsEnum::This(r));
+                                                let solved =
+                                                    acc.solver.try_solve_node_with(*d, id).unwrap();
+                                                let d = Declarator::Executable(solved);
+                                                acc.solver.add_decl(d.clone(), t.clone());
+                                                members.push((v, d, t));
+                                            }
+                                        }
+                                        x => todo!("{:?}", x),
+                                    }
+                                }
+                                Declarator::Field(d) => {
+                                    {
+                                        // ?.d => t
+                                        let d = Declarator::Field(*d);
+                                        acc.solver.add_decl(d, t.clone());
+                                    }
+                                    {
+                                        // ?.id.d => t
+                                        let solved =
+                                            acc.solver.try_solve_node_with(*d, id).unwrap();
+                                        let d = Declarator::Field(solved);
+                                        acc.solver.add_decl(d.clone(), t.clone());
+                                        members.push((v, d, t.clone()));
+                                    }
+                                    {
+                                        // ?.this.d => t
+                                        let r = mm!();
+                                        let r = acc.solver.intern(RefsEnum::This(r));
+                                        let solved = acc.solver.try_solve_node_with(*d, r).unwrap();
+                                        let d = Declarator::Field(solved);
+                                        acc.solver.add_decl(d.clone(), t.clone());
+                                        members.push((v, d, t));
+                                    }
+                                }
+                                Declarator::Type(d) => {
+                                    {
+                                        let d = Declarator::Type(*d);
+                                        acc.solver.add_decl(d, t.clone());
+                                    }
+                                    {
+                                        let solved =
+                                            acc.solver.try_solve_node_with(*d, id).unwrap();
+                                        let d = Declarator::Type(solved);
+                                        acc.solver.add_decl(d.clone(), t.clone());
+                                        members.push((v, d, t.clone()));
+                                    }
+                                    {
+                                        let r = mm!();
+                                        let r = acc.solver.intern(RefsEnum::This(r));
+                                        let solved = acc.solver.try_solve_node_with(*d, r).unwrap();
+                                        let d = Declarator::Type(solved);
+                                        acc.solver.add_decl(d.clone(), t.clone());
+                                        members.push((v, d, t));
+                                    }
+                                }
+                                x => panic!("{:?}", x),
+                            }
+                        }
+                        // println!("members added");
+                        // let (mut cache, solver) = acc.solver.resolve();
+                        // acc.solver = solver;
+                        // println!("class declaration solved");
+                    } else {
+                        panic!()
+                    }
+                    acc.current_node.take()
+                }
+                y => todo!("{:?} {:?} {:?}", kind, &acc.current_node, y),
+            }
+        } else if kind.is_type_body() {
+            let mut remapper = acc.solver.extend(&self.solver);
+            macro_rules! sync {
+                ( $i:expr ) => {
+                    remapper.intern_external(&mut acc.solver, $i.0)
+                };
+            }
+            match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                (
+                    rest,
+                    State::TypeDeclaration {
+                        visibility,
+                        identifier: d,
+                        members,
+                    },
+                ) if kind == &Type::ClassBody
+                    || kind == &Type::InterfaceBody
+                    || kind == &Type::EnumBody
+                    || kind == &Type::EnumBodyDeclarations =>
+                {
+                    // TODO also solve members ?
+                    // TODO visibility
+                    let mut v = match rest {
+                        State::Declarations(u) => u,
+                        State::None => vec![],
+                        _ => panic!(),
+                    };
+                    match d {
+                        DeclType::Runtime(_) => panic!(),
+                        DeclType::Compile(t, sup, int) => {
+                            let t = sync!(t);
+                            let sup = sup.iter().map(|x| sync!(x)).collect();
+                            let int = int.iter().map(|x| sync!(x)).collect();
+                            let d = Declarator::Type(t);
+                            let t = DeclType::Compile(t, sup, int);
+                            acc.solver.add_decl(d.clone(), t.clone());
+                            v.push((visibility, d, t));
+                        }
+                    };
+                    for (visibility, d, t) in members {
+                        let t = t.map(|x| sync!(x));
+                        match d {
+                            Declarator::None => {
+                                panic!()
+                            }
+                            Declarator::Package(_) => {
+                                panic!()
+                            }
+                            Declarator::Type(_) => {}
+                            Declarator::Field(d) => {
+                                let d = sync!(d);
+                                let d = Declarator::Field(d);
+                                acc.solver.add_decl(d.clone(), t.clone());
+                                v.push((visibility, d, t));
+                            }
+                            Declarator::Executable(_) => {}
+                            Declarator::Variable(_) => {
+                                panic!()
+                            }
+                        };
+                    }
+                    State::Declarations(v)
+                }
+                (rest, State::None) if kind == &Type::ClassBody => {
+                    match &rest {
+                        State::Declarations(_) => (),
+                        State::None => (),
+                        _ => panic!(),
+                    }
+                    rest
+                }
+                (
+                    rest,
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier: d,
+                    },
+                ) if kind == &Type::ClassBody
+                    || kind == &Type::InterfaceBody
+                    || kind == &Type::AnnotationTypeBody
+                    || kind == &Type::EnumBodyDeclarations =>
+                {
+                    let t = t.map(|x| sync!(x));
+                    let d = d.with_changed_node(|i| sync!(*i));
+                    match &d {
+                        Declarator::Type(_) => (),
+                        Declarator::Field(_) => (),
+                        Declarator::Executable(_) => (),
+                        _ => panic!(),
+                    };
+                    acc.solver.add_decl(d.clone(), t.clone());
+                    let mut v = match rest {
+                        State::Declarations(u) => u,
+                        State::None => vec![],
+                        _ => panic!(),
+                    };
+                    v.push((visibility, d, t));
+                    // TODO make a member declaration and make use of visibilty
+                    State::Declarations(v)
+                }
+                (rest, State::Declarations(u))
+                    if kind == &Type::ClassBody
+                        || kind == &Type::InterfaceBody
+                        || kind == &Type::AnnotationTypeBody
+                        || kind == &Type::EnumBodyDeclarations =>
+                {
+                    let mut v = match rest {
+                        State::Declarations(u) => u,
+                        State::None => vec![],
+                        _ => panic!(),
+                    };
+                    for (visibility, d, t) in u {
+                        let t = t.map(|x| sync!(x));
+                        let d = d.with_changed_node(|i| sync!(*i));
+                        match &d {
+                            Declarator::Type(_) => (),
+                            Declarator::Field(_) => (),
+                            Declarator::Executable(_) => (),
+                            _ => panic!(),
+                        };
+                        acc.solver.add_decl(d.clone(), t.clone());
+                        v.push((visibility, d, t));
+                    }
+                    State::Declarations(v)
+                }
+                (rest, State::Declarations(u)) if kind == &Type::EnumBody => {
+                    let mut v = match rest {
+                        State::Declarations(u) => u,
+                        State::None => vec![],
+                        _ => panic!(),
+                    };
+                    for (visibility, d, t) in u {
+                        let t = t.map(|x| sync!(x));
+                        let d = d.with_changed_node(|i| sync!(*i));
+
+                        match &d {
+                            Declarator::Type(_) => (),
+                            Declarator::Field(_) => (),
+                            Declarator::Executable(_) => (),
+                            _ => panic!(),
+                        };
+                        acc.solver.add_decl(d.clone(), t.clone());
+                        v.push((visibility, d, t));
+                    }
+                    State::Declarations(v)
+                }
+                (rest, State::None) if kind == &Type::EnumBodyDeclarations => {
+                    let mut v = match rest {
+                        State::Declarations(u) => u,
+                        State::None => vec![],
+                        _ => panic!(),
+                    };
+                    State::Declarations(v)
+                }
+                (
+                    rest,
+                    State::MethodImplementation {
+                        visibility,
+                        kind: t,
+                        identifier: d,
+                        parameters: p,
+                    },
+                ) if kind == &Type::ClassBody
+                    || kind == &Type::InterfaceBody
+                    || kind == &Type::EnumBodyDeclarations =>
+                {
+                    let t = t.unwrap().map(|x| sync!(x));
+                    let r = mm!();
+                    let p = p
+                        .into_iter()
+                        .map(|(_, t)| {
+                            let t = t.map(|x| sync!(x));
+                            // TODO should construct RefsEnum::Or
+                            match t {
+                                DeclType::Runtime(v) => v[0],
+                                DeclType::Compile(t, _, _) => t,
+                            }
+                        })
+                        .collect();
+                    let d =
+                        acc.solver
+                            .intern(RefsEnum::Invocation(r, d.unwrap(), Arguments::Given(p)));
+                    let d = Declarator::Executable(d);
+                    acc.solver.add_decl(d.clone(), t.clone());
+                    let mut v = match rest {
+                        State::Declarations(u) => u,
+                        State::None => vec![],
+                        _ => panic!(),
+                    };
+                    v.push((visibility, d, t));
+                    // TODO make a member declaration and make use of visibilty
+                    State::Declarations(v)
+                }
+                (
+                    rest,
+                    State::ConstructorImplementation {
+                        visibility,
+                        identifier: i,
+                        parameters: p,
+                    },
+                ) if kind == &Type::ClassBody || kind == &Type::EnumBodyDeclarations => {
+                    let mut v = match rest {
+                        State::Declarations(u) => u,
+                        State::None => vec![],
+                        _ => panic!(),
+                    };
+                    let p = p
+                        .into_iter()
+                        .map(|(_, t)| {
+                            let t = t.map(|x| sync!(x));
+                            match t {
+                                DeclType::Runtime(v) => v[0],
+                                DeclType::Compile(t, _, _) => t,
+                            }
+                        })
+                        .collect();
+                    let t = i.unwrap();
+                    let r = mm!();
+                    let t = acc.solver.intern(RefsEnum::ScopedIdentifier(r, t));
+                    let t = DeclType::Runtime(vec![t].into());
+                    let i = acc.solver.intern(RefsEnum::MaybeMissing);
+                    let i = acc.solver.intern(RefsEnum::This(i));
+                    let i = acc
+                        .solver
+                        .intern(RefsEnum::ConstructorInvocation(i, Arguments::Given(p)));
+                    let d = Declarator::Executable(i);
+                    // TODO constructor solve
+                    acc.solver.add_decl(d.clone(), t.clone());
+                    v.push((visibility, d, t));
+
+                    // TODO make a member declaration and make use of visibilty
+                    State::Declarations(v)
+                }
+                (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            }
+        } else if kind.is_value_member() {
+            let mut remapper = acc.solver.extend(&self.solver);
+            macro_rules! sync {
+                ( $i:expr ) => {
+                    remapper.intern_external(&mut acc.solver, $i.0)
+                };
+            }
+            // if kind == &Type::FieldDeclaration {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+            // } else if kind == &Type::ConstantDeclaration {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+            // } else if kind == &Type::EnumConstant {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+            // } else if kind == &Type::AnnotationTypeElementDeclaration {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+            // } else {
+            //     panic!("{:?}",kind)
+            // }
+            match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                (State::SimpleTypeIdentifier(t), State::Declarator(Declarator::Variable(i)))
+                    if kind == &Type::FieldDeclaration =>
+                {
+                    let t = scoped!(mm!(), t);
+                    let Old(i) = i;
+                    match self.solver.nodes[i] {
+                        RefsEnum::Array(i) => {
+                            let i = remapper.intern_external(&mut acc.solver, i);
+                            let i = Declarator::Field(i);
+                            let t = acc.solver.intern(RefsEnum::Array(t));
+                            let t = DeclType::Runtime(vec![t].into());
+
+                            let v = vec![(Visibility::None, i, t)];
+                            State::Declarations(v)
+                        }
+                        _ => {
+                            let i = remapper.intern_external(&mut acc.solver, i);
+                            let i = Declarator::Field(i);
+                            let t = DeclType::Runtime(vec![t].into());
+
+                            let v = vec![(Visibility::None, i, t)];
+                            State::Declarations(v)
+                        }
+                    }
+                }
+                (State::Modifiers(v, n), State::SimpleTypeIdentifier(t))
+                    if kind == &Type::FieldDeclaration || kind == &Type::ConstantDeclaration =>
+                {
+                    // TODO simple type identifier should be a type identifier ie. already scoped
+                    let t = scoped!(mm!(), t);
+                    let t = DeclType::Runtime(vec![t].into());
+                    let i = Declarator::None;
+                    // not used directly
+                    // acc.solver.add_decl_simple(i.clone(), t);
+                    State::Declaration {
+                        visibility: v,
+                        kind: t,
+                        identifier: i,
+                    }
+                }
+                (State::Modifiers(v, n), State::ScopedTypeIdentifier(t))
+                    if kind == &Type::FieldDeclaration || kind == &Type::ConstantDeclaration =>
+                {
+                    // TODO simple type identifier should be a type identifier ie. already scoped
+                    let t = sync!(t);
+                    let t = DeclType::Runtime(vec![t].into());
+                    let i = Declarator::None;
+                    // not used directly
+                    // acc.solver.add_decl_simple(i.clone(), t);
+                    State::Declaration {
+                        visibility: v,
+                        kind: t,
+                        identifier: i,
+                    }
+                }
+                (State::None, State::SimpleTypeIdentifier(t))
+                    if kind == &Type::FieldDeclaration || kind == &Type::ConstantDeclaration =>
+                {
+                    // TODO simple type identifier should be a type identifier ie. already scoped
+                    let t = scoped!(mm!(), t);
+                    let t = DeclType::Runtime(vec![t].into());
+                    let i = Declarator::None;
+                    // not used directly
+                    // acc.solver.add_decl_simple(i.clone(), t);
+                    State::Declaration {
+                        visibility: Visibility::None,
+                        kind: t,
+                        identifier: i,
+                    }
+                }
+                (State::None, State::ScopedTypeIdentifier(t))
+                    if kind == &Type::FieldDeclaration || kind == &Type::ConstantDeclaration =>
+                {
+                    // TODO simple type identifier should be a type identifier ie. already scoped
+                    let t = sync!(t);
+                    let t = DeclType::Runtime(vec![t].into());
+                    let i = Declarator::None;
+                    // not used directly
+                    // acc.solver.add_decl_simple(i.clone(), t);
+                    State::Declaration {
+                        visibility: Visibility::None,
+                        kind: t,
+                        identifier: i,
+                    }
+                }
+                (
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier: _,
+                    },
+                    // State::Declarations(v),
+                    State::Declarator(Declarator::Variable(i)),
+                ) if kind == &Type::FieldDeclaration || kind == &Type::ConstantDeclaration => {
+                    let Old(i) = i;
+                    match self.solver.nodes[i] {
+                        RefsEnum::Array(i) => {
+                            let i = remapper.intern_external(&mut acc.solver, i);
+                            let i = Declarator::Field(i);
+                            let t = match t {
+                                DeclType::Runtime(v) => DeclType::Runtime(
+                                    v.iter()
+                                        .map(|t| acc.solver.intern_ref(RefsEnum::Array(*t)))
+                                        .collect(),
+                                ),
+                                DeclType::Compile(_, _, _) => todo!(),
+                            };
+                            // State::Declaration {a
+                            //     visibility,
+                            //     kind: t,
+                            //     identifier: i,
+                            // }
+
+                            let v = vec![(visibility, i, t)];
+                            State::Declarations(v)
+                        }
+                        _ => {
+                            let i = remapper.intern_external(&mut acc.solver, i);
+                            let i = Declarator::Field(i);
+                            // State::Declaration {
+                            //     visibility,
+                            //     kind: t,
+                            //     identifier: i,
+                            // }
+
+                            let v = vec![(visibility, i, t)];
+                            // let Old(i) = i;
+                            // match self.solver.nodes[i] {
+                            //     RefsEnum::Array(i) => {
+                            //         let t = acc.solver.intern_ref(RefsEnum::Array(t));
+                            //     }
+                            //     _ => {}
+                            // };
+                            State::Declarations(v)
+                        }
+                    }
+                }
+                (State::Declarations(mut v), State::Declarator(Declarator::Variable(i)))
+                    if kind == &Type::FieldDeclaration || kind == &Type::ConstantDeclaration =>
+                {
+                    let (visibility, _, t) = &v[0];
+                    let visibility = *visibility;
+                    let t = t.clone();
+                    let Old(i) = i;
+                    match self.solver.nodes[i] {
+                        RefsEnum::Array(i) => {
+                            let i = remapper.intern_external(&mut acc.solver, i);
+                            let i = Declarator::Field(i);
+                            let t = match t {
+                                DeclType::Runtime(v) => DeclType::Runtime(
+                                    v.iter()
+                                        .map(|t| acc.solver.intern_ref(RefsEnum::Array(*t)))
+                                        .collect(),
+                                ),
+                                DeclType::Compile(_, _, _) => todo!(),
+                            };
+
+                            v.push((visibility, i, t));
+                            State::Declarations(v)
+                        }
+                        _ => {
+                            let i = remapper.intern_external(&mut acc.solver, i);
+                            let i = Declarator::Field(i);
+
+                            v.push((visibility, i, t));
+                            State::Declarations(v)
+                        }
+                    }
+                }
+                (State::Modifiers(v, n), State::ScopedTypeIdentifier(t))
+                    if kind == &Type::FieldDeclaration =>
+                {
+                    // TODO simple type identifier should be a type identifier ie. already scoped
+                    let t = sync!(t);
+                    let t = DeclType::Runtime(vec![t].into());
+                    let i = Declarator::None;
+                    // not used directly
+                    // acc.solver.add_decl_simple(i.clone(), t);
+                    State::Declaration {
+                        visibility: v,
+                        kind: t,
+                        identifier: i,
+                    }
+                }
+                (State::None, State::Modifiers(v, n))
+                    if kind == &Type::FieldDeclaration
+                        || kind == &Type::ConstantDeclaration
+                        || kind == &Type::AnnotationTypeElementDeclaration =>
+                {
+                    State::Modifiers(v, n)
+                }
+                (State::None, State::SimpleTypeIdentifier(t))
+                    if kind == &Type::FieldDeclaration
+                        || kind == &Type::AnnotationTypeElementDeclaration =>
+                {
+                    let t = scoped!(mm!(), t);
+                    let t = DeclType::Runtime(vec![t].into());
+                    State::Declaration {
+                        visibility: Visibility::None,
+                        kind: t,
+                        identifier: Declarator::None,
+                    }
+                }
+                (State::None, State::ScopedTypeIdentifier(t))
+                    if kind == &Type::FieldDeclaration
+                        || kind == &Type::AnnotationTypeElementDeclaration =>
+                {
+                    let t = sync!(t);
+                    let t = DeclType::Runtime(vec![t].into());
+                    State::Declaration {
+                        visibility: Visibility::None,
+                        kind: t,
+                        identifier: Declarator::None,
+                    }
+                }
+                (State::Modifiers(v, n), State::SimpleTypeIdentifier(t))
+                    if kind == &Type::AnnotationTypeElementDeclaration =>
+                {
+                    // TODO simple type identifier should be a type identifier ie. already scoped
+                    let t = scoped!(mm!(), t);
+                    let t = DeclType::Runtime(vec![t].into());
+                    let i = Declarator::None;
+                    // not used directly
+                    // acc.solver.add_decl_simple(i.clone(), t);
+                    State::Declaration {
+                        visibility: v,
+                        kind: t,
+                        identifier: i,
+                    }
+                }
+                (
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier: _,
+                    },
+                    State::SimpleIdentifier(_, i),
+                ) if kind == &Type::AnnotationTypeElementDeclaration => {
+                    // TODO simple type identifier should be a type identifier ie. already scoped
+                    let r = mm!();
+                    let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                    let i = Declarator::Field(i);
+                    // not used directly
+                    // acc.solver.add_decl_simple(i.clone(), t);
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier: i,
+                    }
+                }
+                (
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier: i,
+                    },
+                    State::LiteralType(_),
+                ) if kind == &Type::AnnotationTypeElementDeclaration && i != Declarator::None => {
+                    // TODO do something with default value
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier: i,
+                    }
+                }
+                (
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier: i,
+                    },
+                    State::None,
+                ) if kind == &Type::AnnotationTypeElementDeclaration && i != Declarator::None => {
+                    // TODO do something with default value
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier: i,
+                    }
+                }
+                (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            }
+        } else if kind.is_executable_member() {
+            let mut remapper = acc.solver.extend(&self.solver);
+            macro_rules! sync {
+                ( $i:expr ) => {
+                    remapper.intern_external(&mut acc.solver, $i.0)
+                };
+            }
+            // if kind == &Type::MethodDeclaration {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+            // } else if kind == &Type::ConstructorDeclaration {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+            // } else {
+            //     panic!("{:?}",kind)
+            // }
+            match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                (State::None, State::SimpleTypeIdentifier(t))
+                    if kind == &Type::MethodDeclaration =>
+                {
+                    let t = scoped!(mm!(), t);
+                    State::ScopedTypeIdentifier(t)
+                }
+                (
+                    State::MethodImplementation {
+                        visibility,
+                        kind: _,
+                        identifier: _,
+                        parameters: _,
+                    },
+                    State::SimpleTypeIdentifier(t),
+                ) if kind == &Type::MethodDeclaration => {
+                    let t = scoped!(mm!(), t);
+                    let t = DeclType::Runtime(vec![t].into());
+                    State::MethodImplementation {
+                        visibility,
+                        kind: Some(t),
+                        identifier: None,
+                        parameters: vec![].into_boxed_slice(),
+                    }
+                }
+                (
+                    State::MethodImplementation {
+                        visibility,
+                        kind: _,
+                        identifier: _,
+                        parameters: _,
+                    },
+                    State::ScopedTypeIdentifier(t),
+                ) if kind == &Type::MethodDeclaration => {
+                    let t = sync!(t);
+                    let t = DeclType::Runtime(vec![t].into());
+                    State::MethodImplementation {
+                        visibility,
+                        kind: Some(t),
+                        identifier: None,
+                        parameters: vec![].into_boxed_slice(),
+                    }
+                }
+                (State::None, State::ScopedTypeIdentifier(t))
+                    if kind == &Type::MethodDeclaration =>
+                {
+                    let t = sync!(t);
+                    State::ScopedTypeIdentifier(t)
+                }
+                (State::ScopedTypeIdentifier(t), State::SimpleIdentifier(_, i))
+                    if kind == &Type::MethodDeclaration =>
+                {
+                    let t = DeclType::Runtime(vec![t].into());
+                    State::MethodImplementation {
+                        visibility: Visibility::None,
+                        kind: Some(t),
+                        identifier: Some(i),
+                        parameters: vec![].into_boxed_slice(),
+                    }
+                }
+                (State::None, State::SimpleIdentifier(_, i))
+                    if kind == &Type::ConstructorDeclaration =>
+                {
+                    State::ConstructorImplementation {
+                        visibility: Visibility::None,
+                        identifier: Some(i),
+                        parameters: vec![].into_boxed_slice(),
+                    }
+                }
+                (State::None, State::Modifiers(v, n))
+                    if kind == &Type::MethodDeclaration
+                        || kind == &Type::ConstructorDeclaration =>
+                {
+                    State::Modifiers(v, n)
+                }
+                (State::Modifiers(v, n), State::SimpleTypeIdentifier(t))
+                    if kind == &Type::MethodDeclaration =>
+                {
+                    let t = scoped!(mm!(), t);
+                    let t = DeclType::Runtime(vec![t].into());
+                    State::MethodImplementation {
+                        visibility: v,
+                        kind: Some(t),
+                        identifier: None,
+                        parameters: Default::default(),
+                    }
+                }
+                (State::Modifiers(v, n), State::ScopedTypeIdentifier(t))
+                    if kind == &Type::MethodDeclaration =>
+                {
+                    let t = sync!(t);
+                    let t = DeclType::Runtime(vec![t].into());
+                    State::MethodImplementation {
+                        visibility: v,
+                        kind: Some(t),
+                        identifier: None,
+                        parameters: Default::default(),
+                    }
+                }
+                (
+                    State::MethodImplementation {
+                        visibility: v,
+                        kind: _,
+                        identifier: _,
+                        parameters: _,
+                    },
+                    State::SimpleTypeIdentifier(t),
+                ) if kind == &Type::MethodDeclaration => {
+                    let t = scoped!(mm!(), t);
+                    let t = DeclType::Runtime(vec![t].into());
+                    State::MethodImplementation {
+                        visibility: v,
+                        kind: Some(t),
+                        identifier: None,
+                        parameters: Default::default(),
+                    }
+                }
+                (State::None, State::TypeParameters(t)) if kind == &Type::MethodDeclaration => {
+                    for (t, b) in t {
+                        let r = mm!();
+                        let t = acc.solver.intern(RefsEnum::ScopedIdentifier(r, t));
+                        let b = b.into_iter().map(|t| sync!(*t)).collect();
+                        acc.solver
+                            .add_decl(Declarator::Type(t), DeclType::Runtime(b))
+                    }
+
+                    State::MethodImplementation {
+                        visibility: Visibility::None,
+                        kind: None,
+                        identifier: None,
+                        parameters: Default::default(),
+                    }
+                }
+                (State::Modifiers(v, n), State::TypeParameters(t))
+                    if kind == &Type::MethodDeclaration =>
+                {
+                    for (t, b) in t {
+                        let r = mm!();
+                        let t = acc.solver.intern(RefsEnum::ScopedIdentifier(r, t));
+                        let b = b.into_iter().map(|t| sync!(*t)).collect();
+                        acc.solver
+                            .add_decl(Declarator::Type(t), DeclType::Runtime(b))
+                    }
+
+                    State::MethodImplementation {
+                        visibility: v,
+                        kind: None,
+                        identifier: None,
+                        parameters: Default::default(),
+                    }
+                }
+                (State::Modifiers(v, n), State::SimpleIdentifier(_, i))
+                    if kind == &Type::ConstructorDeclaration =>
+                {
+                    // TODO use visibility
+                    State::ConstructorImplementation {
+                        visibility: v,
+                        identifier: Some(i),
+                        parameters: Default::default(),
+                    }
+                }
+                (
+                    State::MethodImplementation {
+                        visibility,
+                        kind: t,
+                        identifier: i,
+                        parameters: _,
+                    },
+                    State::FormalParameters(p),
+                ) if kind == &Type::MethodDeclaration => {
+                    let p = p
+                        .into_iter()
+                        .map(|(i, t)| {
+                            let i = sync!(i);
+                            let t = t.map(|x| sync!(x));
+                            acc.solver.add_decl(Declarator::Variable(i), t.clone()); // TODO use variable or parameter ?
+                            (i, t)
+                        })
+                        .collect();
+                    // let r = mm!();
+                    // let i = acc
+                    //     .solver
+                    //     .intern(RefsEnum::Invocation(r, i, Arguments::Given(p)));
+                    State::MethodImplementation {
+                        visibility,
+                        kind: t,
+                        identifier: i,
+                        parameters: p,
+                    }
+                }
+                (
+                    State::MethodImplementation {
+                        visibility,
+                        kind: t,
+                        identifier: i0,
+                        parameters: p,
+                    },
+                    State::SimpleIdentifier(_, i),
+                ) if kind == &Type::MethodDeclaration => {
+                    assert_eq!(i0, None);
+                    State::MethodImplementation {
+                        visibility,
+                        kind: t,
+                        identifier: Some(i),
+                        parameters: p,
+                    }
+                }
+                (
+                    State::MethodImplementation {
+                        visibility,
+                        kind: t,
+                        identifier,
+                        parameters: p,
+                    },
+                    State::Dimensions,
+                ) if kind == &Type::MethodDeclaration => {
+                    let t = t.map(|t| {
+                        let t = match t {
+                            DeclType::Runtime(v) => DeclType::Runtime(
+                                v.iter()
+                                    .map(|t| acc.solver.intern_ref(RefsEnum::Array(*t)))
+                                    .collect(),
+                            ),
+                            DeclType::Compile(_, _, _) => todo!(),
+                        };
+                        t
+                    });
+                    State::MethodImplementation {
+                        visibility,
+                        kind: t,
+                        identifier,
+                        parameters: p,
+                    }
+                }
+                (
+                    State::MethodImplementation {
+                        visibility,
+                        kind: t,
+                        identifier: i,
+                        parameters: p,
+                    },
+                    State::Throws,
+                ) if kind == &Type::MethodDeclaration => State::MethodImplementation {
+                    visibility,
+                    kind: t,
+                    identifier: i,
+                    parameters: p,
+                },
+                (
+                    State::ConstructorImplementation {
+                        visibility,
+                        identifier: i,
+                        parameters: p,
+                    },
+                    State::Throws,
+                ) if kind == &Type::ConstructorDeclaration => State::ConstructorImplementation {
+                    visibility,
+                    identifier: i,
+                    parameters: p,
+                },
+                (
+                    State::ConstructorImplementation {
+                        visibility,
+                        identifier: i,
+                        parameters: _,
+                    },
+                    State::FormalParameters(p),
+                ) if kind == &Type::ConstructorDeclaration => {
+                    let p = p
+                        .into_iter()
+                        .map(|(i, t)| {
+                            let i = sync!(i);
+                            let t = t.map(|x| sync!(x));
+                            acc.solver.add_decl(Declarator::Variable(i), t.clone()); // TODO use variable or parameter ?
+                            (i, t)
+                        })
+                        .collect();
+                    State::ConstructorImplementation {
+                        visibility,
+                        identifier: i,
+                        parameters: p,
+                    }
+                }
+                (
+                    State::MethodImplementation {
+                        visibility,
+                        kind: t,
+                        identifier: i,
+                        parameters: p,
+                    },
+                    State::None,
+                ) if kind == &Type::MethodDeclaration => {
+                    let p: Box<[_]> = p
+                        .into_iter()
+                        .map(|(i, t)| {
+                            // TODO should transform to RefEnum::Or
+                            match t {
+                                DeclType::Runtime(v) => v[0],
+                                DeclType::Compile(t, _, _) => *t,
+                            }
+                        })
+                        .collect();
+                    let r = mm!();
+                    let i =
+                        acc.solver
+                            .intern(RefsEnum::Invocation(r, i.unwrap(), Arguments::Given(p)));
+                    State::Declaration {
+                        visibility,
+                        kind: t.unwrap(),
+                        identifier: Declarator::Executable(i),
+                    }
+                }
+                (
+                    State::ConstructorImplementation {
+                        visibility,
+                        identifier,
+                        parameters,
+                    },
+                    State::None,
+                ) if kind == &Type::ConstructorDeclaration => {
+                    let t = identifier.unwrap();
+                    let r = mm!();
+                    let t = acc.solver.intern(RefsEnum::ScopedIdentifier(r, t));
+                    let p: Box<[RefPtr]> = parameters
+                        .into_iter()
+                        .map(|(_, t)| {
+                            // TODO should transform to RefEnum::Or
+                            match t {
+                                DeclType::Runtime(v) => v[0],
+                                DeclType::Compile(t, _, _) => *t,
+                            }
+                        })
+                        .collect();
+                    {
+                        let p = p.clone();
+                        let i = acc.solver.intern(RefsEnum::MaybeMissing);
+                        let i = acc.solver.intern(RefsEnum::This(i));
+                        let i = acc
+                            .solver
+                            .intern(RefsEnum::ConstructorInvocation(i, Arguments::Given(p)));
+                        let d = Declarator::Executable(i);
+                        acc.solver.add_decl(d, DeclType::Runtime(vec![t].into()));
+                    }
+                    {
+                        let i = acc
+                            .solver
+                            .intern(RefsEnum::ConstructorInvocation(t, Arguments::Given(p)));
+                        let d = Declarator::Executable(i);
+                        acc.solver.add_decl(d, DeclType::Runtime(vec![t].into()));
+                    }
+                    State::ConstructorImplementation {
+                        visibility,
+                        identifier,
+                        parameters,
+                    }
+                }
+                (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            }
+        } else if kind.is_statement() {
+            if kind.is_declarative_statement() {
+                let mut remapper = acc.solver.local_solve_extend(&self.solver);
+                macro_rules! sync {
+                    ( $i:expr ) => {
+                        remapper.intern_external(&mut acc.solver, $i.0)
+                    };
+                }
+                if kind == &Type::LocalVariableDeclaration {
+                    match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                        (State::None, State::Modifiers(v, n)) => State::Modifiers(v, n),
+                        (State::None, State::ScopedTypeIdentifier(t)) => {
+                            let t = sync!(t);
+                            State::ScopedTypeIdentifier(t)
+                        }
+                        (
+                            State::ScopedTypeIdentifier(t),
+                            State::Declarator(Declarator::Variable(i)),
+                        ) => {
+                            let t = DeclType::Runtime(vec![t].into());
+                            let v =
+                                vec![(Visibility::None, Declarator::Variable(sync!(i)), t.clone())];
+                            let Old(i) = i;
+                            match self.solver.nodes[i] {
+                                RefsEnum::Array(_) => match t {
+                                    DeclType::Runtime(v) => {
+                                        for t in v.iter() {
+                                            acc.solver.intern_ref(RefsEnum::Array(*t));
+                                        }
+                                    }
+                                    DeclType::Compile(_, _, _) => todo!(),
+                                },
+                                _ => {}
+                            };
+                            State::Declarations(v)
+                        }
+                        (
+                            State::Declarations(mut v),
+                            State::Declarator(Declarator::Variable(i)),
+                        ) => {
+                            let x = {
+                                let (visibility, _, t) = &v[0];
+                                {
+                                    let Old(i) = i;
+                                    match self.solver.nodes[i] {
+                                        RefsEnum::Array(_) => match t {
+                                            DeclType::Runtime(v) => {
+                                                for t in v.iter() {
+                                                    acc.solver.intern_ref(RefsEnum::Array(*t));
+                                                }
+                                            }
+                                            DeclType::Compile(_, _, _) => todo!(),
+                                        },
+                                        _ => {}
+                                    };
+                                }
+                                (*visibility, Declarator::Variable(sync!(i)), t.clone())
+                            };
+                            v.push(x);
+                            State::Declarations(v)
+                        }
+                        (State::None, State::SimpleTypeIdentifier(t)) => {
+                            let t = scoped!(mm!(), t);
+                            State::ScopedTypeIdentifier(t)
+                        }
+                        (State::Modifiers(v, n), State::SimpleTypeIdentifier(t)) => {
+                            let t = scoped!(mm!(), t);
+                            State::ScopedTypeIdentifier(t)
+                        }
+                        (State::Modifiers(v, n), State::ScopedTypeIdentifier(t)) => {
+                            let t = sync!(t);
+                            State::ScopedTypeIdentifier(t)
+                        }
+                        (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    }
+                // } else if kind == &Type::TryWithResourcesStatement {
+                //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+                //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                //     }
+                // } else if kind == &Type::CatchClause {
+                //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+                //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                //     }
+                // } else if kind == &Type::ForStatement {
+                //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+                //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                //     }
+                // } else if kind == &Type::EnhancedForStatement {
+                //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+                //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                //     }
+                // } else if kind == &Type::Scope {
+                //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+                //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                //     }
+                } else {
+                    // panic!("{:?}",kind)
+                    // }
+                    match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                        (State::None, State::None) if kind == &Type::TryWithResourcesStatement => {
+                            State::None
+                        }
+                        (State::None, State::FormalParameters(p))
+                            if kind == &Type::TryWithResourcesStatement =>
+                        {
+                            // TODO it implicitly calls close on resource so need to materialize it
+                            p.into_iter().for_each(|(i, t)| {
+                                let i = sync!(i);
+                                let t = t.map(|x| sync!(x));
+                                acc.solver.add_decl(Declarator::Variable(i), t);
+                                // TODO use variable or parameter ?
+                            });
+                            State::None
+                        }
+                        (State::None, State::None) if kind == &Type::CatchClause => State::None,
+                        (
+                            State::None,
+                            State::CatchParameter {
+                                kinds: b,
+                                identifier: i,
+                            },
+                        ) if kind == &Type::CatchClause => {
+                            let r = mm!();
+                            let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                            let d = Declarator::Variable(i);
+                            // let b = b.into_iter().map(|t|
+                            //     sync!(*t)
+                            // ).collect();
+                            let b = b.iter().map(|x|sync!(x)).collect();
+                            acc.solver.add_decl(d.clone(), DeclType::Runtime(b));
+                            State::None
+                        }
+                        (State::None, State::SimpleTypeIdentifier(t))
+                            if kind == &Type::EnhancedForStatement =>
+                        {
+                            let t = scoped!(mm!(), t);
+                            State::ScopedTypeIdentifier(t)
+                        }
+                        (State::None, State::ScopedTypeIdentifier(t))
+                            if kind == &Type::EnhancedForStatement =>
+                        {
+                            let t = sync!(t);
+                            State::ScopedTypeIdentifier(t)
+                        }
+                        (State::ScopedTypeIdentifier(t), State::SimpleIdentifier(_, i))
+                            if kind == &Type::EnhancedForStatement =>
+                        {
+                            let t = DeclType::Runtime(vec![t].into());
+                            let r = mm!();
+                            let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                            let i = Declarator::Variable(i);
+                            acc.solver.add_decl(i.clone(), t.clone());
+                            // TODO also make a special state for variable declarations
+                            State::Declaration {
+                                visibility: Visibility::None,
+                                kind: t,
+                                identifier: i,
+                            }
+                        }
+                        (
+                            State::Declaration {
+                                visibility,
+                                kind: t,
+                                identifier: d,
+                            },
+                            State::SimpleIdentifier(_, i),
+                        ) if kind == &Type::EnhancedForStatement => {
+                            let r = mm!();
+                            let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                            State::Declaration {
+                                visibility,
+                                kind: t,
+                                identifier: d,
+                            }
+                        }
+                        (
+                            State::Declaration {
+                                visibility,
+                                kind: t,
+                                identifier: d,
+                            },
+                            State::This(i),
+                        ) if kind == &Type::EnhancedForStatement => {
+                            let i = sync!(i);
+                            State::Declaration {
+                                visibility,
+                                kind: t,
+                                identifier: d,
+                            }
+                        }
+                        (
+                            State::Declaration {
+                                visibility,
+                                kind: t,
+                                identifier: d,
+                            },
+                            State::FieldIdentifier(i),
+                        ) if kind == &Type::EnhancedForStatement => State::Declaration {
+                            visibility,
+                            kind: t,
+                            identifier: d,
+                        },
+                        (
+                            State::Declaration {
+                                visibility: _,
+                                kind: _,
+                                identifier: _,
+                            },
+                            State::None,
+                        ) if kind == &Type::EnhancedForStatement => State::None,
+                        (
+                            State::Declaration {
+                                visibility,
+                                kind: t,
+                                identifier: d,
+                            },
+                            State::ScopedIdentifier(i),
+                        ) if kind == &Type::EnhancedForStatement => {
+                            let i = sync!(i); // Not necessary
+                            State::Declaration {
+                                visibility,
+                                kind: t,
+                                identifier: d,
+                            }
+                        }
+                        (
+                            State::Declaration {
+                                visibility,
+                                kind: t,
+                                identifier: d,
+                            },
+                            State::Invocation(i),
+                        ) if kind == &Type::EnhancedForStatement => {
+                            let i = sync!(i); // Not necessary
+                            State::Declaration {
+                                visibility,
+                                kind: t,
+                                identifier: d,
+                            }
+                        }
+                        (
+                            State::Declaration {
+                                visibility,
+                                kind: t,
+                                identifier: d,
+                            },
+                            State::ConstructorInvocation(i),
+                        ) if kind == &Type::EnhancedForStatement => {
+                            let i = sync!(i); // Not necessary
+                            State::Declaration {
+                                visibility,
+                                kind: t,
+                                identifier: d,
+                            }
+                        }
+
+                        (rest, State::Declarations(v)) if kind == &Type::ForStatement => {
+                            for (_, d, t) in v {
+                                let t = t.map(|x| sync!(x));
+                                let d = d.with_changed_node(|i| sync!(*i));
+                                match rest {
+                                    State::None => (),
+                                    _ => panic!(),
+                                }
+                                match &d {
+                                    Declarator::Variable(_) => acc.solver.add_decl(d, t),
+                                    _ => todo!(),
+                                };
+                            }
+                            // we do not need declarations outside of the map to solve local variable
+                            // because a local variable declaration is never visible from outside
+                            State::None
+                        }
+
+                        // (
+                        //     State::None,
+                        //     State::Declaration {
+                        //         visibility,
+                        //         kind: t,
+                        //         identifier: d,
+                        //     },
+                        // ) if kind == &Type::ForStatement => {
+                        //     let t = sync!(t);
+                        //     let d = d.with_changed_node(|i| sync!(*i));
+                        //     State::Declaration {a
+                        //         visibility,
+                        //         kind: t,
+                        //         identifier: d,
+                        //     }
+                        // }
+                        (State::None, State::SimpleIdentifier(_, i))
+                            if kind == &Type::ForStatement || kind == &Type::DoStatement =>
+                        {
+                            scoped!(mm!(), i);
+                            State::None
+                        }
+                        (State::None, _)
+                            if kind == &Type::ForStatement || kind == &Type::DoStatement =>
+                        {
+                            State::None
+                        }
+                        (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    }
+                }
+            } else if kind.is_block_related() {
+                let mut remapper = acc.solver.local_solve_extend(&self.solver);
+                macro_rules! sync {
+                    ( $i:expr ) => {
+                        remapper.intern_external(&mut acc.solver, $i.0)
+                    };
+                }
+                // maybe fusion with structural statement
+                if kind == &Type::StaticInitializer {
+                    match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                        (State::None, State::Modifiers(_, _)) => State::None,
+                        (State::None, State::None) => State::None,
+                        (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    }
+                } else if kind == &Type::ConstructorBody {
+                    match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                        (State::None, State::None) if kind == &Type::ConstructorBody => State::None,
+                        (rest, State::ConstructorInvocation(i))
+                            if kind == &Type::ConstructorBody =>
+                        {
+                            let i = sync!(i);
+                            match rest {
+                                State::None => (),
+                                _ => panic!(),
+                            }
+                            State::None
+                        }
+                        (
+                            rest,
+                            State::Declaration {
+                                visibility,
+                                kind: t,
+                                identifier: d,
+                            },
+                        ) if kind == &Type::ConstructorBody => {
+                            let t = t.map(|x| sync!(x));
+                            let d = d.with_changed_node(|i| sync!(*i));
+                            match rest {
+                                State::None => (),
+                                _ => panic!(),
+                            }
+                            match &d {
+                                Declarator::Variable(_) => acc.solver.add_decl(d, t),
+                                _ => todo!(),
+                            };
+                            // we do not need declarations outside of the map to solve local variable
+                            // because a local variable declaration is never visible from outside
+                            // TODO declarations needed in ConstructorDeclaration
+                            State::None
+                        }
+                        (rest, State::Declarations(v)) => {
+                            for (_, d, t) in v {
+                                let t = t.map(|x| sync!(x));
+                                let d = d.with_changed_node(|i| sync!(*i));
+                                match rest {
+                                    State::None => (),
+                                    _ => panic!(),
+                                }
+                                match &d {
+                                    Declarator::Variable(_) => acc.solver.add_decl(d, t),
+                                    _ => todo!(),
+                                };
+                            }
+                            // we do not need declarations outside of the map to solve local variable
+                            // because a local variable declaration is never visible from outside
+                            State::None
+                        }
+                        (
+                            rest,
+                            State::TypeDeclaration {
+                                visibility,
+                                identifier: d,
+                                members: _,
+                            },
+                        ) => {
+                            match d {
+                                DeclType::Runtime(_) => panic!(),
+                                DeclType::Compile(t, sup, int) => {
+                                    let t = sync!(t);
+                                    let d = Declarator::Type(t);
+                                    let sup = sup.iter().map(|x| sync!(x)).collect();
+                                    let int = int.iter().map(|x| sync!(x)).collect();
+                                    let t = DeclType::Compile(t, sup, int);
+                                    acc.solver.add_decl(d, t);
+                                }
+                            };
+                            match rest {
+                                State::None => (),
+                                _ => panic!(),
+                            }
+                            // we do not need declarations outside of the map to solve local variable
+                            // because a local variable declaration is never visible from outside
+                            State::None
+                        }
+                        (State::None, State::None) => State::None,
+                        (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    }
+                } else if kind == &Type::Block {
+                    match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                        (rest, State::Declarations(v)) => {
+                            for (_, d, t) in v {
+                                let t = t.map(|x| sync!(x));
+                                let d = d.with_changed_node(|i| sync!(*i));
+                                match rest {
+                                    State::None => (),
+                                    _ => panic!(),
+                                }
+                                match &d {
+                                    Declarator::Variable(i) => match acc.solver.nodes[*i] {
+                                        RefsEnum::Array(i) => {
+                                            let i = Declarator::Variable(i);
+                                            let t = match t {
+                                                DeclType::Runtime(v) => DeclType::Runtime(
+                                                    v.iter()
+                                                        .map(|t| {
+                                                            acc.solver
+                                                                .intern_ref(RefsEnum::Array(*t))
+                                                        })
+                                                        .collect(),
+                                                ),
+                                                DeclType::Compile(_, _, _) => todo!(),
+                                            };
+                                            acc.solver.add_decl(i, t)
+                                        }
+                                        _ => {
+                                            let i = Declarator::Variable(*i);
+                                            acc.solver.add_decl(i, t)
+                                        }
+                                    },
+                                    _ => todo!(),
+                                };
+                            }
+                            // we do not need declarations apart of the map to solve local variable
+                            // because a local variable declaration is never visible from outside
+                            State::None
+                        }
+                        (
+                            rest,
+                            State::TypeDeclaration {
+                                visibility,
+                                identifier: d,
+                                members: _,
+                            },
+                        ) => {
+                            match d {
+                                DeclType::Runtime(_) => panic!(),
+                                DeclType::Compile(t, sup, int) => {
+                                    let t = sync!(t);
+                                    let d = Declarator::Type(t);
+                                    let sup = sup.iter().map(|x| sync!(x)).collect();
+                                    let int = int.iter().map(|x| sync!(x)).collect();
+                                    let t = DeclType::Compile(t, sup, int);
+                                    acc.solver.add_decl(d, t);
+                                }
+                            };
+                            match rest {
+                                State::None => (),
+                                _ => panic!(),
+                            }
+                            // we do not need declarations outside of the map to solve local variable
+                            // because a local variable declaration is never visible from outside
+                            State::None
+                        }
+                        (State::None, State::None) => State::None,
+                        (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    }
+                } else if kind == &Type::SwitchBlockStatementGroup {
+                    match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                        (rest, State::Declarations(v)) => {
+                            for (_, d, t) in v {
+                                let t = t.map(|x| sync!(x));
+                                let d = d.with_changed_node(|i| sync!(*i));
+                                match rest {
+                                    State::None => (),
+                                    _ => panic!(),
+                                }
+                                match &d {
+                                    Declarator::Variable(_) => acc.solver.add_decl(d, t),
+                                    _ => todo!(),
+                                };
+                            }
+                            State::None
+                        }
+                        (
+                            rest,
+                            State::TypeDeclaration {
+                                visibility,
+                                identifier: d,
+                                members: _,
+                            },
+                        ) => {
+                            match d {
+                                DeclType::Runtime(_) => panic!(),
+                                DeclType::Compile(t, sup, int) => {
+                                    let t = sync!(t);
+                                    let d = Declarator::Type(t);
+                                    let sup = sup.iter().map(|x| sync!(x)).collect();
+                                    let int = int.iter().map(|x| sync!(x)).collect();
+                                    let t = DeclType::Compile(t, sup, int);
+                                    acc.solver.add_decl(d, t);
+                                }
+                            };
+                            match rest {
+                                State::None => (),
+                                _ => panic!(),
+                            }
+                            State::None
+                        }
+                        (State::None, State::None) => State::None,
+                        (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    }
+                } else if kind == &Type::SwitchBlock {
+                    // TODO retrieve decls not in Block from SwitchBlockStatementGroup
+                    match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                        (rest, State::None) => rest, // TODO handle fall through declarations
+                        (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    }
+                } else {
+                    panic!("{:?}", kind)
+                }
+            } else if kind.is_structural_statement() {
+                let mut remapper = acc.solver.local_solve_extend(&self.solver);
+                macro_rules! sync {
+                    ( $i:expr ) => {
+                        remapper.intern_external(&mut acc.solver, $i.0)
+                    };
+                }
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::None) => State::None,
+
+                    (State::None, State::LiteralType(t)) if kind == &Type::IfStatement => {
+                        let t = sync!(t);
+                        State::None
+                    }
+                    (State::None, State::LiteralType(_))
+                        if kind == &Type::IfStatement
+                            || kind == &Type::DoStatement
+                            || kind == &Type::WhileStatement
+                            || kind == &Type::SwitchStatement =>
+                    {
+                        State::None
+                    }
+                    (State::None, State::FieldIdentifier(_)) if kind == &Type::IfStatement => {
+                        State::None
+                    }
+                    (State::None, State::ConstructorInvocation(i))
+                        if kind == &Type::IfStatement =>
+                    {
+                        let i = sync!(i);
+                        State::None
+                    }
+                    (State::None, State::ConstructorInvocation(i))
+                        if kind == &Type::WhileStatement
+                            || kind == &Type::DoStatement
+                            || kind == &Type::SwitchStatement =>
+                    {
+                        let i = sync!(i);
+                        State::None
+                    }
+                    (State::None, State::Invocation(i))
+                        if kind == &Type::WhileStatement
+                            || kind == &Type::DoStatement
+                            || kind == &Type::SwitchStatement =>
+                    {
+                        let i = sync!(i);
+                        State::None
+                    }
+                    (State::None, State::This(i))
+                        if kind == &Type::WhileStatement
+                            || kind == &Type::DoStatement
+                            || kind == &Type::SwitchStatement =>
+                    {
+                        State::None
+                    }
+                    (State::None, State::ScopedIdentifier(i))
+                        if kind == &Type::IfStatement
+                            || kind == &Type::DoStatement
+                            || kind == &Type::WhileStatement
+                            || kind == &Type::SwitchStatement =>
+                    {
+                        State::None
+                    }
+                    (State::None, State::FieldIdentifier(i))
+                        if kind == &Type::IfStatement
+                            || kind == &Type::DoStatement
+                            || kind == &Type::WhileStatement
+                            || kind == &Type::SwitchStatement =>
+                    {
+                        State::None
+                    }
+                    (State::None, State::Invocation(i)) if kind == &Type::IfStatement => {
+                        State::None
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind.is_simple_statement() {
+                let mut remapper = acc.solver.extend(&self.solver);
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, rest) => {
+                        match rest {
+                            State::None => (),
+                            State::FieldIdentifier(_) => (),
+                            State::ScopedIdentifier(_) => (),
+                            State::MethodReference(_) => (),
+                            State::Invocation(_) => (),
+                            State::ConstructorInvocation(_) => (),
+                            State::LiteralType(_) => (),
+                            State::This(_) => (),
+                            State::LambdaExpression(_) => (),
+                            State::SimpleIdentifier(_, i) => {
+                                if kind == &Type::ExpressionStatement
+                                    || kind == &Type::AssertStatement
+                                    || kind == &Type::ReturnStatement
+                                    || kind == &Type::SynchronizedStatement
+                                    || kind == &Type::ThrowStatement
+                                {
+                                    scoped!(mm!(), i);
+                                } else if kind == &Type::LabeledStatement
+                                    || kind == &Type::BreakStatement
+                                    || kind == &Type::ContinueStatement
+                                {
+                                } else {
+                                    panic!()
+                                }
+                            }
+                            State::SimpleIdentifier(_, i) => {}
+                            x => panic!("{:?} {:?}", kind, x),
+                        }
+                        State::None
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else {
+                panic!("{:?}", kind)
+            }
+        } else if kind.is_parameter() {
+            let mut remapper = acc.solver.extend(&self.solver);
+            macro_rules! sync {
+                ( $i:expr ) => {
+                    remapper.intern_external(&mut acc.solver, $i.0)
+                };
+            }
+            if kind == &Type::Resource {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::SimpleIdentifier(_, t)) if kind == &Type::Resource => {
+                        let t = scoped!(mm!(), t);
+                        State::ScopedIdentifier(t)
+                    }
+                    (State::None, State::ScopedIdentifier(t)) if kind == &Type::Resource => {
+                        let t = sync!(t);
+                        State::ScopedIdentifier(t)
+                    }
+                    (State::None, State::ScopedTypeIdentifier(t)) if kind == &Type::Resource => {
+                        let t = sync!(t);
+                        let t = DeclType::Runtime(vec![t].into());
+                        State::Declaration {
+                            visibility: Visibility::None,
+                            kind: t,
+                            identifier: Declarator::None,
+                        }
+                    }
+                    (State::None, State::SimpleTypeIdentifier(t)) if kind == &Type::Resource => {
+                        let t = scoped!(mm!(), t);
+                        let t = DeclType::Runtime(vec![t].into());
+                        State::Declaration {
+                            visibility: Visibility::None,
+                            kind: t,
+                            identifier: Declarator::None,
+                        }
+                    }
+                    (
+                        State::Declaration {
+                            visibility,
+                            kind: t,
+                            identifier: _,
+                        },
+                        State::SimpleIdentifier(_, i),
+                    ) if kind == &Type::Resource => {
+                        let i = scoped!(mm!(), i);
+                        let i = Declarator::Variable(i);
+                        State::Declaration {
+                            visibility,
+                            kind: t,
+                            identifier: i,
+                        }
+                    }
+                    (
+                        State::Declaration {
+                            visibility,
+                            kind: t,
+                            identifier: Declarator::Variable(i),
+                        },
+                        rest,
+                    ) if kind == &Type::Resource => {
+                        match rest {
+                            State::ConstructorInvocation(_) => (),
+                            State::Invocation(_) => (),
+                            State::ScopedIdentifier(_) => (), // not sure
+                            x => todo!("{:?}", x),
+                        };
+                        let d = Declarator::Variable(i);
+                        State::Declaration {
+                            visibility,
+                            kind: t,
+                            identifier: d,
+                        }
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::FormalParameter {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::SimpleTypeIdentifier(t))
+                        if kind == &Type::FormalParameter || kind == &Type::SpreadParameter =>
+                    {
+                        // TODO spread parameter is hard for invocation matching on check ? cannot use param ?
+                        // TODO spread parameter is hard for decl matching on solve
+                        // NOTE method ref resolution (overloading)
+                        // 1)strict invocation: fixed arity method resolution, no boxing/unboxing )
+                        // 2)loose invocation: fixed arity method resolution, boxing/unboxing
+                        // 3)variable arity invocation: variable arity method resolution, boxing/unboxing
+                        let t = scoped!(mm!(), t);
+                        State::ScopedTypeIdentifier(t)
+                    }
+                    (State::None, State::ScopedTypeIdentifier(t))
+                        if kind == &Type::FormalParameter || kind == &Type::SpreadParameter =>
+                    {
+                        let t = sync!(t);
+                        State::ScopedTypeIdentifier(t)
+                    }
+                    (State::ScopedTypeIdentifier(t), State::SimpleIdentifier(_, i))
+                        if kind == &Type::FormalParameter =>
+                    {
+                        let t = DeclType::Runtime(vec![t].into());
+                        let r = mm!();
+                        let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                        let i = Declarator::Variable(i);
+                        State::Declaration {
+                            visibility: Visibility::None,
+                            kind: t,
+                            identifier: i,
+                        }
+                    }
+                    (State::SimpleTypeIdentifier(t), State::SimpleIdentifier(_, i))
+                        if kind == &Type::FormalParameter =>
+                    {
+                        let t = scoped!(mm!(), t);
+                        let t = DeclType::Runtime(vec![t].into());
+                        let r = mm!();
+                        let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                        let i = Declarator::Variable(i);
+                        // no need because wont be used directly
+                        // acc.solver.add_decl_simple(i.clone(), t);
+                        State::Declaration {
+                            visibility: Visibility::None,
+                            kind: t,
+                            identifier: i,
+                        }
+                    }
+                    (
+                        State::Declaration {
+                            visibility,
+                            kind: t,
+                            identifier: i,
+                        },
+                        State::Dimensions,
+                    ) if kind == &Type::FormalParameter => {
+                        let t = match t {
+                            DeclType::Runtime(v) => DeclType::Runtime(
+                                v.iter()
+                                    .map(|t| acc.solver.intern_ref(RefsEnum::Array(*t)))
+                                    .collect(),
+                            ),
+                            DeclType::Compile(_, _, _) => todo!(),
+                        };
+                        State::Declaration {
+                            visibility,
+                            kind: t,
+                            identifier: i,
+                        }
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::TypeParameter {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    // TypeParameter
+                    (State::None, State::None) if kind == &Type::TypeParameter => State::None,
+                    (State::None, State::SimpleIdentifier(case, i))
+                        if kind == &Type::TypeParameter =>
+                    {
+                        State::SimpleIdentifier(case, i)
+                    }
+                    (State::SimpleIdentifier(case, i), State::TypeBound)
+                        if kind == &Type::TypeParameter =>
+                    {
+                        // TODO use type bound
+                        State::SimpleIdentifier(case, i)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::SpreadParameter {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::ScopedTypeIdentifier(t), State::Declarator(d))
+                        if kind == &Type::SpreadParameter =>
+                    {
+                        let t = DeclType::Runtime(vec![t].into());
+                        let i = match d {
+                            Declarator::Variable(t) => sync!(t),
+                            _ => panic!(),
+                        };
+                        let i = Declarator::Variable(i);
+                        State::Declaration {
+                            visibility: Visibility::None,
+                            kind: t,
+                            identifier: i,
+                        }
+                        // State::ScopedTypeIdentifier(t)
+                    }
+                    (State::None, State::ScopedTypeIdentifier(t))
+                        if kind == &Type::SpreadParameter =>
+                    {
+                        let t = sync!(t);
+                        State::ScopedTypeIdentifier(t)
+                    }
+                    (State::None, State::SimpleTypeIdentifier(t))
+                        if kind == &Type::SpreadParameter =>
+                    {
+                        let t = scoped!(mm!(), t);
+                        State::ScopedTypeIdentifier(t)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::CatchFormalParameter {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::CatchTypes(v)) if kind == &Type::CatchFormalParameter => {
+                        State::CatchTypes(v.iter().map(|x| sync!(x)).collect())
+                    }
+                    (State::CatchTypes(v), State::SimpleIdentifier(_, i))
+                        if kind == &Type::CatchFormalParameter =>
+                    {
+                        State::CatchParameter {
+                            kinds: v.into_boxed_slice(),
+                            identifier: i,
+                        }
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else {
+                panic!("{:?}", kind)
+            }
+        } else if kind.is_expression() {
+            let mut remapper = acc.solver.extend(&self.solver);
+            macro_rules! sync {
+                ( $i:expr ) => {
+                    remapper.intern_external(&mut acc.solver, $i.0)
+                };
+            }
+            if kind == &Type::LambdaExpression {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::SimpleIdentifier(_, i))
+                        if kind == &Type::LambdaExpression =>
+                    {
+                        let r = mm!();
+                        let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                        let i = Declarator::Variable(i);
+                        acc.solver.add_decl(i.clone(), DeclType::Runtime(vec![].into()));
+                        State::Declarations(vec![(
+                            Visibility::None,
+                            i,
+                            DeclType::Runtime(vec![].into()),
+                        )]) // r
+                    }
+                    (State::None, State::Declarations(v)) if kind == &Type::LambdaExpression => {
+                        let v = v
+                            .into_iter()
+                            .map(|(v, i, t)| {
+                                let i = i.with_changed_node(|i| sync!(*i));
+                                let t = t.map(|x| sync!(x));
+                                acc.solver.add_decl(i.clone(), t.clone());
+                                (v, i, t)
+                            })
+                            .collect();
+                        State::Declarations(v)
+                    }
+                    (State::None, State::FormalParameters(v))
+                        if kind == &Type::LambdaExpression =>
+                    {
+                        let v = v
+                            .into_iter()
+                            .map(|(i, t)| {
+                                let i = sync!(i);
+                                let t = t.map(|x| sync!(x));
+                                let i = Declarator::Variable(i);
+                                acc.solver.add_decl(i.clone(), t.clone());
+                                (Visibility::None, i, t)
+                            })
+                            .collect();
+                        State::Declarations(v)
+                    }
+                    (State::Declarations(p), State::None) if kind == &Type::LambdaExpression => {
+                        let i = mm!();
+                        State::LambdaExpression(i)
+                    }
+                    (State::Declarations(p), State::Invocation(i))
+                        if kind == &Type::LambdaExpression =>
+                    {
+                        // TODO solve references to parameters
+                        let i = sync!(i);
+                        let i = mm!();
+                        State::LambdaExpression(i)
+                    }
+                    (State::Declarations(p), State::FieldIdentifier(i))
+                        if kind == &Type::LambdaExpression =>
+                    {
+                        // TODO solve references to parameters
+                        let i = sync!(i);
+                        let i = mm!();
+                        State::LambdaExpression(i)
+                    }
+                    (State::Declarations(p), State::ConstructorInvocation(i))
+                        if kind == &Type::LambdaExpression =>
+                    {
+                        // TODO solve references to parameters
+                        let i = sync!(i);
+                        let i = mm!();
+                        State::LambdaExpression(i)
+                    }
+                    (State::Declarations(p), State::ScopedIdentifier(i))
+                        if kind == &Type::LambdaExpression =>
+                    {
+                        // TODO solve references to parameters
+                        let i = sync!(i);
+                        let i = mm!();
+                        State::LambdaExpression(i)
+                    }
+                    (State::Declarations(p), State::SimpleIdentifier(_, i))
+                        if kind == &Type::LambdaExpression =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        // TODO solve references to parameters
+                        let i = mm!();
+                        State::LambdaExpression(i)
+                    }
+                    (State::Declarations(p), State::This(i)) if kind == &Type::LambdaExpression => {
+                        let i = sync!(i);
+                        // TODO solve references to parameters
+                        let i = mm!();
+                        State::LambdaExpression(i)
+                    }
+                    (State::Declarations(p), State::LiteralType(t))
+                        if kind == &Type::LambdaExpression =>
+                    {
+                        // TODO solve references to parameters
+                        let t = sync!(t);
+                        State::LiteralType(t)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::ArrayCreationExpression {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::SimpleTypeIdentifier(i))
+                        if kind == &Type::ArrayCreationExpression =>
+                    {
+                        let r = mm!();
+                        let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                        let i = acc
+                            .solver
+                            .intern(RefsEnum::ConstructorInvocation(i, Arguments::Unknown));
+                        State::ConstructorInvocation(i)
+                    }
+                    (State::None, State::ScopedTypeIdentifier(i))
+                        if kind == &Type::ArrayCreationExpression =>
+                    {
+                        let i = sync!(i);
+                        let i = acc
+                            .solver
+                            .intern(RefsEnum::ConstructorInvocation(i, Arguments::Unknown));
+                        State::ConstructorInvocation(i)
+                    }
+                    (State::ConstructorInvocation(i), State::None)
+                        if kind == &Type::ArrayCreationExpression =>
+                    {
+                        State::ConstructorInvocation(i)
+                    }
+                    (State::ConstructorInvocation(i), rest)
+                        if kind == &Type::ArrayCreationExpression =>
+                    {
+                        match rest {
+                            State::Dimensions => (),
+                            State::ScopedIdentifier(_) => (),
+                            State::LiteralType(_) => (),
+                            State::SimpleIdentifier(_, i) => {
+                                scoped!(mm!(), i);
+                            }
+                            x => todo!("{:?}", x),
+                        };
+                        let (o, p) = match &acc.solver.nodes[i] {
+                            RefsEnum::ConstructorInvocation(o, p) => (*o, p.clone()),
+                            x => todo!("{:?}", x),
+                        };
+                        let i = acc.solver.intern(RefsEnum::Array(o));
+                        let i = acc.solver.intern(RefsEnum::ConstructorInvocation(i, p));
+                        State::ConstructorInvocation(i)
+                    }
+                    // // (State::ConstructorInvocation(i), State::LiteralType(_))
+                    // //     if kind == &Type::ArrayCreationExpression =>
+                    // // {
+                    // //     // TODO use the dimension expr
+                    // //     State::ConstructorInvocation(i)
+                    // // }
+                    // (State::ScopedIdentifier(i), State::LiteralType(_))
+                    //     if kind == &Type::ArrayCreationExpression =>
+                    // {
+                    //     let i = acc
+                    //         .solver
+                    //         .intern_ref(RefsEnum::ConstructorInvocation(i, Arguments::Unknown));
+                    //     // TODO use dimension
+                    //     State::ConstructorInvocation(i)
+                    // }
+                    // (
+                    //     State::ScopedIdentifier(i),
+                    //     State::FieldIdentifier(_),
+                    // ) if kind == &Type::ArrayCreationExpression => {
+                    //     let i = acc
+                    //         .solver
+                    //         .intern_ref(RefsEnum::ConstructorInvocation(i, Arguments::Unknown));
+                    //     // TODO use dimension
+                    //     State::ConstructorInvocation(i)
+                    // }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::ObjectCreationExpression {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::SimpleTypeIdentifier(i))
+                        if kind == &Type::ObjectCreationExpression =>
+                    {
+                        let r = mm!();
+                        State::InvocationId(r, i)
+                    }
+                    (State::None, State::SimpleIdentifier(case, i))
+                        if kind == &Type::ObjectCreationExpression =>
+                    {
+                        State::SimpleIdentifier(case, i)
+                    }
+                    (State::None, State::ScopedIdentifier(i))
+                        if kind == &Type::ObjectCreationExpression =>
+                    {
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::SimpleIdentifier(case, o), State::SimpleTypeIdentifier(i))
+                        if kind == &Type::ObjectCreationExpression =>
+                    {
+                        // TODO use case maybe
+                        let o = scoped!(mm!(), o);
+                        State::InvocationId(o, i)
+                    }
+                    (State::ScopedIdentifier(o), State::SimpleTypeIdentifier(i))
+                        if kind == &Type::ObjectCreationExpression =>
+                    {
+                        State::InvocationId(o, i)
+                    }
+                    (State::SimpleTypeIdentifier(o), State::SimpleTypeIdentifier(i))
+                        if kind == &Type::ObjectCreationExpression =>
+                    {
+                        let o = scoped!(mm!(), o);
+                        State::InvocationId(o, i)
+                    }
+                    (State::ScopedTypeIdentifier(o), State::ScopedTypeIdentifier(i))
+                        if kind == &Type::ObjectCreationExpression =>
+                    {
+                        let i = sync!(i);
+                        let i = acc.solver.try_solve_node_with(i, o).unwrap();
+                        State::ScopedTypeIdentifier(i)
+                    }
+                    (State::None, State::ScopedTypeIdentifier(i))
+                        if kind == &Type::ObjectCreationExpression =>
+                    {
+                        let i = sync!(i);
+                        State::ScopedTypeIdentifier(i)
+                    }
+                    (State::ScopedTypeIdentifier(i), State::Arguments(p))
+                        if kind == &Type::ObjectCreationExpression =>
+                    {
+                        let p = p.deref().iter().map(|i| sync!(*i)).collect();
+                        let r = acc
+                            .solver
+                            .intern_ref(RefsEnum::ConstructorInvocation(i, Arguments::Given(p)));
+                        State::ConstructorInvocation(r)
+                    }
+                    (State::InvocationId(r, i), State::Arguments(p))
+                        if kind == &Type::ObjectCreationExpression =>
+                    {
+                        // TODO invocationId may not be the best way
+                        let p = p.deref().iter().map(|i| sync!(*i)).collect();
+                        let i = scoped!(r, i);
+                        let r = acc
+                            .solver
+                            .intern_ref(RefsEnum::ConstructorInvocation(i, Arguments::Given(p)));
+                        State::ConstructorInvocation(r)
+                    }
+                    (State::ConstructorInvocation(r), State::Declarations(v))
+                        if kind == &Type::ObjectCreationExpression =>
+                    {
+                        State::ConstructorInvocation(r)
+                    }
+                    (State::ConstructorInvocation(r), State::None)
+                        if kind == &Type::ObjectCreationExpression =>
+                    {
+                        State::ConstructorInvocation(r)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+
+            // }else if kind == &Type::TernaryExpression {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+            // } else if kind == &Type::BinaryExpression {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+            // } else if kind == &Type::AssignmentExpression {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+            // } else if kind == &Type::VariableDeclarator {
+            // match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //     (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            // }
+            // } else if kind == &Type::InstanceofExpression {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+
+            // } else if kind == &Type::CastExpression {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+            // } else if kind == &Type::UpdateExpression {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+            // } else if kind == &Type::ParenthesizedExpression {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+            } else if kind == &Type::MethodInvocation {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    // MethodInvocation f()
+                    (State::None, State::SimpleIdentifier(case, t))
+                        if kind == &Type::MethodInvocation =>
+                    {
+                        State::SimpleIdentifier(case, t)
+                    }
+                    (State::SimpleIdentifier(_, i), State::Arguments(p))
+                        if kind == &Type::MethodInvocation =>
+                    {
+                        let p = p.deref().iter().map(|i| sync!(*i)).collect();
+                        let r = mm!();
+                        let r =
+                            acc.solver
+                                .intern_ref(RefsEnum::Invocation(r, i, Arguments::Given(p)));
+                        State::ScopedIdentifier(r) // or should it be an invocation
+                    }
+                    (State::SimpleIdentifier(case, i), State::TypeArguments(p))
+                        if kind == &Type::MethodInvocation =>
+                    {
+                        // TODO use type arguments
+                        State::SimpleIdentifier(case, i)
+                    }
+                    (State::ScopedIdentifier(i), State::TypeArguments(p))
+                        if kind == &Type::MethodInvocation =>
+                    {
+                        // TODO handle type argmuments
+                        // todo!(
+                        //     "{:?}",
+                        //     ExplorableRef {
+                        //         rf: i,
+                        //         nodes: &acc.solver.nodes
+                        //     }
+                        // );
+                        // let p = p.deref().iter().map(|i| sync!(*i)).collect();
+                        // let r = mm!();
+                        // let r =
+                        //     acc.solver
+                        //         .intern_ref(RefsEnum::Invocation(r, i, Arguments::Given(p)));
+                        State::ScopedIdentifier(i) // or should it be an invocation
+                    }
+                    // MethodInvocation x.f()
+                    (State::None, expr) if kind == &Type::MethodInvocation => {
+                        let i = match expr {
+                            State::LiteralType(t) => sync!(t),
+                            State::SimpleIdentifier(_, t) => {
+                                panic!("should be handled specifically")
+                            }
+                            State::This(i) => sync!(i),
+                            State::Super(i) => sync!(i),
+                            State::ScopedIdentifier(i) => sync!(i),
+                            State::FieldIdentifier(i) => sync!(i),
+                            State::Invocation(i) => sync!(i),
+                            State::ConstructorInvocation(i) => sync!(i),
+                            State::None => panic!(""),
+                            x => panic!("{:?}", x),
+                        };
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(i), State::Arguments(p))
+                        if kind == &Type::MethodInvocation =>
+                    {
+                        // todo!("{:?}",ExplorableRef{rf:i,nodes:&acc.solver.nodes});
+                        let p = p.deref().iter().map(|i| sync!(*i)).collect();
+                        match &acc.solver.nodes[i] {
+                            RefsEnum::ScopedIdentifier(o, i) => {
+                                let r = acc.solver.intern_ref(RefsEnum::Invocation(
+                                    *o,
+                                    *i,
+                                    Arguments::Given(p),
+                                ));
+                                State::ScopedIdentifier(r)
+                            }
+                            x => panic!("{:?} {:?}", acc.solver.nodes.with(i), x),
+                        }
+                    }
+                    (State::ScopedIdentifier(o), expr) if kind == &Type::MethodInvocation => {
+                        match expr {
+                            State::SimpleIdentifier(_, i) => State::InvocationId(o, i),
+                            State::This(i) => State::ScopedIdentifier(spec!(o, sync!(i))),
+                            State::Super(i) => State::ScopedIdentifier(spec!(o, sync!(i))),
+                            x => panic!("{:?} {:?}", acc.solver.nodes.with(o), x),
+                        }
+                    }
+                    (State::SimpleIdentifier(case, o), expr) if kind == &Type::MethodInvocation => {
+                        // TODO use case
+                        match expr {
+                            State::SimpleIdentifier(_, i) => {
+                                State::InvocationId(scoped!(mm!(), o), i)
+                            }
+                            State::This(i) => {
+                                State::ScopedIdentifier(spec!(scoped!(mm!(), o), sync!(i)))
+                            }
+                            State::Super(i) => {
+                                State::ScopedIdentifier(spec!(scoped!(mm!(), o), sync!(i)))
+                            }
+                            x => panic!("{:?}", x),
+                        }
+                    }
+                    (State::InvocationId(o, i), State::Arguments(p))
+                        if kind == &Type::MethodInvocation =>
+                    {
+                        let p = p.deref().iter().map(|i| sync!(*i)).collect();
+                        let r =
+                            acc.solver
+                                .intern_ref(RefsEnum::Invocation(o, i, Arguments::Given(p)));
+                        State::ScopedIdentifier(r) // or should it be an invocation
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::MethodReference {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, expr) if kind == &Type::MethodReference => {
+                        let i = match expr {
+                            State::LiteralType(t) => sync!(t),
+                            State::SimpleIdentifier(case, t) => scoped!(mm!(), t), // TODO use case
+                            State::SimpleTypeIdentifier(t) => scoped!(mm!(), t),
+                            State::This(t) => sync!(t),
+                            State::ScopedTypeIdentifier(i) => sync!(i), // TODO fix related to getting type alias from tree-sitter API
+                            State::ScopedIdentifier(i) => sync!(i),
+                            State::FieldIdentifier(i) => panic!("not possible"),
+                            State::Invocation(i) => panic!("not possible"),
+                            State::ConstructorInvocation(i) => panic!("not possible"),
+                            State::None => panic!("should handle before"),
+                            x => panic!("{:?}", x),
+                        };
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(o), State::SimpleIdentifier(_, i))
+                        if kind == &Type::MethodReference =>
+                    {
+                        let r = acc.solver.intern_ref(RefsEnum::MethodReference(o, i));
+                        State::MethodReference(r)
+                    }
+                    (State::ScopedIdentifier(o), State::None) if kind == &Type::MethodReference => {
+                        let r = acc
+                            .solver
+                            .intern_ref(RefsEnum::ConstructorInvocation(o, Arguments::Unknown));
+                        State::MethodReference(r)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::ExplicitConstructorInvocation {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    // this() or super()
+                    // TODO ExplicitConstructorInvocation try not to pollute ref resolution
+                    (State::None, expr) if kind == &Type::ExplicitConstructorInvocation => {
+                        match &expr {
+                            State::SimpleIdentifier(case, i) => State::SimpleIdentifier(*case, *i),
+                            State::ScopedIdentifier(i) => State::ScopedIdentifier(sync!(*i)),
+                            State::This(i) => State::This(sync!(*i)),
+                            State::Super(i) => State::Super(sync!(*i)),
+                            x => panic!("{:?}", x),
+                        }
+                    }
+                    (State::ScopedIdentifier(o), State::SimpleIdentifier(_, i))
+                        if kind == &Type::ExplicitConstructorInvocation =>
+                    {
+                        let i = acc.solver.intern(RefsEnum::ScopedIdentifier(o, i));
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(o), State::Super(i))
+                        if kind == &Type::ExplicitConstructorInvocation =>
+                    {
+                        let i = spec!(o, sync!(i));
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::SimpleIdentifier(case, o), State::Super(i))
+                        if kind == &Type::ExplicitConstructorInvocation =>
+                    {
+                        // TODO use case if super has an object
+                        let i = spec!(scoped!(mm!(), o), sync!(i));
+                        State::ScopedIdentifier(i)
+                    }
+                    (expr, State::Arguments(p)) if kind == &Type::ExplicitConstructorInvocation => {
+                        let i = match expr {
+                            State::ScopedIdentifier(i) => i,
+                            State::Super(i) => i,
+                            State::This(i) => i,
+                            _ => panic!(),
+                        };
+                        let p = p.deref().iter().map(|i| sync!(*i)).collect();
+                        let i = acc
+                            .solver
+                            .intern_ref(RefsEnum::ConstructorInvocation(i, Arguments::Given(p)));
+                        State::ConstructorInvocation(i)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+
+            // } else if kind == &Type::ClassLiteral {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+            // } else if kind == &Type::FieldAccess {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+            // } else if kind == &Type::ArrayAccess {
+            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
+            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     }
+            } else {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::SimpleTypeIdentifier(t))
+                        if kind == &Type::InstanceofExpression =>
+                    {
+                        scoped!(mm!(), t);
+                        State::None
+                    }
+                    (State::Invocation(_), State::SimpleTypeIdentifier(i))
+                        if kind == &Type::InstanceofExpression =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        // TODO intern boolean
+                        State::ScopedIdentifier(mm!())
+                    }
+                    (State::ScopedIdentifier(_), State::SimpleTypeIdentifier(i))
+                        if kind == &Type::InstanceofExpression =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        // TODO intern boolean
+                        State::ScopedIdentifier(mm!())
+                    }
+                    (State::ScopedIdentifier(_), State::ScopedTypeIdentifier(i))
+                        if kind == &Type::InstanceofExpression =>
+                    {
+                        // TODO intern boolean
+                        State::ScopedIdentifier(mm!())
+                    }
+
+                    // array access
+                    (State::None, expr) if kind == &Type::ArrayAccess => {
+                        // TODO simp more FieldIdentifiers to ScopedIdentifier
+                        let i = match expr {
+                            State::LiteralType(t) => sync!(t),
+                            State::SimpleIdentifier(case, t) => scoped!(mm!(), t), // TODO use case
+                            State::ScopedIdentifier(i) => sync!(i),
+                            State::FieldIdentifier(i) => sync!(i),
+                            State::Invocation(i) => sync!(i),
+                            State::ConstructorInvocation(i) => sync!(i),
+                            x => panic!("{:?}", x),
+                        };
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(o), expr) if kind == &Type::ArrayAccess => {
+                        // TODO create RefsEnum variant to use access expr and solve type of array
+                        match expr {
+                            State::LiteralType(t) => (),
+                            State::SimpleIdentifier(_, t) => {
+                                scoped!(mm!(), t);
+                            }
+                            State::This(t) => (),
+                            State::ScopedIdentifier(_) => (),
+                            State::FieldIdentifier(_) => (),
+                            State::Invocation(_) => (),
+                            State::ConstructorInvocation(_) => (),
+                            // State::None => (), // TODO check
+                            x => panic!("{:?}", x),
+                        };
+                        let o = acc.solver.intern_ref(RefsEnum::ArrayAccess(o));
+                        State::ScopedIdentifier(o)
+                    }
+                    // field access
+                    (State::None, expr) if kind == &Type::FieldAccess =>
+                    //TODO get type
+                    {
+                        let i = match expr {
+                            State::LiteralType(t) => sync!(t),
+                            State::SimpleIdentifier(case, t) => scoped!(mm!(), t), // TODO use case
+                            State::This(i) => sync!(i),
+                            State::Super(i) => sync!(i),
+                            State::ScopedIdentifier(i) => sync!(i),
+                            State::FieldIdentifier(i) => sync!(i),
+                            State::Invocation(i) => sync!(i),
+                            State::ConstructorInvocation(i) => sync!(i),
+                            State::None => panic!("should handle super"),
+                            x => panic!("{:?}", x),
+                        };
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(o), State::SimpleIdentifier(_, i))
+                        if kind == &Type::FieldAccess =>
+                    {
+                        let i = scoped!(o, i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(o), State::This(i)) if kind == &Type::FieldAccess => {
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
+                    }
+
+                    // literal
+                    (State::None, State::ScopedTypeIdentifier(i))
+                        if kind == &Type::ClassLiteral =>
+                    {
+                        // TODO should return Class<i>
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::None, State::SimpleTypeIdentifier(i))
+                        if kind == &Type::ClassLiteral =>
+                    {
+                        // TODO should return Class<i>
+                        let i = scoped!(mm!(), i);
+                        State::ScopedIdentifier(i)
+                    }
+
+                    // CastExpression
+                    (State::None, expr) if kind == &Type::CastExpression => {
+                        let t = match expr {
+                            State::SimpleTypeIdentifier(t) => scoped!(mm!(), t),
+                            State::ScopedTypeIdentifier(i) => sync!(i),
+                            State::None => panic!("should handle before"),
+                            x => panic!("{:?}", x),
+                        };
+                        State::ScopedTypeIdentifier(t)
+                    }
+                    (State::ScopedTypeIdentifier(t), expr) if kind == &Type::CastExpression => {
+                        let i = match expr {
+                            State::LiteralType(t) => sync!(t),
+                            State::This(i) => sync!(i),
+                            State::SimpleIdentifier(_, t) => scoped!(mm!(), t),
+                            State::SimpleTypeIdentifier(t) => scoped!(mm!(), t), // should not append
+                            State::ScopedIdentifier(i) => sync!(i),
+                            State::LambdaExpression(i) => sync!(i),
+                            State::FieldIdentifier(i) => sync!(i),
+                            State::Invocation(i) => sync!(i),
+                            State::ConstructorInvocation(i) => sync!(i),
+                            State::MethodReference(i) => sync!(i),
+                            State::ScopedTypeIdentifier(i) => panic!(),
+                            State::None => panic!("should handle before"),
+                            x => panic!("{:?}", x),
+                        };
+                        State::ScopedIdentifier(t)
+                    }
+                    (State::ScopedIdentifier(t), expr) if kind == &Type::CastExpression => {
+                        // should be ScopedTypeIdentifier but cannot get alias from treesitter rust API cleanly
+                        let i = match expr {
+                            State::LiteralType(t) => sync!(t),
+                            State::This(i) => sync!(i),
+                            State::SimpleIdentifier(_, t) => scoped!(mm!(), t),
+                            State::SimpleTypeIdentifier(t) => scoped!(mm!(), t), // should not append
+                            State::ScopedIdentifier(i) => sync!(i),
+                            State::LambdaExpression(i) => sync!(i),
+                            State::FieldIdentifier(i) => sync!(i),
+                            State::Invocation(i) => sync!(i),
+                            State::ConstructorInvocation(i) => sync!(i),
+                            State::MethodReference(i) => sync!(i),
+                            State::ScopedTypeIdentifier(i) => panic!(),
+                            State::None => panic!("should handle before"),
+                            x => panic!("{:?}", x),
+                        };
+                        State::ScopedIdentifier(t)
+                    }
+                    (State::None, State::SimpleIdentifier(_, i))
+                        if kind == &Type::BinaryExpression
+                            || kind == &Type::UnaryExpression
+                            || kind == &Type::AssignmentExpression
+                            || kind == &Type::InstanceofExpression
+                            || kind == &Type::UpdateExpression
+                            || kind == &Type::ParenthesizedExpression =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::None, State::ScopedIdentifier(i))
+                        if kind == &Type::BinaryExpression
+                            || kind == &Type::UnaryExpression
+                            || kind == &Type::AssignmentExpression
+                            || kind == &Type::InstanceofExpression
+                            || kind == &Type::UpdateExpression
+                            || kind == &Type::ParenthesizedExpression =>
+                    {
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::None, State::ConstructorInvocation(i))
+                        if kind == &Type::InstanceofExpression
+                            || kind == &Type::BinaryExpression
+                            || kind == &Type::UnaryExpression
+                            || kind == &Type::ParenthesizedExpression
+                            || kind == &Type::UpdateExpression =>
+                    {
+                        let i = sync!(i);
+                        State::ConstructorInvocation(i)
+                    }
+                    (State::None, State::Invocation(i))
+                        if kind == &Type::InstanceofExpression
+                            || kind == &Type::BinaryExpression
+                            || kind == &Type::UnaryExpression
+                            || kind == &Type::ParenthesizedExpression
+                            || kind == &Type::UpdateExpression =>
+                    {
+                        // TODO TODO regroup right and match inside
+                        let i = sync!(i);
+                        State::Invocation(i)
+                    }
+                    (State::None, State::FieldIdentifier(i))
+                        if kind == &Type::InstanceofExpression
+                            || kind == &Type::UpdateExpression
+                            || kind == &Type::ParenthesizedExpression =>
+                    {
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::None, State::LiteralType(t))
+                        if kind == &Type::BinaryExpression
+                            || kind == &Type::UnaryExpression
+                            || kind == &Type::AssignmentExpression
+                            || kind == &Type::ParenthesizedExpression =>
+                    {
+                        let t = sync!(t);
+                        State::LiteralType(t)
+                    }
+                    (State::None, State::FieldIdentifier(i))
+                        if kind == &Type::BinaryExpression
+                            || kind == &Type::UnaryExpression
+                            || kind == &Type::UpdateExpression
+                            || kind == &Type::AssignmentExpression
+                            || kind == &Type::ParenthesizedExpression =>
+                    {
+                        let i = sync!(i);
+                        State::FieldIdentifier(i)
+                    }
+                    (State::None, State::This(i))
+                        if kind == &Type::BinaryExpression
+                            || kind == &Type::InstanceofExpression
+                            || kind == &Type::ParenthesizedExpression =>
+                    {
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(_), State::LiteralType(t))
+                        if kind == &Type::AssignmentExpression =>
+                    {
+                        let t = sync!(t);
+                        State::LiteralType(t)
+                    }
+                    (State::ScopedIdentifier(i), State::This(_))
+                        if kind == &Type::AssignmentExpression =>
+                    {
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(i), State::ConstructorInvocation(_))
+                        if kind == &Type::AssignmentExpression =>
+                    {
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(i), State::LambdaExpression(_))
+                        if kind == &Type::AssignmentExpression =>
+                    {
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::FieldIdentifier(_), State::ScopedIdentifier(i))
+                        if kind == &Type::AssignmentExpression =>
+                    {
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(i0), State::SimpleIdentifier(_, i))
+                        if kind == &Type::AssignmentExpression =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        State::ScopedIdentifier(i0)
+                    }
+                    (State::ScopedIdentifier(i0), State::ScopedIdentifier(i))
+                        if kind == &Type::AssignmentExpression =>
+                    {
+                        State::ScopedIdentifier(i0)
+                    }
+                    (State::ScopedIdentifier(i0), State::FieldIdentifier(i))
+                        if kind == &Type::AssignmentExpression =>
+                    {
+                        State::ScopedIdentifier(i0)
+                    }
+                    (State::FieldIdentifier(i0), State::FieldIdentifier(i))
+                        if kind == &Type::AssignmentExpression =>
+                    {
+                        State::FieldIdentifier(i0)
+                    }
+                    // TernaryExpression
+                    // TernaryExpression (None,c)
+                    (State::None, c) if kind == &Type::TernaryExpression => {
+                        match c {
+                            State::SimpleIdentifier(_, i) => {
+                                let i = scoped!(mm!(), i);
+                            }
+                            State::LiteralType(t) => (),
+                            State::ScopedIdentifier(i) => {
+                                sync!(i);
+                            }
+                            State::Invocation(_) => (),
+                            State::FieldIdentifier(_) => (),
+                            x => todo!("{:?}", x),
+                        };
+                        State::Condition
+                    }
+                    // TernaryExpression (Cond,x)
+                    (State::Condition, x) if kind == &Type::TernaryExpression => match x {
+                        State::LiteralType(t) => {
+                            let i = sync!(t);
+                            State::ScopedIdentifier(i)
+                        }
+                        State::SimpleIdentifier(_, i) => {
+                            let i = scoped!(mm!(), i);
+                            State::ScopedIdentifier(i)
+                        }
+                        State::This(i) => {
+                            let i = sync!(i);
+                            State::ScopedIdentifier(i)
+                        }
+                        State::ConstructorInvocation(i) => State::ConstructorInvocation(sync!(i)),
+                        State::Invocation(i) => State::Invocation(sync!(i)),
+                        State::ScopedIdentifier(i) => State::ScopedIdentifier(sync!(i)),
+                        State::FieldIdentifier(i) => State::FieldIdentifier(sync!(i)),
+                        State::MethodReference(i) => State::MethodReference(sync!(i)),
+                        State::None => panic!(),
+                        x => todo!("{:?}", x),
+                    },
+                    // TernaryExpression (x,y)
+                    (State::LiteralType(t), y) if kind == &Type::TernaryExpression => {
+                        match y {
+                            State::LiteralType(t) => (),
+                            State::SimpleIdentifier(_, i) => {
+                                scoped!(mm!(), i);
+                            }
+                            State::FieldIdentifier(i) => (),
+                            State::ConstructorInvocation(i) => (),
+                            State::Invocation(i) => (),
+                            State::ScopedIdentifier(i) => (),
+                            State::None => panic!(),
+                            x => todo!("{:?}", x),
+                        };
+                        State::LiteralType(t)
+                    }
+                    (x, State::LiteralType(t)) if kind == &Type::TernaryExpression => {
+                        match x {
+                            State::LiteralType(t) => (),
+                            State::SimpleIdentifier(_, i) => {
+                                scoped!(mm!(), i);
+                            }
+                            State::ConstructorInvocation(i) => (),
+                            State::Invocation(i) => (),
+                            State::ScopedIdentifier(i) => (),
+                            State::None => panic!(),
+                            x => todo!("{:?}", x),
+                        };
+                        assert_ne!(x, State::Condition);
+                        let t = sync!(t);
+                        State::LiteralType(t)
+                    }
+                    (State::SimpleIdentifier(_, i), _) if kind == &Type::TernaryExpression => {
+                        let i = scoped!(mm!(), i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(i), _) if kind == &Type::TernaryExpression => {
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::Invocation(_), State::ScopedIdentifier(i))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ConstructorInvocation(i), State::ScopedIdentifier(_))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        State::ConstructorInvocation(i)
+                    }
+                    (State::MethodReference(i), State::LambdaExpression(_))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        State::ConstructorInvocation(i)
+                    }
+                    (State::FieldIdentifier(_), State::SimpleIdentifier(_, i))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::FieldIdentifier(_), State::ScopedIdentifier(i))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::Invocation(_), State::SimpleIdentifier(_, i))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::Invocation(i), State::Invocation(_))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        State::Invocation(i)
+                    }
+                    (State::Invocation(i), State::FieldIdentifier(_))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        State::Invocation(i)
+                    }
+                    (State::ConstructorInvocation(i), State::ConstructorInvocation(_))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        State::ConstructorInvocation(i)
+                    }
+                    (State::FieldIdentifier(i), State::FieldIdentifier(_))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        State::FieldIdentifier(i)
+                    }
+                    (State::FieldIdentifier(i), State::Invocation(_))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        State::FieldIdentifier(i)
+                    }
+                    (State::Invocation(_), State::ConstructorInvocation(i))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        let i = sync!(i);
+                        State::ConstructorInvocation(i)
+                    }
+                    (State::ConstructorInvocation(i), State::Invocation(_))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        State::ConstructorInvocation(i)
+                    }
+                    (State::ConstructorInvocation(t), State::SimpleIdentifier(_, i))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        State::ConstructorInvocation(t)
+                    }
+                    (State::ConstructorInvocation(t), State::This(i))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        let i = sync!(i);
+                        State::This(i)
+                    }
+
+                    (State::None, State::ScopedIdentifier(i))
+                        if kind == &Type::ParenthesizedExpression =>
+                    {
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::None, State::LambdaExpression(i))
+                        if kind == &Type::ParenthesizedExpression =>
+                    {
+                        let i = sync!(i);
+                        State::LambdaExpression(i)
+                    }
+                    (State::None, State::SimpleIdentifier(_, i))
+                        if kind == &Type::ParenthesizedExpression =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        State::ScopedIdentifier(i)
+                    }
+
+                    (State::ScopedIdentifier(il), State::SimpleIdentifier(_, ir))
+                        if kind == &Type::BinaryExpression =>
+                    {
+                        scoped!(mm!(), ir);
+                        State::ScopedIdentifier(il)
+                    }
+                    (State::ScopedIdentifier(i), State::LiteralType(_))
+                        if kind == &Type::BinaryExpression =>
+                    {
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(i), State::This(t))
+                        if kind == &Type::BinaryExpression =>
+                    {
+                        let t = sync!(t);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::FieldIdentifier(i), State::ScopedIdentifier(_))
+                        if kind == &Type::BinaryExpression =>
+                    {
+                        State::FieldIdentifier(i)
+                    }
+                    (State::LiteralType(t), _) if kind == &Type::BinaryExpression => {
+                        // TODO not that obvious in general
+                        State::LiteralType(t)
+                    }
+                    (State::ScopedIdentifier(i), State::ScopedIdentifier(_))
+                        if kind == &Type::BinaryExpression
+                            || kind == &Type::AssignmentExpression =>
+                    {
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::LiteralType(t), State::SimpleTypeIdentifier(i))
+                        if kind == &Type::BinaryExpression =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        State::LiteralType(t)
+                    }
+                    (State::LiteralType(t), _) if kind == &Type::BinaryExpression => {
+                        State::LiteralType(t)
+                    }
+                    (State::Invocation(i), State::Invocation(_))
+                        if kind == &Type::BinaryExpression =>
+                    {
+                        State::Invocation(i)
+                    }
+                    (State::This(i), State::Invocation(_)) if kind == &Type::BinaryExpression => {
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::Invocation(i), State::LiteralType(_))
+                        if kind == &Type::BinaryExpression =>
+                    {
+                        State::Invocation(i)
+                    }
+                    (State::Invocation(i), State::This(t)) if kind == &Type::BinaryExpression => {
+                        let t = sync!(t);
+                        State::Invocation(i)
+                    }
+                    (State::Invocation(i), State::ScopedIdentifier(_))
+                        if kind == &Type::BinaryExpression =>
+                    {
+                        State::Invocation(i)
+                    }
+                    (State::Invocation(i), State::FieldIdentifier(_))
+                        if kind == &Type::BinaryExpression =>
+                    {
+                        State::Invocation(i)
+                    }
+                    (State::FieldIdentifier(i), State::LiteralType(_))
+                        if kind == &Type::BinaryExpression =>
+                    {
+                        State::FieldIdentifier(i)
+                    }
+                    (State::FieldIdentifier(i), State::Invocation(_))
+                        if kind == &Type::BinaryExpression =>
+                    {
+                        State::FieldIdentifier(i)
+                    }
+                    (State::Invocation(i0), State::SimpleIdentifier(_, i))
+                        if kind == &Type::BinaryExpression =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        State::Invocation(i0)
+                    }
+                    (State::FieldIdentifier(i0), State::SimpleIdentifier(_, i))
+                        if kind == &Type::BinaryExpression =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        State::FieldIdentifier(i0)
+                    }
+                    (State::FieldIdentifier(i), State::FieldIdentifier(_))
+                        if kind == &Type::BinaryExpression =>
+                    {
+                        State::FieldIdentifier(i)
+                    }
+
+                    (State::Invocation(_), State::LiteralType(t))
+                        if kind == &Type::AssignmentExpression =>
+                    {
+                        let t = sync!(t);
+                        State::LiteralType(t)
+                    }
+                    (State::FieldIdentifier(_), State::LiteralType(t))
+                        if kind == &Type::AssignmentExpression =>
+                    {
+                        let t = sync!(t);
+                        State::LiteralType(t)
+                    }
+                    (State::FieldIdentifier(i0), State::SimpleIdentifier(_, i))
+                        if kind == &Type::AssignmentExpression =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        State::FieldIdentifier(i0)
+                    }
+                    (State::FieldIdentifier(_), State::ConstructorInvocation(i))
+                        if kind == &Type::AssignmentExpression =>
+                    {
+                        let i = sync!(i);
+                        State::ConstructorInvocation(i)
+                    }
+                    (State::FieldIdentifier(_), State::Invocation(i))
+                        if kind == &Type::AssignmentExpression =>
+                    {
+                        let i = sync!(i);
+                        State::ConstructorInvocation(i)
+                    }
+                    (State::None, State::ScopedIdentifier(i))
+                        if kind == &Type::BinaryExpression
+                            || kind == &Type::AssignmentExpression =>
+                    {
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(i), State::LiteralType(t))
+                        if kind == &Type::AssignmentExpression =>
+                    {
+                        let t = sync!(t);
+                        State::LiteralType(t)
+                    }
+                    (State::ScopedIdentifier(i), State::Invocation(_))
+                        if kind == &Type::BinaryExpression
+                            || kind == &Type::AssignmentExpression =>
+                    {
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(i), State::ConstructorInvocation(_))
+                        if kind == &Type::BinaryExpression =>
+                    {
+                        State::ScopedIdentifier(i)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            }
+        } else if kind == &Type::Directory {
+            // let mut s: Solver = Default::default();
+            // s.nodes = self.solver.nodes;
+            // s.refs.resize(self.solver.refs.len(), false);
+            // let mut remapper = acc.solver.extend(&s);
+            let mut remapper = acc.solver.extend(&self.solver);
+            macro_rules! sync {
+                ( $i:expr ) => {
+                    remapper.intern_external(&mut acc.solver, $i.0)
+                };
+            }
+
+            match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                (rest, State::None) => rest,
+                (State::None, State::File{
+                    package,
+                    local,
+                    global,
+                    ..//TODO
+                }) =>
+                {
+                    let global_decls = global.iter().map(|(d,t)| {
+                        let d = d.with_changed_node(|x|sync!(*x));
+                        let t = t.map(|x| sync!(x));
+                        acc.solver.add_decl(d.clone(), t.clone());
+                        (d,t)
+                    }).collect();
+                    let package_local = local.iter().map(|(d,t)| {
+                        let d = d.with_changed_node(|x|sync!(*x));
+                        let t = t.map(|x| sync!(x));
+                        acc.solver.add_decl(d.clone(), t.clone());
+                        (d,t)
+                    }).collect();
+                    let package = package.map(|p|sync!(p));
+
+
+                    State::Package{
+                        package,
+                        global_decls,
+                        package_local,
+                    }
+                }
+                (State::Directory{
+                    mut global_decls,
+                }, State::File{
+                    package,
+                    local,
+                    global,
+                    ..//TODO
+                }) =>
+                {
+                    let package = package.map(|p|sync!(p));
+
+                    global.iter().for_each(|(d,t)| {
+                        let d = d.with_changed_node(|x| sync!(*x));
+                        let t = t.map(|x| sync!(x));
+                        acc.solver.add_decl(d.clone(), t.clone());
+                        global_decls.push((d,t));
+                    });
+
+                    let package_local = local.iter().map(|(d,t)| {
+                        let d = d.with_changed_node(|x|sync!(*x));
+                        let t = t.map(|x| sync!(x));
+                        acc.solver.add_decl(d.clone(), t.clone());
+                        (d,t)
+                    }).collect();
+
+                    State::Package{
+                        package,
+                        global_decls,
+                        package_local,
+                    }
+                }
+                (State::Package{
+                    package,
+                    mut global_decls,
+                    mut package_local,
+                    ..//TODO
+                }, State::File{
+                    package: p,
+                    local,
+                    global,
+                    ..//TODO
+                }) =>
+                {
+                    assert_eq!(package,p.map(|p|sync!(p)));
+
+                    global.iter().for_each(|(d,t)| {
+                        let d = d.with_changed_node(|x| sync!(*x));
+                        let t = t.map(|x| sync!(x));
+                        acc.solver.add_decl(d.clone(), t.clone());
+                        global_decls.push((d,t));
+                    });
+                    local.iter().for_each(|(d,t)| {
+                        let d = d.with_changed_node(|x| sync!(*x));
+                        let t = t.map(|x| sync!(x));
+                        acc.solver.add_decl(d.clone(), t.clone());
+                        package_local.push((d,t));
+                    });
+
+                    State::Package{
+                        package,
+                        global_decls,
+                        package_local,
+                    }
+                }
+                (State::None, State::Directory{
+                    global_decls:global,
+                }) =>
+                {
+                    let global_decls = global.iter().map(|(d,t)| {
+                        let d = d.with_changed_node(|x|sync!(*x));
+                        let t = t.map(|x| sync!(x));
+                        acc.solver.add_decl(d.clone(), t.clone());
+                        (d,t)
+                    }).collect();
+
+                    State::Directory{
+                        global_decls,
+                    }
+                }
+                (State::None, State::Package{
+                    global_decls:global,
+                    ..
+                }) =>
+                {
+                    let global_decls = global.iter().map(|(d,t)| {
+                        let d = d.with_changed_node(|x|sync!(*x));
+                        let t = t.map(|x| sync!(x));
+                        acc.solver.add_decl(d.clone(), t.clone());
+                        (d,t)
+                    }).collect();
+
+                    State::Directory{
+                        global_decls,
+                    }
+                }
+                (State::Directory{
+                    mut global_decls,
+                }, State::Package{
+                    global_decls:global,
+                    ..
+                }) =>
+                {
+                    global.iter().for_each(|(d,t)| {
+                        let d = d.with_changed_node(|x| sync!(*x));
+                        let t = t.map(|x| sync!(x));
+                        acc.solver.add_decl(d.clone(), t.clone());
+                        global_decls.push((d,t));
+                    });
+
+                    State::Directory{
+                        global_decls,
+                    }
+                }
+                (State::Package{
+                    package,
+                    mut global_decls,
+                    package_local
+                }, State::Directory{
+                    global_decls:global,
+                }) =>
+                {
+                    global.iter().for_each(|(d,t)| {
+                        let d = d.with_changed_node(|x| sync!(*x));
+                        let t = t.map(|x| sync!(x));
+                        acc.solver.add_decl(d.clone(), t.clone());
+                        global_decls.push((d,t));
+                    });
+
+                    State::Package{
+                        package,
+                        global_decls,
+                        package_local,
+                    }
+                }
+                (State::Package{
+                    package,
+                    mut global_decls,
+                    package_local
+                }, State::Package{
+                    global_decls:global,
+                    ..
+                }) =>
+                {
+                    global.iter().for_each(|(d,t)| {
+                        let d = d.with_changed_node(|x| sync!(*x));
+                        let t = t.map(|x| sync!(x));
+                        acc.solver.add_decl(d.clone(), t.clone());
+                        global_decls.push((d,t));
+                    });
+
+                    State::Package{
+                        package,
+                        global_decls,
+                        package_local,
+                    }
+                }
+                (State::Directory{
+                    mut global_decls,
+                }, State::Directory{
+                    global_decls:global,
+                }) =>
+                {
+                    global.iter().for_each(|(d,t)| {
+                        let d = d.with_changed_node(|x| sync!(*x));
+                        let t = t.map(|x| sync!(x));
+                        acc.solver.add_decl(d.clone(), t.clone());
+                        global_decls.push((d,t));
+                    });
+                    State::Directory{
+                        global_decls,
+                    }
+                }
+                (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            }
+        } else {
+            // rest that is not easily categorized ie. used at multiple places
+            let mut remapper = acc.solver.extend(&self.solver);
+            macro_rules! sync {
+                ( $i:expr ) => {
+                    remapper.intern_external(&mut acc.solver, $i.0)
+                };
+            }
+            if kind == &Type::Annotation || kind == &Type::MarkerAnnotation {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::SimpleIdentifier(_, i))
+                        if kind == &Type::MarkerAnnotation =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        // TODO handle annotations correctly
+                        State::Annotation
+                    }
+                    (State::None, State::ScopedIdentifier(i))
+                        if kind == &Type::MarkerAnnotation =>
+                    {
+                        let i = sync!(i);
+                        // TODO handle annotations correctly
+                        State::Annotation
+                    }
+                    (State::None, State::SimpleIdentifier(_, i)) if kind == &Type::Annotation => {
+                        let i = scoped!(mm!(), i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::None, State::ScopedIdentifier(i)) if kind == &Type::Annotation => {
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::SimpleIdentifier(_, i), State::Arguments(p))
+                        if kind == &Type::Annotation =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        State::Annotation
+                    }
+                    (State::ScopedIdentifier(i), State::Arguments(p))
+                        if kind == &Type::Annotation =>
+                    {
+                        State::Annotation
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::AnnotationArgumentList
+                || kind == &Type::ElementValuePair
+                || kind == &Type::ElementValueArrayInitializer
+            {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (state, rest) if kind == &Type::AnnotationArgumentList => {
+                        let mut v = match state {
+                            State::Arguments(l) => l,
+                            State::None => vec![],
+                            x => panic!("{:?}", x),
+                        };
+
+                        match rest {
+                            State::ElementValuePair(p, i) => (),
+                            State::LiteralType(_) => (),
+                            State::FieldIdentifier(_) => (),
+                            State::ScopedIdentifier(_) => (),
+                            State::SimpleIdentifier(_, i) => {
+                                scoped!(mm!(), i);
+                            }
+                            x => panic!("{:?}", x),
+                        };
+
+                        State::Arguments(v)
+                    }
+                    (State::None, State::SimpleIdentifier(case, i))
+                        if kind == &Type::ElementValuePair =>
+                    {
+                        State::SimpleIdentifier(case, i)
+                    }
+                    (State::SimpleIdentifier(_, i), State::None)
+                        if kind == &Type::ElementValuePair =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::SimpleIdentifier(_, p), expr) if kind == &Type::ElementValuePair => {
+                        let t = match expr {
+                            State::LiteralType(t) => sync!(t),
+                            State::SimpleIdentifier(_, t) => {
+                                scoped!(mm!(), t)
+                            }
+                            State::ScopedIdentifier(t) => sync!(t),
+                            State::FieldIdentifier(t) => sync!(t),
+                            State::Invocation(t) => sync!(t),
+                            State::ConstructorInvocation(t) => sync!(t),
+                            x => panic!("{:?}", x),
+                        };
+                        State::ElementValuePair(p, t)
+                    }
+                    (rest, expr) if kind == &Type::ElementValueArrayInitializer => {
+                        let i = match expr {
+                            State::LiteralType(t) => sync!(t),
+                            State::SimpleIdentifier(_, t) => {
+                                scoped!(mm!(), t)
+                            }
+                            State::ScopedIdentifier(t) => sync!(t),
+                            State::FieldIdentifier(t) => sync!(t),
+                            State::Invocation(t) => sync!(t),
+                            State::ConstructorInvocation(t) => sync!(t),
+                            x => panic!("{:?}", x),
+                        };
+                        match rest {
+                            State::ScopedIdentifier(i) => State::ScopedIdentifier(i),
+                            State::None => State::ScopedIdentifier(i),
+                            _ => panic!(),
+                        }
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::ScopedAbsoluteIdentifier {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::ScopedIdentifier(i)) => {
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(o), State::SimpleIdentifier(_, i)) => {
+                        let i = acc.solver.intern(RefsEnum::ScopedIdentifier(o, i));
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::None, State::SimpleIdentifier(_, i)) => {
+                        let o = acc.solver.intern(RefsEnum::Root);
+                        let i = acc.solver.intern(RefsEnum::ScopedIdentifier(o, i));
+                        State::ScopedIdentifier(i)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::ScopedIdentifier {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::ScopedIdentifier(i)) => {
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ScopedIdentifier(o), State::SimpleIdentifier(_, i)) => {
+                        let i = acc.solver.intern(RefsEnum::ScopedIdentifier(o, i));
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::None, State::SimpleIdentifier(case, i)) => {
+                        // TODO use case
+                        let o = acc.solver.intern(RefsEnum::MaybeMissing);
+                        let i = acc.solver.intern(RefsEnum::ScopedIdentifier(o, i));
+                        State::ScopedIdentifier(i)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::ScopedTypeIdentifier {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::SimpleTypeIdentifier(i))
+                        if kind == &Type::ScopedTypeIdentifier =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        State::ScopedTypeIdentifier(i)
+                    }
+                    (State::None, State::ScopedTypeIdentifier(i))
+                        if kind == &Type::ScopedTypeIdentifier =>
+                    {
+                        let i = sync!(i);
+                        State::ScopedTypeIdentifier(i)
+                    }
+                    (State::ScopedTypeIdentifier(o), State::SimpleTypeIdentifier(i))
+                        if kind == &Type::ScopedTypeIdentifier =>
+                    {
+                        let i = scoped!(o, i);
+                        State::ScopedTypeIdentifier(i)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::CatchType {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (rest, State::SimpleTypeIdentifier(i)) if kind == &Type::CatchType => {
+                        let mut v = match rest {
+                            State::CatchTypes(l) => l,
+                            State::None => vec![],
+                            x => panic!("{:?}", x),
+                        };
+                        let i = scoped!(mm!(), i);
+                        v.push(i);
+                        State::CatchTypes(v)
+                    }
+                    (rest, State::ScopedTypeIdentifier(i)) if kind == &Type::CatchType => {
+                        let mut v = match rest {
+                            State::CatchTypes(l) => l,
+                            State::None => vec![],
+                            x => panic!("{:?}", x),
+                        };
+                        let i = sync!(i);
+                        v.push(i);
+                        State::CatchTypes(v)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::ArrayType {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::SimpleTypeIdentifier(i)) if kind == &Type::ArrayType => {
+                        let i = scoped!(mm!(), i);
+                        State::ScopedTypeIdentifier(i)
+                    }
+                    (State::None, State::ScopedTypeIdentifier(i)) if kind == &Type::ArrayType => {
+                        let i = sync!(i);
+                        State::ScopedTypeIdentifier(i)
+                    }
+                    (State::SimpleTypeIdentifier(i), State::Dimensions)
+                        if kind == &Type::ArrayType =>
+                    {
+                        let i = scoped!(mm!(), i);
+                        State::ScopedTypeIdentifier(i)
+                    }
+                    (State::ScopedTypeIdentifier(i), State::Dimensions)
+                        if kind == &Type::ArrayType =>
+                    {
+                        let i = acc.solver.intern(RefsEnum::Array(i));
+                        State::ScopedTypeIdentifier(i)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::ResourceSpecification || kind == &Type::FormalParameters {
+                // TODO look like local decl
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (rest, State::ScopedIdentifier(i)) if kind == &Type::ResourceSpecification => {
+                        rest
+                    }
+                    (
+                        rest,
+                        State::Declaration {
+                            visibility,
+                            kind: t,
+                            identifier: d,
+                        },
+                    ) if kind == &Type::FormalParameters
+                        || kind == &Type::ResourceSpecification =>
+                    {
+                        // TODO do better than simple identifier
+                        // TODO own State declaration (for parameters)
+                        let mut v = match rest {
+                            State::FormalParameters(l) => l,
+                            State::None => vec![],
+                            x => panic!("{:?}", x),
+                        };
+                        let t = t.map(|x| sync!(x));
+                        let i = match d {
+                            Declarator::Variable(i) => sync!(i),
+                            _ => panic!(),
+                        };
+                        v.push((i, t));
+                        State::FormalParameters(v)
+                    }
+                    (rest, State::None)
+                        if kind == &Type::FormalParameters
+                            || kind == &Type::ResourceSpecification =>
+                    {
+                        let mut v = match rest {
+                            State::FormalParameters(l) => l,
+                            State::None => vec![],
+                            x => panic!("{:?}", x),
+                        };
+                        State::FormalParameters(v)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::Wildcard
+                || kind == &Type::WildcardSuper
+                || kind == &Type::WildcardExtends
+            {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, rest) if kind == &Type::Wildcard => {
+                        match rest {
+                            State::None => (),
+                            State::WildcardExtends(_) => (),
+                            State::WildcardSuper(_) => (),
+                            x => panic!("{:?}", x),
+                        }
+                        // TODO solve correctly ie. DeclType::Runtime
+                        let r = mm!();
+                        State::ScopedTypeIdentifier(r)
+                    }
+                    (State::None, rest) if kind == &Type::WildcardExtends => {
+                        let t = match rest {
+                            State::SimpleTypeIdentifier(t) => scoped!(mm!(), t),
+                            State::ScopedTypeIdentifier(t) => sync!(t),
+                            x => panic!("{:?}", x),
+                        };
+                        State::WildcardExtends(t)
+                    }
+                    (State::None, rest) if kind == &Type::WildcardSuper => {
+                        let t = match rest {
+                            State::SimpleIdentifier(_, t) => scoped!(mm!(), t),
+                            State::SimpleTypeIdentifier(t) => scoped!(mm!(), t),
+                            State::ScopedTypeIdentifier(t) => sync!(t),
+                            State::Super(t) => sync!(t),
+                            x => panic!("{:?}", x),
+                        };
+                        State::WildcardSuper(t)
+                    }
+                    (State::WildcardSuper(i), State::SimpleTypeIdentifier(t))
+                        if kind == &Type::WildcardSuper =>
+                    {
+                        let t = scoped!(mm!(), t);
+                        State::WildcardSuper(i)
+                    }
+                    (State::WildcardSuper(i), State::ScopedTypeIdentifier(t))
+                        if kind == &Type::WildcardSuper =>
+                    {
+                        State::WildcardSuper(i)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::SwitchLabel {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::LiteralType(_)) if kind == &Type::SwitchLabel => {
+                        State::None
+                    }
+                    (State::None, State::FieldIdentifier(_)) if kind == &Type::SwitchLabel => {
+                        State::None
+                    }
+                    (State::None, State::ScopedIdentifier(_)) if kind == &Type::SwitchLabel => {
+                        State::None
+                    }
+                    (State::None, State::SimpleIdentifier(_, _)) if kind == &Type::SwitchLabel => {
+                        State::None
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::Modifiers {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::Modifiers(v0, n0), State::Modifiers(v, n)) => State::Modifiers(
+                        if v0 == Visibility::None {
+                            v
+                        } else {
+                            assert_eq!(v, Visibility::None);
+                            v0
+                        },
+                        n0.union(n),
+                    ),
+
+                    (State::None, State::Modifiers(v, n)) if kind == &Type::Modifiers => {
+                        State::Modifiers(v, n)
+                    }
+
+                    (State::None, State::Annotation) if kind == &Type::Modifiers => {
+                        State::Modifiers(Visibility::None, Default::default())
+                    }
+
+                    (State::Modifiers(v, n), State::Annotation) if kind == &Type::Modifiers => {
+                        State::Modifiers(v, n)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::ArgumentList {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (rest, State::MethodReference(i)) if kind == &Type::ArgumentList => {
+                        let i = sync!(i);
+                        let mut v = match rest {
+                            State::Arguments(l) => l,
+                            State::None => vec![],
+                            x => panic!("{:?}", x),
+                        };
+                        v.push(i);
+                        State::Arguments(v)
+                    }
+                    (rest, State::LambdaExpression(i)) if kind == &Type::ArgumentList => {
+                        let i = sync!(i);
+                        let mut v = match rest {
+                            State::Arguments(l) => l,
+                            State::None => vec![],
+                            x => panic!("{:?}", x),
+                        };
+                        v.push(i);
+                        State::Arguments(v)
+                    }
+                    (rest, expr) if kind == &Type::ArgumentList => {
+                        // TODO do better than simple identifier
+                        let mut v = match rest {
+                            State::Arguments(l) => l,
+                            State::None => vec![],
+                            x => panic!("{:?}", x),
+                        };
+                        let i = match expr {
+                            State::LiteralType(t) => sync!(t),
+                            State::SimpleIdentifier(_, t) => scoped!(mm!(), t),
+                            State::This(t) => sync!(t),
+                            State::ScopedIdentifier(i) => sync!(i),
+                            State::FieldIdentifier(i) => sync!(i),
+                            State::Invocation(i) => sync!(i),
+                            State::ConstructorInvocation(i) => sync!(i),
+                            x => panic!("{:?}", x),
+                        };
+                        v.push(i);
+                        State::Arguments(v)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::TypeArguments {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (rest, State::SimpleTypeIdentifier(t)) if kind == &Type::TypeArguments => {
+                        let mut v = match rest {
+                            State::TypeArguments(v) => v,
+                            State::None => vec![],
+                            _ => vec![],
+                        };
+                        let t = scoped!(mm!(), t);
+                        v.push(t);
+                        State::TypeArguments(v)
+                    }
+                    (rest, State::ScopedTypeIdentifier(i)) if kind == &Type::TypeArguments => {
+                        let mut v = match rest {
+                            State::TypeArguments(v) => v,
+                            State::None => vec![],
+                            _ => vec![],
+                        };
+                        let t = sync!(i);
+                        v.push(t);
+                        State::TypeArguments(v)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::InferredParameters {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (rest, State::SimpleIdentifier(_, i)) if kind == &Type::InferredParameters => {
+                        let mut v = match rest {
+                            State::Declarations(v) => v,
+                            State::None => vec![],
+                            _ => todo!(),
+                        };
+                        let r = mm!();
+                        let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                        let i = Declarator::Variable(i);
+                        acc.solver.add_decl(i.clone(), DeclType::Runtime(vec![].into()));
+                        v.push((Visibility::None, i, DeclType::Runtime(vec![].into())));
+                        State::Declarations(v)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::TypeParameters {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (rest, State::SimpleIdentifier(_, i)) if kind == &Type::TypeParameters => {
+                        let mut v = match rest {
+                            State::TypeParameters(v) => v,
+                            State::None => vec![],
+                            _ => todo!(),
+                        };
+                        v.push((i, vec![].into_boxed_slice()));
+                        State::TypeParameters(v)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::ArrayInitializer {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    // ArrayInit
+                    (State::None, expr) if kind == &Type::ArrayInitializer => {
+                        match expr {
+                            State::LiteralType(t) => (),
+                            State::SimpleIdentifier(_, t) => {
+                                scoped!(mm!(), t);
+                            }
+                            State::This(t) => (),
+                            State::ScopedIdentifier(_) => (),
+                            State::FieldIdentifier(_) => (),
+                            State::Invocation(_) => (),
+                            State::ConstructorInvocation(_) => (),
+                            State::None => (), // TODO check
+                            x => panic!("{:?}", x),
+                        };
+                        State::None
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::Throws {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (rest, State::SimpleTypeIdentifier(i)) if kind == &Type::Throws => {
+                        let i = scoped!(mm!(), i);
+                        State::Throws
+                    }
+                    (rest, State::ScopedTypeIdentifier(i)) if kind == &Type::Throws => {
+                        State::Throws
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::VariableDeclarator {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::SimpleIdentifier(_, i))
+                        if kind == &Type::VariableDeclarator =>
+                    {
+                        let r = mm!();
+                        let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                        State::Declarator(Declarator::Variable(i))
+                    }
+                    (State::Declarator(Declarator::Variable(v)), State::Dimensions)
+                        if kind == &Type::VariableDeclarator =>
+                    {
+                        let v = acc.solver.intern(RefsEnum::Array(v));
+                        State::Declarator(Declarator::Variable(v))
+                    }
+                    (State::Declarator(Declarator::Variable(v)), _)
+                        if kind == &Type::VariableDeclarator =>
+                    {
+                        State::Declarator(Declarator::Variable(v))
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::DimensionsExpr {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, expr) if kind == &Type::DimensionsExpr => {
+                        let i = match expr {
+                            State::LiteralType(t) => sync!(t),
+                            State::SimpleIdentifier(_, t) => scoped!(mm!(), t),
+                            State::ScopedIdentifier(i) => sync!(i),
+                            State::FieldIdentifier(i) => sync!(i),
+                            State::Invocation(i) => sync!(i),
+                            State::ConstructorInvocation(i) => sync!(i),
+                            x => panic!("{:?}", x),
+                        };
+                        State::ScopedIdentifier(i)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::GenericType {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::SimpleTypeIdentifier(t)) if kind == &Type::GenericType => {
+                        State::SimpleTypeIdentifier(t)
+                    }
+                    (State::None, State::ScopedTypeIdentifier(t)) if kind == &Type::GenericType => {
+                        let t = sync!(t);
+                        State::ScopedTypeIdentifier(t)
+                    }
+                    (State::SimpleTypeIdentifier(t), State::TypeArguments(_))
+                        if kind == &Type::GenericType =>
+                    {
+                        let t = scoped!(mm!(), t);
+                        // TODO use arguments
+                        State::ScopedTypeIdentifier(t)
+                    }
+                    (State::ScopedTypeIdentifier(t), State::TypeArguments(_))
+                        if kind == &Type::GenericType =>
+                    {
+                        // TODO use arguments
+                        State::ScopedTypeIdentifier(t)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::TypeBound {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (_, State::SimpleTypeIdentifier(t)) if kind == &Type::TypeBound => {
+                        let t = scoped!(mm!(), t);
+                        // TODO propag to use for solving refs
+                        State::TypeBound
+                    }
+                    (_, State::ScopedTypeIdentifier(t)) if kind == &Type::TypeBound => {
+                        // TODO propag to use for solving refs
+                        State::TypeBound
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::Superclass {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::SimpleTypeIdentifier(i)) if kind == &Type::Superclass => {
+                        let i = scoped!(mm!(), i);
+                        State::ScopedTypeIdentifier(i)
+                    }
+                    (State::None, State::ScopedTypeIdentifier(i)) if kind == &Type::Superclass => {
+                        let i = sync!(i);
+                        State::ScopedTypeIdentifier(i)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else if kind == &Type::SuperInterfaces || kind == &Type::ExtendsInterfaces {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (rest, State::ScopedTypeIdentifier(t))
+                        if kind == &Type::SuperInterfaces || kind == &Type::ExtendsInterfaces =>
+                    {
+                        let mut v = match rest {
+                            State::Interfaces(v) => v,
+                            State::None => vec![],
+                            x => panic!("{:?}", x),
+                        };
+                        let t = sync!(t);
+                        v.push(t);
+                        State::Interfaces(v)
+                    }
+                    (rest, State::SimpleTypeIdentifier(t))
+                        if kind == &Type::SuperInterfaces || kind == &Type::ExtendsInterfaces =>
+                    {
+                        let mut v = match rest {
+                            State::Interfaces(v) => v,
+                            State::None => vec![],
+                            x => panic!("{:?}", x),
+                        };
+                        let t = scoped!(mm!(), t);
+                        v.push(t);
+                        State::Interfaces(v)
+                    }
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            } else {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    (State::None, State::ScopedIdentifier(t))
+                        if kind == &Type::ModuleDeclaration =>
+                    {
+                        State::None
+                    }
+                    (State::ScopedIdentifier(t), State::None)
+                        if kind == &Type::ModuleDeclaration =>
+                    {
+                        State::None
+                    }
+                    (State::None, State::ScopedIdentifier(t)) if kind == &Type::ModuleDirective => {
+                        State::None
+                    }
+                    (State::ScopedIdentifier(t), State::None) if kind == &Type::ModuleDirective => {
+                        State::None
+                    }
+                    (State::None, State::None) if kind == &Type::ModuleBody => State::None,
+                    (State::None, State::None) if kind == &Type::ModuleDeclaration => State::None,
+                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                }
+            }
+        };
+
+        println!("result for {:?} is {:?}", kind, acc.current_node);
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Visibility {
+    Public,
+    Protected,
+    Private,
+    None,
+}
+
+#[derive(EnumSetType, Debug)]
+pub enum NonVisibility {
+    Static,
+    Final,
+    Abstract,
+    Synchronized,
+    Transient,
+    Strictfp,
+    Native,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum State<Node = LabelValue, Leaf = LabelValue>
+where
+    Leaf: std::cmp::Eq + std::hash::Hash,
+    Node: std::cmp::Eq + std::hash::Hash,
+{
+    Todo,
+    None,
+    Asterisk,
+    Super(Node),
+    This(Node),
+    Condition,
+    Dimensions,
+    Throws,
+    Root,
+    Annotation,
+    Modifiers(Visibility, EnumSet<NonVisibility>),
+    /// a
+    SimpleIdentifier(IdentifierFormat, Leaf),
+    /// A or A.B
+    SimpleTypeIdentifier(Leaf),
+    ScopedTypeIdentifier(Node),
+    WildcardExtends(Node),
+    WildcardSuper(Node),
+    TypeBound,
+    TypeParameters(Vec<(Leaf, Box<[Node]>)>),
+    GenericType(Node),
+    CatchTypes(Vec<Node>),
+    CatchParameter {
+        kinds: Box<[Node]>,
+        identifier: Leaf,
+    },
+    LiteralType(Node),
+    ScopedIdentifier(Node),
+    PackageDeclaration(Node),
+    File {
+        package: Option<Node>,
+        asterisk_imports: Vec<Node>,
+        global: Vec<(Declarator<Node>, DeclType<Node>)>,
+        local: Vec<(Declarator<Node>, DeclType<Node>)>,
+    },
+    Directory {
+        global_decls: Vec<(Declarator<Node>, DeclType<Node>)>,
+    },
+    Package {
+        package: Option<Node>,
+        global_decls: Vec<(Declarator<Node>, DeclType<Node>)>,
+        package_local: Vec<(Declarator<Node>, DeclType<Node>)>,
+    },
+    /// b.f() or A.f()
+    Invocation(Node),
+    InvocationId(Node, Leaf),
+    MethodReference(Node),
+    LambdaExpression(Node),
+    TypeArguments(Vec<Node>),
+    Arguments(Vec<Node>),
+    /// A#constructor()
+    ConstructorInvocation(Node),
+    ImportDeclaration {
+        sstatic: bool,
+        identifier: Node,
+        asterisk: bool,
+    },
+    /// a.b
+    FieldIdentifier(Node),
+    Interfaces(Vec<Node>),
+    ElementValuePair(Leaf, Node),
+    Declarator(Declarator<Node>),
+    Declaration {
+        visibility: Visibility,
+        kind: DeclType<Node>,
+        identifier: Declarator<Node>,
+    },
+    MethodImplementation {
+        visibility: Visibility,
+        kind: Option<DeclType<Node>>,
+        identifier: Option<Leaf>,
+        parameters: Box<[(Node, DeclType<Node>)]>,
+    },
+    ConstructorImplementation {
+        visibility: Visibility,
+        identifier: Option<Leaf>,
+        parameters: Box<[(Node, DeclType<Node>)]>,
+    },
+    TypeDeclaration {
+        visibility: Visibility,
+        identifier: DeclType<Node>,
+        members: Vec<(Visibility, Declarator<Node>, DeclType<Node>)>,
+    },
+    Declarations(Vec<(Visibility, Declarator<Node>, DeclType<Node>)>),
+    FormalParameters(Vec<(Node, DeclType<Node>)>),
+
+    ///TODO use this to make further flow type static analysis, most of the time replace None
+    TypeOfValue(Box<[Leaf]>),
+}
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub enum Argument<Node = LabelValue>
+where
+    Node: Eq + Hash,
+{
+    Type(Node),
+    Identifier(Node),
+}
+
+impl<Node, Leaf> State<Node, Leaf>
+where
+    Leaf: std::cmp::Eq + std::hash::Hash + Copy,
+    Node: std::cmp::Eq + std::hash::Hash + Copy,
+{
+    pub fn take(&mut self) -> Self {
+        std::mem::replace(self, State::None)
+    }
+    pub fn map<N, L, FN: Fn(Node) -> N, FL: Fn(Leaf) -> L>(&self, f: FN, g: FL) -> State<N, L>
+    where
+        L: std::cmp::Eq + std::hash::Hash,
+        N: std::cmp::Eq + std::hash::Hash,
+    {
+        match self {
+            State::Todo => State::Todo,
+            State::None => State::None,
+            State::Asterisk => State::Asterisk,
+            State::Condition => State::Condition,
+            State::Dimensions => State::Dimensions,
+            State::Throws => State::Throws,
+            State::Root => State::Root,
+            State::Annotation => State::Annotation,
+            State::TypeBound => State::TypeBound,
+            State::SimpleIdentifier(b, l) => State::SimpleIdentifier(*b, g(*l)),
+            State::SimpleTypeIdentifier(l) => State::SimpleTypeIdentifier(g(*l)),
+
+            State::Super(i) => State::Super(f(*i)),
+            State::This(i) => State::This(f(*i)),
+            State::ScopedTypeIdentifier(i) => State::ScopedTypeIdentifier(f(*i)),
+            State::WildcardExtends(i) => State::WildcardExtends(f(*i)),
+            State::WildcardSuper(i) => State::WildcardSuper(f(*i)),
+            State::GenericType(i) => State::GenericType(f(*i)),
+            State::LiteralType(i) => State::LiteralType(f(*i)),
+            State::ScopedIdentifier(i) => State::ScopedIdentifier(f(*i)),
+            State::PackageDeclaration(i) => State::PackageDeclaration(f(*i)),
+            State::Invocation(i) => State::Invocation(f(*i)),
+            State::MethodReference(i) => State::MethodReference(f(*i)),
+            State::LambdaExpression(i) => State::LambdaExpression(f(*i)),
+            State::ConstructorInvocation(i) => State::ConstructorInvocation(f(*i)),
+            State::FieldIdentifier(i) => State::FieldIdentifier(f(*i)),
+            State::Declarator(d) => State::Declarator(d.with_changed_node(|x| f(*x))),
+            State::Interfaces(v) => State::Interfaces(v.iter().map(|x| f(*x)).collect()),
+            State::Arguments(v) => State::Arguments(v.iter().map(|x| f(*x)).collect()),
+            State::TypeArguments(v) => State::TypeArguments(v.iter().map(|x| f(*x)).collect()),
+            State::CatchTypes(v) => State::CatchTypes(v.iter().map(|x| f(*x)).collect()),
+            State::TypeParameters(v) => State::TypeParameters(
+                v.iter()
+                    .map(|(x, y)| ((g(*x), y.iter().map(|x| f(*x)).collect())))
+                    .collect(),
+            ),
+            State::Declarations(v) => State::Declarations(
+                v.iter()
+                    .map(|(v, x, y)| (*v, x.with_changed_node(|x| f(*x)), y.map(|x| f(*x))))
+                    .collect(),
+            ),
+            State::FormalParameters(v) => {
+                State::FormalParameters(v.iter().map(|(x, y)| (f(*x), y.map(|x| f(*x)))).collect())
+            }
+            State::TypeOfValue(_) => todo!(),
+            State::ElementValuePair(x, y) => State::ElementValuePair(g(*x), f(*y)),
+            State::InvocationId(x, y) => State::InvocationId(f(*x), g(*y)),
+            State::Modifiers(x, y) => State::Modifiers(x.clone(), y.clone()),
+            State::ImportDeclaration {
+                sstatic,
+                identifier: i,
+                asterisk,
+            } => State::ImportDeclaration {
+                sstatic: *sstatic,
+                identifier: f(*i),
+                asterisk: *asterisk,
+            },
+            State::CatchParameter {
+                kinds: v,
+                identifier: i,
+            } => State::CatchParameter {
+                kinds: v.iter().map(|x| f(*x)).collect(),
+                identifier: g(*i),
+            },
+
+            State::File {
+                package: p,
+                asterisk_imports,
+                global: t,
+                local: v,
+            } => State::File {
+                package: p.map(|x| f(x)),
+                asterisk_imports: asterisk_imports.iter().map(|x| f(*x)).collect(),
+                global: t
+                    .iter()
+                    .map(|(x, y)| (x.with_changed_node(|x| f(*x)), y.map(|x| f(*x))))
+                    .collect(),
+                local: v
+                    .iter()
+                    .map(|(x, y)| (x.with_changed_node(|x| f(*x)), y.map(|x| f(*x))))
+                    .collect(),
+            },
+
+            State::Package {
+                package: p,
+                global_decls,
+                package_local,
+            } => State::Package {
+                package: p.map(|x| f(x)),
+                global_decls: global_decls
+                    .iter()
+                    .map(|(x, y)| (x.with_changed_node(|x| f(*x)), y.map(|x| f(*x))))
+                    .collect(),
+                package_local: package_local
+                    .iter()
+                    .map(|(x, y)| (x.with_changed_node(|x| f(*x)), y.map(|x| f(*x))))
+                    .collect(),
+            },
+            State::Directory { global_decls } => State::Directory {
+                global_decls: global_decls
+                    .iter()
+                    .map(|(x, y)| (x.with_changed_node(|x| f(*x)), y.map(|x| f(*x))))
+                    .collect(),
+            },
+            State::Declaration {
+                visibility,
+                kind: t,
+                identifier: d,
+            } => State::Declaration {
+                visibility: visibility.clone(),
+                kind: t.map(|x| f(*x)),
+                identifier: d.with_changed_node(|x| f(*x)),
+            },
+            State::MethodImplementation {
+                visibility,
+                kind: t,
+                identifier: i,
+                parameters: p,
+            } => State::MethodImplementation {
+                visibility: visibility.clone(),
+                kind: t.clone().map(|x| x.map(|x| f(*x))),
+                identifier: i.map(|x| g(x)),
+                parameters: p.iter().map(|(x, y)| (f(*x), y.map(|x| f(*x)))).collect(),
+            },
+            State::ConstructorImplementation {
+                visibility,
+                identifier: i,
+                parameters: p,
+            } => State::ConstructorImplementation {
+                visibility: visibility.clone(),
+                identifier: i.map(|x| g(x)),
+                parameters: p.iter().map(|(x, y)| (f(*x), y.map(|x| f(*x)))).collect(),
+            },
+            State::TypeDeclaration {
+                visibility,
+                identifier: d,
+                members: v,
+            } => State::TypeDeclaration {
+                visibility: visibility.clone(),
+                identifier: d.map(|x| f(*x)),
+                members: v
+                    .iter()
+                    .map(|(v, x, y)| (*v, x.with_changed_node(|x| f(*x)), y.map(|x| f(*x))))
+                    .collect(),
+            },
+        }
+    }
+}

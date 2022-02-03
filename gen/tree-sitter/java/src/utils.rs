@@ -4,7 +4,7 @@ use std::{
     hash::{BuildHasher, Hash, Hasher},
 };
 
-pub(crate) fn hash<T: Hash>(x: &T) -> u64 {
+pub(crate) fn hash<T: ?Sized + Hash>(x: &T) -> u64 {
     let mut state = DefaultHasher::default();
     x.hash(&mut state);
     state.finish()

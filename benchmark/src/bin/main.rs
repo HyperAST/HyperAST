@@ -10,15 +10,16 @@ use std::{
 use git2::{ObjectType, Oid, RemoteCallbacks, Repository, Revwalk, TreeEntry};
 use rusted_gumtree_core::tree::tree::{LabelStore as _, Labeled, Tree, Typed, WithChildren};
 use rusted_gumtree_core::tree::{tree::Type, tree_path::TreePath};
+use rusted_gumtree_cvs_git::PreProcessedRepository;
 use rusted_gumtree_gen_ts_java::{
     filter::{BloomResult, BloomSize},
     full::FullNode,
     hashed::{self, SyntaxNodeHashs},
     impact::{
-        elements::{ExplorableRef, PartialAnalysis, RefsEnum},
-        label_value::LabelValue,
+        elements::{},
+        label_value::LabelValue, usage::{eq_root_scoped, eq_node_ref, self}, element::{RefsEnum, ExplorableRef, IdentifierFormat, LabelPtr}, partial_analysis::PartialAnalysis,
     },
-    java_tree_gen_full_compress_legion_ref::{eq_node_ref, HashedNodeRef, NodeIdentifier, CS},
+    java_tree_gen_full_compress_legion_ref::{HashedNodeRef, NodeIdentifier, CS},
     nodes::RefContainer,
     store::{ecs::EntryRef, mapped_world::Backend},
     tree_gen::TreeGen,
@@ -71,7 +72,73 @@ fn main() {
     let mut repository = get_up_to_date_repo(path, fo, url);
 
     // bench_1_aux(&mut repository, repo_name, before, after, dir_path);
-    bench_2(&mut repository, repo_name, before, after, dir_path);
+    find_refs_from_canonical_type(&mut repository, repo_name, before, after, dir_path);
+}
+
+pub fn find_refs_from_canonical_type(
+    repository: &mut Repository,
+    repo_name: &str,
+    before: &str,
+    after: &str,
+    dir_path: &str,
+) {
+    // let PreProcessedRepository {
+    //     object_map: full_nodes,
+    //     hyper_ast: mut java_tree_gen,
+    //     mut commits,
+    // }
+    let mut preprocessed = PreProcessedRepository::new(repository, before, after, dir_path);
+
+    {
+        let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
+
+        macro_rules! scoped {
+            ( $o:expr, $i:expr ) => {{
+                let o = $o;
+                let i = $i;
+                let f = IdentifierFormat::from(i);
+                let i = preprocessed.hyper_ast.stores.label_store.get_or_insert($i);
+                let i = LabelPtr::new(i,f);
+                ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
+            }};
+        }
+        // let i = ana.solver.intern(RefsEnum::MaybeMissing);
+        // // let i = scoped!(i, "ReferenceQueue");
+        // let i = scoped!(i, "Reference");
+
+        let i = ana.solver.intern(RefsEnum::Root);
+        // let i = scoped!(scoped!(scoped!(i, "java"), "security"), "PrivilegedAction");
+        // let i = scoped!(scoped!(scoped!(i, "java"), "util"), "Objects");
+        // let i = scoped!(scoped!(scoped!(i, "java"), "util"), "Comparator");
+        // let i = scoped!(scoped!(scoped!(i, "java"), "util"), "Arrays");
+        // let i = scoped!(scoped!(scoped!(scoped!(i,"jdk"),"internal"),"misc"),"SharedSecrets");
+        // let i = scoped!(scoped!(scoped!(scoped!(i,"java"),"util"),"concurrent"),"ThreadFactory");
+        // let i = scoped!(scoped!(scoped!(scoped!(i,"java"),"nio"),"file"),"FilePermission");
+        // let i = scoped!(scoped!(scoped!(scoped!(i, "java"), "nio"), "file"), "Files");
+        // let i = scoped!(
+        //     scoped!(scoped!(scoped!(i, "java"), "nio"), "file"),
+        //     "InvalidPathException"
+        // );
+        let i = scoped!(scoped!(scoped!(scoped!(i,"java"),"nio"),"file"),"Path");
+        ana.print_refs(&preprocessed.hyper_ast.stores.label_store);
+
+        // println!("{}", java_tree_gen.stores.label_store);
+
+        let root = preprocessed
+            .commits
+            .get(&repository.find_reference(after).unwrap().peel_to_commit().unwrap().id())
+            .unwrap()
+            .ast_root;
+        usage::find_refs(&preprocessed.hyper_ast, &mut ana, i, root);
+    }
+
+    let mu = memusage_linux();
+    // drop(java_tree_gen);
+    // drop(full_nodes);
+    // drop(commits);
+    drop(preprocessed);
+    let mu = mu - memusage_linux();
+    println!("memory used {}", mu);
 }
 
 #[bench]
@@ -129,7 +196,10 @@ fn bench_2(
         macro_rules! scoped {
             ( $o:expr, $i:expr ) => {{
                 let o = $o;
+                let i = $i;
+                let f = IdentifierFormat::from(i);
                 let i = java_tree_gen.stores.label_store.get_or_insert($i);
+                let i = LabelPtr::new(i,f);
                 ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
             }};
         }
@@ -152,194 +222,7 @@ fn bench_2(
 
         // println!("{}", java_tree_gen.stores.label_store);
 
-        fn aaa(
-            java_tree_gen: &JavaTreeGen,
-            ana: &mut PartialAnalysis,
-            i: usize,
-            x: java_tree_gen::NodeIdentifier,
-        ) -> Vec<usize> {
-            // let d: LabelValue = ;
-            let b = java_tree_gen.stores.node_store.resolve(x);
-            let t = b.get_type();
-            if &t == &Type::Spaces {
-                return vec![];
-            } else if &t == &Type::Comment {
-                return vec![];
-            } else if &t == &Type::PackageDeclaration {
-                return vec![];
-            } else if &t == &Type::Directory {
-                // TODO if package, get top level declarations then localize if ref.
-                // in the end we do not need due to the way we do the impact ana.
-                // we should only come from parent of package with canonical id.
-            } else if &t == &Type::ImportDeclaration {
-                println!("d=1 {:?}", &t);
-                let c = {
-                    let d = ExplorableRef {
-                        rf: i,
-                        nodes: &ana.solver.nodes,
-                    };
-                    b.check(Into::<LabelValue>::into(d.clone()).as_ref())
-                };
-                if let BloomResult::MaybeContain = c {
-                    println!("+++import+++++Maybe contains");
-                    java_tree_gen::print_tree_syntax(
-                        &java_tree_gen.stores.node_store,
-                        &java_tree_gen.stores.label_store,
-                        &x,
-                    );
-                    println!();
-                    // TODO check if same canonical name
-                    let (stic, scop, asterisk) = {
-                        let b = java_tree_gen.stores.node_store.resolve(x);
-                        let mut scop = None;
-                        let mut sstatic = false;
-                        let mut asterisk = false;
-                        for c in b.get_children() {
-                            let b = java_tree_gen.stores.node_store.resolve(*c);
-                            match b.get_type() {
-                                Type::TS86 => sstatic = true,
-                                Type::Asterisk => asterisk = true,
-                                Type::Identifier => scop = Some((*c, b)),
-                                Type::ScopedIdentifier => scop = Some((*c, b)),
-                                _ => (),
-                            }
-                        }
-                        (sstatic, scop.unwrap(), asterisk)
-                    };
-                    let d = ExplorableRef {
-                        rf: i,
-                        nodes: &ana.solver.nodes,
-                    };
-                    if stic {
-                        return vec![]; // TODO
-                    } else if asterisk {
-                        return vec![]; // TODO
-                    } else if java_tree_gen::eq_root_scoped(d, java_tree_gen, scop.1) {
-                        
-                        let d = ExplorableRef {
-                            rf: i,
-                            nodes: &ana.solver.nodes,
-                        };
-                        let i = if let RefsEnum::ScopedIdentifier(_,i)=d.as_ref() {
-                            *i
-                        } else {
-                            panic!()
-                        };
-                        let o = ana.solver.intern(RefsEnum::MaybeMissing);
-                        let i = ana.solver.intern(RefsEnum::ScopedIdentifier(o, i));
-                        // let i = handle_import(
-                        //     java_tree_gen,
-                        //     ana,
-                        //     java_tree_gen.stores.node_store.resolve(scop.0),
-                        // );
-                        println!("import matched ref");
-                        return vec![i];
-                    } else {
-                        return vec![];
-                    }
-                } else {
-                    println!("Do not contains");
-                    return vec![];
-                }
-            }
-            if !b.has_children() {
-                return vec![];
-            }
-            println!("d=1 {:?}", &t);
-            let c = {
-                let d = ExplorableRef {
-                    rf: i,
-                    nodes: &ana.solver.nodes,
-                };
-                b.check(Into::<LabelValue>::into(d.clone()).as_ref())
-            };
-
-            struct IoOut<W: std::io::Write> {
-                stream: W,
-            }
-
-            impl<W: std::io::Write> std::fmt::Write for IoOut<W> {
-                fn write_str(&mut self, s: &str) -> fmt::Result {
-                    self.stream
-                        .write_all(s.as_bytes())
-                        .map_err(|_| std::fmt::Error)
-                }
-            }
-            if let BloomResult::MaybeContain = c {
-                println!("++++++++++++++Maybe contains");
-
-                if &t == &Type::MethodInvocation // find object
-                    || &t == &Type::FormalParameter // find simple type
-                    || &t == &Type::GenericType // find simple type
-                    || &t == &Type::LocalVariableDeclaration // find simple type
-                    || &t == &Type::ObjectCreationExpression // find simple object
-                    || &t == &Type::ScopedIdentifier // find identifier
-                    || &t == &Type::ScopedTypeIdentifier
-                    || &t == &Type::CatchType // TODO to check
-                    || &t == &Type::Resource // TODO to check
-                // find identifier
-                {
-                    // Here, for now, we try to find Identifiers (not invocations)
-                    // thus we either search directly for scoped identifiers
-                    // or we search for simple identifiers because they do not present refs in themself
-                    println!("!found {:?}", &t);
-                    java_tree_gen::print_tree_syntax(
-                        &java_tree_gen.stores.node_store,
-                        &java_tree_gen.stores.label_store,
-                        &x,
-                    );
-                    println!();
-
-                    let d = ExplorableRef {
-                        rf: i,
-                        nodes: &ana.solver.nodes,
-                    };
-
-                    if eq_node_ref(d, java_tree_gen, x) {
-                        println!("really found");
-                    }
-                } else if &t == &Type::TypeIdentifier {
-                    println!("!found TypeIdentifier");
-                    let mut out = IoOut { stream: stdout() };
-                    java_tree_gen::serialize(
-                        &java_tree_gen.stores.node_store,
-                        &java_tree_gen.stores.label_store,
-                        &x,
-                        &mut out,
-                        &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
-                    );
-                } else if &t == &Type::MethodDeclaration {
-                    // java_tree_gen::print_tree_syntax(
-                    //     &java_tree_gen.stores.node_store,
-                    //     &java_tree_gen.stores.label_store,
-                    //     &x,
-                    // );
-                    let mut out = IoOut { stream: stdout() };
-                    java_tree_gen::serialize(
-                        &java_tree_gen.stores.node_store,
-                        &java_tree_gen.stores.label_store,
-                        &x,
-                        &mut out,
-                        &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
-                    );
-                }
-            } else {
-                println!("Do not contains");
-                return vec![];
-            }
-
-            let mut v: Vec<usize> = vec![];
-            for x in b.get_children().clone() {
-                let z = aaa(java_tree_gen, ana, i, *x);
-                v.extend(z);
-                for w in v.clone() {
-                    let z = aaa(java_tree_gen, ana, w, *x);
-                    v.extend(z)
-                }
-            }
-            vec![]
-        }
-        aaa(&java_tree_gen, &mut ana, i, root);
+        usage::find_refs(&java_tree_gen, &mut ana, i, root);
     }
 
     let mu = memusage_linux();
@@ -348,25 +231,6 @@ fn bench_2(
     drop(commits);
     let mu = mu - memusage_linux();
     println!("memory used {}", mu);
-}
-
-fn handle_import(
-    java_tree_gen: &java_tree_gen::JavaTreeGen,
-    ana: &mut PartialAnalysis,
-    b: HashedNodeRef,
-) -> usize {
-    let i = b.get_child_rev(&0);
-    java_tree_gen::print_tree_syntax(
-        &java_tree_gen.stores.node_store,
-        &java_tree_gen.stores.label_store,
-        &i,
-    );
-    println!();
-    let i = java_tree_gen.stores.node_store.resolve(i);
-    let i = i.get_label();
-    let o = ana.solver.intern(RefsEnum::MaybeMissing);
-    let i = ana.solver.intern(RefsEnum::ScopedIdentifier(o, *i));
-    i
 }
 
 struct Commit {
@@ -549,7 +413,7 @@ fn handle_commit(
                                 continue;
                             }
                             let full_node =
-                                java_tree_gen.generate_default(a.content(), tree.walk());
+                                java_tree_gen.generate_file(b"",a.content(), tree.walk());
 
                             let w = &mut stack.last_mut().unwrap().2;
 

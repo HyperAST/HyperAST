@@ -227,6 +227,20 @@ pub trait AsNodeEntityRefSelf: AsNodeEntityRef {
     fn as_ref(&self) -> Self::Ref<'_>;
 }
 
+impl AsNodeEntityRef for Box<[u8]> {
+    type Ref<'a> = &'a [u8];
+
+    fn eq(&self, other: &Self::Ref<'_>) -> bool {
+        AsNodeEntityRefSelf::as_ref(self) == *other
+    }
+}
+
+impl AsNodeEntityRefSelf for Box<[u8]> {
+    fn as_ref(&self) -> Self::Ref<'_> {
+        AsRef::as_ref(self)
+    }
+}
+
 /// Come from string-interner
 /// Types implementing this trait may act as backends for the string interner.
 ///
