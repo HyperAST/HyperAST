@@ -321,6 +321,7 @@ impl Debug for LabelStore {
             .finish()
     }
 }
+
 impl Display for LabelStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (i, x) in self.internal.clone().into_iter() {
@@ -725,6 +726,7 @@ impl<'a> TreeGen for JavaTreeGen {
                 None,
             )
         } else if acc.simple.kind == Type::ArgumentList || acc.simple.kind == Type::FormalParameters
+        || acc.simple.kind == Type::AnnotationArgumentList
         {
             assert!(acc
                 .simple

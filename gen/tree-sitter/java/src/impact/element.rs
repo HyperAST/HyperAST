@@ -315,12 +315,21 @@ impl<Node: Eq + Hash, Leaf: Eq + Hash> RefsEnum<Node, Leaf> {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum Arguments<Node = LabelValue>
+pub enum Arguments<Node>
 where
     Node: Eq + Hash,
 {
     Unknown,
     Given(Box<[Node]>),
+}
+
+impl<Node: Eq + Hash> Arguments<Node> {
+    pub fn map<T: Eq + Hash,F:FnMut(&Node)->T>(&self, f:F) -> Arguments<T> {
+        match self {
+            Arguments::Unknown => Arguments::Unknown,
+            Arguments::Given(x) => Arguments::Given(x.iter().map(f).collect()),
+        }
+    }
 }
 
 #[derive(Clone)]

@@ -183,6 +183,8 @@ pub fn eq_node_scoped_id(o: ExplorableRef,i:&LabelIdentifier, java_tree_gen: &Ja
             false // TODO not sure
         } else if t == Type::IntegralType {
             false // TODO not sure
+        } else if t == Type::FloatingPointType {
+            false // TODO not sure
         } else if t == Type::BooleanType {
             false // TODO not sure
         } else {
@@ -261,6 +263,8 @@ pub fn eq_node_scoped_id(o: ExplorableRef,i:&LabelIdentifier, java_tree_gen: &Ja
 pub fn eq_root_scoped(d: ExplorableRef, java_tree_gen: &JavaTreeGen, b: HashedNodeRef) -> bool {
     match d.as_ref() {
         RefsEnum::Root => todo!(),
+        RefsEnum::MaybeMissing => {false
+        },
         RefsEnum::ScopedIdentifier(o, i) => {
             let t = b.get_type();
             if t == Type::ScopedAbsoluteIdentifier {

@@ -418,7 +418,17 @@ impl Solver {
         // TODO decls should be searched without masks
 
         let no_mask = self.no_mask(other); // maybe return just after match
-        let other = if let Some(r) = (&self.decls).get(&Declarator::Field(no_mask)).cloned() {
+        let other = if let Some(r) = (&self.decls).get(&Declarator::Type(no_mask)).cloned() {
+            // println!("t through cache {:?}", other);
+            match r {
+                DeclType::Compile(r, _, _) => r,
+                DeclType::Runtime(b) => {
+                    return Default::default();
+                }
+                x => todo!("{:?}", x),
+            }
+        } else if let Some(r) = (&self.decls).get(&Declarator::Field(no_mask)).cloned() {
+            // println!("f through cache {:?}", other);
             match r {
                 DeclType::Compile(r, _, _) => r,
                 DeclType::Runtime(b) => {
@@ -432,14 +442,6 @@ impl Solver {
                         }).collect()
                     }
                 }
-            }
-        } else if let Some(r) = (&self.decls).get(&Declarator::Type(no_mask)).cloned() {
-            match r {
-                DeclType::Compile(r, _, _) => r,
-                DeclType::Runtime(b) => {
-                    return Default::default();
-                }
-                x => todo!("{:?}", x),
             }
         } else {
             other
@@ -568,10 +570,12 @@ impl Solver {
             }
             RefsEnum::Mask(o, v) => {
                 // println!("solving mask {:?}", other);
-                let v: Vec<RefPtr> = v
+                let v: Vec<RefPtr> = v // TODO infinite loop
                     .iter()
                     .flat_map(|x| {
-                        self.solve_aux(cache, *x)
+                        assert_ne!(other,*x);
+                        // println!("mask {:?}", *x);
+                        self.solve_aux(cache, *x) // TODO infinite loop
                             .iter()
                             .map(|x| *x)
                             .collect::<Vec<_>>() // TODO handle None properly
@@ -605,8 +609,9 @@ impl Solver {
                 todo!()
             }
             RefsEnum::ScopedIdentifier(o, i) => {
-                let mut m: Option<Box<[usize]>> = None; // TODO use mask
-                let r: MultiResult<RefPtr> = self.solve_aux(cache, o);
+                // println!("solving cioped id {:?}", other);
+                let mut m: Option<Box<[usize]>> = None;
+                let r: MultiResult<RefPtr> = self.solve_aux(cache, o); // TODO infinite loop
                 if r.is_empty() {
                     // println!("solving {:?} an object into nothing", o);
                     cache.insert(other, r);
@@ -621,7 +626,7 @@ impl Solver {
                             RefsEnum::Root if !self.is_package_token(i) => return None,
                             RefsEnum::Array(_) if self.is_length_token(i) => None,
                             RefsEnum::Mask(o, x) => {
-                                m = Some(x.clone()); // TODO use mask
+                                m = Some(x.clone());
                                 Some(*o)
                             }
                             _ => Some(o),
