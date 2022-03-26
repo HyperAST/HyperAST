@@ -1,0 +1,24 @@
+[package]
+name = "rusted_gumtree_gen_ts_xml"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tree-sitter = "0.20.0"
+rusted_gumtree_core = { path = "../../../core" }
+hyper_ast = { path = "../../../hyper_ast" }
+
+
+libc = "0.2"
+
+
+legion = "0.4.0"
+tuples = "=1.4.1"
+
+[build-dependencies]
+cc = "*"
+
+[dev-dependencies]
+pretty_assertions = "1.0.0"
