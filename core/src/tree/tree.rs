@@ -10,6 +10,11 @@ use strum_macros::ToString;
 
 use crate::utils;
 
+pub trait HashKind {
+    fn structural() -> Self;
+    fn label() -> Self;
+}
+
 /// for now the types shared between all languages
 #[derive(Debug, EnumString, ToString)]
 #[strum(serialize_all = "snake_case")]
@@ -644,11 +649,6 @@ mod Owned {
 pub trait WithStats {
     fn size(&self) -> usize;
     fn height(&self) -> usize;
-}
-
-pub trait HashKind {
-    fn structural() -> Self;
-    fn label() -> Self;
 }
 
 pub trait WithHashs {
