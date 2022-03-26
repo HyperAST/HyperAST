@@ -1,0 +1,41 @@
+[package]
+name = "hyper_ast"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# tree-sitter = "0.20.0"
+# atomic-counter = "1.0.1"
+num = "0.4.0"
+cfg-if = "1.0"
+hashbrown = { version = "0.11.2", default-features = false, features = ["ahash"] }
+# fasthash="0.4.0"
+
+# rusted_gumtree_core = { path = "../../../core" }
+# tree-sitter_types = { path = "../../../tree-sitter_types" }
+
+
+# # promizing to store subtrees efficiently
+# zerocopy="0.6.1"
+
+# tuples = "=1.4.1"
+
+# enumset = "1.0.8"
+
+## store
+legion = {version="0.4.0", features = ["extended-tuple-impls"]}
+bitvec = "0.22.3"
+controlled-option = "0.4.1"
+string-interner = "0.14.0"
+
+# # memusage
+libc = "0.2"
+
+# # types
+strum = "0.23.0"
+strum_macros = "0.23.1"
+
+# # handle: use the handle of their arena implementation
+stack-graphs = "0.3.0"

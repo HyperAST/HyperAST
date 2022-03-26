@@ -1,0 +1,790 @@
+use core::{fmt, panic};
+use std::{
+    fmt::{Debug, Display},
+    iter::Peekable,
+    ops::AddAssign,
+    path::{PathBuf, Path},
+};
+
+use num::ToPrimitive;
+
+use crate::{
+    nodes::{self, print_tree_syntax, Space},
+    store::{defaults::NodeIdentifier, SimpleStores},
+    types::{LabelStore, Labeled, Tree, Type, Typed, WithChildren},
+};
+
+#[derive(PartialEq, Eq, Hash)]
+pub struct Position {
+    file: PathBuf,
+    offset: usize,
+    len: usize,
+}
+impl Position {
+    pub fn default() -> Self {
+        Self {
+            file: PathBuf::default(),
+            offset: 0,
+            len: 0,
+        }
+    }
+    pub fn new(file:PathBuf,offset:usize,len:usize) -> Self {
+        Self {
+            file,
+            offset,
+            len,
+        }
+    }
+    pub fn inc_path(&mut self, s: &str) {
+        self.file.push(s);
+    }
+    pub fn inc_offset(&mut self, x: usize) {
+        self.offset += x;
+    }
+    pub fn set_len(&mut self, x: usize) {
+        self.len = x;
+    }
+    pub fn range(&self) -> std::ops::Range<usize> {
+        self.offset..(self.offset + self.len)
+    }
+    pub fn file(&self) -> &Path {
+        &self.file
+    }
+}
+impl Debug for Position {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Position")
+            .field("path", &self.file)
+            .field("offset", &self.offset)
+            .field("len", &self.len)
+            .finish()
+    }
+}
+impl Display for Position {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{{\"offset\":{},\"len\":{},\"path\":{:?}}}",
+            &self.offset, &self.len, &self.file
+        )
+    }
+}
+
+pub fn extract_file_postion(stores: &SimpleStores, parents: &[NodeIdentifier]) -> Position {
+    if parents.is_empty() {
+        Position::default()
+    } else {
+        let p = parents[parents.len() - 1];
+        let b = stores.node_store.resolve(p);
+        // println!("type {:?}", b.get_type());
+        // if !b.has_label() {
+        //     panic!("{:?} should have a label", b.get_type());
+        // }
+        let l = stores.label_store.resolve(b.get_label());
+
+        let mut r = extract_file_postion(stores, &parents[..parents.len() - 1]);
+        r.inc_path(l);
+        r
+    }
+}
+
+pub fn extract_position(
+    stores: &SimpleStores,
+    parents: &[NodeIdentifier],
+    offsets: &[usize],
+) -> Position {
+    if parents.is_empty() {
+        return Position::default();
+    }
+    let p = parents[parents.len() - 1];
+    let o = offsets[offsets.len() - 1];
+
+    let b = stores.node_store.resolve(p);
+    let c = {
+        let v = b.get_children()[..o - 1].to_vec();
+        v.iter()
+            .map(|x| {
+                let b = stores.node_store.resolve(*x);
+                // println!("{:?}", b.get_type());
+                b.get_bytes_len(0) as usize
+            })
+            .sum()
+    };
+    if b.get_type() == Type::Program {
+        let mut r = extract_file_postion(stores, parents);
+        r.inc_offset(c);
+        r
+    } else {
+        let mut r = extract_position(
+            stores,
+            &parents[..parents.len() - 1],
+            &offsets[..offsets.len() - 1],
+        );
+        r.inc_offset(c);
+        r
+    }
+}
+
+// #[derive(Clone, Debug)]
+// pub struct StructuralPosition {
+//     pub(crate) parents: Vec<NodeIdentifier>,
+//     pub(crate) offsets: Vec<usize>,
+//     pub(crate) node: NodeIdentifier,
+// }
+
+// impl StructuralPosition {
+//     pub fn to_position(&self, stores: &SimpleStores) -> Position {
+//         todo!()
+//         // extract_position(stores, &self.parents, &self.offsets)
+//     }
+
+//     pub fn new(node: NodeIdentifier) -> Self {
+//         Self {
+//             parents: vec![],
+//             offsets: vec![0],
+//             // offsets: vec![],
+//             node,
+//         }
+//     }
+
+//     pub fn with_offset(node: NodeIdentifier, o: usize) -> Self {
+//         Self {
+//             parents: vec![],
+//             offsets: vec![o],
+//             // offsets: vec![],
+//             node,
+//         }
+//     }
+
+//     pub fn push(&mut self) {
+//         self.parents.push(self.node);
+//         self.offsets.push(0);
+//     }
+
+//     pub fn pop(&mut self) {
+//         self.parents.pop();
+//         self.offsets.pop();
+//     }
+
+//     pub fn inc(&mut self, node: NodeIdentifier) {
+//         self.node = node;
+//         self.offsets.last_mut().unwrap().add_assign(1)
+//     }
+// }
+
+#[derive(Clone, Debug)]
+pub struct StructuralPosition {
+    pub(crate) nodes: Vec<NodeIdentifier>,
+    pub(crate) offsets: Vec<usize>,
+}
+
+impl StructuralPosition {
+    pub fn to_position(&self, stores: &SimpleStores) -> Position {
+        todo!()
+        // extract_position(stores, &self.parents, &self.offsets)
+    }
+
+    pub fn new(node: NodeIdentifier) -> Self {
+        Self {
+            nodes: vec![node],
+            offsets: vec![0],
+        }
+    }
+
+    pub fn with_offset(node: NodeIdentifier, o: usize) -> Self {
+        Self {
+            nodes: vec![node],
+            offsets: vec![o],
+        }
+    }
+
+    pub fn push(&mut self) {
+        // self.nodes.push(self.current_node());
+        self.offsets.push(0);
+    }
+
+    pub fn pop(&mut self) {
+        if self.offsets.len() != self.nodes.len() {
+            self.offsets.pop();
+        } else {
+            self.nodes.pop();
+            self.offsets.pop();
+        }
+    }
+
+    pub fn inc(&mut self, node: NodeIdentifier) {
+        if self.offsets.is_empty() {
+            // self.nodes.push(node);
+            // self.offsets.push(0);
+            panic!();
+        } else if self.offsets.len() != self.nodes.len() {
+            self.nodes.push(node);
+        } else {
+            *self.nodes.last_mut().unwrap() = node;
+        }
+        self.offsets.last_mut().unwrap().add_assign(1)
+    }
+}
+
+impl StructuralPosition {
+    pub fn current_node(&self) -> Option<&NodeIdentifier> {
+        self.nodes.last()
+    }
+    pub fn current_offset(&self) -> Option<&usize> {
+        self.offsets.last()
+    }
+}
+
+impl From<(Vec<NodeIdentifier>, Vec<usize>, NodeIdentifier)> for StructuralPosition {
+    fn from(mut x: (Vec<NodeIdentifier>, Vec<usize>, NodeIdentifier)) -> Self {
+        assert_eq!(x.0.len() + 1, x.1.len());
+        x.0.push(x.2);
+        Self {
+            nodes: x.0,
+            offsets: x.1,
+        }
+    }
+}
+impl From<(Vec<NodeIdentifier>, Vec<usize>)> for StructuralPosition {
+    fn from(x: (Vec<NodeIdentifier>, Vec<usize>)) -> Self {
+        assert_eq!(x.0.len(), x.1.len());
+        Self {
+            nodes: x.0,
+            offsets: x.1,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct StructuralPositionWithIndentation {
+    pub(crate) nodes: Vec<NodeIdentifier>,
+    pub(crate) offsets: Vec<usize>,
+    pub(crate) indentations: Vec<Box<[Space]>>,
+}
+
+pub struct StructuralPositionStore {
+    pub nodes: Vec<NodeIdentifier>,
+    parents: Vec<usize>,
+    offsets: Vec<usize>,
+    // ends: Vec<usize>,
+}
+struct IterStructuralPositions<'a> {
+    sps: &'a StructuralPositionStore,
+    ends: core::slice::Iter<'a, usize>,
+}
+
+impl<'a> Iterator for IterStructuralPositions<'a> {
+    type Item = StructuralPosition;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let x = *self.ends.next()?;
+        let it = ExploreStructuralPositions::from((self.sps, x));
+        // let r = Position;
+        todo!()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Scout {
+    root: usize,
+    path: StructuralPosition,
+}
+
+impl Scout {
+    pub fn node(&self, x: &StructuralPositionStore) -> NodeIdentifier {
+        if let Some(y) = self.path.current_node() {
+            *y
+        } else {
+            x.nodes[self.root]
+        }
+    }
+    pub fn try_node(&self) -> Result<NodeIdentifier, usize> {
+        if let Some(y) = self.path.current_node() {
+            Ok(*y)
+        } else {
+            Err(self.root)
+        }
+    }
+    pub fn has_parents(&self) -> bool {
+        if self.path.nodes.is_empty() {
+            self.root != 0
+        } else {
+            true
+        }
+    }
+    pub fn try_up(&mut self) -> Result<(), ()> {
+        if self.path.nodes.is_empty() {
+            Err(())
+        } else {
+            self.path.pop();
+            Ok(())
+        }
+    }
+    pub fn up(&mut self, x: &StructuralPositionStore) {
+        // println!("up {} {:?}", self.root, self.path);
+        // if !self.path.offsets.is_empty() && self.path.offsets[0] == 0 {
+        //     assert!(self.root == 0);
+        // }
+        if self.path.nodes.is_empty() {
+            // let o = x.offsets[self.root];
+            self.path = StructuralPosition {
+                nodes: vec![],
+                offsets: vec![],
+            };
+            // self.path = StructuralPosition::with_offset(x.nodes[self.root], o);
+            self.root = x.parents[self.root];
+            // if o == 0 {
+            //     assert!(self.path.offsets[0] == 0);
+            //     assert!(self.root == 0);
+            // }
+        } else {
+            self.path.pop();
+        }
+        // if !self.path.offsets.is_empty() && self.path.offsets[0] == 0 {
+        //     assert!(self.root == 0);
+        // }
+        assert_eq!(self.path.nodes.len(), self.path.offsets.len());
+    }
+    pub fn goto(&mut self, node: NodeIdentifier, i: usize) {
+        // println!("goto {} {:?}", self.root, self.path);
+        self.path.nodes.push(node);
+        self.path.offsets.push(i + 1);
+        assert_eq!(self.path.nodes.len(), self.path.offsets.len());
+        // if !self.path.offsets.is_empty() && self.path.offsets[0] == 0 {
+        //     assert!(self.root == 0);
+        // }
+    }
+    pub fn inc(&mut self, node: NodeIdentifier) -> usize {
+        assert_eq!(self.path.nodes.len(), self.path.offsets.len());
+        *self.path.nodes.last_mut().unwrap() = node;
+        self.path.offsets.last_mut().unwrap().add_assign(1);
+        // self.path.inc(node);
+        self.path.offsets.last().unwrap() - 1
+    }
+    // pub fn inc(&mut self, node: NodeIdentifier, x: &StructuralPositionStore) {
+    // //     println!("inc {} {:?}", self.root, self.path);
+    //     if self.path.offsets.is_empty() {
+
+    //     }
+    //     self.path.inc(node);
+    // }
+
+    pub fn check(&self, stores: &SimpleStores) -> bool {
+        assert_eq!(self.path.offsets.len(), self.path.nodes.len());
+        if self.path.nodes.is_empty() {
+            return true;
+        }
+        let mut i = self.path.nodes.len() - 1;
+
+        while i > 0 {
+            let e = self.path.nodes[i];
+            let o = self.path.offsets[i] - 1;
+            let p = self.path.nodes[i - 1];
+            let b = stores.node_store.resolve(p);
+            if !b.has_children() || e != b.get_child(&o.to_u16().expect("too big")) {
+                return false;
+            }
+            i -= 1;
+        }
+        true
+    }
+    pub fn check_size(&self, stores: &SimpleStores) -> bool {
+        assert_eq!(self.path.offsets.len(), self.path.nodes.len());
+        if self.path.nodes.is_empty() {
+            return true;
+        }
+        let mut i = self.path.nodes.len() - 1;
+
+        while i > 0 {
+            let o = self.path.offsets[i] - 1;
+            let p = self.path.nodes[i - 1];
+            let b = stores.node_store.resolve(p);
+            if !b.has_children() || o >= (b.child_count() as usize) {
+                let s = b.child_count();
+                if b.has_children() {
+                    println!("error: {} {} {:?}", b.child_count(), o, p,);
+                } else {
+                    println!("error no children: {} {:?}", o, p,);
+                }
+                return false;
+            }
+            i -= 1;
+        }
+        true
+    }
+}
+
+// impl From<StructuralPosition> for Scout {
+//     fn from(x: StructuralPosition) -> Self {
+//         Self { root: 0, path: x }
+//     }
+// }
+
+impl From<(StructuralPosition, usize)> for Scout {
+    fn from((path, root): (StructuralPosition, usize)) -> Self {
+        // println!("from {} {:?}", root, path);
+        Self { path, root }
+    }
+}
+
+pub struct ExploreStructuralPositions<'a> {
+    sps: &'a StructuralPositionStore,
+    i: usize,
+}
+
+impl<'a> ExploreStructuralPositions<'a> {
+    pub fn to_position(self, stores: &SimpleStores) -> Position {
+        self.to_position_aux(stores, |_| {})
+    }
+
+    fn to_position_aux<F: Fn(&mut Peekable<ExploreStructuralPositions>)>(
+        self,
+        stores: &SimpleStores,
+        f: F,
+    ) -> Position {
+        assert!(self.sps.check(stores));
+        // let parents = self.parents.iter().peekable();
+        let mut it = self;
+        let mut from_file = false;
+        // let mut len = 0;
+        let mut len = if let Some(x) = it.peek_node() {
+            let b = stores.node_store.resolve(x);
+            let t = b.get_type();
+            if let Some(y) = b.try_get_bytes_len(0) {
+                if t != Type::Program {
+                    from_file = true;
+                }
+                y as usize
+                // Some(x)
+            } else {
+                0
+                // None
+            }
+        } else {
+            0
+            // None
+        };
+        let mut offset = 0;
+        // f(&mut it); // TODO
+        // println!(
+        //     "it: {:?},{:?},{:?}",
+        //     &it.sps.nodes, &it.sps.offsets, &it.sps.parents
+        // );
+        if from_file {
+            while let Some(p) = it.peek_parent_node() {
+                // println!("i: {}", it.i);
+                assert_ne!(p, it.peek_node().unwrap());
+                assert_eq!(p, it.sps.nodes[it.sps.parents[it.i - 1]]);
+                assert_eq!(it.peek_node().unwrap(), it.sps.nodes[it.i - 1]);
+                // println!("nodes: {}, parents:{}, offsets:{}",it.sps.nodes.len(),it.sps.parents.len(),it.sps.offsets.len());
+                let b = stores.node_store.resolve(p);
+                let t = b.get_type();
+                // let o = it.sps.offsets[it]
+                // println!("nodes: ({})", it.sps.nodes.len());
+                // println!("offsets: ({}) {:?}", it.sps.offsets.len(), &it.sps.offsets);
+                // println!("parents: ({}) {:?}", it.sps.parents.len(), &it.sps.parents);
+                // println!(
+                //     "o: {}, o p: {}",
+                //     it.peek_offset().unwrap(),
+                //     it.sps.offsets[it.sps.parents[it.i - 1]]
+                // );
+                let o = it.peek_offset().unwrap();
+                if it.peek_node().unwrap() != b.get_children()[o - 1] {
+                    print_tree_syntax(
+                        |x| {
+                            stores
+                                .node_store
+                                .resolve(*x)
+                                .into_compressed_node()
+                                .unwrap()
+                        },
+                        |x| stores.label_store.resolve(x).to_string(),
+                        &p,
+                    );
+                    assert_eq!(
+                        it.peek_node().unwrap(),
+                        b.get_children()[o - 1],
+                        "p:{:?} b.cs:{:?} o:{} o p:{} i p:{}",
+                        p,
+                        b.get_children(),
+                        it.peek_offset().unwrap(),
+                        it.sps.offsets[it.sps.parents[it.i - 1]],
+                        it.sps.parents[it.i - 1],
+                    );
+                }
+                let c: usize = {
+                    let v = b.get_children()[..o - 1].to_vec();
+                    v.iter()
+                        .map(|x| {
+                            let b = stores.node_store.resolve(*x);
+                            // println!("{:?}", b.get_type());
+                            b.get_bytes_len(0) as usize
+                        })
+                        .sum()
+                };
+                offset += c;
+                if t == Type::Program {
+                    it.next();
+                    break;
+                } else {
+                    it.next();
+                }
+            }
+        }
+        let mut path = vec![];
+        for p in it {
+            let b = stores.node_store.resolve(p);
+            // println!("type {:?}", b.get_type());
+            // if !b.has_label() {
+            //     panic!("{:?} should have a label", b.get_type());
+            // }
+            let l = stores.label_store.resolve(b.get_label());
+            // println!("value: {}",l);
+            // path = path.join(path)
+            path.push(l)
+        }
+        let path = PathBuf::from_iter(path.iter().rev());
+        Position { file: path, offset, len }
+    }
+    fn peek_parent_node(&self) -> Option<NodeIdentifier> {
+        if self.i == 0 {
+            return None;
+        }
+        let i = self.i - 1;
+        let r = self.sps.nodes[self.sps.parents[i]];
+        Some(r)
+    }
+    fn peek_offset(&self) -> Option<usize> {
+        if self.i == 0 {
+            return None;
+        }
+        let i = self.i - 1;
+        let r = self.sps.offsets[i];
+        Some(r)
+    }
+    fn peek_node(&self) -> Option<NodeIdentifier> {
+        if self.i == 0 {
+            return None;
+        }
+        let i = self.i - 1;
+        let r = self.sps.nodes[i];
+        Some(r)
+    }
+}
+
+impl<'a> Iterator for ExploreStructuralPositions<'a> {
+    type Item = NodeIdentifier;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.i == 0 {
+            return None;
+        } //println!("next: {} {}", self.i, self.sps.parents[self.i - 1]);
+        let i = self.i - 1;
+        let r = self.sps.nodes[i];
+        if i > 0 {
+            self.i = self.sps.parents[i] + 1;
+        } else {
+            self.i = i;
+        }
+        Some(r)
+    }
+}
+
+impl<'a> From<(&'a StructuralPositionStore, usize)> for ExploreStructuralPositions<'a> {
+    fn from((s, x): (&'a StructuralPositionStore, usize)) -> Self {
+        // println!("from {} {:?}",x,s.parents);
+        Self { sps: s, i: x + 1 }
+    }
+}
+
+impl StructuralPositionStore {
+    // fn new() -> Self {
+    //     Self {
+    //         nodes: vec![],
+    //         parents: vec![],
+    //         offsets: vec![],
+    //         ends: vec![],
+    //     }
+    // }
+    pub fn get_positions(&self, stores: &SimpleStores, ends: &[usize]) -> Vec<Position> {
+        self.get_positions_aux(stores, ends, |_| {})
+    }
+
+    fn get_positions_aux<F: Fn(&mut Peekable<ExploreStructuralPositions>)>(
+        &self,
+        stores: &SimpleStores,
+        ends: &[usize],
+        f: F,
+    ) -> Vec<Position> {
+        let mut r = vec![];
+
+        for x in ends.iter() {
+            // let parents = self.parents.iter().peekable();
+            let it = ExploreStructuralPositions::from((self, *x));
+            r.push(it.to_position_aux(stores, &f));
+            // let len = stores.node_store.resolve(self.nodes[*x]).get_bytes_len() as usize;
+            // let mut it = it.peekable();
+            // let mut offset = 0;
+            // f(&mut it);
+            // while let Some((p, o)) = it.peek() {
+            //     let b = stores.node_store.resolve(*p);
+            //     let c: usize = {
+            //         let v = b.get_children()[..o - 1].to_vec();
+            //         v.iter()
+            //             .map(|x| {
+            //                 let b = stores.node_store.resolve(*x);
+            //                 // println!("{:?}", b.get_type());
+            //                 b.get_bytes_len() as usize
+            //             })
+            //             .sum()
+            //     };
+            //     offset += c;
+            //     if b.get_type() == Type::Program {
+            //         break;
+            //     } else {
+            //         it.next();
+            //     }
+            // }
+            // let mut path = vec![];
+            // for (p, _) in it.next() {
+            //     let b = stores.node_store.resolve(p);
+            //     // println!("type {:?}", b.get_type());
+            //     // if !b.has_label() {
+            //     //     panic!("{:?} should have a label", b.get_type());
+            //     // }
+            //     let l = stores.label_store.resolve(b.get_label());
+            //     // path = path.join(path)
+            //     path.push(l)
+            // }
+            // let path = PathBuf::from_iter(path.iter().rev());
+            // r.push(Position { path, offset, len })
+            // // r.push(extract_position(stores, parents, offsets))
+        }
+        r
+    }
+
+    /// intended to easily compare to positions un other ASTs
+    pub fn to_relaxed_positions(&self, stores: &SimpleStores) -> Vec<Position> {
+        todo!()
+        // self.to_positions_aux(stores, |it| {
+        //     while let Some((p,o)) = it.peek() {
+        //         let b = stores.node_store.resolve(*p);
+        //         let t = b.get_type();
+        //         if t == Type::Program {
+        //             break;
+        //         } else {
+        //             it.next();
+        //         }
+        //     }
+        // })
+    }
+
+    pub fn check(&self, stores: &SimpleStores) -> bool {
+        assert_eq!(self.offsets.len(), self.parents.len());
+        assert_eq!(self.nodes.len(), self.parents.len());
+        if self.nodes.is_empty() {
+            return true;
+        }
+        let mut i = self.nodes.len() - 1;
+
+        while i > 0 {
+            let e = self.nodes[i];
+            let o = self.offsets[i] - 1;
+            let p = self.nodes[self.parents[i]];
+            let b = stores.node_store.resolve(p);
+            if !b.has_children() || e != b.get_child(&o.to_u16().expect("too big")) {
+                if b.has_children() {
+                    println!("error: {} {} {:?}", b.child_count(), o, p,);
+                } else {
+                    println!("error no children: {} {:?}", o, p,);
+                }
+                return false;
+            }
+            i -= 1;
+        }
+        true
+    }
+}
+
+impl StructuralPositionStore {
+    pub fn push(&mut self, x: &mut Scout) -> usize {
+        assert_eq!(x.path.nodes.len(), x.path.offsets.len());
+        if x.path.offsets.is_empty() {
+            return x.root;
+        }
+        assert!(!x.path.offsets[1..].contains(&0), "{:?}", &x.path.offsets);
+        if x.path.offsets[0] == 0 {
+            assert!(x.root == 0, "{:?} {}", &x.path.offsets, &x.root);
+            if x.path.offsets.len() == 1 {
+                return 0;
+            }
+            let l = x.path.nodes.len() - 2;
+            let o = self.parents.len();
+            self.nodes.extend(&x.path.nodes[1..]);
+
+            self.parents.push(x.root);
+            self.parents
+                .extend((o..o + l).into_iter().collect::<Vec<_>>());
+
+            self.offsets.extend(&x.path.offsets[1..]);
+            x.root = self.nodes.len() - 1;
+            x.path = StructuralPosition {
+                nodes: vec![],
+                offsets: vec![],
+            }
+        } else {
+            let l = x.path.nodes.len() - 1;
+            let o = self.parents.len();
+            self.nodes.extend(x.path.nodes.clone());
+            self.parents.push(x.root);
+            self.parents
+                .extend((o..o + l).into_iter().collect::<Vec<_>>());
+            self.offsets.extend(&x.path.offsets);
+            // self.ends.push(self.nodes.len() - 1);
+            x.root = self.nodes.len() - 1;
+            x.path = StructuralPosition {
+                nodes: vec![],
+                offsets: vec![],
+            }
+            // x.path = StructuralPosition::with_offset(x.path.current_node(), x.path.current_offset());
+        }
+
+        // if !x.path.offsets.is_empty() && x.path.offsets[0] == 0 {
+        //     assert!(x.root == 0, "{:?} {}", &x.path.offsets, &x.root);
+        // }
+
+        assert!(
+            self.offsets.is_empty() || !self.offsets[1..].contains(&0),
+            "{:?}",
+            &self.offsets
+        );
+        assert_eq!(self.offsets.len(), self.parents.len());
+        assert_eq!(self.nodes.len(), self.parents.len());
+        self.nodes.len() - 1
+    }
+}
+
+impl From<StructuralPosition> for StructuralPositionStore {
+    fn from(x: StructuralPosition) -> Self {
+        let l = x.nodes.len();
+        assert!(!x.offsets[1..].contains(&0));
+        let nodes = x.nodes;
+        Self {
+            nodes,
+            parents: (0..l).into_iter().collect(),
+            offsets: x.offsets,
+            // ends: vec![],
+        }
+    }
+}
+
+impl Default for StructuralPositionStore {
+    fn default() -> Self {
+        Self {
+            nodes: Default::default(),
+            parents: Default::default(),
+            offsets: Default::default(),
+            // ends: Default::default(),
+        }
+    }
+}
