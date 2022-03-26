@@ -58,9 +58,9 @@ impl rusted_gumtree_core::tree::tree::Stored for HashedNode {
     type TreeId = NodeIdentifier;
 }
 impl rusted_gumtree_core::tree::tree::WithChildren for HashedNode {
-    type ChildIdx = u8;
+    type ChildIdx = u16;
 
-    fn child_count(&self) -> u8 {
+    fn child_count(&self) -> u16 {
         self.0.child_count()
     }
 

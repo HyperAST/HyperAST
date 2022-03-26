@@ -5,6 +5,7 @@ use std::{
     marker::PhantomData,
 };
 
+use num::ToPrimitive;
 use rusted_gumtree_core::tree::tree::Type;
 
 pub type TypeIdentifier = Type;
@@ -171,14 +172,14 @@ impl<N, L: Eq> rusted_gumtree_core::tree::tree::Labeled for CompressedNode<N, L>
 }
 
 impl<N: Eq + Clone, L> rusted_gumtree_core::tree::tree::WithChildren for CompressedNode<N, L> {
-    type ChildIdx = u8;
-    fn child_count(&self) -> u8 {
+    type ChildIdx = u16;
+    fn child_count(&self) -> u16 {
         match self {
             CompressedNode::Children2 {
                 children: _,
                 kind: _,
             } => 2,
-            CompressedNode::Children { children, kind: _ } => children.len() as u8,
+            CompressedNode::Children { children, kind: _ } => children.len().to_u16().expect("too much children"),
             _ => 0,
         }
     }

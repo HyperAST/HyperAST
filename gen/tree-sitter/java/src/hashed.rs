@@ -138,9 +138,9 @@ impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L: Eq> rusted_gumtree_core::t
 impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L>
     rusted_gumtree_core::tree::tree::WithChildren for HashedCompressedNode<U, N, L>
 {
-    type ChildIdx = u8;
+    type ChildIdx = u16;
 
-    fn child_count(&self) -> u8 {
+    fn child_count(&self) -> u16 {
         self.node.child_count()
     }
 

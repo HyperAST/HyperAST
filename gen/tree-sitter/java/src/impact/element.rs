@@ -138,6 +138,7 @@ mod tests {
 
     #[test]
     fn test() {
+        assert_eq!(IdentifierFormat::FlatCase, "org".into());
         assert_eq!(IdentifierFormat::FlatCase, "twowords".into());
         assert_eq!(IdentifierFormat::UpperFlatCase, "TWOWORDS".into());
         assert_eq!(IdentifierFormat::LowerCamelCase, "twoWords".into());
@@ -150,7 +151,7 @@ mod tests {
 }
 
 #[derive(Debug, Clone)]
-pub struct ListSet<Node: Eq + Hash>(Box<[Node]>);
+pub struct ListSet<Node>(Box<[Node]>);
 impl<Node: Eq + Hash + Clone> ListSet<Node> {
     // TODO search nodes with hash with dichotomy
     pub fn push(&mut self, x: Node) {
@@ -228,8 +229,8 @@ impl<Node: Eq + Hash> FromIterator<Node> for ListSet<Node> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
-pub enum RefsEnum<Node: Eq + Hash, Leaf: Eq + Hash> {
+#[derive(Debug, Clone)]
+pub enum RefsEnum<Node, Leaf> {
     // * Meta References
     /// rest of resolution and rest of refs masking it
     Mask(Node, Box<[Node]>),
@@ -241,6 +242,7 @@ pub enum RefsEnum<Node: Eq + Hash, Leaf: Eq + Hash> {
     Root,
     MaybeMissing, // TODO replace ? with ~
     ScopedIdentifier(Node, Leaf),
+    TypeIdentifier(Node, Leaf),
     // TODO Anonymous(Id)
     // no need instance of type for cases where there is a cast ie. to access static members as static do not overload .ie thus error
     MethodReference(Node, Leaf), // equivalent to Invocation(Node, Leaf, Arguments::Unknown) but it does not represent a call that is actually made
@@ -255,8 +257,73 @@ pub enum RefsEnum<Node: Eq + Hash, Leaf: Eq + Hash> {
     Super(Node),
     ArrayAccess(Node),
 }
+impl<Node: Eq + Hash + Clone, Leaf: Eq + Hash> Hash for RefsEnum<Node, Leaf> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            RefsEnum::Mask(_, _) => 0,
+            RefsEnum::Or(_) => 1,
+            RefsEnum::Root => 2,
+            RefsEnum::MaybeMissing => 3,
+            RefsEnum::ScopedIdentifier(_, _) => 4,
+            RefsEnum::TypeIdentifier(_, _) => 4,
+            RefsEnum::MethodReference(_, _) => 5,
+            RefsEnum::ConstructorReference(_) => 6,
+            RefsEnum::Invocation(_, _, _) => 7,
+            RefsEnum::ConstructorInvocation(_, _) => 8,
+            RefsEnum::Primitive(_) => 9,
+            RefsEnum::Array(_) => 10,
+            RefsEnum::This(_) => 11,
+            RefsEnum::Super(_) => 12,
+            RefsEnum::ArrayAccess(_) => 13,
+        }.hash(state);
+    }
+}
+impl<Node: Eq + Hash + Clone, Leaf: Eq + Hash> Eq for RefsEnum<Node, Leaf> {}
+impl<Node: Eq + Hash + Clone, Leaf: Eq + Hash> PartialEq for RefsEnum<Node, Leaf> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Mask(l0, l1), Self::Mask(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::Or(l0), Self::Or(r0)) => l0 == r0,
+            (Self::ScopedIdentifier(l0, l1), Self::ScopedIdentifier(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::ScopedIdentifier(l0, l1), Self::TypeIdentifier(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::TypeIdentifier(l0, l1), Self::ScopedIdentifier(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::TypeIdentifier(l0, l1), Self::TypeIdentifier(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::MethodReference(l0, l1), Self::MethodReference(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::ConstructorReference(l0), Self::ConstructorReference(r0)) => l0 == r0,
+            (Self::Invocation(l0, l1, l2), Self::Invocation(r0, r1, r2)) => l0 == r0 && l1 == r1 && l2 == r2,
+            (Self::ConstructorInvocation(l0, l1), Self::ConstructorInvocation(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::Primitive(l0), Self::Primitive(r0)) => l0 == r0,
+            (Self::Array(l0), Self::Array(r0)) => l0 == r0,
+            (Self::This(l0), Self::This(r0)) => l0 == r0,
+            (Self::Super(l0), Self::Super(r0)) => l0 == r0,
+            (Self::ArrayAccess(l0), Self::ArrayAccess(r0)) => l0 == r0,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
+}
 
 impl<Node: Eq + Hash + Clone, Leaf: Eq + Hash> RefsEnum<Node, Leaf> {
+    pub(crate) fn strict_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Mask(l0, l1), Self::Mask(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::Or(l0), Self::Or(r0)) => l0 == r0,
+            (Self::ScopedIdentifier(l0, l1), Self::ScopedIdentifier(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::TypeIdentifier(l0, l1), Self::TypeIdentifier(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::MethodReference(l0, l1), Self::MethodReference(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::ConstructorReference(l0), Self::ConstructorReference(r0)) => l0 == r0,
+            (Self::Invocation(l0, l1, l2), Self::Invocation(r0, r1, r2)) => l0 == r0 && l1 == r1 && l2 == r2,
+            (Self::ConstructorInvocation(l0, l1), Self::ConstructorInvocation(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::Primitive(l0), Self::Primitive(r0)) => l0 == r0,
+            (Self::Array(l0), Self::Array(r0)) => l0 == r0,
+            (Self::This(l0), Self::This(r0)) => l0 == r0,
+            (Self::Super(l0), Self::Super(r0)) => l0 == r0,
+            (Self::ArrayAccess(l0), Self::ArrayAccess(r0)) => l0 == r0,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
+}
+
+impl<Node: Clone, Leaf> RefsEnum<Node, Leaf> {
     pub(crate) fn object(&self) -> Option<Node> {
         let r = match self {
             RefsEnum::Mask(o, _) => o,
@@ -275,7 +342,7 @@ impl<Node: Eq + Hash + Clone, Leaf: Eq + Hash> RefsEnum<Node, Leaf> {
     }
 }
 
-impl<Node: Eq + Hash + Clone, Leaf: Eq + Hash + Clone> RefsEnum<Node, Leaf> {
+impl<Node: Clone, Leaf: Clone> RefsEnum<Node, Leaf> {
     pub(crate) fn with_object(&self, o: Node) -> Self {
         match self {
             RefsEnum::Mask(_, b) => RefsEnum::Mask(o, b.clone()),
@@ -293,7 +360,7 @@ impl<Node: Eq + Hash + Clone, Leaf: Eq + Hash + Clone> RefsEnum<Node, Leaf> {
     }
 }
 
-impl<Node: Eq + Hash, Leaf: Eq + Hash> RefsEnum<Node, Leaf> {
+impl<Node, Leaf: Eq> RefsEnum<Node, Leaf> {
     pub(crate) fn similar(&self, other: &Self) -> bool {
         match (self, other) {
             (RefsEnum::Root, RefsEnum::Root) => true,
@@ -305,8 +372,9 @@ impl<Node: Eq + Hash, Leaf: Eq + Hash> RefsEnum<Node, Leaf> {
             (RefsEnum::Super(_), RefsEnum::Super(_)) => true,
             (RefsEnum::Mask(_, u), RefsEnum::Mask(_, v)) => u.len() == v.len(),
             (RefsEnum::ScopedIdentifier(_, i), RefsEnum::ScopedIdentifier(_, j)) => i == j,
+            (RefsEnum::TypeIdentifier(_, i), RefsEnum::TypeIdentifier(_, j)) => i == j,
             (RefsEnum::MethodReference(_, i), RefsEnum::MethodReference(_, j)) => i == j,
-            (RefsEnum::ConstructorReference(i), RefsEnum::ConstructorReference(j)) => i == j,
+            (RefsEnum::ConstructorReference(i), RefsEnum::ConstructorReference(j)) => true,
             (RefsEnum::Invocation(_, i, _), RefsEnum::Invocation(_, j, _)) => i == j, // TODO count parameters
             (RefsEnum::ConstructorInvocation(_, _), RefsEnum::ConstructorInvocation(_, _)) => true, // TODO count parameters
             _ => false,
@@ -314,13 +382,25 @@ impl<Node: Eq + Hash, Leaf: Eq + Hash> RefsEnum<Node, Leaf> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Clone)]
 pub enum Arguments<Node>
-where
-    Node: Eq + Hash,
 {
     Unknown,
     Given(Box<[Node]>),
+}
+impl<Node: Eq + Hash> Hash for Arguments<Node> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+    }
+}
+impl<Node: Eq + Hash> Eq for Arguments<Node> {}
+impl<Node: Eq + Hash> PartialEq for Arguments<Node> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Given(l0), Self::Given(r0)) => l0 == r0,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
 }
 
 impl<Node: Eq + Hash> Arguments<Node> {
@@ -366,6 +446,11 @@ impl<'a> ExplorableRef<'a> {
         // let mut r = vec![];
         // self.ser(&mut r);
         // r.into()
+    }
+    pub fn bytes(self) -> Box<[u8]> {
+        let mut r = vec![];
+        self.ser(&mut r);
+        r.into()
     }
 }
 
@@ -420,6 +505,15 @@ impl<'a> ExplorableRef<'a> {
                 // out.extend(b"}");
             }
             RefsEnum::ScopedIdentifier(o, i) => {
+                assert_ne!(*o, self.rf);
+                self.with(*o).ser(out);
+                out.push(b"."[0]);
+                // let b: [u8; 4] = (i.to_usize() as u32).to_be_bytes();
+                let b = i.as_ref().to_usize().to_string();
+                let b = b.as_bytes();
+                out.extend(b);
+            }
+            RefsEnum::TypeIdentifier(o, i) => {
                 assert_ne!(*o, self.rf);
                 self.with(*o).ser(out);
                 out.push(b"."[0]);
@@ -543,6 +637,15 @@ impl<'a> ExplorableRef<'a> {
                     let b = b.as_bytes();
                     out.extend(b);
                 }
+                RefsEnum::TypeIdentifier(o, i) => {
+                    assert_ne!(*o, self.rf);
+                    out.extend(self.with(*o).ser_cached(cache));
+                    out.push(b"."[0]);
+                    // let b: [u8; 4] = (i.to_usize() as u32).to_be_bytes();
+                    let b = i.as_ref().to_usize().to_string();
+                    let b = b.as_bytes();
+                    out.extend(b);
+                }
                 RefsEnum::MethodReference(o, i) => {
                     assert_ne!(*o, self.rf);
                     out.extend(self.with(*o).ser_cached(cache));
@@ -607,8 +710,8 @@ impl<'a> Debug for ExplorableRef<'a> {
     }
 }
 
-impl<'a> Into<LabelValue> for ExplorableRef<'a> {
-    fn into(self) -> LabelValue {
+impl<'a> Into<Box<[u8]>> for ExplorableRef<'a> {
+    fn into(self) -> Box<[u8]> {
         let mut r = vec![];
         self.ser(&mut r);
         r.into()

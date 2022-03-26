@@ -1,15 +1,24 @@
-use std::{ops::{Index, Deref}, collections::HashMap, error::Error};
+use std::{
+    collections::HashMap,
+    error::Error,
+    ops::{Deref, Index},
+};
 
 use string_interner::Symbol;
 
+use crate::impact::declaration::{DebugDecls, DeclsIter};
+
 use super::{
     declaration::{self, DeclType, Declarator},
-    element::{self, Arguments, ExplorableRef, LabelPtr, Nodes, RefPtr, RefsEnum, IdentifierFormat},
+    element::{
+        self, Arguments, ExplorableRef, IdentifierFormat, LabelPtr, Nodes, RefPtr, RefsEnum,
+    },
     java_element::Primitive,
     label_value::LabelValue,
     reference,
 };
 
+/// Allow to handle referencial relations i.e. resolve references
 #[derive(Debug, Clone)]
 pub struct Solver {
     // leafs: LeafSet,
@@ -44,7 +53,7 @@ impl<T: Clone> Clone for MultiResult<T> {
     }
 }
 
-impl<T:Eq> FromIterator<T> for MultiResult<T> {
+impl<T: Eq> FromIterator<T> for MultiResult<T> {
     fn from_iter<U: IntoIterator<Item = T>>(iter: U) -> Self {
         let mut r = Default::default();
         let mut v = vec![];
@@ -94,23 +103,59 @@ impl<T> MultiResult<T> {
     }
 }
 
+/// accessors to references and declarations
 impl Solver {
-
     pub fn decls_count(&self) -> usize {
         self.decls.len()
     }
 
-    fn is_length_token(&self, id: LabelPtr) -> bool {
-        id.as_ref().to_usize() == 0 // TODO verify/model statically
-    }
-    fn is_package_token(&self, id: LabelPtr) -> bool {
-        let f =id.format();
-        IdentifierFormat::FlatCase.eq(&f) || IdentifierFormat::SnakeCase.eq(&f)
+    pub(crate) fn is_empty(&self) -> bool {
+        self.refs.is_empty() && self.decls.is_empty()
     }
 
+    pub(crate) fn refs_count(&self) -> usize {
+        self.refs.count_ones()
+    }
+    pub fn refs(&self) -> impl Iterator<Item = LabelValue> + '_ {
+        self.refs
+            .iter_ones()
+            // iter().enumerate()
+            // .filter_map(|(x,b)| if *b {Some(x)} else {None})
+            .map(|x| self.nodes.with(x).bytes().into())
+    }
+
+    pub(crate) fn iter_refs<'a>(&'a self) -> reference::Iter<'a> {
+        reference::Iter {
+            nodes: &self.nodes,
+            refs: self.refs.iter_ones(),
+        }
+    }
+
+    pub(crate) fn iter_decls<'a>(&'a self) -> declaration::DeclsIter<'a> {
+        declaration::DeclsIter {
+            nodes: &self.nodes,
+            decls: self.decls.iter(),
+        }
+    }
+    pub(crate) fn get(&self, other: RefsEnum<RefPtr, LabelPtr>) -> Option<RefPtr> {
+        // TODO analyze perfs to find if Vec or HashSet or something else works better
+        self.nodes.iter().position(|x| x == &other)
+    }
+
+    fn iter_nodes<'a>(&'a self) -> element::NodesIter<'a> {
+        element::NodesIter {
+            rf: 0,
+            nodes: &self.nodes,
+        }
+    }
+}
+
+/// basic insertions of references
+impl Solver {
+    /// add a node to the solver
     pub fn intern(&mut self, other: RefsEnum<RefPtr, LabelPtr>) -> RefPtr {
         // TODO analyze perfs to find if Vec or HashSet or something else works better
-        match self.nodes.iter().position(|x| x == &other) {
+        match self.nodes.iter().position(|x| other.strict_eq(x)) {
             Some(x) => x,
             None => {
                 let r = self.nodes.len();
@@ -119,11 +164,8 @@ impl Solver {
             }
         }
     }
-    pub(crate) fn get(&self, other: RefsEnum<RefPtr, LabelPtr>) -> Option<RefPtr> {
-        // TODO analyze perfs to find if Vec or HashSet or something else works better
-        self.nodes.iter().position(|x| x == &other)
-    }
 
+    /// add a reference to the solver
     pub(crate) fn intern_ref(&mut self, other: RefsEnum<RefPtr, LabelPtr>) -> RefPtr {
         match other {
             RefsEnum::Primitive(_) => panic!(),
@@ -141,6 +183,7 @@ impl Solver {
         r
     }
 
+    /// add a declaration to the solver
     pub(crate) fn add_decl(&mut self, d: Declarator<RefPtr>, t: DeclType<RefPtr>) {
         self.decls.insert(d, t);
     }
@@ -149,7 +192,159 @@ impl Solver {
     //         .insert(d, DeclType::Compile(t, None, Default::default()));
     // }
 
-    pub(crate) fn try_solve_node_with(&mut self, t: RefPtr, p: RefPtr) -> Option<RefPtr> {
+    /// copy a referencial element from another solver to the current one
+    fn intern_external(
+        &mut self,
+        map: &mut HashMap<RefPtr, RefPtr>,
+        cache: &mut HashMap<RefPtr, RefPtr>,
+        other: ExplorableRef,
+    ) -> RefPtr {
+        // log::trace!("int_ext   {:?} {:?}", other.rf, other);
+        if let Some(x) = map.get(&other.rf) {
+            // log::trace!(
+            //     "int_ext m {:?} {:?}",
+            //     other.rf,
+            //     ExplorableRef {
+            //         rf:*x,
+            //         nodes: &self.nodes,
+            //     }
+            // );
+            return *x;
+        }
+        if let Some(x) = cache.get(&other.rf) {
+            assert!(
+                self.nodes[*x].similar(other.as_ref()),
+                "{:?} ~ {:?}",
+                other,
+                ExplorableRef {
+                    nodes: &self.nodes,
+                    rf: *x
+                },
+            );
+            // log::trace!(
+            //     "int_ext c {:?} {:?}",
+            //     other.rf,
+            //     ExplorableRef {
+            //         rf:*x,
+            //         nodes: &self.nodes,
+            //     }
+            // );
+            return *x;
+        }
+        let r = match other.as_ref() {
+            RefsEnum::Root => self.intern(RefsEnum::Root),
+            RefsEnum::MaybeMissing => self.intern(RefsEnum::MaybeMissing),
+            RefsEnum::Primitive(i) => self.intern(RefsEnum::Primitive(*i)),
+            RefsEnum::Array(o) => {
+                let o = self.intern_external(map, cache, other.with(*o));
+                self.intern(RefsEnum::Array(o))
+            }
+            RefsEnum::ArrayAccess(o) => {
+                let o = self.intern_external(map, cache, other.with(*o));
+                self.intern(RefsEnum::ArrayAccess(o))
+            }
+            RefsEnum::This(o) => {
+                let o = self.intern_external(map, cache, other.with(*o));
+                self.intern(RefsEnum::This(o))
+            }
+            RefsEnum::Super(o) => {
+                let o = self.intern_external(map, cache, other.with(*o));
+                self.intern(RefsEnum::Super(o))
+            }
+            RefsEnum::Mask(o, p) => {
+                let o = self.intern_external(map, cache, other.with(*o));
+                let p = p
+                    .iter()
+                    .map(|x| self.intern_external(map, cache, other.with(*x)))
+                    .collect();
+                self.intern(RefsEnum::Mask(o, p))
+            }
+            RefsEnum::Or(p) => {
+                let p = p
+                    .iter()
+                    .map(|x| self.intern_external(map, cache, other.with(*x)))
+                    .collect();
+                self.intern(RefsEnum::Or(p))
+            }
+            RefsEnum::ScopedIdentifier(o, i) => {
+                let o = self.intern_external(map, cache, other.with(*o));
+                self.intern(RefsEnum::ScopedIdentifier(o, *i))
+            }
+            RefsEnum::TypeIdentifier(o, i) => {
+                let o = self.intern_external(map, cache, other.with(*o));
+                self.intern(RefsEnum::TypeIdentifier(o, *i))
+            }
+            RefsEnum::MethodReference(o, i) => {
+                let o = self.intern_external(map, cache, other.with(*o));
+                // log::trace!("{:?}", o);
+                // log::trace!("{:?}", self.nodes);
+                self.intern(RefsEnum::MethodReference(o, *i))
+            }
+            RefsEnum::ConstructorReference(o) => {
+                let o = self.intern_external(map, cache, other.with(*o));
+                // log::trace!("{:?}", o);
+                // log::trace!("{:?}", self.nodes);
+                self.intern(RefsEnum::ConstructorReference(o))
+            }
+            RefsEnum::Invocation(o, i, p) => {
+                let o = self.intern_external(map, cache, other.with(*o));
+                let p = match p {
+                    Arguments::Unknown => Arguments::Unknown,
+                    Arguments::Given(p) => {
+                        let mut v = vec![];
+                        for x in p.deref() {
+                            let r = self.intern_external(map, cache, other.with(*x));
+                            v.push(r);
+                        }
+                        let p = v.into_boxed_slice();
+                        Arguments::Given(p)
+                    }
+                };
+                self.intern(RefsEnum::Invocation(o, *i, p))
+            }
+            RefsEnum::ConstructorInvocation(o, p) => {
+                let i = self.intern_external(map, cache, other.with(*o));
+                let p = match p {
+                    Arguments::Unknown => Arguments::Unknown,
+                    Arguments::Given(p) => {
+                        let p = p
+                            .deref()
+                            .iter()
+                            .map(|x| self.intern_external(map, cache, other.with(*x)))
+                            .collect();
+                        Arguments::Given(p)
+                    }
+                };
+                let r = self.intern(RefsEnum::ConstructorInvocation(i, p));
+                assert_ne!(r, i);
+                r
+            }
+        };
+        assert!(
+            self.nodes[r].similar(other.as_ref()),
+            "{:?} ~ {:?}",
+            other.as_ref(),
+            self.nodes[r],
+        );
+        // log::trace!(
+        //     "int_ext r {:?} {:?}",
+        //     other.rf,
+        //     ExplorableRef {
+        //         rf:r,
+        //         nodes: &self.nodes,
+        //     }
+        // );
+        cache.insert(other.rf, r);
+        r
+    }
+}
+
+/// basic modifications of references
+impl Solver {
+
+    /// try to reconstruct [`t`] with [`p`] replacing the main MaybeMissing (?)
+    /// returns None if [`t`] does not end with (?)
+    pub fn try_solve_node_with(&mut self, t: RefPtr, p: RefPtr) -> Option<RefPtr> {
         macro_rules! refs {
             ( $x:expr ) => {
                 if t < self.refs.len() && self.refs[t] {
@@ -160,7 +355,7 @@ impl Solver {
             };
         }
         match self.nodes[t].clone() {
-            RefsEnum::Root => None,//("fully qualified node cannot be qualified further")),
+            RefsEnum::Root => None, //("fully qualified node cannot be qualified further")),
             RefsEnum::MaybeMissing => Some(p),
             RefsEnum::Array(i) => {
                 let x = self.try_solve_node_with(i, p)?;
@@ -192,6 +387,11 @@ impl Solver {
                 let tmp = RefsEnum::ScopedIdentifier(x, y);
                 Some(refs!(tmp))
             }
+            RefsEnum::TypeIdentifier(i, y) => {
+                let x = self.try_solve_node_with(i, p)?;
+                let tmp = RefsEnum::TypeIdentifier(x, y);
+                Some(refs!(tmp))
+            }
             RefsEnum::Invocation(o, i, args) => {
                 let x = self.try_solve_node_with(o, p)?;
                 let tmp = RefsEnum::Invocation(x, i, args);
@@ -206,38 +406,58 @@ impl Solver {
         }
     }
 
-    pub fn refs(&self) -> impl Iterator<Item = LabelValue> + '_ {
-        self.refs
-            .iter_ones()
-            // iter().enumerate()
-            // .filter_map(|(x,b)| if *b {Some(x)} else {None})
-            .map(|x| {
-                self.nodes.with(x).into()
-            })
-    }
-
-    pub(crate) fn iter_refs<'a>(&'a self) -> reference::Iter<'a> {
-        reference::Iter {
-            nodes: &self.nodes,
-            refs: self.refs.iter_ones(),
+    /// reconstruct the [`other`] referential element without masks
+    fn no_mask(&mut self, other: RefPtr) -> RefPtr {
+        let o = self.nodes[other].object();
+        let o = if let Some(o) = o {
+            self.no_mask(o)
+        } else {
+            return other;
+        };
+        if let RefsEnum::Mask(_, _) = self.nodes[other] {
+            return o;
         }
+        let x = self.nodes[other].with_object(o);
+        self.intern(x)
     }
+}
 
-    pub(crate) fn iter_decls<'a>(&'a self) -> declaration::DeclsIter<'a> {
-        declaration::DeclsIter {
-            nodes: &self.nodes,
-            decls: self.decls.iter(),
-        }
-    }
-
-    fn iter_nodes<'a>(&'a self) -> element::NodesIter<'a> {
-        element::NodesIter {
-            rf: 0,
-            nodes: &self.nodes,
-        }
-    }
-
+/// advanced insertions
+impl Solver {
     /// dedicated to solving references to localvariables
+    pub(crate) fn local_solve_extend<'a>(&mut self, solver: &'a Solver) -> Internalizer<'a> {
+        let mut cached = Internalizer {
+            solve: true,
+            cache: Default::default(),
+            solver,
+        };
+        // self.print_decls();
+        for r in solver.iter_refs() {
+            // TODO make it imperative ?
+            let r = self.local_solve_intern_external(&mut cached.cache, r);
+            match &self.nodes[r] {
+                RefsEnum::Primitive(_) => {}
+                RefsEnum::Array(o) => {
+                    if let RefsEnum::Primitive(_) = &self.nodes[*o] {
+                    } else {
+                        if r >= self.refs.len() {
+                            self.refs.resize(r + 1, false);
+                        }
+                        self.refs.set(r, true);
+                    }
+                }
+                _ => {
+                    if r >= self.refs.len() {
+                        self.refs.resize(r + 1, false);
+                    }
+                    self.refs.set(r, true);
+                }
+            };
+        }
+        cached
+    }
+
+    /// dedicated to solving references in scopes that contain localvariables
     fn local_solve_intern_external(
         &mut self,
         cache: &mut HashMap<RefPtr, RefPtr>,
@@ -246,7 +466,7 @@ impl Solver {
         if let Some(x) = cache.get(&other.rf) {
             return *x;
         }
-        // println!("other: {:?}", other);
+        // log::trace!("other: {:?}", other);
         let r = match other.as_ref() {
             RefsEnum::Root => self.intern(RefsEnum::Root),
             RefsEnum::MaybeMissing => self.intern(RefsEnum::MaybeMissing),
@@ -271,7 +491,7 @@ impl Solver {
                 self.intern(RefsEnum::Super(o))
             }
             RefsEnum::Mask(o, v) => {
-                // println!("try solve mask: {:?}", other);
+                // log::trace!("try solve mask: {:?}", other);
                 let o = self.local_solve_intern_external(cache, other.with(*o));
                 let v = v
                     .iter()
@@ -290,9 +510,14 @@ impl Solver {
                 self.intern(RefsEnum::Or(v))
             }
             RefsEnum::ScopedIdentifier(o, i) => {
-                // println!("try solve scoped id: {:?}", other);
+                // log::trace!("try solve scoped id: {:?}", other);
                 let o = self.local_solve_intern_external(cache, other.with(*o));
                 self.intern(RefsEnum::ScopedIdentifier(o, *i))
+            }
+            RefsEnum::TypeIdentifier(o, i) => {
+                // log::trace!("try solve scoped id: {:?}", other);
+                let o = self.local_solve_intern_external(cache, other.with(*o));
+                self.intern(RefsEnum::TypeIdentifier(o, *i))
             }
             RefsEnum::MethodReference(o, i) => {
                 let o = self.local_solve_intern_external(cache, other.with(*o));
@@ -319,7 +544,7 @@ impl Solver {
                 self.intern(RefsEnum::Invocation(o, *i, p))
             }
             RefsEnum::ConstructorInvocation(o, p) => {
-                // println!("try solve constructor: {:?}", other);
+                // log::trace!("try solve constructor: {:?}", other);
                 let i = self.local_solve_intern_external(cache, other.with(*o));
                 let p = match p {
                     Arguments::Unknown => Arguments::Unknown,
@@ -346,7 +571,7 @@ impl Solver {
                 }
             }
             Some(DeclType::Compile(r, s, i)) => {
-                // println!("solved local variable: {:?}", r);
+                // log::trace!("solved local variable: {:?}", r);
                 // self.solve_intern_external(cache, other.with(r))
                 *r
             }
@@ -357,20 +582,114 @@ impl Solver {
         r
     }
 
-    fn no_mask(&mut self, other: RefPtr) -> RefPtr {
-        let o = self.nodes[other].object();
-        let o = if let Some(o) = o {
-            self.no_mask(o)
-        } else {
-            return other;
-        };
-        if let RefsEnum::Mask(_, _) = self.nodes[other] {
-            return o;
-        }
-        let x = self.nodes[other].with_object(o);
-        self.intern(x)
+    /// copy all references in [`solver`] to current solver
+    pub(crate) fn extend<'a>(&mut self, solver: &'a Solver) -> Internalizer<'a> {
+        self.extend_map(solver, &mut Default::default())
     }
 
+    pub(crate) fn extend_map<'a>(
+        &mut self,
+        solver: &'a Solver,
+        map: &mut HashMap<usize, usize>,
+    ) -> Internalizer<'a> {
+        let mut cached = Internalizer {
+            solve: false,
+            cache: Default::default(),
+            solver,
+        };
+        for r in solver.iter_refs() {
+            // TODO make it imperative ?
+            let r = self.intern_external(map, &mut cached.cache, r);
+            match &self.nodes[r] {
+                RefsEnum::Primitive(_) => {}
+                RefsEnum::Array(o) => {
+                    if let RefsEnum::Primitive(_) = &self.nodes[*o] {
+                    } else {
+                        if r >= self.refs.len() {
+                            self.refs.resize(r + 1, false);
+                        }
+                        self.refs.set(r, true);
+                    }
+                }
+                _ => {
+                    if r >= self.refs.len() {
+                        self.refs.resize(r + 1, false);
+                    }
+                    self.refs.set(r, true);
+                }
+            };
+        }
+        // no need to extend decls, handled specifically given state
+        cached
+    }
+
+}
+
+/// main logic to resolve references
+impl Solver {
+    /// resolve references in bodies, class declarations, programs and directories
+    pub(crate) fn resolve(
+        self,
+        mut cache: HashMap<RefPtr, MultiResult<RefPtr>>,
+    ) -> (HashMap<RefPtr, MultiResult<RefPtr>>, Solver) {
+        // let mut r = self.clone();
+        let mut r = Solver {
+            nodes: self.nodes.clone(),
+            refs: Default::default(),
+            decls: self.decls.clone(),
+        };
+
+        log::trace!(
+            "sd: {:?}",
+            DebugDecls {
+                decls: &self.decls,
+                nodes: &self.nodes
+            }
+        );
+        // self.print_decls();
+        // log::trace!("primed cache for resolve");
+        // for (k, v) in &cache {
+        //     print!(
+        //         "   {:?}: ",
+        //         ExplorableRef {
+        //             rf: *k,
+        //             nodes: &self.nodes
+        //         }
+        //     );
+        //     for r in v.iter() {
+        //         print!(
+        //             "{:?} ",
+        //             ExplorableRef {
+        //                 rf: *r,
+        //                 nodes: &self.nodes
+        //             }
+        //         );
+        //     }
+        // }
+        for s in self.iter_refs() {
+            // TODO make it imperative ?
+            for s in r.solve_aux(&mut cache, s.rf).iter() {
+                let s = *s;
+                match &r.nodes[s] {
+                    RefsEnum::Primitive(_) => {}
+                    _ => {
+                        if s >= r.refs.len() {
+                            r.refs.resize(s + 1, false);
+                        }
+                        r.refs.set(s, true);
+                    }
+                };
+            }
+        }
+        // TODO try better
+        (cache, r)
+    }
+
+    // fn log(
+    //     &mut self,
+    // ) {
+
+    // }
     /// no internalization needed
     /// not used on blocks, only bodies, declarations and whole programs
     pub(crate) fn solve_aux(
@@ -380,71 +699,168 @@ impl Solver {
     ) -> MultiResult<RefPtr> {
         if let Some(x) = cache.get(&other) {
             if x.is_empty() {
-                // println!(
-                //     "solving {:?}: {:?} from cache into nothing",
-                //     other,
-                //     ExplorableRef {
-                //         rf: other,
-                //         nodes: &self.nodes
-                //     }
-                // );
+                log::trace!(
+                    "solving {:?}: {:?} from cache into nothing",
+                    other,
+                    self.nodes.with(other)
+                );
+                
             } else {
-                // for r in x.iter() {
-                //     println!(
-                //         "solving {:?}: {:?} from cache into {:?}",
-                //         other,
-                //         ExplorableRef {
-                //             rf: other,
-                //             nodes: &self.nodes
-                //         },
-                //         ExplorableRef {
-                //             rf: *r,
-                //             nodes: &self.nodes
-                //         }
-                //     );
-                // }
+                for r in x.iter() {
+                    log::trace!(
+                        "solving {:?}: {:?} from cache into {:?}",
+                        other,
+                        self.nodes.with(other),
+                        self.nodes.with(*r)
+                    );
+                }
             }
             return x.clone();
         }
-        // println!(
-        //     "solving : {:?} {:?}",
-        //     other,
-        //     ExplorableRef {
-        //         rf: other,
-        //         nodes: &self.nodes
-        //     }
-        // );
+        log::trace!(
+            "solving : {:?} {:?}",
+            other,
+            self.nodes.with(other)
+        );
 
         // TODO decls should be searched without masks
 
-        let no_mask = self.no_mask(other); // maybe return just after match
-        let other = if let Some(r) = (&self.decls).get(&Declarator::Type(no_mask)).cloned() {
-            // println!("t through cache {:?}", other);
-            match r {
-                DeclType::Compile(r, _, _) => r,
-                DeclType::Runtime(b) => {
-                    return Default::default();
-                }
-                x => todo!("{:?}", x),
-            }
-        } else if let Some(r) = (&self.decls).get(&Declarator::Field(no_mask)).cloned() {
-            // println!("f through cache {:?}", other);
-            match r {
-                DeclType::Compile(r, _, _) => r,
-                DeclType::Runtime(b) => {
-                    if b.len() == 1 {
-                        b[0]
-                    } else if b.len() == 0 {
-                        other
-                    } else {
-                        return b.iter().flat_map(|r| {
-                            self.solve_aux(cache, *r).iter().map(|x| *x).collect::<Vec<_>>()
-                        }).collect()
+        let other = if let RefsEnum::TypeIdentifier(o, i) = self.nodes[other].clone() {
+            let no_mask = self.no_mask(o); // maybe return just after match
+            if no_mask != o {
+                // let simp = self.intern(RefsEnum::ScopedIdentifier(o,i));
+                // let no_mask = self.intern(RefsEnum::ScopedIdentifier(no_mask,i));
+                let simp = self.intern(RefsEnum::TypeIdentifier(o, i));
+                let no_mask = self.intern(RefsEnum::TypeIdentifier(no_mask, i));
+                if let Some(r) = (&self.decls).get(&Declarator::Type(no_mask)).cloned() {
+                    log::trace!("t t through cache {:?}", other);
+                    match r {
+                        DeclType::Compile(r, _, _) => r,
+                        DeclType::Runtime(b) => {
+                            // TODO should be about generics
+                            if b.is_empty() {
+                                return Default::default();
+                            } else {
+                                match self.nodes[other].clone() {
+                                    RefsEnum::Mask(mo, ms) => {
+                                        // TODO do more than b[0]
+                                        // TODO mo might contain more masks
+                                        match self.nodes[b[0]].clone() {
+                                            RefsEnum::ScopedIdentifier(oo, ii) => {
+                                                let n = self.intern(RefsEnum::Mask(oo, ms));
+                                                self.intern(RefsEnum::ScopedIdentifier(n, ii))
+                                            }
+                                            RefsEnum::TypeIdentifier(oo, ii) => {
+                                                let n = self.intern(RefsEnum::Mask(oo, ms));
+                                                self.intern(RefsEnum::TypeIdentifier(n, ii))
+                                            }
+                                            _ => todo!(),
+                                        }
+                                    }
+                                    _ => b[0],
+                                }
+                            }
+                        }
+                        x => todo!("{:?}", x),
                     }
+                // } else if let Some(r) = (&self.decls).get(&Declarator::Field(no_mask)).cloned() {
+                //     log::trace!("t f through cache {:?}", other);
+                //     match r {
+                //         DeclType::Compile(r, _, _) => r,
+                //         DeclType::Runtime(b) => {
+                //             if b.len() == 1 {
+                //                 b[0]
+                //             } else if b.len() == 0 {
+                //                 simp
+                //             } else {
+                //                 return b.iter().flat_map(|r| {
+                //                     self.solve_aux(cache, *r).iter().map(|x| *x).collect::<Vec<_>>()
+                //                 }).collect()
+                //             }
+                //         }
+                //     }
+                // } else if let Some(r) = (&self.decls).get(&Declarator::Variable(no_mask)).cloned() {
+                //     log::trace!("t v through cache {:?}", other);
+                //     match r {
+                //         DeclType::Compile(r, _, _) => r,
+                //         DeclType::Runtime(b) => {
+                //             if b.len() == 1 {
+                //                 b[0]
+                //             } else if b.len() == 0 {
+                //                 simp
+                //             } else {
+                //                 return b.iter().flat_map(|r| {
+                //                     self.solve_aux(cache, *r).iter().map(|x| *x).collect::<Vec<_>>()
+                //                 }).collect()
+                //             }
+                //         }
+                //     }
+                } else {
+                    simp //other
                 }
+            } else {
+                other
             }
         } else {
-            other
+            let no_mask = self.no_mask(other); // maybe return just after match
+            if let Some(r) = (&self.decls).get(&Declarator::Field(no_mask)).cloned() {
+                log::trace!("f through cache {:?}", other);
+                match r {
+                    DeclType::Compile(r, _, _) => r,
+                    DeclType::Runtime(b) => {
+                        if b.len() == 1 {
+                            log::trace!("f through cache gg {:?}", other);
+                            b[0]
+                        } else if b.len() == 0 {
+                            other
+                        } else {
+                            return b
+                                .iter()
+                                .flat_map(|r| {
+                                    self.solve_aux(cache, *r)
+                                        .iter()
+                                        .map(|x| *x)
+                                        .collect::<Vec<_>>()
+                                })
+                                .collect();
+                        }
+                    }
+                }
+            } else if let Some(r) = (&self.decls).get(&Declarator::Variable(no_mask)).cloned() {
+                log::trace!("v through cache {:?}", other);
+                match r {
+                    DeclType::Compile(r, _, _) => r,
+                    DeclType::Runtime(b) => {
+                        if b.len() == 1 {
+                            log::trace!("v through cache gg {:?}", other);
+                            b[0]
+                        } else if b.len() == 0 {
+                            other
+                        } else {
+                            return b
+                                .iter()
+                                .flat_map(|r| {
+                                    self.solve_aux(cache, *r)
+                                        .iter()
+                                        .map(|x| *x)
+                                        .collect::<Vec<_>>()
+                                })
+                                .collect();
+                        }
+                    }
+                }
+            } else if let Some(r) = (&self.decls).get(&Declarator::Type(no_mask)).cloned() {
+                log::trace!("t through cache {:?}", other);
+                match r {
+                    DeclType::Compile(r, _, _) => r,
+                    DeclType::Runtime(b) => {
+                        return Default::default();
+                    }
+                    x => todo!("{:?}", x),
+                }
+            } else {
+                other
+            }
         };
         let r: MultiResult<RefPtr> = match self.nodes[other].clone() {
             RefsEnum::Root => [other].iter().map(|x| *x).collect(),
@@ -498,16 +914,17 @@ impl Solver {
                     .flat_map(|r| {
                         let r = *r;
                         let r = if let Some(r) = (&self.decls).get(&Declarator::Type(r)).cloned() {
-                            //println!("solved class: {:?}", r);
-                            // None // TODO not 100% sure Some of None
+                            //log::trace!("solved class: {:?}", r);
+                            // None // TODO not 100% sure Some or None
                             match r {
                                 DeclType::Compile(r, _, _) => {
-                                    //println!("solved class: {:?}", r);
+                                    //log::trace!("solved class: {:?}", r);
                                     vec![] //Some(r)
                                 }
                                 DeclType::Runtime(b) => {
-                                    //println!("solved runtime: {:?}", b);
-                                    vec![]
+                                    //log::trace!("solved runtime: {:?}", b);
+                                    // vec![]
+                                    b.to_vec()
                                 }
                                 x => todo!("{:?}", x),
                             }
@@ -545,16 +962,17 @@ impl Solver {
                     .flat_map(|r| {
                         let r = *r;
                         let r = if let Some(r) = (&self.decls).get(&Declarator::Type(r)).cloned() {
-                            //println!("solved class: {:?}", r);
+                            //log::trace!("solved class: {:?}", r);
                             // None // TODO not 100% sure Some of None
                             match r {
                                 DeclType::Compile(r, _, _) => {
-                                    //println!("solved class: {:?}", r);
+                                    //log::trace!("solved class: {:?}", r);
                                     vec![] //Some(r)
                                 }
                                 DeclType::Runtime(b) => {
-                                    //println!("solved runtime: {:?}", b);
-                                    vec![]
+                                    //log::trace!("solved runtime: {:?}", b);
+                                    // vec![]
+                                    b.to_vec()
                                 }
                                 x => todo!("{:?}", x),
                             }
@@ -569,12 +987,12 @@ impl Solver {
                 r
             }
             RefsEnum::Mask(o, v) => {
-                // println!("solving mask {:?}", other);
+                log::trace!("solving mask {:?}", other);
                 let v: Vec<RefPtr> = v // TODO infinite loop
                     .iter()
                     .flat_map(|x| {
-                        assert_ne!(other,*x);
-                        // println!("mask {:?}", *x);
+                        assert_ne!(other, *x);
+                        log::trace!("mask {:?}", *x);
                         self.solve_aux(cache, *x) // TODO infinite loop
                             .iter()
                             .map(|x| *x)
@@ -585,7 +1003,7 @@ impl Solver {
                 let r: MultiResult<RefPtr> = self.solve_aux(cache, o);
 
                 if r.is_empty() {
-                    // println!("solving {:?} an object of a mask into nothing", o);
+                    // log::trace!("solving {:?} an object of a mask into nothing", o);
                     cache.insert(other, r);
                     return Default::default();
                 }
@@ -605,15 +1023,15 @@ impl Solver {
                 // or the masked thing is surely not declared and remove the mask
                 r
             }
-            RefsEnum::Or(v) => {
+            RefsEnum::Or(_) => {
                 todo!()
             }
-            RefsEnum::ScopedIdentifier(o, i) => {
-                // println!("solving cioped id {:?}", other);
+            RefsEnum::TypeIdentifier(oo, i) => {
+                // log::trace!("solving cioped id {:?}", other);
                 let mut m: Option<Box<[usize]>> = None;
-                let r: MultiResult<RefPtr> = self.solve_aux(cache, o); // TODO infinite loop
+                let r: MultiResult<RefPtr> = self.solve_aux(cache, oo);
                 if r.is_empty() {
-                    // println!("solving {:?} an object into nothing", o);
+                    // log::trace!("solving {:?} an object into nothing", o);
                     cache.insert(other, r);
                     return Default::default();
                 }
@@ -621,6 +1039,137 @@ impl Solver {
                     .iter()
                     .filter_map(|o| {
                         let o = *o;
+                        if self.is_mm(oo) {
+                            // println!(
+                            //     "at {:?} with : {:?} {:?}",
+                            //     i,
+                            //     o,
+                            //     ExplorableRef {
+                            //         rf: o,
+                            //         nodes: &self.nodes
+                            //     }
+                            // );
+                            // println!("{} {} {}",
+                            // self.is_root(o),
+                            // self.is_package(o),
+                            // self.is_package_token(i));
+                            if !self.is_root(o) && self.is_package(o) && self.is_package_token(i) {
+                                return None;
+                            }
+                        }
+                        let matched = match &self.nodes[o] {
+                            // if /.A
+                            RefsEnum::Root if !self.is_package_token(i) => return None,
+                            // if x[].lenght -> int , thus None to signify its solved
+                            RefsEnum::Array(_) if self.is_length_token(i) => None,
+                            RefsEnum::Mask(o, x) => {
+                                m = Some(x.clone());
+                                Some(*o)
+                            }
+                            _ => Some(o),
+                        };
+                        let o = if let Some(m) = &m {
+                            for m in m.iter() {
+                                let no_mask = self.no_mask(*m);
+                                if self.intern(RefsEnum::Root) == no_mask
+                                    && !self.is_package_token(i)
+                                {
+                                    return None;
+                                }
+                                let no_mask = self.intern(RefsEnum::TypeIdentifier(no_mask, i));
+                                let x = self.solve_aux(cache, no_mask);
+                                if !x.is_empty() {
+                                    let x = *x.iter().next().unwrap();
+                                    if x != no_mask {
+                                        return Some(x);
+                                    }
+                                }
+                            }
+                            Some(o)
+                        } else {
+                            matched
+                        };
+                        if let Some(o) = o {
+                            Some(self.intern(RefsEnum::TypeIdentifier(o, i)))
+                        } else {
+                            Some(self.intern(RefsEnum::Primitive(Primitive::Int)))
+                        }
+                    })
+                    .collect();
+                if r.is_empty() {
+                    // log::trace!("solving {:?} into nothing", other);
+                    cache.insert(other, r);
+                    return Default::default();
+                }
+
+                let r: MultiResult<RefPtr> = r
+                    .iter()
+                    .flat_map(|r| {
+                        let r = *r;
+                        // log::trace!(
+                        //     "then {:?}",
+                        //     ExplorableRef {
+                        //         rf: r,
+                        //         nodes: &self.nodes
+                        //     }
+                        // );
+                        let r = if let Some(r) = (&self.decls).get(&Declarator::Type(r)).cloned() {
+                            //log::trace!("solved class: {:?}", r);
+                            // None // TODO not 100% sure Some of None
+                            match r {
+                                DeclType::Compile(r, _, _) => {
+                                    //log::trace!("solved class: {:?}", r);
+                                    vec![] //Some(r)
+                                }
+                                DeclType::Runtime(b) => {
+                                    //log::trace!("solved runtime: {:?}", b);
+                                    // vec![]
+                                    b.to_vec()
+                                }
+                                x => todo!("{:?}", x),
+                            }
+                        } else if r != other {
+                            self.solve_aux(cache, r).iter().map(|x| *x).collect()
+                        } else {
+                            vec![r]
+                        };
+                        r
+                    })
+                    .collect();
+
+                r
+            }
+            RefsEnum::ScopedIdentifier(oo, i) => {
+                // log::trace!("solving cioped id {:?}", other);
+                let mut m: Option<Box<[usize]>> = None;
+                let r: MultiResult<RefPtr> = self.solve_aux(cache, oo);
+                if r.is_empty() {
+                    // log::trace!("solving {:?} an object into nothing", o);
+                    cache.insert(other, r);
+                    return Default::default();
+                }
+                let r: MultiResult<RefPtr> = r
+                    .iter()
+                    .filter_map(|o| {
+                        let o = *o;
+                        if self.is_mm(oo) {
+                            // println!(
+                            //     "at {:?} with : {:?} {:?}",
+                            //     i,
+                            //     o,
+                            //     ExplorableRef {
+                            //         rf: o,
+                            //         nodes: &self.nodes
+                            //     }
+                            // );
+                            // println!("{} {} {}",
+                            // self.is_root(o),
+                            // self.is_package(o),
+                            // self.is_package_token(i));
+                            if !self.is_root(o) && self.is_package(o) && self.is_package_token(i) {
+                                return None;
+                            }
+                        }
                         let matched = match &self.nodes[o] {
                             // if x[].lenght -> int
                             RefsEnum::Root if !self.is_package_token(i) => return None,
@@ -634,8 +1183,10 @@ impl Solver {
                         let o = if let Some(m) = &m {
                             for m in m.iter() {
                                 let no_mask = self.no_mask(*m);
-                                if self.intern(RefsEnum::Root) == no_mask && !self.is_package_token(i) {
-                                    return None
+                                if self.intern(RefsEnum::Root) == no_mask
+                                    && !self.is_package_token(i)
+                                {
+                                    return None;
                                 }
                                 let no_mask = self.intern(RefsEnum::ScopedIdentifier(no_mask, i));
                                 let x = self.solve_aux(cache, no_mask);
@@ -658,7 +1209,7 @@ impl Solver {
                     })
                     .collect();
                 if r.is_empty() {
-                    // println!("solving {:?} into nothing", other);
+                    // log::trace!("solving {:?} into nothing", other);
                     cache.insert(other, r);
                     return Default::default();
                 }
@@ -667,7 +1218,7 @@ impl Solver {
                     .iter()
                     .flat_map(|r| {
                         let r = *r;
-                        // println!(
+                        // log::trace!(
                         //     "then {:?}",
                         //     ExplorableRef {
                         //         rf: r,
@@ -675,40 +1226,56 @@ impl Solver {
                         //     }
                         // );
                         let r = if let Some(r) = (&self.decls).get(&Declarator::Type(r)).cloned() {
-                            //println!("solved class: {:?}", r);
+                            //log::trace!("solved class: {:?}", r);
                             // None // TODO not 100% sure Some of None
                             match r {
                                 DeclType::Compile(r, _, _) => {
-                                    //println!("solved class: {:?}", r);
+                                    //log::trace!("solved class: {:?}", r);
                                     vec![] //Some(r)
                                 }
                                 DeclType::Runtime(b) => {
-                                    //println!("solved runtime: {:?}", b);
-                                    vec![]
+                                    //log::trace!("solved runtime: {:?}", b);
+                                    // vec![]
+                                    b.to_vec()
                                 }
                                 x => todo!("{:?}", x),
                             }
                         } else if let Some(r) = (&self.decls).get(&Declarator::Field(r)).cloned() {
                             match r {
                                 DeclType::Compile(r, _, _) => {
-                                    // println!("solved field: {:?}", r);
+                                    // log::trace!("solved field: {:?}", r);
                                     self.solve_aux(cache, r).iter().map(|x| *x).collect()
                                 }
-                                _ => todo!(),
+                                DeclType::Runtime(v) => {
+                                    // log::trace!("solved local variable: {:?}", r);
+                                    v.iter()
+                                        .flat_map(|r| {
+                                            self.solve_aux(cache, *r)
+                                                .iter()
+                                                .map(|x| *x)
+                                                .collect::<Vec<_>>()
+                                        })
+                                        .collect()
+                                }
                             }
                         } else if let Some(r) = (&self.decls).get(&Declarator::Variable(r)).cloned()
                         {
                             // TODO should not need
                             match r {
                                 DeclType::Compile(r, _, _) => {
-                                    // println!("solved local variable: {:?}", r);
+                                    // log::trace!("solved local variable: {:?}", r);
                                     self.solve_aux(cache, r).iter().map(|x| *x).collect()
                                 }
                                 DeclType::Runtime(v) => {
-                                    // println!("solved local variable: {:?}", r);
-                                    v.iter().flat_map(|r| {
-                                        self.solve_aux(cache, *r).iter().map(|x| *x).collect::<Vec<_>>()
-                                    }).collect()
+                                    // log::trace!("solved local variable: {:?}", r);
+                                    v.iter()
+                                        .flat_map(|r| {
+                                            self.solve_aux(cache, *r)
+                                                .iter()
+                                                .map(|x| *x)
+                                                .collect::<Vec<_>>()
+                                        })
+                                        .collect()
                                 }
                             }
                         } else if r != other {
@@ -742,7 +1309,7 @@ impl Solver {
                         {
                             match r {
                                 DeclType::Compile(r, _, _) => {
-                                    //println!("solved method ref: {:?}", r);
+                                    //log::trace!("solved method ref: {:?}", r);
                                     self.solve_aux(cache, r).iter().map(|x| *x).collect()
                                 }
                                 _ => todo!(),
@@ -777,7 +1344,7 @@ impl Solver {
                         {
                             match r {
                                 DeclType::Compile(r, _, _) => {
-                                    //println!("solved constructor ref: {:?}", r);
+                                    //log::trace!("solved constructor ref: {:?}", r);
                                     self.solve_aux(cache, r).iter().map(|x| *x).collect()
                                 }
                                 _ => todo!(),
@@ -853,14 +1420,19 @@ impl Solver {
                         {
                             match r {
                                 DeclType::Compile(r, _, _) => {
-                                    //println!("solved method: {:?}", r);
+                                    //log::trace!("solved method: {:?}", r);
                                     self.solve_aux(cache, r).iter().map(|x| *x).collect()
                                 }
                                 DeclType::Runtime(v) => {
-                                    //println!("solved method: {:?}", r);
-                                    v.iter().flat_map(|r| {
-                                        self.solve_aux(cache, *r).iter().map(|x| *x).collect::<Vec<_>>()
-                                    }).collect()
+                                    //log::trace!("solved method: {:?}", r);
+                                    v.iter()
+                                        .flat_map(|r| {
+                                            self.solve_aux(cache, *r)
+                                                .iter()
+                                                .map(|x| *x)
+                                                .collect::<Vec<_>>()
+                                        })
+                                        .collect()
                                 }
                             }
                         } else if r != other {
@@ -899,10 +1471,15 @@ impl Solver {
                             {
                                 match r {
                                     DeclType::Compile(r, s, i) => {
-                                        //println!("solved super constructor type: {:?} {:?} {:?}", r, s, i);
-                                        s.iter().flat_map(|r| {
-                                            self.solve_aux(cache, *r).iter().map(|x| *x).collect::<Vec<_>>()
-                                        }).collect()
+                                        //log::trace!("solved super constructor type: {:?} {:?} {:?}", r, s, i);
+                                        s.iter()
+                                            .flat_map(|r| {
+                                                self.solve_aux(cache, *r)
+                                                    .iter()
+                                                    .map(|x| *x)
+                                                    .collect::<Vec<_>>()
+                                            })
+                                            .collect()
                                         // self.solve_aux(cache, s.unwrap())
                                     }
                                     _ => todo!(),
@@ -918,7 +1495,7 @@ impl Solver {
                             {
                                 match r {
                                     DeclType::Compile(r, s, i) => {
-                                        //println!("solved super constructor type: {:?} {:?} {:?}", r, s, i);
+                                        //log::trace!("solved super constructor type: {:?} {:?} {:?}", r, s, i);
                                         self.solve_aux(cache, r)
                                     }
                                     _ => todo!(),
@@ -984,14 +1561,19 @@ impl Solver {
                         {
                             match r {
                                 DeclType::Compile(r, _, _) => {
-                                    //println!("solved constructor: {:?} {:?} {:?}", r, s, i);
+                                    //log::trace!("solved constructor: {:?} {:?} {:?}", r, s, i);
                                     self.solve_aux(cache, r).iter().map(|x| *x).collect()
                                 }
                                 DeclType::Runtime(v) => {
-                                    //println!("solved constructor: {:?} {:?} {:?}", r, s, i);
-                                    v.iter().flat_map(|r| {
-                                        self.solve_aux(cache, *r).iter().map(|x| *x).collect::<Vec<_>>()
-                                    }).collect()
+                                    //log::trace!("solved constructor: {:?} {:?} {:?}", r, s, i);
+                                    v.iter()
+                                        .flat_map(|r| {
+                                            self.solve_aux(cache, *r)
+                                                .iter()
+                                                .map(|x| *x)
+                                                .collect::<Vec<_>>()
+                                        })
+                                        .collect()
                                 }
                             }
                         } else if r != other {
@@ -1007,406 +1589,66 @@ impl Solver {
         };
 
         if r.is_empty() {
-            // println!("solving {:?} into nothing", other);
+            log::trace!("solving {:?} into nothing", other);
             cache.insert(other, Default::default());
         } else {
             for r in r.iter() {
-                // println!(
-                //     "solving {:?} into {:?}",
-                //     other,
-                //     ExplorableRef {
-                //         rf: *r,
-                //         nodes: &self.nodes
-                //     }
-                // );
+                log::trace!(
+                    "solving {:?} into {:?}",
+                    other,
+                    self.nodes.with(*r)
+                );
             }
             let r = r.iter().map(|x| *x).collect(); //r.iter().filter(|r| other.ne(*r)).collect();
             cache.insert(other, r);
         }
         r
     }
+}
 
-    fn print_decls(&self) {
-        println!("sd: ");
-        for (k, v) in self.decls.iter() {
-            let kr = match k.node() {
-                None => ExplorableRef {
-                    rf: 0,
-                    nodes: &self.nodes,
-                },
-                Some(rf) => ExplorableRef {
-                    rf: *rf,
-                    nodes: &self.nodes,
-                },
-            };
-            match v {
-                DeclType::Runtime(b) => {
-                    // TODO print more things
-                    println!("   {:?}: {:?} =>", k, kr);
-                    for v in b.iter() {
-                        let r = ExplorableRef {
-                            rf: *v,
-                            nodes: &self.nodes,
-                        };
-                        print!(" ({:?}) {:?}", *v, r);
-                    }
-                    println!();
-                }
-                DeclType::Compile(v, s, b) => {
-                    // TODO print more things
-                    let r = ExplorableRef {
-                        rf: *v,
-                        nodes: &self.nodes,
-                    };
-                    print!("   {:?}: {:?} => {:?}", k, kr, r);
-                    if s.len() > 0 {
-                        print!(" extends");
-                    }
-                    for v in s.iter() {
-                        let v = ExplorableRef {
-                            rf: *v,
-                            nodes: &self.nodes,
-                        };
-                        print!(" {:?},", v);
-                    }
-                    if b.len() > 0 {
-                        print!(" implements");
-                    }
-                    for v in b.iter() {
-                        let v = ExplorableRef {
-                            rf: *v,
-                            nodes: &self.nodes,
-                        };
-                        print!(" {:?},", v);
-                    }
-                    println!();
-                }
-            }
-        }
+/// internal utilities to take decisions
+impl Solver {
+    fn is_length_token(&self, id: LabelPtr) -> bool {
+        id.as_ref().to_usize() == 0 // TODO verify/model statically
     }
-
-    fn intern_external(
-        &mut self,
-        map: &mut HashMap<RefPtr, RefPtr>,
-        cache: &mut HashMap<RefPtr, RefPtr>,
-        other: ExplorableRef,
-    ) -> RefPtr {
-        // println!("int_ext   {:?} {:?}", other.rf, other);
-        if let Some(x) = map.get(&other.rf) {
-            // println!(
-            //     "int_ext m {:?} {:?}",
-            //     other.rf,
-            //     ExplorableRef {
-            //         rf:*x,
-            //         nodes: &self.nodes,
-            //     }
-            // );
-            return *x;
-        }
-        if let Some(x) = cache.get(&other.rf) {
-            assert!(
-                self.nodes[*x].similar(other.as_ref()),
-                "{:?} ~ {:?}",
-                other,
-                ExplorableRef {
-                    nodes: &self.nodes,
-                    rf: *x
-                },
-            );
-            // println!(
-            //     "int_ext c {:?} {:?}",
-            //     other.rf,
-            //     ExplorableRef {
-            //         rf:*x,
-            //         nodes: &self.nodes,
-            //     }
-            // );
-            return *x;
-        }
-        let r = match other.as_ref() {
-            RefsEnum::Root => self.intern(RefsEnum::Root),
-            RefsEnum::MaybeMissing => self.intern(RefsEnum::MaybeMissing),
-            RefsEnum::Primitive(i) => self.intern(RefsEnum::Primitive(*i)),
-            RefsEnum::Array(o) => {
-                let o = self.intern_external(map, cache, other.with(*o));
-                self.intern(RefsEnum::Array(o))
-            }
-            RefsEnum::ArrayAccess(o) => {
-                let o = self.intern_external(map, cache, other.with(*o));
-                self.intern(RefsEnum::ArrayAccess(o))
-            }
-            RefsEnum::This(o) => {
-                let o = self.intern_external(map, cache, other.with(*o));
-                self.intern(RefsEnum::This(o))
-            }
-            RefsEnum::Super(o) => {
-                let o = self.intern_external(map, cache, other.with(*o));
-                self.intern(RefsEnum::Super(o))
-            }
-            RefsEnum::Mask(o, p) => {
-                let o = self.intern_external(map, cache, other.with(*o));
-                let p = p
-                    .iter()
-                    .map(|x| self.intern_external(map, cache, other.with(*x)))
-                    .collect();
-                self.intern(RefsEnum::Mask(o, p))
-            }
-            RefsEnum::Or(p) => {
-                let p = p
-                    .iter()
-                    .map(|x| self.intern_external(map, cache, other.with(*x)))
-                    .collect();
-                self.intern(RefsEnum::Or(p))
-            }
+    fn is_package_token(&self, id: LabelPtr) -> bool {
+        let f = id.format();
+        IdentifierFormat::FlatCase.eq(&f)
+            || IdentifierFormat::LowerCamelCase.eq(&f)
+            || IdentifierFormat::SnakeCase.eq(&f) // not sure about this one
+    }
+    fn is_package(&self, n: RefPtr) -> bool {
+        let r = match &self.nodes[n] {
+            RefsEnum::Root => return true,
+            RefsEnum::Array(_) => return false,
             RefsEnum::ScopedIdentifier(o, i) => {
-                let o = self.intern_external(map, cache, other.with(*o));
-                self.intern(RefsEnum::ScopedIdentifier(o, *i))
+                if self.is_package_token(*i) {
+                    *o
+                } else {
+                    return false;
+                }
             }
-            RefsEnum::MethodReference(o, i) => {
-                let o = self.intern_external(map, cache, other.with(*o));
-                // println!("{:?}", o);
-                // println!("{:?}", self.nodes);
-                self.intern(RefsEnum::MethodReference(o, *i))
-            }
-            RefsEnum::ConstructorReference(o) => {
-                let o = self.intern_external(map, cache, other.with(*o));
-                // println!("{:?}", o);
-                // println!("{:?}", self.nodes);
-                self.intern(RefsEnum::ConstructorReference(o))
-            }
-            RefsEnum::Invocation(o, i, p) => {
-                let o = self.intern_external(map, cache, other.with(*o));
-                let p = match p {
-                    Arguments::Unknown => Arguments::Unknown,
-                    Arguments::Given(p) => {
-                        let mut v = vec![];
-                        for x in p.deref() {
-                            let r = self.intern_external(map, cache, other.with(*x));
-                            v.push(r);
-                        }
-                        let p = v.into_boxed_slice();
-                        Arguments::Given(p)
-                    }
-                };
-                self.intern(RefsEnum::Invocation(o, *i, p))
-            }
-            RefsEnum::ConstructorInvocation(o, p) => {
-                let i = self.intern_external(map, cache, other.with(*o));
-                let p = match p {
-                    Arguments::Unknown => Arguments::Unknown,
-                    Arguments::Given(p) => {
-                        let p = p
-                            .deref()
-                            .iter()
-                            .map(|x| self.intern_external(map, cache, other.with(*x)))
-                            .collect();
-                        Arguments::Given(p)
-                    }
-                };
-                let r = self.intern(RefsEnum::ConstructorInvocation(i, p));
-                assert_ne!(r, i);
-                r
-            }
+            RefsEnum::Mask(o, _) => *o,
+            x => return false,
         };
-        assert!(
-            self.nodes[r].similar(other.as_ref()),
-            "{:?} ~ {:?}",
-            other.as_ref(),
-            self.nodes[r],
-        );
-        // println!(
-        //     "int_ext r {:?} {:?}",
-        //     other.rf,
-        //     ExplorableRef {
-        //         rf:r,
-        //         nodes: &self.nodes,
-        //     }
-        // );
-        cache.insert(other.rf, r);
-        r
+        self.is_package(r)
     }
-    pub(crate) fn extend<'a>(&mut self, solver: &'a Solver) -> Internalizer<'a> {
-        self.extend_map(solver, &mut Default::default())
-    }
-
-    pub(crate) fn extend_map<'a>(
-        &mut self,
-        solver: &'a Solver,
-        map: &mut HashMap<usize, usize>,
-    ) -> Internalizer<'a> {
-        let mut cached = Internalizer {
-            solve: false,
-            cache: Default::default(),
-            solver,
+    fn is_root(&self, n: RefPtr) -> bool {
+        let r = match &self.nodes[n] {
+            RefsEnum::Root => return true,
+            RefsEnum::Mask(o, _) => *o,
+            _ => return false,
         };
-        // println!("primed cache for extend_map");
-        // for (k, v) in map.iter() {
-        //     print!(
-        //         "   {:?} {:?}: ",
-        //         *k,
-        //         ExplorableRef {
-        //             rf: *k,
-        //             nodes: &solver.nodes
-        //         }
-        //     );
-        //     print!(
-        //         "{:?} ",
-        //         ExplorableRef {
-        //             rf: *v,
-        //             nodes: &self.nodes
-        //         }
-        //     );
-        //     println!();
-        // }
-        for r in solver.iter_refs() {
-            // TODO make it imperative ?
-            let r = self.intern_external(map, &mut cached.cache, r);
-            match &self.nodes[r] {
-                RefsEnum::Primitive(_) => {}
-                RefsEnum::Array(o) => {
-                    if let RefsEnum::Primitive(_) = &self.nodes[*o] {
-                    } else {
-                        if r >= self.refs.len() {
-                            self.refs.resize(r + 1, false);
-                        }
-                        self.refs.set(r, true);
-                    }
-                }
-                _ => {
-                    if r >= self.refs.len() {
-                        self.refs.resize(r + 1, false);
-                    }
-                    self.refs.set(r, true);
-                }
-            };
-        }
-        // no need to extend decls, handled specifically given state
-        cached
+        self.is_root(r)
     }
-
-    /// dedicated to solving references to localvariables
-    pub(crate) fn local_solve_extend<'a>(&mut self, solver: &'a Solver) -> Internalizer<'a> {
-        let mut cached = Internalizer {
-            solve: true,
-            cache: Default::default(),
-            solver,
+    fn is_mm(&self, n: RefPtr) -> bool {
+        let r = match &self.nodes[n] {
+            RefsEnum::MaybeMissing => return true,
+            RefsEnum::Mask(o, _) => *o,
+            _ => return false,
         };
-        // self.print_decls();
-        for r in solver.iter_refs() {
-            // TODO make it imperative ?
-            let r = self.local_solve_intern_external(&mut cached.cache, r);
-            match &self.nodes[r] {
-                RefsEnum::Primitive(_) => {}
-                RefsEnum::Array(o) => {
-                    if let RefsEnum::Primitive(_) = &self.nodes[*o] {
-                    } else {
-                        if r >= self.refs.len() {
-                            self.refs.resize(r + 1, false);
-                        }
-                        self.refs.set(r, true);
-                    }
-                }
-                _ => {
-                    if r >= self.refs.len() {
-                        self.refs.resize(r + 1, false);
-                    }
-                    self.refs.set(r, true);
-                }
-            };
-        }
-        cached
+        self.is_mm(r)
     }
-
-    pub(crate) fn resolve(
-        self,
-        mut cache: HashMap<RefPtr, MultiResult<RefPtr>>,
-    ) -> (HashMap<RefPtr, MultiResult<RefPtr>>, Solver) {
-        // let mut r = self.clone();
-        let mut r = Solver {
-            nodes: self.nodes.clone(),
-            refs: Default::default(),
-            decls: self.decls.clone(),
-        };
-        // self.print_decls();
-        println!("primed cache for resolve");
-        for (k, v) in &cache {
-            print!(
-                "   {:?}: ",
-                ExplorableRef {
-                    rf: *k,
-                    nodes: &self.nodes
-                }
-            );
-            for r in v.iter() {
-                print!(
-                    "{:?} ",
-                    ExplorableRef {
-                        rf: *r,
-                        nodes: &self.nodes
-                    }
-                );
-            }
-            println!();
-        }
-        for s in self.iter_refs() {
-            // TODO make it imperative ?
-            for s in r.solve_aux(&mut cache, s.rf).iter() {
-                let s = *s;
-                match &r.nodes[s] {
-                    RefsEnum::Primitive(_) => {}
-                    _ => {
-                        if s >= r.refs.len() {
-                            r.refs.resize(s + 1, false);
-                        }
-                        r.refs.set(s, true);
-                    }
-                };
-            }
-        }
-        // TODO try better
-        (cache, r)
-    }
-
-    // pub(crate) fn hierarchy_solve_extend<'a>(
-    //     &mut self,
-    //     solver: &'a Solver,
-    // ) -> (HashMap<usize, Option<usize>>, Solver) {
-    //     // let mut r = self.clone();
-    //     let mut r = Solver {
-    //         nodes: self.nodes.clone(),
-    //         refs: Default::default(),
-    //         decls: self.decls.clone(),
-    //     };
-    //     // self.print_decls();
-    //     let mut cache = Default::default();
-    //     for s in self.iter_refs() {
-    //         // TODO make it imperative ?
-    //         if let Some(s) = r.hierarchy_solve_intern_external(&mut cache, s) {
-    //             match &r.nodes[s] {
-    //                 RefsEnum::Primitive(_) => {}
-    //                 _ => {
-    //                     if s >= r.refs.len() {
-    //                         r.refs.resize(s + 1, false);
-    //                     }
-    //                     r.refs.set(s, true);
-    //                 }
-    //             };
-    //         }
-    //     }
-    //     // TODO try better
-    //     (cache, r)
-    // }
-
-    // fn hierarchy_solve_intern_external(
-    //     &mut self,
-    //     cache: &mut HashMap<RefPtr, Option<RefPtr>>,
-    //     other: ExplorableRef,
-    // ) -> Option<RefPtr> {
-    //     todo!()
-    //     // let r = self.intern_external(&mut cache, other);
-    //     // let r = self.solve_aux(&mut cache, r);
-    //     // r
-    // }
 }
 
 pub(crate) struct Internalizer<'a> {

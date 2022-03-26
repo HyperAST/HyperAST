@@ -14,3 +14,4 @@ pub mod usage;
 #[cfg(test)]
 mod stack_graph_test;
 mod wanted_test;
+mod test_solver;

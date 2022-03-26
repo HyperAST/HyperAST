@@ -1,4 +1,4 @@
-use std::{fmt::Display, hash::Hash};
+use std::{fmt::{Display, Debug}, hash::Hash, collections::HashMap};
 
 use super::{
     element::{ExplorableRef, LabelPtr, Nodes, RawLabelPtr, RefPtr},
@@ -6,7 +6,7 @@ use super::{
     reference::DisplayRef,
 };
 
-use rusted_gumtree_core::tree::tree::LabelStore;
+use hyper_ast::types::LabelStore;
 
 pub struct ExplorableDecl<'a> {
     decl: (&'a Declarator<RefPtr>, &'a DeclType<RefPtr>),
@@ -98,6 +98,72 @@ impl<'a> Iterator for DeclsIter<'a> {
             }
             None => None,
         }
+    }
+}
+
+pub struct DebugDecls<'a> {
+    pub(crate) decls: &'a HashMap<Declarator<usize>, DeclType<usize>>,
+    pub(crate) nodes: &'a Nodes,
+}
+
+impl<'a> Debug for DebugDecls<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (k, v) in self.decls {
+            let kr = match k.node() {
+                None => ExplorableRef {
+                    rf: 0,
+                    nodes: &self.nodes,
+                },
+                Some(rf) => ExplorableRef {
+                    rf: *rf,
+                    nodes: &self.nodes,
+                },
+            };
+            match v {
+                DeclType::Runtime(b) => {
+                    // TODO print more things
+                    writeln!(f,"   {:?}: {:?} =>", k, kr)?;
+                    for v in b.iter() {
+                        let r = ExplorableRef {
+                            rf: *v,
+                            nodes: &self.nodes,
+                        };
+                        write!(f," ({:?}) {:?}", *v, r)?;
+                    }
+                    writeln!(f)?;
+                }
+                DeclType::Compile(v, s, b) => {
+                    // TODO print more things
+                    let r = ExplorableRef {
+                        rf: *v,
+                        nodes: &self.nodes,
+                    };
+                    write!(f,"   {:?}: {:?} => {:?}", k, kr, r)?;
+                    if s.len() > 0 {
+                        write!(f," extends")?;
+                    }
+                    for v in s.iter() {
+                        let v = ExplorableRef {
+                            rf: *v,
+                            nodes: &self.nodes,
+                        };
+                        write!(f," {:?},", v)?;
+                    }
+                    if b.len() > 0 {
+                        write!(f," implements")?;
+                    }
+                    for v in b.iter() {
+                        let v = ExplorableRef {
+                            rf: *v,
+                            nodes: &self.nodes,
+                        };
+                        write!(f," {:?},", v)?;
+                    }
+                    writeln!(f)?;
+                }
+            }
+        }
+        Ok(())
     }
 }
 

@@ -4,7 +4,7 @@ use bitvec::order::Lsb0;
 
 use super::element::{Arguments, ExplorableRef, LabelPtr, Nodes, RefPtr, RefsEnum, RawLabelPtr};
 
-use rusted_gumtree_core::tree::tree::LabelStore;
+use hyper_ast::types::LabelStore;
 
 pub struct Iter<'a> {
     pub(crate) refs: bitvec::slice::IterOnes<'a, Lsb0, usize>,
@@ -97,6 +97,10 @@ impl<'a, 'b, LS: LabelStore<str, I = RawLabelPtr>> Display for DisplayRef<'a, 'b
             RefsEnum::ScopedIdentifier(o, i) => {
                 write!(f, "{}", self.with(*o))?;
                 write!(f, ".{}", self.leafs.resolve(i.as_ref()))
+            }
+            RefsEnum::TypeIdentifier(o, i) => {
+                write!(f, "{}", self.with(*o))?;
+                write!(f, "%{}", self.leafs.resolve(i.as_ref()))
             }
             RefsEnum::MethodReference(o, i) => {
                 write!(f, "{}", self.with(*o))?;
