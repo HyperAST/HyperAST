@@ -8,9 +8,14 @@ edition = "2021"
 [dependencies]
 tree-sitter = "0.20.0"
 rusted_gumtree_core = { path = "../../../core" }
+hyper_ast = { path = "../../../hyper_ast" }
 
 
 libc = "0.2"
+
+
+legion = "0.4.0"
+tuples = "=1.4.1"
 
 [build-dependencies]
 cc = "*"
