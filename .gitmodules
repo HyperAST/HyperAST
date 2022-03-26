@@ -1,3 +1,7 @@
 [submodule "gen/tree-sitter/xml/tree-sitter-xml"]
 	path = gen/tree-sitter/xml/tree-sitter-xml
 	url = git@github.com:quentinLeDilavrec/tree-sitter-xml.git
+
+[submodule "gen/tree-sitter/java/tree-sitter-java"]
+	path = gen/tree-sitter/java/tree-sitter-java
+	url = git@github.com:quentinLeDilavrec/tree-sitter-java.git
