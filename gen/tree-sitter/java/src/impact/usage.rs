@@ -1,9 +1,13 @@
 use core::fmt;
-use std::{fmt::Debug, io::stdout, ops::AddAssign};
+use std::{
+    fmt::Debug,
+    io::stdout,
+    ops::{AddAssign, Deref},
+};
 
 use hyper_ast::{
     filter::{BloomResult, BloomSize},
-    nodes::RefContainer,
+    nodes::{print_tree_syntax, RefContainer},
     position::{
         extract_position, ExploreStructuralPositions, Scout, StructuralPosition,
         StructuralPositionStore,
@@ -19,7 +23,10 @@ use hyper_ast::{
 // use rusted_gumtree_core::tree::tree::{WithChildren, Tree, Labeled};
 
 use crate::{
-    impact::element::{IdentifierFormat, LabelPtr},
+    impact::{
+        element::{IdentifierFormat, LabelPtr},
+        reference::DisplayRef,
+    },
     java_tree_gen_full_compress_legion_ref::{
         self,
         // HashedNodeRef,
@@ -35,330 +42,39 @@ use super::{
 
 // TODO use generic node and store
 
-/// impl smthing more efficient by dispatching earlier
-/// make a comparator that only take scopedIdentifier, one that only take ...
-/// fo the node identifier it is less obvious
-pub fn eq_node_ref(d: ExplorableRef, stores: &SimpleStores, x: NodeIdentifier) -> bool {
-    match d.as_ref() {
-        RefsEnum::Root => todo!(),
-        RefsEnum::MaybeMissing => todo!(),
-        RefsEnum::ScopedIdentifier(o, i) => eq_node_scoped_id(d.with(*o), i.as_ref(), stores, x),
-        RefsEnum::TypeIdentifier(o, i) => eq_node_scoped_id(d.with(*o), i.as_ref(), stores, x),
-        RefsEnum::MethodReference(_, _) => todo!(),
-        RefsEnum::ConstructorReference(_) => todo!(),
-        RefsEnum::Invocation(_, _, _) => todo!(),
-        RefsEnum::ConstructorInvocation(_, _) => todo!(),
-        RefsEnum::Primitive(_) => todo!(),
-        RefsEnum::Array(_) => todo!(),
-        RefsEnum::This(_) => {
-            let b = stores.node_store.resolve(x);
-            if b.get_type() != Type::This {
-                false
-            } else {
-                assert!(!b.has_children()); // TODO
-                true
-            }
-        }
-        RefsEnum::Super(_) => todo!(),
-        RefsEnum::ArrayAccess(_) => todo!(),
-        RefsEnum::Mask(_, _) => todo!(),
-        RefsEnum::Or(_) => todo!(),
-    }
-}
-
-pub fn eq_node_scoped_id(
-    o: ExplorableRef,
-    i: &LabelIdentifier,
-    stores: &SimpleStores,
-    x: NodeIdentifier,
-) -> bool {
-    let b = stores.node_store.resolve(x);
-    let t = b.get_type();
-    if t == Type::MethodInvocation {
-        let x = b.get_child(&0);
-        let b = stores.node_store.resolve(x);
-        let t = b.get_type();
-        if t == Type::TypeIdentifier {
-            if b.has_label() {
-                let l = b.get_label();
-                if l != i {
-                    false // TODO
-                } else {
-                    true // TODO
-                }
-            } else {
-                todo!()
-            }
-        } else if t == Type::Identifier {
-            if b.has_label() {
-                let l = b.get_label();
-                if l != i {
-                    false // TODO
-                } else {
-                    true // TODO
-                }
-            } else {
-                todo!()
-            }
-        } else if t == Type::FieldAccess {
-            false // should be handled after
-        } else if t == Type::ScopedTypeIdentifier {
-            false // should be handled after
-        } else if t == Type::ScopedIdentifier {
-            false // should be handled after
-        } else if t == Type::MethodInvocation {
-            false // should be handled after
-        } else if t == Type::ArrayAccess {
-            false // should be handled after
-        } else if t == Type::ObjectCreationExpression {
-            false // should be handled after
-        } else if t == Type::ParenthesizedExpression {
-            false // should be handled after
-        } else if t == Type::TernaryExpression {
-            false // should be handled after
-        } else if t == Type::StringLiteral {
-            false // should be handled after
-        } else if t == Type::This {
-            false // TODO not exactly sure but if scoped should be handled after
-        } else if t == Type::Super {
-            false // TODO not exactly sure but if scoped should be handled after
-        } else if t == Type::ClassLiteral {
-            false // out of scope for tool ie. reflexivity
-        } else if t == Type::Comment {
-            false
-        } else {
-            todo!("{:?}", t)
-        }
-    } else if t == Type::ObjectCreationExpression {
-        let (b, t) = {
-            let mut i = 0;
-            let mut r;
-            let mut t;
-            loop {
-                let x = b.get_child(&i);
-                r = stores.node_store.resolve(x);
-                t = r.get_type();
-                if t == Type::TS74 {
-                    // find new
-                    // TODO but should alse construct the fully qualified name in the mean time
-                    i += 1;
-                    break;
-                }
-                i += 1;
-            }
-            loop {
-                let x = b.get_child(&i);
-                r = stores.node_store.resolve(x);
-                t = r.get_type();
-                if t != Type::Spaces
-                    && t != Type::Comment
-                    && t != Type::MarkerAnnotation
-                    && t != Type::Annotation
-                {
-                    break;
-                }
-                i += 1;
-            }
-            (r, t)
-        };
-        if t == Type::TypeIdentifier {
-            if b.has_label() {
-                let l = b.get_label();
-                if l != i {
-                    false // TODO
-                } else {
-                    true // TODO
-                }
-            } else {
-                todo!()
-            }
-        } else if t == Type::GenericType {
-            false // should be handled after
-        } else if t == Type::ScopedTypeIdentifier {
-            false // should be handled after
-        } else if t == Type::TypeArguments {
-            false // should be handled after
-        } else {
-            todo!("{:?}", t)
-        }
-    } else if t == Type::FormalParameter || t == Type::LocalVariableDeclaration {
-        // let (r,t) = {
-        //     let mut i = 0;
-        //     let mut r;
-        //     let mut t;
-        //     loop {
-        //         let x = b.get_child(&i);
-        //         r = java_tree_gen.stores.node_store.resolve(x);
-        //         t = r.get_type();
-        //         if t != Type::Modifiers {
-        //             break;
-        //         }
-        //         i+=1;
-        //     }
-        //     (r,t)
-        // };
-        let (r, t) = {
-            let x = b.get_child(&0);
-            let r = stores.node_store.resolve(x);
-            let t = r.get_type();
-            if t == Type::Modifiers {
-                let x = b.get_child(&2);
-                let r = stores.node_store.resolve(x);
-                let t = r.get_type();
-                (r, t)
-            } else {
-                (r, t)
-            }
-        };
-        if t == Type::TypeIdentifier {
-            if r.has_label() {
-                let l = r.get_label();
-                if l != i {
-                    false // TODO
-                } else {
-                    true // TODO
-                }
-            } else {
-                todo!()
-            }
-        } else if t == Type::ScopedTypeIdentifier {
-            false // should be handled after
-        } else if t == Type::GenericType {
-            false // should be handled after
-        } else if t == Type::ArrayType {
-            false // TODO not sure
-        } else if t == Type::IntegralType {
-            false // TODO not sure
-        } else if t == Type::FloatingPointType {
-            false // TODO not sure
-        } else if t == Type::BooleanType {
-            false // TODO not sure
-        } else if t == Type::Comment {
-            false
-        } else {
-            todo!("{:?}", t)
-        }
-    } else if t == Type::GenericType {
-        let x = b.get_child(&0);
-        let b = stores.node_store.resolve(x);
-        let t = b.get_type();
-        if t == Type::TypeIdentifier {
-            if b.has_label() {
-                let l = b.get_label();
-                if l != i {
-                    false // TODO
-                } else {
-                    true // TODO
-                }
-            } else {
-                todo!()
-            }
-        } else if t == Type::ScopedTypeIdentifier {
-            false // should be handled after
-        } else {
-            todo!("{:?}", t)
-        }
-    } else if t == Type::ScopedTypeIdentifier {
-        let x = b.get_child_rev(&0);
-        let b = stores.node_store.resolve(x);
-        let t = b.get_type();
-        if t == Type::TypeIdentifier {
-            if b.has_label() {
-                let l = b.get_label();
-                if l != i {
-                    false // TODO
-                } else {
-                    true // TODO
-                }
-            } else {
-                todo!()
-            }
-        } else if t == Type::ScopedTypeIdentifier {
-            false // TODO should check the fully qual name
-        } else if t == Type::GenericType {
-            false // TODO should check the fully qual name
-        } else if t == Type::Comment {
-            false
-        } else {
-            todo!("{:?}", t)
-        }
-    } else if t == Type::CatchType {
-        // TODO check for type union eg. A|B|C
-        let x = b.get_child(&0);
-        let b = stores.node_store.resolve(x);
-        let t = b.get_type();
-        if t == Type::TypeIdentifier {
-            if b.has_label() {
-                let l = b.get_label();
-                if l != i {
-                    false // TODO
-                } else {
-                    true // TODO
-                }
-            } else {
-                todo!()
-            }
-        } else if t == Type::ScopedTypeIdentifier {
-            false // should be handled after
-        } else if t == Type::Comment {
-            false
-        } else {
-            todo!("{:?}", t)
-        }
-    } else if t == Type::Resource {
-        let l = b.child_count();
-        let mut j = 0;
-        loop {
-            let x = b.get_child(&j);
-            let r = stores.node_store.resolve(x);
-            let t = r.get_type();
-
-            j += 1;
-            if t == Type::TypeIdentifier {
-                return if r.has_label() {
-                    let l = r.get_label();
-                    if l != i {
-                        false // TODO
-                    } else {
-                        true // TODO
-                    }
-                } else {
-                    todo!()
-                };
-            } else if t == Type::Modifiers {
-                // } else if t == Type::ScopedTypeIdentifier {
-                //     break;
-                // } else if  j == l{
-                //     break;
-            } else {
-                break;
-            }
-        }
-        false
-    } else {
-        todo!("{:?}", t)
-    }
-}
-
 pub fn remake_pkg_ref(
     stores: &SimpleStores,
     ana: &mut PartialAnalysis,
     x: NodeIdentifier,
 ) -> RefPtr {
+    print_tree_syntax(
+        |x| {
+            stores
+                .node_store
+                .resolve(*x)
+                .into_compressed_node()
+                .unwrap()
+        },
+        |x| stores.label_store.resolve(x).to_string(),
+        &x,
+    );
+    println!();
     let b = stores.node_store.resolve(x);
     let t = b.get_type();
     if t == Type::ScopedAbsoluteIdentifier {
         let x = b.get_child(&0);
         let o = remake_pkg_ref(stores, ana, x);
 
-        let x = b.get_child(&1);
+        let x = b.get_child(&2);
         let b = stores.node_store.resolve(x);
+        assert!(b.has_label());
         let i = b.get_label();
         let f = IdentifierFormat::from(stores.label_store.resolve(i));
         let l = LabelPtr::new(*i, f);
         let i = ana.solver.intern(RefsEnum::ScopedIdentifier(o, l));
         i
     } else if t == Type::Identifier {
+        assert!(b.has_label());
         let i = b.get_label();
         let o = ana.solver.intern(RefsEnum::Root);
         let f = IdentifierFormat::from(stores.label_store.resolve(i));
@@ -366,27 +82,24 @@ pub fn remake_pkg_ref(
         let i = ana.solver.intern(RefsEnum::ScopedIdentifier(o, l));
         i
     } else if t == Type::PackageDeclaration {
-        let x = b.get_child(&1);
+        let x = b.get_child(&2);
         remake_pkg_ref(stores, ana, x)
-    } else {
+    } else if t == Type::Spaces {
         todo!()
+    } else {
+        todo!("{:?}", t)
     }
 }
 pub fn eq_root_scoped(d: ExplorableRef, stores: &SimpleStores, b: HashedNodeRef) -> bool {
     match d.as_ref() {
-        RefsEnum::Root => todo!(),
+        RefsEnum::Root => false, // TODO check, not sure
         RefsEnum::MaybeMissing => false,
         RefsEnum::ScopedIdentifier(o, i) => {
             let t = b.get_type();
             if t == Type::ScopedAbsoluteIdentifier {
                 let mut bo = false;
                 for x in b.get_children().iter().rev() {
-                    // print_tree_syntax(
-                    //     &java_tree_gen.stores.node_store,
-                    //     &java_tree_gen.stores.label_store,
-                    //     &x,
-                    // );
-                    // println!();
+                    // log::trace!("d:{:?}",d);
                     let b = stores.node_store.resolve(*x);
                     let t = b.get_type();
                     if t == Type::ScopedAbsoluteIdentifier {
@@ -429,7 +142,9 @@ pub fn eq_root_scoped(d: ExplorableRef, stores: &SimpleStores, b: HashedNodeRef)
                 todo!("{:?}", t)
             }
         }
-        x => panic!("{:?}", x),
+        x => {
+            panic!("{:?}", x)
+        }
     }
 }
 
@@ -562,15 +277,17 @@ impl<'a> RefsFinder<'a> {
         }
     }
 
-    pub fn find_all(mut self, i: RefPtr, mut x: Scout) -> Vec<usize> {
+    /// Find all references to `target` that was declared in `package`
+    ///
+    pub fn find_all(mut self, package: RefPtr, target: RefPtr, mut x: Scout) -> Vec<usize> {
         // let position = (0,Some(root));
         // self.refs = StructuralPositions::from(root);
         // let mut x = Scout::from(root);
-        self.find_refs(i, &mut x);
+        self.find_refs(package, target, &mut x);
         self.refs
     }
 
-    fn find_refs(&mut self, target: RefPtr, scout: &mut Scout) -> Vec<RefPtr> {
+    fn find_refs(&mut self, package: RefPtr, target: RefPtr, scout: &mut Scout) -> Vec<RefPtr> {
         let current = scout.node(&self.sp_store);
         let b = self.stores.node_store.resolve(current);
         let t = b.get_type();
@@ -579,75 +296,310 @@ impl<'a> RefsFinder<'a> {
         } else if &t == &Type::Comment {
             return vec![];
         } else if &t == &Type::PackageDeclaration {
-            return vec![];
+            let d = ExplorableRef {
+                rf: package,
+                nodes: &self.ana.solver.nodes,
+            };
+            let (b, x) = {
+                let mut i = 0;
+                let r;
+                let x;
+                loop {
+                    let y = b.get_child(&i);
+                    let b = self.stores.node_store.resolve(y);
+                    let t = b.get_type();
+                    if t == Type::ScopedAbsoluteIdentifier || t == Type::Identifier {
+                        r = b;
+                        x = y;
+                        break;
+                    } else {
+                        i += 1;
+                    }
+                }
+                (r, x)
+            };
+            println!(
+                "d=1 {} {:?} {:?}",
+                DisplayRef::from((self.ana.solver.nodes.with(target), &self.stores.label_store)),
+                &t,
+                scout.to_position(&self.sp_store, &self.stores)
+            );
+            if DisplayRef::from((self.ana.solver.nodes.with(target), &self.stores.label_store))
+                .to_string()
+                .eq("/.spoon.support.compiler.jdt.SpoonFolder")
+            {
+                log::trace!("");
+            }
+            java_tree_gen_full_compress_legion_ref::print_tree_syntax(
+                &self.stores.node_store,
+                &self.stores.label_store,
+                &x,
+            );
+            println!();
+            if eq_root_scoped(d, self.stores, b) {
+                if let Some(x) = self.ana.solver.try_unsolve_node_with(target, package) {
+                    let r = self.ana.solver.intern(RefsEnum::Root);
+                    if let Some(y) = self.ana.solver.try_unsolve_node_with(target, r) {
+                        return vec![x, y];
+                    } else {
+                        return vec![x];
+                    }
+                } else {
+                    let d = ExplorableRef {
+                        rf: package,
+                        nodes: &self.ana.solver.nodes,
+                    };
+                    let b = self.stores.node_store.resolve(x);
+                    eq_root_scoped(d, self.stores, b);
+                    self.ana.solver.try_unsolve_node_with(target, package);
+                    panic!()
+                }
+            } else {
+                let r = self.ana.solver.intern(RefsEnum::Root);
+                if let Some(x) = self.ana.solver.try_unsolve_node_with(target, r) {
+                    return vec![x];
+                } else {
+                    return vec![];
+                }
+            }
+        } else if &t == &Type::Program {
+            println!(
+                "d=1 {} {:?} {:?}",
+                DisplayRef::from((self.ana.solver.nodes.with(target), &self.stores.label_store)),
+                &t,
+                scout.to_position(&self.sp_store, &self.stores)
+            );
         } else if &t == &Type::Directory {
+            println!(
+                "d=1 {} {:?} {:?}",
+                DisplayRef::from((self.ana.solver.nodes.with(target), &self.stores.label_store)),
+                &t,
+                scout.to_position(&self.sp_store, &self.stores)
+            );
             // TODO if package, get top level declarations then localize if ref.
             // in the end we do not need due to the way we do the impact ana.
             // we should only come from parent of package with canonical id.
         } else if &t == &Type::MavenDirectory {
+            println!(
+                "d=1 {:?} {:?}",
+                &t,
+                scout.to_position(&self.sp_store, &self.stores)
+            );
             // idem
         } else if &t == &Type::ImportDeclaration {
             println!("d=1 {:?}", &t);
-            let c = {
-                let d = self.ana.solver.nodes.with(target);
-                b.check(Into::<Box<[u8]>>::into(d.clone()).as_ref())
-            };
-            if let BloomResult::MaybeContain = c {
-                println!("+++import+++++Maybe contains");
-                java_tree_gen_full_compress_legion_ref::print_tree_syntax(
-                    &self.stores.node_store,
-                    &self.stores.label_store,
-                    &current,
-                );
-                println!();
-                let (stic, scop, asterisk) = {
-                    let b = self.stores.node_store.resolve(current);
-                    let mut scop = None;
-                    let mut sstatic = false;
-                    let mut asterisk = false;
-                    for c in b.get_children() {
-                        let b = self.stores.node_store.resolve(*c);
-                        match b.get_type() {
-                            Type::TS86 => sstatic = true,
-                            Type::Asterisk => asterisk = true,
-                            Type::Identifier => scop = Some((*c, b)),
-                            Type::ScopedAbsoluteIdentifier => scop = Some((*c, b)),
-                            _ => (),
-                        }
-                    }
-                    (sstatic, scop.unwrap(), asterisk)
-                };
-                let d = ExplorableRef {
-                    rf: target,
-                    nodes: &self.ana.solver.nodes,
-                };
-                if stic {
-                    return vec![]; // TODO
-                } else if asterisk {
-                    return vec![]; // TODO
-                } else if eq_root_scoped(d, self.stores, scop.1) {
-                    let d = self.ana.solver.nodes.with(target);
-                    let i = if let RefsEnum::ScopedIdentifier(_, i) = d.as_ref() {
-                        *i
-                    } else {
-                        panic!()
-                    };
-                    let o = self.ana.solver.intern(RefsEnum::MaybeMissing);
-                    let i = self.ana.solver.intern(RefsEnum::ScopedIdentifier(o, i));
-                    // let i = handle_import(
-                    //     java_tree_gen,
-                    //     self.ana,
-                    //     self.stores.node_store.resolve(scop.0),
-                    // );
-                    println!("import matched ref");
-                    return vec![i];
-                } else {
-                    return vec![];
-                }
-            } else {
-                println!("Do not contains");
+            // TODO move print to maybe contains branch
+            java_tree_gen_full_compress_legion_ref::print_tree_syntax(
+                &self.stores.node_store,
+                &self.stores.label_store,
+                &current,
+            );
+            println!();
+            if target == package {
                 return vec![];
             }
+
+            let mut curr = target;
+
+            let parse_import = || {
+                let b = self.stores.node_store.resolve(current);
+                let mut scop = None;
+                let mut sstatic = false;
+                let mut asterisk = false;
+                for c in b.get_children() {
+                    let b = self.stores.node_store.resolve(*c);
+                    match b.get_type() {
+                        Type::TS86 => sstatic = true,
+                        Type::Asterisk => asterisk = true,
+                        Type::Identifier => scop = Some(*c),
+                        Type::ScopedAbsoluteIdentifier => scop = Some(*c),
+                        _ => (),
+                    }
+                }
+                (sstatic, scop.unwrap(), asterisk)
+            };
+            let mut parsed_import: Option<(bool, NodeIdentifier, bool)> = None;
+            loop {
+                let d = self.ana.solver.nodes.with(curr);
+                let c = b.check(Into::<Box<[u8]>>::into(d.clone()).as_ref());
+                if let BloomResult::MaybeContain = c {
+                    println!("+++import+++++Maybe contains");
+
+                    let (stic, scop, asterisk) = if let Some(x) = &parsed_import {
+                        x.clone()
+                    } else {
+                        parsed_import = Some(parse_import());
+                        parsed_import.unwrap().clone()
+                    };
+
+                    if eq_root_scoped(d, self.stores, self.stores.node_store.resolve(scop)) {
+                        if stic {
+                            println!("the import is static");
+                        }
+                        if asterisk {
+                            if target != curr {
+                                println!("on-demand import matched ref");
+                                if let Some(x) = self.ana.solver.try_unsolve_node_with(target, curr)
+                                {
+                                    return vec![x];
+                                }
+                            }
+                        } else {
+                            let d = self.ana.solver.nodes.with(curr);
+                            if let RefsEnum::ScopedIdentifier(o, _) = d.as_ref() {
+                                curr = *o;
+                            } else {
+                                return vec![];
+                            };
+                            println!("import matched ref");
+                            assert_ne!(target, curr);
+                            if let Some(x) = self.ana.solver.try_unsolve_node_with(target, curr) {
+                                return vec![x];
+                            }
+                        }
+                    }
+
+                    if curr == package {
+                        return vec![];
+                    }
+                } else {
+                    println!("Do not contains");
+                }
+
+                let d = self.ana.solver.nodes.with(curr);
+                if let RefsEnum::ScopedIdentifier(o, _) = d.as_ref() {
+                    curr = *o;
+                } else {
+                    return vec![];
+                };
+            }
+            // let whole_match;
+            // let c = {
+            //     let d = self.ana.solver.nodes.with(target);
+            //     b.check(Into::<Box<[u8]>>::into(d.clone()).as_ref())
+            // };
+            // let asterisk_match;
+            // let c = if let BloomResult::MaybeContain = c {
+            //     whole_match = true;
+            //     c
+            // } else {
+            //     whole_match = false;
+            //     let c = {
+            //         let d = self.ana.solver.nodes.with(package);
+            //         b.check(Into::<Box<[u8]>>::into(d.clone()).as_ref())
+            //     };
+            //     c
+            // };
+            // let c = if let BloomResult::MaybeContain = c {
+            //     let d = self.ana.solver.nodes.with(target);
+            //     if let RefsEnum::ScopedIdentifier(o, _) = d.as_ref() {
+            //         if *o == package {
+            //             asterisk_match = false;
+            //         } else {
+            //             asterisk_match = true;
+            //         }
+            //     } else {
+            //         asterisk_match = true;
+            //     }
+            //     c
+            // } else {
+            //     asterisk_match = false;
+            //     let d = self.ana.solver.nodes.with(target);
+            //     if let RefsEnum::ScopedIdentifier(o, _) = d.as_ref() {
+            //         let d = self.ana.solver.nodes.with(*o);
+            //         b.check(Into::<Box<[u8]>>::into(d.clone()).as_ref())
+            //     } else {
+            //         c
+            //     }
+            // };
+            // println!("d=1 {:?}", &t);
+            // if let BloomResult::MaybeContain = c {
+            //     println!("+++import+++++Maybe contains");
+            //     let parent_match = !whole_match && !asterisk_match;
+            //     java_tree_gen_full_compress_legion_ref::print_tree_syntax(
+            //         &self.stores.node_store,
+            //         &self.stores.label_store,
+            //         &current,
+            //     );
+            //     println!();
+            //     let (stic, scop, asterisk) = {
+            //         let b = self.stores.node_store.resolve(current);
+            //         let mut scop = None;
+            //         let mut sstatic = false;
+            //         let mut asterisk = false;
+            //         for c in b.get_children() {
+            //             let b = self.stores.node_store.resolve(*c);
+            //             match b.get_type() {
+            //                 Type::TS86 => sstatic = true,
+            //                 Type::Asterisk => asterisk = true,
+            //                 Type::Identifier => scop = Some((*c, b)),
+            //                 Type::ScopedAbsoluteIdentifier => scop = Some((*c, b)),
+            //                 _ => (),
+            //             }
+            //         }
+            //         (sstatic, scop.unwrap(), asterisk)
+            //     };
+            //     if stic {
+            //         return vec![]; // TODO
+            //     } else if asterisk && (parent_match || asterisk_match) {
+            //         let d = self.ana.solver.nodes.with(package);
+            //         if eq_root_scoped(d, self.stores, scop.1) {
+            //             if let Some(x) = self.ana.solver.try_unsolve_node_with(target, package) {
+            //                 return vec![x];
+            //             };
+            //             println!("on-demand import matched ref");
+            //         } else {
+            //             return vec![];
+            //         }
+            //     } else if parent_match {
+            //         let d = self.ana.solver.nodes.with(target);
+            //         let o = if let RefsEnum::ScopedIdentifier(o, _) = d.as_ref() {
+            //             let d = self.ana.solver.nodes.with(*o);
+            //             if eq_root_scoped(d, self.stores, scop.1) {
+            //                 Some(*o)
+            //             } else {
+            //                 None
+            //             }
+            //         } else {
+            //             None
+            //         };
+            //         if let Some(o) = o {
+            //             println!("import matched inner type ref");
+            //             if let Some(x) = &self.ana.solver.try_unsolve_node_with(target, o) {
+            //                 return vec![*x];
+            //             } else {
+            //                 panic!();
+            //             }
+            //         } else {
+            //             return vec![];
+            //         }
+            //     } else {
+            //         let d = self.ana.solver.nodes.with(target);
+            //         if eq_root_scoped(d, self.stores, scop.1) {
+            //             // TODO use self.ana.solver.try_unsolve_node_with
+            //             let d = self.ana.solver.nodes.with(target);
+            //             let i = if let RefsEnum::ScopedIdentifier(_, i) = d.as_ref() {
+            //                 *i
+            //             } else {
+            //                 panic!()
+            //             };
+            //             let o = self.ana.solver.intern(RefsEnum::MaybeMissing);
+            //             let i = self.ana.solver.intern(RefsEnum::ScopedIdentifier(o, i));
+            //             // let i = handle_import(
+            //             //     java_tree_gen,
+            //             //     self.ana,
+            //             //     self.stores.node_store.resolve(scop.0),
+            //             // );
+            //             println!("import matched ref");
+            //             return vec![i];
+            //         } else {
+            //             return vec![];
+            //         }
+            //     }
+            // } else {
+            //     println!("Do not contains");
+            //     return vec![];
+            // }
         }
         if !b.has_children() {
             return vec![];
@@ -677,12 +629,30 @@ impl<'a> RefsFinder<'a> {
             if &t == &Type::MethodInvocation // find object
                 || &t == &Type::FormalParameter // find simple type
                 || &t == &Type::GenericType // find simple type
-                || &t == &Type::LocalVariableDeclaration // find simple type
+                || &t == &Type::TypeBound // find simple type
                 || &t == &Type::ObjectCreationExpression // find simple object
                 || &t == &Type::ScopedIdentifier // find identifier
                 || &t == &Type::ScopedAbsoluteIdentifier // find identifier
                 || &t == &Type::ScopedTypeIdentifier
                 || &t == &Type::CatchType // TODO to check
+                || &t == &Type::FieldAccess // TODO to check
+                || &t == &Type::FieldDeclaration // TODO to check
+                || &t == &Type::Superclass // TODO to check for hierachy
+                || &t == &Type::SuperInterfaces // TODO to check for hierachy
+                || &t == &Type::ExtendsInterfaces // TODO to check for hierachy
+                || &t == &Type::InstanceofExpression // TODO to handle
+                || &t == &Type::AnnotatedType // TODO to handle
+                || &t == &Type::ClassLiteral // to handle A.class
+                || &t == &Type::ArrayType // TODO to handle A[]
+                || &t == &Type::MethodReference // TODO to handle A::m
+                || &t == &Type::CastExpression // TODO to handle (A)x
+                // || &t == &Type::ConstructorDeclaration // TODO to handle constructors
+                || &t == &Type::LocalVariableDeclaration // find simple type
+                || &t == &Type::EnhancedForVariable
+                // || &t == &Type::ForStatement // no need
+                // || &t == &Type::TryWithResourcesStatement // no need
+                // || &t == &Type::CatchClause // no need
+                || &t == &Type::EnhancedForStatement // TODO to handle declarative staements
                 || &t == &Type::Resource
             // TODO to check
             // find identifier
@@ -714,6 +684,21 @@ impl<'a> RefsFinder<'a> {
                 //     // println!("really found");
                 // }
                 self.exact_match(target, scout.clone());
+            // } else if &t == &Type::ClassDeclaration || &t == &Type::InterfaceDeclaration {
+            //     // TODO to handle refs by heritage
+            //     println!(
+            //         "!found Class or Interface declaration at {:?}",
+            //         scout.to_position(&self.sp_store, &self.stores)
+            //     );
+            //     // let mut out = IoOut { stream: stdout() };
+            //     // java_tree_gen_full_compress_legion_ref::serialize(
+            //     //     &self.stores.node_store,
+            //     //     &self.stores.label_store,
+            //     //     &current,
+            //     //     &mut out,
+            //     //     "\n",
+            //     // );
+            //     self.exact_match(target, scout.clone());
             } else if &t == &Type::TypeIdentifier {
                 println!("!found TypeIdentifier");
                 let mut out = IoOut { stream: stdout() };
@@ -724,6 +709,8 @@ impl<'a> RefsFinder<'a> {
                     &mut out,
                     "\n",
                 );
+                println!();
+                self.exact_match(target, scout.clone());
             } else if &t == &Type::MethodDeclaration {
                 // java_tree_gen::print_tree_syntax(
                 //     &self.stores.node_store,
@@ -738,6 +725,8 @@ impl<'a> RefsFinder<'a> {
                     &mut out,
                     "\n",
                 );
+                println!();
+                self.exact_match(target, scout.clone());
             }
         } else {
             println!("Do not contains");
@@ -752,12 +741,20 @@ impl<'a> RefsFinder<'a> {
             // scout.inc(*x);
             scout.goto(*x, i);
             i += 1;
-            let z = self.find_refs(target, scout);
-            v.extend(z);
+            log::trace!(
+                "rec search ref {}",
+                DisplayRef::from((self.ana.solver.nodes.with(target), &self.stores.label_store)),
+            );
+            let z = self.find_refs(package, target, scout);
             for w in v.clone() {
-                let z = self.find_refs(w, scout);
+                log::trace!(
+                    "rec search ref {}",
+                    DisplayRef::from((self.ana.solver.nodes.with(w), &self.stores.label_store)),
+                );
+                let z = self.find_refs(package, w, scout);
                 v.extend(z)
             }
+            v.extend(z);
             scout.up(&self.sp_store);
         }
         vec![]
@@ -798,8 +795,8 @@ impl<'a> RefsFinder<'a> {
 
     pub fn exact_match_aux(&mut self, o: RefPtr, i: &LabelIdentifier, mut scout: Scout) {
         fn is_individually_matched(t: Type) -> bool {
-            t == Type::FieldAccess
-                || t == Type::ScopedTypeIdentifier
+            t == Type::ScopedTypeIdentifier
+                || t == Type::FieldAccess
                 || t == Type::ScopedIdentifier
                 || t == Type::MethodInvocation
                 || t == Type::ArrayAccess
@@ -807,11 +804,27 @@ impl<'a> RefsFinder<'a> {
                 || t == Type::ParenthesizedExpression
                 || t == Type::TernaryExpression
                 || t == Type::GenericType
+                || t == Type::AnnotatedType
+                || t == Type::ArrayType
+                || t == Type::CastExpression
+                || t == Type::Modifiers
+                || t == Type::ArrayCreationExpression
+                || t == Type::BinaryExpression
+                || t == Type::UnaryExpression
+                || t == Type::SwitchExpression
+                || t == Type::AssignmentExpression
+                || t == Type::EnhancedForVariable
         }
         fn is_never_reference(t: Type) -> bool {
             t == Type::Comment
             || t == Type::ClassLiteral // out of scope for tool ie. reflexivity
             || t == Type::StringLiteral
+            || t == Type::NullLiteral
+            || t == Type::VoidType
+            || t == Type::IntegralType
+            || t == Type::FloatingPointType
+            || t == Type::BooleanType
+            // println!("not matched"); // TODO not sure
         }
         let b = self.stores.node_store.resolve(scout.node(&self.sp_store));
         let t = b.get_type();
@@ -825,7 +838,8 @@ impl<'a> RefsFinder<'a> {
                     let l = b.get_label();
                     if l != i {
                         // println!("not matched"); // TODO
-                    } else {println!("success 1");
+                    } else {
+                        println!("success 1");
                         self.successful_match(&mut scout); // TODO
                     }
                 } else {
@@ -836,12 +850,24 @@ impl<'a> RefsFinder<'a> {
                     let l = b.get_label();
                     if l != i {
                         // println!("not matched"); // TODO
-                    } else {println!("success 2");
+                    } else {
+                        println!("success 2");
                         self.successful_match(&mut scout); // TODO
                     }
                 } else {
                     todo!()
                 }
+            // } else if t == Type::FieldAccess {
+            //     // if b.has_label() {
+            //     //     let l = b.get_label();
+            //     //     if l != i {
+            //     //         // println!("not matched"); // TODO
+            //     //     } else {println!("success 2.1");
+            //     //         self.successful_match(&mut scout); // TODO
+            //     //     }
+            //     // } else {
+            //     //     todo!()
+            //     // }
             } else if is_individually_matched(t) {
                 // println!("not matched"); // should be handled after
             } else if is_never_reference(t) {
@@ -879,7 +905,7 @@ impl<'a> RefsFinder<'a> {
                         && t != Type::MarkerAnnotation
                         && t != Type::Annotation
                     {
-                        scout.goto(x, i as usize);
+                        // scout.goto(x, i as usize);
                         break;
                     }
                     i += 1;
@@ -891,7 +917,8 @@ impl<'a> RefsFinder<'a> {
                     let l = b.get_label();
                     if l != i {
                         // println!("not matched"); // TODO
-                    } else {println!("success 3");
+                    } else {
+                        println!("success 3");
                         self.successful_match(&mut scout); // TODO
                     }
                 } else {
@@ -906,7 +933,53 @@ impl<'a> RefsFinder<'a> {
             } else {
                 todo!("{:?}", t)
             }
-        } else if t == Type::FormalParameter || t == Type::LocalVariableDeclaration {
+        } else if t == Type::MethodDeclaration {
+            let (r, t) = {
+                let mut i = 0;
+                let r;
+                let t;
+                loop {
+                    let x = b.get_child(&i);
+                    let b = self.stores.node_store.resolve(x);
+                    let tt = b.get_type();
+                    if tt == Type::Modifiers {
+                        i += 1;
+                    } else if tt == Type::TypeParameters {
+                        i += 1;
+                    } else if tt == Type::Annotation {
+                        i += 1;
+                    } else if tt == Type::Spaces {
+                        i += 1;
+                    } else {
+                        r = b;
+                        t = tt;
+                        break;
+                    }
+                }
+                (r, t)
+            };
+            if t == Type::TypeIdentifier {
+                if r.has_label() {
+                    let l = r.get_label();
+                    if l != i {
+                        // println!("not matched"); // TODO
+                    } else {
+                        self.successful_match(&mut scout);
+                    }
+                } else {
+                    todo!()
+                }
+            } else if is_individually_matched(t) {
+                // println!("not matched"); // should be handled after
+            } else if is_never_reference(t) {
+                // println!("not matched");
+            } else {
+                todo!("{:?}", t)
+            }
+        } else if t == Type::FormalParameter
+            || t == Type::LocalVariableDeclaration
+            || t == Type::EnhancedForVariable
+        {
             // let (r,t) = {
             //     let mut i = 0;
             //     let mut r;
@@ -942,57 +1015,9 @@ impl<'a> RefsFinder<'a> {
                     let l = r.get_label();
                     if l != i {
                         // println!("not matched"); // TODO
-                    } else {println!("success 4");
-                        self.successful_match(&mut scout); // TODO
-                        // src/main/java/spoon/pattern/internal/DefaultGenerator.java", offset: 16
-                        {
-                            scout.up(self.sp_store);
-                            let r = self.sp_store.push(&mut scout);
-                            assert!(self.sp_store.check(&self.stores));
-                            let it = ExploreStructuralPositions::from((&*self.sp_store, r));
-                            println!("success 4 up 1 {:?}", it.to_position(&self.stores));
-                        }
-                        {
-                            scout.up(self.sp_store);
-                            let r = self.sp_store.push(&mut scout);
-                            assert!(self.sp_store.check(&self.stores));
-                            let it = ExploreStructuralPositions::from((&*self.sp_store, r));
-                            println!("success 4 up 2 {:?}", it.to_position(&self.stores));
-                        }
-                        {
-                            scout.up(self.sp_store);
-                            let r = self.sp_store.push(&mut scout);
-                            assert!(self.sp_store.check(&self.stores));
-                            let it = ExploreStructuralPositions::from((&*self.sp_store, r));
-                            println!("success 4 up 3 {:?}", it.to_position(&self.stores));
-                        }
-                        {
-                            let b = self.stores.node_store.resolve(scout.node(self.sp_store));
-                            let o = 0;//(b.child_count() -2) as usize;
-                            let x = b.get_children()[o];
-                            scout.goto(x,o);
-                            let r = self.sp_store.push(&mut scout);
-                            assert!(self.sp_store.check(&self.stores));
-                            let it = ExploreStructuralPositions::from((&*self.sp_store, r));
-                            println!("success 4 goto 0 {:?}", it.to_position(&self.stores));
-                            scout.up(self.sp_store);
-                            let o = 1;
-                            let x = b.get_children()[o];
-                            scout.goto(x,o);
-                            let r = self.sp_store.push(&mut scout);
-                            assert!(self.sp_store.check(&self.stores));
-                            let it = ExploreStructuralPositions::from((&*self.sp_store, r));
-                            println!("success 4 goto 1 {:?}", it.to_position(&self.stores));
-                            scout.up(self.sp_store);
-                            let o = 2;
-                            let x = b.get_children()[o];
-                            scout.goto(x,o);
-                            let r = self.sp_store.push(&mut scout);
-                            assert!(self.sp_store.check(&self.stores));
-                            let it = ExploreStructuralPositions::from((&*self.sp_store, r));
-                            println!("success 4 goto 2 {:?}", it.to_position(&self.stores));
-                            scout.up(self.sp_store);
-                        }
+                    } else {
+                        println!("success 4");
+                        self.successful_match(&mut scout);
                     }
                 } else {
                     todo!()
@@ -1000,19 +1025,192 @@ impl<'a> RefsFinder<'a> {
             } else if is_individually_matched(t) {
                 // println!("not matched"); // should be handled after
             } else if is_never_reference(t) {
+
                 // println!("not matched");
             } else if t == Type::ArrayType {
                 // println!("not matched"); // TODO not sure
             } else if t == Type::IntegralType {
-                // println!("not matched"); // TODO not sure
             } else if t == Type::FloatingPointType {
-                // println!("not matched"); // TODO not sure
             } else if t == Type::BooleanType {
-                // println!("not matched"); // TODO not sure
             } else {
                 todo!("{:?}", t)
             }
+        } else if &t == &Type::SuperInterfaces
+            || &t == &Type::Superclass
+            || &t == &Type::ExtendsInterfaces
+            || &t == &Type::TypeBound
+        {
+            let mut j = 0;
+            let mut r;
+            let mut t;
+            let mut ok = false;
+            let l = b.child_count();
+            while j < l {
+                let x = b.get_child(&j);
+                r = self.stores.node_store.resolve(x);
+                t = r.get_type();
+                if t == Type::TS60 {
+                    // ext
+                    ok = true;
+                } else if t == Type::TS66 {
+                    // impl
+                    ok = true;
+                } else if t == Type::TS14 { // comma
+                } else if t == Type::Spaces {
+                } else if ok {
+                    if t == Type::TypeIdentifier {
+                        if r.has_label() {
+                            let l = r.get_label();
+                            if l != i {
+                                // println!("not matched"); // TODO
+                            } else {
+                                println!("success 4");
+                                scout.up(self.sp_store);
+                                self.successful_match(&mut scout);
+                                break;
+                            }
+                        } else {
+                            todo!()
+                        }
+                    } else if t == Type::AnnotatedType {
+                        let x = r.get_child_rev(&0);
+                        let l = r.child_count();
+                        let b = self.stores.node_store.resolve(x);
+                        let t = b.get_type();
+                        if t == Type::TypeIdentifier {
+                            // scout.goto(x, l as usize - 1);
+                            if b.has_label() {
+                                let l = b.get_label();
+                                if l != i {
+                                    // println!("not matched"); // TODO
+                                } else {
+                                    println!("success 6");
+                                    self.successful_match(&mut scout); // TODO
+                                }
+                            } else {
+                                todo!()
+                            }
+                        } else if t == Type::ScopedTypeIdentifier {
+                            // println!("not matched"); // TODO should check the fully qual name
+                        } else if t == Type::GenericType {
+                            // println!("not matched"); // TODO should check the fully qual name
+                        } else if is_individually_matched(t) {
+                            // println!("not matched"); // should be handled after
+                        } else if is_never_reference(t) {
+                            // println!("not matched");
+                        } else {
+                            todo!("{:?}", t)
+                        }
+                    } else if t == Type::TS4 {
+                    } else if is_individually_matched(t) {
+                        // println!("not matched"); // should be handled after
+                    } else if is_never_reference(t) {
+                        // println!("not matched");
+                    } else {
+                        todo!("{:?}", t)
+                    }
+                }
+                j += 1;
+            }
+        } else if &t == &Type::EnhancedForStatement {
+            let mut j = 0;
+            let mut r;
+            let mut t;
+            let mut ok = false;
+            let mut ok2 = false;
+            let l = b.child_count();
+            while j < l {
+                let x = b.get_child(&j);
+                r = self.stores.node_store.resolve(x);
+                t = r.get_type();
+                if t == Type::TS7 {
+                    // (
+                    ok = true;
+                } else if t == Type::TS8 {
+                    // )
+                    break;
+                } else if t == Type::Spaces {
+                } else if t == Type::TS23 {
+                    // :
+                    ok = false;
+                    ok2 = true;
+                } else if ok {
+                    if t == Type::TypeIdentifier {
+                        if r.has_label() {
+                            let l = r.get_label();
+                            if l != i {
+                                // println!("not matched"); // TODO
+                            } else {
+                                println!("success 10");
+                                scout.goto(x, j as usize);
+                                self.successful_match(&mut scout);
+                                scout.up(self.sp_store);
+                            }
+                        } else {
+                            todo!()
+                        }
+                    } else if t == Type::Identifier {
+                    } else if is_individually_matched(t) {
+                        // println!("not matched"); // should be handled after
+                    } else if is_never_reference(t) {
+                        // println!("not matched");
+                    } else {
+                        todo!("{:?}", t)
+                    }
+                } else if ok2 {
+                    if t == Type::Identifier {
+                        if r.has_label() {
+                            let l = r.get_label();
+                            if l != i {
+                                // println!("not matched"); // TODO
+                            } else {
+                                println!("success 11");
+                                scout.goto(x, j as usize);
+                                self.successful_match(&mut scout);
+                                scout.up(self.sp_store);
+                            }
+                        } else {
+                            todo!()
+                        }
+                    } else if t == Type::This {
+                    } else if is_individually_matched(t) {
+                        // println!("not matched"); // should be handled after
+                    } else if is_never_reference(t) {
+                        // println!("not matched");
+                    } else {
+                        todo!("{:?}", t)
+                    }
+                }
+                j += 1;
+            }
         } else if t == Type::GenericType {
+            let x = b.get_child(&0);
+            let b = self.stores.node_store.resolve(x);
+            let t = b.get_type();
+            if t == Type::TypeIdentifier {
+                // scout.goto(x, 0);
+                if b.has_label() {
+                    let l = b.get_label();
+                    if l != i {
+                        // println!("not matched"); // TODO
+                    } else {
+                        println!("success 5");
+                        self.successful_match(&mut scout); // TODO
+                    }
+                } else {
+                    todo!()
+                }
+            } else if t == Type::This { // TODO
+            } else if t == Type::ScopedTypeIdentifier {
+                // println!("not matched"); // should be handled after
+            } else if is_individually_matched(t) {
+                // println!("not matched"); // should be handled after
+            } else if is_never_reference(t) {
+                // println!("not matched");
+            } else {
+                todo!("{:?}", t)
+            }
+        } else if t == Type::ArrayType {
             let x = b.get_child(&0);
             let b = self.stores.node_store.resolve(x);
             let t = b.get_type();
@@ -1022,7 +1220,8 @@ impl<'a> RefsFinder<'a> {
                     let l = b.get_label();
                     if l != i {
                         // println!("not matched"); // TODO
-                    } else {println!("success 5");
+                    } else {
+                        println!("success 5.1");
                         self.successful_match(&mut scout); // TODO
                     }
                 } else {
@@ -1030,21 +1229,28 @@ impl<'a> RefsFinder<'a> {
                 }
             } else if t == Type::ScopedTypeIdentifier {
                 // println!("not matched"); // should be handled after
+            } else if is_individually_matched(t) {
+                // println!("not matched"); // should be handled after
+            } else if is_never_reference(t) {
+                // println!("not matched");
             } else {
                 todo!("{:?}", t)
             }
         } else if t == Type::ScopedTypeIdentifier {
+            // maybe  || t == Type::AnnotatedType
             let x = b.get_child_rev(&0);
             let l = b.child_count();
             let b = self.stores.node_store.resolve(x);
             let t = b.get_type();
             if t == Type::TypeIdentifier {
-                scout.goto(x, l as usize-1);
+                // scout.goto(x, l as usize - 1);
                 if b.has_label() {
                     let l = b.get_label();
+                    // TODO should also check if is fully qual then equal to target
                     if l != i {
                         // println!("not matched"); // TODO
-                    } else {println!("success 6");
+                    } else {
+                        println!("success 6");
                         self.successful_match(&mut scout); // TODO
                     }
                 } else {
@@ -1061,18 +1267,411 @@ impl<'a> RefsFinder<'a> {
             } else {
                 todo!("{:?}", t)
             }
+        } else if t == Type::InstanceofExpression {
+            let x = b.get_child(&0);
+            let bb = self.stores.node_store.resolve(x);
+            let t = bb.get_type();
+            if t == Type::Identifier {
+                if bb.has_label() {
+                    let l = bb.get_label();
+                    // TODO should also check if is fully qual then equal to target
+                    if l != i {
+                        // println!("not matched"); // TODO
+                    } else {
+                        // if o == MaybeMissing
+                        println!("success 6");
+                        scout.goto(x, 0);
+                        self.successful_match(&mut scout); // TODO
+                        scout.up(self.sp_store);
+                    }
+                } else {
+                    todo!()
+                }
+            } else if t == Type::This { // TODO
+            } else if is_individually_matched(t) {
+                // println!("not matched"); // should be handled after
+            } else if is_never_reference(t) {
+                // println!("not matched");
+            } else {
+                todo!("{:?}", t)
+            }
+            let x = b.get_child_rev(&0);
+            let len = b.child_count();
+            let bb = self.stores.node_store.resolve(x);
+            let t = bb.get_type();
+            if t == Type::TypeIdentifier || t == Type::Identifier {
+                if bb.has_label() {
+                    let l = bb.get_label();
+                    // TODO should also check if is fully qual then equal to target
+                    if l != i {
+                        // println!("not matched"); // TODO
+                    } else {
+                        // if o == MaybeMissing
+                        println!("success 6.1");
+                        scout.goto(x, len as usize - 1);
+                        self.successful_match(&mut scout); // TODO
+                        scout.up(self.sp_store);
+                    }
+                } else {
+                    todo!()
+                }
+            } else if t == Type::This {
+                panic!(); // sure ?
+            } else if is_individually_matched(t) {
+                // println!("not matched"); // should be handled after
+            } else if is_never_reference(t) {
+                // println!("not matched");
+            } else {
+                todo!("{:?}", t)
+            }
+        } else if t == Type::CastExpression {
+            let mut j = 0;
+            let mut r;
+            let mut t;
+            let mut ok = false;
+            let mut ok2 = false;
+            let l = b.child_count();
+            while j < l {
+                let x = b.get_child(&j);
+                r = self.stores.node_store.resolve(x);
+                t = r.get_type();
+                if t == Type::TS7 {
+                    // (
+                    ok = true;
+                } else if t == Type::TS8 {
+                    // )
+                    ok = false;
+                    ok2 = true;
+                } else if t == Type::Spaces {
+                } else if ok {
+                    if t == Type::TypeIdentifier {
+                        if r.has_label() {
+                            let l = r.get_label();
+                            if l != i {
+                                // println!("not matched"); // TODO
+                            } else {
+                                println!("success 15");
+                                // let mut scout = scout.clone();
+                                // scout.up(self.sp_store);
+                                self.successful_match(&mut scout);
+                            }
+                        } else {
+                            todo!()
+                        }
+                    } else if t == Type::Identifier {
+                    } else if t == Type::TS4 {
+                    } else if is_individually_matched(t) {
+                        // println!("not matched"); // should be handled after
+                    } else if is_never_reference(t) {
+                        // println!("not matched");
+                    } else {
+                        todo!("{:?}", t)
+                    }
+                } else if ok2 {
+                    if t == Type::Identifier {
+                        if r.has_label() {
+                            let l = r.get_label();
+                            if l != i {
+                                // println!("not matched"); // TODO
+                            } else {
+                                println!("success 15.1");
+                                // let mut scout = scout.clone();
+                                // scout.up(self.sp_store);
+                                self.successful_match(&mut scout);
+                            }
+                        } else {
+                            todo!()
+                        }
+                    } else if t == Type::This {
+                    } else if t == Type::LambdaExpression {
+                    } else if is_individually_matched(t) {
+                        // println!("not matched"); // should be handled after
+                    } else if is_never_reference(t) {
+                        // println!("not matched");
+                    } else {
+                        todo!("{:?}", t)
+                    }
+                }
+                j += 1;
+            }
+        } else if t == Type::MethodReference {
+            let x = b.get_child(&0);
+            let b = self.stores.node_store.resolve(x);
+            let t = b.get_type();
+            if t == Type::TypeIdentifier {
+                if b.has_label() {
+                    let l = b.get_label();
+                    // TODO should also check if is fully qual then equal to target
+                    if l != i {
+                        // println!("not matched"); // TODO
+                    } else if &RefsEnum::MaybeMissing == self.ana.solver.nodes.with(o).as_ref() {
+                        scout.goto(x, 0);
+                        println!("success 6.1");
+                        self.successful_match(&mut scout); // TODO
+                    }
+                } else {
+                    todo!()
+                }
+            } else if t == Type::Identifier {
+                if b.has_label() {
+                    let l = b.get_label();
+                    // TODO should also check if is fully qual then equal to target
+                    if l != i {
+                        // println!("not matched"); // TODO
+                    } else if &RefsEnum::MaybeMissing == self.ana.solver.nodes.with(o).as_ref() {
+                        scout.goto(x, 0);
+                        println!("success 6.1");
+                        self.successful_match(&mut scout); // TODO
+                    }
+                } else {
+                    todo!()
+                }
+            } else if t == Type::TS74 { // TODO contructor
+            } else if t == Type::This {
+            } else if t == Type::ScopedTypeIdentifier {
+                // println!("not matched"); // TODO should check the fully qual name
+            } else if t == Type::GenericType {
+                // println!("not matched"); // TODO should check the fully qual name
+            } else if is_individually_matched(t) {
+                // println!("not matched"); // should be handled after
+            } else if is_never_reference(t) {
+                // println!("not matched");
+            } else {
+                todo!("{:?}", t)
+            }
+        } else if t == Type::FieldAccess {
+            let x = b.get_child(&0);
+            let bb = self.stores.node_store.resolve(x);
+            let t = bb.get_type();
+            let mut matching_o = false;
+            if t == Type::Identifier {
+                if bb.has_label() {
+                    let l = bb.get_label();
+                    match self.ana.solver.nodes.with(o).as_ref() {
+                        RefsEnum::ScopedIdentifier(oo, ii) => {
+                            if l != ii.as_ref() {
+                                // println!("not matched"); // TODO
+                            } else {
+                                match self.ana.solver.nodes.with(*oo).as_ref() {
+                                    RefsEnum::MaybeMissing => {
+                                        matching_o = true;
+                                    }
+                                    // RefsEnum::ScopedIdentifier(oo, ii) => {
+                                    //     if l != ii.as_ref() {
+                                    //         // println!("not matched"); // TODO
+                                    //     } else {
+                                    //         match self.ana.solver.nodes.with(*oo).as_ref() {
+                                    //             RefsEnum::MaybeMissing => {
+                                    //                 matching_o = true;
+                                    //             }
+                                    //             _ => {}
+                                    //         }
+                                    //     }
+                                    // }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        RefsEnum::MaybeMissing => {
+                            if l != i {
+                                // println!("not matched"); // TODO
+                            } else {
+                                scout.goto(x, 0);
+                                scout.check(self.stores).unwrap();
+                                println!("success 7");
+                                self.successful_match(&mut scout); // TODO
+                                scout.up(self.sp_store);
+                            }
+                        }
+                        _ => {}
+                    }
+                } else {
+                    todo!()
+                }
+            } else if t == Type::This {
+                // // TODO need to have more information to know it we are good ?
+                // scout.goto(x, 0);
+                // scout.check(self.stores).unwrap();
+                // println!(
+                //     "while searching {} found \"this\" reference here {:?}",
+                //     self.stores.label_store.resolve(i),
+                //     scout.to_position(self.sp_store, self.stores)
+                // );
+            } else if t == Type::ScopedTypeIdentifier {
+                // println!("not matched"); // TODO should check the fully qual name
+            } else if t == Type::GenericType {
+                // println!("not matched"); // TODO should check the fully qual name
+            } else if is_individually_matched(t) {
+                // println!("not matched"); // should be handled after
+            } else if is_never_reference(t) {
+                // println!("not matched");
+            } else {
+                todo!("{:?}", t)
+            }
+
+            let x = b.get_child(&2);
+            let bb = self.stores.node_store.resolve(x);
+            let t = bb.get_type();
+
+            if t == Type::Identifier {
+                if bb.has_label() {
+                    let l = bb.get_label();
+                    if l != i {
+                        // println!("not matched"); // TODO
+                    } else if matching_o {
+                        // scout.goto(x, 2);
+                        scout.check(self.stores).unwrap();
+                        println!("success 7.1");
+                        self.successful_match(&mut scout); // TODO
+                    }
+                } else {
+                    todo!()
+                }
+            } else if t == Type::This {
+                //     // TODO need to have more information to know it we are good ?
+                //     scout.goto(x, 0);
+                //     scout.check(self.stores).unwrap();
+                //     println!(
+                //         "while searching {} found \"this\" reference here {:?}",
+                //         self.stores.label_store.resolve(i),
+                //         scout.to_position(self.sp_store, self.stores)
+                //     );
+            } else if t == Type::ScopedTypeIdentifier {
+                // println!("not matched"); // TODO should check the fully qual name
+            } else if t == Type::GenericType {
+                // println!("not matched"); // TODO should check the fully qual name
+            } else if is_individually_matched(t) {
+                // println!("not matched"); // should be handled after
+            } else if is_never_reference(t) {
+                // println!("not matched");
+            } else {
+                todo!("{:?}", t)
+            }
+        } else if t == Type::ClassLiteral {
+            let x = b.get_child(&0);
+            let bb = self.stores.node_store.resolve(x);
+            let t = bb.get_type();
+            if t == Type::TypeIdentifier || t == Type::Identifier {
+                if bb.has_label() {
+                    let l = bb.get_label();
+                    if l != i {
+                        // println!("not matched"); // TODO
+                    } else {
+                        scout.goto(x, 0);
+                        scout.check(self.stores).unwrap();
+                        println!("success 8");
+                        self.successful_match(&mut scout); // TODO
+                    }
+                } else {
+                    todo!()
+                }
+            } else if is_individually_matched(t) {
+                // println!("not matched"); // should be handled after
+            } else if is_never_reference(t) {
+                // println!("not matched");
+            } else {
+                todo!("{:?}", t)
+            }
+        } else if t == Type::AnnotatedType {
+            let x = b.get_child_rev(&0);
+            let len = b.child_count() as usize;
+            let bb = self.stores.node_store.resolve(x);
+            let t = bb.get_type();
+            if t == Type::TypeIdentifier {
+                if bb.has_label() {
+                    let l = bb.get_label();
+                    if l != i {
+                        // println!("not matched"); // TODO
+                    } else {
+                        scout.goto(x, len - 1);
+                        scout.check(self.stores).unwrap();
+                        println!("success 9");
+                        self.successful_match(&mut scout); // TODO
+                    }
+                } else {
+                    todo!()
+                }
+            } else if t == Type::ScopedTypeIdentifier {
+                // println!("not matched"); // TODO should check the fully qual name
+            } else if t == Type::GenericType {
+                // println!("not matched"); // TODO should check the fully qual name
+            } else if is_individually_matched(t) {
+                // println!("not matched"); // should be handled after
+            } else if is_never_reference(t) {
+                // println!("not matched");
+            } else {
+                todo!("{:?}", t)
+            }
+        } else if t == Type::FieldDeclaration {
+            let (r, t) = {
+                let mut i = 0;
+                let r;
+                let t;
+                loop {
+                    let x = b.get_child(&i);
+                    let b = self.stores.node_store.resolve(x);
+                    let tt = b.get_type();
+                    if tt == Type::Modifiers {
+                        i += 1;
+                    } else if tt == Type::Annotation {
+                        i += 1;
+                    } else if tt == Type::Spaces {
+                        i += 1;
+                    } else {
+                        r = b;
+                        t = tt;
+                        break;
+                    }
+                }
+                (r, t)
+            };
+            if t == Type::TypeIdentifier {
+                if r.has_label() {
+                    let l = r.get_label();
+                    if l != i {
+                        // println!("not matched"); // TODO
+                    } else {
+                        self.successful_match(&mut scout);
+                    }
+                } else {
+                    todo!()
+                }
+            } else if is_individually_matched(t) {
+                // println!("not matched"); // should be handled after
+            } else if is_never_reference(t) {
+                // println!("not matched");
+            } else if t == Type::VoidType {
+            } else if t == Type::IntegralType {
+            } else if t == Type::FloatingPointType {
+            } else if t == Type::BooleanType {
+            } else if t == Type::ArrayType {
+                // println!("not matched"); // TODO not sure
+            } else {
+                todo!("{:?}", t)
+            }
+        // } else if t == Type::ClassDeclaration {
+        //     // todo!()
+        //     // find extends and implements then easy
+        // } else if t == Type::InterfaceDeclaration {
+        //     // todo!()
+        // find extends then easy
+        } else if t == Type::ConstructorDeclaration {
+            // todo!()
+            // get ?.identifier from contructor then compare to ref
         } else if t == Type::CatchType {
             // TODO check for type union eg. A|B|C
             let x = b.get_child(&0);
             let b = self.stores.node_store.resolve(x);
             let t = b.get_type();
-            scout.goto(x, 0);
+            // scout.goto(x, 0);
             if t == Type::TypeIdentifier {
                 if b.has_label() {
                     let l = b.get_label();
                     if l != i {
                         // println!("not matched"); // TODO
-                    } else {println!("success 7");
+                    } else {
+                        println!("success 7");
+                        scout.up(self.sp_store);
                         self.successful_match(&mut scout); // TODO
                     }
                 } else {
@@ -1098,7 +1697,8 @@ impl<'a> RefsFinder<'a> {
                         let l = r.get_label();
                         if l != i {
                             // println!("not matched"); // TODO
-                        } else {println!("success 8");
+                        } else {
+                            println!("success 8");
                             self.successful_match(&mut scout); // TODO
                         }
                     } else {
@@ -1120,205 +1720,62 @@ impl<'a> RefsFinder<'a> {
         }
     }
     pub fn successful_match(&mut self, scout: &mut Scout) {
-        scout.check(&self.stores);
+        self.sp_store.check(&self.stores).unwrap();
+        scout.check(&self.stores).unwrap();
         let r = self.sp_store.push(scout);
-        assert!(self.sp_store.check(&self.stores));
-        self.refs.push(r);
-        let it = ExploreStructuralPositions::from((&*self.sp_store, r));
-        println!("really found {:?}", it.to_position(&self.stores));
-    }
-}
-
-pub fn find_refs(
-    stores: &SimpleStores,
-    ana: &mut PartialAnalysis,
-    path: &mut StructuralPosition,
-    target: RefPtr,
-    current: NodeIdentifier,
-) -> Vec<RefPtr> {
-    // let d: LabelValue = ;
-    let b = stores.node_store.resolve(current);
-    let t = b.get_type();
-    if &t == &Type::Spaces {
-        return vec![];
-    } else if &t == &Type::Comment {
-        return vec![];
-    } else if &t == &Type::PackageDeclaration {
-        return vec![];
-    } else if &t == &Type::Directory {
-        // TODO if package, get top level declarations then localize if ref.
-        // in the end we do not need due to the way we do the impact ana.
-        // we should only come from parent of package with canonical id.
-    } else if &t == &Type::MavenDirectory {
-        // idem
-    } else if &t == &Type::ImportDeclaration {
-        println!("d=1 {:?}", &t);
-        let c = {
-            let d = ana.solver.nodes.with(target);
-            b.check(Into::<Box<[u8]>>::into(d.clone()).as_ref())
-        };
-        if let BloomResult::MaybeContain = c {
-            println!("+++import+++++Maybe contains");
-            java_tree_gen_full_compress_legion_ref::print_tree_syntax(
-                &stores.node_store,
-                &stores.label_store,
-                &current,
-            );
-            println!();
-            let (stic, scop, asterisk) = {
-                let b = stores.node_store.resolve(current);
-                let mut scop = None;
-                let mut sstatic = false;
-                let mut asterisk = false;
-                for c in b.get_children() {
-                    let b = stores.node_store.resolve(*c);
-                    match b.get_type() {
-                        Type::TS86 => sstatic = true,
-                        Type::Asterisk => asterisk = true,
-                        Type::Identifier => scop = Some((*c, b)),
-                        Type::ScopedAbsoluteIdentifier => scop = Some((*c, b)),
-                        _ => (),
-                    }
-                }
-                (sstatic, scop.unwrap(), asterisk)
-            };
-            let d = ExplorableRef {
-                rf: target,
-                nodes: &ana.solver.nodes,
-            };
-            if stic {
-                return vec![]; // TODO
-            } else if asterisk {
-                return vec![]; // TODO
-            } else if eq_root_scoped(d, stores, scop.1) {
-                let d = ana.solver.nodes.with(target);
-                let i = if let RefsEnum::ScopedIdentifier(_, i) = d.as_ref() {
-                    *i
+        self.sp_store.check(&self.stores).unwrap();
+        if ADAPT_SPOON {
+            let mut scout = scout.clone();
+            let r = if let Some(p) = scout.up(&self.sp_store) {
+                let b = self.stores.node_store.resolve(p);
+                let t = b.get_type();
+                if t == Type::SuperInterfaces
+                    || t == Type::Superclass
+                    || &t == &Type::ExtendsInterfaces
+                {
+                    scout.up(self.sp_store);
+                    self.sp_store.push(&mut scout)
+                } else if t == Type::FieldDeclaration {
+                    self.sp_store.push(&mut scout)
+                } else if t == Type::FormalParameter {
+                    self.sp_store.push(&mut scout)
+                } else if t == Type::EnhancedForVariable {
+                    self.sp_store.push(&mut scout)
+                } else if t == Type::CastExpression {
+                    self.sp_store.push(&mut scout)
+                } else if t == Type::TypeParameter {
+                    self.sp_store.push(&mut scout)
+                } else if t == Type::TypeBound {
+                    scout.up(self.sp_store);
+                    self.sp_store.push(&mut scout)
+                } else if t == Type::LocalVariableDeclaration {
+                    self.sp_store.push(&mut scout)
+                } else if t == Type::MethodDeclaration {
+                    self.sp_store.push(&mut scout)
+                } else if t == Type::ExpressionStatement {
+                    self.sp_store.push(&mut scout)
+                } else if t == Type::ObjectCreationExpression {
+                    self.sp_store.push(&mut scout)
                 } else {
-                    panic!()
-                };
-                let o = ana.solver.intern(RefsEnum::MaybeMissing);
-                let i = ana.solver.intern(RefsEnum::ScopedIdentifier(o, i));
-                // let i = handle_import(
-                //     java_tree_gen,
-                //     ana,
-                //     stores.node_store.resolve(scop.0),
-                // );
-                println!("import matched ref");
-                return vec![i];
+                    r
+                }
             } else {
-                return vec![];
-            }
-        } else {
-            println!("Do not contains");
-            return vec![];
-        }
-    }
-    if !b.has_children() {
-        return vec![];
-    }
-    println!("d=1 {:?}", &t);
-    let c = if b.get_component::<BloomSize>().is_ok() {
-        let d = ana.solver.nodes.with(target);
-        b.check(Into::<Box<[u8]>>::into(d.clone()).as_ref())
-    } else {
-        BloomResult::MaybeContain
-    };
-
-    struct IoOut<W: std::io::Write> {
-        stream: W,
-    }
-
-    impl<W: std::io::Write> std::fmt::Write for IoOut<W> {
-        fn write_str(&mut self, s: &str) -> fmt::Result {
-            self.stream
-                .write_all(s.as_bytes())
-                .map_err(|_| std::fmt::Error)
-        }
-    }
-    if let BloomResult::MaybeContain = c {
-        println!("++++++++++++++Maybe contains");
-
-        if &t == &Type::MethodInvocation // find object
-            || &t == &Type::FormalParameter // find simple type
-            || &t == &Type::GenericType // find simple type
-            || &t == &Type::LocalVariableDeclaration // find simple type
-            || &t == &Type::ObjectCreationExpression // find simple object
-            || &t == &Type::ScopedIdentifier // find identifier
-            || &t == &Type::ScopedAbsoluteIdentifier // find identifier
-            || &t == &Type::ScopedTypeIdentifier
-            || &t == &Type::CatchType // TODO to check
-            || &t == &Type::Resource
-        // TODO to check
-        // find identifier
-        {
-            // Here, for now, we try to find Identifiers (not invocations)
-            // thus we either search directly for scoped identifiers
-            // or we search for simple identifiers because they do not present refs in themself
-            println!("!found {:?}", &t);
-            java_tree_gen_full_compress_legion_ref::print_tree_syntax(
-                &stores.node_store,
-                &stores.label_store,
-                &current,
-            );
-            println!();
-
-            let d = ExplorableRef {
-                rf: target,
-                nodes: &ana.solver.nodes,
+                r
             };
-
-            if eq_node_ref(d, stores, current) {
-                // let mut position = path.to_position(&stores);
-                // position.set_len(b.get_bytes_len() as usize);
-                // println!("really found {:?}", position);
-                println!("really found");
-            }
-        } else if &t == &Type::TypeIdentifier {
-            println!("!found TypeIdentifier");
-            let mut out = IoOut { stream: stdout() };
-            java_tree_gen_full_compress_legion_ref::serialize(
-                &stores.node_store,
-                &stores.label_store,
-                &current,
-                &mut out,
-                "\n",
-            );
-        } else if &t == &Type::MethodDeclaration {
-            // java_tree_gen::print_tree_syntax(
-            //     &stores.node_store,
-            //     &stores.label_store,
-            //     &x,
-            // );
-            let mut out = IoOut { stream: stdout() };
-            java_tree_gen_full_compress_legion_ref::serialize(
-                &stores.node_store,
-                &stores.label_store,
-                &current,
-                &mut out,
-                "\n",
-            );
-        }
-    } else {
-        println!("Do not contains");
-        return vec![];
-    }
-
-    let mut v: Vec<usize> = vec![];
-    println!("c_count {}", b.child_count());
-    path.push();
-    for x in b.get_children().clone() {
-        path.inc(*x);
-        let z = find_refs(stores, ana, path, target, *x);
-        v.extend(z);
-        for w in v.clone() {
-            let z = find_refs(stores, ana, path, w, *x);
-            v.extend(z)
+            self.sp_store.check(&self.stores).unwrap();
+            self.refs.push(r);
+            let it = ExploreStructuralPositions::from((&*self.sp_store, r));
+            println!("really found {:?}", it.to_position(&self.stores));
+        } else {
+            self.sp_store.check(&self.stores).unwrap();
+            self.refs.push(r);
+            let it = ExploreStructuralPositions::from((&*self.sp_store, r));
+            println!("really found {:?}", it.to_position(&self.stores));
         }
     }
-    path.pop();
-    vec![]
 }
+
+const ADAPT_SPOON: bool = true;
 
 pub struct IterDeclarations<'a> {
     stores: &'a SimpleStores,
@@ -1438,83 +1895,96 @@ impl<'a> Iterator for IterDeclarations2<'a> {
     type Item = Scout;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (node, offset, children) = self.stack.pop()?;
-        if let Some(children) = children {
-            if offset < children.len() {
-                let child = children[offset];
-                assert!(self.scout.check(&self.stores));
-                {
-                    let b = self.stores.node_store.resolve(node);
-                    if b.has_children() {
-                        let cs = b.get_children();
-                        // println!("children: {:?} {} {:?}", node,cs.len(),cs);
-                        assert!(offset<cs.len());
-                        assert_eq!(child,cs[offset]);
-                    } else { panic!()}
-
-                }
-                if offset == 0 {
-                    match self.scout.try_node() {
-                        Ok(x) => assert_eq!(x,node),
-                        Err(_) => {},
+        loop {
+            let (node, offset, children) = self.stack.pop()?;
+            if let Some(children) = children {
+                if offset < children.len() {
+                    let child = children[offset];
+                    self.scout.check(&self.stores).unwrap();
+                    {
+                        let b = self.stores.node_store.resolve(node);
+                        if b.has_children() {
+                            let cs = b.get_children();
+                            // println!("children: {:?} {} {:?}", node,cs.len(),cs);
+                            assert!(offset < cs.len());
+                            assert_eq!(child, cs[offset]);
+                        } else {
+                            panic!()
+                        }
                     }
-                    self.scout.goto(child, offset);
-                    assert!(self.scout.check(&self.stores));
+                    if offset == 0 {
+                        match self.scout.try_node() {
+                            Ok(x) => assert_eq!(x, node),
+                            Err(_) => {}
+                        }
+                        self.scout.goto(child, offset);
+                        self.scout.check(&self.stores).unwrap();
+                    } else {
+                        match self.scout.try_node() {
+                            Ok(x) => assert_eq!(x, children[offset - 1]),
+                            Err(_) => {}
+                        }
+                        let i = self.scout.inc(child);
+                        assert_eq!(i, offset);
+                        self.scout.check_size(&self.stores).expect(&format!(
+                            "{:?} {} {:?} {:?} {:?}",
+                            node,
+                            offset,
+                            child,
+                            children.len(),
+                            self.scout
+                        ));
+                        self.scout.check(&self.stores).expect(&format!(
+                            "{:?} {} {:?} {:?} {:?}",
+                            node, offset, child, children, self.scout
+                        ));
+                    }
+                    self.stack.push((node, offset + 1, Some(children)));
+                    self.stack.push((child, 0, None));
+                    continue;
                 } else {
-                    match self.scout.try_node() {
-                        Ok(x) => assert_eq!(x,children[offset-1]),
-                        Err(_) => {},
-                    }
-                    let i = self.scout.inc(child);
-                    assert_eq!(i,offset);
-                    assert!(self.scout.check_size(&self.stores),"{:?} {} {:?} {:?} {:?}", node, offset, child, children.len(),self.scout);
-                    assert!(self.scout.check(&self.stores),"{:?} {} {:?} {:?} {:?}", node, offset, child, children,self.scout);
+                    self.scout.check(&self.stores).unwrap();
+                    self.scout.try_up().expect("should not go higher than root");
+                    self.scout.check(&self.stores).unwrap();
+                    continue;
                 }
-                self.stack.push((node, offset + 1, Some(children)));
-                self.stack.push((child, 0, None));
-                self.next()
             } else {
-                assert!(self.scout.check(&self.stores));
-                self.scout.try_up().expect("should not go higher than root");
-                assert!(self.scout.check(&self.stores));
-                self.next()
-            }
-        } else {
-            let b = self.stores.node_store.resolve(node);
-            let t = b.get_type();
+                let b = self.stores.node_store.resolve(node);
+                let t = b.get_type();
 
-            if &t == &Type::Spaces {
-                return self.next();
-            } else if &t == &Type::Comment {
-                return self.next();
-            } else if &t == &Type::PackageDeclaration {
-                return self.next();
-            } else if &t == &Type::ImportDeclaration {
-                return self.next();
-            }
-            
-            if b.has_children() {
-                let children = b.get_children();
-                self.stack.push((node, 0, Some(children.to_vec())));
-            }
+                if &t == &Type::Spaces {
+                    continue;
+                } else if &t == &Type::Comment {
+                    continue;
+                } else if &t == &Type::PackageDeclaration {
+                    continue;
+                } else if &t == &Type::ImportDeclaration {
+                    continue;
+                }
 
-            if t.is_type_declaration()
-                || &t == &Type::LocalVariableDeclaration
-                || &t == &Type::EnhancedForStatement
-                || t.is_value_member()
-                || t.is_parameter()
-                || t.is_executable_member()
-            {
-                assert!(b.has_children(),"{:?}",t);
-                assert!(self.scout.check(&self.stores));
-                Some(self.scout.clone())
-            } else if &t == &Type::Resource {
-                assert!(b.has_children(),"{:?}",t);
-                assert!(self.scout.check(&self.stores));
-                // TODO also need to find an "=" and find the name just before
-                Some(self.scout.clone())
-            } else {
-                self.next()
+                if b.has_children() {
+                    let children = b.get_children();
+                    self.stack.push((node, 0, Some(children.to_vec())));
+                }
+
+                if t.is_type_declaration()
+                    || &t == &Type::LocalVariableDeclaration
+                    || &t == &Type::EnhancedForStatement
+                    || t.is_value_member()
+                    || t.is_parameter()
+                    || t.is_executable_member()
+                {
+                    assert!(b.has_children(), "{:?}", t);
+                    self.scout.check(&self.stores).unwrap();
+                    return Some(self.scout.clone());
+                } else if &t == &Type::Resource {
+                    assert!(b.has_children(), "{:?}", t);
+                    self.scout.check(&self.stores).unwrap();
+                    // TODO also need to find an "=" and find the name just before
+                    return Some(self.scout.clone());
+                } else {
+                    continue;
+                }
             }
         }
     }
@@ -1576,6 +2046,7 @@ pub fn find_all_decls(
             &stores.label_store,
             &x,
         );
+        println!();
     } else if &t == &Type::LocalVariableDeclaration {
         println!("!found decl: {:?}", &t);
         java_tree_gen_full_compress_legion_ref::print_tree_syntax(

@@ -13,7 +13,7 @@ rusted_gumtree_gen_ts_java = { path = "../../gen/tree-sitter/java" }
 rusted_gumtree_gen_ts_xml = { path = "../../gen/tree-sitter/xml" }
 hyper_ast = { path = "../../hyper_ast" } 
 env_logger = "0.9.0"
-log = { version = "0.4.6", features = ["max_level_debug", "release_max_level_info"] }
+log = { version = "0.4.6", features = ["max_level_trace", "release_max_level_info"] }
 tuples = "=1.4.1"
 
 

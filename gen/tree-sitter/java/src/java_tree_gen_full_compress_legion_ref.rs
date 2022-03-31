@@ -1330,9 +1330,20 @@ impl<'a> JavaTreeGen<'a> {
         mut cursor: TreeCursor,
     ) -> FullNode<Global, Local> {
         let mut init = self.init_val(text, &TNode(cursor.node()));
+        let mut xx = TTreeCursor(cursor);
+        let node_store = &mut self.stores.node_store;
+        Self::handle_spacing(
+            init.padding_start,
+            init.start_byte,
+            text,
+            node_store,
+            &(0 + 1),
+            0,
+            &mut init,
+        );
         init.label = Some(std::str::from_utf8(name).unwrap().to_owned());
         let mut stack = vec![init];
-        let mut xx = TTreeCursor(cursor);
+
         let sum_byte_length = self.gen(text, &mut stack, &mut xx);
 
         let mut acc = stack.pop().unwrap();
@@ -1445,6 +1456,10 @@ impl<'a> JavaTreeGen<'a> {
                 Some(x) => {
                     debug!("refs in file:",);
                     for x in x.display_refs(&self.stores.label_store) {
+                        debug!("    {}", x);
+                    }
+                    debug!("decls in file:",);
+                    for x in x.display_decls(&self.stores.label_store) {
                         debug!("    {}", x);
                     }
                 }
@@ -1798,6 +1813,10 @@ impl<'a> JavaTreeGen<'a> {
                     debug!("    {}", x);
                 }
                 let ana = ana.resolve();
+                debug!("refs in program after resolve");
+                for x in ana.display_refs(&self.stores.label_store) {
+                    debug!("    {}", x);
+                }
                 // TODO assert that ana.solver.refs does not contains mentions to ?.this
                 Some(ana)
             }

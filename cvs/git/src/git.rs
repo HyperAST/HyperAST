@@ -180,6 +180,15 @@ impl<'a> From<TreeEntry<'a>> for BasicGitObjects {
     }
 }
 
+impl<'a> BasicGitObjects {
+    pub fn name(&self) -> &[u8] {
+        match self {
+            BasicGitObjects::Blob(_, n) => &n,
+            BasicGitObjects::Tree(_, n) => &n,
+        }
+    }
+}
+
 pub fn read_position(
     repo: &Repository,
     commit: &str,
@@ -212,6 +221,9 @@ pub fn read_position_floating_lines(
         blob.content(),
         position,
         |r| {
+            if r.is_empty() {
+                return r;
+            }
             let mut i = r.len();
             for _ in 0..=lines {
                 i = r[..i].iter().rposition(|x| *x == b'\n').unwrap_or_default();
@@ -219,6 +231,9 @@ pub fn read_position_floating_lines(
             &r[i..]
         },
         |r| {
+            if r.is_empty() {
+                return r;
+            }
             let mut i = 0;
             for _ in 0..=lines {
                 let x = r[i..]

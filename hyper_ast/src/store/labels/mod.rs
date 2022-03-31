@@ -37,6 +37,9 @@ impl crate::types::LabelStore<DefaultLabelValue> for LabelStore {
         self.count += 1;
         self.internal.get_or_intern(node.borrow())
     }
+    fn get<T: Borrow<DefaultLabelValue>>(&self, node: T) -> Option<Self::I> {
+        self.internal.get(node.borrow())
+    }
 
     fn resolve(&self, id: &Self::I) -> &DefaultLabelValue {
         self.internal.resolve(*id).unwrap()

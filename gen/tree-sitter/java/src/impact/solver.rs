@@ -341,9 +341,9 @@ impl Solver {
 
 /// basic modifications of references
 impl Solver {
-
-    /// try to reconstruct [`t`] with [`p`] replacing the main MaybeMissing (?)
-    /// returns None if [`t`] does not end with (?)
+    /// try to reconstruct `t` with `p` replacing the main MaybeMissing (?).
+    ///
+    /// returns None if `t` does not end with (?).
     pub fn try_solve_node_with(&mut self, t: RefPtr, p: RefPtr) -> Option<RefPtr> {
         macro_rules! refs {
             ( $x:expr ) => {
@@ -399,6 +399,74 @@ impl Solver {
             }
             RefsEnum::ConstructorInvocation(o, args) => {
                 let x = self.try_solve_node_with(o, p)?;
+                let tmp = RefsEnum::ConstructorInvocation(x, args);
+                Some(refs!(tmp))
+            }
+            x => todo!("not sure how {:?} should be handled", x),
+        }
+    }
+
+    /// try to reconstruct `t` with ? replacing `p`.
+    ///
+    /// returns None if `t` does not end (start for serialized order) with `p`.
+    pub fn try_unsolve_node_with(&mut self, t: RefPtr, p: RefPtr) -> Option<RefPtr> {
+        macro_rules! refs {
+            ( $x:expr ) => {
+                if t < self.refs.len() && self.refs[t] {
+                    self.intern_ref($x)
+                } else {
+                    self.intern($x)
+                }
+            };
+        }
+        if p == t {
+            return Some(self.intern(RefsEnum::MaybeMissing));
+        }
+        match self.nodes[t].clone() {
+            RefsEnum::Root => None,
+            RefsEnum::MaybeMissing => None,
+            RefsEnum::Array(i) => {
+                let x = self.try_unsolve_node_with(i, p)?;
+                let tmp = RefsEnum::Array(x);
+                Some(refs!(tmp))
+            }
+            RefsEnum::ArrayAccess(i) => {
+                let x = self.try_unsolve_node_with(i, p)?;
+                let tmp = RefsEnum::ArrayAccess(x);
+                Some(refs!(tmp))
+            }
+            RefsEnum::This(i) => {
+                let x = self.try_unsolve_node_with(i, p)?;
+                let tmp = RefsEnum::This(x);
+                Some(refs!(tmp))
+            }
+            RefsEnum::Super(i) => {
+                let x = self.try_unsolve_node_with(i, p)?;
+                let tmp = RefsEnum::Super(x);
+                Some(refs!(tmp))
+            }
+            RefsEnum::Mask(i, y) => {
+                let x = self.try_unsolve_node_with(i, p)?; // TODO not sure
+                let tmp = RefsEnum::Mask(x, y);
+                Some(refs!(tmp))
+            }
+            RefsEnum::ScopedIdentifier(i, y) => {
+                let x = self.try_unsolve_node_with(i, p)?;
+                let tmp = RefsEnum::ScopedIdentifier(x, y);
+                Some(refs!(tmp))
+            }
+            RefsEnum::TypeIdentifier(i, y) => {
+                let x = self.try_unsolve_node_with(i, p)?;
+                let tmp = RefsEnum::TypeIdentifier(x, y);
+                Some(refs!(tmp))
+            }
+            RefsEnum::Invocation(o, i, args) => {
+                let x = self.try_unsolve_node_with(o, p)?;
+                let tmp = RefsEnum::Invocation(x, i, args);
+                Some(refs!(tmp))
+            }
+            RefsEnum::ConstructorInvocation(o, args) => {
+                let x = self.try_unsolve_node_with(o, p)?;
                 let tmp = RefsEnum::ConstructorInvocation(x, args);
                 Some(refs!(tmp))
             }
@@ -622,7 +690,6 @@ impl Solver {
         // no need to extend decls, handled specifically given state
         cached
     }
-
 }
 
 /// main logic to resolve references
@@ -704,7 +771,6 @@ impl Solver {
                     other,
                     self.nodes.with(other)
                 );
-                
             } else {
                 for r in x.iter() {
                     log::trace!(
@@ -717,11 +783,10 @@ impl Solver {
             }
             return x.clone();
         }
-        log::trace!(
-            "solving : {:?} {:?}",
-            other,
-            self.nodes.with(other)
-        );
+        log::trace!("solving : {:?} {:?}", other, self.nodes.with(other));
+        if format!("{:?}", self.nodes.with(other)) == "/.3.26" {
+            println!("gg");
+        }
 
         // TODO decls should be searched without masks
 
@@ -1074,10 +1139,15 @@ impl Solver {
                                 if self.intern(RefsEnum::Root) == no_mask
                                     && !self.is_package_token(i)
                                 {
-                                    return None;
+                                    continue;
                                 }
                                 let no_mask = self.intern(RefsEnum::TypeIdentifier(no_mask, i));
                                 let x = self.solve_aux(cache, no_mask);
+                                log::trace!("for {:?} choose between:", no_mask);
+                                x.iter().for_each(|x| {
+                                    let x = self.nodes.with(*x);
+                                    log::trace!("@:; {:?}", x);
+                                });
                                 if !x.is_empty() {
                                     let x = *x.iter().next().unwrap();
                                     if x != no_mask {
@@ -1097,7 +1167,7 @@ impl Solver {
                     })
                     .collect();
                 if r.is_empty() {
-                    // log::trace!("solving {:?} into nothing", other);
+                    log::trace!("solving {:?} into nothing", other);
                     cache.insert(other, r);
                     return Default::default();
                 }
@@ -1593,11 +1663,7 @@ impl Solver {
             cache.insert(other, Default::default());
         } else {
             for r in r.iter() {
-                log::trace!(
-                    "solving {:?} into {:?}",
-                    other,
-                    self.nodes.with(*r)
-                );
+                log::trace!("solving {:?} into {:?}", other, self.nodes.with(*r));
             }
             let r = r.iter().map(|x| *x).collect(); //r.iter().filter(|r| other.ne(*r)).collect();
             cache.insert(other, r);

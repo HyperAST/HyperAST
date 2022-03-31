@@ -13,7 +13,7 @@ use crate::{
     hashed::{NodeHashs, SyntaxNodeHashs, SyntaxNodeHashsKinds},
     nodes::{CompressedNode, HashSize, RefContainer, Space},
     store::labels::DefaultLabelIdentifier,
-    types::{Type, Typed},
+    types::{Type, Typed, WithChildren},
     utils::make_hash,
 };
 
@@ -104,7 +104,7 @@ impl<'a> Deref for HashedNodeRef<'a> {
     type Target = EntryRef<'a>;
 
     fn deref(&self) -> &Self::Target {
-        panic!()
+        &self.0
     }
 }
 
@@ -189,7 +189,7 @@ impl<'a> HashedNodeRef<'a> {
         } else {
             self.0
                 .get_component::<compo::BytesLen>()
-                .expect("check type of node")
+                .expect(&format!("node with type {:?} don't have a len",self.get_type()))
                 .0
         }
         // .map_or_else(|_| self
@@ -216,6 +216,22 @@ impl<'a> HashedNodeRef<'a> {
         }
         // .map_or_else(|_| self
         //     .get_type().to_string().len() as u32,|x|x.0)
+    }
+
+    pub fn is_directory(&self) -> bool {
+        self.get_type().is_directory()
+    }
+
+    pub fn get_child_by_name(&self, name: &<HashedNodeRef<'a> as crate::types::Labeled>::Label) -> Option<<HashedNodeRef<'a> as crate::types::Stored>::TreeId> {
+        let labels = self.0.get_component::<CS<<HashedNodeRef<'a> as crate::types::Labeled>::Label>>().ok()?;
+        let idx = labels.0.iter().position(|x|x==name);
+        idx.map(|idx|self.get_child(&idx.to_u16().unwrap()))
+    }
+
+    pub fn get_child_idx_by_name(&self, name: &<HashedNodeRef<'a> as crate::types::Labeled>::Label) -> Option<<HashedNodeRef<'a> as crate::types::WithChildren>::ChildIdx> {
+        let labels = self.0.get_component::<CS<<HashedNodeRef<'a> as crate::types::Labeled>::Label>>().ok()?;
+        println!("{:?} {:?}",name,labels.0);
+        labels.0.iter().position(|x|x==name).map(|x|x.to_u16().unwrap())
     }
 }
 

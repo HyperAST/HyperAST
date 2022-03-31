@@ -2,7 +2,7 @@ use crate::{FAIL_ON_BAD_CST_NODE, MAX_REFS};
 
 use hyper_ast::{
     hashed::{SyntaxNodeHashs},
-    types::Type,
+    types::Type, store::labels::DefaultLabelIdentifier,
 };
 use rusted_gumtree_gen_ts_java::impact::partial_analysis::PartialAnalysis;
 
@@ -64,6 +64,7 @@ pub(crate) fn handle_java_file(
 
 pub struct JavaAcc {
     pub(crate) name: String,
+    pub(crate) children_names: Vec<DefaultLabelIdentifier>,
     pub(crate) children: Vec<hyper_ast::store::nodes::DefaultNodeIdentifier>,
     pub(crate) metrics: java_tree_gen::SubTreeMetrics<SyntaxNodeHashs<u32>>,
     pub(crate) ana: PartialAnalysis,
@@ -74,6 +75,7 @@ impl JavaAcc {
     pub(crate) fn new(name: String) -> Self {
         Self {
             name,
+            children_names: Default::default(),
             children: Default::default(),
             // simple: BasicAccumulator::new(kind),
             metrics: Default::default(),
@@ -84,8 +86,9 @@ impl JavaAcc {
 }
 
 impl JavaAcc {
-    pub(crate) fn push_file(&mut self, full_node: java_tree_gen::FNode) {
+    pub(crate) fn push_file(&mut self, name:DefaultLabelIdentifier, full_node: java_tree_gen::FNode) {
         self.children.push(full_node.local.compressed_node.clone());
+        self.children_names.push(name);
         self.metrics.acc(full_node.local.metrics);
         full_node
             .local
@@ -93,8 +96,9 @@ impl JavaAcc {
             .unwrap()
             .acc(&Type::Directory, &mut self.ana);
     }
-    pub(crate) fn push(&mut self, full_node: java_tree_gen::Local) {
+    pub(crate) fn push(&mut self, name:DefaultLabelIdentifier, full_node: java_tree_gen::Local) {
         self.children.push(full_node.compressed_node);
+        self.children_names.push(name);
         self.metrics.acc(full_node.metrics);
 
         if let Some(ana) = full_node.ana {
@@ -105,8 +109,9 @@ impl JavaAcc {
             }
         }
     }
-    pub(crate) fn push_dir(&mut self, full_node: java_tree_gen::Local, skiped_ana: bool) {
+    pub(crate) fn push_dir(&mut self, name:DefaultLabelIdentifier, full_node: java_tree_gen::Local, skiped_ana: bool) {
         self.children.push(full_node.compressed_node);
+        self.children_names.push(name);
         self.metrics.acc(full_node.metrics);
 
         if let Some(ana) = full_node.ana {

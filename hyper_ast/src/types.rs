@@ -18,9 +18,9 @@ pub trait HashKind {
 pub enum Type {
     MavenDirectory,
     Directory,
-    FileName,
+    // FileName,
     Spaces,
-    File,
+    // File,
     xml_File,
     #[strum(serialize = "ERROR")]
     Error,
@@ -68,6 +68,7 @@ pub enum Type {
     ElementValueArrayInitializer,
     ElementValuePair,
     EnhancedForStatement,
+    EnhancedForVariable,
     EnumBody,
     EnumBodyDeclarations,
     EnumConstant,
@@ -344,7 +345,7 @@ pub enum Type {
     #[strum(serialize = "throw")]
     TS90,
     #[strum(serialize = "throws")]
-    TS91,
+    TS91, // TODO check this keyword as it collide with a grammar rule
     #[strum(serialize = "to")]
     TS92,
     #[strum(serialize = "transient")]
@@ -630,6 +631,10 @@ impl Type {
         }
     }
 
+    pub fn is_directory(&self) -> bool {
+        self == &Type::Directory || self == &Type::MavenDirectory
+    }
+
     pub fn is_type_body(&self) -> bool {
         self == &Type::ClassBody
             || self == &Type::InterfaceBody
@@ -896,6 +901,8 @@ pub trait LabelStore<L: ?Sized> {
     type I: Copy + Eq;
 
     fn get_or_insert<T: Borrow<L>>(&mut self, node: T) -> Self::I;
+
+    fn get<T: Borrow<L>>(&self, node: T) -> Option<Self::I>;
 
     fn resolve(&self, id: &Self::I) -> &L;
 }

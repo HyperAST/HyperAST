@@ -3,8 +3,8 @@
 use std::{
     collections::{BTreeMap, HashMap},
     env, fmt, fs::{self, File},
-    io::{stdout, Write, self},
-    path::{Path, PathBuf},
+    io::{stdout, Write, self, BufWriter},
+    path::{Path, PathBuf}, str::FromStr,
 };
 
 use git2::{ObjectType, Oid, RemoteCallbacks, Repository, Revwalk, TreeEntry};
@@ -17,7 +17,7 @@ use rusted_gumtree_gen_ts_java::{
     hashed::{self, SyntaxNodeHashs},
     impact::{
         elements::{},
-        label_value::LabelValue, usage::{eq_root_scoped, eq_node_ref, self}, element::{RefsEnum, ExplorableRef, IdentifierFormat, LabelPtr}, partial_analysis::PartialAnalysis,
+        label_value::LabelValue, usage::{eq_root_scoped, self}, element::{RefsEnum, ExplorableRef, IdentifierFormat, LabelPtr}, partial_analysis::PartialAnalysis,
     },
     nodes::RefContainer,
     store::{ecs::EntryRef, mapped_world::Backend},
@@ -56,9 +56,10 @@ fn main() {
     let before = args.get(2).map_or("", |x| x);
     let after = args.get(3).map_or("", |x| x);
     let dir_path = args.get(4).map_or("", |x| x);
-    let mut out = args.get(5).map_or(Box::new(io::stdout()) as Box<dyn Write>, |x| {
-        Box::new(File::create(x).unwrap()) as Box<dyn Write>
-    });
+    // let mut out = args.get(5).map_or(Box::new(io::stdout()) as Box<dyn Write>, |x| {
+    //     Box::new(File::create(x).unwrap()) as Box<dyn Write>
+    // });
+    let out = args.get(5).and_then(|x| if x.is_empty() {None} else {PathBuf::from_str(x).ok()});
 
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
     preprocessed.pre_process(&mut fetch_github_repository(&repo_name), before, after, dir_path);
@@ -69,25 +70,54 @@ fn main() {
     log::info!("search refs");
     let refs = compute_references_to_declarations(&mut preprocessed, before, after, dir_path);
     let mut first = true;
-    for (k,v) in refs.iter_relations() {
-        if first {
-            first = false;
-        } else {
-            writeln!(out, ",").unwrap();
-        }
-        write!(out, r#"{{"decl":"#).unwrap();
-        write!(out, "{}",k).unwrap();
-        write!(out, r#","refs":["#).unwrap();
-        let mut first = true;
-        for x in v {
+    log::info!("print referential relations");
+
+    if let Some(out) = out {
+        let mut out = BufWriter::new(File::create(out).unwrap());
+
+        for (k,v) in refs.iter_relations() {
             if first {
                 first = false;
             } else {
                 writeln!(out, ",").unwrap();
             }
-            write!(out, "{}",x).unwrap();
+            write!(out, r#"{{"decl":"#).unwrap();
+            write!(out, "{}",k).unwrap();
+            write!(out, r#","refs":["#).unwrap();
+            let mut first = true;
+            for x in v {
+                if first {
+                    first = false;
+                } else {
+                    writeln!(out, ",").unwrap();
+                }
+                write!(out, "{}",x).unwrap();
+            }
+            write!(out, "]}}").unwrap();
         }
-        write!(out, "]}}").unwrap();
+        out.flush().unwrap();
+    } else {
+        let mut out =  io::stdout();
+        for (k,v) in refs.iter_relations() {
+            if first {
+                first = false;
+            } else {
+                writeln!(out, ",").unwrap();
+            }
+            write!(out, r#"{{"decl":"#).unwrap();
+            write!(out, "{}",k).unwrap();
+            write!(out, r#","refs":["#).unwrap();
+            let mut first = true;
+            for x in v {
+                if first {
+                    first = false;
+                } else {
+                    writeln!(out, ",").unwrap();
+                }
+                write!(out, "{}",x).unwrap();
+            }
+            write!(out, "]}}").unwrap();
+        }
     }
 
     // print_matched_refeferences_from_canonical_type(&mut preprocessed, before, after, dir_path);
@@ -182,6 +212,7 @@ pub fn print_declarations(
         .ast_root;
     preprocessed.print_declarations(&mut ana, root);
 }
+
 pub fn print_references_to_declarations(
     preprocessed: &mut PreProcessedRepository,
     before: &str,

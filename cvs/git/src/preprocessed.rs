@@ -11,6 +11,7 @@ use hyper_ast::{
     hashed::{self, SyntaxNodeHashs},
     position::{extract_position, Position, StructuralPosition},
     store::{
+        labels::DefaultLabelIdentifier,
         nodes::legion::{compo, EntryRef, NodeStore, CS},
         nodes::{legion, DefaultNodeIdentifier as NodeIdentifier},
     },
@@ -248,9 +249,10 @@ impl PreProcessedRepository {
             }
             children_objects
         }
+        let prepared = prepare_dir_exploration(tree, &mut dir_path);
         let mut stack: Vec<(Oid, Vec<BasicGitObjects>, MavenModuleAcc)> = vec![(
             oid,
-            prepare_dir_exploration(tree, &mut dir_path),
+            prepared,
             MavenModuleAcc::new(std::str::from_utf8(&name).unwrap().to_string()),
         )];
         loop {
@@ -262,9 +264,10 @@ impl PreProcessedRepository {
                                 dir_path.next();
                                 stack.last_mut().expect("never empty").1.clear();
                                 let tree = repository.find_tree(x).unwrap();
+                                let prepared = prepare_dir_exploration(tree, &mut dir_path);
                                 stack.push((
                                     x,
-                                    prepare_dir_exploration(tree, &mut dir_path),
+                                    prepared,
                                     MavenModuleAcc::new(
                                         std::str::from_utf8(&name).unwrap().to_string(),
                                     ),
@@ -278,22 +281,42 @@ impl PreProcessedRepository {
                                 // reinit already computed node for post order
                                 let full_node = already.clone();
 
-                                if stack.is_empty() {
+                                let name = self
+                                    .main_stores()
+                                    .label_store
+                                    .get_or_insert(std::str::from_utf8(&name).unwrap());
+                                let n = self.main_stores().node_store.resolve(full_node.0);
+                                let already_name = *n.get_label();
+                                if name != already_name {
+                                    let already_name = self
+                                        .main_stores()
+                                        .label_store
+                                        .resolve(&already_name)
+                                        .to_string();
+                                    let name = self.main_stores().label_store.resolve(&name);
+                                    panic!("{} != {}", name, already_name);
+                                } else if stack.is_empty() {
                                     root_full_node = full_node;
                                     break;
                                 } else {
                                     let w = &mut stack.last_mut().unwrap().2;
-                                    w.push_submodule(full_node);
+                                    assert!(!w.children_names.contains(&name));
+                                    w.push_submodule(name, full_node);
+                                    continue;
                                 }
-                                continue;
                             }
                             let tree = repository.find_tree(x).unwrap();
                             let full_node = self.handle_java_src(repository, &name, tree.id());
                             let paren_acc = &mut stack.last_mut().unwrap().2;
-                            paren_acc.push_source_directory(full_node);
+                            let name = self
+                                .main_stores()
+                                .label_store
+                                .get_or_insert(std::str::from_utf8(&name).unwrap());
+                            assert!(!paren_acc.children_names.contains(&name));
+                            paren_acc.push_source_directory(name, full_node);
                         }
                     }
-                    BasicGitObjects::Blob(x, name) => {
+                    BasicGitObjects::Blob(_, _) => {
                         continue;
                     }
                 }
@@ -377,13 +400,15 @@ impl PreProcessedRepository {
                 } else {
                     println!("make mm {} {}", &acc.name, acc.children.len());
                     let vacant = insertion.vacant();
+                    assert_eq!(acc.children_names.len(),acc.children.len());
                     NodeStore::insert_after_prepare(
                         vacant,
                         (
                             Type::MavenDirectory,
                             label,
                             hashs,
-                            CS(acc.children) as CS<legion::NodeIdentifier>,
+                            CS(acc.children_names),
+                            CS(acc.children),
                             BloomSize::Much,
                         ),
                     )
@@ -426,9 +451,14 @@ impl PreProcessedRepository {
                     root_full_node = full_node;
                     break;
                 } else {
-                    let w = &mut stack.last_mut().unwrap().2;
-                    w.push_submodule(full_node);
                     println!("dir: {}", &acc.name);
+                    let w = &mut stack.last_mut().unwrap().2;
+                    let name = self
+                        .main_stores()
+                        .label_store
+                        .get_or_insert(acc.name);
+                    assert!(!w.children_names.contains(&name));
+                    w.push_submodule(name, full_node);
                 }
             } else {
                 panic!("never empty")
@@ -469,9 +499,10 @@ impl PreProcessedRepository {
             }
             children_objects
         }
+        let prepared = prepare_dir_exploration(tree, &mut dir_path);
         let mut stack: Vec<(Oid, Vec<BasicGitObjects>, MavenModuleAcc)> = vec![(
             oid,
-            prepare_dir_exploration(tree, &mut dir_path),
+            prepared,
             MavenModuleAcc::new(std::str::from_utf8(&name).unwrap().to_string()),
         )];
         loop {
@@ -483,9 +514,10 @@ impl PreProcessedRepository {
                                 dir_path.next();
                                 stack.last_mut().expect("never empty").1.clear();
                                 let tree = repository.find_tree(x).unwrap();
+                                let prepared = prepare_dir_exploration(tree, &mut dir_path);
                                 stack.push((
                                     x,
-                                    prepare_dir_exploration(tree, &mut dir_path),
+                                    prepared,
                                     MavenModuleAcc::new(
                                         std::str::from_utf8(&name).unwrap().to_string(),
                                     ),
@@ -506,7 +538,12 @@ impl PreProcessedRepository {
                                 break;
                             } else {
                                 let w = &mut stack.last_mut().unwrap().2;
-                                w.push_submodule(full_node);
+                                let name = self
+                                    .main_stores()
+                                    .label_store
+                                    .get_or_insert(std::str::from_utf8(&name).unwrap());
+                                assert!(!w.children_names.contains(&name));
+                                w.push_submodule(name, full_node);
                             }
                             continue;
                         }
@@ -542,11 +579,16 @@ impl PreProcessedRepository {
                             // handle as source dir
                             let full_node = self.handle_java_src(repository, &name, tree.id());
                             let paren_acc = &mut stack.last_mut().unwrap().2;
+                            let name = self
+                                .main_stores()
+                                .label_store
+                                .get_or_insert(std::str::from_utf8(&name).unwrap());
+                            assert!(!paren_acc.children_names.contains(&name));
                             if is_source_dir {
-                                paren_acc.push_source_directory(full_node);
+                                paren_acc.push_source_directory(name, full_node);
                             } else {
                                 // is_test_source_dir
-                                paren_acc.push_test_source_directory(full_node);
+                                paren_acc.push_test_source_directory(name, full_node);
                             }
                         }
 
@@ -564,11 +606,12 @@ impl PreProcessedRepository {
                             || !new_main_dirs.is_empty()
                             || !new_test_dirs.is_empty()
                         {
+                            let prepared = prepare_dir_exploration(tree, &mut dir_path);
                             if is_maven_module {
                                 // handle as maven module
                                 stack.push((
                                     x,
-                                    prepare_dir_exploration(tree, &mut dir_path),
+                                    prepared,
                                     MavenModuleAcc::with_content(
                                         std::str::from_utf8(&name).unwrap().to_string(),
                                         new_sub_modules,
@@ -580,7 +623,7 @@ impl PreProcessedRepository {
                                 // search further inside
                                 stack.push((
                                     x,
-                                    prepare_dir_exploration(tree, &mut dir_path),
+                                    prepared,
                                     MavenModuleAcc::with_content(
                                         std::str::from_utf8(&name).unwrap().to_string(),
                                         new_sub_modules,
@@ -591,9 +634,10 @@ impl PreProcessedRepository {
                             };
                         } else if !(is_source_dir || is_test_source_dir) {
                             // anyway try to find maven modules, but maybe can do better
+                            let prepared = prepare_dir_exploration(tree, &mut dir_path);
                             stack.push((
                                 x,
-                                prepare_dir_exploration(tree, &mut dir_path),
+                                prepared,
                                 MavenModuleAcc::with_content(
                                     std::str::from_utf8(&name).unwrap().to_string(),
                                     new_sub_modules,
@@ -611,7 +655,12 @@ impl PreProcessedRepository {
                                 // TODO reinit already computed node for post order
                                 let full_node = already.clone();
                                 let w = &mut stack.last_mut().unwrap().2;
-                                w.push_pom(full_node);
+                                let name = self
+                                    .main_stores()
+                                    .label_store
+                                    .get_or_insert(std::str::from_utf8(&name).unwrap());
+                                assert!(!w.children_names.contains(&name));
+                                w.push_pom(name, full_node);
                                 continue;
                             }
                             println!("blob {:?}", std::str::from_utf8(&name));
@@ -631,7 +680,12 @@ impl PreProcessedRepository {
                                     handle_pom_file(&mut self.xml_generator(), &name, text);
                                 let x = full_node.unwrap();
                                 self.object_map_pom.insert(a.id(), x.clone());
-                                parent_acc.push_pom(x);
+                                let name = self
+                                    .main_stores()
+                                    .label_store
+                                    .get_or_insert(std::str::from_utf8(&name).unwrap());
+                                assert!(!parent_acc.children_names.contains(&name));
+                                parent_acc.push_pom(name, x);
                             }
                         }
                     }
@@ -716,13 +770,15 @@ impl PreProcessedRepository {
                 } else {
                     println!("make mm {} {}", &acc.name, acc.children.len());
                     let vacant = insertion.vacant();
+                    assert_eq!(acc.children_names.len(),acc.children.len());
                     NodeStore::insert_after_prepare(
                         vacant,
                         (
                             Type::MavenDirectory,
                             label,
                             hashs,
-                            CS(acc.children) as CS<legion::NodeIdentifier>,
+                            CS(acc.children_names), // TODO extract dir names
+                            CS(acc.children),
                             BloomSize::Much,
                         ),
                     )
@@ -766,7 +822,12 @@ impl PreProcessedRepository {
                     break;
                 } else {
                     let w = &mut stack.last_mut().unwrap().2;
-                    w.push_submodule(full_node);
+                    let name = self
+                        .main_stores()
+                        .label_store
+                        .get_or_insert(acc.name);
+                    assert!(!w.children_names.contains(&name),"{:?}",name);
+                    w.push_submodule(name, full_node);
                     // println!("dir: {}", &acc.name);
                 }
             } else {
@@ -790,9 +851,10 @@ impl PreProcessedRepository {
         let root_full_node;
 
         let tree = repository.find_tree(oid).unwrap();
+        let prepared: Vec<BasicGitObjects> = tree.iter().rev().map(Into::into).collect();
         let mut stack: Vec<(Oid, Vec<BasicGitObjects>, JavaAcc)> = vec![(
             oid,
-            tree.iter().rev().map(Into::into).collect(),
+            prepared,
             JavaAcc::new(std::str::from_utf8(&name).unwrap().to_string()),
         )];
         loop {
@@ -801,27 +863,40 @@ impl PreProcessedRepository {
                     BasicGitObjects::Tree(x, name) => {
                         if let Some((already, skiped_ana)) = self.object_map_java.get(&x) {
                             // reinit already computed node for post order
-                            let full_node = already.clone(); //(
-                                                             //     already.0.clone(),
-                                                             //     already.1 .0.clone(),
-                                                             //     already.1 .1.clone(),
-                                                             // );
+                            let full_node = already.clone();
 
-                            if stack.is_empty() {
+                            let name = self
+                            .main_stores
+                            .label_store
+                            .get(std::str::from_utf8(&name).unwrap()).unwrap();
+                            let n = self.main_stores.node_store.resolve(full_node.compressed_node);
+                            let already_name = *n.get_label();
+                            if name != already_name {
+                                let already_name = self
+                                    .main_stores()
+                                    .label_store
+                                    .resolve(&already_name)
+                                    .to_string();
+                                let name = self.main_stores().label_store.resolve(&name);
+                                panic!("{} != {}", name, already_name);
+                            } else if stack.is_empty() {
                                 root_full_node = full_node;
                                 break;
                             } else {
                                 let w = &mut stack.last_mut().unwrap().2;
-                                w.push_dir(full_node, *skiped_ana);
+                                assert!(!w.children_names.contains(&name));
+                                w.push_dir(name, full_node,*skiped_ana);
                             }
                             continue;
                         }
                         // TODO use maven pom.xml to find source_dir  and tests_dir ie. ignore resources, maybe also tests
                         println!("tree {:?}", std::str::from_utf8(&name));
                         let a = repository.find_tree(x).unwrap();
+                        let prepared: Vec<BasicGitObjects> =
+                            a.iter().rev().map(Into::into).collect();
                         stack.push((
                             x,
-                            a.iter().rev().map(Into::into).collect(),
+                            prepared,
                             JavaAcc::new(std::str::from_utf8(&name).unwrap().to_string()),
                         ));
                     }
@@ -832,12 +907,27 @@ impl PreProcessedRepository {
                             // TODO reinit already computed node for post order
                             let full_node = already.clone();
 
-                            if stack.is_empty() {
+                            let name = self
+                            .main_stores()
+                            .label_store
+                            .get_or_insert(std::str::from_utf8(&name).unwrap());
+                            let n = self.main_stores().node_store.resolve(full_node.compressed_node);
+                            let already_name = *n.get_label();
+                            if name != already_name {
+                                let already_name = self
+                                    .main_stores()
+                                    .label_store
+                                    .resolve(&already_name)
+                                    .to_string();
+                                let name = self.main_stores().label_store.resolve(&name);
+                                panic!("{} != {}", name, already_name);
+                            } else if stack.is_empty() {
                                 root_full_node = full_node;
                                 break;
                             } else {
                                 let w = &mut stack.last_mut().unwrap().2;
-                                w.push(full_node);
+                                assert!(!w.children_names.contains(&name));
+                                w.push(name,full_node);
                             }
                             continue;
                         }
@@ -858,7 +948,12 @@ impl PreProcessedRepository {
                                     self.object_map_java
                                         .insert(a.id(), (full_node.clone(), false));
                                     let w = &mut stack.last_mut().unwrap().2;
-                                    w.push(full_node);
+                                    let name = self
+                                    .main_stores()
+                                    .label_store
+                                    .get_or_insert(std::str::from_utf8(&name).unwrap());
+                                    assert!(!w.children_names.contains(&name));
+                                    w.push(name,full_node);
                                 }
                             }
                         } else {
@@ -969,14 +1064,15 @@ impl PreProcessedRepository {
                             (Type::Directory, label, hashs, BloomSize::None),
                         ),
                         _ => {
-                            let a = acc.children;
+                            assert_eq!(acc.children_names.len(),acc.children.len());
                             let c = (
                                 Type::Directory,
                                 label,
                                 compo::Size(acc.metrics.size + 1),
                                 compo::Height(acc.metrics.height + 1),
                                 hashs,
-                                CS(a),
+                                CS(acc.children_names),
+                                CS(acc.children),
                             );
                             match ana.refs_count() {
                                 x if x > 2048 || acc.skiped_ana => NodeStore::insert_after_prepare(
@@ -1038,7 +1134,12 @@ impl PreProcessedRepository {
                     break;
                 } else {
                     let w = &mut stack.last_mut().unwrap().2;
-                    w.push_dir(full_node.clone(), acc.skiped_ana);
+                    let name = self
+                    .main_stores()
+                    .label_store
+                    .get_or_insert(acc.name.clone());
+                    assert!(!w.children_names.contains(&name));
+                    w.push_dir(name, full_node.clone(), acc.skiped_ana);
                     println!("dir: {}", &acc.name);
                 }
             } else {
@@ -1049,20 +1150,21 @@ impl PreProcessedRepository {
     }
     pub fn child_by_name(&self, d: NodeIdentifier, name: &str) -> Option<NodeIdentifier> {
         let n = self.main_stores.node_store.resolve(d);
-        let s = n
-            .get_children()
-            .iter()
-            .find(|x| {
-                let n = self.main_stores.node_store.resolve(**x);
+        n.get_child_by_name(&self.main_stores.label_store.get(name)?)
+        // let s = n
+        //     .get_children()
+        //     .iter()
+        //     .find(|x| {
+        //         let n = self.main_stores.node_store.resolve(**x);
 
-                if n.has_label() {
-                    self.main_stores.label_store.resolve(n.get_label()).eq(name)
-                } else {
-                    false
-                }
-            })
-            .map(|x| *x);
-        s
+        //         if n.has_label() {
+        //             self.main_stores.label_store.resolve(n.get_label()).eq(name)
+        //         } else {
+        //             false
+        //         }
+        //     })
+        //     .map(|x| *x);
+        // s
     }
     pub fn child_by_name_with_idx(
         &self,
@@ -1070,31 +1172,35 @@ impl PreProcessedRepository {
         name: &str,
     ) -> Option<(NodeIdentifier, usize)> {
         let n = self.main_stores.node_store.resolve(d);
+        println!("{}",name);
+        let i = n.get_child_idx_by_name(&self.main_stores.label_store.get(name)?);
+        i.map(|i|(n.get_child(&i),i as usize))
+        // let s = n
+        //     .get_children()
+        //     .iter()
+        //     .enumerate()
+        //     .find(|(_, x)| {
+        //         let n = self.main_stores.node_store.resolve(**x);
+        //         if n.has_label() {
+        //             self.main_stores.label_store.resolve(n.get_label()).eq(name)
+        //         } else {
+        //             false
+        //         }
+        //     })
+        //     .map(|(i, x)| (*x, i));
+        // s
+    }
+    pub fn child_by_type(&self, d: NodeIdentifier, t: &Type) -> Option<(NodeIdentifier, usize)> {
+        let n = self.main_stores.node_store.resolve(d);
         let s = n
             .get_children()
             .iter()
             .enumerate()
             .find(|(_, x)| {
                 let n = self.main_stores.node_store.resolve(**x);
-                if n.has_label() {
-                    self.main_stores.label_store.resolve(n.get_label()).eq(name)
-                } else {
-                    false
-                }
-            })
-            .map(|(i, x)| (*x, i));
-        s
-    }
-    pub fn child_by_type(&self, d: NodeIdentifier, t: &Type) -> Option<NodeIdentifier> {
-        let n = self.main_stores.node_store.resolve(d);
-        let s = n
-            .get_children()
-            .iter()
-            .find(|x| {
-                let n = self.main_stores.node_store.resolve(**x);
                 n.get_type().eq(t)
             })
-            .map(|x| *x);
+            .map(|(i, x)| (*x, i));
         s
     }
 
@@ -1104,50 +1210,51 @@ impl PreProcessedRepository {
         i: RefPtr,
         root: NodeIdentifier,
     ) {
-        for d in IterMavenModules::new(&self.main_stores, root) {
-            let s = self.child_by_name(d, "src");
-            let s = s.and_then(|d| self.child_by_name(d, "main"));
-            let s = s.and_then(|d| self.child_by_name(d, "java"));
-            // let s = s.and_then(|d| self.child_by_type(d, &Type::Directory));
-            if let Some(s) = s {
-                // let n = self.main_stores.node_store.resolve(d);
-                // println!(
-                //     "search in module/src/main/java {}",
-                //     self
-                //         .main_stores
-                //         .label_store
-                //         .resolve(n.get_label())
-                // );
-                usage::find_refs(
-                    &self.main_stores,
-                    ana,
-                    &mut StructuralPosition::new(s),
-                    i,
-                    s,
-                );
-            }
-            let s = self.child_by_name(d, "src");
-            let s = s.and_then(|d| self.child_by_name(d, "test"));
-            let s = s.and_then(|d| self.child_by_name(d, "java"));
-            // let s = s.and_then(|d| self.child_by_type(d, &Type::Directory));
-            if let Some(s) = s {
-                // let n = self.main_stores.node_store.resolve(d);
-                // println!(
-                //     "search in module/src/test/java {}",
-                //     self
-                //         .main_stores
-                //         .label_store
-                //         .resolve(n.get_label())
-                // );
-                usage::find_refs(
-                    &self.main_stores,
-                    ana,
-                    &mut StructuralPosition::new(s),
-                    i,
-                    s,
-                );
-            }
-        }
+        todo!()
+        // for d in IterMavenModules::new(&self.main_stores, root) {
+        //     let s = self.child_by_name(d, "src");
+        //     let s = s.and_then(|d| self.child_by_name(d, "main"));
+        //     let s = s.and_then(|d| self.child_by_name(d, "java"));
+        //     // let s = s.and_then(|d| self.child_by_type(d, &Type::Directory));
+        //     if let Some(s) = s {
+        //         // let n = self.main_stores.node_store.resolve(d);
+        //         // println!(
+        //         //     "search in module/src/main/java {}",
+        //         //     self
+        //         //         .main_stores
+        //         //         .label_store
+        //         //         .resolve(n.get_label())
+        //         // );
+        //         usage::find_refs(
+        //             &self.main_stores,
+        //             ana,
+        //             &mut StructuralPosition::new(s),
+        //             i,
+        //             s,
+        //         );
+        //     }
+        //     let s = self.child_by_name(d, "src");
+        //     let s = s.and_then(|d| self.child_by_name(d, "test"));
+        //     let s = s.and_then(|d| self.child_by_name(d, "java"));
+        //     // let s = s.and_then(|d| self.child_by_type(d, &Type::Directory));
+        //     if let Some(s) = s {
+        //         // let n = self.main_stores.node_store.resolve(d);
+        //         // println!(
+        //         //     "search in module/src/test/java {}",
+        //         //     self
+        //         //         .main_stores
+        //         //         .label_store
+        //         //         .resolve(n.get_label())
+        //         // );
+        //         usage::find_refs(
+        //             &self.main_stores,
+        //             ana,
+        //             &mut StructuralPosition::new(s),
+        //             i,
+        //             s,
+        //         );
+        //     }
+        // }
     }
 
     pub fn print_references_to_declarations_aux(
@@ -1155,232 +1262,233 @@ impl PreProcessedRepository {
         ana: &mut PartialAnalysis,
         s: NodeIdentifier,
     ) {
-        let mut d_it = IterDeclarations::new(&self.main_stores, s);
-        loop {
-            if let Some(x) = d_it.next() {
-                let b = self.main_stores.node_store.resolve(x);
-                let t = b.get_type();
-                let now = Instant::now();
-                if &t == &Type::ClassDeclaration {
-                    let mut position =
-                        extract_position(&self.main_stores, d_it.parents(), d_it.offsets());
-                    position.set_len(b.get_bytes_len(0) as usize);
-                    println!("now search for {:?} at {:?}", &t, position);
-                    {
-                        let i = ana.solver.intern(RefsEnum::MaybeMissing);
-                        let i = ana.solver.intern(RefsEnum::This(i));
-                        println!("try search this");
-                        usage::find_refs(&self.main_stores, ana, &mut d_it.position(x), i, x);
-                    }
-                    let mut l = None;
-                    for xx in b.get_children() {
-                        let bb = self.main_stores.node_store.resolve(*xx);
-                        if bb.get_type() == Type::Identifier {
-                            let i = bb.get_label();
-                            l = Some(*i);
-                        }
-                    }
-                    if let Some(i) = l {
-                        let o = ana.solver.intern(RefsEnum::MaybeMissing);
-                        let f = self.main_stores.label_store.resolve(&i);
-                        println!("search uses of {:?}", f);
-                        let f = IdentifierFormat::from(f);
-                        let l = LabelPtr::new(i, f);
-                        let i = ana.solver.intern(RefsEnum::ScopedIdentifier(o, l));
-                        println!("try search {:?}", ana.solver.nodes.with(i));
-                        usage::find_refs(&self.main_stores, ana, &mut d_it.position(x), i, x);
-                        {
-                            let i = ana.solver.intern(RefsEnum::This(i));
-                            println!("try search {:?}", ana.solver.nodes.with(i));
-                            usage::find_refs(&self.main_stores, ana, &mut d_it.position(x), i, x);
-                        }
-                        let mut parents = d_it.parents().to_vec();
-                        let mut offsets = d_it.offsets().to_vec();
-                        let mut curr = parents.pop();
-                        offsets.pop();
-                        let mut prev = curr;
-                        let mut before_p_ref = i;
-                        let mut max_qual_ref = i;
-                        let mut conti = false;
-                        // go through classes if inner
-                        loop {
-                            if let Some(xx) = curr {
-                                let bb = self.main_stores.node_store.resolve(xx);
-                                let t = bb.get_type();
-                                if t.is_type_body() {
-                                    println!(
-                                        "try search {:?}",
-                                        ana.solver.nodes.with(max_qual_ref)
-                                    );
-                                    usage::find_refs(
-                                        &self.main_stores,
-                                        ana,
-                                        &mut (parents.clone(), offsets.clone(), x).into(),
-                                        max_qual_ref,
-                                        x,
-                                    );
-                                    prev = curr;
-                                    curr = parents.pop();
-                                    offsets.pop();
-                                    if let Some(xxx) = curr {
-                                        let bb = self.main_stores.node_store.resolve(xxx);
-                                        let t = bb.get_type();
-                                        if t == Type::ObjectCreationExpression {
-                                            conti = true;
-                                            break;
-                                        } else if !t.is_type_declaration() {
-                                            panic!("{:?}", t);
-                                        }
-                                        let mut l2 = None;
-                                        for xx in b.get_children() {
-                                            let bb = self.main_stores.node_store.resolve(*xx);
-                                            if bb.get_type() == Type::Identifier {
-                                                let i = bb.get_label();
-                                                l2 = Some(*i);
-                                            }
-                                        }
-                                        if let Some(i) = l2 {
-                                            let o = ana.solver.intern(RefsEnum::MaybeMissing);
-                                            let f = IdentifierFormat::from(
-                                                self.main_stores.label_store.resolve(&i),
-                                            );
-                                            let l = LabelPtr::new(i, f);
-                                            let i =
-                                                ana.solver.intern(RefsEnum::ScopedIdentifier(o, l));
-                                            max_qual_ref = ana
-                                                .solver
-                                                .try_solve_node_with(max_qual_ref, i)
-                                                .unwrap();
-                                            println!(
-                                                "try search {:?}",
-                                                ana.solver.nodes.with(max_qual_ref)
-                                            );
-                                            usage::find_refs(
-                                                &self.main_stores,
-                                                ana,
-                                                &mut (parents.clone(), offsets.clone(), xx).into(),
-                                                max_qual_ref,
-                                                xx,
-                                            );
-                                        }
-                                        prev = curr;
-                                        curr = parents.pop();
-                                        offsets.pop();
-                                    }
-                                } else if t == Type::Program {
-                                    // go through program i.e. package declaration
-                                    before_p_ref = max_qual_ref;
-                                    for xx in b.get_children() {
-                                        let bb = self.main_stores.node_store.resolve(*xx);
-                                        let t = bb.get_type();
-                                        if t == Type::PackageDeclaration {
-                                            let p = remake_pkg_ref(&self.main_stores, ana, *xx);
-                                            max_qual_ref = ana
-                                                .solver
-                                                .try_solve_node_with(max_qual_ref, p)
-                                                .unwrap();
-                                        } else if t.is_type_declaration() {
-                                            println!(
-                                                "try search {:?}",
-                                                ana.solver.nodes.with(max_qual_ref)
-                                            );
-                                            if Some(*xx) != prev {
-                                                usage::find_refs(
-                                                    &self.main_stores,
-                                                    ana,
-                                                    &mut (parents.clone(), offsets.clone(), *xx)
-                                                        .into(),
-                                                    before_p_ref,
-                                                    *xx,
-                                                );
-                                            }
-                                            usage::find_refs(
-                                                &self.main_stores,
-                                                ana,
-                                                &mut (parents.clone(), offsets.clone(), *xx).into(),
-                                                max_qual_ref,
-                                                *xx,
-                                            );
-                                        }
-                                    }
-                                    prev = curr;
-                                    curr = parents.pop();
-                                    offsets.pop();
-                                    break;
-                                } else if t == Type::ObjectCreationExpression {
-                                    conti = true;
-                                    break;
-                                } else if t == Type::Block {
-                                    conti = true;
-                                    break; // TODO check if really done
-                                } else {
-                                    todo!("{:?}", t)
-                                }
-                            }
-                        }
-                        if conti {
-                            continue;
-                        }
-                        // go through package
-                        if let Some(xx) = curr {
-                            if Some(xx) != prev {
-                                usage::find_refs(
-                                    &self.main_stores,
-                                    ana,
-                                    &mut (parents.clone(), offsets.clone(), xx).into(),
-                                    before_p_ref,
-                                    xx,
-                                );
-                            }
-                            usage::find_refs(
-                                &self.main_stores,
-                                ana,
-                                &mut (parents.clone(), offsets.clone(), xx).into(),
-                                max_qual_ref,
-                                xx,
-                            );
-                            prev = curr;
-                            curr = parents.pop();
-                            offsets.pop();
-                        }
-                        // go through directories
-                        loop {
-                            if let Some(xx) = curr {
-                                if Some(xx) != prev {
-                                    usage::find_refs(
-                                        &self.main_stores,
-                                        ana,
-                                        &mut (parents.clone(), offsets.clone(), xx).into(),
-                                        max_qual_ref,
-                                        xx,
-                                    );
-                                }
-                                prev = curr;
-                                curr = parents.pop();
-                                offsets.pop();
-                            } else {
-                                break;
-                            }
-                        }
-                    }
+        todo!()
+        // let mut d_it = IterDeclarations::new(&self.main_stores, s);
+        // loop {
+        //     if let Some(x) = d_it.next() {
+        //         let b = self.main_stores.node_store.resolve(x);
+        //         let t = b.get_type();
+        //         let now = Instant::now();
+        //         if &t == &Type::ClassDeclaration {
+        //             let mut position =
+        //                 extract_position(&self.main_stores, d_it.parents(), d_it.offsets());
+        //             position.set_len(b.get_bytes_len(0) as usize);
+        //             println!("now search for {:?} at {:?}", &t, position);
+        //             {
+        //                 let i = ana.solver.intern(RefsEnum::MaybeMissing);
+        //                 let i = ana.solver.intern(RefsEnum::This(i));
+        //                 println!("try search this");
+        //                 usage::find_refs(&self.main_stores, ana, &mut d_it.position(x), i, x);
+        //             }
+        //             let mut l = None;
+        //             for xx in b.get_children() {
+        //                 let bb = self.main_stores.node_store.resolve(*xx);
+        //                 if bb.get_type() == Type::Identifier {
+        //                     let i = bb.get_label();
+        //                     l = Some(*i);
+        //                 }
+        //             }
+        //             if let Some(i) = l {
+        //                 let o = ana.solver.intern(RefsEnum::MaybeMissing);
+        //                 let f = self.main_stores.label_store.resolve(&i);
+        //                 println!("search uses of {:?}", f);
+        //                 let f = IdentifierFormat::from(f);
+        //                 let l = LabelPtr::new(i, f);
+        //                 let i = ana.solver.intern(RefsEnum::ScopedIdentifier(o, l));
+        //                 println!("try search {:?}", ana.solver.nodes.with(i));
+        //                 usage::find_refs(&self.main_stores, ana, &mut d_it.position(x), i, x);
+        //                 {
+        //                     let i = ana.solver.intern(RefsEnum::This(i));
+        //                     println!("try search {:?}", ana.solver.nodes.with(i));
+        //                     usage::find_refs(&self.main_stores, ana, &mut d_it.position(x), i, x);
+        //                 }
+        //                 let mut parents = d_it.parents().to_vec();
+        //                 let mut offsets = d_it.offsets().to_vec();
+        //                 let mut curr = parents.pop();
+        //                 offsets.pop();
+        //                 let mut prev = curr;
+        //                 let mut before_p_ref = i;
+        //                 let mut max_qual_ref = i;
+        //                 let mut conti = false;
+        //                 // go through classes if inner
+        //                 loop {
+        //                     if let Some(xx) = curr {
+        //                         let bb = self.main_stores.node_store.resolve(xx);
+        //                         let t = bb.get_type();
+        //                         if t.is_type_body() {
+        //                             println!(
+        //                                 "try search {:?}",
+        //                                 ana.solver.nodes.with(max_qual_ref)
+        //                             );
+        //                             usage::find_refs(
+        //                                 &self.main_stores,
+        //                                 ana,
+        //                                 &mut (parents.clone(), offsets.clone(), x).into(),
+        //                                 max_qual_ref,
+        //                                 x,
+        //                             );
+        //                             prev = curr;
+        //                             curr = parents.pop();
+        //                             offsets.pop();
+        //                             if let Some(xxx) = curr {
+        //                                 let bb = self.main_stores.node_store.resolve(xxx);
+        //                                 let t = bb.get_type();
+        //                                 if t == Type::ObjectCreationExpression {
+        //                                     conti = true;
+        //                                     break;
+        //                                 } else if !t.is_type_declaration() {
+        //                                     panic!("{:?}", t);
+        //                                 }
+        //                                 let mut l2 = None;
+        //                                 for xx in b.get_children() {
+        //                                     let bb = self.main_stores.node_store.resolve(*xx);
+        //                                     if bb.get_type() == Type::Identifier {
+        //                                         let i = bb.get_label();
+        //                                         l2 = Some(*i);
+        //                                     }
+        //                                 }
+        //                                 if let Some(i) = l2 {
+        //                                     let o = ana.solver.intern(RefsEnum::MaybeMissing);
+        //                                     let f = IdentifierFormat::from(
+        //                                         self.main_stores.label_store.resolve(&i),
+        //                                     );
+        //                                     let l = LabelPtr::new(i, f);
+        //                                     let i =
+        //                                         ana.solver.intern(RefsEnum::ScopedIdentifier(o, l));
+        //                                     max_qual_ref = ana
+        //                                         .solver
+        //                                         .try_solve_node_with(max_qual_ref, i)
+        //                                         .unwrap();
+        //                                     println!(
+        //                                         "try search {:?}",
+        //                                         ana.solver.nodes.with(max_qual_ref)
+        //                                     );
+        //                                     usage::find_refs(
+        //                                         &self.main_stores,
+        //                                         ana,
+        //                                         &mut (parents.clone(), offsets.clone(), xx).into(),
+        //                                         max_qual_ref,
+        //                                         xx,
+        //                                     );
+        //                                 }
+        //                                 prev = curr;
+        //                                 curr = parents.pop();
+        //                                 offsets.pop();
+        //                             }
+        //                         } else if t == Type::Program {
+        //                             // go through program i.e. package declaration
+        //                             before_p_ref = max_qual_ref;
+        //                             for xx in b.get_children() {
+        //                                 let bb = self.main_stores.node_store.resolve(*xx);
+        //                                 let t = bb.get_type();
+        //                                 if t == Type::PackageDeclaration {
+        //                                     let p = remake_pkg_ref(&self.main_stores, ana, *xx);
+        //                                     max_qual_ref = ana
+        //                                         .solver
+        //                                         .try_solve_node_with(max_qual_ref, p)
+        //                                         .unwrap();
+        //                                 } else if t.is_type_declaration() {
+        //                                     println!(
+        //                                         "try search {:?}",
+        //                                         ana.solver.nodes.with(max_qual_ref)
+        //                                     );
+        //                                     if Some(*xx) != prev {
+        //                                         usage::find_refs(
+        //                                             &self.main_stores,
+        //                                             ana,
+        //                                             &mut (parents.clone(), offsets.clone(), *xx)
+        //                                                 .into(),
+        //                                             before_p_ref,
+        //                                             *xx,
+        //                                         );
+        //                                     }
+        //                                     usage::find_refs(
+        //                                         &self.main_stores,
+        //                                         ana,
+        //                                         &mut (parents.clone(), offsets.clone(), *xx).into(),
+        //                                         max_qual_ref,
+        //                                         *xx,
+        //                                     );
+        //                                 }
+        //                             }
+        //                             prev = curr;
+        //                             curr = parents.pop();
+        //                             offsets.pop();
+        //                             break;
+        //                         } else if t == Type::ObjectCreationExpression {
+        //                             conti = true;
+        //                             break;
+        //                         } else if t == Type::Block {
+        //                             conti = true;
+        //                             break; // TODO check if really done
+        //                         } else {
+        //                             todo!("{:?}", t)
+        //                         }
+        //                     }
+        //                 }
+        //                 if conti {
+        //                     continue;
+        //                 }
+        //                 // go through package
+        //                 if let Some(xx) = curr {
+        //                     if Some(xx) != prev {
+        //                         usage::find_refs(
+        //                             &self.main_stores,
+        //                             ana,
+        //                             &mut (parents.clone(), offsets.clone(), xx).into(),
+        //                             before_p_ref,
+        //                             xx,
+        //                         );
+        //                     }
+        //                     usage::find_refs(
+        //                         &self.main_stores,
+        //                         ana,
+        //                         &mut (parents.clone(), offsets.clone(), xx).into(),
+        //                         max_qual_ref,
+        //                         xx,
+        //                     );
+        //                     prev = curr;
+        //                     curr = parents.pop();
+        //                     offsets.pop();
+        //                 }
+        //                 // go through directories
+        //                 loop {
+        //                     if let Some(xx) = curr {
+        //                         if Some(xx) != prev {
+        //                             usage::find_refs(
+        //                                 &self.main_stores,
+        //                                 ana,
+        //                                 &mut (parents.clone(), offsets.clone(), xx).into(),
+        //                                 max_qual_ref,
+        //                                 xx,
+        //                             );
+        //                         }
+        //                         prev = curr;
+        //                         curr = parents.pop();
+        //                         offsets.pop();
+        //                     } else {
+        //                         break;
+        //                     }
+        //                 }
+        //             }
 
-                    println!("time taken for refs search: {}", now.elapsed().as_nanos());
-                } else {
-                    // TODO
-                    // println!("todo impl search on {:?}", &t);
-                }
+        //             println!("time taken for refs search: {}", now.elapsed().as_nanos());
+        //         } else {
+        //             // TODO
+        //             // println!("todo impl search on {:?}", &t);
+        //         }
 
-                // println!("it state {:?}", &d_it);
-                // java_tree_gen_full_compress_legion_ref::print_tree_syntax(
-                //     &self.main_stores.node_store,
-                //     &self.main_stores.label_store,
-                //     &x,
-                // );
-                // println!();
-            } else {
-                break;
-            }
-        }
+        //         // println!("it state {:?}", &d_it);
+        //         // java_tree_gen_full_compress_legion_ref::print_tree_syntax(
+        //         //     &self.main_stores.node_store,
+        //         //     &self.main_stores.label_store,
+        //         //     &x,
+        //         // );
+        //         // println!();
+        //     } else {
+        //         break;
+        //     }
+        // }
     }
     pub fn print_references_to_declarations(
         &self,

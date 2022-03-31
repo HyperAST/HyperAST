@@ -6,7 +6,7 @@ use std::{
 
 use hyper_ast::{
     hashed::SyntaxNodeHashs,
-    store::nodes::DefaultNodeIdentifier as NodeIdentifier,
+    store::{labels::DefaultLabelIdentifier, nodes::DefaultNodeIdentifier as NodeIdentifier},
     tree_gen::SubTreeMetrics,
     types::{LabelStore as _, Labeled, Tree, Type, Typed, WithChildren},
 };
@@ -179,6 +179,7 @@ pub struct MD {
 
 pub struct MavenModuleAcc {
     pub(crate) name: String,
+    pub(crate) children_names: Vec<DefaultLabelIdentifier>,
     pub(crate) children: Vec<hyper_ast::store::nodes::DefaultNodeIdentifier>,
     pub(crate) metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>, //java_tree_gen::SubTreeMetrics<SyntaxNodeHashs<u32>>,
     pub(crate) ana: MavenPartialAnalysis,
@@ -191,6 +192,7 @@ impl MavenModuleAcc {
     pub(crate) fn new(name: String) -> Self {
         Self {
             name,
+            children_names: Default::default(),
             children: Default::default(),
             // simple: BasicAccumulator::new(kind),
             metrics: Default::default(),
@@ -208,6 +210,7 @@ impl MavenModuleAcc {
     ) -> Self {
         Self {
             name,
+            children_names: Default::default(),
             children: Default::default(),
             // simple: BasicAccumulator::new(kind),
             metrics: Default::default(),
@@ -256,8 +259,9 @@ impl MavenModuleAcc {
     //     //     .unwrap()
     //     //     .acc(&Type::Directory, &mut self.ana);
     // }
-    pub(crate) fn push_pom(&mut self, full_node: POM) {
+    pub(crate) fn push_pom(&mut self, name: DefaultLabelIdentifier, full_node: POM) {
         self.children.push(full_node.compressed_node);
+        self.children_names.push(name);
         self.main_dirs = Some(full_node.source_dirs.iter().map(|x| x.into()).collect());
         self.test_dirs = Some(
             full_node
@@ -273,15 +277,22 @@ impl MavenModuleAcc {
     }
     pub(crate) fn push_submodule(
         &mut self,
+        name: DefaultLabelIdentifier,
         full_node: (hyper_ast::store::nodes::DefaultNodeIdentifier, MD),
     ) {
         self.children.push(full_node.0);
+        self.children_names.push(name);
         self.metrics.acc(full_node.1.metrics);
         // TODO ana
         // full_node.2.acc(&Type::Directory, &mut self.ana);
     }
-    pub(crate) fn push_source_directory(&mut self, full_node: java_tree_gen::Local) {
+    pub(crate) fn push_source_directory(
+        &mut self,
+        name: DefaultLabelIdentifier,
+        full_node: java_tree_gen::Local,
+    ) {
         self.children.push(full_node.compressed_node);
+        self.children_names.push(name);
         self.metrics.acc(SubTreeMetrics {
             hashs: full_node.metrics.hashs,
             size: full_node.metrics.size,
@@ -290,8 +301,13 @@ impl MavenModuleAcc {
         // TODO ana
         // full_node.2.acc(&Type::Directory, &mut self.ana);
     }
-    pub(crate) fn push_test_source_directory(&mut self, full_node: java_tree_gen::Local) {
+    pub(crate) fn push_test_source_directory(
+        &mut self,
+        name: DefaultLabelIdentifier,
+        full_node: java_tree_gen::Local,
+    ) {
         self.children.push(full_node.compressed_node);
+        self.children_names.push(name);
         self.metrics.acc(SubTreeMetrics {
             hashs: full_node.metrics.hashs,
             size: full_node.metrics.size,

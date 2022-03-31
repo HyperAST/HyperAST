@@ -455,13 +455,69 @@ fn test_offset_computation() {
         let x = f(x,7);
         let x = f(x,24);
     }
-    s.check(&stores);
+    s.check(&stores).unwrap();
     let x = s.push(&mut scout);
     let z = ExploreStructuralPositions::from((&s,x));
     let p = z.to_position(&stores);
     println!("{}",p);
     println!("|{}|",std::str::from_utf8(&text[p.range()]).unwrap());
     assert_eq!(std::str::from_utf8(&text[p.range()]).unwrap(),r#"ModelUtils.canBeBuilt(new File("./target/spooned/spoon/test/template/ReturnReplaceResult.java"), 8);"#);
+}
+#[test]
+fn test_offset_computation2() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    let text = CASE_30.as_bytes();
+    let mut parser = Parser::new();
+
+    {
+        let language = unsafe { tree_sitter_java() };
+        parser.set_language(language).unwrap();
+    }
+    let mut stores = SimpleStores {
+        label_store: LabelStore::new(),
+        type_store: TypeStore {},
+        node_store: NodeStore::new(),
+    };
+    let mut md_cache = Default::default();
+    let mut java_tree_gen = JavaTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    let tree = parser.parse(text, None).unwrap();
+    println!("{}", tree.root_node().to_sexp());
+    let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
+    let mut s = StructuralPositionStore::from(StructuralPosition::new(full_node.local.compressed_node));
+    let mut scout = Scout::from((StructuralPosition::from((vec![],vec![])),0));
+    print_tree_syntax(
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
+        &full_node.local.compressed_node,
+    );
+    println!();
+    {
+        let mut f = |x,i:u16| {
+            let b = stores.node_store.resolve(x);
+            let x = b.get_child(&i);
+            scout.goto(x,i as usize);
+            scout.up(&s);
+            scout.goto(x,i as usize);
+            x
+        };
+        let x = full_node.local.compressed_node;
+        let x = f(x,5);
+    }
+    s.check(&stores).unwrap();
+    let x = s.push(&mut scout);
+    let z = ExploreStructuralPositions::from((&s,x));
+    let p = z.to_position(&stores);
+    println!("{}",p);
+    println!("|{}|",std::str::from_utf8(&text[p.range()]).unwrap());
+    assert_eq!(std::str::from_utf8(&text[p.range()]).unwrap(),r#"public class InnerTypeOk {
+  private void test() {
+    Entry<String, String> test;
+  }
+}"#);
 }
 
 /// historic regression test for static analysis
@@ -2137,6 +2193,17 @@ public class TemplateReplaceReturnTest {\r
 	}\r
 
 }";
+
+static CASE_30: &'static str = r#"
+package spoon.test.prettyprinter.testclasses.innertype;
+
+import java.util.Map.*;
+
+public class InnerTypeOk {
+  private void test() {
+    Entry<String, String> test;
+  }
+}"#;
 
 enum D {
     F(&'static str),
