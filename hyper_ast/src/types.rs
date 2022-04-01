@@ -800,6 +800,9 @@ pub trait Labeled {
 pub trait Tree: Typed + Labeled + WithChildren {
     fn has_children(&self) -> bool;
     fn has_label(&self) -> bool;
+    fn try_get_label<'a>(&'a self) -> Option<&'a Self::Label> {
+        self.has_label().then(|| self.get_label())
+    }
 }
 pub trait DeCompressedTree<T: PrimInt>: Tree {
     fn get_parent(&self) -> T;

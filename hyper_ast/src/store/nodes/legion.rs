@@ -318,6 +318,10 @@ impl<'a> crate::types::Tree for HashedNodeRef<'a> {
     fn has_label(&self) -> bool {
         self.0.get_component::<DefaultLabelIdentifier>().is_ok()
     }
+
+    fn try_get_label(&self) -> Option<&Self::Label> {
+        self.0.get_component::<DefaultLabelIdentifier>().ok()
+    }
 }
 
 impl<'a> HashedNodeRef<'a> {}

@@ -74,15 +74,16 @@ fn run(text: &[u8]) {
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(),2);
     println!("-------------2----------------");
-    let i = scoped!(package_ref, "Klass");
+    let package_ref2 = scoped!(root, "org");
+    let i = scoped!(package_ref2, "Klass");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
-    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),1);
+    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
+    assert_eq!(r.len(),7);
     println!("-------------3----------------");
     let i = scoped!(package_ref, "SpoonModelBuilder");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),4);
+    assert_eq!(r.len(),5);
     println!("-------------4----------------");
     let i = scoped!(package_ref, "SpoonException");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
@@ -118,11 +119,6 @@ fn run(text: &[u8]) {
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(),2);
-    println!("-------------10----------------");
-    let i = scoped!(scoped!(package_ref, "PatternBuilder"), "PatternQuery");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
-    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),2);
 }
 
 #[test]
@@ -152,6 +148,7 @@ import com.martiansoftware.jsap.Switch;
 import com.martiansoftware.jsap.stringparsers.EnumeratedStringParser;
 import com.martiansoftware.jsap.stringparsers.FileStringParser;
 import org.apache.commons.io.FileUtils;
+import org.Klass;
 
 import spoon.SpoonModelBuilder.InputType2;
 import spoon.SpoonModelBuilder.InputType3;
@@ -180,7 +177,6 @@ public class Launcher extends Klass implements SpoonAPI, A {
 
         }
 
-
         assertThrows(SpoonException.class, () -> {
             new MavenLauncher("./pomm.xml", MavenLauncher.SOURCE_TYPE.APP_SOURCE);
         });
@@ -192,13 +188,21 @@ public class Launcher extends Klass implements SpoonAPI, A {
 
     }
 
+    Klass M = new Klass() {
+    };
+
     public static final SpoonModelBuilder.InputType2 INSTANCE = new FactoryCompilerConfig();
 
     public class FactoryCompilerConfig implements SpoonModelBuilder.InputType2 {
     }
     public interface AALaucher extends SpoonAPI {
-
+        Klass M = new Klass() {
+        };
     }
+}
+interface I {
+    Klass M = new Klass() {
+    };
 }"#;
 
 
@@ -247,7 +251,7 @@ fn run2(text: &[u8]) {
     let i = scoped!(package_ref, "SpoonModelBuilder");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),1);
+    assert_eq!(r.len(),2);
     println!("-------------2----------------");
     let i = scoped!(package_ref, "Launcher");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
@@ -270,6 +274,34 @@ fn run2(text: &[u8]) {
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(),2);
+    println!("-------------6----------------");
+    let i = scoped!(scoped!(package_ref, "SpoonModelBuilder2"), "InputType2");
+    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
+    assert_eq!(r.len(),1);
+    println!("-------------7----------------");
+    let package_ref2 = scoped!(package_ref, "pattern");
+    let i = scoped!(package_ref2, "PatternBuilder");
+    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
+    assert_eq!(r.len(),1);
+    println!("-------------8----------------");
+    let package_ref2 = scoped!(package_ref, "pattern");
+    let i = scoped!(scoped!(package_ref2, "PatternBuilder"), "TARGET_TYPE");
+    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
+    assert_eq!(r.len(),1);
+    println!("-------------9----------------");
+    let i = scoped!(scoped!(package_ref, "SpoonModelBuilder3"), "InputType");
+    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
+    assert_eq!(r.len(),2);
+    println!("-------------10---------------");
+    let package_ref2 = scoped!(package_ref, "processor");
+    let i = scoped!(package_ref2, "AbstractProcessor");
+    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
+    assert_eq!(r.len(),1);
 }
 
 #[test]
@@ -282,9 +314,12 @@ fn test_case2() {
 static CASE_2: &'static str = r#"package spoon.support.compiler.jdt;
 
 import spoon.SpoonModelBuilder;
+import spoon.SpoonModelBuilder3;
 import spoon.SpoonModelBuilder.InputType;
+import spoon.SpoonModelBuilder2.InputType2;
 import spoon.Launcher;
 import spoon.support.Envir;
+import spoon.processor.AbstractProcessor;
 
 public class JDTBasedSpoonCompiler implements spoon.SpoonModelBuilder {
     
@@ -292,11 +327,19 @@ public class JDTBasedSpoonCompiler implements spoon.SpoonModelBuilder {
         spoon.Launcher.main();
 
         getModelBuilder().compile(InputType.FILES);
+        getModelBuilder().compile(InputType2.FILES);
         Launcher.LOGGER.error(e.getMessage(), e);
         for (SpoonFolder fol : getSubFolders()) {
 			files.addAll(fol.getAllJavaFiles());
         }
         Envir.MultipleAlt alternatives = new Envir.MultipleAlt();
+        templateParametersAsMap.put(spoon.pattern.PatternBuilder.TARGET_TYPE, targetType.getReference());
+        SpoonModelBuilder3.InputType<T> result = new SpoonModelBuilder3.InputType<>(expectedType);
+        launcher.addProcessor(new AbstractProcessor<>() {
+			public void process(CtElement element) {
+				markElementForSniperPrinting(element);
+			}
+		});
     }
 }
 
@@ -431,12 +474,12 @@ fn run3(text: &[u8]) {
     let bb = stores.node_store.resolve(xx);
     assert_eq!(bb.get_type(),Type::ClassDeclaration);
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(), 3);
+    assert_eq!(r.len(), 4);
     println!("-------------3----------------");
     let i = scoped!(package_ref2, "AnnotationProcessingOptions");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
-    assert_eq!(r.len(),2); // TODO should be 1, flacky over estimation caused by not fully comparing generic type, should not exact match ?.spoon.compiler.AnnotationProcessingOptions
+    assert_eq!(r.len(),1);
     println!("-------------4----------------");
     let i = scoped!(package_ref, "NameFilter");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
@@ -477,6 +520,7 @@ fn test_case3() {
 
 /// search spoon.compile.SpoonResource
 /// search spoon.compile.SpoonFile in class
+/// TODO SpoonFile.this
 static CASE_3: &'static str = r#"package spoon.compiler;
 
 import org.apache.commons.io.IOUtils;
@@ -501,8 +545,10 @@ public class SpoonFile<T extends SpoonFile<T>> implements SpoonResource {
         }
     }
 
-   class StringAttr extends Scanner {
-
+    class StringAttr extends Scanner {
+        void g() {
+            SpoonFile.this.forEachParameterInfo(consumer);
+        }
     }
 
     void f() {
