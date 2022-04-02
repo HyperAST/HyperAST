@@ -121,52 +121,15 @@ pub fn extract_position(
     }
 }
 
-// #[derive(Clone, Debug)]
-// pub struct StructuralPosition {
-//     pub(crate) parents: Vec<NodeIdentifier>,
-//     pub(crate) offsets: Vec<usize>,
-//     pub(crate) node: NodeIdentifier,
-// }
-
-// impl StructuralPosition {
-//     pub fn to_position(&self, stores: &SimpleStores) -> Position {
-//         todo!()
-//         // extract_position(stores, &self.parents, &self.offsets)
-//     }
-
-//     pub fn new(node: NodeIdentifier) -> Self {
-//         Self {
-//             parents: vec![],
-//             offsets: vec![0],
-//             // offsets: vec![],
-//             node,
-//         }
-//     }
-
-//     pub fn with_offset(node: NodeIdentifier, o: usize) -> Self {
-//         Self {
-//             parents: vec![],
-//             offsets: vec![o],
-//             // offsets: vec![],
-//             node,
-//         }
-//     }
-
-//     pub fn push(&mut self) {
-//         self.parents.push(self.node);
-//         self.offsets.push(0);
-//     }
-
-//     pub fn pop(&mut self) {
-//         self.parents.pop();
-//         self.offsets.pop();
-//     }
-
-//     pub fn inc(&mut self, node: NodeIdentifier) {
-//         self.node = node;
-//         self.offsets.last_mut().unwrap().add_assign(1)
-//     }
-// }
+pub trait TreePath<IdN> {
+    fn node(&self) -> Option<&IdN>;
+    fn offset(&self) -> Option<&usize>;
+    fn pop(&mut self) -> Option<(IdN, usize)>;
+    fn goto(&mut self, node: IdN, i: usize);
+    fn inc(&mut self, node: IdN);
+    fn dec(&mut self, node: IdN);
+    fn check(&self, stores: &SimpleStores) -> Result<(), ()>;
+}
 
 #[derive(Clone, Debug)]
 pub struct StructuralPosition {
@@ -174,10 +137,155 @@ pub struct StructuralPosition {
     pub(crate) offsets: Vec<usize>,
 }
 
+impl TreePath<NodeIdentifier> for StructuralPosition {
+    fn node(&self) -> Option<&NodeIdentifier> {
+        self.nodes.last()
+    }
+
+    fn offset(&self) -> Option<&usize> {
+        self.offsets.last()
+    }
+
+    fn pop(&mut self) -> Option<(NodeIdentifier, usize)> {
+        Some((self.nodes.pop()?, self.offsets.pop()?))
+    }
+
+    fn goto(&mut self, node: NodeIdentifier, i: usize) {
+        self.nodes.push(node);
+        self.offsets.push(i + 1);
+    }
+
+    fn inc(&mut self, node: NodeIdentifier) {
+        *self.nodes.last_mut().unwrap() = node;
+        *self.offsets.last_mut().unwrap() += 1;
+    }
+
+    fn dec(&mut self, node: NodeIdentifier) {
+        *self.nodes.last_mut().unwrap() = node;
+        if let Some(offsets) = self.offsets.last_mut() {
+            assert!(*offsets > 1);
+            *offsets -= 1;
+        }
+    }
+
+    fn check(&self, stores: &SimpleStores) -> Result<(), ()> {
+        assert_eq!(self.offsets.len(), self.nodes.len());
+        if self.nodes.is_empty() {
+            return Ok(());
+        }
+        let mut i = self.nodes.len() - 1;
+
+        while i > 0 {
+            let e = self.nodes[i];
+            let o = self.offsets[i] - 1;
+            let p = self.nodes[i - 1];
+            let b = stores.node_store.resolve(p);
+            if !b.has_children() || e != b.get_child(&o.to_u16().expect("too big")) {
+                return Err(());
+            }
+            i -= 1;
+        }
+        Ok(())
+    }
+}
+
 impl StructuralPosition {
     pub fn to_position(&self, stores: &SimpleStores) -> Position {
-        todo!()
-        // extract_position(stores, &self.parents, &self.offsets)
+        self.check(stores).unwrap();
+        // let parents = self.parents.iter().peekable();
+        let mut from_file = false;
+        // let mut len = 0;
+        let x = *self.node().unwrap();
+        let b = stores.node_store.resolve(x);
+        let t = b.get_type();
+        // println!("t0:{:?}", t);
+        let len = if let Some(y) = b.try_get_bytes_len(0) {
+            if t != Type::Program {
+                from_file = true;
+            }
+            y as usize
+            // Some(x)
+        } else {
+            0
+            // None
+        };
+        let mut offset = 0;
+        let mut path = vec![];
+        if self.nodes.is_empty() {
+            let path = PathBuf::from_iter(path.iter().rev());
+            return Position {
+                file: path,
+                offset,
+                len,
+            };
+        }
+        let mut i = self.nodes.len() - 1;
+        if from_file {
+            while i > 0 {
+                let p = self.nodes[i - 1];
+                let b = stores.node_store.resolve(p);
+                let t = b.get_type();
+                // println!("t1:{:?}", t);
+                let o = self.offsets[i];
+                let c: usize = {
+                    let v = b.get_children()[..o - 1].to_vec();
+                    v.iter()
+                        .map(|x| {
+                            let b = stores.node_store.resolve(*x);
+                            println!("{:?}", b.get_type());
+                            b.get_bytes_len(0) as usize
+                        })
+                        .sum()
+                };
+                offset += c;
+                if t == Type::Program {
+                    from_file = false;
+                    i -= 1;
+                    break;
+                } else {
+                    i -= 1;
+                }
+            }
+        }
+        if self.nodes.is_empty() {
+        } else if !from_file
+        // || (i == 0 && stores.node_store.resolve(self.nodes[i]).get_type() == Type::Program)
+        {
+            loop {
+                let n = self.nodes[i];
+                let b = stores.node_store.resolve(n);
+                // println!("t2:{:?}", b.get_type());
+                let l = stores.label_store.resolve(b.get_label());
+                path.push(l);
+                if i == 0 {
+                    break;
+                } else {
+                    i -= 1;
+                }
+            }
+        } else {
+            let p = self.nodes[i - 1];
+            let b = stores.node_store.resolve(p);
+            let o = self.offsets[i];
+            let c: usize = {
+                let v = b.get_children()[..o - 1].to_vec();
+                v.iter()
+                    .map(|x| {
+                        let b = stores.node_store.resolve(*x);
+                        println!("{:?}", b.get_type());
+                        b.get_bytes_len(0) as usize
+                    })
+                    .sum()
+            };
+            offset += c;
+        }
+
+        let path = PathBuf::from_iter(path.iter().rev());
+        Position {
+            file: path,
+            offset,
+            len,
+        }
     }
 
     pub fn new(node: NodeIdentifier) -> Self {
@@ -185,49 +293,6 @@ impl StructuralPosition {
             nodes: vec![node],
             offsets: vec![0],
         }
-    }
-
-    pub fn with_offset(node: NodeIdentifier, o: usize) -> Self {
-        Self {
-            nodes: vec![node],
-            offsets: vec![o],
-        }
-    }
-
-    pub fn push(&mut self) {
-        // self.nodes.push(self.current_node());
-        self.offsets.push(0);
-    }
-
-    pub fn pop(&mut self) {
-        if self.offsets.len() != self.nodes.len() {
-            self.offsets.pop();
-        } else {
-            self.nodes.pop();
-            self.offsets.pop();
-        }
-    }
-
-    pub fn inc(&mut self, node: NodeIdentifier) {
-        if self.offsets.is_empty() {
-            // self.nodes.push(node);
-            // self.offsets.push(0);
-            panic!();
-        } else if self.offsets.len() != self.nodes.len() {
-            self.nodes.push(node);
-        } else {
-            *self.nodes.last_mut().unwrap() = node;
-        }
-        self.offsets.last_mut().unwrap().add_assign(1)
-    }
-}
-
-impl StructuralPosition {
-    pub fn current_node(&self) -> Option<&NodeIdentifier> {
-        self.nodes.last()
-    }
-    pub fn current_offset(&self) -> Option<&usize> {
-        self.offsets.last()
     }
 }
 
@@ -248,6 +313,11 @@ impl From<(Vec<NodeIdentifier>, Vec<usize>)> for StructuralPosition {
             nodes: x.0,
             offsets: x.1,
         }
+    }
+}
+impl From<NodeIdentifier> for StructuralPosition {
+    fn from(node: NodeIdentifier) -> Self {
+        Self::new(node)
     }
 }
 
@@ -286,21 +356,51 @@ pub struct Scout {
     path: StructuralPosition,
 }
 
+impl TreePath<NodeIdentifier> for Scout {
+    fn node(&self) -> Option<&NodeIdentifier> {
+        self.path.node()
+    }
+
+    fn offset(&self) -> Option<&usize> {
+        self.path.offset()
+    }
+
+    fn pop(&mut self) -> Option<(NodeIdentifier, usize)> {
+        self.path.pop()
+    }
+
+    fn goto(&mut self, node: NodeIdentifier, i: usize) {
+        self.path.goto(node, i)
+    }
+
+    fn inc(&mut self, node: NodeIdentifier) {
+        self.path.inc(node)
+    }
+
+    fn dec(&mut self, node: NodeIdentifier) {
+        self.path.dec(node)
+    }
+
+    fn check(&self, stores: &SimpleStores) -> Result<(), ()> {
+        self.path.check(stores)
+    }
+}
+
 impl Scout {
-    pub fn node(&self, x: &StructuralPositionStore) -> NodeIdentifier {
-        if let Some(y) = self.path.current_node() {
+    pub fn node_always(&self, x: &StructuralPositionStore) -> NodeIdentifier {
+        if let Some(y) = self.path.node() {
             *y
         } else {
             x.nodes[self.root]
         }
     }
-    pub fn try_node(&self) -> Result<NodeIdentifier, usize> {
-        if let Some(y) = self.path.current_node() {
-            Ok(*y)
-        } else {
-            Err(self.root)
-        }
-    }
+    // pub fn try_node(&self) -> Result<NodeIdentifier, usize> {
+    //     if let Some(y) = self.path.node() {
+    //         Ok(*y)
+    //     } else {
+    //         Err(self.root)
+    //     }
+    // }
     pub fn has_parents(&self) -> bool {
         if self.path.nodes.is_empty() {
             self.root != 0
@@ -308,14 +408,14 @@ impl Scout {
             true
         }
     }
-    pub fn try_up(&mut self) -> Result<(), ()> {
-        if self.path.nodes.is_empty() {
-            Err(())
-        } else {
-            self.path.pop();
-            Ok(())
-        }
-    }
+    // pub fn try_up(&mut self) -> Result<(), ()> {
+    //     if self.path.nodes.is_empty() {
+    //         Err(())
+    //     } else {
+    //         self.path.pop();
+    //         Ok(())
+    //     }
+    // }
     pub fn up(&mut self, x: &StructuralPositionStore) -> Option<NodeIdentifier> {
         // println!("up {} {:?}", self.root, self.path);
         // if !self.path.offsets.is_empty() && self.path.offsets[0] == 0 {
@@ -333,7 +433,7 @@ impl Scout {
                 None
             } else {
                 self.root = x.parents[self.root];
-                Some(self.node(x))
+                Some(self.node_always(x))
             }
             // if o == 0 {
             //     assert!(self.path.offsets[0] == 0);
@@ -342,86 +442,59 @@ impl Scout {
         } else {
             self.path.pop();
             assert_eq!(self.path.nodes.len(), self.path.offsets.len());
-            Some(self.node(x))
+            Some(self.node_always(x))
         }
         // if !self.path.offsets.is_empty() && self.path.offsets[0] == 0 {
         //     assert!(self.root == 0);
         // }
     }
-    pub fn goto(&mut self, node: NodeIdentifier, i: usize) {
-        // println!("goto {} {:?}", self.root, self.path);
-        self.path.nodes.push(node);
-        self.path.offsets.push(i + 1);
-        assert_eq!(self.path.nodes.len(), self.path.offsets.len());
-        // if !self.path.offsets.is_empty() && self.path.offsets[0] == 0 {
-        //     assert!(self.root == 0);
-        // }
-    }
-    pub fn inc(&mut self, node: NodeIdentifier) -> usize {
-        assert_eq!(self.path.nodes.len(), self.path.offsets.len());
-        *self.path.nodes.last_mut().unwrap() = node;
-        self.path.offsets.last_mut().unwrap().add_assign(1);
-        // self.path.inc(node);
-        self.path.offsets.last().unwrap() - 1
-    }
-    // pub fn inc(&mut self, node: NodeIdentifier, x: &StructuralPositionStore) {
-    // //     println!("inc {} {:?}", self.root, self.path);
-    //     if self.path.offsets.is_empty() {
-
-    //     }
-    //     self.path.inc(node);
+    // pub fn goto(&mut self, node: NodeIdentifier, i: usize) {
+    //     // println!("goto {} {:?}", self.root, self.path);
+    //     self.path.nodes.push(node);
+    //     self.path.offsets.push(i + 1);
+    //     assert_eq!(self.path.nodes.len(), self.path.offsets.len());
+    //     // if !self.path.offsets.is_empty() && self.path.offsets[0] == 0 {
+    //     //     assert!(self.root == 0);
+    //     // }
     // }
+    // pub fn inc(&mut self, node: NodeIdentifier) -> usize {
+    //     assert_eq!(self.path.nodes.len(), self.path.offsets.len());
+    //     *self.path.nodes.last_mut().unwrap() = node;
+    //     self.path.offsets.last_mut().unwrap().add_assign(1);
+    //     // self.path.inc(node);
+    //     self.path.offsets.last().unwrap() - 1
+    // }
+    // pub fn check_size(&self, stores: &SimpleStores) -> Result<(), ()> {
+    //     assert_eq!(self.path.offsets.len(), self.path.nodes.len());
+    //     if self.path.nodes.is_empty() {
+    //         return Ok(());
+    //     }
+    //     let mut i = self.path.nodes.len() - 1;
 
-    pub fn check(&self, stores: &SimpleStores) -> Result<(), ()> {
-        assert_eq!(self.path.offsets.len(), self.path.nodes.len());
-        if self.path.nodes.is_empty() {
-            return Ok(());
-        }
-        let mut i = self.path.nodes.len() - 1;
-
-        while i > 0 {
-            let e = self.path.nodes[i];
-            let o = self.path.offsets[i] - 1;
-            let p = self.path.nodes[i - 1];
-            let b = stores.node_store.resolve(p);
-            if !b.has_children() || e != b.get_child(&o.to_u16().expect("too big")) {
-                return Err(());
-            }
-            i -= 1;
-        }
-        Ok(())
-    }
-    pub fn check_size(&self, stores: &SimpleStores) -> Result<(), ()> {
-        assert_eq!(self.path.offsets.len(), self.path.nodes.len());
-        if self.path.nodes.is_empty() {
-            return Ok(());
-        }
-        let mut i = self.path.nodes.len() - 1;
-
-        while i > 0 {
-            let o = self.path.offsets[i] - 1;
-            let p = self.path.nodes[i - 1];
-            let b = stores.node_store.resolve(p);
-            if !b.has_children() || o >= (b.child_count() as usize) {
-                let s = b.child_count();
-                if b.has_children() {
-                    println!("error: {} {} {:?}", b.child_count(), o, p,);
-                } else {
-                    println!("error no children: {} {:?}", o, p,);
-                }
-                return Err(());
-            }
-            i -= 1;
-        }
-        Ok(())
-    }
+    //     while i > 0 {
+    //         let o = self.path.offsets[i] - 1;
+    //         let p = self.path.nodes[i - 1];
+    //         let b = stores.node_store.resolve(p);
+    //         if !b.has_children() || o >= (b.child_count() as usize) {
+    //             let s = b.child_count();
+    //             if b.has_children() {
+    //                 println!("error: {} {} {:?}", b.child_count(), o, p,);
+    //             } else {
+    //                 println!("error no children: {} {:?}", o, p,);
+    //             }
+    //             return Err(());
+    //         }
+    //         i -= 1;
+    //     }
+    //     Ok(())
+    // }
 
     pub fn to_position(&self, sp: &StructuralPositionStore, stores: &SimpleStores) -> Position {
         self.check(stores).unwrap();
         // let parents = self.parents.iter().peekable();
         let mut from_file = false;
         // let mut len = 0;
-        let x = self.node(sp);
+        let x = self.node_always(sp);
         let b = stores.node_store.resolve(x);
         let t = b.get_type();
         // println!("t0:{:?}", t);
@@ -471,7 +544,7 @@ impl Scout {
         }
         if self.path.nodes.is_empty() {
         } else if !from_file
-            // || (i == 0 && stores.node_store.resolve(self.path.nodes[i]).get_type() == Type::Program)
+        // || (i == 0 && stores.node_store.resolve(self.path.nodes[i]).get_type() == Type::Program)
         {
             loop {
                 from_file = false;
@@ -487,7 +560,11 @@ impl Scout {
                 }
             }
         } else {
-            let p = if i == 0 {sp.nodes[self.root]} else {self.path.nodes[i - 1]};
+            let p = if i == 0 {
+                sp.nodes[self.root]
+            } else {
+                self.path.nodes[i - 1]
+            };
             let b = stores.node_store.resolve(p);
             let t = b.get_type();
             // println!("t3:{:?}", t);
@@ -705,62 +782,16 @@ impl<'a> From<(&'a StructuralPositionStore, usize)> for ExploreStructuralPositio
 }
 
 impl StructuralPositionStore {
-    // fn new() -> Self {
-    //     Self {
-    //         nodes: vec![],
-    //         parents: vec![],
-    //         offsets: vec![],
-    //         ends: vec![],
-    //     }
-    // }
-    pub fn get_positions(&self, stores: &SimpleStores, ends: &[usize]) -> Vec<Position> {
-        self.get_positions_aux(stores, ends)
+    pub fn push_up_scout(&self, s: &mut Scout) -> Option<NodeIdentifier> {
+        s.up(self)
     }
 
-    fn get_positions_aux(&self, stores: &SimpleStores, ends: &[usize]) -> Vec<Position> {
+    pub fn ends_positions(&self, stores: &SimpleStores, ends: &[usize]) -> Vec<Position> {
         let mut r = vec![];
-
         for x in ends.iter() {
             // let parents = self.parents.iter().peekable();
             let it = ExploreStructuralPositions::from((self, *x));
             r.push(it.to_position(stores));
-            // let len = stores.node_store.resolve(self.nodes[*x]).get_bytes_len() as usize;
-            // let mut it = it.peekable();
-            // let mut offset = 0;
-            // f(&mut it);
-            // while let Some((p, o)) = it.peek() {
-            //     let b = stores.node_store.resolve(*p);
-            //     let c: usize = {
-            //         let v = b.get_children()[..o - 1].to_vec();
-            //         v.iter()
-            //             .map(|x| {
-            //                 let b = stores.node_store.resolve(*x);
-            //                 // println!("{:?}", b.get_type());
-            //                 b.get_bytes_len() as usize
-            //             })
-            //             .sum()
-            //     };
-            //     offset += c;
-            //     if b.get_type() == Type::Program {
-            //         break;
-            //     } else {
-            //         it.next();
-            //     }
-            // }
-            // let mut path = vec![];
-            // for (p, _) in it.next() {
-            //     let b = stores.node_store.resolve(p);
-            //     // println!("type {:?}", b.get_type());
-            //     // if !b.has_label() {
-            //     //     panic!("{:?} should have a label", b.get_type());
-            //     // }
-            //     let l = stores.label_store.resolve(b.get_label());
-            //     // path = path.join(path)
-            //     path.push(l)
-            // }
-            // let path = PathBuf::from_iter(path.iter().rev());
-            // r.push(Position { path, offset, len })
-            // // r.push(extract_position(stores, parents, offsets))
         }
         r
     }

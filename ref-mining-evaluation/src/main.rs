@@ -6,10 +6,8 @@ pub mod relations;
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    env, fmt,
     fs::{self, File},
-    io::{self, stdout, Read, Seek, SeekFrom, Write},
-    path::{Path, PathBuf},
+    io::{self, stdout, Read, Seek, SeekFrom},
 };
 
 use clap::{Parser, Subcommand};
@@ -581,10 +579,11 @@ fn handle_file(mut file: File) -> Result<Relations, serde_json::Error> {
     if let Ok(x) = serde_json::from_reader::<_, Relations>(&mut file) {
         Ok(x)
     } else {
-        file.seek(SeekFrom::Start(0)).unwrap();
+        file.rewind().unwrap();
+        let file = Read::by_ref(&mut file);
         let r = "["
             .as_bytes()
-            .chain(Read::by_ref(&mut file))
+            .chain(file)
             .chain("]".as_bytes());
         serde_json::from_reader::<_, Relations>(r)
     }

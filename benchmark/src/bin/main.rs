@@ -10,7 +10,7 @@ use std::{
 use git2::{ObjectType, Oid, RemoteCallbacks, Repository, Revwalk, TreeEntry};
 use rusted_gumtree_core::tree::tree::{LabelStore as _, Labeled, Tree, Typed, WithChildren};
 use rusted_gumtree_core::tree::{tree::Type, tree_path::TreePath};
-use rusted_gumtree_cvs_git::{SimpleStores, preprocessed::PreProcessedRepository, git::fetch_github_repository, allrefs::AllRefsFinder};
+use rusted_gumtree_cvs_git::{SimpleStores, preprocessed::PreProcessedRepository, git::fetch_github_repository, allrefs::write_referencial_relations};
 use rusted_gumtree_gen_ts_java::{
     filter::{BloomResult, BloomSize},
     full::FullNode,
@@ -68,56 +68,27 @@ fn main() {
     preprocessed.purge_caches();
     println!("cache size: {}", mu-memusage_linux());
     log::info!("search refs");
-    let refs = compute_references_to_declarations(&mut preprocessed, before, after, dir_path);
-    let mut first = true;
-    log::info!("print referential relations");
+    // let refs = compute_references_to_declarations(&mut preprocessed, before, after, dir_path);
+    // let mut first = true;
+    // log::info!("print referential relations");
+
+
+    let repository = fetch_github_repository(preprocessed.name());
+    // node identifier at after commit
+    let root = preprocessed
+        .commits
+        .get(&repository.find_reference(after).unwrap().peel_to_commit().unwrap().id())
+        .unwrap()
+        .ast_root;
 
     if let Some(out) = out {
         let mut out = BufWriter::new(File::create(out).unwrap());
-
-        for (k,v) in refs.iter_relations() {
-            if first {
-                first = false;
-            } else {
-                writeln!(out, ",").unwrap();
-            }
-            write!(out, r#"{{"decl":"#).unwrap();
-            write!(out, "{}",k).unwrap();
-            write!(out, r#","refs":["#).unwrap();
-            let mut first = true;
-            for x in v {
-                if first {
-                    first = false;
-                } else {
-                    writeln!(out, ",").unwrap();
-                }
-                write!(out, "{}",x).unwrap();
-            }
-            write!(out, "]}}").unwrap();
-        }
+        write_referencial_relations(&preprocessed, root, &mut out);
         out.flush().unwrap();
     } else {
         let mut out =  io::stdout();
-        for (k,v) in refs.iter_relations() {
-            if first {
-                first = false;
-            } else {
-                writeln!(out, ",").unwrap();
-            }
-            write!(out, r#"{{"decl":"#).unwrap();
-            write!(out, "{}",k).unwrap();
-            write!(out, r#","refs":["#).unwrap();
-            let mut first = true;
-            for x in v {
-                if first {
-                    first = false;
-                } else {
-                    writeln!(out, ",").unwrap();
-                }
-                write!(out, "{}",x).unwrap();
-            }
-            write!(out, "]}}").unwrap();
-        }
+        write_referencial_relations(&preprocessed, root, &mut out);
+        out.flush().unwrap();
     }
 
     // print_matched_refeferences_from_canonical_type(&mut preprocessed, before, after, dir_path);
@@ -213,62 +184,6 @@ pub fn print_declarations(
     preprocessed.print_declarations(&mut ana, root);
 }
 
-pub fn print_references_to_declarations(
-    preprocessed: &mut PreProcessedRepository,
-    before: &str,
-    after: &str,
-    dir_path: &str,
-) {
-
-    let mut ana = PartialAnalysis::default();
-
-    // macro_rules! scoped {
-    //     ( $o:expr, $i:expr ) => {{
-    //         let o = $o;
-    //         let i = $i;
-    //         let f = IdentifierFormat::from(i);
-    //         let i = preprocessed.hyper_ast.get_or_insert_label($i);
-    //         let i = LabelPtr::new(i,f);
-    //         ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
-    //     }};
-    // }
-
-    // let i = ana.solver.intern(RefsEnum::Root);
-    // let i = scoped!(scoped!(scoped!(scoped!(i,"java"),"nio"),"file"),"Path");
-    // preprocessed.hyper_ast.print_refs(&ana);
-
-    let repository = fetch_github_repository(preprocessed.name());
-    let root = preprocessed
-        .commits
-        .get(&repository.find_reference(after).unwrap().peel_to_commit().unwrap().id())
-        .unwrap()
-        .ast_root;
-    // preprocessed.print_references_to_declarations(&mut ana, root);
-    let mut relations = AllRefsFinder::new(&preprocessed);
-    relations.
-    find_references_to_declarations(root);
-    let r: HashMap<_, Vec<_>> = relations.into();
-    println!("found referential relations: {:#?}",r);
-    // let r = relations.iter_relations();
-    // println!("found referential relations: {:#?}", r);
-}
-pub fn compute_references_to_declarations<'a>(
-    preprocessed: &'a mut PreProcessedRepository,
-    before: &'a str,
-    after: &'a str,
-    dir_path: &'a str,
-)  -> AllRefsFinder<'a> {
-    let repository = fetch_github_repository(preprocessed.name());
-    let root = preprocessed
-        .commits
-        .get(&repository.find_reference(after).unwrap().peel_to_commit().unwrap().id())
-        .unwrap()
-        .ast_root;
-    // preprocessed.print_references_to_declarations(&mut ana, root);
-    let mut relations = AllRefsFinder::new(&*preprocessed);
-    relations.find_references_to_declarations(root);
-    relations
-}
 
 #[bench]
 fn bench_1(bencher: &mut Bencher) {

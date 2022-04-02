@@ -6,6 +6,7 @@ use std::{
 
 use hyper_ast::{
     hashed::SyntaxNodeHashs,
+    position::{StructuralPosition, TreePath},
     store::{labels::DefaultLabelIdentifier, nodes::DefaultNodeIdentifier as NodeIdentifier},
     tree_gen::SubTreeMetrics,
     types::{LabelStore as _, Labeled, Tree, Type, Typed, WithChildren},
@@ -62,7 +63,7 @@ pub struct POM {
     test_source_dirs: Vec<String>,
 }
 
-pub struct IterMavenModules<'a> {
+pub struct IterMavenModules2<'a> {
     stores: &'a SimpleStores,
     parents: Vec<NodeIdentifier>,
     offsets: Vec<usize>,
@@ -70,7 +71,7 @@ pub struct IterMavenModules<'a> {
     remaining: Vec<Option<NodeIdentifier>>,
 }
 
-impl<'a> Debug for IterMavenModules<'a> {
+impl<'a> Debug for IterMavenModules2<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("IterMavenModules")
             .field("parents", &self.parents())
@@ -80,10 +81,39 @@ impl<'a> Debug for IterMavenModules<'a> {
     }
 }
 
-impl<'a> Iterator for IterMavenModules<'a> {
-    type Item = NodeIdentifier;
+impl<'a> Iterator for IterMavenModules2<'a> {
+    type Item = StructuralPosition;
 
     fn next(&mut self) -> Option<Self::Item> {
+        self.next_node().map(|x| {
+            StructuralPosition::from((
+                // self.parents()[1..].to_vec(),
+                // self.offsets()[1..].to_vec(),
+                self.parents().to_vec(),
+                self.offsets().to_vec(),
+                x,
+            ))
+        })
+    }
+}
+
+impl<'a> IterMavenModules2<'a> {
+    pub fn new(stores: &'a SimpleStores, root: NodeIdentifier) -> Self {
+        Self {
+            stores,
+            parents: vec![],
+            offsets: vec![0],
+            remaining: vec![Some(root)],
+        }
+    }
+    pub fn parents(&self) -> &[NodeIdentifier] {
+        &self.parents[..self.parents.len() - 1]
+    }
+    pub fn offsets(&self) -> &[usize] {
+        &self.offsets[..self.offsets.len() - 1]
+    }
+
+    pub(crate) fn next_node(&mut self) -> Option<NodeIdentifier> {
         let x;
         loop {
             if let Some(c) = self.remaining.pop()? {
@@ -106,9 +136,9 @@ impl<'a> Iterator for IterMavenModules<'a> {
         };
 
         if is_src {
-            return self.next();
+            return self.next_node();
         } else if t != Type::MavenDirectory {
-            return self.next();
+            return self.next_node();
         }
 
         self.parents.push(x);
@@ -145,29 +175,12 @@ impl<'a> Iterator for IterMavenModules<'a> {
             Some(x)
         } else {
             while !self.remaining.is_empty() {
-                if let Some(x) = self.next() {
+                if let Some(x) = self.next_node() {
                     return Some(x);
                 }
             }
             None
         }
-    }
-}
-
-impl<'a> IterMavenModules<'a> {
-    pub fn new(stores: &'a SimpleStores, root: NodeIdentifier) -> Self {
-        Self {
-            stores,
-            parents: vec![],
-            offsets: vec![0],
-            remaining: vec![Some(root)],
-        }
-    }
-    pub fn parents(&self) -> &[NodeIdentifier] {
-        &self.parents[..self.parents.len() - 1]
-    }
-    pub fn offsets(&self) -> &[usize] {
-        &self.offsets[..self.offsets.len() - 1]
     }
 }
 
@@ -340,5 +353,133 @@ impl MavenPartialAnalysis {
             main_dirs: self.main_dirs.clone(),
             test_dirs: self.test_dirs.clone(),
         }
+    }
+}
+
+pub struct IterMavenModules<'a, T: TreePath<NodeIdentifier>> {
+    stores: &'a SimpleStores,
+    path: T,
+    stack: Vec<(NodeIdentifier, usize, Option<Vec<NodeIdentifier>>)>,
+}
+
+impl<'a, T: TreePath<NodeIdentifier>> Debug for IterMavenModules<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        todo!()
+    }
+}
+
+impl<'a, T: TreePath<NodeIdentifier> + Debug + Clone> Iterator for IterMavenModules<'a, T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let (node, offset, children) = self.stack.pop()?;
+            if let Some(children) = children {
+                if offset < children.len() {
+                    let child = children[offset];
+                    self.path.check(&self.stores).unwrap();
+                    {
+                        let b = self.stores.node_store.resolve(node);
+                        if b.has_children() {
+                            let cs = b.get_children();
+                            // println!("children: {:?} {} {:?}", node,cs.len(),cs);
+                            assert!(offset < cs.len());
+                            assert_eq!(child, cs[offset]);
+                        } else {
+                            panic!()
+                        }
+                    }
+                    if offset == 0 {
+                        match self.path.node() {
+                            Some(x) => assert_eq!(*x, node),
+                            None => {}
+                        }
+                        self.path.goto(child, offset);
+                        self.path.check(&self.stores).unwrap();
+                    } else {
+                        match self.path.node() {
+                            Some(x) => assert_eq!(*x, children[offset - 1]),
+                            None => {}
+                        }
+                        self.path.inc(child);
+                        assert_eq!(*self.path.offset().unwrap(), offset + 1);
+                        self.path.check(&self.stores).expect(&format!(
+                            "{:?} {} {:?} {:?} {:?}",
+                            node, offset, child, children, self.path
+                        ));
+                    }
+                    self.stack.push((node, offset + 1, Some(children)));
+                    self.stack.push((child, 0, None));
+                    continue;
+                } else {
+                    self.path.check(&self.stores).unwrap();
+                    self.path.pop().expect("should not go higher than root");
+                    self.path.check(&self.stores).unwrap();
+                    continue;
+                }
+            } else {
+                let b = self.stores.node_store.resolve(node);
+
+                if self.is_dead_end(&b) {
+                    continue;
+                }
+
+                if b.has_children() {
+                    let children = b.get_children();
+                    self.stack.push((node, 0, Some(children.to_vec())));
+                }
+
+                if self.is_matching(&b) {
+                    self.path.check(&self.stores).unwrap();
+                    return Some(self.path.clone());
+                }
+            }
+        }
+    }
+}
+
+impl<'a, T: TreePath<NodeIdentifier>> IterMavenModules<'a, T> {
+    pub fn new(stores: &'a SimpleStores, path: T, root: NodeIdentifier) -> Self {
+        let stack = vec![(root, 0, None)];
+        Self {
+            stores,
+            path,
+            stack,
+        }
+    }
+
+    fn is_dead_end(&self, b: &hyper_ast::store::nodes::legion::HashedNodeRef) -> bool {
+        let t = b.get_type();
+        let is_src = if b.has_label() {
+            self.stores.label_store.resolve(b.get_label()).eq("src")
+        } else {
+            false
+        };
+
+        is_src || t != Type::MavenDirectory
+    }
+    fn is_matching(&self, b: &hyper_ast::store::nodes::legion::HashedNodeRef) -> bool {
+        let contains_pom = b
+            .get_children()
+            .iter()
+            .find(|x| {
+                if let Some(n) = self.stores.node_store.try_resolve(**x) {
+                    println!("f {:?}", n.get_type());
+                    n.get_type().eq(&Type::xml_SourceFile)
+                        && if n.has_label() {
+                            println!(
+                                "f name: {:?}",
+                                self.stores.label_store.resolve(n.get_label())
+                            );
+                            self.stores.label_store.resolve(n.get_label()).eq("pom.xml")
+                        } else {
+                            false
+                        }
+                } else {
+                    false
+                }
+            })
+            .is_some();
+        contains_pom
     }
 }

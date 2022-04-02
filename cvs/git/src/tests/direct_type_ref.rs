@@ -69,7 +69,7 @@ fn run(text: &[u8]) {
 
 #[test]
 fn test_case() {
-    run(CASE_2.as_bytes())
+    run(CASE_1.as_bytes())
 }
 
 // #[test]

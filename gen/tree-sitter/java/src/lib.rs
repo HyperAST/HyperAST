@@ -22,6 +22,7 @@ pub mod vec_map_store;
 pub mod impact;
 pub mod store;
 pub mod filter;
+pub mod usage;
 
 #[cfg(test)]
 mod tests;

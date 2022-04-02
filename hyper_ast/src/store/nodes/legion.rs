@@ -481,8 +481,8 @@ impl Debug for NodeStore {
     }
 }
 
-impl<'a> crate::types::NodeStore<'a, NodeIdentifier, HashedNodeRef<'a>> for NodeStore {
-    fn resolve(&'a self, id: &NodeIdentifier) -> HashedNodeRef<'a> {
+impl<'b,'a:'b> crate::types::NodeStore<'a, NodeIdentifier, HashedNodeRef<'b>> for NodeStore {
+    fn resolve(&'a self, id: &NodeIdentifier) -> HashedNodeRef<'b> {
         self.internal
             .entry_ref(id.clone())
             .map(|x| HashedNodeRef(x))

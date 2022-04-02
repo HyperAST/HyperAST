@@ -7,7 +7,7 @@ use std::{
 use hyper_ast::{
     filter::BloomResult,
     nodes::RefContainer,
-    position::{ExploreStructuralPositions, Scout, StructuralPosition, StructuralPositionStore},
+    position::{ExploreStructuralPositions, Scout, StructuralPosition, StructuralPositionStore, TreePath},
     store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores, TypeStore},
     tree_gen::TreeGen,
     types::{LabelStore as _, Typed, Type},
@@ -251,7 +251,7 @@ fn run2(text: &[u8]) {
     let i = scoped!(package_ref, "SpoonModelBuilder");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),2);
+    assert_eq!(r.len(),3);
     println!("-------------2----------------");
     let i = scoped!(package_ref, "Launcher");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
@@ -261,7 +261,7 @@ fn run2(text: &[u8]) {
     let i = scoped!(scoped!(package_ref, "SpoonModelBuilder"), "InputType");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),2);
+    assert_eq!(r.len(),6);
     println!("-------------4----------------");
     let package_ref2 = scoped!(scoped!(scoped!(package_ref, "support"), "compiler"), "jdt");
     let i = scoped!(package_ref2, "SpoonFolder");
@@ -299,6 +299,12 @@ fn run2(text: &[u8]) {
     println!("-------------10---------------");
     let package_ref2 = scoped!(package_ref, "processor");
     let i = scoped!(package_ref2, "AbstractProcessor");
+    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
+    assert_eq!(r.len(),2);
+    println!("-------------11----------------");
+    let package_ref2 = scoped!(scoped!(scoped!(package_ref, "support"), "compiler"), "jdt");
+    let i = scoped!(scoped!(package_ref2, "JDTBasedSpoonCompiler"), "AAA");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(),1);
@@ -340,7 +346,14 @@ public class JDTBasedSpoonCompiler implements spoon.SpoonModelBuilder {
 				markElementForSniperPrinting(element);
 			}
 		});
+        types = new InputType[]{InputType.CTTYPES};
+        for (InputType inputType : types) {}
+		SpoonModelBuilder.InputType.FILES.initializeCompiler(batchCompiler);
+
+        new spoon.support.compiler.jdt.JDTBasedSpoonCompiler.AAA(x)
     }
+
+    static class AAA {}
 }
 
 class FactoryCompilerConfig implements SpoonModelBuilder.InputType {
@@ -510,6 +523,12 @@ fn run3(text: &[u8]) {
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(),1);
+    println!("-------------7----------------");
+    let package_ref2 = scoped!(package_ref, "compiler");
+    let i = scoped!(package_ref2, "SpoonFile");
+    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
+    assert_eq!(r.len(),1);
 }
 
 #[test]
@@ -561,13 +580,15 @@ public class SpoonFile<T extends SpoonFile<T>> implements SpoonResource {
 
     @Override
 	public <T extends SpoonResource> T setA(boolean f) {
-
     }
+
+    public static <T> T build(spoon.compiler.SpoonFile builder, Object o) {return null;}
 
 }"#;
 
 /// search spoon.compiler.builder.ClasspathOptions
 /// search spoon.compiler.builder.SourceOptions
+/// TODO search spoon.compiler.builder.AAA
 static CASE_4: &'static str = r#"package spoon.compiler.builder;
 /**
  * Helper to build arguments for the JDT compiler.
@@ -580,6 +601,8 @@ public interface JDTBuilder extends Builder {
 
     public JDTBuilder sources(SourceOptions<?> options) {
     }
+    @DerivedProperty // aaa
+    AAA getAAA();
 }"#;
 
 /// search spoon.legacy.NameFilter
@@ -686,6 +709,44 @@ public class PatternBuiler {
         }
     }
     Environment a;
+
+}"#;
+
+/// search spoon.reflect.declaration.CtAnonymousExecutable
+static CASE_7: &'static str = r#"package spoon;
+
+import spoon.reflect.declaration.CtAnonymousExecutable;
+
+public enum CtRole {
+    ANNONYMOUS_EXECUTABLE(TYPE_MEMBER, obj -> obj instanceof CtAnonymousExecutable),
+
+}"#;
+
+/// CtAnnotationImpl in body
+static CASE_8: &'static str = r#"package spoon;
+
+import spoon.reflect.declaration.CtAnonymousExecutable;
+
+public class CtAnnotationImpl {
+    class A {
+        String f() {
+            return CtAnnotationImpl.this.toString();
+        }
+    }
+
+}"#;
+
+/// find SwitchNode in body one time
+static CASE_9: &'static str = r#"package spoon.pattern.internal.node;
+
+public class SwitchNode extends AbstractNode implements InlineNode {
+
+    private class CaseNode extends AbstractNode implements InlineNode {
+        @Override
+        public void forEachParameterInfo(BiConsumer<ParameterInfo, RootNode> consumer) {
+                SwitchNode.this.forEachParameterInfo(consumer);
+        }
+    }
 
 }"#;
 

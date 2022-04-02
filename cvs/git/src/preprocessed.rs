@@ -9,11 +9,9 @@ use git2::{Oid, Repository};
 use hyper_ast::{
     filter::{Bloom, BF},
     hashed::{self, SyntaxNodeHashs},
-    position::{extract_position, Position, StructuralPosition},
     store::{
-        labels::DefaultLabelIdentifier,
         nodes::legion::{compo, EntryRef, NodeStore, CS},
-        nodes::{legion, DefaultNodeIdentifier as NodeIdentifier},
+        nodes::{DefaultNodeIdentifier as NodeIdentifier},
     },
     tree_gen::SubTreeMetrics,
     types::{LabelStore as _, Labeled, Tree, Type, Typed, WithChildren},
@@ -22,24 +20,25 @@ use log::info;
 use rusted_gumtree_gen_ts_java::{
     filter::BloomSize,
     impact::{
-        declaration::ExplorableDecl,
-        element::{ExplorableRef, IdentifierFormat, LabelPtr, RefPtr, RefsEnum},
+        element::{RefPtr},
         partial_analysis::PartialAnalysis,
-        usage::{self, remake_pkg_ref, IterDeclarations},
     },
-    java_tree_gen_full_compress_legion_ref::{self, hash32},
+    java_tree_gen_full_compress_legion_ref::{self, hash32}, usage::declarations::IterDeclarationsUnstableOpti,
 };
 
 use crate::{
     git::{all_commits_between, BasicGitObjects},
     java::{handle_java_file, JavaAcc},
-    maven::{handle_pom_file, IterMavenModules, MavenModuleAcc, POM},
-    Commit, Diffs, Impacts, SimpleStores, MAX_REFS, MD,
+    maven::{handle_pom_file, IterMavenModules2, MavenModuleAcc, POM},
+    Commit, SimpleStores, MAX_REFS, MD,
 };
 use rusted_gumtree_gen_ts_java::java_tree_gen_full_compress_legion_ref as java_tree_gen;
-use rusted_gumtree_gen_ts_xml::xml_tree_gen::{self, XmlTreeGen};
+use rusted_gumtree_gen_ts_xml::xml_tree_gen::{XmlTreeGen};
 use tuples::CombinConcat;
 
+/// preprocess a git repository
+/// using the hyperAST and caching git object transformations
+/// for now only work with java with maven
 pub struct PreProcessedRepository {
     name: String,
     pub(crate) main_stores: SimpleStores,
@@ -666,6 +665,7 @@ impl PreProcessedRepository {
                             println!("blob {:?}", std::str::from_utf8(&name));
                             let a = repository.find_blob(x).unwrap();
                             if let Ok(z) = std::str::from_utf8(a.content()) {
+                                println!("{:?} contain error", std::str::from_utf8(&name));
                                 // println!("content: {}", z);
                                 let text = a.content();
                                 let parent_acc = &mut stack.last_mut().unwrap().2;
@@ -1495,74 +1495,40 @@ impl PreProcessedRepository {
         ana: &mut PartialAnalysis,
         root: NodeIdentifier,
     ) {
-        let mut m_it = IterMavenModules::new(&self.main_stores, root);
+        let mut m_it = IterMavenModules2::new(&self.main_stores, root);
         loop {
-            let d = if let Some(d) = m_it.next() { d } else { break };
+            let d = if let Some(d) = m_it.next_node() { d } else { break };
             // m_it.parents();
             let src = self.child_by_name(d, "src");
 
             let s = src.and_then(|d| self.child_by_name(d, "main"));
             let s = s.and_then(|d| self.child_by_name(d, "java"));
-            // let s = s.and_then(|d| self.child_by_type(d, &Type::Directory));
             if let Some(s) = s {
-                // let n = self.main_stores.node_store.resolve(d);
-                // println!(
-                //     "search in module/src/main/java {}",
-                //     self
-                //         .main_stores
-                //         .label_store
-                //         .resolve(n.get_label())
-                // );
-                // usage::find_all_decls(&self.main_stores, ana, s);
                 self.print_references_to_declarations_aux(ana, s)
             }
             let s = src.and_then(|d| self.child_by_name(d, "test"));
             let s = s.and_then(|d| self.child_by_name(d, "java"));
-            // let s = s.and_then(|d| self.child_by_type(d, &Type::Directory));
             if let Some(s) = s {
-                // let n = self.main_stores.node_store.resolve(d);
-                // println!(
-                //     "search in module/src/test/java {}",
-                //     self
-                //         .main_stores
-                //         .label_store
-                //         .resolve(n.get_label())
-                // );
-                // let mut d_it = IterDeclarations::new(&self.main_stores, s);
                 self.print_references_to_declarations_aux(ana, s)
             }
         }
     }
 
     pub fn print_declarations(&self, ana: &mut PartialAnalysis, root: NodeIdentifier) {
-        for d in IterMavenModules::new(&self.main_stores, root) {
+        let mut m_it = IterMavenModules2::new(&self.main_stores, root);
+        loop  {
+            let d = if let Some(d) = m_it.next_node() { d } else { break };
             let s = self.child_by_name(d, "src");
             let s = s.and_then(|d| self.child_by_name(d, "main"));
             let s = s.and_then(|d| self.child_by_name(d, "java"));
-            // let s = s.and_then(|d| self.child_by_type(d, &Type::Directory));
             if let Some(s) = s {
-                // let n = self.main_stores.node_store.resolve(d);
-                // println!(
-                //     "search in module/src/main/java {}",
-                //     self
-                //         .main_stores
-                //         .label_store
-                //         .resolve(n.get_label())
-                // );
-                // usage::find_all_decls(&self.main_stores, ana, s);
-                let mut d_it = IterDeclarations::new(&self.main_stores, s);
+                let mut d_it = IterDeclarationsUnstableOpti::new(&self.main_stores, s);
                 loop {
                     if let Some(x) = d_it.next() {
                         let b = self.main_stores.node_store.resolve(x);
                         let t = b.get_type();
                         println!("now search for {:?}", &t);
                         println!("it state {:?}", &d_it);
-                        // java_tree_gen_full_compress_legion_ref::print_tree_syntax(
-                        //     &self.main_stores.node_store,
-                        //     &self.main_stores.label_store,
-                        //     &x,
-                        // );
-                        // println!();
                     } else {
                         break;
                     }
@@ -1571,29 +1537,14 @@ impl PreProcessedRepository {
             let s = self.child_by_name(d, "src");
             let s = s.and_then(|d| self.child_by_name(d, "test"));
             let s = s.and_then(|d| self.child_by_name(d, "java"));
-            // let s = s.and_then(|d| self.child_by_type(d, &Type::Directory));
             if let Some(s) = s {
-                // let n = self.main_stores.node_store.resolve(d);
-                // println!(
-                //     "search in module/src/test/java {}",
-                //     self
-                //         .main_stores
-                //         .label_store
-                //         .resolve(n.get_label())
-                // );
-                let mut d_it = IterDeclarations::new(&self.main_stores, s);
+                let mut d_it = IterDeclarationsUnstableOpti::new(&self.main_stores, s);
                 loop {
                     if let Some(x) = d_it.next() {
                         let b = self.main_stores.node_store.resolve(x);
                         let t = b.get_type();
                         println!("now search for {:?}", &t);
                         println!("it state {:?}", &d_it);
-                        // java_tree_gen_full_compress_legion_ref::print_tree_syntax(
-                        //     &self.main_stores.node_store,
-                        //     &self.main_stores.label_store,
-                        //     &x,
-                        // );
-                        // println!();
                     } else {
                         break;
                     }
@@ -1605,19 +1556,15 @@ impl PreProcessedRepository {
 
 fn drain_filter_strip(v: &mut Option<Vec<PathBuf>>, name: &[u8]) -> Vec<PathBuf> {
     let mut new_sub_modules = vec![];
+    let name = std::str::from_utf8(&name).unwrap();
     if let Some(sub_modules) = v {
         sub_modules
             .drain_filter(|x| {
-                // x.components().next().map_or(false, |s| {
-                //     name.eq(std::os::unix::prelude::OsStrExt::as_bytes(
-                //         s.as_os_str(),
-                //     ))
-                // })
-                x.starts_with(std::str::from_utf8(&name).unwrap())
+                x.starts_with(name)
             })
             .for_each(|x| {
                 let x = x
-                    .strip_prefix(std::str::from_utf8(&name).unwrap())
+                    .strip_prefix(name)
                     .unwrap()
                     .to_owned();
                 new_sub_modules.push(x);

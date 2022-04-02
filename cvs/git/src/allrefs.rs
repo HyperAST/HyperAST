@@ -1,288 +1,164 @@
-// use std::{
-//     collections::{BTreeMap, HashMap},
-//     env,
-//     fmt::{self, Debug},
-//     fs,
-//     io::{stdout, Write},
-//     iter::Peekable,
-//     ops::AddAssign,
-//     path::{Components, Path, PathBuf},
-//     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
-// };
-
-// use git2::{ObjectType, Oid, RemoteCallbacks, Repository, Revwalk, TreeEntry};
-// use hyper_ast::{
-//     filter::{Bloom, BF},
-//     hashed::{self, SyntaxNodeHashs},
-//     store::{
-//         labels::{DefaultLabelValue, LabelStore},
-//         nodes::legion::{compo, EntryRef, NodeStore, CS},
-//         nodes::{legion, DefaultNodeIdentifier as NodeIdentifier},
-//         TypeStore,
-//     },
-//     tree_gen::SubTreeMetrics,
-//     types::{LabelStore as _, Labeled, Tree, Type, Typed, WithChildren}, position::{Position, extract_position},
-// };
-// use log::info;
-// use rusted_gumtree_core::tree::tree::LabelStore as _;
-// use rusted_gumtree_gen_ts_java::{
-//     filter::BloomSize,
-//     impact::{
-//         declaration::ExplorableDecl,
-//         element::{ExplorableRef, IdentifierFormat, LabelPtr, RefPtr, RefsEnum},
-//         partial_analysis::PartialAnalysis,
-//         usage::{self, remake_pkg_ref, IterDeclarations},
-//     },
-//     java_tree_gen_full_compress_legion_ref::{self, hash32},
-//     tree_gen::TreeGen,
-// };
-
-use std::{collections::HashMap, fmt::Display, ops::ControlFlow, time::Instant};
+use std::{borrow::Borrow, collections::HashMap, io::Write, path::Path, time::Instant};
 
 use hyper_ast::{
     position::{
-        extract_position, ExploreStructuralPositions, Position, Scout, StructuralPosition,
-        StructuralPositionStore,
+        ExploreStructuralPositions, Position, Scout, StructuralPosition, StructuralPositionStore,
+        TreePath,
     },
-    store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef},
+    store::defaults::NodeIdentifier,
     types::{LabelStore, Labeled, Type, Typed, WithChildren},
 };
-use rusted_gumtree_gen_ts_java::impact::{
-    element::{IdentifierFormat, LabelPtr, RefsEnum},
-    partial_analysis::PartialAnalysis,
-    reference::DisplayRef,
-    usage::{self, remake_pkg_ref, IterDeclarations, IterDeclarations2},
+use rusted_gumtree_gen_ts_java::{
+    impact::{
+        element::{IdentifierFormat, LabelPtr, RefsEnum},
+        partial_analysis::PartialAnalysis,
+        reference::DisplayRef,
+        usage::{self, remake_pkg_ref},
+    },
+    usage::declarations::{self, IterDeclarations},
 };
 
-use crate::{maven::IterMavenModules, preprocessed::PreProcessedRepository};
+use crate::{
+    maven::{IterMavenModules, IterMavenModules2},
+    preprocessed::PreProcessedRepository,
+};
 
-/// find all referencial relations in a commit of a preprocessed repository
-pub struct AllRefsFinder<'a> {
-    prepro: &'a PreProcessedRepository,
-    ana: PartialAnalysis,
-    structural_positions: StructuralPositionStore,
-    relations: HashMap<usize, Vec<usize>>,
+pub fn write_referencial_relations<W: Write>(
+    prepro: &PreProcessedRepository,
+    root: NodeIdentifier,
+    out: &mut W,
+) {
+    let modules = IterMavenModules::new(&prepro.main_stores, StructuralPosition::new(root), root);
+    let declarations = iter_declarations(prepro, modules);
+
+    for (decl, m, of) in declarations {
+        let of = of
+            .into_iter()
+            .map(|x| (x.to_position(&prepro.main_stores).file().to_owned(), x));
+        let p_in_of = find_package_in_other_folders(
+            prepro,
+            decl.to_position(&prepro.main_stores).file(),
+            decl.to_position(&prepro.main_stores).file(),
+            of,
+        );
+        let p_in_of: Vec<Scout> = p_in_of.into_iter().map(|x| (x, 0).into()).collect();
+
+        let b = prepro
+            .main_stores
+            .node_store
+            .resolve(decl.node().unwrap().to_owned());
+        let t = b.get_type();
+        if t == Type::ClassDeclaration
+            || t == Type::InterfaceDeclaration
+            || t == Type::AnnotationTypeDeclaration
+        {
+            let mut structural_positions = StructuralPosition::new(root).into();
+            let references = RefsFinder::new(prepro, &mut structural_positions)
+                .find_type_declaration_references(
+                    (decl.clone(), 0).into(),
+                    m.node().unwrap(),
+                    &p_in_of,
+                );
+            let decl = decl.to_position(&prepro.main_stores);
+            let references = structural_positions.ends_positions(&prepro.main_stores, &references);
+            write_positions_of_referencial_relations(decl, references, out);
+        }
+    }
 }
 
-impl<'a> AllRefsFinder<'a> {
-    pub fn new(prepro: &'a PreProcessedRepository) -> Self {
+fn write_positions_of_referencial_relations<W: Write>(
+    decl: Position,
+    references: Vec<Position>,
+    out: &mut W,
+) {
+    write!(out, r#"{{"decl":"#).unwrap();
+    write!(out, "{}", decl).unwrap();
+    write!(out, r#","refs":["#).unwrap();
+    let mut first = true;
+    for x in references {
+        if first {
+            first = false;
+        } else {
+            write!(out, ",").unwrap();
+        }
+        write!(out, "{}", x).unwrap();
+    }
+    write!(out, "]}}").unwrap();
+    writeln!(out, ",").unwrap();
+}
+
+type ExtendedDeclaration = (
+    StructuralPosition,
+    StructuralPosition,
+    Vec<StructuralPosition>,
+);
+
+pub fn iter_declarations<'a>(
+    prepro: &'a PreProcessedRepository,
+    modules: IterMavenModules<'a, StructuralPosition>,
+) -> impl Iterator<Item = ExtendedDeclaration> + 'a {
+    modules
+        .flat_map(|m| {
+            let src = goto_by_name(prepro, m.clone(), "src");
+            let source_tests = src
+                .clone()
+                .and_then(|x| goto_by_name(prepro, x, "test"))
+                .and_then(|x| goto_by_name(prepro, x, "java"));
+            let source = src
+                .and_then(|x| goto_by_name(prepro, x, "main"))
+                .and_then(|x| goto_by_name(prepro, x, "java"));
+            let mut r = vec![];
+            let mut test_folders = vec![];
+            if let Some(source_tests) = source_tests {
+                test_folders.push(source_tests.clone());
+                r.push((source_tests, m.clone(), vec![]))
+            }
+            if let Some(source) = source {
+                r.push((source, m, test_folders))
+            }
+            r
+        })
+        .flat_map(|(f, m, of)| {
+            let n = *f.node().unwrap();
+            IterDeclarations::new(&prepro.main_stores, f, n)
+                .map(move |x| (x, m.clone(), of.clone()))
+        })
+}
+
+pub struct RefsFinder<'a> {
+    prepro: &'a PreProcessedRepository,
+    ana: PartialAnalysis,
+    structural_positions: &'a mut StructuralPositionStore,
+}
+
+impl<'a> RefsFinder<'a> {
+    pub fn new(
+        prepro: &'a PreProcessedRepository,
+        structural_positions: &'a mut StructuralPositionStore,
+    ) -> Self {
         Self {
             prepro,
             ana: PartialAnalysis::default(),
-            structural_positions: Default::default(),
-            relations: Default::default(),
+            structural_positions,
         }
-    }
-
-    pub fn find_references_to_declarations(&mut self, root: NodeIdentifier) {
-        self.structural_positions = StructuralPosition::new(root).into();
-        let mut m_it = IterMavenModules::new(&self.prepro.main_stores, root);
-        loop {
-            let maven_module = if let Some(d) = m_it.next() { d } else { break };
-            assert_eq!(m_it.parents().len() + 1, m_it.offsets().len());
-            let mut other_root_packages = vec![];
-            let mut scout_main = if maven_module == root {
-                Scout::from((StructuralPosition::from((vec![], vec![])), 0))
-            } else {
-                let scout = Scout::from((
-                    StructuralPosition::from((
-                        m_it.parents()[1..].to_vec(),
-                        m_it.offsets()[1..].to_vec(),
-                        maven_module,
-                    )),
-                    0,
-                ));
-                scout.check(&self.prepro.main_stores).unwrap();
-                scout
-            };
-            let mut scout_test = scout_main.clone();
-            let src = self.prepro.child_by_name_with_idx(maven_module, "src");
-            println!("src:{:?}", src);
-            // first the tests code
-            let src = if let Some((d, i)) = src {
-                scout_main.goto(d, i);
-                scout_test.goto(d, i);
-                // scout_main.check(&self.prepro.main_stores).unwrap();
-                // scout_test.check(&self.prepro.main_stores).unwrap();
-                d
-            } else {
-                continue;
-            };
-            let src_test = self.prepro.child_by_name_with_idx(src, "test");
-            let src_test_java = src_test.and_then(|(d, i)| {
-                scout_test.goto(d, i);
-                scout_test.check(&self.prepro.main_stores).unwrap();
-                self.prepro.child_by_name_with_idx(d, "java")
-            });
-            if let Some((d, i)) = src_test_java {
-                scout_test.goto(d, i);
-                scout_test.check(&self.prepro.main_stores).unwrap();
-                other_root_packages.push(scout_test.clone());
-                self.find_references_to_declarations_aux(&maven_module, scout_test, &vec![])
-            }
-
-            // then the production code
-
-            let src_main = self.prepro.child_by_name_with_idx(src, "main");
-            let src_main_java = src_main.and_then(|(d, i)| {
-                scout_main.goto(d, i);
-                scout_main.check(&self.prepro.main_stores).unwrap();
-                self.prepro.child_by_name_with_idx(d, "java")
-            });
-            // let s = s.and_then(|d| self.child_by_type(d, &Type::Directory));
-            if let Some((d, i)) = src_main_java {
-                scout_main.goto(d, i);
-                scout_main.check(&self.prepro.main_stores).unwrap();
-                // let n = self.prepro.hyper_ast.main_stores().node_store.resolve(d);
-                // println!(
-                //     "search in module/src/main/java {}",
-                //     self.prepro.hyper_ast
-                //         .main_stores
-                //         .label_store
-                //         .resolve(n.get_label())
-                // );
-                // usage::find_all_decls(&self.prepro.hyper_ast.main_stores, &mut self.ana, s);
-                self.find_references_to_declarations_aux(
-                    &maven_module,
-                    scout_main,
-                    &other_root_packages,
-                )
-            }
-        }
-    }
-
-    fn find_references_to_declarations_aux(
-        &mut self,
-        mut maven_module: &NodeIdentifier,
-        mut root_package: Scout,
-        other_root_packages: &[Scout],
-    ) {
-        // let mut d_it = IterDeclarations::new(&self.prepro.main_stores, s.node(&self.structural_positions));
-        println!("scout: {:?}", root_package);
-        self.structural_positions
-            .check(&self.prepro.main_stores)
-            .unwrap();
-        root_package.check(&self.prepro.main_stores).unwrap();
-        let root_package_p =
-            root_package.to_position(&self.structural_positions, &self.prepro.main_stores);
-        let root_package_file_path = root_package_p.file();
-        let structural_positions_root = self.structural_positions.push(&mut root_package);
-        self.structural_positions
-            .check(&self.prepro.main_stores)
-            .unwrap();
-        let it = ExploreStructuralPositions::from((
-            &self.structural_positions,
-            structural_positions_root,
-        ));
-        println!("search from {:?}", it.to_position(&self.prepro.main_stores));
-
-        let mut d_it = {
-            let n = root_package.node(&self.structural_positions);
-            IterDeclarations2::new(&self.prepro.main_stores, root_package, n)
-        };
-        self.structural_positions
-            .check(&self.prepro.main_stores)
-            .unwrap();
-        loop {
-            if let Some(decl) = d_it.next() {
-                let b = self
-                    .prepro
-                    .main_stores
-                    .node_store
-                    .resolve(decl.node(&self.structural_positions));
-                let t = b.get_type();
-                println!("could search {:?}", &t);
-                if t == Type::ClassDeclaration
-                    || t == Type::InterfaceDeclaration
-                    || t == Type::AnnotationTypeDeclaration
-                {
-                    let other_root_packages_paths: Vec<_> = self.find_package_in_other_roots(
-                        &decl,
-                        root_package_file_path,
-                        other_root_packages,
-                    );
-
-                    self.find_type_declaration_references(
-                        decl,
-                        maven_module,
-                        &other_root_packages_paths,
-                    );
-                } else if t == Type::EnumDeclaration {
-                    self.find_type_declaration_references(decl, maven_module, &vec![]);
-                // TODO
-                // TODO go to variants and search references to them then union results
-                } else {
-                    // TODO
-                    // println!("todo impl search on {:?}", &t);
-                }
-
-                // println!("it state {:?}", &d_it);
-                // java_tree_gen_full_compress_legion_ref::print_tree_syntax(
-                //     &self.prepro.hyper_ast.main_stores().node_store,
-                //     &self.prepro.hyper_ast.main_stores().label_store,
-                //     &x,
-                // );
-                // println!();
-            } else {
-                break;
-            }
-        }
-    }
-
-    fn find_package_in_other_roots(
-        &mut self,
-        decl: &Scout,
-        root_package_file_path: &std::path::Path,
-        other_root_packages: &[Scout],
-    ) -> Vec<Scout> {
-        let decl_p = decl.to_position(&self.structural_positions, &self.prepro.main_stores);
-        let decl_file_path = decl_p.file();
-        let decl_package_path = decl_file_path.parent().unwrap();
-        let rel = decl_package_path
-            .strip_prefix(root_package_file_path)
-            .expect("a relative path");
-        other_root_packages
-            .iter()
-            .filter_map(|x| {
-                let other_root_p =
-                    x.to_position(&self.structural_positions, &self.prepro.main_stores);
-                let other_root_path = other_root_p.file();
-                let path = other_root_path.join(rel);
-                let mut r = x.clone();
-                for n in path.components() {
-                    let x = r.node(&self.structural_positions);
-                    let n = std::os::unix::prelude::OsStrExt::as_bytes(n.as_os_str());
-                    let n = std::str::from_utf8(n).unwrap();
-                    let aaa = self.prepro.child_by_name_with_idx(x, n);
-                    if let Some((x, i)) = aaa {
-                        r.goto(x, i);
-                    } else {
-                        return None;
-                    }
-                }
-                Some(r)
-            })
-            .collect()
     }
 
     fn find_type_declaration_references(
         &mut self,
-        mut decl: Scout,
+        decl: Scout,
         maven_module: &NodeIdentifier,
         mirror_packages: &[Scout],
-    ) {
+    ) -> Vec<usize> {
         let now = Instant::now();
         self.structural_positions
             .check(&self.prepro.main_stores)
             .unwrap();
         println!("{:?}", decl);
         decl.check(&self.prepro.main_stores).unwrap();
-        let key = self.structural_positions.push(&mut decl);
         self.structural_positions
             .check(&self.prepro.main_stores)
             .unwrap();
-        let it = ExploreStructuralPositions::from((&self.structural_positions, key));
-        let r = self.relations.entry(key).or_insert(vec![]);
+        let mut r = vec![];
 
         macro_rules! search {
             ( $p:expr, $i:expr, $s:expr ) => {{
@@ -301,12 +177,12 @@ impl<'a> AllRefsFinder<'a> {
             .prepro
             .main_stores
             .node_store
-            .resolve(decl.node(&self.structural_positions));
+            .resolve(decl.node_always(&self.structural_positions));
         let t = b.get_type();
         println!(
             "now search for {:?} at {:?}",
             &t,
-            it.to_position(&self.prepro.main_stores)
+            decl.to_position(&self.structural_positions, &self.prepro.main_stores)
         );
         {
             let r = self.ana.solver.intern(RefsEnum::MaybeMissing);
@@ -326,7 +202,7 @@ impl<'a> AllRefsFinder<'a> {
             i
         } else {
             println!("time taken for refs search: {}", now.elapsed().as_nanos());
-            return;
+            return r;
         };
 
         let f = self.prepro.main_stores.label_store.resolve(&i);
@@ -389,7 +265,7 @@ impl<'a> AllRefsFinder<'a> {
                         let bb = self.prepro.main_stores.node_store.resolve(xxx);
                         let t = bb.get_type();
                         if t == Type::ObjectCreationExpression {
-                            return;
+                            return r;
                         } else if !t.is_type_declaration() {
                             panic!("{:?}", t);
                         }
@@ -482,9 +358,9 @@ impl<'a> AllRefsFinder<'a> {
                     curr = scout.up(&self.structural_positions);
                     break;
                 } else if t == Type::ObjectCreationExpression {
-                    return;
+                    return r;
                 } else if t == Type::Block {
-                    return; // TODO check if really done
+                    return r; // TODO check if really done
                 } else {
                     todo!("{:?}", t)
                 }
@@ -528,7 +404,7 @@ impl<'a> AllRefsFinder<'a> {
                     .prepro
                     .main_stores
                     .node_store
-                    .resolve(scout.node(&self.structural_positions));
+                    .resolve(scout.node_always(&self.structural_positions));
                 for (i, xx) in bb.get_children().iter().enumerate() {
                     let bb = self.prepro.main_stores.node_store.resolve(*xx);
                     let t = bb.get_type();
@@ -578,92 +454,53 @@ impl<'a> AllRefsFinder<'a> {
             }
         }
         println!("time taken for refs search: {}", now.elapsed().as_nanos());
-    }
-
-    pub fn iter_relations(&self) -> impl Iterator<Item = (Position, Vec<Position>)> + '_ {
-        IterRefRelations {
-            x: &self,
-            r: self.relations.iter(),
-        }
-    }
-}
-
-impl<'a> Into<HashMap<Position, Vec<Position>>> for AllRefsFinder<'a> {
-    fn into(self) -> HashMap<Position, Vec<Position>> {
-        let mut r: HashMap<Position, Vec<Position>> = Default::default();
-        for (k, v) in self.relations {
-            let v = self
-                .structural_positions
-                .get_positions(&self.prepro.main_stores, &v);
-            // let v = v
-            //     .iter()
-            //     .map(|x| x.to_position(&self.prepro.main_stores))
-            //     .collect();
-            let k = self
-                .structural_positions
-                .get_positions(&self.prepro.main_stores, &[k])
-                .pop()
-                .expect("should have produced one position");
-            // let k = k.to_position(&self.prepro.main_stores);
-            r.insert(k, v);
-        }
         r
     }
 }
-struct IterRefRelations<'a, It>
-where
-    It: Iterator<Item = (&'a usize, &'a Vec<usize>)>,
-{
-    x: &'a AllRefsFinder<'a>,
-    r: It,
+
+pub fn goto_by_name<T: TreePath<NodeIdentifier>>(
+    prepro: &PreProcessedRepository,
+    mut p: T,
+    name: &str,
+) -> Option<T> {
+    p.node()
+        .and_then(|x| prepro.child_by_name_with_idx(*x, name))
+        .and_then(|(n, i)| {
+            p.goto(n, i);
+            Some(p)
+        })
 }
 
-impl<'a, It> Iterator for IterRefRelations<'a, It>
-where
-    It: Iterator<Item = (&'a usize, &'a Vec<usize>)>,
-{
-    type Item = (Position, Vec<Position>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let (k, v) = self.r.next()?;
-        let v = self
-            .x
-            .structural_positions
-            .get_positions(&self.x.prepro.main_stores, &v);
-        let k = self
-            .x
-            .structural_positions
-            .get_positions(&self.x.prepro.main_stores, &[*k])
-            .pop()
-            .expect("should have produced one position");
-        Some((k, v))
-    }
+pub fn find_package_in_other_folders<
+    'a,
+    T: TreePath<NodeIdentifier> + Clone,
+    U: Borrow<Path>,
+    V: Iterator<Item = (U, T)>,
+>(
+    prepro: &PreProcessedRepository,
+    package: &Path,
+    root_package_file_path: &Path,
+    other_root_packages: V,
+) -> Vec<T> {
+    let rel = package
+        .strip_prefix(root_package_file_path)
+        .expect("a relative path");
+    other_root_packages
+        .filter_map(|(p, x)| {
+            let path = p.borrow().join(rel);
+            let mut r = x.clone();
+            for n in path.components() {
+                let x = *r.node().unwrap();
+                let n = std::os::unix::prelude::OsStrExt::as_bytes(n.as_os_str());
+                let n = std::str::from_utf8(n).unwrap();
+                let aaa = prepro.child_by_name_with_idx(x, n);
+                if let Some((x, i)) = aaa {
+                    r.goto(x, i);
+                } else {
+                    return None;
+                }
+            }
+            Some(r)
+        })
+        .collect()
 }
-
-// impl<'a> Display for AllRefsFinder<'a> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-
-//         for (k, v) in self.relations.iter() {
-//             let v = self
-//                 .structural_positions
-//                 .get_positions(&self.prepro.main_stores, v);
-//             // let v = v
-//             //     .iter()
-//             //     .map(|x| x.to_position(&self.prepro.main_stores))
-//             //     .collect();
-//             let k = self
-//                 .structural_positions
-//                 .get_positions(&self.prepro.main_stores, &[*k])
-//                 .pop()
-//                 .expect("should have produced one position");
-//             // let k = k.to_position(&self.prepro.main_stores);
-//             write!(f, "{{\"decl\":{},\"refs\":{}}}",k,v)?;//.insert(k, v);
-//         }
-//         Ok(())
-//     }
-// }
-
-// TODO everyting to iterators
-// struct IterPerDeclarations {
-
-// }
