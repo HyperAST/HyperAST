@@ -1,6 +1,6 @@
 #![feature(min_specialization)]
 #![feature(generic_associated_types)]
-
+#![feature(backtrace)]
 
 pub mod types;
 pub mod nodes;
@@ -12,6 +12,7 @@ pub mod filter;
 pub mod compat;
 pub mod utils;
 pub mod position;
+pub mod usage;
 
 #[cfg(test)]
 mod tests;

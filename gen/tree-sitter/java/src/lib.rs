@@ -1,6 +1,7 @@
 #![feature(min_specialization)]
 #![feature(generic_associated_types)]
 #![feature(let_chains)]
+#![feature(backtrace)]
 pub mod compat;
 pub mod full;
 pub mod hashed;

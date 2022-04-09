@@ -24,7 +24,7 @@ pub enum BloomSize {
 
 pub trait BF<T: ?Sized> {
     type Result;
-    const Size: BloomSize;
+    const SIZE: BloomSize;
     fn insert<U: AsRef<[u8]>>(&mut self, dups: usize, item: U) {
         panic!()
     }
@@ -109,7 +109,7 @@ pub enum BloomResult {
 
 impl BF<[u8]> for Bloom<&'static [u8], u16> {
     type Result = BloomResult;
-    const Size:BloomSize = BloomSize::B16;
+    const SIZE:BloomSize = BloomSize::B16;
 
     fn insert<U: AsRef<[u8]>>(&mut self, dups: usize, item: U) {
         for i in 0..=dups {
@@ -120,7 +120,7 @@ impl BF<[u8]> for Bloom<&'static [u8], u16> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = pearson(i, item.as_ref());
             let b = (a & 0xf) ^ (a >> 4);
@@ -134,7 +134,7 @@ impl BF<[u8]> for Bloom<&'static [u8], u16> {
 
 impl BF<[u8]> for Bloom<&'static [u8], u32> {
     type Result = BloomResult;
-    const Size:BloomSize = BloomSize::B32;
+    const SIZE:BloomSize = BloomSize::B32;
 
     fn insert<U: AsRef<[u8]>>(&mut self, dups: usize, item: U) {
         for i in 0..=dups {
@@ -145,7 +145,7 @@ impl BF<[u8]> for Bloom<&'static [u8], u32> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = pearson_mod::<_, 32>(i, item.as_ref());
             let b = a;
@@ -159,7 +159,7 @@ impl BF<[u8]> for Bloom<&'static [u8], u32> {
 
 impl BF<[u8]> for Bloom<&'static [u8], u64> {
     type Result = BloomResult;
-    const Size:BloomSize = BloomSize::B64;
+    const SIZE:BloomSize = BloomSize::B64;
 
     fn insert<U: AsRef<[u8]>>(&mut self, dups: usize, item: U) {
         for i in 0..=dups {
@@ -170,7 +170,7 @@ impl BF<[u8]> for Bloom<&'static [u8], u64> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = pearson_mod::<_, 64>(i, item.as_ref());
             let b = a;
@@ -184,7 +184,7 @@ impl BF<[u8]> for Bloom<&'static [u8], u64> {
 
 impl BF<[u8]> for Bloom<&'static [u8], [u64; 2]> {
     type Result = BloomResult;
-    const Size:BloomSize = BloomSize::B128;
+    const SIZE:BloomSize = BloomSize::B128;
 
     fn insert<U: AsRef<[u8]>>(&mut self, dups: usize, item: U) {
         for i in 0..=dups {
@@ -195,7 +195,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 2]> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = pearson_mod::<_, 128>(i, item.as_ref());
             let b = a;
@@ -209,7 +209,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 2]> {
 
 impl BF<[u8]> for Bloom<&'static [u8], [u64; 4]> {
     type Result = BloomResult;
-    const Size:BloomSize = BloomSize::B256;
+    const SIZE:BloomSize = BloomSize::B256;
 
     fn insert<U: AsRef<[u8]>>(&mut self, dups: usize, item: U) {
         for i in 0..=dups {
@@ -220,7 +220,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 4]> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = pearson(i, item.as_ref());
             let b = a;
@@ -235,7 +235,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 4]> {
 //TODO
 impl BF<[u8]> for Bloom<&'static [u8], [u64; 8]> {
     type Result = BloomResult;
-    const Size:BloomSize = BloomSize::B512;
+    const SIZE:BloomSize = BloomSize::B512;
 
     fn insert<U: AsRef<[u8]>>(&mut self, dups: usize, item: U) {
         for i in 0..=dups {
@@ -246,7 +246,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 8]> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = xor_rot_mod::<_,512>(i, item.as_ref());
             let b = a;
@@ -259,7 +259,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 8]> {
 }
 impl BF<[u8]> for Bloom<&'static [u8], [u64; 16]> {
     type Result = BloomResult;
-    const Size:BloomSize = BloomSize::B1024;
+    const SIZE:BloomSize = BloomSize::B1024;
 
     fn insert<U: AsRef<[u8]>>(&mut self, dups: usize, item: U) {
         for i in 0..=dups {
@@ -270,7 +270,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 16]> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = xor_rot_mod::<_,1024>(i, item.as_ref());
             let b = a;
@@ -284,7 +284,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 16]> {
 
 impl BF<[u8]> for Bloom<&'static [u8], [u64; 32]> {
     type Result = BloomResult;
-    const Size:BloomSize = BloomSize::B2048;
+    const SIZE:BloomSize = BloomSize::B2048;
 
     fn insert<U: AsRef<[u8]>>(&mut self, dups: usize, item: U) {
         for i in 0..=dups {
@@ -295,7 +295,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 32]> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = xor_rot_mod::<_,2048>(i, item.as_ref());
             let b = a;

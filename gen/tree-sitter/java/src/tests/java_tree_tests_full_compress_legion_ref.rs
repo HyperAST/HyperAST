@@ -459,7 +459,7 @@ fn test_offset_computation() {
     s.check(&stores).unwrap();
     let x = s.push(&mut scout);
     let z = ExploreStructuralPositions::from((&s,x));
-    let p = z.to_position(&stores);
+    let p = z.make_position(&stores);
     println!("{}",p);
     println!("|{}|",std::str::from_utf8(&text[p.range()]).unwrap());
     assert_eq!(std::str::from_utf8(&text[p.range()]).unwrap(),r#"ModelUtils.canBeBuilt(new File("./target/spooned/spoon/test/template/ReturnReplaceResult.java"), 8);"#);
@@ -511,7 +511,7 @@ fn test_offset_computation2() {
     s.check(&stores).unwrap();
     let x = s.push(&mut scout);
     let z = ExploreStructuralPositions::from((&s,x));
-    let p = z.to_position(&stores);
+    let p = z.make_position(&stores);
     println!("{}",p);
     println!("|{}|",std::str::from_utf8(&text[p.range()]).unwrap());
     assert_eq!(std::str::from_utf8(&text[p.range()]).unwrap(),r#"public class InnerTypeOk {

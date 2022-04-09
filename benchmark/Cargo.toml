@@ -12,7 +12,7 @@ rusted_gumtree_core = { path = "../core" }
 rusted_gumtree_gen_ts_java = { path = "../gen/tree-sitter/java" }
 rusted_gumtree_cvs_git = { path = "../cvs/git" }
 env_logger = "0.9.0"
-log = { version = "0.4.6", features = ["max_level_debug", "release_max_level_info"] }
+log = { version = "0.4.6", features = ["max_level_debug", "release_max_level_warn"] }
 
 pommes = "0.0.2"
 

@@ -16,6 +16,10 @@ hashbrown = { version = "0.11.2", default-features = false, features = ["ahash"]
 # rusted_gumtree_core = { path = "../../../core" }
 # tree-sitter_types = { path = "../../../tree-sitter_types" }
 
+#  # logging
+env_logger = "0.9.0"
+log = { version = "0.4.6" }#, features = ["max_level_debug", "release_max_level_warn"] }
+
 
 # # promizing to store subtrees efficiently
 # zerocopy="0.6.1"
@@ -26,8 +30,8 @@ hashbrown = { version = "0.11.2", default-features = false, features = ["ahash"]
 
 ## store
 legion = {version="0.4.0", features = ["extended-tuple-impls"]}
-bitvec = "0.22.3"
-controlled-option = "0.4.1"
+bitvec = "0.22.3" # TODO upgrade
+controlled-option = "0.4.1" # check if really needed
 string-interner = "0.14.0"
 
 # # memusage
@@ -38,4 +42,4 @@ strum = "0.23.0"
 strum_macros = "0.23.1"
 
 # # handle: use the handle of their arena implementation
-stack-graphs = "0.3.0"
+stack-graphs = "0.6.0"

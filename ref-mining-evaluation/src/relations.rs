@@ -1,9 +1,7 @@
-
 use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Result;
-
 
 #[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Eq, Clone, PartialOrd, Ord)]
 pub struct Position {
@@ -14,7 +12,7 @@ pub struct Position {
 
 impl Display for Position {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,"{}:({},{})", self.file,self.offset,self.len)
+        write!(f, "{}:({},{})", self.file, self.offset, self.len)
     }
 }
 
@@ -26,10 +24,9 @@ pub struct Range {
 
 impl Display for Range {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,"({},{})",self.offset,self.len)
+        write!(f, "({},{})", self.offset, self.len)
     }
 }
-
 
 impl From<Position> for Range {
     fn from(p: Position) -> Self {
@@ -56,7 +53,7 @@ impl Into<hyper_ast::position::Position> for Position {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct Relation {
     pub(crate) decl: Position,
     pub(crate) refs: Vec<Position>,

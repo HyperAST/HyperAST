@@ -90,6 +90,20 @@ impl<'a, T: TreePath<NodeIdentifier> + Clone + Debug> Iterator for IterDeclarati
                     continue;
                 } else if t == Type::ImportDeclaration {
                     continue;
+                } else if t == Type::Identifier {
+                    let mut p = self.path.clone();
+                    p.pop();
+                    let x = p.node().unwrap();
+                    let b = self.stores.node_store.resolve(*x);
+                    let tt = b.get_type();
+                    if self.path.offset() == Some(&1) && tt == Type::LambdaExpression {
+                        self.path.check(&self.stores).unwrap();
+                        return Some(self.path.clone());
+                    } else if tt == Type::InferredParameters {
+                        self.path.check(&self.stores).unwrap();
+                        return Some(self.path.clone());
+                    }
+                    continue;
                 }
 
                 if b.has_children() {
@@ -97,23 +111,58 @@ impl<'a, T: TreePath<NodeIdentifier> + Clone + Debug> Iterator for IterDeclarati
                     self.stack.push((node, 0, Some(children.to_vec())));
                 }
 
-                if t.is_type_declaration()
-                    || t == Type::LocalVariableDeclaration
-                    || t == Type::EnhancedForStatement
-                    || t.is_value_member()
-                    || t.is_parameter()
-                    || t.is_executable_member()
+                if t.is_type_declaration() || t.is_parameter() {
+                    assert!(b.has_children(), "{:?}", t);
+                    self.path.check(&self.stores).unwrap();
+                    return Some(self.path.clone());
+                } else if t == Type::LocalVariableDeclaration
+                    || t == Type::EnhancedForVariable
+                    || t == Type::CatchFormalParameter
                 {
                     assert!(b.has_children(), "{:?}", t);
                     self.path.check(&self.stores).unwrap();
                     return Some(self.path.clone());
+                } else if t == Type::TypeParameter
+                {
+                    assert!(b.has_children(), "{:?}", t);
+                    self.path.check(&self.stores).unwrap();
+                    return Some(self.path.clone());
+                } else if t == Type::ClassBody
+                {
+                    let mut p = self.path.clone();
+                    p.pop();
+                    let x = p.node().unwrap();
+                    let b = self.stores.node_store.resolve(*x);
+                    let tt = b.get_type();
+                    if tt == Type::ObjectCreationExpression {
+                        self.path.check(&self.stores).unwrap();
+                        return Some(self.path.clone());
+                    } else if tt == Type::EnumDeclaration {
+                        self.path.check(&self.stores).unwrap();
+                        return Some(self.path.clone());
+                    }
                 } else if t == Type::Resource {
                     assert!(b.has_children(), "{:?}", t);
                     self.path.check(&self.stores).unwrap();
                     // TODO also need to find an "=" and find the name just before
-                    return Some(self.path.clone());
+
+                    for xx in b.get_children() {
+                        let bb = self.stores.node_store.resolve(*xx);
+                        if bb.get_type() == Type::TS30 {
+                            return Some(self.path.clone());
+                        }
+                    }
+                // } else if t.is_value_member()
+                // {
+                //     assert!(b.has_children(), "{:?}", t);
+                //     self.path.check(&self.stores).unwrap();
+                //     return Some(self.path.clone());
+                // } else if t.is_executable_member()
+                // {
+                //     assert!(b.has_children(), "{:?}", t);
+                //     self.path.check(&self.stores).unwrap();
+                //     return Some(self.path.clone());
                 } else {
-                    continue;
                 }
             }
         }

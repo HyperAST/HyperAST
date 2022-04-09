@@ -7,15 +7,28 @@ use std::{
 };
 
 use rusted_gumtree_cvs_git::{
-    allrefs::write_referencial_relations, git::fetch_github_repository,
+    allrefs::write_referencial_relations,
+    git::{fetch_github_repository, retrieve_commit},
     preprocessed::PreProcessedRepository,
 };
 use rusted_gumtree_gen_ts_java::utils::memusage_linux;
 
+// WARN there is a big impact of the buff writer capacity
+const BUFF_WRITER_CAPACITY: usize = 4 * 8 * 1024;
+
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    // let f = env_logger::fmt::BufferWriter
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
+        .format(|buf, record| {
+            if record.level().to_level_filter() > log::LevelFilter::Debug {
+                writeln!(buf, "{}", record.args())
+            } else {
+                writeln!(buf, "[{} {}] {}",buf.timestamp_millis(), record.level(), record.args())
+            }
+        })
+        .init();
     let args: Vec<String> = env::args().collect();
-    println!("{:?}", args);
+    log::warn!("args: {:?}", args);
     let repo_name = args
         .get(1)
         .expect("give an argument like openjdk/jdk or INRIA/spoon"); //"openjdk/jdk";//"INRIA/spoon";
@@ -31,35 +44,23 @@ fn main() {
     });
 
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
-    preprocessed.pre_process(
-        &mut fetch_github_repository(&repo_name),
-        before,
-        after,
-        dir_path,
-    );
+    preprocessed.pre_process_single(&mut fetch_github_repository(&repo_name), after, dir_path);
     let mu = memusage_linux();
-    println!("total memory used {}", mu);
+    log::warn!("total memory used {}", mu);
     preprocessed.purge_caches();
-    println!("cache size: {}", mu - memusage_linux());
-    log::info!("search refs");
+    log::warn!("cache size: {}", mu - memusage_linux());
+    log::warn!("search refs");
 
     let repository = fetch_github_repository(preprocessed.name());
     // node identifier at after commit
     let root = preprocessed
         .commits
-        .get(
-            &repository
-                .find_reference(after)
-                .unwrap()
-                .peel_to_commit()
-                .unwrap()
-                .id(),
-        )
+        .get(&retrieve_commit(&repository, after).unwrap().id())
         .unwrap()
         .ast_root;
 
     if let Some(out) = out {
-        let mut out = BufWriter::new(File::create(out).unwrap());
+        let mut out = BufWriter::with_capacity(BUFF_WRITER_CAPACITY, File::create(out).unwrap());
         write_referencial_relations(&preprocessed, root, &mut out);
         out.flush().unwrap();
     } else {
@@ -67,13 +68,12 @@ fn main() {
         write_referencial_relations(&preprocessed, root, &mut out);
         out.flush().unwrap();
     }
-    log::info!("done searching refs");
+    log::warn!("done searching refs");
 
     let mu = memusage_linux();
     drop(preprocessed);
-    println!("hyperAST size: {}", mu - memusage_linux());
+    log::warn!("hyperAST size: {}", mu - memusage_linux());
 }
-
 
 #[test]
 fn all() {

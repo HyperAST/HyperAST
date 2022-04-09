@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Result;
+use termion::color;
 // use serde_with::skip_serializing_none;
 
 use crate::relations::{Position, Range, Relation};
@@ -36,19 +37,36 @@ impl Display for ComparedRanges {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} left [{}] right [{}]",
+            "{}",
             self.file,
-            self.left
-                .iter()
-                .map(|x| x.to_string())
-                .intersperse("".to_string())
-                .collect::<String>(),
-            self.right
-                .iter()
-                .map(|x| x.to_string())
-                .intersperse("".to_string())
-                .collect::<String>()
-        )
+        )?;
+        if !self.left.is_empty() {
+            write!(
+                f,
+                " left [{}{}{}]",
+                color::Bg(color::Magenta),
+                self.left
+                    .iter()
+                    .map(|x| x.to_string())
+                    .intersperse("".to_string())
+                    .collect::<String>(),
+                color::Bg(color::Reset),
+                )?
+        }
+        if !self.right.is_empty() {
+            write!(
+                f,
+                " right [{}{}{}]",
+                color::Bg(color::Blue),
+                self.right
+                    .iter()
+                    .map(|x| x.to_string())
+                    .intersperse("".to_string())
+                    .collect::<String>(),
+                color::Bg(color::Reset),
+            )?
+        }
+        Ok(())
     }
 }
 

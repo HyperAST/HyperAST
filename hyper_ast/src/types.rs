@@ -699,12 +699,31 @@ impl Type {
             || self == &Type::SynchronizedStatement
     }
 
+    pub fn is_local_declare(&self) -> bool {
+        self == &Type::LocalVariableDeclaration
+            || self == &Type::EnhancedForVariable
+            || self == &Type::Resource
+    }
+
+
     pub fn is_parameter(&self) -> bool {
         self == &Type::Resource
             || self == &Type::FormalParameter
             || self == &Type::SpreadParameter
             || self == &Type::CatchFormalParameter
             || self == &Type::TypeParameter
+    }
+
+    pub fn is_parameter_list(&self) -> bool {
+        self == &Type::ResourceSpecification
+            || self == &Type::FormalParameters
+            || self == &Type::TypeParameters
+    }
+
+    pub fn is_argument_list(&self) -> bool {
+        self == &Type::ArgumentList
+            || self == &Type::TypeArguments
+            || self == &Type::AnnotationArgumentList
     }
 
     pub fn is_expression(&self) -> bool {
@@ -727,6 +746,24 @@ impl Type {
         || self == &Type::FieldAccess
         || self == &Type::ArrayAccess
     }
+    // pub fn is_type_propagating_expression(&self) -> bool {
+    //     self == &Type::TernaryExpression
+    //     || self == &Type::BinaryExpression
+    //     || self == &Type::UnaryExpression
+    //     || self == &Type::AssignmentExpression
+    //     || self == &Type::ArrayCreationExpression
+    //     || self == &Type::ObjectCreationExpression
+    //     // || self == &Type::LambdaExpression
+    //     || self == &Type::CastExpression
+    //     || self == &Type::UpdateExpression
+    //     || self == &Type::ParenthesizedExpression
+    //     || self == &Type::MethodInvocation
+    //     // || self == &Type::MethodReference
+    //     || self == &Type::ExplicitConstructorInvocation
+    //     // || self == &Type::ClassLiteral
+    //     || self == &Type::FieldAccess
+    //     || self == &Type::ArrayAccess
+    // }
 }
 
 impl Type {

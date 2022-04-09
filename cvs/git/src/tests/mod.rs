@@ -81,7 +81,7 @@ pub fn find_refs_from_canonical_type(
             .unwrap()
             .ast_root;
 
-        preprocessed.print_matched_references(&mut ana, i, root);
+        todo!()// preprocessed.print_matched_references(&mut ana, i, root);
     }
 
     let mu = memusage_linux();

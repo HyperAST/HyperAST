@@ -15,9 +15,9 @@ pub fn all_commits_between<'a>(
     let mut rw = repository.revwalk().unwrap();
     if !before.is_empty() {
         // rw.hide_ref(before).unwrap();
-        println!("{}", before);
+        // log::debug!("{}", before);
         let c = retrieve_commit(repository, before).unwrap();
-        println!("{:?}", c);
+        // log::debug!("{:?}", c);
         for c in c.parents() {
             rw.hide(c.id()).unwrap();
         }
@@ -32,7 +32,10 @@ pub fn all_commits_between<'a>(
     rw
 }
 
-fn retrieve_commit<'a>(repository: &'a Repository, s: &str) -> Result<git2::Commit<'a>,git2::Error>{
+pub fn retrieve_commit<'a>(
+    repository: &'a Repository,
+    s: &str,
+) -> Result<git2::Commit<'a>, git2::Error> {
     if let Ok(c) = repository.find_reference(s) {
         c.peel_to_commit()
     } else {
@@ -112,7 +115,7 @@ where
     let mut callbacks = RemoteCallbacks::new();
 
     callbacks.transfer_progress(|x| {
-        println!("transfer {}/{}", x.received_objects(), x.total_objects());
+        log::info!("transfer {}/{}", x.received_objects(), x.total_objects());
         true
     });
 
@@ -137,12 +140,12 @@ pub fn up_to_date_repo(path: &Path, mut fo: git2::FetchOptions, url: Url) -> Rep
             Ok(repo) => repo,
             Err(e) => panic!("failed to open: {}", e),
         };
-        println!("fetch: {:?}", path);
+        log::info!("fetch: {:?}", path);
         repository
             .find_remote("origin")
             .unwrap()
             .fetch(&["main"], Some(&mut fo), None)
-            .unwrap_or_else(|e| println!("{}", e));
+            .unwrap_or_else(|e| log::error!("{}", e));
 
         repository
     } else if path.exists() {
@@ -154,7 +157,7 @@ pub fn up_to_date_repo(path: &Path, mut fo: git2::FetchOptions, url: Url) -> Rep
 
         builder.fetch_options(fo);
 
-        println!("clone {} in {:?}", url, path);
+        log::info!("clone {} in {:?}", url, path);
         let repository = match builder.clone(&url.to_string(), path.join(".git").as_path()) {
             Ok(repo) => repo,
             Err(e) => panic!("failed to clone: {}", e),
@@ -246,6 +249,13 @@ pub fn read_position_floating_lines(
             &r[..i]
         },
     )
+    .map_err(|err| {
+        git2::Error::new(
+            err.code(),
+            err.class(),
+            position.file().to_str().unwrap().to_string() + err.message(),
+        )
+    })
 }
 
 pub fn read_position_floating(
@@ -267,6 +277,13 @@ pub fn read_position_floating(
             &r[..x]
         },
     )
+    .map_err(|err| {
+        git2::Error::new(
+            err.code(),
+            err.class(),
+            position.file().to_str().unwrap().to_string() + err.message(),
+        )
+    })
 }
 fn compute_range_floating<F, G>(
     text: &[u8],
@@ -279,8 +296,22 @@ where
     G: Fn(&[u8]) -> &[u8],
 {
     let range = position.range();
-    let before = f_start(&text[..range.start]);
-    let after = f_end(&text[range.end..]);
+    let before = f_start(&text.get(..range.start).ok_or_else(|| {
+        git2::Error::from_str(&format!(
+            "range {:?} out of text ({}) {:?}",
+            range,
+            text.len(),
+            std::str::from_utf8(text)
+        ))
+    })?);
+    let after = f_end(&text.get(range.end..).ok_or_else(|| {
+        git2::Error::from_str(&format!(
+            "range {:?} out of text ({}) {:?}",
+            range,
+            text.len(),
+            std::str::from_utf8(text)
+        ))
+    })?);
     Ok((own(before)?, own(&text[range])?, own(after)?))
 }
 fn blob_position<'a>(

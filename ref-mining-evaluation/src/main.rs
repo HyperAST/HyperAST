@@ -8,16 +8,52 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs::{self, File},
     io::{self, stdout, Read, Seek, SeekFrom},
+    ops::Add,
 };
 
 use clap::{Parser, Subcommand};
 use rusted_gumtree_cvs_git::git::{fetch_repository, read_position, read_position_floating_lines};
-use termion::{color, screen::AlternateScreen};
+use termion::color;
 
 use crate::{
+    compare::Comparator,
     comparisons::{ComparedRanges, Comparison, Comparisons},
-    relations::{Position, Relations, Range},
+    relations::{Position, Range, Relations},
 };
+
+macro_rules! inv_reset {
+    ( Fg ) => {
+        color::Bg(color::Reset)
+    };
+    ( Bg ) => {
+        color::Fg(color::Reset)
+    };
+}
+macro_rules! show_code_range {
+    ($b:tt{$x:tt ($s:tt) with $cx:tt $px:tt }$a:tt with $c:tt $p:tt ) => {
+        print!(
+            "{}{}{}{}",
+            inv_reset!($p),
+            color::$p(color::$c),
+            // $b,
+            summarize_border(&$b, isize::try_from($s).unwrap() + 5),
+            color::$p(color::Reset)
+        );
+        print!(
+            "{}{}{}",
+            color::$px(color::$cx),
+            summarize_center(&$x, $s),
+            color::$px(color::Reset)
+        );
+        print!(
+            "{}{}{}",
+            color::$p(color::$c),
+            summarize_border(&$a, -isize::try_from($s).unwrap() - 5),
+            color::$p(color::Reset)
+        );
+        println!()
+    };
+}
 
 fn main() {
     let cli = Cli::parse();
@@ -30,10 +66,10 @@ fn main() {
 
             println!("{:?} {:?}", left_r.len(), right_r.len());
 
-            let mut r: Comparisons = (left_r, right_r).into();
-            r.left_name = left.clone();
-            r.right_name = right.clone();
-            println!("{}", serde_json::to_string_pretty(&r).unwrap());
+            let mut comp = Comparator::default().compare(left_r, right_r);
+            comp.left_name = left.clone();
+            comp.right_name = right.clone();
+            println!("{}", serde_json::to_string_pretty(&comp).unwrap());
         }
         Commands::Stats { file } => {
             let relations = handle_file(File::open(file).expect("should be a file")).unwrap();
@@ -51,14 +87,6 @@ fn main() {
                 }
             }
             println!("# of uniquely mentioned files: {}", files.len());
-
-            // let repo = fetch_repository(repository.clone(), "/tmp/hyperastgitresources");
-            // for r in &relations {
-            //     let span = read_position(&repo, commit, &r.decl.clone().into()).unwrap();
-            //     println!("{:?} gives\n<|{}|>", r.decl, summarize_center(&span,5));
-            //     let mut buffer = String::new();
-            //     io::stdin().read_line(&mut buffer).unwrap();
-            // }
         }
         Commands::InteractiveDeclarations {
             repository,
@@ -70,29 +98,11 @@ fn main() {
             let repo = fetch_repository(repository.clone(), "/tmp/hyperastgitresources");
             let bl_rs = handle_file(File::open(baseline).expect("should be a file")).unwrap();
             let t_rs = handle_file(File::open(test).expect("should be a file")).unwrap();
-            let comp: Comparisons = (bl_rs, t_rs).into();
+            let comp = Comparator::default().compare(bl_rs, t_rs).into();
             print_comparisons_stats(&comp);
-            let mut per_file:BTreeMap<String,(Vec<Range>,Vec<Range>)> = BTreeMap::default();
-            
-            for r in comp.right {
-                let r = r.decl;
-                per_file
-                    .entry(r.file.clone())
-                    .or_insert((vec![], vec![]))
-                    .1
-                    .push(r.clone().into());
-            }
-            for l in comp.left {
-                let l = l.decl;
-                per_file
-                    .entry(l.file.clone())
-                    .or_insert((vec![], vec![]))
-                    .0
-                    .push(l.clone().into());
-            }
+            let per_file = decls_per_file(comp);
 
-
-            for (k,v) in per_file {
+            for (f, rs) in per_file {
                 let read_position = |p: &Position, z: Option<usize>| {
                     if let Some(z) = z {
                         read_position_floating_lines(&repo, commit, &p.clone().into(), z)
@@ -100,42 +110,46 @@ fn main() {
                         read_position(&repo, commit, &p.clone().into())
                             .map(|x| ("".to_string(), x, "".to_string()))
                     }
-                    .unwrap()
                 };
-                for r in v.0 {
-                    let p = r.with(k.clone());
-                    let (before, span, after) = read_position(&p, Some(4));
-                    println!(
-                        "baseline {}: \n{}{}{}{}{}{}{}{}{}{}",
-                        p,
-                        color::Bg(color::Reset),
-                        color::Fg(color::LightBlack),
-                        before,
-                        color::Fg(color::Reset),
-                        color::Bg(color::Magenta),
-                        summarize_center(&span, 4),
-                        color::Bg(color::Reset),
-                        color::Fg(color::LightBlack),
-                        after,
-                        color::Fg(color::Reset),
+                // println!("{}:{:?}",f,rs);
+                for r in &rs.0 {
+                    if rs.1.contains(r) {
+                        continue;
+                    }
+                    let p = r.with(f.clone());
+                    let (before, span, after) = read_position(&p, Some(4)).unwrap();
+                    println!("baseline {}:", p);
+
+                    show_code_range!(
+                        before {
+                            span (4) with Magenta Bg
+                        } after with LightBlack Fg
                     );
                 }
-                for r in v.1 {
-                    let p = r.with(k.clone());
-                    let (before, span, after) = read_position(&p, Some(4));
-                    println!(
-                        "test {}: \n{}{}{}{}{}{}{}{}{}{}",
-                        p,
-                        color::Bg(color::Reset),
-                        color::Fg(color::LightBlack),
-                        before,
-                        color::Fg(color::Reset),
-                        color::Bg(color::Blue),
-                        summarize_center(&span, 4),
-                        color::Bg(color::Reset),
-                        color::Fg(color::LightBlack),
-                        after,
-                        color::Fg(color::Reset),
+                for r in &rs.1 {
+                    if rs.0.contains(r) {
+                        // println!("matched {}:", r);
+                        let p = r.with(f.clone());
+                        let (before, span, after) = read_position(&p, Some(4)).unwrap();
+                        println!("exact {}:", p);
+                        show_code_range!(
+                            before {
+                                span (4) with Green Bg
+                            } after with LightBlack Fg
+                        );
+                        continue;
+                    }
+                    let p = r.with(f.clone());
+                    let (before, span, after) = read_position(&p, Some(4)).unwrap_or((
+                        p.to_string() + "bugged",
+                        p.to_string(),
+                        p.to_string(),
+                    ));
+                    println!("test {}:", p);
+                    show_code_range!(
+                        before {
+                            span (4) with Blue Bg
+                        } after with LightBlack Fg
                     );
                 }
             }
@@ -145,12 +159,15 @@ fn main() {
             commit,
             baseline,
             evaluated: test,
+            only_misses,
             ..
         } => {
             let repo = fetch_repository(repository.clone(), "/tmp/hyperastgitresources");
             let bl_rs = handle_file(File::open(baseline).expect("should be a file")).unwrap();
             let t_rs = handle_file(File::open(test).expect("should be a file")).unwrap();
-            let comp: Comparisons = (bl_rs, t_rs).into();
+            let comp = Comparator::default()
+                .set_intersection_left(*only_misses)
+                .compare(bl_rs, t_rs);
             print_comparisons_stats(&comp);
             for r in &comp.exact {
                 let read_position = |p: &Position, z: Option<usize>| {
@@ -166,20 +183,28 @@ fn main() {
                     continue;
                 }
                 let (before, span, after) = read_position(&r.decl, None);
-                println!(
-                    "decl {}: \n{}{}{}{}{}{}{}{}{}{}",
-                    r.decl,
-                    color::Bg(color::Reset),
-                    color::Fg(color::LightBlack),
-                    before,
-                    color::Fg(color::Reset),
-                    color::Bg(color::Green),
-                    summarize_center(&span, 1),
-                    color::Bg(color::Reset),
-                    color::Fg(color::LightBlack),
-                    after,
-                    color::Fg(color::Reset),
+
+                println!("decl {}:", r.decl,);
+
+                show_code_range!(
+                    before {
+                        span (1) with Green Bg
+                    } after with LightBlack Fg
                 );
+                // println!(
+                //     "decl {}: \n{}{}{}{}{}{}{}{}{}{}",
+                //     r.decl,
+                //     color::Bg(color::Reset),
+                //     color::Fg(color::LightBlack),
+                //     before,
+                //     color::Fg(color::Reset),
+                //     color::Bg(color::Green),
+                //     summarize_center(&span, 1),
+                //     color::Bg(color::Reset),
+                //     color::Fg(color::LightBlack),
+                //     after,
+                //     color::Fg(color::Reset),
+                // );
                 explore_misses(r, &read_position);
             }
         }
@@ -197,11 +222,86 @@ fn main() {
     // let p: Vec<Relation> = serde_json::from_str(data);
 }
 
+fn decls_per_file(comp: Comparisons) -> BTreeMap<String, (Vec<Range>, Vec<Range>)> {
+    let mut per_file: BTreeMap<String, (Vec<Range>, Vec<Range>)> = BTreeMap::default();
+    for r in &comp.right {
+        let r = &r.decl;
+        let aa = &mut per_file.entry(r.file.clone()).or_insert((vec![], vec![])).1;
+        let rr = r.clone().into();
+        if aa.contains(&rr) {
+            continue;
+        }
+        aa.push(rr)
+    }
+    for l in &comp.left {
+        let l = &l.decl;
+        let aa = &mut per_file.entry(l.file.clone()).or_insert((vec![], vec![])).0;
+
+        let ll = l.clone().into();
+        if aa.contains(&ll) {
+            println!("doubled left {}", l);
+            continue;
+        }
+        aa.push(ll)
+    }
+    for l in &comp.exact {
+        let l = &l.decl;
+        let (aa, bb) = &mut per_file.entry(l.file.clone()).or_insert((vec![], vec![]));
+
+        let ll = l.clone().into();
+        if !aa.contains(&ll) {
+            aa.push(ll);
+        }
+        let ll = l.clone().into();
+        if !bb.contains(&ll) {
+            bb.push(ll)
+        }
+    }
+    per_file
+
+    // let mut per_file: BTreeMap<String, (HashSet<Range>, HashSet<Range>)> = BTreeMap::default();
+    // for r in &comp.right {
+    //     let r = &r.decl;
+    //     per_file
+    //         .entry(r.file.clone())
+    //         .or_insert((Default::default(), Default::default()))
+    //         .1
+    //         .insert(r.clone().into());
+    // }
+    // for l in &comp.left {
+    //     if comp.left.contains(&l) {
+    //         continue;
+    //     }
+    //     let l = &l.decl;
+    //     per_file
+    //         .entry(l.file.clone())
+    //         .or_insert((Default::default(), Default::default()))
+    //         .0
+    //         .insert(l.clone().into());
+    // }
+    // let mut res: BTreeMap<String, (Vec<Range>, Vec<Range>)> = BTreeMap::default();
+
+    // for (k,(l,r)) in per_file {
+    //     res.entry(r)
+    //     .or_insert(vec![]).e
+    // }
+    // res
+}
+
 fn explore_misses<F: Fn(&Position, Option<usize>) -> (String, String, String)>(
     r: &Comparison,
     read_position: &F,
 ) {
-    println!("{} is correctly referenced {} times", r.decl, r.exact.len());
+    println!(
+        "{} is correctly referenced {} times : {}",
+        r.decl,
+        r.exact.len(),
+        r.exact
+            .iter()
+            .take(10)
+            .map(|x| x.to_string())
+            .collect::<String>()
+    );
     println!("but it is missed {} times:", r.left.len());
     for (i, r) in r.per_file.iter().enumerate() {
         println!("({}) {}", i, r);
@@ -241,7 +341,7 @@ fn explore_misses<F: Fn(&Position, Option<usize>) -> (String, String, String)>(
                     } else if &x[..1] == "-" {
                         if let Some(z) = current_outside_zoom {
                             if z > 0 {
-                                current_outside_zoom = Some(z - 1);
+                                current_outside_zoom = Some(z - n);
                             } else {
                                 current_outside_zoom = None;
                             }
@@ -253,19 +353,11 @@ fn explore_misses<F: Fn(&Position, Option<usize>) -> (String, String, String)>(
                         continue;
                     }
                     let (before, span, after) = read_position(&r.decl, current_outside_zoom);
-                    println!(
-                        "decl {}: \n{}{}{}{}{}{}{}{}{}{}",
-                        r.decl,
-                        color::Bg(color::Reset),
-                        color::Fg(color::LightBlack),
-                        before,
-                        color::Fg(color::Reset),
-                        color::Bg(color::Green),
-                        summarize_center(&span, current_inside_zoom),
-                        color::Bg(color::Reset),
-                        color::Fg(color::LightBlack),
-                        after,
-                        color::Fg(color::Reset),
+                    println!("decl {}:", r.decl,);
+                    show_code_range!(
+                        before {
+                            span (current_inside_zoom) with Green Bg
+                        } after with LightBlack Fg
                     );
                 } else if let Ok(n) = x.parse::<usize>() {
                     if n < r.per_file.len() {
@@ -393,41 +485,53 @@ where
                         let p = ranges.left[n].with(ranges.file.clone());
                         let (before, span, after) =
                             read_position(&p.clone().into(), current_outside_zoom);
-                        println!(
-                            "show !({}) {}: \n{}{}{}{}{}{}{}{}{}{}",
-                            n,
-                            p,
-                            color::Bg(color::Reset),
-                            color::Fg(color::LightBlack),
-                            before,
-                            color::Fg(color::Reset),
-                            color::Bg(color::Magenta),
-                            summarize_center(&span, current_inside_zoom),
-                            color::Bg(color::Reset),
-                            color::Fg(color::LightBlack),
-                            after,
-                            color::Fg(color::Reset),
+                        println!("show !({}) {}:", n, p);
+                        show_code_range!(
+                            before {
+                                span (current_inside_zoom) with Magenta Bg
+                            } after with LightBlack Fg
                         );
+                        // println!(
+                        //     "show !({}) {}: \n{}{}{}{}{}{}{}{}{}{}",
+                        //     n,
+                        //     p,
+                        //     color::Bg(color::Reset),
+                        //     color::Fg(color::LightBlack),
+                        //     before,
+                        //     color::Fg(color::Reset),
+                        //     color::Bg(color::Magenta),
+                        //     summarize_center(&span, current_inside_zoom),
+                        //     color::Bg(color::Reset),
+                        //     color::Fg(color::LightBlack),
+                        //     after,
+                        //     color::Fg(color::Reset),
+                        // );
                         // println!("{:?}", current_outside_zoom);
                     } else if n < ranges.left.len() + ranges.right.len() {
                         let p = ranges.right[n - ranges.left.len()].with(ranges.file.clone());
                         let (before, span, after) =
                             read_position(&p.clone().into(), current_outside_zoom);
-                        println!(
-                            "show ?({}) {}: \n{}{}{}{}{}{}{}{}{}{}",
-                            n,
-                            p,
-                            color::Bg(color::Reset),
-                            color::Fg(color::LightBlack),
-                            before,
-                            color::Fg(color::Reset),
-                            color::Bg(color::Blue),
-                            summarize_center(&span, current_inside_zoom),
-                            color::Bg(color::Reset),
-                            color::Fg(color::LightBlack),
-                            after,
-                            color::Fg(color::Reset),
+                        println!("show ?({}) {}:", n, p);
+                        show_code_range!(
+                            before {
+                                span (current_inside_zoom) with Blue Bg
+                            } after with LightBlack Fg
                         );
+                        // println!(
+                        //     "show ?({}) {}: \n{}{}{}{}{}{}{}{}{}{}",
+                        //     n,
+                        //     p,
+                        //     color::Bg(color::Reset),
+                        //     color::Fg(color::LightBlack),
+                        //     before,
+                        //     color::Fg(color::Reset),
+                        //     color::Bg(color::Blue),
+                        //     summarize_center(&span, current_inside_zoom),
+                        //     color::Bg(color::Reset),
+                        //     color::Fg(color::LightBlack),
+                        //     after,
+                        //     color::Fg(color::Reset),
+                        // );
                         // println!("{:?}", current_outside_zoom);
                     } else {
                         continue;
@@ -438,69 +542,63 @@ where
                 } else {
                     panic!()
                 }
-                // if &x[..1] == "!" {
-                //     if let Ok(n) = x[1..].parse::<usize>() {
-                //         if n < r.left.len() {
-                //             let n = r.left.len()-n-1;
-                //             let p = r.left[n].with(r.file.clone());
-                //             let span = read_position(&p.clone().into());
-                //             println!("show (!{}) {}: \n<|{}|>", n, p, summarize_center(&span, 1));
-                //         } else {
-                //             println!("can you repeat ? \"{}\" is not in range", x);
-                //             buffer.clear();
-                //             io::stdin().read_line(&mut buffer).unwrap();
-                //         }
-                //     } else {
-                //         println!("can you repeat ? \"{}\" is invalid", x);
-                //         buffer.clear();
-                //         io::stdin().read_line(&mut buffer).unwrap();
-                //     }
-                // } else if &x[..1] == "?" {
-                //     if let Ok(n) = x[1..].parse::<usize>() {
-                //         if n < r.right.len() {
-                //             let p = r.right[n].with(r.file.clone());
-                //             let span = read_position(&p.clone().into());
-                //             println!("show (?{}) {}: \n<|{}|>", n, p, summarize_center(&span, 1));
-                //         } else {
-                //             println!("can you repeat ? \"{}\" is not in range", x);
-                //             buffer.clear();
-                //             io::stdin().read_line(&mut buffer).unwrap();
-                //         }
-                //     } else {
-                //         println!("can you repeat ? \"{}\" is invalid", x);
-                //         buffer.clear();
-                //         io::stdin().read_line(&mut buffer).unwrap();
-                //     }
-                // } else {
-                //     println!("can you repeat ? \"{}\" is invalid", x);
-                //     buffer.clear();
-                //     io::stdin().read_line(&mut buffer).unwrap();
-                // }
             }
         }
     }
 }
 
+/// TODO remove temporary things related to analysing spoon codebase
 fn print_comparisons_stats(comp: &Comparisons) {
     println!("# of exact decls matches: {}", comp.exact.len());
     println!("# of remaining decls in baseline: {}", comp.left.len());
-    println!("# of remaining decls in tool results: {}", comp.right.len());
+    let comp_bl = comp
+        .exact
+        .iter()
+        .map(|x| (x.left.len(), x.exact.len()))
+        .filter(|x| x.0 != 0 || x.1 != 0)
+        .fold((0, 0, 0f64, 0), |(xl, xe, m, c), (x, e)| {
+            (x + xl, e + xe, m + (e as f64 / (x + e) as f64), c + 1)
+        });
+    let comp_tool = comp
+        .exact
+        .iter()
+        .map(|x| {
+            (
+                x.right
+                    .iter()
+                    .filter(|x| !x.file.starts_with("spoon-"))
+                    .count(),
+                x.exact.len(),
+            )
+        })
+        .filter(|x| x.0 != 0 || x.1 != 0)
+        .fold((0, 0, 0f64, 0), |(xl, xe, m, c), (x, e)| {
+            (x + xl, e + xe, m + (x as f64 / (x + e) as f64), c + 1)
+        });
     println!(
-        "mean success rate: {}",
-        comp.exact
+        "# of remaining decls in tool results: {}",
+        comp.right
             .iter()
-            .map(|x| x.exact.len() as f64 / ((x.exact.len() + x.left.len()) as f64 + 0.00001))
-            .sum::<f64>()
-            / comp.exact.len() as f64
+            .filter(|x| !x.decl.file.starts_with("spoon-"))
+            .count()
     );
+    println!("overall success rate: {}", {
+        let (x, e, _, _) = comp_bl;
+        e as f64 / (x + e) as f64
+    });
+    println!("overall overestimation rate: {}", {
+        let (x, e, _, _) = comp_tool;
+        x as f64 / (x + e) as f64
+    });
+    println!("mean success rate: {}", {
+        let (_, _, r, c) = comp_bl;
+        r as f64 / c as f64
+    });
     println!(
-        "mean overestimation rate: {}",
-        comp.exact
-            .iter()
-            .map(|x| (x.right.len() as f64) / ((x.exact.len() + x.right.len()) as f64 + 0.00001))
-            .sum::<f64>()
-            / comp.exact.len() as f64
-    );
+        "mean overestimation rate: {}",{
+            let (_, _, r, c) = comp_tool;
+            r as f64 / c as f64
+        });
     println!(
         "mean # of exact references: {}",
         comp.exact.iter().map(|x| x.exact.len()).sum::<usize>() as f64 / comp.exact.len() as f64
@@ -511,7 +609,15 @@ fn print_comparisons_stats(comp: &Comparisons) {
     );
     println!(
         "mean # of remaining refs in tool results: {}",
-        comp.exact.iter().map(|x| x.right.len()).sum::<usize>() as f64 / comp.exact.len() as f64
+        comp.exact
+            .iter()
+            .map(|x| x
+                .right
+                .iter()
+                .filter(|x| !x.file.starts_with("spoon-"))
+                .count())
+            .sum::<usize>() as f64
+            / comp.exact.len() as f64
     );
     let mut files = HashSet::<String>::default();
     for x in &comp.exact {
@@ -567,6 +673,46 @@ fn summarize_center(text: &str, border_lines: usize) -> String {
         r
     }
 }
+fn summarize_border(text: &str, border_lines: isize) -> String {
+    if border_lines == 0 {
+        text.to_string()
+    } else if border_lines > 0 {
+        let mut before = 1;
+        for _ in 0..border_lines {
+            let x = text[before - 1..]
+                .find(|x: char| x == '\n')
+                .unwrap_or(text.len() - before);
+            before = before + x + 1;
+            before = before.min(text.len() - 1)
+        }
+        if before + 1 >= text.len() {
+            text.to_string()
+        } else {
+            let mut r = text[..before.saturating_sub(1)].to_string();
+            r += ",,,,,,,,,, b ignored ";
+            let ignored = text.len() - before;
+            r += &ignored.to_string();
+            r += " characters ,,,,,,,,,,\n";
+            r
+        }
+    } else {
+        let mut after = text.len();
+        for _ in 0..-border_lines {
+            let x = text[..after].rfind(|x: char| x == '\n').unwrap_or_default();
+            after = x;
+        }
+        if after == 0 {
+            text.to_string()
+        } else {
+            let mut r = "\n,,,,,,,,,, a ignored ".to_string();
+            let ignored = after;
+            r += &ignored.to_string();
+            r += " characters ,,,,,,,,,,";
+            r += &text[after..];
+            r
+        }
+    }
+}
 
 fn handle_file(mut file: File) -> Result<Relations, serde_json::Error> {
     // let c =  Read::by_ref(&mut left).bytes().count();
@@ -581,10 +727,7 @@ fn handle_file(mut file: File) -> Result<Relations, serde_json::Error> {
     } else {
         file.rewind().unwrap();
         let file = Read::by_ref(&mut file);
-        let r = "["
-            .as_bytes()
-            .chain(file)
-            .chain("]".as_bytes());
+        let r = "[".as_bytes().chain(file).chain("]".as_bytes());
         serde_json::from_reader::<_, Relations>(r)
     }
 }
@@ -623,6 +766,9 @@ enum Commands {
 
         #[clap(short, long)]
         commit: String,
+
+        #[clap(short, long)]
+        only_misses: bool,
 
         /// File that contains referential relations.
         /// It will be used as a baseline

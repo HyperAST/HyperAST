@@ -27,9 +27,9 @@ pub(crate) fn handle_java_file(
 
     let tree = parser.parse(text, None).unwrap();
     if tree.root_node().has_error() {
-        println!("bad CST");
+        log::warn!("bad CST");
         // println!("{}", name);
-        println!("{}", tree.root_node().to_sexp());
+        log::debug!("{}", tree.root_node().to_sexp());
         // {
         //     let mut fe = PathBuf::new();
         //     fe.extend(&[

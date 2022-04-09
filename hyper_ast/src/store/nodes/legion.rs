@@ -230,7 +230,6 @@ impl<'a> HashedNodeRef<'a> {
 
     pub fn get_child_idx_by_name(&self, name: &<HashedNodeRef<'a> as crate::types::Labeled>::Label) -> Option<<HashedNodeRef<'a> as crate::types::WithChildren>::ChildIdx> {
         let labels = self.0.get_component::<CS<<HashedNodeRef<'a> as crate::types::Labeled>::Label>>().ok()?;
-        println!("{:?} {:?}",name,labels.0);
         labels.0.iter().position(|x|x==name).map(|x|x.to_u16().unwrap())
     }
 }
@@ -270,7 +269,9 @@ impl<'a> crate::types::WithChildren for HashedNodeRef<'a> {
     fn child_count(&self) -> u16 {
         self.0
             .get_component::<CS<legion::Entity>>()
-            .unwrap()
+            .unwrap_or_else(|x| {
+                panic!("too much children: {}\n{}", x, std::backtrace::Backtrace::force_capture());
+            })
             .0
             .len()
             .to_u16()
@@ -336,7 +337,7 @@ impl<'a> RefContainer for HashedNodeRef<'a> {
             ( ($e:expr, $s:expr, $rf:expr); $($t:ty),* ) => {
                 match $e {
                     BloomSize::Much => {
-                        println!("[Too Much]");
+                        log::trace!("[Too Much]");
                         BloomResult::MaybeContain
                     },
                     BloomSize::None => BloomResult::DoNotContain,

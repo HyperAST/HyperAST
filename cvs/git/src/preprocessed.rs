@@ -11,7 +11,7 @@ use hyper_ast::{
     hashed::{self, SyntaxNodeHashs},
     store::{
         nodes::legion::{compo, EntryRef, NodeStore, CS},
-        nodes::{DefaultNodeIdentifier as NodeIdentifier},
+        nodes::DefaultNodeIdentifier as NodeIdentifier,
     },
     tree_gen::SubTreeMetrics,
     types::{LabelStore as _, Labeled, Tree, Type, Typed, WithChildren},
@@ -19,21 +19,19 @@ use hyper_ast::{
 use log::info;
 use rusted_gumtree_gen_ts_java::{
     filter::BloomSize,
-    impact::{
-        element::{RefPtr},
-        partial_analysis::PartialAnalysis,
-    },
-    java_tree_gen_full_compress_legion_ref::{self, hash32}, usage::declarations::IterDeclarationsUnstableOpti,
+    impact::{element::RefPtr, partial_analysis::PartialAnalysis},
+    java_tree_gen_full_compress_legion_ref::{self, hash32},
+    usage::declarations::IterDeclarationsUnstableOpti,
 };
 
 use crate::{
-    git::{all_commits_between, BasicGitObjects},
+    git::{all_commits_between, retrieve_commit, BasicGitObjects},
     java::{handle_java_file, JavaAcc},
     maven::{handle_pom_file, IterMavenModules2, MavenModuleAcc, POM},
     Commit, SimpleStores, MAX_REFS, MD,
 };
 use rusted_gumtree_gen_ts_java::java_tree_gen_full_compress_legion_ref as java_tree_gen;
-use rusted_gumtree_gen_ts_xml::xml_tree_gen::{XmlTreeGen};
+use rusted_gumtree_gen_ts_xml::xml_tree_gen::XmlTreeGen;
 use tuples::CombinConcat;
 
 /// preprocess a git repository
@@ -119,7 +117,7 @@ impl PreProcessedRepository {
         after: &str,
         dir_path: &str,
     ) {
-        println!(
+        log::info!(
             "commits to process: {}",
             all_commits_between(&repository, before, after).count()
         );
@@ -129,9 +127,20 @@ impl PreProcessedRepository {
             .take(2)
             .for_each(|oid| {
                 let oid = oid.unwrap();
-                let c = self.handle_maven_commit(&repository, dir_path, oid);
+                let c = self.handle_maven_commit::<true>(&repository, dir_path, oid);
                 self.commits.insert(oid.clone(), c);
             });
+    }
+
+    pub fn pre_process_single(
+        &mut self,
+        repository: &mut Repository,
+        ref_or_commit: &str,
+        dir_path: &str,
+    ) {
+        let oid = retrieve_commit(repository, ref_or_commit).unwrap().id();
+        let c = self.handle_maven_commit::<false>(&repository, dir_path, oid);
+        self.commits.insert(oid.clone(), c);
     }
 
     pub fn pre_process_no_maven(
@@ -141,7 +150,7 @@ impl PreProcessedRepository {
         after: &str,
         dir_path: &str,
     ) {
-        println!(
+        log::info!(
             "commits to process: {}",
             all_commits_between(&repository, before, after).count()
         );
@@ -177,7 +186,7 @@ impl PreProcessedRepository {
     // }
 
     /// module_path: path to wanted root module else ""
-    fn handle_maven_commit(
+    fn handle_maven_commit<const RMS: bool>(
         &mut self,
         repository: &Repository,
         module_path: &str,
@@ -189,7 +198,8 @@ impl PreProcessedRepository {
         let tree = commit.tree().unwrap();
 
         info!("handle commit: {}", commit_oid);
-        let root_full_node = self.handle_maven_module(repository, &mut dir_path, b"", tree.id());
+        let root_full_node =
+            self.handle_maven_module::<RMS>(repository, &mut dir_path, b"", tree.id());
         // let root_full_node = self.fast_fwd(repository, &mut dir_path, b"", tree.id()); // used to directly access specific java sources
         Commit {
             meta_data: root_full_node.1,
@@ -359,7 +369,7 @@ impl PreProcessedRepository {
                         || !new_main_dirs.is_empty()
                         || !new_test_dirs.is_empty()
                     {
-                        println!(
+                        log::error!(
                             "{:?} {:?} {:?}",
                             new_sub_modules, new_main_dirs, new_test_dirs
                         );
@@ -397,9 +407,9 @@ impl PreProcessedRepository {
                 let node_id = if let Some(id) = insertion.occupied_id() {
                     id
                 } else {
-                    println!("make mm {} {}", &acc.name, acc.children.len());
+                    log::info!("make mm {} {}", &acc.name, acc.children.len());
                     let vacant = insertion.vacant();
-                    assert_eq!(acc.children_names.len(),acc.children.len());
+                    assert_eq!(acc.children_names.len(), acc.children.len());
                     NodeStore::insert_after_prepare(
                         vacant,
                         (
@@ -416,7 +426,7 @@ impl PreProcessedRepository {
                 {
                     let n = self.main_stores.node_store.resolve(node_id);
                     if !n.has_children() {
-                        println!(
+                        log::warn!(
                             "z {} {:?} {:?} {:?} {:?}",
                             n.get_component::<CS<NodeIdentifier>>().is_ok(),
                             n.get_component::<CS<NodeIdentifier>>()
@@ -450,12 +460,9 @@ impl PreProcessedRepository {
                     root_full_node = full_node;
                     break;
                 } else {
-                    println!("dir: {}", &acc.name);
+                    log::info!("dir: {}", &acc.name);
                     let w = &mut stack.last_mut().unwrap().2;
-                    let name = self
-                        .main_stores()
-                        .label_store
-                        .get_or_insert(acc.name);
+                    let name = self.main_stores().label_store.get_or_insert(acc.name);
                     assert!(!w.children_names.contains(&name));
                     w.push_submodule(name, full_node);
                 }
@@ -466,7 +473,8 @@ impl PreProcessedRepository {
         root_full_node
     }
 
-    fn handle_maven_module(
+    /// RMS: resursive module search
+    fn handle_maven_module<const RMS: bool>(
         &mut self,
         repository: &Repository,
         mut dir_path: &mut Peekable<Components>,
@@ -548,7 +556,7 @@ impl PreProcessedRepository {
                         }
                         // TODO use maven pom.xml to find source_dir  and tests_dir ie. ignore resources, maybe also tests
                         // TODO maybe at some point try to handle maven modules and source dirs that reference parent directory in their path
-                        println!("mm tree {:?}", std::str::from_utf8(&name));
+                        log::info!("mm tree {:?}", std::str::from_utf8(&name));
                         let tree = repository.find_tree(x).unwrap();
 
                         let parent_acc = &mut stack.last_mut().unwrap().2;
@@ -631,7 +639,7 @@ impl PreProcessedRepository {
                                     ),
                                 ));
                             };
-                        } else if !(is_source_dir || is_test_source_dir) {
+                        } else if RMS && !(is_source_dir || is_test_source_dir) {
                             // anyway try to find maven modules, but maybe can do better
                             let prepared = prepare_dir_exploration(tree, &mut dir_path);
                             stack.push((
@@ -662,10 +670,10 @@ impl PreProcessedRepository {
                                 w.push_pom(name, full_node);
                                 continue;
                             }
-                            println!("blob {:?}", std::str::from_utf8(&name));
+                            log::info!("blob {:?}", std::str::from_utf8(&name));
                             let a = repository.find_blob(x).unwrap();
                             if let Ok(z) = std::str::from_utf8(a.content()) {
-                                println!("{:?} contain error", std::str::from_utf8(&name));
+                                log::error!("{:?} contains errors", std::str::from_utf8(&name));
                                 // println!("content: {}", z);
                                 let text = a.content();
                                 let parent_acc = &mut stack.last_mut().unwrap().2;
@@ -730,7 +738,7 @@ impl PreProcessedRepository {
                         || !new_main_dirs.is_empty()
                         || !new_test_dirs.is_empty()
                     {
-                        println!(
+                        log::error!(
                             "{:?} {:?} {:?}",
                             new_sub_modules, new_main_dirs, new_test_dirs
                         );
@@ -768,9 +776,9 @@ impl PreProcessedRepository {
                 let node_id = if let Some(id) = insertion.occupied_id() {
                     id
                 } else {
-                    println!("make mm {} {}", &acc.name, acc.children.len());
+                    log::info!("make mm {} {}", &acc.name, acc.children.len());
                     let vacant = insertion.vacant();
-                    assert_eq!(acc.children_names.len(),acc.children.len());
+                    assert_eq!(acc.children_names.len(), acc.children.len());
                     NodeStore::insert_after_prepare(
                         vacant,
                         (
@@ -822,11 +830,8 @@ impl PreProcessedRepository {
                     break;
                 } else {
                     let w = &mut stack.last_mut().unwrap().2;
-                    let name = self
-                        .main_stores()
-                        .label_store
-                        .get_or_insert(acc.name);
-                    assert!(!w.children_names.contains(&name),"{:?}",name);
+                    let name = self.main_stores().label_store.get_or_insert(acc.name);
+                    assert!(!w.children_names.contains(&name), "{:?}", name);
                     w.push_submodule(name, full_node);
                     // println!("dir: {}", &acc.name);
                 }
@@ -866,10 +871,14 @@ impl PreProcessedRepository {
                             let full_node = already.clone();
 
                             let name = self
-                            .main_stores
-                            .label_store
-                            .get(std::str::from_utf8(&name).unwrap()).unwrap();
-                            let n = self.main_stores.node_store.resolve(full_node.compressed_node);
+                                .main_stores
+                                .label_store
+                                .get(std::str::from_utf8(&name).unwrap())
+                                .unwrap();
+                            let n = self
+                                .main_stores
+                                .node_store
+                                .resolve(full_node.compressed_node);
                             let already_name = *n.get_label();
                             if name != already_name {
                                 let already_name = self
@@ -885,12 +894,12 @@ impl PreProcessedRepository {
                             } else {
                                 let w = &mut stack.last_mut().unwrap().2;
                                 assert!(!w.children_names.contains(&name));
-                                w.push_dir(name, full_node,*skiped_ana);
+                                w.push_dir(name, full_node, *skiped_ana);
                             }
                             continue;
                         }
                         // TODO use maven pom.xml to find source_dir  and tests_dir ie. ignore resources, maybe also tests
-                        println!("tree {:?}", std::str::from_utf8(&name));
+                        log::info!("tree {:?}", std::str::from_utf8(&name));
                         let a = repository.find_tree(x).unwrap();
                         let prepared: Vec<BasicGitObjects> =
                             a.iter().rev().map(Into::into).collect();
@@ -908,10 +917,13 @@ impl PreProcessedRepository {
                             let full_node = already.clone();
 
                             let name = self
-                            .main_stores()
-                            .label_store
-                            .get_or_insert(std::str::from_utf8(&name).unwrap());
-                            let n = self.main_stores().node_store.resolve(full_node.compressed_node);
+                                .main_stores()
+                                .label_store
+                                .get_or_insert(std::str::from_utf8(&name).unwrap());
+                            let n = self
+                                .main_stores()
+                                .node_store
+                                .resolve(full_node.compressed_node);
                             let already_name = *n.get_label();
                             if name != already_name {
                                 let already_name = self
@@ -927,11 +939,11 @@ impl PreProcessedRepository {
                             } else {
                                 let w = &mut stack.last_mut().unwrap().2;
                                 assert!(!w.children_names.contains(&name));
-                                w.push(name,full_node);
+                                w.push(name, full_node);
                             }
                             continue;
                         }
-                        println!("blob {:?}", std::str::from_utf8(&name));
+                        log::info!("blob {:?}", std::str::from_utf8(&name));
                         // if std::str::from_utf8(&name).unwrap().eq("package-info.java") {
                         //     println!("module info:  {:?}", std::str::from_utf8(&name));
                         // } else
@@ -949,11 +961,11 @@ impl PreProcessedRepository {
                                         .insert(a.id(), (full_node.clone(), false));
                                     let w = &mut stack.last_mut().unwrap().2;
                                     let name = self
-                                    .main_stores()
-                                    .label_store
-                                    .get_or_insert(std::str::from_utf8(&name).unwrap());
+                                        .main_stores()
+                                        .label_store
+                                        .get_or_insert(std::str::from_utf8(&name).unwrap());
                                     assert!(!w.children_names.contains(&name));
-                                    w.push(name,full_node);
+                                    w.push(name, full_node);
                                 }
                             }
                         } else {
@@ -1015,11 +1027,11 @@ impl PreProcessedRepository {
                     log::info!("ref count in dir {}", c);
                     log::debug!("refs in directory");
                     for x in ana.display_refs(&self.main_stores().label_store) {
-                        println!("    {}", x);
+                        log::debug!("    {}", x);
                     }
                     log::debug!("decls in directory");
                     for x in ana.display_decls(&self.main_stores().label_store) {
-                        println!("    {}", x);
+                        log::debug!("    {}", x);
                     }
                     if c < MAX_REFS {
                         ana.resolve()
@@ -1030,7 +1042,7 @@ impl PreProcessedRepository {
                 log::info!("ref count in dir after resolver {}", ana.refs_count());
                 log::debug!("refs in directory after resolve: ");
                 for x in ana.display_refs(&self.main_stores().label_store) {
-                    println!("    {}", x);
+                    log::debug!("    {}", x);
                 }
                 let insertion = self
                     .main_stores()
@@ -1064,7 +1076,7 @@ impl PreProcessedRepository {
                             (Type::Directory, label, hashs, BloomSize::None),
                         ),
                         _ => {
-                            assert_eq!(acc.children_names.len(),acc.children.len());
+                            assert_eq!(acc.children_names.len(), acc.children.len());
                             let c = (
                                 Type::Directory,
                                 label,
@@ -1135,12 +1147,12 @@ impl PreProcessedRepository {
                 } else {
                     let w = &mut stack.last_mut().unwrap().2;
                     let name = self
-                    .main_stores()
-                    .label_store
-                    .get_or_insert(acc.name.clone());
+                        .main_stores()
+                        .label_store
+                        .get_or_insert(acc.name.clone());
                     assert!(!w.children_names.contains(&name));
                     w.push_dir(name, full_node.clone(), acc.skiped_ana);
-                    println!("dir: {}", &acc.name);
+                    log::info!("dir: {}", &acc.name);
                 }
             } else {
                 panic!("never empty")
@@ -1172,9 +1184,9 @@ impl PreProcessedRepository {
         name: &str,
     ) -> Option<(NodeIdentifier, usize)> {
         let n = self.main_stores.node_store.resolve(d);
-        println!("{}",name);
+        log::info!("{}", name);
         let i = n.get_child_idx_by_name(&self.main_stores.label_store.get(name)?);
-        i.map(|i|(n.get_child(&i),i as usize))
+        i.map(|i| (n.get_child(&i), i as usize))
         // let s = n
         //     .get_children()
         //     .iter()
@@ -1203,355 +1215,6 @@ impl PreProcessedRepository {
             .map(|(i, x)| (*x, i));
         s
     }
-
-    pub fn print_matched_references(
-        &self,
-        ana: &mut PartialAnalysis,
-        i: RefPtr,
-        root: NodeIdentifier,
-    ) {
-        todo!()
-        // for d in IterMavenModules::new(&self.main_stores, root) {
-        //     let s = self.child_by_name(d, "src");
-        //     let s = s.and_then(|d| self.child_by_name(d, "main"));
-        //     let s = s.and_then(|d| self.child_by_name(d, "java"));
-        //     // let s = s.and_then(|d| self.child_by_type(d, &Type::Directory));
-        //     if let Some(s) = s {
-        //         // let n = self.main_stores.node_store.resolve(d);
-        //         // println!(
-        //         //     "search in module/src/main/java {}",
-        //         //     self
-        //         //         .main_stores
-        //         //         .label_store
-        //         //         .resolve(n.get_label())
-        //         // );
-        //         usage::find_refs(
-        //             &self.main_stores,
-        //             ana,
-        //             &mut StructuralPosition::new(s),
-        //             i,
-        //             s,
-        //         );
-        //     }
-        //     let s = self.child_by_name(d, "src");
-        //     let s = s.and_then(|d| self.child_by_name(d, "test"));
-        //     let s = s.and_then(|d| self.child_by_name(d, "java"));
-        //     // let s = s.and_then(|d| self.child_by_type(d, &Type::Directory));
-        //     if let Some(s) = s {
-        //         // let n = self.main_stores.node_store.resolve(d);
-        //         // println!(
-        //         //     "search in module/src/test/java {}",
-        //         //     self
-        //         //         .main_stores
-        //         //         .label_store
-        //         //         .resolve(n.get_label())
-        //         // );
-        //         usage::find_refs(
-        //             &self.main_stores,
-        //             ana,
-        //             &mut StructuralPosition::new(s),
-        //             i,
-        //             s,
-        //         );
-        //     }
-        // }
-    }
-
-    pub fn print_references_to_declarations_aux(
-        &self,
-        ana: &mut PartialAnalysis,
-        s: NodeIdentifier,
-    ) {
-        todo!()
-        // let mut d_it = IterDeclarations::new(&self.main_stores, s);
-        // loop {
-        //     if let Some(x) = d_it.next() {
-        //         let b = self.main_stores.node_store.resolve(x);
-        //         let t = b.get_type();
-        //         let now = Instant::now();
-        //         if &t == &Type::ClassDeclaration {
-        //             let mut position =
-        //                 extract_position(&self.main_stores, d_it.parents(), d_it.offsets());
-        //             position.set_len(b.get_bytes_len(0) as usize);
-        //             println!("now search for {:?} at {:?}", &t, position);
-        //             {
-        //                 let i = ana.solver.intern(RefsEnum::MaybeMissing);
-        //                 let i = ana.solver.intern(RefsEnum::This(i));
-        //                 println!("try search this");
-        //                 usage::find_refs(&self.main_stores, ana, &mut d_it.position(x), i, x);
-        //             }
-        //             let mut l = None;
-        //             for xx in b.get_children() {
-        //                 let bb = self.main_stores.node_store.resolve(*xx);
-        //                 if bb.get_type() == Type::Identifier {
-        //                     let i = bb.get_label();
-        //                     l = Some(*i);
-        //                 }
-        //             }
-        //             if let Some(i) = l {
-        //                 let o = ana.solver.intern(RefsEnum::MaybeMissing);
-        //                 let f = self.main_stores.label_store.resolve(&i);
-        //                 println!("search uses of {:?}", f);
-        //                 let f = IdentifierFormat::from(f);
-        //                 let l = LabelPtr::new(i, f);
-        //                 let i = ana.solver.intern(RefsEnum::ScopedIdentifier(o, l));
-        //                 println!("try search {:?}", ana.solver.nodes.with(i));
-        //                 usage::find_refs(&self.main_stores, ana, &mut d_it.position(x), i, x);
-        //                 {
-        //                     let i = ana.solver.intern(RefsEnum::This(i));
-        //                     println!("try search {:?}", ana.solver.nodes.with(i));
-        //                     usage::find_refs(&self.main_stores, ana, &mut d_it.position(x), i, x);
-        //                 }
-        //                 let mut parents = d_it.parents().to_vec();
-        //                 let mut offsets = d_it.offsets().to_vec();
-        //                 let mut curr = parents.pop();
-        //                 offsets.pop();
-        //                 let mut prev = curr;
-        //                 let mut before_p_ref = i;
-        //                 let mut max_qual_ref = i;
-        //                 let mut conti = false;
-        //                 // go through classes if inner
-        //                 loop {
-        //                     if let Some(xx) = curr {
-        //                         let bb = self.main_stores.node_store.resolve(xx);
-        //                         let t = bb.get_type();
-        //                         if t.is_type_body() {
-        //                             println!(
-        //                                 "try search {:?}",
-        //                                 ana.solver.nodes.with(max_qual_ref)
-        //                             );
-        //                             usage::find_refs(
-        //                                 &self.main_stores,
-        //                                 ana,
-        //                                 &mut (parents.clone(), offsets.clone(), x).into(),
-        //                                 max_qual_ref,
-        //                                 x,
-        //                             );
-        //                             prev = curr;
-        //                             curr = parents.pop();
-        //                             offsets.pop();
-        //                             if let Some(xxx) = curr {
-        //                                 let bb = self.main_stores.node_store.resolve(xxx);
-        //                                 let t = bb.get_type();
-        //                                 if t == Type::ObjectCreationExpression {
-        //                                     conti = true;
-        //                                     break;
-        //                                 } else if !t.is_type_declaration() {
-        //                                     panic!("{:?}", t);
-        //                                 }
-        //                                 let mut l2 = None;
-        //                                 for xx in b.get_children() {
-        //                                     let bb = self.main_stores.node_store.resolve(*xx);
-        //                                     if bb.get_type() == Type::Identifier {
-        //                                         let i = bb.get_label();
-        //                                         l2 = Some(*i);
-        //                                     }
-        //                                 }
-        //                                 if let Some(i) = l2 {
-        //                                     let o = ana.solver.intern(RefsEnum::MaybeMissing);
-        //                                     let f = IdentifierFormat::from(
-        //                                         self.main_stores.label_store.resolve(&i),
-        //                                     );
-        //                                     let l = LabelPtr::new(i, f);
-        //                                     let i =
-        //                                         ana.solver.intern(RefsEnum::ScopedIdentifier(o, l));
-        //                                     max_qual_ref = ana
-        //                                         .solver
-        //                                         .try_solve_node_with(max_qual_ref, i)
-        //                                         .unwrap();
-        //                                     println!(
-        //                                         "try search {:?}",
-        //                                         ana.solver.nodes.with(max_qual_ref)
-        //                                     );
-        //                                     usage::find_refs(
-        //                                         &self.main_stores,
-        //                                         ana,
-        //                                         &mut (parents.clone(), offsets.clone(), xx).into(),
-        //                                         max_qual_ref,
-        //                                         xx,
-        //                                     );
-        //                                 }
-        //                                 prev = curr;
-        //                                 curr = parents.pop();
-        //                                 offsets.pop();
-        //                             }
-        //                         } else if t == Type::Program {
-        //                             // go through program i.e. package declaration
-        //                             before_p_ref = max_qual_ref;
-        //                             for xx in b.get_children() {
-        //                                 let bb = self.main_stores.node_store.resolve(*xx);
-        //                                 let t = bb.get_type();
-        //                                 if t == Type::PackageDeclaration {
-        //                                     let p = remake_pkg_ref(&self.main_stores, ana, *xx);
-        //                                     max_qual_ref = ana
-        //                                         .solver
-        //                                         .try_solve_node_with(max_qual_ref, p)
-        //                                         .unwrap();
-        //                                 } else if t.is_type_declaration() {
-        //                                     println!(
-        //                                         "try search {:?}",
-        //                                         ana.solver.nodes.with(max_qual_ref)
-        //                                     );
-        //                                     if Some(*xx) != prev {
-        //                                         usage::find_refs(
-        //                                             &self.main_stores,
-        //                                             ana,
-        //                                             &mut (parents.clone(), offsets.clone(), *xx)
-        //                                                 .into(),
-        //                                             before_p_ref,
-        //                                             *xx,
-        //                                         );
-        //                                     }
-        //                                     usage::find_refs(
-        //                                         &self.main_stores,
-        //                                         ana,
-        //                                         &mut (parents.clone(), offsets.clone(), *xx).into(),
-        //                                         max_qual_ref,
-        //                                         *xx,
-        //                                     );
-        //                                 }
-        //                             }
-        //                             prev = curr;
-        //                             curr = parents.pop();
-        //                             offsets.pop();
-        //                             break;
-        //                         } else if t == Type::ObjectCreationExpression {
-        //                             conti = true;
-        //                             break;
-        //                         } else if t == Type::Block {
-        //                             conti = true;
-        //                             break; // TODO check if really done
-        //                         } else {
-        //                             todo!("{:?}", t)
-        //                         }
-        //                     }
-        //                 }
-        //                 if conti {
-        //                     continue;
-        //                 }
-        //                 // go through package
-        //                 if let Some(xx) = curr {
-        //                     if Some(xx) != prev {
-        //                         usage::find_refs(
-        //                             &self.main_stores,
-        //                             ana,
-        //                             &mut (parents.clone(), offsets.clone(), xx).into(),
-        //                             before_p_ref,
-        //                             xx,
-        //                         );
-        //                     }
-        //                     usage::find_refs(
-        //                         &self.main_stores,
-        //                         ana,
-        //                         &mut (parents.clone(), offsets.clone(), xx).into(),
-        //                         max_qual_ref,
-        //                         xx,
-        //                     );
-        //                     prev = curr;
-        //                     curr = parents.pop();
-        //                     offsets.pop();
-        //                 }
-        //                 // go through directories
-        //                 loop {
-        //                     if let Some(xx) = curr {
-        //                         if Some(xx) != prev {
-        //                             usage::find_refs(
-        //                                 &self.main_stores,
-        //                                 ana,
-        //                                 &mut (parents.clone(), offsets.clone(), xx).into(),
-        //                                 max_qual_ref,
-        //                                 xx,
-        //                             );
-        //                         }
-        //                         prev = curr;
-        //                         curr = parents.pop();
-        //                         offsets.pop();
-        //                     } else {
-        //                         break;
-        //                     }
-        //                 }
-        //             }
-
-        //             println!("time taken for refs search: {}", now.elapsed().as_nanos());
-        //         } else {
-        //             // TODO
-        //             // println!("todo impl search on {:?}", &t);
-        //         }
-
-        //         // println!("it state {:?}", &d_it);
-        //         // java_tree_gen_full_compress_legion_ref::print_tree_syntax(
-        //         //     &self.main_stores.node_store,
-        //         //     &self.main_stores.label_store,
-        //         //     &x,
-        //         // );
-        //         // println!();
-        //     } else {
-        //         break;
-        //     }
-        // }
-    }
-    pub fn print_references_to_declarations(
-        &self,
-        ana: &mut PartialAnalysis,
-        root: NodeIdentifier,
-    ) {
-        let mut m_it = IterMavenModules2::new(&self.main_stores, root);
-        loop {
-            let d = if let Some(d) = m_it.next_node() { d } else { break };
-            // m_it.parents();
-            let src = self.child_by_name(d, "src");
-
-            let s = src.and_then(|d| self.child_by_name(d, "main"));
-            let s = s.and_then(|d| self.child_by_name(d, "java"));
-            if let Some(s) = s {
-                self.print_references_to_declarations_aux(ana, s)
-            }
-            let s = src.and_then(|d| self.child_by_name(d, "test"));
-            let s = s.and_then(|d| self.child_by_name(d, "java"));
-            if let Some(s) = s {
-                self.print_references_to_declarations_aux(ana, s)
-            }
-        }
-    }
-
-    pub fn print_declarations(&self, ana: &mut PartialAnalysis, root: NodeIdentifier) {
-        let mut m_it = IterMavenModules2::new(&self.main_stores, root);
-        loop  {
-            let d = if let Some(d) = m_it.next_node() { d } else { break };
-            let s = self.child_by_name(d, "src");
-            let s = s.and_then(|d| self.child_by_name(d, "main"));
-            let s = s.and_then(|d| self.child_by_name(d, "java"));
-            if let Some(s) = s {
-                let mut d_it = IterDeclarationsUnstableOpti::new(&self.main_stores, s);
-                loop {
-                    if let Some(x) = d_it.next() {
-                        let b = self.main_stores.node_store.resolve(x);
-                        let t = b.get_type();
-                        println!("now search for {:?}", &t);
-                        println!("it state {:?}", &d_it);
-                    } else {
-                        break;
-                    }
-                }
-            }
-            let s = self.child_by_name(d, "src");
-            let s = s.and_then(|d| self.child_by_name(d, "test"));
-            let s = s.and_then(|d| self.child_by_name(d, "java"));
-            if let Some(s) = s {
-                let mut d_it = IterDeclarationsUnstableOpti::new(&self.main_stores, s);
-                loop {
-                    if let Some(x) = d_it.next() {
-                        let b = self.main_stores.node_store.resolve(x);
-                        let t = b.get_type();
-                        println!("now search for {:?}", &t);
-                        println!("it state {:?}", &d_it);
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
-    }
 }
 
 fn drain_filter_strip(v: &mut Option<Vec<PathBuf>>, name: &[u8]) -> Vec<PathBuf> {
@@ -1559,14 +1222,9 @@ fn drain_filter_strip(v: &mut Option<Vec<PathBuf>>, name: &[u8]) -> Vec<PathBuf>
     let name = std::str::from_utf8(&name).unwrap();
     if let Some(sub_modules) = v {
         sub_modules
-            .drain_filter(|x| {
-                x.starts_with(name)
-            })
+            .drain_filter(|x| x.starts_with(name))
             .for_each(|x| {
-                let x = x
-                    .strip_prefix(name)
-                    .unwrap()
-                    .to_owned();
+                let x = x.strip_prefix(name).unwrap().to_owned();
                 new_sub_modules.push(x);
             });
     }

@@ -1,6 +1,6 @@
 use std::{
     borrow::BorrowMut,
-    collections::{HashMap, BTreeMap},
+    collections::{BTreeMap, HashMap},
     mem::{replace, take},
 };
 
@@ -15,8 +15,25 @@ enum ExactCompareDeclResult {
     Right(Vec<Position>),
 }
 
-impl From<(Relations, Relations)> for Comparisons {
-    fn from((left, right): (Relations, Relations)) -> Self {
+pub struct Comparator {
+    pub intersection_left: bool,
+}
+
+impl Default for Comparator {
+    fn default() -> Self {
+        Self { intersection_left: Default::default() }
+    }
+}
+
+impl Comparator {
+
+    pub fn set_intersection_left(self, intersection_left:bool) -> Self {
+        Self {
+            intersection_left,
+        }
+    }
+
+    pub fn compare(&self, left: Relations, right: Relations) -> Comparisons {
         let mut m: BTreeMap<Position, ExactCompareDeclResult> = Default::default();
         for x in left {
             m.insert(x.decl, ExactCompareDeclResult::Left(x.refs));
@@ -42,7 +59,7 @@ impl From<(Relations, Relations)> for Comparisons {
         let mut left = vec![];
         let mut right = vec![];
 
-        for (k,v) in m {
+        for (k, v) in m {
             match v {
                 ExactCompareDeclResult::Exact(mut left, mut right) => {
                     left.sort();
@@ -74,7 +91,15 @@ impl From<(Relations, Relations)> for Comparisons {
                             .0
                             .push(l.clone().into());
                     }
-                    let per_file = per_file.into_iter().map(|x| x.into()).collect();
+                    let per_file = if self.intersection_left {
+                        per_file
+                            .into_iter()
+                            .filter(|(_, (l, _))| !l.is_empty())
+                            .map(|x| x.into())
+                            .collect()
+                    } else {
+                        per_file.into_iter().map(|x| x.into()).collect()
+                    };
                     exact.push(Comparison {
                         decl: k,
                         exact: intersection,

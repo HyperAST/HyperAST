@@ -90,6 +90,7 @@ fn f() {
     let b: Bloom<&'static [u8], [u64; 4]> = From::from(a);
 }
 
+#[derive(PartialEq, Eq)]
 pub enum BloomResult {
     MaybeContain,
     DoNotContain,
@@ -120,7 +121,7 @@ impl BF<[u8]> for Bloom<&'static [u8], u16> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = pearson(i, item.as_ref());
             let b = (a & 0xf) ^ (a >> 4);
@@ -145,7 +146,7 @@ impl BF<[u8]> for Bloom<&'static [u8], u32> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = pearson_mod::<_, 32>(i, item.as_ref());
             let b = a;
@@ -170,7 +171,7 @@ impl BF<[u8]> for Bloom<&'static [u8], u64> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = pearson_mod::<_, 64>(i, item.as_ref());
             let b = a;
@@ -195,7 +196,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 2]> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = pearson_mod::<_, 128>(i, item.as_ref());
             let b = a;
@@ -220,7 +221,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 4]> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = pearson(i, item.as_ref());
             let b = a;
@@ -245,7 +246,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 8]> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = hash16_mod::<_, 512>(i, item.as_ref());
             if !self.bits[a as usize] {
@@ -269,7 +270,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 16]> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = hash16_mod::<_, 1024>(i, item.as_ref());
             let b = a;
@@ -294,7 +295,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 32]> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = hash16_mod::<_, 2048>(i, item.as_ref());
             let b = a;
@@ -319,7 +320,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 64]> {
     }
 
     fn check<U: AsRef<[u8]>>(&self, dups: usize, item: U) -> Self::Result {
-        println!("{}", self.bits);
+        log::trace!("{}", self.bits);
         for i in 0..=dups {
             let a = hash16_mod::<_, 4096>(i, item.as_ref());
             let b = a;

@@ -381,7 +381,7 @@ impl PartialAnalysis {
             }
         } else if kind == &Type::This {
             let i = solver.intern(RefsEnum::MaybeMissing);
-            let i = solver.intern(RefsEnum::This(i));
+            let i = solver.intern_ref(RefsEnum::This(i));
             PartialAnalysis {
                 current_node: State::This(i),
                 solver,
@@ -430,7 +430,7 @@ impl PartialAnalysis {
             let d = solver.intern(RefsEnum::Super(r));
             let d = solver.intern(RefsEnum::ConstructorInvocation(d, Arguments::Unknown));
             let d = Declarator::Executable(d);
-            solver.add_decl(d, DeclType::Runtime(vec![s].into()));
+            solver.add_decl(d, DeclType::Runtime(vec![s].into())); // TODO check
 
             PartialAnalysis {
                 current_node: State::TypeDeclaration {
@@ -769,7 +769,7 @@ impl PartialAnalysis {
                         }
                         _ => panic!(),
                     };
-                    println!("{}", members.len());
+                    log::trace!("{}", members.len());
                     for (v, d, t) in members {
                         let d = d.with_changed_node(|i| sync!(*i));
                         let t = t.map(|x| sync!(x)); // TODO try solving t
@@ -1005,6 +1005,7 @@ impl PartialAnalysis {
                 }
                 State::Arguments(_) => {
                     assert_eq!(kind, &Type::EnumConstant);
+                    let mut remapper = acc.solver.extend(&self.solver);
                     // TODO materialize the construtor call
                     acc.current_node.take()
                 }
@@ -2583,7 +2584,8 @@ impl PartialAnalysis {
                             State::SimpleIdentifier(_, i),
                         ) if kind == &Type::EnhancedForStatement => {
                             let r = mm!();
-                            let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                            // let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                            scoped!(r,i);
                             State::Declaration {
                                 visibility,
                                 kind: t,
@@ -2599,6 +2601,7 @@ impl PartialAnalysis {
                             State::This(i),
                         ) if kind == &Type::EnhancedForStatement => {
                             let i = sync!(i);
+                            let i = acc.solver.intern_ref(RefsEnum::This(i));
                             State::Declaration {
                                 visibility,
                                 kind: t,
@@ -4407,6 +4410,11 @@ impl PartialAnalysis {
                     {
                         State::FieldIdentifier(i)
                     }
+                    (State::LiteralType(t), State::SimpleIdentifier(_, ir)) if kind == &Type::BinaryExpression => {
+                        scoped!(mm!(), ir);
+                        // TODO not that obvious in general
+                        State::LiteralType(t)
+                    }
                     (State::LiteralType(t), _) if kind == &Type::BinaryExpression => {
                         // TODO not that obvious in general
                         State::LiteralType(t)
@@ -5321,6 +5329,12 @@ impl PartialAnalysis {
                         if kind == &Type::VariableDeclarator =>
                     {
                         let v = acc.solver.intern(RefsEnum::Array(v));
+                        State::Declarator(Declarator::Variable(v))
+                    }
+                    (State::Declarator(Declarator::Variable(v)), State::SimpleIdentifier(_, i))
+                        if kind == &Type::VariableDeclarator =>
+                    {
+                        scoped!(mm!(),i);
                         State::Declarator(Declarator::Variable(v))
                     }
                     (State::Declarator(Declarator::Variable(v)), _)

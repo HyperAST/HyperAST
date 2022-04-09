@@ -14,6 +14,7 @@ use hyper_ast::{
     types::WithChildren,
 };
 
+use rusted_gumtree_gen_ts_java::java_tree_gen_full_compress_legion_ref::print_tree_syntax;
 use tree_sitter::{Language, Parser};
 
 use crate::java::handle_java_file;
@@ -712,6 +713,62 @@ public class PatternBuiler {
 
 }"#;
 
+
+fn run7(text: &[u8]) {
+    let mut stores = SimpleStores {
+        label_store: LabelStore::new(),
+        type_store: TypeStore {},
+        node_store: NodeStore::new(),
+    };
+    let mut md_cache = Default::default();
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+
+    // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
+    match a.local.ana.as_ref() {
+        Some(x) => {
+            println!("refs:",);
+            x.print_refs(&java_tree_gen.stores.label_store);
+        }
+        None => println!("None"),
+    };
+    let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
+    let v = AA;
+    macro_rules! scoped {
+        ( $o:expr, $i:expr ) => {{
+            let o = $o;
+            let i = $i;
+            let f = IdentifierFormat::from(i);
+            let i = stores.label_store.get_or_insert(i);
+            let i = LabelPtr::new(i, f);
+            ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
+        }};
+    }
+    let mut sp_store =
+        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+
+    let mm = ana.solver.intern(RefsEnum::MaybeMissing);
+    let root = ana.solver.intern(RefsEnum::Root);
+    let package_ref = scoped!(root, "spoon");
+
+    println!("-------------1----------------");
+    let package_ref2 = scoped!(scoped!(package_ref, "reflect"), "declaration");
+    let i = scoped!(package_ref2, "CtAnonymousExecutable");
+    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
+    assert_eq!(r.len(),1);
+}
+
+#[test]
+fn test_case7() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    run7(CASE_7.as_bytes())
+}
+
 /// search spoon.reflect.declaration.CtAnonymousExecutable
 static CASE_7: &'static str = r#"package spoon;
 
@@ -721,6 +778,78 @@ public enum CtRole {
     ANNONYMOUS_EXECUTABLE(TYPE_MEMBER, obj -> obj instanceof CtAnonymousExecutable),
 
 }"#;
+
+
+fn run8(text: &[u8]) {
+    let mut stores = SimpleStores {
+        label_store: LabelStore::new(),
+        type_store: TypeStore {},
+        node_store: NodeStore::new(),
+    };
+    let mut md_cache = Default::default();
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+
+    // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
+    match a.local.ana.as_ref() {
+        Some(x) => {
+            println!("refs:",);
+            x.print_refs(&java_tree_gen.stores.label_store);
+        }
+        None => println!("None"),
+    };
+    let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
+    macro_rules! scoped {
+        ( $o:expr, $i:expr ) => {{
+            let o = $o;
+            let i = $i;
+            let f = IdentifierFormat::from(i);
+            let i = stores.label_store.get_or_insert(i);
+            let i = LabelPtr::new(i, f);
+            ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
+        }};
+    }
+    let mut sp_store =
+        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+
+    let mm = ana.solver.intern(RefsEnum::MaybeMissing);
+    let root = ana.solver.intern(RefsEnum::Root);
+    let package_ref = scoped!(root, "spoon");
+
+    println!("-------------1----------------");
+    let i = scoped!(mm, "CtAnnotationImpl");
+    let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let bb = stores.node_store.resolve(a.local.compressed_node);
+    assert_eq!(bb.get_type(),Type::Program);
+    let xx = bb.get_child(&4);
+    x.goto(xx, 4);
+    let bb = stores.node_store.resolve(xx);
+    assert_eq!(bb.get_type(),Type::ClassDeclaration);
+    let xx = bb.get_child(&6);
+    x.goto(xx, 6);
+    let bb = stores.node_store.resolve(xx);
+    assert_eq!(bb.get_type(),Type::ClassBody);
+    // let xx = bb.get_child(&2);
+    // x.goto(xx, 2);
+    // let bb = stores.node_store.resolve(xx);
+    // assert_eq!(bb.get_type(),Type::ClassDeclaration);
+    // let xx = bb.get_child(&6);
+    // x.goto(xx, 6);
+    // let bb = stores.node_store.resolve(xx);
+    // assert_eq!(bb.get_type(),Type::ClassBody);
+    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
+    assert_eq!(r.len(), 1);
+}
+
+#[test]
+fn test_case8() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    run8(CASE_8.as_bytes())
+}
 
 /// CtAnnotationImpl in body
 static CASE_8: &'static str = r#"package spoon;
@@ -751,3 +880,537 @@ public class SwitchNode extends AbstractNode implements InlineNode {
 }"#;
 
 
+
+
+fn run10(text: &[u8]) {
+    let mut stores = SimpleStores {
+        label_store: LabelStore::new(),
+        type_store: TypeStore {},
+        node_store: NodeStore::new(),
+    };
+    let mut md_cache = Default::default();
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+
+    // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
+    match a.local.ana.as_ref() {
+        Some(x) => {
+            println!("refs:",);
+            x.print_refs(&java_tree_gen.stores.label_store);
+        }
+        None => println!("None"),
+    };
+    let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
+    macro_rules! scoped {
+        ( $o:expr, $i:expr ) => {{
+            let o = $o;
+            let i = $i;
+            let f = IdentifierFormat::from(i);
+            let i = stores.label_store.get_or_insert(i);
+            let i = LabelPtr::new(i, f);
+            ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
+        }};
+    }
+    let mut sp_store =
+        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+
+    let mm = ana.solver.intern(RefsEnum::MaybeMissing);
+    let root = ana.solver.intern(RefsEnum::Root);
+    let package_ref = scoped!(root, "spoon");
+
+    println!("-------------1----------------");
+    let i = scoped!(mm, "CtAnnotationImpl");
+    let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let bb = stores.node_store.resolve(a.local.compressed_node);
+    assert_eq!(bb.get_type(),Type::Program);
+    let xx = bb.get_child(&4);
+    x.goto(xx, 4);
+    let bb = stores.node_store.resolve(xx);
+    assert_eq!(bb.get_type(),Type::ClassDeclaration);
+    let xx = bb.get_child(&6);
+    x.goto(xx, 6);
+    let bb = stores.node_store.resolve(xx);
+    assert_eq!(bb.get_type(),Type::ClassBody);
+    // let xx = bb.get_child(&2);
+    // x.goto(xx, 2);
+    // let bb = stores.node_store.resolve(xx);
+    // assert_eq!(bb.get_type(),Type::ClassDeclaration);
+    // let xx = bb.get_child(&6);
+    // x.goto(xx, 6);
+    // let bb = stores.node_store.resolve(xx);
+    // assert_eq!(bb.get_type(),Type::ClassBody);
+    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
+    assert_eq!(r.len(), 1);
+}
+
+#[test]
+fn test_case10() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    run10(CASE_10.as_bytes())
+}
+
+
+/// search `Tacos.Burritos` in Tacos.Burritos body
+static CASE_10: &'static str = r#"package spoon.test.generics.testclasses;
+
+import javax.lang.model.util.SimpleTypeVisitor7;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Tacos<K, V extends String> implements ITacos<V> {
+
+        public Tacos() {
+                <String>this(1);
+        }
+
+        public <T> Tacos(int nbTacos) {
+        }
+
+        public void m() {
+                List<String> l = new ArrayList<>();
+                List l2;
+                IBurritos<?, ?> burritos = new Burritos<>();
+                List<?> l3 = new ArrayList<Object>();
+                new <Integer>Tacos<Object, String>();
+                new Tacos<>();
+        }
+
+        public void m2() {
+                this.<String>makeTacos(null);
+                this.makeTacos(null);
+        }
+
+        public void m3() {
+                new SimpleTypeVisitor7<Tacos, Void>() {
+                };
+                new javax.lang.model.util.SimpleTypeVisitor7<Tacos, Void>() {
+                };
+        }
+
+        public <V, C extends List<V>> void m4() {
+                Tacos.<V, C>makeTacos();
+                Tacos.makeTacos();
+        }
+
+        public static <V, C extends List<V>> List<C> makeTacos() {
+                return null;
+        }
+
+        public <T> void makeTacos(T anObject) {
+        }
+
+        class Burritos<K, V> implements IBurritos<K, V> {
+            Tacos<K, String>.Burritos<K, V> burritos;
+            public Tacos<K, String>.Burritos<K, V> b() {
+                    new Burritos<K, V>();
+                    return null;
+            }
+
+            class Pozole {
+                    public Tacos<K, String>.Burritos<K, V>.Pozole p() {
+                            new Pozole();
+                            return null;
+                    }
+            }
+
+            @Override
+            public IBurritos<K, V> make() {
+                    return new Burritos<K, V>() {};
+            }
+    }
+
+    public class BeerFactory {
+            public Beer newBeer() {
+                    return new Beer();
+            }
+    }
+
+    class Beer {
+    }
+}
+"#;
+
+
+
+fn run11(text: &[u8]) {
+    let mut stores = SimpleStores {
+        label_store: LabelStore::new(),
+        type_store: TypeStore {},
+        node_store: NodeStore::new(),
+    };
+    let mut md_cache = Default::default();
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+
+    // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
+    match a.local.ana.as_ref() {
+        Some(x) => {
+            println!("refs:",);
+            x.print_refs(&java_tree_gen.stores.label_store);
+        }
+        None => println!("None"),
+    };
+    let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
+    macro_rules! scoped {
+        ( $o:expr, $i:expr ) => {{
+            let o = $o;
+            let i = $i;
+            let f = IdentifierFormat::from(i);
+            let i = stores.label_store.get_or_insert(i);
+            let i = LabelPtr::new(i, f);
+            ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
+        }};
+    }
+    let mut sp_store =
+        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+
+    // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
+    // let root = ana.solver.intern(RefsEnum::Root);
+    // let package_ref = scoped!(root, "spoon");
+
+    print_tree_syntax(
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
+        &a.local.compressed_node,
+    );
+    println!();
+}
+
+#[test]
+fn test_case11() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    run11(CASE_11.as_bytes());
+    println!("{}",CASE_11.as_bytes().len());
+    println!("{}",CASE_11_bis.as_bytes().len());
+}
+
+static CASE_11: &'static str = r#"/**
+* The MIT License
+* <p>
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+* <p>
+* The above copyright notice and this permission notice shall be included in
+* all copies or substantial portions of the Software.
+* <p>
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+* THE SOFTWARE.
+*/
+
+package fr.inria.controlflow;
+
+import org.junit.Test;
+import spoon.processing.AbstractProcessor;
+import spoon.processing.ProcessingManager;
+import spoon.reflect.code.CtIf;
+import spoon.reflect.declaration.CtMethod;
+import spoon.reflect.factory.Factory;
+import spoon.support.QueueProcessingManager;
+
+import static junit.framework.TestCase.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+/**
+* Created by marodrig on 04/01/2016.
+*/
+public class AllBranchesReturnTest {
+/*
+   private ModifierKind getInvocationMethodVisibility(CtInvocation inv) {
+       if (inv.getExecutable().getDeclaration() != null &&
+               inv.getExecutable().getDeclaration() instanceof CtMethodImpl)
+           return (inv.getExecutable().getDeclaration()).getVisibility();
+       return null;
+   }
+
+   @Test
+   public void testSegment2() throws Exception {
+       final Factory factory = new SpoonMetaFactory().buildNewFactory(
+               "C:\\MarcelStuff\\DATA\\DIVERSE\\input_programs\\MATH_3_2\\src\\main\\java", 7);
+       //        "C:\\MarcelStuff\\DATA\\DIVERSE\\input_programs\\easymock-light-3.2\\src\\main\\javaz", 7);
+       ProcessingManager pm = new QueueProcessingManager(factory);
+
+
+       AbstractProcessor<CtMethod> p = new AbstractProcessor<CtMethod>() {
+           @Override
+           public void process(CtMethod ctMethod) {
+               List<CtFor> fors = ctMethod.getElements(new TypeFilter<CtFor>(CtFor.class));
+               if (ctMethod.getBody() == null || ctMethod.getBody().getStatements() == null) return;
+
+               int size = ctMethod.getBody().getStatements().size();
+
+               if (size > 6 || fors.size() < 1 || !hasInterfaceVariables(ctMethod) ) return;
+
+               printMethod(ctMethod);
+
+           }
+       };
+
+       pm.addProcessor(p);
+       pm.process();
+   }
+
+   private boolean hasInterfaceVariables(CtMethod ctMethod) {
+       List<CtVariableAccess> vars =
+               ctMethod.getElements(new TypeFilter<CtVariableAccess>(CtVariableAccess.class));
+       for ( CtVariableAccess a : vars ) {
+           try {
+               if (!a.getVariable().getDeclaration().getModifiers().contains(ModifierKind.FINAL) &&
+                       a.getVariable().getType().isInterface()) return true;
+           } catch (Exception e) {
+               System.out.print(".");
+           }
+       }
+       return false;
+   }
+
+   private void printMethod(CtMethod ctMethod) {
+       System.out.println(ctMethod.getPosition().toString());
+       System.out.println(ctMethod);
+       //System.out.println(invName);
+       System.out.println("+++++++++++++++++++++++++++++++++++++");
+
+   }
+
+   private void printStaticInvocations(CtMethodImpl ctMethod) {
+       List<CtInvocation> invs = ctMethod.getElements(new TypeFilter<CtInvocation>(CtInvocation.class));
+       boolean staticInv = true;
+       boolean abstractVarAccess = false;
+       String invName = "";
+       for (CtInvocation inv : invs) {
+           ModifierKind mk = getInvocationMethodVisibility(inv);
+           if (inv.getExecutable().isStatic() &&
+                   (mk == ModifierKind.PRIVATE || mk == ModifierKind.PROTECTED)) {
+               invName = inv.toString();
+               staticInv = true;
+               break;
+           }
+       }
+       if( staticInv) {
+           System.out.println(ctMethod.getPosition().toString());
+           System.out.println(ctMethod);
+           System.out.println(invName);
+           System.out.println("+++++++++++++++++++++++++++++++++++++");
+       }
+   }*/
+
+   public void testSegment(AbstractProcessor processor) throws Exception {
+       //ControlFlowGraph graph = buildGraph(this.getClass().getResource("/control-flow").toURI().getPath(),
+       //        "nestedIfSomeNotReturning", false);
+
+       Factory factory = new SpoonMetaFactory().buildNewFactory(
+               this.getClass().getResource("/control-flow").toURI().getPath(), 7);
+       ProcessingManager pm = new QueueProcessingManager(factory);
+       pm.addProcessor(processor);
+       pm.process(factory.getModel().getRootPackage());
+   }
+
+   @Test
+   public void nestedIfSomeNotReturning() throws Exception {
+       testSegment(new AbstractProcessor<CtIf>() {
+           @Override
+           public void process(CtIf element) {
+               CtMethod m = element.getParent().getParent(CtMethod.class);
+               if (m != null && m.getSimpleName().equals("nestedIfSomeNotReturning"))
+                   if (element.getCondition().toString().contains("b < 1")) {
+                       AllBranchesReturn alg = new AllBranchesReturn();
+                       assertFalse(alg.execute(element));
+                   }
+           }
+       });
+   }
+
+   @Test
+   public void testNestedIfAllReturning() throws Exception {
+       testSegment(new AbstractProcessor<CtIf>() {
+           @Override
+           public void process(CtIf element) {
+               CtMethod m = element.getParent().getParent(CtMethod.class);
+               if (m != null && m.getSimpleName().equals("nestedIfAllReturning"))
+                   if (element.getCondition().toString().contains("a > 0")) {
+                       AllBranchesReturn alg = new AllBranchesReturn();
+                       assertTrue(alg.execute(element));
+                   }
+           }
+       });
+   }
+
+}
+"#;
+static CASE_11_bis: &'static str = r#"/**
+ * The MIT License
+ * <p>
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * <p>
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ * <p>
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+package fr.inria.controlflow;
+
+import org.junit.Test;
+import spoon.processing.AbstractProcessor;
+import spoon.processing.ProcessingManager;
+import spoon.reflect.code.CtIf;
+import spoon.reflect.declaration.CtMethod;
+import spoon.reflect.factory.Factory;
+import spoon.support.QueueProcessingManager;
+
+import static junit.framework.TestCase.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * Created by marodrig on 04/01/2016.
+ */
+public class AllBranchesReturnTest {
+    /*
+        private ModifierKind getInvocationMethodVisibility(CtInvocation inv) {
+            if (inv.getExecutable().getDeclaration() != null &&
+                    inv.getExecutable().getDeclaration() instanceof CtMethodImpl)
+                return (inv.getExecutable().getDeclaration()).getVisibility();
+            return null;
+    }
+
+    @Test
+    public void testSegment2() throws Exception {
+            final Factory factory = new SpoonMetaFactory().buildNewFactory(
+                    "C:\\MarcelStuff\\DATA\\DIVERSE\\input_programs\\MATH_3_2\\src\\main\\java", 7);
+        //        "C:\\MarcelStuff\\DATA\\DIVERSE\\input_programs\\easymock-light-3.2\\src\\main\\javaz", 7);
+        ProcessingManager pm = new QueueProcessingManager(factory);
+
+
+        AbstractProcessor<CtMethod> p = new AbstractProcessor<CtMethod>() {
+                @Override
+                public void process(CtMethod ctMethod) {
+                    List<CtFor> fors = ctMethod.getElements(new TypeFilter<CtFor>(CtFor.class));
+                    if (ctMethod.getBody() == null || ctMethod.getBody().getStatements() == null) return;
+    
+                    int size = ctMethod.getBody().getStatements().size();
+    
+                    if (size > 6 || fors.size() < 1 || !hasInterfaceVariables(ctMethod) ) return;
+    
+                    printMethod(ctMethod);
+    
+            }
+        };
+
+        pm.addProcessor(p);
+        pm.process();
+    }
+
+    private boolean hasInterfaceVariables(CtMethod ctMethod) {
+            List<CtVariableAccess> vars =
+                    ctMethod.getElements(new TypeFilter<CtVariableAccess>(CtVariableAccess.class));
+            for ( CtVariableAccess a : vars ) {
+                try {
+                    if (!a.getVariable().getDeclaration().getModifiers().contains(ModifierKind.FINAL) &&
+                            a.getVariable().getType().isInterface()) return true;
+            } catch (Exception e) {
+                    System.out.print(".");
+            }
+        }
+        return false;
+    }
+
+    private void printMethod(CtMethod ctMethod) {
+            System.out.println(ctMethod.getPosition().toString());
+            System.out.println(ctMethod);
+            //System.out.println(invName);
+            System.out.println("+++++++++++++++++++++++++++++++++++++");
+
+    }
+
+    private void printStaticInvocations(CtMethodImpl ctMethod) {
+            List<CtInvocation> invs = ctMethod.getElements(new TypeFilter<CtInvocation>(CtInvocation.class));
+            boolean staticInv = true;
+            boolean abstractVarAccess = false;
+            String invName = "";
+        for (CtInvocation inv : invs) {
+                ModifierKind mk = getInvocationMethodVisibility(inv);
+                if (inv.getExecutable().isStatic() &&
+                        (mk == ModifierKind.PRIVATE || mk == ModifierKind.PROTECTED)) {
+                    invName = inv.toString();
+                    staticInv = true;
+                    break;
+            }
+        }
+        if( staticInv) {
+                System.out.println(ctMethod.getPosition().toString());
+                System.out.println(ctMethod);
+                System.out.println(invName);
+                System.out.println("+++++++++++++++++++++++++++++++++++++");
+        }
+    }*/
+
+	public void testSegment(AbstractProcessor processor) throws Exception {
+    		//ControlFlowGraph graph = buildGraph(this.getClass().getResource("/control-flow").toURI().getPath(),
+		//        "nestedIfSomeNotReturning", false);
+
+		Factory factory = new SpoonMetaFactory().buildNewFactory(
+    				this.getClass().getResource("/control-flow").toURI().getPath(), 7);
+		ProcessingManager pm = new QueueProcessingManager(factory);
+		pm.addProcessor(processor);
+		pm.process(factory.getModel().getRootPackage());
+	}
+
+	@Test
+	public void nestedIfSomeNotReturning() throws Exception {
+    		testSegment(new AbstractProcessor<CtIf>() {
+    			@Override
+    			public void process(CtIf element) {
+    				CtMethod m = element.getParent().getParent(CtMethod.class);
+    				if (m != null && m.getSimpleName().equals("nestedIfSomeNotReturning"))
+					if (element.getCondition().toString().contains("b < 1")) {
+    						AllBranchesReturn alg = new AllBranchesReturn();
+    						assertFalse(alg.execute(element));
+    					}
+			}
+		});
+	}
+
+	@Test
+	public void testNestedIfAllReturning() throws Exception {
+    		testSegment(new AbstractProcessor<CtIf>() {
+    			@Override
+    			public void process(CtIf element) {
+    				CtMethod m = element.getParent().getParent(CtMethod.class);
+    				if (m != null && m.getSimpleName().equals("nestedIfAllReturning"))
+					if (element.getCondition().toString().contains("a > 0")) {
+    						AllBranchesReturn alg = new AllBranchesReturn();
+    						assertTrue(alg.execute(element));
+    					}
+			}
+		});
+	}
+
+}
+"#;

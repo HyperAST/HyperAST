@@ -328,19 +328,19 @@ pub fn find_refs(
     } else if &t == &Type::MavenDirectory {
         // idem
     } else if &t == &Type::ImportDeclaration {
-        println!("d=1 {:?}", &t);
+        log::info!("d=1 {:?}", &t);
         let c = {
             let d = ana.solver.nodes.with(target);
             b.check(Into::<Box<[u8]>>::into(d.clone()).as_ref())
         };
         if let BloomResult::MaybeContain = c {
-            println!("+++import+++++Maybe contains");
+            log::info!("+++import+++++Maybe contains");
             java_tree_gen_full_compress_legion_ref::print_tree_syntax(
                 &stores.node_store,
                 &stores.label_store,
                 &current,
             );
-            println!();
+            log::info!();
             let (stic, scop, asterisk) = {
                 let b = stores.node_store.resolve(current);
                 let mut scop = None;
@@ -380,20 +380,20 @@ pub fn find_refs(
                 //     ana,
                 //     stores.node_store.resolve(scop.0),
                 // );
-                println!("import matched ref");
+                log::info!("import matched ref");
                 return vec![i];
             } else {
                 return vec![];
             }
         } else {
-            println!("Do not contains");
+            log::info!("Do not contains");
             return vec![];
         }
     }
     if !b.has_children() {
         return vec![];
     }
-    println!("d=1 {:?}", &t);
+    log::info!("d=1 {:?}", &t);
     let c = if b.get_component::<BloomSize>().is_ok() {
         let d = ana.solver.nodes.with(target);
         b.check(Into::<Box<[u8]>>::into(d.clone()).as_ref())
@@ -413,7 +413,7 @@ pub fn find_refs(
         }
     }
     if let BloomResult::MaybeContain = c {
-        println!("++++++++++++++Maybe contains");
+        log::info!("++++++++++++++Maybe contains");
 
         if &t == &Type::MethodInvocation // find object
             || &t == &Type::FormalParameter // find simple type
@@ -431,13 +431,13 @@ pub fn find_refs(
             // Here, for now, we try to find Identifiers (not invocations)
             // thus we either search directly for scoped identifiers
             // or we search for simple identifiers because they do not present refs in themself
-            println!("!found {:?}", &t);
+            log::info!("!found {:?}", &t);
             java_tree_gen_full_compress_legion_ref::print_tree_syntax(
                 &stores.node_store,
                 &stores.label_store,
                 &current,
             );
-            println!();
+            log::info!();
 
             let d = ExplorableRef {
                 rf: target,
@@ -447,11 +447,11 @@ pub fn find_refs(
             if eq_node_ref(d, stores, current) {
                 // let mut position = path.to_position(&stores);
                 // position.set_len(b.get_bytes_len() as usize);
-                // println!("really found {:?}", position);
-                println!("really found");
+                // log::info!("really found {:?}", position);
+                log::info!("really found");
             }
         } else if &t == &Type::TypeIdentifier {
-            println!("!found TypeIdentifier");
+            log::info!("!found TypeIdentifier");
             let mut out = IoOut { stream: stdout() };
             java_tree_gen_full_compress_legion_ref::serialize(
                 &stores.node_store,
@@ -476,12 +476,12 @@ pub fn find_refs(
             );
         }
     } else {
-        println!("Do not contains");
+        log::info!("Do not contains");
         return vec![];
     }
 
     let mut v: Vec<usize> = vec![];
-    println!("c_count {}", b.child_count());
+    log::info!("c_count {}", b.child_count());
     path.push();
     for x in b.get_children().clone() {
         path.inc(*x);

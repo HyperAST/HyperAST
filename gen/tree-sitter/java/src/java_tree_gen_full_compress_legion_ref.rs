@@ -4,11 +4,12 @@ use std::{
     collections::HashMap,
     fmt::{Debug, Display},
     hash::Hash,
+    io::stdout,
     ops::Deref,
     vec,
 };
 
-use hyper_ast::store::labels::LabelStore;
+use hyper_ast::{nodes::IoOut, store::labels::LabelStore};
 use legion::{
     storage::{Archetype, Component, IntoComponentSource},
     world::{ComponentError, EntityLocation, EntryRef},
@@ -103,7 +104,7 @@ impl<'a> RefContainer for HashedNodeRef<'a> {
             ( ($e:expr, $s:expr, $rf:expr); $($t:ty),* ) => {
                 match $e {
                     BloomSize::Much => {
-                        println!("[Too Much]");
+                        log::warn!("[Too Much]");
                         BloomResult::MaybeContain
                     },
                     BloomSize::None => BloomResult::DoNotContain,
@@ -261,7 +262,9 @@ impl<'a> hyper_ast::types::WithChildren for HashedNodeRef<'a> {
             .get_component::<CS<legion::Entity>>()
             .unwrap()
             .0
-            .len().to_u16().expect("too much children")
+            .len()
+            .to_u16()
+            .expect("too much children")
     }
 
     fn get_child(&self, idx: &Self::ChildIdx) -> Self::TreeId {
@@ -1356,128 +1359,21 @@ impl<'a> JavaTreeGen<'a> {
             acc.metrics.size as usize + 1,
             &mut acc,
         );
-        // let mut r = Acc
-        // // ::new(self.stores().type_store.get("file"));
-        // {
-        //     simple: BasicAccumulator::new(self.stores().type_store.get("file")),
-        //     label:None,
-        //     start_byte: 0,
-        //     metrics: Default::default(),
-        //     ana: Default::default(),
-        //     padding_start: 0,
-        //     indentation: Space::format_indentation(&"\n".as_bytes().to_vec()),
-        // };
-        // {
-        //     // handle file name
-        //     let hashed_kind = &clamp_u64_to_u32(&utils::hash(&Type::FileName));
-        //     let hashed_label = &clamp_u64_to_u32(&utils::hash(name));
-        //     let hsyntax = hashed::inner_node_hash(hashed_kind, hashed_label, &0, &0);
-        //     let hashable = &hsyntax;
-        //     let nameid = self
-        //         .stores
-        //         .label_store
-        //         .get_or_insert(std::str::from_utf8(name).unwrap());
-        //     let eq = |x: EntryRef| {
-        //         let t = x.get_component::<Type>().ok();
-        //         if &t != &Some(&Type::FileName) {
-        //             return false;
-        //         }
-        //         let l = x.get_component::<LabelIdentifier>().ok();
-        //         if l != Some(&nameid) {
-        //             return false;
-        //         }
-        //         true
-        //     };
-        //     let insertion = self.stores.node_store.prepare_insertion(&hashable, eq);
+        let full_node = self.make(0, acc.metrics.size as usize, acc);
 
-        //     let hashs = SyntaxNodeHashs {
-        //         structt: hashed::inner_node_hash(hashed_kind, &0, &0, &0),
-        //         label: hashed::inner_node_hash(hashed_kind, hashed_label, &0, &0),
-        //         syntax: hsyntax,
-        //     };
-
-        //     let compressed_node = if let Some(id) = insertion.occupied_id() {
-        //         id
-        //     } else {
-        //         let vacant = insertion.vacant();
-        //         NodeStore::insert_after_prepare(
-        //             vacant,
-        //             (Type::FileName, hashs, nameid, BloomSize::None), // None not sure
-        //         )
-        //     };
-
-        //     let metrics = SubTreeMetrics {
-        //         size: 1,
-        //         height: 1,
-        //         hashs,
-        //     };
-
-        //     let full_node = FullNode {
-        //         global: Global {
-        //             depth: 0,
-        //             position: 0,
-        //         },
-        //         local: Local {
-        //             compressed_node,
-        //             metrics,
-        //             ana: Default::default(),
-        //         },
-        //     };
-        //     r.push(full_node);
-        // }
-        // acc.end_byte = text.len();
-        let full_node = self.make(
-            // &mut r,
-            0,
-            acc.metrics.size as usize,
-            // text,
-            // &TNode(cursor.node()),
-            acc,
-        );
-
-        {
-            let a = &full_node.local.compressed_node;
-
-            let b = self.stores.node_store.resolve(*a);
-            // println!(
-            //     "rset: {:#?}",
-            //     full_node
-            //         .local
-            //         .ana
-            //         .as_ref()
-            //         .map(|x| x
-            //             .refs()
-            //             .map(|x| std::str::from_utf8(&x).unwrap().to_owned())
-            //             .collect::<Vec<_>>())
-            //         .unwrap_or_default()
-            // );
-
-            match full_node.local.ana.as_ref() {
-                Some(x) => {
-                    debug!("refs in file:",);
-                    for x in x.display_refs(&self.stores.label_store) {
-                        debug!("    {}", x);
-                    }
-                    debug!("decls in file:",);
-                    for x in x.display_decls(&self.stores.label_store) {
-                        debug!("    {}", x);
-                    }
+        match full_node.local.ana.as_ref() {
+            Some(x) => {
+                debug!("refs in file:",);
+                for x in x.display_refs(&self.stores.label_store) {
+                    debug!("    {}", x);
                 }
-                None => println!("None"),
-            };
-
-            // let dd = full_node.local.ana.as_ref();
-            // if let Some(d) = dd.and_then(|dd| dd.refs().next()) {
-            //     let c = b.check(d.deref().deref());
-
-            //     let s = std::str::from_utf8(&d).unwrap();
-
-            //     match c {
-            //         BloomResult::MaybeContain => println!("Maybe contains {}", s),
-            //         BloomResult::DoNotContain => panic!("Do not contains {}", s),
-            //     }
-            // }
-        }
+                debug!("decls in file:",);
+                for x in x.display_decls(&self.stores.label_store) {
+                    debug!("    {}", x);
+                }
+            }
+            None => debug!("None"),
+        };
 
         full_node
     }
@@ -2087,7 +1983,7 @@ pub fn print_tree_labels(node_store: &NodeStore, label_store: &LabelStore, id: &
 }
 
 pub fn print_tree_syntax(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
-    nodes::print_tree_labels(
+    nodes::print_tree_syntax(
         |id| -> _ {
             node_store
                 .resolve(id.clone())
@@ -2096,6 +1992,7 @@ pub fn print_tree_syntax(node_store: &NodeStore, label_store: &LabelStore, id: &
         },
         |id| -> _ { label_store.resolve(id).to_owned() },
         id,
+        &mut Into::<IoOut<_>>::into(stdout()),
     )
 }
 
@@ -2118,6 +2015,59 @@ pub fn serialize<W: std::fmt::Write>(
         out,
         parent_indent,
     )
+}
+
+pub struct TreeSerializer<'a> {
+    node_store: &'a NodeStore,
+    label_store: &'a LabelStore,
+    id: NodeIdentifier,
+}
+impl<'a> TreeSerializer<'a> {
+    pub fn new(node_store: &'a NodeStore, label_store: &'a LabelStore, id: NodeIdentifier) -> Self {
+        Self {
+            node_store,
+            label_store,
+            id,
+        }
+    }
+}
+impl<'a> Display for TreeSerializer<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        serialize(self.node_store, self.label_store, &self.id, f, "\n");
+        Ok(())
+    }
+}
+
+pub struct TreeSyntax<'a> {
+    node_store: &'a NodeStore,
+    label_store: &'a LabelStore,
+    id: NodeIdentifier,
+}
+impl<'a> TreeSyntax<'a> {
+    pub fn new(node_store: &'a NodeStore, label_store: &'a LabelStore, id: NodeIdentifier) -> Self {
+        Self {
+            node_store,
+            label_store,
+            id,
+        }
+    }
+}
+
+impl<'a> Display for TreeSyntax<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        nodes::print_tree_syntax(
+            |id| -> _ {
+                self.node_store
+                    .resolve(id.clone())
+                    .into_compressed_node()
+                    .unwrap()
+            },
+            |id| -> _ { self.label_store.resolve(id).to_owned() },
+            &self.id,
+            f,
+        );
+        Ok(())
+    }
 }
 
 // impl NodeStore {

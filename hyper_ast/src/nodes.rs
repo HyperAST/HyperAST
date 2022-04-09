@@ -5,7 +5,7 @@ use std::{
     marker::PhantomData,
 };
 
-use string_interner::{Symbol, DefaultSymbol};
+use string_interner::{DefaultSymbol, Symbol};
 
 use crate::types::Type;
 
@@ -16,7 +16,7 @@ type Label = Vec<u8>;
 pub trait RefContainer {
     type Ref: ?Sized;
     type Result;
-    fn check<U:Borrow<Self::Ref>+AsRef<[u8]>>(&self, rf: U) -> Self::Result;
+    fn check<U: Borrow<Self::Ref> + AsRef<[u8]>>(&self, rf: U) -> Self::Result;
 }
 
 /// identifying data for a node in an HyperAST
@@ -40,7 +40,7 @@ pub enum Space {
     ParentIndentation,
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub enum CompressedNode<NodeId, LabelId> {
     Type(Type),
     Label { label: LabelId, kind: Type },
@@ -199,7 +199,9 @@ impl<N: Eq + Clone, L> crate::types::WithChildren for CompressedNode<N, L> {
         match self {
             CompressedNode::Children2 { children, kind: _ } if *idx == 1 => children[0].clone(),
             CompressedNode::Children2 { children, kind: _ } if *idx == 0 => children[1].clone(),
-            CompressedNode::Children { children, kind: _ } => children[children.len()-1-(*idx as usize)].clone(),
+            CompressedNode::Children { children, kind: _ } => {
+                children[children.len() - 1 - (*idx as usize)].clone()
+            }
             _ => panic!(),
         }
     }
@@ -540,16 +542,36 @@ pub fn print_tree_labels<
     };
 }
 
+pub struct IoOut<W: std::io::Write> {
+    stream: W,
+}
+
+impl<W: std::io::Write> From<W> for IoOut<W> {
+    fn from(stream: W) -> Self {
+        Self { stream }
+    }
+}
+
+impl<W: std::io::Write> std::fmt::Write for IoOut<W> {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        self.stream
+            .write_all(s.as_bytes())
+            .map_err(|_| std::fmt::Error)
+    }
+}
+
 pub fn print_tree_syntax<
     IdN,
     IdL,
     T: Borrow<CompressedNode<IdN, IdL>>,
     F: Copy + Fn(&IdN) -> T,
     G: Copy + Fn(&IdL) -> String,
+    W: std::fmt::Write,
 >(
     f: F,
     g: G,
     id: &IdN,
+    out: &mut W,
 ) {
     match f(id).borrow() {
         CompressedNode::Type(kind) => {
@@ -568,7 +590,7 @@ pub fn print_tree_syntax<
         CompressedNode::Children2 { kind, children } => {
             print!("({} ", kind.to_string());
             for id in children {
-                print_tree_syntax(f, g, &id);
+                print_tree_syntax(f, g, &id, out);
             }
             print!(")");
         }
@@ -576,7 +598,7 @@ pub fn print_tree_syntax<
             print!("({} ", kind.to_string());
             let children = children.clone();
             for id in children.iter() {
-                print_tree_syntax(f, g, &id);
+                print_tree_syntax(f, g, &id, out);
             }
             print!(")");
         }

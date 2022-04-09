@@ -3,13 +3,13 @@ use std::{
     fmt::{Debug, Display},
     iter::Peekable,
     ops::AddAssign,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}, io::stdout,
 };
 
 use num::ToPrimitive;
 
 use crate::{
-    nodes::{self, print_tree_syntax, Space},
+    nodes::{self, print_tree_syntax, Space, IoOut},
     store::{defaults::NodeIdentifier, SimpleStores},
     types::{LabelStore, Labeled, Tree, Type, Typed, WithChildren},
 };
@@ -190,7 +190,7 @@ impl TreePath<NodeIdentifier> for StructuralPosition {
 }
 
 impl StructuralPosition {
-    pub fn to_position(&self, stores: &SimpleStores) -> Position {
+    pub fn make_position(&self, stores: &SimpleStores) -> Position {
         self.check(stores).unwrap();
         // let parents = self.parents.iter().peekable();
         let mut from_file = false;
@@ -232,7 +232,7 @@ impl StructuralPosition {
                     v.iter()
                         .map(|x| {
                             let b = stores.node_store.resolve(*x);
-                            println!("{:?}", b.get_type());
+                            // println!("{:?}", b.get_type());
                             b.get_bytes_len(0) as usize
                         })
                         .sum()
@@ -272,7 +272,7 @@ impl StructuralPosition {
                 v.iter()
                     .map(|x| {
                         let b = stores.node_store.resolve(*x);
-                        println!("{:?}", b.get_type());
+                        // println!("{:?}", b.get_type());
                         b.get_bytes_len(0) as usize
                     })
                     .sum()
@@ -334,6 +334,10 @@ pub struct StructuralPositionStore {
     offsets: Vec<usize>,
     // ends: Vec<usize>,
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct SpHandle(usize);
+
 struct IterStructuralPositions<'a> {
     sps: &'a StructuralPositionStore,
     ends: core::slice::Iter<'a, usize>,
@@ -344,7 +348,7 @@ impl<'a> Iterator for IterStructuralPositions<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let x = *self.ends.next()?;
-        let it = ExploreStructuralPositions::from((self.sps, x));
+        let it = ExploreStructuralPositions::new(self.sps, x);
         // let r = Position;
         todo!()
     }
@@ -392,6 +396,13 @@ impl Scout {
             *y
         } else {
             x.nodes[self.root]
+        }
+    }
+    pub fn offset_always(&self, x: &StructuralPositionStore) -> usize {
+        if let Some(y) = self.path.offset() {
+            *y
+        } else {
+            x.offsets[self.root]
         }
     }
     // pub fn try_node(&self) -> Result<NodeIdentifier, usize> {
@@ -489,7 +500,7 @@ impl Scout {
     //     Ok(())
     // }
 
-    pub fn to_position(&self, sp: &StructuralPositionStore, stores: &SimpleStores) -> Position {
+    pub fn make_position(&self, sp: &StructuralPositionStore, stores: &SimpleStores) -> Position {
         self.check(stores).unwrap();
         // let parents = self.parents.iter().peekable();
         let mut from_file = false;
@@ -511,8 +522,8 @@ impl Scout {
         let mut offset = 0;
         let mut path = vec![];
         if self.path.nodes.is_empty() {
-            return ExploreStructuralPositions::from((sp, self.root))
-                .to_position_aux(stores, from_file, len, offset, path);
+            return ExploreStructuralPositions::new(sp, self.root)
+                .make_position_aux(stores, from_file, len, offset, path);
         }
         let mut i = self.path.nodes.len() - 1;
         if from_file {
@@ -527,7 +538,7 @@ impl Scout {
                     v.iter()
                         .map(|x| {
                             let b = stores.node_store.resolve(*x);
-                            println!("{:?}", b.get_type());
+                            // println!("{:?}", b.get_type());
                             b.get_bytes_len(0) as usize
                         })
                         .sum()
@@ -574,7 +585,7 @@ impl Scout {
                 v.iter()
                     .map(|x| {
                         let b = stores.node_store.resolve(*x);
-                        println!("{:?}", b.get_type());
+                        // println!("{:?}", b.get_type());
                         b.get_bytes_len(0) as usize
                     })
                     .sum()
@@ -585,8 +596,8 @@ impl Scout {
             } else {
             }
         }
-        ExploreStructuralPositions::from((sp, self.root))
-            .to_position_aux(stores, from_file, len, offset, path)
+        ExploreStructuralPositions::new(sp, self.root)
+            .make_position_aux(stores, from_file, len, offset, path)
     }
 }
 
@@ -609,7 +620,7 @@ pub struct ExploreStructuralPositions<'a> {
 }
 
 impl<'a> ExploreStructuralPositions<'a> {
-    pub fn to_position(self, stores: &SimpleStores) -> Position {
+    pub fn make_position(self, stores: &SimpleStores) -> Position {
         self.sps.check(stores).unwrap();
         // let parents = self.parents.iter().peekable();
         let mut from_file = false;
@@ -633,10 +644,10 @@ impl<'a> ExploreStructuralPositions<'a> {
         };
         let offset = 0;
         let path = vec![];
-        self.to_position_aux(stores, from_file, len, offset, path)
+        self.make_position_aux(stores, from_file, len, offset, path)
     }
 
-    fn to_position_aux(
+    fn make_position_aux(
         mut self,
         stores: &'a SimpleStores,
         from_file: bool,
@@ -679,6 +690,7 @@ impl<'a> ExploreStructuralPositions<'a> {
                         },
                         |x| stores.label_store.resolve(x).to_string(),
                         &p,
+                        &mut Into::<IoOut<_>>::into(stdout()),
                     );
                     assert_eq!(
                         self.peek_node().unwrap(),
@@ -754,6 +766,10 @@ impl<'a> ExploreStructuralPositions<'a> {
         let r = self.sps.nodes[i];
         Some(r)
     }
+
+    fn new(sps: &'a StructuralPositionStore, x: usize) -> Self {
+        Self { sps, i: x + 1 }
+    }
 }
 
 impl<'a> Iterator for ExploreStructuralPositions<'a> {
@@ -774,10 +790,9 @@ impl<'a> Iterator for ExploreStructuralPositions<'a> {
     }
 }
 
-impl<'a> From<(&'a StructuralPositionStore, usize)> for ExploreStructuralPositions<'a> {
-    fn from((s, x): (&'a StructuralPositionStore, usize)) -> Self {
-        // println!("from {} {:?}",x,s.parents);
-        Self { sps: s, i: x + 1 }
+impl<'a> From<(&'a StructuralPositionStore, SpHandle)> for ExploreStructuralPositions<'a> {
+    fn from((sps, x): (&'a StructuralPositionStore, SpHandle)) -> Self {
+        Self::new(sps, x.0)
     }
 }
 
@@ -786,33 +801,23 @@ impl StructuralPositionStore {
         s.up(self)
     }
 
-    pub fn ends_positions(&self, stores: &SimpleStores, ends: &[usize]) -> Vec<Position> {
+    pub fn ends_positions(&self, stores: &SimpleStores, ends: &[SpHandle]) -> Vec<Position> {
         let mut r = vec![];
         for x in ends.iter() {
+            let x = x.0;
             // let parents = self.parents.iter().peekable();
-            let it = ExploreStructuralPositions::from((self, *x));
-            r.push(it.to_position(stores));
+            let it = ExploreStructuralPositions::from((self, SpHandle(x)));
+            r.push(it.make_position(stores));
         }
         r
     }
 
-    /// intended to easily compare to positions un other ASTs
+    /// intended to easily compare to positions from other ASTs eg. spoon
     pub fn to_relaxed_positions(&self, stores: &SimpleStores) -> Vec<Position> {
         todo!()
-        // self.to_positions_aux(stores, |it| {
-        //     while let Some((p,o)) = it.peek() {
-        //         let b = stores.node_store.resolve(*p);
-        //         let t = b.get_type();
-        //         if t == Type::Program {
-        //             break;
-        //         } else {
-        //             it.next();
-        //         }
-        //     }
-        // })
     }
 
-    pub fn check(&self, stores: &SimpleStores) -> Result<(), ()> {
+    pub fn check(&self, stores: &SimpleStores) -> Result<(), String> {
         assert_eq!(self.offsets.len(), self.parents.len());
         assert_eq!(self.nodes.len(), self.parents.len());
         if self.nodes.is_empty() {
@@ -826,12 +831,11 @@ impl StructuralPositionStore {
             let p = self.nodes[self.parents[i]];
             let b = stores.node_store.resolve(p);
             if !b.has_children() || e != b.get_child(&o.to_u16().expect("too big")) {
-                if b.has_children() {
-                    println!("error: {} {} {:?}", b.child_count(), o, p,);
+                return Err(if b.has_children() {
+                    format!("error: {} {} {:?}", b.child_count(), o, p,)
                 } else {
-                    println!("error no children: {} {:?}", o, p,);
-                }
-                return Err(());
+                    format!("error no children: {} {:?}", o, p,)
+                });
             }
             i -= 1;
         }
@@ -840,16 +844,16 @@ impl StructuralPositionStore {
 }
 
 impl StructuralPositionStore {
-    pub fn push(&mut self, x: &mut Scout) -> usize {
+    pub fn push(&mut self, x: &mut Scout) -> SpHandle {
         assert_eq!(x.path.nodes.len(), x.path.offsets.len());
         if x.path.offsets.is_empty() {
-            return x.root;
+            return SpHandle(x.root);
         }
         assert!(!x.path.offsets[1..].contains(&0), "{:?}", &x.path.offsets);
         if x.path.offsets[0] == 0 {
             assert!(x.root == 0, "{:?} {}", &x.path.offsets, &x.root);
             if x.path.offsets.len() == 1 {
-                return 0;
+                return SpHandle(0);
             }
             let l = x.path.nodes.len() - 2;
             let o = self.parents.len();
@@ -893,7 +897,7 @@ impl StructuralPositionStore {
         );
         assert_eq!(self.offsets.len(), self.parents.len());
         assert_eq!(self.nodes.len(), self.parents.len());
-        self.nodes.len() - 1
+        SpHandle(self.nodes.len() - 1)
     }
 }
 

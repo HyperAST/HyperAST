@@ -35,9 +35,8 @@ pub(crate) fn handle_pom_file(
 
     let tree = parser.parse(text, None).unwrap();
     if tree.root_node().has_error() {
-        println!("bad CST");
-        // println!("{}", name);
-        println!("{}", tree.root_node().to_sexp());
+        log::warn!("bad CST");
+        log::debug!("{}", tree.root_node().to_sexp());
 
         if FAIL_ON_BAD_CST_NODE {
             return Err(());
@@ -154,10 +153,10 @@ impl<'a> IterMavenModules2<'a> {
             .iter()
             .find(|x| {
                 if let Some(n) = self.stores.node_store.try_resolve(**x) {
-                    println!("f {:?}", n.get_type());
+                    log::debug!("f {:?}", n.get_type());
                     n.get_type().eq(&Type::xml_SourceFile)
                         && if n.has_label() {
-                            println!(
+                            log::debug!(
                                 "f name: {:?}",
                                 self.stores.label_store.resolve(n.get_label())
                             );
@@ -464,10 +463,10 @@ impl<'a, T: TreePath<NodeIdentifier>> IterMavenModules<'a, T> {
             .iter()
             .find(|x| {
                 if let Some(n) = self.stores.node_store.try_resolve(**x) {
-                    println!("f {:?}", n.get_type());
+                    log::debug!("f {:?}", n.get_type());
                     n.get_type().eq(&Type::xml_SourceFile)
                         && if n.has_label() {
-                            println!(
+                            log::debug!(
                                 "f name: {:?}",
                                 self.stores.label_store.resolve(n.get_label())
                             );
