@@ -1056,6 +1056,7 @@ impl Type {
             "version" => Self::xml_TS54,
             "yes" => Self::xml_TS55,
             "|" => Self::xml_TS56,
+            "ERROR" => Self::Error,
             x => panic!("{}", x),
         }
     }
@@ -1166,6 +1167,7 @@ impl Type {
             Self::xml_TS54 => "version",
             Self::xml_TS55 => "yes",
             Self::xml_TS56 => "|",
+            Self::Error => "ERROR",
             x => panic!("{:?}", x),
         }
     }

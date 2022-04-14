@@ -44,7 +44,7 @@ pub struct PreProcessedRepository {
     java_md_cache: java_tree_gen::MDCache,
     pub object_map: BTreeMap<git2::Oid, (hyper_ast::store::nodes::DefaultNodeIdentifier, MD)>,
     pub object_map_pom: BTreeMap<git2::Oid, POM>,
-    pub object_map_java: BTreeMap<git2::Oid, (java_tree_gen::Local, bool)>,
+    pub object_map_java: BTreeMap<(git2::Oid,Vec<u8>), (java_tree_gen::Local, bool)>,
     pub commits: HashMap<git2::Oid, Commit>,
     pub processing_ordered_commits: Vec<git2::Oid>,
 }
@@ -922,7 +922,7 @@ impl PreProcessedRepository {
             if let Some(current_dir) = stack.last_mut().expect("never empty").1.pop() {
                 match current_dir {
                     BasicGitObjects::Tree(x, name) => {
-                        if let Some((already, skiped_ana)) = self.object_map_java.get(&x) {
+                        if let Some((already, skiped_ana)) = self.object_map_java.get(&(x,name.clone())) {
                             // reinit already computed node for post order
                             let full_node = already.clone();
 
@@ -968,7 +968,7 @@ impl PreProcessedRepository {
                     BasicGitObjects::Blob(x, name) => {
                         if !Self::is_handled(&name) {
                             continue;
-                        } else if let Some((already, _)) = self.object_map_java.get(&x) {
+                        } else if let Some((already, _)) = self.object_map_java.get(&(x,name.clone())) {
                             // TODO reinit already computed node for post order
                             let full_node = already.clone();
 
@@ -1014,7 +1014,7 @@ impl PreProcessedRepository {
                                     let full_node = full_node.local;
                                     // log::debug!("gen java");
                                     self.object_map_java
-                                        .insert(a.id(), (full_node.clone(), false));
+                                        .insert((a.id(),name.clone()), (full_node.clone(), false));
                                     let w = &mut stack.last_mut().unwrap().2;
                                     let name = self
                                         .main_stores()
@@ -1196,7 +1196,7 @@ impl PreProcessedRepository {
                     ana: Some(ana.clone()),
                 };
                 self.object_map_java
-                    .insert(id, (full_node.clone(), acc.skiped_ana));
+                    .insert((id,name.to_vec()), (full_node.clone(), acc.skiped_ana));
                 if stack.is_empty() {
                     root_full_node = full_node;
                     break;
