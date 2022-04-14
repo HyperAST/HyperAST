@@ -2328,24 +2328,33 @@ impl PartialAnalysis {
                     },
                     State::None,
                 ) if kind == &Type::MethodDeclaration => {
-                    let p: Box<[_]> = p
-                        .into_iter()
-                        .map(|(i, t)| {
-                            // TODO should transform to RefEnum::Or
-                            match t {
-                                DeclType::Runtime(v) => v[0],
-                                DeclType::Compile(t, _, _) => *t,
-                            }
-                        })
-                        .collect();
-                    let r = mm!();
-                    let i =
-                        acc.solver
-                            .intern(RefsEnum::Invocation(r, i.unwrap(), Arguments::Given(p)));
-                    State::Declaration {
-                        visibility,
-                        kind: t.unwrap(),
-                        identifier: Declarator::Executable(i),
+                    if let (Some(t),Some(i))= (t.clone(),i) {
+                        let r = mm!();
+                        let p: Box<[_]> = p
+                            .into_iter()
+                            .map(|(i, t)| {
+                                // TODO should transform to RefEnum::Or
+                                match t {
+                                    DeclType::Runtime(v) => v[0],
+                                    DeclType::Compile(t, _, _) => *t,
+                                }
+                            })
+                            .collect();
+                        let i =
+                            acc.solver
+                                .intern(RefsEnum::Invocation(r, i, Arguments::Given(p)));
+                        State::Declaration {
+                            visibility,
+                            kind: t,
+                            identifier: Declarator::Executable(i),
+                        }
+                    } else {
+                        State::MethodImplementation {
+                            visibility,
+                            kind: t,
+                            identifier: i,
+                            parameters: p,
+                        }
                     }
                 }
                 (
@@ -2366,7 +2375,7 @@ impl PartialAnalysis {
                             }
                         })
                         .collect();
-                    let (r,i) = if let RefsEnum::Invocation(r,i,_) = self.solver.nodes[i] {
+                    let (r,i) = if let RefsEnum::Invocation(r,i,_) = acc.solver.nodes[i] {
                         (r,i)
                     } else {panic!()};
                     
