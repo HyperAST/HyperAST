@@ -575,6 +575,12 @@ impl PartialAnalysis {
                 //     }
                 // }
                 (
+                    State::None,
+                    State::None
+                ) => {
+                    State::None
+                }
+                (
                     State::File {
                         package: None,
                         asterisk_imports,
@@ -3832,7 +3838,11 @@ impl PartialAnalysis {
                     {
                         // TODO check, I suppose it is caused by module identifiers
                         // to reproduce on ["target/release/rusted_gumtree_benchmark", "alibaba/fastjson", "", "f56b5d895f97f4cc3bd787c600a3ee67ba56d4db", "", "results_1000_commits2/fastjson"]
-                        State::InvocationId(o, i)
+                        // State::InvocationId(o, i)
+                        let r =
+                            acc.solver
+                                .intern_ref(RefsEnum::Invocation(o, i, Arguments::Given(vec![].into_boxed_slice())));
+                        State::ScopedIdentifier(r)
                     }
                     (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
                 }
@@ -4353,6 +4363,11 @@ impl PartialAnalysis {
                     {
                         let i = sync!(i);
                         State::ConstructorInvocation(i)
+                    }
+                    (State::LambdaExpression(i), State::LambdaExpression(_))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        State::LambdaExpression(i)
                     }
                     (State::ConstructorInvocation(i), State::Invocation(_))
                         if kind == &Type::TernaryExpression =>
