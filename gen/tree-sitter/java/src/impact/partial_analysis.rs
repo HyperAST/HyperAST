@@ -4330,6 +4330,7 @@ impl PartialAnalysis {
                             State::Invocation(_) => (),
                             State::ScopedIdentifier(_) => (),
                             State::LambdaExpression(_) => (),
+                            State::MethodReference(_) => (),
                             State::None => panic!(),
                             x => todo!("{:?}", x),
                         };
@@ -5678,6 +5679,12 @@ impl PartialAnalysis {
                         State::None,
                         State::SimpleIdentifier(_,_),
                     ) if kind == &Type::ModuleDeclaration => {
+                        State::None // TODO maybe something to do
+                    }
+                    (
+                        State::None,
+                        State::Modifiers(_,_),
+                    ) if kind == &Type::RecordDeclaration => {
                         State::None // TODO maybe something to do
                     }
                     (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
