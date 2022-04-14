@@ -2388,6 +2388,20 @@ impl PartialAnalysis {
                     }
                 }
                 (
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier,
+                    },
+                    State::None,
+                ) if kind == &Type::MethodDeclaration => {
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier,
+                    }
+                }
+                (
                     State::ConstructorImplementation {
                         visibility,
                         identifier,
@@ -3169,6 +3183,7 @@ impl PartialAnalysis {
                             State::Invocation(_) => (),
                             State::MethodReference(_) => (),
                             State::ScopedIdentifier(_) => (), // not sure
+                            State::LambdaExpression(_) => (),
                             x => todo!("{:?}", x),
                         };
                         let d = Declarator::Variable(i);
@@ -3865,6 +3880,9 @@ impl PartialAnalysis {
                             State::Super(i) => {
                                 State::ScopedIdentifier(spec!(scoped!(mm!(), o), sync!(i)))
                             }
+                            State::None => { // TODO can do better finding cause of None
+                                State::ScopedIdentifier(scoped!(mm!(), o))
+                            }
                             x => panic!("{:?}", x),
                         }
                     }
@@ -4039,6 +4057,7 @@ impl PartialAnalysis {
                             State::FieldIdentifier(_) => (),
                             State::Invocation(_) => (),
                             State::ConstructorInvocation(_) => (),
+                            State::LambdaExpression(_) => (),
                             // State::None => (), // TODO check
                             x => panic!("{:?}", x),
                         };
@@ -4310,6 +4329,7 @@ impl PartialAnalysis {
                             State::ConstructorInvocation(_) => (),
                             State::Invocation(_) => (),
                             State::ScopedIdentifier(_) => (),
+                            State::LambdaExpression(_) => (),
                             State::None => panic!(),
                             x => todo!("{:?}", x),
                         };
@@ -4324,6 +4344,7 @@ impl PartialAnalysis {
                             State::ConstructorInvocation(_) => (),
                             State::Invocation(_) => (),
                             State::ScopedIdentifier(_) => (),
+                            State::LambdaExpression(_) => (),
                             State::None => panic!(),
                             x => todo!("{:?}", x),
                         };
@@ -5366,6 +5387,7 @@ impl PartialAnalysis {
                             State::FieldIdentifier(_) => (),
                             State::Invocation(_) => (),
                             State::ConstructorInvocation(_) => (),
+                            State::LambdaExpression(_) => (),
                             State::None => (), // TODO check
                             x => panic!("{:?}", x),
                         };
