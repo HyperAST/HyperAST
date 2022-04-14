@@ -2349,6 +2349,36 @@ impl PartialAnalysis {
                     }
                 }
                 (
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier: Declarator::Executable(i),
+                    },
+                    State::FormalParameters(p),
+                ) if kind == &Type::MethodDeclaration => {
+                    let p: Box<[_]> = p
+                        .into_iter()
+                        .map(|(i, t)| {
+                            // TODO should transform to RefEnum::Or
+                            match t {
+                                DeclType::Runtime(v) => sync!(v[0]),
+                                DeclType::Compile(t, _, _) => sync!(t),
+                            }
+                        })
+                        .collect();
+                    let (r,i) = if let RefsEnum::Invocation(r,i,_) = self.solver.nodes[i] {
+                        (r,i)
+                    } else {panic!()};
+                    
+                    let i = acc.solver
+                            .intern(RefsEnum::Invocation(r, i, Arguments::Given(p)));
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier: Declarator::Executable(i),
+                    }
+                }
+                (
                     State::ConstructorImplementation {
                         visibility,
                         identifier,
