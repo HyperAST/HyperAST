@@ -3718,6 +3718,11 @@ impl PartialAnalysis {
                         let i = acc.solver.try_solve_node_with(i, o).unwrap();
                         State::ScopedTypeIdentifier(i)
                     }
+                    (State::None, State::None)
+                        if kind == &Type::ObjectCreationExpression =>
+                    {
+                        State::None
+                    }
                     (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
                 }
 
@@ -3888,8 +3893,8 @@ impl PartialAnalysis {
                             State::ScopedTypeIdentifier(i) => sync!(i), // TODO fix related to getting type alias from tree-sitter API
                             State::ScopedIdentifier(i) => sync!(i),
                             State::FieldIdentifier(i) => sync!(i), // TODO check panic!("not possible"),
-                            State::Invocation(i) => panic!("not possible"),
-                            State::ConstructorInvocation(i) => panic!("not possible"),
+                            State::Invocation(i) => {log::warn!("not possible");sync!(i)},
+                            State::ConstructorInvocation(i) => {log::warn!("not possible");sync!(i)},
                             State::None => panic!("should handle before"),
                             x => panic!("{:?}", x),
                         };
