@@ -4418,6 +4418,11 @@ impl PartialAnalysis {
                     {
                         State::ConstructorInvocation(i)
                     }
+                    (State::MethodReference(i), State::ScopedIdentifier(_))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        State::MethodReference(i)
+                    }
                     (State::ConstructorInvocation(t), State::SimpleIdentifier(_, i))
                         if kind == &Type::TernaryExpression =>
                     {
