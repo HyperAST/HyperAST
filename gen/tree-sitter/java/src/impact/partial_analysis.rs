@@ -4583,7 +4583,9 @@ impl PartialAnalysis {
                 };
             }
 
-            if is_first && (let State::Directory{..} = acc.current_node) && (let State::Directory{global_decls} = current_node) {
+            if is_first 
+            && let State::Directory{..} = acc.current_node 
+            && let State::Directory{global_decls} = current_node {
                 State::Directory{
                     global_decls,
                 }

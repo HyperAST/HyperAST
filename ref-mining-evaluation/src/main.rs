@@ -32,6 +32,7 @@ macro_rules! inv_reset {
         color::Fg(color::Reset)
     };
 }
+
 macro_rules! show_code_range {
     ($b:tt{$x:tt ($s:tt) with $cx:tt $px:tt }$a:tt with $c:tt $p:tt ) => {
         print!(
@@ -211,7 +212,7 @@ fn main() {
             evaluated,
             ..
         } => {
-            let repo = fetch_repository(repository.clone(), "/tmp/hyperastgitresources");
+            let repo = fetch_repository(repository.clone(), "/tmp/hyperastgitresources/repo");
             let bl_rs = handle_file(File::open(baseline).expect("should be a file")).unwrap();
             let t_rs = handle_file(File::open(evaluated).expect("should be a file")).unwrap();
             let mut per_module: HashMap<String, (_, _)> = Default::default();

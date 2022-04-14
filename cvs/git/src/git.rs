@@ -111,7 +111,7 @@ where
     let mut path: PathBuf = path.into();
     path.push(url.path.clone());
     // let url = &format!("{}{}", "https://github.com/", repo_name);
-    // let path = &format!("{}{}", "/home/quentin/resources/repo/", repo_name);
+    // let path = &format!("{}{}", "/tmp/hyperastgitresources/repo/", repo_name);
     let mut callbacks = RemoteCallbacks::new();
 
     callbacks.transfer_progress(|x| {
@@ -129,7 +129,7 @@ where
 
 pub fn fetch_github_repository(repo_name: &str) -> Repository {
     let url = format!("{}{}", "https://github.com/", repo_name);
-    let path = format!("{}", "/home/quentin/resources/repo/");
+    let path = format!("{}", "/tmp/hyperastgitresources/repo/");
     fetch_repository(url, path)
 }
 
