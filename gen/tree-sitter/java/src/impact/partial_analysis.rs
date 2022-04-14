@@ -2467,6 +2467,9 @@ impl PartialAnalysis {
                             let t = sync!(t);
                             State::ScopedTypeIdentifier(t)
                         }
+                        (State::ScopedTypeIdentifier(t), State::None) => {
+                            State::ScopedTypeIdentifier(t)
+                        }
                         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
                     }
                 // } else if kind == &Type::TryWithResourcesStatement {
@@ -3824,6 +3827,13 @@ impl PartialAnalysis {
                                 .intern_ref(RefsEnum::Invocation(o, i, Arguments::Given(p)));
                         State::ScopedIdentifier(r) // or should it be an invocation
                     }
+                    (State::InvocationId(o, i), State::None)
+                        if kind == &Type::MethodInvocation =>
+                    {
+                        // TODO check, I suppose it is caused by module identifiers
+                        // to reproduce on ["target/release/rusted_gumtree_benchmark", "alibaba/fastjson", "", "f56b5d895f97f4cc3bd787c600a3ee67ba56d4db", "", "results_1000_commits2/fastjson"]
+                        State::InvocationId(o, i)
+                    }
                     (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::MethodReference {
@@ -4231,6 +4241,7 @@ impl PartialAnalysis {
                         State::ScopedIdentifier(i) => State::ScopedIdentifier(sync!(i)),
                         State::FieldIdentifier(i) => State::FieldIdentifier(sync!(i)),
                         State::MethodReference(i) => State::MethodReference(sync!(i)),
+                        State::LambdaExpression(i) => State::LambdaExpression(sync!(i)),
                         State::None => panic!(),
                         x => todo!("{:?}", x),
                     },
@@ -5569,6 +5580,18 @@ impl PartialAnalysis {
                         State::None,
                         State::ScopedIdentifier(_),
                     ) if kind == &Type::RequiresModifier => {
+                        State::None // TODO maybe something to do
+                    }
+                    (
+                        State::None,
+                        State::None,
+                    ) if kind == &Type::ModuleDirective => {
+                        State::None // TODO maybe something to do
+                    }
+                    (
+                        State::None,
+                        State::SimpleIdentifier(_,_),
+                    ) if kind == &Type::ModuleDeclaration => {
                         State::None // TODO maybe something to do
                     }
                     (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
