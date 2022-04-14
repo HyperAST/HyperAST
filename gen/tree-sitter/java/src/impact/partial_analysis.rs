@@ -63,6 +63,9 @@ pub fn leaf_state(
         State::Modifiers(Visibility::None, enum_set!(NonVisibility::Static))
     } else if t == &Type::TS81 {
         State::Modifiers(Visibility::Public, enum_set!())
+    } else if t == &Type::Error {
+        // TODO do more clever debug things here
+        State::None
     } else {
         assert_eq!(t, &Type::Comment);
         State::Todo
@@ -907,30 +910,19 @@ impl PartialAnalysis {
                     } // TODO use static
                 }
                 (State::None, State::ScopedIdentifier(i)) => {
-                    // let Old(i) = i;
-                    // let i = match &self.solver.nodes[i] {
-                    //     RefsEnum::ScopedIdentifier(o,i) => {
-                    //         let o = remapper.intern_external(&mut acc.solver, *o);
-                    //         scoped_type!(o,*i)
-                    //     },
-                    //     // RefsEnum::TypeIdentifier(o,i) => {
-                    //     //     let o = remapper.intern_external(&mut acc.solver, o);
-                    //     //     scoped_type!(o,i)
-                    //     // },
-                    //     x => panic!("{:?}", x)
-                    // };
                     let i = sync!(i);
                     if i >= acc.solver.refs.len() {
                         acc.solver.refs.resize(i + 1, false);
                     }
                     acc.solver.refs.set(i, true);
-                    // println!(
-                    //     "@@{:?}",
-                    //     ExplorableRef {
-                    //         rf: i,
-                    //         nodes: &self.solver.nodes
-                    //     }
-                    // );
+                    State::ImportDeclaration {
+                        identifier: i,
+                        sstatic: false,
+                        asterisk: false,
+                    }
+                }
+                (State::None, State::SimpleIdentifier(_,i)) => {
+                    let i = scoped!(mm!(),i);
                     State::ImportDeclaration {
                         identifier: i,
                         sstatic: false,
@@ -1809,6 +1801,14 @@ impl PartialAnalysis {
                             State::Declarations(v)
                         }
                     }
+                }
+                (State::Declarations(v), State::None)
+                    if kind == &Type::ConstantDeclaration =>
+                {
+                    // TODO check if right is ok to be none
+                    // reproduce ConstantDeclaration Declarations([(None, Field(3), Runtime([2]))]) None'
+                    // with ["target/release/rusted_gumtree_benchmark", "apache/dubbo", "", "e831b464837ae5d2afac9841559420aeaef6c52b", "", "results_1000_commits/dubbo"]
+                    State::Declarations(v)
                 }
                 (State::Modifiers(v, n), State::ScopedTypeIdentifier(t))
                     if kind == &Type::FieldDeclaration =>
@@ -3119,6 +3119,7 @@ impl PartialAnalysis {
                         match rest {
                             State::ConstructorInvocation(_) => (),
                             State::Invocation(_) => (),
+                            State::MethodReference(_) => (),
                             State::ScopedIdentifier(_) => (), // not sure
                             x => todo!("{:?}", x),
                         };
@@ -3836,7 +3837,7 @@ impl PartialAnalysis {
                             State::Super(t) => sync!(t),
                             State::ScopedTypeIdentifier(i) => sync!(i), // TODO fix related to getting type alias from tree-sitter API
                             State::ScopedIdentifier(i) => sync!(i),
-                            State::FieldIdentifier(i) => panic!("not possible"),
+                            State::FieldIdentifier(i) => sync!(i), // TODO check panic!("not possible"),
                             State::Invocation(i) => panic!("not possible"),
                             State::ConstructorInvocation(i) => panic!("not possible"),
                             State::None => panic!("should handle before"),
@@ -5551,6 +5552,24 @@ impl PartialAnalysis {
                             kind: t,
                             identifier: Declarator::Variable(i),
                         }
+                    }
+                    (
+                        State::None,
+                        State::Modifiers(v,n),
+                    ) if kind == &Type::RequiresModifier => {
+                        State::None // TODO maybe something to do
+                    }
+                    (
+                        State::None,
+                        State::SimpleIdentifier(_, _i),
+                    ) if kind == &Type::RequiresModifier => {
+                        State::None // TODO maybe something to do
+                    }
+                    (
+                        State::None,
+                        State::ScopedIdentifier(_),
+                    ) if kind == &Type::RequiresModifier => {
+                        State::None // TODO maybe something to do
                     }
                     (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
                 }

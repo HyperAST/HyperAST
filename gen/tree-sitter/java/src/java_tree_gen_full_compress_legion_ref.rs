@@ -1613,6 +1613,7 @@ impl<'a> JavaTreeGen<'a> {
             || acc.simple.kind == Type::SwitchBlock
             || acc.simple.kind == Type::ClassBody
             || acc.simple.kind == Type::EnumBody
+            || acc.simple.kind == Type::ModuleBody
             || acc.simple.kind == Type::AnnotationTypeBody
             || acc.simple.kind == Type::TypeArguments
             || acc.simple.kind == Type::ArrayInitializer

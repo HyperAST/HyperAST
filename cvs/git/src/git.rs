@@ -37,7 +37,11 @@ pub fn retrieve_commit<'a>(
     s: &str,
 ) -> Result<git2::Commit<'a>, git2::Error> {
     if let Ok(c) = repository.find_reference(s) {
-        c.peel_to_commit()
+        if let Ok (c) = c.peel_to_commit() {
+            Ok(c)
+        }else {
+            repository.find_commit(Oid::from_str(s)?)
+        }
     } else {
         let oid = Oid::from_str(s)?;
         repository.find_commit(oid)
@@ -171,14 +175,28 @@ pub(crate) enum BasicGitObjects {
     Tree(Oid, Vec<u8>),
 }
 
-impl<'a> From<TreeEntry<'a>> for BasicGitObjects {
-    fn from(x: TreeEntry<'a>) -> Self {
+// impl<'a> From<TreeEntry<'a>> for BasicGitObjects {
+//     fn from(x: TreeEntry<'a>) -> Self {
+//         if x.kind().unwrap().eq(&ObjectType::Tree) {
+//             Self::Tree(x.id(), x.name_bytes().to_owned())
+//         } else if x.kind().unwrap().eq(&ObjectType::Blob) {
+//             Self::Blob(x.id(), x.name_bytes().to_owned())
+//         } else {
+//             panic!("{:?} {:?}",x.kind(), x.name_bytes())
+//         }
+//     }
+// }
+
+impl<'a> TryFrom<TreeEntry<'a>> for BasicGitObjects {
+    type Error = TreeEntry<'a>;
+
+    fn try_from(x: TreeEntry<'a>) -> Result<Self, Self::Error> {
         if x.kind().unwrap().eq(&ObjectType::Tree) {
-            Self::Tree(x.id(), x.name_bytes().to_owned())
+            Ok(Self::Tree(x.id(), x.name_bytes().to_owned()))
         } else if x.kind().unwrap().eq(&ObjectType::Blob) {
-            Self::Blob(x.id(), x.name_bytes().to_owned())
+            Ok(Self::Blob(x.id(), x.name_bytes().to_owned()))
         } else {
-            panic!()
+            Err(x)
         }
     }
 }

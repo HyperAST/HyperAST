@@ -297,7 +297,7 @@ impl PreProcessedRepository {
             tree: git2::Tree,
             dir_path: &mut Peekable<Components>,
         ) -> Vec<BasicGitObjects> {
-            let mut children_objects: Vec<BasicGitObjects> = tree.iter().map(Into::into).collect();
+            let mut children_objects: Vec<BasicGitObjects> = tree.iter().map(TryInto::try_into).filter_map(|x| x.ok()).collect();
             if dir_path.peek().is_none() {
                 let p = children_objects.iter().position(|x| match x {
                     BasicGitObjects::Blob(_, n) => n.eq(b"pom.xml"),
@@ -547,7 +547,7 @@ impl PreProcessedRepository {
             tree: git2::Tree,
             dir_path: &mut Peekable<Components>,
         ) -> Vec<BasicGitObjects> {
-            let mut children_objects: Vec<BasicGitObjects> = tree.iter().map(Into::into).collect();
+            let mut children_objects: Vec<BasicGitObjects> = tree.iter().map(TryInto::try_into).filter_map(|x| x.ok()).collect();
             if dir_path.peek().is_none() {
                 let p = children_objects.iter().position(|x| match x {
                     BasicGitObjects::Blob(_, n) => n.eq(b"pom.xml"),
@@ -912,7 +912,7 @@ impl PreProcessedRepository {
         let root_full_node;
 
         let tree = repository.find_tree(oid).unwrap();
-        let prepared: Vec<BasicGitObjects> = tree.iter().rev().map(Into::into).collect();
+        let prepared: Vec<BasicGitObjects> = tree.iter().rev().map(TryInto::try_into).filter_map(|x| x.ok()).collect();
         let mut stack: Vec<(Oid, Vec<BasicGitObjects>, JavaAcc)> = vec![(
             oid,
             prepared,
@@ -958,7 +958,7 @@ impl PreProcessedRepository {
                         log::info!("tree {:?}", std::str::from_utf8(&name));
                         let a = repository.find_tree(x).unwrap();
                         let prepared: Vec<BasicGitObjects> =
-                            a.iter().rev().map(Into::into).collect();
+                            a.iter().rev().map(TryInto::try_into).filter_map(|x| x.ok()).collect();
                         stack.push((
                             x,
                             prepared,
