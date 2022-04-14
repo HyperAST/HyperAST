@@ -15,6 +15,7 @@ use hyper_ast::{
     },
     tree_gen::SubTreeMetrics,
     types::{LabelStore as _, Labeled, Tree, Type, Typed, WithChildren},
+    utils::memusage_linux,
 };
 use log::info;
 use rusted_gumtree_gen_ts_java::{
@@ -45,6 +46,7 @@ pub struct PreProcessedRepository {
     pub object_map_pom: BTreeMap<git2::Oid, POM>,
     pub object_map_java: BTreeMap<git2::Oid, (java_tree_gen::Local, bool)>,
     pub commits: HashMap<git2::Oid, Commit>,
+    pub processing_ordered_commits: Vec<git2::Oid>,
 }
 
 impl PreProcessedRepository {
@@ -107,6 +109,7 @@ impl PreProcessedRepository {
             object_map_pom: BTreeMap::default(),
             object_map_java: BTreeMap::default(),
             commits: Default::default(),
+            processing_ordered_commits: Default::default(),
         }
     }
 
@@ -124,10 +127,35 @@ impl PreProcessedRepository {
         let rw = all_commits_between(&repository, before, after);
         rw
             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
-            .take(2)
+            // .take(40) // TODO make a variable
             .for_each(|oid| {
                 let oid = oid.unwrap();
                 let c = self.handle_maven_commit::<true>(&repository, dir_path, oid);
+                self.processing_ordered_commits.push(oid.clone());
+                self.commits.insert(oid.clone(), c);
+            });
+    }
+
+    pub fn pre_process_with_limit(
+        &mut self,
+        repository: &mut Repository,
+        before: &str,
+        after: &str,
+        dir_path: &str,
+        limit: usize,
+    ) {
+        log::info!(
+            "commits to process: {}",
+            all_commits_between(&repository, before, after).count()
+        );
+        let rw = all_commits_between(&repository, before, after);
+        rw
+            // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
+            .take(limit) // TODO make a variable
+            .for_each(|oid| {
+                let oid = oid.unwrap();
+                let c = self.handle_maven_commit::<true>(&repository, dir_path, oid);
+                self.processing_ordered_commits.push(oid.clone());
                 self.commits.insert(oid.clone(), c);
             });
     }
@@ -140,6 +168,7 @@ impl PreProcessedRepository {
     ) {
         let oid = retrieve_commit(repository, ref_or_commit).unwrap().id();
         let c = self.handle_maven_commit::<false>(&repository, dir_path, oid);
+        self.processing_ordered_commits.push(oid.clone());
         self.commits.insert(oid.clone(), c);
     }
 
@@ -157,10 +186,11 @@ impl PreProcessedRepository {
         let rw = all_commits_between(&repository, before, after);
         rw
             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
-            .take(2)
+            // .take(2)
             .for_each(|oid| {
                 let oid = oid.unwrap();
                 let c = self.handle_java_commit(&repository, dir_path, oid);
+                self.processing_ordered_commits.push(oid.clone());
                 self.commits.insert(oid.clone(), c);
             });
     }
@@ -198,13 +228,24 @@ impl PreProcessedRepository {
         let tree = commit.tree().unwrap();
 
         info!("handle commit: {}", commit_oid);
+
+        let memory_used = memusage_linux();
+        let now = Instant::now();
+
         let root_full_node =
             self.handle_maven_module::<RMS>(repository, &mut dir_path, b"", tree.id());
         // let root_full_node = self.fast_fwd(repository, &mut dir_path, b"", tree.id()); // used to directly access specific java sources
+
+        let processing_time = now.elapsed().as_nanos();
+        let memory_used = memusage_linux() - memory_used;
+        let memory_used = memory_used.into();
+
         Commit {
             meta_data: root_full_node.1,
             parents: commit.parents().into_iter().map(|x| x.id()).collect(),
             ast_root: root_full_node.0,
+            processing_time,
+            memory_used,
         }
     }
 
@@ -220,11 +261,22 @@ impl PreProcessedRepository {
         let tree = commit.tree().unwrap();
 
         info!("handle commit: {}", commit_oid);
+
+        let memory_used = memusage_linux();
+        let now = Instant::now();
+
         let root_full_node = self.fast_fwd(repository, &mut dir_path, b"", tree.id()); // used to directly access specific java sources
+
+        let processing_time = now.elapsed().as_nanos();
+        let memory_used = memusage_linux() - memory_used;
+        let memory_used = memory_used.into();
+
         Commit {
             meta_data: root_full_node.1,
             parents: commit.parents().into_iter().map(|x| x.id()).collect(),
             ast_root: root_full_node.0,
+            processing_time,
+            memory_used,
         }
     }
 
@@ -371,7 +423,9 @@ impl PreProcessedRepository {
                     {
                         log::error!(
                             "{:?} {:?} {:?}",
-                            new_sub_modules, new_main_dirs, new_test_dirs
+                            new_sub_modules,
+                            new_main_dirs,
+                            new_test_dirs
                         );
                         todo!("also prepare search for modules and sources in parent, should also tell from which module it is required");
                     }
@@ -423,22 +477,22 @@ impl PreProcessedRepository {
                     )
                 };
 
-                {
-                    let n = self.main_stores.node_store.resolve(node_id);
-                    if !n.has_children() {
-                        log::warn!(
-                            "z {} {:?} {:?} {:?} {:?}",
-                            n.get_component::<CS<NodeIdentifier>>().is_ok(),
-                            n.get_component::<CS<NodeIdentifier>>()
-                                .map_or(&CS(vec![]), |x| x),
-                            n.get_component::<CS<NodeIdentifier>>().map(|x| x.0.len()),
-                            n.has_children(),
-                            n.get_component::<CS<NodeIdentifier>>()
-                                .map(|x| !x.0.is_empty())
-                                .unwrap_or(false)
-                        );
-                    }
-                }
+                // {
+                //     let n = self.main_stores.node_store.resolve(node_id);
+                //     if !n.has_children() {
+                //         log::warn!(
+                //             "z {} {:?} {:?} {:?} {:?}",
+                //             n.get_component::<CS<NodeIdentifier>>().is_ok(),
+                //             n.get_component::<CS<NodeIdentifier>>()
+                //                 .map_or(&CS(vec![]), |x| x),
+                //             n.get_component::<CS<NodeIdentifier>>().map(|x| x.0.len()),
+                //             n.has_children(),
+                //             n.get_component::<CS<NodeIdentifier>>()
+                //                 .map(|x| !x.0.is_empty())
+                //                 .unwrap_or(false)
+                //         );
+                //     }
+                // }
 
                 let metrics = SubTreeMetrics {
                     size: acc.metrics.size + 1,
@@ -740,7 +794,9 @@ impl PreProcessedRepository {
                     {
                         log::error!(
                             "{:?} {:?} {:?}",
-                            new_sub_modules, new_main_dirs, new_test_dirs
+                            new_sub_modules,
+                            new_main_dirs,
+                            new_test_dirs
                         );
                         todo!("also prepare search for modules and sources in parent, should also tell from which module it is required");
                     }
@@ -792,22 +848,22 @@ impl PreProcessedRepository {
                     )
                 };
 
-                {
-                    let n = self.main_stores.node_store.resolve(node_id);
-                    if !n.has_children() {
-                        println!(
-                            "z {} {:?} {:?} {:?} {:?}",
-                            n.get_component::<CS<NodeIdentifier>>().is_ok(),
-                            n.get_component::<CS<NodeIdentifier>>()
-                                .map_or(&CS(vec![]), |x| x),
-                            n.get_component::<CS<NodeIdentifier>>().map(|x| x.0.len()),
-                            n.has_children(),
-                            n.get_component::<CS<NodeIdentifier>>()
-                                .map(|x| !x.0.is_empty())
-                                .unwrap_or(false)
-                        );
-                    }
-                }
+                // {
+                //     let n = self.main_stores.node_store.resolve(node_id);
+                //     if !n.has_children() {
+                //         println!(
+                //             "z {} {:?} {:?} {:?} {:?}",
+                //             n.get_component::<CS<NodeIdentifier>>().is_ok(),
+                //             n.get_component::<CS<NodeIdentifier>>()
+                //                 .map_or(&CS(vec![]), |x| x),
+                //             n.get_component::<CS<NodeIdentifier>>().map(|x| x.0.len()),
+                //             n.has_children(),
+                //             n.get_component::<CS<NodeIdentifier>>()
+                //                 .map(|x| !x.0.is_empty())
+                //                 .unwrap_or(false)
+                //         );
+                //     }
+                // }
 
                 let metrics = SubTreeMetrics {
                     size: acc.metrics.size + 1,

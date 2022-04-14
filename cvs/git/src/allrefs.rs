@@ -1,4 +1,7 @@
-use std::{borrow::Borrow, fmt::Display, io::Write, mem::swap, path::Path, time::Instant};
+use std::{
+    borrow::Borrow, collections::HashSet, fmt::Display, io::Write, mem::swap, path::Path,
+    time::Instant,
+};
 
 use hyper_ast::{
     position::{
@@ -29,20 +32,39 @@ pub fn write_referencial_relations<W: Write>(
     out: &mut W,
 ) {
     let modules = IterMavenModules::new(&prepro.main_stores, StructuralPosition::new(root), root);
-    let declarations = iter_declarations(prepro, modules);
+    // let declarations = iter_declarations(prepro, modules);
 
-    let mut writer = Writer::new(out);
+    let mut first = true;
 
-    for (decl, root_folder, of) in declarations {
-        let now = Instant::now();
-        let references = find_declaration_references_position(root, prepro, &decl, root_folder, of);
-        if let Some((sk, references)) = references {
-            let decl = decl.make_position(&prepro.main_stores);
-            let time = now.elapsed().as_nanos();
-            log::info!("time taken for refs search of {} :\t{}", decl, time);
-            writer.positions_of_referencial_relations(decl, sk, time, references);
-            // writer.summary_of_referencial_relations(decl, rk, time, references);
+    for module in modules {
+        if first {
+            first = false;
+        } else {
+            writeln!(out, ",").unwrap();
         }
+        write!(out, r#"{{"module":"#).unwrap();
+        write!(out, "\"{}\"", module.make_position(&prepro.main_stores).file().to_str().unwrap()).unwrap();
+        writeln!(out, r#","content": ["#).unwrap();
+        let mut writer = Writer::new(out);
+        let declarations = iter_declarations(prepro, module);
+        for (decl, root_folder, of) in declarations {
+            let now = Instant::now();
+            let references =
+                find_declaration_references_position(root, prepro, &decl, root_folder, of);
+            if let Some((sk, references)) = references {
+                let decl = decl.make_position(&prepro.main_stores);
+                let time = now.elapsed().as_nanos();
+                log::info!("time taken for refs search of {} :\t{}", decl, time);
+                writer.positions_of_referencial_relations(
+                    decl,
+                    sk,
+                    time,
+                    references,
+                );
+                // writer.summary_of_referencial_relations(decl, rk, time, references);
+            }
+        }
+        write!(out, "]}}").unwrap();
     }
 }
 
@@ -129,7 +151,9 @@ fn find_declaration_references(
     //         );
     //     rs
     } else if t == Type::ClassBody {
-        Some((SearchKinds::TypeDecl, vec![]))
+        let rs = RefsFinder::new(prepro, structural_positions)
+            .find_this_unchecked((declaration.clone(), 0).into());
+        Some((SearchKinds::LocalDecl, rs))
     } else if t == Type::LocalVariableDeclaration
         || t == Type::Resource
         || t == Type::EnhancedForVariable
@@ -151,13 +175,14 @@ fn find_declaration_references(
     }
 }
 
-struct Writer<'a, W:Write> {
+struct Writer<'a, W: Write> {
+    start: bool,
     out: &'a mut W,
 }
 
-impl<'a, W:Write>  Writer<'a, W>  {
+impl<'a, W: Write> Writer<'a, W> {
     pub fn new(out: &'a mut W) -> Self {
-        Self { out }
+        Self { start: true, out }
     }
     pub fn positions_of_referencial_relations(
         &mut self,
@@ -167,6 +192,11 @@ impl<'a, W:Write>  Writer<'a, W>  {
         references: Vec<Position>,
     ) {
         let out = &mut self.out;
+        if self.start {
+            self.start = false;
+        } else {
+            writeln!(out, ",").unwrap();
+        }
         write!(out, r#"{{"decl":"#).unwrap();
         write!(out, "{}", decl).unwrap();
         write!(out, r#","search":"#).unwrap();
@@ -184,7 +214,6 @@ impl<'a, W:Write>  Writer<'a, W>  {
             write!(out, "{}", x).unwrap();
         }
         write!(out, "]}}").unwrap();
-        writeln!(out, ",").unwrap();
     }
 
     pub fn summary_of_referencial_relations(
@@ -212,36 +241,60 @@ type ExtendedDeclaration = (
     Vec<StructuralPosition>,
 );
 
-pub fn iter_declarations<'a>(
+pub fn modules_iter_declarations<'a>(
     prepro: &'a PreProcessedRepository,
     modules: IterMavenModules<'a, StructuralPosition>,
 ) -> impl Iterator<Item = ExtendedDeclaration> + 'a {
     modules
-        .flat_map(|maven_module| {
-            let src = goto_by_name(prepro, maven_module.clone(), "src");
-            let source_tests = src
-                .clone()
-                .and_then(|x| goto_by_name(prepro, x, "test"))
-                .and_then(|x| goto_by_name(prepro, x, "java"));
-            let source = src
-                .and_then(|x| goto_by_name(prepro, x, "main"))
-                .and_then(|x| goto_by_name(prepro, x, "java"));
-            let mut r = vec![];
-            let mut test_folders = vec![];
-            if let Some(source_tests) = source_tests {
-                test_folders.push(source_tests.clone());
-                r.push((source_tests, maven_module.clone(), vec![]))
-            }
-            if let Some(source) = source {
-                r.push((source, maven_module, test_folders))
-            }
-            r
-        })
-        .flat_map(|(f, m, of)| {
-            let n = *f.node().unwrap();
-            IterDeclarations::new(&prepro.main_stores, f.clone(), n)
-                .map(move |x| (x, f.clone(), of.clone()))
-        })
+        .flat_map(|maven_module| maven_module_folders(prepro, maven_module))
+        .flat_map(|(f, _m, of)| make_decl_iter(prepro, f, of))
+}
+
+pub fn iter_declarations<'a>(
+    prepro: &'a PreProcessedRepository,
+    maven_module: StructuralPosition,
+) -> impl Iterator<Item = ExtendedDeclaration> + 'a {
+    maven_module_folders(prepro, maven_module)
+        .into_iter()
+        .flat_map(|(f, _m, of)| make_decl_iter(prepro, f, of))
+}
+
+fn make_decl_iter(
+    prepro: &PreProcessedRepository,
+    f: StructuralPosition,
+    of: Vec<StructuralPosition>,
+) -> impl Iterator<Item = ExtendedDeclaration> + '_ {
+    let n = *f.node().unwrap();
+    IterDeclarations::new(&prepro.main_stores, f.clone(), n)
+        .map(move |x| (x, f.clone(), of.clone()))
+}
+
+fn maven_module_folders(
+    prepro: &PreProcessedRepository,
+    maven_module: StructuralPosition,
+) -> Vec<(
+    StructuralPosition,
+    StructuralPosition,
+    Vec<StructuralPosition>,
+)> {
+    let src = goto_by_name(prepro, maven_module.clone(), "src");
+    let source_tests = src
+        .clone()
+        .and_then(|x| goto_by_name(prepro, x, "test"))
+        .and_then(|x| goto_by_name(prepro, x, "java"));
+    let source = src
+        .and_then(|x| goto_by_name(prepro, x, "main"))
+        .and_then(|x| goto_by_name(prepro, x, "java"));
+    let mut r = vec![];
+    let mut test_folders = vec![];
+    if let Some(source_tests) = source_tests {
+        test_folders.push(source_tests.clone());
+        r.push((source_tests, maven_module.clone(), vec![]))
+    }
+    if let Some(source) = source {
+        r.push((source, maven_module, test_folders))
+    }
+    r
 }
 
 pub struct RefsFinder<'a> {
@@ -331,6 +384,12 @@ impl<'a> RefsFinder<'a> {
         self.go_through_folders(r, &mut cursor, &package_ref, &fq_decl_ref, other_folders)?;
 
         Ok(())
+    }
+
+    fn find_this_unchecked(mut self, decl: Scout) -> Vec<SpHandle> {
+        let mut r = vec![];
+        self.find_this(&mut r, &decl);
+        r
     }
 
     fn find_field_declaration_references_unchecked(
@@ -530,6 +589,31 @@ impl<'a> RefsFinder<'a> {
 
         Ok(())
     }
+
+    fn find_this<'b>(&mut self, r: &mut Vec<SpHandle>, decl: &Scout) {
+        let b = self
+            .prepro
+            .main_stores
+            .node_store
+            .resolve(decl.node_always(&self.structural_positions));
+        let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
+        let mut scout = decl.clone();
+        for (i, xx) in b.get_children().iter().enumerate() {
+            scout.goto(*xx, i);
+
+            log::debug!("try search this");
+            r.extend(
+                usage::RefsFinder::new(
+                    &self.prepro.main_stores,
+                    &mut self.ana,
+                    &mut self.structural_positions,
+                )
+                .find_all_is_this(mm, scout.clone()),
+            );
+            scout.up(&self.structural_positions);
+        }
+    }
+
     fn init_type_decl<'b>(&mut self, r: &mut Vec<SpHandle>, decl: &Scout) -> RefPtr {
         let b = self
             .prepro

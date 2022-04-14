@@ -189,7 +189,10 @@ impl<'a> HashedNodeRef<'a> {
         } else {
             self.0
                 .get_component::<compo::BytesLen>()
-                .expect(&format!("node with type {:?} don't have a len",self.get_type()))
+                .expect(&format!(
+                    "node with type {:?} don't have a len",
+                    self.get_type()
+                ))
                 .0
         }
         // .map_or_else(|_| self
@@ -201,7 +204,8 @@ impl<'a> HashedNodeRef<'a> {
         // use crate::types::Typed;
         if self.get_type() == Type::Spaces {
             let s = self.get_component::<Box<[Space]>>().ok()?;
-            let s = s.iter()
+            let s = s
+                .iter()
                 .map(|x| {
                     if x == &Space::ParentIndentation {
                         p_indent_len
@@ -222,15 +226,31 @@ impl<'a> HashedNodeRef<'a> {
         self.get_type().is_directory()
     }
 
-    pub fn get_child_by_name(&self, name: &<HashedNodeRef<'a> as crate::types::Labeled>::Label) -> Option<<HashedNodeRef<'a> as crate::types::Stored>::TreeId> {
-        let labels = self.0.get_component::<CS<<HashedNodeRef<'a> as crate::types::Labeled>::Label>>().ok()?;
-        let idx = labels.0.iter().position(|x|x==name);
-        idx.map(|idx|self.get_child(&idx.to_u16().unwrap()))
+    pub fn get_child_by_name(
+        &self,
+        name: &<HashedNodeRef<'a> as crate::types::Labeled>::Label,
+    ) -> Option<<HashedNodeRef<'a> as crate::types::Stored>::TreeId> {
+        let labels = self
+            .0
+            .get_component::<CS<<HashedNodeRef<'a> as crate::types::Labeled>::Label>>()
+            .ok()?;
+        let idx = labels.0.iter().position(|x| x == name);
+        idx.map(|idx| self.get_child(&idx.to_u16().unwrap()))
     }
 
-    pub fn get_child_idx_by_name(&self, name: &<HashedNodeRef<'a> as crate::types::Labeled>::Label) -> Option<<HashedNodeRef<'a> as crate::types::WithChildren>::ChildIdx> {
-        let labels = self.0.get_component::<CS<<HashedNodeRef<'a> as crate::types::Labeled>::Label>>().ok()?;
-        labels.0.iter().position(|x|x==name).map(|x|x.to_u16().unwrap())
+    pub fn get_child_idx_by_name(
+        &self,
+        name: &<HashedNodeRef<'a> as crate::types::Labeled>::Label,
+    ) -> Option<<HashedNodeRef<'a> as crate::types::WithChildren>::ChildIdx> {
+        let labels = self
+            .0
+            .get_component::<CS<<HashedNodeRef<'a> as crate::types::Labeled>::Label>>()
+            .ok()?;
+        labels
+            .0
+            .iter()
+            .position(|x| x == name)
+            .map(|x| x.to_u16().unwrap())
     }
 }
 
@@ -270,7 +290,11 @@ impl<'a> crate::types::WithChildren for HashedNodeRef<'a> {
         self.0
             .get_component::<CS<legion::Entity>>()
             .unwrap_or_else(|x| {
-                panic!("too much children: {}\n{}", x, std::backtrace::Backtrace::force_capture());
+                panic!(
+                    "too much children: {}\n{}",
+                    x,
+                    std::backtrace::Backtrace::force_capture()
+                );
             })
             .0
             .len()
@@ -279,8 +303,13 @@ impl<'a> crate::types::WithChildren for HashedNodeRef<'a> {
     }
 
     fn get_child(&self, idx: &Self::ChildIdx) -> Self::TreeId {
-        self.0.get_component::<CS<legion::Entity>>().unwrap().0
-            [num::cast::<_, usize>(*idx).unwrap()]
+        self.0
+            .get_component::<CS<legion::Entity>>()
+            .unwrap_or_else(|x| {
+                log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+                panic!()
+            })
+            .0[num::cast::<_, usize>(*idx).unwrap()]
     }
 
     fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
@@ -291,7 +320,10 @@ impl<'a> crate::types::WithChildren for HashedNodeRef<'a> {
     fn get_children<'b>(&'b self) -> &'b [Self::TreeId] {
         self.0
             .get_component::<CS<legion::Entity>>()
-            .unwrap()
+            .unwrap_or_else(|x| {
+                log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+                panic!()
+            })
             .0
             .as_slice()
     }
@@ -482,7 +514,7 @@ impl Debug for NodeStore {
     }
 }
 
-impl<'b,'a:'b> crate::types::NodeStore<'a, NodeIdentifier, HashedNodeRef<'b>> for NodeStore {
+impl<'b, 'a: 'b> crate::types::NodeStore<'a, NodeIdentifier, HashedNodeRef<'b>> for NodeStore {
     fn resolve(&'a self, id: &NodeIdentifier) -> HashedNodeRef<'b> {
         self.internal
             .entry_ref(id.clone())

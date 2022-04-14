@@ -34,11 +34,31 @@ impl fmt::Display for MemoryUsage {
     }
 }
 
+impl Into<Bytes> for MemoryUsage {
+    fn into(self) -> Bytes {
+        self.allocated
+    }
+}
+impl Into<isize> for MemoryUsage {
+    fn into(self) -> isize {
+        self.allocated.bytes()
+    }
+}
+
 impl std::ops::Sub for MemoryUsage {
     type Output = MemoryUsage;
     fn sub(self, rhs: MemoryUsage) -> MemoryUsage {
         MemoryUsage {
             allocated: self.allocated - rhs.allocated,
+        }
+    }
+}
+
+impl std::ops::Add for MemoryUsage {
+    type Output = MemoryUsage;
+    fn add(self, rhs: MemoryUsage) -> MemoryUsage {
+        MemoryUsage {
+            allocated: self.allocated + rhs.allocated,
         }
     }
 }
@@ -85,6 +105,9 @@ impl Bytes {
     pub fn megabytes(self) -> isize {
         self.0 / 1024 / 1024
     }
+    pub fn bytes(self) -> isize {
+        self.0
+    }
 }
 
 impl fmt::Display for Bytes {
@@ -114,5 +137,12 @@ impl std::ops::Sub for Bytes {
     type Output = Bytes;
     fn sub(self, rhs: Bytes) -> Bytes {
         Bytes(self.0 - rhs.0)
+    }
+}
+
+impl std::ops::Add for Bytes {
+    type Output = Bytes;
+    fn add(self, rhs: Bytes) -> Bytes {
+        Bytes(self.0 + rhs.0)
     }
 }

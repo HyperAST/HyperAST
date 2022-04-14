@@ -61,6 +61,39 @@ pub struct Relation {
 
 pub type Relations = Vec<Relation>;
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct RelationsWithPerfs {
+    pub(crate) relations: Option<Vec<PerModule<Vec<Relation>>>>,
+    // pub(super) construction_time:u128,
+    // pub(super) search_time:u128,
+    // pub(super) construction_memory_fooprint:usize,
+    // pub(super) with_search_memory_fooprint:usize,
+    pub(super) construction_perfs: Perfs,
+    pub(super) search_perfs: Option<Perfs>,
+    pub(super) info: Option<Info>,
+}
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct PerModule<T> {
+    pub(super) module: String,
+    pub(super) content: T,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct Perfs {
+    /// time in nano seconds
+    pub(super) time: u128,
+    /// memory in bytes
+    pub(super) memory: usize,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct Info {
+    pub(super) repo_name: String,
+    pub(super) commit: String,
+    pub(super) no: Option<usize>,
+    pub(super) batch_id: Option<String>,
+}
+
 pub fn typed_example() -> Result<()> {
     // Some JSON input data as a &str. Maybe this comes from the user.
     let data = r#"[

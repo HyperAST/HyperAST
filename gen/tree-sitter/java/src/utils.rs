@@ -24,6 +24,7 @@ pub(crate) fn clamp_u64_to_u32(x: &u64) -> u32 {
     (((x & 0xffff0000) >> 32) as u32) ^ ((x & 0xffff) as u32)
 }
 
+#[derive(Clone)]
 pub struct MemoryUsage {
     allocated: Bytes,
 }
@@ -40,6 +41,21 @@ impl std::ops::Sub for MemoryUsage {
         MemoryUsage {
             allocated: self.allocated - rhs.allocated,
         }
+    }
+}
+
+impl std::ops::Add for MemoryUsage {
+    type Output = MemoryUsage;
+    fn add(self, rhs: MemoryUsage) -> MemoryUsage {
+        MemoryUsage {
+            allocated: self.allocated + rhs.allocated,
+        }
+    }
+}
+
+impl Into<isize> for MemoryUsage {
+    fn into(self) -> isize {
+        self.allocated.bytes()
     }
 }
 
@@ -85,6 +101,9 @@ impl Bytes {
     pub fn megabytes(self) -> isize {
         self.0 / 1024 / 1024
     }
+    pub fn bytes(self) -> isize {
+        self.0
+    }
 }
 
 impl fmt::Display for Bytes {
@@ -114,5 +133,13 @@ impl std::ops::Sub for Bytes {
     type Output = Bytes;
     fn sub(self, rhs: Bytes) -> Bytes {
         Bytes(self.0 - rhs.0)
+    }
+}
+
+
+impl std::ops::Add for Bytes {
+    type Output = Bytes;
+    fn add(self, rhs: Bytes) -> Bytes {
+        Bytes(self.0 + rhs.0)
     }
 }

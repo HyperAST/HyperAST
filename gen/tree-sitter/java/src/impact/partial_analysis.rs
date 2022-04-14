@@ -2585,7 +2585,7 @@ impl PartialAnalysis {
                         ) if kind == &Type::EnhancedForStatement => {
                             let r = mm!();
                             // let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
-                            scoped!(r,i);
+                            scoped!(r, i);
                             State::Declaration {
                                 visibility,
                                 kind: t,
@@ -4208,9 +4208,9 @@ impl PartialAnalysis {
                     (State::None, c) if kind == &Type::TernaryExpression => {
                         match c {
                             State::SimpleIdentifier(_, i) => {
-                                let i = scoped!(mm!(), i);
+                                scoped!(mm!(), i);
                             }
-                            State::LiteralType(t) => (),
+                            State::LiteralType(_) => (),
                             State::ScopedIdentifier(i) => {
                                 sync!(i);
                             }
@@ -4222,18 +4222,9 @@ impl PartialAnalysis {
                     }
                     // TernaryExpression (Cond,x)
                     (State::Condition, x) if kind == &Type::TernaryExpression => match x {
-                        State::LiteralType(t) => {
-                            let i = sync!(t);
-                            State::ScopedIdentifier(i)
-                        }
-                        State::SimpleIdentifier(_, i) => {
-                            let i = scoped!(mm!(), i);
-                            State::ScopedIdentifier(i)
-                        }
-                        State::This(i) => {
-                            let i = sync!(i);
-                            State::ScopedIdentifier(i)
-                        }
+                        State::LiteralType(t) => State::ScopedIdentifier(sync!(t)),
+                        State::SimpleIdentifier(_, i) => State::ScopedIdentifier(scoped!(mm!(), i)),
+                        State::This(i) => State::ScopedIdentifier(sync!(i)),
                         State::ConstructorInvocation(i) => State::ConstructorInvocation(sync!(i)),
                         State::Invocation(i) => State::Invocation(sync!(i)),
                         State::ScopedIdentifier(i) => State::ScopedIdentifier(sync!(i)),
@@ -4245,14 +4236,14 @@ impl PartialAnalysis {
                     // TernaryExpression (x,y)
                     (State::LiteralType(t), y) if kind == &Type::TernaryExpression => {
                         match y {
-                            State::LiteralType(t) => (),
+                            State::LiteralType(_) => (),
                             State::SimpleIdentifier(_, i) => {
                                 scoped!(mm!(), i);
                             }
-                            State::FieldIdentifier(i) => (),
-                            State::ConstructorInvocation(i) => (),
-                            State::Invocation(i) => (),
-                            State::ScopedIdentifier(i) => (),
+                            State::FieldIdentifier(_) => (),
+                            State::ConstructorInvocation(_) => (),
+                            State::Invocation(_) => (),
+                            State::ScopedIdentifier(_) => (),
                             State::None => panic!(),
                             x => todo!("{:?}", x),
                         };
@@ -4260,13 +4251,13 @@ impl PartialAnalysis {
                     }
                     (x, State::LiteralType(t)) if kind == &Type::TernaryExpression => {
                         match x {
-                            State::LiteralType(t) => (),
+                            State::LiteralType(_) => (),
                             State::SimpleIdentifier(_, i) => {
                                 scoped!(mm!(), i);
                             }
-                            State::ConstructorInvocation(i) => (),
-                            State::Invocation(i) => (),
-                            State::ScopedIdentifier(i) => (),
+                            State::ConstructorInvocation(_) => (),
+                            State::Invocation(_) => (),
+                            State::ScopedIdentifier(_) => (),
                             State::None => panic!(),
                             x => todo!("{:?}", x),
                         };
@@ -4279,12 +4270,6 @@ impl PartialAnalysis {
                         State::ScopedIdentifier(i)
                     }
                     (State::ScopedIdentifier(i), _) if kind == &Type::TernaryExpression => {
-                        State::ScopedIdentifier(i)
-                    }
-                    (State::Invocation(_), State::ScopedIdentifier(i))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        let i = sync!(i);
                         State::ScopedIdentifier(i)
                     }
                     (State::ConstructorInvocation(i), State::ScopedIdentifier(_))
@@ -4313,6 +4298,12 @@ impl PartialAnalysis {
                         if kind == &Type::TernaryExpression =>
                     {
                         State::MethodReference(r)
+                    }
+                    (State::Invocation(_), State::ScopedIdentifier(i))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
                     }
                     (State::Invocation(_), State::SimpleIdentifier(_, i))
                         if kind == &Type::TernaryExpression =>
@@ -4359,7 +4350,7 @@ impl PartialAnalysis {
                     (State::ConstructorInvocation(t), State::SimpleIdentifier(_, i))
                         if kind == &Type::TernaryExpression =>
                     {
-                        let i = scoped!(mm!(), i);
+                        scoped!(mm!(), i);
                         State::ConstructorInvocation(t)
                     }
                     (State::ConstructorInvocation(t), State::This(i))
@@ -4410,7 +4401,9 @@ impl PartialAnalysis {
                     {
                         State::FieldIdentifier(i)
                     }
-                    (State::LiteralType(t), State::SimpleIdentifier(_, ir)) if kind == &Type::BinaryExpression => {
+                    (State::LiteralType(t), State::SimpleIdentifier(_, ir))
+                        if kind == &Type::BinaryExpression =>
+                    {
                         scoped!(mm!(), ir);
                         // TODO not that obvious in general
                         State::LiteralType(t)
@@ -5105,10 +5098,7 @@ impl PartialAnalysis {
                     }
                     (State::None, rest) if kind == &Type::WildcardExtends => {
                         let t = match rest {
-                            State::SimpleTypeIdentifier(t) => {
-                                let o = mm!();
-                                acc.solver.intern_ref(RefsEnum::TypeIdentifier(o, t))
-                            }
+                            State::SimpleTypeIdentifier(t) => scoped_type!(mm!(), t),
                             State::ScopedTypeIdentifier(t) => sync!(t),
                             x => panic!("{:?}", x),
                         };
@@ -5229,7 +5219,7 @@ impl PartialAnalysis {
                     (State::None, State::None) if kind == &Type::TypeArguments => {
                         let v = vec![];
                         State::TypeArguments(v)
-                    },
+                    }
                     (rest, State::SimpleTypeIdentifier(t)) if kind == &Type::TypeArguments => {
                         let mut v = match rest {
                             State::TypeArguments(v) => v,
@@ -5334,7 +5324,7 @@ impl PartialAnalysis {
                     (State::Declarator(Declarator::Variable(v)), State::SimpleIdentifier(_, i))
                         if kind == &Type::VariableDeclarator =>
                     {
-                        scoped!(mm!(),i);
+                        scoped!(mm!(), i);
                         State::Declarator(Declarator::Variable(v))
                     }
                     (State::Declarator(Declarator::Variable(v)), _)

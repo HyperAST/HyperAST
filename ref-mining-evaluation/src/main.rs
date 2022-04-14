@@ -6,19 +6,22 @@ pub mod relations;
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    fmt::Display,
     fs::{self, File},
     io::{self, stdout, Read, Seek, SeekFrom},
     ops::Add,
 };
 
 use clap::{Parser, Subcommand};
+use relations::{Info, Perfs};
 use rusted_gumtree_cvs_git::git::{fetch_repository, read_position, read_position_floating_lines};
+use serde::{Deserialize, Serialize};
 use termion::color;
 
 use crate::{
     compare::Comparator,
     comparisons::{ComparedRanges, Comparison, Comparisons},
-    relations::{Position, Range, Relations},
+    relations::{PerModule, Position, Range, Relation, Relations, RelationsWithPerfs},
 };
 
 macro_rules! inv_reset {
@@ -57,7 +60,7 @@ macro_rules! show_code_range {
 
 fn main() {
     let cli = Cli::parse();
-    println!("{:?}", cli);
+    eprintln!("{:?}", cli);
     match &cli.command {
         Commands::Compare { left, right, .. } => {
             println!("left: {} right:{}", left, right);
@@ -66,93 +69,216 @@ fn main() {
 
             println!("{:?} {:?}", left_r.len(), right_r.len());
 
-            let mut comp = Comparator::default().compare(left_r, right_r);
-            comp.left_name = left.clone();
-            comp.right_name = right.clone();
-            println!("{}", serde_json::to_string_pretty(&comp).unwrap());
-        }
-        Commands::Stats { file } => {
-            let relations = handle_file(File::open(file).expect("should be a file")).unwrap();
-            println!("{:#?}", relations);
-            println!("# of relations: {}", relations.len());
-            println!(
-                "mean # of references: {}",
-                relations.iter().map(|x| x.refs.len()).sum::<usize>() / relations.len()
-            );
-            let mut files = HashSet::<String>::default();
-            for x in &relations {
-                files.insert(x.decl.file.clone());
-                for x in &x.refs {
-                    files.insert(x.file.clone());
-                }
+            let mut per_module: HashMap<String, (_, _)> = Default::default();
+
+            for x in left_r {
+                per_module.insert(x.module, (x.content, vec![]));
             }
-            println!("# of uniquely mentioned files: {}", files.len());
+            for x in right_r {
+                per_module.entry(x.module).or_default().1 = x.content;
+            }
+
+            let res: Vec<_> = per_module
+                .into_iter()
+                .map(|(module, (left_r, right_r))| {
+                    let mut comp = Comparator::default().compare(left_r, right_r);
+                    comp.left_name = left.clone();
+                    comp.right_name = right.clone();
+                    PerModule {
+                        module,
+                        content: comp,
+                    }
+                })
+                .collect();
+            println!("{}", serde_json::to_string_pretty(&res).unwrap());
+        }
+        Commands::Stats { file, .. } => {
+            let relations =
+                handle_file_with_perfs(File::open(file).expect("should be a file")).unwrap();
+            // println!("{:#?}", relations);
+            // println!(
+            //     "mean # of references: {}",
+            //     relations.iter().map(|x| x.refs.len()).sum::<usize>() / relations.len()
+            // );
+            // let mut files = HashSet::<String>::default();
+            // for x in &relations {
+            //     files.insert(x.decl.file.clone());
+            //     for x in &x.refs {
+            //         files.insert(x.file.clone());
+            //     }
+            // }
+            // println!("# of uniquely mentioned files: {}", files.len());
+        }
+        Commands::Modules { dir, .. } => {
+            let dir = std::fs::read_dir(dir).expect("should be a dir");
+            for file in dir
+                .into_iter()
+                .filter(|x| x.is_ok() && x.as_ref().unwrap().file_type().unwrap().is_file())
+            {
+                let relations = handle_file_with_perfs(
+                    File::open(file.unwrap().path())
+                        .expect("should be a file"),
+                )
+                .unwrap();
+
+                let mut res = relations.info.unwrap().commit;
+                relations
+                    .relations
+                    .into_iter()
+                    .flat_map(|x| x.into_iter().map(|x| x.module))
+                    .for_each(|x| {
+                        res.push(' ');
+                        res += &x;
+                    });
+                println!("{}", res);
+            }
+            // println!("{:#?}", relations);
+            // println!(
+            //     "mean # of references: {}",
+            //     relations.iter().map(|x| x.refs.len()).sum::<usize>() / relations.len()
+            // );
+            // let mut files = HashSet::<String>::default();
+            // for x in &relations {
+            //     files.insert(x.decl.file.clone());
+            //     for x in &x.refs {
+            //         files.insert(x.file.clone());
+            //     }
+            // }
+            // println!("# of uniquely mentioned files: {}", files.len());
+        }
+        Commands::MultiCompareStats {
+            baseline_dir,
+            evaluated_dir,
+            json,
+            ..
+        } => {
+            let bl_dir = std::fs::read_dir(baseline_dir).expect("should be a dir");
+            let t_dir = std::fs::read_dir(evaluated_dir).expect("should be a dir");
+            let mut files = HashMap::<_, (Option<_>, Option<_>)>::default();
+            bl_dir.for_each(|x| {
+                let x = x.unwrap();
+                if x.file_type().unwrap().is_file() {
+                    files
+                        .entry(x.file_name())
+                        .insert_entry((Some(x.path()), None));
+                }
+            });
+            t_dir.for_each(|x| {
+                let x = x.unwrap();
+                if x.file_type().unwrap().is_file() {
+                    files.entry(x.file_name()).or_insert((None, None)).1 = Some(x.path());
+                }
+            });
+            let comps = files.into_iter().filter_map(|(commit, v)| {
+                if let (Some(baseline), Some(evaluated)) = v {
+                    let bl_rs =
+                        handle_file_with_perfs(File::open(baseline).expect("should be a file"))
+                            .unwrap();
+                    let t_rs =
+                        handle_file_with_perfs(File::open(evaluated).expect("should be a file"))
+                            .unwrap();
+                    let bl_commit = bl_rs.info.as_ref().unwrap().commit.clone();
+                    let t_commit = t_rs.info.as_ref().unwrap().commit.clone();
+                    let commit: String = commit.to_string_lossy().into_owned();
+                    assert_eq!(commit, bl_commit);
+                    assert_eq!(commit, t_commit);
+
+                    let x = Versus {
+                        baseline: bl_rs,
+                        evaluated: t_rs,
+                    };
+                    Some(CommitCompStats::from(x))
+                } else {
+                    None
+                }
+            });
+            if *json {
+                let mut res = vec![];
+                comps.for_each(|x| {
+                    res.push(x);
+                });
+                println!("{}", serde_json::to_string_pretty(&res).unwrap());
+            } else {
+                comps.for_each(|x| {
+                    println!("no: {:?}", x);
+                });
+            }
         }
         Commands::InteractiveDeclarations {
             repository,
             commit,
             baseline,
-            evaluated: test,
+            evaluated,
             ..
         } => {
             let repo = fetch_repository(repository.clone(), "/tmp/hyperastgitresources");
             let bl_rs = handle_file(File::open(baseline).expect("should be a file")).unwrap();
-            let t_rs = handle_file(File::open(test).expect("should be a file")).unwrap();
-            let comp = Comparator::default().compare(bl_rs, t_rs).into();
-            print_comparisons_stats(&comp);
-            let per_file = decls_per_file(comp);
+            let t_rs = handle_file(File::open(evaluated).expect("should be a file")).unwrap();
+            let mut per_module: HashMap<String, (_, _)> = Default::default();
 
-            for (f, rs) in per_file {
-                let read_position = |p: &Position, z: Option<usize>| {
-                    if let Some(z) = z {
-                        read_position_floating_lines(&repo, commit, &p.clone().into(), z)
-                    } else {
-                        read_position(&repo, commit, &p.clone().into())
-                            .map(|x| ("".to_string(), x, "".to_string()))
-                    }
-                };
-                // println!("{}:{:?}",f,rs);
-                for r in &rs.0 {
-                    if rs.1.contains(r) {
-                        continue;
-                    }
-                    let p = r.with(f.clone());
-                    let (before, span, after) = read_position(&p, Some(4)).unwrap();
-                    println!("baseline {}:", p);
+            for x in bl_rs {
+                per_module.insert(x.module, (x.content, vec![]));
+            }
+            for x in t_rs {
+                per_module.entry(x.module).or_default().1 = x.content;
+            }
+            per_module.into_iter().for_each(|(_, (bl_rs, t_rs))| {
+                let comp = Comparator::default().compare(bl_rs, t_rs).into();
+                print_comparisons_stats(&comp);
+                let per_file = decls_per_file(comp);
 
-                    show_code_range!(
-                        before {
-                            span (4) with Magenta Bg
-                        } after with LightBlack Fg
-                    );
-                }
-                for r in &rs.1 {
-                    if rs.0.contains(r) {
-                        // println!("matched {}:", r);
+                for (f, rs) in per_file {
+                    let read_position = |p: &Position, z: Option<usize>| {
+                        if let Some(z) = z {
+                            read_position_floating_lines(&repo, commit, &p.clone().into(), z)
+                        } else {
+                            read_position(&repo, commit, &p.clone().into())
+                                .map(|x| ("".to_string(), x, "".to_string()))
+                        }
+                    };
+                    // println!("{}:{:?}",f,rs);
+                    for r in &rs.0 {
+                        if rs.1.contains(r) {
+                            continue;
+                        }
                         let p = r.with(f.clone());
                         let (before, span, after) = read_position(&p, Some(4)).unwrap();
-                        println!("exact {}:", p);
+                        println!("baseline {}:", p);
+
                         show_code_range!(
                             before {
-                                span (4) with Green Bg
+                                span (4) with Magenta Bg
                             } after with LightBlack Fg
                         );
-                        continue;
                     }
-                    let p = r.with(f.clone());
-                    let (before, span, after) = read_position(&p, Some(4)).unwrap_or((
-                        p.to_string() + "bugged",
-                        p.to_string(),
-                        p.to_string(),
-                    ));
-                    println!("test {}:", p);
-                    show_code_range!(
-                        before {
-                            span (4) with Blue Bg
-                        } after with LightBlack Fg
-                    );
+                    for r in &rs.1 {
+                        if rs.0.contains(r) {
+                            // println!("matched {}:", r);
+                            let p = r.with(f.clone());
+                            let (before, span, after) = read_position(&p, Some(4)).unwrap();
+                            println!("exact {}:", p);
+                            show_code_range!(
+                                before {
+                                    span (4) with Green Bg
+                                } after with LightBlack Fg
+                            );
+                            continue;
+                        }
+                        let p = r.with(f.clone());
+                        let (before, span, after) = read_position(&p, Some(4)).unwrap_or((
+                            p.to_string() + "bugged",
+                            p.to_string(),
+                            p.to_string(),
+                        ));
+                        println!("test {}:", p);
+                        show_code_range!(
+                            before {
+                                span (4) with Blue Bg
+                            } after with LightBlack Fg
+                        );
+                    }
                 }
-            }
+            })
         }
         Commands::Interactive {
             repository,
@@ -165,48 +291,58 @@ fn main() {
             let repo = fetch_repository(repository.clone(), "/tmp/hyperastgitresources");
             let bl_rs = handle_file(File::open(baseline).expect("should be a file")).unwrap();
             let t_rs = handle_file(File::open(test).expect("should be a file")).unwrap();
-            let comp = Comparator::default()
-                .set_intersection_left(*only_misses)
-                .compare(bl_rs, t_rs);
-            print_comparisons_stats(&comp);
-            for r in &comp.exact {
-                let read_position = |p: &Position, z: Option<usize>| {
-                    if let Some(z) = z {
-                        read_position_floating_lines(&repo, commit, &p.clone().into(), z)
-                    } else {
-                        read_position(&repo, commit, &p.clone().into())
-                            .map(|x| ("".to_string(), x, "".to_string()))
-                    }
-                    .unwrap()
-                };
-                if r.left.is_empty() {
-                    continue;
-                }
-                let (before, span, after) = read_position(&r.decl, None);
+            let mut per_module: HashMap<String, (_, _)> = Default::default();
 
-                println!("decl {}:", r.decl,);
-
-                show_code_range!(
-                    before {
-                        span (1) with Green Bg
-                    } after with LightBlack Fg
-                );
-                // println!(
-                //     "decl {}: \n{}{}{}{}{}{}{}{}{}{}",
-                //     r.decl,
-                //     color::Bg(color::Reset),
-                //     color::Fg(color::LightBlack),
-                //     before,
-                //     color::Fg(color::Reset),
-                //     color::Bg(color::Green),
-                //     summarize_center(&span, 1),
-                //     color::Bg(color::Reset),
-                //     color::Fg(color::LightBlack),
-                //     after,
-                //     color::Fg(color::Reset),
-                // );
-                explore_misses(r, &read_position);
+            for x in bl_rs {
+                per_module.insert(x.module, (x.content, vec![]));
             }
+            for x in t_rs {
+                per_module.entry(x.module).or_default().1 = x.content;
+            }
+            per_module.into_iter().for_each(|(_, (bl_rs, t_rs))| {
+                let comp = Comparator::default()
+                    .set_intersection_left(*only_misses)
+                    .compare(bl_rs, t_rs);
+                print_comparisons_stats(&comp);
+                for r in &comp.exact {
+                    let read_position = |p: &Position, z: Option<usize>| {
+                        if let Some(z) = z {
+                            read_position_floating_lines(&repo, commit, &p.clone().into(), z)
+                        } else {
+                            read_position(&repo, commit, &p.clone().into())
+                                .map(|x| ("".to_string(), x, "".to_string()))
+                        }
+                        .unwrap()
+                    };
+                    if r.left.is_empty() {
+                        continue;
+                    }
+                    let (before, span, after) = read_position(&r.decl, None);
+
+                    println!("decl {}:", r.decl,);
+
+                    show_code_range!(
+                        before {
+                            span (1) with Green Bg
+                        } after with LightBlack Fg
+                    );
+                    // println!(
+                    //     "decl {}: \n{}{}{}{}{}{}{}{}{}{}",
+                    //     r.decl,
+                    //     color::Bg(color::Reset),
+                    //     color::Fg(color::LightBlack),
+                    //     before,
+                    //     color::Fg(color::Reset),
+                    //     color::Bg(color::Green),
+                    //     summarize_center(&span, 1),
+                    //     color::Bg(color::Reset),
+                    //     color::Fg(color::LightBlack),
+                    //     after,
+                    //     color::Fg(color::Reset),
+                    // );
+                    explore_misses(r, &read_position);
+                }
+            });
         }
     }
     // let repo_name = args
@@ -547,104 +683,332 @@ where
     }
 }
 
-/// TODO remove temporary things related to analysing spoon codebase
-fn print_comparisons_stats(comp: &Comparisons) {
-    println!("# of exact decls matches: {}", comp.exact.len());
-    println!("# of remaining decls in baseline: {}", comp.left.len());
-    let comp_bl = comp
-        .exact
-        .iter()
-        .map(|x| (x.left.len(), x.exact.len()))
-        .filter(|x| x.0 != 0 || x.1 != 0)
-        .fold((0, 0, 0f64, 0), |(xl, xe, m, c), (x, e)| {
-            (x + xl, e + xe, m + (e as f64 / (x + e) as f64), c + 1)
-        });
-    let comp_tool = comp
-        .exact
-        .iter()
-        .map(|x| {
-            (
-                x.right
-                    .iter()
-                    .filter(|x| !x.file.starts_with("spoon-"))
-                    .count(),
-                x.exact.len(),
-            )
-        })
-        .filter(|x| x.0 != 0 || x.1 != 0)
-        .fold((0, 0, 0f64, 0), |(xl, xe, m, c), (x, e)| {
-            (x + xl, e + xe, m + (x as f64 / (x + e) as f64), c + 1)
-        });
-    println!(
-        "# of remaining decls in tool results: {}",
-        comp.right
+#[derive(Serialize, Deserialize, Debug)]
+struct CommitCompStats {
+    relations_stats: Option<Vec<PerModule<CompStats>>>,
+    construction_perfs: Versus<Perfs>,
+    search_perfs: Option<Versus<Perfs>>,
+    info: Info,
+}
+
+impl CommitCompStats {
+    fn from(x: Versus<RelationsWithPerfs>) -> Self {
+        let mut per_module: HashMap<String, (_, _)> = Default::default();
+
+        for x in x.baseline.relations.unwrap_or_default() {
+            per_module.insert(x.module, (x.content, vec![]));
+        }
+        for x in x.evaluated.relations.unwrap_or_default() {
+            per_module.entry(x.module).or_default().1 = x.content;
+        }
+        let stats: Vec<_> = per_module
+            .into_iter()
+            .map(|(module, (bl_rs, t_rs))| {
+                let comp = Comparator::default().compare(bl_rs, t_rs).into();
+                let content = CompStats::compute(&comp);
+                PerModule { module, content }
+            })
+            .collect();
+
+        let stats = if stats.is_empty() { None } else { Some(stats) };
+
+        let search_perfs = Option::zip(x.baseline.search_perfs, x.evaluated.search_perfs);
+        Self {
+            relations_stats: stats,
+            construction_perfs: Versus {
+                baseline: x.baseline.construction_perfs,
+                evaluated: x.evaluated.construction_perfs,
+            },
+            search_perfs: search_perfs.map(|x| Versus {
+                baseline: x.0,
+                evaluated: x.1,
+            }),
+            info: x.evaluated.info.unwrap(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct CompStats {
+    exact_decls_matches: usize,
+    decls_in_baseline_and_tool_with_refs: usize,
+    remaining_decls_in_baseline: usize,
+    remaining_decls_in_tool_results: usize,
+    overall_success_rate: f64,
+    overall_overestimation_rate: f64,
+    mean_success_rate: f64,
+    mean_overestimation_rate: f64,
+    mean_of_exact_references: f64,
+    mean_of_remaining_refs_in_baseline: f64,
+    mean_of_remaining_refs_in_tool_results: f64,
+    files_len: usize,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Versus<T> {
+    baseline: T,
+    evaluated: T,
+}
+
+impl CompStats {
+    fn compute(comp: &Comparisons) -> Self {
+        let exact_decls_matches = comp.exact.len();
+        let remaining_decls_in_baseline = comp.left.len();
+        let comp_bl = comp
+            .exact
             .iter()
-            .filter(|x| !x.decl.file.starts_with("spoon-"))
-            .count()
-    );
-    println!("overall success rate: {}", {
-        let (x, e, _, _) = comp_bl;
-        e as f64 / (x + e) as f64
-    });
-    println!("overall overestimation rate: {}", {
-        let (x, e, _, _) = comp_tool;
-        x as f64 / (x + e) as f64
-    });
-    println!("mean success rate: {}", {
-        let (_, _, r, c) = comp_bl;
-        r as f64 / c as f64
-    });
-    println!(
-        "mean overestimation rate: {}",{
+            .map(|x| (x.left.len(), x.exact.len()))
+            .filter(|x| x.0 != 0 || x.1 != 0)
+            .fold((0, 0, 0f64, 0), |(xl, xe, m, c), (x, e)| {
+                (x + xl, e + xe, m + (e as f64 / (x + e) as f64), c + 1)
+            });
+        let comp_tool = comp
+            .exact
+            .iter()
+            .map(|x| (x.right.iter().count(), x.exact.len()))
+            .filter(|x| x.0 != 0 || x.1 != 0)
+            .fold((0, 0, 0f64, 0), |(xl, xe, m, c), (x, e)| {
+                (x + xl, e + xe, m + (x as f64 / (x + e) as f64), c + 1)
+            });
+        let remaining_decls_in_tool_results = comp.right.iter().count();
+        let overall_success_rate = {
+            let (x, e, _, _) = comp_bl;
+            e as f64 / (x + e) as f64
+        };
+        let overall_overestimation_rate = {
+            let (x, e, _, _) = comp_tool;
+            x as f64 / (x + e) as f64
+        };
+        let mean_success_rate = {
+            let (_, _, r, c) = comp_bl;
+            r as f64 / c as f64
+        };
+
+        let mean_overestimation_rate = {
             let (_, _, r, c) = comp_tool;
             r as f64 / c as f64
-        });
-    println!(
-        "mean # of exact references: {}",
-        comp.exact.iter().map(|x| x.exact.len()).sum::<usize>() as f64 / comp.exact.len() as f64
-    );
-    println!(
-        "mean # of remaining refs in baseline: {}",
-        comp.exact.iter().map(|x| x.left.len()).sum::<usize>() as f64 / comp.exact.len() as f64
-    );
-    println!(
-        "mean # of remaining refs in tool results: {}",
-        comp.exact
+        };
+
+        let mean_of_exact_references = comp.exact.iter().map(|x| x.exact.len()).sum::<usize>()
+            as f64
+            / comp.exact.len() as f64;
+
+        let mean_of_remaining_refs_in_baseline =
+            comp.exact.iter().map(|x| x.left.len()).sum::<usize>() as f64 / comp.exact.len() as f64;
+
+        let mean_of_remaining_refs_in_tool_results = comp
+            .exact
             .iter()
-            .map(|x| x
-                .right
-                .iter()
-                .filter(|x| !x.file.starts_with("spoon-"))
-                .count())
+            .map(|x| x.right.iter().count())
             .sum::<usize>() as f64
-            / comp.exact.len() as f64
-    );
-    let mut files = HashSet::<String>::default();
-    for x in &comp.exact {
-        files.insert(x.decl.file.clone());
-        for x in &x.exact {
-            files.insert(x.file.clone());
+            / comp.exact.len() as f64;
+        let mut files = HashSet::<String>::default();
+        for x in &comp.exact {
+            files.insert(x.decl.file.clone());
+            for x in &x.exact {
+                files.insert(x.file.clone());
+            }
+            for x in &x.left {
+                files.insert(x.file.clone());
+            }
+            for x in &x.right {
+                files.insert(x.file.clone());
+            }
         }
-        for x in &x.left {
-            files.insert(x.file.clone());
+        for x in &comp.left {
+            files.insert(x.decl.file.clone());
+            for x in &x.refs {
+                files.insert(x.file.clone());
+            }
         }
-        for x in &x.right {
-            files.insert(x.file.clone());
+        for x in &comp.right {
+            files.insert(x.decl.file.clone());
+            for x in &x.refs {
+                files.insert(x.file.clone());
+            }
+        }
+        let files_len = files.len();
+        let decls_in_baseline_and_tool_with_refs = comp
+            .exact
+            .iter()
+            .map(|x| (x.left.len(), x.exact.len()))
+            .count();
+        Self {
+            exact_decls_matches,
+            remaining_decls_in_baseline,
+            remaining_decls_in_tool_results,
+            decls_in_baseline_and_tool_with_refs,
+            overall_success_rate,
+            overall_overestimation_rate,
+            mean_success_rate,
+            mean_overestimation_rate,
+            mean_of_exact_references,
+            mean_of_remaining_refs_in_baseline,
+            mean_of_remaining_refs_in_tool_results,
+            files_len,
         }
     }
-    for x in &comp.left {
-        files.insert(x.decl.file.clone());
-        for x in &x.refs {
-            files.insert(x.file.clone());
-        }
+}
+
+impl Display for CompStats {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        println!("# of exact decls matches: {}", self.exact_decls_matches);
+        println!(
+            "# of remaining decls in baseline: {}",
+            self.remaining_decls_in_baseline
+        );
+        println!(
+            "# of remaining decls in tool results: {}",
+            self.remaining_decls_in_tool_results
+        );
+        println!(
+            "# of decls with refs in baseline or tool: {}",
+            self.decls_in_baseline_and_tool_with_refs
+        );
+        println!("overall success rate: {}", self.overall_success_rate);
+        println!(
+            "overall overestimation rate: {}",
+            self.overall_overestimation_rate
+        );
+        println!("mean success rate: {}", self.mean_success_rate);
+        println!(
+            "mean overestimation rate: {}",
+            self.mean_overestimation_rate
+        );
+        println!(
+            "mean # of exact references: {}",
+            self.mean_of_exact_references
+        );
+        println!(
+            "mean # of remaining refs in baseline: {}",
+            self.mean_of_remaining_refs_in_baseline
+        );
+        println!(
+            "mean # of remaining refs in tool results: {}",
+            self.mean_of_remaining_refs_in_tool_results
+        );
+        writeln!(f, "# of uniquely mentioned files: {}", self.files_len)
     }
-    for x in &comp.right {
-        files.insert(x.decl.file.clone());
-        for x in &x.refs {
-            files.insert(x.file.clone());
-        }
-    }
-    println!("# of uniquely mentioned files: {}", files.len());
+}
+
+// #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+// pub struct Perfs {
+//     construction_time: u128,
+//     search_time: u128,
+//     construction_memory_fooprint: usize,
+//     with_search_memory_fooprint: usize,
+// }
+
+impl Perfs {
+    // fn new(x: &RelationsWithPerfs) -> Self {
+    //     Self {
+    //         construction_time: x.construction_time,
+    //         search_time: x.search_time,
+    //         construction_memory_fooprint: x.construction_memory_fooprint,
+    //         with_search_memory_fooprint: x.with_search_memory_fooprint,
+    //     }
+    // }
+}
+
+/// TODO remove temporary things related to analysing spoon codebase
+fn print_comparisons_stats(comp: &Comparisons) {
+    println!("{}", CompStats::compute(comp))
+    // println!("# of exact decls matches: {}", comp.exact.len());
+    // println!("# of remaining decls in baseline: {}", comp.left.len());
+    // let comp_bl = comp
+    //     .exact
+    //     .iter()
+    //     .map(|x| (x.left.len(), x.exact.len()))
+    //     .filter(|x| x.0 != 0 || x.1 != 0)
+    //     .fold((0, 0, 0f64, 0), |(xl, xe, m, c), (x, e)| {
+    //         (x + xl, e + xe, m + (e as f64 / (x + e) as f64), c + 1)
+    //     });
+    // let comp_tool = comp
+    //     .exact
+    //     .iter()
+    //     .map(|x| {
+    //         (
+    //             x.right
+    //                 .iter()
+    //                 // .filter(|x| !x.file.starts_with("spoon-"))
+    //                 .count(),
+    //             x.exact.len(),
+    //         )
+    //     })
+    //     .filter(|x| x.0 != 0 || x.1 != 0)
+    //     .fold((0, 0, 0f64, 0), |(xl, xe, m, c), (x, e)| {
+    //         (x + xl, e + xe, m + (x as f64 / (x + e) as f64), c + 1)
+    //     });
+    // println!(
+    //     "# of remaining decls in tool results: {}",
+    //     comp.right
+    //         .iter()
+    //         // .filter(|x| !x.decl.file.starts_with("spoon-"))
+    //         .count()
+    // );
+    // println!("overall success rate: {}", {
+    //     let (x, e, _, _) = comp_bl;
+    //     e as f64 / (x + e) as f64
+    // });
+    // println!("overall overestimation rate: {}", {
+    //     let (x, e, _, _) = comp_tool;
+    //     x as f64 / (x + e) as f64
+    // });
+    // println!("mean success rate: {}", {
+    //     let (_, _, r, c) = comp_bl;
+    //     r as f64 / c as f64
+    // });
+    // println!(
+    //     "mean overestimation rate: {}",{
+    //         let (_, _, r, c) = comp_tool;
+    //         r as f64 / c as f64
+    //     });
+    // println!(
+    //     "mean # of exact references: {}",
+    //     comp.exact.iter().map(|x| x.exact.len()).sum::<usize>() as f64 / comp.exact.len() as f64
+    // );
+    // println!(
+    //     "mean # of remaining refs in baseline: {}",
+    //     comp.exact.iter().map(|x| x.left.len()).sum::<usize>() as f64 / comp.exact.len() as f64
+    // );
+    // println!(
+    //     "mean # of remaining refs in tool results: {}",
+    //     comp.exact
+    //         .iter()
+    //         .map(|x| x
+    //             .right
+    //             .iter()
+    //             // .filter(|x| !x.file.starts_with("spoon-"))
+    //             .count())
+    //         .sum::<usize>() as f64
+    //         / comp.exact.len() as f64
+    // );
+    // let mut files = HashSet::<String>::default();
+    // for x in &comp.exact {
+    //     files.insert(x.decl.file.clone());
+    //     for x in &x.exact {
+    //         files.insert(x.file.clone());
+    //     }
+    //     for x in &x.left {
+    //         files.insert(x.file.clone());
+    //     }
+    //     for x in &x.right {
+    //         files.insert(x.file.clone());
+    //     }
+    // }
+    // for x in &comp.left {
+    //     files.insert(x.decl.file.clone());
+    //     for x in &x.refs {
+    //         files.insert(x.file.clone());
+    //     }
+    // }
+    // for x in &comp.right {
+    //     files.insert(x.decl.file.clone());
+    //     for x in &x.refs {
+    //         files.insert(x.file.clone());
+    //     }
+    // }
+    // println!("# of uniquely mentioned files: {}", files.len());
 }
 
 fn summarize_center(text: &str, border_lines: usize) -> String {
@@ -714,22 +1078,32 @@ fn summarize_border(text: &str, border_lines: isize) -> String {
     }
 }
 
-fn handle_file(mut file: File) -> Result<Relations, serde_json::Error> {
+fn handle_file(mut file: File) -> Result<Vec<PerModule<Vec<Relation>>>, serde_json::Error> {
     // let c =  Read::by_ref(&mut left).bytes().count();
     // println!("left: {:?} {:?}", left, c);
     // left.seek(SeekFrom::Start(0)).unwrap();
     let c = file.seek(SeekFrom::End(0)).unwrap();
     file.seek(SeekFrom::Start(0)).unwrap();
-    println!("file: {:?} {:?}", file, c);
+    eprintln!("file: {:?} {:?}", file, c);
 
-    if let Ok(x) = serde_json::from_reader::<_, Relations>(&mut file) {
+    if let Ok(x) = serde_json::from_reader::<_, RelationsWithPerfs>(&mut file) {
+        Ok(x.relations.unwrap())
+    } else if let Ok(x) = serde_json::from_reader::<_, Vec<PerModule<Vec<Relation>>>>(&mut file) {
         Ok(x)
     } else {
         file.rewind().unwrap();
         let file = Read::by_ref(&mut file);
         let r = "[".as_bytes().chain(file).chain("]".as_bytes());
-        serde_json::from_reader::<_, Relations>(r)
+        serde_json::from_reader::<_, Vec<PerModule<Vec<Relation>>>>(r)
     }
+}
+
+fn handle_file_with_perfs(mut file: File) -> Result<RelationsWithPerfs, serde_json::Error> {
+    let c = file.seek(SeekFrom::End(0)).unwrap();
+    file.seek(SeekFrom::Start(0)).unwrap();
+    eprintln!("file: {:?} {:?}", file, c);
+
+    serde_json::from_reader(&mut file)
 }
 
 #[derive(Parser, Debug)]
@@ -754,7 +1128,29 @@ enum Commands {
     },
 
     /// Statistics on relations
-    Stats { file: String },
+    Stats {
+        file: String,
+
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// Modules per commit
+    Modules { dir: String },
+
+    /// Statistics on relations
+    MultiCompareStats {
+        /// Directory that contains commit identified files that contains referential relations.
+        /// It will be used as a baseline
+        baseline_dir: String,
+
+        /// Directory that contains commit identified files that  contains referential relations.
+        /// We want to evalute those.
+        evaluated_dir: String,
+
+        #[clap(long)]
+        json: bool,
+    },
 
     /// look interactively at missed references to exactly matched declarations
     Interactive {

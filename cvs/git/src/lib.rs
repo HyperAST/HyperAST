@@ -9,6 +9,7 @@ pub mod preprocessed;
 #[cfg(test)]
 pub mod tests;
 
+use hyper_ast::utils::{MemoryUsage, Bytes};
 use maven::MD;
 extern crate test;
 
@@ -25,8 +26,20 @@ pub(crate) const MAX_REFS: usize = 10000; //4096;
 pub struct Diffs();
 pub struct Impacts();
 
+#[derive(Clone)]
 pub struct Commit {
     meta_data: MD,
     parents: Vec<git2::Oid>,
+    processing_time:u128,
+    memory_used:Bytes,
     pub ast_root: hyper_ast::store::nodes::DefaultNodeIdentifier,
+}
+
+impl Commit {
+    pub fn processing_time(&self) -> u128 {
+        self.processing_time
+    }
+    pub fn memory_used(&self) -> Bytes {
+        self.memory_used
+    }
 }

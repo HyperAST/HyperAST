@@ -25,6 +25,6 @@ serde-xml-rs = "0.5.1"
 # [profile.release]
 # debug = 1
 
-[[bin]]
-name = "bench"
-path = "src/bin/main.rs"
+# [[bin]]
+# name = "bench"
+# path = "src/bin/main.rs"
