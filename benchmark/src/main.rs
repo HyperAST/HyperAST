@@ -127,7 +127,7 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
             };
 
             let construction_time = c.1.processing_time();
-            let construction_memory_fooprint = c.1.memory_used().bytes();
+            let construction_memory_fooprint = c.1.memory_used().bytes().min(0);
             let construction_perfs = Perfs {
                 time: construction_time,
                 memory: construction_memory_fooprint.try_into().unwrap(),

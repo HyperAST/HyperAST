@@ -1618,6 +1618,8 @@ impl<'a> JavaTreeGen<'a> {
             || acc.simple.kind == Type::TypeArguments
             || acc.simple.kind == Type::ArrayInitializer
             || acc.simple.kind == Type::ReturnStatement
+            || acc.simple.kind == Type::ForStatement
+            || acc.simple.kind == Type::RequiresModifier
             || acc.simple.kind == Type::Error
         {
             // TODO maybe do something later?
