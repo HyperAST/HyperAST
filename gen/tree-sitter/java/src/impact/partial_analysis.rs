@@ -866,6 +866,23 @@ impl PartialAnalysis {
                 // not yet implemented: Program None Declarations([(None, Variable(Old(3)), Runtime([Old(2)]))]) 
                 // not yet implemented: Program None TypeDeclaration { visibility: Public, identifier: Compile(Old(11), [Old(12)], []), members: [(None, Field(Old(263)), 
                 // not yet implemented: Program None ImportDeclaration { sstatic: false, identifier: Old(4), asterisk: false }
+                // TODO aaa not yet implemented: Program File { package: None, asterisk_imports: [3], global: [], local: [] } Declarations([(None, Variable(Old(3)), Runtime([Old(2)]))])
+                (
+                    State::File {
+                        package: p,
+                        asterisk_imports,
+                        global,
+                        local,
+                    },
+                    State::Declarations(_),
+                ) => {
+                    State::File {
+                        package: p,
+                        asterisk_imports,
+                        global,
+                        local,
+                    }
+                }
                 (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
             }
         } else if kind == &Type::PackageDeclaration {
@@ -3124,6 +3141,9 @@ impl PartialAnalysis {
                     (State::None, State::Invocation(i)) if kind == &Type::IfStatement => {
                         State::None
                     }
+                    (State::None, State::Declarations(_)) if kind == &Type::IfStatement => {
+                        State::None
+                    }
                     (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind.is_simple_statement() {
@@ -4703,7 +4723,7 @@ impl PartialAnalysis {
                         if kind == &Type::BinaryExpression =>
                     {
                         State::ConstructorInvocation(t)
-                    } // not yet implemented: TernaryExpression LambdaExpression(1) ScopedIdentifier(Old(3))
+                    } // TODO aaa not yet implemented: TernaryExpression LambdaExpression(1) ScopedIdentifier(Old(3))
                     (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
                 }
             }
@@ -5703,51 +5723,31 @@ impl PartialAnalysis {
                     }
                     (
                         State::None,
-                        State::Modifiers(v,n),
+                        _,//State::Modifiers(v,n),
                     ) if kind == &Type::RequiresModifier => {
                         State::None // TODO maybe something to do
                     }
                     (
                         State::None,
-                        State::SimpleIdentifier(_, _i),
-                    ) if kind == &Type::RequiresModifier => {
-                        State::None // TODO maybe something to do
-                    }
-                    (
-                        State::None,
-                        State::ScopedIdentifier(_),
-                    ) if kind == &Type::RequiresModifier => {
-                        State::None // TODO maybe something to do
-                    }
-                    (
-                        State::None,
-                        State::None,
+                        _,
                     ) if kind == &Type::ModuleDirective => {
                         State::None // TODO maybe something to do
                     }
                     (
                         State::None,
-                        State::SimpleIdentifier(_,_),
+                        _,
                     ) if kind == &Type::ModuleDeclaration => {
                         State::None // TODO maybe something to do
                     }
                     (
                         State::None,
-                        State::Modifiers(_,_),
+                        _,
                     ) if kind == &Type::RecordDeclaration => {
                         State::None // TODO maybe something to do
                     }
-                    // not yet implemented: RecordDeclaration None SimpleIdentifier(UpperCamelCase, LabelPtr(SymbolU32 { value: 32761 }, UpperCamelCase))
                     (
                         State::None,
-                        State::SimpleIdentifier(_,_),
-                    ) if kind == &Type::RecordDeclaration => {
-                        State::None // TODO maybe something to do
-                    }
-                    // not yet implemented: ReceiverParameter None SimpleTypeIdentifier(LabelPtr(SymbolU32 { value: 349 }, UpperCamelCase))
-                    (
-                        State::None,
-                        State::SimpleTypeIdentifier(_),
+                        _,//State::SimpleTypeIdentifier(_),
                     ) if kind == &Type::ReceiverParameter => {
                         State::None // TODO maybe something to do
                     } 
