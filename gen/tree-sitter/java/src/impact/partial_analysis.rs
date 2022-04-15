@@ -575,12 +575,6 @@ impl PartialAnalysis {
                 //     }
                 // }
                 (
-                    State::None,
-                    State::None
-                ) => {
-                    State::None
-                }
-                (
                     State::File {
                         package: None,
                         asterisk_imports,
@@ -615,10 +609,15 @@ impl PartialAnalysis {
                         package: p,
                         asterisk_imports,
                         global,
-                        mut local,
+                        local,
                     },
                     State::None,
-                ) if kind == &Type::Program => State::None,
+                ) if kind == &Type::Program => State::File {
+                    package: p,
+                    asterisk_imports,
+                    global,
+                    local,
+                },
                 // (
                 //     State::File {
                 //         package: p,
@@ -857,6 +856,16 @@ impl PartialAnalysis {
                         local,
                     }
                 }
+                // SHOULD not be needed if no rules of Program resturn None
+                // (
+                //     State::None,
+                //     State::None
+                // ) => {
+                //     State::None
+                // }
+                // not yet implemented: Program None Declarations([(None, Variable(Old(3)), Runtime([Old(2)]))]) 
+                // not yet implemented: Program None TypeDeclaration { visibility: Public, identifier: Compile(Old(11), [Old(12)], []), members: [(None, Field(Old(263)), 
+                // not yet implemented: Program None ImportDeclaration { sstatic: false, identifier: Old(4), asterisk: false }
                 (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
             }
         } else if kind == &Type::PackageDeclaration {
@@ -1776,6 +1785,21 @@ impl PartialAnalysis {
                         }
                     }
                 }
+                // not yet implemented: FieldDeclaration Declaration { visibility: None, kind: Runtime([2]), identifier: None } None 
+                (
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier: Declarator::None,
+                    },
+                    State::None,
+                ) if kind == &Type::FieldDeclaration => {
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier: Declarator::None,
+                    }
+                }
                 (State::Declarations(mut v), State::Declarator(Declarator::Variable(i)))
                     if kind == &Type::FieldDeclaration || kind == &Type::ConstantDeclaration =>
                 {
@@ -1950,6 +1974,29 @@ impl PartialAnalysis {
                     State::None,
                 ) if kind == &Type::AnnotationTypeElementDeclaration && i != Declarator::None => {
                     // TODO do something with default value
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier: i,
+                    }
+                }
+                // not yet implemented: AnnotationTypeElementDeclaration Declaration { visibility: None, kind: Runtime([2]), identifier: Field(4) } Dimensions 
+                (
+                    State::Declaration {
+                        visibility,
+                        kind: t,
+                        identifier: i,
+                    },
+                    State::Dimensions,
+                ) if kind == &Type::AnnotationTypeElementDeclaration => {
+                    let t = match t {
+                        DeclType::Runtime(v) => DeclType::Runtime(
+                            v.iter()
+                                .map(|t| acc.solver.intern_ref(RefsEnum::Array(*t)))
+                                .collect(),
+                        ),
+                        DeclType::Compile(_, _, _) => todo!(),
+                    };
                     State::Declaration {
                         visibility,
                         kind: t,
@@ -4058,6 +4105,7 @@ impl PartialAnalysis {
                             State::Invocation(_) => (),
                             State::ConstructorInvocation(_) => (),
                             State::LambdaExpression(_) => (),
+                            State::MethodReference(_) => (),
                             // State::None => (), // TODO check
                             x => panic!("{:?}", x),
                         };
@@ -4346,6 +4394,7 @@ impl PartialAnalysis {
                             State::Invocation(_) => (),
                             State::ScopedIdentifier(_) => (),
                             State::LambdaExpression(_) => (),
+                            State::MethodReference(_) => (),
                             State::None => panic!(),
                             x => todo!("{:?}", x),
                         };
@@ -4654,7 +4703,7 @@ impl PartialAnalysis {
                         if kind == &Type::BinaryExpression =>
                     {
                         State::ConstructorInvocation(t)
-                    }
+                    } // not yet implemented: TernaryExpression LambdaExpression(1) ScopedIdentifier(Old(3))
                     (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
                 }
             }
@@ -5389,6 +5438,7 @@ impl PartialAnalysis {
                             State::Invocation(_) => (),
                             State::ConstructorInvocation(_) => (),
                             State::LambdaExpression(_) => (),
+                            State::MethodReference(_) => (),
                             State::None => (), // TODO check
                             x => panic!("{:?}", x),
                         };
@@ -5687,6 +5737,20 @@ impl PartialAnalysis {
                     ) if kind == &Type::RecordDeclaration => {
                         State::None // TODO maybe something to do
                     }
+                    // not yet implemented: RecordDeclaration None SimpleIdentifier(UpperCamelCase, LabelPtr(SymbolU32 { value: 32761 }, UpperCamelCase))
+                    (
+                        State::None,
+                        State::SimpleIdentifier(_,_),
+                    ) if kind == &Type::RecordDeclaration => {
+                        State::None // TODO maybe something to do
+                    }
+                    // not yet implemented: ReceiverParameter None SimpleTypeIdentifier(LabelPtr(SymbolU32 { value: 349 }, UpperCamelCase))
+                    (
+                        State::None,
+                        State::SimpleTypeIdentifier(_),
+                    ) if kind == &Type::ReceiverParameter => {
+                        State::None // TODO maybe something to do
+                    } 
                     (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
                 }
             }

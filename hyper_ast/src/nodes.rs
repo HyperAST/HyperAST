@@ -335,9 +335,8 @@ impl Space {
                 '\t' => Space::Tabulation,
                 CR => Space::CariageReturn,
                 x => {
-                    use std::io::Write;
-                    stdout().write(&[x as u8]).unwrap();
-                    panic!("{}", x as u8)
+                    log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+                    panic!("{} {:?}", x as u8, spaces)
                 }
             })
             .collect()
