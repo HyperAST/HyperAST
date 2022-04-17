@@ -2,6 +2,8 @@
 #![feature(generic_associated_types)]
 #![feature(let_chains)]
 #![feature(backtrace)]
+#![feature(generic_const_exprs)]
+
 pub mod compat;
 pub mod full;
 pub mod hashed;

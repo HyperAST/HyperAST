@@ -1,4 +1,4 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, hash::{Hash, Hasher}};
 
 
 const T: [u8; 256] = [
@@ -19,7 +19,6 @@ const T: [u8; 256] = [
 
 pub fn pearson<T:Borrow<[u8]>>(x0:usize,x:T) -> u8 {
     let mut ret = T[x0];
-
     // use std::mem::size_of_val;
     //   for j in 0..size_of_val(&ret) {
     //     // Change the first byte

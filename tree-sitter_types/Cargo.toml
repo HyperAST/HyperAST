@@ -10,7 +10,7 @@ edition = "2021"
 # atomic-counter = "1.0.1"
 # num = "0.4.0"
 # bitvec = "0.22.3"
-# stack-graphs = "0.3.0"
+# stack-graphs = "=0.3.0"
 # rusted_gumtree_core = { path = "../../../core" }
 # controlled-option = "0.4.1"
 # string-interner = "0.14.0"

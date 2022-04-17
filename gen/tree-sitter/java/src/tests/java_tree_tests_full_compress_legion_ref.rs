@@ -80,7 +80,7 @@ fn test_cases() {
 #[test]
 fn test_equals() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
-    let text = CASE_28.as_bytes();
+    let text = CASE_1.as_bytes();
     let mut parser = Parser::new();
 
     {

@@ -4,7 +4,7 @@ use bitvec::order::Lsb0;
 use enumset::{enum_set, EnumSet, EnumSetType};
 use hyper_ast::types::{LabelStore, Type};
 
-use crate::impact::element::{Arguments, ExplorableRef};
+use crate::impact::{element::{Arguments, ExplorableRef, ListSet}, solver::{SolvingAssocTable, SolvingResult}};
 
 use super::{
     declaration::{DeclType, Declarator, DisplayDecl},
@@ -94,7 +94,7 @@ const FAIL_ON_BAD_CST_NODE: bool = false;
 impl PartialAnalysis {
     // apply before commiting/saving subtree
     pub fn resolve(mut self) -> Self {
-        let mut cache: HashMap<usize, MultiResult<RefPtr>> = Default::default();
+        let mut cache: SolvingAssocTable = Default::default();
         log::debug!("resolve : {:?}", self.current_node);
         if let State::File {
             asterisk_imports,
@@ -120,7 +120,7 @@ impl PartialAnalysis {
                         [package, root]
                             .iter()
                             .map(|x| *x)
-                            .collect::<MultiResult<RefPtr>>(),
+                            .collect(),
                     );
                     // TODO explain usage
                     if package == jlang {
@@ -140,18 +140,21 @@ impl PartialAnalysis {
                             ))
                         });
                         let a = a.chain([package, root].into_iter());
-                        let refs: MultiResult<RefPtr> = a.collect();
+                        let refs: ListSet<RefPtr> = a.collect();
                         refs.iter().for_each(|x| {
                             let x = self.solver.nodes.with(*x);
                             log::trace!("#| {:?}", x);
                         });
-                        cache.insert(mm, refs);
+                        let result = self.solver.intern(RefsEnum::Or(
+                            refs.iter().map(|x|*x).collect()
+                        ));
+                        cache.insert(mm, SolvingResult::new(result, refs));
                     };
                 }
             } else {
                 cache.insert(
                     mask,
-                    [mm].iter().map(|x| *x).collect::<MultiResult<RefPtr>>(),
+                    [mm].iter().map(|x| *x).collect(),
                 );
             }
         }
