@@ -42,4 +42,4 @@ strum = "0.23.0"
 strum_macros = "0.23.1"
 
 # # handle: use the handle of their arena implementation
-stack-graphs = "0.6.0"
+stack-graphs = "=0.3.0"
