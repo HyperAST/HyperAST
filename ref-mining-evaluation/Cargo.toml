@@ -24,6 +24,8 @@ serde_json = "1.0.79"
 clap = { version = "3.1.6",features = ["derive"] }
 termion = "1.5.6"
 
+rayon = "1.5.2"
+
 [build-dependencies]
 
 # [profile.release]

@@ -13,6 +13,7 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
+use rayon::iter::{IntoParallelRefIterator, IntoParallelIterator, ParallelIterator};
 use relations::{Info, Perfs};
 use rusted_gumtree_cvs_git::git::{fetch_repository, read_position, read_position_floating_lines};
 use serde::{Deserialize, Serialize};
@@ -173,39 +174,38 @@ fn main() {
                     files.entry(x.file_name()).or_insert((None, None)).1 = Some(x.path());
                 }
             });
-            let comps = files.into_iter().filter_map(|(commit, v)| {
+            let files:Vec<_> = files.into_iter().filter_map(|(c,v)|{
                 if let (Some(baseline), Some(evaluated)) = v {
-                    let bl_rs =
-                        handle_file_with_perfs(File::open(baseline).expect("should be a file"))
-                            .map_err(|e| eprintln!("can't read baseline relations: {}", e))
-                            .ok()?;
-                    let t_rs =
-                        handle_file_with_perfs(File::open(evaluated).expect("should be a file"))
-                            .map_err(|e| eprintln!("can't read evaluated relations: {}", e))
-                            .ok()?;
-                    let bl_commit = bl_rs.info.as_ref().unwrap().commit.clone();
-                    let t_commit = t_rs.info.as_ref().unwrap().commit.clone();
-                    let commit: String = commit.to_string_lossy().into_owned();
-                    assert_eq!(commit, bl_commit);
-                    assert_eq!(commit, t_commit);
-
-                    let x = Versus {
-                        baseline: bl_rs,
-                        evaluated: t_rs,
-                    };
-                    Some(CommitCompStats::from(x))
+                    Some((c.to_string_lossy().into_owned(),(baseline,evaluated)))
                 } else {
                     None
                 }
+            }).collect();
+            let comps = files.into_par_iter().filter_map(|(commit, (baseline,evaluated))| {
+                let bl_rs =
+                    handle_file_with_perfs(File::open(baseline).expect("should be a file"))
+                        .map_err(|e| eprintln!("can't read baseline relations: {}", e))
+                        .ok()?;
+                let t_rs =
+                    handle_file_with_perfs(File::open(evaluated).expect("should be a file"))
+                        .map_err(|e| eprintln!("can't read evaluated relations: {}", e))
+                        .ok()?;
+                let bl_commit = bl_rs.info.as_ref().unwrap().commit.clone();
+                let t_commit = t_rs.info.as_ref().unwrap().commit.clone();
+                assert_eq!(commit, bl_commit);
+                assert_eq!(commit, t_commit);
+
+                let x = Versus {
+                    baseline: bl_rs,
+                    evaluated: t_rs,
+                };
+                Some(CommitCompStats::from(x))
             });
             if *json {
-                let mut res = vec![];
-                comps.for_each(|x| {
-                    res.push(x);
-                });
+                let res:Vec<_> = comps.collect();
                 println!("{}", serde_json::to_string_pretty(&res).unwrap());
             } else {
-                comps.for_each(|x| {
+                comps.collect::<Vec<_>>().iter().for_each(|x| {
                     println!("no: {:?}", x);
                 });
             }
