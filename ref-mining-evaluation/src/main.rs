@@ -177,10 +177,12 @@ fn main() {
                 if let (Some(baseline), Some(evaluated)) = v {
                     let bl_rs =
                         handle_file_with_perfs(File::open(baseline).expect("should be a file"))
-                            .unwrap();
+                            .map_err(|e| eprintln!("can't read baseline relations: {}", e))
+                            .ok()?;
                     let t_rs =
                         handle_file_with_perfs(File::open(evaluated).expect("should be a file"))
-                            .unwrap();
+                            .map_err(|e| eprintln!("can't read evaluated relations: {}", e))
+                            .ok()?;
                     let bl_commit = bl_rs.info.as_ref().unwrap().commit.clone();
                     let t_commit = t_rs.info.as_ref().unwrap().commit.clone();
                     let commit: String = commit.to_string_lossy().into_owned();
