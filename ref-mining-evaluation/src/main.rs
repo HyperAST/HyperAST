@@ -110,28 +110,31 @@ fn main() {
             // }
             // println!("# of uniquely mentioned files: {}", files.len());
         }
-        Commands::Modules { dir, .. } => {
+        Commands::Modules { dir, refs, .. } => {
+            let refs = *refs;
             let dir = std::fs::read_dir(dir).expect("should be a dir");
             for file in dir
                 .into_iter()
                 .filter(|x| x.is_ok() && x.as_ref().unwrap().file_type().unwrap().is_file())
             {
                 let relations = handle_file_with_perfs(
-                    File::open(file.unwrap().path())
-                        .expect("should be a file"),
+                    File::open(file.unwrap().path()).expect("should be a file"),
                 )
                 .unwrap();
 
                 let mut res = relations.info.unwrap().commit;
-                relations
-                    .relations
-                    .into_iter()
-                    .flat_map(|x| x.into_iter().map(|x| x.module))
-                    .for_each(|x| {
+                if let Some(relations) = relations.relations {
+                    if refs && relations.is_empty() {
+                        continue;
+                    }
+                    relations.into_iter().for_each(|x| {
                         res.push(' ');
-                        res += &x;
+                        res += &x.module;
                     });
-                println!("{}", res);
+                    println!("{}", res);
+                } else if !refs {
+                    println!("{}", res);
+                }
             }
             // println!("{:#?}", relations);
             // println!(
@@ -1137,7 +1140,11 @@ enum Commands {
     },
 
     /// Modules per commit
-    Modules { dir: String },
+    Modules {
+        dir: String,
+        #[clap(long)]
+        refs: bool,
+    },
 
     /// Statistics on relations
     MultiCompareStats {
