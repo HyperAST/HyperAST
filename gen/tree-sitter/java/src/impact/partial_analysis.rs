@@ -91,6 +91,19 @@ impl Default for PartialAnalysis {
 
 const FAIL_ON_BAD_CST_NODE: bool = false;
 
+
+
+macro_rules! missing_rule {
+    () => {
+        log::error!("missing rule");
+        State::None
+    };
+    ($($arg:tt)+) => {{
+        log::error!($($arg)+);
+        State::None
+    }};
+}
+
 impl PartialAnalysis {
     // apply before commiting/saving subtree
     pub fn resolve(mut self) -> Self {
@@ -261,12 +274,13 @@ impl PartialAnalysis {
                                     i,
                                 )
                             } else {
-                                todo!()
-                                // DeclType::Compile(
-                                //     *t,
-                                //     s.as_ref().map(|x|*x),
-                                //     i.iter().map(|x|*x).collect(),
-                                // )
+                                log::warn!("resolution of local type decl without a package should not append");
+                                
+                                DeclType::Compile(
+                                    *t,
+                                    s.iter().map(|x|*x).collect(),
+                                    i.iter().map(|x|*x).collect(),
+                                )
                             }
                         }
                     };
@@ -883,7 +897,7 @@ impl PartialAnalysis {
                         local,
                     }
                 }
-                (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             }
         } else if kind == &Type::PackageDeclaration {
             let mut remapper = acc.solver.extend(&self.solver);
@@ -908,7 +922,7 @@ impl PartialAnalysis {
                     State::PackageDeclaration(i)
                 }
                 (State::None, State::Annotation) => State::None,
-                (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             }
         } else if kind == &Type::ImportDeclaration {
             let mut remapper = acc.solver.extend(&self.solver);
@@ -977,7 +991,7 @@ impl PartialAnalysis {
                         asterisk: true,
                     }
                 }
-                (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             }
         } else if kind.is_type_declaration() {
             match current_node.map(|x| Old(x), |x| x) {
@@ -1339,7 +1353,9 @@ impl PartialAnalysis {
                                                 members.push((v, d, t));
                                             }
                                         }
-                                        x => todo!("{:?}", x),
+                                        x => {
+                                            log::error!("executable in declarations of a type declaration should handle: {:?}", x)
+                                        }
                                     }
                                 }
                                 Declarator::Field(d) => {
@@ -1387,7 +1403,9 @@ impl PartialAnalysis {
                                         members.push((v, d, t));
                                     }
                                 }
-                                x => panic!("{:?}", x),
+                                x => {
+                                    log::error!("type declaration should handle the following declaration {:?}", x)
+                                }
                             }
                         }
                         // println!("members added");
@@ -1399,7 +1417,7 @@ impl PartialAnalysis {
                     }
                     acc.current_node.take()
                 }
-                y => todo!("{:?} {:?} {:?}", kind, &acc.current_node, y),
+                y => missing_rule!("{:?} {:?} {:?}", kind, &acc.current_node, y),
             }
         } else if kind.is_type_body() {
             let mut remapper = acc.solver.extend(&self.solver);
@@ -1549,8 +1567,8 @@ impl PartialAnalysis {
                     }
                     State::Declarations(v)
                 }
-                (rest, State::None) if kind == &Type::EnumBodyDeclarations => {
-                    let mut v = match rest {
+                (rest, State::None) if kind == &Type::EnumBody => {
+                    let v = match rest {
                         State::Declarations(u) => u,
                         State::None => vec![],
                         _ => panic!(),
@@ -1636,7 +1654,7 @@ impl PartialAnalysis {
                     // TODO make a member declaration and make use of visibilty
                     State::Declarations(v)
                 }
-                (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             }
         } else if kind.is_value_member() {
             let mut remapper = acc.solver.extend(&self.solver);
@@ -1647,19 +1665,19 @@ impl PartialAnalysis {
             }
             // if kind == &Type::FieldDeclaration {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
             // } else if kind == &Type::ConstantDeclaration {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
             // } else if kind == &Type::EnumConstant {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
             // } else if kind == &Type::AnnotationTypeElementDeclaration {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
             // } else {
             //     panic!("{:?}",kind)
@@ -2035,7 +2053,7 @@ impl PartialAnalysis {
                         identifier: i,
                     }
                 }
-                (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             }
         } else if kind.is_executable_member() {
             let mut remapper = acc.solver.extend(&self.solver);
@@ -2046,11 +2064,11 @@ impl PartialAnalysis {
             }
             // if kind == &Type::MethodDeclaration {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
             // } else if kind == &Type::ConstructorDeclaration {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
             // } else {
             //     panic!("{:?}",kind)
@@ -2357,7 +2375,7 @@ impl PartialAnalysis {
                             parameters: p,
                         }
                     } else {
-                        todo!()
+                        missing_rule!("{:?} {:?} Throws", kind, x)
                     }
                 }
                 (
@@ -2509,7 +2527,7 @@ impl PartialAnalysis {
                         parameters,
                     }
                 }
-                (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             }
         } else if kind.is_statement() {
             if kind.is_declarative_statement() {
@@ -2593,27 +2611,27 @@ impl PartialAnalysis {
                         (State::ScopedTypeIdentifier(t), State::None) => {
                             State::ScopedTypeIdentifier(t)
                         }
-                        (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                        (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                     }
                 // } else if kind == &Type::TryWithResourcesStatement {
                 //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-                //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 //     }
                 // } else if kind == &Type::CatchClause {
                 //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-                //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 //     }
                 // } else if kind == &Type::ForStatement {
                 //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-                //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 //     }
                 // } else if kind == &Type::EnhancedForStatement {
                 //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-                //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 //     }
                 // } else if kind == &Type::Scope {
                 //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-                //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 //     }
                 } else {
                     // panic!("{:?}",kind)
@@ -2845,7 +2863,7 @@ impl PartialAnalysis {
                         {
                             State::None
                         }
-                        (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                        (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                     }
                 }
             } else if kind.is_block_related() {
@@ -2860,7 +2878,7 @@ impl PartialAnalysis {
                     match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
                         (State::None, State::Modifiers(_, _)) => State::None,
                         (State::None, State::None) => State::None,
-                        (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                        (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                     }
                 } else if kind == &Type::ConstructorBody {
                     match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -2943,7 +2961,7 @@ impl PartialAnalysis {
                             State::None
                         }
                         (State::None, State::None) => State::None,
-                        (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                        (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                     }
                 } else if kind == &Type::Block {
                     match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -3012,7 +3030,7 @@ impl PartialAnalysis {
                             State::None
                         }
                         (State::None, State::None) => State::None,
-                        (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                        (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                     }
                 } else if kind == &Type::SwitchBlockStatementGroup {
                     match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -3057,13 +3075,13 @@ impl PartialAnalysis {
                             State::None
                         }
                         (State::None, State::None) => State::None,
-                        (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                        (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                     }
                 } else if kind == &Type::SwitchBlock {
                     // TODO retrieve decls not in Block from SwitchBlockStatementGroup
                     match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
                         (rest, State::None) => rest, // TODO handle fall through declarations
-                        (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                        (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                     }
                 } else {
                     panic!("{:?}", kind)
@@ -3144,7 +3162,7 @@ impl PartialAnalysis {
                     (State::None, State::Declarations(_)) if kind == &Type::IfStatement => {
                         State::None
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind.is_simple_statement() {
                 let mut remapper = acc.solver.extend(&self.solver);
@@ -3181,10 +3199,10 @@ impl PartialAnalysis {
                         }
                         State::None
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else {
-                panic!("{:?}", kind)
+                missing_rule!("{:?} should be block related", kind)
             }
         } else if kind.is_parameter() {
             let mut remapper = acc.solver.extend(&self.solver);
@@ -3251,7 +3269,7 @@ impl PartialAnalysis {
                             State::MethodReference(_) => (),
                             State::ScopedIdentifier(_) => (), // not sure
                             State::LambdaExpression(_) => (),
-                            x => todo!("{:?}", x),
+                            x => log::error!("{:?} Declaration {:?}", kind, x),
                         };
                         let d = Declarator::Variable(i);
                         State::Declaration {
@@ -3260,7 +3278,7 @@ impl PartialAnalysis {
                             identifier: d,
                         }
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::FormalParameter {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -3397,7 +3415,7 @@ impl PartialAnalysis {
                             identifier: i,
                         }
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::TypeParameter {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -3415,7 +3433,7 @@ impl PartialAnalysis {
                         // TODO use type bound
                         State::SimpleIdentifier(case, i)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::SpreadParameter {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -3469,7 +3487,7 @@ impl PartialAnalysis {
                                     //     identifier: Declarator::None,
                                     // }
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::CatchFormalParameter {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -3490,7 +3508,7 @@ impl PartialAnalysis {
                             identifier: i,
                         }
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else {
                 panic!("{:?}", kind)
@@ -3609,7 +3627,7 @@ impl PartialAnalysis {
                         let i = mm!();
                         State::LambdaExpression(i)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::ArrayCreationExpression {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -3685,7 +3703,7 @@ impl PartialAnalysis {
                     //     // TODO use dimension
                     //     State::ConstructorInvocation(i)
                     // }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::ObjectCreationExpression {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -3814,41 +3832,41 @@ impl PartialAnalysis {
                     {
                         State::None
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
 
             // }else if kind == &Type::TernaryExpression {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
             // } else if kind == &Type::BinaryExpression {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
             // } else if kind == &Type::AssignmentExpression {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
             // } else if kind == &Type::VariableDeclarator {
             // match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //     (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //     (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             // }
             // } else if kind == &Type::InstanceofExpression {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
 
             // } else if kind == &Type::CastExpression {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
             // } else if kind == &Type::UpdateExpression {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
             // } else if kind == &Type::ParenthesizedExpression {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
             } else if kind == &Type::MethodInvocation {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -3973,7 +3991,7 @@ impl PartialAnalysis {
                                 .intern_ref(RefsEnum::Invocation(o, i, Arguments::Given(vec![].into_boxed_slice())));
                         State::ScopedIdentifier(r)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::MethodReference {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -4006,7 +4024,7 @@ impl PartialAnalysis {
                             .intern_ref(RefsEnum::ConstructorInvocation(o, Arguments::Unknown));
                         State::MethodReference(r)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::ExplicitConstructorInvocation {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -4054,20 +4072,20 @@ impl PartialAnalysis {
                             .intern_ref(RefsEnum::ConstructorInvocation(i, Arguments::Given(p)));
                         State::ConstructorInvocation(i)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
 
             // } else if kind == &Type::ClassLiteral {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
             // } else if kind == &Type::FieldAccess {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
             // } else if kind == &Type::ArrayAccess {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
             } else {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -4504,6 +4522,11 @@ impl PartialAnalysis {
                     {
                         State::LambdaExpression(i)
                     }
+                    (State::LambdaExpression(i), State::ScopedIdentifier(_))
+                        if kind == &Type::TernaryExpression =>
+                    {
+                        State::LambdaExpression(i)
+                    }
                     (State::ConstructorInvocation(i), State::Invocation(_))
                         if kind == &Type::TernaryExpression =>
                     {
@@ -4724,7 +4747,7 @@ impl PartialAnalysis {
                     {
                         State::ConstructorInvocation(t)
                     } // TODO aaa not yet implemented: TernaryExpression LambdaExpression(1) ScopedIdentifier(Old(3))
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             }
         } else if kind == &Type::Directory {
@@ -4962,7 +4985,7 @@ impl PartialAnalysis {
                         global_decls,
                     }
                 }
-                (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             }
         }
         } else {
@@ -5008,7 +5031,7 @@ impl PartialAnalysis {
                     {
                         State::Annotation
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::AnnotationArgumentList
                 || kind == &Type::ElementValuePair
@@ -5088,7 +5111,7 @@ impl PartialAnalysis {
                             _ => panic!(),
                         }
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::ScopedAbsoluteIdentifier {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5105,7 +5128,7 @@ impl PartialAnalysis {
                         let i = acc.solver.intern(RefsEnum::ScopedIdentifier(o, i));
                         State::ScopedIdentifier(i)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::ScopedIdentifier {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5123,7 +5146,7 @@ impl PartialAnalysis {
                         let i = acc.solver.intern(RefsEnum::ScopedIdentifier(o, i));
                         State::ScopedIdentifier(i)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::ScopedTypeIdentifier {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5151,7 +5174,7 @@ impl PartialAnalysis {
                     {
                         State::ScopedTypeIdentifier(o)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::CatchType {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5176,7 +5199,7 @@ impl PartialAnalysis {
                         v.push(i);
                         State::CatchTypes(v)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::ArrayType {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5202,7 +5225,7 @@ impl PartialAnalysis {
                         let i = acc.solver.intern(RefsEnum::Array(i));
                         State::ScopedTypeIdentifier(i)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::ResourceSpecification || kind == &Type::FormalParameters {
                 // TODO look like local decl
@@ -5246,7 +5269,7 @@ impl PartialAnalysis {
                         };
                         State::FormalParameters(v)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::Wildcard
                 || kind == &Type::WildcardSuper
@@ -5295,7 +5318,7 @@ impl PartialAnalysis {
                     {
                         State::WildcardSuper(i)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::SwitchLabel {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5311,7 +5334,7 @@ impl PartialAnalysis {
                     (State::None, State::SimpleIdentifier(_, _)) if kind == &Type::SwitchLabel => {
                         State::None
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::Modifiers {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5336,7 +5359,7 @@ impl PartialAnalysis {
                     (State::Modifiers(v, n), State::Annotation) if kind == &Type::Modifiers => {
                         State::Modifiers(v, n)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::ArgumentList {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5381,7 +5404,7 @@ impl PartialAnalysis {
                         v.push(i);
                         State::Arguments(v)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::TypeArguments {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5410,7 +5433,7 @@ impl PartialAnalysis {
                         v.push(t);
                         State::TypeArguments(v)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::InferredParameters {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5428,7 +5451,7 @@ impl PartialAnalysis {
                         v.push((Visibility::None, i, DeclType::Runtime(vec![].into())));
                         State::Declarations(v)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::TypeParameters {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5441,7 +5464,7 @@ impl PartialAnalysis {
                         v.push((i, vec![].into_boxed_slice()));
                         State::TypeParameters(v)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::ArrayInitializer {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5464,7 +5487,7 @@ impl PartialAnalysis {
                         };
                         State::None
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::Throws {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5475,7 +5498,7 @@ impl PartialAnalysis {
                     (rest, State::ScopedTypeIdentifier(i)) if kind == &Type::Throws => {
                         State::Throws
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::VariableDeclarator {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5503,7 +5526,7 @@ impl PartialAnalysis {
                     {
                         State::Declarator(Declarator::Variable(v))
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::DimensionsExpr {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5519,7 +5542,7 @@ impl PartialAnalysis {
                         };
                         State::ScopedIdentifier(i)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::GenericType {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5549,7 +5572,7 @@ impl PartialAnalysis {
                         // TODO use arguments
                         State::ScopedTypeIdentifier(t)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::TypeBound {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5562,7 +5585,7 @@ impl PartialAnalysis {
                         // TODO propag to use for solving refs
                         State::TypeBound
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::Superclass {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5574,7 +5597,7 @@ impl PartialAnalysis {
                         let i = sync!(i);
                         State::ScopedTypeIdentifier(i)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::SuperInterfaces || kind == &Type::ExtendsInterfaces {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5602,7 +5625,7 @@ impl PartialAnalysis {
                         v.push(t);
                         State::Interfaces(v)
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -5751,7 +5774,7 @@ impl PartialAnalysis {
                     ) if kind == &Type::ReceiverParameter => {
                         State::None // TODO maybe something to do
                     } 
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             }
         };

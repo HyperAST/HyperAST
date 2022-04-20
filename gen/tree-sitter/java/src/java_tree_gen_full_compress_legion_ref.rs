@@ -11,13 +11,11 @@ use std::{
 
 use hyper_ast::{nodes::IoOut, store::labels::LabelStore};
 use legion::{
-    storage::{Archetype, Component, IntoComponentSource},
+    storage::{Archetype, Component},
     world::{ComponentError, EntityLocation, EntryRef},
-    EntityStore,
 };
-use log::debug;
 use num::ToPrimitive;
-use string_interner::{DefaultHashBuilder, DefaultSymbol, StringInterner, Symbol as _};
+use string_interner::{DefaultHashBuilder, DefaultSymbol};
 use tree_sitter::{Language, Parser, TreeCursor};
 use tuples::CombinConcat;
 
@@ -38,22 +36,18 @@ use hyper_ast::{
     },
     types::{
         LabelStore as LabelStoreTrait,
-        Labeled,
-        NodeStoreMut as NodeStoreMutTrait,
         Tree,
         // NodeStore as NodeStoreTrait,
         Type,
         Typed,
-        VersionedNodeStore,
-        WithChildren,
     },
 };
 
 use crate::{
     full::FullNode,
-    impact::{element::RefsEnum, elements::*, partial_analysis::PartialAnalysis},
+    impact::{partial_analysis::PartialAnalysis},
     store::vec_map_store::Symbol,
-    utils::{self, clamp_u64_to_u32, make_hash},
+    utils::{self, clamp_u64_to_u32},
 };
 
 pub fn hash32<T: ?Sized + Hash>(t: &T) -> u32 {
@@ -1363,51 +1357,19 @@ impl<'a> JavaTreeGen<'a> {
 
         match full_node.local.ana.as_ref() {
             Some(x) => {
-                debug!("refs in file:",);
+                log::debug!("refs in file:",);
                 for x in x.display_refs(&self.stores.label_store) {
-                    debug!("    {}", x);
+                    log::debug!("    {}", x);
                 }
-                debug!("decls in file:",);
+                log::debug!("decls in file:",);
                 for x in x.display_decls(&self.stores.label_store) {
-                    debug!("    {}", x);
+                    log::debug!("    {}", x);
                 }
             }
-            None => debug!("None"),
+            None => log::debug!("None"),
         };
 
         full_node
-    }
-
-    pub fn main() {
-        let mut parser = Parser::new();
-        parser.set_language(unsafe { tree_sitter_java() }).unwrap();
-
-        let text = {
-            let source_code1 = "class A {void test() {}}";
-            source_code1.as_bytes()
-        };
-        // let mut parser: Parser, old_tree: Option<&Tree>
-        let tree = parser.parse(text, None).unwrap();
-        let mut stores = SimpleStores {
-            label_store: LabelStore::new(),
-            type_store: TypeStore {},
-            node_store: NodeStore::new(),
-        };
-        let mut md_cache = Default::default();
-        let mut java_tree_gen = JavaTreeGen {
-            line_break: "\n".as_bytes().to_vec(),
-            stores: &mut stores,
-            md_cache: &mut md_cache,
-        };
-        let _full_node = java_tree_gen.generate_file(b"", text, tree.walk());
-
-        // print_tree_structure(
-        //     &java_tree_gen.stores.node_store,
-        //     &_full_node.local.compressed_node,
-        // );
-
-        let tree = parser.parse(text, Some(&tree)).unwrap();
-        let _full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     }
 
     fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {
@@ -1592,12 +1554,15 @@ impl<'a> JavaTreeGen<'a> {
             || acc.simple.kind == Type::FormalParameters
             || acc.simple.kind == Type::AnnotationArgumentList
         {
-            assert!(acc
-                .simple
-                .children
-                .iter()
-                .all(|x| { !insertion.resolve(*x).has_children() }));
-            // TODO decls
+            if acc
+                    .simple
+                    .children
+                    .iter()
+                    .all(|x| !insertion.resolve(*x).has_children())
+            {
+                // eg. an empty body/block/paramlist/...
+                log::error!("{:?} should only contains leafs", &acc.simple.kind);
+            }
 
             Some(PartialAnalysis::init(&acc.simple.kind, None, |x| {
                 label_store.get_or_insert(x)
@@ -1625,16 +1590,16 @@ impl<'a> JavaTreeGen<'a> {
             // TODO maybe do something later?
             None
         } else {
-            assert!(
-                acc.simple.children.is_empty()
-                    || !acc
-                        .simple
-                        .children
-                        .iter()
-                        .all(|x| { !insertion.resolve(*x).has_children() }),
-                "{:?}",
-                &acc.simple.kind
-            );
+            if !acc.simple.children.is_empty()
+                && acc
+                    .simple
+                    .children
+                    .iter()
+                    .all(|x| !insertion.resolve(*x).has_children())
+            {
+                // eg. an empty body/block/paramlist/...
+                log::error!("{:?} should only contains leafs", &acc.simple.kind);
+            }
             None
         };
         // TODO resolution now?
@@ -1677,57 +1642,57 @@ impl<'a> JavaTreeGen<'a> {
             Some(ana) if &acc.simple.kind == &Type::MethodDeclaration => {
                 // debug!("refs in method decl:");
                 // for x in ana.display_refs(&self.stores.label_store) {
-                //     debug!("    {}", x);
+                //     log::debug!("    {}", x);
                 // }
                 let ana = ana.resolve();
                 // debug!("refs in method decl after resolution:");
                 // for x in ana.display_refs(&self.stores.label_store) {
-                //     debug!("    {}", x);
+                //     log::debug!("    {}", x);
                 // }
                 Some(ana)
             }
             Some(ana) if &acc.simple.kind == &Type::ConstructorDeclaration => {
                 // debug!("refs in construtor decl:");
                 // for x in ana.display_refs(&self.stores.label_store) {
-                //     debug!("    {}", x);
+                //     log::debug!("    {}", x);
                 // }
                 // debug!("decls in construtor decl");
                 // for x in ana.display_decls(&self.stores.label_store) {
-                //     debug!("    {}", x);
+                //     log::debug!("    {}", x);
                 // }
                 let ana = ana.resolve();
                 // debug!("refs in construtor decl after resolution:");
                 // for x in ana.display_refs(&self.stores.label_store) {
-                //     debug!("    {}", x);
+                //     log::debug!("    {}", x);
                 // }
                 Some(ana)
             }
             Some(ana) if &acc.simple.kind == &Type::Program => {
-                debug!("refs in program");
+                log::debug!("refs in program");
                 for x in ana.display_refs(&self.stores.label_store) {
-                    debug!("    {}", x);
+                    log::debug!("    {}", x);
                 }
-                debug!("decls in program");
+                log::debug!("decls in program");
                 for x in ana.display_decls(&self.stores.label_store) {
-                    debug!("    {}", x);
+                    log::debug!("    {}", x);
                 }
                 let ana = ana.resolve();
-                debug!("refs in program after resolve");
+                log::debug!("refs in program after resolve");
                 for x in ana.display_refs(&self.stores.label_store) {
-                    debug!("    {}", x);
+                    log::debug!("    {}", x);
                 }
                 // TODO assert that ana.solver.refs does not contains mentions to ?.this
                 Some(ana)
             }
             // Some(ana) if &acc.simple.kind == &Type::Directory => {
-            //     debug!("refs in directory");
+            //     log::debug!("refs in directory");
             //
             // for x in ana.display_refs(&self.stores.label_store) {
-            //     debug!("    {}", x);
+            //     log::debug!("    {}", x);
             // }
-            //     debug!("decls in directory");
+            //     log::debug!("decls in directory");
             //     for x in ana.display_decls(&self.stores.label_store) {
-            //     debug!("    {}", x);
+            //     log::debug!("    {}", x);
             // }
             //     let ana = ana.resolve();
             //     Some(ana)

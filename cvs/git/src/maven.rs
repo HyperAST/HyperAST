@@ -14,7 +14,7 @@ use hyper_ast::{
 use rusted_gumtree_gen_ts_java::java_tree_gen_full_compress_legion_ref as java_tree_gen;
 use rusted_gumtree_gen_ts_xml::xml_tree_gen::XmlTreeGen;
 
-use crate::{SimpleStores, FAIL_ON_BAD_CST_NODE};
+use crate::{SimpleStores, PROPAGATE_ERROR_ON_BAD_CST_NODE};
 
 pub(crate) fn handle_pom_file(
     tree_gen: &mut XmlTreeGen,
@@ -38,7 +38,7 @@ pub(crate) fn handle_pom_file(
         log::warn!("bad CST");
         log::debug!("{}", tree.root_node().to_sexp());
 
-        if FAIL_ON_BAD_CST_NODE {
+        if PROPAGATE_ERROR_ON_BAD_CST_NODE {
             return Err(());
         }
     }

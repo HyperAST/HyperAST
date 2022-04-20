@@ -1,4 +1,4 @@
-use crate::{FAIL_ON_BAD_CST_NODE, MAX_REFS};
+use crate::{PROPAGATE_ERROR_ON_BAD_CST_NODE, MAX_REFS};
 
 use hyper_ast::{
     hashed::{SyntaxNodeHashs},
@@ -55,7 +55,7 @@ pub(crate) fn handle_java_file(
         //     let mut fe = fs::File::create(&fe).unwrap();
         //     fe.write(tree.root_node().to_sexp().as_bytes()).unwrap();
         // }
-        if FAIL_ON_BAD_CST_NODE {
+        if PROPAGATE_ERROR_ON_BAD_CST_NODE {
             return Err(());
         }
     }

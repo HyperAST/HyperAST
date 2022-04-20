@@ -175,13 +175,7 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
                 .serialize(WritePartialJson::from(&mut buf))
                 .unwrap();
 
-            // write!(buf, "}}").unwrap();
-
             buf.flush().unwrap();
-            // drop(buf);
-            // let c = file.seek(SeekFrom::End(0)).unwrap();
-            // file.seek(SeekFrom::Start(0)).unwrap();
-            // file.set_len(c-1).unwrap();
         } else {
             todo!();
             let mut out = io::stdout();

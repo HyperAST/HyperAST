@@ -66,6 +66,16 @@ impl<'a> RefsFinder<'a> {
     }
 }
 
+
+macro_rules! missing_rule {
+    () => {
+        log::error!("missing rule");
+    };
+    ($($arg:tt)+) => {{
+        log::error!($($arg)+);
+    }};
+}
+
 /// Main traversal of HyperAST
 /// Recusive traversal, it goes through declaration without handling them particularly
 /// thus is should not search for references to `this` or `super`
@@ -570,6 +580,8 @@ impl<'a> RefsFinder<'a> {
     }
 }
 
+
+
 /// prerequisite: recusive traversal limited to expressions ie. should not cross declarations
 impl<'a> RefsFinder<'a> {
     pub fn exact_match(&mut self, target: RefPtr, mut scout: Scout) {
@@ -710,7 +722,7 @@ impl<'a> RefsFinder<'a> {
                 }
             }
         } else {
-            todo!("{:?}", t)
+            missing_rule!("exact_match_scoped_references do not handle {:?}", t)
         }
     }
 
@@ -738,11 +750,11 @@ impl<'a> RefsFinder<'a> {
                     }
                 }
             } else {
-                todo!()
+                missing_rule!("exact_match_this_super where typeIdentifier do not have a label")
             }
         } else if is_individually_matched(t) || is_never_reference(t) {
         } else {
-            todo!("{:?}", t)
+            missing_rule!("exact_match_this_super missing {:?}", t)
         }
     
     }
@@ -771,7 +783,7 @@ impl<'a> RefsFinder<'a> {
             }
         } else if is_individually_matched(t) || is_never_reference(t) {
         } else {
-            // todo!("{:?}", t)
+            missing_rule!("exact_match_var_declarator missing {:?}", t)
         }
     }
     fn exact_match_identifier_in_expr_like(
@@ -871,7 +883,7 @@ impl<'a> RefsFinder<'a> {
             }
         } else if is_individually_matched(t) || is_never_reference(t) {
         } else {
-            todo!("{:?}", t)
+            missing_rule!("exact_match_catch_type missing {:?}", t)
         }
     }
 
@@ -917,7 +929,7 @@ impl<'a> RefsFinder<'a> {
             }
         } else if is_individually_matched(t) || is_never_reference(t) {
         } else {
-            todo!("{:?}", t)
+            missing_rule!("exact_match_field_declaration missing {:?}", t)
         }
     }
 
@@ -950,7 +962,7 @@ impl<'a> RefsFinder<'a> {
             // log::debug!("not matched"); // TODO should check the fully qual name
         } else if is_individually_matched(t) || is_never_reference(t) {
         } else {
-            todo!("{:?}", t)
+            missing_rule!("exact_match_annotated_type missing {:?}", t)
         }
     }
 
@@ -978,7 +990,7 @@ impl<'a> RefsFinder<'a> {
             }
         } else if is_individually_matched(t) || is_never_reference(t) {
         } else {
-            todo!("{:?}", t)
+            missing_rule!("exact_match_class_literal missing {:?}", t)
         }
     }
 
@@ -1026,7 +1038,7 @@ impl<'a> RefsFinder<'a> {
             // log::debug!("not matched"); // TODO should check the fully qual name
         } else if is_individually_matched(t) || is_never_reference(t) {
         } else {
-            todo!("{:?}", t)
+            missing_rule!("exact_match_method_reference missing {:?}", t)
         }
     }
 
@@ -1084,7 +1096,8 @@ impl<'a> RefsFinder<'a> {
                 } else if t == Type::LambdaExpression {
                 } else if is_individually_matched(t) || is_never_reference(t) {
                 } else {
-                    todo!("{:?}", t) // TODO aaa not yet implemented: True
+                    missing_rule!("exact_match_cast_expression missing {:?}", t)
+                    // TODO aaa not yet implemented: True
                 }
             }
         }
@@ -1137,7 +1150,7 @@ impl<'a> RefsFinder<'a> {
             panic!(); // sure ?
         } else if is_individually_matched(t) || is_never_reference(t) {
         } else {
-            todo!("{:?}", t)
+            missing_rule!("exact_match_instanceof_expression missing {:?}", t)
         }
     }
 
@@ -1166,7 +1179,7 @@ impl<'a> RefsFinder<'a> {
             // log::debug!("not matched"); // should be handled after
         } else if is_individually_matched(t) || is_never_reference(t) {
         } else {
-            todo!("{:?}", t)
+            missing_rule!("exact_match_array_type missing {:?}", t)
         }
     }
 
@@ -1196,7 +1209,7 @@ impl<'a> RefsFinder<'a> {
             // log::debug!("not matched"); // should be handled after
         } else if is_individually_matched(t) || is_never_reference(t) {
         } else {
-            todo!("{:?}", t)
+            missing_rule!("exact_match_generic_type missing {:?}", t)
         }
     }
 
@@ -1258,7 +1271,7 @@ impl<'a> RefsFinder<'a> {
                 } else if t == Type::TS4 {
                 } else if is_individually_matched(t) || is_never_reference(t) {
                 } else {
-                    todo!("{:?}", t)
+                    missing_rule!("exact_match_extend_impl_things missing {:?}", t)
                 }
             }
             j += 1;
@@ -1300,7 +1313,7 @@ impl<'a> RefsFinder<'a> {
         } else if is_individually_matched(t) || is_never_reference(t) {
             // log::debug!("not matched");
         } else {
-            todo!("{:?}", t)
+            missing_rule!("exact_match_variable_declaration missing {:?}", t)
         }
     }
 
@@ -1342,7 +1355,7 @@ impl<'a> RefsFinder<'a> {
             }
         } else if is_individually_matched(t) || is_never_reference(t) {
         } else {
-            todo!("{:?}", t)
+            missing_rule!("exact_match_method_declaration missing {:?}", t)
         }
     }
 
@@ -1387,7 +1400,7 @@ impl<'a> RefsFinder<'a> {
         } else if t == Type::Super {
             // TODO if scoped might be handled after
         } else {
-            todo!("{:?}", t)
+            missing_rule!("exact_match_method_invocation missing {:?}", t)
         }
     }
 
@@ -1460,7 +1473,7 @@ impl<'a> RefsFinder<'a> {
                     // log::debug!("not matched"); // should be handled after
                 } else if is_individually_matched(t) || is_never_reference(t) {
                 } else {
-                    todo!("{:?}", t)
+                    missing_rule!("exact_match_object_creation_expression missing {:?}", t)
                 }
             } else if t == Type::ScopedTypeIdentifier {
                 // TODO need full check if creating anonymous class
@@ -1482,7 +1495,7 @@ impl<'a> RefsFinder<'a> {
             } else if t == Type::Annotation {
             } else if t == Type::MarkerAnnotation {
             } else {
-                todo!("{:?}", t)
+                missing_rule!("exact_match_object_creation_expression missing' {:?}", t)
             }
             if j == 0 {
                 return;
@@ -1575,7 +1588,7 @@ impl<'a> RefsFinder<'a> {
                 }
                 return;
             } else {
-                todo!("{:?}", t)
+                missing_rule!("exact_match_object_creation_expression missing'' {:?}", t)
             }
             if j == 0 {
                 if matched {
@@ -1669,7 +1682,7 @@ impl<'a> RefsFinder<'a> {
             // log::debug!("not matched"); // TODO should check the fully qual name
         } else if is_individually_matched(t) || is_never_reference(t) {
         } else {
-            todo!("{:?}", t)
+            missing_rule!("exact_match_object_creation_expression_aux missing {:?}", t)
         }
         None
     }
@@ -1713,7 +1726,7 @@ impl<'a> RefsFinder<'a> {
                 } else if t == Type::Identifier {
                 } else if is_individually_matched(t) || is_never_reference(t) {
                 } else {
-                    todo!("{:?}", t)
+                    missing_rule!("exact_match_enhanced_for_statement missing {:?}", t)
                 }
             } else if ok2 {
                 if t == Type::Identifier {
@@ -1728,7 +1741,7 @@ impl<'a> RefsFinder<'a> {
                 } else if t == Type::This {
                 } else if is_individually_matched(t) || is_never_reference(t) {
                 } else {
-                    todo!("{:?}", t)
+                    missing_rule!("exact_match_enhanced_for_statement missing' {:?}", t)
                 }
             }
         }
@@ -1768,7 +1781,7 @@ impl<'a> RefsFinder<'a> {
                     }
                 } else if is_individually_matched(t) || is_never_reference(t) {
                 } else {
-                    todo!("{:?}", t)
+                    missing_rule!("exact_match_array_access missing {:?}", t)
                 }
             } else if ok2 {
                 if t == Type::Identifier {
@@ -1781,7 +1794,7 @@ impl<'a> RefsFinder<'a> {
                     }
                 } else if is_individually_matched(t) || is_never_reference(t) {
                 } else {
-                    todo!("{:?}", t)
+                    missing_rule!("exact_match_array_access missing' {:?}", t)
                 }
             }
         }
@@ -2547,9 +2560,9 @@ pub fn remake_pkg_ref(
         let x = b.get_child(&2);
         remake_pkg_ref(stores, ana, x)
     } else if t == Type::Spaces {
-        todo!()
+        panic!()
     } else {
-        todo!("{:?}", t)
+        todo!("remake_pkg_ref missing {:?}", t)
     }
 }
 pub fn eq_root_scoped(d: ExplorableRef, stores: &SimpleStores, b: HashedNodeRef) -> bool {
