@@ -1554,7 +1554,7 @@ impl<'a> JavaTreeGen<'a> {
             || acc.simple.kind == Type::FormalParameters
             || acc.simple.kind == Type::AnnotationArgumentList
         {
-            if acc
+            if !acc
                     .simple
                     .children
                     .iter()
