@@ -1483,7 +1483,7 @@ impl PartialAnalysis {
                     }
                     State::Declarations(v)
                 }
-                (rest, State::None) if kind == &Type::ClassBody => {
+                (rest, State::None) if kind == &Type::ClassBody || kind == &Type::EnumBodyDeclarations => {
                     match &rest {
                         State::Declarations(_) => (),
                         State::None => (),
@@ -3169,15 +3169,14 @@ impl PartialAnalysis {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
                     (State::None, rest) => {
                         match rest {
-                            State::None => (),
-                            State::FieldIdentifier(_) => (),
-                            State::ScopedIdentifier(_) => (),
-                            State::MethodReference(_) => (),
-                            State::Invocation(_) => (),
-                            State::ConstructorInvocation(_) => (),
-                            State::LiteralType(_) => (),
-                            State::This(_) => (),
-                            State::LambdaExpression(_) => (),
+                            State::None | State::FieldIdentifier(_) |
+                            State::ScopedIdentifier(_) |
+                            State::MethodReference(_) |
+                            State::Invocation(_) |
+                            State::ConstructorInvocation(_) |
+                            State::LiteralType(_) |
+                            State::This(_) |
+                            State::LambdaExpression(_) => State::None,
                             State::SimpleIdentifier(_, i) => {
                                 if kind == &Type::ExpressionStatement
                                     || kind == &Type::AssertStatement
@@ -3186,18 +3185,18 @@ impl PartialAnalysis {
                                     || kind == &Type::ThrowStatement
                                 {
                                     scoped!(mm!(), i);
+                                    State::None
                                 } else if kind == &Type::LabeledStatement
                                     || kind == &Type::BreakStatement
                                     || kind == &Type::ContinueStatement
                                 {
+                                    State::None
                                 } else {
-                                    panic!()
+                                    missing_rule!("{:?} None State::SimpleIdentifier", kind)
                                 }
                             }
-                            State::SimpleIdentifier(_, i) => {}
-                            x => panic!("{:?} {:?}", kind, x),
+                            x => missing_rule!("{:?} None {:?}", kind, x),
                         }
-                        State::None
                     }
                     (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }

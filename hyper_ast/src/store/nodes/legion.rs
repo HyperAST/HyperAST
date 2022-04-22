@@ -307,25 +307,33 @@ impl<'a> crate::types::WithChildren for HashedNodeRef<'a> {
             .get_component::<CS<legion::Entity>>()
             .unwrap_or_else(|x| {
                 log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+                panic!("{}",x)
+            })
+            .0.get(num::cast::<_, usize>(*idx).unwrap()).map(|x|*x).unwrap_or_else(|| {
+                log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
                 panic!()
             })
-            .0[num::cast::<_, usize>(*idx).unwrap()]
     }
 
     fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
-        let v = &self.0.get_component::<CS<legion::Entity>>().unwrap().0;
+        let cs = self.0
+            .get_component::<CS<legion::Entity>>()
+            .unwrap_or_else(|x| {
+                log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+                panic!("{}",x)
+            });
+        let v = &cs.0;
         v[v.len() - 1 - num::cast::<_, usize>(*idx).unwrap()]
     }
 
     fn get_children<'b>(&'b self) -> &'b [Self::TreeId] {
-        self.0
+        let cs = self.0
             .get_component::<CS<legion::Entity>>()
             .unwrap_or_else(|x| {
                 log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-                panic!()
-            })
-            .0
-            .as_slice()
+                panic!("{}",x)
+            });
+        cs.0.as_slice()
     }
 }
 

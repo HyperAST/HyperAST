@@ -689,7 +689,6 @@ impl<'a> TreeGen for JavaTreeGen<'a> {
         let parent_indentation = &stack.last().unwrap().indentation();
         let kind = node.kind();
         let kind = type_store.get(kind);
-        // let kind = handle_wildcard_kind(kind, node);
 
         let indent = compute_indentation(
             &self.line_break,
@@ -701,7 +700,6 @@ impl<'a> TreeGen for JavaTreeGen<'a> {
 
         let label = node
             .extract_label(text)
-            // let label = label_for_cursor(text, &node)
             .and_then(|x| Some(std::str::from_utf8(&x).unwrap().to_owned()));
 
         let ana = self.build_ana(&kind);
@@ -719,6 +717,7 @@ impl<'a> TreeGen for JavaTreeGen<'a> {
             indentation: indent,
         }
     }
+
     fn post(
         &mut self,
         parent: &mut <Self as TreeGen>::Acc,
