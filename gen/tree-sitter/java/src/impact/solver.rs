@@ -168,7 +168,7 @@ impl Solver {
     }
 
     /// add a reference to the solver
-    pub(crate) fn intern_ref(&mut self, other: RefsEnum<RefPtr, LabelPtr>) -> RefPtr {
+    pub fn intern_ref(&mut self, other: RefsEnum<RefPtr, LabelPtr>) -> RefPtr {
         match other {
             RefsEnum::Primitive(_) => panic!(),
             _ => (),

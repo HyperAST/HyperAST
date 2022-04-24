@@ -5,16 +5,20 @@ use std::{
 };
 
 use hyper_ast::{
-    filter::BloomResult,
+    filter::{Bloom, BloomResult, BF},
     nodes::RefContainer,
-    position::{ExploreStructuralPositions, Scout, StructuralPosition, StructuralPositionStore, TreePath},
+    position::{
+        ExploreStructuralPositions, Scout, StructuralPosition, StructuralPositionStore, TreePath,
+    },
     store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores, TypeStore},
     tree_gen::TreeGen,
-    types::{LabelStore as _, Typed, Type},
     types::WithChildren,
+    types::{LabelStore as _, Type, Typed}, impact::serialize::CachedHasher,
 };
 
-use rusted_gumtree_gen_ts_java::java_tree_gen_full_compress_legion_ref::print_tree_syntax;
+use rusted_gumtree_gen_ts_java::java_tree_gen_full_compress_legion_ref::{
+    print_tree_syntax, BulkHasher,
+};
 use tree_sitter::{Language, Parser};
 
 use crate::java::handle_java_file;
@@ -51,7 +55,7 @@ fn run(text: &[u8]) {
         None => println!("None"),
     };
     let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
-    print!("{}",AA);
+    print!("{}", AA);
     macro_rules! scoped {
         ( $o:expr, $i:expr ) => {{
             let o = $o;
@@ -73,58 +77,65 @@ fn run(text: &[u8]) {
     let i = scoped!(package_ref, "SpoonAPI");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),2);
+    assert_eq!(r.len(), 2);
     println!("-------------2----------------");
     let package_ref2 = scoped!(root, "org");
     let i = scoped!(package_ref2, "Klass");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
-    assert_eq!(r.len(),7);
+    assert_eq!(r.len(), 17);
     println!("-------------3----------------");
     let i = scoped!(package_ref, "SpoonModelBuilder");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),5);
+    assert_eq!(r.len(), 5);
     println!("-------------4----------------");
     let i = scoped!(package_ref, "SpoonException");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),4);
+    assert_eq!(r.len(), 4);
     println!("-------------5----------------");
     let i = scoped!(scoped!(package_ref, "SpoonModelBuilder"), "InputType");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),1);
+    assert_eq!(r.len(), 1);
     println!("-------------6----------------");
     let i = scoped!(package_ref, "SpoonException2");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),1);
+    assert_eq!(r.len(), 1);
     println!("-------------7----------------");
     let i = scoped!(package_ref, "MavenLauncher");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),2);
+    assert_eq!(r.len(), 3);
     println!("-------------8----------------");
     let i = scoped!(scoped!(package_ref, "SpoonModelBuilder"), "InputType2");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),3);
+    assert_eq!(r.len(), 3);
     println!("-------------9----------------");
     let i = scoped!(scoped!(package_ref, "SpoonModelBuilder"), "InputType3");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),1);
+    assert_eq!(r.len(), 1);
     println!("-------------10----------------");
     let i = scoped!(package_ref, "SpoonFile");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),2);
+    assert_eq!(r.len(), 2);
+    println!("-------------11----------------");
+    let i = scoped!(package_ref, "Z");
+    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
+    assert_eq!(r.len(), 1);
 }
 
 #[test]
 fn test_case() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
     run(CASE_1.as_bytes())
 }
 
@@ -182,6 +193,8 @@ public class Launcher extends Klass implements SpoonAPI, A {
             new MavenLauncher("./pomm.xml", MavenLauncher.SOURCE_TYPE.APP_SOURCE);
         });
 
+        new Z.B();
+
         getModelBuilder2().compile(InputType3.FILES);
 
         getAllFiles().stream().filter(SpoonFile::isJava).collect(Collectors.toList());
@@ -205,7 +218,6 @@ interface I {
     Klass M = new Klass() {
     };
 }"#;
-
 
 fn run2(text: &[u8]) {
     let mut stores = SimpleStores {
@@ -252,72 +264,74 @@ fn run2(text: &[u8]) {
     let i = scoped!(package_ref, "SpoonModelBuilder");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),3);
+    assert_eq!(r.len(), 3);
     println!("-------------2----------------");
     let i = scoped!(package_ref, "Launcher");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),2);
+    assert_eq!(r.len(), 2);
     println!("-------------3----------------");
     let i = scoped!(scoped!(package_ref, "SpoonModelBuilder"), "InputType");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),6);
+    assert_eq!(r.len(), 6);
     println!("-------------4----------------");
     let package_ref2 = scoped!(scoped!(scoped!(package_ref, "support"), "compiler"), "jdt");
     let i = scoped!(package_ref2, "SpoonFolder");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
-    assert_eq!(r.len(),1);
+    assert_eq!(r.len(), 1);
     println!("-------------5----------------");
     let package_ref2 = scoped!(package_ref, "support");
     let i = scoped!(scoped!(package_ref2, "Envir"), "MultipleAlt");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
-    assert_eq!(r.len(),2);
+    assert_eq!(r.len(), 3);
     println!("-------------6----------------");
     let i = scoped!(scoped!(package_ref, "SpoonModelBuilder2"), "InputType2");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),1);
+    assert_eq!(r.len(), 1);
     println!("-------------7----------------");
     let package_ref2 = scoped!(package_ref, "pattern");
     let i = scoped!(package_ref2, "PatternBuilder");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
-    assert_eq!(r.len(),1);
+    assert_eq!(r.len(), 1);
     println!("-------------8----------------");
     let package_ref2 = scoped!(package_ref, "pattern");
     let i = scoped!(scoped!(package_ref2, "PatternBuilder"), "TARGET_TYPE");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
-    assert_eq!(r.len(),1);
+    assert_eq!(r.len(), 1);
     println!("-------------9----------------");
     let i = scoped!(scoped!(package_ref, "SpoonModelBuilder3"), "InputType");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),2);
+    assert_eq!(r.len(), 2);
     println!("-------------10---------------");
     let package_ref2 = scoped!(package_ref, "processor");
     let i = scoped!(package_ref2, "AbstractProcessor");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
-    assert_eq!(r.len(),2);
+    assert_eq!(r.len(), 3);
     println!("-------------11----------------");
     let package_ref2 = scoped!(scoped!(scoped!(package_ref, "support"), "compiler"), "jdt");
     let i = scoped!(scoped!(package_ref2, "JDTBasedSpoonCompiler"), "AAA");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
-    assert_eq!(r.len(),1);
+    assert_eq!(r.len(), 2);
 }
 
 #[test]
 fn test_case2() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
     run2(CASE_2.as_bytes())
 }
 
-/// src/main/java/spoon/support/compiler/jdt/JDTBasedSpoonCompiler.java:(2753,21527): 
+/// src/main/java/spoon/support/compiler/jdt/JDTBasedSpoonCompiler.java:(2753,21527):
 static CASE_2: &'static str = r#"package spoon.support.compiler.jdt;
 
 import spoon.SpoonModelBuilder;
@@ -430,7 +444,6 @@ static AA: &'static str = r#"
 }%Environment
 "#;
 
-
 fn run3(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
@@ -477,64 +490,66 @@ fn run3(text: &[u8]) {
     let i = scoped!(package_ref2, "SpoonResource");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
-    assert_eq!(r.len(),2);
+    assert_eq!(r.len(), 2);
     println!("-------------2----------------");
     let i = scoped!(mm, "SpoonFile");
     let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let bb = stores.node_store.resolve(a.local.compressed_node);
-    assert_eq!(bb.get_type(),Type::Program);
+    assert_eq!(bb.get_type(), Type::Program);
     let xx = bb.get_child(&18);
     x.goto(xx, 18);
     let bb = stores.node_store.resolve(xx);
-    assert_eq!(bb.get_type(),Type::ClassDeclaration);
+    assert_eq!(bb.get_type(), Type::ClassDeclaration);
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 4);
     println!("-------------3----------------");
     let i = scoped!(package_ref2, "AnnotationProcessingOptions");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
-    assert_eq!(r.len(),1);
+    assert_eq!(r.len(), 1);
     println!("-------------4----------------");
     let i = scoped!(package_ref, "NameFilter");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(),1);
+    assert_eq!(r.len(), 2);
     println!("-------------5----------------");
     let i = scoped!(mm, "StringAttr");
     let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let bb = stores.node_store.resolve(a.local.compressed_node);
-    assert_eq!(bb.get_type(),Type::Program);
+    assert_eq!(bb.get_type(), Type::Program);
     let xx = bb.get_child(&18);
     x.goto(xx, 18);
     let bb = stores.node_store.resolve(xx);
-    assert_eq!(bb.get_type(),Type::ClassDeclaration);
+    assert_eq!(bb.get_type(), Type::ClassDeclaration);
     let xx = bb.get_child(&9);
     x.goto(xx, 9);
     let bb = stores.node_store.resolve(xx);
-    assert_eq!(bb.get_type(),Type::ClassBody);
+    assert_eq!(bb.get_type(), Type::ClassBody);
     let xx = bb.get_child(&2);
     x.goto(xx, 2);
     let bb = stores.node_store.resolve(xx);
-    assert_eq!(bb.get_type(),Type::ConstructorDeclaration);
+    assert_eq!(bb.get_type(), Type::ConstructorDeclaration);
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
-    assert_eq!(r.len(), 1);
+    assert_eq!(r.len(), 2);
     println!("-------------6----------------");
     let package_ref2 = scoped!(package_ref, "reflect");
     let i = scoped!(scoped!(package_ref2, "CtModelImpl"), "CtRootPackage");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
-    assert_eq!(r.len(),1);
+    assert_eq!(r.len(), 1);
     println!("-------------7----------------");
     let package_ref2 = scoped!(package_ref, "compiler");
     let i = scoped!(package_ref2, "SpoonFile");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
-    assert_eq!(r.len(),1);
+    assert_eq!(r.len(), 5);
 }
 
 #[test]
 fn test_case3() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
     run3(CASE_3.as_bytes())
 }
 
@@ -587,6 +602,115 @@ public class SpoonFile<T extends SpoonFile<T>> implements SpoonResource {
 
 }"#;
 
+fn run3_1(text: &[u8]) {
+    let mut stores = SimpleStores {
+        label_store: LabelStore::new(),
+        type_store: TypeStore {},
+        node_store: NodeStore::new(),
+    };
+    let mut md_cache = Default::default();
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+
+    // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
+    match a.local.ana.as_ref() {
+        Some(x) => {
+            println!("refs:",);
+            x.print_refs(&java_tree_gen.stores.label_store);
+        }
+        None => println!("None"),
+    };
+    let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
+    let v = AA;
+    macro_rules! scoped {
+        ( $o:expr, $i:expr ) => {{
+            let o = $o;
+            let i = $i;
+            let f = IdentifierFormat::from(i);
+            let i = stores.label_store.get_or_insert(i);
+            let i = LabelPtr::new(i, f);
+            ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
+        }};
+    }
+    macro_rules! scoped_type {
+        ( $o:expr, $i:expr ) => {{
+            let o = $o;
+            let i = $i;
+            let f = IdentifierFormat::from(i);
+            let i = stores.label_store.get_or_insert(i);
+            let i = LabelPtr::new(i, f);
+            ana.solver.intern_ref(RefsEnum::ScopedIdentifier(o, i))
+        }};
+    }
+    let mut sp_store =
+        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+
+    let mm = ana.solver.intern(RefsEnum::MaybeMissing);
+    let root = ana.solver.intern(RefsEnum::Root);
+    let package_ref = scoped!(root, "spoon");
+    let package_lang = scoped!(scoped!(root, "java"), "lang");
+
+    let package_ref2 = scoped!(package_ref, "compiler");
+    println!("-------------3----------------");
+    let i = scoped_type!(package_ref2, "AnnotationProcessingOptions");
+    {
+        let uncertain = ana.solver.intern(RefsEnum::Or(
+            vec![package_ref2, root, package_lang].into(),
+        ));
+        let i = scoped_type!(uncertain, "AnnotationProcessingOptions");
+        let d = ana.solver.nodes.with(i);
+        eprintln!("i: {:?}",d);
+        type T = Bloom<&'static [u8], u16>;
+        let r = CachedHasher::<usize, <T as BF<[u8]>>::S, <T as BF<[u8]>>::H>::once(d);
+        eprintln!("CachedHasher or: {:?}", r)
+    }
+    {
+        let it = ana.solver.iter_refs();
+        type T = Bloom<&'static [u8], u16>;
+        let it = BulkHasher::<_, <T as BF<[u8]>>::S, <T as BF<[u8]>>::H>::from(it);
+        // let it:Vec<_> = it.collect();
+        eprintln!("search list: {:?}", it.collect::<Vec<_>>())
+    } 
+    {
+        let it = ana.solver.iter_refs();
+        type T = Bloom<&'static [u8], u16>;
+        let it = BulkHasher::<_, <T as BF<[u8]>>::S, <T as BF<[u8]>>::H>::from(it);
+        // let it:Vec<_> = it.collect();
+        let bloom = T::from(it);
+        eprintln!("search bloom: {:?}", bloom)
+    } 
+    {
+        let d = ana.solver.nodes.with(i);
+        eprintln!("i: {:?}",d);
+        type T = Bloom<&'static [u8], u16>;
+        let r = CachedHasher::<usize, <T as BF<[u8]>>::S, <T as BF<[u8]>>::H>::once(d);
+        eprintln!("CachedHasher result: {:?}", r)
+    }
+    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
+    assert_eq!(r.len(), 1);
+}
+
+#[test]
+fn test_case3_1() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
+    run3_1(CASE_3_1.as_bytes())
+}
+
+/// search spoon.compile.SpoonResource
+/// search spoon.compile.SpoonFile in class
+/// TODO SpoonFile.this
+static CASE_3_1: &'static str = r#"package spoon.compiler;
+
+public class A {
+	public void h(AnnotationProcessingOptions<?> options) {}
+}"#;
 /// search spoon.compiler.builder.ClasspathOptions
 /// search spoon.compiler.builder.SourceOptions
 /// TODO search spoon.compiler.builder.AAA
@@ -616,8 +740,6 @@ public class FilterTest {
         NameFilter<CtNamedElement> nameFilter = new NameFilter<>(name);
     }
 }"#;
-
-
 
 fn run6(text: &[u8]) {
     let mut stores = SimpleStores {
@@ -664,11 +786,11 @@ fn run6(text: &[u8]) {
     let i = scoped!(scoped!(mm, "PatternBuiler"), "PatternQuery");
     let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let bb = stores.node_store.resolve(a.local.compressed_node);
-    assert_eq!(bb.get_type(),Type::Program);
+    assert_eq!(bb.get_type(), Type::Program);
     let xx = bb.get_child(&4);
     x.goto(xx, 4);
     let bb = stores.node_store.resolve(xx);
-    assert_eq!(bb.get_type(),Type::ClassDeclaration);
+    assert_eq!(bb.get_type(), Type::ClassDeclaration);
     // let xx = bb.get_child(&6);
     // x.goto(xx, 6);
     // let bb = stores.node_store.resolve(xx);
@@ -688,12 +810,14 @@ fn run6(text: &[u8]) {
     let i = scoped!(package_ref2, "Environment");
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
-    assert_eq!(r.len(),1);
+    assert_eq!(r.len(), 1);
 }
 
 #[test]
 fn test_case6() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
     run6(CASE_6.as_bytes())
 }
 
@@ -712,7 +836,6 @@ public class PatternBuiler {
     Environment a;
 
 }"#;
-
 
 fn run7(text: &[u8]) {
     let mut stores = SimpleStores {
@@ -748,6 +871,16 @@ fn run7(text: &[u8]) {
             ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
         }};
     }
+    macro_rules! scoped_ref {
+        ( $o:expr, $i:expr ) => {{
+            let o = $o;
+            let i = $i;
+            let f = IdentifierFormat::from(i);
+            let i = stores.label_store.get_or_insert(i);
+            let i = LabelPtr::new(i, f);
+            ana.solver.intern_ref(RefsEnum::ScopedIdentifier(o, i))
+        }};
+    }
     let mut sp_store =
         StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
 
@@ -757,15 +890,36 @@ fn run7(text: &[u8]) {
 
     println!("-------------1----------------");
     let package_ref2 = scoped!(scoped!(package_ref, "reflect"), "declaration");
-    let i = scoped!(package_ref2, "CtAnonymousExecutable");
+    let i = scoped_ref!(package_ref2, "CtAnonymousExecutable");
+    {
+        let it = ana.solver.iter_refs();
+        type T = Bloom<&'static [u8], u16>;
+        let it = BulkHasher::<_, <T as BF<[u8]>>::S, <T as BF<[u8]>>::H>::from(it);
+        // let it:Vec<_> = it.collect();
+        let bloom = T::from(it);
+        eprintln!("search bloom: {:?}", bloom)
+    } 
+    {
+        let d = ana.solver.nodes.with(i);
+        type T = Bloom<&'static [u8], u16>;
+        let r = CachedHasher::<usize, <T as BF<[u8]>>::S, <T as BF<[u8]>>::H>::once(d);
+        eprintln!("CachedHasher result: {:?}", r)
+    }
+    let d = ana.solver.nodes.with(i);
+    if let BloomResult::MaybeContain = stores.node_store.resolve(a.local.compressed_node).check(d) {
+    } else {
+        assert!(false);
+    }
     let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
-    assert_eq!(r.len(),1);
+    assert_eq!(r.len(), 1);
 }
-
+//[1001011111000000]
 #[test]
 fn test_case7() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
     run7(CASE_7.as_bytes())
 }
 
@@ -779,6 +933,68 @@ public enum CtRole {
 
 }"#;
 
+#[test]
+fn test_hashing() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
+    let mut stores = SimpleStores {
+        label_store: LabelStore::new(),
+        type_store: TypeStore {},
+        node_store: NodeStore::new(),
+    };
+    let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
+    macro_rules! scoped {
+        ( $o:expr, $i:expr ) => {{
+            let o = $o;
+            let i = $i;
+            let f = IdentifierFormat::from(i);
+            let i = stores.label_store.get_or_insert(i);
+            let i = LabelPtr::new(i, f);
+            ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
+        }};
+    }
+    macro_rules! scoped_ref {
+        ( $o:expr, $i:expr ) => {{
+            let o = $o;
+            let i = $i;
+            let f = IdentifierFormat::from(i);
+            let i = stores.label_store.get_or_insert(i);
+            let i = LabelPtr::new(i, f);
+            ana.solver.intern_ref(RefsEnum::ScopedIdentifier(o, i))
+        }};
+    }
+    macro_rules! scoped_type {
+        ( $o:expr, $i:expr ) => {{
+            let o = $o;
+            let i = $i;
+            let f = IdentifierFormat::from(i);
+            let i = stores.label_store.get_or_insert(i);
+            let i = LabelPtr::new(i, f);
+            ana.solver.intern_ref(RefsEnum::TypeIdentifier(o, i))
+        }};
+    }
+    // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
+    let root = ana.solver.intern(RefsEnum::Root);
+    let package_ref = scoped!(root, "spoon");
+    let package_ref2 = scoped!(scoped!(package_ref, "reflect"), "declaration");
+    let i = scoped_ref!(package_ref2, "CtAnonymousExecutable");
+    let package_lang = scoped!(scoped!(root, "java"), "lang");
+    let lang_obj = scoped_type!(package_lang, "Object");
+    let uncertain = ana.solver.intern(RefsEnum::Or(
+        vec![lang_obj, package_lang, package_ref, root].into(),
+    ));
+    let i = scoped_ref!(uncertain, "TYPE_MEMBER");
+    let i = scoped_ref!(uncertain, "obj");
+    // let d = ana.solver.nodes.with(i);
+    let it = ana.solver.iter_refs();
+    type T = Bloom<&'static [u8], u16>;
+    let it = BulkHasher::<_, <T as BF<[u8]>>::S, <T as BF<[u8]>>::H>::from(it);
+    // let it:Vec<_> = it.collect();
+    let bloom = T::from(it);
+    eprintln!("{:?}", bloom)
+    // b.check(d)
+}
 
 fn run8(text: &[u8]) {
     let mut stores = SimpleStores {
@@ -824,15 +1040,15 @@ fn run8(text: &[u8]) {
     let i = scoped!(mm, "CtAnnotationImpl");
     let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let bb = stores.node_store.resolve(a.local.compressed_node);
-    assert_eq!(bb.get_type(),Type::Program);
+    assert_eq!(bb.get_type(), Type::Program);
     let xx = bb.get_child(&4);
     x.goto(xx, 4);
     let bb = stores.node_store.resolve(xx);
-    assert_eq!(bb.get_type(),Type::ClassDeclaration);
+    assert_eq!(bb.get_type(), Type::ClassDeclaration);
     let xx = bb.get_child(&6);
     x.goto(xx, 6);
     let bb = stores.node_store.resolve(xx);
-    assert_eq!(bb.get_type(),Type::ClassBody);
+    assert_eq!(bb.get_type(), Type::ClassBody);
     // let xx = bb.get_child(&2);
     // x.goto(xx, 2);
     // let bb = stores.node_store.resolve(xx);
@@ -847,7 +1063,9 @@ fn run8(text: &[u8]) {
 
 #[test]
 fn test_case8() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
     run8(CASE_8.as_bytes())
 }
 
@@ -878,9 +1096,6 @@ public class SwitchNode extends AbstractNode implements InlineNode {
     }
 
 }"#;
-
-
-
 
 fn run10(text: &[u8]) {
     let mut stores = SimpleStores {
@@ -926,15 +1141,15 @@ fn run10(text: &[u8]) {
     let i = scoped!(mm, "CtAnnotationImpl");
     let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let bb = stores.node_store.resolve(a.local.compressed_node);
-    assert_eq!(bb.get_type(),Type::Program);
-    let xx = bb.get_child(&4);
-    x.goto(xx, 4);
+    assert_eq!(bb.get_type(), Type::Program);
+    let xx = bb.get_child(&8);
+    x.goto(xx, 8);
     let bb = stores.node_store.resolve(xx);
-    assert_eq!(bb.get_type(),Type::ClassDeclaration);
-    let xx = bb.get_child(&6);
-    x.goto(xx, 6);
+    assert_eq!(bb.get_type(), Type::ClassDeclaration);
+    let xx = bb.get_child(&9);
+    x.goto(xx, 9);
     let bb = stores.node_store.resolve(xx);
-    assert_eq!(bb.get_type(),Type::ClassBody);
+    assert_eq!(bb.get_type(), Type::ClassBody);
     // let xx = bb.get_child(&2);
     // x.goto(xx, 2);
     // let bb = stores.node_store.resolve(xx);
@@ -949,10 +1164,11 @@ fn run10(text: &[u8]) {
 
 #[test]
 fn test_case10() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
     run10(CASE_10.as_bytes())
 }
-
 
 /// search `Tacos.Burritos` in Tacos.Burritos body
 static CASE_10: &'static str = r#"package spoon.test.generics.testclasses;
@@ -1034,8 +1250,6 @@ public class Tacos<K, V extends String> implements ITacos<V> {
 }
 "#;
 
-
-
 fn run11(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
@@ -1086,10 +1300,12 @@ fn run11(text: &[u8]) {
 
 #[test]
 fn test_case11() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
     run11(CASE_11.as_bytes());
-    println!("{}",CASE_11.as_bytes().len());
-    println!("{}",CASE_11_bis.as_bytes().len());
+    println!("{}", CASE_11.as_bytes().len());
+    println!("{}", CASE_11_bis.as_bytes().len());
 }
 
 static CASE_11: &'static str = r#"/**

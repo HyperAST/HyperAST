@@ -715,9 +715,28 @@ impl<'a> RefsFinder<'a> {
                 let tt = bb.get_type();
                 if tt == Type::ObjectCreationExpression {
                     return Err(SearchStopEvent::Blocked);
+                } else if tt == Type::EnumBody {
+                    for (i, xx) in b.get_children().iter().enumerate() {
+                        cursor.scout.goto(*xx, i);
+                        if Some(*xx) != cursor.prev.clone() {
+                            // search ?.A or ?.B.A or ...
+                            r.extend(self.search(&mm, &fq_decl_ref, &cursor.scout));
+                        }
+                        cursor.scout.up(&self.structural_positions);
+                    }
+                    // TODO do things to find type of field at the same level than type decl
+                    // should loop through siblings
+                    self.up(cursor);
+                    let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
+                    let bb = self.prepro.main_stores.node_store.resolve(xx);
+                    let tt = bb.get_type();
+
+                    if !tt.is_type_declaration() {
+                        panic!("{:?}", tt);
+                    }
                 } else if !tt.is_type_declaration() {
                     panic!("{:?}", tt);
-                }
+                };
                 let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
                 log::debug!(
                     "try search {}",
@@ -776,11 +795,33 @@ impl<'a> RefsFinder<'a> {
                 let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
                 let bb = self.prepro.main_stores.node_store.resolve(xx);
                 let tt = bb.get_type();
-                if tt == Type::ObjectCreationExpression {
+                let (xx,bb,tt) = if tt == Type::ObjectCreationExpression {
                     return Err(SearchStopEvent::Blocked);
+                } else if tt == Type::EnumBody {
+                    for (i, xx) in b.get_children().iter().enumerate() {
+                        cursor.scout.goto(*xx, i);
+                        if Some(*xx) != cursor.prev.clone() {
+                            // search ?.A or ?.B.A or ...
+                            r.extend(self.search(&mm, &qual_ref, &cursor.scout));
+                        }
+                        cursor.scout.up(&self.structural_positions);
+                    }
+                    // TODO do things to find type of field at the same level than type decl
+                    // should loop through siblings
+                    self.up(cursor);
+                    let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
+                    let bb = self.prepro.main_stores.node_store.resolve(xx);
+                    let tt = bb.get_type();
+
+                    if !tt.is_type_declaration() {
+                        panic!("{:?}", tt);
+                    }
+                    (xx,bb,tt)
                 } else if !tt.is_type_declaration() {
                     panic!("{:?}", tt);
-                }
+                } else {
+                    (xx,bb,tt)
+                };
                 let name = {
                     let i = self.extract_identifier(&bb).unwrap();
                     let name = self.prepro.main_stores.label_store.resolve(&i);

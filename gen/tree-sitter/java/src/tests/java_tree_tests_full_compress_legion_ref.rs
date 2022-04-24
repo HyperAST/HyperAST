@@ -80,7 +80,7 @@ fn test_cases() {
 #[test]
 fn test_equals() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
-    let text = CASE_31.as_bytes();
+    let text = CASE_32.as_bytes();
     let mut parser = Parser::new();
 
     {
@@ -2308,6 +2308,17 @@ public class A {
         }
     }
 }"#;
+
+static CASE_32: &'static str = r#"
+package q.w.e;
+
+public class A {
+    public static void main(final String[] args) {
+        launch(args);
+    }
+}"#;
+
+
 
 enum D {
     F(&'static str),

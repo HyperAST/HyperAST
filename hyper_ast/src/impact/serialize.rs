@@ -1,4 +1,9 @@
-use std::{fmt::{Display, Debug}, marker::PhantomData, ops::Index, str::Utf8Error};
+use std::{
+    fmt::{Debug, Display},
+    marker::PhantomData,
+    ops::Index,
+    str::Utf8Error,
+};
 
 use num::ToPrimitive;
 use string_interner::{symbol::SymbolU16, Symbol};
@@ -109,7 +114,7 @@ impl<T> Index<SymbolU16> for Table<T> {
     }
 }
 
-impl<T:PartialEq+Debug> Table<T> {
+impl<T> Table<T> {
     fn insert(&mut self, index: usize, v: Vec<T>) -> SymbolU16 {
         assert_ne!(v.len(), 0);
         if self.offsets.len() <= index {
@@ -117,9 +122,8 @@ impl<T:PartialEq+Debug> Table<T> {
             self.choices.resize(index + 1, 0);
         }
         if self.offsets[index] != 0 {
-            assert_eq!(self.choices[index],v.len().to_u8().unwrap());
-            assert_eq!(self.index(SymbolU16::try_from_usize(index).unwrap()),v);
-            return SymbolU16::try_from_usize(index).unwrap()
+            assert!(self.choices[index] == v.len().to_u8().unwrap());
+            return SymbolU16::try_from_usize(index).unwrap();
         }
         self.offsets[index] = self.buf.len().to_u32().unwrap();
         self.choices[index] = v.len().to_u8().unwrap();
@@ -161,11 +165,11 @@ impl Error for CachedHasherError {
 /// Could simplify structurally, fusioning Auxilary serializers
 pub struct CachedHasher<'a, I, S, H: VaryHasher<S>> {
     pub(crate) index: I,
-    pub(crate) table: &'a mut Table<S>,
-    pub(crate) phantom: PhantomData<*const H>,
+    pub(crate) table: &'a mut Table<H>,
+    pub(crate) phantom: PhantomData<(*const H,*const S)>,
 }
 impl<'a, I, S, H: VaryHasher<S>> CachedHasher<'a, I, S, H> {
-    pub fn new(table: &'a mut Table<S>, index: I) -> Self {
+    pub fn new(table: &'a mut Table<H>, index: I) -> Self {
         Self {
             index,
             table: table,
@@ -176,15 +180,13 @@ impl<'a, I, S, H: VaryHasher<S>> CachedHasher<'a, I, S, H> {
 impl<H: VaryHasher<u8>> CachedHasher<'static, usize, u8, H> {
     pub fn once<T: MySerialize + Keyed<usize>>(x: T) -> Vec<u8> {
         let mut table = Default::default();
-        let x = {
-            let s = CachedHasher::<usize, u8, H> {
-                index: x.key(),
-                table: &mut table,
-                phantom: PhantomData,
-            };
-            x.serialize(s).unwrap().to_owned()
+        let s = CachedHasher::<usize, u8, H> {
+            index: x.key(),
+            table: &mut table,
+            phantom: PhantomData,
         };
-        table[x].to_vec()
+        let x = x.serialize(s).unwrap().to_owned();
+        table[x].iter().map(|x| x.finish()).collect()
     }
 }
 
@@ -197,11 +199,11 @@ impl<'a, H: VaryHasher<u16>> CachedHasher<'a, usize, u16, H> {
             phantom: PhantomData,
         };
         let x = x.serialize(s).unwrap();
-        table[x].to_vec()
+        table[x].iter().map(|x| x.finish()).collect()
     }
 }
 
-impl<'a, H: VaryHasher<u8>> MySerializer for CachedHasher<'a, usize, u8, H> {
+impl<'a, H: 'a + VaryHasher<u8>> MySerializer for CachedHasher<'a, usize, u8, H> {
     type Ok = SymbolU16; // TODO use an u8 symbol
 
     type Error = CachedHasherError;
@@ -214,6 +216,7 @@ impl<'a, H: VaryHasher<u8>> MySerializer for CachedHasher<'a, usize, u8, H> {
             index: self.index,
             table: self.table,
             acc: Default::default(),
+            _phantom: PhantomData,
         })
     }
 
@@ -222,6 +225,7 @@ impl<'a, H: VaryHasher<u8>> MySerializer for CachedHasher<'a, usize, u8, H> {
             index: self.index,
             table: self.table,
             acc: Default::default(),
+            _phantom: PhantomData,
         })
     }
 
@@ -231,13 +235,12 @@ impl<'a, H: VaryHasher<u8>> MySerializer for CachedHasher<'a, usize, u8, H> {
     {
         let mut h = H::new(0);
         h.write(value.to_string().as_bytes());
-        let x = h.finish();
-        let x = self.table.insert(self.index, vec![x]);
+        let x = self.table.insert(self.index, vec![h]);
         Ok(x)
     }
 }
 
-impl<'a, H: VaryHasher<u16>> MySerializer for CachedHasher<'a, usize, u16, H> {
+impl<'a, H: 'a + VaryHasher<u16>> MySerializer for CachedHasher<'a, usize, u16, H> {
     type Ok = SymbolU16;
 
     type Error = CachedHasherError;
@@ -250,6 +253,7 @@ impl<'a, H: VaryHasher<u16>> MySerializer for CachedHasher<'a, usize, u16, H> {
             index: self.index,
             table: self.table,
             acc: Default::default(),
+            _phantom: PhantomData,
         })
     }
 
@@ -258,6 +262,7 @@ impl<'a, H: VaryHasher<u16>> MySerializer for CachedHasher<'a, usize, u16, H> {
             index: self.index,
             table: self.table,
             acc: Default::default(),
+            _phantom: PhantomData,
         })
     }
 
@@ -267,16 +272,16 @@ impl<'a, H: VaryHasher<u16>> MySerializer for CachedHasher<'a, usize, u16, H> {
     {
         let mut h = H::new(0);
         h.write(value.to_string().as_bytes());
-        let x = h.finish();
-        let x = self.table.insert(self.index, vec![x]);
+        let x = self.table.insert(self.index, vec![h]);
         Ok(x)
     }
 }
 
 pub struct CachedHasherAux<'a, I, S, H: VaryHasher<S>> {
     index: I,
-    table: &'a mut Table<S>,
+    table: &'a mut Table<H>,
     acc: Vec<H>,
+    _phantom: PhantomData<*const S>
 }
 
 impl<'a, H: VaryHasher<u8>> MySerializePar for CachedHasherAux<'a, usize, u8, H> {
@@ -294,21 +299,14 @@ impl<'a, H: VaryHasher<u8>> MySerializePar for CachedHasherAux<'a, usize, u8, H>
             phantom: PhantomData,
         })?;
         for x in &self.table[x] {
-            let x = *x;
-            let mut h = H::new(0);
-            h.write(b"|");
-            h.write_u8(x);
+            let h = x.clone();
             self.acc.push(h);
         }
         Ok(())
     }
 
-    fn end(mut self) -> Result<Self::Ok, Self::Error> {
-        for x in &mut self.acc {
-            x.write(b"|]");
-        }
-        let v = self.acc.iter().map(VaryHasher::finish).collect();
-        Ok(self.table.insert(self.index, v))
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        Ok(self.table.insert(self.index, self.acc))
     }
 }
 
@@ -327,21 +325,14 @@ impl<'a, H: VaryHasher<u16>> MySerializePar for CachedHasherAux<'a, usize, u16, 
             phantom: PhantomData,
         })?;
         for x in &self.table[x] {
-            let x = *x;
-            let mut h = H::new(0);
-            h.write(b"|");
-            h.write_u16(x);
+            let h = x.clone();
             self.acc.push(h);
         }
         Ok(())
     }
 
-    fn end(mut self) -> Result<Self::Ok, Self::Error> {
-        for x in &mut self.acc {
-            x.write(b"|]");
-        }
-        let v = self.acc.iter().map(VaryHasher::finish).collect();
-        Ok(self.table.insert(self.index, v))
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        Ok(self.table.insert(self.index, self.acc))
     }
 }
 impl<'a, H: VaryHasher<u8>> MySerializeSco for CachedHasherAux<'a, usize, u8, H> {
@@ -359,20 +350,17 @@ impl<'a, H: VaryHasher<u8>> MySerializeSco for CachedHasherAux<'a, usize, u8, H>
             phantom: PhantomData,
         })?;
         for x in &self.table[x] {
-            let x = *x;
-            let mut h = H::new(0);
-            h.write_u8(x);
+            let h = x.clone();
             self.acc.push(h);
         }
         Ok(())
     }
 
     fn end(mut self, s: &str) -> Result<Self::Ok, Self::Error> {
-        for x in &mut self.acc {
-            x.write(s.as_bytes());
+        for h in &mut self.acc {
+            h.write(s.as_bytes());
         }
-        let v = self.acc.iter().map(VaryHasher::finish).collect();
-        Ok(self.table.insert(self.index, v))
+        Ok(self.table.insert(self.index, self.acc))
     }
 }
 impl<'a, H: VaryHasher<u16>> MySerializeSco for CachedHasherAux<'a, usize, u16, H> {
@@ -390,19 +378,16 @@ impl<'a, H: VaryHasher<u16>> MySerializeSco for CachedHasherAux<'a, usize, u16, 
             phantom: PhantomData,
         })?;
         for x in &self.table[x] {
-            let x = *x;
-            let mut h = H::new(0);
-            h.write_u16(x);
+            let h = x.clone();
             self.acc.push(h);
         }
         Ok(())
     }
 
     fn end(mut self, s: &str) -> Result<Self::Ok, Self::Error> {
-        for x in &mut self.acc {
-            x.write(s.as_bytes());
+        for h in &mut self.acc {
+            h.write(s.as_bytes());
         }
-        let v = self.acc.iter().map(VaryHasher::finish).collect();
-        Ok(self.table.insert(self.index, v))
+        Ok(self.table.insert(self.index, self.acc))
     }
 }

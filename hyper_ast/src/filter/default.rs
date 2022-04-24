@@ -22,11 +22,12 @@ pub fn hash16_mod<T: Borrow<[u8]>, const MOD: u16>(x0: usize, x: T) -> u16 {
     ret ^ (Hasher::finish(&hasher) % (MOD as u64)) as u16
 }
 
+#[derive(Clone)]
 pub struct Pearson<const MOD: usize> {
     acc: u8,
 }
 
-pub trait VaryHasher<R> {
+pub trait VaryHasher<R> : Clone {
     const MOD: usize;
     fn new(init: usize) -> Self;
     fn finish(&self) -> R;
@@ -60,6 +61,7 @@ impl<const MOD: usize> VaryHasher<u8> for Pearson<MOD> {
     }
 }
 
+#[derive(Clone)]
 #[repr(transparent)]
 pub struct MyDefaultHasher<const MOD: usize>(DefaultHasher);
 

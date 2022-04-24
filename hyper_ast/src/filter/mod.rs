@@ -1,6 +1,7 @@
 pub mod default;
 pub mod pearson_hashing;
 
+use std::fmt::Debug;
 use std::{hash::Hash, io::Result, marker::PhantomData, ops::Deref};
 
 use bitvec::{order::Lsb0, store::BitStore, view::BitViewSized};
@@ -57,6 +58,11 @@ impl<T, V: BitViewSized> Default for Bloom<T, V> {
             bits: Default::default(),
             _phantom: Default::default(),
         }
+    }
+}
+impl<T, V: BitViewSized> Debug for Bloom<T, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Bloom").field("bits", &self.bits).finish()
     }
 }
 
@@ -147,9 +153,9 @@ impl BF<[u8]> for Bloom<&'static [u8], u16> {
     fn check_raw(&self, b: Self::S) -> Self::Result {
         log::trace!("{}", self.bits);
         if self.bits[b as usize] {
-            BloomResult::DoNotContain
-        } else {
             BloomResult::MaybeContain
+        } else {
+            BloomResult::DoNotContain
         }
     }
 }
@@ -189,9 +195,9 @@ impl BF<[u8]> for Bloom<&'static [u8], u32> {
     fn check_raw(&self, b: Self::S) -> Self::Result {
         log::trace!("{}", self.bits);
         if self.bits[b as usize] {
-            BloomResult::DoNotContain
-        } else {
             BloomResult::MaybeContain
+        } else {
+            BloomResult::DoNotContain
         }
     }
 }
@@ -231,9 +237,9 @@ impl BF<[u8]> for Bloom<&'static [u8], u64> {
     fn check_raw(&self, b: Self::S) -> Self::Result {
         log::trace!("{}", self.bits);
         if self.bits[b as usize] {
-            BloomResult::DoNotContain
-        } else {
             BloomResult::MaybeContain
+        } else {
+            BloomResult::DoNotContain
         }
     }
 }
@@ -273,9 +279,9 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 2]> {
     fn check_raw(&self, b: Self::S) -> Self::Result {
         log::trace!("{}", self.bits);
         if self.bits[b as usize] {
-            BloomResult::DoNotContain
-        } else {
             BloomResult::MaybeContain
+        } else {
+            BloomResult::DoNotContain
         }
     }
 }
@@ -315,9 +321,9 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 4]> {
     fn check_raw(&self, b: Self::S) -> Self::Result {
         log::trace!("{}", self.bits);
         if self.bits[b as usize] {
-            BloomResult::DoNotContain
-        } else {
             BloomResult::MaybeContain
+        } else {
+            BloomResult::DoNotContain
         }
     }
 }
@@ -356,9 +362,9 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 8]> {
     fn check_raw(&self, b: Self::S) -> Self::Result {
         log::trace!("{}", self.bits);
         if self.bits[b as usize] {
-            BloomResult::DoNotContain
-        } else {
             BloomResult::MaybeContain
+        } else {
+            BloomResult::DoNotContain
         }
     }
 }
@@ -398,9 +404,9 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 16]> {
     fn check_raw(&self, b: Self::S) -> Self::Result {
         log::trace!("{}", self.bits);
         if self.bits[b as usize] {
-            BloomResult::DoNotContain
-        } else {
             BloomResult::MaybeContain
+        } else {
+            BloomResult::DoNotContain
         }
     }
 }
@@ -440,9 +446,9 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 32]> {
     fn check_raw(&self, b: Self::S) -> Self::Result {
         log::trace!("{}", self.bits);
         if self.bits[b as usize] {
-            BloomResult::DoNotContain
-        } else {
             BloomResult::MaybeContain
+        } else {
+            BloomResult::DoNotContain
         }
     }
 }
@@ -482,9 +488,9 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 64]> {
     fn check_raw(&self, b: Self::S) -> Self::Result {
         log::trace!("{}", self.bits);
         if self.bits[b as usize] {
-            BloomResult::DoNotContain
-        } else {
             BloomResult::MaybeContain
+        } else {
+            BloomResult::DoNotContain
         }
     }
 }

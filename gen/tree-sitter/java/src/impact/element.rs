@@ -6,7 +6,9 @@ use std::ops::{Deref, Index, IndexMut};
 use std::str::Utf8Error;
 
 use hyper_ast::filter::default::VaryHasher;
-use hyper_ast::impact::serialize::{Keyed, MySerialize, MySerializer, MySerializePar, MySerializeSco, Table, CachedHasher};
+use hyper_ast::impact::serialize::{
+    CachedHasher, Keyed, MySerialize, MySerializePar, MySerializeSco, MySerializer, Table,
+};
 use num::ToPrimitive;
 use serde::de::VariantAccess;
 use serde::ser::SerializeSeq;
@@ -459,15 +461,13 @@ impl<Node: Eq + Hash> Hash for Arguments<Node> {
         core::mem::discriminant(self).hash(state);
     }
 }
-impl<Node:Clone> Into<Box<[Node]>> for Arguments<Node> {
-
+impl<Node: Clone> Into<Box<[Node]>> for Arguments<Node> {
     fn into(self) -> Box<[Node]> {
         match self {
             Arguments::Unknown => Default::default(),
             Arguments::Given(v) => v,
         }
     }
-
 }
 impl<Node: Eq + Hash> Eq for Arguments<Node> {}
 impl<Node: Eq + Hash> PartialEq for Arguments<Node> {
@@ -984,17 +984,19 @@ impl<'a> Iterator for NodesIter<'a> {
 }
 
 pub struct BulkHasher<'a, It, S, H>
-where   It: Iterator<Item = ExplorableRef<'a>>,
-   H: VaryHasher<S>, {
-    table: Table<S>,
+where
+    It: Iterator<Item = ExplorableRef<'a>>,
+    H: VaryHasher<S>,
+{
+    table: Table<H>,
     it: It,
     branched: Vec<S>,
     phantom: PhantomData<*const H>,
 }
 
-impl<'a, It, S, H> From<It>
-    for BulkHasher<'a, It, S, H>
- where   It: Iterator<Item = ExplorableRef<'a>>,
+impl<'a, It, S, H> From<It> for BulkHasher<'a, It, S, H>
+where
+    It: Iterator<Item = ExplorableRef<'a>>,
     H: VaryHasher<S>,
 {
     fn from(it: It) -> Self {
@@ -1007,11 +1009,10 @@ impl<'a, It, S, H> From<It>
     }
 }
 
-impl<'a, It, H> Iterator
-    for BulkHasher<'a, It, u8, H>
-    where
-        It: Iterator<Item = ExplorableRef<'a>>,
-        H: VaryHasher<u8>
+impl<'a, It, H> Iterator for BulkHasher<'a, It, u8, H>
+where
+    It: Iterator<Item = ExplorableRef<'a>>,
+    H: VaryHasher<u8>,
 {
     type Item = u8;
     fn next(&mut self) -> Option<u8> {
@@ -1019,11 +1020,10 @@ impl<'a, It, H> Iterator
             return Some(x);
         }
         let x = self.it.next()?;
-        let x = x
-            .serialize(CachedHasher::<usize, u8, H>::new(&mut self.table, x.rf))
-            .unwrap();
+        let s = CachedHasher::<usize, u8, H>::new(&mut self.table, x.key());
+        let x = x.serialize(s).unwrap();
         let x = &self.table[x];
-        self.branched = x.to_vec();
+        self.branched = x.iter().map(VaryHasher::finish).collect();
         self.next()
     }
 }
@@ -1039,12 +1039,10 @@ where
             return Some(x);
         }
         let x = self.it.next()?;
-        let x = x
-            .serialize(CachedHasher::<usize, u16, H>::new(&mut self.table, x.rf))
-            .unwrap();
+        let s = CachedHasher::<usize, u16, H>::new(&mut self.table, x.key());
+        let x = x.serialize(s).unwrap();
         let x = &self.table[x];
-        self.branched = x.to_vec();
+        self.branched = x.iter().map(VaryHasher::finish).collect();
         self.next()
     }
 }
-
