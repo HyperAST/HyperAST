@@ -51,10 +51,16 @@ use hyper_ast::{
 
 use crate::{
     full::FullNode,
-    impact::{element::RefsEnum, elements::*, partial_analysis::PartialAnalysis},
+    impact::{
+        element::{ExplorableRef, RefsEnum},
+        elements::*,
+        partial_analysis::PartialAnalysis,
+    },
     store::vec_map_store::Symbol,
     utils::{self, clamp_u64_to_u32, make_hash},
 };
+
+pub use crate::impact::element::BulkHasher;
 
 pub fn hash32<T: ?Sized + Hash>(t: &T) -> u32 {
     utils::clamp_u64_to_u32(&utils::hash(t))
@@ -95,40 +101,39 @@ impl hyper_ast::types::Stored for HashedNode {
 impl Symbol<HashedNode> for legion::Entity {}
 impl<'a> Symbol<HashedNodeRef<'a>> for legion::Entity {}
 
-impl<'a> RefContainer for HashedNodeRef<'a> {
-    type Ref = [u8];
-    type Result = BloomResult;
+// impl<'a> RefContainer for HashedNodeRef<'a> {
+//     type Result = BloomResult;
 
-    fn check<U: Borrow<Self::Ref> + AsRef<[u8]>>(&self, rf: U) -> Self::Result {
-        macro_rules! check {
-            ( ($e:expr, $s:expr, $rf:expr); $($t:ty),* ) => {
-                match $e {
-                    BloomSize::Much => {
-                        log::warn!("[Too Much]");
-                        BloomResult::MaybeContain
-                    },
-                    BloomSize::None => BloomResult::DoNotContain,
-                    $( <$t>::SIZE => $s.get_component::<$t>()
-                        .unwrap()
-                        .check(0, $rf)),*
-                }
-            };
-        }
-        let e = self.0.get_component::<BloomSize>().unwrap();
-        check![
-            (*e, self.0, rf);
-            Bloom<&'static [u8], u16>,
-            Bloom<&'static [u8], u32>,
-            Bloom<&'static [u8], u64>,
-            Bloom<&'static [u8], [u64; 2]>,
-            Bloom<&'static [u8], [u64; 4]>,
-            Bloom<&'static [u8], [u64; 8]>,
-            Bloom<&'static [u8], [u64; 16]>,
-            Bloom<&'static [u8], [u64; 32]>,
-            Bloom<&'static [u8], [u64; 64]>
-        ]
-    }
-}
+//     fn check<U: Borrow<Self::Ref> + AsRef<[u8]>>(&self, rf: U) -> Self::Result {
+//         macro_rules! check {
+//             ( ($e:expr, $s:expr, $rf:expr); $($t:ty),* ) => {
+//                 match $e {
+//                     BloomSize::Much => {
+//                         log::warn!("[Too Much]");
+//                         BloomResult::MaybeContain
+//                     },
+//                     BloomSize::None => BloomResult::DoNotContain,
+//                     $( <$t>::SIZE => $s.get_component::<$t>()
+//                         .unwrap()
+//                         .check(0, $rf)),*
+//                 }
+//             };
+//         }
+//         let e = self.0.get_component::<BloomSize>().unwrap();
+//         check![
+//             (*e, self.0, rf);
+//             Bloom<&'static [u8], u16>,
+//             Bloom<&'static [u8], u32>,
+//             Bloom<&'static [u8], u64>,
+//             Bloom<&'static [u8], [u64; 2]>,
+//             Bloom<&'static [u8], [u64; 4]>,
+//             Bloom<&'static [u8], [u64; 8]>,
+//             Bloom<&'static [u8], [u64; 16]>,
+//             Bloom<&'static [u8], [u64; 32]>,
+//             Bloom<&'static [u8], [u64; 64]>
+//         ]
+//     }
+// }
 
 impl<'a> PartialEq for HashedNodeRef<'a> {
     fn eq(&self, other: &Self) -> bool {
@@ -1423,6 +1428,11 @@ impl<'a> JavaTreeGen<'a> {
             Some(PartialAnalysis::init(kind, None, |x| {
                 label_store.get_or_insert(x)
             }))
+        } else if kind == &Type::TypeParameter
+        {
+            Some(PartialAnalysis::init(kind, None, |x| {
+                label_store.get_or_insert(x)
+            }))
         } else {
             None
         }
@@ -1675,15 +1685,19 @@ impl<'a> JavaTreeGen<'a> {
                 Some(ana)
             }
             Some(ana) if &acc.simple.kind == &Type::MethodDeclaration => {
-                // debug!("refs in method decl:");
-                // for x in ana.display_refs(&self.stores.label_store) {
-                //     debug!("    {}", x);
-                // }
+                log::trace!("refs in method decl:");
+                for x in ana.display_refs(&self.stores.label_store) {
+                    log::trace!("    {}", x);
+                }
+                log::trace!("decls in method decl");
+                for x in ana.display_decls(&self.stores.label_store) {
+                    log::trace!("    {}", x);
+                }
                 let ana = ana.resolve();
-                // debug!("refs in method decl after resolution:");
-                // for x in ana.display_refs(&self.stores.label_store) {
-                //     debug!("    {}", x);
-                // }
+                log::trace!("refs in method decl after resolution:");
+                for x in ana.display_refs(&self.stores.label_store) {
+                    log::trace!("    {}", x);
+                }
                 Some(ana)
             }
             Some(ana) if &acc.simple.kind == &Type::ConstructorDeclaration => {
@@ -1755,13 +1769,20 @@ impl<'a> JavaTreeGen<'a> {
         let compressed_node = match label_id {
             None => {
                 macro_rules! insert {
-                    ( $c:expr, $t:ty ) => {
+                    ( $c:expr, $t:ty ) => {{
+                        let it = ana.as_ref().unwrap().solver.iter_refs();
+                        let it =
+                            BulkHasher::<_, <$t as BF<[u8]>>::S, <$t as BF<[u8]>>::H>::from(it);
                         NodeStore::insert_after_prepare(
                             vacant,
-                            $c.concat((<$t>::SIZE, <$t>::from(ana.as_ref().unwrap().refs()))),
+                            $c.concat((<$t>::SIZE, <$t>::from(it))),
                         )
-                    };
+                    }};
                 }
+                // type A = Bloom<&'static [u8], [u64; 64]>;
+                // let it = ana.as_ref().unwrap().solver.iter_refs();
+                // let it = BulkHasher::<_, <A as BF<[u8]>>::S, <A as BF<[u8]>>::H>::from(it);
+                // let zazaz = A::from(it);
                 match acc.simple.children.len() {
                     0 => {
                         assert_eq!(0, metrics.size);
@@ -1857,12 +1878,15 @@ impl<'a> JavaTreeGen<'a> {
             }
             Some(label) => {
                 macro_rules! insert {
-                    ( $c:expr, $t:ty ) => {
+                    ( $c:expr, $t:ty ) => {{
+                        let it = ana.as_ref().unwrap().solver.iter_refs();
+                        let it =
+                            BulkHasher::<_, <$t as BF<[u8]>>::S, <$t as BF<[u8]>>::H>::from(it);
                         NodeStore::insert_after_prepare(
                             vacant,
-                            $c.concat((<$t>::SIZE, <$t>::from(ana.as_ref().unwrap().refs()))),
+                            $c.concat((<$t>::SIZE, <$t>::from(it))),
                         )
-                    };
+                    }};
                 }
                 match acc.simple.children.len() {
                     0 => {

@@ -1,31 +1,38 @@
 ///! fully compress all subtrees from an Xml CST
-use std::{
-    fmt::{Debug},
-    vec,
-};
+use std::{fmt::Debug, vec};
 
-use legion::{
-    world::{EntryRef},
-};
+use legion::world::EntryRef;
 use tree_sitter::{Language, Parser, TreeCursor};
 use tuples::CombinConcat;
 
 use hyper_ast::{
-    store::labels::LabelStore,
     filter::BF,
     filter::{Bloom, BloomSize},
     full::FullNode,
     hashed::{self, NodeHashs, SyntaxNodeHashs},
     // impact::{element::RefsEnum, elements::*, partial_analysis::PartialAnalysis},
     nodes::{self, SimpleNode1, Space},
-    store::{TypeStore, nodes::DefaultNodeStore as NodeStore, nodes::legion::{NodeIdentifier, HashedNodeRef, CS}},
-    tree_gen::{
-        compute_indentation, get_spacing, has_final_space, 
-        // label_for_cursor, 
-        AccIndentation,
-        Accumulator, BasicAccumulator, Spaces, TreeGen, parser::{Node as _,TreeCursor as _}, SubTreeMetrics,
+    store::labels::LabelStore,
+    store::{
+        nodes::legion::{HashedNodeRef, NodeIdentifier, CS},
+        nodes::DefaultNodeStore as NodeStore,
+        TypeStore,
     },
-    utils::{self, clamp_u64_to_u32}, types::{LabelStore as _, Type, Typed, Tree as _},
+    tree_gen::{
+        compute_indentation,
+        get_spacing,
+        has_final_space,
+        parser::{Node as _, TreeCursor as _},
+        // label_for_cursor,
+        AccIndentation,
+        Accumulator,
+        BasicAccumulator,
+        Spaces,
+        SubTreeMetrics,
+        TreeGen,
+    },
+    types::{LabelStore as _, Tree as _, Type, Typed},
+    utils::{self, clamp_u64_to_u32},
 };
 
 // pub type HashedNode<'a> = HashedCompressedNode<SyntaxNodeHashs<HashSize>,SymbolU32<&'a HashedNode>,LabelIdentifier>;
@@ -48,10 +55,10 @@ pub struct Global {
 }
 
 /// TODO temporary placeholder
-#[derive(Debug,Clone,Default)]
+#[derive(Debug, Clone, Default)]
 pub struct PartialAnalysis {}
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Local {
     pub compressed_node: NodeIdentifier,
     pub metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
@@ -84,7 +91,7 @@ impl Local {
 
 pub struct Acc {
     simple: BasicAccumulator<Type, NodeIdentifier>,
-    label:Option<String>,
+    label: Option<String>,
     start_byte: usize,
     metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
     ana: Option<PartialAnalysis>,
@@ -134,7 +141,6 @@ impl Default for SimpleStores {
     }
 }
 
-
 #[repr(transparent)]
 pub struct TNode<'a>(tree_sitter::Node<'a>);
 
@@ -156,7 +162,7 @@ impl<'a> hyper_ast::tree_gen::parser::Node<'a> for TNode<'a> {
     }
 
     fn child(&self, i: usize) -> Option<Self> {
-        self.0.child(i).map(|x|TNode(x))
+        self.0.child(i).map(|x| TNode(x))
     }
 
     fn is_named(&self) -> bool {
@@ -166,7 +172,7 @@ impl<'a> hyper_ast::tree_gen::parser::Node<'a> for TNode<'a> {
 #[repr(transparent)]
 pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
 
-impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a,TNode<'a>> for TTreeCursor<'a> {
+impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<'a> {
     fn node(&self) -> TNode<'a> {
         TNode(self.0.node())
     }
@@ -216,7 +222,8 @@ impl<'a> TreeGen for XmlTreeGen {
             sum_byte_length,
             &parent_indentation,
         );
-        let label = node.extract_label(text)
+        let label = node
+            .extract_label(text)
             .and_then(|x| Some(std::str::from_utf8(&x).unwrap().to_owned()));
         let ana = self.build_ana(&kind);
         Acc {
@@ -225,14 +232,14 @@ impl<'a> TreeGen for XmlTreeGen {
                 children: vec![],
             },
             label,
-            start_byte:node.start_byte(),
+            start_byte: node.start_byte(),
             metrics: Default::default(),
             ana,
             padding_start: sum_byte_length,
             indentation: indent,
         }
     }
-    
+
     fn post(
         &mut self,
         parent: &mut <Self as TreeGen>::Acc,
@@ -267,7 +274,8 @@ impl<'a> TreeGen for XmlTreeGen {
             0,
             &Space::format_indentation(&self.line_break),
         );
-        let label = node.extract_label(text)
+        let label = node
+            .extract_label(text)
             .and_then(|x| Some(std::str::from_utf8(&x).unwrap().to_owned()));
         let ana = self.build_ana(&kind);
         Acc {
@@ -276,7 +284,7 @@ impl<'a> TreeGen for XmlTreeGen {
                 children: vec![],
             },
             label,
-            start_byte:node.start_byte(),
+            start_byte: node.start_byte(),
             metrics: Default::default(),
             ana,
             padding_start: 0,
@@ -423,11 +431,7 @@ impl XmlTreeGen {
             acc.metrics.size as usize + 1,
             &mut acc,
         );
-        let full_node = self.make(
-            0,
-            acc.metrics.size as usize,
-            acc,
-        );
+        let full_node = self.make(0, acc.metrics.size as usize, acc);
         full_node
     }
 
@@ -470,7 +474,7 @@ impl XmlTreeGen {
             || kind == &Type::AnnotationTypeDeclaration
             || kind == &Type::Program
         {
-            Some(PartialAnalysis{})
+            Some(PartialAnalysis {})
         } else {
             None
         }
@@ -503,15 +507,12 @@ impl XmlTreeGen {
                 let tl = acc.simple.kind.literal_type();
                 // let tl = label_store.get_or_insert(tl);
                 (
-                    Some(PartialAnalysis{}),
+                    Some(PartialAnalysis {}),
                     Some(label_store.get_or_insert(label.as_str())),
                 )
             } else {
                 let rf = label_store.get_or_insert(label.as_str());
-                (
-                    Some(PartialAnalysis{}),
-                    Some(rf),
-                )
+                (Some(PartialAnalysis {}), Some(rf))
             }
         } else if acc.simple.kind.is_primitive() {
             let node = node_store.resolve(acc.simple.children[0]);
@@ -520,10 +521,7 @@ impl XmlTreeGen {
                 todo!("{:?} {:?}", acc.simple.kind, ana)
             }
             // let rf = label_store.get_or_insert(label.as_str());
-            (
-                Some(PartialAnalysis{}),
-                None,
-            )
+            (Some(PartialAnalysis {}), None)
         } else if let Some(ana) = acc.ana {
             // nothing to do, resolutions at the end of post ?
             (Some(ana), None)
@@ -534,12 +532,10 @@ impl XmlTreeGen {
             || acc.simple.kind == Type::Block
             || acc.simple.kind == Type::ElementValueArrayInitializer
         {
-            (
-                Some(PartialAnalysis{}),
-                None,
-            )
-        } else if acc.simple.kind == Type::ArgumentList || acc.simple.kind == Type::FormalParameters
-        || acc.simple.kind == Type::AnnotationArgumentList
+            (Some(PartialAnalysis {}), None)
+        } else if acc.simple.kind == Type::ArgumentList
+            || acc.simple.kind == Type::FormalParameters
+            || acc.simple.kind == Type::AnnotationArgumentList
         {
             assert!(acc
                 .simple
@@ -547,10 +543,7 @@ impl XmlTreeGen {
                 .iter()
                 .all(|x| { !node_store.resolve(*x).has_children() }));
             // TODO decls
-            (
-                Some(PartialAnalysis{}),
-                None,
-            )
+            (Some(PartialAnalysis {}), None)
         } else if acc.simple.kind == Type::SwitchLabel || acc.simple.kind == Type::Modifiers {
             // TODO decls
             (None, None)
@@ -635,12 +628,16 @@ impl XmlTreeGen {
             match label {
                 None => {
                     macro_rules! insert {
-                        ( $c:expr, $t:ty ) => {
+                        ( $c:expr, $t:ty ) => {{
+                            // let it = ana.as_ref().unwrap().solver.iter_refs();
+                            // let it =
+                            //     BulkHasher::<_, <$t as BF<[u8]>>::S, <$t as BF<[u8]>>::H>::from(it);
                             NodeStore::insert_after_prepare(
                                 vacant,
-                                $c.concat((<$t>::SIZE, <$t>::from(ana.as_ref().unwrap().refs()))),
+                                // $c.concat((<$t>::SIZE, <$t>::from(it))),
+                                $c
                             )
-                        };
+                        }};
                     }
                     match acc.simple.children.len() {
                         0 => {
@@ -815,9 +812,9 @@ pub fn serialize<W: std::fmt::Write>(
 /// TODO partialana
 impl PartialAnalysis {
     pub(crate) fn refs_count(&self) -> usize {
-        0//TODO
+        0 //TODO
     }
     pub(crate) fn refs(&self) -> impl Iterator<Item = Vec<u8>> {
-        vec![vec![0_u8]].into_iter()//TODO
+        vec![vec![0_u8]].into_iter() //TODO
     }
 }

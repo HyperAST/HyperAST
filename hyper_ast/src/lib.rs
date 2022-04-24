@@ -13,6 +13,7 @@ pub mod compat;
 pub mod utils;
 pub mod position;
 pub mod usage;
+pub mod impact;
 
 #[cfg(test)]
 mod tests;

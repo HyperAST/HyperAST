@@ -7,16 +7,15 @@ use std::{
 
 use string_interner::{DefaultSymbol, Symbol};
 
-use crate::types::Type;
+use crate::{types::Type, impact::serialize::{MySerialize, Keyed}};
 
 pub type TypeIdentifier = Type;
 
 type Label = Vec<u8>;
 
 pub trait RefContainer {
-    type Ref: ?Sized;
     type Result;
-    fn check<U: Borrow<Self::Ref> + AsRef<[u8]>>(&self, rf: U) -> Self::Result;
+    fn check<U: MySerialize+Keyed<usize>>(&self, rf: U) -> Self::Result;
 }
 
 /// identifying data for a node in an HyperAST

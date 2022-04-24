@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     error::Error,
+    fmt::Debug,
     ops::{Deref, Index},
 };
 
@@ -118,15 +119,15 @@ impl Solver {
     pub(crate) fn refs_count(&self) -> usize {
         self.refs.count_ones()
     }
-    pub fn refs(&self) -> impl Iterator<Item = LabelValue> + '_ {
-        self.refs
-            .iter_ones()
-            // iter().enumerate()
-            // .filter_map(|(x,b)| if *b {Some(x)} else {None})
-            .map(|x| self.nodes.with(x).bytes().into())
-    }
+    // pub fn refs(&self) -> impl Iterator<Item = LabelValue> + '_ {
+    //     self.refs
+    //         .iter_ones()
+    //         // iter().enumerate()
+    //         // .filter_map(|(x,b)| if *b {Some(x)} else {None})
+    //         .map(|x| self.nodes.with(x).bytes().into())
+    // }
 
-    pub(crate) fn iter_refs<'a>(&'a self) -> reference::Iter<'a> {
+    pub fn iter_refs<'a>(&'a self) -> reference::Iter<'a> {
         reference::Iter {
             nodes: &self.nodes,
             refs: self.refs.iter_ones(),
@@ -140,8 +141,7 @@ impl Solver {
         }
     }
     pub(crate) fn get(&self, other: RefsEnum<RefPtr, LabelPtr>) -> Option<RefPtr> {
-        // TODO analyze perfs to find if Vec or HashSet or something else works better
-        self.nodes.iter().position(|x| x == &other)
+        self.nodes.get(other)
     }
 
     fn iter_nodes<'a>(&'a self) -> element::NodesIter<'a> {
@@ -248,7 +248,14 @@ impl Solver {
             RefsEnum::Or(p) => {
                 let p = p
                     .iter()
-                    .map(|x| self.intern_external(map, cache, other.with(*x)))
+                    .map(|x| {
+                        let x = self.intern_external(map, cache, other.with(*x));
+                        // match &self.nodes[x] {
+                        //     RefsEnum::Or(v) => v.clone(),
+                        //     _ => vec![x].into(),
+                        // }
+                        x
+                    })
                     .collect();
                 self.intern(RefsEnum::Or(p))
             }
@@ -328,6 +335,21 @@ impl Solver {
         match self.nodes[t].clone() {
             RefsEnum::Root => None, //("fully qualified node cannot be qualified further")),
             RefsEnum::MaybeMissing => Some(p),
+            RefsEnum::Or(v) => {
+                let o = v
+                    .iter()
+                    .flat_map(|&o| {
+                        self.try_solve_node_with(o, p).map_or(vec![].into(), |x| {
+                            match &self.nodes[x] {
+                                RefsEnum::Or(v) => v.clone(),
+                                _ => vec![x].into(),
+                            }
+                        })
+                    })
+                    .collect();
+                let tmp = RefsEnum::Or(o);
+                Some(refs!(tmp))
+            }
             x => {
                 let o = x.object().expect(&format!("should have an object {:?}", x));
                 let o = self.try_solve_node_with(o, p)?;
@@ -357,10 +379,16 @@ impl Solver {
             RefsEnum::Root => None,
             RefsEnum::MaybeMissing => None,
             RefsEnum::Or(y) => {
-                let x = y
-                    .iter()
-                    .filter_map(|x| self.try_unsolve_node_with(*x, p))
-                    .collect(); // TODO not sure
+                let x =
+                    y.iter()
+                        .flat_map(|&o| {
+                            self.try_unsolve_node_with(o, p)
+                                .map_or(vec![].into(), |x| match &self.nodes[x] {
+                                    RefsEnum::Or(v) => v.clone(),
+                                    _ => vec![x].into(),
+                                })
+                        })
+                        .collect(); // TODO not sure
                 let tmp = RefsEnum::Or(x);
                 Some(refs!(tmp))
             }
@@ -396,7 +424,7 @@ impl Solver {
     fn no_choice(&mut self, other: RefPtr) -> RefPtr {
         let o = self.nodes[other].object();
         let o = if let Some(o) = o {
-            self.no_mask(o)
+            self.no_choice(o)
         } else {
             return other;
         };
@@ -405,6 +433,17 @@ impl Solver {
         }
         let x = self.nodes[other].with_object(o);
         self.intern(x)
+    }
+    pub fn has_choice(&self, other: RefPtr) -> bool {
+        if let RefsEnum::Or(_) = self.nodes[other] {
+            return true;
+        }
+        let o = self.nodes[other].object();
+        if let Some(o) = o {
+            self.has_choice(o)
+        } else {
+            false
+        }
     }
 }
 
@@ -415,6 +454,7 @@ impl Solver {
         let mut cached = Internalizer {
             solve: true,
             cache: Default::default(),
+            cache_decls: Default::default(),
             solver,
         };
         // self.print_decls();
@@ -479,7 +519,13 @@ impl Solver {
             RefsEnum::Or(v) => {
                 let v = v
                     .iter()
-                    .map(|x| self.local_solve_intern_external(cache, other.with(*x)))
+                    .flat_map(|x| {
+                        let x = self.local_solve_intern_external(cache, other.with(*x));
+                        match &self.nodes[x] {
+                            RefsEnum::Or(v) => v.clone(),
+                            _ => vec![x].into(),
+                        }
+                    })
                     .collect();
                 self.intern(RefsEnum::Or(v))
             }
@@ -545,17 +591,19 @@ impl Solver {
 
     /// copy all references in [`solver`] to current solver
     pub(crate) fn extend<'a>(&mut self, solver: &'a Solver) -> Internalizer<'a> {
-        self.extend_map(solver, &mut Default::default())
+        self.extend_map(solver, &mut Default::default(), Default::default())
     }
 
     pub(crate) fn extend_map<'a>(
         &mut self,
         solver: &'a Solver,
         map: &mut HashMap<usize, usize>,
+        map_decls: HashMap<usize, usize>,
     ) -> Internalizer<'a> {
         let mut cached = Internalizer {
             solve: false,
             cache: Default::default(),
+            cache_decls: map_decls,
             solver,
         };
         for r in solver.iter_refs() {
@@ -587,40 +635,32 @@ impl Solver {
 
 #[derive(Debug, Clone)]
 pub struct SolvingResult {
-    /// Whenever the result is the consequence of a match to its declaration.
-    /// It does not particularly buble up when solving, it depends on the type of RefsEnum.
-    matched: bool,
+    /// Result of successful matches
+    matched: ListSet<RefPtr>,
     /// The reference that we are atempting to solve, it may contain RefsEnum::Mask and RefsEnum::Or
-    result: Option<RefPtr>,
-    /// References corresponding to the developped form of result ie. do not contain Mask and Or
-    /// Important for Matching against declarations
-    /// TODO check if building digesteds on the fly would be better
-    /// NOTE I fear that precomputing them is a waste of time and won't help much finding the matched branch in result
-    digested: ListSet<RefPtr>,
+    pub(crate) waiting: Option<RefPtr>,
 }
 
 impl SolvingResult {
-    pub fn new(result:RefPtr,digested:ListSet<RefPtr>) -> Self {
+    pub fn new(result: RefPtr, matched: ListSet<RefPtr>) -> Self {
         Self {
-            matched: false,
-            result: Some(result),
-            digested,
+            matched,
+            waiting: Some(result),
         }
     }
     pub fn is_matched(&self) -> bool {
-        self.matched
+        !self.matched.is_empty()
     }
     pub fn iter(&self) -> impl Iterator<Item = &RefPtr> {
-        self.digested.iter()
+        self.matched.iter()
     }
 }
 
 impl Default for SolvingResult {
     fn default() -> Self {
         Self {
-            matched: false,
-            result: None,
-            digested: Default::default(),
+            waiting: None,
+            matched: Default::default(),
         }
     }
 }
@@ -641,6 +681,26 @@ impl<Node: Eq> FromIterator<Node> for SolvingResult {
     }
 }
 
+struct DebugSolvingResult<'a> {
+    pub(crate) nodes: &'a Nodes,
+    pub(crate) result: &'a SolvingResult,
+}
+
+impl<'a> Debug for DebugSolvingResult<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?} := {:?}",
+            self.result.waiting.map(|x| self.nodes.with(x)),
+            self.result
+                .matched
+                .iter()
+                .map(|&x| self.nodes.with(x))
+                .collect::<Vec<_>>()
+        )
+    }
+}
+
 pub struct SolvingAssocTable {
     intern: Vec<Option<SolvingResult>>,
 }
@@ -655,22 +715,27 @@ impl Index<RefPtr> for SolvingAssocTable {
 
 impl Default for SolvingAssocTable {
     fn default() -> Self {
-        Self { intern: Default::default() }
+        Self {
+            intern: Default::default(),
+        }
     }
 }
 
 impl SolvingAssocTable {
-    const def:Option<SolvingResult> = None;
+    const N: Option<SolvingResult> = None;
     pub fn get(&self, index: &RefPtr) -> &Option<SolvingResult> {
         if index >= &self.intern.len() {
-            return &Self::def;
+            return &Self::N;
         }
         &self.intern[*index]
     }
     pub fn insert(&mut self, index: RefPtr, v: SolvingResult) {
+        if index >= self.intern.len() {
+            self.intern.resize(index + 1, None)
+        }
         self.intern[index] = Some(v);
     }
-    fn len(&self, index: &RefPtr) -> usize {
+    fn len(&self) -> usize {
         self.intern.len()
     }
     fn is_empty(&self) -> bool {
@@ -690,7 +755,7 @@ impl Solver {
         };
 
         log::trace!(
-            "sd: {:?}",
+            "sd:\n{:?}",
             DebugDecls {
                 decls: &self.decls,
                 nodes: &self.nodes
@@ -699,11 +764,18 @@ impl Solver {
         for s in self.iter_refs() {
             // TODO make it imperative ?
             let rr = r.solve_aux(&mut cache, s.rf);
+            log::trace!(
+                "solve_aux({:?}) produced {:?}",
+                self.nodes.with(s.rf),
+                DebugSolvingResult {
+                    nodes: &r.nodes,
+                    result: &rr
+                }
+            );
             if rr.is_matched() {
                 continue;
             }
-            for s in rr.iter() {
-                let s = *s;
+            if let Some(s) = rr.waiting {
                 match &r.nodes[s] {
                     RefsEnum::Primitive(_) => {}
                     _ => {
@@ -719,6 +791,48 @@ impl Solver {
         (cache, r)
     }
 
+    pub(crate) fn solving_result(&mut self, refs: &[RefPtr]) -> SolvingResult {
+        if refs.is_empty() {
+            panic!()
+        } else if refs.len() == 1 {
+            SolvingResult::new(refs[0], refs.iter().map(|x| *x).collect())
+        } else {
+            let refs = refs.iter().map(|x| *x);
+            let result = self.intern(RefsEnum::Or(refs.clone().collect()));
+            SolvingResult::new(result, refs.collect())
+        }
+    }
+
+    /// flatten Or and filter Masks
+    pub(crate) fn possibilities(&mut self, other: RefPtr) -> Vec<RefPtr> {
+        let o = &self.nodes[other].clone();
+        if let RefsEnum::Mask(oo, _) = o {
+            self.possibilities(*oo)
+        } else if let RefsEnum::Or(v) = o {
+            v.iter().flat_map(|&o| self.possibilities(o)).collect()
+        } else if let Some(o) = o.object() {
+            self.possibilities(o)
+                .into_iter()
+                .map(|o| {
+                    let x = self.nodes[other].with_object(o);
+                    self.intern(x)
+                })
+                .collect()
+        } else {
+            vec![other]
+        }
+    }
+
+    /// flatten Or and filter Masks
+    /// do not create new references
+    /// useful to cut short search for declarations,
+    /// indeed as we share `self.nodes` with declarations
+    /// if we cannot flatten a case we are sure
+    /// that there is no corresponding declaration
+    pub(crate) fn straight_possibilities(&self, other: RefPtr) -> Vec<RefPtr> {
+        self.nodes.straight_possibilities(other)
+    }
+
     /// no internalization needed
     /// not used on blocks, only bodies, declarations and whole programs
     pub(crate) fn solve_aux(
@@ -727,185 +841,156 @@ impl Solver {
         other: RefPtr,
     ) -> SolvingResult {
         if let Some(x) = cache.get(&other) {
-            if x.is_matched() {
-                log::trace!(
-                    "solving {:?}: {:?} from cache into nothing",
-                    other,
-                    self.nodes.with(other)
-                );
-            } else {
-                log::trace!("solve {:?}: {:?} from cache", other, self.nodes.with(other),);
-                // for r in x.iter() {
-                //     log::trace!(
-                //         "solving {:?}: {:?} from cache into {:?}",
-                //         other,
-                //         self.nodes.with(other),
-                //         self.nodes.with(*r)
-                //     );
-                // }
-            }
+            log::trace!(
+                "solve: {:?} {:?} from cache {:?}",
+                other,
+                self.nodes.with(other),
+                DebugSolvingResult {
+                    nodes: &self.nodes,
+                    result: x
+                }
+            );
             return x.clone();
         }
-        log::trace!("solving : {:?} {:?}", other, self.nodes.with(other));
 
-        let other = if let RefsEnum::TypeIdentifier(o, i) = self.nodes[other].clone() {
-            let no_mask = self.no_mask(o); // maybe return just after match
-            if no_mask != o {
-                // let simp = self.intern(RefsEnum::ScopedIdentifier(o,i));
-                // let no_mask = self.intern(RefsEnum::ScopedIdentifier(no_mask,i));
-                let simp = self.intern(RefsEnum::TypeIdentifier(o, i));
-                let no_mask = self.intern(RefsEnum::TypeIdentifier(no_mask, i));
-                if let Some(r) = (&self.decls).get(&Declarator::Type(no_mask)).cloned() {
-                    log::trace!("t t through cache {:?}", other);
-                    match r {
-                        DeclType::Compile(r, _, _) => r,
-                        DeclType::Runtime(b) => {
-                            // TODO should be about generics
-                            if b.is_empty() {
-                                return Default::default();
-                            } else {
-                                match self.nodes[other].clone() {
-                                    RefsEnum::Mask(mo, ms) => {
-                                        // TODO do more than b[0]
-                                        // TODO mo might contain more masks
-                                        match self.nodes[b[0]].clone() {
-                                            RefsEnum::ScopedIdentifier(oo, ii) => {
-                                                let n = self.intern(RefsEnum::Mask(oo, ms));
-                                                self.intern(RefsEnum::ScopedIdentifier(n, ii))
-                                            }
-                                            RefsEnum::TypeIdentifier(oo, ii) => {
-                                                let n = self.intern(RefsEnum::Mask(oo, ms));
-                                                self.intern(RefsEnum::TypeIdentifier(n, ii))
-                                            }
-                                            _ => todo!(),
-                                        }
-                                    }
-                                    _ => b[0],
-                                }
-                            }
-                        }
-                        x => todo!("{:?}", x),
-                    }
-                // } else if let Some(r) = (&self.decls).get(&Declarator::Field(no_mask)).cloned() {
-                //     log::trace!("t f through cache {:?}", other);
-                //     match r {
-                //         DeclType::Compile(r, _, _) => r,
-                //         DeclType::Runtime(b) => {
-                //             if b.len() == 1 {
-                //                 b[0]
-                //             } else if b.len() == 0 {
-                //                 simp
-                //             } else {
-                //                 return b.iter().flat_map(|r| {
-                //                     self.solve_aux(cache, *r).iter().map(|x| *x).collect::<Vec<_>>()
-                //                 }).collect()
-                //             }
-                //         }
-                //     }
-                // } else if let Some(r) = (&self.decls).get(&Declarator::Variable(no_mask)).cloned() {
-                //     log::trace!("t v through cache {:?}", other);
-                //     match r {
-                //         DeclType::Compile(r, _, _) => r,
-                //         DeclType::Runtime(b) => {
-                //             if b.len() == 1 {
-                //                 b[0]
-                //             } else if b.len() == 0 {
-                //                 simp
-                //             } else {
-                //                 return b.iter().flat_map(|r| {
-                //                     self.solve_aux(cache, *r).iter().map(|x| *x).collect::<Vec<_>>()
-                //                 }).collect()
-                //             }
-                //         }
-                //     }
-                } else {
-                    simp //other
+        macro_rules! search {
+            ( $($e:expr,  $f:expr;)+ ) => {{
+                $(if let Some(r) = (&self.decls).get(&$e).cloned() {
+                    $f(r)
+                } else )+ {
+                    vec![]
                 }
-            } else {
-                other
+            }};
+            ( { $d:expr } $($e:expr,  $f:expr;)+ ) => {{
+                $(if let Some(r) = (&self.decls).get(&$e).cloned() {
+                    $f(r)
+                } else )+ {
+                    $d
+                }
+            }};
+        }
+
+        log::trace!("solving: {:?} {:?}", other, self.nodes.with(other));
+
+        let decl_type_handling = |r: DeclType<RefPtr>| match r {
+            DeclType::Compile(r, r1, r2) => {
+                let mut r = vec![r];
+                r.extend_from_slice(&r1);
+                r.extend_from_slice(&r2);
+                r
             }
-        } else {
-            let no_mask = self.no_mask(other); // maybe return just after match
-            if let Some(r) = (&self.decls).get(&Declarator::Field(no_mask)).cloned() {
-                log::trace!("f through cache {:?}", other);
-                match r {
-                    DeclType::Compile(r, _, _) => r,
-                    DeclType::Runtime(b) => {
-                        if b.len() == 1 {
-                            log::trace!("f through cache gg {:?}", other);
-                            b[0]
-                        } else if b.len() == 0 {
-                            other
-                        } else {
-                            return b
-                                .iter()
-                                .flat_map(|r| {
-                                    self.solve_aux(cache, *r)
-                                        .iter()
-                                        .map(|x| *x)
-                                        .collect::<Vec<_>>()
-                                })
-                                .collect();
-                        }
-                    }
-                }
-            } else if let Some(r) = (&self.decls).get(&Declarator::Variable(no_mask)).cloned() {
-                log::trace!("v through cache {:?}", other);
-                match r {
-                    DeclType::Compile(r, _, _) => r,
-                    DeclType::Runtime(b) => {
-                        if b.len() == 1 {
-                            log::trace!("v through cache gg {:?}", other);
-                            b[0]
-                        } else if b.len() == 0 {
-                            other
-                        } else {
-                            return b
-                                .iter()
-                                .flat_map(|r| {
-                                    self.solve_aux(cache, *r)
-                                        .iter()
-                                        .map(|x| *x)
-                                        .collect::<Vec<_>>()
-                                })
-                                .collect();
-                        }
-                    }
-                }
-            } else if let Some(r) = (&self.decls).get(&Declarator::Type(no_mask)).cloned() {
-                log::trace!("t through cache {:?}", other);
-                match r {
-                    DeclType::Compile(r, _, _) => r,
-                    DeclType::Runtime(b) => {
-                        return Default::default();
-                    }
-                    x => todo!("{:?}", x),
-                }
-            } else {
-                other
-            }
+            DeclType::Runtime(b) => b.to_vec(),
         };
+
+        // let (not_matched, matched) = if let RefsEnum::TypeIdentifier(o, i) = self.nodes[other].clone() {
+        //     let possibilities = self.straight_possibilities(o);
+        //     let mut not_matched = vec![];
+        //     let mut matched = vec![];
+        //     for o in possibilities {
+        //         let simp = self.intern(RefsEnum::TypeIdentifier(o, i));
+        //         search![
+        //             { not_matched.push(simp) }
+        //             Declarator::Type(simp), |r| {matched.extend(decl_type_handling(r));} ;
+        //         ]
+        //     }
+
+        //         // .collect();
+        //     let matched: ListSet<RefPtr> = possibilities
+        //         .into_iter()
+        //         .flat_map(|o| {
+        //             let simp = self.intern(RefsEnum::TypeIdentifier(o, i));
+        //             let mut f = || {not_matched+=1;vec![simp]};
+        //             search![
+        //                 { f() }
+        //                 Declarator::Type(simp), decl_type_handling;
+        //             ]
+        //         })
+        //         .collect();
+        //     let matched: ListSet<RefPtr> = matched
+        //         .iter()
+        //         .flat_map(|&x| {
+        //             if x == other {
+        //                 vec![x].into()
+        //             } else {
+        //                 let x = self.solve_aux(cache, x).waiting.unwrap();
+        //                 match &self.nodes[x] {
+        //                     RefsEnum::Or(v) => v.clone(),
+        //                     _ => vec![x].into(),
+        //                 }
+        //             }
+        //         })
+        //         .collect();
+        //     (not_matched, matched)
+        // } else {
+        //     let matched = self.straight_possibilities(other);
+        //     log::trace!("àà {:?}", matched);
+        //     let mut not_matched = 0;
+        //     let matched: ListSet<RefPtr> = matched
+        //         .into_iter()
+        //         .flat_map(|simp| {
+        //             log::trace!("&& {:?} {:?}", simp, self.nodes.with(simp));
+        //             let mut f = || {not_matched+=1;vec![simp]};
+        //             search![
+        //                 { f() }
+        //                 Declarator::Field(simp), decl_type_handling;
+        //                 Declarator::Variable(simp), decl_type_handling;
+        //                 Declarator::Type(simp), decl_type_handling;
+        //             ]
+        //         })
+        //         .collect();
+        //     log::trace!("== {:?}", matched);
+        //     let matched: ListSet<RefPtr> = matched
+        //         .iter()
+        //         .flat_map(|&x| {
+        //             log::trace!("éé {:?} {:?}", x, self.nodes.with(x));
+        //             if x == other {
+        //                 vec![x].into()
+        //             } else {
+        //                 let x = self.solve_aux(cache, x).waiting.unwrap();
+        //                 match &self.nodes[x] {
+        //                     RefsEnum::Or(v) => v.clone(),
+        //                     _ => vec![x].into(),
+        //                 }
+        //             }
+        //         })
+        //         .collect();
+        //     (not_matched, matched)
+        // };
+
+        // if matched.len() > not_matched {
+        //     let waiting = if matched.len() == 1 {
+        //         matched.iter().next().map(|&x|x)
+        //     } else {
+        //         Some(self.intern(RefsEnum::Or(matched.clone())))
+        //     };
+        //     let r = SolvingResult { matched, waiting };
+        //     log::trace!(
+        //         "solved early: {} produced {:?}",
+        //         other,
+        //         DebugSolvingResult {
+        //             nodes: &self.nodes,
+        //             result: &r
+        //         }
+        //     );
+        //     cache.insert(other, r.clone());
+        //     return r;
+        // }
+
         let r: SolvingResult = match self.nodes[other].clone() {
-            RefsEnum::Root => [other].iter().map(|x| *x).collect(),
-            RefsEnum::MaybeMissing => [other].iter().map(|x| *x).collect(), //if let Some(p) = self.root { p } else { other }),
-            RefsEnum::Primitive(i) => [self.intern(RefsEnum::Primitive(i))]
-                .iter()
-                .map(|x| *x)
-                .collect(),
+            RefsEnum::Root => SolvingResult::new(other, vec![other].into()),
+            RefsEnum::MaybeMissing => SolvingResult::new(other, vec![other].into()), //if let Some(p) = self.root { p } else { other }),
+            RefsEnum::Primitive(_) => SolvingResult::new(other, vec![other].into()),
             RefsEnum::Array(o) => {
                 let rr = self.solve_aux(cache, o);
                 let r: ListSet<RefPtr> = rr
                     .iter()
                     .map(|o| self.intern(RefsEnum::Array(*o)))
+                    // .chain(matched.into_iter())
                     .collect();
-                let r = SolvingResult {
-                    matched: rr.matched,
-                    result: rr.result.map(|x| self.intern(RefsEnum::Array(x))),
-                    digested: r,
-                };
-                // TODO there should be more/other things to do
-                cache.insert(other, r.clone());
-                r
+                SolvingResult {
+                    matched: r,
+                    waiting: rr.waiting.map(|x| self.intern(RefsEnum::Array(x))),
+                }
             }
             RefsEnum::ArrayAccess(o) => {
                 let rr = self.solve_aux(cache, o);
@@ -915,107 +1000,153 @@ impl Solver {
                         RefsEnum::Array(x) => *x,
                         _ => self.intern(RefsEnum::ArrayAccess(*o)),
                     })
+                    // .chain(matched.into_iter())
                     .collect();
-                let r = SolvingResult {
-                    matched: rr.matched,
-                    result: rr.result.map(|x| match &self.nodes[x] {
+                SolvingResult {
+                    matched: r,
+                    waiting: rr.waiting.map(|x| match &self.nodes[x] {
                         RefsEnum::Array(x) => *x,
                         _ => self.intern(RefsEnum::ArrayAccess(x)),
                     }),
-                    digested: r,
-                };
-                cache.insert(other, r.clone());
-                r
+                }
             }
             RefsEnum::This(o) => {
-                let rr = self.solve_aux(cache, o);
-                let r: ListSet<RefPtr> = rr
+
+                let possibilities: ListSet<RefPtr> = self.straight_possibilities(other).into();
+
+                let mut e_matched = vec![];
+                let mut e_t_matched = vec![];
+                let mut e_not_matched = vec![];
+
+                let mut decl_type_handling2 = |r: DeclType<RefPtr>| match r {
+                    DeclType::Compile(r, r1, r2) => {
+                        e_t_matched.push(r);
+                        e_matched.extend_from_slice(&r1);
+                        e_matched.extend_from_slice(&r2);
+                    }
+                    DeclType::Runtime(b) => e_matched.extend_from_slice(&b),
+                };
+
+                possibilities.iter().for_each(|&x| {
+                    search![
+                        { e_not_matched.push(x) }
+                        Declarator::Type(x), decl_type_handling2;
+                    ]
+                });
+
+                if !e_matched.is_empty() || !e_t_matched.is_empty() {
+                    e_matched.extend_from_slice(&e_not_matched);
+                    let x: ListSet<_> = e_matched.into();
+                    let x: ListSet<_> = x
+                        .iter()
+                        .flat_map(|&x| {
+                            log::trace!("éé {:?} {:?}", x, self.nodes.with(x));
+                            if x == other {
+                                vec![x].into()
+                            } else {
+                                let x = self.solve_aux(cache, x).waiting.unwrap();
+                                match &self.nodes[x] {
+                                    RefsEnum::Or(v) => v.clone(),
+                                    _ => vec![x].into(),
+                                }
+                            }
+                        })
+                        .collect();
+                    let waiting = if x.len() == 1 {
+                        x.iter().next().map(|&x| x)
+                    } else {
+                        Some(self.intern(RefsEnum::Or(x.clone())))
+                    };
+                    let r = SolvingResult {
+                        matched: e_t_matched.into_iter().chain(x.into_iter()).collect(),
+                        waiting,
+                    };
+                    log::trace!(
+                        "solved early: {} produced {:?}",
+                        other,
+                        DebugSolvingResult {
+                            nodes: &self.nodes,
+                            result: &r
+                        }
+                    );
+                    cache.insert(other, r.clone());
+                    return r;
+                }
+
+                let matched_o = self.solve_aux(cache, o);
+
+                let ext: ListSet<RefPtr> = matched_o
                     .iter()
-                    .map(|o| match &self.nodes[*o] {
-                        RefsEnum::Mask(o, _) => *o,
-                        _ => *o,
+                    .flat_map(|&o| match &self.nodes[o] {
+                        RefsEnum::Or(v) => v.clone(),
+                        _ => vec![o].into(),
                     })
                     .collect::<Vec<_>>()
                     .into_iter()
                     .map(|o| self.intern(RefsEnum::This(o)))
                     .collect();
-                let r = SolvingResult {
-                    matched: rr.matched,
-                    result: rr
-                        .result
-                        .map(|o| match &self.nodes[o] {
-                            RefsEnum::Mask(o, _) => *o,
-                            _ => o,
-                        })
-                        .map(|o| self.intern(RefsEnum::This(o))),
-                    digested: r,
-                };
-                // TODO there should be more/other things to do
-                if r.digested.is_empty() {
-                    cache.insert(other, r.clone());
-                    return r;
-                }
-                let mut matched = r.matched;
-                let old_result = r.result;
-                let mut possibilities = vec![];
-                let r: ListSet<RefPtr> = r
+
+                let waiting = matched_o.waiting;
+                let matched: ListSet<RefPtr> = ext
                     .iter()
                     .flat_map(|r| {
-                        let r = *r;
-                        let r = if let Some(r) = (&self.decls).get(&Declarator::Type(r)).cloned() {
-                            matched = true;
-                            //log::trace!("solved class: {:?}", r);
-                            match r {
-                                DeclType::Compile(r, _, _) => {
-                                    // TODO do I use the rest of the hierarchy
-                                    possibilities.push(r);
-                                    //log::trace!("solved class: {:?}", r);
-                                    vec![r]
-                                }
-                                DeclType::Runtime(b) => {
-                                    if b.len() == 1 {
-                                        possibilities.push(b[1]);
-                                    } else if b.is_empty() {
-                                        panic!("{}", other)
-                                    } else {
-                                        // TODO maybe just extending possibilities is enough
-                                        let r = self.intern(RefsEnum::Or(b.clone().into()));
-                                        possibilities.push(r);
-                                    }
-                                    //log::trace!("solved runtime: {:?}", b);
-                                    b.to_vec()
-                                }
-                                x => todo!("{:?}", x),
-                            }
-                        } else if r != other {
-                            let rr = self.solve_aux(cache, r);
-                            matched |= rr.matched;
-                            rr.iter().map(|x| *x).collect()
-                        } else {
-                            vec![r]
-                        };
-                        r
+                        let r = self.straight_possibilities(*r);
+                        r.into_iter().flat_map(|r| {
+                            search![
+                                Declarator::Type(r), decl_type_handling;
+                            ]
+                        })
                     })
                     .collect();
-                let result = if possibilities.is_empty() {
-                    old_result
-                } else if possibilities.len() == 1 {
-                    Some(possibilities[0])
+
+                let waiting = if !matched.is_empty() || ext.is_empty() {
+                    waiting
                 } else {
-                    Some(self.intern(RefsEnum::Or(possibilities.into())))
-                };
-                let r = SolvingResult {
-                    matched,
-                    result,
-                    digested: r,
-                };
-                r
+                    let v: ListSet<_> = matched_o
+                        .matched
+                        .into_iter()
+                        .chain(waiting.into_iter())
+                        .collect();
+                    if v.len() == 1 {
+                        log::trace!("4");
+                        v.iter().next().cloned()
+                    } else {
+                        log::trace!("5");
+                        let v = v
+                            .into_iter()
+                            .flat_map(|x| {
+                                match &self.nodes[x] {
+                                    RefsEnum::Or(v) => v.clone(),
+                                    _ => vec![x].into(),
+                                }
+                                .into_iter()
+                                .filter(|&x| {
+                                    if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
+                                        !self.solve_aux(cache, x).is_matched()
+                                    } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x]
+                                    {
+                                        !self.solve_aux(cache, x).is_matched()
+                                    } else {
+                                        true
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                            })
+                            .collect();
+                        Some(self.intern(RefsEnum::Or(v)))
+                    }
+                }
+                .map(|o| self.intern(RefsEnum::This(o)));
+
+                SolvingResult { matched, waiting }
             }
             RefsEnum::Super(o) => {
-                let rr = self.solve_aux(cache, o);
-                let r: ListSet<RefPtr> = rr
+                let matched_o = self.solve_aux(cache, o);
+
+                let ext: ListSet<RefPtr> = matched_o
                     .iter()
                     .map(|o| match &self.nodes[*o] {
+                        // TODO check
                         RefsEnum::Mask(o, _) => *o,
                         _ => *o,
                     })
@@ -1023,1137 +1154,937 @@ impl Solver {
                     .into_iter()
                     .map(|o| self.intern(RefsEnum::Super(o)))
                     .collect();
-                let r = SolvingResult {
-                    matched: rr.matched,
-                    result: rr
-                        .result
-                        .map(|o| match &self.nodes[o] {
-                            RefsEnum::Mask(o, _) => *o,
-                            _ => o,
-                        })
-                        .map(|o| self.intern(RefsEnum::Super(o))),
-                    digested: r,
-                };
-                // TODO there should be more/other things to do
-                if r.digested.is_empty() {
-                    cache.insert(other, r.clone());
-                    return r;
-                }
 
-                let mut matched = r.matched;
-                let old_result = r.result;
-                let mut possibilities = vec![];
-                let r: ListSet<RefPtr> = r
+                let waiting = matched_o.waiting;
+                let matched: ListSet<RefPtr> = ext
                     .iter()
                     .flat_map(|r| {
-                        let r = *r;
-                        let r = if let Some(r) = (&self.decls).get(&Declarator::Type(r)).cloned() {
-                            matched = true;
-                            //log::trace!("solved class: {:?}", r);
-                            match r {
-                                DeclType::Compile(r, _, _) => {
-                                    // TODO should use hierarchy as it is an explicit super access, I would bet on superClass
-                                    possibilities.push(r);
-                                    //log::trace!("solved class: {:?}", r);
-                                    vec![r]
-                                }
-                                DeclType::Runtime(b) => {
-                                    // TODO check with a unit test how this case happened
-                                    if b.len() == 1 {
-                                        possibilities.push(b[1]);
-                                    } else if b.is_empty() {
-                                        panic!("{}", other)
-                                    } else {
-                                        // TODO maybe just extending possibilities is enough
-                                        let r = self.intern(RefsEnum::Or(b.clone().into()));
-                                        possibilities.push(r);
+                        let r = self.straight_possibilities(*r);
+                        r.into_iter().flat_map(|r| {
+                            search![
+                                Declarator::Type(r), |r: DeclType<RefPtr>| match r {
+                                    DeclType::Compile(_, r1, r2) => {
+                                        let mut r = vec![];
+                                        r.extend_from_slice(&r1);
+                                        r.extend_from_slice(&r2); // TODO check if is used
+                                        r
                                     }
-                                    //log::trace!("solved runtime: {:?}", b);
-                                    b.to_vec()
-                                }
-                                x => todo!("{:?}", x),
-                            }
-                        } else if r != other {
-                            let rr = self.solve_aux(cache, r);
-                            matched |= rr.matched;
-                            if let Some(r) = rr.result {
-                                possibilities.push(r);
-                            }
-                            rr.iter().map(|x| *x).collect()
-                        } else {
-                            vec![r]
-                        };
-                        r
+                                    DeclType::Runtime(b) => b.to_vec(),
+                                };
+                            ]
+                        })
                     })
                     .collect();
-                let result = if possibilities.is_empty() {
-                    old_result
-                } else if possibilities.len() == 1 {
-                    Some(possibilities[0])
+
+                let waiting = if !matched.is_empty() || ext.is_empty() {
+                    waiting
                 } else {
-                    Some(self.intern(RefsEnum::Or(possibilities.into())))
-                };
-                let r = SolvingResult {
-                    matched,
-                    result,
-                    digested: r,
-                };
-                r
+                    let mut v: Vec<_> = matched_o.matched.into_iter().collect();
+                    if let Some(w) = waiting {
+                        v.push(w);
+                    }
+                    let v = v
+                        .into_iter()
+                        .flat_map(|x| match &self.nodes[x] {
+                            RefsEnum::Or(v) => v.clone(),
+                            _ => vec![x].into(),
+                        })
+                        .collect();
+                    Some(self.intern(RefsEnum::Or(v)))
+                }
+                .map(|o| match &self.nodes[o] {
+                    RefsEnum::Mask(o, _) => *o,
+                    _ => o,
+                })
+                .map(|o| self.intern(RefsEnum::Super(o)));
+
+                SolvingResult { matched, waiting }
             }
             RefsEnum::Mask(o, v) => {
                 log::trace!("solving mask {:?}", other);
                 let mut v_matched = vec![];
-                let mut v_rest = vec![];
-                let mut v_both = vec![];
-                let mut v_results = vec![];
-                let mut matched = false;
+                let mut v_waiting = vec![];
                 v.iter().for_each(|x| {
                     assert_ne!(other, *x);
                     log::trace!("mask {:?}", *x);
                     let rr = self.solve_aux(cache, *x);
-                    if let Some(r) = rr.result {
-                        v_results.push(r);
+                    if let Some(r) = rr.waiting {
+                        v_waiting.push(r);
                     }
-                    v_both.extend(rr.digested.clone());
-                    if rr.is_matched() {
-                        matched = true;
-                        v_matched.extend(rr.digested);
-                    } else {
-                        v_rest.extend(rr.digested);
-                    }
+                    v_matched.extend(rr.matched);
                 });
 
-                let rr = self.solve_aux(cache, o);
+                let matched_o = self.solve_aux(cache, o);
 
-                if rr.digested.is_empty() {
-                    // log::trace!("solving {:?} an object of a mask into nothing", o);
-                    cache.insert(other, rr.clone());
-                    return rr;
+                if !v_matched.is_empty() {
+                    SolvingResult {
+                        matched: v_matched.into(),
+                        waiting: matched_o.waiting.map(|o| {
+                            self.intern(RefsEnum::Mask(o, v_waiting.clone().into_boxed_slice()))
+                        }),
+                    }
+                } else {
+                    SolvingResult {
+                        matched: matched_o.matched,
+                        waiting: matched_o
+                            .waiting
+                            .map(|o| self.intern(RefsEnum::Mask(o, v_waiting.into_boxed_slice()))),
+                    }
                 }
-
-                let r: ListSet<RefPtr> =
-                    rr.digested.into_iter().chain(v_both.into_iter()).collect();
-
-                let r = SolvingResult {
-                    matched: rr.matched | matched,
-                    result: rr.result.map(|o| {
-                        self.intern(RefsEnum::Mask(o, v_results.clone().into_boxed_slice()))
-                    }),
-                    digested: r,
+            }
+            RefsEnum::Or(v) => {
+                // TODO if one case is matched, we should be able to ditch the rest
+                // NOTE removing cases should be done later (on the RefsEnum containing the Or)
+                log::trace!("solving Or: {:?} {:?}", other, self.nodes.with(other));
+                let mut matched = vec![];
+                let mut waiting = vec![];
+                v.iter().for_each(|&x| {
+                    assert_ne!(other, x);
+                    log::trace!("or {:?}", x);
+                    let rr = self.solve_aux(cache, x);
+                    log::trace!("after or {:?}", x);
+                    if let Some(r) = rr.waiting {
+                        // waiting.push(r);
+                        match &self.nodes[r] {
+                            RefsEnum::Or(r) => {
+                                waiting.extend(r.iter());
+                            }
+                            _ => waiting.push(r),
+                        }
+                    }
+                    matched.extend(rr.matched.iter().flat_map(|&o| match &self.nodes[o] {
+                        RefsEnum::Or(o) => o.iter().map(|x| *x).collect::<Vec<_>>(),
+                        _ => vec![o].into(),
+                    }));
+                });
+                let waiting: ListSet<_> = waiting.into();
+                let r = if waiting.is_empty() {
+                    assert!(matched.is_empty());
+                    SolvingResult {
+                        matched: matched.into(),
+                        waiting: Some(self.intern(RefsEnum::Or(waiting))),
+                    }
+                } else if waiting.len() == 1 {
+                    SolvingResult {
+                        matched: matched.into(),
+                        waiting: Some(*waiting.iter().next().unwrap()),
+                    }
+                } else {
+                    SolvingResult {
+                        matched: matched.into(),
+                        waiting: Some(self.intern(RefsEnum::Or(waiting))),
+                    }
                 };
 
-                // TODO should look for declarations solving the masking
-                // either the masked thing is declared by thing in mask
-                // or the masked thing is surely not declared and remove the mask
+                log::trace!(
+                    "solved Or: {} produced {:?}",
+                    other,
+                    DebugSolvingResult {
+                        nodes: &self.nodes,
+                        result: &r
+                    }
+                );
                 r
             }
-            RefsEnum::Or(_) => {
-                // TODO if one case is matched, we should be able to ditch the rest
-                todo!()
-            }
             RefsEnum::TypeIdentifier(oo, i) => {
-                // log::trace!("solving scoped type {:?}", other);
-                let mut m: Option<Box<[usize]>> = None;
-                let rr = self.solve_aux(cache, oo);
-                if rr.digested.is_empty() {
-                    // log::trace!("solving {:?} an object into nothing", o);
-                    cache.insert(other, rr.clone());
-                    return rr;
-                }
+                log::trace!("solving scoped type: {:?}", other);
 
-                let mut handle = |o: &usize| {
-                    let o = *o;
-                    if self.is_mm(oo) {
-                        if !self.is_root(o) && self.is_package(o) && self.is_package_token(i) {
-                            return None;
-                        }
+                let possibilities: ListSet<RefPtr> = self.straight_possibilities(other).into();
+
+                let mut e_matched = vec![];
+                let mut e_t_matched = vec![];
+                let mut e_not_matched = vec![];
+
+                let mut decl_type_handling2 = |r: DeclType<RefPtr>| match r {
+                    DeclType::Compile(r, r1, r2) => {
+                        e_t_matched.push(r);
+                        e_matched.extend_from_slice(&r1);
+                        e_matched.extend_from_slice(&r2);
                     }
-                    let matched = match &self.nodes[o] {
-                        // if /.A
-                        RefsEnum::Root if !self.is_package_token(i) => return None,
-                        // if x[].lenght -> int , thus None to signify its solved
-                        RefsEnum::Array(_) if self.is_length_token(i) => None,
-                        RefsEnum::Mask(o, x) => {
-                            m = Some(x.clone());
-                            Some(*o)
-                        }
-                        _ => Some(o),
-                    };
-                    let o = if let Some(m) = &m {
-                        for m in m.iter() {
-                            let no_mask = self.no_mask(*m);
-                            if self.intern(RefsEnum::Root) == no_mask && !self.is_package_token(i) {
-                                continue;
-                            }
-                            let no_mask = self.intern(RefsEnum::TypeIdentifier(no_mask, i));
-                            let x = self.solve_aux(cache, no_mask);
-                            log::trace!("for {:?} choose between:", no_mask);
-                            x.iter().for_each(|x| {
-                                let x = self.nodes.with(*x);
-                                log::trace!("@:; {:?}", x);
-                            });
-                            if !x.is_matched() {
-                                // TODO check, was using is_empty
-                                let x = *x.iter().next().unwrap();
-                                if x != no_mask {
-                                    return Some(x);
+                    DeclType::Runtime(b) => e_matched.extend_from_slice(&b),
+                };
+
+                possibilities.iter().for_each(|&x| {
+                    search![
+                        { e_not_matched.push(x) }
+                        Declarator::Type(x), decl_type_handling2;
+                    ]
+                });
+
+                if !e_matched.is_empty() || !e_t_matched.is_empty() {
+                    e_matched.extend_from_slice(&e_not_matched);
+                    let x: ListSet<_> = e_matched.into();
+                    let x: ListSet<_> = x
+                        .iter()
+                        .flat_map(|&x| {
+                            log::trace!("éé {:?} {:?}", x, self.nodes.with(x));
+                            if x == other {
+                                vec![x].into()
+                            } else {
+                                let x = self.solve_aux(cache, x).waiting.unwrap();
+                                match &self.nodes[x] {
+                                    RefsEnum::Or(v) => v.clone(),
+                                    _ => vec![x].into(),
                                 }
                             }
-                        }
-                        Some(o)
+                        })
+                        .collect();
+                    let waiting = if x.len() == 1 {
+                        x.iter().next().map(|&x| x)
                     } else {
-                        matched
+                        Some(self.intern(RefsEnum::Or(x.clone())))
                     };
-                    if let Some(o) = o {
-                        Some(self.intern(RefsEnum::TypeIdentifier(o, i)))
-                    } else {
-                        Some(self.intern(RefsEnum::Primitive(Primitive::Int)))
-                    }
-                };
-
-                let r: ListSet<RefPtr> = rr.iter().filter_map(handle).collect();
-                let mut handle = |o: &usize| {
-                    let o = *o;
-                    if self.is_mm(oo) {
-                        if !self.is_root(o) && self.is_package(o) && self.is_package_token(i) {
-                            return None;
-                        }
-                    }
-                    let matched = match &self.nodes[o] {
-                        // if /.A
-                        RefsEnum::Root if !self.is_package_token(i) => return None,
-                        // if x[].lenght -> int , thus None to signify its solved
-                        RefsEnum::Array(_) if self.is_length_token(i) => None,
-                        RefsEnum::Mask(o, x) => {
-                            m = Some(x.clone());
-                            Some(*o)
-                        }
-                        _ => Some(o),
+                    let r = SolvingResult {
+                        matched: e_t_matched.into_iter().chain(x.into_iter()).collect(),
+                        waiting,
                     };
-                    let o = if let Some(m) = &m {
-                        for m in m.iter() {
-                            let no_mask = self.no_mask(*m);
-                            if self.intern(RefsEnum::Root) == no_mask && !self.is_package_token(i) {
-                                continue;
-                            }
-                            let no_mask = self.intern(RefsEnum::TypeIdentifier(no_mask, i));
-                            let x = self.solve_aux(cache, no_mask);
-                            log::trace!("for {:?} choose between:", no_mask);
-                            x.iter().for_each(|x| {
-                                let x = self.nodes.with(*x);
-                                log::trace!("@:; {:?}", x);
-                            });
-                            if !x.is_matched() {
-                                // TODO check, was using is_empty
-                                let x = *x.iter().next().unwrap();
-                                if x != no_mask {
-                                    return Some(x);
-                                }
-                            }
+                    log::trace!(
+                        "solved early: {} produced {:?}",
+                        other,
+                        DebugSolvingResult {
+                            nodes: &self.nodes,
+                            result: &r
                         }
-                        Some(o)
-                    } else {
-                        matched
-                    };
-                    if let Some(o) = o {
-                        Some(self.intern(RefsEnum::TypeIdentifier(o, i)))
-                    } else {
-                        Some(self.intern(RefsEnum::Primitive(Primitive::Int)))
-                    }
-                };
-                let result = rr.result.and_then(|o| handle(&o));
-                let r = SolvingResult {
-                    matched: rr.matched,
-                    result,
-                    digested: r,
-                };
-
-                if r.digested.is_empty() {
-                    // log::trace!("solving {:?} into nothing", other);
+                    );
                     cache.insert(other, r.clone());
                     return r;
                 }
 
-                let mut matched = r.matched;
-                let old_result = r.result;
-                let mut possibilities = vec![];
-                let r: ListSet<RefPtr> = r
-                    .iter()
-                    .flat_map(|r| {
-                        let r = *r;
-                        let r = if let Some(r) = (&self.decls).get(&Declarator::Type(r)).cloned() {
-                            matched = true;
-                            //log::trace!("solved class: {:?}", r);
-                            match r {
-                                DeclType::Compile(r, _, _) => {
-                                    // TODO should use hierarchy as it is an explicit super access, I would bet on superClass
-                                    possibilities.push(r);
-                                    //log::trace!("solved class: {:?}", r);
-                                    vec![r]
-                                }
-                                DeclType::Runtime(b) => {
-                                    // TODO check with a unit test how this case happened
-                                    if b.len() == 1 {
-                                        possibilities.push(b[1]);
-                                    } else if b.is_empty() {
-                                        panic!("{}", other)
-                                    } else {
-                                        // TODO maybe just extending possibilities is enough
-                                        let r = self.intern(RefsEnum::Or(b.clone().into()));
-                                        possibilities.push(r);
-                                    }
-                                    //log::trace!("solved runtime: {:?}", b);
-                                    b.to_vec()
-                                }
-                                x => todo!("{:?}", x),
+                // if matched return all matched and unmatched
+                // if unmatched continue with the rest
+
+                let matched_o = self.solve_aux(cache, oo);
+
+                log::trace!(
+                    "solving sco t: {} with {:?}",
+                    other,
+                    DebugSolvingResult {
+                        nodes: &self.nodes,
+                        result: &matched_o
+                    }
+                );
+
+                fn handle(
+                    sss: &mut Solver,
+                    cache: &mut SolvingAssocTable,
+                    oo: usize,
+                    &o: &usize,
+                    i: LabelPtr,
+                ) -> Option<usize> {
+                    if sss.is_mm(oo) {
+                        if !sss.is_root(o) && sss.is_package(o) && sss.is_package_token(i) {
+                            return None;
+                        }
+                    }
+                    let o_enum = &sss.nodes[o];
+
+                    // // /.A -> None
+                    // if let RefsEnum::Root= o_enum && !sss.is_package_token(i) {
+                    //     return None
+                    // }
+
+                    // x[].length -> int
+                    if let RefsEnum::Array(_)= o_enum && sss.is_length_token(i) {
+                        return Some(sss.intern(RefsEnum::Primitive(Primitive::Int)))
+                    }
+
+                    let m = if let RefsEnum::Mask(_, x) = o_enum {
+                        x.clone()
+                    } else {
+                        return Some(sss.intern(RefsEnum::TypeIdentifier(o, i)));
+                    };
+
+                    for m in m.iter() {
+                        let no_mask = sss.no_mask(*m);
+                        if sss.intern(RefsEnum::Root) == no_mask && !sss.is_package_token(i) {
+                            continue;
+                        }
+                        let no_mask = sss.intern(RefsEnum::TypeIdentifier(no_mask, i));
+                        let x = sss.solve_aux(cache, no_mask);
+                        log::trace!("for {:?} choose between:", no_mask);
+                        x.iter().for_each(|x| {
+                            let x = sss.nodes.with(*x);
+                            log::trace!("@:; {:?}", x);
+                        });
+                        if !x.is_matched() {
+                            // TODO check, was using is_empty
+                            let x = *x.iter().next().unwrap();
+                            if x != no_mask {
+                                return Some(x);
                             }
-                        } else if r != other {
-                            let rr = self.solve_aux(cache, r);
-                            matched |= rr.matched;
-                            rr.iter().map(|x| *x).collect()
-                        } else {
-                            vec![r]
-                        };
-                        r
+                        }
+                    }
+                    Some(sss.intern(RefsEnum::TypeIdentifier(o, i)))
+                }
+                let ext: ListSet<RefPtr> = matched_o
+                    .iter()
+                    .filter_map(|o| handle(self, cache, oo, o, i))
+                    .collect();
+                log::trace!(
+                    "solving sco t: {} with {:?}",
+                    other,
+                    ext.iter().map(|&x| self.nodes.with(x)).collect::<Vec<_>>()
+                );
+
+                let mut t_matched = vec![];
+                let waiting = matched_o.waiting;
+                let matched: ListSet<RefPtr> =
+                    ext.iter()
+                        .flat_map(|r| {
+                            let r = self.straight_possibilities(*r);
+                            r.into_iter()
+                                .flat_map(|r| {
+                                    search![
+                                        Declarator::Type(r), |r: DeclType<RefPtr>| match r {
+                                            DeclType::Compile(r, r1, r2) => {
+                                                t_matched.extend(match &self.nodes[r] {
+                                                    RefsEnum::Or(v) => v.clone(),
+                                                    _ => vec![r].into(),
+                                                });
+                                                let mut r = vec![];
+                                                r.extend_from_slice(&r1);
+                                                r.extend_from_slice(&r2);
+                                                r
+                                            }
+                                            DeclType::Runtime(b) => b.to_vec(),
+                                        };
+                                    ]
+                                    .into_iter()
+                                    .flat_map(|x| match &self.nodes[x] {
+                                        RefsEnum::Or(v) => v.clone(),
+                                        _ => vec![x].into(),
+                                    })
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .collect();
+                let mut matched: ListSet<RefPtr> = matched
+                    .iter()
+                    .flat_map(|&x| {
+                        let x = self.solve_aux(cache, x).waiting.unwrap();
+                        match &self.nodes[x] {
+                            RefsEnum::Or(v) => v.clone(),
+                            _ => vec![x].into(),
+                        }
                     })
                     .collect();
-                let result = if possibilities.is_empty() {
-                    old_result
-                } else if possibilities.len() == 1 {
-                    Some(possibilities[0])
+                let t_matched: ListSet<RefPtr> = t_matched
+                    .iter()
+                    .flat_map(|&x| {
+                        let x = self.solve_aux(cache, x).waiting.unwrap();
+                        match &self.nodes[x] {
+                            RefsEnum::Or(v) => v.clone(),
+                            _ => vec![x].into(),
+                        }
+                    })
+                    .collect();
+
+                let waiting = if !t_matched.is_empty() {
+                    log::trace!("0");
+                    let w = t_matched.iter().next().map(|x| *x);
+                    matched = matched.into_iter().chain(t_matched.into_iter()).collect();
+                    w
+                } else if !matched.is_empty() {
+                    log::trace!("2");
+                    let w = if matched.len() == 1 {
+                        Some(*matched.iter().next().unwrap())
+                    } else {
+                        Some(self.intern(RefsEnum::Or(matched.clone())))
+                    };
+                    matched = matched.into_iter().chain(t_matched.into_iter()).collect();
+                    w
+                } else if ext.is_empty() {
+                    log::trace!("3");
+                    waiting.and_then(|o| handle(self, cache, oo, &o, i))
                 } else {
-                    Some(self.intern(RefsEnum::Or(possibilities.into())))
-                };
-                let r = SolvingResult {
-                    matched,
-                    result,
-                    digested: r,
+                    let v: ListSet<_> = matched_o
+                        .matched
+                        .into_iter()
+                        .chain(waiting.into_iter())
+                        .collect();
+                    if v.len() == 1 {
+                        log::trace!("4");
+                        v.iter().next().and_then(|o| handle(self, cache, oo, &o, i))
+                    } else {
+                        log::trace!("5");
+                        let v = v
+                            .into_iter()
+                            .flat_map(|x| {
+                                match &self.nodes[x] {
+                                    RefsEnum::Or(v) => v.clone(),
+                                    _ => vec![x].into(),
+                                }
+                                .into_iter()
+                                .filter(|&x| {
+                                    if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
+                                        !self.solve_aux(cache, x).is_matched()
+                                    } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x]
+                                    {
+                                        !self.solve_aux(cache, x).is_matched()
+                                    } else {
+                                        true
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                            })
+                            .collect();
+                        Some(self.intern(RefsEnum::Or(v)))
+                            .and_then(|o| handle(self, cache, oo, &o, i))
+                    }
                 };
 
+                let r = SolvingResult { matched, waiting };
+
+                log::trace!(
+                    "solved scoped type: {} produced {:?}",
+                    other,
+                    DebugSolvingResult {
+                        nodes: &self.nodes,
+                        result: &r
+                    }
+                );
                 r
             }
             RefsEnum::ScopedIdentifier(oo, i) => {
-                // log::trace!("solving cioped id {:?}", other);
-                let mut m: Option<Box<[usize]>> = None;
-                let rr = self.solve_aux(cache, oo);
-                if rr.digested.is_empty() {
-                    // log::trace!("solving {:?} an object into nothing", o);
-                    cache.insert(other, rr.clone());
-                    return rr;
-                }
+                log::trace!("solving scoped id: {:?}", other);
 
-                let mut handle = |o: &usize| {
-                    let o = *o;
-                    if self.is_mm(oo) {
-                        if !self.is_root(o) && self.is_package(o) && self.is_package_token(i) {
-                            return None;
-                        }
+                let possibilities: ListSet<RefPtr> = self.straight_possibilities(other).into();
+
+                let mut e_matched = vec![];
+                let mut e_t_matched = vec![];
+                let mut e_not_matched = vec![];
+
+                let mut decl_type_handling2 = |r: DeclType<RefPtr>| match r {
+                    DeclType::Compile(r, r1, r2) => {
+                        e_t_matched.push(r);
+                        e_matched.extend_from_slice(&r1);
+                        e_matched.extend_from_slice(&r2);
                     }
-                    let matched = match &self.nodes[o] {
-                        // if x[].lenght -> int
-                        RefsEnum::Root if !self.is_package_token(i) => return None,
-                        RefsEnum::Array(_) if self.is_length_token(i) => None,
-                        RefsEnum::Mask(o, x) => {
-                            m = Some(x.clone());
-                            Some(*o)
-                        }
-                        _ => Some(o),
-                    };
-                    let o = if let Some(m) = &m {
-                        for m in m.iter() {
-                            let no_mask = self.no_mask(*m);
-                            if self.intern(RefsEnum::Root) == no_mask && !self.is_package_token(i) {
-                                return None;
-                            }
-                            let no_mask = self.intern(RefsEnum::ScopedIdentifier(no_mask, i));
-                            let x = self.solve_aux(cache, no_mask);
-                            if !x.is_matched() {
-                                // TODO check, was using is_empty
-                                let x = *x.iter().next().unwrap();
-                                if x != no_mask {
-                                    return Some(x);
+                    DeclType::Runtime(b) => e_matched.extend_from_slice(&b),
+                };
+
+                possibilities.iter().for_each(|&x| {
+                    search![
+                        { e_not_matched.push(x) }
+                        Declarator::Field(x), decl_type_handling2;
+                        Declarator::Variable(x), decl_type_handling2;
+                        Declarator::Type(x), decl_type_handling2;
+                    ]
+                });
+
+                if !e_matched.is_empty() || !e_t_matched.is_empty() {
+                    e_matched.extend_from_slice(&e_not_matched);
+                    let x: ListSet<_> = e_matched.into();
+                    let x: ListSet<_> = x
+                        .iter()
+                        .flat_map(|&x| {
+                            log::trace!("éé {:?} {:?}", x, self.nodes.with(x));
+                            if x == other {
+                                vec![x].into()
+                            } else {
+                                let x = self.solve_aux(cache, x).waiting.unwrap();
+                                match &self.nodes[x] {
+                                    RefsEnum::Or(v) => v.clone(),
+                                    _ => vec![x].into(),
                                 }
                             }
-                        }
-                        Some(o)
+                        })
+                        .collect();
+                    let waiting = if x.len() == 1 {
+                        x.iter().next().map(|&x| x)
                     } else {
-                        matched
+                        Some(self.intern(RefsEnum::Or(x.clone())))
                     };
-                    if let Some(o) = o {
-                        Some(self.intern(RefsEnum::ScopedIdentifier(o, i)))
-                    } else {
-                        Some(self.intern(RefsEnum::Primitive(Primitive::Int)))
-                    }
-                };
-
-                let r: ListSet<RefPtr> = rr.iter().filter_map(handle).collect();
-                let mut handle = |o: &usize| {
-                    let o = *o;
-                    if self.is_mm(oo) {
-                        if !self.is_root(o) && self.is_package(o) && self.is_package_token(i) {
-                            return None;
-                        }
-                    }
-                    let matched = match &self.nodes[o] {
-                        // if x[].lenght -> int
-                        RefsEnum::Root if !self.is_package_token(i) => return None,
-                        RefsEnum::Array(_) if self.is_length_token(i) => None,
-                        RefsEnum::Mask(o, x) => {
-                            m = Some(x.clone());
-                            Some(*o)
-                        }
-                        _ => Some(o),
+                    let r = SolvingResult {
+                        matched: e_t_matched.into_iter().chain(x.into_iter()).collect(),
+                        waiting,
                     };
-                    let o = if let Some(m) = &m {
-                        for m in m.iter() {
-                            let no_mask = self.no_mask(*m);
-                            if self.intern(RefsEnum::Root) == no_mask && !self.is_package_token(i) {
-                                return None;
-                            }
-                            let no_mask = self.intern(RefsEnum::ScopedIdentifier(no_mask, i));
-                            let x = self.solve_aux(cache, no_mask);
-                            if !x.is_matched() {
-                                // TODO check, was using is_empty
-                                let x = *x.iter().next().unwrap();
-                                if x != no_mask {
-                                    return Some(x);
-                                }
-                            }
+                    log::trace!(
+                        "solved early: {} produced {:?}",
+                        other,
+                        DebugSolvingResult {
+                            nodes: &self.nodes,
+                            result: &r
                         }
-                        Some(o)
-                    } else {
-                        matched
-                    };
-                    if let Some(o) = o {
-                        Some(self.intern(RefsEnum::ScopedIdentifier(o, i)))
-                    } else {
-                        Some(self.intern(RefsEnum::Primitive(Primitive::Int)))
-                    }
-                };
-                let result = rr.result.and_then(|o| handle(&o));
-                let r = SolvingResult {
-                    matched: rr.matched,
-                    result,
-                    digested: r,
-                };
-
-                if r.digested.is_empty() {
-                    // log::trace!("solving {:?} into nothing", other);
+                    );
                     cache.insert(other, r.clone());
                     return r;
                 }
 
-                let mut matched = r.matched;
-                let old_result = r.result;
-                let mut possibilities = vec![];
-                let r: ListSet<RefPtr> = r
+                let matched_o = self.solve_aux(cache, oo);
+
+                log::trace!(
+                    "solving sco i: {} with {:?}",
+                    other,
+                    DebugSolvingResult {
+                        nodes: &self.nodes,
+                        result: &matched_o
+                    }
+                );
+
+                fn handle(
+                    sss: &mut Solver,
+                    cache: &mut SolvingAssocTable,
+                    oo: usize,
+                    &o: &usize,
+                    i: LabelPtr,
+                ) -> Option<usize> {
+                    if sss.is_mm(oo) {
+                        if !sss.is_root(o) && sss.is_package(o) && sss.is_package_token(i) {
+                            return None;
+                        }
+                    }
+                    let o_enum = &sss.nodes[o];
+
+                    // // /.A -> None
+                    // if let RefsEnum::Root= o_enum && !sss.is_package_token(i) {
+                    //     return None
+                    // }
+
+                    // x[].length -> int
+                    if let RefsEnum::Array(_)= o_enum && sss.is_length_token(i) {
+                        return Some(sss.intern(RefsEnum::Primitive(Primitive::Int)))
+                    }
+
+                    let m = if let RefsEnum::Mask(_, x) = o_enum {
+                        x.clone()
+                    } else {
+                        return Some(sss.intern(RefsEnum::ScopedIdentifier(o, i)));
+                    };
+
+                    for m in m.iter() {
+                        let no_mask = sss.no_mask(*m);
+                        if sss.intern(RefsEnum::Root) == no_mask && !sss.is_package_token(i) {
+                            continue;
+                        }
+                        let no_mask = sss.intern(RefsEnum::ScopedIdentifier(no_mask, i));
+                        let x = sss.solve_aux(cache, no_mask);
+                        log::trace!("for {:?} choose between:", no_mask);
+                        x.iter().for_each(|x| {
+                            let x = sss.nodes.with(*x);
+                            log::trace!("@:; {:?}", x);
+                        });
+                        if !x.is_matched() {
+                            // TODO check, was using is_empty
+                            let x = *x.iter().next().unwrap();
+                            if x != no_mask {
+                                return Some(x);
+                            }
+                        }
+                    }
+                    Some(sss.intern(RefsEnum::ScopedIdentifier(o, i)))
+                }
+
+                let ext: ListSet<RefPtr> = matched_o
                     .iter()
-                    .flat_map(|r| {
-                        let r = *r;
-                        let r = if let Some(r) = (&self.decls).get(&Declarator::Type(r)).cloned() {
-                            matched = true;
-                            //log::trace!("solved class: {:?}", r);
-                            match r {
-                                DeclType::Compile(r, _, _) => {
-                                    // TODO should use hierarchy as it is an explicit super access, I would bet on superClass
-                                    possibilities.push(r);
-                                    //log::trace!("solved class: {:?}", r);
-                                    vec![r]
-                                }
-                                DeclType::Runtime(b) => {
-                                    // TODO check with a unit test how this case happened
-                                    if b.len() == 1 {
-                                        possibilities.push(b[1]);
-                                    } else if b.is_empty() {
-                                        panic!("{}", other)
-                                    } else {
-                                        // TODO maybe just extending possibilities is enough
-                                        let r = self.intern(RefsEnum::Or(b.clone().into()));
-                                        possibilities.push(r);
-                                    }
-                                    //log::trace!("solved runtime: {:?}", b);
-                                    b.to_vec()
-                                }
-                                x => todo!("{:?}", x),
-                            }
-                        } else if let Some(r) = (&self.decls).get(&Declarator::Field(r)).cloned() {
-                            match r {
-                                DeclType::Compile(r, _, _) => {
-                                    // TODO should not append, I think
-                                    possibilities.push(r);
-                                    // log::trace!("solved field: {:?}", r);
-                                    self.solve_aux(cache, r).iter().map(|x| *x).collect()
-                                }
-                                DeclType::Runtime(v) => {
-                                    // log::trace!("solved field: {:?}", r);
-                                    // TODO check with a unit test how this case happened
-                                    if v.len() == 1 {
-                                        possibilities.push(v[1]);
-                                    } else if v.is_empty() {
-                                        panic!("{}", other)
-                                    } else {
-                                        // TODO maybe just extending possibilities is enough
-                                        let r = self.intern(RefsEnum::Or(v.clone().into()));
-                                        possibilities.push(r);
-                                    }
-                                    v.iter()
-                                        .flat_map(|r| {
-                                            self.solve_aux(cache, *r)
-                                                .iter()
-                                                .map(|x| *x)
-                                                .collect::<Vec<_>>()
-                                        })
-                                        .collect()
-                                }
-                            }
-                        } else if let Some(r) = (&self.decls).get(&Declarator::Variable(r)).cloned()
-                        {
-                            // TODO should not need
-                            match r {
-                                DeclType::Compile(r, _, _) => {
-                                    // log::trace!("solved local variable: {:?}", r);
-                                    possibilities.push(r);
-                                    self.solve_aux(cache, r).iter().map(|x| *x).collect()
-                                }
-                                DeclType::Runtime(v) => {
-                                    // log::trace!("solved local variable: {:?}", r);
-                                    // TODO check with a unit test how this case happened
-                                    if v.len() == 1 {
-                                        possibilities.push(v[1]);
-                                    } else if v.is_empty() {
-                                        panic!("{}", other)
-                                    } else {
-                                        // TODO maybe just extending possibilities is enough
-                                        let r = self.intern(RefsEnum::Or(v.clone().into()));
-                                        possibilities.push(r);
-                                    }
-                                    v.iter()
-                                        .flat_map(|r| {
-                                            self.solve_aux(cache, *r)
-                                                .iter()
-                                                .map(|x| *x)
-                                                .collect::<Vec<_>>()
-                                        })
-                                        .collect()
-                                }
-                            }
-                        } else if r != other {
-                            let rr = self.solve_aux(cache, r);
-                            matched |= rr.matched;
-                            rr.iter().map(|x| *x).collect()
-                        } else {
-                            vec![r]
-                        };
-                        r
+                    .filter_map(|o| handle(self, cache, oo, o, i))
+                    .collect();
+                log::trace!(
+                    "solving sco i: {} with {:?}",
+                    other,
+                    ext.iter().map(|&x| self.nodes.with(x)).collect::<Vec<_>>()
+                );
+
+                let mut t_matched = vec![];
+                let waiting = matched_o.waiting;
+                let matched: ListSet<RefPtr> =
+                    ext.iter()
+                        .flat_map(|r| {
+                            let r = self.straight_possibilities(*r);
+                            r.into_iter()
+                                .flat_map(|r| {
+                                    search![
+                                        Declarator::Field(r), decl_type_handling;
+                                        Declarator::Variable(r), decl_type_handling;
+                                        Declarator::Type(r), |r: DeclType<RefPtr>| match r {
+                                            DeclType::Compile(r, r1, r2) => {
+                                                t_matched.extend(match &self.nodes[r] {
+                                                    RefsEnum::Or(v) => v.clone(),
+                                                    _ => vec![r].into(),
+                                                });
+                                                let mut r = vec![];
+                                                r.extend_from_slice(&r1);
+                                                r.extend_from_slice(&r2);
+                                                r
+                                            }
+                                            DeclType::Runtime(b) => b.to_vec(),
+                                        };
+                                    ]
+                                    .into_iter()
+                                    .flat_map(|x| match &self.nodes[x] {
+                                        RefsEnum::Or(v) => v.clone(),
+                                        _ => vec![x].into(),
+                                    })
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .collect();
+                let mut matched: ListSet<RefPtr> = matched
+                    .iter()
+                    .flat_map(|&x| {
+                        let x = self.solve_aux(cache, x).waiting.unwrap();
+                        match &self.nodes[x] {
+                            RefsEnum::Or(v) => v.clone(),
+                            _ => vec![x].into(),
+                        }
                     })
                     .collect();
-                let result = if possibilities.is_empty() {
-                    old_result
-                } else if possibilities.len() == 1 {
-                    Some(possibilities[0])
+                let t_matched: ListSet<RefPtr> = t_matched
+                    .iter()
+                    .flat_map(|&x| {
+                        let x = self.solve_aux(cache, x).waiting.unwrap();
+                        match &self.nodes[x] {
+                            RefsEnum::Or(v) => v.clone(),
+                            _ => vec![x].into(),
+                        }
+                    })
+                    .collect();
+                let waiting = if !t_matched.is_empty() {
+                    log::trace!("0");
+                    let w = t_matched.iter().next().map(|x| *x);
+                    matched = matched.into_iter().chain(t_matched.into_iter()).collect();
+                    w
+                } else if !matched.is_empty() {
+                    log::trace!("2");
+                    let w = if matched.len() == 1 {
+                        Some(*matched.iter().next().unwrap())
+                    } else {
+                        Some(self.intern(RefsEnum::Or(matched.clone())))
+                    };
+                    matched = matched.into_iter().chain(t_matched.into_iter()).collect();
+                    w
+                } else if ext.is_empty() {
+                    log::trace!("3");
+                    waiting.and_then(|o| handle(self, cache, oo, &o, i))
                 } else {
-                    Some(self.intern(RefsEnum::Or(possibilities.into())))
-                };
-                let r = SolvingResult {
-                    matched,
-                    result,
-                    digested: r,
+                    let v: ListSet<_> = matched_o
+                        .matched
+                        .into_iter()
+                        .chain(waiting.into_iter())
+                        .collect();
+                    if v.len() == 1 {
+                        log::trace!("4");
+                        v.iter().next().and_then(|o| handle(self, cache, oo, &o, i))
+                    } else {
+                        log::trace!("5");
+                        let v = v
+                            .into_iter()
+                            .flat_map(|x| {
+                                match &self.nodes[x] {
+                                    RefsEnum::Or(v) => v.clone(),
+                                    _ => vec![x].into(),
+                                }
+                                .into_iter()
+                                .filter(|&x| {
+                                    if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
+                                        !self.solve_aux(cache, x).is_matched()
+                                    } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x]
+                                    {
+                                        !self.solve_aux(cache, x).is_matched()
+                                    } else {
+                                        true
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                            })
+                            .collect();
+                        Some(self.intern(RefsEnum::Or(v)))
+                            .and_then(|o| handle(self, cache, oo, &o, i))
+                    }
                 };
 
+                let r = SolvingResult { matched, waiting };
+
+                log::trace!(
+                    "solved scoped id: {} produced {:?}",
+                    other,
+                    DebugSolvingResult {
+                        nodes: &self.nodes,
+                        result: &r
+                    }
+                );
                 r
             }
             RefsEnum::MethodReference(o, i) => {
-                let rr = self.solve_aux(cache, o);
-                let r: ListSet<RefPtr> = rr
-                    .iter()
-                    .map(|o| self.intern(RefsEnum::MethodReference(*o, i)))
-                    .collect();
-                let r = SolvingResult {
-                    matched: rr.matched,
-                    result: rr
-                        .result
-                        .map(|o| self.intern(RefsEnum::MethodReference(o, i))),
-                    digested: r,
-                };
-                if r.digested.is_empty() {
-                    cache.insert(other, r.clone());
-                    return r;
-                }
+                let matched_o = self.solve_aux(cache, o);
 
-                let mut matched = r.matched;
-                let old_result = r.result;
-                let mut possibilities = vec![];
-                let r: ListSet<RefPtr> = r
+                let ext: ListSet<RefPtr> = matched_o
                     .iter()
-                    .flat_map(|&r| {
-                        let r = if let Some(r) =
-                            (&self.decls).get(&Declarator::Executable(r)).cloned()
-                        {
-                            matched = true;
-                            //log::trace!("solved method ref: {:?}", r);
-                            match r {
-                                DeclType::Compile(r, _, _) => {
-                                    let r = self.solve_aux(cache, r); // TODO check is solving here is needed
-                                    if let Some(r) = r.result {
-                                        possibilities.push(r);
-                                    }
-                                    r.digested.into_iter().collect()
-                                }
-                                DeclType::Runtime(b) => {
-                                    // TODO check with a unit test how this case happened
-                                    b.iter()
-                                        .flat_map(|&r| {
-                                            let r = self.solve_aux(cache, r);
-                                            if let Some(r) = r.result {
-                                                possibilities.push(r);
-                                            }
-                                            r.digested
-                                        })
-                                        .collect()
-                                    //log::trace!("solved runtime: {:?}", b);
-                                }
-                                x => todo!("{:?}", x),
-                            }
-                        } else if r != other {
-                            let rr = self.solve_aux(cache, r);
-                            matched |= rr.matched;
-                            if let Some(r) = rr.result {
-                                possibilities.push(r);
-                            }
-                            rr.iter().map(|x| *x).collect()
-                        } else {
-                            vec![r]
-                        };
-                        r
+                    .map(|&o| self.intern(RefsEnum::MethodReference(o, i)))
+                    .collect();
+
+                let waiting = matched_o.waiting;
+                let matched: ListSet<RefPtr> = ext
+                    .iter()
+                    .flat_map(|r| {
+                        let r = self.straight_possibilities(*r);
+                        r.into_iter().flat_map(|r| {
+                            search![
+                                Declarator::Type(r), decl_type_handling;
+                            ]
+                        })
                     })
                     .collect();
-                let result = if possibilities.is_empty() {
-                    old_result
-                } else if possibilities.len() == 1 {
-                    Some(possibilities[0])
+
+                let waiting = if !matched.is_empty() || ext.is_empty() {
+                    waiting
                 } else {
-                    Some(self.intern(RefsEnum::Or(possibilities.into())))
-                };
-                let r = SolvingResult {
-                    matched,
-                    result,
-                    digested: r,
-                };
-                r
+                    let v: ListSet<_> = matched_o
+                        .matched
+                        .into_iter()
+                        .chain(waiting.into_iter())
+                        .collect();
+                    if v.len() == 1 {
+                        log::trace!("4");
+                        v.iter().next().map(|x| *x)
+                    } else {
+                        log::trace!("5");
+                        let v = v
+                            .into_iter()
+                            .flat_map(|x| {
+                                match &self.nodes[x] {
+                                    RefsEnum::Or(v) => v.clone(),
+                                    _ => vec![x].into(),
+                                }
+                                .into_iter()
+                                .filter(|&x| {
+                                    if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
+                                        !self.solve_aux(cache, x).is_matched()
+                                    } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x]
+                                    {
+                                        !self.solve_aux(cache, x).is_matched()
+                                    } else {
+                                        true
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                            })
+                            .collect();
+                        Some(self.intern(RefsEnum::Or(v)))
+                    }
+                }
+                .map(|o| self.intern(RefsEnum::MethodReference(o, i)));
+
+                SolvingResult { matched, waiting }
             }
             RefsEnum::ConstructorReference(o) => {
-                let rr = self.solve_aux(cache, o);
-                let r: ListSet<RefPtr> = rr
-                    .iter()
-                    .map(|o| self.intern(RefsEnum::ConstructorReference(*o)))
-                    .collect();
-                let r = SolvingResult {
-                    matched: rr.matched,
-                    result: rr
-                        .result
-                        .map(|o| self.intern(RefsEnum::ConstructorReference(o))),
-                    digested: r,
-                };
-                if r.digested.is_empty() {
-                    cache.insert(other, r.clone());
-                    return r;
-                }
+                let matched_o = self.solve_aux(cache, o);
 
-                let mut matched = r.matched;
-                let old_result = r.result;
-                let mut possibilities = vec![];
-                let r: ListSet<RefPtr> = r
+                let ext: ListSet<RefPtr> = matched_o
                     .iter()
-                    .flat_map(|&r| {
-                        let r = if let Some(r) =
-                            (&self.decls).get(&Declarator::Executable(r)).cloned()
-                        {
-                            matched = true;
-                            //log::trace!("solved method ref: {:?}", r);
-                            match r {
-                                DeclType::Compile(r, _, _) => {
-                                    let r = self.solve_aux(cache, r); // TODO check is solving here is needed
-                                    if let Some(r) = r.result {
-                                        possibilities.push(r);
-                                    }
-                                    r.digested.into_iter().collect()
-                                }
-                                DeclType::Runtime(b) => {
-                                    // TODO check with a unit test how this case happened
-                                    b.iter()
-                                        .flat_map(|&r| {
-                                            let r = self.solve_aux(cache, r);
-                                            if let Some(r) = r.result {
-                                                possibilities.push(r);
-                                            }
-                                            r.digested
-                                        })
-                                        .collect()
-                                    //log::trace!("solved runtime: {:?}", b);
-                                }
-                                x => todo!("{:?}", x),
-                            }
-                        } else if r != other {
-                            let rr = self.solve_aux(cache, r);
-                            matched |= rr.matched;
-                            if let Some(r) = rr.result {
-                                possibilities.push(r);
-                            }
-                            rr.iter().map(|x| *x).collect()
-                        } else {
-                            vec![r]
-                        };
-                        r
+                    .map(|&o| self.intern(RefsEnum::ConstructorReference(o)))
+                    .collect();
+
+                let waiting = matched_o.waiting;
+                let matched: ListSet<RefPtr> = ext
+                    .iter()
+                    .flat_map(|r| {
+                        let r = self.straight_possibilities(*r);
+                        r.into_iter().flat_map(|r| {
+                            search![
+                                Declarator::Type(r), decl_type_handling;
+                            ]
+                        })
                     })
                     .collect();
-                let result = if possibilities.is_empty() {
-                    old_result
-                } else if possibilities.len() == 1 {
-                    Some(possibilities[0])
+
+                let waiting = if !matched.is_empty() || ext.is_empty() {
+                    waiting
                 } else {
-                    Some(self.intern(RefsEnum::Or(possibilities.into())))
-                };
-                let r = SolvingResult {
-                    matched,
-                    result,
-                    digested: r,
-                };
-                r
+                    let v: ListSet<_> = matched_o
+                        .matched
+                        .into_iter()
+                        .chain(waiting.into_iter())
+                        .collect();
+                    if v.len() == 1 {
+                        log::trace!("4");
+                        v.iter().next().map(|x| *x)
+                    } else {
+                        log::trace!("5");
+                        let v = v
+                            .into_iter()
+                            .flat_map(|x| {
+                                match &self.nodes[x] {
+                                    RefsEnum::Or(v) => v.clone(),
+                                    _ => vec![x].into(),
+                                }
+                                .into_iter()
+                                .filter(|&x| {
+                                    if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
+                                        !self.solve_aux(cache, x).is_matched()
+                                    } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x]
+                                    {
+                                        !self.solve_aux(cache, x).is_matched()
+                                    } else {
+                                        true
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                            })
+                            .collect();
+                        Some(self.intern(RefsEnum::Or(v)))
+                    }
+                }
+                .map(|o| self.intern(RefsEnum::ConstructorReference(o)));
+
+                SolvingResult { matched, waiting }
             }
             RefsEnum::Invocation(o, i, p) => {
-                let rr = self.solve_aux(cache, o);
+                let matched_o = self.solve_aux(cache, o);
 
-                let mut handle = |&o: &usize| {
-                    let mask_o = match &self.nodes[o] {
-                        RefsEnum::Mask(o, _) => Some(*o),
-                        _ => None,
-                    };
-                    let mm = self.intern(RefsEnum::MaybeMissing);
-                    let mm = self.intern(RefsEnum::Mask(mm, Default::default()));
-                    let r = if mask_o.is_some() && cache.get(&mm).is_some() {
-                        None
-                    } else {
-                        let mut b = false;
-                        let p = match &p {
-                            Arguments::Unknown => Arguments::Unknown,
-                            Arguments::Given(p) => {
-                                b = p.is_empty();
-                                let mut v = vec![];
-                                for x in p.deref() {
-                                    let r = self.solve_aux(cache, *x);
-                                    if r.is_matched() {
-                                        // TODO check, was using !is_empty
-                                        v.push(*x); // TODO or MaybeMissing ?
-                                    } else {
-                                        for r in r.iter() {
-                                            b = true;
-                                            v.push(*r);
-                                            break; // TODO handle combinatorial
-                                        }
-                                    }
-                                }
-                                let p = v.into_boxed_slice();
-                                Arguments::Given(p)
-                            }
-                        };
-                        if b {
-                            Some(self.intern(RefsEnum::Invocation(o, i, p)))
-                        } else {
-                            None
-                        }
-                    };
-                    r
-                };
-                let r: ListSet<RefPtr> = rr.iter().filter_map(handle).collect();
-                let mut handle = |&o: &usize| {
-                    let mask_o = match &self.nodes[o] {
-                        RefsEnum::Mask(o, _) => Some(*o),
-                        _ => None,
-                    };
-                    let mm = self.intern(RefsEnum::MaybeMissing);
-                    let mm = self.intern(RefsEnum::Mask(mm, Default::default()));
-                    let r = if mask_o.is_some() && cache.get(&mm).is_some() {
-                        None
-                    } else {
-                        let mut b = false;
-                        let p = match &p {
-                            Arguments::Unknown => Arguments::Unknown,
-                            Arguments::Given(p) => {
-                                b = p.is_empty();
-                                let mut v = vec![];
-                                for x in p.deref() {
-                                    let r = self.solve_aux(cache, *x);
-                                    if r.is_matched() {
-                                        // TODO check, was using !is_empty
-                                        v.push(*x); // TODO or MaybeMissing ?
-                                    } else {
-                                        for r in r.iter() {
-                                            b = true;
-                                            v.push(*r);
-                                            break; // TODO handle combinatorial
-                                        }
-                                    }
-                                }
-                                let p = v.into_boxed_slice();
-                                Arguments::Given(p)
-                            }
-                        };
-                        if b {
-                            Some(self.intern(RefsEnum::Invocation(o, i, p)))
-                        } else {
-                            None
-                        }
-                    };
-                    r
-                };
-                let r = SolvingResult {
-                    matched: rr.matched,
-                    result: rr
-                        .result
-                        // TODO
-                        .and_then(|o| handle(&o)),
-                    digested: r,
-                };
-                if r.digested.is_empty() {
-                    cache.insert(other, r.clone());
-                    return r;
-                }
+                log::trace!(
+                    "solving invo: {} with {:?}",
+                    other,
+                    DebugSolvingResult {
+                        nodes: &self.nodes,
+                        result: &matched_o
+                    }
+                );
 
-                let mut matched = r.matched;
-                let old_result = r.result;
-                let mut possibilities = vec![];
-                let r: ListSet<RefPtr> = r
+                let matched_p = p.map(|&p| self.solve_aux(cache, p).waiting.unwrap());
+
+                let ext: ListSet<RefPtr> = matched_o
                     .iter()
-                    .flat_map(|&r| {
-                        let r = if let Some(r) =
-                            (&self.decls).get(&Declarator::Executable(r)).cloned()
-                        {
-                            matched = true;
-                            //log::trace!("solved method ref: {:?}", r);
-                            match r {
-                                DeclType::Compile(r, _, _) => {
-                                    let r = self.solve_aux(cache, r); // TODO check is solving here is needed
-                                    if let Some(r) = r.result {
-                                        possibilities.push(r);
-                                    }
-                                    r.digested.into_iter().collect()
-                                }
-                                DeclType::Runtime(b) => {
-                                    // TODO check with a unit test how this case happened
-                                    b.iter()
-                                        .flat_map(|&r| {
-                                            let r = self.solve_aux(cache, r);
-                                            if let Some(r) = r.result {
-                                                possibilities.push(r);
-                                            }
-                                            r.digested
-                                        })
-                                        .collect()
-                                    //log::trace!("solved runtime: {:?}", b);
-                                }
-                                x => todo!("{:?}", x),
-                            }
-                        } else if r != other {
-                            let rr = self.solve_aux(cache, r);
-                            matched |= rr.matched;
-                            if let Some(r) = rr.result {
-                                possibilities.push(r);
-                            }
-                            rr.iter().map(|x| *x).collect()
-                        } else {
-                            vec![r]
-                        };
-                        r
+                    .map(|&o| self.intern(RefsEnum::Invocation(o, i, matched_p.clone())))
+                    .collect();
+
+                let waiting = matched_o.waiting;
+                let matched: ListSet<_> = ext
+                    .iter()
+                    .flat_map(|r| {
+                        let r = self.straight_possibilities(*r);
+                        r.into_iter().flat_map(|r| {
+                            search![
+                                Declarator::Executable(r), decl_type_handling;
+                            ]
+                        })
                     })
                     .collect();
-                let result = if possibilities.is_empty() {
-                    old_result
-                } else if possibilities.len() == 1 {
-                    Some(possibilities[0])
+                // let matched: ListSet<RefPtr> = if matchedmatched
+                //     .into_iter()
+                //     .chain()
+                //     .collect();
+
+                let waiting = if !matched.is_empty() || ext.is_empty() {
+                    waiting
                 } else {
-                    Some(self.intern(RefsEnum::Or(possibilities.into())))
-                };
-                let r = SolvingResult {
-                    matched,
-                    result,
-                    digested: r,
-                };
-                r
+                    let v: ListSet<_> = matched_o
+                        .matched
+                        .into_iter()
+                        .chain(waiting.into_iter())
+                        .collect();
+                    if v.len() == 1 {
+                        log::trace!("4");
+                        v.iter().next().map(|x| *x)
+                    } else {
+                        log::trace!("5");
+                        let v = v
+                            .into_iter()
+                            .flat_map(|x| {
+                                match &self.nodes[x] {
+                                    RefsEnum::Or(v) => v.clone(),
+                                    _ => vec![x].into(),
+                                }
+                                .into_iter()
+                                .filter(|&x| {
+                                    if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
+                                        !self.solve_aux(cache, x).is_matched()
+                                    } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x]
+                                    {
+                                        !self.solve_aux(cache, x).is_matched()
+                                    } else {
+                                        true
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                            })
+                            .collect();
+                        Some(self.intern(RefsEnum::Or(v)))
+                    }
+                }
+                .map(|o| self.intern(RefsEnum::Invocation(o, i, matched_p)));
+
+                SolvingResult { matched, waiting }
             }
             RefsEnum::ConstructorInvocation(o, p) => {
-                let rr = self.solve_aux(cache, o);
+                let matched_o = self.solve_aux(cache, o);
 
-                let mut handle = |&o: &usize| {
-                    let (sup, this) = match &self.nodes[o] {
-                        RefsEnum::Super(_) => (true, false),
-                        RefsEnum::This(_) => (false, true),
-                        _ => (false, false),
-                    };
+                let matched_p = p.map(|&p| self.solve_aux(cache, p).waiting.unwrap());
 
-                    let mask_o = match &self.nodes[o] {
-                        RefsEnum::Mask(o, _) => Some(*o),
-                        _ => None,
-                    };
-                    let mm = self.intern(RefsEnum::MaybeMissing);
-                    let mm = self.intern(RefsEnum::Mask(mm, Default::default()));
-
-                    let o = if sup {
-                        let r = self.intern(RefsEnum::ConstructorInvocation(o, Arguments::Unknown));
-                        if let Some(r) = (&self.decls).get(&Declarator::Executable(r)).cloned() {
-                            match r {
-                                DeclType::Compile(r, s, i) => {
-                                    //log::trace!("solved super constructor type: {:?} {:?} {:?}", r, s, i);
-                                    s.iter()
-                                        .flat_map(|r| {
-                                            self.solve_aux(cache, *r)
-                                                .iter()
-                                                .map(|x| *x)
-                                                .collect::<Vec<_>>()
-                                        })
-                                        .collect()
-                                    // self.solve_aux(cache, s.unwrap())
-                                }
-                                _ => todo!(),
-                            }
-                            // TODO if outside class body should return None ?
-                        } else {
-                            [o].iter().map(|x| *x).collect::<ListSet<RefPtr>>()
-                        }
-                    } else if this {
-                        let r = self.intern(RefsEnum::ConstructorInvocation(o, Arguments::Unknown));
-                        if let Some(r) = (&self.decls).get(&Declarator::Executable(r)).cloned() {
-                            match r {
-                                DeclType::Compile(r, s, i) => {
-                                    //log::trace!("solved super constructor type: {:?} {:?} {:?}", r, s, i);
-                                    self.solve_aux(cache, r).digested.into_iter().collect()
-                                }
-                                _ => todo!(),
-                            }
-                            // TODO if outside class body should return None ?
-                        } else {
-                            [o].iter().map(|x| *x).collect::<ListSet<RefPtr>>()
-                        }
-                    } else {
-                        [o].iter().map(|x| *x).collect::<ListSet<RefPtr>>()
-                    };
-
-                    let r = if mask_o.is_some() && cache.get(&mm).is_some() {
-                        //&& self.root.is_some() {
-                        vec![]
-                    } else {
-                        let mut b = false;
-                        let pp = match &p {
-                            Arguments::Unknown => Arguments::Unknown,
-                            Arguments::Given(p) => {
-                                b = p.is_empty();
-                                let mut v = vec![];
-                                for x in p.deref() {
-                                    let r = self.solve_aux(cache, *x);
-                                    if r.digested.is_empty() {
-                                        v.push(*x); // TODO or MaybeMissing ?
-                                    } else {
-                                        for r in r.iter() {
-                                            b = true;
-                                            v.push(*r);
-                                            break; // TODO handle combinatorial
-                                        }
-                                    }
-                                }
-                                let p = v.into_boxed_slice();
-                                Arguments::Given(p)
-                            }
-                        };
-                        if b {
-                            o.iter()
-                                .map(|o| {
-                                    self.intern(RefsEnum::ConstructorInvocation(*o, pp.clone()))
-                                })
-                                .collect()
-                        } else {
-                            vec![]
-                        }
-                    };
-                    r
-                };
-
-                let r: ListSet<RefPtr> = rr.iter().flat_map(handle).collect();
-                let mut handle = |&o: &usize| {
-                    let (sup, this) = match &self.nodes[o] {
-                        RefsEnum::Super(_) => (true, false),
-                        RefsEnum::This(_) => (false, true),
-                        _ => (false, false),
-                    };
-
-                    let mask_o = match &self.nodes[o] {
-                        RefsEnum::Mask(o, _) => Some(*o),
-                        _ => None,
-                    };
-                    let mm = self.intern(RefsEnum::MaybeMissing);
-                    let mm = self.intern(RefsEnum::Mask(mm, Default::default()));
-
-                    let o = if sup {
-                        let r = self.intern(RefsEnum::ConstructorInvocation(o, Arguments::Unknown));
-                        if let Some(r) = (&self.decls).get(&Declarator::Executable(r)).cloned() {
-                            match r {
-                                DeclType::Compile(r, s, i) => {
-                                    //log::trace!("solved super constructor type: {:?} {:?} {:?}", r, s, i);
-                                    s.iter()
-                                        .flat_map(|r| {
-                                            self.solve_aux(cache, *r)
-                                                .iter()
-                                                .map(|x| *x)
-                                                .collect::<Vec<_>>()
-                                        })
-                                        .collect()
-                                    // self.solve_aux(cache, s.unwrap())
-                                }
-                                _ => todo!(),
-                            }
-                            // TODO if outside class body should return None ?
-                        } else {
-                            [o].iter().map(|x| *x).collect::<ListSet<RefPtr>>()
-                        }
-                    } else if this {
-                        let r = self.intern(RefsEnum::ConstructorInvocation(o, Arguments::Unknown));
-                        if let Some(r) = (&self.decls).get(&Declarator::Executable(r)).cloned() {
-                            match r {
-                                DeclType::Compile(r, s, i) => {
-                                    //log::trace!("solved super constructor type: {:?} {:?} {:?}", r, s, i);
-                                    self.solve_aux(cache, r).digested.into_iter().collect()
-                                }
-                                _ => todo!(),
-                            }
-                            // TODO if outside class body should return None ?
-                        } else {
-                            [o].iter().map(|x| *x).collect::<ListSet<RefPtr>>()
-                        }
-                    } else {
-                        [o].iter().map(|x| *x).collect::<ListSet<RefPtr>>()
-                    };
-
-                    let r = if mask_o.is_some() && cache.get(&mm).is_some() {
-                        //&& self.root.is_some() {
-                        vec![]
-                    } else {
-                        let mut b = false;
-                        let pp = match &p {
-                            Arguments::Unknown => Arguments::Unknown,
-                            Arguments::Given(p) => {
-                                b = p.is_empty();
-                                let mut v = vec![];
-                                for x in p.deref() {
-                                    let r = self.solve_aux(cache, *x);
-                                    if r.digested.is_empty() {
-                                        v.push(*x); // TODO or MaybeMissing ?
-                                    } else {
-                                        for r in r.iter() {
-                                            b = true;
-                                            v.push(*r);
-                                            break; // TODO handle combinatorial
-                                        }
-                                    }
-                                }
-                                let p = v.into_boxed_slice();
-                                Arguments::Given(p)
-                            }
-                        };
-                        if b {
-                            o.iter()
-                                .map(|o| {
-                                    self.intern(RefsEnum::ConstructorInvocation(*o, pp.clone()))
-                                })
-                                .collect()
-                        } else {
-                            vec![]
-                        }
-                    };
-                    r
-                };
-                let r = SolvingResult {
-                    matched: rr.matched,
-                    result: rr
-                        .result
-                        // TODO
-                        .and_then(|o| handle(&o).first().map(|x| *x)), // TODO
-                    digested: r,
-                };
-                if r.digested.is_empty() {
-                    cache.insert(other, r.clone());
-                    return r;
-                }
-
-                let mut matched = r.matched;
-                let old_result = r.result;
-                let mut possibilities = vec![];
-                let r: ListSet<RefPtr> = r
+                let ext: ListSet<RefPtr> = matched_o
                     .iter()
-                    .flat_map(|&r| {
-                        let r = if let Some(r) =
-                            (&self.decls).get(&Declarator::Executable(r)).cloned()
-                        {
-                            matched = true;
-                            //log::trace!("solved method ref: {:?}", r);
-                            match r {
-                                DeclType::Compile(r, _, _) => {
-                                    let r = self.solve_aux(cache, r); // TODO check is solving here is needed
-                                    if let Some(r) = r.result {
-                                        possibilities.push(r);
-                                    }
-                                    r.digested.into_iter().collect()
-                                }
-                                DeclType::Runtime(b) => {
-                                    // TODO check with a unit test how this case happened
-                                    b.iter()
-                                        .flat_map(|&r| {
-                                            let r = self.solve_aux(cache, r);
-                                            if let Some(r) = r.result {
-                                                possibilities.push(r);
-                                            }
-                                            r.digested
-                                        })
-                                        .collect()
-                                    //log::trace!("solved runtime: {:?}", b);
-                                }
-                                x => todo!("{:?}", x),
-                            }
-                        } else if r != other {
-                            let rr = self.solve_aux(cache, r);
-                            matched |= rr.matched;
-                            if let Some(r) = rr.result {
-                                possibilities.push(r);
-                            }
-                            rr.iter().map(|x| *x).collect()
-                        } else {
-                            vec![r]
-                        };
-                        r
+                    .map(|&o| self.intern(RefsEnum::ConstructorInvocation(o, matched_p.clone())))
+                    .collect();
+
+                let waiting = matched_o.waiting;
+                let matched: ListSet<RefPtr> = ext
+                    .iter()
+                    .flat_map(|r| {
+                        let r = self.straight_possibilities(*r);
+                        r.into_iter().flat_map(|r| {
+                            search![
+                                Declarator::Executable(r), decl_type_handling;
+                            ]
+                        })
                     })
                     .collect();
-                let result = if possibilities.is_empty() {
-                    old_result
-                } else if possibilities.len() == 1 {
-                    Some(possibilities[0])
+                // matched
+                //     .into_iter()
+                //     .chain(
+                //         )
+                //     .collect();
+
+                let waiting = if !matched.is_empty() || ext.is_empty() {
+                    waiting
                 } else {
-                    Some(self.intern(RefsEnum::Or(possibilities.into())))
-                };
-                let r = SolvingResult {
-                    matched,
-                    result,
-                    digested: r,
-                };
-                r
+                    let v: ListSet<_> = matched_o
+                        .matched
+                        .into_iter()
+                        .chain(waiting.into_iter())
+                        .collect();
+                    if v.len() == 1 {
+                        log::trace!("4");
+                        v.iter().next().map(|x| *x)
+                    } else {
+                        let v = v
+                            .into_iter()
+                            .flat_map(|x| {
+                                match &self.nodes[x] {
+                                    RefsEnum::Or(v) => v.clone(),
+                                    _ => vec![x].into(),
+                                }
+                                .into_iter()
+                                .filter(|&x| {
+                                    if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
+                                        !self.solve_aux(cache, x).is_matched()
+                                    } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x]
+                                    {
+                                        !self.solve_aux(cache, x).is_matched()
+                                    } else {
+                                        true
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                            })
+                            .collect();
+                        Some(self.intern(RefsEnum::Or(v)))
+                    }
+                }
+                .map(|o| self.intern(RefsEnum::ConstructorInvocation(o, matched_p)));
+
+                SolvingResult { matched, waiting }
             }
         };
 
-        if r.digested.is_empty() {
-            // log::trace!("solving {:?} into nothing", other);
-            cache.insert(other, r.clone());
-        } else {
-            for r in r.iter() {
-                log::trace!("solving {:?} into {:?}", other, self.nodes.with(*r));
+        log::trace!(
+            "solved: {} into {:?}",
+            other,
+            DebugSolvingResult {
+                nodes: &self.nodes,
+                result: &r
             }
-            cache.insert(other, r.clone());
-        }
+        );
+        cache.insert(other, r.clone());
         r
     }
 }
@@ -2206,6 +2137,7 @@ impl Solver {
 pub(crate) struct Internalizer<'a> {
     solve: bool,
     cache: HashMap<RefPtr, RefPtr>,
+    cache_decls: HashMap<RefPtr, RefPtr>,
     solver: &'a Solver,
 }
 
@@ -2219,6 +2151,25 @@ impl<'a> Internalizer<'a> {
             solver.local_solve_intern_external(&mut self.cache, other)
         } else {
             solver.intern_external(&mut Default::default(), &mut self.cache, other)
+        };
+        // should not be needed as we aleady interned external refs in extend
+        // if self.solver.refs[other] {
+        //     if r >= solver.refs.len() {
+        //         solver.refs.resize(r + 1, false);
+        //     }
+        //     solver.refs.set(r, true);
+        // }
+        r
+    }
+    pub(crate) fn intern_external_decl(&mut self, solver: &mut Solver, other: RefPtr) -> RefPtr {
+        let other = ExplorableRef {
+            rf: other,
+            nodes: &self.solver.nodes,
+        };
+        let r = if self.solve {
+            solver.local_solve_intern_external(&mut self.cache_decls, other)
+        } else {
+            solver.intern_external(&mut Default::default(), &mut self.cache_decls, other)
         };
         // should not be needed as we aleady interned external refs in extend
         // if self.solver.refs[other] {

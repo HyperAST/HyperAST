@@ -21,7 +21,7 @@ use log::info;
 use rusted_gumtree_gen_ts_java::{
     filter::BloomSize,
     impact::{element::RefPtr, partial_analysis::PartialAnalysis},
-    java_tree_gen_full_compress_legion_ref::{self, hash32},
+    java_tree_gen_full_compress_legion_ref::{self, hash32, BulkHasher},
     usage::declarations::IterDeclarationsUnstableOpti,
 };
 
@@ -1109,11 +1109,19 @@ impl PreProcessedRepository {
                 } else {
                     let vacant = insertion.vacant();
                     macro_rules! insert {
-                        ( $c:expr, $t:ty ) => {
+                        ( $c:expr, $t:ty ) => {{
+                            let it = ana.solver.iter_refs();
+                            let it =
+                                BulkHasher::<_, <$t as BF<[u8]>>::S, <$t as BF<[u8]>>::H>::from(it);
                             NodeStore::insert_after_prepare(
                                 vacant,
-                                $c.concat((<$t>::SIZE, <$t>::from(ana.refs()))),
+                                $c.concat((<$t>::SIZE, <$t>::from(it))),
                             )
+                        }
+                            // NodeStore::insert_after_prepare(
+                            //     vacant,
+                            //     $c.concat((<$t>::SIZE, <$t>::from(ana.refs()))),
+                            // )
                         };
                     }
                     // NodeStore::insert_after_prepare(

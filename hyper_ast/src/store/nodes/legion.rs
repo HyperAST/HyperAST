@@ -9,12 +9,12 @@ use legion::{
 use num::ToPrimitive;
 
 use crate::{
-    filter::{Bloom, BloomResult, BloomSize},
+    filter::{Bloom, BloomResult, BloomSize, BF},
     hashed::{NodeHashs, SyntaxNodeHashs, SyntaxNodeHashsKinds},
     nodes::{CompressedNode, HashSize, RefContainer, Space},
     store::labels::DefaultLabelIdentifier,
     types::{Type, Typed, WithChildren},
-    utils::make_hash,
+    utils::make_hash, impact::serialize::{MySerialize, CachedHasher, Keyed},
 };
 
 pub type NodeIdentifier = legion::Entity;
@@ -360,28 +360,36 @@ impl<'a> crate::types::Tree for HashedNodeRef<'a> {
 impl<'a> HashedNodeRef<'a> {}
 
 impl<'a> RefContainer for HashedNodeRef<'a> {
-    type Ref = [u8];
     type Result = BloomResult;
 
-    fn check<U: Borrow<Self::Ref> + AsRef<[u8]>>(&self, rf: U) -> Self::Result {
+    fn check<U: MySerialize+Keyed<usize>>(&self, rf: U) -> Self::Result {
         use crate::filter::BF as _;
+
+        let e = self.0.get_component::<BloomSize>().unwrap();
+
         macro_rules! check {
-            ( ($e:expr, $s:expr, $rf:expr); $($t:ty),* ) => {
-                match $e {
+            ( $($t:ty),* ) => {
+                match *e {
                     BloomSize::Much => {
                         log::trace!("[Too Much]");
                         BloomResult::MaybeContain
                     },
                     BloomSize::None => BloomResult::DoNotContain,
-                    $( <$t>::SIZE => $s.get_component::<$t>()
-                        .unwrap()
-                        .check(0, $rf)),*
+                    $( <$t>::SIZE => {
+                        let x = CachedHasher::<usize,<$t as BF<[u8]>>::S, <$t as BF<[u8]>>::H>::once(rf);
+                        let x = x.into_iter().map(|x|<$t>::check_raw(self.0.get_component::<$t>().unwrap(), x));
+
+                        for x in x {
+                            if let BloomResult::MaybeContain = x {
+                                return BloomResult::MaybeContain
+                            }
+                        }
+                        BloomResult::DoNotContain
+                    }),*
                 }
             };
         }
-        let e = self.0.get_component::<BloomSize>().unwrap();
         check![
-            (*e, self.0, rf);
             Bloom<&'static [u8], u16>,
             Bloom<&'static [u8], u32>,
             Bloom<&'static [u8], u64>,

@@ -80,7 +80,7 @@ fn test_cases() {
 #[test]
 fn test_equals() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
-    let text = CASE_1.as_bytes();
+    let text = CASE_31.as_bytes();
     let mut parser = Parser::new();
 
     {
@@ -119,6 +119,7 @@ fn test_equals() {
         &mut out,
         &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
     );
+    println!();
 
     {
         // playing with refs
@@ -135,14 +136,14 @@ fn test_equals() {
         let bb = "B".as_bytes().to_owned().into_boxed_slice();
         let d = bb.as_ref(); //_full_node.local.refs.unwrap().iter().next().unwrap();
 
-        let c = b.check(d);
+        // let c = b.check(d);
 
         let s = std::str::from_utf8(d).unwrap();
         println!("{}", java_tree_gen.stores.label_store);
-        match c {
-            BloomResult::MaybeContain => println!("Maybe contains {}", s),
-            BloomResult::DoNotContain => println!("Do not contains {}", s),
-        }
+        // match c {
+        //     BloomResult::MaybeContain => println!("Maybe contains {}", s),
+        //     BloomResult::DoNotContain => println!("Do not contains {}", s),
+        // }
     }
 //     use hyper_ast::position::extract_position;
 //     let mut position = extract_position(&java_tree_gen.stores, d_it.parents(), d_it.offsets());
@@ -527,6 +528,69 @@ class A {
     char[] c = new char[] { (char) x };
 }
 ";
+static CASE_1_1: &'static str = "package q.w.e;
+class A {
+    char c = null;
+}
+";
+static CASE_1_2: &'static str = "package q.w.e;
+class A {
+    A c = null;
+}
+";
+static CASE_1_3: &'static str = "package q.w.e;
+class A {
+    E c = null;
+}
+";
+
+static CASE_1_4: &'static str = "package q.w.e;
+class A  extends E {
+    X c = null;
+}
+";
+static CASE_1_5: &'static str = "package q.w.e;
+class A  extends E {
+    E c = null;
+}
+";
+static CASE_1_6: &'static str = "package q.w.e;
+class A  extends E {
+    E E = null;
+}
+";
+
+static CASE_1_7: &'static str = "package q.w.e;
+class A  extends E {
+    E E = null;
+    E e = E;
+}
+";
+static CASE_1_8: &'static str = "package q.w.e;
+import a.z.E;
+
+class A  extends E {
+    E E = null;
+    E e = E;
+}
+";
+static CASE_1_9: &'static str = "package q.w.e;
+import a.z.*;
+
+class A  extends E {
+    E E = null;
+    E e = E;
+}
+";
+static CASE_1_10: &'static str = "package q.w.e;
+import a.z.E;
+import a.z.*;
+
+class A  extends E {
+    E E = null;
+    E e = E;
+}
+";
 
 /// mostly simple resolutions
 static CASE_2: &'static str = "package q.w.e;
@@ -718,9 +782,17 @@ class A {
         test(1);
         A b = new A();
         b.test(a);
+        b.test(x);
         test(a);
         String s = \"\";
         b.test(s);
+    }
+}";
+
+static CASE_8_1: &'static str = "package q.w.e;
+class A {
+    <T> void test(T x) {
+        test(x);
     }
 }";
 
@@ -765,6 +837,7 @@ public class A {
 
 // TODO handle fall through variable declaration
 static CASE_12: &'static str = "package a;
+import z.VM;
 public class A {
     public static long f() {
         switch (VM.initLevel()) {
@@ -779,6 +852,7 @@ public class A {
             default:
                 // system fully initialized
                 assert VM.isBooted() && scl != null;
+                A d = null;
                 SecurityManager sm = System.getSecurityManager();
                 if (sm != null) {
                     checkClassLoaderPermission(scl, Reflection.getCallerClass());
@@ -835,6 +909,24 @@ static CASE_15: &'static str = "package q.w.e;
 class A<V> {
     public Enumeration<V> elements() {
         return this.<V>getEnumeration(VALUES);
+    }
+}";
+static CASE_15_1: &'static str = "package q.w.e;
+class A<V> {
+    public Enumeration<V> elements() {
+        return this.<V>getEnumeration(VALUES);
+    }
+    public Enumeration<V> getEnumeration(V v) {
+        return v.a;
+    }
+}";
+static CASE_15_2: &'static str = "package q.w.e;
+class A<V> {
+    public Enumeration<V> elements() {
+        return this.<V>getEnumeration();
+    }
+    public Enumeration<V> getEnumeration() {
+        return v.a;
     }
 }";
 
@@ -2204,6 +2296,17 @@ public class InnerTypeOk {
   private void test() {
     Entry<String, String> test;
   }
+}"#;
+
+static CASE_31: &'static str = r#"
+package q.w.e;
+
+public class A {
+    public static class B {
+        public A f() {
+            return null;
+        }
+    }
 }"#;
 
 enum D {

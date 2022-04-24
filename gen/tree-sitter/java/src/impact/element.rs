@@ -5,7 +5,8 @@ use std::marker::PhantomData;
 use std::ops::{Deref, Index, IndexMut};
 use std::str::Utf8Error;
 
-use hyper_ast::filter::default::{Pearson, VaryHasher};
+use hyper_ast::filter::default::VaryHasher;
+use hyper_ast::impact::serialize::{Keyed, MySerialize, MySerializer, MySerializePar, MySerializeSco, Table, CachedHasher};
 use num::ToPrimitive;
 use serde::de::VariantAccess;
 use serde::ser::SerializeSeq;
@@ -242,7 +243,7 @@ impl<Node: Eq + Hash> FromIterator<Node> for ListSet<Node> {
     fn from_iter<T: IntoIterator<Item = Node>>(iter: T) -> Self {
         let mut r = vec![];
         for x in iter.into_iter() {
-            if r.contains(&x) {
+            if !r.contains(&x) {
                 r.push(x);
             }
         }
@@ -250,9 +251,9 @@ impl<Node: Eq + Hash> FromIterator<Node> for ListSet<Node> {
     }
 }
 
-impl<Node: Eq + Hash+Clone> From<Box<[Node]>> for ListSet<Node> {
+impl<Node: Eq + Hash + Clone> From<Box<[Node]>> for ListSet<Node> {
     fn from(x: Box<[Node]>) -> Self {
-        x.into_iter().map(|x|x.clone()).collect()
+        x.into_iter().map(|x| x.clone()).collect()
     }
 }
 
@@ -262,10 +263,10 @@ impl<Node: Eq + Hash> From<Vec<Node>> for ListSet<Node> {
     }
 }
 
-impl<Node:Clone> IntoIterator for ListSet<Node> {
-    type Item=Node;
+impl<Node: Clone> IntoIterator for ListSet<Node> {
+    type Item = Node;
 
-    type IntoIter=std::vec::IntoIter<Node>;
+    type IntoIter = std::vec::IntoIter<Node>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.to_vec().into_iter()
@@ -303,7 +304,7 @@ pub enum RefsEnum<Node, Leaf> {
 impl<Node: Eq + Hash + Clone, Leaf: Eq + Hash> Hash for RefsEnum<Node, Leaf> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            RefsEnum::Mask(_,_) => 1,
+            RefsEnum::Mask(_, _) => 1,
             RefsEnum::Or(_) => 1,
             RefsEnum::Root => 2,
             RefsEnum::MaybeMissing => 3,
@@ -354,6 +355,7 @@ impl<Node: Eq + Hash + Clone, Leaf: Eq + Hash> PartialEq for RefsEnum<Node, Leaf
 impl<Node: Eq + Hash + Clone, Leaf: Eq + Hash> RefsEnum<Node, Leaf> {
     pub(crate) fn strict_eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (Self::Mask(l0, l1), Self::Mask(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::Or(l0), Self::Or(r0)) => l0 == r0,
             (Self::ScopedIdentifier(l0, l1), Self::ScopedIdentifier(r0, r1)) => {
                 l0 == r0 && l1 == r1
@@ -381,7 +383,7 @@ impl<Node: Clone, Leaf> RefsEnum<Node, Leaf> {
     pub(crate) fn object(&self) -> Option<Node> {
         let r = match self {
             RefsEnum::Mask(o, _) => o,
-            RefsEnum::Or(_) => panic!(),
+            RefsEnum::Or(_) => return None,
             RefsEnum::ScopedIdentifier(o, _) => o,
             RefsEnum::MethodReference(o, _) => o,
             RefsEnum::ConstructorReference(o) => o,
@@ -456,6 +458,16 @@ impl<Node: Eq + Hash> Hash for Arguments<Node> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         core::mem::discriminant(self).hash(state);
     }
+}
+impl<Node:Clone> Into<Box<[Node]>> for Arguments<Node> {
+
+    fn into(self) -> Box<[Node]> {
+        match self {
+            Arguments::Unknown => Default::default(),
+            Arguments::Given(v) => v,
+        }
+    }
+
 }
 impl<Node: Eq + Hash> Eq for Arguments<Node> {}
 impl<Node: Eq + Hash> PartialEq for Arguments<Node> {
@@ -549,25 +561,24 @@ impl<'a> ExplorableRef<'a> {
                 out.extend(b".psuper");
             }
             RefsEnum::Or(v) => {
-                todo!()
-                // out.extend(b"[|");
-                // for p in v.iter() {
-                //     assert_ne!(*p, self.rf);
-                //     self.with(*p).ser(out);
-                //     out.push(b"|"[0]);
-                // }
-                // out.extend(b"|]");
+                out.extend(b"[");
+                for p in v.iter() {
+                    assert_ne!(*p, self.rf);
+                    out.push(b"|"[0]);
+                    self.with(*p).ser(out);
+                }
+                out.extend(b"|]");
             }
             RefsEnum::Mask(o, v) => {
                 assert_ne!(*o, self.rf);
                 self.with(*o).ser(out);
-                // out.extend(b".{");
-                // for p in v.deref() {
-                //     assert_ne!(*p, self.rf);
-                //     self.with(*p).ser(out);
-                //     out.push(b","[0]);
-                // }
-                // out.extend(b"}");
+                out.extend(b".{");
+                for p in v.deref() {
+                    assert_ne!(*p, self.rf);
+                    self.with(*p).ser(out);
+                    out.push(b","[0]);
+                }
+                out.extend(b"}");
             }
             RefsEnum::ScopedIdentifier(o, i) => {
                 assert_ne!(*o, self.rf);
@@ -674,7 +685,7 @@ impl<'a> ExplorableRef<'a> {
                     out.extend(b".psuper");
                 }
                 RefsEnum::Or(v) => {
-                    out.extend(b".[|");
+                    out.extend(b"[|");
                     for p in v.iter() {
                         assert_ne!(*p, self.rf);
                         out.extend(self.with(*p).ser_cached(cache));
@@ -685,13 +696,13 @@ impl<'a> ExplorableRef<'a> {
                 RefsEnum::Mask(o, v) => {
                     assert_ne!(*o, self.rf);
                     out.extend(self.with(*o).ser_cached(cache));
-                    // out.extend(b".{");
-                    // for p in v.deref() {
-                    //     assert_ne!(*p, self.rf);
-                    //     out.extend(self.with(*p).ser_cached(cache));
-                    //     out.push(b","[0]);
-                    // }
-                    // out.extend(b"}");
+                    out.extend(b".{");
+                    for p in v.deref() {
+                        assert_ne!(*p, self.rf);
+                        out.extend(self.with(*p).ser_cached(cache));
+                        out.push(b","[0]);
+                    }
+                    out.extend(b"}");
                 }
                 RefsEnum::ScopedIdentifier(o, i) => {
                     assert_ne!(*o, self.rf);
@@ -765,81 +776,6 @@ impl<'a> ExplorableRef<'a> {
             cache.get(&self.rf).unwrap()
         }
     }
-}
-
-pub trait MySerializePar {
-    /// Must match the `Ok` type of our `Serializer`.
-    type Ok;
-
-    /// Must match the `Error` type of our `Serializer`.
-    type Error: serde::ser::Error;
-
-    /// Serialize a sequence element.
-    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: MySerialize + Keyed<usize>;
-
-    /// Finish serializing a sequence.
-    fn end(self) -> Result<Self::Ok, Self::Error>;
-}
-pub trait MySerializeSco {
-    /// Must match the `Ok` type of our `Serializer`.
-    type Ok;
-
-    /// Must match the `Error` type of our `Serializer`.
-    type Error: serde::ser::Error;
-
-    /// Serialize a sequence element.
-    fn serialize_object<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: MySerialize + Keyed<usize>;
-
-    /// Finish serializing a sequence.
-    fn end(self, s: &str) -> Result<Self::Ok, Self::Error>;
-}
-
-pub trait Keyed<T> {
-    fn key(&self) -> T;
-}
-
-pub trait MySerializer: Sized {
-    /// The output type produced by this `Serializer` during successful
-    /// serialization. Most serializers that produce text or binary output
-    /// should set `Ok = ()` and serialize into an [`io::Write`] or buffer
-    /// contained within the `Serializer` instance. Serializers that build
-    /// in-memory data structures may be simplified by using `Ok` to propagate
-    /// the data structure around.
-    ///
-    /// [`io::Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
-    type Ok;
-
-    /// The error type when some error occurs during serialization.
-    type Error: serde::ser::Error;
-
-    /// Type returned from [`serialize_seq`] for serializing the content of the
-    /// sequence.
-    ///
-    /// [`serialize_seq`]: #tymethod.serialize_seq
-    type SerializePar: MySerializePar<Ok = Self::Ok, Error = Self::Error>;
-    type SerializeSco: MySerializeSco<Ok = Self::Ok, Error = Self::Error>;
-
-    fn collect_str<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: Display,
-    {
-        todo!()
-        // self.serialize_str(&value.to_string())
-    }
-
-    fn serialize_par(self, len: Option<usize>) -> Result<Self::SerializePar, Self::Error>;
-
-    fn serialize_sco(self, len: Option<usize>) -> Result<Self::SerializeSco, Self::Error>;
-}
-
-pub trait MySerialize {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: MySerializer;
 }
 
 impl<'a> Keyed<usize> for ExplorableRef<'a> {
@@ -951,13 +887,14 @@ impl<'a> Debug for ExplorableRef<'a> {
     }
 }
 
-impl<'a> Into<Box<[u8]>> for ExplorableRef<'a> {
-    fn into(self) -> Box<[u8]> {
-        let mut r = vec![];
-        self.ser(&mut r);
-        r.into()
-    }
-}
+// impl<'a> Into<Box<[u8]>> for ExplorableRef<'a> {
+//     fn into(self) -> Box<[u8]> {
+//         panic!();
+//         let mut r = vec![];
+//         self.ser(&mut r);
+//         r.into()
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub struct Nodes(Vec<RefsEnum<RefPtr, LabelPtr>>);
@@ -990,6 +927,38 @@ impl Nodes {
     pub fn with(&self, rf: RefPtr) -> ExplorableRef {
         ExplorableRef { rf, nodes: self }
     }
+
+    pub fn get(&self, other: RefsEnum<RefPtr, LabelPtr>) -> Option<RefPtr> {
+        // TODO analyze perfs to find if Vec or HashSet or something else works better
+        self.iter().position(|x| x == &other)
+    }
+
+    /// flatten Or and filter Masks
+    /// do not create new references
+    /// useful to cut short search for declarations,
+    /// indeed as we share `self.nodes` with declarations
+    /// if we cannot flatten a case we are sure
+    /// that there is no corresponding declaration
+    pub fn straight_possibilities(&self, other: RefPtr) -> Vec<RefPtr> {
+        let o = &self[other].clone();
+        if let RefsEnum::Mask(oo, _) = o {
+            self.straight_possibilities(*oo)
+        } else if let RefsEnum::Or(v) = o {
+            v.iter()
+                .flat_map(|&o| self.straight_possibilities(o))
+                .collect()
+        } else if let Some(o) = o.object() {
+            self.straight_possibilities(o)
+                .into_iter()
+                .filter_map(|o| {
+                    let x = self[other].with_object(o);
+                    self.get(x)
+                })
+                .collect()
+        } else {
+            vec![other]
+        }
+    }
 }
 
 pub struct NodesIter<'a> {
@@ -1014,96 +983,21 @@ impl<'a> Iterator for NodesIter<'a> {
     }
 }
 
-#[derive(Debug)]
-pub struct CachedHasherError(String);
-
-impl Display for CachedHasherError {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(())
-    }
-}
-impl From<std::io::Error> for CachedHasherError {
-    fn from(e: std::io::Error) -> Self {
-        Self(e.to_string())
-    }
-}
-impl From<Utf8Error> for CachedHasherError {
-    fn from(e: Utf8Error) -> Self {
-        Self(e.to_string())
-    }
-}
-
-impl std::error::Error for CachedHasherError {}
-
-impl serde::ser::Error for CachedHasherError {
-    fn custom<T>(msg: T) -> Self
-    where
-        T: std::fmt::Display,
-    {
-        Self(msg.to_string())
-    }
-}
-
-struct Table<T> {
-    offsets: Vec<u32>,
-    choices: Vec<u8>,
-    buf: Vec<T>,
-}
-
-impl<T> Default for Table<T> {
-    fn default() -> Self {
-        Self {
-            offsets: Default::default(),
-            choices: Default::default(),
-            buf: Default::default(),
-        }
-    }
-}
-
-impl<T> Index<SymbolU16> for Table<T> {
-    type Output = [T];
-
-    fn index(&self, index: SymbolU16) -> &Self::Output {
-        let index = index.to_usize();
-        let o = self.offsets[index] as usize;
-        let c = self.choices[index] as usize;
-        &self.buf[o..o + c]
-    }
-}
-
-impl<T> Table<T> {
-    fn insert(&mut self, index: usize, v: Vec<T>) -> SymbolU16 {
-        assert_ne!(v.len(), 0);
-        if self.offsets.len() <= index {
-            self.offsets.resize(index + 1, 0);
-            self.choices.resize(index + 1, 0);
-        }
-        if self.offsets[index] != 0 {
-            panic!();
-        }
-        self.offsets[index] = self.buf.len().to_u32().unwrap();
-        self.choices[index] = v.len().to_u8().unwrap();
-        self.buf.extend(v);
-        SymbolU16::try_from_usize(index).unwrap()
-    }
-}
-
-/// Could simplify structurally, fusioning Auxilary serializers
-pub struct CachedHasher<'a, I, S, H: VaryHasher<S>> {
-    index: I,
-    table: &'a mut Table<S>,
-    phantom: PhantomData<*const H>,
-}
-
-pub struct BulkHasher<'a, S, H: VaryHasher<S>> {
+pub struct BulkHasher<'a, It, S, H>
+where   It: Iterator<Item = ExplorableRef<'a>>,
+   H: VaryHasher<S>, {
     table: Table<S>,
-    it: NodesIter<'a>,
+    it: It,
     branched: Vec<S>,
     phantom: PhantomData<*const H>,
 }
 
-impl<'a, S, H: VaryHasher<S>> From<NodesIter<'a>> for BulkHasher<'a, S, H> {
-    fn from(it: NodesIter<'a>) -> Self {
+impl<'a, It, S, H> From<It>
+    for BulkHasher<'a, It, S, H>
+ where   It: Iterator<Item = ExplorableRef<'a>>,
+    H: VaryHasher<S>,
+{
+    fn from(it: It) -> Self {
         Self {
             table: Default::default(),
             it,
@@ -1113,7 +1007,12 @@ impl<'a, S, H: VaryHasher<S>> From<NodesIter<'a>> for BulkHasher<'a, S, H> {
     }
 }
 
-impl<'a, H: VaryHasher<u8>> Iterator for BulkHasher<'a, u8, H> {
+impl<'a, It, H> Iterator
+    for BulkHasher<'a, It, u8, H>
+    where
+        It: Iterator<Item = ExplorableRef<'a>>,
+        H: VaryHasher<u8>
+{
     type Item = u8;
     fn next(&mut self) -> Option<u8> {
         if let Some(x) = self.branched.pop() {
@@ -1121,11 +1020,7 @@ impl<'a, H: VaryHasher<u8>> Iterator for BulkHasher<'a, u8, H> {
         }
         let x = self.it.next()?;
         let x = x
-            .serialize(CachedHasher::<usize, u8, H> {
-                index: x.rf,
-                table: &mut self.table,
-                phantom: PhantomData,
-            })
+            .serialize(CachedHasher::<usize, u8, H>::new(&mut self.table, x.rf))
             .unwrap();
         let x = &self.table[x];
         self.branched = x.to_vec();
@@ -1133,7 +1028,11 @@ impl<'a, H: VaryHasher<u8>> Iterator for BulkHasher<'a, u8, H> {
     }
 }
 
-impl<'a, H: VaryHasher<u16>> Iterator for BulkHasher<'a, u16, H> {
+impl<'a, It, H> Iterator for BulkHasher<'a, It, u16, H>
+where
+    It: Iterator<Item = ExplorableRef<'a>>,
+    H: VaryHasher<u16>,
+{
     type Item = u16;
     fn next(&mut self) -> Option<u16> {
         if let Some(x) = self.branched.pop() {
@@ -1141,11 +1040,7 @@ impl<'a, H: VaryHasher<u16>> Iterator for BulkHasher<'a, u16, H> {
         }
         let x = self.it.next()?;
         let x = x
-            .serialize(CachedHasher::<usize, u16, H> {
-                index: x.rf,
-                table: &mut self.table,
-                phantom: PhantomData,
-            })
+            .serialize(CachedHasher::<usize, u16, H>::new(&mut self.table, x.rf))
             .unwrap();
         let x = &self.table[x];
         self.branched = x.to_vec();
@@ -1153,186 +1048,3 @@ impl<'a, H: VaryHasher<u16>> Iterator for BulkHasher<'a, u16, H> {
     }
 }
 
-impl<'a, H: VaryHasher<u8>> MySerializer for CachedHasher<'a, usize, u8, H> {
-    type Ok = SymbolU16; // TODO use an u8 symbol
-
-    type Error = CachedHasherError;
-
-    type SerializePar = CachedHasherAux<'a, usize, u8, H>;
-    type SerializeSco = CachedHasherAux<'a, usize, u8, H>;
-
-    fn serialize_par(self, _: Option<usize>) -> Result<Self::SerializePar, Self::Error> {
-        Ok(CachedHasherAux {
-            index: self.index,
-            table: self.table,
-            acc: Default::default(),
-        })
-    }
-
-    fn serialize_sco(self, _: Option<usize>) -> Result<Self::SerializeSco, Self::Error> {
-        Ok(CachedHasherAux {
-            index: self.index,
-            table: self.table,
-            acc: Default::default(),
-        })
-    }
-}
-
-impl<'a, H: VaryHasher<u16>> MySerializer for CachedHasher<'a, usize, u16, H> {
-    type Ok = SymbolU16;
-
-    type Error = CachedHasherError;
-
-    type SerializePar = CachedHasherAux<'a, usize, u16, H>;
-    type SerializeSco = CachedHasherAux<'a, usize, u16, H>;
-
-    fn serialize_par(self, _: Option<usize>) -> Result<Self::SerializePar, Self::Error> {
-        Ok(CachedHasherAux {
-            index: self.index,
-            table: self.table,
-            acc: Default::default(),
-        })
-    }
-
-    fn serialize_sco(self, _: Option<usize>) -> Result<Self::SerializeSco, Self::Error> {
-        Ok(CachedHasherAux {
-            index: self.index,
-            table: self.table,
-            acc: Default::default(),
-        })
-    }
-}
-
-pub struct CachedHasherAux<'a, I, S, H: VaryHasher<S>> {
-    index: I,
-    table: &'a mut Table<S>,
-    acc: Vec<H>,
-}
-
-impl<'a, H: VaryHasher<u8>> MySerializePar for CachedHasherAux<'a, usize, u8, H> {
-    type Ok = SymbolU16;
-
-    type Error = CachedHasherError;
-
-    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: MySerialize + Keyed<usize>,
-    {
-        let x = value.serialize(CachedHasher::<_, _, H> {
-            index: value.key(),
-            table: self.table,
-            phantom: PhantomData,
-        })?;
-        for x in &self.table[x] {
-            let x = *x;
-            let mut h = H::new(0);
-            h.write(b"|");
-            h.write_u8(x);
-            self.acc.push(h);
-        }
-        Ok(())
-    }
-
-    fn end(mut self) -> Result<Self::Ok, Self::Error> {
-        for x in &mut self.acc {
-            x.write(b"|]");
-        }
-        let v = self.acc.iter().map(VaryHasher::finish).collect();
-        Ok(self.table.insert(self.index, v))
-    }
-}
-
-impl<'a, H: VaryHasher<u16>> MySerializePar for CachedHasherAux<'a, usize, u16, H> {
-    type Ok = SymbolU16;
-
-    type Error = CachedHasherError;
-
-    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: MySerialize + Keyed<usize>,
-    {
-        let x = value.serialize(CachedHasher::<_, _, H> {
-            index: value.key(),
-            table: self.table,
-            phantom: PhantomData,
-        })?;
-        for x in &self.table[x] {
-            let x = *x;
-            let mut h = H::new(0);
-            h.write(b"|");
-            h.write_u16(x);
-            self.acc.push(h);
-        }
-        Ok(())
-    }
-
-    fn end(mut self) -> Result<Self::Ok, Self::Error> {
-        for x in &mut self.acc {
-            x.write(b"|]");
-        }
-        let v = self.acc.iter().map(VaryHasher::finish).collect();
-        Ok(self.table.insert(self.index, v))
-    }
-}
-impl<'a, H: VaryHasher<u8>> MySerializeSco for CachedHasherAux<'a, usize, u8, H> {
-    type Ok = SymbolU16;
-
-    type Error = CachedHasherError;
-
-    fn serialize_object<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: MySerialize + Keyed<usize>,
-    {
-        let x = value.serialize(CachedHasher::<_, _, H> {
-            index: value.key(),
-            table: self.table,
-            phantom: PhantomData,
-        })?;
-        for x in &self.table[x] {
-            let x = *x;
-            let mut h = H::new(0);
-            h.write_u8(x);
-            self.acc.push(h);
-        }
-        Ok(())
-    }
-
-    fn end(mut self, s: &str) -> Result<Self::Ok, Self::Error> {
-        for x in &mut self.acc {
-            x.write(s.as_bytes());
-        }
-        let v = self.acc.iter().map(VaryHasher::finish).collect();
-        Ok(self.table.insert(self.index, v))
-    }
-}
-impl<'a, H: VaryHasher<u16>> MySerializeSco for CachedHasherAux<'a, usize, u16, H> {
-    type Ok = SymbolU16;
-
-    type Error = CachedHasherError;
-
-    fn serialize_object<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: MySerialize + Keyed<usize>,
-    {
-        let x = value.serialize(CachedHasher::<_, _, H> {
-            index: value.key(),
-            table: self.table,
-            phantom: PhantomData,
-        })?;
-        for x in &self.table[x] {
-            let x = *x;
-            let mut h = H::new(0);
-            h.write_u16(x);
-            self.acc.push(h);
-        }
-        Ok(())
-    }
-
-    fn end(mut self, s: &str) -> Result<Self::Ok, Self::Error> {
-        for x in &mut self.acc {
-            x.write(s.as_bytes());
-        }
-        let v = self.acc.iter().map(VaryHasher::finish).collect();
-        Ok(self.table.insert(self.index, v))
-    }
-}

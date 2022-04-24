@@ -44,7 +44,11 @@ impl<const MOD: usize> VaryHasher<u8> for Pearson<MOD> {
         self.acc
     }
     fn write_u8(&mut self, i: u8) {
-        self.acc = T[(self.acc ^ i) as usize] % (MOD as u8);
+        if MOD as u8 == 0 {
+            self.acc = T[(self.acc ^ i) as usize];
+        } else {
+            self.acc = T[(self.acc ^ i) as usize] % (MOD as u8);
+        }
     }
     fn write_u16(&mut self, _: u16) {
         panic!()
@@ -57,7 +61,7 @@ impl<const MOD: usize> VaryHasher<u8> for Pearson<MOD> {
 }
 
 #[repr(transparent)]
-struct MyDefaultHasher<const MOD: usize>(DefaultHasher);
+pub struct MyDefaultHasher<const MOD: usize>(DefaultHasher);
 
 impl<const MOD: usize> VaryHasher<u16> for MyDefaultHasher<MOD> {
     const MOD: usize = MOD;
@@ -67,7 +71,11 @@ impl<const MOD: usize> VaryHasher<u16> for MyDefaultHasher<MOD> {
         r
     }
     fn finish(&self) -> u16 {
-        (self.0.finish() % (MOD as u64)) as u16
+        if MOD as u64 == 0 {
+            self.0.finish() as u16
+        } else {
+            (self.0.finish() % (MOD as u64)) as u16
+        }
     }
     fn write_u8(&mut self, i: u8) {
         self.0.write_u8(i)

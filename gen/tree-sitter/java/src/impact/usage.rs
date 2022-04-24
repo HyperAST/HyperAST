@@ -228,7 +228,8 @@ impl<'a> RefsFinder<'a> {
             let mut parsed_import: Option<(bool, NodeIdentifier, bool)> = None;
             loop {
                 let d = self.ana.solver.nodes.with(curr);
-                let c = b.check(Into::<Box<[u8]>>::into(d.clone()).as_ref());
+                // let c = b.check(Into::<Box<[u8]>>::into(d.clone()).as_ref());
+                let c = b.check(d.clone());
                 if let BloomResult::MaybeContain = c {
                     log::debug!("+++import+++++Maybe contains");
 
@@ -564,7 +565,7 @@ impl<'a> RefsFinder<'a> {
         b.get_component::<BloomSize>()
             .map(|_| {
                 let d = self.ana.solver.nodes.with(target);
-                b.check(Into::<Box<[u8]>>::into(d.clone()).as_ref())
+                b.check(d)
             })
             .unwrap_or(BloomResult::MaybeContain)
     }
@@ -2693,7 +2694,7 @@ impl<'a> RefsFinder<'a> {
         log::debug!("d=1 {:?}", &t);
         let c = if b.get_component::<BloomSize>().is_ok() {
             let d = self.ana.solver.nodes.with(target);
-            b.check(Into::<Box<[u8]>>::into(d.clone()).as_ref())
+            b.check(d)
         } else {
             BloomResult::MaybeContain
         };

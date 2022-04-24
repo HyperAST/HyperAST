@@ -88,11 +88,17 @@ impl<'a, 'b, LS: LabelStore<str, I = RawLabelPtr>> Display for DisplayRef<'a, 'b
                 write!(f, "}}")
             }
             RefsEnum::Or(v) => {
-                write!(f, ".[|")?;
+                write!(f, "{{")?;
+                let mut first = true;
                 for a in v.iter() {
-                    write!(f, "{}|", self.with(*a))?;
+                    if first {
+                        first = false;
+                    } else {
+                        write!(f, ",")?;
+                    }
+                    write!(f, "{}", self.with(*a))?;
                 }
-                write!(f, "]")
+                write!(f, "}}")
             }
             RefsEnum::ScopedIdentifier(o, i) => {
                 write!(f, "{}", self.with(*o))?;

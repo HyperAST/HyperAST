@@ -115,30 +115,34 @@ impl PartialAnalysis {
                     panic!();
                 } else {
                     // TODO explain usage
-                    cache.insert(
-                        mask,
-                        [package, root]
-                            .iter()
-                            .map(|x| *x)
-                            .collect(),
-                    );
+                    let refs = [package, root];
+                    let result = self.solver.intern(RefsEnum::Or(
+                        refs.iter().map(|x|*x).collect()
+                    ));
+                    cache.insert(mask, SolvingResult::new(result, refs.into_iter().collect()));
                     // TODO explain usage
                     if package == jlang {
-                        let a = asterisk_imports[1..].iter().map(|imp| {
-                            self.solver.intern(RefsEnum::Mask(
-                                *imp,
-                                vec![package, root].into_boxed_slice(),
-                            ))
-                        });
+                        // let a = asterisk_imports[1..].iter().map(|imp| {
+                        //     self.solver.intern(RefsEnum::Mask(
+                        //         *imp,
+                        //         vec![package, root].into_boxed_slice(),
+                        //     ))
+                        // });
+                        let a = asterisk_imports[1..].into_iter().map(|x|*x);
                         let a = a.chain([package, root].into_iter());
-                        cache.insert(mm, a.collect());
+                        let refs:Vec<_> = a.collect();
+                        let result = self.solver.intern(RefsEnum::Or(
+                            refs.clone().into()
+                        ));
+                        cache.insert(mm, SolvingResult::new(result, refs.into()));
                     } else {
-                        let a = asterisk_imports.iter().map(|imp| {
-                            self.solver.intern(RefsEnum::Mask(
-                                *imp,
-                                vec![package, root].into_boxed_slice(),
-                            ))
-                        });
+                        // let a = asterisk_imports.iter().map(|imp| {
+                        //     self.solver.intern(RefsEnum::Mask(
+                        //         *imp,
+                        //         vec![package, root].into_boxed_slice(),
+                        //     ))
+                        // });
+                        let a = asterisk_imports.into_iter();
                         let a = a.chain([package, root].into_iter());
                         let refs: ListSet<RefPtr> = a.collect();
                         refs.iter().for_each(|x| {
@@ -154,7 +158,13 @@ impl PartialAnalysis {
             } else {
                 cache.insert(
                     mask,
-                    [mm].iter().map(|x| *x).collect(),
+                    SolvingResult::new(mm, [mm].into_iter().collect())
+                );
+            }
+        } else if let State::Declarations(ds) = self.current_node.clone(){
+            for (_,d,_) in ds {
+                d.node().map(|&d|
+                    assert!(!self.solver.has_choice(d),"{:?}",self.solver.nodes.with(d))
                 );
             }
         }
@@ -172,9 +182,17 @@ impl PartialAnalysis {
                         DeclType::Runtime(t) => {
                             let mut r = vec![];
                             for y in t.iter() {
-                                for z in solver.solve_aux(&mut cache, *y).iter() {
-                                    if !r.contains(z) {
-                                        r.push(*z);
+                                let s = solver.solve_aux(&mut cache, *y);
+                                if s.is_matched() {
+                                    for z in s.iter() {
+                                        if !r.contains(z) {
+                                            r.push(*z);
+                                        }
+                                    }
+                                } else {
+                                    let w = s.waiting.unwrap();
+                                    if !r.contains(&w) {
+                                        r.push(w);
                                     }
                                 }
                             }
@@ -184,22 +202,34 @@ impl PartialAnalysis {
                             if let Some(p) = package {
                                 let mut r = vec![];
                                 for y in s.iter() {
-                                    if let Some(t) = cache.get(y) {
-                                        for z in t.iter() {
+                                    let s = solver.solve_aux(&mut cache, *y);
+                                    if s.is_matched() {
+                                        for z in s.iter() {
                                             if !r.contains(z) {
                                                 r.push(*z);
                                             }
+                                        }
+                                    } else {
+                                        let w = s.waiting.unwrap();
+                                        if !r.contains(&w) {
+                                            r.push(w);
                                         }
                                     }
                                 }
                                 let s = r.into();
                                 let mut r = vec![];
                                 for y in i.iter() {
-                                    if let Some(t) = cache.get(y) {
-                                        for z in t.iter() {
+                                    let s = solver.solve_aux(&mut cache, *y);
+                                    if s.is_matched() {
+                                        for z in s.iter() {
                                             if !r.contains(z) {
                                                 r.push(*z);
                                             }
+                                        }
+                                    } else {
+                                        let w = s.waiting.unwrap();
+                                        if !r.contains(&w) {
+                                            r.push(w);
                                         }
                                     }
                                 }
@@ -226,9 +256,17 @@ impl PartialAnalysis {
                         DeclType::Runtime(t) => {
                             let mut r = vec![];
                             for y in t.iter() {
-                                for z in solver.solve_aux(&mut cache, *y).iter() {
-                                    if !r.contains(z) {
-                                        r.push(*z);
+                                let s = solver.solve_aux(&mut cache, *y);
+                                if s.is_matched() {
+                                    for z in s.iter() {
+                                        if !r.contains(z) {
+                                            r.push(*z);
+                                        }
+                                    }
+                                } else {
+                                    let w = s.waiting.unwrap();
+                                    if !r.contains(&w) {
+                                        r.push(w);
                                     }
                                 }
                             }
@@ -238,22 +276,34 @@ impl PartialAnalysis {
                             if let Some(p) = package {
                                 let mut r = vec![];
                                 for y in s.iter() {
-                                    if let Some(t) = cache.get(y) {
-                                        for z in t.iter() {
+                                    let s = solver.solve_aux(&mut cache, *y);
+                                    if s.is_matched() {
+                                        for z in s.iter() {
                                             if !r.contains(z) {
                                                 r.push(*z);
                                             }
+                                        }
+                                    } else {
+                                        let w = s.waiting.unwrap();
+                                        if !r.contains(&w) {
+                                            r.push(w);
                                         }
                                     }
                                 }
                                 let s = r.into();
                                 let mut r = vec![];
                                 for y in i.iter() {
-                                    if let Some(t) = cache.get(y) {
-                                        for z in t.iter() {
+                                    let s = solver.solve_aux(&mut cache, *y);
+                                    if s.is_matched() {
+                                        for z in s.iter() {
                                             if !r.contains(z) {
                                                 r.push(*z);
                                             }
+                                        }
+                                    } else {
+                                        let w = s.waiting.unwrap();
+                                        if !r.contains(&w) {
+                                            r.push(w);
                                         }
                                     }
                                 }
@@ -264,12 +314,12 @@ impl PartialAnalysis {
                                     i,
                                 )
                             } else {
-                                todo!()
-                                // DeclType::Compile(
-                                //     *t,
-                                //     s.as_ref().map(|x|*x),
-                                //     i.iter().map(|x|*x).collect(),
-                                // )
+                                // todo!()
+                                DeclType::Compile(
+                                    *t,
+                                    s.as_ref().into(),
+                                    i.as_ref().into(),
+                                )
                             }
                         }
                     };
@@ -292,6 +342,13 @@ impl PartialAnalysis {
                 // // TODO also remove the ones that refs the one s removed as they cannot really be resolved anymore
                 // solver.refs = r;
             }
+            State::Declarations(ds) => {
+                for (_,d,_) in ds {
+                    d.node().map(|&d|
+                        assert!(!solver.has_choice(d),"{:?}",solver.nodes.with(d))
+                    );
+                }
+            }
             _ => (),
         };
 
@@ -301,9 +358,9 @@ impl PartialAnalysis {
         }
     }
 
-    pub fn refs(&self) -> impl Iterator<Item = LabelValue> + '_ {
-        self.solver.refs()
-    }
+    // pub fn refs(&self) -> impl Iterator<Item = LabelValue> + '_ {
+    //     self.solver.refs()
+    // }
 
     pub fn display_refs<'a, LS: LabelStore<str, I = RawLabelPtr>>(
         &'a self,
@@ -450,6 +507,24 @@ impl PartialAnalysis {
                 },
                 solver,
             }
+        } else if kind == &Type::TypeParameter {
+            let r = solver.intern(RefsEnum::Root);
+            let i = solver.intern(RefsEnum::ScopedIdentifier(r, intern_label("java")));
+            let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("lang")));
+            let s = solver.intern(RefsEnum::TypeIdentifier(i, intern_label("Object")));
+
+            PartialAnalysis {
+                current_node: State::TypeDeclaration {
+                    visibility: Visibility::None,
+                    identifier: DeclType::Compile(
+                        0,
+                        vec![s].into_boxed_slice(),
+                        vec![].into_boxed_slice(),
+                    ),
+                    members: vec![],
+                },
+                solver,
+            }
         } else if kind == &Type::ClassBody {
             // TODO constructor solve
             // {
@@ -491,7 +566,7 @@ impl PartialAnalysis {
             &kind,
             &acc.current_node,
             &current_node,
-            acc.refs().collect::<Vec<_>>()
+            acc.solver.iter_refs().map(|x|x).collect::<Vec<_>>()
         );
 
         macro_rules! mm {
@@ -549,6 +624,14 @@ impl PartialAnalysis {
                     remapper.intern_external(&mut acc.solver, $i.0)
                 };
             }
+            macro_rules! syncd {
+                ( $i:expr ) => {{
+                    let r = remapper.intern_external_decl(&mut acc.solver, $i.0);
+                    assert!(!acc.solver.has_choice(r),"{:?}",acc.solver.nodes.with(r));
+                    r
+                }};
+            }
+            
             match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
                 // (
                 //     State::File {
@@ -684,6 +767,7 @@ impl PartialAnalysis {
                                 let o = sync!(Old(*o));
                                 let r = mm!();
                                 let shorten = acc.solver.intern(RefsEnum::TypeIdentifier(r, *i));
+                                assert!(!acc.solver.has_choice(shorten),"{:?}",acc.solver.nodes.with(shorten));
                                 let d = scoped!(o, *i);
                                 acc.solver.add_decl(
                                     Declarator::Type(shorten),
@@ -694,6 +778,7 @@ impl PartialAnalysis {
                                 let o = sync!(Old(*o));
                                 let r = mm!();
                                 let shorten = acc.solver.intern(RefsEnum::TypeIdentifier(r, *i));
+                                assert!(!acc.solver.has_choice(shorten),"{:?}",acc.solver.nodes.with(shorten));
                                 let d = scoped!(o, *i);
                                 acc.solver.add_decl(
                                     Declarator::Type(shorten),
@@ -706,6 +791,7 @@ impl PartialAnalysis {
                                 let p = p.map(|x| sync!(Old(*x)));
                                 let shorten =
                                     acc.solver.intern(RefsEnum::Invocation(r, *i, p.clone()));
+                                assert!(!acc.solver.has_choice(shorten),"{:?}",acc.solver.nodes.with(shorten));
                                 let d =
                                     acc.solver
                                         .intern_ref(RefsEnum::Invocation(o, *i, p.clone())); // TODO use it
@@ -746,8 +832,9 @@ impl PartialAnalysis {
                             let d = sync!(d);
                             let sup = sup.iter().map(|x| sync!(*x)).collect();
                             let int = int.iter().map(|x| sync!(*x)).collect();
+                            assert!(!acc.solver.has_choice(p),"{:?}",acc.solver.nodes.with(p));
                             let solved = acc.solver.try_solve_node_with(d, p).unwrap();
-                            let i = Declarator::Type(solved);
+                                let i = Declarator::Type(solved);
                             let solved = DeclType::Compile(solved, sup, int);
                             if let Visibility::Public = visibility {
                                 global.push((i.clone(), solved.clone()));
@@ -755,6 +842,7 @@ impl PartialAnalysis {
                                 local.push((i.clone(), solved.clone()));
                             }
                             acc.solver.add_decl(i.clone(), solved.clone());
+                            assert!(!acc.solver.has_choice(d),"{:?}",acc.solver.nodes.with(d));
                             let i = Declarator::Type(d);
                             if let Visibility::Public = visibility {
                                 global.push((i.clone(), solved.clone()));
@@ -766,6 +854,7 @@ impl PartialAnalysis {
                         }
                         (DeclType::Compile(d, sup, int), None) => {
                             let d = sync!(d);
+                            assert!(!acc.solver.has_choice(d),"{:?}",acc.solver.nodes.with(d));
                             let i = Declarator::Type(d);
                             let sup = sup.iter().map(|x| sync!(*x)).collect();
                             let int = int.iter().map(|x| sync!(*x)).collect();
@@ -782,7 +871,7 @@ impl PartialAnalysis {
                     };
                     log::trace!("{}", members.len());
                     for (v, d, t) in members {
-                        let d = d.with_changed_node(|i| sync!(*i));
+                        let d = d.with_changed_node(|i| syncd!(*i));
                         let t = t.map(|x| sync!(x)); // TODO try solving t
                                                      // println!("d:{:?} t:{:?}", &d, &t);
 
@@ -815,9 +904,11 @@ impl PartialAnalysis {
                                 if let Some(p) = p {
                                     // let t = acc.solver.try_solve_node_with(t, p).unwrap_or(t);
                                     {
+                                        assert!(!acc.solver.has_choice(*d));
                                         let d = Declarator::Field(*d);
                                         acc.solver.add_decl(d, t.clone());
                                     }
+                                    assert!(!acc.solver.has_choice(p));
                                     let solved = acc.solver.try_solve_node_with(*d, p).unwrap();
                                     let d = Declarator::Field(solved);
                                     acc.solver.add_decl(d.clone(), t.clone());
@@ -829,6 +920,7 @@ impl PartialAnalysis {
                             }
                             Declarator::Type(d) => {
                                 if let Some(p) = p {
+                                    assert!(!acc.solver.has_choice(p),"{:?}",acc.solver.nodes.with(p));
                                     let solved = acc.solver.try_solve_node_with(*d, p).unwrap();
                                     let d = Declarator::Type(*d);
                                     acc.solver.add_decl(d, t.clone()); // TODO try_solve_node_with in resolve when we have a case where we avec seen the declaration ie. DeclType::Compile
@@ -836,6 +928,7 @@ impl PartialAnalysis {
                                     acc.solver.add_decl(d.clone(), t.clone());
                                     container.push((d, t));
                                 } else {
+                                    assert!(!acc.solver.has_choice(*d),"{:?}",acc.solver.nodes.with(*d));
                                     let d = Declarator::Type(*d);
                                     acc.solver.add_decl(d, t);
                                 }
@@ -1009,7 +1102,7 @@ impl PartialAnalysis {
                     if let State::TypeDeclaration { identifier, .. } = &mut acc.current_node {
                         if let DeclType::Compile(ii, _, _) = identifier {
                             let r = mm!();
-                            let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                            let i = acc.solver.intern(RefsEnum::TypeIdentifier(r, i));
                             *ii = i;
                         } else {
                             panic!("{:?}", acc.current_node)
@@ -1018,7 +1111,7 @@ impl PartialAnalysis {
                     } else {
                         assert_eq!(kind, &Type::EnumConstant);
                         let r = mm!();
-                        let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                        let i = acc.solver.intern(RefsEnum::TypeIdentifier(r, i));
                         State::TypeDeclaration {
                             visibility: Visibility::None,
                             identifier: DeclType::Compile(
@@ -1045,12 +1138,13 @@ impl PartialAnalysis {
                         };
                     }
                     // println!("typeParams {:?}", ps);
-                    for (d, t) in ps {
-                        let r = mm!();
-                        let d = acc.solver.intern(RefsEnum::ScopedIdentifier(r, d));
-                        let d = Declarator::Type(d);
-                        let t = t.into_iter().map(|t| sync!(*t)).collect();
-                        acc.solver.add_decl(d.clone(), DeclType::Runtime(t));
+                    for t in ps {
+                        if let DeclType::Compile(d,ext,imp) = &t {
+                            let d = Declarator::Type(sync!(*d));
+                            let mut v:Vec<_> = ext.iter().map(|t| sync!(*t)).collect();
+                            v.extend(imp.iter().map(|t| sync!(*t)));
+                            acc.solver.add_decl(d.clone(), DeclType::Runtime(v.into()));
+                        }
                     }
                     // println!("decls after added typeParams");
                     // acc.solver.print_decls();
@@ -1143,8 +1237,10 @@ impl PartialAnalysis {
                             DeclType::Compile(i, _, _) => *i,
                             _ => panic!(),
                         };
+                        assert!(!acc.solver.has_choice(id),"{:?}",acc.solver.nodes.with(id));
                         // prime cache
                         let mut extend_cache = HashMap::<usize, usize>::default();
+                        let mut extend_cache_decls = HashMap::<usize, usize>::default();
                         if let Some(mm) = self.solver.get(RefsEnum::MaybeMissing) {
                             assert!(
                                 !(self.solver.refs.len() > mm && self.solver.refs[mm]),
@@ -1174,7 +1270,7 @@ impl PartialAnalysis {
                                         let mut t = vec![i];
                                         t.extend(s.iter());
                                         t.extend(is.iter());
-                                        t.into_boxed_slice()
+                                        t
                                     }
                                     _ => panic!(),
                                 }
@@ -1201,21 +1297,34 @@ impl PartialAnalysis {
                             // temporary
                             if let Some(i) = self.solver.get(RefsEnum::Super(mm)) {
                                 extend_cache.insert(i, id);
+                                extend_cache_decls.insert(i, id);
                             }
 
-                            let mask = acc.solver.intern(RefsEnum::Mask(r, t));
-                            extend_cache.insert(mm, mask);
+                            // let to_cache = acc.solver.intern(RefsEnum::Mask(r, t));
+                            let mut t = t;
+                            t.push(mm);
+                            let to_cache = acc.solver.intern(RefsEnum::Or(t.into()));
+                            extend_cache.insert(mm, to_cache);
                         }
                         // // then stash refs from decl
                         // let hierarchical_decls_refs: Vec<_> = acc.solver.refs.iter_ones().collect();
                         // acc.solver.refs = Default::default(); // TODO not sure;
 
                         // then extend refs from body with a primed cache
-                        let mut remapper = acc.solver.extend_map(&self.solver, &mut extend_cache);
+                        let mut remapper = acc.solver.extend_map(&self.solver, &mut extend_cache, extend_cache_decls);
                         macro_rules! sync {
                             ( $i:expr ) => {
                                 remapper.intern_external(&mut acc.solver, $i.0)
                             };
+                        }
+                        macro_rules! syncd {
+                            ( $i:expr ) => {{
+                                let r = $i.0;
+                                assert!(!self.solver.has_choice(r),"{:?}",self.solver.nodes.with(r));
+                                let r = remapper.intern_external_decl(&mut acc.solver, r);
+                                assert!(!acc.solver.has_choice(r),"{:?}",acc.solver.nodes.with(r));
+                                r
+                            }};
                         }
                         // then handle members considering prev thing ie. either ?.this -> ?.A or ? -> ?.{B,C}
                         // then resolve
@@ -1294,7 +1403,7 @@ impl PartialAnalysis {
                         // }
                         // println!("adding members");
                         for (v, d, t) in ds {
-                            let d = d.with_changed_node(|i| sync!(*i));
+                            let d = d.with_changed_node(|i| syncd!(*i));
                             let t = t.map(|x| sync!(x));
                             // println!("d:{:?} t:{:?}", &d, &t);
                             match &d {
@@ -1348,10 +1457,13 @@ impl PartialAnalysis {
                                 Declarator::Field(d) => {
                                     {
                                         // ?.d => t
+                                        assert!(!acc.solver.has_choice(*d),"{:?}",acc.solver.nodes.with(*d));
                                         let d = Declarator::Field(*d);
                                         acc.solver.add_decl(d, t.clone());
                                     }
                                     {
+                                        // println!("{:?}",acc.solver.nodes.with(*d));
+                                        assert!(!acc.solver.has_choice(id),"{:?}",acc.solver.nodes.with(id));
                                         // ?.id.d => t
                                         let solved =
                                             acc.solver.try_solve_node_with(*d, id).unwrap();
@@ -1371,10 +1483,12 @@ impl PartialAnalysis {
                                 }
                                 Declarator::Type(d) => {
                                     {
+                                        assert!(!acc.solver.has_choice(*d),"{:?}",acc.solver.nodes.with(*d));
                                         let d = Declarator::Type(*d);
                                         acc.solver.add_decl(d, t.clone());
                                     }
                                     {
+                                        assert!(!acc.solver.has_choice(id),"{:?}",acc.solver.nodes.with(id));
                                         let solved =
                                             acc.solver.try_solve_node_with(*d, id).unwrap();
                                         let d = Declarator::Type(solved);
@@ -1410,6 +1524,13 @@ impl PartialAnalysis {
                 ( $i:expr ) => {
                     remapper.intern_external(&mut acc.solver, $i.0)
                 };
+            }
+            macro_rules! syncd {
+                ( $i:expr ) => {{
+                    let r = remapper.intern_external(&mut acc.solver, $i.0);
+                    assert!(!acc.solver.has_choice(r),"{:?}",acc.solver.nodes.with(r));
+                    r
+                }};
             }
             match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
                 (
@@ -1447,23 +1568,29 @@ impl PartialAnalysis {
                     for (visibility, d, t) in members {
                         let t = t.map(|x| sync!(x));
                         match d {
-                            Declarator::None => {
-                                panic!()
-                            }
-                            Declarator::Package(_) => {
-                                panic!()
-                            }
-                            Declarator::Type(_) => {}
+                            Declarator::None => panic!(),
+                            Declarator::Package(_) => panic!(),
+                            Declarator::Type(d) => {
+                                let d = sync!(d);
+                                assert!(!acc.solver.has_choice(d),"{:?}",acc.solver.nodes.with(d));
+                                let d = Declarator::Type(d);
+                                acc.solver.add_decl(d.clone(), t.clone());
+                                v.push((visibility, d, t));}
                             Declarator::Field(d) => {
                                 let d = sync!(d);
+                                assert!(!acc.solver.has_choice(d),"{:?}",acc.solver.nodes.with(d));
                                 let d = Declarator::Field(d);
                                 acc.solver.add_decl(d.clone(), t.clone());
                                 v.push((visibility, d, t));
                             }
-                            Declarator::Executable(_) => {}
-                            Declarator::Variable(_) => {
-                                panic!()
+                            Declarator::Executable(d) => {
+                                let d = sync!(d);
+                                assert!(!acc.solver.has_choice(d),"{:?}",acc.solver.nodes.with(d));
+                                let d = Declarator::Executable(d);
+                                acc.solver.add_decl(d.clone(), t.clone());
+                                v.push((visibility, d, t));
                             }
+                            Declarator::Variable(_) => panic!(),
                         };
                     }
                     State::Declarations(v)
@@ -1489,7 +1616,7 @@ impl PartialAnalysis {
                     || kind == &Type::EnumBodyDeclarations =>
                 {
                     let t = t.map(|x| sync!(x));
-                    let d = d.with_changed_node(|i| sync!(*i));
+                    let d = d.with_changed_node(|i| syncd!(*i));
                     match &d {
                         Declarator::Type(_) => (),
                         Declarator::Field(_) => (),
@@ -1519,7 +1646,7 @@ impl PartialAnalysis {
                     };
                     for (visibility, d, t) in u {
                         let t = t.map(|x| sync!(x));
-                        let d = d.with_changed_node(|i| sync!(*i));
+                        let d = d.with_changed_node(|i| syncd!(*i));
                         match &d {
                             Declarator::Type(_) => (),
                             Declarator::Field(_) => (),
@@ -1539,7 +1666,7 @@ impl PartialAnalysis {
                     };
                     for (visibility, d, t) in u {
                         let t = t.map(|x| sync!(x));
-                        let d = d.with_changed_node(|i| sync!(*i));
+                        let d = d.with_changed_node(|i| syncd!(*i));
 
                         match &d {
                             Declarator::Type(_) => (),
@@ -1676,6 +1803,7 @@ impl PartialAnalysis {
                     match self.solver.nodes[i] {
                         RefsEnum::Array(i) => {
                             let i = sync!(Old(i));
+                            assert!(!acc.solver.has_choice(i));
                             let i = Declarator::Field(i);
                             let t = acc.solver.intern(RefsEnum::Array(t));
                             let t = DeclType::Runtime(vec![t].into());
@@ -1685,6 +1813,7 @@ impl PartialAnalysis {
                         }
                         _ => {
                             let i = sync!(Old(i));
+                            assert!(!acc.solver.has_choice(i));
                             let i = Declarator::Field(i);
                             let t = DeclType::Runtime(vec![t].into());
 
@@ -1766,6 +1895,7 @@ impl PartialAnalysis {
                     match self.solver.nodes[i] {
                         RefsEnum::Array(i) => {
                             let i = sync!(Old(i));
+                            assert!(!acc.solver.has_choice(i),"{:?}",acc.solver.nodes.with(i));
                             let i = Declarator::Field(i);
                             let t = match t {
                                 DeclType::Runtime(v) => DeclType::Runtime(
@@ -1786,6 +1916,7 @@ impl PartialAnalysis {
                         }
                         _ => {
                             let i = sync!(Old(i));
+                            assert!(!acc.solver.has_choice(i),"{:?}",acc.solver.nodes.with(i));
                             let i = Declarator::Field(i);
                             // State::Declaration {
                             //     visibility,
@@ -1830,6 +1961,8 @@ impl PartialAnalysis {
                     match self.solver.nodes[i] {
                         RefsEnum::Array(i) => {
                             let i = sync!(Old(i));
+
+                            assert!(!acc.solver.has_choice(i),"{:?}",acc.solver.nodes.with(i));
                             let i = Declarator::Field(i);
                             let t = match t {
                                 DeclType::Runtime(v) => DeclType::Runtime(
@@ -1845,6 +1978,9 @@ impl PartialAnalysis {
                         }
                         _ => {
                             let i = sync!(Old(i));
+
+
+                            assert!(!acc.solver.has_choice(i),"{:?}",acc.solver.nodes.with(i));
                             let i = Declarator::Field(i);
 
                             v.push((visibility, i, t));
@@ -2176,12 +2312,13 @@ impl PartialAnalysis {
                     }
                 }
                 (State::None, State::TypeParameters(t)) if kind == &Type::MethodDeclaration => {
-                    for (t, b) in t {
-                        let r = mm!();
-                        let t = acc.solver.intern(RefsEnum::ScopedIdentifier(r, t));
-                        let b = b.into_iter().map(|t| sync!(*t)).collect();
-                        acc.solver
-                            .add_decl(Declarator::Type(t), DeclType::Runtime(b))
+                    for t in t {
+                        if let DeclType::Compile(d,ext,imp) = &t {
+                            let d = Declarator::Type(sync!(*d));
+                            let mut v:Vec<_> = ext.iter().map(|t| sync!(*t)).collect();
+                            v.extend(imp.iter().map(|t| sync!(*t)));
+                            acc.solver.add_decl(d.clone(), DeclType::Runtime(v.into()));
+                        }
                     }
 
                     State::MethodImplementation {
@@ -2194,12 +2331,13 @@ impl PartialAnalysis {
                 (State::None, State::TypeParameters(t))
                     if kind == &Type::ConstructorDeclaration =>
                 {
-                    for (t, b) in t {
-                        let r = mm!();
-                        let t = acc.solver.intern(RefsEnum::ScopedIdentifier(r, t));
-                        let b = b.into_iter().map(|t| sync!(*t)).collect();
-                        acc.solver
-                            .add_decl(Declarator::Type(t), DeclType::Runtime(b))
+                    for t in t {
+                        if let DeclType::Compile(d,ext,imp) = &t {
+                            let d = Declarator::Type(sync!(*d));
+                            let mut v:Vec<_> = ext.iter().map(|t| sync!(*t)).collect();
+                            v.extend(imp.iter().map(|t| sync!(*t)));
+                            acc.solver.add_decl(d.clone(), DeclType::Runtime(v.into()));
+                        }
                     }
 
                     State::ConstructorImplementation {
@@ -2212,12 +2350,13 @@ impl PartialAnalysis {
                     if kind == &Type::MethodDeclaration
                         || kind == &Type::ConstructorDeclaration =>
                 {
-                    for (t, b) in t {
-                        let r = mm!();
-                        let t = acc.solver.intern(RefsEnum::ScopedIdentifier(r, t));
-                        let b = b.into_iter().map(|t| sync!(*t)).collect();
-                        acc.solver
-                            .add_decl(Declarator::Type(t), DeclType::Runtime(b))
+                    for t in t {
+                        if let DeclType::Compile(d,ext,imp) = &t {
+                            let d = Declarator::Type(sync!(*d));
+                            let mut v:Vec<_> = ext.iter().map(|t| sync!(*t)).collect();
+                            v.extend(imp.iter().map(|t| sync!(*t)));
+                            acc.solver.add_decl(d.clone(), DeclType::Runtime(v.into()));
+                        }
                     }
 
                     if kind == &Type::MethodDeclaration {
@@ -2522,6 +2661,13 @@ impl PartialAnalysis {
                         remapper.intern_external(&mut acc.solver, $i.0)
                     };
                 }
+                macro_rules! syncd {
+                    ( $i:expr ) => {{
+                        let r = remapper.intern_external(&mut acc.solver, $i.0);
+                        assert!(!acc.solver.has_choice(r),"{:?}",acc.solver.nodes.with(r));
+                        r
+                    }};
+                }
                 if kind == &Type::LocalVariableDeclaration {
                     match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
                         (State::None, State::Modifiers(v, n)) => State::Modifiers(v, n),
@@ -2681,7 +2827,7 @@ impl PartialAnalysis {
                             },
                         ) if kind == &Type::EnhancedForStatement => {
                             let t = t.map(|x| sync!(x));
-                            let d = d.with_changed_node(|i| sync!(*i));
+                            let d = d.with_changed_node(|i| syncd!(*i));
                             State::Declaration {
                                 visibility,
                                 kind: t,
@@ -2806,7 +2952,7 @@ impl PartialAnalysis {
                         (rest, State::Declarations(v)) if kind == &Type::ForStatement => {
                             for (_, d, t) in v {
                                 let t = t.map(|x| sync!(x));
-                                let d = d.with_changed_node(|i| sync!(*i));
+                                let d = d.with_changed_node(|i| syncd!(*i));
                                 match rest {
                                     State::None => (),
                                     _ => panic!(),
@@ -2858,6 +3004,13 @@ impl PartialAnalysis {
                         remapper.intern_external(&mut acc.solver, $i.0)
                     };
                 }
+                macro_rules! syncd {
+                    ( $i:expr ) => {{
+                        let r = remapper.intern_external(&mut acc.solver, $i.0);
+                        assert!(!acc.solver.has_choice(r),"{:?}",acc.solver.nodes.with(r));
+                        r
+                    }};
+                }
                 // maybe fusion with structural statement
                 if kind == &Type::StaticInitializer {
                     match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -2887,7 +3040,7 @@ impl PartialAnalysis {
                             },
                         ) if kind == &Type::ConstructorBody => {
                             let t = t.map(|x| sync!(x));
-                            let d = d.with_changed_node(|i| sync!(*i));
+                            let d = d.with_changed_node(|i| syncd!(*i));
                             match rest {
                                 State::None => (),
                                 _ => panic!(),
@@ -2904,7 +3057,7 @@ impl PartialAnalysis {
                         (rest, State::Declarations(v)) => {
                             for (_, d, t) in v {
                                 let t = t.map(|x| sync!(x));
-                                let d = d.with_changed_node(|i| sync!(*i));
+                                let d = d.with_changed_node(|i| syncd!(*i));
                                 match rest {
                                     State::None => (),
                                     _ => panic!(),
@@ -2953,7 +3106,7 @@ impl PartialAnalysis {
                         (rest, State::Declarations(v)) => {
                             for (_, d, t) in v {
                                 let t = t.map(|x| sync!(x));
-                                let d = d.with_changed_node(|i| sync!(*i));
+                                let d = d.with_changed_node(|i| syncd!(*i));
                                 match rest {
                                     State::None => (),
                                     _ => panic!(),
@@ -3022,7 +3175,7 @@ impl PartialAnalysis {
                         (rest, State::Declarations(v)) => {
                             for (_, d, t) in v {
                                 let t = t.map(|x| sync!(x));
-                                let d = d.with_changed_node(|i| sync!(*i));
+                                let d = d.with_changed_node(|i| syncd!(*i));
                                 match rest {
                                     State::None => (),
                                     _ => panic!(),
@@ -3403,22 +3556,40 @@ impl PartialAnalysis {
                     (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
                 }
             } else if kind == &Type::TypeParameter {
-                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
-                    // TypeParameter
-                    (State::None, State::None) if kind == &Type::TypeParameter => State::None,
-                    (State::None, State::Annotation) if kind == &Type::TypeParameter => State::None,
-                    (State::None, State::SimpleIdentifier(case, i))
-                        if kind == &Type::TypeParameter =>
+                match current_node.map(|x| Old(x), |x| x) {
+                    State::None => acc.current_node.take(),
+                    State::Annotation => acc.current_node.take(),
+                    State::SimpleIdentifier(_, i) =>
                     {
-                        State::SimpleIdentifier(case, i)
-                    }
-                    (State::SimpleIdentifier(case, i), State::TypeBound)
-                        if kind == &Type::TypeParameter =>
+                        if let State::TypeDeclaration { identifier: DeclType::Compile{0:a, ..}, .. } = &mut acc.current_node {
+                            let mm = mm!();
+                            *a = acc.solver.intern(RefsEnum::TypeIdentifier(mm, i));
+                            acc.current_node.take()
+                        } else {
+                            panic!("{:?} {:?}", kind, acc.current_node)
+                        }
+                    },
+                    State::ScopedTypeIdentifier(t) =>
+                    {
+                        if let State::TypeDeclaration { identifier: DeclType::Compile{0:a, ..}, .. } = &mut acc.current_node {
+                            *a = sync!(t);
+                            acc.current_node.take()
+                        } else {
+                            panic!("{:?} {:?}", kind, acc.current_node)
+                        }
+                    },
+                    State::TypeBound(ext,imp) =>
                     {
                         // TODO use type bound
-                        State::SimpleIdentifier(case, i)
+                        if let State::TypeDeclaration { identifier: DeclType::Compile{1:a, 2:b,..}, .. } = &mut acc.current_node {
+                            *a = vec![sync!(ext)].into();
+                            *b = imp.iter().map(|x|sync!(x)).collect();
+                            acc.current_node.take()
+                        } else {
+                            panic!("{:?} {:?}", kind, acc.current_node)
+                        }
                     }
-                    (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
+                    x => todo!("{:?} TypeDeclaration {:?}", kind, x),
                 }
             } else if kind == &Type::SpreadParameter {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
@@ -3525,7 +3696,11 @@ impl PartialAnalysis {
                         let v = v
                             .into_iter()
                             .map(|(v, i, t)| {
-                                let i = i.with_changed_node(|i| sync!(*i));
+                                let i = i.with_changed_node(|i| {
+                                    let i = sync!(*i);
+                                    assert!(!acc.solver.has_choice(i),"{:?}",acc.solver.nodes.with(i));
+                                    i
+                                });
                                 let t = t.map(|x| sync!(x));
                                 acc.solver.add_decl(i.clone(), t.clone());
                                 (v, i, t)
@@ -3540,6 +3715,7 @@ impl PartialAnalysis {
                             .into_iter()
                             .map(|(i, t)| {
                                 let i = sync!(i);
+                                assert!(!acc.solver.has_choice(i),"{:?}",acc.solver.nodes.with(i));
                                 let t = t.map(|x| sync!(x));
                                 let i = Declarator::Variable(i);
                                 acc.solver.add_decl(i.clone(), t.clone());
@@ -4753,6 +4929,23 @@ impl PartialAnalysis {
                 };
             }
 
+            macro_rules! syncd {
+                ( $i:expr ) => {{
+                    match &mut remapper {
+                        None => {
+                            let r = $i.0;
+                            assert!(!acc.solver.has_choice(r),"{:?}",acc.solver.nodes.with(r));
+                            r
+                        },
+                        Some(remapper) => {
+                            let r = remapper.intern_external(&mut acc.solver, $i.0);
+                            assert!(!acc.solver.has_choice(r),"{:?}",acc.solver.nodes.with(r));
+                            r
+                        },
+                    }
+                }};
+            }
+
             if is_first 
             && let State::Directory{..} = acc.current_node 
             && let State::Directory{global_decls} = current_node {
@@ -4772,13 +4965,13 @@ impl PartialAnalysis {
                 {
                     // assert!(package.is_some());
                     let global_decls = global.iter().map(|(d,t)| {
-                        let d = d.with_changed_node(|x|sync!(*x));
+                        let d = d.with_changed_node(|x|syncd!(*x));
                         let t = t.map(|x| sync!(x));
                         acc.solver.add_decl(d.clone(), t.clone());
                         (d,t)
                     }).collect();
                     let package_local = local.iter().map(|(d,t)| {
-                        let d = d.with_changed_node(|x|sync!(*x));
+                        let d = d.with_changed_node(|x|syncd!(*x));
                         let t = t.map(|x| sync!(x));
                         acc.solver.add_decl(d.clone(), t.clone());
                         (d,t)
@@ -4805,14 +4998,14 @@ impl PartialAnalysis {
                     let package = package.map(|p|sync!(p));
 
                     global.iter().for_each(|(d,t)| {
-                        let d = d.with_changed_node(|x| sync!(*x));
+                        let d = d.with_changed_node(|x| syncd!(*x));
                         let t = t.map(|x| sync!(x));
                         acc.solver.add_decl(d.clone(), t.clone());
                         global_decls.push((d,t));
                     });
 
                     let package_local = local.iter().map(|(d,t)| {
-                        let d = d.with_changed_node(|x|sync!(*x));
+                        let d = d.with_changed_node(|x|syncd!(*x));
                         let t = t.map(|x| sync!(x));
                         acc.solver.add_decl(d.clone(), t.clone());
                         (d,t)
@@ -4839,13 +5032,13 @@ impl PartialAnalysis {
                     // assert_eq!(package,p.map(|p|sync!(p)));
 
                     global.iter().for_each(|(d,t)| {
-                        let d = d.with_changed_node(|x| sync!(*x));
+                        let d = d.with_changed_node(|x| syncd!(*x));
                         let t = t.map(|x| sync!(x));
                         acc.solver.add_decl(d.clone(), t.clone());
                         global_decls.push((d,t));
                     });
                     local.iter().for_each(|(d,t)| {
-                        let d = d.with_changed_node(|x| sync!(*x));
+                        let d = d.with_changed_node(|x| syncd!(*x));
                         let t = t.map(|x| sync!(x));
                         acc.solver.add_decl(d.clone(), t.clone());
                         package_local.push((d,t));
@@ -4862,7 +5055,7 @@ impl PartialAnalysis {
                 }) =>
                 {
                     let global_decls = global.iter().map(|(d,t)| {
-                        let d = d.with_changed_node(|x|sync!(*x));
+                        let d = d.with_changed_node(|x|syncd!(*x));
                         let t = t.map(|x| sync!(x));
                         acc.solver.add_decl(d.clone(), t.clone());
                         (d,t)
@@ -4878,7 +5071,7 @@ impl PartialAnalysis {
                 }) =>
                 {
                     let global_decls = global.iter().map(|(d,t)| {
-                        let d = d.with_changed_node(|x|sync!(*x));
+                        let d = d.with_changed_node(|x|syncd!(*x));
                         let t = t.map(|x| sync!(x));
                         acc.solver.add_decl(d.clone(), t.clone());
                         (d,t)
@@ -4896,7 +5089,7 @@ impl PartialAnalysis {
                 }) =>
                 {
                     global.iter().for_each(|(d,t)| {
-                        let d = d.with_changed_node(|x| sync!(*x));
+                        let d = d.with_changed_node(|x| syncd!(*x));
                         let t = t.map(|x| sync!(x));
                         acc.solver.add_decl(d.clone(), t.clone());
                         global_decls.push((d,t));
@@ -4915,7 +5108,7 @@ impl PartialAnalysis {
                 }) =>
                 {
                     global.iter().for_each(|(d,t)| {
-                        let d = d.with_changed_node(|x| sync!(*x));
+                        let d = d.with_changed_node(|x| syncd!(*x));
                         let t = t.map(|x| sync!(x));
                         acc.solver.add_decl(d.clone(), t.clone());
                         global_decls.push((d,t));
@@ -4937,7 +5130,7 @@ impl PartialAnalysis {
                 }) =>
                 {
                     global.iter().for_each(|(d,t)| {
-                        let d = d.with_changed_node(|x| sync!(*x));
+                        let d = d.with_changed_node(|x| syncd!(*x));
                         let t = t.map(|x| sync!(x));
                         acc.solver.add_decl(d.clone(), t.clone());
                         global_decls.push((d,t));
@@ -4956,7 +5149,7 @@ impl PartialAnalysis {
                 }) =>
                 {
                     global.iter().for_each(|(d,t)| {
-                        let d = d.with_changed_node(|x| sync!(*x));
+                        let d = d.with_changed_node(|x| syncd!(*x));
                         let t = t.map(|x| sync!(x));
                         acc.solver.add_decl(d.clone(), t.clone());
                         global_decls.push((d,t));
@@ -5435,13 +5628,18 @@ impl PartialAnalysis {
                 }
             } else if kind == &Type::TypeParameters {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
-                    (rest, State::SimpleIdentifier(_, i)) if kind == &Type::TypeParameters => {
+                    (rest, 
+                    State::TypeDeclaration{ 
+                        visibility, 
+                        identifier, 
+                        members 
+                    }) => {
                         let mut v = match rest {
                             State::TypeParameters(v) => v,
                             State::None => vec![],
                             _ => todo!(),
                         };
-                        v.push((i, vec![].into_boxed_slice()));
+                        v.push(identifier.map(|x|sync!(*x)));
                         State::TypeParameters(v)
                     }
                     (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
@@ -5556,14 +5754,38 @@ impl PartialAnalysis {
                 }
             } else if kind == &Type::TypeBound {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
-                    (_, State::SimpleTypeIdentifier(t)) if kind == &Type::TypeBound => {
-                        let t = scoped_type!(mm!(), t);
-                        // TODO propag to use for solving refs
-                        State::TypeBound
+                    (State::None, rest) if kind == &Type::TypeBound => {
+                        match rest {
+                            State::SimpleTypeIdentifier(t) => {
+                                let t = scoped_type!(mm!(), t);
+                                State::ScopedTypeIdentifier(t)
+                            },
+                            State::ScopedTypeIdentifier(t) => {
+                                State::ScopedTypeIdentifier(sync!(t))
+                            },
+                            State::None => State::None,
+                            x => todo!("{:?} None {:?}", kind, x),
+                        }
                     }
-                    (_, State::ScopedTypeIdentifier(t)) if kind == &Type::TypeBound => {
-                        // TODO propag to use for solving refs
-                        State::TypeBound
+                    (val, rest) if kind == &Type::TypeBound => {
+                        let (ext, mut imp) = match val {
+                            State::TypeBound(ext,imp) => (ext,imp.to_vec()),
+                            State::ScopedTypeIdentifier(t) => (t,vec![]),
+                            x => todo!("{:?} TypeBound {:?}", kind, x),
+                        };
+                        match rest {
+                            State::SimpleTypeIdentifier(t) => {
+                                let t = scoped_type!(mm!(), t);
+                                imp.push(t);
+                                State::TypeBound(ext,imp.into())
+                            },
+                            State::ScopedTypeIdentifier(t) => {
+                                imp.push(sync!(t));
+                                State::TypeBound(ext,imp.into())
+                            },
+                            State::None => State::TypeBound(ext,imp.into()),
+                            x => todo!("{:?} TypeBound {:?}", kind, x),
+                        }
                     }
                     (x, y) => todo!("{:?} {:?} {:?}", kind, x, y),
                 }
@@ -5806,8 +6028,8 @@ where
     ScopedTypeIdentifier(Node),
     WildcardExtends(Node),
     WildcardSuper(Node),
-    TypeBound,
-    TypeParameters(Vec<(Leaf, Box<[Node]>)>),
+    TypeBound(Node, Box<[Node]>),
+    TypeParameters(Vec<DeclType<Node>>),
     GenericType(Node),
     CatchTypes(Vec<Node>),
     CatchParameter {
@@ -5908,7 +6130,7 @@ where
             State::Throws => State::Throws,
             State::Root => State::Root,
             State::Annotation => State::Annotation,
-            State::TypeBound => State::TypeBound,
+            State::TypeBound(x,y) => State::TypeBound(f(*x), y.iter().map(|x| f(*x)).collect()),
             State::SimpleIdentifier(b, l) => State::SimpleIdentifier(*b, g(*l)),
             State::SimpleTypeIdentifier(l) => State::SimpleTypeIdentifier(g(*l)),
 
@@ -5932,9 +6154,7 @@ where
             State::TypeArguments(v) => State::TypeArguments(v.iter().map(|x| f(*x)).collect()),
             State::CatchTypes(v) => State::CatchTypes(v.iter().map(|x| f(*x)).collect()),
             State::TypeParameters(v) => State::TypeParameters(
-                v.iter()
-                    .map(|(x, y)| ((g(*x), y.iter().map(|x| f(*x)).collect())))
-                    .collect(),
+                v.iter().map(|x| x.map(|x|f(*x))).collect()
             ),
             State::Declarations(v) => State::Declarations(
                 v.iter()
