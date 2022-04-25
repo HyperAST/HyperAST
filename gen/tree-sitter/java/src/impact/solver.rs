@@ -795,9 +795,9 @@ impl Solver {
         if refs.is_empty() {
             panic!()
         } else if refs.len() == 1 {
-            SolvingResult::new(refs[0], refs.iter().map(|x| *x).collect())
+            SolvingResult::new(refs[0], refs.iter().cloned().collect())
         } else {
-            let refs = refs.iter().map(|x| *x);
+            let refs = refs.iter().cloned();
             let result = self.intern(RefsEnum::Or(refs.clone().collect()));
             SolvingResult::new(result, refs.collect())
         }
@@ -1111,28 +1111,31 @@ impl Solver {
                         v.iter().next().cloned()
                     } else {
                         log::trace!("5");
-                        let v = v
+                        let v: ListSet<_> = v
                             .into_iter()
-                            .flat_map(|x| {
-                                match &self.nodes[x] {
-                                    RefsEnum::Or(v) => v.clone(),
-                                    _ => vec![x].into(),
-                                }
-                                .into_iter()
-                                .filter(|&x| {
-                                    if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
-                                        !self.solve_aux(cache, x).is_matched()
-                                    } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x]
-                                    {
-                                        !self.solve_aux(cache, x).is_matched()
-                                    } else {
-                                        true
-                                    }
-                                })
-                                .collect::<Vec<_>>()
+                            .flat_map(|x| match &self.nodes[x] {
+                                RefsEnum::Or(v) => v.clone(),
+                                _ => vec![x].into(),
                             })
                             .collect();
-                        Some(self.intern(RefsEnum::Or(v)))
+                        let w: ListSet<_> = v
+                            .iter()
+                            .filter(|&&x| {
+                                if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
+                                    !self.solve_aux(cache, x).is_matched()
+                                } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x] {
+                                    !self.solve_aux(cache, x).is_matched()
+                                } else {
+                                    true
+                                }
+                            })
+                            .cloned()
+                            .collect();
+                        if w.is_empty() {
+                            Some(self.intern(RefsEnum::Or(v)))
+                        } else {
+                            Some(self.intern(RefsEnum::Or(w)))
+                        }
                     }
                 }
                 .map(|o| self.intern(RefsEnum::This(o)));
@@ -1252,7 +1255,7 @@ impl Solver {
                         }
                     }
                     matched.extend(rr.matched.iter().flat_map(|&o| match &self.nodes[o] {
-                        RefsEnum::Or(o) => o.iter().map(|x| *x).collect::<Vec<_>>(),
+                        RefsEnum::Or(o) => o.iter().cloned().collect::<Vec<_>>(),
                         _ => vec![o].into(),
                     }));
                 });
@@ -1480,7 +1483,7 @@ impl Solver {
 
                 let waiting = if !t_matched.is_empty() {
                     log::trace!("0");
-                    let w = t_matched.iter().next().map(|x| *x);
+                    let w = t_matched.iter().next().cloned();
                     matched = matched.into_iter().chain(t_matched.into_iter()).collect();
                     w
                 } else if !matched.is_empty() {
@@ -1503,33 +1506,35 @@ impl Solver {
                         .collect();
                     if v.len() == 1 {
                         log::trace!("4");
-                        v.iter().next().and_then(|o| handle(self, cache, oo, &o, i))
+                        v.iter().next().cloned()
                     } else {
-                        log::trace!("5");
-                        let v = v
+                        let v: ListSet<_> = v
                             .into_iter()
-                            .flat_map(|x| {
-                                match &self.nodes[x] {
-                                    RefsEnum::Or(v) => v.clone(),
-                                    _ => vec![x].into(),
-                                }
-                                .into_iter()
-                                .filter(|&x| {
-                                    if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
-                                        !self.solve_aux(cache, x).is_matched()
-                                    } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x]
-                                    {
-                                        !self.solve_aux(cache, x).is_matched()
-                                    } else {
-                                        true
-                                    }
-                                })
-                                .collect::<Vec<_>>()
+                            .flat_map(|x| match &self.nodes[x] {
+                                RefsEnum::Or(v) => v.clone(),
+                                _ => vec![x].into(),
                             })
                             .collect();
-                        Some(self.intern(RefsEnum::Or(v)))
-                            .and_then(|o| handle(self, cache, oo, &o, i))
+                        let w: ListSet<_> = v
+                            .iter()
+                            .filter(|&&x| {
+                                if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
+                                    !self.solve_aux(cache, x).is_matched()
+                                } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x] {
+                                    !self.solve_aux(cache, x).is_matched()
+                                } else {
+                                    true
+                                }
+                            })
+                            .cloned()
+                            .collect();
+                        if w.is_empty() {
+                            Some(self.intern(RefsEnum::Or(v)))
+                        } else {
+                            Some(self.intern(RefsEnum::Or(w)))
+                        }
                     }
+                            .and_then(|o| handle(self, cache, oo, &o, i))
                 };
 
                 let r = SolvingResult { matched, waiting };
@@ -1740,7 +1745,7 @@ impl Solver {
                     .collect();
                 let waiting = if !t_matched.is_empty() {
                     log::trace!("0");
-                    let w = t_matched.iter().next().map(|x| *x);
+                    let w = t_matched.iter().next().cloned();
                     matched = matched.into_iter().chain(t_matched.into_iter()).collect();
                     w
                 } else if !matched.is_empty() {
@@ -1763,33 +1768,36 @@ impl Solver {
                         .collect();
                     if v.len() == 1 {
                         log::trace!("4");
-                        v.iter().next().and_then(|o| handle(self, cache, oo, &o, i))
+                        v.iter().next().cloned()
                     } else {
                         log::trace!("5");
-                        let v = v
+                        let v: ListSet<_> = v
                             .into_iter()
-                            .flat_map(|x| {
-                                match &self.nodes[x] {
-                                    RefsEnum::Or(v) => v.clone(),
-                                    _ => vec![x].into(),
-                                }
-                                .into_iter()
-                                .filter(|&x| {
-                                    if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
-                                        !self.solve_aux(cache, x).is_matched()
-                                    } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x]
-                                    {
-                                        !self.solve_aux(cache, x).is_matched()
-                                    } else {
-                                        true
-                                    }
-                                })
-                                .collect::<Vec<_>>()
+                            .flat_map(|x| match &self.nodes[x] {
+                                RefsEnum::Or(v) => v.clone(),
+                                _ => vec![x].into(),
                             })
                             .collect();
-                        Some(self.intern(RefsEnum::Or(v)))
-                            .and_then(|o| handle(self, cache, oo, &o, i))
+                        let w: ListSet<_> = v
+                            .iter()
+                            .filter(|&&x| {
+                                if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
+                                    !self.solve_aux(cache, x).is_matched()
+                                } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x] {
+                                    !self.solve_aux(cache, x).is_matched()
+                                } else {
+                                    true
+                                }
+                            })
+                            .cloned()
+                            .collect();
+                        if w.is_empty() {
+                            Some(self.intern(RefsEnum::Or(v)))
+                        } else {
+                            Some(self.intern(RefsEnum::Or(w)))
+                        }
                     }
+                            .and_then(|o| handle(self, cache, oo, &o, i))
                 };
 
                 let r = SolvingResult { matched, waiting };
@@ -1835,31 +1843,34 @@ impl Solver {
                         .collect();
                     if v.len() == 1 {
                         log::trace!("4");
-                        v.iter().next().map(|x| *x)
+                        v.iter().next().cloned()
                     } else {
                         log::trace!("5");
-                        let v = v
+                        let v: ListSet<_> = v
                             .into_iter()
-                            .flat_map(|x| {
-                                match &self.nodes[x] {
-                                    RefsEnum::Or(v) => v.clone(),
-                                    _ => vec![x].into(),
-                                }
-                                .into_iter()
-                                .filter(|&x| {
-                                    if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
-                                        !self.solve_aux(cache, x).is_matched()
-                                    } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x]
-                                    {
-                                        !self.solve_aux(cache, x).is_matched()
-                                    } else {
-                                        true
-                                    }
-                                })
-                                .collect::<Vec<_>>()
+                            .flat_map(|x| match &self.nodes[x] {
+                                RefsEnum::Or(v) => v.clone(),
+                                _ => vec![x].into(),
                             })
                             .collect();
-                        Some(self.intern(RefsEnum::Or(v)))
+                        let w: ListSet<_> = v
+                            .iter()
+                            .filter(|&&x| {
+                                if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
+                                    !self.solve_aux(cache, x).is_matched()
+                                } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x] {
+                                    !self.solve_aux(cache, x).is_matched()
+                                } else {
+                                    true
+                                }
+                            })
+                            .cloned()
+                            .collect();
+                        if w.is_empty() {
+                            Some(self.intern(RefsEnum::Or(v)))
+                        } else {
+                            Some(self.intern(RefsEnum::Or(w)))
+                        }
                     }
                 }
                 .map(|o| self.intern(RefsEnum::MethodReference(o, i)));
@@ -1897,31 +1908,34 @@ impl Solver {
                         .collect();
                     if v.len() == 1 {
                         log::trace!("4");
-                        v.iter().next().map(|x| *x)
+                        v.iter().next().cloned()
                     } else {
                         log::trace!("5");
-                        let v = v
+                        let v: ListSet<_> = v
                             .into_iter()
-                            .flat_map(|x| {
-                                match &self.nodes[x] {
-                                    RefsEnum::Or(v) => v.clone(),
-                                    _ => vec![x].into(),
-                                }
-                                .into_iter()
-                                .filter(|&x| {
-                                    if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
-                                        !self.solve_aux(cache, x).is_matched()
-                                    } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x]
-                                    {
-                                        !self.solve_aux(cache, x).is_matched()
-                                    } else {
-                                        true
-                                    }
-                                })
-                                .collect::<Vec<_>>()
+                            .flat_map(|x| match &self.nodes[x] {
+                                RefsEnum::Or(v) => v.clone(),
+                                _ => vec![x].into(),
                             })
                             .collect();
-                        Some(self.intern(RefsEnum::Or(v)))
+                        let w: ListSet<_> = v
+                            .iter()
+                            .filter(|&&x| {
+                                if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
+                                    !self.solve_aux(cache, x).is_matched()
+                                } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x] {
+                                    !self.solve_aux(cache, x).is_matched()
+                                } else {
+                                    true
+                                }
+                            })
+                            .cloned()
+                            .collect();
+                        if w.is_empty() {
+                            Some(self.intern(RefsEnum::Or(v)))
+                        } else {
+                            Some(self.intern(RefsEnum::Or(w)))
+                        }
                     }
                 }
                 .map(|o| self.intern(RefsEnum::ConstructorReference(o)));
@@ -1990,31 +2004,34 @@ impl Solver {
                         .collect();
                     if v.len() == 1 {
                         log::trace!("4");
-                        v.iter().next().map(|x| *x)
+                        v.iter().next().cloned()
                     } else {
                         log::trace!("5");
-                        let v = v
+                        let v: ListSet<_> = v
                             .into_iter()
-                            .flat_map(|x| {
-                                match &self.nodes[x] {
-                                    RefsEnum::Or(v) => v.clone(),
-                                    _ => vec![x].into(),
-                                }
-                                .into_iter()
-                                .filter(|&x| {
-                                    if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
-                                        !self.solve_aux(cache, x).is_matched()
-                                    } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x]
-                                    {
-                                        !self.solve_aux(cache, x).is_matched()
-                                    } else {
-                                        true
-                                    }
-                                })
-                                .collect::<Vec<_>>()
+                            .flat_map(|x| match &self.nodes[x] {
+                                RefsEnum::Or(v) => v.clone(),
+                                _ => vec![x].into(),
                             })
                             .collect();
-                        Some(self.intern(RefsEnum::Or(v)))
+                        let w: ListSet<_> = v
+                            .iter()
+                            .filter(|&&x| {
+                                if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
+                                    !self.solve_aux(cache, x).is_matched()
+                                } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x] {
+                                    !self.solve_aux(cache, x).is_matched()
+                                } else {
+                                    true
+                                }
+                            })
+                            .cloned()
+                            .collect();
+                        if w.is_empty() {
+                            Some(self.intern(RefsEnum::Or(v)))
+                        } else {
+                            Some(self.intern(RefsEnum::Or(w)))
+                        }
                     }
                     .map(|o| self.intern(RefsEnum::Invocation(o, i, matched_p)))
                 };
@@ -2074,30 +2091,33 @@ impl Solver {
                         .collect();
                     if v.len() == 1 {
                         log::trace!("4");
-                        v.iter().next().map(|x| *x)
+                        v.iter().next().cloned()
                     } else {
-                        let v = v
+                        let v: ListSet<_> = v
                             .into_iter()
-                            .flat_map(|x| {
-                                match &self.nodes[x] {
-                                    RefsEnum::Or(v) => v.clone(),
-                                    _ => vec![x].into(),
-                                }
-                                .into_iter()
-                                .filter(|&x| {
-                                    if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
-                                        !self.solve_aux(cache, x).is_matched()
-                                    } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x]
-                                    {
-                                        !self.solve_aux(cache, x).is_matched()
-                                    } else {
-                                        true
-                                    }
-                                })
-                                .collect::<Vec<_>>()
+                            .flat_map(|x| match &self.nodes[x] {
+                                RefsEnum::Or(v) => v.clone(),
+                                _ => vec![x].into(),
                             })
                             .collect();
-                        Some(self.intern(RefsEnum::Or(v)))
+                        let w: ListSet<_> = v
+                            .iter()
+                            .filter(|&&x| {
+                                if let RefsEnum::TypeIdentifier(_, _) = &self.nodes[x] {
+                                    !self.solve_aux(cache, x).is_matched()
+                                } else if let RefsEnum::ScopedIdentifier(_, _) = &self.nodes[x] {
+                                    !self.solve_aux(cache, x).is_matched()
+                                } else {
+                                    true
+                                }
+                            })
+                            .cloned()
+                            .collect();
+                        if w.is_empty() {
+                            Some(self.intern(RefsEnum::Or(v)))
+                        } else {
+                            Some(self.intern(RefsEnum::Or(w)))
+                        }
                     }
                     .map(|o| self.intern(RefsEnum::ConstructorInvocation(o, matched_p)))
                 };
