@@ -3,6 +3,7 @@
 pub mod compare;
 pub mod comparisons;
 pub mod relations;
+pub mod stats;
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -13,10 +14,11 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
-use rayon::iter::{IntoParallelRefIterator, IntoParallelIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use relations::{Info, Perfs};
 use rusted_gumtree_cvs_git::git::{fetch_repository, read_position, read_position_floating_lines};
 use serde::{Deserialize, Serialize};
+use stats::CompStats;
 use termion::color;
 
 use crate::{
@@ -121,11 +123,11 @@ fn main() {
                 let relations = handle_file_with_perfs(
                     File::open(file.unwrap().path()).expect("should be a file"),
                 );
-                
+
                 let relations = match relations {
                     Ok(x) => x,
                     Err(e) => {
-                        eprintln!("{}",e);
+                        eprintln!("{}", e);
                         continue;
                     }
                 };
@@ -181,35 +183,40 @@ fn main() {
                     files.entry(x.file_name()).or_insert((None, None)).1 = Some(x.path());
                 }
             });
-            let files:Vec<_> = files.into_iter().filter_map(|(c,v)|{
-                if let (Some(baseline), Some(evaluated)) = v {
-                    Some((c.to_string_lossy().into_owned(),(baseline,evaluated)))
-                } else {
-                    None
-                }
-            }).collect();
-            let comps = files.into_par_iter().filter_map(|(commit, (baseline,evaluated))| {
-                let bl_rs =
-                    handle_file_with_perfs(File::open(baseline).expect("should be a file"))
-                        .map_err(|e| eprintln!("can't read baseline relations: {}", e))
-                        .ok()?;
-                let t_rs =
-                    handle_file_with_perfs(File::open(evaluated).expect("should be a file"))
-                        .map_err(|e| eprintln!("can't read evaluated relations: {}", e))
-                        .ok()?;
-                let bl_commit = bl_rs.info.as_ref().unwrap().commit.clone();
-                let t_commit = t_rs.info.as_ref().unwrap().commit.clone();
-                assert_eq!(commit, bl_commit);
-                assert_eq!(commit, t_commit);
+            let files: Vec<_> = files
+                .into_iter()
+                .filter_map(|(c, v)| {
+                    if let (Some(baseline), Some(evaluated)) = v {
+                        Some((c.to_string_lossy().into_owned(), (baseline, evaluated)))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let comps = files
+                .into_par_iter()
+                .filter_map(|(commit, (baseline, evaluated))| {
+                    let bl_rs =
+                        handle_file_with_perfs(File::open(baseline).expect("should be a file"))
+                            .map_err(|e| eprintln!("can't read baseline relations: {}", e))
+                            .ok()?;
+                    let t_rs =
+                        handle_file_with_perfs(File::open(evaluated).expect("should be a file"))
+                            .map_err(|e| eprintln!("can't read evaluated relations: {}", e))
+                            .ok()?;
+                    let bl_commit = bl_rs.info.as_ref().unwrap().commit.clone();
+                    let t_commit = t_rs.info.as_ref().unwrap().commit.clone();
+                    assert_eq!(commit, bl_commit);
+                    assert_eq!(commit, t_commit);
 
-                let x = Versus {
-                    baseline: bl_rs,
-                    evaluated: t_rs,
-                };
-                Some(CommitCompStats::from(x))
-            });
+                    let x = Versus {
+                        baseline: bl_rs,
+                        evaluated: t_rs,
+                    };
+                    Some(CommitCompStats::from(x))
+                });
             if *json {
-                let res:Vec<_> = comps.collect();
+                let res: Vec<_> = comps.collect();
                 println!("{}", serde_json::to_string_pretty(&res).unwrap());
             } else {
                 comps.collect::<Vec<_>>().iter().for_each(|x| {
@@ -237,7 +244,7 @@ fn main() {
             }
             per_module.into_iter().for_each(|(_, (bl_rs, t_rs))| {
                 let comp = Comparator::default().compare(bl_rs, t_rs).into();
-                print_comparisons_stats(&comp);
+                println!("{}", CompStats::compute(&comp));
                 let per_file = decls_per_file(comp);
 
                 for (f, rs) in per_file {
@@ -316,7 +323,7 @@ fn main() {
                 let comp = Comparator::default()
                     .set_intersection_left(*only_misses)
                     .compare(bl_rs, t_rs);
-                print_comparisons_stats(&comp);
+                println!("{}", CompStats::compute(&comp));
                 for r in &comp.exact {
                     let read_position = |p: &Position, z: Option<usize>| {
                         if let Some(z) = z {
@@ -742,286 +749,9 @@ impl CommitCompStats {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct CompStats {
-    exact_decls_matches: usize,
-    decls_in_baseline_and_tool_with_refs: usize,
-    remaining_decls_in_baseline: usize,
-    remaining_decls_in_tool_results: usize,
-    overall_success_rate: f64,
-    overall_overestimation_rate: f64,
-    mean_success_rate: f64,
-    mean_overestimation_rate: f64,
-    mean_of_exact_references: f64,
-    mean_of_remaining_refs_in_baseline: f64,
-    mean_of_remaining_refs_in_tool_results: f64,
-    files_len: usize,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
 struct Versus<T> {
     baseline: T,
     evaluated: T,
-}
-
-impl CompStats {
-    fn compute(comp: &Comparisons) -> Self {
-        let exact_decls_matches = comp.exact.len();
-        let remaining_decls_in_baseline = comp.left.len();
-        let comp_bl = comp
-            .exact
-            .iter()
-            .map(|x| (x.left.len(), x.exact.len()))
-            .filter(|x| x.0 != 0 || x.1 != 0)
-            .fold((0, 0, 0f64, 0), |(xl, xe, m, c), (x, e)| {
-                (x + xl, e + xe, m + (e as f64 / (x + e) as f64), c + 1)
-            });
-        let comp_tool = comp
-            .exact
-            .iter()
-            .map(|x| (x.right.iter().count(), x.exact.len()))
-            .filter(|x| x.0 != 0 || x.1 != 0)
-            .fold((0, 0, 0f64, 0), |(xl, xe, m, c), (x, e)| {
-                (x + xl, e + xe, m + (x as f64 / (x + e) as f64), c + 1)
-            });
-        let remaining_decls_in_tool_results = comp.right.iter().count();
-        let overall_success_rate = {
-            let (x, e, _, _) = comp_bl;
-            e as f64 / (x + e) as f64
-        };
-        let overall_overestimation_rate = {
-            let (x, e, _, _) = comp_tool;
-            x as f64 / (x + e) as f64
-        };
-        let mean_success_rate = {
-            let (_, _, r, c) = comp_bl;
-            r as f64 / c as f64
-        };
-
-        let mean_overestimation_rate = {
-            let (_, _, r, c) = comp_tool;
-            r as f64 / c as f64
-        };
-
-        let mean_of_exact_references = comp.exact.iter().map(|x| x.exact.len()).sum::<usize>()
-            as f64
-            / comp.exact.len() as f64;
-
-        let mean_of_remaining_refs_in_baseline =
-            comp.exact.iter().map(|x| x.left.len()).sum::<usize>() as f64 / comp.exact.len() as f64;
-
-        let mean_of_remaining_refs_in_tool_results = comp
-            .exact
-            .iter()
-            .map(|x| x.right.iter().count())
-            .sum::<usize>() as f64
-            / comp.exact.len() as f64;
-        let mut files = HashSet::<String>::default();
-        for x in &comp.exact {
-            files.insert(x.decl.file.clone());
-            for x in &x.exact {
-                files.insert(x.file.clone());
-            }
-            for x in &x.left {
-                files.insert(x.file.clone());
-            }
-            for x in &x.right {
-                files.insert(x.file.clone());
-            }
-        }
-        for x in &comp.left {
-            files.insert(x.decl.file.clone());
-            for x in &x.refs {
-                files.insert(x.file.clone());
-            }
-        }
-        for x in &comp.right {
-            files.insert(x.decl.file.clone());
-            for x in &x.refs {
-                files.insert(x.file.clone());
-            }
-        }
-        let files_len = files.len();
-        let decls_in_baseline_and_tool_with_refs = comp
-            .exact
-            .iter()
-            .map(|x| (x.left.len(), x.exact.len()))
-            .count();
-        Self {
-            exact_decls_matches,
-            remaining_decls_in_baseline,
-            remaining_decls_in_tool_results,
-            decls_in_baseline_and_tool_with_refs,
-            overall_success_rate,
-            overall_overestimation_rate,
-            mean_success_rate,
-            mean_overestimation_rate,
-            mean_of_exact_references,
-            mean_of_remaining_refs_in_baseline,
-            mean_of_remaining_refs_in_tool_results,
-            files_len,
-        }
-    }
-}
-
-impl Display for CompStats {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        println!("# of exact decls matches: {}", self.exact_decls_matches);
-        println!(
-            "# of remaining decls in baseline: {}",
-            self.remaining_decls_in_baseline
-        );
-        println!(
-            "# of remaining decls in tool results: {}",
-            self.remaining_decls_in_tool_results
-        );
-        println!(
-            "# of decls with refs in baseline or tool: {}",
-            self.decls_in_baseline_and_tool_with_refs
-        );
-        println!("overall success rate: {}", self.overall_success_rate);
-        println!(
-            "overall overestimation rate: {}",
-            self.overall_overestimation_rate
-        );
-        println!("mean success rate: {}", self.mean_success_rate);
-        println!(
-            "mean overestimation rate: {}",
-            self.mean_overestimation_rate
-        );
-        println!(
-            "mean # of exact references: {}",
-            self.mean_of_exact_references
-        );
-        println!(
-            "mean # of remaining refs in baseline: {}",
-            self.mean_of_remaining_refs_in_baseline
-        );
-        println!(
-            "mean # of remaining refs in tool results: {}",
-            self.mean_of_remaining_refs_in_tool_results
-        );
-        writeln!(f, "# of uniquely mentioned files: {}", self.files_len)
-    }
-}
-
-// #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-// pub struct Perfs {
-//     construction_time: u128,
-//     search_time: u128,
-//     construction_memory_fooprint: usize,
-//     with_search_memory_fooprint: usize,
-// }
-
-impl Perfs {
-    // fn new(x: &RelationsWithPerfs) -> Self {
-    //     Self {
-    //         construction_time: x.construction_time,
-    //         search_time: x.search_time,
-    //         construction_memory_fooprint: x.construction_memory_fooprint,
-    //         with_search_memory_fooprint: x.with_search_memory_fooprint,
-    //     }
-    // }
-}
-
-/// TODO remove temporary things related to analysing spoon codebase
-fn print_comparisons_stats(comp: &Comparisons) {
-    println!("{}", CompStats::compute(comp))
-    // println!("# of exact decls matches: {}", comp.exact.len());
-    // println!("# of remaining decls in baseline: {}", comp.left.len());
-    // let comp_bl = comp
-    //     .exact
-    //     .iter()
-    //     .map(|x| (x.left.len(), x.exact.len()))
-    //     .filter(|x| x.0 != 0 || x.1 != 0)
-    //     .fold((0, 0, 0f64, 0), |(xl, xe, m, c), (x, e)| {
-    //         (x + xl, e + xe, m + (e as f64 / (x + e) as f64), c + 1)
-    //     });
-    // let comp_tool = comp
-    //     .exact
-    //     .iter()
-    //     .map(|x| {
-    //         (
-    //             x.right
-    //                 .iter()
-    //                 // .filter(|x| !x.file.starts_with("spoon-"))
-    //                 .count(),
-    //             x.exact.len(),
-    //         )
-    //     })
-    //     .filter(|x| x.0 != 0 || x.1 != 0)
-    //     .fold((0, 0, 0f64, 0), |(xl, xe, m, c), (x, e)| {
-    //         (x + xl, e + xe, m + (x as f64 / (x + e) as f64), c + 1)
-    //     });
-    // println!(
-    //     "# of remaining decls in tool results: {}",
-    //     comp.right
-    //         .iter()
-    //         // .filter(|x| !x.decl.file.starts_with("spoon-"))
-    //         .count()
-    // );
-    // println!("overall success rate: {}", {
-    //     let (x, e, _, _) = comp_bl;
-    //     e as f64 / (x + e) as f64
-    // });
-    // println!("overall overestimation rate: {}", {
-    //     let (x, e, _, _) = comp_tool;
-    //     x as f64 / (x + e) as f64
-    // });
-    // println!("mean success rate: {}", {
-    //     let (_, _, r, c) = comp_bl;
-    //     r as f64 / c as f64
-    // });
-    // println!(
-    //     "mean overestimation rate: {}",{
-    //         let (_, _, r, c) = comp_tool;
-    //         r as f64 / c as f64
-    //     });
-    // println!(
-    //     "mean # of exact references: {}",
-    //     comp.exact.iter().map(|x| x.exact.len()).sum::<usize>() as f64 / comp.exact.len() as f64
-    // );
-    // println!(
-    //     "mean # of remaining refs in baseline: {}",
-    //     comp.exact.iter().map(|x| x.left.len()).sum::<usize>() as f64 / comp.exact.len() as f64
-    // );
-    // println!(
-    //     "mean # of remaining refs in tool results: {}",
-    //     comp.exact
-    //         .iter()
-    //         .map(|x| x
-    //             .right
-    //             .iter()
-    //             // .filter(|x| !x.file.starts_with("spoon-"))
-    //             .count())
-    //         .sum::<usize>() as f64
-    //         / comp.exact.len() as f64
-    // );
-    // let mut files = HashSet::<String>::default();
-    // for x in &comp.exact {
-    //     files.insert(x.decl.file.clone());
-    //     for x in &x.exact {
-    //         files.insert(x.file.clone());
-    //     }
-    //     for x in &x.left {
-    //         files.insert(x.file.clone());
-    //     }
-    //     for x in &x.right {
-    //         files.insert(x.file.clone());
-    //     }
-    // }
-    // for x in &comp.left {
-    //     files.insert(x.decl.file.clone());
-    //     for x in &x.refs {
-    //         files.insert(x.file.clone());
-    //     }
-    // }
-    // for x in &comp.right {
-    //     files.insert(x.decl.file.clone());
-    //     for x in &x.refs {
-    //         files.insert(x.file.clone());
-    //     }
-    // }
-    // println!("# of uniquely mentioned files: {}", files.len());
 }
 
 fn summarize_center(text: &str, border_lines: usize) -> String {
