@@ -1062,7 +1062,7 @@ impl PartialAnalysis {
                     }
                 }
                 (State::None, State::SimpleIdentifier(_,i)) => {
-                    let r = acc.solver.intern(RefsEnum::MaybeMissing);
+                    let r = acc.solver.intern(RefsEnum::Root);
                     let i = scoped!(r,i);
                     State::ImportDeclaration {
                         identifier: i,
