@@ -589,7 +589,7 @@ impl PartialAnalysis {
         macro_rules! scoped {
             ( $o:expr, $i:expr ) => {{
                 let o = $o;
-                acc.solver.intern_ref(RefsEnum::ScopedIdentifier(o, $i))
+                acc.solver.intern(RefsEnum::ScopedIdentifier(o, $i))
             }};
         }
         macro_rules! scoped_type {
@@ -1062,7 +1062,8 @@ impl PartialAnalysis {
                     }
                 }
                 (State::None, State::SimpleIdentifier(_,i)) => {
-                    let i = scoped!(mm!(),i);
+                    let r = acc.solver.intern(RefsEnum::MaybeMissing);
+                    let i = scoped!(r,i);
                     State::ImportDeclaration {
                         identifier: i,
                         sstatic: false,

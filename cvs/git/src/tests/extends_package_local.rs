@@ -1699,3 +1699,73 @@ public class A {
     private B B;
     public B getB() {}
 }"#;
+
+
+fn run13(text: &[u8]) {
+    let mut stores = SimpleStores {
+        label_store: LabelStore::new(),
+        type_store: TypeStore {},
+        node_store: NodeStore::new(),
+    };
+    let mut md_cache = Default::default();
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+
+    // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
+    match a.local.ana.as_ref() {
+        Some(x) => {
+            println!("refs:",);
+            x.print_refs(&java_tree_gen.stores.label_store);
+        }
+        None => println!("None"),
+    };
+    let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
+    macro_rules! scoped {
+        ( $o:expr, $i:expr ) => {{
+            let o = $o;
+            let i = $i;
+            let f = IdentifierFormat::from(i);
+            let i = stores.label_store.get_or_insert(i);
+            let i = LabelPtr::new(i, f);
+            ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
+        }};
+    }
+    let mut sp_store =
+        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+
+    // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
+    // let root = ana.solver.intern(RefsEnum::Root);
+    // let package_ref = scoped!(root, "spoon");
+
+    print_tree_syntax(
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
+        &a.local.compressed_node,
+    );
+    println!();
+}
+
+#[test]
+fn test_case13() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
+    run13(CASE_13.as_bytes());
+}
+
+static CASE_13: &'static str = r#"
+
+package org.apache.spark.shuffle.sort;
+
+import scala.*;
+import scala.collection.Iterator;
+
+public class A {
+
+
+
+}"#;
