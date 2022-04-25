@@ -1011,7 +1011,6 @@ impl Solver {
                 }
             }
             RefsEnum::This(o) => {
-
                 let possibilities: ListSet<RefPtr> = self.straight_possibilities(other).into();
 
                 let mut e_matched = vec![];
@@ -1960,13 +1959,29 @@ impl Solver {
                         })
                     })
                     .collect();
-                // let matched: ListSet<RefPtr> = if matchedmatched
-                //     .into_iter()
-                //     .chain()
-                //     .collect();
+                let mut matched: ListSet<RefPtr> = matched
+                    .iter()
+                    .flat_map(|&x| {
+                        let x = self.solve_aux(cache, x).waiting.unwrap();
+                        match &self.nodes[x] {
+                            RefsEnum::Or(v) => v.clone(),
+                            _ => vec![x].into(),
+                        }
+                    })
+                    .collect();
 
-                let waiting = if !matched.is_empty() || ext.is_empty() {
-                    waiting
+                let waiting = if !matched.is_empty() {
+                    log::trace!("2");
+                    let w = if matched.len() == 1 {
+                        Some(*matched.iter().next().unwrap())
+                    } else {
+                        Some(self.intern(RefsEnum::Or(matched.clone())))
+                    };
+                    matched = matched.into_iter().collect();
+                    w
+                } else if ext.is_empty() {
+                    log::trace!("3");
+                    waiting.map(|o| self.intern(RefsEnum::Invocation(o, i, matched_p)))
                 } else {
                     let v: ListSet<_> = matched_o
                         .matched
@@ -2001,8 +2016,8 @@ impl Solver {
                             .collect();
                         Some(self.intern(RefsEnum::Or(v)))
                     }
-                }
-                .map(|o| self.intern(RefsEnum::Invocation(o, i, matched_p)));
+                    .map(|o| self.intern(RefsEnum::Invocation(o, i, matched_p)))
+                };
 
                 SolvingResult { matched, waiting }
             }
@@ -2028,14 +2043,29 @@ impl Solver {
                         })
                     })
                     .collect();
-                // matched
-                //     .into_iter()
-                //     .chain(
-                //         )
-                //     .collect();
+                let mut matched: ListSet<RefPtr> = matched
+                    .iter()
+                    .flat_map(|&x| {
+                        let x = self.solve_aux(cache, x).waiting.unwrap();
+                        match &self.nodes[x] {
+                            RefsEnum::Or(v) => v.clone(),
+                            _ => vec![x].into(),
+                        }
+                    })
+                    .collect();
 
-                let waiting = if !matched.is_empty() || ext.is_empty() {
-                    waiting
+                let waiting = if !matched.is_empty() {
+                    log::trace!("2");
+                    let w = if matched.len() == 1 {
+                        Some(*matched.iter().next().unwrap())
+                    } else {
+                        Some(self.intern(RefsEnum::Or(matched.clone())))
+                    };
+                    matched = matched.into_iter().collect();
+                    w
+                } else if ext.is_empty() {
+                    log::trace!("3");
+                    waiting.map(|o| self.intern(RefsEnum::ConstructorInvocation(o, matched_p)))
                 } else {
                     let v: ListSet<_> = matched_o
                         .matched
@@ -2069,8 +2099,8 @@ impl Solver {
                             .collect();
                         Some(self.intern(RefsEnum::Or(v)))
                     }
-                }
-                .map(|o| self.intern(RefsEnum::ConstructorInvocation(o, matched_p)));
+                    .map(|o| self.intern(RefsEnum::ConstructorInvocation(o, matched_p)))
+                };
 
                 SolvingResult { matched, waiting }
             }
