@@ -1954,7 +1954,21 @@ impl Solver {
                     }
                 );
 
-                let matched_p = p.map(|&p| self.solve_aux(cache, p).waiting.unwrap());
+                let matched_p = p.map(|&p| {
+                    let r = self.solve_aux(cache, p);
+                    let x = r.waiting.unwrap();
+                    let b = match &self.nodes[x] {
+                        RefsEnum::Or(v) => v.is_empty(),
+                        _ => false,
+                    };
+                    if b && r.matched.len() == 1 {
+                        *r.matched.iter().next().unwrap()
+                    } else if b {
+                        self.intern(RefsEnum::Or(r.matched))
+                    } else {
+                        x
+                    }
+                });
 
                 let ext: ListSet<RefPtr> = matched_o
                     .iter()
@@ -2041,7 +2055,21 @@ impl Solver {
             RefsEnum::ConstructorInvocation(o, p) => {
                 let matched_o = self.solve_aux(cache, o);
 
-                let matched_p = p.map(|&p| self.solve_aux(cache, p).waiting.unwrap());
+                let matched_p = p.map(|&p| {
+                    let r = self.solve_aux(cache, p);
+                    let x = r.waiting.unwrap();
+                    let b = match &self.nodes[x] {
+                        RefsEnum::Or(v) => v.is_empty(),
+                        _ => false,
+                    };
+                    if b && r.matched.len() == 1 {
+                        *r.matched.iter().next().unwrap()
+                    } else if b {
+                        self.intern(RefsEnum::Or(r.matched))
+                    } else {
+                        x
+                    }
+                });
 
                 let ext: ListSet<RefPtr> = matched_o
                     .iter()

@@ -181,8 +181,7 @@ impl PartialAnalysis {
                 );
             }
         }
-
-        let (mut cache, mut solver) = self.solver.resolve(cache);
+        let (mut cache, mut solver) = (cache, self.solver);
         match &mut self.current_node {
             State::File {
                 package,
@@ -364,7 +363,7 @@ impl PartialAnalysis {
             }
             _ => (),
         };
-
+        let (_, solver) = solver.resolve(cache);
         Self {
             current_node: self.current_node,
             solver,
@@ -2637,8 +2636,7 @@ impl PartialAnalysis {
                     State::None,
                 ) if kind == &Type::ConstructorDeclaration => {
                     let t = identifier.unwrap();
-                    let r = mm!();
-                    let t = acc.solver.intern(RefsEnum::ScopedIdentifier(r, t));
+                    let t = scoped_type!(mm!(), t);
                     let p: Box<[RefPtr]> = parameters
                         .into_iter()
                         .map(|(_, t)| {
