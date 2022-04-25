@@ -592,7 +592,7 @@ impl<'a> ExplorableRef<'a> {
             RefsEnum::TypeIdentifier(o, i) => {
                 assert_ne!(*o, self.rf);
                 self.with(*o).ser(out);
-                out.push(b"."[0]);
+                out.push(b"%"[0]);
                 // let b: [u8; 4] = (i.to_usize() as u32).to_be_bytes();
                 let b = i.as_ref().to_usize().to_string();
                 let b = b.as_bytes();
@@ -930,7 +930,7 @@ impl Nodes {
 
     pub fn get(&self, other: RefsEnum<RefPtr, LabelPtr>) -> Option<RefPtr> {
         // TODO analyze perfs to find if Vec or HashSet or something else works better
-        self.iter().position(|x| x == &other)
+        self.iter().position(|x| other.strict_eq(x))
     }
 
     /// flatten Or and filter Masks
@@ -947,11 +947,11 @@ impl Nodes {
             v.iter()
                 .flat_map(|&o| self.straight_possibilities(o))
                 .collect()
-        } else if let Some(o) = o.object() {
-            self.straight_possibilities(o)
+        } else if let Some(oo) = o.object() {
+            self.straight_possibilities(oo)
                 .into_iter()
-                .filter_map(|o| {
-                    let x = self[other].with_object(o);
+                .filter_map(|oo| {
+                    let x = o.with_object(oo);
                     self.get(x)
                 })
                 .collect()

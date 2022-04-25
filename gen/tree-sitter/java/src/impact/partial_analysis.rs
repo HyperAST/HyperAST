@@ -3812,8 +3812,7 @@ impl PartialAnalysis {
                     (State::None, State::SimpleTypeIdentifier(i))
                         if kind == &Type::ArrayCreationExpression =>
                     {
-                        let r = mm!();
-                        let i = acc.solver.intern(RefsEnum::ScopedIdentifier(r, i));
+                        let i = scoped_type!(mm!(),i);
                         let i = acc
                             .solver
                             .intern(RefsEnum::ConstructorInvocation(i, Arguments::Unknown));
@@ -3920,7 +3919,7 @@ impl PartialAnalysis {
                     (State::SimpleTypeIdentifier(o), State::SimpleTypeIdentifier(i))
                         if kind == &Type::ObjectCreationExpression =>
                     {
-                        let o = scoped!(mm!(), o);
+                        let o = scoped_type!(mm!(), o);
                         State::InvocationId(o, i)
                     }
                     (State::ScopedTypeIdentifier(o), State::ScopedTypeIdentifier(i))
@@ -4276,14 +4275,14 @@ impl PartialAnalysis {
                     (State::Invocation(_), State::SimpleTypeIdentifier(i))
                         if kind == &Type::InstanceofExpression =>
                     {
-                        let i = scoped!(mm!(), i);
+                        let i = scoped_type!(mm!(), i);
                         // TODO intern boolean
                         State::ScopedIdentifier(mm!())
                     }
                     (State::ScopedIdentifier(_), State::SimpleTypeIdentifier(i))
                         if kind == &Type::InstanceofExpression =>
                     {
-                        let i = scoped!(mm!(), i);
+                        let i = scoped_type!(mm!(), i);
                         // TODO intern boolean
                         State::ScopedIdentifier(mm!())
                     }
@@ -4370,14 +4369,14 @@ impl PartialAnalysis {
                         if kind == &Type::ClassLiteral =>
                     {
                         // TODO should return Class<i>
-                        let i = scoped!(mm!(), i);
+                        let i = scoped_type!(mm!(), i);
                         State::ScopedIdentifier(i)
                     }
 
                     // CastExpression
                     (State::None, expr) if kind == &Type::CastExpression => {
                         let t = match expr {
-                            State::SimpleTypeIdentifier(t) => scoped!(mm!(), t),
+                            State::SimpleTypeIdentifier(t) => scoped_type!(mm!(), t),
                             State::ScopedTypeIdentifier(i) => sync!(i),
                             State::None => panic!("should handle before"),
                             x => panic!("{:?}", x),
@@ -5350,7 +5349,8 @@ impl PartialAnalysis {
                         if kind == &Type::ScopedTypeIdentifier =>
                     {
                         let o = mm!();
-                        let i = acc.solver.intern_ref(RefsEnum::TypeIdentifier(o, i));
+                        // let i = acc.solver.intern_ref(RefsEnum::TypeIdentifier(o, i));
+                        let i = scoped_type!(o, i);
                         State::ScopedTypeIdentifier(i)
                     }
                     (State::None, State::ScopedTypeIdentifier(i))
@@ -5381,7 +5381,7 @@ impl PartialAnalysis {
                             x => panic!("{:?}", x),
                         };
                         let o = mm!();
-                        let i = acc.solver.intern_ref(RefsEnum::TypeIdentifier(o, i));
+                        let i = scoped_type!(o, i);
                         v.push(i);
                         State::CatchTypes(v)
                     }
@@ -5401,7 +5401,7 @@ impl PartialAnalysis {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
                     (State::None, State::SimpleTypeIdentifier(i)) if kind == &Type::ArrayType => {
                         let o = mm!();
-                        let i = acc.solver.intern_ref(RefsEnum::TypeIdentifier(o, i));
+                        let i = scoped_type!(o, i);
                         State::ScopedTypeIdentifier(i)
                     }
                     (State::None, State::ScopedTypeIdentifier(i)) if kind == &Type::ArrayType => {
@@ -5412,7 +5412,7 @@ impl PartialAnalysis {
                         if kind == &Type::ArrayType =>
                     {
                         let o = mm!();
-                        let i = acc.solver.intern_ref(RefsEnum::TypeIdentifier(o, i));
+                        let i = scoped_type!(o, i);
                         State::ScopedTypeIdentifier(i)
                     }
                     (State::ScopedTypeIdentifier(i), State::Dimensions)
@@ -5506,7 +5506,7 @@ impl PartialAnalysis {
                         if kind == &Type::WildcardSuper =>
                     {
                         let o = mm!();
-                        let t = acc.solver.intern_ref(RefsEnum::TypeIdentifier(o, t));
+                        let t = scoped_type!(o, t);
                         State::WildcardSuper(i)
                     }
                     (State::WildcardSuper(i), State::ScopedTypeIdentifier(t))
@@ -5692,7 +5692,7 @@ impl PartialAnalysis {
             } else if kind == &Type::Throws {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
                     (rest, State::SimpleTypeIdentifier(i)) if kind == &Type::Throws => {
-                        let i = scoped!(mm!(), i);
+                        let i = scoped_type!(mm!(), i);
                         State::Throws
                     }
                     (rest, State::ScopedTypeIdentifier(i)) if kind == &Type::Throws => {

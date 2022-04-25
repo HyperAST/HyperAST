@@ -1319,7 +1319,7 @@ impl Solver {
                     let x: ListSet<_> = x
                         .iter()
                         .flat_map(|&x| {
-                            log::trace!("éé {:?} {:?}", x, self.nodes.with(x));
+                            log::trace!("&& {:?} {:?}", x, self.nodes.with(x));
                             if x == other {
                                 vec![x].into()
                             } else {
@@ -1961,9 +1961,7 @@ impl Solver {
                         RefsEnum::Or(v) => v.is_empty(),
                         _ => false,
                     };
-                    if b && r.matched.len() == 1 {
-                        *r.matched.iter().next().unwrap()
-                    } else if b {
+                    if b {
                         self.intern(RefsEnum::Or(r.matched))
                     } else {
                         x
