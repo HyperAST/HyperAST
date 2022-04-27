@@ -108,7 +108,7 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
         before,
         after,
         dir_path,
-        10000
+        1000
     );
     let mu = memusage_linux();
     log::warn!("total memory used {}", mu);
