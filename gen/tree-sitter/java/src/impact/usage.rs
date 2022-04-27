@@ -1101,7 +1101,7 @@ impl<'a> RefsFinder<'a> {
                 } else if t == Type::TS4 {
                 } else if is_individually_matched(t) || is_never_reference(t) {
                 } else {
-                    todo!("{:?}", t)
+                    missing_rule!("exact_match_cast_expression missing {:?}", t)
                 }
             } else if ok2 {
                 if t == Type::Identifier {
@@ -1113,10 +1113,9 @@ impl<'a> RefsFinder<'a> {
                         scout.up(self.sp_store);
                     }
                 } else if t == Type::This {
-                } else if t == Type::LambdaExpression {
                 } else if is_individually_matched(t) || is_never_reference(t) {
                 } else {
-                    missing_rule!("exact_match_cast_expression missing {:?}", t)
+                    missing_rule!("exact_match_cast_expression missing' {:?}", t)
                     // TODO aaa not yet implemented: True
                 }
             }
@@ -1484,11 +1483,9 @@ impl<'a> RefsFinder<'a> {
                 // TODO need full check if creating anonymous class
                 log::debug!("need to handle new C<T>() "); // used for  type generics
 
-                let x = cs[j];
                 let mut scout2 = scout.clone();
                 scout2.goto(x, j);
-                let b = self.stores.node_store.resolve(x);
-                let x = b.get_child(&0);
+                let x = r.get_child(&0);
                 let b = self.stores.node_store.resolve(x);
                 let t = b.get_type();
                 if t == Type::TypeIdentifier {
@@ -1579,8 +1576,9 @@ impl<'a> RefsFinder<'a> {
                                         if l == ii.as_ref() {
                                             log::debug!("success 3");
                                             let xx = cs[j];
+                                            let mut scout = scout.clone();
                                             scout.goto(xx, j);
-                                            self.successful_match(scout)
+                                            self.successful_match(&mut scout)
                                         }
                                     }
                                     _ => {
@@ -1599,13 +1597,23 @@ impl<'a> RefsFinder<'a> {
             } else if t == Type::MarkerAnnotation {
             } else if t == Type::Spaces {
             } else if t == Type::TS19 {
+            } else if t == Type::FieldAccess {
+                log::debug!("need to handle a.new b.C() {}",java_tree_gen_full_compress_legion_ref::TreeSyntax::new(
+                    &self.stores.node_store,
+                    &self.stores.label_store,
+                    scout.node_always(&self.sp_store),
+                ));
             } else if t == Type::GenericType {
                 // TODO need full check if creating anonymous class
-                log::debug!("need to handle a<T>.new b.C() ");
+                log::debug!("need to handle a<T>.new b.C() {}",java_tree_gen_full_compress_legion_ref::TreeSyntax::new(
+                    &self.stores.node_store,
+                    &self.stores.label_store,
+                    scout.node_always(&self.sp_store),
+                ));
             } else if t == Type::ScopedTypeIdentifier {
                 // TODO need a unit test
                 // TODO need full check if creating anonymous class
-                log::debug!("need to handle a.new b.C() ");
+                log::debug!("need to handle matching A in A.new B.C() ");
                 if matched {
                     let (oo, ii) = match self.ana.solver.nodes.with(o).as_ref() {
                         RefsEnum::ScopedIdentifier(o, i) => (*o, *i.as_ref()),
@@ -2180,8 +2188,11 @@ impl<'a> RefsFinder<'a> {
                     let mut scout = scout.clone();
                     scout.goto(x, cs.len() - 1);
                     let r = self.sp_store.push(&mut scout);
-                    self.sp_store.check(&self.stores).expect("cc");
-                    self.refs.push(r);
+                    if let Err(e) = self.sp_store.check(&self.stores) {
+                        log::error!("corrupted scout class body: {}", e)
+                    } else {
+                        self.refs.push(r);
+                    }
                     let it = ExploreStructuralPositions::from((&*self.sp_store, r));
                     log::debug!("really found {:?}", it.make_position(&self.stores));
                 }
@@ -2195,16 +2206,24 @@ impl<'a> RefsFinder<'a> {
                 {
                     scout.up(&self.sp_store).expect("up");
                     scout.check(&self.stores).expect("dd");
-                    scout = self.relax_to_typed(scout.clone()).expect("relax");
-                    scout.check(&self.stores).expect("ee");
+                    if let Err(e) = self.sp_store.check(&self.stores) {
+                        log::error!("corrupted scout after class body: {}", e);
+                        return;
+                    } else {
+                        scout = self.relax_to_typed(scout.clone()).expect("relax");
+                        scout.check(&self.stores).expect("ee");
+                    }
                 }
             }
         }
 
         scout.check(&self.stores).expect("dd");
         let r = self.sp_store.push(&mut scout);
-        self.sp_store.check(&self.stores).expect("ee");
-        self.refs.push(r);
+        if let Err(e) = self.sp_store.check(&self.stores) {
+            log::error!("corrupted scout: {}", e)
+        } else {
+            self.refs.push(r);
+        }
         let it = ExploreStructuralPositions::from((&*self.sp_store, r));
         log::debug!("really found {:?}", it.make_position(&self.stores));
     }
@@ -2559,6 +2578,11 @@ fn is_individually_matched(t: Type) -> bool {
         || t == Type::SwitchExpression
         || t == Type::AssignmentExpression
         || t == Type::EnhancedForVariable
+        || t == Type::InstanceofExpression
+        || t == Type::FieldAccess
+        || t == Type::ArrayInitializer
+        || t == Type::LambdaExpression
+        || t == Type::MethodReference
 }
 /// WARN not exaustive set
 fn is_never_reference(t: Type) -> bool {

@@ -20,12 +20,23 @@ use serde::{Deserialize, Serialize, Serializer};
 
 use crate::write_serializer::{WriteJson, WritePartialJson};
 
+
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 // WARN there is a big impact of the buff writer capacity
 const BUFF_WRITER_CAPACITY: usize = 4 * 8 * 1024;
 
 fn main() {
+    benchmark_main()
+}
+fn benchmark_main() {
     // let f = env_logger::fmt::BufferWriter
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
         .format(|buf, record| {
             if record.level().to_level_filter() > log::LevelFilter::Debug {
                 writeln!(buf, "{}", record.args())

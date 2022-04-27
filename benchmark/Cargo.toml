@@ -20,6 +20,12 @@ pommes = "0.0.2"
 serde = { version = "1.0.130" }
 serde-xml-rs = "0.5.1"
 
+
+cfg-if = "1.0"
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = "0.3.2"
+
 [build-dependencies]
 
 # [profile.release]

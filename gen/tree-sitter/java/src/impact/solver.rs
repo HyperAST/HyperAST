@@ -1261,7 +1261,6 @@ impl Solver {
                 });
                 let waiting: ListSet<_> = waiting.into();
                 let r = if waiting.is_empty() {
-                    assert!(matched.is_empty());
                     SolvingResult {
                         matched: matched.into(),
                         waiting: Some(self.intern(RefsEnum::Or(waiting))),

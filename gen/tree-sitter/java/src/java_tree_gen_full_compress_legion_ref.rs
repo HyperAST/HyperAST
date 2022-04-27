@@ -1182,12 +1182,14 @@ impl<'a> TreeGen for JavaTreeGen<'a> {
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
         let type_store = &mut self.stores().type_store;
         let kind = type_store.get(node.kind());
+        let parent_indentation = Space::try_format_indentation(&self.line_break)
+            .unwrap_or_else(|| vec![Space::Space; self.line_break.len()]);
         let indent = compute_indentation(
             &self.line_break,
             text,
             node.start_byte(),
             0,
-            &Space::format_indentation(&self.line_break),
+            &parent_indentation,
         );
         let ana = self.build_ana(&kind);
         let label = node
@@ -1389,8 +1391,7 @@ impl<'a> JavaTreeGen<'a> {
             Some(PartialAnalysis::init(kind, None, |x| {
                 label_store.get_or_insert(x)
             }))
-        } else if kind == &Type::TypeParameter
-        {
+        } else if kind == &Type::TypeParameter {
             Some(PartialAnalysis::init(kind, None, |x| {
                 label_store.get_or_insert(x)
             }))
@@ -1564,10 +1565,10 @@ impl<'a> JavaTreeGen<'a> {
             || acc.simple.kind == Type::AnnotationArgumentList
         {
             if !acc
-                    .simple
-                    .children
-                    .iter()
-                    .all(|x| !insertion.resolve(*x).has_children())
+                .simple
+                .children
+                .iter()
+                .all(|x| !insertion.resolve(*x).has_children())
             {
                 // eg. an empty body/block/paramlist/...
                 log::error!("{:?} should only contains leafs", &acc.simple.kind);
@@ -1732,7 +1733,10 @@ impl<'a> JavaTreeGen<'a> {
         let vacant = insertion.vacant();
         let compressed_node = match label_id {
             None => {
-                log::trace!("insertion with {} refs",ana.as_ref().map(|x| x.refs_count()).unwrap_or(0));
+                log::trace!(
+                    "insertion with {} refs",
+                    ana.as_ref().map(|x| x.refs_count()).unwrap_or(0)
+                );
                 macro_rules! insert {
                     ( $c:expr, $t:ty ) => {{
                         let it = ana.as_ref().unwrap().solver.iter_refs();
@@ -1740,10 +1744,7 @@ impl<'a> JavaTreeGen<'a> {
                             BulkHasher::<_, <$t as BF<[u8]>>::S, <$t as BF<[u8]>>::H>::from(it);
                         let bloom = <$t>::from(it);
                         log::trace!("{:?}", bloom);
-                        NodeStore::insert_after_prepare(
-                            vacant,
-                            $c.concat((<$t>::SIZE, bloom)),
-                        )
+                        NodeStore::insert_after_prepare(vacant, $c.concat((<$t>::SIZE, bloom)))
                     }};
                 }
                 // type A = Bloom<&'static [u8], [u64; 64]>;
@@ -1855,10 +1856,7 @@ impl<'a> JavaTreeGen<'a> {
                             BulkHasher::<_, <$t as BF<[u8]>>::S, <$t as BF<[u8]>>::H>::from(it);
                         let bloom = <$t>::from(it);
                         log::trace!("{:?}", bloom);
-                        NodeStore::insert_after_prepare(
-                            vacant,
-                            $c.concat((<$t>::SIZE, bloom)),
-                        )
+                        NodeStore::insert_after_prepare(vacant, $c.concat((<$t>::SIZE, bloom)))
                     }};
                 }
                 match acc.simple.children.len() {

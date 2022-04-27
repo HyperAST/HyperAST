@@ -89,7 +89,7 @@ pub trait MySerialize {
 
 pub struct Table<T> {
     offsets: Vec<u32>,
-    choices: Vec<u8>,
+    choices: Vec<u16>,
     buf: Vec<T>,
 }
 
@@ -122,11 +122,11 @@ impl<T> Table<T> {
             self.choices.resize(index + 1, 0);
         }
         if self.offsets[index] != 0 {
-            assert!(self.choices[index] == v.len().to_u8().unwrap());
+            assert!(self.choices[index] == v.len().to_u16().unwrap());
             return SymbolU16::try_from_usize(index).unwrap();
         }
         self.offsets[index] = self.buf.len().to_u32().unwrap();
-        self.choices[index] = v.len().to_u8().unwrap();
+        self.choices[index] = v.len().to_u16().unwrap();
         self.buf.extend(v);
         SymbolU16::try_from_usize(index).unwrap()
     }
@@ -185,8 +185,14 @@ impl<H: VaryHasher<u8>> CachedHasher<'static, usize, u8, H> {
             table: &mut table,
             phantom: PhantomData,
         };
-        let x = x.serialize(s).unwrap().to_owned();
-        table[x].iter().map(|x| x.finish()).collect()
+        match x.serialize(s) {
+            Ok(x) => table[x].iter().map(|x| x.finish()).collect(),
+            Err(e) => {
+                log::error!("error {} with hashing of {}",e, x.key());
+                vec![]
+            },
+        }
+        
     }
 }
 
@@ -198,8 +204,13 @@ impl<'a, H: VaryHasher<u16>> CachedHasher<'a, usize, u16, H> {
             table: &mut table,
             phantom: PhantomData,
         };
-        let x = x.serialize(s).unwrap();
-        table[x].iter().map(|x| x.finish()).collect()
+        match x.serialize(s) {
+            Ok(x) => table[x].iter().map(|x| x.finish()).collect(),
+            Err(e) => {
+                log::error!("error {} with hashing of {}",e, x.key());
+                vec![]
+            },
+        }
     }
 }
 
@@ -306,7 +317,11 @@ impl<'a, H: VaryHasher<u8>> MySerializePar for CachedHasherAux<'a, usize, u8, H>
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(self.table.insert(self.index, self.acc))
+        if self.acc.is_empty() {
+            Err(CachedHasherError::custom("empty element"))
+        } else {
+            Ok(self.table.insert(self.index, self.acc))
+        }
     }
 }
 
@@ -332,7 +347,11 @@ impl<'a, H: VaryHasher<u16>> MySerializePar for CachedHasherAux<'a, usize, u16, 
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(self.table.insert(self.index, self.acc))
+        if self.acc.is_empty() {
+            Err(CachedHasherError::custom("empty element"))
+        } else {
+            Ok(self.table.insert(self.index, self.acc))
+        }
     }
 }
 impl<'a, H: VaryHasher<u8>> MySerializeSco for CachedHasherAux<'a, usize, u8, H> {

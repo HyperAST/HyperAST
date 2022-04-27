@@ -59,40 +59,42 @@ impl Into<isize> for MemoryUsage {
     }
 }
 
-#[cfg(all(target_os = "linux", target_env = "gnu", not(feature = "jemalloc")))]
-pub fn memusage_linux() -> MemoryUsage {
-    // Linux/glibc has 2 APIs for allocator introspection that we can use: mallinfo and mallinfo2.
-    // mallinfo uses `int` fields and cannot handle memory usage exceeding 2 GB.
-    // mallinfo2 is very recent, so its presence needs to be detected at runtime.
-    // Both are abysmally slow.
+// #[cfg(all(target_os = "linux", target_env = "gnu", not(feature = "jemalloc")))]
+// pub fn memusage_linux() -> MemoryUsage {
+//     // Linux/glibc has 2 APIs for allocator introspection that we can use: mallinfo and mallinfo2.
+//     // mallinfo uses `int` fields and cannot handle memory usage exceeding 2 GB.
+//     // mallinfo2 is very recent, so its presence needs to be detected at runtime.
+//     // Both are abysmally slow.
 
-    use std::ffi::CStr;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+//     use std::ffi::CStr;
+//     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    static MALLINFO2: AtomicUsize = AtomicUsize::new(1);
+//     static MALLINFO2: AtomicUsize = AtomicUsize::new(1);
 
-    let mut mallinfo2 = MALLINFO2.load(Ordering::Relaxed);
-    if mallinfo2 == 1 {
-        let cstr = CStr::from_bytes_with_nul(b"mallinfo2\0").unwrap();
-        mallinfo2 = unsafe { libc::dlsym(libc::RTLD_DEFAULT, cstr.as_ptr()) } as usize;
-        // NB: races don't matter here, since they'll always store the same value
-        MALLINFO2.store(mallinfo2, Ordering::Relaxed);
-    }
+//     let mut mallinfo2 = MALLINFO2.load(Ordering::Relaxed);
+//     if mallinfo2 == 1 {
+//         let cstr = CStr::from_bytes_with_nul(b"mallinfo2\0").unwrap();
+//         mallinfo2 = unsafe { libc::dlsym(libc::RTLD_DEFAULT, cstr.as_ptr()) } as usize;
+//         // NB: races don't matter here, since they'll always store the same value
+//         MALLINFO2.store(mallinfo2, Ordering::Relaxed);
+//     }
 
-    if mallinfo2 == 0 {
-        // mallinfo2 does not exist, use mallinfo.
-        let alloc = unsafe { libc::mallinfo() }.uordblks as isize;
-        MemoryUsage {
-            allocated: Bytes(alloc),
-        }
-    } else {
-        let mallinfo2: fn() -> libc::mallinfo2 = unsafe { std::mem::transmute(mallinfo2) };
-        let alloc = mallinfo2().uordblks as isize;
-        MemoryUsage {
-            allocated: Bytes(alloc),
-        }
-    }
-}
+//     if mallinfo2 == 0 {
+//         // mallinfo2 does not exist, use mallinfo.
+//         let alloc = unsafe { libc::mallinfo() }.uordblks as isize;
+//         MemoryUsage {
+//             allocated: Bytes(alloc),
+//         }
+//     } else {
+//         let mallinfo2: fn() -> libc::mallinfo2 = unsafe { std::mem::transmute(mallinfo2) };
+//         let alloc = mallinfo2().uordblks as isize;
+//         MemoryUsage {
+//             allocated: Bytes(alloc),
+//         }
+//     }
+// }
+
+pub use hyper_ast::utils::memusage_linux;
 
 #[derive(Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct Bytes(isize);
