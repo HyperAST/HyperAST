@@ -178,7 +178,7 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
                 construction_perfs,
                 search_perfs: Some(Perfs {
                     time: search_time,
-                    memory: with_search_memory_fooprint.try_into().unwrap(),
+                    memory: with_search_memory_fooprint.max(0).unsigned_abs(),
                 }),
                 info,
             };
