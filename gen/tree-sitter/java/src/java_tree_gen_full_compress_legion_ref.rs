@@ -1330,7 +1330,7 @@ impl<'a> JavaTreeGen<'a> {
         &mut self,
         name: &[u8],
         text: &[u8],
-        mut cursor: TreeCursor,
+        cursor: TreeCursor,
     ) -> FullNode<Global, Local> {
         let mut init = self.init_val(text, &TNode(cursor.node()));
         let mut xx = TTreeCursor(cursor);
@@ -1711,7 +1711,9 @@ impl<'a> JavaTreeGen<'a> {
             //     let ana = ana.resolve();
             //     Some(ana)
             // }
-            Some(ana) => Some(ana), // TODO
+            Some(ana) => {
+                Some(ana) // TODO
+            }
             None => None,
         };
 
@@ -1735,7 +1737,7 @@ impl<'a> JavaTreeGen<'a> {
             None => {
                 log::trace!(
                     "insertion with {} refs",
-                    ana.as_ref().map(|x| x.refs_count()).unwrap_or(0)
+                    ana.as_ref().map(|x| x.estimated_refs_count()).unwrap_or(0)
                 );
                 macro_rules! insert {
                     ( $c:expr, $t:ty ) => {{
@@ -1803,7 +1805,7 @@ impl<'a> JavaTreeGen<'a> {
                             hashs,
                             CS(a),
                         );
-                        match ana.as_ref().map(|x| x.refs_count()).unwrap_or(0) {
+                        match ana.as_ref().map(|x| x.estimated_refs_count()).unwrap_or(0) {
                             x if x > 2048 => NodeStore::insert_after_prepare(
                                 vacant,
                                 c.concat((BloomSize::Much,)),
@@ -1847,10 +1849,13 @@ impl<'a> JavaTreeGen<'a> {
             Some(label) => {
                 macro_rules! insert {
                     ( $c:expr, $t:ty ) => {{
-                        let it = ana.as_ref().unwrap().solver.iter_refs();
-                        let it =
-                            BulkHasher::<_, <$t as BF<[u8]>>::S, <$t as BF<[u8]>>::H>::from(it);
-                        log::trace!("it: {:?}", it.collect::<Vec<_>>());
+                        log::trace!(
+                            "it: {:?}",
+                            BulkHasher::<_, <$t as BF<[u8]>>::S, <$t as BF<[u8]>>::H>::from(
+                                ana.as_ref().unwrap().solver.iter_refs()
+                            )
+                            .collect::<Vec<_>>()
+                        );
                         let it = ana.as_ref().unwrap().solver.iter_refs();
                         let it =
                             BulkHasher::<_, <$t as BF<[u8]>>::S, <$t as BF<[u8]>>::H>::from(it);
@@ -1886,7 +1891,7 @@ impl<'a> JavaTreeGen<'a> {
                             label,
                             CS(a),
                         );
-                        match ana.as_ref().map(|x| x.refs_count()).unwrap_or(0) {
+                        match ana.as_ref().map(|x| x.estimated_refs_count()).unwrap_or(0) {
                             x if x > 2048 => NodeStore::insert_after_prepare(
                                 vacant,
                                 c.concat((BloomSize::Much,)),

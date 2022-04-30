@@ -5,6 +5,7 @@ use std::{
     ops::{Deref, Index},
 };
 
+use num::ToPrimitive;
 use string_interner::Symbol;
 use tuples::TupleCollect;
 
@@ -116,8 +117,9 @@ impl Solver {
         self.refs.is_empty() && self.decls.is_empty()
     }
 
-    pub(crate) fn refs_count(&self) -> usize {
-        self.refs.count_ones()
+    pub(crate) fn lower_estimate_refs_count(&self) -> u32 {
+        // self.refcount
+        self.refs.count_ones().to_u32().unwrap()
     }
     // pub fn refs(&self) -> impl Iterator<Item = LabelValue> + '_ {
     //     self.refs
@@ -201,16 +203,7 @@ impl Solver {
         cache: &mut HashMap<RefPtr, RefPtr>,
         other: ExplorableRef,
     ) -> RefPtr {
-        // log::trace!("int_ext   {:?} {:?}", other.rf, other);
         if let Some(x) = map.get(&other.rf) {
-            // log::trace!(
-            //     "int_ext m {:?} {:?}",
-            //     other.rf,
-            //     ExplorableRef {
-            //         rf:*x,
-            //         nodes: &self.nodes,
-            //     }
-            // );
             return *x;
         }
         if let Some(x) = cache.get(&other.rf) {
@@ -223,78 +216,39 @@ impl Solver {
                     rf: *x
                 },
             );
-            // log::trace!(
-            //     "int_ext c {:?} {:?}",
-            //     other.rf,
-            //     ExplorableRef {
-            //         rf:*x,
-            //         nodes: &self.nodes,
-            //     }
-            // );
             return *x;
         }
+
+        let mut rec = |&x: &usize| self.intern_external(map, cache, other.with(x));
+
         let r = match other.as_ref() {
             RefsEnum::Root => self.intern(RefsEnum::Root),
             RefsEnum::MaybeMissing => self.intern(RefsEnum::MaybeMissing),
             RefsEnum::Primitive(i) => self.intern(RefsEnum::Primitive(*i)),
             RefsEnum::Mask(o, p) => {
-                let o = self.intern_external(map, cache, other.with(*o));
-                let p = p
-                    .iter()
-                    .map(|x| self.intern_external(map, cache, other.with(*x)))
-                    .collect();
+                let o = rec(o);
+                let p = p.iter().map(rec).collect();
                 self.intern(RefsEnum::Mask(o, p))
             }
             RefsEnum::Or(p) => {
-                let p = p
-                    .iter()
-                    .map(|x| {
-                        let x = self.intern_external(map, cache, other.with(*x));
-                        // match &self.nodes[x] {
-                        //     RefsEnum::Or(v) => v.clone(),
-                        //     _ => vec![x].into(),
-                        // }
-                        x
-                    })
-                    .collect();
+                let p = p.iter().map(rec).collect();
                 self.intern(RefsEnum::Or(p))
             }
             RefsEnum::Invocation(o, i, p) => {
-                let o = self.intern_external(map, cache, other.with(*o));
-                let p = match p {
-                    Arguments::Unknown => Arguments::Unknown,
-                    Arguments::Given(p) => {
-                        let mut v = vec![];
-                        for x in p.deref() {
-                            let r = self.intern_external(map, cache, other.with(*x));
-                            v.push(r);
-                        }
-                        let p = v.into_boxed_slice();
-                        Arguments::Given(p)
-                    }
-                };
+                let o = rec(o);
+                let p = p.map(rec);
                 self.intern(RefsEnum::Invocation(o, *i, p))
             }
-            RefsEnum::ConstructorInvocation(o, p) => {
-                let i = self.intern_external(map, cache, other.with(*o));
-                let p = match p {
-                    Arguments::Unknown => Arguments::Unknown,
-                    Arguments::Given(p) => {
-                        let p = p
-                            .deref()
-                            .iter()
-                            .map(|x| self.intern_external(map, cache, other.with(*x)))
-                            .collect();
-                        Arguments::Given(p)
-                    }
-                };
+            RefsEnum::ConstructorInvocation(i, p) => {
+                let i = rec(i);
+                let p = p.map(rec);
                 let r = self.intern(RefsEnum::ConstructorInvocation(i, p));
                 assert_ne!(r, i);
                 r
             }
             x => {
                 let o = x.object().expect(&format!("should have an object {:?}", x));
-                let o = self.intern_external(map, cache, other.with(o));
+                let o = rec(&o);
                 self.intern(x.with_object(o))
             }
         };
@@ -304,14 +258,6 @@ impl Solver {
             other.as_ref(),
             self.nodes[r],
         );
-        // log::trace!(
-        //     "int_ext r {:?} {:?}",
-        //     other.rf,
-        //     ExplorableRef {
-        //         rf:r,
-        //         nodes: &self.nodes,
-        //     }
-        // );
         cache.insert(other.rf, r);
         r
     }
@@ -447,7 +393,7 @@ impl Solver {
     }
 }
 
-/// advanced insertions
+/// advanced insertions with local solving
 impl Solver {
     /// dedicated to solving references to localvariables
     pub(crate) fn local_solve_extend<'a>(&mut self, solver: &'a Solver) -> Internalizer<'a> {
@@ -588,7 +534,10 @@ impl Solver {
         cache.insert(other.rf, r);
         r
     }
+}
 
+/// advanced insertions
+impl Solver {
     /// copy all references in [`solver`] to current solver
     pub(crate) fn extend<'a>(&mut self, solver: &'a Solver) -> Internalizer<'a> {
         self.extend_map(solver, &mut Default::default(), Default::default())
@@ -627,6 +576,133 @@ impl Solver {
                     self.refs.set(r, true);
                 }
             };
+        }
+        // no need to extend decls, handled specifically given state
+        cached
+    }
+}
+
+#[derive(Clone)]
+struct CountedRefPtr {
+    ptr: RefPtr,
+    count: usize,
+}
+
+impl CountedRefPtr {
+    fn new(ptr: RefPtr) -> Self {
+        Self { ptr, count: 1 }
+    }
+}
+
+/// advanced counting insertions
+impl Solver {
+    /// copy a referencial element from another solver to the current one
+    /// also count exected number of unique flatten references
+    fn counted_intern_external(
+        &mut self,
+        cache: &mut HashMap<RefPtr, CountedRefPtr>,
+        other: ExplorableRef,
+    ) -> CountedRefPtr {
+        if let Some(x) = cache.get(&other.rf) {
+            assert!(
+                self.nodes[x.ptr].similar(other.as_ref()),
+                "{:?} ~ {:?}",
+                other,
+                ExplorableRef {
+                    nodes: &self.nodes,
+                    rf: x.ptr
+                },
+            );
+            return x.clone();
+        }
+
+        let mut rec = |x: usize| self.counted_intern_external(cache, other.with(x));
+
+        let r = match other.as_ref() {
+            RefsEnum::Root => CountedRefPtr::new(self.intern(RefsEnum::Root)),
+            RefsEnum::MaybeMissing => CountedRefPtr::new(self.intern(RefsEnum::MaybeMissing)),
+            RefsEnum::Primitive(i) => CountedRefPtr::new(self.intern(RefsEnum::Primitive(*i))),
+            RefsEnum::Mask(o, p) => {
+                let o = rec(*o);
+                let p = p.iter().map(|&x| rec(x).ptr).collect();
+                CountedRefPtr {
+                    ptr: self.intern(RefsEnum::Mask(o.ptr, p)),
+                    count: o.count,
+                }
+            }
+            RefsEnum::Or(p) => {
+                let mut count = 0;
+                let p = p
+                    .iter()
+                    .map(|&x| {
+                        let x = rec(x);
+                        count += x.count;
+                        x.ptr
+                    })
+                    .collect();
+
+                CountedRefPtr {
+                    ptr: self.intern(RefsEnum::Or(p)),
+                    count,
+                }
+            }
+            RefsEnum::Invocation(o, i, p) => {
+                let o = rec(*o);
+                let p = p.map(|x|rec(*x).ptr);
+
+                CountedRefPtr {
+                    ptr: self.intern(RefsEnum::Invocation(o.ptr, *i, p)),
+                    count: o.count,
+                }
+            }
+            RefsEnum::ConstructorInvocation(i, p) => {
+                let i = rec(*i);
+                let p = p.map(|x|rec(*x).ptr);
+                let ptr = self.intern(RefsEnum::ConstructorInvocation(i.ptr, p));
+                assert_ne!(ptr, i.ptr);
+                CountedRefPtr {
+                    ptr,
+                    count: i.count,
+                }
+            }
+            x => {
+                let o = x.object().expect(&format!("should have an object {:?}", x));
+                let o = rec(o);
+                let ptr = self.intern(x.with_object(o.ptr));
+                CountedRefPtr {
+                    ptr,
+                    count: o.count,
+                }
+            }
+        };
+        assert!(
+            self.nodes[r.ptr].similar(other.as_ref()),
+            "{:?} ~ {:?}",
+            other.as_ref(),
+            self.nodes[r.ptr],
+        );
+        cache.insert(other.rf, r.clone());
+        r
+    }
+
+    pub(crate) fn counted_extend<'a>(
+        &mut self,
+        solver: &'a Solver,
+    ) -> CountedInternalizer<'a> {
+        let mut cached = CountedInternalizer {
+            count: 0,
+            cache: Default::default(),
+            solver,
+        };
+        for r in solver.iter_refs() {
+            // TODO make it imperative ?
+            let r = self.counted_intern_external(&mut cached.cache, r);
+            cached.count += r.count;
+            let r = r.ptr;
+            if r >= self.refs.len() {
+                self.refs.resize(r + 1, false);
+            }
+            self.refs.set(r, true);
         }
         // no need to extend decls, handled specifically given state
         cached
@@ -1533,7 +1609,7 @@ impl Solver {
                             Some(self.intern(RefsEnum::Or(w)))
                         }
                     }
-                            .and_then(|o| handle(self, cache, oo, &o, i))
+                    .and_then(|o| handle(self, cache, oo, &o, i))
                 };
 
                 let r = SolvingResult { matched, waiting };
@@ -1796,7 +1872,7 @@ impl Solver {
                             Some(self.intern(RefsEnum::Or(w)))
                         }
                     }
-                            .and_then(|o| handle(self, cache, oo, &o, i))
+                    .and_then(|o| handle(self, cache, oo, &o, i))
                 };
 
                 let r = SolvingResult { matched, waiting };
@@ -2206,6 +2282,23 @@ impl Solver {
             _ => return false,
         };
         self.is_mm(r)
+    }
+}
+
+pub(crate) struct CountedInternalizer<'a> {
+    pub count: usize,
+    cache: HashMap<RefPtr, CountedRefPtr>,
+    solver: &'a Solver,
+}
+impl<'a> CountedInternalizer<'a> {
+    pub(crate) fn intern_external(&mut self, solver: &mut Solver, other: RefPtr) -> RefPtr {
+        let other = ExplorableRef {
+            rf: other,
+            nodes: &self.solver.nodes,
+        };
+        let r = solver.counted_intern_external(&mut self.cache, other);
+        self.count += r.count;
+        r.ptr
     }
 }
 

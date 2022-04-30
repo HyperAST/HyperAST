@@ -102,7 +102,7 @@ impl JavaAcc {
         self.metrics.acc(full_node.metrics);
 
         if let Some(ana) = full_node.ana {
-            if ana.refs_count() < MAX_REFS && self.skiped_ana == false {
+            if ana.estimated_refs_count() < MAX_REFS && self.skiped_ana == false {
                 ana.acc(&Type::Directory, &mut self.ana);
             } else {
                 self.skiped_ana = true;
@@ -115,7 +115,7 @@ impl JavaAcc {
         self.metrics.acc(full_node.metrics);
 
         if let Some(ana) = full_node.ana {
-            if ana.refs_count() < MAX_REFS && skiped_ana == false && self.skiped_ana == false {
+            if ana.estimated_refs_count() < MAX_REFS && skiped_ana == false && self.skiped_ana == false {
                 ana.acc(&Type::Directory, &mut self.ana);
             } else {
                 self.skiped_ana = true;

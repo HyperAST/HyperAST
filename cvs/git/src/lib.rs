@@ -21,7 +21,7 @@ pub type SimpleStores = hyper_ast::store::SimpleStores;
 // might also skip
 pub(crate) const PROPAGATE_ERROR_ON_BAD_CST_NODE: bool = false;
 
-pub(crate) const MAX_REFS: usize = 10000; //4096;
+pub(crate) const MAX_REFS: u32 = 10000; //4096;
 
 pub struct Diffs();
 pub struct Impacts();

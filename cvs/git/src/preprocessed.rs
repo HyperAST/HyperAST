@@ -968,7 +968,7 @@ impl PreProcessedRepository {
                     BasicGitObjects::Blob(x, name) => {
                         if !Self::is_handled(&name) {
                             continue;
-                        } else if let Some((already, _)) = self.object_map_java.get(&(x,name.clone())) {
+                        } else if let Some((already,_)) = self.object_map_java.get(&(x,name.clone())) {
                             // TODO reinit already computed node for post order
                             let full_node = already.clone();
 
@@ -1079,23 +1079,28 @@ impl PreProcessedRepository {
                 };
                 let ana = {
                     let ana = acc.ana;
-                    let c = ana.refs_count();
-                    log::info!("ref count in dir {}", c);
-                    log::debug!("refs in directory");
-                    for x in ana.display_refs(&self.main_stores().label_store) {
-                        log::debug!("    {}", x);
-                    }
-                    log::debug!("decls in directory");
-                    for x in ana.display_decls(&self.main_stores().label_store) {
-                        log::debug!("    {}", x);
-                    }
-                    if c < MAX_REFS {
-                        ana.resolve()
-                    } else {
+                    let c = ana.estimated_refs_count();
+                    if acc.skiped_ana {
+                        log::info!("shop ana with at least {} refs", ana.lower_estimate_refs_count());
                         ana
+                    } else {
+                        log::info!("ref count lower estimate in dir {}", ana.lower_estimate_refs_count());
+                        log::debug!("refs in directory");
+                        for x in ana.display_refs(&self.main_stores().label_store) {
+                            log::debug!("    {}", x);
+                        }
+                        log::debug!("decls in directory");
+                        for x in ana.display_decls(&self.main_stores().label_store) {
+                            log::debug!("    {}", x);
+                        }
+                        if c < MAX_REFS {
+                            ana.resolve()
+                        } else {
+                            ana
+                        }
                     }
                 };
-                log::info!("ref count in dir after resolver {}", ana.refs_count());
+                log::info!("ref count in dir after resolver {}", ana.lower_estimate_refs_count());
                 log::debug!("refs in directory after resolve: ");
                 for x in ana.display_refs(&self.main_stores().label_store) {
                     log::debug!("    {}", x);
@@ -1150,7 +1155,7 @@ impl PreProcessedRepository {
                                 CS(acc.children_names),
                                 CS(acc.children),
                             );
-                            match ana.refs_count() {
+                            match ana.estimated_refs_count() {
                                 x if x > 2048 || acc.skiped_ana => NodeStore::insert_after_prepare(
                                     vacant,
                                     c.concat((BloomSize::Much,)),

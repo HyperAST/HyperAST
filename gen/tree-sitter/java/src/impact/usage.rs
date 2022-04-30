@@ -1533,6 +1533,7 @@ impl<'a> RefsFinder<'a> {
             } else if t == Type::Spaces {
             } else if t == Type::Annotation {
             } else if t == Type::MarkerAnnotation {
+            } else if is_individually_matched(t) || is_never_reference(t) {
             } else {
                 missing_rule!("exact_match_object_creation_expression missing' {:?}", t)
             }
@@ -1637,6 +1638,7 @@ impl<'a> RefsFinder<'a> {
                     }
                 }
                 return;
+            } else if is_individually_matched(t) || is_never_reference(t) {
             } else {
                 missing_rule!("exact_match_object_creation_expression missing'' {:?}", t)
             }

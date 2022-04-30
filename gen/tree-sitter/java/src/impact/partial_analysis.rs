@@ -3,6 +3,7 @@ use std::{collections::HashMap, fmt::Display, hash::Hash, ops::Deref};
 use bitvec::order::Lsb0;
 use enumset::{enum_set, EnumSet, EnumSetType};
 use hyper_ast::types::{LabelStore, Type};
+use num::ToPrimitive;
 
 use crate::impact::{element::{Arguments, ExplorableRef, ListSet}, solver::{SolvingAssocTable, SolvingResult}};
 
@@ -78,6 +79,7 @@ pub fn leaf_state(
 pub struct PartialAnalysis {
     current_node: State<RefPtr, LabelPtr>,
     pub solver: Solver,
+    refs_count: u32,
 }
 
 impl Default for PartialAnalysis {
@@ -85,6 +87,7 @@ impl Default for PartialAnalysis {
         Self {
             current_node: State::None,
             solver: Default::default(),
+            refs_count: 0,
         }
     }
 }
@@ -363,10 +366,14 @@ impl PartialAnalysis {
             }
             _ => (),
         };
-        let (_, solver) = solver.resolve(cache);
+        let (_, mut prev_solver) = solver.resolve(cache);
+        let mut solver = Solver::default();
+        let mut counted_intern = solver.counted_extend(&prev_solver);
+        let current_node = self.current_node.map(|x| counted_intern.intern_external(&mut solver,x),|x| x);
         Self {
-            current_node: self.current_node,
+            current_node,
             solver,
+            refs_count:counted_intern.count.to_u32().unwrap(),
         }
     }
 
@@ -390,8 +397,12 @@ impl PartialAnalysis {
         }
     }
 
-    pub fn refs_count(&self) -> usize {
-        self.solver.refs_count()
+    pub fn lower_estimate_refs_count(&self) -> u32 {
+        self.solver.lower_estimate_refs_count()
+    }
+    
+    pub fn estimated_refs_count(&self) -> u32 {
+        self.refs_count.max(self.solver.lower_estimate_refs_count()*2)
     }
 
     pub fn print_decls<LS: LabelStore<str, I = RawLabelPtr>>(&self, leafs: &LS) {
@@ -428,6 +439,7 @@ impl PartialAnalysis {
             PartialAnalysis {
                 current_node: State::None,
                 solver,
+                refs_count:0,
             }
         } else if kind == &Type::Program {
             // default_imports(&mut solver, intern_label);
@@ -443,6 +455,7 @@ impl PartialAnalysis {
                     local: vec![],
                 },
                 solver,
+                refs_count:0,
             }
         } else if kind == &Type::PackageDeclaration {
             // default_imports(&mut solver, |x| intern_label(x));
@@ -453,6 +466,7 @@ impl PartialAnalysis {
             PartialAnalysis {
                 current_node: State::None, //ScopedIdentifier(i),
                 solver,
+                refs_count:0,
             }
         } else if kind == &Type::This {
             let i = solver.intern(RefsEnum::MaybeMissing);
@@ -460,6 +474,7 @@ impl PartialAnalysis {
             PartialAnalysis {
                 current_node: State::This(i),
                 solver,
+                refs_count:0,
             }
         } else if kind == &Type::Super {
             let i = solver.intern(RefsEnum::MaybeMissing);
@@ -467,6 +482,7 @@ impl PartialAnalysis {
             PartialAnalysis {
                 current_node: State::Super(i),
                 solver,
+                refs_count:0,
             }
         } else if kind.is_literal() {
             let i = if kind == &Type::StringLiteral {
@@ -483,6 +499,7 @@ impl PartialAnalysis {
             PartialAnalysis {
                 current_node: State::LiteralType(i),
                 solver,
+                refs_count:0,
             }
         } else if kind.is_primitive() {
             // println!("{:?}", label);
@@ -494,6 +511,7 @@ impl PartialAnalysis {
             PartialAnalysis {
                 current_node: State::ScopedTypeIdentifier(i),
                 solver,
+                refs_count:0,
             }
             // panic!("{:?} {:?}",kind,label);
         } else if kind.is_type_declaration() {
@@ -518,6 +536,7 @@ impl PartialAnalysis {
                     members: vec![],
                 },
                 solver,
+                refs_count:0,
             }
         } else if kind == &Type::TypeParameter {
             let r = solver.intern(RefsEnum::Root);
@@ -536,6 +555,7 @@ impl PartialAnalysis {
                     members: vec![],
                 },
                 solver,
+                refs_count:0,
             }
         } else if kind == &Type::ClassBody {
             // TODO constructor solve
@@ -560,6 +580,7 @@ impl PartialAnalysis {
             PartialAnalysis {
                 current_node: State::None,
                 solver,
+                refs_count:0,
             }
         } else {
             let is_lowercase = label.map(|x| x.into());
@@ -567,6 +588,7 @@ impl PartialAnalysis {
             PartialAnalysis {
                 current_node: leaf_state(kind, label, is_lowercase),
                 solver,
+                refs_count:0,
             }
         }
     }
@@ -6140,7 +6162,7 @@ where
     pub fn take(&mut self) -> Self {
         std::mem::replace(self, State::None)
     }
-    pub fn map<N, L, FN: Fn(Node) -> N, FL: Fn(Leaf) -> L>(&self, f: FN, g: FL) -> State<N, L>
+    pub fn map<N, L, FN: FnMut(Node) -> N, FL: Fn(Leaf) -> L>(&self, mut f: FN, g: FL) -> State<N, L>
     where
         L: std::cmp::Eq + std::hash::Hash,
         N: std::cmp::Eq + std::hash::Hash,
