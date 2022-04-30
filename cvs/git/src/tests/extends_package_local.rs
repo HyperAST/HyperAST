@@ -1026,7 +1026,7 @@ fn run8(text: &[u8]) {
             let f = IdentifierFormat::from(i);
             let i = stores.label_store.get_or_insert(i);
             let i = LabelPtr::new(i, f);
-            ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
+            ana.solver.intern_ref(RefsEnum::ScopedIdentifier(o, i))
         }};
     }
     let mut sp_store =
@@ -1057,6 +1057,21 @@ fn run8(text: &[u8]) {
     // x.goto(xx, 6);
     // let bb = stores.node_store.resolve(xx);
     // assert_eq!(bb.get_type(),Type::ClassBody);
+
+    {
+        let it = ana.solver.iter_refs();
+        type T = Bloom<&'static [u8], u64>;
+        let it = BulkHasher::<_, <T as BF<[u8]>>::S, <T as BF<[u8]>>::H>::from(it);
+        // let it:Vec<_> = it.collect();
+        let bloom = T::from(it);
+        eprintln!("search bloom: {:?}", bloom)
+    } 
+    {
+        let d = ana.solver.nodes.with(i);
+        type T = Bloom<&'static [u8], u64>;
+        let r = CachedHasher::<usize, <T as BF<[u8]>>::S, <T as BF<[u8]>>::H>::once(d);
+        eprintln!("CachedHasher result: {:?}", r)
+    }
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 1);
 }
@@ -1159,6 +1174,37 @@ fn run10(text: &[u8]) {
     // let bb = stores.node_store.resolve(xx);
     // assert_eq!(bb.get_type(),Type::ClassBody);
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
+    assert_eq!(r.len(), 0);
+    println!("-------------2----------------");
+    let i = scoped!(mm, "node");
+    let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let bb = stores.node_store.resolve(a.local.compressed_node);
+    assert_eq!(bb.get_type(), Type::Program);
+    let xx = bb.get_child(&8);
+    x.goto(xx, 8);
+    let bb = stores.node_store.resolve(xx);
+    assert_eq!(bb.get_type(), Type::ClassDeclaration);
+    let xx = bb.get_child(&9);
+    x.goto(xx, 9);
+    let bb = stores.node_store.resolve(xx);
+    assert_eq!(bb.get_type(), Type::ClassBody);
+    let xx = bb.get_child(&6);
+    x.goto(xx, 6);
+    let bb = stores.node_store.resolve(xx);
+    assert_eq!(bb.get_type(),Type::MethodDeclaration);
+    let xx = bb.get_child(&7);
+    x.goto(xx, 7);
+    let bb = stores.node_store.resolve(xx);
+    assert_eq!(bb.get_type(),Type::Block);
+    let xx = bb.get_child(&2);
+    x.goto(xx, 2);
+    let bb = stores.node_store.resolve(xx);
+    assert_eq!(bb.get_type(),Type::EnhancedForStatement);
+    let xx = bb.get_child(&10);
+    x.goto(xx, 10);
+    let bb = stores.node_store.resolve(xx);
+    assert_eq!(bb.get_type(),Type::Block);
+    let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 1);
 }
 
@@ -1180,36 +1226,46 @@ import java.util.List;
 public class Tacos<K, V extends String> implements ITacos<V> {
 
         public Tacos() {
-                <String>this(1);
+            <String>this(1);
         }
 
         public <T> Tacos(int nbTacos) {
         }
 
         public void m() {
-                List<String> l = new ArrayList<>();
-                List l2;
-                IBurritos<?, ?> burritos = new Burritos<>();
-                List<?> l3 = new ArrayList<Object>();
-                new <Integer>Tacos<Object, String>();
-                new Tacos<>();
+            for (ControlFlowNode node : cfg.vertexSet()) {
+                if (node.getKind() == BranchKind.BEGIN) {
+                    // Dont add a state for the BEGIN node
+                    continue;
+                }
+            }
+            List<String> l = new ArrayList<>();
+            List l2;
+            IBurritos<?, ?> burritos = new Burritos<>();
+            List<?> l3 = new ArrayList<Object>();
+            new <Integer>Tacos<Object, String>();
+            new Tacos<>();
+        }
+        
+        public List<Label> getLabels(int state) {
+            return labels.get(state);
         }
 
         public void m2() {
-                this.<String>makeTacos(null);
-                this.makeTacos(null);
+            this.<String>makeTacos(null);
+            this.makeTacos(null);
         }
 
         public void m3() {
-                new SimpleTypeVisitor7<Tacos, Void>() {
-                };
-                new javax.lang.model.util.SimpleTypeVisitor7<Tacos, Void>() {
-                };
+            new SimpleTypeVisitor7<Tacos, Void>() {
+            };
+            new javax.lang.model.util.SimpleTypeVisitor7<Tacos, Void>() {
+            };
         }
 
         public <V, C extends List<V>> void m4() {
-                Tacos.<V, C>makeTacos();
-                Tacos.makeTacos();
+            Tacos.<V, C>makeTacos();
+            Tacos.makeTacos();
         }
 
         public static <V, C extends List<V>> List<C> makeTacos() {

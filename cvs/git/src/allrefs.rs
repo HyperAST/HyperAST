@@ -43,7 +43,16 @@ pub fn write_referencial_relations<W: Write>(
             writeln!(out, ",").unwrap();
         }
         write!(out, r#"{{"module":"#).unwrap();
-        write!(out, "\"{}\"", module.make_position(&prepro.main_stores).file().to_str().unwrap()).unwrap();
+        write!(
+            out,
+            "\"{}\"",
+            module
+                .make_position(&prepro.main_stores)
+                .file()
+                .to_str()
+                .unwrap()
+        )
+        .unwrap();
         writeln!(out, r#","content": ["#).unwrap();
         let mut writer = Writer::new(out);
         let declarations = iter_declarations(prepro, module);
@@ -55,12 +64,7 @@ pub fn write_referencial_relations<W: Write>(
                 let decl = decl.make_position(&prepro.main_stores);
                 let time = now.elapsed().as_nanos();
                 log::info!("time taken for refs search of {} :\t{}", decl, time);
-                writer.positions_of_referencial_relations(
-                    decl,
-                    sk,
-                    time,
-                    references,
-                );
+                writer.positions_of_referencial_relations(decl, sk, time, references);
                 // writer.summary_of_referencial_relations(decl, rk, time, references);
             }
         }
@@ -795,7 +799,7 @@ impl<'a> RefsFinder<'a> {
                 let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
                 let bb = self.prepro.main_stores.node_store.resolve(xx);
                 let tt = bb.get_type();
-                let (xx,bb,tt) = if tt == Type::ObjectCreationExpression {
+                let (xx, bb, tt) = if tt == Type::ObjectCreationExpression {
                     return Err(SearchStopEvent::Blocked);
                 } else if tt == Type::EnumBody {
                     for (i, xx) in b.get_children().iter().enumerate() {
@@ -816,11 +820,11 @@ impl<'a> RefsFinder<'a> {
                     if !tt.is_type_declaration() {
                         panic!("{:?}", tt);
                     }
-                    (xx,bb,tt)
+                    (xx, bb, tt)
                 } else if !tt.is_type_declaration() {
                     panic!("{:?}", tt);
                 } else {
-                    (xx,bb,tt)
+                    (xx, bb, tt)
                 };
                 let name = {
                     let i = self.extract_identifier(&bb).unwrap();
