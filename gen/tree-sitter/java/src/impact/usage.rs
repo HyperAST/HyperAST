@@ -83,8 +83,8 @@ impl<'a> RefsFinder<'a> {
     /// Find all references to `target` that was declared in `package`
     /// WARN maybe do not search targets that end with unqualified this, use find_all_with_this it it works
     /// returns the indexes that should be used on self.sp_store the `StructuralPositionStore`
-    pub fn find_all(mut self, package: RefPtr, target: RefPtr, mut x: Scout) -> Vec<SpHandle> {
-        self.find_refs::<false>(package, target, &mut x);
+    pub fn find_all(mut self, package: RefPtr, target: RefPtr, mut scout: Scout) -> Vec<SpHandle> {
+        self.find_refs::<false>(package, target, &mut scout);
         self.refs
     }
     /// Find all references to `target` that was declared in `package`
@@ -94,19 +94,21 @@ impl<'a> RefsFinder<'a> {
         mut self,
         package: RefPtr,
         target: RefPtr,
-        mut x: Scout,
+        mut scout: Scout,
     ) -> Vec<SpHandle> {
-        self.find_refs::<IM>(package, target, &mut x);
+        self.find_refs::<IM>(package, target, &mut scout);
         self.refs
     }
     /// Find all references to `target` that was declared in `package`
     /// WARN do not search targets that end with unqualified this, use find_ref_this
     /// returns the indexes that should be used on self.sp_store the `StructuralPositionStore`
-    pub fn find_all_is_this(mut self, package: RefPtr, mut x: Scout) -> Vec<SpHandle> {
+    pub fn find_all_is_this(mut self, package: RefPtr, mut scout: Scout) -> Vec<SpHandle> {
         let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
         let this = self.ana.solver.intern(RefsEnum::This(mm));
-        self.find_constructors(x.clone());
-        self.find_refs_with_this(package, this, &mut x);
+        self.find_constructors(scout.clone());
+        self.sp_store.check_with(&self.stores, &scout).expect("find_all_is_this before");
+        self.find_refs_with_this(package, this, &mut scout);
+        self.sp_store.check_with(&self.stores, &scout).expect("find_all_is_this after");
         self.refs
     }
 
@@ -117,6 +119,7 @@ impl<'a> RefsFinder<'a> {
         target: RefPtr,
         scout: &mut Scout,
     ) -> Vec<RefPtr> {
+        self.sp_store.check_with(&self.stores, scout).expect("find_refs");
         let current = scout.node_always(&self.sp_store);
         let b = self.stores.node_store.resolve(current);
         let t = b.get_type();
@@ -564,11 +567,11 @@ impl<'a> RefsFinder<'a> {
         let mut v: Vec<usize> = vec![];
         log::debug!("c_count {}",b.child_count());
         // scout.down();
-        let mut i = 0;
-        for x in b.get_children().clone() {
+
+        for (i, x) in b.get_children().clone().iter().enumerate() {
             // scout.inc(*x);
+            assert_eq!(current,scout.node_always(&self.sp_store));
             scout.goto(*x, i);
-            i += 1;
             log::trace!(
                 "rec {} search ref {}",
                 i,
@@ -1263,7 +1266,7 @@ impl<'a> RefsFinder<'a> {
                         if l != i {
                             // log::debug!("not matched"); // TODO
                         } else {
-                            log::debug!("success 4");
+                            log::debug!("success 4 2");
                             // scout.up(self.sp_store);
                             scout.goto(x, j as usize);
                             self.successful_match(scout);
@@ -1304,6 +1307,9 @@ impl<'a> RefsFinder<'a> {
         i: &LabelIdentifier,
         scout: &mut Scout,
     ) {
+        if &RefsEnum::MaybeMissing != self.ana.solver.nodes.with(o).as_ref() {
+            return;
+        }
         assert!(b.has_children());
         let (r, t,j,x) = {
             let x = b.get_child(&0);
@@ -2160,6 +2166,10 @@ impl<'a> RefsFinder<'a> {
         self.sp_store.check(&self.stores).expect("aa");
         scout.check(&self.stores).expect("bb");
         let r = self.sp_store.push(scout);
+        if let Err(e) = self.sp_store.check(&self.stores) {
+            log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+            log::error!("corrupted scout: {}", e)
+        }
         let x = scout.node_always(&self.sp_store);
         let b = self.stores.node_store.resolve(x);
         let t = b.get_type();
@@ -2174,6 +2184,10 @@ impl<'a> RefsFinder<'a> {
             log::debug!("abort match because of relax");
             return;
         };
+        if let Err(e) = scout.check(&self.stores) {
+            log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+            log::error!("corrupted scout'")
+        }
         // handle body of ObjectCreationExpression
         {
             log::debug!("zzz {:?}", scout.make_position(&self.sp_store, self.stores));
@@ -2225,7 +2239,7 @@ impl<'a> RefsFinder<'a> {
         let r = self.sp_store.push(&mut scout);
         if let Err(e) = self.sp_store.check(&self.stores) {
             log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-            log::error!("corrupted scout: {}", e)
+            log::error!("corrupted scout'': {}", e)
         } else {
             self.refs.push(r);
         }

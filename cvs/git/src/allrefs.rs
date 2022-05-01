@@ -618,7 +618,7 @@ impl<'a> RefsFinder<'a> {
         }
     }
 
-    fn init_type_decl<'b>(&mut self, r: &mut Vec<SpHandle>, decl: &Scout) -> RefPtr {
+        fn init_type_decl<'b>(&mut self, r: &mut Vec<SpHandle>, decl: &Scout) -> RefPtr {
         let b = self
             .prepro
             .main_stores
@@ -1185,6 +1185,7 @@ impl<'a> RefsFinder<'a> {
     }
 
     fn search(&mut self, p: &RefPtr, i: &RefPtr, s: &Scout) -> Vec<SpHandle> {
+        // self.structural_positions.check_with(&self.prepro.main_stores, s).expect("search");
         usage::RefsFinder::new(
             &self.prepro.main_stores,
             &mut self.ana,

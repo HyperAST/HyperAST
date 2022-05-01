@@ -1,15 +1,16 @@
 use core::{fmt, panic};
 use std::{
     fmt::{Debug, Display},
+    io::stdout,
     iter::Peekable,
     ops::AddAssign,
-    path::{Path, PathBuf}, io::stdout,
+    path::{Path, PathBuf},
 };
 
 use num::ToPrimitive;
 
 use crate::{
-    nodes::{self, print_tree_syntax, Space, IoOut},
+    nodes::{self, print_tree_syntax, IoOut, Space},
     store::{defaults::NodeIdentifier, SimpleStores},
     types::{LabelStore, Labeled, Tree, Type, Typed, WithChildren},
 };
@@ -609,7 +610,15 @@ impl Scout {
 
 impl From<(StructuralPosition, usize)> for Scout {
     fn from((path, root): (StructuralPosition, usize)) -> Self {
-        // println!("from {} {:?}", root, path);
+        let path = if !path.offsets.is_empty() && path.offsets[0] == 0 {
+            assert_eq!(root, 0);
+            StructuralPosition {
+                nodes: path.nodes[1..].to_owned(),
+                offsets: path.offsets[1..].to_owned(),
+            }
+        } else {
+            path
+        };
         Self { path, root }
     }
 }
@@ -692,6 +701,9 @@ impl<'a> ExploreStructuralPositions<'a> {
                         &p,
                         &mut Into::<IoOut<_>>::into(stdout()),
                     );
+                    if self.peek_node().unwrap() != b.get_children()[o - 1] {
+                        log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+                    }
                     assert_eq!(
                         self.peek_node().unwrap(),
                         b.get_children()[o - 1],
@@ -815,6 +827,50 @@ impl StructuralPositionStore {
     /// intended to easily compare to positions from other ASTs eg. spoon
     pub fn to_relaxed_positions(&self, stores: &SimpleStores) -> Vec<Position> {
         todo!()
+    }
+
+    pub fn check_with(&self, stores: &SimpleStores, scout: &Scout) -> Result<(), String> {
+        scout.path.check(stores).map_err(|_| "bad path")?;
+        if self.nodes.is_empty() {
+            return Ok(());
+        }
+        let mut i = scout.root;
+        if !scout.path.nodes.is_empty() {
+            let e = scout.path.nodes[0];
+            let p = self.nodes[i];
+            let o = scout.path.offsets[0];
+            if o == 0 {
+                if i != 0 {
+                    return Err(format!("bad offset"));
+                }
+                return Ok(());
+            }
+            let o = o - 1;
+            let b = stores.node_store.resolve(p);
+            if !b.has_children() || e != b.get_child(&o.to_u16().expect("too big")) {
+                return Err(if b.has_children() {
+                    format!("error on link: {} {} {:?}", b.child_count(), o, p,)
+                } else {
+                    format!("error no children on link: {} {:?}", o, p,)
+                });
+            }
+        }
+
+        while i > 0 {
+            let e = self.nodes[i];
+            let o = self.offsets[i] - 1;
+            let p = self.nodes[self.parents[i]];
+            let b = stores.node_store.resolve(p);
+            if !b.has_children() || e != b.get_child(&o.to_u16().expect("too big")) {
+                return Err(if b.has_children() {
+                    format!("error: {} {} {:?}", b.child_count(), o, p,)
+                } else {
+                    format!("error no children: {} {:?}", o, p,)
+                });
+            }
+            i -= 1;
+        }
+        Ok(())
     }
 
     pub fn check(&self, stores: &SimpleStores) -> Result<(), String> {
