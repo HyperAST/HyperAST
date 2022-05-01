@@ -857,6 +857,14 @@ impl<'a> RefsFinder<'a> {
                     .ok_or(SearchStopEvent::NoMore);
             } else if t == Type::ObjectCreationExpression {
                 return Err(SearchStopEvent::Blocked);
+            } else if t == Type::ConstructorBody {
+                let mut scout = cursor.scout.clone();
+                for (i, xx) in b.get_children().iter().skip(prev_offset).enumerate() {
+                    scout.goto(*xx, i);
+                    r.extend(self.search(&mm, &qual_ref, &cursor.scout));
+                    scout.up(&self.structural_positions);
+                }
+                return Err(SearchStopEvent::Blocked);
             } else if t == Type::Block {
                 let mut scout = cursor.scout.clone();
                 for (i, xx) in b.get_children().iter().skip(prev_offset).enumerate() {
