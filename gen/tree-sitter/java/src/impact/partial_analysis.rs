@@ -4608,8 +4608,8 @@ impl PartialAnalysis {
                         State::FieldIdentifier(i) => State::FieldIdentifier(sync!(i)),
                         State::MethodReference(i) => State::MethodReference(sync!(i)),
                         State::LambdaExpression(i) => State::LambdaExpression(sync!(i)),
-                        State::None => panic!(),
-                        x => todo!("{:?}", x),
+                        State::None => {log::warn!("TernaryExpression Condition None");State::None},
+                        x => missing_rule!("{:?} Condition {:?}", kind, x),
                     },
                     // TernaryExpression (x,y)
                     (State::LiteralType(t), y) if kind == &Type::TernaryExpression => {
@@ -4624,12 +4624,13 @@ impl PartialAnalysis {
                             State::ScopedIdentifier(_) => (),
                             State::LambdaExpression(_) => (),
                             State::MethodReference(_) => (),
-                            State::None => panic!(),
-                            x => todo!("{:?}", x),
+                            State::None => log::warn!("TernaryExpression LiteralType None"),
+                            x => log::warn!("TernaryExpression LiteralType {:?}", &x),
                         };
                         State::LiteralType(t)
                     }
                     (x, State::LiteralType(t)) if kind == &Type::TernaryExpression => {
+                        assert_ne!(x, State::Condition);
                         match x {
                             State::LiteralType(_) => (),
                             State::SimpleIdentifier(_, i) => {
@@ -4640,10 +4641,11 @@ impl PartialAnalysis {
                             State::ScopedIdentifier(_) => (),
                             State::LambdaExpression(_) => (),
                             State::MethodReference(_) => (),
-                            State::None => panic!(),
-                            x => todo!("{:?}", x),
+                            State::This(_) => (),
+                            State::Super(_) => (),
+                            State::None => log::warn!("TernaryExpression None LiteralType"),
+                            x => log::warn!("TernaryExpression {:?} LiteralType", &x),
                         };
-                        assert_ne!(x, State::Condition);
                         let t = sync!(t);
                         State::LiteralType(t)
                     }
@@ -4659,15 +4661,17 @@ impl PartialAnalysis {
                             State::ScopedIdentifier(_) => (),
                             State::LambdaExpression(_) => (),
                             State::MethodReference(_) => (),
-                            State::None => panic!(),
-                            x => todo!("{:?}", x),
+                            State::This(_) => (),
+                            State::Super(_) => (),
+                            State::None => log::warn!("TernaryExpression ScopedIdentifier None"),
+                            x => log::warn!("TernaryExpression ScopedIdentifier {:?}", x),
                         };
                         let i = scoped_ref!(mm!(), i);
                         State::ScopedIdentifier(i)
                     }
                     (State::ScopedIdentifier(i), y) if kind == &Type::TernaryExpression => {
                         match y {
-                            State::LiteralType(_) => (),
+                            State::LiteralType(_) => panic!(),
                             State::SimpleIdentifier(_, i) => {
                                 scoped_ref!(mm!(), i);
                             }
@@ -4677,8 +4681,10 @@ impl PartialAnalysis {
                             State::ScopedIdentifier(_) => (),
                             State::LambdaExpression(_) => (),
                             State::MethodReference(_) => (),
-                            State::None => panic!(),
-                            x => todo!("{:?}", x),
+                            State::This(_) => (),
+                            State::Super(_) => (),
+                            State::None => log::warn!("TernaryExpression ScopedIdentifier None"),
+                            x => log::warn!("TernaryExpression ScopedIdentifier {:?}", x),
                         };
                         State::ScopedIdentifier(i)
                     }
