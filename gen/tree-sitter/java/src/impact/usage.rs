@@ -2191,6 +2191,7 @@ impl<'a> RefsFinder<'a> {
                     scout.goto(x, cs.len() - 1);
                     let r = self.sp_store.push(&mut scout);
                     if let Err(e) = self.sp_store.check(&self.stores) {
+                        log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
                         log::error!("corrupted scout class body: {}", e)
                     } else {
                         self.refs.push(r);
@@ -2209,6 +2210,7 @@ impl<'a> RefsFinder<'a> {
                     scout.up(&self.sp_store).expect("up");
                     scout.check(&self.stores).expect("dd");
                     if let Err(e) = self.sp_store.check(&self.stores) {
+                        log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
                         log::error!("corrupted scout after class body: {}", e);
                         return;
                     } else {
@@ -2222,6 +2224,7 @@ impl<'a> RefsFinder<'a> {
         scout.check(&self.stores).expect("dd");
         let r = self.sp_store.push(&mut scout);
         if let Err(e) = self.sp_store.check(&self.stores) {
+            log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
             log::error!("corrupted scout: {}", e)
         } else {
             self.refs.push(r);
