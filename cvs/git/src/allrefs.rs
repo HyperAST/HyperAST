@@ -372,7 +372,9 @@ impl<'a> RefsFinder<'a> {
 
         let mut cursor = Cursor { scout, prev, curr };
 
+        log::trace!("go_through_type_declarations");
         let qual_ref = self.go_through_type_declarations(r, prev_offset, &mut cursor, qual_ref)?;
+        log::trace!("go_through_program");
         let (package_ref, fq_decl_ref) = self.go_through_program(r, &mut cursor, qual_ref)?;
         {
             let mut scout = decl.clone();
@@ -380,11 +382,15 @@ impl<'a> RefsFinder<'a> {
             let curr = scout.up(&self.structural_positions);
 
             let mut cursor = Cursor { scout, prev, curr };
+            log::trace!("go_through_type_declarations_with_fully_qual_ref");
             self.go_through_type_declarations_with_fully_qual_ref(r, &mut cursor, fq_decl_ref)
                 .unwrap_or(());
         }
+        log::trace!("go_through_package");
         self.go_through_package(r, &mut cursor, mirror_packages, &package_ref, &fq_decl_ref)?;
+        log::trace!("go_through_directories");
         self.go_through_directories(r, &mut cursor, &package_ref, &fq_decl_ref, limit)?;
+        log::trace!("go_through_folders");
         self.go_through_folders(r, &mut cursor, &package_ref, &fq_decl_ref, other_folders)?;
 
         Ok(())
@@ -618,7 +624,7 @@ impl<'a> RefsFinder<'a> {
         }
     }
 
-        fn init_type_decl<'b>(&mut self, r: &mut Vec<SpHandle>, decl: &Scout) -> RefPtr {
+    fn init_type_decl<'b>(&mut self, r: &mut Vec<SpHandle>, decl: &Scout) -> RefPtr {
         let b = self
             .prepro
             .main_stores
@@ -720,7 +726,7 @@ impl<'a> RefsFinder<'a> {
                 if tt == Type::ObjectCreationExpression {
                     return Err(SearchStopEvent::Blocked);
                 } else if tt == Type::EnumBody {
-                    for (i, xx) in b.get_children().iter().enumerate() {
+                    for (i, xx) in bb.get_children().iter().enumerate() {
                         cursor.scout.goto(*xx, i);
                         if Some(*xx) != cursor.prev.clone() {
                             // search ?.A or ?.B.A or ...
@@ -789,23 +795,27 @@ impl<'a> RefsFinder<'a> {
                     cursor.scout.goto(*xx, i);
                     if Some(*xx) != cursor.prev.clone() {
                         // search ?.A or ?.B.A or ...
+                        log::trace!("go_through_type_declarations s1");
                         r.extend(self.search(&mm, &qual_ref, &cursor.scout));
                     }
                     cursor.scout.up(&self.structural_positions);
                 }
                 // TODO do things to find type of field at the same level than type decl
                 // should loop through siblings
+                // self.structural_positions.check_with(&self.prepro.main_stores, &cursor.scout).expect("before");
                 self.up(cursor);
+                // self.structural_positions.check_with(&self.prepro.main_stores, &cursor.scout).expect("after");
                 let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
                 let bb = self.prepro.main_stores.node_store.resolve(xx);
                 let tt = bb.get_type();
                 let (xx, bb, tt) = if tt == Type::ObjectCreationExpression {
                     return Err(SearchStopEvent::Blocked);
                 } else if tt == Type::EnumBody {
-                    for (i, xx) in b.get_children().iter().enumerate() {
+                    for (i, xx) in bb.get_children().iter().enumerate() {
                         cursor.scout.goto(*xx, i);
                         if Some(*xx) != cursor.prev.clone() {
                             // search ?.A or ?.B.A or ...
+                            log::trace!("go_through_type_declarations s2");
                             r.extend(self.search(&mm, &qual_ref, &cursor.scout));
                         }
                         cursor.scout.up(&self.structural_positions);
@@ -846,6 +856,7 @@ impl<'a> RefsFinder<'a> {
                         &self.prepro.main_stores.label_store
                     ))
                 );
+                log::trace!("go_through_type_declarations s3");
                 r.extend(self.search(&mm, &qual_ref, &cursor.scout));
                 // TODO do things to find type of field at the same level than type decl
                 // should loop through members searching for parent qualified
@@ -861,6 +872,7 @@ impl<'a> RefsFinder<'a> {
                 let mut scout = cursor.scout.clone();
                 for (i, xx) in b.get_children().iter().skip(prev_offset).enumerate() {
                     scout.goto(*xx, i);
+                    log::trace!("go_through_type_declarations s4");
                     r.extend(self.search(&mm, &qual_ref, &cursor.scout));
                     scout.up(&self.structural_positions);
                 }
@@ -869,6 +881,7 @@ impl<'a> RefsFinder<'a> {
                 let mut scout = cursor.scout.clone();
                 for (i, xx) in b.get_children().iter().skip(prev_offset).enumerate() {
                     scout.goto(*xx, i);
+                    log::trace!("go_through_type_declarations s5");
                     r.extend(self.search(&mm, &qual_ref, &cursor.scout));
                     scout.up(&self.structural_positions);
                 }
@@ -1185,7 +1198,9 @@ impl<'a> RefsFinder<'a> {
     }
 
     fn search(&mut self, p: &RefPtr, i: &RefPtr, s: &Scout) -> Vec<SpHandle> {
-        // self.structural_positions.check_with(&self.prepro.main_stores, s).expect("search");
+        // self.structural_positions
+        //     .check_with(&self.prepro.main_stores, s)
+        //     .expect("search");
         usage::RefsFinder::new(
             &self.prepro.main_stores,
             &mut self.ana,

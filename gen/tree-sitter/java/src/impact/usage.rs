@@ -84,6 +84,7 @@ impl<'a> RefsFinder<'a> {
     /// WARN maybe do not search targets that end with unqualified this, use find_all_with_this it it works
     /// returns the indexes that should be used on self.sp_store the `StructuralPositionStore`
     pub fn find_all(mut self, package: RefPtr, target: RefPtr, mut scout: Scout) -> Vec<SpHandle> {
+        // self.sp_store.check_with(&self.stores, &scout).expect("find_all before");
         self.find_refs::<false>(package, target, &mut scout);
         self.refs
     }
@@ -96,6 +97,7 @@ impl<'a> RefsFinder<'a> {
         target: RefPtr,
         mut scout: Scout,
     ) -> Vec<SpHandle> {
+        // self.sp_store.check_with(&self.stores, &scout).expect("find_all_with before");
         self.find_refs::<IM>(package, target, &mut scout);
         self.refs
     }

@@ -123,6 +123,7 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
     let mu = memusage_linux();
     let mut i = 0;
     for c in &preprocessed.processing_ordered_commits {
+        log::warn!("search of commit {:?}", c.to_string());
         let c = preprocessed.commits.get_key_value(c).unwrap();
         let root = c.1.ast_root;
         let out = out.as_ref().map(|x| x.join(c.0.to_string()));
@@ -185,7 +186,7 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
             instance
                 .serialize(WritePartialJson::from(&mut buf))
                 .unwrap();
-
+            
             buf.flush().unwrap();
         } else {
             todo!();
