@@ -2629,7 +2629,7 @@ pub fn remake_pkg_ref(
     stores: &SimpleStores,
     ana: &mut PartialAnalysis,
     x: NodeIdentifier,
-) -> RefPtr {
+) -> Option<RefPtr> {
     log::debug!("{}",java_tree_gen_full_compress_legion_ref::TreeSyntax::new(
         &stores.node_store,
         &stores.label_store,
@@ -2640,29 +2640,34 @@ pub fn remake_pkg_ref(
     if t == Type::ScopedAbsoluteIdentifier {
         assert!(b.has_children());
         let x = b.get_child(&0);
-        let o = remake_pkg_ref(stores, ana, x);
+        let o = remake_pkg_ref(stores, ana, x)?;
         let x = b.get_child(&2);
         let b = stores.node_store.resolve(x);
-        let i = b.try_get_label().unwrap();
-        let f = IdentifierFormat::from(stores.label_store.resolve(i));
-        let l = LabelPtr::new(*i, f);
-        let i = ana.solver.intern(RefsEnum::ScopedIdentifier(o, l));
-        i
+        if let Some(i) = b.try_get_label() {
+            let f = IdentifierFormat::from(stores.label_store.resolve(i));
+            let l = LabelPtr::new(*i, f);
+            let i = ana.solver.intern(RefsEnum::ScopedIdentifier(o, l));
+            Some(i)
+        } else {
+            None
+        }
     } else if t == Type::Identifier {
-        let i = b.try_get_label().unwrap();
+        let i = b.get_label();
         let o = ana.solver.intern(RefsEnum::Root);
         let f = IdentifierFormat::from(stores.label_store.resolve(i));
         let l = LabelPtr::new(*i, f);
         let i = ana.solver.intern(RefsEnum::ScopedIdentifier(o, l));
-        i
+        Some(i)
     } else if t == Type::PackageDeclaration {
         assert!(b.has_children());
         let x = b.get_child(&2);
         remake_pkg_ref(stores, ana, x)
     } else if t == Type::Spaces {
-        panic!()
+        log::error!("remake_pkg_ref space");
+        None
     } else {
-        todo!("remake_pkg_ref missing {:?}", t)
+        log::error!("remake_pkg_ref {:?}", t);
+        None
     }
 }
 pub fn eq_root_scoped(d: ExplorableRef, stores: &SimpleStores, b: HashedNodeRef) -> bool {

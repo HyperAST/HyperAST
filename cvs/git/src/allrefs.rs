@@ -1014,7 +1014,8 @@ impl<'a> RefsFinder<'a> {
             let tt = bb.get_type();
             log::debug!("in program {:?}", tt);
             if tt == Type::PackageDeclaration {
-                package_ref = remake_pkg_ref(&self.prepro.main_stores, &mut self.ana, *xx);
+                package_ref = remake_pkg_ref(&self.prepro.main_stores, &mut self.ana, *xx)
+                    .ok_or(SearchStopEvent::Blocked)?;
                 max_qual_ref = self
                     .ana
                     .solver
