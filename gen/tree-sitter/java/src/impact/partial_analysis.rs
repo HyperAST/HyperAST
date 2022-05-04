@@ -4040,40 +4040,6 @@ impl PartialAnalysis {
                     }
                     (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
-
-            // }else if kind == &Type::TernaryExpression {
-            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
-            //     }
-            // } else if kind == &Type::BinaryExpression {
-            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
-            //     }
-            // } else if kind == &Type::AssignmentExpression {
-            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
-            //     }
-            // } else if kind == &Type::VariableDeclarator {
-            // match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //     (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
-            // }
-            // } else if kind == &Type::InstanceofExpression {
-            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
-            //     }
-
-            // } else if kind == &Type::CastExpression {
-            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
-            //     }
-            // } else if kind == &Type::UpdateExpression {
-            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
-            //     }
-            // } else if kind == &Type::ParenthesizedExpression {
-            //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
-            //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
-            //     }
             } else if kind == &Type::MethodInvocation {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
                     // MethodInvocation f()
@@ -4293,6 +4259,167 @@ impl PartialAnalysis {
             //     match (acc.current_node.take(), current_node.map(|x| Old(x),|x| x)) {
             //         (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
             //     }
+            } else if kind == &Type::TernaryExpression {
+                match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
+                    // TernaryExpression
+                    // TernaryExpression (None,c)
+                    (State::None, c) => {
+                        match c {
+                            State::SimpleIdentifier(_, i) => {
+                                scoped_ref!(mm!(), i);
+                            }
+                            State::LiteralType(_) => (),
+                            State::ScopedIdentifier(i) => {
+                                sync!(i);
+                            }
+                            State::Invocation(_) => (),
+                            State::FieldIdentifier(_) => (),
+                            x => log::warn!("TernaryExpression None LiteralType {:?}", x),
+                        };
+                        State::Condition
+                    }
+                    // TernaryExpression (Cond,x)
+                    (State::Condition, x) => match x {
+                        State::LiteralType(t) => State::ScopedIdentifier(sync!(t)),
+                        State::SimpleIdentifier(_, i) => State::ScopedIdentifier(scoped_ref!(mm!(), i)),
+                        State::This(i) => State::ScopedIdentifier(sync!(i)),
+                        State::ConstructorInvocation(i) => State::ConstructorInvocation(sync!(i)),
+                        State::Invocation(i) => State::Invocation(sync!(i)),
+                        State::ScopedIdentifier(i) => State::ScopedIdentifier(sync!(i)),
+                        State::FieldIdentifier(i) => State::FieldIdentifier(sync!(i)),
+                        State::MethodReference(i) => State::MethodReference(sync!(i)),
+                        State::LambdaExpression(i) => State::LambdaExpression(sync!(i)),
+                        State::None => {log::warn!("TernaryExpression Condition None");State::None},
+                        x => missing_rule!("{:?} Condition {:?}", kind, x),
+                    },
+                    // TernaryExpression (x,y)
+                    // WARN The kind of type evaluation (choosing between x and y) is not finished (without obvious bugs relative to java spec)
+                    // but for now it should not impact the quality of the reference analysis.
+                    (State::LiteralType(t), y) => {
+                        match y {
+                            State::LiteralType(_) => (),
+                            State::SimpleIdentifier(_, i) => {
+                                scoped_ref!(mm!(), i);
+                            }
+                            State::FieldIdentifier(_) => (),
+                            State::ConstructorInvocation(_) => (),
+                            State::Invocation(_) => (),
+                            State::ScopedIdentifier(_) => (),
+                            State::LambdaExpression(_) => (),
+                            State::MethodReference(_) => (),
+                            State::None => log::warn!("TernaryExpression LiteralType None"),
+                            x => log::warn!("TernaryExpression LiteralType {:?}", &x),
+                        };
+                        State::LiteralType(t)
+                    }
+                    (x, State::LiteralType(t)) => {
+                        assert_ne!(x, State::Condition);
+                        match x {
+                            State::LiteralType(_) => (),
+                            State::SimpleIdentifier(_, i) => {
+                                scoped_ref!(mm!(), i);
+                            }
+                            State::ConstructorInvocation(_) => (),
+                            State::Invocation(_) => (),
+                            State::ScopedIdentifier(_) => (),
+                            State::LambdaExpression(_) => (),
+                            State::MethodReference(_) => (),
+                            State::This(_) => (),
+                            State::Super(_) => (),
+                            State::None => log::warn!("TernaryExpression None LiteralType"),
+                            x => log::warn!("TernaryExpression {:?} LiteralType", &x),
+                        };
+                        let t = sync!(t);
+                        State::LiteralType(t)
+                    }
+                    (State::SimpleIdentifier(_, i), y) => {
+                        match y {
+                            State::LiteralType(_) => panic!(),
+                            State::SimpleIdentifier(_, i) => {
+                                scoped_ref!(mm!(), i);
+                            }
+                            State::FieldIdentifier(_) => (),
+                            State::ConstructorInvocation(_) => (),
+                            State::Invocation(_) => (),
+                            State::ScopedIdentifier(_) => (),
+                            State::LambdaExpression(_) => (),
+                            State::MethodReference(_) => (),
+                            State::This(_) => (),
+                            State::Super(_) => (),
+                            State::None => log::warn!("TernaryExpression SimpleIdentifier None"),
+                            x => log::warn!("TernaryExpression SimpleIdentifier {:?}", x),
+                        };
+                        let i = scoped_ref!(mm!(), i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (x, State::SimpleIdentifier(_, i)) =>
+                    {
+                        assert_ne!(x, State::Condition);
+                        match x {
+                            State::LiteralType(_) => panic!(),
+                            State::SimpleIdentifier(_, _) => panic!(),
+                            State::ConstructorInvocation(_) => (),
+                            State::Invocation(_) => (),
+                            State::ScopedIdentifier(_) => (),
+                            State::LambdaExpression(_) => (),
+                            State::MethodReference(_) => (),
+                            State::This(_) => (),
+                            State::Super(_) => (),
+                            State::None => log::warn!("TernaryExpression None SimpleIdentifier"),
+                            x => log::warn!("TernaryExpression {:?} SimpleIdentifier", &x),
+                        };
+                        let i = scoped_ref!(mm!(), i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::ConstructorInvocation(_), State::This(i)) =>
+                    {
+                        let i = sync!(i);
+                        State::This(i)
+                    }
+                    (State::ConstructorInvocation(i), _) =>
+                    {
+                        State::ConstructorInvocation(i)
+                    }
+                    (_, State::ConstructorInvocation(i)) =>
+                    {
+                        let i = sync!(i);
+                        State::ConstructorInvocation(i)
+                    }
+                    (State::ScopedIdentifier(i), y) => {
+                        match y {
+                            State::LiteralType(_) => panic!(),
+                            State::SimpleIdentifier(_, i) => {
+                                scoped_ref!(mm!(), i);
+                            }
+                            State::FieldIdentifier(_) => (),
+                            State::ConstructorInvocation(_) => panic!(),
+                            State::Invocation(_) => (),
+                            State::ScopedIdentifier(_) => (),
+                            State::LambdaExpression(_) => (),
+                            State::MethodReference(_) => (),
+                            State::This(_) => (),
+                            State::Super(_) => (),
+                            State::None => log::warn!("TernaryExpression ScopedIdentifier None"),
+                            x => log::warn!("TernaryExpression ScopedIdentifier {:?}", x),
+                        };
+                        State::ScopedIdentifier(i)
+                    }
+                    (_, State::ScopedIdentifier(i)) =>
+                    {
+                        let i = sync!(i);
+                        State::ScopedIdentifier(i)
+                    }
+                    (State::FieldIdentifier(i), _) =>
+                    {
+                        State::FieldIdentifier(i)
+                    }
+                    (_, State::FieldIdentifier(i)) =>
+                    {
+                        let i = sync!(i);
+                        State::FieldIdentifier(i)
+                    }
+                    (x, _) => x
+                }
             } else {
                 match (acc.current_node.take(), current_node.map(|x| Old(x), |x| x)) {
                     (State::None, State::SimpleTypeIdentifier(t))
@@ -4580,217 +4707,7 @@ impl PartialAnalysis {
                     {
                         State::FieldIdentifier(i0)
                     }
-                    // TernaryExpression
-                    // TernaryExpression (None,c)
-                    (State::None, c) if kind == &Type::TernaryExpression => {
-                        match c {
-                            State::SimpleIdentifier(_, i) => {
-                                scoped_ref!(mm!(), i);
-                            }
-                            State::LiteralType(_) => (),
-                            State::ScopedIdentifier(i) => {
-                                sync!(i);
-                            }
-                            State::Invocation(_) => (),
-                            State::FieldIdentifier(_) => (),
-                            x => todo!("{:?}", x),
-                        };
-                        State::Condition
-                    }
-                    // TernaryExpression (Cond,x)
-                    (State::Condition, x) if kind == &Type::TernaryExpression => match x {
-                        State::LiteralType(t) => State::ScopedIdentifier(sync!(t)),
-                        State::SimpleIdentifier(_, i) => State::ScopedIdentifier(scoped_ref!(mm!(), i)),
-                        State::This(i) => State::ScopedIdentifier(sync!(i)),
-                        State::ConstructorInvocation(i) => State::ConstructorInvocation(sync!(i)),
-                        State::Invocation(i) => State::Invocation(sync!(i)),
-                        State::ScopedIdentifier(i) => State::ScopedIdentifier(sync!(i)),
-                        State::FieldIdentifier(i) => State::FieldIdentifier(sync!(i)),
-                        State::MethodReference(i) => State::MethodReference(sync!(i)),
-                        State::LambdaExpression(i) => State::LambdaExpression(sync!(i)),
-                        State::None => {log::warn!("TernaryExpression Condition None");State::None},
-                        x => missing_rule!("{:?} Condition {:?}", kind, x),
-                    },
-                    // TernaryExpression (x,y)
-                    (State::LiteralType(t), y) if kind == &Type::TernaryExpression => {
-                        match y {
-                            State::LiteralType(_) => (),
-                            State::SimpleIdentifier(_, i) => {
-                                scoped_ref!(mm!(), i);
-                            }
-                            State::FieldIdentifier(_) => (),
-                            State::ConstructorInvocation(_) => (),
-                            State::Invocation(_) => (),
-                            State::ScopedIdentifier(_) => (),
-                            State::LambdaExpression(_) => (),
-                            State::MethodReference(_) => (),
-                            State::None => log::warn!("TernaryExpression LiteralType None"),
-                            x => log::warn!("TernaryExpression LiteralType {:?}", &x),
-                        };
-                        State::LiteralType(t)
-                    }
-                    (x, State::LiteralType(t)) if kind == &Type::TernaryExpression => {
-                        assert_ne!(x, State::Condition);
-                        match x {
-                            State::LiteralType(_) => (),
-                            State::SimpleIdentifier(_, i) => {
-                                scoped_ref!(mm!(), i);
-                            }
-                            State::ConstructorInvocation(_) => (),
-                            State::Invocation(_) => (),
-                            State::ScopedIdentifier(_) => (),
-                            State::LambdaExpression(_) => (),
-                            State::MethodReference(_) => (),
-                            State::This(_) => (),
-                            State::Super(_) => (),
-                            State::None => log::warn!("TernaryExpression None LiteralType"),
-                            x => log::warn!("TernaryExpression {:?} LiteralType", &x),
-                        };
-                        let t = sync!(t);
-                        State::LiteralType(t)
-                    }
-                    (State::SimpleIdentifier(_, i), y) if kind == &Type::TernaryExpression => {
-                        match y {
-                            State::LiteralType(_) => (),
-                            State::SimpleIdentifier(_, i) => {
-                                scoped_ref!(mm!(), i);
-                            }
-                            State::FieldIdentifier(_) => (),
-                            State::ConstructorInvocation(_) => (),
-                            State::Invocation(_) => (),
-                            State::ScopedIdentifier(_) => (),
-                            State::LambdaExpression(_) => (),
-                            State::MethodReference(_) => (),
-                            State::This(_) => (),
-                            State::Super(_) => (),
-                            State::None => log::warn!("TernaryExpression ScopedIdentifier None"),
-                            x => log::warn!("TernaryExpression ScopedIdentifier {:?}", x),
-                        };
-                        let i = scoped_ref!(mm!(), i);
-                        State::ScopedIdentifier(i)
-                    }
-                    (State::ScopedIdentifier(i), y) if kind == &Type::TernaryExpression => {
-                        match y {
-                            State::LiteralType(_) => panic!(),
-                            State::SimpleIdentifier(_, i) => {
-                                scoped_ref!(mm!(), i);
-                            }
-                            State::FieldIdentifier(_) => (),
-                            State::ConstructorInvocation(_) => (),
-                            State::Invocation(_) => (),
-                            State::ScopedIdentifier(_) => (),
-                            State::LambdaExpression(_) => (),
-                            State::MethodReference(_) => (),
-                            State::This(_) => (),
-                            State::Super(_) => (),
-                            State::None => log::warn!("TernaryExpression ScopedIdentifier None"),
-                            x => log::warn!("TernaryExpression ScopedIdentifier {:?}", x),
-                        };
-                        State::ScopedIdentifier(i)
-                    }
-                    (State::ConstructorInvocation(i), State::ScopedIdentifier(_))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        State::ConstructorInvocation(i)
-                    }
-                    (State::MethodReference(i), State::LambdaExpression(_))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        State::ConstructorInvocation(i)
-                    }
-                    (State::FieldIdentifier(_), State::SimpleIdentifier(_, i))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        let i = scoped_ref!(mm!(), i);
-                        State::ScopedIdentifier(i)
-                    }
-                    (State::FieldIdentifier(_), State::ScopedIdentifier(i))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        let i = sync!(i);
-                        State::ScopedIdentifier(i)
-                    }
-                    (State::MethodReference(r), State::MethodReference(_))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        State::MethodReference(r)
-                    }
-                    (State::Invocation(_), State::ScopedIdentifier(i))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        let i = sync!(i);
-                        State::ScopedIdentifier(i)
-                    }
-                    (State::Invocation(_), State::SimpleIdentifier(_, i))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        let i = scoped_ref!(mm!(), i);
-                        State::ScopedIdentifier(i)
-                    }
-                    (State::Invocation(i), State::Invocation(_))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        State::Invocation(i)
-                    }
-                    (State::Invocation(i), State::FieldIdentifier(_))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        State::Invocation(i)
-                    }
-                    (State::ConstructorInvocation(i), State::ConstructorInvocation(_))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        State::ConstructorInvocation(i)
-                    }
-                    (State::FieldIdentifier(i), State::FieldIdentifier(_))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        State::FieldIdentifier(i)
-                    }
-                    (State::FieldIdentifier(i), State::Invocation(_))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        State::FieldIdentifier(i)
-                    }
-                    (State::Invocation(_), State::ConstructorInvocation(i))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        let i = sync!(i);
-                        State::ConstructorInvocation(i)
-                    }
-                    (State::LambdaExpression(i), State::LambdaExpression(_))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        State::LambdaExpression(i)
-                    }
-                    (State::LambdaExpression(i), State::ScopedIdentifier(_))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        State::LambdaExpression(i)
-                    }
-                    (State::ConstructorInvocation(i), State::Invocation(_))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        State::ConstructorInvocation(i)
-                    }
-                    (State::MethodReference(i), State::ScopedIdentifier(_))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        State::MethodReference(i)
-                    }
-                    (State::ConstructorInvocation(t), State::SimpleIdentifier(_, i))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        scoped_ref!(mm!(), i);
-                        State::ConstructorInvocation(t)
-                    }
-                    (State::ConstructorInvocation(t), State::This(i))
-                        if kind == &Type::TernaryExpression =>
-                    {
-                        let i = sync!(i);
-                        State::This(i)
-                    }
-
+                    
                     (State::None, State::ScopedIdentifier(i))
                         if kind == &Type::ParenthesizedExpression =>
                     {
@@ -4987,7 +4904,7 @@ impl PartialAnalysis {
                         if kind == &Type::BinaryExpression =>
                     {
                         State::ConstructorInvocation(t)
-                    } // TODO aaa not yet implemented: TernaryExpression LambdaExpression(1) ScopedIdentifier(Old(3))
+                    }
                     (x, y) => missing_rule!("{:?} {:?} {:?}", kind, x, y),
                 }
             }

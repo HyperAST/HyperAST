@@ -1057,6 +1057,7 @@ impl<'a> RefsFinder<'a> {
             }
         } else if t == Type::TS74 { // TODO contructor
         } else if t == Type::This {
+        } else if t == Type::Super {
         } else if t == Type::ScopedTypeIdentifier {
             // log::debug!("not matched"); // TODO should check the fully qual name
         } else if t == Type::GenericType {
