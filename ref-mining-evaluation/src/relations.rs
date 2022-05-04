@@ -78,7 +78,7 @@ pub struct PerModule<T> {
     pub(super) content: T,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Perfs {
     /// time in nano seconds
     pub(super) time: u128,
@@ -86,7 +86,7 @@ pub struct Perfs {
     pub(super) memory: usize,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Info {
     pub(super) repo_name: String,
     pub(super) commit: String,

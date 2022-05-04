@@ -224,6 +224,97 @@ fn main() {
                 });
             }
         }
+        Commands::MultiPerfsStats {
+            baseline_dir,
+            evaluated_dir,
+            json,
+            ..
+        } => {
+            let bl_dir = std::fs::read_dir(baseline_dir).expect("should be a dir");
+            let t_dir = std::fs::read_dir(evaluated_dir).expect("should be a dir");
+            let mut files = HashMap::<_, (Option<_>, Option<_>)>::default();
+            bl_dir.for_each(|x| {
+                let x = x.unwrap();
+                if x.file_type().unwrap().is_file() {
+                    files
+                        .entry(x.file_name())
+                        .insert_entry((Some(x.path()), None));
+                }
+            });
+            t_dir.for_each(|x| {
+                let x = x.unwrap();
+                if x.file_type().unwrap().is_file() {
+                    files.entry(x.file_name()).or_insert((None, None)).1 = Some(x.path());
+                }
+            });
+            let files: Vec<_> = files
+                .into_iter()
+                .map(|(c, v)| (c.to_string_lossy().into_owned(), v))
+                .collect();
+            let comps = files
+                .into_par_iter()
+                .flat_map(|(commit, (baseline, evaluated))| {
+                    let bl_rs = baseline.and_then(|baseline| {
+                        handle_file_with_perfs(File::open(baseline).expect("should be a file"))
+                            .map_err(|e| eprintln!("can't read baseline relations: {}", e))
+                            .ok()
+                    });
+                    let t_rs = evaluated.and_then(|evaluated| {
+                        handle_file_with_perfs(File::open(evaluated).expect("should be a file"))
+                            .map_err(|e| eprintln!("can't read evaluated relations: {}", e))
+                            .ok()
+                    });
+                    match (bl_rs, t_rs) {
+                        (None, None) => vec![],
+                        (None, Some(x))=> {
+                            vec![
+                                CommitStats {
+                                    construction_perfs: x.construction_perfs,
+                                    search_perfs: x.search_perfs,
+                                    info: x.info.unwrap(),
+                                    processor: "evaluation".to_string(),
+                                }
+                            ]
+                        }
+                        (Some(x), None) => vec![],
+                        (Some(bl_rs), Some(t_rs)) => {
+                            let bl_commit = bl_rs.info.as_ref().unwrap().commit.clone();
+                            let t_commit = t_rs.info.as_ref().unwrap().commit.clone();
+                            assert_eq!(commit, bl_commit);
+                            assert_eq!(commit, t_commit);
+
+                            let x = Versus {
+                                baseline: bl_rs,
+                                evaluated: t_rs,
+                            };
+                            let r = CommitCompStats::from(x);
+
+                            vec![
+                                CommitStats {
+                                    construction_perfs: r.construction_perfs.baseline,
+                                    search_perfs: r.search_perfs.as_ref().map(|x| x.baseline),
+                                    info: r.info.clone(),
+                                    processor: "baseline".to_string(),
+                                },
+                                CommitStats {
+                                    construction_perfs: r.construction_perfs.evaluated,
+                                    search_perfs: r.search_perfs.map(|x| x.evaluated),
+                                    info: r.info,
+                                    processor: "evaluation".to_string(),
+                                },
+                            ]
+                        }
+                    }
+                });
+            if *json {
+                let res: Vec<_> = comps.collect();
+                println!("{}", serde_json::to_string_pretty(&res).unwrap());
+            } else {
+                comps.collect::<Vec<_>>().iter().for_each(|x| {
+                    println!("no: {:?}", x);
+                });
+            }
+        }
         Commands::InteractiveDeclarations {
             repository,
             commit,
@@ -262,14 +353,18 @@ fn main() {
                             continue;
                         }
                         let p = r.with(f.clone());
-                        let (before, span, after) = read_position(&p, Some(4)).unwrap();
-                        println!("baseline {}:", p);
+                        match read_position(&p, Some(4)) {
+                            Ok((before, span, after)) => {
+                                println!("baseline {}:", p);
 
-                        show_code_range!(
-                            before {
-                                span (4) with Magenta Bg
-                            } after with LightBlack Fg
-                        );
+                                show_code_range!(
+                                    before {
+                                        span (4) with Magenta Bg
+                                    } after with LightBlack Fg
+                                );
+                            }
+                            Err(e) => println!("baseline cannot be read {}", e),
+                        }
                     }
                     for r in &rs.1 {
                         if rs.0.contains(r) {
@@ -711,6 +806,14 @@ struct CommitCompStats {
     info: Info,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct CommitStats {
+    construction_perfs: Perfs,
+    search_perfs: Option<Perfs>,
+    info: Info,
+    processor: String,
+}
+
 impl CommitCompStats {
     fn from(x: Versus<RelationsWithPerfs>) -> Self {
         let mut per_module: HashMap<String, (_, _)> = Default::default();
@@ -887,6 +990,20 @@ enum Commands {
 
     /// Statistics on relations
     MultiCompareStats {
+        /// Directory that contains commit identified files that contains referential relations.
+        /// It will be used as a baseline
+        baseline_dir: String,
+
+        /// Directory that contains commit identified files that  contains referential relations.
+        /// We want to evalute those.
+        evaluated_dir: String,
+
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// Statistics on memory and time
+    MultiPerfsStats {
         /// Directory that contains commit identified files that contains referential relations.
         /// It will be used as a baseline
         baseline_dir: String,
