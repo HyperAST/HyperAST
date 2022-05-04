@@ -276,32 +276,26 @@ fn main() {
                                 }
                             ]
                         }
-                        (Some(x), None) => vec![],
+                        (Some(_), None) => vec![],
                         (Some(bl_rs), Some(t_rs)) => {
                             let bl_commit = bl_rs.info.as_ref().unwrap().commit.clone();
                             let t_commit = t_rs.info.as_ref().unwrap().commit.clone();
                             assert_eq!(commit, bl_commit);
                             assert_eq!(commit, t_commit);
 
-                            let x = Versus {
-                                baseline: bl_rs,
-                                evaluated: t_rs,
-                            };
-                            let r = CommitCompStats::from(x);
-
                             vec![
                                 CommitStats {
-                                    construction_perfs: r.construction_perfs.baseline,
-                                    search_perfs: r.search_perfs.as_ref().map(|x| x.baseline),
-                                    info: r.info.clone(),
+                                    construction_perfs: bl_rs.construction_perfs,
+                                    search_perfs: bl_rs.search_perfs,
+                                    info: t_rs.info.clone().unwrap(),
                                     processor: "baseline".to_string(),
                                 },
                                 CommitStats {
-                                    construction_perfs: r.construction_perfs.evaluated,
-                                    search_perfs: r.search_perfs.map(|x| x.evaluated),
-                                    info: r.info,
+                                    construction_perfs: t_rs.construction_perfs,
+                                    search_perfs: t_rs.search_perfs,
+                                    info: t_rs.info.unwrap(),
                                     processor: "evaluation".to_string(),
-                                },
+                                }
                             ]
                         }
                     }
