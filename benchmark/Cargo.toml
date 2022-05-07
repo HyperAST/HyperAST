@@ -31,6 +31,6 @@ jemallocator = "0.3.2"
 # [profile.release]
 # debug = 1
 
-# [[bin]]
-# name = "bench"
-# path = "src/bin/main.rs"
+[[bin]]
+name = "reserializing"
+path = "src/reserializing.rs"

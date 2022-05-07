@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     iter::Peekable,
     path::{Components, PathBuf},
     time::Instant,
@@ -44,7 +44,7 @@ pub struct PreProcessedRepository {
     java_md_cache: java_tree_gen::MDCache,
     pub object_map: BTreeMap<git2::Oid, (hyper_ast::store::nodes::DefaultNodeIdentifier, MD)>,
     pub object_map_pom: BTreeMap<git2::Oid, POM>,
-    pub object_map_java: BTreeMap<(git2::Oid,Vec<u8>), (java_tree_gen::Local, bool)>,
+    pub object_map_java: BTreeMap<(git2::Oid, Vec<u8>), (java_tree_gen::Local, bool)>,
     pub commits: HashMap<git2::Oid, Commit>,
     pub processing_ordered_commits: Vec<git2::Oid>,
 }
@@ -134,6 +134,85 @@ impl PreProcessedRepository {
                 self.processing_ordered_commits.push(oid.clone());
                 self.commits.insert(oid.clone(), c);
             });
+    }
+
+    pub fn check_random_files_reserialization(
+        &mut self,
+        repository: &mut Repository,
+        // before: &str,
+        // after: &str,
+        // dir_path: &str,
+    ) -> (usize,usize) {
+
+        struct BuffOut {
+            buff: String,
+        }
+
+        impl std::fmt::Write for BuffOut {
+            fn write_str(&mut self, s: &str) -> std::fmt::Result {
+                Ok(self.buff.extend(s.chars()))
+            }
+        }
+        // log::info!(
+        //     "commits to process: {}",
+        //     all_commits_between(&repository, before, after).count()
+        // );
+        // let rw = all_commits_between(&repository, before, after);
+        let mut oids = HashSet::<_>::default();
+        repository.odb().unwrap().foreach(|&oid| {
+            // easy deterministic sampling of objects
+            if (oid.as_bytes()[0] & 0b11000000) != 0 {
+                return true;
+            }
+            if let Ok(tree) = repository.find_tree(oid) {
+                tree.iter().for_each(|entry| {
+                    let name = entry.name_bytes().to_owned();
+                    if name.ends_with(b".java") {
+                        oids.insert(entry.id());
+                    }
+                })
+                //if let Ok(blob) = repository.find_blob(oid) {
+            }
+            true
+        }).unwrap();
+        let mut eq = 0;
+        let mut not = 0;
+        for oid in oids {
+            let blob = repository.find_blob(oid).unwrap();
+            if let Ok(_) = std::str::from_utf8(blob.content()) {
+                // log::debug!("content: {}", z);
+                let text = blob.content();
+                if let Ok(full_node) = handle_java_file(&mut self.java_generator(text), b"", text) {
+                    let mut out = BuffOut {
+                        buff: "".to_owned(),
+                    };
+                    rusted_gumtree_gen_ts_java::java_tree_gen_full_compress_legion_ref::serialize(
+                        &self.main_stores.node_store,
+                        &self.main_stores.label_store,
+                        &full_node.local.compressed_node,
+                        &mut out,
+                        &std::str::from_utf8(&"\n".as_bytes().to_vec()).unwrap(),
+                    );
+                    if std::str::from_utf8(text).unwrap() == out.buff {
+                        eq += 1;
+                    } else {
+                        not += 1;
+                    }
+                }
+            }
+        }
+        // let set = HashSet
+        // rw.for_each(|oid| {
+        //     let oid = oid.unwrap();
+
+        //     let commit = repository.find_commit(oid).unwrap();
+        //     let tree = commit.tree().unwrap();
+        //     tree.walk(git2::TreeWalkMode::PreOrder, callback);
+        //     let c = self.handle_java_commit(&repository, dir_path, oid);
+        //     todo!()
+        // })
+        // .collect()
+        (eq,not)
     }
 
     pub fn pre_process_with_limit(
@@ -297,7 +376,11 @@ impl PreProcessedRepository {
             tree: git2::Tree,
             dir_path: &mut Peekable<Components>,
         ) -> Vec<BasicGitObjects> {
-            let mut children_objects: Vec<BasicGitObjects> = tree.iter().map(TryInto::try_into).filter_map(|x| x.ok()).collect();
+            let mut children_objects: Vec<BasicGitObjects> = tree
+                .iter()
+                .map(TryInto::try_into)
+                .filter_map(|x| x.ok())
+                .collect();
             if dir_path.peek().is_none() {
                 let p = children_objects.iter().position(|x| match x {
                     BasicGitObjects::Blob(_, n) => n.eq(b"pom.xml"),
@@ -547,7 +630,11 @@ impl PreProcessedRepository {
             tree: git2::Tree,
             dir_path: &mut Peekable<Components>,
         ) -> Vec<BasicGitObjects> {
-            let mut children_objects: Vec<BasicGitObjects> = tree.iter().map(TryInto::try_into).filter_map(|x| x.ok()).collect();
+            let mut children_objects: Vec<BasicGitObjects> = tree
+                .iter()
+                .map(TryInto::try_into)
+                .filter_map(|x| x.ok())
+                .collect();
             if dir_path.peek().is_none() {
                 let p = children_objects.iter().position(|x| match x {
                     BasicGitObjects::Blob(_, n) => n.eq(b"pom.xml"),
@@ -912,7 +999,12 @@ impl PreProcessedRepository {
         let root_full_node;
 
         let tree = repository.find_tree(oid).unwrap();
-        let prepared: Vec<BasicGitObjects> = tree.iter().rev().map(TryInto::try_into).filter_map(|x| x.ok()).collect();
+        let prepared: Vec<BasicGitObjects> = tree
+            .iter()
+            .rev()
+            .map(TryInto::try_into)
+            .filter_map(|x| x.ok())
+            .collect();
         let mut stack: Vec<(Oid, Vec<BasicGitObjects>, JavaAcc)> = vec![(
             oid,
             prepared,
@@ -922,7 +1014,9 @@ impl PreProcessedRepository {
             if let Some(current_dir) = stack.last_mut().expect("never empty").1.pop() {
                 match current_dir {
                     BasicGitObjects::Tree(x, name) => {
-                        if let Some((already, skiped_ana)) = self.object_map_java.get(&(x,name.clone())) {
+                        if let Some((already, skiped_ana)) =
+                            self.object_map_java.get(&(x, name.clone()))
+                        {
                             // reinit already computed node for post order
                             let full_node = already.clone();
 
@@ -957,8 +1051,12 @@ impl PreProcessedRepository {
                         // TODO use maven pom.xml to find source_dir  and tests_dir ie. ignore resources, maybe also tests
                         log::info!("tree {:?}", std::str::from_utf8(&name));
                         let a = repository.find_tree(x).unwrap();
-                        let prepared: Vec<BasicGitObjects> =
-                            a.iter().rev().map(TryInto::try_into).filter_map(|x| x.ok()).collect();
+                        let prepared: Vec<BasicGitObjects> = a
+                            .iter()
+                            .rev()
+                            .map(TryInto::try_into)
+                            .filter_map(|x| x.ok())
+                            .collect();
                         stack.push((
                             x,
                             prepared,
@@ -968,7 +1066,9 @@ impl PreProcessedRepository {
                     BasicGitObjects::Blob(x, name) => {
                         if !Self::is_handled(&name) {
                             continue;
-                        } else if let Some((already,_)) = self.object_map_java.get(&(x,name.clone())) {
+                        } else if let Some((already, _)) =
+                            self.object_map_java.get(&(x, name.clone()))
+                        {
                             // TODO reinit already computed node for post order
                             let full_node = already.clone();
 
@@ -1014,7 +1114,7 @@ impl PreProcessedRepository {
                                     let full_node = full_node.local;
                                     // log::debug!("gen java");
                                     self.object_map_java
-                                        .insert((a.id(),name.clone()), (full_node.clone(), false));
+                                        .insert((a.id(), name.clone()), (full_node.clone(), false));
                                     let w = &mut stack.last_mut().unwrap().2;
                                     let name = self
                                         .main_stores()
@@ -1081,10 +1181,16 @@ impl PreProcessedRepository {
                     let ana = acc.ana;
                     let c = ana.estimated_refs_count();
                     if acc.skiped_ana {
-                        log::info!("shop ana with at least {} refs", ana.lower_estimate_refs_count());
+                        log::info!(
+                            "shop ana with at least {} refs",
+                            ana.lower_estimate_refs_count()
+                        );
                         ana
                     } else {
-                        log::info!("ref count lower estimate in dir {}", ana.lower_estimate_refs_count());
+                        log::info!(
+                            "ref count lower estimate in dir {}",
+                            ana.lower_estimate_refs_count()
+                        );
                         log::debug!("refs in directory");
                         for x in ana.display_refs(&self.main_stores().label_store) {
                             log::debug!("    {}", x);
@@ -1100,7 +1206,10 @@ impl PreProcessedRepository {
                         }
                     }
                 };
-                log::info!("ref count in dir after resolver {}", ana.lower_estimate_refs_count());
+                log::info!(
+                    "ref count in dir after resolver {}",
+                    ana.lower_estimate_refs_count()
+                );
                 log::debug!("refs in directory after resolve: ");
                 for x in ana.display_refs(&self.main_stores().label_store) {
                     log::debug!("    {}", x);
@@ -1209,7 +1318,7 @@ impl PreProcessedRepository {
                     ana: Some(ana.clone()),
                 };
                 self.object_map_java
-                    .insert((id,name.to_vec()), (full_node.clone(), acc.skiped_ana));
+                    .insert((id, name.to_vec()), (full_node.clone(), acc.skiped_ana));
                 if stack.is_empty() {
                     root_full_node = full_node;
                     break;

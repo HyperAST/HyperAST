@@ -99,11 +99,12 @@ pub trait TreeGen {
         let mut has = Has::Down;
         let mut position = 0;
         let mut depth = 1;
-        let mut sum_byte_length;
+        let mut sum_byte_length = 0;
 
         loop {
-            sum_byte_length = cursor.node().start_byte();
+            let sbl = cursor.node().start_byte();
             if has != Has::Up && cursor.goto_first_child() {
+                sum_byte_length =  sbl;
                 has = Has::Down;
                 position += 1;
                 depth += 1;
@@ -125,8 +126,9 @@ pub trait TreeGen {
                     None
                 };
 
-                sum_byte_length = cursor.node().end_byte();
+                let sbl = cursor.node().end_byte();
                 if cursor.goto_next_sibling() {
+                    sum_byte_length =  sbl;
                     has = Has::Right;
                     let parent = stack.last_mut().unwrap();
                     parent.push(full_node.unwrap());
@@ -138,11 +140,18 @@ pub trait TreeGen {
                     has = Has::Up;
                     if cursor.goto_parent() {
                         if let Some(full_node) = full_node {
+                            sum_byte_length =  sbl;
                             stack.last_mut().unwrap().push(full_node);
                         } else {
+                            if has == Has::Down {
+                                sum_byte_length =  sbl;
+                            }
                             return sum_byte_length;
                         }
                     } else {
+                        if has == Has::Down {
+                            sum_byte_length =  sbl;
+                        }
                         return sum_byte_length;
                     }
                 }
