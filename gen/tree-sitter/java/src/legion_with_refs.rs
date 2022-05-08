@@ -9,14 +9,18 @@ use std::{
     vec,
 };
 
-use hyper_ast::{nodes::IoOut, store::labels::LabelStore};
+use hyper_ast::{
+    full::FullNode,
+    nodes::IoOut,
+    store::labels::LabelStore,
+    utils::{self, clamp_u64_to_u32},
+};
 use legion::{
     storage::{Archetype, Component},
     world::{ComponentError, EntityLocation, EntryRef},
 };
 use num::ToPrimitive;
 use string_interner::{DefaultHashBuilder, DefaultSymbol};
-use tree_sitter::{Language, Parser, TreeCursor};
 use tuples::CombinConcat;
 
 use hyper_ast::{
@@ -43,16 +47,7 @@ use hyper_ast::{
     },
 };
 
-use crate::{
-    full::FullNode,
-    impact::{
-        element::{ExplorableRef, RefsEnum},
-        elements::*,
-        partial_analysis::PartialAnalysis,
-    },
-    store::vec_map_store::Symbol,
-    utils::{self, clamp_u64_to_u32},
-};
+use crate::impact::partial_analysis::PartialAnalysis;
 
 pub use crate::impact::element::BulkHasher;
 
@@ -91,43 +86,6 @@ impl hyper_ast::types::Node for HashedNode {}
 impl hyper_ast::types::Stored for HashedNode {
     type TreeId = NodeIdentifier;
 }
-
-impl Symbol<HashedNode> for legion::Entity {}
-impl<'a> Symbol<HashedNodeRef<'a>> for legion::Entity {}
-
-// impl<'a> RefContainer for HashedNodeRef<'a> {
-//     type Result = BloomResult;
-
-//     fn check<U: Borrow<Self::Ref> + AsRef<[u8]>>(&self, rf: U) -> Self::Result {
-//         macro_rules! check {
-//             ( ($e:expr, $s:expr, $rf:expr); $($t:ty),* ) => {
-//                 match $e {
-//                     BloomSize::Much => {
-//                         log::warn!("[Too Much]");
-//                         BloomResult::MaybeContain
-//                     },
-//                     BloomSize::None => BloomResult::DoNotContain,
-//                     $( <$t>::SIZE => $s.get_component::<$t>()
-//                         .unwrap()
-//                         .check(0, $rf)),*
-//                 }
-//             };
-//         }
-//         let e = self.0.get_component::<BloomSize>().unwrap();
-//         check![
-//             (*e, self.0, rf);
-//             Bloom<&'static [u8], u16>,
-//             Bloom<&'static [u8], u32>,
-//             Bloom<&'static [u8], u64>,
-//             Bloom<&'static [u8], [u64; 2]>,
-//             Bloom<&'static [u8], [u64; 4]>,
-//             Bloom<&'static [u8], [u64; 8]>,
-//             Bloom<&'static [u8], [u64; 16]>,
-//             Bloom<&'static [u8], [u64; 32]>,
-//             Bloom<&'static [u8], [u64; 64]>
-//         ]
-//     }
-// }
 
 impl<'a> PartialEq for HashedNodeRef<'a> {
     fn eq(&self, other: &Self) -> bool {
@@ -312,11 +270,6 @@ impl<'a> hyper_ast::types::Tree for HashedNodeRef<'a> {
 
 impl<'a> HashedNodeRef<'a> {}
 
-// pub type HashedNode<'a> = HashedCompressedNode<SyntaxNodeHashs<HashSize>,SymbolU32<&'a HashedNode>,LabelIdentifier>;
-
-extern "C" {
-    fn tree_sitter_java() -> Language;
-}
 
 type MyLabel = str;
 pub type LabelIdentifier = DefaultSymbol;
@@ -1326,11 +1279,24 @@ impl<'a> JavaTreeGen<'a> {
         }
     }
 
+    pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
+        let mut parser = tree_sitter::Parser::new();
+        let language = tree_sitter_java::language();
+        parser.set_language(language).unwrap();
+
+        let tree = parser.parse(text, None).unwrap();
+        if tree.root_node().has_error() {
+            Err(tree)
+        } else {
+            Ok(tree)
+        }
+    }
+
     pub fn generate_file(
         &mut self,
         name: &[u8],
         text: &[u8],
-        cursor: TreeCursor,
+        cursor: tree_sitter::TreeCursor,
     ) -> FullNode<Global, Local> {
         let mut init = self.init_val(text, &TNode(cursor.node()));
         let mut xx = TTreeCursor(cursor);

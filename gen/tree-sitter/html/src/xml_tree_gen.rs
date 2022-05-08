@@ -2,7 +2,6 @@
 use std::{fmt::Debug, vec};
 
 use legion::world::EntryRef;
-use tree_sitter::{Language, Parser, TreeCursor};
 use tuples::CombinConcat;
 
 use hyper_ast::{
@@ -36,10 +35,6 @@ use hyper_ast::{
 };
 
 // pub type HashedNode<'a> = HashedCompressedNode<SyntaxNodeHashs<HashSize>,SymbolU32<&'a HashedNode>,LabelIdentifier>;
-
-extern "C" {
-    fn tree_sitter_html() -> Language;
-}
 
 pub type LabelIdentifier = hyper_ast::store::labels::DefaultLabelIdentifier;
 
@@ -411,11 +406,23 @@ impl XmlTreeGen {
         }
     }
 
+    pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
+        let mut parser = tree_sitter::Parser::new();
+        let language = tree_sitter_html::language();
+        parser.set_language(language).unwrap();
+        let tree = parser.parse(text, None).unwrap();
+        if tree.root_node().has_error() {
+            Err(tree)
+        } else {
+            Ok(tree)
+        }
+    }
+
     pub fn generate_file(
         &mut self,
         name: &[u8],
         text: &[u8],
-        cursor: TreeCursor,
+        cursor: tree_sitter::TreeCursor,
     ) -> FullNode<Global, Local> {
         let mut init = self.init_val(text, &TNode(cursor.node()));
         init.label = Some(std::str::from_utf8(name).unwrap().to_owned());
@@ -433,35 +440,6 @@ impl XmlTreeGen {
         );
         let full_node = self.make(0, acc.metrics.size as usize, acc);
         full_node
-    }
-
-    pub fn main() {
-        let mut parser = Parser::new();
-        parser.set_language(unsafe { tree_sitter_html() }).unwrap();
-
-        let text = {
-            let source_code1 = "class A {void test() {}}";
-            source_code1.as_bytes()
-        };
-        // let mut parser: Parser, old_tree: Option<&Tree>
-        let tree = parser.parse(text, None).unwrap();
-        let mut xml_tree_gen = XmlTreeGen {
-            line_break: "\n".as_bytes().to_vec(),
-            stores: SimpleStores {
-                label_store: LabelStore::new(),
-                type_store: TypeStore {},
-                node_store: NodeStore::new(),
-            },
-        };
-        let _full_node = xml_tree_gen.generate_file(b"", text, tree.walk());
-
-        // print_tree_structure(
-        //     &xml_tree_gen.stores.node_store,
-        //     &_full_node.local.compressed_node,
-        // );
-
-        let tree = parser.parse(text, Some(&tree)).unwrap();
-        let _full_node = xml_tree_gen.generate_file(b"", text, tree.walk());
     }
 
     fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {

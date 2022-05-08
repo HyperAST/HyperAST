@@ -1,4 +1,5 @@
-use rusted_gumtree_core::tree::tree::{NodeStore, Stored, NodeStoreMut};
+use hyper_ast::types::{NodeStore, Stored, NodeStoreMut};
+
 
 pub struct Arena<T>(stack_graphs::arena::Arena<T>);
 

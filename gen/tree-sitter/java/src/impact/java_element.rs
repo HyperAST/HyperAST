@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use rusted_gumtree_core::tree::tree::Type;
+use hyper_ast::types::Type;
 
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]

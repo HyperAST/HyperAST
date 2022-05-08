@@ -1,20 +1,8 @@
-use core::fmt;
-use std::{
-    io::{stdout, Write},
-    ops::Deref,
-};
-
 use hyper_ast::{
-    filter::BloomResult,
-    nodes::RefContainer,
-    position::{ExploreStructuralPositions, Scout, StructuralPosition, StructuralPositionStore},
+    position::{Scout, StructuralPosition, StructuralPositionStore},
     store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores, TypeStore},
-    tree_gen::TreeGen,
     types::LabelStore as _,
-    types::WithChildren,
 };
-
-use tree_sitter::{Language, Parser};
 
 use crate::java::handle_java_file;
 
@@ -24,7 +12,7 @@ use rusted_gumtree_gen_ts_java::impact::{
 };
 use rusted_gumtree_gen_ts_java::{
     impact::{element::RefsEnum, usage},
-    java_tree_gen_full_compress_legion_ref as java_tree_gen,
+    legion_with_refs as java_tree_gen,
 };
 
 fn run(text: &[u8]) {

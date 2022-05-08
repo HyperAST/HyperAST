@@ -11,8 +11,8 @@ use hyper_ast::{
     tree_gen::SubTreeMetrics,
     types::{LabelStore as _, Labeled, Tree, Type, Typed, WithChildren},
 };
-use rusted_gumtree_gen_ts_java::java_tree_gen_full_compress_legion_ref as java_tree_gen;
-use rusted_gumtree_gen_ts_xml::xml_tree_gen::XmlTreeGen;
+use rusted_gumtree_gen_ts_java::legion_with_refs as java_tree_gen;
+use rusted_gumtree_gen_ts_xml::xml_tree_gen::{self, XmlTreeGen};
 
 use crate::{SimpleStores, PROPAGATE_ERROR_ON_BAD_CST_NODE};
 
@@ -21,27 +21,19 @@ pub(crate) fn handle_pom_file(
     name: &[u8],
     text: &[u8],
 ) -> Result<POM, ()> {
-    use tree_sitter::{Language, Parser};
-
-    let mut parser = Parser::new();
-
-    extern "C" {
-        fn tree_sitter_xml() -> Language;
-    }
-    {
-        let language = unsafe { tree_sitter_xml() };
-        parser.set_language(language).unwrap();
-    }
-
-    let tree = parser.parse(text, None).unwrap();
-    if tree.root_node().has_error() {
-        log::warn!("bad CST");
-        log::debug!("{}", tree.root_node().to_sexp());
-
-        if PROPAGATE_ERROR_ON_BAD_CST_NODE {
-            return Err(());
+    let tree = match xml_tree_gen::XmlTreeGen::tree_sitter_parse(text) {
+        Ok(tree) => tree,
+        Err(tree) => {
+            log::warn!("bad CST");
+            // println!("{}", name);
+            log::debug!("{}", tree.root_node().to_sexp());
+            if PROPAGATE_ERROR_ON_BAD_CST_NODE {
+                return Err(());
+            } else {
+                tree
+            }
         }
-    }
+    };
     let x = tree_gen.generate_file(&name, text, tree.walk()).local;
     let x = POM {
         compressed_node: x.compressed_node,

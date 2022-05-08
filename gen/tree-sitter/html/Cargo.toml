@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 tree-sitter = "0.20.0"
-rusted_gumtree_core = { path = "../../../core" }
+tree-sitter-html = {path="tree-sitter-html", version="0.20.0"}
 hyper_ast = { path = "../../../hyper_ast" }
 
 

@@ -7,32 +7,16 @@ use std::{
 use hyper_ast::{
     store::{TypeStore, SimpleStores, labels::LabelStore, nodes::DefaultNodeStore as NodeStore}, 
     nodes::RefContainer, tree_gen::TreeGen, filter::BloomResult, 
-    position::{ExploreStructuralPositions, StructuralPositionStore, StructuralPosition, Scout, TreePath}, types::WithChildren};
+    position::{ExploreStructuralPositions, StructuralPositionStore, StructuralPosition, Scout, TreePath}, types::WithChildren, utils::memusage_linux};
 use pretty_assertions::assert_eq;
 
-use tree_sitter::{Language, Parser};
-
 use crate::{
-    java_tree_gen::spaces_after_lb,
-    java_tree_gen_full_compress_legion_ref::{
+    legion_with_refs::{
         print_tree_labels, print_tree_syntax, serialize, JavaTreeGen,
     },
-    utils::memusage_linux,
 };
 
-// use crate::java_tree_gen::{JavaTreeGen, TreeContext, TreeGenerator};
-
-extern "C" {
-    fn tree_sitter_java() -> Language;
-}
-
 fn run(text: &[u8]) {
-    let mut parser = Parser::new();
-
-    {
-        let language = unsafe { tree_sitter_java() };
-        parser.set_language(language).unwrap();
-    }
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
         type_store: TypeStore {},
@@ -44,7 +28,8 @@ fn run(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let tree = parser.parse(text, None).unwrap();
+    
+    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
@@ -81,12 +66,6 @@ fn test_cases() {
 fn test_equals() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
     let text = CASE_33.as_bytes();
-    let mut parser = Parser::new();
-
-    {
-        let language = unsafe { tree_sitter_java() };
-        parser.set_language(language).unwrap();
-    }
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
         type_store: TypeStore {},
@@ -98,7 +77,7 @@ fn test_equals() {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let tree = parser.parse(text, None).unwrap();
+    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
@@ -153,12 +132,6 @@ fn test_equals() {
 
 #[test]
 fn test_special() {
-    let mut parser = Parser::new();
-
-    {
-        let language = unsafe { tree_sitter_java() };
-        parser.set_language(language).unwrap();
-    }
 
     // let mut parser: Parser, old_tree: Option<&Tree>
     let mut stores = SimpleStores {
@@ -215,7 +188,7 @@ public class A {
         // ";
         source_code1.as_bytes()
     };
-    let tree = parser.parse(text, None).unwrap();
+    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
 
     let _full_node = java_tree_gen.generate_file(b"", text, tree.walk());
@@ -312,7 +285,7 @@ public class A {
         // ";
         source_code1.as_bytes()
     };
-    let tree = parser.parse(text, None).unwrap();
+    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
@@ -379,52 +352,9 @@ impl std::fmt::Write for BuffOut {
 }
 
 #[test]
-fn test_2_spaces_after_lb() {
-    let r = spaces_after_lb("\n".as_bytes(), "\n  ".as_bytes());
-    assert_eq!(
-        r.and_then(|x| Some(std::str::from_utf8(x).unwrap())),
-        Some("  ")
-    )
-}
-
-#[test]
-fn test_1_space_after_lb() {
-    let r = spaces_after_lb("\n".as_bytes(), "\n ".as_bytes());
-    assert_eq!(
-        r.and_then(|x| Some(std::str::from_utf8(x).unwrap())),
-        Some(" ")
-    )
-}
-
-#[test]
-fn test_no_spaces_after_lb() {
-    let r = spaces_after_lb("\n".as_bytes(), "\n".as_bytes());
-    assert_eq!(
-        r.and_then(|x| Some(std::str::from_utf8(x).unwrap())),
-        Some("")
-    )
-}
-
-#[test]
-fn test_spaces_after_lb_special() {
-    let r = spaces_after_lb("\n\r".as_bytes(), "\n\r\t ".as_bytes());
-    assert_eq!(
-        r.and_then(|x| Some(std::str::from_utf8(x).unwrap())),
-        Some("\t ")
-    )
-}
-
-
-#[test]
 fn test_offset_computation() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
     let text = CASE_29.as_bytes();
-    let mut parser = Parser::new();
-
-    {
-        let language = unsafe { tree_sitter_java() };
-        parser.set_language(language).unwrap();
-    }
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
         type_store: TypeStore {},
@@ -436,7 +366,7 @@ fn test_offset_computation() {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let tree = parser.parse(text, None).unwrap();
+    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     let mut s = StructuralPositionStore::from(StructuralPosition::new(full_node.local.compressed_node));
@@ -469,12 +399,6 @@ fn test_offset_computation() {
 fn test_offset_computation2() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
     let text = CASE_30.as_bytes();
-    let mut parser = Parser::new();
-
-    {
-        let language = unsafe { tree_sitter_java() };
-        parser.set_language(language).unwrap();
-    }
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
         type_store: TypeStore {},
@@ -486,7 +410,7 @@ fn test_offset_computation2() {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let tree = parser.parse(text, None).unwrap();
+    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     let mut s = StructuralPositionStore::from(StructuralPosition::new(full_node.local.compressed_node));

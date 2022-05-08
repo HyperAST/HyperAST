@@ -1,12 +1,10 @@
 use std::path::{Path, PathBuf};
 
-use tree_sitter::{Language, Parser};
+use tree_sitter::{Parser};
+
+use crate::xml_tree_gen::XmlTreeGen;
 
 
-
-extern "C" {
-    fn tree_sitter_xml() -> Language;
-}
 
 #[test]
 fn xml_tree_sitter_simple() {
@@ -14,8 +12,7 @@ fn xml_tree_sitter_simple() {
     let mut parser = Parser::new();
 
     {
-        let language = unsafe { tree_sitter_xml() };
-        parser.set_language(language).unwrap();
+        parser.set_language(tree_sitter_xml::language()).unwrap();
     }
 
 
@@ -37,13 +34,6 @@ fn xml_tree_sitter_simple() {
 }
 #[test]
 fn xml_tree_sitter_simple2() {
-    
-    let mut parser = Parser::new();
-
-    {
-        let language = unsafe { tree_sitter_xml() };
-        parser.set_language(language).unwrap();
-    }
     let text = {
         let source_code1 = "<?xml version=\"1.0\"?><!-- q -->
 <project>
@@ -67,41 +57,27 @@ fn xml_tree_sitter_simple2() {
           ";
         source_code1.as_bytes()
     };
-    let tree = parser.parse(text, None).unwrap();
+    let tree = match XmlTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
 }
 
 #[test]
 fn xml_tree_sitter_on_pom() {
-    
-    let mut parser = Parser::new();
-
-    {
-        let language = unsafe { tree_sitter_xml() };
-        parser.set_language(language).unwrap();
-    }
 
     let path: PathBuf = Path::new("../../../benchmark/pom.xml").to_path_buf();
     
     let text = std::fs::read(path).unwrap();
-    let tree = parser.parse(&text, None).unwrap();
+    let tree = match XmlTreeGen::tree_sitter_parse(&text) {Ok(t)=>t,Err(t)=>t};
     println!("{:#?}", tree.root_node().to_sexp());
 }
 
 #[test]
 fn hyperAST_on_pom() {
-    
-    let mut parser = Parser::new();
-
-    {
-        let language = unsafe { tree_sitter_xml() };
-        parser.set_language(language).unwrap();
-    }
 
     let path: PathBuf = Path::new("../../../benchmark/pom.xml").to_path_buf();
     
     let text = std::fs::read(path).unwrap();
-    let tree = parser.parse(&text, None).unwrap();
+    let tree = match XmlTreeGen::tree_sitter_parse(&text) {Ok(t)=>t,Err(t)=>t};
     println!("{:#?}", tree.root_node().to_sexp());
 }
 

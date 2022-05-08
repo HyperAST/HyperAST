@@ -7,31 +7,29 @@ use std::{
 
 use git2::{Oid, Repository};
 use hyper_ast::{
-    filter::{Bloom, BF},
+    filter::{Bloom, BF, BloomSize},
     hashed::{self, SyntaxNodeHashs},
     store::{
         nodes::legion::{compo, EntryRef, NodeStore, CS},
         nodes::DefaultNodeIdentifier as NodeIdentifier,
     },
     tree_gen::SubTreeMetrics,
-    types::{LabelStore as _, Labeled, Tree, Type, Typed, WithChildren},
+    types::{LabelStore as _, Labeled, Type, Typed, WithChildren},
     utils::memusage_linux,
 };
 use log::info;
 use rusted_gumtree_gen_ts_java::{
-    filter::BloomSize,
-    impact::{element::RefPtr, partial_analysis::PartialAnalysis},
-    java_tree_gen_full_compress_legion_ref::{self, hash32, BulkHasher},
-    usage::declarations::IterDeclarationsUnstableOpti,
+    impact::{partial_analysis::PartialAnalysis},
+    legion_with_refs::{self, hash32, BulkHasher},
 };
 
 use crate::{
     git::{all_commits_between, retrieve_commit, BasicGitObjects},
     java::{handle_java_file, JavaAcc},
-    maven::{handle_pom_file, IterMavenModules2, MavenModuleAcc, POM},
+    maven::{handle_pom_file, MavenModuleAcc, POM},
     Commit, SimpleStores, MAX_REFS, MD,
 };
-use rusted_gumtree_gen_ts_java::java_tree_gen_full_compress_legion_ref as java_tree_gen;
+use rusted_gumtree_gen_ts_java::legion_with_refs as java_tree_gen;
 use rusted_gumtree_gen_ts_xml::xml_tree_gen::XmlTreeGen;
 use tuples::CombinConcat;
 
@@ -186,7 +184,7 @@ impl PreProcessedRepository {
                     let mut out = BuffOut {
                         buff: "".to_owned(),
                     };
-                    rusted_gumtree_gen_ts_java::java_tree_gen_full_compress_legion_ref::serialize(
+                    rusted_gumtree_gen_ts_java::legion_with_refs::serialize(
                         &self.main_stores.node_store,
                         &self.main_stores.label_store,
                         &full_node.local.compressed_node,
@@ -1306,7 +1304,7 @@ impl PreProcessedRepository {
                     }
                 };
 
-                let metrics = java_tree_gen_full_compress_legion_ref::SubTreeMetrics {
+                let metrics = legion_with_refs::SubTreeMetrics {
                     size: acc.metrics.size + 1,
                     height: acc.metrics.height + 1,
                     hashs,

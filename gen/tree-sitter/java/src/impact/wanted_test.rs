@@ -32,7 +32,8 @@ fn test() {
 
 
 mod try_typed_store {
-    use rusted_gumtree_core::tree::tree::Type;
+    use hyper_ast::types::Type;
+
 
     enum Element {
         Block(Box<Block>),

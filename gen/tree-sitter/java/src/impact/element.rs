@@ -9,6 +9,7 @@ use hyper_ast::filter::default::VaryHasher;
 use hyper_ast::impact::serialize::{
     CachedHasher, Keyed, MySerialize, MySerializePar, MySerializeSco, MySerializer, Table,
 };
+use hyper_ast::utils;
 use num::ToPrimitive;
 use serde::de::VariantAccess;
 use serde::ser::SerializeSeq;
@@ -16,8 +17,6 @@ use serde::Serialize;
 use string_interner::symbol::SymbolU16;
 use string_interner::{DefaultSymbol, StringInterner, Symbol};
 
-use crate::store::vec_map_store::{self, VecMapStore};
-use crate::utils::hash;
 
 use super::bytes_interner::{BytesInterner, BytesMap};
 use super::java_element::Primitive;
@@ -235,7 +234,7 @@ impl<Node: Eq + Hash> Hash for ListSet<Node> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let mut h = 0;
         for x in self.0.iter() {
-            h ^= hash(x);
+            h ^= utils::hash(x);
         }
         h.hash(state);
     }

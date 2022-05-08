@@ -8,5 +8,5 @@ edition = "2021"
 [dependencies]
 tree-sitter = "0.20.1"
 tree-sitter-cli = "0.20.1"
-rusted_gumtree_core = { path = "../core" }
+hyper_gumtree = { path = "../gumtree" }
 rusted_gumtree_gen_ts_java = { path = "../gen/tree-sitter/java" }

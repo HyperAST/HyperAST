@@ -16,7 +16,7 @@ use hyper_ast::{
     types::{LabelStore as _, Type, Typed}, impact::serialize::CachedHasher,
 };
 
-use rusted_gumtree_gen_ts_java::java_tree_gen_full_compress_legion_ref::{
+use rusted_gumtree_gen_ts_java::legion_with_refs::{
     print_tree_syntax, BulkHasher,
 };
 use tree_sitter::{Language, Parser};
@@ -29,7 +29,7 @@ use rusted_gumtree_gen_ts_java::impact::{
 };
 use rusted_gumtree_gen_ts_java::{
     impact::{element::RefsEnum, usage},
-    java_tree_gen_full_compress_legion_ref as java_tree_gen,
+    legion_with_refs as java_tree_gen,
 };
 
 fn run(text: &[u8]) {

@@ -8,7 +8,6 @@ edition = "2021"
 [dependencies]
 git2 = "0.13.24"
 tree-sitter = "0.20.0"
-rusted_gumtree_core = { path = "../../core" }
 rusted_gumtree_gen_ts_java = { path = "../../gen/tree-sitter/java" }
 rusted_gumtree_gen_ts_xml = { path = "../../gen/tree-sitter/xml" }
 hyper_ast = { path = "../../hyper_ast" } 
