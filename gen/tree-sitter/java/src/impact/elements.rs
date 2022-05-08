@@ -8,7 +8,6 @@ use std::{
 
 use bitvec::order::Lsb0;
 use enumset::{enum_set, EnumSet, EnumSetType};
-use rusted_gumtree_core::tree::tree::{LabelStore, Type};
 use string_interner::{DefaultSymbol, StringInterner, Symbol};
 
 use crate::impact::element::Arguments;

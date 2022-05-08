@@ -14,7 +14,7 @@ use hyper_ast::{
     types::WithChildren,
 };
 
-use rusted_gumtree_gen_ts_java::java_tree_gen_full_compress_legion_ref::print_tree_syntax;
+use rusted_gumtree_gen_ts_java::legion_with_refs::print_tree_syntax;
 use tree_sitter::{Language, Parser};
 
 use crate::java::handle_java_file;
@@ -25,7 +25,7 @@ use rusted_gumtree_gen_ts_java::impact::{
 };
 use rusted_gumtree_gen_ts_java::{
     impact::{element::RefsEnum, usage},
-    java_tree_gen_full_compress_legion_ref as java_tree_gen,
+    legion_with_refs as java_tree_gen,
 };
 
 fn run(text: &[u8]) {

@@ -3,10 +3,11 @@ use std::fmt::Debug;
 use std::hash::{BuildHasher, BuildHasherDefault, Hash};
 use std::ops::{Deref, Index};
 
+use hyper_ast::utils;
 use string_interner::{DefaultSymbol, Symbol};
 
-use crate::store::vec_map_store::{self, VecMapStore};
-use crate::utils::hash;
+// use crate::store::vec_map_store::{self, VecMapStore};
+// use crate::utils::hash;
 
 use super::java_element::Primitive;
 use super::label_value::LabelValue;
@@ -211,7 +212,7 @@ impl<Node: Eq + Hash> Hash for ListSet<Node> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let mut h = 0;
         for x in self.0.iter() {
-            h ^= hash(x);
+            h ^= utils::hash(x);
         }
         h.hash(state);
     }

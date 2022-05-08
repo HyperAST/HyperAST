@@ -13,7 +13,6 @@ cfg-if = "1.0"
 hashbrown = { version = "0.11.2", default-features = false, features = ["ahash"] }
 # fasthash="0.4.0"
 
-# rusted_gumtree_core = { path = "../../../core" }
 # tree-sitter_types = { path = "../../../tree-sitter_types" }
 
 #  # logging

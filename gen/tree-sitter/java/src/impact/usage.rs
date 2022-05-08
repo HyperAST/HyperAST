@@ -28,7 +28,7 @@ use crate::{
         element::{IdentifierFormat, LabelPtr},
         reference::DisplayRef,
     },
-    java_tree_gen_full_compress_legion_ref::{
+    legion_with_refs::{
         self,
         // HashedNodeRef,
         JavaTreeGen,
@@ -152,7 +152,7 @@ impl<'a> RefsFinder<'a> {
                 &t,
                 scout.make_position(&self.sp_store, &self.stores)
             );
-            log::debug!("{}",java_tree_gen_full_compress_legion_ref::TreeSyntax::new(
+            log::debug!("{}",legion_with_refs::TreeSyntax::new(
                 &self.stores.node_store,
                 &self.stores.label_store,
                 x,
@@ -206,7 +206,7 @@ impl<'a> RefsFinder<'a> {
         } else if t == Type::ImportDeclaration {
             log::debug!("d=1 {:?}", &t);
             // TODO move print to maybe contains branch
-            log::debug!("{}",java_tree_gen_full_compress_legion_ref::TreeSyntax::new(
+            log::debug!("{}",legion_with_refs::TreeSyntax::new(
                 &self.stores.node_store,
                 &self.stores.label_store,
                 current,
@@ -497,7 +497,7 @@ impl<'a> RefsFinder<'a> {
                 // thus we either search directly for scoped identifiers
                 // or we search for simple identifiers because they do not present refs in themself
                 log::debug!("!found {:?}", &t);
-                log::debug!("{}",java_tree_gen_full_compress_legion_ref::TreeSyntax::new(
+                log::debug!("{}",legion_with_refs::TreeSyntax::new(
                     &self.stores.node_store,
                     &self.stores.label_store,
                     current,
@@ -511,7 +511,7 @@ impl<'a> RefsFinder<'a> {
                 self.exact_match(target, scout.clone());
             } else if t == Type::This {
                 log::debug!("!found This");
-                log::debug!("{}",java_tree_gen_full_compress_legion_ref::TreeSyntax::new(
+                log::debug!("{}",legion_with_refs::TreeSyntax::new(
                     &self.stores.node_store,
                     &self.stores.label_store,
                     current,
@@ -520,7 +520,7 @@ impl<'a> RefsFinder<'a> {
                 return vec![];
             } else if t == Type::TypeIdentifier {
                 log::debug!("!found TypeIdentifier");
-                log::debug!("{}",java_tree_gen_full_compress_legion_ref::TreeSyntax::new(
+                log::debug!("{}",legion_with_refs::TreeSyntax::new(
                     &self.stores.node_store,
                     &self.stores.label_store,
                     current,
@@ -529,7 +529,7 @@ impl<'a> RefsFinder<'a> {
                 return vec![];
             } else if t == Type::MethodDeclaration {
                 // java_tree_gen::print_tree_syntax(
-                log::debug!("{}",java_tree_gen_full_compress_legion_ref::TreeSyntax::new(
+                log::debug!("{}",legion_with_refs::TreeSyntax::new(
                     &self.stores.node_store,
                     &self.stores.label_store,
                     current,
@@ -1957,7 +1957,7 @@ impl<'a> RefsFinder<'a> {
         // } else if o_t == Type::ScopedTypeIdentifier {
         // } else if o_t == Type::GenericType {
         } else {
-            log::debug!("{}",java_tree_gen_full_compress_legion_ref::TreeSyntax::new(
+            log::debug!("{}",legion_with_refs::TreeSyntax::new(
                 &self.stores.node_store,
                 &self.stores.label_store,
                 scout.node_always(&self.sp_store),
@@ -2530,7 +2530,7 @@ pub fn remake_pkg_ref(
     ana: &mut PartialAnalysis,
     x: NodeIdentifier,
 ) -> RefPtr {
-    log::debug!("{}",java_tree_gen_full_compress_legion_ref::TreeSyntax::new(
+    log::debug!("{}",legion_with_refs::TreeSyntax::new(
         &stores.node_store,
         &stores.label_store,
         x,
@@ -2686,7 +2686,7 @@ impl<'a> RefsFinder<'a> {
             return;
         } else if t == Type::This {
             log::debug!("!found 'this' {:?}", &t);
-            log::debug!("{}",java_tree_gen_full_compress_legion_ref::TreeSyntax::new(
+            log::debug!("{}",legion_with_refs::TreeSyntax::new(
                 &self.stores.node_store,
                 &self.stores.label_store,
                 current,

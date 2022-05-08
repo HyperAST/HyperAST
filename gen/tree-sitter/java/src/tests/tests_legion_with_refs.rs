@@ -7,17 +7,15 @@ use std::{
 use hyper_ast::{
     store::{TypeStore, SimpleStores, labels::LabelStore, nodes::DefaultNodeStore as NodeStore}, 
     nodes::RefContainer, tree_gen::TreeGen, filter::BloomResult, 
-    position::{ExploreStructuralPositions, StructuralPositionStore, StructuralPosition, Scout, TreePath}, types::WithChildren};
+    position::{ExploreStructuralPositions, StructuralPositionStore, StructuralPosition, Scout, TreePath}, types::WithChildren, utils::memusage_linux};
 use pretty_assertions::assert_eq;
 
 use tree_sitter::{Language, Parser};
 
 use crate::{
-    java_tree_gen::spaces_after_lb,
-    java_tree_gen_full_compress_legion_ref::{
+    legion_with_refs::{
         print_tree_labels, print_tree_syntax, serialize, JavaTreeGen,
     },
-    utils::memusage_linux,
 };
 
 // use crate::java_tree_gen::{JavaTreeGen, TreeContext, TreeGenerator};
@@ -376,43 +374,6 @@ impl std::fmt::Write for BuffOut {
         Ok(self.buff.extend(s.chars()))
     }
 }
-
-#[test]
-fn test_2_spaces_after_lb() {
-    let r = spaces_after_lb("\n".as_bytes(), "\n  ".as_bytes());
-    assert_eq!(
-        r.and_then(|x| Some(std::str::from_utf8(x).unwrap())),
-        Some("  ")
-    )
-}
-
-#[test]
-fn test_1_space_after_lb() {
-    let r = spaces_after_lb("\n".as_bytes(), "\n ".as_bytes());
-    assert_eq!(
-        r.and_then(|x| Some(std::str::from_utf8(x).unwrap())),
-        Some(" ")
-    )
-}
-
-#[test]
-fn test_no_spaces_after_lb() {
-    let r = spaces_after_lb("\n".as_bytes(), "\n".as_bytes());
-    assert_eq!(
-        r.and_then(|x| Some(std::str::from_utf8(x).unwrap())),
-        Some("")
-    )
-}
-
-#[test]
-fn test_spaces_after_lb_special() {
-    let r = spaces_after_lb("\n\r".as_bytes(), "\n\r\t ".as_bytes());
-    assert_eq!(
-        r.and_then(|x| Some(std::str::from_utf8(x).unwrap())),
-        Some("\t ")
-    )
-}
-
 
 #[test]
 fn test_offset_computation() {

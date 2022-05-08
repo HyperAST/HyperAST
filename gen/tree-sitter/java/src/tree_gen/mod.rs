@@ -1,8 +1,10 @@
 use std::hash::Hash;
 
+use hyper_ast::{nodes::{Space, SimpleNode1}, hashed::{SyntaxNodeHashs, inner_node_hash}};
+
 use crate::{
-    hashed::{inner_node_hash, SyntaxNodeHashs},
-    nodes::{SimpleNode1, Space},
+    // hashed::{inner_node_hash, SyntaxNodeHashs},
+    // nodes::{SimpleNode1, Space},
     utils::{self, clamp_u64_to_u32},
 };
 
@@ -156,19 +158,19 @@ pub fn label_for_cursor(text: &[u8], node: &tree_sitter::Node) -> Option<Vec<u8>
     label
 }
 
-pub fn hash_for_node<T: Hash, U>(
-    hashs: &SyntaxNodeHashs<u32>,
-    size: &u32,
-    node: &SimpleNode1<U, T>,
-) -> SyntaxNodeHashs<u32> {
-    let hashed_kind = &clamp_u64_to_u32(&utils::hash(&node.kind));
-    let hashed_label = &clamp_u64_to_u32(&utils::hash(&node.label));
-    SyntaxNodeHashs {
-        structt: inner_node_hash(hashed_kind, &0, size, &hashs.structt),
-        label: inner_node_hash(hashed_kind, hashed_label, size, &hashs.label),
-        syntax: inner_node_hash(hashed_kind, hashed_label, size, &hashs.syntax),
-    }
-}
+// pub fn hash_for_node<T: Hash, U>(
+//     hashs: &SyntaxNodeHashs<u32>,
+//     size: &u32,
+//     node: &SimpleNode1<U, T>,
+// ) -> SyntaxNodeHashs<u32> {
+//     let hashed_kind = &clamp_u64_to_u32(&utils::hash(&node.kind));
+//     let hashed_label = &clamp_u64_to_u32(&utils::hash(&node.label));
+//     SyntaxNodeHashs {
+//         structt: inner_node_hash(hashed_kind, &0, size, &hashs.structt),
+//         label: inner_node_hash(hashed_kind, hashed_label, size, &hashs.label),
+//         syntax: inner_node_hash(hashed_kind, hashed_label, size, &hashs.syntax),
+//     }
+// }
 
 pub fn compute_indentation<'a>(
     line_break: &Vec<u8>,
@@ -225,21 +227,21 @@ pub fn compute_indentation<'a>(
 //     };
 // }
 
-pub fn get_spacing(
-    padding_start: usize,
-    pos: usize,
-    text: &[u8],
-    parent_indentation: &Spaces,
-) -> Option<Spaces> {
-    if padding_start != pos {
-        let spaces = &text[padding_start..pos];
-        let spaces = Space::format_indentation(spaces);
-        let relativized = Space::replace_indentation(parent_indentation, &spaces);
-        Some(relativized)
-    } else {
-        None
-    }
-}
+// pub fn get_spacing(
+//     padding_start: usize,
+//     pos: usize,
+//     text: &[u8],
+//     parent_indentation: &Spaces,
+// ) -> Option<Spaces> {
+//     if padding_start != pos {
+//         let spaces = &text[padding_start..pos];
+//         let spaces = Space::format_indentation(spaces);
+//         let relativized = Space::replace_indentation(parent_indentation, &spaces);
+//         Some(relativized)
+//     } else {
+//         None
+//     }
+// }
 
 pub fn has_final_space(depth: &usize, sum_byte_length: usize, text: &[u8]) -> bool {
     // TODO not sure about depth

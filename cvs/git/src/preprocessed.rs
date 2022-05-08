@@ -21,7 +21,7 @@ use log::info;
 use rusted_gumtree_gen_ts_java::{
     filter::BloomSize,
     impact::{element::RefPtr, partial_analysis::PartialAnalysis},
-    java_tree_gen_full_compress_legion_ref::{self, hash32},
+    legion_with_refs::{self, hash32},
     usage::declarations::IterDeclarationsUnstableOpti,
 };
 
@@ -31,8 +31,8 @@ use crate::{
     maven::{handle_pom_file, IterMavenModules2, MavenModuleAcc, POM},
     Commit, SimpleStores, MAX_REFS, MD,
 };
-use rusted_gumtree_gen_ts_java::java_tree_gen_full_compress_legion_ref as java_tree_gen;
-use rusted_gumtree_gen_ts_xml::xml_tree_gen::XmlTreeGen;
+use rusted_gumtree_gen_ts_java::legion_with_refs as java_tree_gen;
+use rusted_gumtree_gen_ts_xml::legion::XmlTreeGen;
 use tuples::CombinConcat;
 
 /// preprocess a git repository
@@ -1184,7 +1184,7 @@ impl PreProcessedRepository {
                     }
                 };
 
-                let metrics = java_tree_gen_full_compress_legion_ref::SubTreeMetrics {
+                let metrics = legion_with_refs::SubTreeMetrics {
                     size: acc.metrics.size + 1,
                     height: acc.metrics.height + 1,
                     hashs,

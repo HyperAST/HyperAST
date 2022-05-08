@@ -9,7 +9,7 @@ use std::{
     vec,
 };
 
-use hyper_ast::{nodes::IoOut, store::labels::LabelStore};
+use hyper_ast::{nodes::IoOut, store::labels::LabelStore, full::FullNode, utils::{self, clamp_u64_to_u32}};
 use legion::{
     storage::{Archetype, Component},
     world::{ComponentError, EntityLocation, EntryRef},
@@ -44,10 +44,7 @@ use hyper_ast::{
 };
 
 use crate::{
-    full::FullNode,
     impact::{partial_analysis::PartialAnalysis},
-    store::vec_map_store::Symbol,
-    utils::{self, clamp_u64_to_u32},
 };
 
 pub fn hash32<T: ?Sized + Hash>(t: &T) -> u32 {
@@ -85,9 +82,6 @@ impl hyper_ast::types::Node for HashedNode {}
 impl hyper_ast::types::Stored for HashedNode {
     type TreeId = NodeIdentifier;
 }
-
-impl Symbol<HashedNode> for legion::Entity {}
-impl<'a> Symbol<HashedNodeRef<'a>> for legion::Entity {}
 
 impl<'a> RefContainer for HashedNodeRef<'a> {
     type Ref = [u8];
@@ -309,9 +303,9 @@ impl<'a> HashedNodeRef<'a> {}
 
 // pub type HashedNode<'a> = HashedCompressedNode<SyntaxNodeHashs<HashSize>,SymbolU32<&'a HashedNode>,LabelIdentifier>;
 
-extern "C" {
-    fn tree_sitter_java() -> Language;
-}
+// extern "C" {
+//     fn tree_sitter_java() -> Language;
+// }
 
 type MyLabel = str;
 pub type LabelIdentifier = DefaultSymbol;
@@ -1318,12 +1312,27 @@ impl<'a> JavaTreeGen<'a> {
             md_cache,
         }
     }
+    
+    pub fn tree_sitter_parse(
+        &mut self,
+        text: &[u8],
+    ) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
+        let mut parser = Parser::new();
+        let language = tree_sitter_java::language();
+        parser.set_language(language).unwrap();
+        let tree = parser.parse(text, None).unwrap();
+        if tree.root_node().has_error() {
+            Err(tree)
+        } else {
+            Ok(tree)
+        }
+    }
 
     pub fn generate_file(
         &mut self,
         name: &[u8],
         text: &[u8],
-        mut cursor: TreeCursor,
+        cursor: TreeCursor,
     ) -> FullNode<Global, Local> {
         let mut init = self.init_val(text, &TNode(cursor.node()));
         let mut xx = TTreeCursor(cursor);

@@ -1,6 +1,6 @@
 #![feature(generic_associated_types)]
 
-pub mod xml_tree_gen;
+pub mod legion;
 
 #[cfg(test)]
 mod tests;

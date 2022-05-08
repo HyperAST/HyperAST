@@ -24,6 +24,7 @@ pub fn clamp_u64_to_u32(x: &u64) -> u32 {
     (((x & 0xffff0000) >> 32) as u32) ^ ((x & 0xffff) as u32)
 }
 
+#[derive(Clone)]
 pub struct MemoryUsage {
     allocated: Bytes,
 }

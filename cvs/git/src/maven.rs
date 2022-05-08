@@ -11,8 +11,8 @@ use hyper_ast::{
     tree_gen::SubTreeMetrics,
     types::{LabelStore as _, Labeled, Tree, Type, Typed, WithChildren},
 };
-use rusted_gumtree_gen_ts_java::java_tree_gen_full_compress_legion_ref as java_tree_gen;
-use rusted_gumtree_gen_ts_xml::xml_tree_gen::XmlTreeGen;
+use rusted_gumtree_gen_ts_java::legion_with_refs as java_tree_gen;
+use rusted_gumtree_gen_ts_xml::legion::XmlTreeGen;
 
 use crate::{SimpleStores, PROPAGATE_ERROR_ON_BAD_CST_NODE};
 
@@ -21,27 +21,19 @@ pub(crate) fn handle_pom_file(
     name: &[u8],
     text: &[u8],
 ) -> Result<POM, ()> {
-    use tree_sitter::{Language, Parser};
-
-    let mut parser = Parser::new();
-
-    extern "C" {
-        fn tree_sitter_xml() -> Language;
-    }
-    {
-        let language = unsafe { tree_sitter_xml() };
-        parser.set_language(language).unwrap();
-    }
-
-    let tree = parser.parse(text, None).unwrap();
-    if tree.root_node().has_error() {
-        log::warn!("bad CST");
-        log::debug!("{}", tree.root_node().to_sexp());
-
-        if PROPAGATE_ERROR_ON_BAD_CST_NODE {
-            return Err(());
+    let tree = match tree_gen.tree_sitter_parse(text) {
+        Ok(tree) => tree,
+        Err(tree) => {
+            log::warn!("bad CST");
+            // println!("{}", name);
+            log::debug!("{}", tree.root_node().to_sexp());
+            if PROPAGATE_ERROR_ON_BAD_CST_NODE {
+                return Err(())
+            } else {
+                tree
+            }
         }
-    }
+    };
     let x = tree_gen.generate_file(&name, text, tree.walk()).local;
     let x = POM {
         compressed_node: x.compressed_node,
@@ -86,8 +78,6 @@ impl<'a> Iterator for IterMavenModules2<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.next_node().map(|x| {
             StructuralPosition::from((
-                // self.parents()[1..].to_vec(),
-                // self.offsets()[1..].to_vec(),
                 self.parents().to_vec(),
                 self.offsets().to_vec(),
                 x,
@@ -247,30 +237,6 @@ impl MavenModuleAcc {
 }
 
 impl MavenModuleAcc {
-    // pub(crate) fn push_java(&mut self, full_node: java_tree_gen::FNode) {
-    //     self.children.push(full_node.local.compressed_node.clone());
-    //     self.metrics.acc(full_node.local.metrics);
-    //     full_node
-    //         .local
-    //         .ana
-    //         .unwrap()
-    //         .acc(&Type::Directory, &mut self.ana);
-    // }
-    // pub(crate) fn push_xml(&mut self, full_node: xml_tree_gen::FNode) {
-    //     self.children.push(full_node.local.compressed_node.clone());
-    //     let m = full_node.local.metrics;
-    //     let m = java_tree_gen::SubTreeMetrics {
-    //         hashs: m.hashs,
-    //         size: m.size,
-    //         height: m.height,
-    //     };
-    //     self.metrics.acc(m);
-    //     // full_node
-    //     //     .local
-    //     //     .ana
-    //     //     .unwrap()
-    //     //     .acc(&Type::Directory, &mut self.ana);
-    // }
     pub(crate) fn push_pom(&mut self, name: DefaultLabelIdentifier, full_node: POM) {
         self.children.push(full_node.compressed_node);
         self.children_names.push(name);
