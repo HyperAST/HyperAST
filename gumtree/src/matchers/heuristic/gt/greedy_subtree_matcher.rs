@@ -150,7 +150,7 @@ where
                     return r;
                 }
             }
-            if alink.0 != alink.0 {
+            if alink.0 != blink.0 {
                 return alink.0.cmp(&blink.0);
             }
             return alink.1.cmp(&blink.1);

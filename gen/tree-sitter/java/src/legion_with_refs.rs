@@ -1,6 +1,5 @@
 ///! fully compress all subtrees
 use std::{
-    borrow::Borrow,
     collections::HashMap,
     fmt::{Debug, Display},
     hash::Hash,
@@ -25,13 +24,13 @@ use tuples::CombinConcat;
 
 use hyper_ast::{
     filter::BF,
-    filter::{Bloom, BloomResult, BloomSize},
+    filter::{Bloom, BloomSize},
     hashed::{self, NodeHashs, SyntaxNodeHashs, SyntaxNodeHashsKinds},
-    nodes::{self, CompressedNode, HashSize, RefContainer, SimpleNode1, Space},
+    nodes::{self, CompressedNode, HashSize, SimpleNode1, Space},
     store::{
         nodes::legion::{compo, CS},
         nodes::DefaultNodeStore as NodeStore,
-        SimpleStores, TypeStore,
+        SimpleStores,
     },
     tree_gen::parser::Node as _,
     tree_gen::{
@@ -234,7 +233,7 @@ impl<'a> hyper_ast::types::WithChildren for HashedNodeRef<'a> {
         v[v.len() - 1 - num::cast::<_, usize>(*idx).unwrap()]
     }
 
-    fn get_children<'b>(&'b self) -> &'b [Self::TreeId] {
+    fn get_children(&self) -> &[Self::TreeId] {
         self.0
             .get_component::<CS<legion::Entity>>()
             .unwrap()
@@ -269,7 +268,6 @@ impl<'a> hyper_ast::types::Tree for HashedNodeRef<'a> {
 }
 
 impl<'a> HashedNodeRef<'a> {}
-
 
 type MyLabel = str;
 pub type LabelIdentifier = DefaultSymbol;
@@ -554,7 +552,7 @@ impl Accumulator for Acc {
 }
 
 impl AccIndentation for Acc {
-    fn indentation<'a>(&'a self) -> &'a Spaces {
+    fn indentation(&self) -> &Spaces {
         &self.indentation
     }
 }
@@ -596,7 +594,7 @@ impl<'a> hyper_ast::tree_gen::parser::Node<'a> for TNode<'a> {
     }
 
     fn child(&self, i: usize) -> Option<Self> {
-        self.0.child(i).map(|x| TNode(x))
+        self.0.child(i).map(TNode)
     }
 
     fn is_named(&self) -> bool {
@@ -658,7 +656,7 @@ impl<'a> TreeGen for JavaTreeGen<'a> {
 
         let label = node
             .extract_label(text)
-            .and_then(|x| Some(std::str::from_utf8(&x).unwrap().to_owned()));
+            .map(|x| std::str::from_utf8(&x).unwrap().to_owned());
 
         let ana = self.build_ana(&kind);
         Acc {
@@ -710,7 +708,7 @@ impl<'a> TreeGen for JavaTreeGen<'a> {
         // let hashable = &hsyntax; //(hlabel as u64) << 32 & hsyntax as u64;
 
         // let label_id = if let Some(label) = label.as_ref() {
-        //     if &acc.simple.kind == &Type::Comment {
+        //     if acc.simple.kind == Type::Comment {
         //         // None // TODO check
         //         Some(label_store.get_or_insert(label.as_str()))
         //     } else if acc.simple.kind.is_literal() {
@@ -801,7 +799,7 @@ impl<'a> TreeGen for JavaTreeGen<'a> {
         // }
         // let ana = if let Some(label) = label.as_ref() {
         //     assert!(acc.ana.is_none());
-        //     if &acc.simple.kind == &Type::Comment {
+        //     if acc.simple.kind == Type::Comment {
         //         None
         //     } else if acc.simple.kind.is_literal() {
         //         let tl = acc.simple.kind.literal_type();
@@ -893,7 +891,7 @@ impl<'a> TreeGen for JavaTreeGen<'a> {
         // };
         // // TODO resolution now?
         // let ana = match ana {
-        //     Some(ana) if &acc.simple.kind == &Type::ClassBody => {
+        //     Some(ana) if acc.simple.kind == Type::ClassBody => {
         //         log::trace!("refs in class body");
         //         for x in ana.display_refs(&self.stores.label_store) {
         //             log::trace!("    {}", x);
@@ -928,7 +926,7 @@ impl<'a> TreeGen for JavaTreeGen<'a> {
         //         // TODO assert that ana.solver.refs does not contains mentions to ?.this
         //         Some(ana)
         //     }
-        //     Some(ana) if &acc.simple.kind == &Type::MethodDeclaration => {
+        //     Some(ana) if acc.simple.kind == Type::MethodDeclaration => {
         //         // debug!("refs in method decl:");
         //         // for x in ana.display_refs(&self.stores.label_store) {
         //         //     debug!("    {}", x);
@@ -940,7 +938,7 @@ impl<'a> TreeGen for JavaTreeGen<'a> {
         //         // }
         //         Some(ana)
         //     }
-        //     Some(ana) if &acc.simple.kind == &Type::ConstructorDeclaration => {
+        //     Some(ana) if acc.simple.kind == Type::ConstructorDeclaration => {
         //         // debug!("refs in construtor decl:");
         //         // for x in ana.display_refs(&self.stores.label_store) {
         //         //     debug!("    {}", x);
@@ -956,7 +954,7 @@ impl<'a> TreeGen for JavaTreeGen<'a> {
         //         // }
         //         Some(ana)
         //     }
-        //     Some(ana) if &acc.simple.kind == &Type::Program => {
+        //     Some(ana) if acc.simple.kind == Type::Program => {
         //         debug!("refs in program");
         //         for x in ana.display_refs(&self.stores.label_store) {
         //             debug!("    {}", x);
@@ -969,7 +967,7 @@ impl<'a> TreeGen for JavaTreeGen<'a> {
         //         // TODO assert that ana.solver.refs does not contains mentions to ?.this
         //         Some(ana)
         //     }
-        //     // Some(ana) if &acc.simple.kind == &Type::Directory => {
+        //     // Some(ana) if acc.simple.kind == Type::Directory => {
         //     //     debug!("refs in directory");
         //     //
         //     // for x in ana.display_refs(&self.stores.label_store) {
@@ -1148,7 +1146,7 @@ impl<'a> TreeGen for JavaTreeGen<'a> {
         let label = node
             .extract_label(text)
             // let label = label_for_cursor(text, &node)
-            .and_then(|x| Some(std::str::from_utf8(&x).unwrap().to_owned()));
+            .map(|x| std::str::from_utf8(&x).unwrap().to_owned());
         Acc {
             simple: BasicAccumulator {
                 kind,
@@ -1389,7 +1387,7 @@ impl<'a> JavaTreeGen<'a> {
         let hashable = &hsyntax; //(hlabel as u64) << 32 & hsyntax as u64;
 
         let label_id = if let Some(label) = label.as_ref() {
-            if &acc.simple.kind == &Type::Comment {
+            if acc.simple.kind == Type::Comment {
                 // None // TODO check
                 Some(label_store.get_or_insert(label.as_str()))
             } else if acc.simple.kind.is_literal() {
@@ -1441,7 +1439,7 @@ impl<'a> JavaTreeGen<'a> {
 
         let eq = |x: EntryRef| {
             let t = x.get_component::<Type>().ok();
-            if &t != &Some(&acc.simple.kind) {
+            if t != Some(&acc.simple.kind) {
                 // println!("typed: {:?} {:?}", acc.simple.kind, t);
                 return false;
             }
@@ -1467,7 +1465,7 @@ impl<'a> JavaTreeGen<'a> {
         if let Some(id) = insertion.occupied_id() {
             let md = self.md_cache.get(&id).unwrap();
             let ana = md.ana.clone();
-            let metrics = md.metrics.clone();
+            let metrics = md.metrics;
             let full_node = FullNode {
                 global: Global { depth, position },
                 local: Local {
@@ -1482,7 +1480,7 @@ impl<'a> JavaTreeGen<'a> {
             acc.ana
         } else if let Some(label) = label.as_ref() {
             assert!(acc.ana.is_none());
-            if &acc.simple.kind == &Type::Comment {
+            if acc.simple.kind == Type::Comment {
                 None
             } else if acc.simple.kind.is_literal() {
                 let tl = acc.simple.kind.literal_type();
@@ -1580,7 +1578,7 @@ impl<'a> JavaTreeGen<'a> {
         };
         // TODO resolution now?
         let ana = match ana {
-            Some(ana) if &acc.simple.kind == &Type::ClassBody => {
+            Some(ana) if acc.simple.kind == Type::ClassBody => {
                 log::trace!("refs in class body");
                 for x in ana.display_refs(&self.stores.label_store) {
                     log::trace!("    {}", x);
@@ -1615,7 +1613,7 @@ impl<'a> JavaTreeGen<'a> {
                 // TODO assert that ana.solver.refs does not contains mentions to ?.this
                 Some(ana)
             }
-            Some(ana) if &acc.simple.kind == &Type::MethodDeclaration => {
+            Some(ana) if acc.simple.kind == Type::MethodDeclaration => {
                 log::trace!("refs in method decl:");
                 for x in ana.display_refs(&self.stores.label_store) {
                     log::trace!("    {}", x);
@@ -1631,7 +1629,7 @@ impl<'a> JavaTreeGen<'a> {
                 }
                 Some(ana)
             }
-            Some(ana) if &acc.simple.kind == &Type::ConstructorDeclaration => {
+            Some(ana) if acc.simple.kind == Type::ConstructorDeclaration => {
                 // debug!("refs in construtor decl:");
                 // for x in ana.display_refs(&self.stores.label_store) {
                 //     log::debug!("    {}", x);
@@ -1647,7 +1645,7 @@ impl<'a> JavaTreeGen<'a> {
                 // }
                 Some(ana)
             }
-            Some(ana) if &acc.simple.kind == &Type::Program => {
+            Some(ana) if acc.simple.kind == Type::Program => {
                 log::debug!("refs in program");
                 for x in ana.display_refs(&self.stores.label_store) {
                     log::debug!("    {}", x);
@@ -1664,7 +1662,7 @@ impl<'a> JavaTreeGen<'a> {
                 // TODO assert that ana.solver.refs does not contains mentions to ?.this
                 Some(ana)
             }
-            // Some(ana) if &acc.simple.kind == &Type::Directory => {
+            // Some(ana) if acc.simple.kind == Type::Directory => {
             //     log::debug!("refs in directory");
             //
             // for x in ana.display_refs(&self.stores.label_store) {

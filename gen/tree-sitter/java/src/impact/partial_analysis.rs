@@ -133,7 +133,7 @@ impl PartialAnalysis {
                     // TODO explain usage
                     let refs = [package, root];
                     let result = self.solver.intern(RefsEnum::Or(
-                        refs.iter().map(|x|*x).collect()
+                        refs.iter().copied().collect()
                     ));
                     cache.insert(mask, SolvingResult::new(result, refs.into_iter().collect()));
                     // TODO explain usage
@@ -144,7 +144,7 @@ impl PartialAnalysis {
                         //         vec![package, root].into_boxed_slice(),
                         //     ))
                         // });
-                        let a = asterisk_imports[1..].into_iter().map(|x|*x);
+                        let a = asterisk_imports[1..].iter().copied();
                         let a = a.chain([package, root].into_iter());
                         let refs:Vec<_> = a.collect();
                         let result = self.solver.intern(RefsEnum::Or(
@@ -166,7 +166,7 @@ impl PartialAnalysis {
                             log::trace!("#| {:?}", x);
                         });
                         let result = self.solver.intern(RefsEnum::Or(
-                            refs.iter().map(|x|*x).collect()
+                            refs.iter().copied().collect()
                         ));
                         cache.insert(mm, SolvingResult::new(result, refs));
                     };
@@ -179,9 +179,9 @@ impl PartialAnalysis {
             }
         } else if let State::Declarations(ds) = self.current_node.clone(){
             for (_,d,_) in ds {
-                d.node().map(|&d|
+                if let Some(&d)  = d.node() {
                     assert!(!self.solver.has_choice(d),"{:?}",self.solver.nodes.with(d))
-                );
+                }
             }
         }
         let (mut cache, mut solver) = (cache, self.solver);
@@ -259,8 +259,8 @@ impl PartialAnalysis {
                                 DeclType::Compile(*t, s.clone(), i.clone())
                                 // DeclType::Compile(
                                 //     *t,
-                                //     s.as_ref().map(|x|*x),
-                                //     i.iter().map(|x|*x).collect(),
+                                //     s.as_ref().copied(),
+                                //     i.iter().copied().collect(),
                                 // )
                             }
                         }
@@ -359,9 +359,9 @@ impl PartialAnalysis {
             }
             State::Declarations(ds) => {
                 for (_,d,_) in ds {
-                    d.node().map(|&d|
+                    if let Some(&d)  = d.node() {
                         assert!(!solver.has_choice(d),"{:?}",solver.nodes.with(d))
-                    );
+                    }
                 }
             }
             _ => (),
@@ -489,12 +489,10 @@ impl PartialAnalysis {
                 let i = solver.intern(RefsEnum::Root);
                 let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("java")));
                 let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("lang")));
-                let i = solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("String")));
-                i
+                solver.intern(RefsEnum::ScopedIdentifier(i, intern_label("String")))
             } else {
                 let p = Primitive::from(label.unwrap());
-                let i = solver.intern(RefsEnum::Primitive(p));
-                i
+                solver.intern(RefsEnum::Primitive(p))
             };
             PartialAnalysis {
                 current_node: State::LiteralType(i),
@@ -584,7 +582,7 @@ impl PartialAnalysis {
             }
         } else {
             let is_lowercase = label.map(|x| x.into());
-            let label = label.map(|x| intern_label(x));
+            let label = label.map(intern_label);
             PartialAnalysis {
                 current_node: leaf_state(kind, label, is_lowercase),
                 solver,
@@ -4105,7 +4103,7 @@ impl PartialAnalysis {
                     {
                         // todo!("{:?}",ExplorableRef{rf:i,nodes:&acc.solver.nodes});
                         let p = p.deref().iter().map(|i| sync!(*i)).collect();
-                        match &acc.solver.nodes[i] {
+                        match &acc.solver.nodes[i].clone() {
                             RefsEnum::ScopedIdentifier(o, i) => {
                                 let r = acc.solver.intern_ref(RefsEnum::Invocation(
                                     *o,

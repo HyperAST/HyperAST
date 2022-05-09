@@ -1,5 +1,5 @@
 use core::{iter::Enumerate, marker::PhantomData, slice};
-use std::num::{NonZeroU32, NonZeroUsize};
+use std::num::{NonZeroU32};
 
 use crate::compat::{DefaultHashBuilder, HashMap};
 

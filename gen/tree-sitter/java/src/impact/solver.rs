@@ -247,7 +247,7 @@ impl Solver {
                 r
             }
             x => {
-                let o = x.object().expect(&format!("should have an object {:?}", x));
+                let o = x.object().unwrap_or_else(|| panic!("should have an object {:?}", x));
                 let o = rec(&o);
                 self.intern(x.with_object(o))
             }
@@ -297,7 +297,7 @@ impl Solver {
                 Some(refs!(tmp))
             }
             x => {
-                let o = x.object().expect(&format!("should have an object {:?}", x));
+                let o = x.object().unwrap_or_else(|| panic!("should have an object {:?}", x));
                 let o = self.try_solve_node_with(o, p)?;
                 let tmp = x.with_object(o);
                 Some(refs!(tmp))
@@ -344,7 +344,7 @@ impl Solver {
                 Some(refs!(tmp))
             }
             x => {
-                let o = x.object().expect(&format!("should have an object {:?}", x));
+                let o = x.object().unwrap_or_else(|| panic!("should have an object {:?}", x));
                 let o = self.try_unsolve_node_with(o, p)?;
                 let tmp = x.with_object(o);
                 Some(refs!(tmp))
@@ -510,7 +510,7 @@ impl Solver {
                 r
             }
             x => {
-                let o = x.object().expect(&format!("should have an object {:?}", x));
+                let o = x.object().unwrap_or_else(|| panic!("should have an object {:?}", x));
                 let o = self.local_solve_intern_external(cache, other.with(o));
                 self.intern(x.with_object(o))
             }
@@ -520,6 +520,7 @@ impl Solver {
                 if b.len() == 1 {
                     b[0]
                 } else {
+                    log::trace!("TODO");
                     b[0] // TODO
                 }
             }
@@ -666,7 +667,7 @@ impl Solver {
                 }
             }
             x => {
-                let o = x.object().expect(&format!("should have an object {:?}", x));
+                let o = x.object().unwrap_or_else(|| panic!("should have an object {:?}", x));
                 let o = rec(o);
                 let ptr = self.intern(x.with_object(o.ptr));
                 CountedRefPtr {
@@ -1128,7 +1129,7 @@ impl Solver {
                         })
                         .collect();
                     let waiting = if x.len() == 1 {
-                        x.iter().next().map(|&x| x)
+                        x.iter().next().copied()
                     } else {
                         Some(self.intern(RefsEnum::Or(x.clone())))
                     };
@@ -1407,7 +1408,7 @@ impl Solver {
                         })
                         .collect();
                     let waiting = if x.len() == 1 {
-                        x.iter().next().map(|&x| x)
+                        x.iter().next().copied()
                     } else {
                         Some(self.intern(RefsEnum::Or(x.clone())))
                     };
@@ -1670,7 +1671,7 @@ impl Solver {
                         })
                         .collect();
                     let waiting = if x.len() == 1 {
-                        x.iter().next().map(|&x| x)
+                        x.iter().next().copied()
                     } else {
                         Some(self.intern(RefsEnum::Or(x.clone())))
                     };

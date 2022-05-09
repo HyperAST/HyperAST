@@ -486,7 +486,6 @@ pub fn print_tree_structure<
         }
         CompressedNode::Children { kind, children } => {
             print!("({} ", kind.to_string());
-            let children = children.clone();
             for id in children.iter() {
                 print_tree_structure(f, &id);
             }
@@ -530,7 +529,6 @@ pub fn print_tree_labels<
         }
         CompressedNode::Children { kind, children } => {
             print!("({} ", kind.to_string());
-            let children = children.clone();
             for id in children.iter() {
                 print_tree_labels(f, g, &id);
             }
@@ -594,7 +592,6 @@ pub fn print_tree_syntax<
         }
         CompressedNode::Children { kind, children } => {
             print!("({} ", kind.to_string());
-            let children = children.clone();
             for id in children.iter() {
                 print_tree_syntax(f, g, &id, out);
             }

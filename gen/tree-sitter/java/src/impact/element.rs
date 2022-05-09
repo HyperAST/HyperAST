@@ -1,24 +1,18 @@
 use std::collections::HashMap;
-use std::fmt::{Debug, Display};
-use std::hash::{BuildHasher, BuildHasherDefault, Hash};
+use std::fmt::{Debug};
+use std::hash::{Hash};
 use std::marker::PhantomData;
-use std::ops::{Deref, Index, IndexMut};
-use std::str::Utf8Error;
+use std::ops::{Deref, Index};
 
 use hyper_ast::filter::default::VaryHasher;
 use hyper_ast::impact::serialize::{
     CachedHasher, Keyed, MySerialize, MySerializePar, MySerializeSco, MySerializer, Table,
 };
 use hyper_ast::utils;
-use num::ToPrimitive;
-use serde::de::VariantAccess;
-use serde::ser::SerializeSeq;
-use serde::Serialize;
-use string_interner::symbol::SymbolU16;
-use string_interner::{DefaultSymbol, StringInterner, Symbol};
+use string_interner::{DefaultSymbol, Symbol};
 
 
-use super::bytes_interner::{BytesInterner, BytesMap};
+
 use super::java_element::Primitive;
 use super::label_value::LabelValue;
 
@@ -254,7 +248,7 @@ impl<Node: Eq + Hash> FromIterator<Node> for ListSet<Node> {
 
 impl<Node: Eq + Hash + Clone> From<Box<[Node]>> for ListSet<Node> {
     fn from(x: Box<[Node]>) -> Self {
-        x.into_iter().map(|x| x.clone()).collect()
+        x.into_iter().cloned().collect()
     }
 }
 

@@ -52,7 +52,7 @@ impl EntityU16 {
     }
 
     fn is_leaf(content: u16) -> bool {
-        content & 1 << LEAF_FLAG == 1
+        content & 1 << LEAF_FLAG != 0
     }
 
     pub fn try_type(&self) -> Option<u16> {
@@ -147,7 +147,7 @@ impl EntityU32 {
     }
 
     fn is_inline_length(content: u32) -> bool {
-        content & (1 << MEDIUM_CHILD_FLAG) == 1
+        content & (1 << MEDIUM_CHILD_FLAG) != 0
     }
 
     pub fn try_unwrap(&self) -> Option<EntityU16> {
