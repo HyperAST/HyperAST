@@ -13,6 +13,7 @@ use self::parser::{Node as _, TreeCursor as _};
 
 pub type Spaces = Vec<Space>;
 
+/// Builder of a node for the hyperAST
 pub trait Accumulator {
     type Node;
     fn push(&mut self, full_node: Self::Node);
@@ -39,6 +40,7 @@ impl<T, Id> Accumulator for BasicAccumulator<T, Id> {
     }
 }
 
+/// Builder of a node aware of its indentation for the hyperAST
 pub trait AccIndentation: Accumulator {
     fn indentation<'a>(&'a self) -> &'a Spaces;
 }
@@ -58,10 +60,147 @@ impl<U: NodeHashs> SubTreeMetrics<U> {
     }
 }
 
+pub trait GlobalData {
+    fn up(&mut self);
+    fn right(&mut self);
+    fn down(&mut self);
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BasicGlobalData {
+    depth: usize,
+    /// preorder position
+    position: usize,
+}
+
+impl Default for BasicGlobalData {
+    fn default() -> Self {
+        Self {
+            depth: 1,
+            position: 0,
+        }
+    }
+}
+
+impl GlobalData for BasicGlobalData {
+    fn up(&mut self) {
+        self.depth -= 0;
+    }
+
+    fn right(&mut self) {
+        self.position += 1;
+    }
+
+    /// goto the first children
+    fn down(&mut self) {
+        self.position += 1;
+        self.depth += 1;
+    }
+}
+pub trait TotalBytesGlobalData {
+    fn set_sum_byte_length(&mut self, sum_byte_length: usize);
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TextedGlobalData<'a> {
+    text: &'a [u8],
+    inner: BasicGlobalData,
+}
+
+impl<'a> TextedGlobalData<'a> {
+    pub fn new(inner: BasicGlobalData, text: &'a [u8]) -> Self {
+        Self { text, inner }
+    }
+    pub fn text(self) -> &'a [u8] {
+        self.text
+    }
+}
+
+impl<'a> GlobalData for TextedGlobalData<'a> {
+    fn up(&mut self) {
+        self.inner.up();
+    }
+
+    fn right(&mut self) {
+        self.inner.right();
+    }
+
+    /// goto the first children
+    fn down(&mut self) {
+        self.inner.down();
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SpacedGlobalData<'a> {
+    sum_byte_length: usize,
+    inner: TextedGlobalData<'a>,
+}
+impl<'a> From<TextedGlobalData<'a>> for SpacedGlobalData<'a> {
+    fn from(inner: TextedGlobalData<'a>) -> Self {
+        Self { sum_byte_length: 0, inner }
+    }
+}
+impl<'a> From<SpacedGlobalData<'a>> for BasicGlobalData {
+    fn from(x: SpacedGlobalData<'a>) -> Self {
+        BasicGlobalData::from(x.inner)
+    }
+}
+impl<'a> From<TextedGlobalData<'a>> for BasicGlobalData {
+    fn from(x: TextedGlobalData<'a>) -> Self {
+        BasicGlobalData::from(x.inner)
+    }
+}
+impl<'a> From<&mut SpacedGlobalData<'a>> for BasicGlobalData {
+    fn from(x: &mut SpacedGlobalData<'a>) -> Self {
+        BasicGlobalData::from(x.inner)
+    }
+}
+impl<'a> From<&mut TextedGlobalData<'a>> for BasicGlobalData {
+    fn from(x: &mut TextedGlobalData<'a>) -> Self {
+        BasicGlobalData::from(x.inner)
+    }
+}
+impl<'a> SpacedGlobalData<'a> {
+    pub fn sum_byte_length(self) -> usize {
+        self.sum_byte_length
+    }
+}
+impl<'a> TotalBytesGlobalData for SpacedGlobalData<'a> {
+    fn set_sum_byte_length(&mut self, sum_byte_length: usize) {
+        self.sum_byte_length = sum_byte_length;
+    }
+}
+
+impl<'a> GlobalData for SpacedGlobalData<'a> {
+    fn up(&mut self) {
+        self.inner.up();
+    }
+
+    fn right(&mut self) {
+        self.inner.right();
+    }
+
+    /// goto the first children
+    fn down(&mut self) {
+        self.inner.down();
+    }
+}
+
 pub trait TreeGen {
+    type Acc: AccIndentation;
+    type Global: GlobalData;
+    fn make(
+        &mut self,
+        global: &mut Self::Global,
+        acc: <Self as TreeGen>::Acc,
+    ) -> <<Self as TreeGen>::Acc as Accumulator>::Node;
+}
+
+pub trait ZippedTreeGen: TreeGen
+where Self::Global: TotalBytesGlobalData {
     // # results
     type Node1;
-    type Acc: AccIndentation;
     type Stores;
     // # source
     type Text: ?Sized;
@@ -75,16 +214,14 @@ pub trait TreeGen {
         text: &Self::Text,
         node: &Self::Node<'_>,
         stack: &Vec<Self::Acc>,
-        sum_byte_length: usize,
+        global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc;
 
     fn post(
         &mut self,
         parent: &mut <Self as TreeGen>::Acc,
-        depth: usize,
-        position: usize,
+        global: &mut Self::Global,
         text: &Self::Text,
-        // node: &Self::Node<'_>,
         acc: <Self as TreeGen>::Acc,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node;
 
@@ -95,30 +232,30 @@ pub trait TreeGen {
         text: &Self::Text,
         stack: &mut Vec<Self::Acc>,
         cursor: &mut Self::TreeCursor<'_>,
-    ) -> usize {
+        global: &mut Self::Global,
+    ) {
         let mut has = Has::Down;
-        let mut position = 0;
-        let mut depth = 1;
-        let mut sum_byte_length = 0;
-
+        // let mut sum_byte_length = 0;
         loop {
             let sbl = cursor.node().start_byte();
             if has != Has::Up && cursor.goto_first_child() {
-                sum_byte_length =  sbl;
+                global.set_sum_byte_length(sbl);//sum_byte_length = sbl;
                 has = Has::Down;
-                position += 1;
-                depth += 1;
+                // position += 1;
+                // depth += 1;
+                global.down();
 
-                let n = self.pre(text, &cursor.node(), &stack, sum_byte_length);
+                let n = self.pre(text, &cursor.node(), &stack, global);
 
                 stack.push(n);
             } else {
                 let acc = stack.pop().unwrap();
-                depth -= 1;
+                // depth -= 1;
+                global.up();
 
                 let full_node: Option<_> = if let Some(parent) = stack.last_mut() {
                     Some(self.post(
-                        parent, depth, position, text, // &cursor.node(),
+                        parent, global, text, // &cursor.node(),
                         acc,
                     ))
                 } else {
@@ -128,31 +265,32 @@ pub trait TreeGen {
 
                 let sbl = cursor.node().end_byte();
                 if cursor.goto_next_sibling() {
-                    sum_byte_length =  sbl;
+                    global.set_sum_byte_length(sbl);//sum_byte_length = sbl;
                     has = Has::Right;
                     let parent = stack.last_mut().unwrap();
                     parent.push(full_node.unwrap());
-                    position += 1;
-                    depth += 1;
-                    let n = self.pre(text, &cursor.node(), &stack, sum_byte_length);
+                    // position += 1;
+                    // depth += 1;
+                    global.down();
+                    let n = self.pre(text, &cursor.node(), &stack, global);
                     stack.push(n);
                 } else {
                     has = Has::Up;
                     if cursor.goto_parent() {
                         if let Some(full_node) = full_node {
-                            sum_byte_length =  sbl;
+                            global.set_sum_byte_length(sbl);//sum_byte_length = sbl;
                             stack.last_mut().unwrap().push(full_node);
                         } else {
                             if has == Has::Down {
-                                sum_byte_length =  sbl;
+                                global.set_sum_byte_length(sbl);//sum_byte_length = sbl;
                             }
-                            return sum_byte_length;
+                            return;
                         }
                     } else {
                         if has == Has::Down {
-                            sum_byte_length =  sbl;
+                            global.set_sum_byte_length(sbl);//sum_byte_length = sbl;
                         }
-                        return sum_byte_length;
+                        return;
                     }
                 }
             }
@@ -177,15 +315,15 @@ pub(crate) fn things_after_last_lb<'b>(lb: &[u8], spaces: &'b [u8]) -> Option<&'
 
 pub fn hash_for_node<T: Hash, U>(
     hashs: &SyntaxNodeHashs<u32>,
-    size: &u32,
+    size: u32,
     node: &SimpleNode1<U, T>,
 ) -> SyntaxNodeHashs<u32> {
-    let hashed_kind = &clamp_u64_to_u32(&utils::hash(&node.kind));
-    let hashed_label = &clamp_u64_to_u32(&utils::hash(&node.label));
+    let hashed_kind = clamp_u64_to_u32(&utils::hash(&node.kind));
+    let hashed_label = clamp_u64_to_u32(&utils::hash(&node.label));
     SyntaxNodeHashs {
-        structt: inner_node_hash(hashed_kind, &0, size, &hashs.structt),
-        label: inner_node_hash(hashed_kind, hashed_label, size, &hashs.label),
-        syntax: inner_node_hash(hashed_kind, hashed_label, size, &hashs.syntax),
+        structt: inner_node_hash(hashed_kind, 0, size, hashs.structt),
+        label: inner_node_hash(hashed_kind, hashed_label, size, hashs.label),
+        syntax: inner_node_hash(hashed_kind, hashed_label, size, hashs.syntax),
     }
 }
 

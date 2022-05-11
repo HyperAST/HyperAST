@@ -7,7 +7,7 @@ use std::{
 
 use git2::{Oid, Repository};
 use hyper_ast::{
-    filter::{Bloom, BF, BloomSize},
+    filter::{Bloom, BloomSize, BF},
     hashed::{self, SyntaxNodeHashs},
     store::{
         nodes::legion::{compo, EntryRef, NodeStore, CS},
@@ -19,7 +19,7 @@ use hyper_ast::{
 };
 use log::info;
 use rusted_gumtree_gen_ts_java::{
-    impact::{partial_analysis::PartialAnalysis},
+    impact::partial_analysis::PartialAnalysis,
     legion_with_refs::{self, hash32, BulkHasher},
 };
 
@@ -76,7 +76,7 @@ impl PreProcessedRepository {
     }
 
     fn java_generator(&mut self, text: &[u8]) -> java_tree_gen::JavaTreeGen {
-        let line_break = if text.contains(&b"\r"[0]) {
+        let line_break = if text.contains(&b'\r') {
             "\r\n".as_bytes().to_vec()
         } else {
             "\n".as_bytes().to_vec()
@@ -140,8 +140,7 @@ impl PreProcessedRepository {
         // before: &str,
         // after: &str,
         // dir_path: &str,
-    ) -> (usize,usize) {
-
+    ) -> (usize, usize) {
         struct BuffOut {
             buff: String,
         }
@@ -157,22 +156,26 @@ impl PreProcessedRepository {
         // );
         // let rw = all_commits_between(&repository, before, after);
         let mut oids = HashSet::<_>::default();
-        repository.odb().unwrap().foreach(|&oid| {
-            // easy deterministic sampling of objects
-            if (oid.as_bytes()[0] & 0b11000000) != 0 {
-                return true;
-            }
-            if let Ok(tree) = repository.find_tree(oid) {
-                tree.iter().for_each(|entry| {
-                    let name = entry.name_bytes().to_owned();
-                    if name.ends_with(b".java") {
-                        oids.insert(entry.id());
-                    }
-                })
-                //if let Ok(blob) = repository.find_blob(oid) {
-            }
-            true
-        }).unwrap();
+        repository
+            .odb()
+            .unwrap()
+            .foreach(|&oid| {
+                // easy deterministic sampling of objects
+                if (oid.as_bytes()[0] & 0b11000000) != 0 {
+                    return true;
+                }
+                if let Ok(tree) = repository.find_tree(oid) {
+                    tree.iter().for_each(|entry| {
+                        let name = entry.name_bytes().to_owned();
+                        if name.ends_with(b".java") {
+                            oids.insert(entry.id());
+                        }
+                    })
+                    //if let Ok(blob) = repository.find_blob(oid) {
+                }
+                true
+            })
+            .unwrap();
         let mut eq = 0;
         let mut not = 0;
         for oid in oids {
@@ -210,7 +213,7 @@ impl PreProcessedRepository {
         //     todo!()
         // })
         // .collect()
-        (eq,not)
+        (eq, not)
     }
 
     pub fn pre_process_with_limit(
@@ -465,11 +468,11 @@ impl PreProcessedRepository {
             } else if let Some((id, _, mut acc)) = stack.pop() {
                 // commit node
                 let hashed_label = hash32(&acc.name);
-                let hsyntax = hashed::inner_node_hash(
-                    &dir_hash,
-                    &0,
-                    &acc.metrics.size,
-                    &acc.metrics.hashs.syntax,
+                let hsyntax = SyntaxNodeHashs::most_discriminating(
+                    dir_hash,
+                    hashed_label,
+                    acc.metrics.hashs,
+                    acc.metrics.size,
                 );
                 let label = self
                     .main_stores()
@@ -524,21 +527,13 @@ impl PreProcessedRepository {
                     .main_stores()
                     .node_store
                     .prepare_insertion(&hsyntax, eq);
-                let hashs = SyntaxNodeHashs {
-                    structt: hashed::inner_node_hash(
-                        &dir_hash,
-                        &0,
-                        &acc.metrics.size,
-                        &acc.metrics.hashs.structt,
-                    ),
-                    label: hashed::inner_node_hash(
-                        &dir_hash,
-                        &hashed_label,
-                        &acc.metrics.size,
-                        &acc.metrics.hashs.label,
-                    ),
-                    syntax: hsyntax,
-                };
+                let hashs = SyntaxNodeHashs::with_most_disriminating(
+                    dir_hash,
+                    hashed_label,
+                    acc.metrics.hashs,
+                    acc.metrics.size,
+                    hsyntax,
+                );
                 let node_id = if let Some(id) = insertion.occupied_id() {
                     id
                 } else {
@@ -840,11 +835,11 @@ impl PreProcessedRepository {
             } else if let Some((id, _, mut acc)) = stack.pop() {
                 // commit node
                 let hashed_label = hash32(&acc.name);
-                let hsyntax = hashed::inner_node_hash(
-                    &dir_hash,
-                    &0,
-                    &acc.metrics.size,
-                    &acc.metrics.hashs.syntax,
+                let hsyntax = SyntaxNodeHashs::most_discriminating(
+                    dir_hash,
+                    hashed_label,
+                    acc.metrics.hashs,
+                    acc.metrics.size,
                 );
                 let label = self
                     .main_stores()
@@ -899,21 +894,13 @@ impl PreProcessedRepository {
                     .main_stores()
                     .node_store
                     .prepare_insertion(&hsyntax, eq);
-                let hashs = SyntaxNodeHashs {
-                    structt: hashed::inner_node_hash(
-                        &dir_hash,
-                        &0,
-                        &acc.metrics.size,
-                        &acc.metrics.hashs.structt,
-                    ),
-                    label: hashed::inner_node_hash(
-                        &dir_hash,
-                        &hashed_label,
-                        &acc.metrics.size,
-                        &acc.metrics.hashs.label,
-                    ),
-                    syntax: hsyntax,
-                };
+                let hashs = SyntaxNodeHashs::with_most_disriminating(
+                    dir_hash,
+                    hashed_label,
+                    acc.metrics.hashs,
+                    acc.metrics.size,
+                    hsyntax,
+                );
                 let node_id = if let Some(id) = insertion.occupied_id() {
                     id
                 } else {
@@ -1131,12 +1118,11 @@ impl PreProcessedRepository {
                 // commit node
 
                 let hashed_label = hash32(&acc.name);
-
-                let hsyntax = hashed::inner_node_hash(
-                    &dir_hash,
-                    &0,
-                    &acc.metrics.size,
-                    &acc.metrics.hashs.syntax,
+                let hsyntax = SyntaxNodeHashs::most_discriminating(
+                    dir_hash,
+                    hashed_label,
+                    acc.metrics.hashs,
+                    acc.metrics.size,
                 );
                 let label = self
                     .main_stores()
@@ -1160,21 +1146,14 @@ impl PreProcessedRepository {
                     }
                     true
                 };
-                let hashs = SyntaxNodeHashs {
-                    structt: hashed::inner_node_hash(
-                        &dir_hash,
-                        &0,
-                        &acc.metrics.size,
-                        &acc.metrics.hashs.structt,
-                    ),
-                    label: hashed::inner_node_hash(
-                        &dir_hash,
-                        &hashed_label,
-                        &acc.metrics.size,
-                        &acc.metrics.hashs.label,
-                    ),
-                    syntax: hsyntax,
-                };
+
+                let hashs = SyntaxNodeHashs::with_most_disriminating(
+                    dir_hash,
+                    hashed_label,
+                    acc.metrics.hashs,
+                    acc.metrics.size,
+                    hsyntax,
+                );
                 let ana = {
                     let ana = acc.ana;
                     let c = ana.estimated_refs_count();

@@ -16,10 +16,10 @@ use rusted_gumtree_gen_ts_xml::xml_tree_gen::{self, XmlTreeGen};
 
 use crate::{SimpleStores, PROPAGATE_ERROR_ON_BAD_CST_NODE};
 
-pub(crate) fn handle_pom_file(
-    tree_gen: &mut XmlTreeGen,
+pub(crate) fn handle_pom_file<'a>(
+    tree_gen: &mut XmlTreeGen<'a>,
     name: &[u8],
-    text: &[u8],
+    text: &'a [u8],
 ) -> Result<POM, ()> {
     let tree = match xml_tree_gen::XmlTreeGen::tree_sitter_parse(text) {
         Ok(tree) => tree,

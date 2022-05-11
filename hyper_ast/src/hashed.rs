@@ -3,9 +3,11 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use num::{traits::WrappingAdd, PrimInt};
-use crate::{types::Type, store::labels::DefaultLabelIdentifier, store::nodes::DefaultNodeIdentifier};
 use crate::types::HashKind;
+use crate::{
+    store::labels::DefaultLabelIdentifier, store::nodes::DefaultNodeIdentifier, types::Type,
+};
+use num::{traits::WrappingAdd, PrimInt};
 
 use crate::nodes::{CompressedNode, HashSize};
 
@@ -24,6 +26,45 @@ pub struct SyntaxNodeHashs<T: PrimInt> {
     pub structt: T,
     pub label: T,
     pub syntax: T,
+}
+
+impl SyntaxNodeHashs<u32> {
+    pub fn most_discriminating(
+        hashed_kind: u32,
+        hashed_label: u32,
+        hashs: SyntaxNodeHashs<u32>,
+        size: u32,
+    ) -> u32 {
+        inner_node_hash(
+                hashed_kind,
+                hashed_label,
+                size,
+                hashs.label,
+        )
+    }
+    pub fn with_most_disriminating(
+        hashed_kind: u32,
+        hashed_label: u32,
+        hashs: SyntaxNodeHashs<u32>,
+        size: u32,
+        hsyntax: u32,
+    ) -> SyntaxNodeHashs<u32> {
+        SyntaxNodeHashs {
+            structt: inner_node_hash(
+                hashed_kind,
+                0,
+                size,
+                hashs.structt,
+            ),
+            label: inner_node_hash(
+                hashed_kind,
+                hashed_label,
+                size,
+                hashs.label,
+            ),
+            syntax: hsyntax,
+        }
+    }
 }
 
 pub enum SyntaxNodeHashsKinds {
@@ -136,8 +177,8 @@ impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L: Eq> crate::types::Labeled
     }
 }
 
-impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L>
-    crate::types::WithChildren for HashedCompressedNode<U, N, L>
+impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L> crate::types::WithChildren
+    for HashedCompressedNode<U, N, L>
 {
     type ChildIdx = u8;
 
@@ -150,7 +191,7 @@ impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L>
     }
 
     fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
-    self.node.get_child_rev(idx)
+        self.node.get_child_rev(idx)
     }
 
     // fn descendants_count(&self) -> Self::TreeId {
@@ -162,8 +203,8 @@ impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L>
     }
 }
 
-impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L: Eq>
-    crate::types::Tree for HashedCompressedNode<U, N, L>
+impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L: Eq> crate::types::Tree
+    for HashedCompressedNode<U, N, L>
 {
     fn has_children(&self) -> bool {
         self.node.has_children()
@@ -220,7 +261,7 @@ static LEAVE: u32 = {
 };
 static BASE: &u32 = &33u32;
 
-pub fn inner_node_hash(kind: &u32, label: &u32, size: &u32, middle_hash: &u32) -> u32 {
+pub fn inner_node_hash(kind: u32, label: u32, size: u32, middle_hash: u32) -> u32 {
     let mut left = 1u32;
     left = 31 * left + kind;
     left = 31 * left + label;
@@ -231,23 +272,23 @@ pub fn inner_node_hash(kind: &u32, label: &u32, size: &u32, middle_hash: &u32) -
     right = 31 * right + label;
     right = 31 * right + LEAVE;
 
-    left.wrapping_add(*middle_hash)
+    left.wrapping_add(middle_hash)
         .wrapping_add(right.wrapping_mul(hash_factor(size)))
 }
 
-fn hash_factor(exponent: &u32) -> u32 {
-    fast_exponentiation(BASE, exponent)
+fn hash_factor(exponent: u32) -> u32 {
+    fast_exponentiation(*BASE, exponent)
 }
 
-fn fast_exponentiation(base: &u32, exponent: &u32) -> u32 {
-    if exponent == &0 {
+fn fast_exponentiation(base: u32, exponent: u32) -> u32 {
+    if exponent == 0 {
         1
-    } else if exponent == &1 {
-        *base
+    } else if exponent == 1 {
+        base
     } else {
         let mut result: u32 = 1;
-        let mut exponent = *exponent;
-        let mut base = *base;
+        let mut exponent = exponent;
+        let mut base = base;
         while exponent > 0 {
             if (exponent & 1) != 0 {
                 result = result.wrapping_mul(base);

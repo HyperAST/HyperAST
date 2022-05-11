@@ -6,7 +6,7 @@ use std::{
 
 use hyper_ast::{
     store::{TypeStore, SimpleStores, labels::LabelStore, nodes::DefaultNodeStore as NodeStore}, 
-    nodes::RefContainer, tree_gen::TreeGen, filter::BloomResult, 
+    nodes::RefContainer, tree_gen::ZippedTreeGen, filter::BloomResult, 
     position::{ExploreStructuralPositions, StructuralPositionStore, StructuralPosition, Scout, TreePath}, types::WithChildren, utils::memusage_linux};
 use pretty_assertions::assert_eq;
 

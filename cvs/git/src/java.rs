@@ -5,10 +5,10 @@ use rusted_gumtree_gen_ts_java::impact::partial_analysis::PartialAnalysis;
 
 use rusted_gumtree_gen_ts_java::legion_with_refs as java_tree_gen;
 
-pub(crate) fn handle_java_file(
-    tree_gen: &mut java_tree_gen::JavaTreeGen,
+pub(crate) fn handle_java_file<'a,'b:'a>(
+    tree_gen: &mut java_tree_gen::JavaTreeGen<'a>,
     name: &[u8],
-    text: &[u8],
+    text: &'b [u8],
 ) -> Result<java_tree_gen::FNode, ()> {
     let tree = match java_tree_gen::JavaTreeGen::tree_sitter_parse(text) {
         Ok(tree) => tree,
@@ -43,7 +43,7 @@ impl JavaAcc {
             children: Default::default(),
             // simple: BasicAccumulator::new(kind),
             metrics: Default::default(),
-            ana: PartialAnalysis::init(&Type::Directory, None, |x| panic!()),
+            ana: PartialAnalysis::init(&Type::Directory, None, |_| panic!()),
             skiped_ana: false,
         }
     }

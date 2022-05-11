@@ -11,7 +11,7 @@ use hyper_ast::{
         ExploreStructuralPositions, Scout, StructuralPosition, StructuralPositionStore, TreePath,
     },
     store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores, TypeStore},
-    tree_gen::TreeGen,
+    tree_gen::ZippedTreeGen,
     types::WithChildren,
     types::{LabelStore as _, Type, Typed}, impact::serialize::CachedHasher,
 };
