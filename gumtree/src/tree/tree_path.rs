@@ -1,3 +1,5 @@
+/// Path in tree optimized for memory footprint
+
 use std::{fmt::Debug, marker::PhantomData};
 
 use num_traits::{cast, PrimInt};

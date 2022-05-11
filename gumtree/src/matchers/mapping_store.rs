@@ -1,4 +1,7 @@
-use std::fmt::Debug;
+use std::{
+    fmt::{Debug, Display},
+    ops::Index,
+};
 
 use num_traits::{cast, one, zero, PrimInt};
 
@@ -12,6 +15,7 @@ pub trait MappingStore: Clone {
     fn is_src(&self, src: &Self::Ele) -> bool;
     fn is_dst(&self, dst: &Self::Ele) -> bool;
 }
+pub type DefaultMappingStore<T> = VecStore<T>;
 
 pub trait MonoMappingStore: MappingStore {
     fn get_src(&self, dst: &Self::Ele) -> Self::Ele;
@@ -26,14 +30,15 @@ pub trait MultiMappingStore: MappingStore {
     fn isSrcUnique(&self, dst: &Self::Ele) -> bool;
     fn isDstUnique(&self, src: &Self::Ele) -> bool;
 }
+pub type DefaultMultiMappingStore<T> = MultiVecStore<T>;
 
 /// TODO try using umax
-pub struct DefaultMappingStore<T> {
+pub struct VecStore<T> {
     pub src_to_dst: Vec<T>,
     pub dst_to_src: Vec<T>,
 }
 
-impl<T: PrimInt + Debug> DefaultMappingStore<T> {
+impl<T: PrimInt + Debug> VecStore<T> {
     pub fn new() -> Self {
         Self {
             src_to_dst: vec![zero()],
@@ -71,7 +76,7 @@ impl<T: PrimInt + Debug> DefaultMappingStore<T> {
 //     }
 // }
 
-impl<T: PrimInt + Debug> Clone for DefaultMappingStore<T> {
+impl<T: PrimInt + Debug> Clone for VecStore<T> {
     fn clone(&self) -> Self {
         Self {
             src_to_dst: self.src_to_dst.clone(),
@@ -80,7 +85,7 @@ impl<T: PrimInt + Debug> Clone for DefaultMappingStore<T> {
     }
 }
 
-impl<T: PrimInt + Debug> MappingStore for DefaultMappingStore<T> {
+impl<T: PrimInt + Debug> MappingStore for VecStore<T> {
     type Ele = T;
 
     fn len(&self) -> usize {
@@ -119,7 +124,7 @@ impl<T: PrimInt + Debug> MappingStore for DefaultMappingStore<T> {
     }
 }
 
-impl<T: PrimInt + Debug> MonoMappingStore for DefaultMappingStore<T> {
+impl<T: PrimInt + Debug> MonoMappingStore for VecStore<T> {
     fn get_src(&self, dst: &T) -> T {
         self.dst_to_src[dst.to_usize().unwrap()] - one()
     }
@@ -129,12 +134,12 @@ impl<T: PrimInt + Debug> MonoMappingStore for DefaultMappingStore<T> {
     }
 }
 
-pub struct DefaultMultiMappingStore<T> {
+pub struct MultiVecStore<T> {
     pub src_to_dsts: Vec<Option<Vec<T>>>,
     pub dst_to_srcs: Vec<Option<Vec<T>>>,
 }
 
-impl<T: PrimInt> Clone for DefaultMultiMappingStore<T> {
+impl<T: PrimInt> Clone for MultiVecStore<T> {
     fn clone(&self) -> Self {
         Self {
             src_to_dsts: self.src_to_dsts.clone(),
@@ -143,7 +148,7 @@ impl<T: PrimInt> Clone for DefaultMultiMappingStore<T> {
     }
 }
 
-impl<T: PrimInt> MappingStore for DefaultMultiMappingStore<T> {
+impl<T: PrimInt> MappingStore for MultiVecStore<T> {
     type Ele = T;
 
     fn len(&self) -> usize {
@@ -232,7 +237,7 @@ impl<T: PrimInt> MappingStore for DefaultMultiMappingStore<T> {
     }
 }
 
-impl<T: PrimInt> MultiMappingStore for DefaultMultiMappingStore<T> {
+impl<T: PrimInt> MultiMappingStore for MultiVecStore<T> {
     fn get_srcs(&self, dst: &Self::Ele) -> &[Self::Ele] {
         self.dst_to_srcs[cast::<_, usize>(*dst).unwrap()]
             .as_ref()
@@ -290,3 +295,76 @@ impl<'a, T: PrimInt> Iterator for Iter<'a, T> {
         }
     }
 }
+
+// Debug/Display related helpers
+
+impl<T: PrimInt + Debug> VecStore<T> {
+    pub fn display<'b, Src, Dst>(
+        &self,
+        src_store: &'b Src,
+        dst_store: &'b Dst,
+    ) -> DisplayVecStore<'_, 'b, T, Src, Dst> {
+        DisplayVecStore {
+            mappings: self,
+            src_store,
+            dst_store,
+        }
+    }
+}
+
+pub struct DisplayVecStore<'a, 'b, T, Src, Dst> {
+    mappings: &'a VecStore<T>,
+    src_store: &'b Src,
+    dst_store: &'b Dst,
+}
+
+impl<'a, 'b, T: PrimInt + TryFrom<usize>, Src, Dst, D: Display> Display
+    for DisplayVecStore<'a, 'b, T, Src, Dst>
+where
+    Src: Fn(T) -> D,
+    Dst: Fn(T) -> D,
+    <T as TryFrom<usize>>::Error: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, x) in self.mappings.src_to_dst.iter().enumerate() {
+            if !x.is_zero() {
+                writeln!(
+                    f,
+                    "({},{})",
+                    &(self.src_store)(i.try_into().unwrap()),
+                    &(self.dst_store)(((*x).to_usize().unwrap() - 1).try_into().unwrap())
+                )?;
+            }
+        }
+        Ok(())
+    }
+}
+
+// mappings
+//     .src_to_dst
+//     .to_owned()
+//     .iter()
+//     .enumerate()
+//     .filter_map(|(i, t)| {
+//         if *t == 0 {
+//             None
+//         } else {
+//             Some((
+//                 {
+//                     let g = src_arena.original(&cast(i - 1).unwrap());
+//                     let n = node_store.resolve(&g).label;
+//                     std::str::from_utf8(&label_store.resolve(&n).to_owned())
+//                         .unwrap()
+//                         .to_owned()
+//                 },
+//                 {
+//                     let g = dst_arena.original(&(*t - 2));
+//                     let n = node_store.resolve(&g).label;
+//                     let a = label_store.resolve(&n).to_owned();
+//                     std::str::from_utf8(&a).unwrap().to_owned()
+//                 },
+//             ))
+//         }
+//     })
+//     .for_each(|x| println!("{:?}", x))
+// };

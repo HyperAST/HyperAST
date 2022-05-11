@@ -15,11 +15,6 @@ use crate::{
 use bitvec::order::Lsb0;
 use num_traits::{cast, one, zero, PrimInt};
 
-//System.getProperty("gt.stm.mh", System.getProperty("gumtree.match.gt.minh", "2"))
-
-// trait SubTreeMatcherWithFilter {
-//     fn filterMappings(&self, multiMappings: MultiMappingStore<ITree>);
-// }
 pub struct GreedySubtreeMatcher<
     'a,
     D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
@@ -29,11 +24,6 @@ pub struct GreedySubtreeMatcher<
     const MIN_HEIGHT: usize, // = 2
 > {
     internal: SubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>,
-    // pub(super) node_store: &'a S,
-    // pub(crate) src_arena: D,
-    // pub(crate) dst_arena: D,
-    // pub(crate) mappings: DefaultMappingStore<IdD>,
-    // pub(super) phantom: PhantomData<*const T>
 }
 
 impl<
@@ -49,7 +39,6 @@ where
 {
     pub fn matchh(
         node_store: &'a S,
-        // label_store: &'a LS,
         src: &'a T::TreeId,
         dst: &'a T::TreeId,
         mappings: DefaultMappingStore<IdD>,
@@ -77,7 +66,6 @@ where
         self.filter_mappings(m);
     }
 
-    // @Override
     fn filter_mappings(&mut self, multi_mappings: DefaultMultiMappingStore<IdD>) {
         // Select unique mappings first and extract ambiguous mappings.
         let mut ambiguous_list: Vec<Mapping<IdD>> = vec![];
@@ -274,8 +262,6 @@ where
         multi_mappings
     }
 
-    // fn abstract filterMappings(MultiMappingStore multiMappings);
-
     fn similarity(&self, src: &IdD, dst: &IdD) -> f64 {
         let p_src = self.src_arena.parent(src).unwrap();
         let p_dst = self.dst_arena.parent(dst).unwrap();
@@ -376,7 +362,7 @@ where
 }
 
 struct PriorityTreeList<'a, D, IdD, T: Tree, S, const MIN_HEIGHT: usize> {
-    trees: Vec<Option<Vec<IdD>>>, //List<ITree>[]
+    trees: Vec<Option<Vec<IdD>>>,
 
     store: &'a S,
     arena: &'a D,
@@ -417,10 +403,6 @@ where
         r.add_tree2(tree, h);
         r
     }
-
-    // fn idx_tree(&self, tree: &IdD) -> usize {
-    //     self.idx(height(self.store, self.arena.original(tree)) as usize) //tree.getMetrics().height())
-    // }
 
     fn idx(&self, height: usize) -> usize {
         self.max_height - height

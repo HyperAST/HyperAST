@@ -1,7 +1,7 @@
 use crate::{
     actions::{
         bfs_wrapper,
-        script_generator2::{Act, Actions, ScriptGenerator, SimpleAction, TestActions},
+        script_generator2::{Act, ScriptGenerator, SimpleAction}, action_vec::TestActions, Actions,
     },
     matchers::{
         decompressed_tree_store::{CompletePostOrder, Initializable, ShallowDecompressedTreeStore},
@@ -9,9 +9,8 @@ use crate::{
     },
     tests::{
         examples::{example_action, example_gt_java_code},
-        simple_tree::{vpair_to_stores, Tree, NS},
     },
-    tree::tree::{LabelStore, Labeled, NodeStore, Stored, WithChildren},
+    tree::{tree::{LabelStore, Labeled, NodeStore, Stored, WithChildren}, simple_tree::{vpair_to_stores, Tree, NS}},
 };
 use std::fmt;
 
@@ -289,7 +288,7 @@ fn test_with_zs_custom_example() {
     //         idx: 0,
     //     },
     // ]));
-    let a = make_insert(dst_arena.original(&dst), &[]);
+    let a = make_insert(dst_arena.original(&dst), &[0]);
     println!("{:?}", a);
     assert!(actions.has_actions(&[a,]));
     // assert!(actions.has_actions(&[
@@ -320,7 +319,7 @@ fn test_with_zs_custom_example() {
         *node_store
             .resolve(&dst_arena.original(&from_dst(&[0, 1, 3])))
             .get_label(),
-        &[],
+        &[1, 3],
     );
     println!("{:?}", a);
     assert!(actions.has_actions(&[a,]));

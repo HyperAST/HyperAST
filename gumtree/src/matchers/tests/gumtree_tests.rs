@@ -12,8 +12,8 @@ use crate::{
     },
     tests::{
         examples::{example_bottom_up, example_gumtree},
-        simple_tree::{vpair_to_stores, Tree, NS},
     },
+    tree::{simple_tree::{vpair_to_stores, Tree, NS}},
 };
 
 #[test]

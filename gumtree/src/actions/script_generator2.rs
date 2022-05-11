@@ -17,12 +17,7 @@ use crate::{
     utils::sequence_algorithms::longest_common_subsequence,
 };
 
-pub trait Actions {
-    fn len(&self) -> usize;
-}
-
-#[derive(Debug)]
-pub struct ActionsVec<A: Debug>(Vec<A>);
+use super::action_vec::ActionsVec;
 
 #[derive(PartialEq, Eq)]
 pub enum Act<T: Stored + Labeled + WithChildren> {
@@ -59,26 +54,6 @@ where
     }
 }
 
-impl<IdD: Debug> Actions for ActionsVec<IdD> {
-    fn len(&self) -> usize {
-        self.0.len()
-    }
-}
-
-pub trait TestActions<T: Stored + Labeled + WithChildren> {
-    fn has_actions(&self, items: &[SimpleAction<T>]) -> bool;
-}
-
-impl<T: Stored + Labeled + WithChildren + std::cmp::PartialEq> TestActions<T>
-    for ActionsVec<SimpleAction<T>>
-where
-    T::Label: Debug,
-    T::TreeId: Debug,
-{
-    fn has_actions(&self, items: &[SimpleAction<T>]) -> bool {
-        items.iter().all(|x| self.0.contains(x))
-    }
-}
 
 struct InOrderNodes<IdD>(Option<Vec<IdD>>);
 
@@ -639,20 +614,6 @@ impl<'a, IdC, IdD: num_traits::PrimInt> Iterator for Iter<'a, IdC, IdD> {
                 return Some(id);
             }
         }
-    }
-}
-
-impl<T: Stored + Labeled + WithChildren> ActionsVec<SimpleAction<T>>
-where
-    T::Label: Debug,
-    T::TreeId: Debug,
-{
-    pub(crate) fn push(&mut self, action: SimpleAction<T>) {
-        self.0.push(action)
-    }
-
-    pub(crate) fn new() -> Self {
-        Self(Default::default())
     }
 }
 

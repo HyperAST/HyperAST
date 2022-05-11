@@ -5,7 +5,7 @@ use num_traits::PrimInt;
 /// @return a list of size 2 u32 arrays that corresponds
 ///     to match of index in sequence 1 to index in sequence 2.
 pub fn longest_common_subsequence_str(s0: &str, s1: &str) -> Vec<(u32, u32)> {
-    let mut lens: Vec<Vec<u32>> = Vec::with_capacity(s0.len() + 1); //new[s0.len() + 1][s1.len() + 1];
+    let mut lens: Vec<Vec<u32>> = vec![vec![0;s1.len() + 1];s0.len() + 1]; //new[s0.len() + 1][s1.len() + 1];
     for (i, c0) in s0.chars().enumerate() {
         for (j, c1) in s1.chars().enumerate() {
             if c0 == c1 {
@@ -50,13 +50,13 @@ pub fn longest_common_sequence<'a>(s1: &'a str, s2: &str) -> &'a str {
     let mut start = 0;
     let mut max = 0;
     let mut it1 = s1.chars();
-    let mut it2 = s2.chars();
     for i in 0..s1.len() {
+        let mut it2 = s2.chars();
         for j in 0..s2.len() {
             let mut x = 0;
             let mut c1 = it1.clone();
             let mut c2 = it2.clone();
-            while c1.next().unwrap() == c2.next().unwrap() {
+            while c1.next() == c2.next() {
                 x += 1;
                 if ((i + x) >= s1.len()) || ((j + x) >= s2.len()) {
                     break;

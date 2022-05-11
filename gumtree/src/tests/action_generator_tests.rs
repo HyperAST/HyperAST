@@ -9,9 +9,8 @@ use crate::{
     },
     tests::{
         examples::{example_action, example_gt_java_code},
-        simple_tree::{vpair_to_stores, Tree, NS},
     },
-    tree::tree::{LabelStore, Labeled, NodeStore},
+    tree::{tree::{LabelStore, Labeled, NodeStore}, simple_tree::{vpair_to_stores, Tree, NS}},
 };
 use std::fmt;
 

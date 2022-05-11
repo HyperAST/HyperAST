@@ -1,50 +1,33 @@
 use std::{
-    cell::{Ref, RefCell},
-    marker::PhantomData, borrow::Borrow,
+    borrow::Borrow,
+    fmt::{Debug, Display},
+    marker::PhantomData,
 };
 
 use num_traits::{cast, PrimInt};
 
-use crate::tree::tree::{HashKind, LabelStore, Labeled, NodeStore, WithChildren, NodeStoreMut};
+use crate::tree::tree::{
+    HashKind, LabelStore, Labeled, NodeStore, NodeStoreMut, Typed, WithChildren,
+};
 
-pub(crate) struct ST<K> {
+pub(crate) struct SimpleTree<K> {
     kind: K,
     label: Option<String>,
-    children: Vec<ST<K>>,
+    children: Vec<SimpleTree<K>>,
 }
 
-impl<K> ST<K> {
-    pub fn new(k: K) -> Self {
+
+impl<K> SimpleTree<K> {
+    pub fn new(k: K, l: Option<&str>, c: Vec<SimpleTree<K>>) -> Self {
         Self {
             kind: k,
-            label: None,
-            children: vec![],
-        }
-    }
-    pub fn new_l(k: K, l: &str) -> Self {
-        Self {
-            kind: k,
-            label: Some(l.to_owned()),
-            children: vec![],
-        }
-    }
-    pub fn new_l_c(k: K, l: &str, c: Vec<ST<K>>) -> Self {
-        Self {
-            kind: k,
-            label: Some(l.to_owned()),
-            children: c,
-        }
-    }
-    pub fn new_c(k: K, c: Vec<ST<K>>) -> Self {
-        Self {
-            kind: k,
-            label: None,
+            label: l.map(|s| s.to_owned()),
             children: c,
         }
     }
 }
 
-fn store(ls: &mut LS<u16>, ns: &mut NS<Tree>, node: &ST<u8>) -> u16 {
+fn store(ls: &mut LS<u16>, ns: &mut NS<Tree>, node: &SimpleTree<u8>) -> u16 {
     let lid = node
         .label
         .as_ref()
@@ -58,11 +41,90 @@ fn store(ls: &mut LS<u16>, ns: &mut NS<Tree>, node: &ST<u8>) -> u16 {
     ns.get_or_insert(t)
 }
 
-pub(crate) fn vpair_to_stores<'a>((src, dst): (ST<u8>, ST<u8>)) -> (LS<u16>, NS<Tree>, u16, u16) {
+pub(crate) fn vpair_to_stores<'a>(
+    (src, dst): (SimpleTree<u8>, SimpleTree<u8>),
+) -> (LS<u16>, NS<Tree>, u16, u16) {
     let (mut label_store, mut compressed_node_store) = make_stores();
     let src = store(&mut label_store, &mut compressed_node_store, &src);
     let dst = store(&mut label_store, &mut compressed_node_store, &dst);
     (label_store, compressed_node_store, src, dst)
+}
+
+pub(crate) struct DisplayTree<'a, 'b, I: num_traits::PrimInt, T: WithChildren> {
+    ls: &'a LS<I>,
+    ns: &'b NS<T>,
+    node: u16,
+    depth: usize,
+}
+impl<'a, 'b, I: num_traits::PrimInt, T: WithChildren> DisplayTree<'a, 'b, I, T> {
+    pub fn new(ls: &'a LS<I>, ns: &'b NS<T>, node: u16) -> Self {
+        Self {
+            ls,
+            ns,
+            node,
+            depth: 0,
+        }
+    }
+}
+
+impl<'a, 'b, I: num_traits::PrimInt, T> Display for DisplayTree<'a, 'b, I, T>
+where
+    T: Typed + WithChildren<TreeId = u16> + Labeled<Label = I> + Eq,
+    T::Type: Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let cs = self.ns.resolve(&self.node);
+        writeln!(
+            f,
+            "{}|-{}:{}",
+            " ".repeat(self.depth),
+            cs.get_type(),
+            std::str::from_utf8(self.ls.resolve(cs.get_label())).unwrap()
+        )?;
+        let cs = cs.get_children().to_vec();
+        for n in cs {
+            Display::fmt(
+                &Self {
+                    ls: self.ls,
+                    ns: self.ns,
+                    node: n,
+                    depth: self.depth + 1,
+                },
+                f,
+            )?;
+        }
+        Ok(())
+    }
+}
+impl<'a, 'b, I: num_traits::PrimInt, T> Debug for DisplayTree<'a, 'b, I, T>
+where
+    T: Typed + WithChildren<TreeId = u16> + Labeled<Label = I> + Eq,
+    T::Type: Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let cs = self.ns.resolve(&self.node);
+        writeln!(
+            f,
+            "{}|-({}){}:{}",
+            " ".repeat(self.depth),
+            self.node,
+            cs.get_type(),
+            std::str::from_utf8(self.ls.resolve(cs.get_label())).unwrap()
+        )?;
+        let cs = cs.get_children().to_vec();
+        for n in cs {
+            Debug::fmt(
+                &Self {
+                    ls: self.ls,
+                    ns: self.ns,
+                    node: n,
+                    depth: self.depth + 1,
+                },
+                f,
+            )?;
+        }
+        Ok(())
+    }
 }
 
 fn make_stores<'a>() -> (LS<u16>, NS<Tree>) {
@@ -71,9 +133,7 @@ fn make_stores<'a>() -> (LS<u16>, NS<Tree>) {
         v: Default::default(),
         phantom: PhantomData,
     };
-    let compressed_node_store = NS::<Tree> {
-        v: vec![],
-    };
+    let compressed_node_store = NS::<Tree> { v: vec![] };
     (label_store, compressed_node_store)
 }
 
@@ -113,7 +173,6 @@ impl crate::tree::tree::Stored for Tree {
     type TreeId = u16;
 }
 
-type A = Tree;
 impl WithChildren for Tree {
     type ChildIdx = u8;
 
@@ -126,7 +185,7 @@ impl WithChildren for Tree {
     }
 
     fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
-        self.children[self.children.len()-(*idx as usize)-1]
+        self.children[self.children.len() - (*idx as usize) - 1]
     }
 
     fn get_children(&self) -> &[Self::TreeId] {
@@ -188,24 +247,20 @@ impl<'a, T: 'a + WithChildren + Eq> NodeStore<'a, T::TreeId, &'a T> for NS<T>
 where
     T::TreeId: PrimInt,
 {
-
     fn resolve(&'a self, id: &T::TreeId) -> &'a T {
         &self.v[cast::<T::TreeId, usize>(*id).unwrap()]
     }
 }
 
-impl<'a, T: 'a + WithChildren + Eq> NodeStoreMut<'a, T, &'a T> for NS<T>
-where
-    T::TreeId: PrimInt,
-{
-}
+impl<'a, T: 'a + WithChildren + Eq> NodeStoreMut<'a, T, &'a T> for NS<T> where T::TreeId: PrimInt {}
 
 impl<'a, T: 'a + WithChildren + Eq> NS<T>
 where
     T::TreeId: PrimInt,
 {
     fn get_or_insert(&mut self, node: T) -> T::TreeId {
-        if let Some(i) = self.v
+        if let Some(i) = self
+            .v
             .iter()
             .enumerate()
             .find_map(|(i, x)| if x == &node { Some(i) } else { None })
@@ -273,51 +328,21 @@ impl<'a, I: PrimInt> LabelStore<crate::tree::tree::SlicedLabel> for LS<I> {
 
     fn resolve(&self, id: &Self::I) -> &crate::tree::tree::SlicedLabel {
         &self.v[cast::<Self::I, usize>(*id).unwrap()]
-        // let a:Ref<'a,_> = self.v.borrow();
-        // Ref::map(a, |x| {
-        //     &x[cast::<Self::I, usize>(*id).unwrap()]
-        // }).deref()
     }
 }
 
-// pub(crate) fn get_child<A: ZsStore<u16, u16> + DecompressedTreeStore<u16, u16>>(
-//     store: &NS<Tree>,
-//     arena: &A,
-//     x: u16,
-//     p: &[u16],
-// ) -> u16 {
-//     let mut r = x;
-//     for d in p {
-//         let a = arena.original(r);
-//         let cs: Vec<_> = store.get_node_at_id(&a).get_children().to_owned();
-//         if cs.len() > 0 {
-//             let mut z = 0;
-//             for x in cs[0..(*d as usize) + 1].to_owned() {
-//                 z += size(store, x);
-//             }
-//             r = arena.lld(r) + z - 1;
-//         } else {
-//             panic!("no children in this tree")
-//         }
-//     }
-//     r
-// }
-
-// pub(crate) fn get_child2<A: BreathFirstContigousSiblings<u16, u16>>(
-//     store: &NS<Tree>,
-//     arena: &A,
-//     x: u16,
-//     p: &[u16],
-// ) -> u16 {
-//     let mut r = x;
-//     for d in p {
-//         let a = arena.original(r);
-//         let cs: Vec<_> = store.get_node_at_id(&a).get_children().to_owned();
-//         if cs.len() > 0 {
-//             r = arena.first_child(r).unwrap() + *d;
-//         } else {
-//             panic!("no children in this tree")
-//         }
-//     }
-//     r
-// }
+macro_rules! tree {
+    ( $k:expr ) => {
+        SimpleTree::new($k, None, vec![])
+    };
+    ( $k:expr, $l:expr) => {
+        SimpleTree::new($k, Some($l), vec![])
+    };
+    ( $k:expr, $l:expr; [$($x:expr),+ $(,)?]) => {
+        SimpleTree::new($k, Some($l), vec![$($x),+])
+    };
+    ( $k:expr; [$($x:expr),+ $(,)?]) => {
+        SimpleTree::new($k, None, vec![$($x),+])
+    };
+}
+pub(crate) use tree;
