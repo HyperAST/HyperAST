@@ -192,6 +192,22 @@ pub struct MavenModuleAcc {
     pub(crate) test_dirs: Option<Vec<PathBuf>>,
 }
 
+impl From<String> for MavenModuleAcc {
+    fn from(name: String) -> Self {
+        Self {
+            name,
+            children_names: Default::default(),
+            children: Default::default(),
+            // simple: BasicAccumulator::new(kind),
+            metrics: Default::default(),
+            ana: MavenPartialAnalysis::new(),
+            sub_modules: None,
+            main_dirs: None,
+            test_dirs: None,
+        }
+    }
+}
+
 impl MavenModuleAcc {
     pub(crate) fn new(name: String) -> Self {
         Self {

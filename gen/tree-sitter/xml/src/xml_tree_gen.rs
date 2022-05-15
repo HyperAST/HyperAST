@@ -8,7 +8,7 @@ use hyper_ast::{
     filter::BF,
     filter::{Bloom, BloomSize},
     full::FullNode,
-    hashed::{self, NodeHashs, SyntaxNodeHashs},
+    hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, NodeHashs, SyntaxNodeHashs},
     // impact::{element::RefsEnum, elements::*, partial_analysis::PartialAnalysis},
     nodes::{self, SimpleNode1, Space},
     store::{labels::LabelStore, SimpleStores},
@@ -23,6 +23,7 @@ use hyper_ast::{
         has_final_space,
         parser::{Node as _, TreeCursor as _},
         try_compute_indentation,
+        try_get_spacing,
         // label_for_cursor,
         AccIndentation,
         Accumulator,
@@ -71,8 +72,9 @@ impl Local {
 
 pub struct Acc {
     simple: BasicAccumulator<Type, NodeIdentifier>,
-    label: Option<String>,
+    labeled: bool,
     start_byte: usize,
+    end_byte: usize,
     metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
     ana: Option<PartialAnalysis>,
     padding_start: usize,
@@ -173,17 +175,16 @@ impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
             global.sum_byte_length(),
             &parent_indentation,
         );
-        let label = node
-            .extract_label(text)
-            .and_then(|x| Some(std::str::from_utf8(&x).unwrap().to_owned()));
+        let labeled = node.has_label();
         let ana = self.build_ana(&kind);
         Acc {
             simple: BasicAccumulator {
                 kind,
                 children: vec![],
             },
-            label,
+            labeled,
             start_byte: node.start_byte(),
+            end_byte: node.end_byte(),
             metrics: Default::default(),
             ana,
             padding_start: global.sum_byte_length(),
@@ -199,7 +200,7 @@ impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
         acc: <Self as TreeGen>::Acc,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let node_store = &mut self.stores.node_store;
-        let spacing = get_spacing(
+        let spacing = try_get_spacing(
             acc.padding_start,
             acc.start_byte,
             text,
@@ -208,7 +209,14 @@ impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
         if let Some(spacing) = spacing {
             parent.push(Self::make_spacing(spacing, node_store, global));
         }
-        self.make(global, acc)
+        let label = if acc.labeled {
+            std::str::from_utf8(&text[acc.start_byte..acc.end_byte])
+                .ok()
+                .map(|x| x.to_string())
+        } else {
+            None
+        };
+        self.make(global, acc, label)
     }
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
@@ -222,17 +230,16 @@ impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
             0,
             &Space::format_indentation(&self.line_break),
         );
-        let label = node
-            .extract_label(text)
-            .and_then(|x| Some(std::str::from_utf8(&x).unwrap().to_owned()));
+        let labeled = node.has_label();
         let ana = self.build_ana(&kind);
         Acc {
             simple: BasicAccumulator {
                 kind,
                 children: vec![],
             },
-            label,
+            labeled,
             start_byte: node.start_byte(),
+            end_byte: node.end_byte(),
             metrics: Default::default(),
             ana,
             padding_start: 0,
@@ -247,20 +254,16 @@ impl<'a> TreeGen for XmlTreeGen<'a> {
         &mut self,
         global: &mut <Self as TreeGen>::Global,
         acc: <Self as TreeGen>::Acc,
+        label: Option<String>,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
-        let label = acc.label;
-        let metrics = acc.metrics;
-        let hashed_kind = clamp_u64_to_u32(&utils::hash(&acc.simple.kind));
-        let hashed_label = clamp_u64_to_u32(&utils::hash(&label));
-        let hsyntax = SyntaxNodeHashs::most_discriminating(
-            hashed_kind,
-            hashed_label,
-            acc.metrics.hashs,
-            acc.metrics.size,
-        );
-        let hashable = &hsyntax; //(hlabel as u64) << 32 & hsyntax as u64;
+        let hashs = acc.metrics.hashs;
+        let size = acc.metrics.size + 1;
+        let height = acc.metrics.height + 1;
+        let hbuilder = hashed::Builder::new(hashs, &acc.simple.kind, &label, size);
+        let hsyntax = hbuilder.most_discriminating();
+        let hashable = &hsyntax;
 
         let (ana, label) = if let Some(label) = label.as_ref() {
             (
@@ -290,7 +293,7 @@ impl<'a> TreeGen for XmlTreeGen<'a> {
             } else {
                 let cs = x.get_component::<CS<legion::Entity>>().ok();
                 let r = match cs {
-                    Some(CS(cs)) => cs == &acc.simple.children,
+                    Some(CS(cs)) => cs.as_ref() == acc.simple.children,
                     None => acc.simple.children.is_empty(),
                 };
                 if !r {
@@ -302,13 +305,7 @@ impl<'a> TreeGen for XmlTreeGen<'a> {
         };
         let insertion = node_store.prepare_insertion(&hashable, eq);
 
-        let hashs = SyntaxNodeHashs::with_most_disriminating(
-            hashed_kind,
-            hashed_label,
-            acc.metrics.hashs,
-            acc.metrics.size,
-            hsyntax,
-        );
+        let hashs = hbuilder.build();
 
         let ana = match ana {
             Some(ana) => Some(ana), // TODO partial ana resolution such as deps in pom.xml
@@ -330,8 +327,8 @@ impl<'a> TreeGen for XmlTreeGen<'a> {
                     }
                     match acc.simple.children.len() {
                         0 => {
-                            assert_eq!(0, metrics.size);
-                            assert_eq!(0, metrics.height);
+                            assert_eq!(0, size);
+                            assert_eq!(0, height);
                             NodeStore::insert_after_prepare(
                                 vacant,
                                 (acc.simple.kind.clone(), hashs, BloomSize::None),
@@ -366,13 +363,13 @@ impl<'a> TreeGen for XmlTreeGen<'a> {
                         //     ),
                         // ),
                         _ => {
-                            let a = acc.simple.children;
+                            let a = acc.simple.children.into_boxed_slice();
                             use hyper_ast::store::nodes::legion::compo;
                             if let Some(ana) = &ana {
                                 let c = (
                                     acc.simple.kind.clone(),
-                                    compo::Size(metrics.size + 1),
-                                    compo::Height(metrics.height + 1),
+                                    compo::Size(size),
+                                    compo::Height(height),
                                     hashs,
                                     ana.clone(),
                                     CS(a),
@@ -384,8 +381,8 @@ impl<'a> TreeGen for XmlTreeGen<'a> {
                             } else {
                                 let c = (
                                     acc.simple.kind.clone(),
-                                    compo::Size(metrics.size + 1),
-                                    compo::Height(metrics.height + 1),
+                                    compo::Size(size),
+                                    compo::Height(height),
                                     hashs,
                                     CS(a),
                                 );
@@ -440,13 +437,13 @@ impl<'a> TreeGen for XmlTreeGen<'a> {
                             )
                         }
                         _ => {
-                            let a = acc.simple.children;
+                            let a = acc.simple.children.into_boxed_slice();
                             use hyper_ast::store::nodes::legion::compo;
                             if let Some(ana) = &ana {
                                 let c = (
                                     acc.simple.kind.clone(),
-                                    compo::Size(metrics.size + 1),
-                                    compo::Height(metrics.height + 1),
+                                    compo::Size(size),
+                                    compo::Height(height),
                                     hashs,
                                     label,
                                     ana.clone(),
@@ -459,8 +456,8 @@ impl<'a> TreeGen for XmlTreeGen<'a> {
                             } else {
                                 let c = (
                                     acc.simple.kind.clone(),
-                                    compo::Size(metrics.size + 1),
-                                    compo::Height(metrics.height + 1),
+                                    compo::Size(size),
+                                    compo::Height(height),
                                     hashs,
                                     label,
                                     CS(a),
@@ -477,8 +474,8 @@ impl<'a> TreeGen for XmlTreeGen<'a> {
         };
 
         let metrics = SubTreeMetrics {
-            size: metrics.size + 1,
-            height: metrics.height + 1,
+            size,
+            height,
             hashs,
         };
 
@@ -572,7 +569,7 @@ impl<'a> XmlTreeGen<'a> {
         let mut xx = TTreeCursor(cursor);
         let mut global = Global::from(TextedGlobalData::new(Default::default(), text));
 
-        let spacing = get_spacing(
+        let spacing = try_get_spacing(
             init.padding_start,
             init.start_byte,
             text,
@@ -587,7 +584,7 @@ impl<'a> XmlTreeGen<'a> {
             ));
             global.right();
         }
-        init.label = Some(std::str::from_utf8(name).unwrap().to_owned());
+        let label = Some(std::str::from_utf8(name).unwrap().to_owned());
         let mut stack = vec![init];
 
         self.gen(text, &mut stack, &mut xx, &mut global);
@@ -595,7 +592,7 @@ impl<'a> XmlTreeGen<'a> {
         let mut acc = stack.pop().unwrap();
 
         if has_final_space(&0, global.sum_byte_length(), text) {
-            let spacing = get_spacing(
+            let spacing = try_get_spacing(
                 global.sum_byte_length(),
                 text.len(),
                 text,
@@ -611,7 +608,7 @@ impl<'a> XmlTreeGen<'a> {
             }
         }
 
-        let full_node = self.make(&mut global, acc);
+        let full_node = self.make(&mut global, acc, label);
         full_node
     }
 

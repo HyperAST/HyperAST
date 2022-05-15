@@ -11,10 +11,11 @@ use num::ToPrimitive;
 use crate::{
     filter::{Bloom, BloomResult, BloomSize, BF},
     hashed::{NodeHashs, SyntaxNodeHashs, SyntaxNodeHashsKinds},
+    impact::serialize::{CachedHasher, Keyed, MySerialize},
     nodes::{CompressedNode, HashSize, RefContainer, Space},
     store::labels::DefaultLabelIdentifier,
     types::{Type, Typed, WithChildren},
-    utils::make_hash, impact::serialize::{MySerialize, CachedHasher, Keyed},
+    utils::make_hash,
 };
 
 pub type NodeIdentifier = legion::Entity;
@@ -47,10 +48,21 @@ pub mod compo {
 }
 
 #[derive(PartialEq, Eq)]
-struct CS0<T: Eq, const N: usize>([T; N]);
+pub struct CSStaticCount(pub u8);
+pub struct CS0<T: Eq, const N: usize>(pub [T; N]);
 struct CSE<const N: usize>([legion::Entity; N]);
 #[derive(PartialEq, Eq, Debug)]
-pub struct CS<T: Eq>(pub Vec<T>);
+pub struct CS<T: Eq>(pub Box<[T]>);
+impl<'a, T: Eq> From<&'a CS<T>> for &'a [T] {
+    fn from(cs: &'a CS<T>) -> Self {
+        &cs.0
+    }
+}
+impl<'a, T: Eq, const N: usize> From<&'a CS0<T, N>> for &'a [T] {
+    fn from(cs: &'a CS0<T, N>) -> Self {
+        &cs.0
+    }
+}
 
 // * hashed node impl
 
@@ -162,8 +174,9 @@ impl<'a> HashedNodeRef<'a> {
         let kind = self.0.get_component::<Type>()?;
         let a = self.0.get_component::<DefaultLabelIdentifier>();
         let label: Option<DefaultLabelIdentifier> = a.ok().map(|x| x.clone());
-        let children = self.0.get_component::<CS<legion::Entity>>();
-        let children = children.ok().map(|x| x.0.clone());
+        let children = self.try_get_children().map(|x| x.to_vec());
+        // .0.get_component::<CS<legion::Entity>>();
+        // let children = children.ok().map(|x| x.0.clone());
         Ok(CompressedNode::new(
             *kind,
             label,
@@ -283,12 +296,40 @@ impl<'a> crate::types::Node for HashedNodeRef<'a> {}
 impl<'a> crate::types::Stored for HashedNodeRef<'a> {
     type TreeId = NodeIdentifier;
 }
+
+impl<'a> HashedNodeRef<'a> {
+    fn cs<'b>(&'b self) -> Result<&'b [<Self as crate::types::Stored>::TreeId], ComponentError> {
+        // let scount = self.0.get_component::<CSStaticCount>().ok();
+        // if let Some(CSStaticCount(scount)) = scount {
+        // if *scount == 1 {
+        //     self.0
+        //         .get_component::<CS0<legion::Entity, 1>>()
+        //         .map(|x| x.into())
+        //     } else if *scount == 2 {
+        //         self.0
+        //             .get_component::<CS0<legion::Entity, 2>>()
+        //             .map(|x| x.into())
+        //     } else
+        // if *scount == 3 {
+        //     self.0
+        //         .get_component::<CS0<legion::Entity, 3>>()
+        //         .map(|x| x.into())
+        // } else {
+        //     panic!()
+        // }
+        // } else {
+        self.0
+            .get_component::<CS<legion::Entity>>()
+            .map(|x| x.into())
+        // }
+    }
+}
+
 impl<'a> crate::types::WithChildren for HashedNodeRef<'a> {
     type ChildIdx = u16;
 
     fn child_count(&self) -> u16 {
-        self.0
-            .get_component::<CS<legion::Entity>>()
+        self.cs()
             .unwrap_or_else(|x| {
                 panic!(
                     "too much children: {}\n{}",
@@ -296,44 +337,43 @@ impl<'a> crate::types::WithChildren for HashedNodeRef<'a> {
                     std::backtrace::Backtrace::force_capture()
                 );
             })
-            .0
             .len()
             .to_u16()
             .expect("too much children")
     }
 
     fn get_child(&self, idx: &Self::ChildIdx) -> Self::TreeId {
-        self.0
-            .get_component::<CS<legion::Entity>>()
+        self.cs()
             .unwrap_or_else(|x| {
                 log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-                panic!("{}",x)
+                panic!("{}", x)
             })
-            .0.get(num::cast::<_, usize>(*idx).unwrap()).map(|x|*x).unwrap_or_else(|| {
+            .get(num::cast::<_, usize>(*idx).unwrap())
+            .map(|x| *x)
+            .unwrap_or_else(|| {
                 log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
                 panic!()
             })
     }
 
     fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
-        let cs = self.0
-            .get_component::<CS<legion::Entity>>()
-            .unwrap_or_else(|x| {
-                log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-                panic!("{}",x)
-            });
-        let v = &cs.0;
+        let v = self.cs().unwrap_or_else(|x| {
+            log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+            panic!("{}", x)
+        });
         v[v.len() - 1 - num::cast::<_, usize>(*idx).unwrap()]
     }
 
     fn get_children<'b>(&'b self) -> &'b [Self::TreeId] {
-        let cs = self.0
-            .get_component::<CS<legion::Entity>>()
-            .unwrap_or_else(|x| {
-                log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-                panic!("{}",x)
-            });
-        cs.0.as_slice()
+        let cs = self.cs().unwrap_or_else(|x| {
+            log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+            panic!("{}", x)
+        });
+        cs
+    }
+
+    fn try_get_children<'b>(&'b self) -> Option<&'b [Self::TreeId]> {
+        self.cs().ok()
     }
 }
 
@@ -351,9 +391,7 @@ impl<'a> crate::types::WithHashs for HashedNodeRef<'a> {
 
 impl<'a> crate::types::Tree for HashedNodeRef<'a> {
     fn has_children(&self) -> bool {
-        self.get_component::<CS<crate::store::nodes::legion::NodeIdentifier>>()
-            .map(|x| !x.0.is_empty())
-            .unwrap_or(false)
+        self.cs().map(|x| !x.is_empty()).unwrap_or(false)
     }
 
     fn has_label(&self) -> bool {
@@ -370,7 +408,7 @@ impl<'a> HashedNodeRef<'a> {}
 impl<'a> RefContainer for HashedNodeRef<'a> {
     type Result = BloomResult;
 
-    fn check<U: MySerialize+Keyed<usize>>(&self, rf: U) -> Self::Result {
+    fn check<U: MySerialize + Keyed<usize>>(&self, rf: U) -> Self::Result {
         use crate::filter::BF as _;
 
         let e = self.0.get_component::<BloomSize>().unwrap();

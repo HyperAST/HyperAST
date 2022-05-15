@@ -16,9 +16,20 @@ pub type HashedNode =
 
 pub trait NodeHashs {
     type Hash: PrimInt;
+    /// the Default value is the most discriminating one
     type Kind: Default + HashKind;
     fn hash(&self, kind: &Self::Kind) -> Self::Hash;
     fn acc(&mut self, other: &Self);
+}
+pub trait ComputableNodeHashs: NodeHashs {
+    fn prepare<T: ?Sized + Hash>(t: &T) -> Self::Hash;
+    fn compute(
+        &self,
+        kind: &Self::Kind,
+        k: Self::Hash,
+        l: Self::Hash,
+        size: Self::Hash,
+    ) -> Self::Hash;
 }
 
 #[derive(Default, Clone, Copy, Eq)]
@@ -28,44 +39,64 @@ pub struct SyntaxNodeHashs<T: PrimInt> {
     pub syntax: T,
 }
 
-impl SyntaxNodeHashs<u32> {
-    pub fn most_discriminating(
-        hashed_kind: u32,
-        hashed_label: u32,
-        hashs: SyntaxNodeHashs<u32>,
-        size: u32,
-    ) -> u32 {
-        inner_node_hash(
-                hashed_kind,
-                hashed_label,
-                size,
-                hashs.label,
-        )
-    }
-    pub fn with_most_disriminating(
-        hashed_kind: u32,
-        hashed_label: u32,
-        hashs: SyntaxNodeHashs<u32>,
-        size: u32,
-        hsyntax: u32,
-    ) -> SyntaxNodeHashs<u32> {
-        SyntaxNodeHashs {
-            structt: inner_node_hash(
-                hashed_kind,
-                0,
-                size,
-                hashs.structt,
-            ),
-            label: inner_node_hash(
-                hashed_kind,
-                hashed_label,
-                size,
-                hashs.label,
-            ),
-            syntax: hsyntax,
+pub trait IndexingHashBuilder<H: NodeHashs> {
+    fn new<K: ?Sized + Hash, L: ?Sized + Hash>(hashs: H, k: &K, l: &L, size: H::Hash) -> Self;
+    fn most_discriminating(&self) -> H::Hash;
+}
+pub trait MetaDataHashsBuilder<H: NodeHashs>: IndexingHashBuilder<H> {
+    fn build(&self) -> H;
+}
+
+pub struct Builder<H: NodeHashs> {
+    h0: H::Hash,
+    k: H::Hash,
+    l: H::Hash,
+    size: H::Hash,
+    hashs: H,
+}
+
+impl<H: ComputableNodeHashs> IndexingHashBuilder<H> for Builder<H> {
+    fn new<K: ?Sized + Hash, L: ?Sized + Hash>(hashs: H, k: &K, l: &L, size: H::Hash) -> Self {
+        let k = H::prepare(k);
+        let l = H::prepare(l);
+        let h0 = hashs.compute(&Default::default(), k, l, size);
+        Self {
+            h0,
+            k,
+            l,
+            size,
+            hashs,
         }
     }
+
+    fn most_discriminating(&self) -> <H as NodeHashs>::Hash {
+        self.h0
+    }
 }
+
+// impl SyntaxNodeHashs<u32> {
+//     pub fn most_discriminating(
+//         hashed_kind: u32,
+//         hashed_label: u32,
+//         hashs: SyntaxNodeHashs<u32>,
+//         size: u32,
+//     ) -> u32 {
+//         inner_node_hash(hashed_kind, hashed_label, size, hashs.label)
+//     }
+//     pub fn with_most_disriminating(
+//         hashed_kind: u32,
+//         hashed_label: u32,
+//         hashs: SyntaxNodeHashs<u32>,
+//         size: u32,
+//         hsyntax: u32,
+//     ) -> SyntaxNodeHashs<u32> {
+//         SyntaxNodeHashs {
+//             structt: inner_node_hash(hashed_kind, 0, size, hashs.structt),
+//             label: inner_node_hash(hashed_kind, hashed_label, size, hashs.label),
+//             syntax: hsyntax,
+//         }
+//     }
+// }
 
 pub enum SyntaxNodeHashsKinds {
     Struct,
@@ -82,11 +113,6 @@ impl<T: PrimInt> Debug for SyntaxNodeHashs<T> {
             &self.label.to_usize().unwrap(),
             &self.syntax.to_usize().unwrap(),
         )
-        // f.debug_struct("SyntaxNodeHashs")
-        //     .field("structt", &self.structt)
-        //     .field("label", &self.label)
-        //     .field("syntax", &self.syntax)
-        //     .finish()
     }
 }
 
@@ -127,6 +153,34 @@ impl<T: PrimInt + WrappingAdd> NodeHashs for SyntaxNodeHashs<T> {
         self.structt = self.structt.wrapping_add(&other.structt);
         self.label = self.label.wrapping_add(&other.label);
         self.syntax = self.syntax.wrapping_add(&other.syntax);
+    }
+}
+
+impl ComputableNodeHashs for SyntaxNodeHashs<u32> {
+    fn prepare<U: ?Sized + Hash>(x: &U) -> u32 {
+        use crate::utils::{self, clamp_u64_to_u32};
+        clamp_u64_to_u32(&utils::hash(x))
+    }
+
+    fn compute(
+        &self,
+        kind: &Self::Kind,
+        k: Self::Hash,
+        l: Self::Hash,
+        size: Self::Hash,
+    ) -> Self::Hash {
+        inner_node_hash(k, l, size as u32, self.hash(kind))
+    }
+}
+
+impl MetaDataHashsBuilder<SyntaxNodeHashs<u32>> for Builder<SyntaxNodeHashs<u32>> {
+    fn build(&self) -> SyntaxNodeHashs<u32> {
+        type K = SyntaxNodeHashsKinds;
+        SyntaxNodeHashs {
+            structt: self.hashs.compute(&K::Struct, self.k, 0, self.size),
+            label: self.hashs.compute(&K::Label, self.k, self.l, self.size),
+            syntax: self.h0,
+        }
     }
 }
 
@@ -201,6 +255,10 @@ impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L> crate::types::
     fn get_children<'a>(&'a self) -> &'a [Self::TreeId] {
         self.node.get_children()
     }
+
+    fn try_get_children<'a>(&'a self) -> Option<&'a [Self::TreeId]> {
+        self.node.try_get_children()
+    }
 }
 
 impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L: Eq> crate::types::Tree
@@ -235,11 +293,11 @@ impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L> crate::types::WithHashs
     }
 }
 
-impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L> HashedCompressedNode<U, N, L> {
-    pub(crate) fn new(hashs: U, node: CompressedNode<N, L>) -> Self {
-        Self { hashs, node }
-    }
-}
+// impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L> HashedCompressedNode<U, N, L> {
+//     pub(crate) fn new(hashs: U, node: CompressedNode<N, L>) -> Self {
+//         Self { hashs, node }
+//     }
+// }
 
 static ENTER: u32 = {
     let mut result = 1u32;

@@ -28,11 +28,11 @@ pub(crate) fn handle_java_file<'a,'b:'a>(
 
 pub struct JavaAcc {
     pub(crate) name: String,
-    pub(crate) children_names: Vec<DefaultLabelIdentifier>,
     pub(crate) children: Vec<hyper_ast::store::nodes::DefaultNodeIdentifier>,
+    pub(crate) children_names: Vec<DefaultLabelIdentifier>,
     pub(crate) metrics: java_tree_gen::SubTreeMetrics<SyntaxNodeHashs<u32>>,
-    pub(crate) ana: PartialAnalysis,
     pub(crate) skiped_ana: bool,
+    pub(crate) ana: PartialAnalysis,
 }
 
 impl JavaAcc {

@@ -791,6 +791,7 @@ pub trait WithChildren: Node + Stored {
     fn get_child(&self, idx: &Self::ChildIdx) -> Self::TreeId;
     fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId;
     fn get_children(&self) -> &[Self::TreeId];
+    fn try_get_children(&self) -> Option<&[Self::TreeId]>;
 }
 
 /// just to show that it is not efficient

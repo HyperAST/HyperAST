@@ -138,7 +138,10 @@ pub struct SpacedGlobalData<'a> {
 }
 impl<'a> From<TextedGlobalData<'a>> for SpacedGlobalData<'a> {
     fn from(inner: TextedGlobalData<'a>) -> Self {
-        Self { sum_byte_length: 0, inner }
+        Self {
+            sum_byte_length: 0,
+            inner,
+        }
     }
 }
 impl<'a> From<SpacedGlobalData<'a>> for BasicGlobalData {
@@ -194,11 +197,14 @@ pub trait TreeGen {
         &mut self,
         global: &mut Self::Global,
         acc: <Self as TreeGen>::Acc,
+        label: Option<String>,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node;
 }
 
 pub trait ZippedTreeGen: TreeGen
-where Self::Global: TotalBytesGlobalData {
+where
+    Self::Global: TotalBytesGlobalData,
+{
     // # results
     type Node1;
     type Stores;
@@ -235,14 +241,11 @@ where Self::Global: TotalBytesGlobalData {
         global: &mut Self::Global,
     ) {
         let mut has = Has::Down;
-        // let mut sum_byte_length = 0;
         loop {
             let sbl = cursor.node().start_byte();
             if has != Has::Up && cursor.goto_first_child() {
-                global.set_sum_byte_length(sbl);//sum_byte_length = sbl;
+                global.set_sum_byte_length(sbl);
                 has = Has::Down;
-                // position += 1;
-                // depth += 1;
                 global.down();
 
                 let n = self.pre(text, &cursor.node(), &stack, global);
@@ -250,14 +253,10 @@ where Self::Global: TotalBytesGlobalData {
                 stack.push(n);
             } else {
                 let acc = stack.pop().unwrap();
-                // depth -= 1;
                 global.up();
 
                 let full_node: Option<_> = if let Some(parent) = stack.last_mut() {
-                    Some(self.post(
-                        parent, global, text, // &cursor.node(),
-                        acc,
-                    ))
+                    Some(self.post(parent, global, text, acc))
                 } else {
                     stack.push(acc);
                     None
@@ -265,12 +264,10 @@ where Self::Global: TotalBytesGlobalData {
 
                 let sbl = cursor.node().end_byte();
                 if cursor.goto_next_sibling() {
-                    global.set_sum_byte_length(sbl);//sum_byte_length = sbl;
+                    global.set_sum_byte_length(sbl);
                     has = Has::Right;
                     let parent = stack.last_mut().unwrap();
                     parent.push(full_node.unwrap());
-                    // position += 1;
-                    // depth += 1;
                     global.down();
                     let n = self.pre(text, &cursor.node(), &stack, global);
                     stack.push(n);
@@ -278,17 +275,17 @@ where Self::Global: TotalBytesGlobalData {
                     has = Has::Up;
                     if cursor.goto_parent() {
                         if let Some(full_node) = full_node {
-                            global.set_sum_byte_length(sbl);//sum_byte_length = sbl;
+                            global.set_sum_byte_length(sbl);
                             stack.last_mut().unwrap().push(full_node);
                         } else {
                             if has == Has::Down {
-                                global.set_sum_byte_length(sbl);//sum_byte_length = sbl;
+                                global.set_sum_byte_length(sbl);
                             }
                             return;
                         }
                     } else {
                         if has == Has::Down {
-                            global.set_sum_byte_length(sbl);//sum_byte_length = sbl;
+                            global.set_sum_byte_length(sbl);
                         }
                         return;
                     }

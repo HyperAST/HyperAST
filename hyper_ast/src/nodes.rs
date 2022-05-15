@@ -205,26 +205,20 @@ impl<N: Eq + Clone, L> crate::types::WithChildren for CompressedNode<N, L> {
         }
     }
 
-    // fn descendants_count(&self) -> Self::TreeId {
-    //     match self {
-    //         CompressedNode::Children2 {
-    //             children: _,
-    //             kind: _,
-    //         } => todo!(),
-    //         CompressedNode::Children {
-    //             children: _,
-    //             kind: _,
-    //         } => todo!(),
-    //         _ => 0,
-    //     }
-    // }
-
     fn get_children<'a>(&'a self) -> &'a [Self::TreeId] {
         match self {
             CompressedNode::Children2 { children, kind: _ } => &*children,
             CompressedNode::Children { children, kind: _ } => &*children,
             _ => &[],
         }
+    }
+
+    fn try_get_children<'a>(&'a self) -> Option<&'a [Self::TreeId]> {
+        Some(match self {
+            CompressedNode::Children2 { children, kind: _ } => &*children,
+            CompressedNode::Children { children, kind: _ } => &*children,
+            _ => &[],
+        })
     }
 }
 impl<N, L> crate::types::Node for CompressedNode<N, L> {}

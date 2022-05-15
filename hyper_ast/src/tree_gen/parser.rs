@@ -14,17 +14,20 @@ pub trait Node<'a> {
     fn extract_label(&self, text: &[u8]) -> Option<Vec<u8>> {
         let pos = self.start_byte();
         let end = self.end_byte();
-        let label = {
-            if self.child_count()>=1 {// TODO maybe get node role
-                None
-            } else if self.is_named() {
-                let t = &text[pos..end];
-                Some(t.to_vec())
-            } else {
-                None
-            }
-        };
-        label
+        if self.has_label() {
+            Some(text[pos..end].to_vec())
+        } else {
+            None
+        }
+    }
+    fn has_label(&self) -> bool {
+        if self.child_count()>=1 {// TODO maybe get node role
+            false
+        } else if self.is_named() {
+            true
+        } else {
+            false
+        }
     }
 }
 pub trait TreeCursor<'a,N:Node<'a>> {
