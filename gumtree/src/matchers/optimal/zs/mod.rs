@@ -10,7 +10,6 @@ use crate::{
             ShallowDecompressedTreeStore, SimpleZsTree as ZsTree,
         },
         mapping_store::{DefaultMappingStore, MappingStore},
-        matcher::Matcher,
     },
     tree::tree::{LabelStore, NodeStore, SlicedLabel, Tree, WithHashs},
 };

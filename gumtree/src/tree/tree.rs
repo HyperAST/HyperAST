@@ -16,8 +16,7 @@ pub trait HashKind {
 #[derive(Debug, EnumString, ToString)]
 #[strum(serialize_all = "snake_case")]
 #[derive(Hash, Clone, Copy, PartialEq, Eq)]
-pub enum Type {
-}
+pub enum Type {}
 
 // impl std::fmt::Display for Type {
 // }
@@ -100,13 +99,10 @@ pub trait NodeStore<'a, IdN, D> {
 }
 
 pub trait NodeStoreMut<'a, T: Stored, D>: NodeStore<'a, T::TreeId, D> {
-    // fn get_or_insert(&mut self, node: T) -> T::TreeId;
-    // fn builder(&mut self) -> NodeBuilder;
+    fn get_or_insert(&mut self, node: T) -> T::TreeId;
 }
 
-pub trait VersionedNodeStore<'a, IdN: Eq+Clone, D>: NodeStore<'a, IdN, D>
-where
-{
+pub trait VersionedNodeStore<'a, IdN: Eq + Clone, D>: NodeStore<'a, IdN, D> {
     fn resolve_root(&self, version: (u8, u8, u8), node: IdN);
 }
 

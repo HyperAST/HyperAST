@@ -1,3 +1,4 @@
+/// inspired by the implementation in gumtree
 use std::fmt::Debug;
 
 use bitvec::order::Lsb0;
@@ -20,13 +21,32 @@ use crate::{
 use super::action_vec::ActionsVec;
 
 #[derive(PartialEq, Eq)]
+pub struct ApplicablePath<T: Stored + Labeled + WithChildren> {
+    pub(crate) ori: CompressedTreePath<T::ChildIdx>,
+    pub(crate) mid: CompressedTreePath<T::ChildIdx>,
+}
+
+impl<T: Stored + Labeled + WithChildren> Debug for ApplicablePath<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApplicablePath")
+            .field("orig", &self.ori)
+            .field("mid", &self.mid)
+            .finish()
+    }
+}
+
+#[derive(PartialEq, Eq)]
 pub enum Act<T: Stored + Labeled + WithChildren> {
     Delete {},
     Update {
         new: T::Label,
     },
     Move {
-        from: CompressedTreePath<T::ChildIdx>,
+        from: ApplicablePath<T>,
+    },
+    MovUpd {
+        from: ApplicablePath<T>,
+        new: T::Label,
     },
     Insert {
         sub: T::TreeId,
@@ -35,7 +55,7 @@ pub enum Act<T: Stored + Labeled + WithChildren> {
 
 #[derive(PartialEq, Eq)]
 pub struct SimpleAction<T: Stored + Labeled + WithChildren> {
-    pub(crate) path: CompressedTreePath<T::ChildIdx>,
+    pub(crate) path: ApplicablePath<T>,
     pub(crate) action: Act<T>,
 }
 
@@ -48,12 +68,12 @@ where
         match &self.action {
             Act::Delete {} => write!(f, "Del {:?}", self.path),
             Act::Update { new } => write!(f, "Upd {:?} {:?}", new, self.path),
-            Act::Move { from: sub } => write!(f, "Mov {:?} {:?}", sub, self.path),
+            Act::Move { from } => write!(f, "Mov {:?} {:?}", from, self.path),
+            Act::MovUpd { from, new } => write!(f, "MoU {:?} {:?} {:?}", from, new, self.path),
             Act::Insert { sub } => write!(f, "Ins {:?} {:?}", sub, self.path),
         }
     }
 }
-
 
 struct InOrderNodes<IdD>(Option<Vec<IdD>>);
 
@@ -79,8 +99,10 @@ pub struct ScriptGenerator<
 {
     store: &'a S,
     src_arena_dont_use: &'a SS,
+    cpy2ori: Vec<IdD>,
+    ori2cpy: Vec<usize>,
     mid_arena: Vec<MidNode<T::TreeId, IdD>>, //SuperTreeStore<T::TreeId>,
-    mid_root: IdD,
+    mid_root: Vec<IdD>,
     dst_arena: &'a SD,
     // ori_to_copy: DefaultMappingStore<IdD>,
     ori_mappings: Option<&'a DefaultMappingStore<IdD>>,
@@ -125,8 +147,10 @@ where
         Self {
             store,
             src_arena_dont_use: src_arena,
+            cpy2ori: vec![],
+            ori2cpy: vec![],
             mid_arena: vec![],
-            mid_root: src_arena.root(),
+            mid_root: vec![],
             dst_arena,
             ori_mappings: None,
             cpy_mappings: DefaultMappingStore::new(),
@@ -158,8 +182,9 @@ where
                 children,
             });
         }
-
-        self.mid_arena[cast::<_, usize>(self.mid_root).unwrap()].parent = self.mid_root;
+        self.mid_arena[cast::<_, usize>(self.src_arena_dont_use.root()).unwrap()].parent =
+            self.src_arena_dont_use.root();
+        self.mid_root = vec![self.src_arena_dont_use.root()];
 
         self
     }
@@ -183,42 +208,48 @@ where
 
     fn auxilary_ins_mov_upd(&mut self) {
         for x in self.dst_arena.iter_bf() {
+            log::debug!("{:?}", self.actions);
             let w;
             let y = self.dst_arena.parent(&x);
             let z = y.and_then(|y| Some(self.cpy_mappings.get_src(&y)));
             if !self.cpy_mappings.is_dst(&x) {
                 // insertion
                 let k = if let Some(y) = y {
-                    self.find_pos(&x, &y)
+                    Some(self.find_pos(&x, &y))
                 } else {
-                    num_traits::zero()
+                    None
                 };
                 w = self.make_inserted_node(&x, &z);
-                let path = if let Some(z) = z {
-                    self.path(z).extend(&[k])
-                    // self.src_arena_dont_use
-                    // .path(&self.src_arena_dont_use.root(), &z)
-                } else {
+                let ori = self.path_dst(&self.dst_arena.root(), &x);
+                let mid = if let Some(z) = z {
+                    self.path(z).extend(&[k.unwrap()])
+                } else if let Some(k) = k {
                     CompressedTreePath::from(vec![k])
+                } else {
+                    // let len = self.mid_arena[cast::<_, usize>(self.mid_root[0]).unwrap()]
+                    //     .children
+                    //     .as_ref()
+                    //     .unwrap()
+                    //     .len();
+                    CompressedTreePath::from(vec![num_traits::one()])
                 };
+                let path = ApplicablePath { ori, mid };
                 let action = SimpleAction {
                     path,
                     action: Act::Insert {
                         sub: self.dst_arena.original(&x),
-                        // parent: z,
-                        // idx: k,
                     },
                 };
                 {
                     if let Some(z) = z {
                         let z: usize = cast(z).unwrap();
                         if let Some(cs) = self.mid_arena[z].children.as_mut() {
-                            cs.insert(cast(k).unwrap(), w)
+                            cs.insert(cast(k.unwrap()).unwrap(), w)
                         } else {
                             self.mid_arena[z].children = Some(vec![w])
                         };
                     } else {
-                        self.mid_root = w;
+                        self.mid_root.push(w);
                     }
                 };
                 self.actions.push(action);
@@ -243,67 +274,44 @@ where
 
                 if z != v {
                     // move
+                    let from = ApplicablePath {
+                        ori: self.orig_src(w),
+                        mid: self.path(w),
+                    };
+
+                    // remove moved node
+                    // TODO do not mutate existing node
+                    if let Some(v) = v {
+                        let cs = self.mid_arena[cast::<_, usize>(v).unwrap()]
+                            .children
+                            .as_mut()
+                            .unwrap();
+                        let idx = cs.iter().position(|x| x == &w).unwrap();
+                        cs.remove(idx);
+                    }
+
                     let k = if let Some(y) = y {
                         self.find_pos(&x, &y)
                     } else {
                         num_traits::zero()
                     };
-                    let path = if let Some(z) = z {
-                        // FIXME should be path in mid_arena as z might be new and even more if moved
-                        // let z = self.copy_to_orig(z);
-                        // self.src_arena_dont_use
-                        //     .path(&self.src_arena_dont_use.root(), &z)
-                        //     .extend(&[k])
+                    let mid = if let Some(z) = z {
                         self.path(z).extend(&[k])
                     } else {
                         CompressedTreePath::from(vec![k])
                     };
-                    let sub = self
-                        .src_arena_dont_use
-                        .path(&self.src_arena_dont_use.root(), &self.copy_to_orig(w));
-                    let action = SimpleAction {
-                        path,
-                        action: Act::Move {
-                            from: sub,
-                            // parent: z,
-                            // idx: k,
-                        },
-                    };
-                    self.actions.push(action);
+                    let ori = self.path_dst(&self.dst_arena.root(), &x);
+                    // let ori = if let Some(z) = z {
+                    //     self.orig_src(z).extend(&[k])
+                    // } else {
+                    //     CompressedTreePath::from(vec![k])
+                    // };
 
-                    let upd = if w_l != x_l {
-                        // rename
-                        let path = self
-                            .src_arena_dont_use
-                            .path(&self.src_arena_dont_use.root(), &self.copy_to_orig(w));
-                        let action = SimpleAction::<T> {
-                            path,
-                            action: Act::Update {
-                                // src: self.copy_to_orig(w),
-                                // dst: x,
-                                // old: w_l,
-                                new: x_l,
-                            },
-                        };
-                        Some(action)
+                    let act = if w_l != x_l {
+                        // and also rename
+                        Act::MovUpd { from, new: x_l }
                     } else {
-                        None
-                    };
-
-                    if let Some(v) = v {
-                        let idx = self.mid_arena[cast::<_, usize>(v).unwrap()]
-                            .children
-                            .as_ref()
-                            .unwrap()
-                            .iter()
-                            .position(|x| x == &w)
-                            .unwrap();
-
-                        self.mid_arena[cast::<_, usize>(v).unwrap()]
-                            .children
-                            .as_mut()
-                            .unwrap()
-                            .remove(idx);
+                        Act::Move { from }
                     };
                     {
                         // TODO do not mutate existing node
@@ -316,28 +324,25 @@ where
                             };
                             self.mid_arena[cast::<_, usize>(w).unwrap()].parent = cast(z).unwrap();
                         } else {
-                            self.mid_root = w;
                             self.mid_arena[cast::<_, usize>(w).unwrap()].parent = cast(w).unwrap();
                         }
                     };
-                    if let Some(action) = upd {
+                    if let Act::MovUpd { .. } = act {
                         self.mid_arena[cast::<_, usize>(w).unwrap()].compressed =
                             self.dst_arena.original(&x);
-                        self.actions.push(action);
                     }
+                    let path = ApplicablePath { ori, mid };
+                    let action = SimpleAction { path, action: act };
+                    self.actions.push(action);
                 } else if w_l != x_l {
                     // rename
-                    let path = self
-                        .src_arena_dont_use
-                        .path(&self.src_arena_dont_use.root(), &self.copy_to_orig(w));
+                    let path = ApplicablePath {
+                        ori: self.orig_src(w),
+                        mid: self.path(w),
+                    };
                     let action = SimpleAction::<T> {
                         path,
-                        action: Act::Update {
-                            // src: self.copy_to_orig(w),
-                            // dst: x,
-                            // old: w_l,
-                            new: x_l,
-                        },
+                        action: Act::Update { new: x_l },
                     };
                     self.mid_arena[cast::<_, usize>(w).unwrap()].compressed =
                         self.dst_arena.original(&x);
@@ -360,12 +365,54 @@ where
     }
 
     fn del(&mut self) {
-        for w in Self::iter_mid_in_post_order(self.mid_root, &self.mid_arena) {
+        let root = *self.mid_root.last().unwrap();
+        let mut parent: Vec<(IdD, usize)> = vec![(root, num_traits::zero())];
+        // let mut it = Self::iter_mid_in_post_order(*self.mid_root.last().unwrap(), &mut self.mid_arena);
+        loop {
+            let mut next = None;
+            loop {
+                let (id, idx) = if let Some(id) = parent.pop() {
+                    id
+                } else {
+                    break;
+                };
+                let curr = &self.mid_arena[cast::<_, usize>(id).unwrap()];
+                if let Some(cs) = &curr.children {
+                    if cs.len() == idx {
+                        next = Some(id);
+                        break;
+                    } else {
+                        parent.push((id, idx + 1));
+                        parent.push((cs[idx], 0));
+                    }
+                } else {
+                    next = Some(id);
+                    break;
+                }
+            }
+            let w = if let Some(w) = next {
+                w
+            } else {
+                break;
+            };
             if !self.cpy_mappings.is_src(&w) {
                 //todo mutate mid arena ?
-                let path = self
-                    .src_arena_dont_use
-                    .path(&self.src_arena_dont_use.root(), &self.copy_to_orig(w));
+                let ori = self.orig_src(w);
+                let path = ApplicablePath {
+                    ori,
+                    mid: self.path(w),
+                };
+                let v = self.mid_arena[cast::<_, usize>(w).unwrap()].parent;
+                if v != w {
+                    let cs = self.mid_arena[cast::<_, usize>(v).unwrap()]
+                        .children
+                        .as_mut()
+                        .unwrap();
+                    let idx = cs.iter().position(|x| x == &w).unwrap();
+                    cs.remove(idx);
+                    let i = parent.len() - 1;
+                    parent[i].1 -= 1;
+                } // TODO how to materialize nothing ?
                 let action = SimpleAction {
                     path,
                     action: Act::Delete {
@@ -373,7 +420,8 @@ where
                     },
                 };
                 // TODO self.apply_action(&action, &w);
-                self.actions.push(action)
+                self.actions.push(action);
+                log::debug!("{:?}", self.actions);
             } else {
                 // not modified
                 // all parents were not modified
@@ -428,16 +476,18 @@ where
             for b in &s2 {
                 if self.ori_mappings.unwrap().has(&a, &b) && !lcs.contains(&(*a, *b)) {
                     let k = self.find_pos(b, x);
-                    let path = self
-                        .src_arena_dont_use
-                        .path(&self.src_arena_dont_use.root(), &self.ori_to_copy(*w))
-                        .extend(&[k]);
-                    let sub = self
-                        .src_arena_dont_use
-                        .path(&self.src_arena_dont_use.root(), &self.ori_to_copy(*a));
+                    let path = ApplicablePath {
+                        ori: self.orig_src(*w).extend(&[k]),
+                        mid: self.path(*w),
+                    };
                     let action = SimpleAction {
                         path,
-                        action: Act::Move { from: sub },
+                        action: Act::Move {
+                            from: ApplicablePath {
+                                ori: self.orig_src(*a),
+                                mid: self.path(*a),
+                            },
+                        },
                     };
                     // let action = SimpleAction::Move {
                     //     sub: self.ori_to_copy(*a),
@@ -544,7 +594,7 @@ where
 
     fn iter_mid_in_post_order<'b>(
         root: IdD,
-        mid_arena: &'b [MidNode<T::TreeId, IdD>],
+        mid_arena: &'b mut [MidNode<T::TreeId, IdD>],
     ) -> Iter<'b, T::TreeId, IdD> {
         let parent: Vec<(IdD, usize)> = vec![(root, num_traits::zero())];
         Iter { parent, mid_arena }
@@ -552,7 +602,8 @@ where
 
     fn copy_to_orig(&self, w: IdD) -> IdD {
         if self.src_arena_dont_use.len() <= cast(w).unwrap() {
-            panic!()
+            let w: usize = cast(w).unwrap();
+            return self.cpy2ori[w - self.src_arena_dont_use.len()];
         }
         w
     }
@@ -564,11 +615,35 @@ where
         a
     }
 
+    fn orig_src(&self, v: IdD) -> CompressedTreePath<T::ChildIdx> {
+        self.src_arena_dont_use
+            .path(&self.src_arena_dont_use.root(), &self.copy_to_orig(v))
+    }
+
+    fn path_dst(&self, root: &IdD, x: &IdD) -> CompressedTreePath<T::ChildIdx> {
+        let mut r = vec![];
+        let mut x = *x;
+        loop {
+            let p = self.dst_arena.parent(&x);
+            if let Some(p) = p {
+                r.push(self.dst_arena.position_in_parent(self.store, &x));
+                x = p
+            } else {
+                assert_eq!(root, &x);
+                break;
+            }
+        }
+        r.reverse();
+        CompressedTreePath::from(r)
+    }
+
     fn path(&self, mut z: IdD) -> CompressedTreePath<T::ChildIdx> {
         let mut r = vec![];
         loop {
             let p = self.mid_arena[cast::<_, usize>(z).unwrap()].parent;
             if p == z {
+                let i = self.mid_root.iter().position(|x| x == &z).unwrap();
+                r.push(cast(i).unwrap());
                 break;
             } else {
                 let i = self.mid_arena[cast::<_, usize>(p).unwrap()]
@@ -587,9 +662,27 @@ where
     }
 }
 
+// struct Iter<'a, 'b, IdC, IdD: PrimInt> {
+//     roots: core::slice::Iter<'b, IdD>,
+//     aux: IterAux<'a, IdC, IdD>,
+// }
+
+// impl<'a, 'b, IdC, IdD: num_traits::PrimInt> Iterator for Iter<'a, 'b, IdC, IdD> {
+//     type Item = IdD;
+
+//     fn next(&mut self) -> Option<Self::Item> {
+//         loop {
+//             if let Some(x) = self.aux.next() {
+//                 return Some(x);
+//             }
+//             let parent: Vec<(IdD, usize)> = vec![(self.roots.next()?.clone(), num_traits::zero())];
+//             self.aux.parent = parent;
+//         }
+//     }
+// }
 struct Iter<'a, IdC, IdD: PrimInt> {
     parent: Vec<(IdD, usize)>,
-    mid_arena: &'a [MidNode<IdC, IdD>],
+    mid_arena: &'a mut [MidNode<IdC, IdD>],
 }
 
 impl<'a, IdC, IdD: num_traits::PrimInt> Iterator for Iter<'a, IdC, IdD> {
@@ -618,7 +711,7 @@ impl<'a, IdC, IdD: num_traits::PrimInt> Iterator for Iter<'a, IdC, IdD> {
 }
 
 impl<IdD: Eq> InOrderNodes<IdD> {
-    /// TODO add precondition to try to linerarly remove element (if both ordered the same way it's easy to remove without looking multiple times in both lists)
+    /// TODO add precondition to try to linerarly remove element (if both ordered the same way it's easy to remove without looking at lists multiple times)
     fn remove_all(&mut self, w: &[IdD]) {
         if let Some(a) = self.0.take() {
             let c: Vec<IdD> = a.into_iter().filter(|x| !w.contains(x)).collect();

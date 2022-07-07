@@ -6,9 +6,9 @@ use std::{
 
 use num_traits::{cast, PrimInt};
 
-use crate::tree::tree::{
+use crate::{tree::tree::{
     HashKind, LabelStore, Labeled, NodeStore, NodeStoreMut, Typed, WithChildren,
-};
+}, actions::{action_vec::{ApplicableActions, ActionsVec}, script_generator2::SimpleAction}};
 
 pub(crate) struct SimpleTree<K> {
     kind: K,
@@ -56,6 +56,7 @@ pub(crate) struct DisplayTree<'a, 'b, I: num_traits::PrimInt, T: WithChildren> {
     node: u16,
     depth: usize,
 }
+
 impl<'a, 'b, I: num_traits::PrimInt, T: WithChildren> DisplayTree<'a, 'b, I, T> {
     pub fn new(ls: &'a LS<I>, ns: &'b NS<T>, node: u16) -> Self {
         Self {
@@ -105,11 +106,11 @@ where
         let cs = self.ns.resolve(&self.node);
         writeln!(
             f,
-            "{}|-({}){}:{}",
+            "{}|-{}:{}    \t({})",
             " ".repeat(self.depth),
-            self.node,
             cs.get_type(),
-            std::str::from_utf8(self.ls.resolve(cs.get_label())).unwrap()
+            std::str::from_utf8(self.ls.resolve(cs.get_label())).unwrap(),
+            self.node,
         )?;
         let cs = cs.get_children().to_vec();
         for n in cs {
@@ -143,6 +144,22 @@ pub(crate) struct Tree {
     pub(crate) label: u16,
     pub(crate) children: Vec<u16>,
 }
+
+
+impl<'a> ApplicableActions<'a, Tree> for ActionsVec<SimpleAction<Tree>> {
+    fn build(
+        t: <Tree as Typed>::Type,
+        l: <Tree as Labeled>::Label,
+        cs: Vec<<Tree as Stored>::TreeId>,
+    ) -> Tree {
+        Tree {
+            t,
+            label: l,
+            children: cs,
+        }
+    }
+}
+
 
 impl crate::tree::tree::Typed for Tree {
     type Type = u8;
@@ -220,28 +237,28 @@ pub(crate) struct NS<T: WithChildren> {
     v: Vec<T>,
 }
 
-impl<T: WithChildren + Labeled> NS<T>
-where
-    T::Label: PrimInt,
-{
-    pub(crate) fn fmt(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-        ls: &LS<T::Label>,
-    ) -> std::fmt::Result {
-        self.v.iter().enumerate().for_each(|(i, x)| {
-            write!(
-                f,
-                "[{}]: {}\n",
-                i,
-                std::str::from_utf8(&ls.resolve(&x.get_label())).unwrap()
-            )
-            .unwrap()
-        });
-        write!(f, "")
-        // f.debug_struct("NS").field("v", &self.v).finish()
-    }
-}
+// impl<T: WithChildren + Labeled> NS<T>
+// where
+//     T::Label: PrimInt,
+// {
+//     pub(crate) fn fmt(
+//         &self,
+//         f: &mut std::fmt::Formatter<'_>,
+//         ls: &LS<T::Label>,
+//     ) -> std::fmt::Result {
+//         self.v.iter().enumerate().for_each(|(i, x)| {
+//             write!(
+//                 f,
+//                 "[{}]: {}\n",
+//                 i,
+//                 std::str::from_utf8(&ls.resolve(&x.get_label())).unwrap()
+//             )
+//             .unwrap()
+//         });
+//         write!(f, "")
+//         // f.debug_struct("NS").field("v", &self.v).finish()
+//     }
+// }
 
 impl<'a, T: 'a + WithChildren + Eq> NodeStore<'a, T::TreeId, &'a T> for NS<T>
 where
@@ -252,7 +269,20 @@ where
     }
 }
 
-impl<'a, T: 'a + WithChildren + Eq> NodeStoreMut<'a, T, &'a T> for NS<T> where T::TreeId: PrimInt {}
+impl<'a, T: 'a + WithChildren + Eq> NodeStoreMut<'a, T, &'a T> for NS<T> where T::TreeId: PrimInt {
+    fn get_or_insert(&mut self, node: T) -> <T as super::tree::Stored>::TreeId {
+        let p = self.v.iter().position(|x| {
+            node.eq(x)
+        });
+        if let Some(p) = p {
+            self.v[p] = node;
+            cast::<usize, T::TreeId>(p).unwrap()
+        } else {
+            self.v.push(node);
+            cast::<usize, T::TreeId>(self.v.len()-1).unwrap()
+        }
+    }
+}
 
 impl<'a, T: 'a + WithChildren + Eq> NS<T>
 where
@@ -346,3 +376,5 @@ macro_rules! tree {
     };
 }
 pub(crate) use tree;
+
+use super::tree::Stored;

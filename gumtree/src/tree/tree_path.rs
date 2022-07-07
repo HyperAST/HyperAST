@@ -52,6 +52,35 @@ impl<Idx: PrimInt> PartialEq for CompressedTreePath<Idx> {
     }
 }
 
+pub enum SharedPath<P> {
+    Exact(P),
+    Remain(P),
+    Submatch(P),
+    Different(P)
+}
+
+impl<Idx: PrimInt> CompressedTreePath<Idx> {
+    pub fn shared_ancestors(&self, other: &Self) -> SharedPath<Vec<Idx>> {
+        let mut other = other.iter();
+        let mut r = vec![];
+        for s in self.iter() {
+            if let Some(other) = other.next() {
+                if s != other {
+                    return SharedPath::Different(r);
+                }
+                r.push(s);
+            } else {
+                return SharedPath::Submatch(r);
+            }
+        }
+        if other.next().is_some() {
+            SharedPath::Remain(r)
+        } else {
+            SharedPath::Exact(r)
+        }
+    }
+}
+
 impl<Idx: PrimInt> Eq for CompressedTreePath<Idx> {}
 
 impl<Idx: PrimInt> Debug for CompressedTreePath<Idx> {

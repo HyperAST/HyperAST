@@ -199,3 +199,37 @@ pub(crate) fn example_action() -> (ST<u8>, ST<u8>) {
     ]);
     (src, dst)
 }
+
+pub(crate) fn example_action2() -> (ST<u8>, ST<u8>) {
+    let src = tree!(
+        0,"a"; [
+            tree!(0, "e"; [
+                tree!(0, "f")]),
+            tree!(0, "b"; [
+                tree!(0, "c"),
+                tree!(0, "d")]),
+            tree!(0, "g"; [
+                tree!(0, "h")]),
+            tree!(0, "i"),
+            tree!(0, "ii"),
+            tree!(0, "j"; [
+                tree!(0, "k")]),
+    ]);
+    let dst = tree!(
+        0,"Z"; [
+            tree!(0, "b"; [
+                tree!(0, "c"),
+                tree!(0, "d")]),
+            tree!(0, "h"; [
+                tree!(0, "e"; [
+                    tree!(0, "y")])]),
+            tree!(0, "x"; [
+                tree!(0, "w")]),
+            tree!(0, "j"; [
+                tree!( 0, "u"; [
+                    tree!(0, "v"; [
+                        tree!(0, "k")])]
+            )]),
+    ]);
+    (src, dst)
+}

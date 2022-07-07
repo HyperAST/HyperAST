@@ -1,5 +1,3 @@
-use num_traits::cast;
-
 use crate::{
     matchers::{
         decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore, SimpleZsTree},
@@ -15,7 +13,7 @@ use crate::{
 #[test]
 fn test_zs_paper_for_initial_layout() {
     let (label_store, ..) = vpair_to_stores(example_zs_paper());
-    // println!("{}",std::str::from_utf8(&label_store.resolve(&0).to_owned()).unwrap());
+    println!("{}",std::str::from_utf8(&label_store.resolve(&0).to_owned()).unwrap());
     // assert_eq!(label_store.resolve(&0).to_owned(), b"");
 }
 
@@ -25,7 +23,7 @@ fn test_with_custom_example() {
     // assert_eq!(label_store.resolve(&0).to_owned(), b"");
     println!(
         "src tree:\n{:?}",
-        DisplayTree::new(&label_store, &node_store, src)
+        DisplayTree::new(&label_store,&node_store,src)
     );
     println!(
         "dst tree:\n{:?}",

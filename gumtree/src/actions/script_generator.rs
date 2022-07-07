@@ -1,3 +1,4 @@
+/// inspired by the implementation in gumtree
 use std::fmt::Debug;
 
 use bitvec::order::Lsb0;

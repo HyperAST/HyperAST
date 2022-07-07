@@ -103,7 +103,7 @@ impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<IdC, IdD>>
     }
 
     fn root(&self) -> IdD {
-        num_traits::zero()
+        self.back.root()
     }
 
     fn path<Idx: PrimInt>(&self, _parent: &IdD, _descendant: &IdD) -> CompressedTreePath<Idx> {

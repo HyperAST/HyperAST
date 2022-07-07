@@ -26,16 +26,22 @@ pub struct CompletePostOrder<IdC, IdD: PrimInt + Into<usize>> {
 // <T:WithChildren + Labeled>
 // where T::Label : PrimInt
 impl<IdC, IdD: PrimInt + Into<usize>> CompletePostOrder<IdC, IdD> {
-    pub fn fmt<G: Fn(&IdC) -> String>(
+    // pub fn fmt<G: Fn(&IdC) -> String>(
+    //     &self,
+    //     f: &mut std::fmt::Formatter<'_>,
+    //     g: G,
+    // ) -> std::fmt::Result {
+    //     self.id_compressed
+    //         .iter()
+    //         .enumerate()
+    //         .for_each(|(i, x)| write!(f, "[{}]: {}\n", i, g(x)).unwrap());
+    //     write!(f, "")
+    // }
+    pub fn iter(
         &self,
-        f: &mut std::fmt::Formatter<'_>,
-        g: G,
-    ) -> std::fmt::Result {
+    ) -> impl Iterator<Item=&IdC> {
         self.id_compressed
             .iter()
-            .enumerate()
-            .for_each(|(i, x)| write!(f, "[{}]: {}\n", i, g(x)).unwrap());
-        write!(f, "")
     }
 }
 
