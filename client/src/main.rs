@@ -155,7 +155,7 @@ use hyper_ast::{
     },
     tree_gen::ZippedTreeGen,
     types::{Labeled, NodeStoreExt, Stored, Tree, Typed, WithChildren},
-    utils::memusage_linux,
+    utils::memusage_linux, cyclomatic::{Mcc, MetaData},
 };
 use rusted_gumtree_gen_ts_java::legion_with_refs::{
     print_tree_ids, print_tree_syntax, JavaTreeGen,
@@ -249,6 +249,10 @@ fn main() {
         &full_node2.local.compressed_node,
     );
     println!();
+
+    dbg!(java_tree_gen.stores.node_store.resolve(full_node1.local.compressed_node).get_type());
+    dbg!(Mcc::retrieve(&java_tree_gen.stores.node_store.resolve(full_node1.local.compressed_node)));
+
     let src = full_node1.local.compressed_node;
     let dst = full_node2.local.compressed_node;
 
@@ -550,7 +554,7 @@ import spoon.reflect.factory.Factory;
 import static junit.framework.TestCase.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-class A{class B{}}"#;
+class A{class B{{while(1){if(1){}else{}};}}}"#;
 
 static CASE_BIG2: &'static str = r#"/***/
 
@@ -567,4 +571,4 @@ import aaaaaaaaaaaaaaaaaa.QueueProcessingManager;
 import static junit.framework.TestCase.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-class A{}class B{}"#;
+class A{}class B{{while(1){};}}"#;

@@ -548,6 +548,22 @@ pub enum Type {
 }
 
 impl Type {
+    pub fn is_fork(&self) -> bool {
+        match self {
+            Self::TernaryExpression => true,
+            Self::IfStatement => true,
+            Self::ForStatement => true,
+            Self::EnhancedForStatement => true,
+            Self::WhileStatement => true,
+            Self::CatchClause => true,
+            Self::SwitchLabel => true,
+            Self::TryStatement => true,
+            Self::TryWithResourcesStatement => true,
+            Self::DoStatement => true,
+            _ => false,
+        }
+    }
+
     pub fn is_literal(&self) -> bool {
         match self {
             Self::Literal => true,

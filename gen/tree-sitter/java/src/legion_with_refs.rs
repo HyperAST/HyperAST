@@ -9,6 +9,7 @@ use std::{
 };
 
 use hyper_ast::{
+    cyclomatic::Mcc,
     full::FullNode,
     hashed::{HashedNode, IndexingHashBuilder, MetaDataHashsBuilder},
     nodes::IoOut,
@@ -80,9 +81,12 @@ pub type MDCache = HashMap<NodeIdentifier, MD>;
 
 // TODO only keep compute intensive metadata (where space/time tradeoff is worth storing)
 // eg. decls refs, maybe hashes but not size and height
+// * metadata: computation results from concrete code of node and its children
+// they can be qualitative metadata .eg a hash or they can be quantitative .eg lines of code
 pub struct MD {
     metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
     ana: Option<PartialAnalysis>,
+    mcc: Mcc,
 }
 
 pub type Global<'a> = SpacedGlobalData<'a>;
@@ -94,6 +98,7 @@ pub struct Local {
     // they can be qualitative metadata .eg a hash or they can be quantitative .eg lines of code
     pub metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
     pub ana: Option<PartialAnalysis>,
+    pub mcc: Mcc,
 }
 
 impl Local {
@@ -112,6 +117,7 @@ impl Local {
                 acc.ana = Some(aaa);
             }
         }
+        self.mcc.acc(&mut acc.mcc)
     }
 }
 
@@ -137,6 +143,7 @@ pub struct Acc {
     end_byte: usize,
     metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
     ana: Option<PartialAnalysis>,
+    mcc: Mcc,
     padding_start: usize,
     indentation: Spaces,
 }
@@ -228,6 +235,7 @@ impl<'stores, 'cache> ZippedTreeGen for JavaTreeGen<'stores, 'cache> {
         );
         let labeled = node.has_label();
         let ana = self.build_ana(&kind);
+        let mcc = Mcc::new(&kind);
         Acc {
             simple: BasicAccumulator {
                 kind,
@@ -238,6 +246,7 @@ impl<'stores, 'cache> ZippedTreeGen for JavaTreeGen<'stores, 'cache> {
             end_byte: node.end_byte(),
             metrics: Default::default(),
             ana,
+            mcc,
             padding_start: 0,
             indentation: indent,
         }
@@ -267,6 +276,7 @@ impl<'stores, 'cache> ZippedTreeGen for JavaTreeGen<'stores, 'cache> {
             end_byte: node.end_byte(),
             metrics: Default::default(),
             ana: self.build_ana(&kind),
+            mcc: Mcc::new(&kind),
             padding_start: global.sum_byte_length(),
             indentation: indent,
             simple: BasicAccumulator {
@@ -346,6 +356,7 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
                     hashs,
                 },
                 ana: Default::default(),
+                mcc: Mcc::new(&Type::Spaces),
             },
         };
         full_spaces_node
@@ -525,10 +536,12 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
             let md = self.md_cache.get(&id).unwrap();
             let ana = md.ana.clone();
             let metrics = md.metrics;
+            let mcc = md.mcc.clone();
             Local {
                 compressed_node: id,
                 metrics,
                 ana,
+                mcc,
             }
         } else {
             let ana = make_partial_ana(
@@ -542,8 +555,18 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
             let hashs = hbuilder.build();
             let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte) as u32);
 
+            let mcc = acc.mcc;
+
             let compressed_node = compress(
-                label_id, &ana, acc.simple, bytes_len, size, height, insertion, hashs,
+                label_id,
+                &ana,
+                acc.simple,
+                bytes_len,
+                size,
+                height,
+                insertion,
+                hashs,
+                mcc.clone(),
             );
 
             let metrics = SubTreeMetrics {
@@ -558,12 +581,14 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
                 MD {
                     metrics: metrics.clone(),
                     ana: ana.clone(),
+                    mcc: mcc.clone(),
                 },
             );
             Local {
                 compressed_node,
                 metrics,
                 ana,
+                mcc,
             }
         };
 
@@ -584,6 +609,7 @@ fn compress(
     height: u32,
     insertion: PendingInsert,
     hashs: SyntaxNodeHashs<u32>,
+    mcc: Mcc,
 ) -> legion::Entity {
     let vacant = insertion.vacant();
     macro_rules! insert {
@@ -697,9 +723,11 @@ fn compress(
         };
     }
     let base = (simple.kind.clone(), hashs, bytes_len);
-    match label_id {
-        None => children_dipatch!(base,),
-        Some(label) => children_dipatch!(base, (label,),),
+    match (label_id, mcc) {
+        (None, mcc) if Mcc::persist(&simple.kind) => children_dipatch!(base, (mcc,),),
+        (None, _) => children_dipatch!(base,),
+        (Some(label), mcc) if Mcc::persist(&simple.kind) => children_dipatch!(base, (label, mcc,),),
+        (Some(label), _) => children_dipatch!(base, (label,),),
     }
 }
 
@@ -867,7 +895,7 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
         if t == Type::Spaces {
             // TODO improve ergonomics
             // should ge spaces as label then reconstruct spaces and insert as done with every other nodes
-            // WARN it wont work for new spaces (l parameter is not used, and label do not return spacing) 
+            // WARN it wont work for new spaces (l parameter is not used, and label do not return spacing)
             return i;
         }
         let mut acc: Acc = {
@@ -878,6 +906,7 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
                 end_byte: 0,
                 metrics: Default::default(),
                 ana: None,
+                mcc: Mcc::new(&t),
                 padding_start: 0,
                 indentation: vec![],
                 simple: BasicAccumulator {
@@ -891,28 +920,34 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
                 print_tree_syntax(&self.stores.node_store, &self.stores.label_store, &c);
                 println!();
                 let md = self.md_cache.get(&c);
-                let (ana, metrics) = if let Some(md) = md {
+                let (ana, metrics, mcc) = if let Some(md) = md {
                     let ana = md.ana.clone();
                     let metrics = md.metrics;
-                    (ana, metrics)
+                    let mcc = md.mcc.clone();
+                    (ana, metrics, mcc)
                 } else {
                     let node = self.stores.node_store.resolve(c);
                     let hashs = SyntaxNodeHashs {
                         structt: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Struct),
-                        label:  WithHashs::hash(&node, &SyntaxNodeHashsKinds::Label),
-                        syntax:  WithHashs::hash(&node, &SyntaxNodeHashsKinds::Syntax),
+                        label: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Label),
+                        syntax: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Syntax),
                     };
                     let metrics = SubTreeMetrics {
-                        size:node.get_component::<compo::Size>().map_or(1,|x|x.0),
-                        height:node.get_component::<compo::Height>().map_or(1,|x|x.0),
+                        size: node.get_component::<compo::Size>().map_or(1, |x| x.0),
+                        height: node.get_component::<compo::Height>().map_or(1, |x| x.0),
                         hashs,
                     };
-                    (None, metrics)
+                    let kind = node.get_type();
+                    let mcc = node
+                        .get_component::<Mcc>()
+                        .map_or(Mcc::new(&kind), |x| x.clone());
+                    (None, metrics, mcc)
                 };
                 Local {
                     compressed_node: c,
                     metrics,
                     ana,
+                    mcc,
                 }
             };
             let global = BasicGlobalData::default();
@@ -940,18 +975,30 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
                 let md = self.md_cache.get(&id).unwrap();
                 let ana = md.ana.clone();
                 let metrics = md.metrics;
+                let mcc = md.mcc.clone();
                 Local {
                     compressed_node: id,
                     metrics,
                     ana,
+                    mcc,
                 }
             } else {
                 let ana = None;
                 let hashs = hbuilder.build();
                 let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte) as u32);
 
+                let mcc = Mcc::new(&acc.simple.kind);
+
                 let compressed_node = compress(
-                    label_id, &ana, acc.simple, bytes_len, size, height, insertion, hashs,
+                    label_id,
+                    &ana,
+                    acc.simple,
+                    bytes_len,
+                    size,
+                    height,
+                    insertion,
+                    hashs,
+                    mcc.clone(),
                 );
 
                 let metrics = SubTreeMetrics {
@@ -966,12 +1013,14 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
                     MD {
                         metrics: metrics.clone(),
                         ana: ana.clone(),
+                        mcc: mcc.clone(),
                     },
                 );
                 Local {
                     compressed_node,
                     metrics,
                     ana,
+                    mcc,
                 }
             };
             local
