@@ -233,3 +233,32 @@ pub(crate) fn example_action2() -> (ST<u8>, ST<u8>) {
     ]);
     (src, dst)
 }
+
+/// class A {} renamed to B
+pub(crate) fn example_eq_simple_class_rename() -> (ST<u8>, ST<u8>) {
+    let src = tree!(
+        0, "program"; [
+            tree!(1, "class_decl"; [
+                tree!(2, "class"),
+                tree!(3, "A"),
+                tree!(4, " "),
+                tree!(5, "class body"; [
+                    tree!(6, "{"),
+                    tree!(7, "}")
+                ]),
+            ]),
+    ]);
+    let dst = tree!(
+        0, "program"; [
+            tree!(1, "class_decl"; [
+                tree!(2, "class"),
+                tree!(3, "B"),
+                tree!(4, " "),
+                tree!(5, "class body"; [
+                    tree!(6, "{"),
+                    tree!(7, "}")
+                ]),
+            ]),
+    ]);
+    (src, dst)
+}

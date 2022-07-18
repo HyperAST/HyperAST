@@ -327,8 +327,8 @@ impl<'a> TreeGen for XmlTreeGen<'a> {
                     }
                     match acc.simple.children.len() {
                         0 => {
-                            assert_eq!(0, size);
-                            assert_eq!(0, height);
+                            assert_eq!(1, size);
+                            assert_eq!(1, height);
                             NodeStore::insert_after_prepare(
                                 vacant,
                                 (acc.simple.kind.clone(), hashs, BloomSize::None),

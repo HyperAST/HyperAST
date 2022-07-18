@@ -704,7 +704,6 @@ impl Type {
             || self == &Type::Resource
     }
 
-
     pub fn is_parameter(&self) -> bool {
         self == &Type::Resource
             || self == &Type::FormalParameter
@@ -775,6 +774,10 @@ impl Type {
 
 pub trait Node {}
 
+pub trait AsTreeRef<T> {
+    fn as_tree_ref(&self) -> T;
+}
+
 pub trait Stored: Node {
     type TreeId: Eq;
 }
@@ -791,6 +794,7 @@ pub trait WithChildren: Node + Stored {
     fn get_child(&self, idx: &Self::ChildIdx) -> Self::TreeId;
     fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId;
     fn get_children(&self) -> &[Self::TreeId];
+    fn get_children_cpy(&self) -> Vec<Self::TreeId>;
     fn try_get_children(&self) -> Option<&[Self::TreeId]>;
 }
 
@@ -905,26 +909,64 @@ pub trait TreePath {}
 //     // }
 
 // }
-pub trait NodeStore<'a, IdN, D> {
-    fn resolve(&'a self, id: &IdN) -> D;
+// pub trait NodeStore<'a, IdN, R> {
+//     fn resolve(&'a self, id: &IdN) -> R;
 
-    // fn size(&self, id: &T::TreeId) -> usize;
-    // fn height(&self, id: &T::TreeId) -> usize;
+//     // fn size(&self, id: &T::TreeId) -> usize;
+//     // fn height(&self, id: &T::TreeId) -> usize;
+// }
+// pub trait NodeStore2<IdN>
+// where
+//     for<'a> Self::R<'a>: Stored<TreeId = IdN>,
+// {
+//     type R<'a>
+//     where
+//         Self: 'a;
+//     fn resolve(&self, id: &IdN) -> Self::R<'_>;
+// }
+pub trait GenericItem<'a> {
+    type Item;//:WithChildren;
+}
+// pub trait NodeStore3<IdN> {
+//     type R: ?Sized + for<'any> GenericItem<'any>;
+//     fn resolve(&self, id: &IdN) -> <Self::R as GenericItem>::Item;
+// }
+// pub trait NodeStore4<'a, IdN> {
+//     type R:'a;
+//     fn resolve(&'a self, id: &IdN) -> Self::R;
+// }
+pub trait NodeStore<IdN> {
+    type R<'a> where Self: 'a;
+    fn resolve(&self, id: &IdN) -> Self::R<'_>;
 }
 
-pub trait NodeStoreMut<'a, T: Stored, D>: NodeStore<'a, T::TreeId, D> {
-    // fn get_or_insert(&mut self, node: T) -> T::TreeId;
+// pub trait NodeStoreMut<'a, T: Stored, D: 'a>: NodeStore<'a, T::TreeId, D> {
+//     fn get_or_insert(&mut self, node: T) -> T::TreeId;
+// }
+// pub trait NodeStoreExt<'a, T: Stored, D: 'a + Tree<TreeId = T::TreeId>>:
+//     NodeStore<'a, T::TreeId, D>
+// {
+//     fn build_then_insert(&mut self, t: D::Type, l: D::Label, cs: Vec<T::TreeId>) -> T::TreeId;
+// }
+
+pub trait NodeStoreMut<T: Stored>
+{
+    fn get_or_insert(&mut self, node: T) -> T::TreeId;
+}
+pub trait NodeStoreExt<T: Tree>
+{
+    fn build_then_insert(&mut self, i: T::TreeId, t: T::Type, l: Option<T::Label>, cs: Vec<T::TreeId>) -> T::TreeId;
 }
 
-pub trait VersionedNodeStore<'a, IdN: Eq + Clone, D>: NodeStore<'a, IdN, D> {
+pub trait VersionedNodeStore<'a, IdN>: NodeStore<IdN> {
     fn resolve_root(&self, version: (u8, u8, u8), node: IdN);
 }
 
-pub trait VersionedNodeStoreMut<'a, T: Stored, D>: NodeStoreMut<'a, T, D>
+pub trait VersionedNodeStoreMut<'a, T: Stored>: NodeStoreMut<T>
 where
     T::TreeId: Clone,
 {
-    fn insert_as_root(&mut self, version: (u8, u8, u8), node: T) -> T::TreeId;
+    // fn insert_as_root(&mut self, version: (u8, u8, u8), node: T) -> T::TreeId;
     //  {
     //     let r = self.get_or_insert(node);
     //     self.as_root(version, r.clone());
@@ -934,8 +976,8 @@ where
     fn as_root(&mut self, version: (u8, u8, u8), node: T::TreeId);
 }
 
-pub type OwnedLabel = Vec<u8>;
-pub type SlicedLabel = [u8];
+pub type OwnedLabel = String;
+pub type SlicedLabel = str;
 
 pub trait LabelStore<L: ?Sized> {
     type I: Copy + Eq;

@@ -1,21 +1,28 @@
 use std::{
     borrow::Borrow,
+    cell::RefCell,
     fmt::{Debug, Display},
     marker::PhantomData,
+    ops::Deref,
 };
 
-use num_traits::{cast, PrimInt};
+use num_traits::{cast, NumCast, PrimInt, ToPrimitive};
 
-use crate::{tree::tree::{
-    HashKind, LabelStore, Labeled, NodeStore, NodeStoreMut, Typed, WithChildren,
-}, actions::{action_vec::{ApplicableActions, ActionsVec}, script_generator2::SimpleAction}};
+use hyper_ast::{
+    store::ecs::EntryRef,
+    types::{
+        AsTreeRef, GenericItem, HashKind, LabelStore, Labeled, NodeStore, NodeStoreMut, Stored,
+        Typed, WithChildren,
+    },
+};
+
+use crate::actions::{action_vec::ActionsVec, script_generator2::SimpleAction};
 
 pub(crate) struct SimpleTree<K> {
     kind: K,
     label: Option<String>,
     children: Vec<SimpleTree<K>>,
 }
-
 
 impl<K> SimpleTree<K> {
     pub fn new(k: K, l: Option<&str>, c: Vec<SimpleTree<K>>) -> Self {
@@ -27,11 +34,11 @@ impl<K> SimpleTree<K> {
     }
 }
 
-fn store(ls: &mut LS<u16>, ns: &mut NS<Tree>, node: &SimpleTree<u8>) -> u16 {
+fn store<'a>(ls: &mut LS<u16>, ns: &mut NS<Tree>, node: &SimpleTree<u8>) -> u16 {
     let lid = node
         .label
         .as_ref()
-        .map(|x| ls.get_or_insert(x.as_str().as_bytes()))
+        .map(|x| ls.get_or_insert(x.as_str()))
         .unwrap_or(0);
     let t = Tree {
         t: node.kind,
@@ -50,6 +57,12 @@ pub(crate) fn vpair_to_stores<'a>(
     (label_store, compressed_node_store, src, dst)
 }
 
+impl AsRef<Tree> for &Tree {
+    fn as_ref(&self) -> &Tree {
+        self
+    }
+}
+
 pub(crate) struct DisplayTree<'a, 'b, I: num_traits::PrimInt, T: WithChildren> {
     ls: &'a LS<I>,
     ns: &'b NS<T>,
@@ -57,8 +70,8 @@ pub(crate) struct DisplayTree<'a, 'b, I: num_traits::PrimInt, T: WithChildren> {
     depth: usize,
 }
 
-impl<'a, 'b, I: num_traits::PrimInt, T: WithChildren> DisplayTree<'a, 'b, I, T> {
-    pub fn new(ls: &'a LS<I>, ns: &'b NS<T>, node: u16) -> Self {
+impl<'a, 'b> DisplayTree<'a, 'b, u16, Tree> {
+    pub fn new(ls: &'a LS<u16>, ns: &'b NS<Tree>, node: u16) -> Self {
         Self {
             ls,
             ns,
@@ -68,10 +81,11 @@ impl<'a, 'b, I: num_traits::PrimInt, T: WithChildren> DisplayTree<'a, 'b, I, T> 
     }
 }
 
-impl<'a, 'b, I: num_traits::PrimInt, T> Display for DisplayTree<'a, 'b, I, T>
+impl<'a, 'b> Display for DisplayTree<'a, 'b, u16, Tree>
 where
-    T: Typed + WithChildren<TreeId = u16> + Labeled<Label = I> + Eq,
-    T::Type: Display,
+// T: 'a,// + AsTreeRef<TreeRef<'b, T>>,
+// T: Typed + WithChildren<TreeId = u16> + Labeled<Label = I> + Eq,
+// T::Type: Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let cs = self.ns.resolve(&self.node);
@@ -80,7 +94,7 @@ where
             "{}|-{}:{}",
             " ".repeat(self.depth),
             cs.get_type(),
-            std::str::from_utf8(self.ls.resolve(cs.get_label())).unwrap()
+            self.ls.resolve(cs.get_label())
         )?;
         let cs = cs.get_children().to_vec();
         for n in cs {
@@ -97,11 +111,8 @@ where
         Ok(())
     }
 }
-impl<'a, 'b, I: num_traits::PrimInt, T> Debug for DisplayTree<'a, 'b, I, T>
-where
-    T: Typed + WithChildren<TreeId = u16> + Labeled<Label = I> + Eq,
-    T::Type: Display,
-{
+
+impl<'a, 'b> Debug for DisplayTree<'a, 'b, u16, Tree> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let cs = self.ns.resolve(&self.node);
         writeln!(
@@ -109,7 +120,7 @@ where
             "{}|-{}:{}    \t({})",
             " ".repeat(self.depth),
             cs.get_type(),
-            std::str::from_utf8(self.ls.resolve(cs.get_label())).unwrap(),
+            self.ls.resolve(cs.get_label()),
             self.node,
         )?;
         let cs = cs.get_children().to_vec();
@@ -139,44 +150,95 @@ fn make_stores<'a>() -> (LS<u16>, NS<Tree>) {
 }
 
 #[derive(PartialEq, Eq)]
-pub(crate) struct Tree {
+pub struct Tree {
     pub(crate) t: u8,
     pub(crate) label: u16,
     pub(crate) children: Vec<u16>,
 }
 
+// impl<'a> ApplicableActions<Tree,TreeRef<'a,Tree>> for ActionsVec<SimpleAction<Tree>> {
+//     fn build(
+//         t: <Tree as Typed>::Type,
+//         l: <Tree as Labeled>::Label,
+//         cs: Vec<<Tree as Stored>::TreeId>,
+//     ) -> Tree {
+//         Tree {
+//             t,
+//             label: l,
+//             children: cs,
+//         }
+//     }
+// }
+// impl<'a> hyper_ast::types::NodeStoreExt<'a, Tree, TreeRef<'a, Tree>> for NS<Tree> {
+//     fn build_then_insert(
+//         &mut self,
+//         t: <TreeRef<'a, Tree> as hyper_ast::types::Typed>::Type,
+//         l: <TreeRef<'a, Tree> as hyper_ast::types::Labeled>::Label,
+//         cs: Vec<<Tree as Stored>::TreeId>,
+//     ) -> <Tree as Stored>::TreeId {
+//         let node = Tree {
+//             t,
+//             label: l,
+//             children: cs,
+//         };
+//         self.get_or_insert(node)
+//     }
+// }
 
-impl<'a> ApplicableActions<'a, Tree> for ActionsVec<SimpleAction<Tree>> {
-    fn build(
-        t: <Tree as Typed>::Type,
-        l: <Tree as Labeled>::Label,
+impl hyper_ast::types::NodeStoreExt<Tree> for NS<Tree> {
+    fn build_then_insert(
+        &mut self,
+        i: <Tree as hyper_ast::types::Stored>::TreeId,
+        t: <Tree as hyper_ast::types::Typed>::Type,
+        l: Option<<Tree as hyper_ast::types::Labeled>::Label>,
         cs: Vec<<Tree as Stored>::TreeId>,
-    ) -> Tree {
-        Tree {
+    ) -> <Tree as Stored>::TreeId {
+        let node = Tree {
             t,
-            label: l,
+            label: 0,
             children: cs,
-        }
+        };
+        self.get_or_insert(node)
     }
 }
 
-
-impl crate::tree::tree::Typed for Tree {
+impl hyper_ast::types::Typed for Tree {
     type Type = u8;
 
     fn get_type(&self) -> Self::Type {
         self.t
     }
 }
-impl crate::tree::tree::Labeled for Tree {
+impl<T> Clone for TreeRef<'_, T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T: hyper_ast::types::Typed> hyper_ast::types::Typed for TreeRef<'_, T> {
+    type Type = T::Type;
+
+    fn get_type(&self) -> Self::Type {
+        self.0.get_type()
+    }
+}
+impl hyper_ast::types::Labeled for Tree {
     type Label = u16;
 
     fn get_label(&self) -> &Self::Label {
         &self.label
     }
 }
-impl crate::tree::tree::Node for Tree {}
-impl crate::tree::tree::Tree for Tree {
+impl<T: hyper_ast::types::Labeled> hyper_ast::types::Labeled for TreeRef<'_, T> {
+    type Label = T::Label;
+
+    fn get_label(&self) -> &Self::Label {
+        self.0.get_label()
+    }
+}
+impl hyper_ast::types::Node for Tree {}
+impl<T: hyper_ast::types::Node> hyper_ast::types::Node for TreeRef<'_, T> {}
+impl hyper_ast::types::Tree for Tree {
     fn has_children(&self) -> bool {
         self.children.len() > 0
     }
@@ -186,8 +248,24 @@ impl crate::tree::tree::Tree for Tree {
     }
 }
 
-impl crate::tree::tree::Stored for Tree {
+impl<T: hyper_ast::types::Tree> hyper_ast::types::Tree for TreeRef<'_, T>
+where
+    T::TreeId: Clone,
+{
+    fn has_children(&self) -> bool {
+        self.0.has_children()
+    }
+
+    fn has_label(&self) -> bool {
+        self.0.has_label()
+    }
+}
+
+impl hyper_ast::types::Stored for Tree {
     type TreeId = u16;
+}
+impl<T: hyper_ast::types::Stored> hyper_ast::types::Stored for TreeRef<'_, T> {
+    type TreeId = T::TreeId;
 }
 
 impl WithChildren for Tree {
@@ -208,9 +286,48 @@ impl WithChildren for Tree {
     fn get_children(&self) -> &[Self::TreeId] {
         &self.children
     }
+
+    fn get_children_cpy(&self) -> Vec<Self::TreeId> {
+        self.children.to_vec()
+    }
+
+    fn try_get_children(&self) -> Option<&[Self::TreeId]> {
+        Some(&self.children)
+    }
 }
 
-pub(crate) enum H {
+impl<T: WithChildren> WithChildren for TreeRef<'_, T>
+where
+    T::TreeId: Clone,
+{
+    type ChildIdx = T::ChildIdx;
+
+    fn child_count(&self) -> Self::ChildIdx {
+        self.0.child_count()
+    }
+
+    fn get_child(&self, idx: &Self::ChildIdx) -> Self::TreeId {
+        self.0.get_child(idx)
+    }
+
+    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
+        self.0.get_child_rev(idx)
+    }
+
+    fn get_children(&self) -> &[Self::TreeId] {
+        self.0.get_children()
+    }
+
+    fn get_children_cpy(&self) -> Vec<Self::TreeId> {
+        self.0.get_children().to_vec()
+    }
+
+    fn try_get_children(&self) -> Option<&[Self::TreeId]> {
+        self.0.try_get_children()
+    }
+}
+
+pub enum H {
     S,
     L,
 }
@@ -225,7 +342,7 @@ impl HashKind for H {
     }
 }
 
-impl crate::tree::tree::WithHashs for Tree {
+impl hyper_ast::types::WithHashs for Tree {
     type HK = H;
     type HP = u8;
     fn hash(&self, _kind: &H) -> u8 {
@@ -233,7 +350,15 @@ impl crate::tree::tree::WithHashs for Tree {
     }
 }
 
-pub(crate) struct NS<T: WithChildren> {
+impl<T: hyper_ast::types::WithHashs> hyper_ast::types::WithHashs for TreeRef<'_, T> {
+    type HK = T::HK;
+    type HP = T::HP;
+    fn hash(&self, kind: &Self::HK) -> Self::HP {
+        self.0.hash(kind)
+    }
+}
+
+pub(crate) struct NS<T> {
     v: Vec<T>,
 }
 
@@ -260,26 +385,122 @@ pub(crate) struct NS<T: WithChildren> {
 //     }
 // }
 
-impl<'a, T: 'a + WithChildren + Eq> NodeStore<'a, T::TreeId, &'a T> for NS<T>
+// impl<'a, T: AsTreeRef<R>, R: 'a + WithChildren + Eq> NodeStore<'a, R::TreeId, R> for NS<T>
+// where
+//     R::TreeId: PrimInt,
+// {
+//     fn resolve(&self, id: &R::TreeId) -> R {
+//         self.v[cast::<R::TreeId, usize>(*id).unwrap()].as_tree_ref()
+//     }
+// }
+
+// impl<'a, T:for<'b> AsTreeRef2<'b, R>, R: 'a + WithChildren + Eq> NodeStore2<R::TreeId, T, R> for NS<T>
+// where
+//     R::TreeId: PrimInt,
+// {
+//     fn resolve(&self, id: R::TreeId) -> R {
+//         self.v[cast::<R::TreeId, usize>(id).unwrap()].as_tree_ref()
+//     }
+// }
+
+// impl NodeStore2<u16> for NS<Tree> {
+//     type R<'a> = TreeRef<'a, Tree>;
+//     fn resolve(&self, id: &u16) -> TreeRef<'_, Tree> {
+//         TreeRef(&self.v[id.to_usize().unwrap()])
+//     }
+// }
+
+// impl<'a, T:'a+ hyper_ast::types::Tree> NodeStore2<'a, T::TreeId> for NS<T>
+// where T::TreeId : ToPrimitive {
+//     type R = TreeRef<'a, T>;
+
+//     fn resolve(&self, id: &T::TreeId) -> TreeRef<'_, T> {
+//         TreeRef(&self.v[id.to_usize().unwrap()])
+//     }
+// }
+
+impl<T: hyper_ast::types::Tree> NodeStore<T::TreeId> for NS<T>
 where
-    T::TreeId: PrimInt,
+    T::TreeId: ToPrimitive,
 {
-    fn resolve(&'a self, id: &T::TreeId) -> &'a T {
-        &self.v[cast::<T::TreeId, usize>(*id).unwrap()]
+    type R<'a>  = TreeRef<'a, T> where T: 'a;
+
+    fn resolve(&self, id: &T::TreeId) -> TreeRef<'_, T> {
+        TreeRef(&self.v[id.to_usize().unwrap()])
     }
 }
 
-impl<'a, T: 'a + WithChildren + Eq> NodeStoreMut<'a, T, &'a T> for NS<T> where T::TreeId: PrimInt {
-    fn get_or_insert(&mut self, node: T) -> <T as super::tree::Stored>::TreeId {
-        let p = self.v.iter().position(|x| {
-            node.eq(x)
-        });
+// impl<T: hyper_ast::types::Tree> NodeStore3<T::TreeId> for NS<T>
+// where T::TreeId : ToPrimitive {
+//     type R = dyn for<'any> GenericItem<'any, Item = TreeRef<'any, T>>;
+
+//     fn resolve(&self, id: &T::TreeId) -> TreeRef<'_, T> {
+//         TreeRef(&self.v[id.to_usize().unwrap()])
+//     }
+// }
+
+#[derive(PartialEq, Eq)]
+pub(crate) struct TreeRef<'a, T>(&'a T);
+
+// impl<'a> AsTreeRef<TreeRef<'a, Tree>> for Tree {
+//     fn as_tree_ref(&self) -> TreeRef<'a,Tree> {
+//         TreeRef(self)
+//     }
+// }
+// impl<'a, T> AsTreeRef<TreeRef<'a, T>> for TreeRef<'a, T> {
+//     fn as_tree_ref(&self) -> TreeRef<T> {
+//         TreeRef(&self.0)
+//     }
+// }
+
+// impl<'a> AsTreeRef<TreeRef<'a, SimpleTree<u8>>> for SimpleTree<u8> {
+//     fn as_tree_ref(&self) -> TreeRef<SimpleTree<u8>> {
+//         TreeRef(self)
+//     }
+// }
+
+// impl<'a, T: AsTreeRef<R> + WithChildren + Eq, R: 'a + WithChildren<TreeId = T::TreeId> + Eq>
+//     NodeStoreMut<'a, T, R> for NS<T>
+// where
+//     <T as Stored>::TreeId: PrimInt,
+// {
+//     fn get_or_insert(&mut self, node: T) -> <T as Stored>::TreeId {
+//         let p = self.v.iter().position(|x| node.eq(x));
+//         if let Some(p) = p {
+//             self.v[p] = node;
+//             cast::<usize, R::TreeId>(p).unwrap()
+//         } else {
+//             self.v.push(node);
+//             cast::<usize, R::TreeId>(self.v.len() - 1).unwrap()
+//         }
+//     }
+// }
+
+// impl NodeStoreMut2<Tree> for NS<Tree> {
+//     fn get_or_insert(&mut self, node: Tree) -> u16 {
+//         let p = self.v.iter().position(|x| node.eq(x));
+//         if let Some(p) = p {
+//             self.v[p] = node;
+//             cast::<usize, u16>(p).unwrap()
+//         } else {
+//             self.v.push(node);
+//             cast::<usize, u16>(self.v.len() - 1).unwrap()
+//         }
+//     }
+// }
+
+impl<T: hyper_ast::types::Tree + Eq> NodeStoreMut<T> for NS<T>
+where
+    T::TreeId: ToPrimitive + NumCast,
+{
+    fn get_or_insert(&mut self, node: T) -> T::TreeId {
+        let p = self.v.iter().position(|x| node.eq(x));
         if let Some(p) = p {
             self.v[p] = node;
             cast::<usize, T::TreeId>(p).unwrap()
         } else {
             self.v.push(node);
-            cast::<usize, T::TreeId>(self.v.len()-1).unwrap()
+            cast::<usize, T::TreeId>(self.v.len() - 1).unwrap()
         }
     }
 }
@@ -333,14 +554,14 @@ where
 // }
 
 pub(crate) struct LS<I: PrimInt> {
-    // v: RefCell<Vec<crate::tree::tree::OwnedLabel>>,
-    v: Vec<crate::tree::tree::OwnedLabel>,
+    // v: RefCell<Vec<hyper_ast::types::OwnedLabel>>,
+    v: Vec<hyper_ast::types::OwnedLabel>,
     phantom: PhantomData<*const I>,
 }
 
-impl<'a, I: PrimInt> LabelStore<crate::tree::tree::SlicedLabel> for LS<I> {
+impl<'a, I: PrimInt> LabelStore<hyper_ast::types::SlicedLabel> for LS<I> {
     type I = I;
-    fn get_or_insert<T: Borrow<crate::tree::tree::SlicedLabel>>(&mut self, node: T) -> Self::I {
+    fn get_or_insert<T: Borrow<hyper_ast::types::SlicedLabel>>(&mut self, node: T) -> Self::I {
         let a = &mut self.v;
         let b = a
             .iter()
@@ -356,7 +577,17 @@ impl<'a, I: PrimInt> LabelStore<crate::tree::tree::SlicedLabel> for LS<I> {
         }
     }
 
-    fn resolve(&self, id: &Self::I) -> &crate::tree::tree::SlicedLabel {
+    fn get<T: Borrow<hyper_ast::types::SlicedLabel>>(&self, node: T) -> Option<Self::I> {
+        let a = &self.v;
+        let b = a
+            .iter()
+            .enumerate()
+            .find_map(|(i, x)| if x.eq(node.borrow()) { Some(i) } else { None })
+            .to_owned();
+        b.map(|i| cast(i).unwrap())
+    }
+
+    fn resolve(&self, id: &Self::I) -> &hyper_ast::types::SlicedLabel {
         &self.v[cast::<Self::I, usize>(*id).unwrap()]
     }
 }
@@ -376,5 +607,3 @@ macro_rules! tree {
     };
 }
 pub(crate) use tree;
-
-use super::tree::Stored;

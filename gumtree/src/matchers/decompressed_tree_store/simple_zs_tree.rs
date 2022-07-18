@@ -1,9 +1,7 @@
 use num_traits::{cast, one, zero, PrimInt};
 
-use crate::tree::{
-    tree::{NodeStore, Stored, Tree, WithChildren},
-    tree_path::CompressedTreePath,
-};
+use crate::tree::tree_path::CompressedTreePath;
+use hyper_ast::types::{NodeStore, WithChildren};
 
 use super::{
     size, DecompressedTreeStore, Initializable, Iter, PostOrder, PostOrderIterable,
@@ -13,7 +11,8 @@ use super::{
 /// made for the zs diff algo
 /// - post order
 /// - key roots
-pub struct SimpleZsTree<IdC, IdD: PrimInt + Into<usize>> {
+#[derive(Debug)]
+pub struct SimpleZsTree<IdC, IdD> {
     leaf_count: IdD,
     id_compressed: Vec<IdC>,
     pub(crate) llds: Vec<IdD>,
@@ -21,19 +20,17 @@ pub struct SimpleZsTree<IdC, IdD: PrimInt + Into<usize>> {
     kr: Vec<IdD>,
 }
 
-impl<IdC: Clone, IdD: PrimInt + Into<usize>> PostOrder<IdC, IdD> for SimpleZsTree<IdC, IdD> {
+impl<'d, IdC: Clone, IdD: PrimInt> PostOrder<'d, IdC, IdD> for SimpleZsTree<IdC, IdD> {
     fn lld(&self, i: &IdD) -> IdD {
-        self.llds[(*i).into() - 1] + num_traits::one()
+        self.llds[(*i).to_usize().unwrap() - 1] + num_traits::one()
     }
 
     fn tree(&self, id: &IdD) -> IdC {
-        self.id_compressed[(*id).into() - 1].clone()
+        self.id_compressed[(*id).to_usize().unwrap() - 1].clone()
     }
 }
 
-impl<IdC: Clone, IdD: PrimInt + Into<usize>> PostOrderIterable<IdC, IdD>
-    for SimpleZsTree<IdC, IdD>
-{
+impl<'d, IdC: Clone, IdD: PrimInt> PostOrderIterable<'d, IdC, IdD> for SimpleZsTree<IdC, IdD> {
     type It = Iter<IdD>;
     fn iter_df_post(&self) -> Iter<IdD> {
         Iter {
@@ -43,24 +40,28 @@ impl<IdC: Clone, IdD: PrimInt + Into<usize>> PostOrderIterable<IdC, IdD>
     }
 }
 
-impl<IdC: Clone, IdD: PrimInt + Into<usize>> PostOrderKeyRoots<IdC, IdD>
-    for SimpleZsTree<IdC, IdD>
-{
+impl<'d, IdC: Clone, IdD: PrimInt> PostOrderKeyRoots<'d, IdC, IdD> for SimpleZsTree<IdC, IdD> {
     fn kr(&self, x: IdD) -> IdD {
-        self.kr[x.into()]
+        self.kr[x.to_usize().unwrap()]
     }
 }
 
-impl<IdC: Clone, IdD: PrimInt + Into<usize>> Initializable<IdC, IdD> for SimpleZsTree<IdC, IdD> {
+impl<'d, IdC: Clone, IdD: PrimInt> Initializable<'d, IdC, IdD> for SimpleZsTree<IdC, IdD> {
     fn new<
-        T: Stored<TreeId = IdC> + WithChildren, // + WithHashs<HK = HK, HP = HP>,
+        // 'a,
+        // T: 'a + Stored<TreeId = IdC> + WithChildren, // + WithHashs<HK = HK, HP = HP>,
         // HK: HashKind,
         // HP: PrimInt,
-        S: for<'a> NodeStore<'a, T::TreeId, &'a T>,
+        S, //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
     >(
-        store: &S,
+        store: &'d S,
         root: &IdC,
-    ) -> Self {
+    ) -> SimpleZsTree<IdC, IdD>
+    where
+        S: 'd + NodeStore<IdC>,
+        // for<'c> <<S as NodeStore2<IdC>>::R as GenericItem<'c>>::Item: WithChildren<TreeId = IdC>,
+        S::R<'d>: WithChildren<TreeId = IdC>,
+    {
         struct R<IdC, Idx, IdD> {
             curr: IdC,
             idx: Idx,
@@ -78,7 +79,7 @@ impl<IdC: Clone, IdD: PrimInt + Into<usize>> Initializable<IdC, IdD> for SimpleZ
         loop {
             if let Some(R { curr, idx, lld }) = stack.pop() {
                 let x = store.resolve(&curr);
-                let l = x.child_count();
+                let l = x.try_get_children().map_or(zero(), |x|cast(x.len()).unwrap());
 
                 if l == zero() {
                     // leaf
@@ -123,9 +124,9 @@ impl<IdC: Clone, IdD: PrimInt + Into<usize>> Initializable<IdC, IdD> for SimpleZ
         let mut visited = vec![false; node_count];
         let mut k = kr.len() - 1;
         for i in (1..node_count).rev() {
-            if !visited[llds[i].into()] {
+            if !visited[llds[i].to_usize().unwrap()] {
                 kr[k] = cast(i + 1).unwrap();
-                visited[llds[i].into()] = true;
+                visited[llds[i].to_usize().unwrap()] = true;
                 if k > 0 {
                     k -= 1;
                 }
@@ -144,7 +145,7 @@ impl<IdC: Clone, IdD: PrimInt + Into<usize>> Initializable<IdC, IdD> for SimpleZ
     }
 }
 
-impl<IdC: Clone, IdD: PrimInt + Into<usize>> ShallowDecompressedTreeStore<IdC, IdD>
+impl<'d, IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<'d, IdC, IdD>
     for SimpleZsTree<IdC, IdD>
 {
     fn len(&self) -> usize {
@@ -152,7 +153,7 @@ impl<IdC: Clone, IdD: PrimInt + Into<usize>> ShallowDecompressedTreeStore<IdC, I
     }
 
     fn original(&self, id: &IdD) -> IdC {
-        self.id_compressed[(*id).into()].clone()
+        self.id_compressed[(*id).to_usize().unwrap()].clone()
     }
 
     fn leaf_count(&self) -> IdD {
@@ -163,12 +164,12 @@ impl<IdC: Clone, IdD: PrimInt + Into<usize>> ShallowDecompressedTreeStore<IdC, I
         cast::<_, IdD>(self.len()).unwrap() - one() // todo test changing it
     }
 
-    fn child<T: Stored<TreeId = IdC> + WithChildren, S: for<'a> NodeStore<'a, T::TreeId, &'a T>>(
-        &self,
-        store: &S,
-        x: &IdD,
-        p: &[T::ChildIdx],
-    ) -> IdD {
+    fn child<'b,S>(&self, store: &'b S, x: &IdD, p: &[<S::R<'b> as WithChildren>::ChildIdx]) -> IdD
+    where
+        S: NodeStore<IdC>,
+        // for<'c> <<S as NodeStore2<IdC>>::R as GenericItem<'c>>::Item: WithChildren<TreeId = IdC>,
+        S::R<'b>: WithChildren<TreeId = IdC>,
+    {
         let mut r = *x;
         for d in p {
             let a = self.original(&r);
@@ -186,14 +187,12 @@ impl<IdC: Clone, IdD: PrimInt + Into<usize>> ShallowDecompressedTreeStore<IdC, I
         r
     }
 
-    fn children<
-        T: Stored<TreeId = IdC> + WithChildren,
-        S: for<'a> NodeStore<'a, T::TreeId, &'a T>,
-    >(
-        &self,
-        store: &S,
-        x: &IdD,
-    ) -> Vec<IdD> {
+    fn children<'b,S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    where
+        S: 'b + NodeStore<IdC>,
+        // for<'c> <<S as NodeStore2<IdC>>::R as GenericItem<'c>>::Item: WithChildren<TreeId = IdC>,
+        S::R<'b>: WithChildren<TreeId = IdC>,
+    {
         let a = self.original(x);
         let cs: Vec<_> = store.resolve(&a).get_children().to_owned();
         let mut r = vec![];
@@ -209,28 +208,26 @@ impl<IdC: Clone, IdD: PrimInt + Into<usize>> ShallowDecompressedTreeStore<IdC, I
         todo!()
     }
 }
-impl<IdC: Clone, IdD: PrimInt + Into<usize>> DecompressedTreeStore<IdC, IdD>
-    for SimpleZsTree<IdC, IdD>
-{
-    fn descendants<T: Tree<TreeId = IdC>, S: for<'a> NodeStore<'a, T::TreeId, &'a T>>(
-        &self,
-        _store: &S,
-        x: &IdD,
-    ) -> Vec<IdD> {
+impl<'d, IdC: Clone, IdD: PrimInt> DecompressedTreeStore<'d, IdC, IdD> for SimpleZsTree<IdC, IdD> {
+    fn descendants<'b,S>(&self, _store: &'b S, x: &IdD) -> Vec<IdD>
+    where
+        S: 'b + NodeStore<IdC>,
+        S::R<'b>: WithChildren<TreeId = IdC>,
+    {
         (cast::<_, usize>(self.lld(x)).unwrap()..cast::<_, usize>(*x).unwrap())
             .map(|x| cast(x).unwrap())
             .collect()
     }
 
     fn first_descendant(&self, i: &IdD) -> IdD {
-        self.llds[(*i).into()]
+        self.llds[(*i).to_usize().unwrap()]
     }
 
-    fn descendants_count<T: Tree<TreeId = IdC>, S: for<'a> NodeStore<'a, T::TreeId, &'a T>>(
-        &self,
-        _store: &S,
-        x: &IdD,
-    ) -> usize {
+    fn descendants_count<'b,S>(&self, _store: &'b S, x: &IdD) -> usize
+    where
+        S: 'b + NodeStore<IdC>,
+        S::R<'b>: WithChildren<TreeId = IdC>,
+    {
         cast::<_, usize>(self.lld(x) - *x).unwrap()
     }
 }

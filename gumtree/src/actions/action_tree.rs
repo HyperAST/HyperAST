@@ -4,21 +4,18 @@
 /// Maybe an other algorithm similar to the Chawathe that better fits my needs exists in the literature.
 use std::fmt::Debug;
 
-use crate::tree::tree::{Labeled, NodeStoreMut, Stored, WithChildren};
-
+use num_traits::PrimInt;
 use super::{
     script_generator2::{Act, SimpleAction},
     Actions,
 };
 
-#[derive(Debug)]
-pub struct ActionsTree<A: Debug> {
+pub struct ActionsTree<A> {
     atomics: Vec<Node<A>>,
     composed: Vec<A>,
 } // TODO use NS ? or a decompressed tree ?
 
-#[derive(Debug)]
-pub struct Node<A: Debug> {
+pub struct Node<A> {
     action: A,
     children: Vec<Node<A>>,
 }
@@ -29,12 +26,9 @@ impl<A: Debug> Actions for ActionsTree<A> {
     }
 }
 
-impl<T: Stored + Labeled + WithChildren> ActionsTree<SimpleAction<T>>
-where
-    T::Label: Debug,
-    T::TreeId: Debug,
+impl<L,Idx:PrimInt,I> ActionsTree<SimpleAction<L,Idx,I>>
 {
-    pub(crate) fn push(&mut self, action: SimpleAction<T>) {
+    pub(crate) fn push(&mut self, action: SimpleAction<L,Idx,I>) {
         Self::push_aux(
             Node {
                 action,
@@ -43,7 +37,7 @@ where
             &mut self.atomics,
         );
     }
-    fn push_aux(node: Node<SimpleAction<T>>, r: &mut Vec<Node<SimpleAction<T>>>) {
+    fn push_aux(node: Node<SimpleAction<L,Idx,I>>, r: &mut Vec<Node<SimpleAction<L,Idx,I>>>) {
         let mut i = 0;
         for x in r.iter_mut() {
             i += 1;
@@ -64,7 +58,7 @@ where
         // }
     }
 
-    fn push_node(&mut self, node: Node<SimpleAction<T>>) {
+    fn push_node(&mut self, node: Node<SimpleAction<L,Idx,I>>) {
         Self::push_aux(node, &mut self.atomics);
     }
 
@@ -76,19 +70,15 @@ where
     }
 }
 
-impl<T: Stored + Labeled + WithChildren + std::cmp::PartialEq> ActionsTree<SimpleAction<T>>
-where
-    T::Label: Debug,
-    T::TreeId: Debug,
-    T::TreeId: Clone,
-{
-    /// WARN should be more efficient than vec variant
-    /// and even more consise if made well
-    fn apply_actions<S: for<'b> NodeStoreMut<'b, T, &'b T>>(
-        &self,
-        r: T::TreeId,
-        s: &mut S,
-    ) -> <T as Stored>::TreeId {
-        todo!()
-    }
-}
+// impl<L,Idx,I> ActionsTree<SimpleAction<L,Idx,I>>
+// {
+//     /// WARN should be more efficient than vec variant
+//     /// and even more consise if made well
+//     fn apply_actions<S: for<'b> NodeStoreMut<'b, T, &'b T>>(
+//         &self,
+//         r: T::TreeId,
+//         s: &mut S,
+//     ) -> <T as Stored>::TreeId {
+//         todo!()
+//     }
+// }

@@ -127,6 +127,8 @@ pub trait LabelStore<L: ?Sized> {
     type I: Copy + Eq;
 
     fn get_or_insert<T: Borrow<L>>(&mut self, node: T) -> Self::I;
+    
+    fn get<T: Borrow<L>>(&self, node: T) -> Option<Self::I>;
 
     fn resolve(&self, id: &Self::I) -> &L;
 }

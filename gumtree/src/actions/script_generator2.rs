@@ -1,8 +1,8 @@
 /// inspired by the implementation in gumtree
-use std::fmt::Debug;
+use std::{fmt::Debug, marker::PhantomData};
 
 use bitvec::order::Lsb0;
-use num_traits::{cast, PrimInt};
+use num_traits::{cast, PrimInt, ToPrimitive};
 
 use crate::{
     matchers::{
@@ -11,22 +11,26 @@ use crate::{
         },
         mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
     },
-    tree::{
-        tree::{Labeled, NodeStore, Stored, WithChildren},
-        tree_path::{CompressedTreePath, TreePath},
-    },
+    tree::tree_path::{CompressedTreePath, TreePath},
     utils::sequence_algorithms::longest_common_subsequence,
 };
+use hyper_ast::types::{GenericItem, Labeled, NodeStore, Stored, Tree, WithChildren};
 
 use super::action_vec::ActionsVec;
 
-#[derive(PartialEq, Eq)]
-pub struct ApplicablePath<T: Stored + Labeled + WithChildren> {
-    pub(crate) ori: CompressedTreePath<T::ChildIdx>,
-    pub(crate) mid: CompressedTreePath<T::ChildIdx>,
+pub struct ApplicablePath<Idx> {
+    pub ori: CompressedTreePath<Idx>,
+    pub mid: CompressedTreePath<Idx>,
 }
 
-impl<T: Stored + Labeled + WithChildren> Debug for ApplicablePath<T> {
+impl<Idx: PartialEq> PartialEq for ApplicablePath<Idx> {
+    fn eq(&self, other: &Self) -> bool {
+        self.ori == other.ori && self.mid == other.mid
+    }
+}
+impl<Idx: Eq> Eq for ApplicablePath<Idx> {}
+
+impl<Idx: PrimInt> Debug for ApplicablePath<Idx> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ApplicablePath")
             .field("orig", &self.ori)
@@ -35,35 +39,48 @@ impl<T: Stored + Labeled + WithChildren> Debug for ApplicablePath<T> {
     }
 }
 
-#[derive(PartialEq, Eq)]
-pub enum Act<T: Stored + Labeled + WithChildren> {
+pub enum Act<L, Idx, I> {
     Delete {},
-    Update {
-        new: T::Label,
-    },
-    Move {
-        from: ApplicablePath<T>,
-    },
-    MovUpd {
-        from: ApplicablePath<T>,
-        new: T::Label,
-    },
-    Insert {
-        sub: T::TreeId,
-    },
+    Update { new: L },
+    Move { from: ApplicablePath<Idx> },
+    MovUpd { from: ApplicablePath<Idx>, new: L },
+    Insert { sub: I },
 }
 
-#[derive(PartialEq, Eq)]
-pub struct SimpleAction<T: Stored + Labeled + WithChildren> {
-    pub(crate) path: ApplicablePath<T>,
-    pub(crate) action: Act<T>,
+impl<L: PartialEq, Idx: PartialEq, I: PartialEq> PartialEq for Act<L, Idx, I> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Update { new: l_new }, Self::Update { new: r_new }) => l_new == r_new,
+            (Self::Move { from: l_from }, Self::Move { from: r_from }) => l_from == r_from,
+            (
+                Self::MovUpd {
+                    from: l_from,
+                    new: l_new,
+                },
+                Self::MovUpd {
+                    from: r_from,
+                    new: r_new,
+                },
+            ) => l_from == r_from && l_new == r_new,
+            (Self::Insert { sub: l_sub }, Self::Insert { sub: r_sub }) => l_sub == r_sub,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
 }
+impl<L: Eq, Idx: Eq, I: Eq> Eq for Act<L, Idx, I> {}
 
-impl<T: Stored + Labeled + WithChildren> Debug for SimpleAction<T>
-where
-    T::Label: Debug,
-    T::TreeId: Debug,
-{
+pub struct SimpleAction<L, Idx, I> {
+    pub path: ApplicablePath<Idx>,
+    pub action: Act<L, Idx, I>,
+}
+impl<L: PartialEq, Idx: PartialEq, I: PartialEq> PartialEq for SimpleAction<L, Idx, I> {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path && self.action == other.action
+    }
+}
+impl<L: Eq, Idx: Eq, I: Eq> Eq for SimpleAction<L, Idx, I> {}
+
+impl<L: Debug, Idx: PrimInt, I: Debug> Debug for SimpleAction<L, Idx, I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.action {
             Act::Delete {} => write!(f, "Del {:?}", self.path),
@@ -86,18 +103,28 @@ struct MidNode<IdC, IdD> {
     children: Option<Vec<IdD>>,
 }
 
+impl<IdC: Debug, IdD: Debug> Debug for MidNode<IdC, IdD> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MidNode")
+            .field("parent", &self.parent)
+            .field("compressed", &self.compressed)
+            .field("children", &self.children)
+            .finish()
+    }
+}
+
 pub struct ScriptGenerator<
     'a,
     IdD: PrimInt + Debug,
     T: 'a + Stored + Labeled + WithChildren,
     SS,
-    SD: BreathFirstIterable<'a, T::TreeId, IdD> + DecompressedWithParent<IdD>,
-    S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+    SD, //: BreathFirstIterable<'a, T::TreeId, IdD> + DecompressedWithParent<IdD>,
+    S,  //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
 > where
     T::Label: Debug,
     T::TreeId: Debug,
 {
-    store: &'a S,
+    pub store: &'a S,
     src_arena_dont_use: &'a SS,
     cpy2ori: Vec<IdD>,
     ori2cpy: Vec<usize>,
@@ -109,7 +136,7 @@ pub struct ScriptGenerator<
     cpy_mappings: DefaultMappingStore<IdD>,
     moved: bitvec::vec::BitVec,
 
-    actions: ActionsVec<SimpleAction<T>>,
+    pub actions: ActionsVec<SimpleAction<T::Label, T::ChildIdx, T::TreeId>>,
 
     src_in_order: InOrderNodes<IdD>,
     dst_in_order: InOrderNodes<IdD>,
@@ -119,15 +146,21 @@ impl<
         'a,
         IdD: PrimInt + Debug,
         T: 'a + Stored + Labeled + WithChildren,
-        SS: DecompressedTreeStore<T::TreeId, IdD>
-            + DecompressedWithParent<IdD>
-            + PostOrder<T::TreeId, IdD>,
-        SD: DecompressedTreeStore<T::TreeId, IdD>
-            + DecompressedWithParent<IdD>
+        SS: DecompressedTreeStore<'a, T::TreeId, IdD>
+            + DecompressedWithParent<'a, T::TreeId, IdD>
+            + PostOrder<'a, T::TreeId, IdD>
+            + Debug,
+        SD: DecompressedTreeStore<'a, T::TreeId, IdD>
+            + DecompressedWithParent<'a, T::TreeId, IdD>
             + BreathFirstIterable<'a, T::TreeId, IdD>,
-        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+        S, //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
     > ScriptGenerator<'a, IdD, T, SS, SD, S>
 where
+    S: 'a + NodeStore<T::TreeId>,
+    // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item:
+    //     hyper_ast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>,
+    for<'x> S::R<'x>:
+        hyper_ast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>,
     T::Label: Debug + Copy,
     T::TreeId: Debug,
 {
@@ -136,11 +169,19 @@ where
         src_arena: &'a SS,
         dst_arena: &'a SD,
         ms: &'a DefaultMappingStore<IdD>,
-    ) -> ActionsVec<SimpleAction<T>> {
-        Self::new(store, src_arena, dst_arena)
+    ) -> ActionsVec<SimpleAction<T::Label, T::ChildIdx, T::TreeId>> {
+        ScriptGenerator::<'a, IdD, T, SS, SD, S>::new(store, src_arena, dst_arena)
             .init_cpy(ms)
             .generate()
             .actions
+    }
+    pub fn precompute_actions(
+        store: &'a S,
+        src_arena: &'a SS,
+        dst_arena: &'a SD,
+        ms: &'a DefaultMappingStore<IdD>,
+    ) -> ScriptGenerator<'a, IdD, T, SS, SD, S> {
+        ScriptGenerator::<'a, IdD, T, SS, SD, S>::new(store, src_arena, dst_arena).init_cpy(ms)
     }
 
     fn new(store: &'a S, src_arena: &'a SS, dst_arena: &'a SD) -> Self {
@@ -165,7 +206,11 @@ where
         // copy mapping
         self.ori_mappings = Some(ms);
         self.cpy_mappings = ms.clone();
-        self.moved.resize(self.src_arena_dont_use.len(), false);
+        // dbg!(&self.src_arena_dont_use);
+        dbg!("aaaaaaaaaaaa");
+        let len = self.src_arena_dont_use.len();
+        let root = self.src_arena_dont_use.root();
+        self.moved.resize(len, false);
         for x in self.src_arena_dont_use.iter_df_post() {
             let children = self.src_arena_dont_use.children(self.store, &x);
             let children = if children.len() > 0 {
@@ -174,22 +219,19 @@ where
                 None
             };
             self.mid_arena.push(MidNode {
-                parent: self
-                    .src_arena_dont_use
-                    .parent(&x)
-                    .unwrap_or(num_traits::zero()),
+                parent: self.src_arena_dont_use.parent(&x).unwrap_or(root),
                 compressed: self.src_arena_dont_use.original(&x),
                 children,
             });
         }
-        self.mid_arena[cast::<_, usize>(self.src_arena_dont_use.root()).unwrap()].parent =
-            self.src_arena_dont_use.root();
-        self.mid_root = vec![self.src_arena_dont_use.root()];
-
+        // self.mid_arena[self.src_arena_dont_use.root().to_usize().unwrap()].parent =
+        // self.src_arena_dont_use.root();
+        self.mid_root = vec![root];
+        // dbg!(&self.mid_arena);
         self
     }
 
-    fn generate(mut self) -> Self {
+    pub fn generate(mut self) -> Self {
         // fake root ?
         // fake root link ?
 
@@ -211,7 +253,7 @@ where
             log::debug!("{:?}", self.actions);
             let w;
             let y = self.dst_arena.parent(&x);
-            let z = y.and_then(|y| Some(self.cpy_mappings.get_src(&y)));
+            let z = y.map(|y| self.cpy_mappings.get_src(&y));
             if !self.cpy_mappings.is_dst(&x) {
                 // insertion
                 let k = if let Some(y) = y {
@@ -244,16 +286,28 @@ where
                     if let Some(z) = z {
                         let z: usize = cast(z).unwrap();
                         if let Some(cs) = self.mid_arena[z].children.as_mut() {
-                            cs.insert(cast(k.unwrap()).unwrap(), w)
+                            cs.insert(cast(k.unwrap()).unwrap(), w);
                         } else {
                             self.mid_arena[z].children = Some(vec![w])
-                        };
+                        }
                     } else {
                         self.mid_root.push(w);
                     }
                 };
+                assert_eq!(CompressedTreePath::from(vec![0,0,12]).iter().collect::<Vec<_>>(),vec![0,0,12]);
+                assert_eq!(CompressedTreePath::from(vec![0,0,0,12]).iter().collect::<Vec<_>>(),vec![0,0,0,12]);
+                assert_eq!(CompressedTreePath::from(vec![0,0,0,0,12]).iter().collect::<Vec<_>>(),vec![0,0,0,0,12]);
+                assert_eq!(CompressedTreePath::from(vec![0,0,0,0,0,12]).iter().collect::<Vec<_>>(),vec![0,0,0,0,0,12]);
+                assert_eq!(CompressedTreePath::from(vec![0,0,0,0,0,20]).iter().collect::<Vec<_>>(),vec![0,0,0,0,0,20]);
+                assert_eq!(CompressedTreePath::from(vec![20,0,0,0,0,12]).iter().collect::<Vec<_>>(),vec![20,0,0,0,0,12]);
+                assert_eq!(
+                    self.access(&action.path.mid)
+                        .unwrap_or_else(|_| panic!("wrong insertion path {:?}", &action.path.mid))
+                        ,w
+                );
                 self.actions.push(action);
             } else {
+                // dbg!(&self.mid_arena);
                 w = self.cpy_mappings.get_src(&x);
                 let v = {
                     let v = self.mid_arena[cast::<_, usize>(w).unwrap()].parent;
@@ -265,11 +319,11 @@ where
                 };
                 let w_l = {
                     let c = &self.mid_arena[cast::<_, usize>(w).unwrap()].compressed;
-                    *self.store.resolve(c).get_label()
+                    self.store.resolve(c).try_get_label().cloned()
                 };
                 let x_l = {
                     let c = &self.dst_arena.original(&x);
-                    *self.store.resolve(c).get_label()
+                    self.store.resolve(c).try_get_label().cloned()
                 };
 
                 if z != v {
@@ -309,7 +363,10 @@ where
 
                     let act = if w_l != x_l {
                         // and also rename
-                        Act::MovUpd { from, new: x_l }
+                        Act::MovUpd {
+                            from,
+                            new: x_l.unwrap(),
+                        }
                     } else {
                         Act::Move { from }
                     };
@@ -340,9 +397,9 @@ where
                         ori: self.orig_src(w),
                         mid: self.path(w),
                     };
-                    let action = SimpleAction::<T> {
+                    let action = SimpleAction {
                         path,
-                        action: Act::Update { new: x_l },
+                        action: Act::Update { new: x_l.unwrap() },
                     };
                     self.mid_arena[cast::<_, usize>(w).unwrap()].compressed =
                         self.dst_arena.original(&x);
@@ -634,6 +691,7 @@ where
             }
         }
         r.reverse();
+        dbg!(&r.iter().map(|x| x.to_usize()).collect::<Vec<_>>());
         CompressedTreePath::from(r)
     }
 
@@ -646,10 +704,12 @@ where
                 r.push(cast(i).unwrap());
                 break;
             } else {
-                let i = self.mid_arena[cast::<_, usize>(p).unwrap()]
+                let i = self.mid_arena[p.to_usize().unwrap()]
                     .children
                     .as_ref()
-                    .unwrap()
+                    .expect(
+                        "parent should have children, current node should actually be one of them",
+                    )
                     .iter()
                     .position(|x| x == &z)
                     .unwrap();
@@ -659,6 +719,17 @@ where
         }
         r.reverse();
         r.into()
+    }
+
+    fn access(&self, p: &CompressedTreePath<T::ChildIdx>) -> Result<IdD, ()> {
+        let mut p = p.iter();
+
+        let mut x = self.mid_root[p.next().unwrap().to_usize().unwrap()];
+        for p in p {
+            let curr = &self.mid_arena[x.to_usize().unwrap()];
+            x = curr.children.as_ref().ok_or(())?[p.to_usize().unwrap()];
+        }
+        Ok(x)
     }
 }
 

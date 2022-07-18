@@ -234,9 +234,9 @@ impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L: Eq> crate::types::Labeled
 impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L> crate::types::WithChildren
     for HashedCompressedNode<U, N, L>
 {
-    type ChildIdx = u8;
+    type ChildIdx = u16;
 
-    fn child_count(&self) -> u8 {
+    fn child_count(&self) -> u16 {
         self.node.child_count()
     }
 
@@ -254,6 +254,10 @@ impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L> crate::types::
 
     fn get_children<'a>(&'a self) -> &'a [Self::TreeId] {
         self.node.get_children()
+    }
+
+    fn get_children_cpy<'a>(&'a self) -> Vec<Self::TreeId> {
+        self.node.get_children_cpy()
     }
 
     fn try_get_children<'a>(&'a self) -> Option<&'a [Self::TreeId]> {

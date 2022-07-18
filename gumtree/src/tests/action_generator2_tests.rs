@@ -1,6 +1,8 @@
+use crate::actions::action_vec::{apply_action, apply_actions};
+use crate::tree::simple_tree::Tree;
 use crate::{
     actions::{
-        action_vec::{ActionsVec, ApplicableActions, TestActions},
+        action_vec::{ActionsVec, TestActions},
         bfs_wrapper,
         script_generator2::{Act, ApplicablePath, ScriptGenerator, SimpleAction},
         Actions,
@@ -9,14 +11,18 @@ use crate::{
         decompressed_tree_store::{CompletePostOrder, Initializable, ShallowDecompressedTreeStore},
         mapping_store::{DefaultMappingStore, MappingStore},
     },
-    tests::{
-        examples::{example_action, example_action2, example_gt_java_code},
-    },
+    tests::examples::{example_action, example_action2, example_gt_java_code},
     tree::{
-        simple_tree::{vpair_to_stores, DisplayTree, Tree, NS},
-        tree::{LabelStore, Labeled, NodeStore, Stored, WithChildren},
+        simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
+        tree_path::TreePath,
     },
 };
+use hyper_ast::types::{
+    LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Typed,
+    WithChildren, Tree as _,
+};
+
+use num_traits::ToPrimitive;
 use std::fmt;
 
 type IdD = u16;
@@ -36,7 +42,7 @@ where
 
 #[test]
 fn test_with_action_example() {
-    let (label_store, node_store, src, dst) = vpair_to_stores(example_action());
+    let (label_store, mut node_store, src, dst) = vpair_to_stores(example_action());
     log::debug!(
         "src tree:\n{:?}",
         DisplayTree::new(&label_store, &node_store, src)
@@ -45,10 +51,11 @@ fn test_with_action_example() {
         "dst tree:\n{:?}",
         DisplayTree::new(&label_store, &node_store, dst)
     );
+    let mut ms = DefaultMappingStore::new();
+    let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &src);
+    let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &dst);
+    let dst_arena2 = bfs_wrapper::SD::from(&node_store, &dst_arena);
     let actions = {
-        let mut ms = DefaultMappingStore::new();
-        let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &dst);
         let src = &(src_arena.root());
         let dst = &(dst_arena.root());
         ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
@@ -64,10 +71,9 @@ fn test_with_action_example() {
         ms.link(from_src(&[4, 0]), from_dst(&[3, 0, 0, 0]));
 
         let g = |x: &u16| -> String {
-            let x = node_store.resolve(x).get_label();
-            std::str::from_utf8(&label_store.resolve(x))
-                .unwrap()
-                .to_owned()
+            let n = node_store.resolve(x);
+            let x = n.get_label();
+            label_store.resolve(x).to_string()
         };
 
         log::debug!(
@@ -91,116 +97,352 @@ fn test_with_action_example() {
                 write!(f, "")
             })
         );
-
-        let actions = ScriptGenerator::<
-            _,
-            Tree,
-            _,
-            bfs_wrapper::SD<_, _, CompletePostOrder<_, IdD>>,
-            NS<Tree>,
-        >::compute_actions(
-            &node_store,
-            &src_arena,
-            &bfs_wrapper::SD::from(&node_store, &dst_arena),
-            &ms,
-        );
-
-        let _lab = |x: &IdD| {
-            std::str::from_utf8(&label_store.resolve(&node_store.resolve(x).get_label()))
-                .unwrap()
-                .to_owned()
-        };
+        let actions: ActionsVec<SimpleAction<u16, u8, u16>> =
+            ScriptGenerator::<
+                _,
+                TreeRef<Tree>,
+                _,
+                bfs_wrapper::SD<_, _, CompletePostOrder<_, IdD>>,
+                NS<Tree>,
+            >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
 
         log::debug!("{:?}", actions);
 
-        let a = make_update(
-            *node_store
-                .resolve(&dst_arena.original(&from_dst(&[])))
-                .get_label(),
-            (&[], &[0]),
-        ); // root renamed
+        macro_rules! test_action {
+            ( ins $at:expr, $to:expr ) => {{
+                let a = make_insert::<Tree>(dst_arena.original(&from_dst(&$at)), (&$at, &$to));
+                log::debug!("{:?}", a);
+                assert!(actions.has_actions(&[a]));
+            }};
+            ( del $at:expr, $to:expr ) => {{
+                let a = make_delete::<Tree>((&$at, &$to));
+                log::debug!("{:?}", a);
+                assert!(actions.has_actions(&[a]));
+            }};
+            ( upd $lab:expr; $at:expr, $to:expr ) => {{
+                let a = make_update::<Tree>(label_store.get($lab).unwrap(), (&$at, &$to));
+                log::debug!("{:?}", a);
+                assert!(actions.has_actions(&[a]));
+            }};
+            ( mov $from:expr, $m_from:expr => $to:expr, $m_to:expr ) => {{
+                let a = make_move::<Tree>((&$from, &$m_from), (&$to, &$m_to));
+                log::debug!("{:?}", a);
+                assert!(actions.has_actions(&[a]));
+            }};
+        }
+        test_action!(upd "Z"; [], [0]); // root renamed
 
-        assert!(actions.has_actions(&[a,]));
+        test_action!(ins[1], [0, 2]); // h at a.2
 
-        let a = make_insert(
-            dst_arena.original(&from_dst(&[1])),
-            (&[1], &[0, 2]), /* FIXME should be 1? */
-        ); // h at a.2
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a]));
+        test_action!(ins[2], [0, 3]); // x at a.3
 
-        let a = make_insert(
-            dst_arena.original(&from_dst(&[2])),
-            (&[2], &[0, 3]), /* FIXME should be 2? */
-        ); // x at a.3
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(mov [0], [0, 0] => [1, 0], [0, 1, 0]); // e to h.0
 
-        let a = make_move((&[0], &[0, 0]), (&[1, 0], &[0, 1, 0])); // e to h.0
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(ins [3, 0], [0, 5, 0]); // ins u at j.0
 
-        // ins u at j.0
-        let a = make_insert(
-            dst_arena.original(&from_dst(&[3, 0])),
-            (&[3, 0], &[0, 5, 0]),
-        );
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(upd "y"; [0, 0], [0, 1, 0, 0]); // upd f to y
 
-        // upd f to y
-        let a = make_update(
-            *node_store
-                .resolve(&dst_arena.original(&from_dst(&[1, 0, 0])))
-                .get_label(),
-            (&[0, 0], &[0, 1, 0, 0]),
-        );
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(ins [3, 0, 0], [0, 5, 0, 0]); // ins u at v.0
 
-        // ins u at v.0
-        let a = make_insert(
-            dst_arena.original(&from_dst(&[3, 0, 0])),
-            (&[3, 0, 0], &[0, 5, 0, 0]),
-        );
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(mov [4, 0], [0, 5, 1] => [3, 0, 0, 0], [0, 5, 0, 0, 0]); // mov k to v.0
 
-        // mov k to v.0
-        let a = make_move((&[4, 0], &[0, 5, 1]), (&[3, 0, 0, 0], &[0, 5, 0, 0, 0]));
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(del[2], [0, 3]); // del g
 
-        // del g
-        let a = make_delete((&[2], &[0, 3]));
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(del[3], [0, 3]); // del i
 
-        // del i
-        let a = make_delete((&[3], &[0, 3]));
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
-
-        assert_eq!(12, actions.len()); // FIXME should be 9 if actions are compressed
+        assert_eq!(12, actions.len());
         actions
     };
 
-    let mut node_store = node_store;
     let mut root = vec![src];
-    for a in actions.iter() {
-        log::debug!(
-            "mid tree:\n{:?}",
-            DisplayTree::new(&label_store, &node_store, *root.last().unwrap())
-        );
-        ActionsVec::apply_action(a, &mut root, &mut node_store);
+    {
+        let node = node_store.resolve(&root[0]);
+        let t = node.get_type();
+        let l = node.try_get_label().cloned();
+        drop(node);
+        node_store.build_then_insert(root[0], t, l, vec![]);
     }
+    apply_actions::<_, NS<Tree>>(actions, &mut root, &mut node_store);
     let then = root; //ActionsVec::apply_actions(actions.iter(), *src, &mut node_store);
     assert_eq!(*then.last().unwrap(), dst);
 }
+// use aaa::*;
+// mod aaa {
+//     use super::*;
+//     use std::fmt::Debug;
+//     pub(crate) fn apply_actions<T, S>(
+//         actions: ActionsVec<SimpleAction<T::Label, T::ChildIdx, T::TreeId>>,
+//         root: &mut Vec<T::TreeId>,
+//         node_store: &mut S,
+//     ) where
+//         T: hyper_ast::types::Tree,
+//         T::Type: Debug + Copy + Default,
+//         T::Label: Debug + Copy + Default,
+//         T::TreeId: Debug + Copy + Default,
+//         T::ChildIdx: Debug + Copy + Default,
+//         S: NodeStoreExt2<T> + NodeStore2<T::TreeId>, //NodeStoreExt<'a, T, R>,
+//         for<'d> S::R<'d>: hyper_ast::types::Tree<
+//             TreeId = T::TreeId,
+//             Type = T::Type,
+//             Label = T::Label,
+//             ChildIdx = T::ChildIdx,
+//         >,
+//     {
+//         for a in actions.iter() {
+//             // *log::debug!(
+//             //     "mid tree:\n{:?}",
+//             //     DisplayTree::new(&label_store, &node_store, *root.last().unwrap())
+//             // );
+//             // apply_action(a, root, node_store);
+//         }
+//     }
+
+//     pub(crate) fn apply_action<T, S>(
+//         a: &SimpleAction<T::Label, T::ChildIdx, T::TreeId>,
+//         root: &mut Vec<T::TreeId>,
+//         s: &mut S,
+//     ) where
+//         T: hyper_ast::types::Tree,
+//         T::Type: Debug + Copy + Default,
+//         T::Label: Debug + Copy + Default,
+//         T::TreeId: Debug + Copy + Default,
+//         T::ChildIdx: Debug + Copy + Default,
+//         S: NodeStoreExt2<T> + NodeStore2<T::TreeId>, //NodeStoreExt<'a, T, R>,
+//         for<'d> S::R<'d>: hyper_ast::types::Tree<
+//             TreeId = T::TreeId,
+//             Type = T::Type,
+//             Label = T::Label,
+//             ChildIdx = T::ChildIdx,
+//         >,
+//     {
+//         let fun_name = |s: &mut S, x: &T::TreeId| -> (T::Type, Option<T::Label>) {
+//             // let node = s.resolve(x);
+//             // let t = node.get_type().to_owned();
+//             // let l = node.get_label().to_owned();
+//             // (t, l)
+//             todo!()
+//         };
+//         let a = a;
+//         let roots: &mut Vec<_> = root;
+//         log::trace!("{:?}", a);
+//         let SimpleAction { path, action } = a;
+
+//         let from = match action {
+//             Act::Move { from } => Some(from),
+//             Act::MovUpd { from, .. } => Some(from),
+//             _ => None,
+//         };
+
+//         let sub = if let Some(from) = from {
+//             // apply remove
+//             log::trace!("sub path {:?}", from.mid.iter().collect::<Vec<_>>());
+//             let mut path = from.mid.iter();
+//             let r = &mut roots[path.next().unwrap().to_usize().unwrap()];
+//             let mut x = *r;
+//             let mut parents: Vec<(T::TreeId, T::ChildIdx, Vec<T::TreeId>)> = vec![];
+//             while let Some(p) = path.next() {
+//                 let node = s.resolve(&x);
+//                 let cs = node.get_children().to_vec();
+//                 parents.push((x, p, cs.iter().cloned().collect()));
+//                 let i = p.to_usize().unwrap();
+//                 if i < cs.len() {
+//                     x = cs[i].clone();
+//                 } else {
+//                     assert!(path.next().is_none());
+//                     break;
+//                 }
+//             }
+//             log::trace!("parents {:?}", parents);
+//             let (node, sub) = if let Some((x, i, cs)) = parents.pop() {
+//                 let mut children = Vec::with_capacity(cs.len() - 1);
+//                 children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+//                 children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
+//                 let (t, l) = fun_name(s, &x);
+//                 let node = s.build_then_insert(t, l, children);
+//                 (node, cs[i.to_usize().unwrap()].clone())
+//             } else {
+//                 // let mut children = Vec::with_capacity(cs.len() - 1);
+//                 // children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+//                 // children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
+//                 // let node = s.resolve(&x);
+//                 // let node = Self::build(node.get_type(), node.get_label().clone(), children);
+//                 // s.get_or_insert(node)
+//                 (r.clone(), r.clone())
+//             };
+//             let mut node: T::TreeId = node;
+//             for (x, i, cs) in parents.into_iter().rev() {
+//                 let mut children = Vec::with_capacity(cs.len() - 1);
+//                 children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+//                 children.push(node.clone());
+//                 children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
+//                 let (t, l) = fun_name(s, &x);
+//                 node = s.build_then_insert(t, l, children);
+//                 // let n: T = BuildableTree::build(n.get_type().to_owned(), n.get_label().clone(), children);
+//                 // node = s.get_or_insert(n);
+//             }
+//             *r = node;
+//             Some(sub)
+//         } else {
+//             None
+//         };
+
+//         let mut parents: Vec<(T::TreeId, T::ChildIdx, Vec<T::TreeId>)> = vec![];
+//         log::trace!("{:?}", path.mid.iter().collect::<Vec<_>>());
+//         let mut path = path.mid.iter();
+//         let fp = path.next().unwrap().to_usize().unwrap();
+//         let r = if roots.len() > fp {
+//             &mut roots[fp]
+//         } else if roots.len() == fp {
+//             roots.push(roots[fp - 1].clone());
+//             &mut roots[fp]
+//         } else {
+//             panic!()
+//         };
+//         let mut x: T::TreeId = *r;
+//         while let Some(p) = path.next() {
+//             let node = s.resolve(&x);
+//             let cs = node.get_children().to_vec();
+//             parents.push((x, p, cs.clone()));
+//             let i = p.to_usize().unwrap();
+//             if i < cs.len() {
+//                 x = cs[i].clone();
+//             } else {
+//                 log::error!("{:?} > {:?}", i, cs.len());
+//                 assert_eq!(path.next(), None);
+//                 break;
+//             }
+//         }
+
+//         let node = match action {
+//             Act::Delete {} => {
+//                 let (x, i, cs) = parents.pop().unwrap();
+//                 let mut children = Vec::with_capacity(cs.len() - 1);
+//                 children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+//                 children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
+//                 let (t, l) = fun_name(s, &x);
+//                 s.build_then_insert(t, l, children)
+//             }
+//             Act::Insert { sub } => {
+//                 if let Some((x, i, cs)) = parents.pop() {
+//                     let mut children = Vec::with_capacity(cs.len());
+//                     children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+//                     let sub = {
+//                         let (t, l) = fun_name(s, sub);
+//                         s.build_then_insert(t, l, vec![])
+//                     };
+//                     children.push(sub);
+//                     if i.to_usize().unwrap() < cs.len() {
+//                         children.extend_from_slice(&cs[i.to_usize().unwrap()..]);
+//                     }
+//                     let (t, l) = fun_name(s, &x);
+//                     s.build_then_insert(t, l, children)
+//                 } else {
+//                     let sub = {
+//                         let (t, l) = fun_name(s, sub);
+//                         s.build_then_insert(t, l, vec![])
+//                     };
+//                     // *r = sub.clone();
+//                     sub
+//                 }
+//             }
+//             Act::Update { new } => {
+//                 if let Some((x, i, cs)) = parents.pop() {
+//                     let mut children = Vec::with_capacity(cs.len());
+//                     children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+//                     let sub = {
+//                         let x = cs[i.to_usize().unwrap()].clone();
+//                         // let node = s.resolve(&x);
+//                         // s.build_then_insert(
+//                         //     node.get_type(),
+//                         //     new.clone(),
+//                         //     node.get_children().to_vec(),
+//                         // )
+
+//                         let (t, cs) = {
+//                             let node = s.resolve(&x);
+//                             let t = node.get_type().to_owned();
+//                             let cs = node.get_children().to_vec();
+//                             (t, cs)
+//                         };
+//                         s.build_then_insert(t, Some(new.clone()), cs)
+//                     };
+//                     children.push(sub);
+//                     children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
+//                     let (t, l) = fun_name(s, &x);
+//                     s.build_then_insert(t, l, children)
+//                 } else {
+//                     let (t, cs) = {
+//                         let node = s.resolve(&x);
+//                         let t = node.get_type().to_owned();
+//                         let cs = node.get_children().to_vec();
+//                         (t, cs)
+//                     };
+//                     let mut children = Vec::with_capacity(cs.len());
+//                     children.extend_from_slice(&cs[..]);
+//                     s.build_then_insert(t, Some(new.clone()), children)
+//                 }
+//             }
+
+//             Act::Move { .. } => {
+//                 // apply insert
+//                 let (x, i, cs) = parents.pop().unwrap();
+//                 let mut children = Vec::with_capacity(cs.len());
+//                 children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+//                 let sub = {
+//                     // let node = s.resolve(&sub.unwrap());
+//                     // let node = BuildableTree::build(node.get_type(), node.get_label().clone(), vec![]);
+//                     // s.get_or_insert(node)
+//                     sub.unwrap()
+//                 };
+//                 children.push(sub);
+//                 if i.to_usize().unwrap() < cs.len() {
+//                     children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
+//                 }
+//                 let (t, l) = fun_name(s, &x);
+//                 s.build_then_insert(t, l, children)
+//             }
+//             Act::MovUpd { new, .. } => {
+//                 // apply insert
+//                 let (x, i, cs) = parents.pop().unwrap();
+//                 let mut children = Vec::with_capacity(cs.len());
+//                 children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+//                 let sub = {
+//                     // let node = s.resolve(&sub.unwrap());
+//                     // let node = BuildableTree::build(node.get_type(), node.get_label().clone(), vec![]);
+//                     // s.get_or_insert(node)
+//                     sub.unwrap()
+//                 };
+//                 children.push(sub);
+//                 if i.to_usize().unwrap() < cs.len() {
+//                     children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
+//                 }
+//                 let t = {
+//                     let node = s.resolve(&x);
+//                     let t = node.get_type().to_owned();
+//                     t
+//                 };
+//                 s.build_then_insert(t, Some(new.clone()), children)
+//             }
+//         };
+//         let mut node = node;
+//         for (x, i, cs) in parents.into_iter().rev() {
+//             let mut children = Vec::with_capacity(cs.len() - 1);
+//             children.extend_from_slice(&cs[..i.to_usize().unwrap()]);
+//             children.push(node.clone());
+//             children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
+//             let (t, l) = fun_name(s, &x);
+//             node = s.build_then_insert(t, l, children);
+//         }
+//         *r = node;
+//     }
+// }
 
 #[test]
 fn test_with_action_example2() {
-    let (label_store, node_store, src, dst) = vpair_to_stores(example_action2());
+    // env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+    //     .is_test(true)
+    //     .init();
+    let (label_store, mut node_store, src, dst) = vpair_to_stores(example_action2());
     log::debug!(
         "src tree:\n{:?}",
         DisplayTree::new(&label_store, &node_store, src)
@@ -209,10 +451,12 @@ fn test_with_action_example2() {
         "dst tree:\n{:?}",
         DisplayTree::new(&label_store, &node_store, dst)
     );
+    let mut ms = DefaultMappingStore::new();
+    let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &src);
+    let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &dst);
+    let dst_arena2 = bfs_wrapper::SD::from(&node_store, &dst_arena);
+
     let actions = {
-        let mut ms = DefaultMappingStore::new();
-        let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &dst);
         let src = &(src_arena.root());
         let dst = &(dst_arena.root());
         ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
@@ -228,10 +472,9 @@ fn test_with_action_example2() {
         ms.link(from_src(&[5, 0]), from_dst(&[3, 0, 0, 0]));
 
         let g = |x: &u16| -> String {
-            let x = node_store.resolve(x).get_label();
-            std::str::from_utf8(&label_store.resolve(x))
-                .unwrap()
-                .to_owned()
+            let n = node_store.resolve(x);
+            let x = n.get_label();
+            label_store.resolve(x).to_string()
         };
 
         log::debug!(
@@ -258,105 +501,67 @@ fn test_with_action_example2() {
 
         let actions = ScriptGenerator::<
             _,
-            Tree,
+            TreeRef<Tree>,
             _,
             bfs_wrapper::SD<_, _, CompletePostOrder<_, IdD>>,
             NS<Tree>,
-        >::compute_actions(
-            &node_store,
-            &src_arena,
-            &bfs_wrapper::SD::from(&node_store, &dst_arena),
-            &ms,
-        );
-
-        let _lab = |x: &IdD| {
-            std::str::from_utf8(&label_store.resolve(&node_store.resolve(x).get_label()))
-                .unwrap()
-                .to_owned()
-        };
+        >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
 
         log::debug!("{:?}", actions);
 
-        let a = make_update(
-            *node_store
-                .resolve(&dst_arena.original(&from_dst(&[])))
-                .get_label(),
-            (&[], &[0]),
-        ); // root renamed
+        macro_rules! test_action {
+            ( ins $at:expr, $to:expr ) => {{
+                let a = make_insert::<Tree>(dst_arena.original(&from_dst(&$at)), (&$at, &$to));
+                log::debug!("{:?}", a);
+                assert!(actions.has_actions(&[a]));
+            }};
+            ( del $at:expr, $to:expr ) => {{
+                let a = make_delete::<Tree>((&$at, &$to));
+                log::debug!("{:?}", a);
+                assert!(actions.has_actions(&[a]));
+            }};
+            ( upd $lab:expr; $at:expr, $to:expr ) => {{
+                let a = make_update::<Tree>(label_store.get($lab).unwrap(), (&$at, &$to));
+                log::debug!("{:?}", a);
+                assert!(actions.has_actions(&[a]));
+            }};
+            ( mov $from:expr, $m_from:expr => $to:expr, $m_to:expr ) => {{
+                let a = make_move::<Tree>((&$from, &$m_from), (&$to, &$m_to));
+                log::debug!("{:?}", a);
+                assert!(actions.has_actions(&[a]));
+            }};
+        }
+        test_action!(upd "Z"; [], [0]); // root renamed
 
-        assert!(actions.has_actions(&[a,]));
+        test_action!(ins[1], [0, 2]); // h at a.2
 
-        let a = make_insert(
-            dst_arena.original(&from_dst(&[1])),
-            (&[1], &[0, 2]),
-        ); // h at a.2
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a]));
+        test_action!(ins[2], [0, 3]); // x at a.3
 
-        let a = make_insert(
-            dst_arena.original(&from_dst(&[2])),
-            (&[2], &[0, 3]),
-        ); // x at a.3
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(mov [0], [0, 0] => [1, 0], [0, 1, 0]); // e to h.0
 
-        let a = make_move((&[0], &[0, 0]), (&[1, 0], &[0, 1, 0])); // e to h.0
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(ins [3, 0], [0, 6, 0]); // ins u at j.0
 
-        // ins u at j.0
-        let a = make_insert(
-            dst_arena.original(&from_dst(&[3, 0])),
-            (&[3, 0], &[0, 6, 0]),
-        );
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(upd "y"; [0, 0], [0, 1, 0, 0]); // upd f to y
 
-        // upd f to y
-        let a = make_update(
-            *node_store
-                .resolve(&dst_arena.original(&from_dst(&[1, 0, 0])))
-                .get_label(),
-            (&[0, 0], &[0, 1, 0, 0]),
-        );
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(ins [3, 0, 0], [0, 6, 0, 0]); // ins u at v.0
 
-        // ins u at v.0
-        let a = make_insert(
-            dst_arena.original(&from_dst(&[3, 0, 0])),
-            (&[3, 0, 0], &[0, 6, 0, 0]),
-        );
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(mov [5, 0], [0, 6, 1] => [3, 0, 0, 0], [0, 6, 0, 0, 0]); // mov k to v.0
 
-        // mov k to v.0
-        let a = make_move((&[5, 0], &[0, 6, 1]), (&[3, 0, 0, 0], &[0, 6, 0, 0, 0]));
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(del[2], [0, 3]); // del g
 
-        // del g
-        let a = make_delete((&[2], &[0, 3]));
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(del[3], [0, 3]); // del i
 
-        // del i
-        let a = make_delete((&[3], &[0, 3]));
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
-
-        assert_eq!(13, actions.len()); // FIXME should be 9 if actions are compressed
+        assert_eq!(13, actions.len());
         actions
     };
 
-    let mut node_store = node_store;
     let mut root = vec![src];
     for a in actions.iter() {
         log::debug!(
             "mid tree:\n{:?}",
             DisplayTree::new(&label_store, &node_store, *root.last().unwrap())
         );
-        ActionsVec::apply_action(a, &mut root, &mut node_store);
+        apply_action::<_, NS<Tree>>(a, &mut root, &mut node_store);
     }
     let then = root; //ActionsVec::apply_actions(actions.iter(), *src, &mut node_store);
     assert_eq!(*then.last().unwrap(), dst);
@@ -365,7 +570,7 @@ fn test_with_action_example2() {
 pub(crate) fn make_move<T: Stored + Labeled + WithChildren>(
     from: (&[T::ChildIdx], &[T::ChildIdx]),
     to: (&[T::ChildIdx], &[T::ChildIdx]),
-) -> SimpleAction<T> {
+) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId> {
     SimpleAction {
         path: ApplicablePath {
             ori: to.0.into(),
@@ -383,7 +588,7 @@ pub(crate) fn make_move_update<T: Stored + Labeled + WithChildren>(
     from: (&[T::ChildIdx], &[T::ChildIdx]),
     new: T::Label,
     to: (&[T::ChildIdx], &[T::ChildIdx]),
-) -> SimpleAction<T> {
+) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId> {
     SimpleAction {
         path: ApplicablePath {
             ori: to.0.into(),
@@ -401,7 +606,7 @@ pub(crate) fn make_move_update<T: Stored + Labeled + WithChildren>(
 
 pub(crate) fn make_delete<T: Stored + Labeled + WithChildren>(
     path: (&[T::ChildIdx], &[T::ChildIdx]),
-) -> SimpleAction<T> {
+) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId> {
     SimpleAction {
         path: ApplicablePath {
             ori: path.0.into(),
@@ -414,7 +619,7 @@ pub(crate) fn make_delete<T: Stored + Labeled + WithChildren>(
 pub(crate) fn make_insert<T: Stored + Labeled + WithChildren>(
     sub: T::TreeId,
     path: (&[T::ChildIdx], &[T::ChildIdx]),
-) -> SimpleAction<T> {
+) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId> {
     SimpleAction {
         path: ApplicablePath {
             ori: path.0.into(),
@@ -427,7 +632,7 @@ pub(crate) fn make_insert<T: Stored + Labeled + WithChildren>(
 pub(crate) fn make_update<T: Stored + Labeled + WithChildren>(
     new: T::Label,
     path: (&[T::ChildIdx], &[T::ChildIdx]),
-) -> SimpleAction<T> {
+) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId> {
     SimpleAction {
         path: ApplicablePath {
             ori: path.0.into(),
@@ -471,7 +676,7 @@ fn test_with_action_example_no_move() {
 }
 #[test]
 fn test_with_zs_custom_example() {
-    let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_java_code());
+    let (label_store, mut node_store, src, dst) = vpair_to_stores(example_gt_java_code());
     log::debug!(
         "src tree:\n{:?}",
         DisplayTree::new(&label_store, &node_store, src)
@@ -480,10 +685,11 @@ fn test_with_zs_custom_example() {
         "dst tree:\n{:?}",
         DisplayTree::new(&label_store, &node_store, dst)
     );
+    let src_arena = CompletePostOrder::<_, IdD>::new(&node_store, &src);
+    let dst_arena = CompletePostOrder::<_, IdD>::new(&node_store, &dst);
+    let dst_arena2 = bfs_wrapper::SD::from(&node_store, &dst_arena);
+    let mut ms = DefaultMappingStore::new();
     let actions = {
-        let mut ms = DefaultMappingStore::new();
-        let src_arena = CompletePostOrder::<_, IdD>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<_, IdD>::new(&node_store, &dst);
         let src = &(src_arena.root());
         let dst = &(dst_arena.root());
         ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
@@ -504,131 +710,57 @@ fn test_with_zs_custom_example() {
 
         let actions = ScriptGenerator::<
             _,
-            Tree,
+            TreeRef<Tree>,
             _,
             bfs_wrapper::SD<_, _, CompletePostOrder<_, IdD>>,
             NS<Tree>,
-        >::compute_actions(
-            &node_store,
-            &src_arena,
-            &bfs_wrapper::SD::from(&node_store, &dst_arena),
-            &ms,
-        );
+        >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
 
         log::debug!("{:?}", actions);
+        macro_rules! test_action {
+            ( ins $at:expr, $to:expr ) => {{
+                let a = make_insert::<Tree>(dst_arena.original(&from_dst(&$at)), (&$at, &$to));
+                log::debug!("{:?}", a);
+                assert!(actions.has_actions(&[a]));
+            }};
+            ( del $at:expr, $to:expr ) => {{
+                let a = make_delete::<Tree>((&$at, &$to));
+                log::debug!("{:?}", a);
+                assert!(actions.has_actions(&[a]));
+            }};
+            ( upd $lab:expr; $at:expr, $to:expr ) => {{
+                let a = make_update::<Tree>(label_store.get($lab).unwrap(), (&$at, &$to));
+                log::debug!("{:?}", a);
+                assert!(actions.has_actions(&[a]));
+            }};
+            ( mov $from:expr, $m_from:expr => $to:expr, $m_to:expr ) => {{
+                let a = make_move::<Tree>((&$from, &$m_from), (&$to, &$m_to));
+                log::debug!("{:?}", a);
+                assert!(actions.has_actions(&[a]));
+            }};
+        }
 
-        // // new Delete(src.getChild("1.1"))
-        // assert!(actions.has_actions(&[SimpleAction::Delete {
-        //     tree: from_src(&[1, 1]),
-        // },]));
-        let a = make_delete((&[1, 1], &[1, 0, 1, 2]));
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(del [1, 1], [1, 0, 1, 2]);
 
-        // assert!(actions.has_actions(&[
-        //     // new Insert(dst, null, 0),
-        //     SimpleAction::Insert {
-        //         sub: dst_arena.original(&dst),
-        //         parent: None,
-        //         idx: 0,
-        //     },
-        // ]));
-        let a = make_insert(dst_arena.original(&dst), (&[], &[1]));
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(ins [], [1]);
 
-        // assert!(actions.has_actions(&[
-        //     // new Move(src, dst, 0),
-        //     SimpleAction::Move {
-        //         sub: *src,
-        //         parent: Some(*dst),
-        //         idx: 0,
-        //     },
-        // ]));
-        let a = make_move((&[], &[0]), (&[0], &[1, 0]));
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
-        // assert!(actions.has_actions(&[
-        //     // new Update(src.getChild("1.3"), "r2"),
-        //     SimpleAction::Update {
-        //         src: from_src(&[1, 3]),
-        //         dst: from_dst(&[0, 1, 3]),
-        //         old: node_store
-        //             .get_node_at_id(&src_arena.original(&from_src(&[1, 3])))
-        //             .get_label(),
-        //         new: node_store
-        //             .get_node_at_id(&dst_arena.original(&from_dst(&[0, 1, 3])))
-        //             .get_label(),
-        //     }, // label: "r2".to_owned()},
-        // ]));
-        let a = make_update(
-            *node_store
-                .resolve(&dst_arena.original(&from_dst(&[0, 1, 3])))
-                .get_label(),
-            (&[1, 3], &[1, 0, 1, 4]),
-        );
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
-        // assert!(actions.has_actions(&[
-        //     // new Insert(dst.getChild("0.1.1"), src.getChild("1"), 1),
-        //     SimpleAction::Insert {
-        //         sub: dst_arena.original(&from_dst(&[0, 1, 1])),
-        //         parent: Some(from_dst(&[0, 1])),
-        //         idx: 1,
-        //     },
-        // ]));
-        let a = make_insert(
-            dst_arena.original(&from_dst(&[0, 1, 1])),
-            (&[0, 1, 1], &[1, 0, 1, 1]),
-        );
-        log::debug!("{:?}", a);
-        assert!(actions.has_actions(&[a,]));
+        test_action!(mov [], [0] => [0], [1, 0]);
+
+        test_action!(upd "r2"; [1, 3], [1, 0, 1, 4]);
+
+        test_action!(ins [0, 1, 1], [1, 0, 1, 1]);
+
         assert_eq!(5, actions.len());
-
-        // assert_eq!(
-        //     label_store
-        //         .get_node_at_id(
-        //             &node_store
-        //                 .get_node_at_id(&from_dst(&[0, 1, 3]))
-        //                 .get_label()
-        //         )
-        //         .to_owned(),
-        //     b"r2"
-        // );
-
-        // actions = new SimplifiedChawatheScriptGenerator().computeActions(ms);
-        // assertEquals(5, actions.size());
-        // assertThat(actions, hasItems(
-        //         new Insert(dst, null, 0),
-        //         new Move(src, dst, 0),
-        //         new Insert(dst.getChild("0.1.1"), src.getChild("1"), 1),
-        //         new Update(src.getChild("1.3"), "r2"),
-        //         new Delete(src.getChild("1.1"))
-        // ));
-
-        // actions = new InsertDeleteChawatheScriptGenerator().computeActions(ms);
-
-        // assertEquals(7, actions.size());
-        // assertThat(actions, hasItems(
-        //         new Insert(dst, null, 0),
-        //         new TreeDelete(src),
-        //         new TreeInsert(dst.getChild(0), dst, 0),
-        //         new Insert(dst.getChild("0.1.1"), src.getChild("1"), 1),
-        //         new Delete(src.getChild("1.1")),
-        //         new Delete(src.getChild("1.3")),
-        //         new Insert(dst.getChild("0.1.1"), src.getChild(1), 1)
-        // ));
         actions
     };
 
-    let mut node_store = node_store;
     let mut root = vec![src];
     for a in actions.iter() {
         log::debug!(
             "mid tree:\n{:?}",
             DisplayTree::new(&label_store, &node_store, *root.last().unwrap())
         );
-        ActionsVec::apply_action(a, &mut root, &mut node_store);
+        apply_action::<_, NS<Tree>>(a, &mut root, &mut node_store);
     }
     log::debug!(
         "mid tree:\n{:?}",

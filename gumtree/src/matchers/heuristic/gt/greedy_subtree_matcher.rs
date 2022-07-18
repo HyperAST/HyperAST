@@ -1,54 +1,63 @@
+use std::hash::Hash;
 use std::{fmt::Debug, marker::PhantomData};
 
 use crate::matchers::heuristic::gt::height;
-use crate::tree::tree::HashKind;
-use crate::{
-    matchers::{
-        decompressed_tree_store::{DecompressedTreeStore, DecompressedWithParent},
-        mapping_store::{
-            DefaultMappingStore, DefaultMultiMappingStore, MappingStore, MultiMappingStore,
-        },
-        similarity_metrics,
+use crate::matchers::{
+    decompressed_tree_store::{DecompressedTreeStore, DecompressedWithParent},
+    mapping_store::{
+        DefaultMappingStore, DefaultMultiMappingStore, MappingStore, MultiMappingStore,
     },
-    tree::tree::{NodeStore, Tree, WithHashs},
+    similarity_metrics,
 };
 use bitvec::order::Lsb0;
+use hyper_ast::types::{
+    HashKind, Labeled, NodeStore, Tree, Typed, WithChildren, WithHashs,
+};
 use num_traits::{cast, one, zero, PrimInt};
 
 pub struct GreedySubtreeMatcher<
     'a,
-    D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
-    IdD: PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
-    T: Tree,      // + WithHashs,
-    S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+    Dsrc,
+    Ddst,
+    IdD: PrimInt,            // + Into<usize> + std::ops::SubAssign + Debug,
+    T: 'a + Tree,            // + WithHashs,
+    S,                       //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a,T::TreeId, T>,
     const MIN_HEIGHT: usize, // = 2
 > {
-    internal: SubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>,
+    internal: SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT>,
 }
 
 impl<
         'a,
-        D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
-        IdD: PrimInt + Debug, // + Into<usize> + std::ops::SubAssign,
+        Dsrc: 'a + DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
+        Ddst: 'a + DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
+        IdD: 'a + PrimInt + Debug, // + Into<usize> + std::ops::SubAssign,
         T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+        S, //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
         const MIN_HEIGHT: usize, // = 2
-    > GreedySubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>
+    > GreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT>
 where
-    T::TreeId: PrimInt,
+    S: 'a + NodeStore<T::TreeId>,
+    // for<'c> < <S as NodeStore2<T::TreeId>>::R  as GenericItem<'c>>::Item:Tree<TreeId = T::TreeId,Type = T::Type,Label = T::Label,ChildIdx = T::ChildIdx> + WithHashs<HK = T::HK,HP = T::HP>,
+    S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
+        + WithHashs<HK = T::HK, HP = T::HP>,
+    T::TreeId: Clone,
 {
     pub fn matchh(
         node_store: &'a S,
         src: &'a T::TreeId,
         dst: &'a T::TreeId,
         mappings: DefaultMappingStore<IdD>,
-    ) -> Self {
-        let mut matcher = Self {
+    ) -> GreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT>
+    where
+        Self: 'a,
+    {
+        let mut matcher = GreedySubtreeMatcher::<'a, Dsrc,Ddst, IdD, T, S, MIN_HEIGHT> {
             // label_store,
             internal: SubtreeMatcher {
                 node_store,
-                src_arena: D::new(node_store, src),
-                dst_arena: D::new(node_store, dst),
+                src_arena: Dsrc::new(node_store, src),
+                dst_arena: Ddst::new(node_store, dst),
                 mappings,
                 phantom: PhantomData,
             },
@@ -58,6 +67,8 @@ where
             matcher.internal.dst_arena.len() + 1,
         );
         Self::execute(&mut matcher);
+        let m = matcher.internal.matchh_to_be_filtered();
+        matcher.filter_mappings(m);
         matcher
     }
 
@@ -148,15 +159,19 @@ where
 }
 impl<
         'a,
-        D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
+        Dsrc: DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
+        Ddst: DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
         IdD: PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree,      // + WithHashs,
-        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+        S,            //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
         const MIN_HEIGHT: usize,
-    > Into<SubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>>
-    for GreedySubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>
+    > Into<SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT>>
+    for GreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT>
+where
+    S: 'a + NodeStore<T::TreeId>,
+    S::R<'a>: Tree<TreeId = T::TreeId>,
 {
-    fn into(self) -> SubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT> {
+    fn into(self) -> SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT> {
         self.internal
     }
 }
@@ -165,28 +180,34 @@ type Mapping<T> = (T, T);
 
 pub struct SubtreeMatcher<
     'a,
-    D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
-    IdD: PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
-    T: Tree,      // + WithHashs,
-    S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+    Dsrc,
+    Ddst,
+    IdD: 'a + PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
+    T: 'a + Tree,      // + WithHashs,
+    S,                 //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
     const MIN_HEIGHT: usize,
 > {
     pub(super) node_store: &'a S,
-    pub(crate) src_arena: D,
-    pub(crate) dst_arena: D,
-    pub(crate) mappings: DefaultMappingStore<IdD>,
+    pub src_arena: Dsrc,
+    pub dst_arena: Ddst,
+    pub mappings: DefaultMappingStore<IdD>,
     pub(super) phantom: PhantomData<*const T>,
 }
 impl<
         'a,
-        D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
+        Dsrc: DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
+        Ddst: DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
         IdD: PrimInt + Debug, // + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+        S, //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
         const MIN_HEIGHT: usize,
-    > SubtreeMatcher<'a, D, IdD, T, S, MIN_HEIGHT>
+    > SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT>
 where
-    T::TreeId: PrimInt,
+    S: 'a + NodeStore<T::TreeId>,
+    // for<'c> < <S as NodeStore2<T::TreeId>>::R  as GenericItem<'c>>::Item:Tree<TreeId = T::TreeId,Type = T::Type,Label = T::Label,ChildIdx = T::ChildIdx> + WithHashs<HK = T::HK,HP = T::HP>,
+    S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
+        + WithHashs<HK = T::HK, HP = T::HP>,
+    T::TreeId: Clone,
 {
     pub(crate) fn add_mapping_recursively(&mut self, src: &IdD, dst: &IdD) {
         self.mappings.link(*src, *dst);
@@ -197,10 +218,10 @@ where
             .for_each(|(src, dst)| self.mappings.link(*src, *dst));
     }
 
-    fn pop_larger(
+    fn pop_larger<'b>(
         &self,
-        src_trees: &mut PriorityTreeList<'a, D, IdD, T, S, MIN_HEIGHT>,
-        dst_trees: &mut PriorityTreeList<'a, D, IdD, T, S, MIN_HEIGHT>,
+        src_trees: &mut PriorityTreeList<'a, 'b, Dsrc, IdD, T, S, MIN_HEIGHT>,
+        dst_trees: &mut PriorityTreeList<'a, 'b, Ddst, IdD, T, S, MIN_HEIGHT>,
     ) {
         if src_trees.peek_height() > dst_trees.peek_height() {
             src_trees.open();
@@ -321,7 +342,7 @@ where
             return true;
         }
         let src = self.node_store.resolve(src);
-        let src_h = src.hash(&T::HK::label());
+        let src_h = src.hash(&mut &T::HK::label());
         let src_t = src.get_type();
         let src_l = if src.has_label() {
             Some(src.get_label())
@@ -332,7 +353,7 @@ where
 
         let dst = self.node_store.resolve(dst);
 
-        let dst_h = dst.hash(&T::HK::label());
+        let dst_h = dst.hash(&mut &T::HK::label());
         if src_h != dst_h {
             return false;
         }
@@ -361,11 +382,11 @@ where
     }
 }
 
-struct PriorityTreeList<'a, D, IdD, T: Tree, S, const MIN_HEIGHT: usize> {
+struct PriorityTreeList<'a, 'b, D, IdD, T: Tree, S, const MIN_HEIGHT: usize> {
     trees: Vec<Option<Vec<IdD>>>,
 
     store: &'a S,
-    arena: &'a D,
+    arena: &'b D,
 
     max_height: usize,
 
@@ -376,16 +397,20 @@ struct PriorityTreeList<'a, D, IdD, T: Tree, S, const MIN_HEIGHT: usize> {
 
 impl<
         'a,
-        D: DecompressedTreeStore<T::TreeId, IdD>,
+        'b,
+        D: DecompressedTreeStore<'a, T::TreeId, IdD>,
         IdD: PrimInt,
         T: Tree,
-        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+        S, //: NodeStore2<T::TreeId, R<'b> = T>,//NodeStore<'b, T::TreeId, T>,
         const MIN_HEIGHT: usize,
-    > PriorityTreeList<'a, D, IdD, T, S, MIN_HEIGHT>
+    > PriorityTreeList<'a, 'b, D, IdD, T, S, MIN_HEIGHT>
 where
-    T::TreeId: PrimInt,
+    S: 'a + NodeStore<T::TreeId>,
+    // for<'c> < <S as NodeStore2<T::TreeId>>::R  as GenericItem<'c>>::Item:Tree<TreeId = T::TreeId,Type = T::Type,Label = T::Label,ChildIdx = T::ChildIdx>,
+    S::R<'a>: Tree<TreeId = T::TreeId>,
+    T::TreeId: Clone,
 {
-    pub(super) fn new(store: &'a S, arena: &'a D, tree: IdD) -> Self {
+    pub(super) fn new(store: &'a S, arena: &'b D, tree: IdD) -> Self {
         let h = height(store, &arena.original(&tree));
         let list_size = if h >= MIN_HEIGHT {
             h + 1 - MIN_HEIGHT

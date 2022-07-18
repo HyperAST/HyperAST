@@ -1,26 +1,29 @@
 /// different decompressed tree layouts optimized for different traversals and exposing different features.
 /// Here decomressed means that nodes are not shared ie. they only have one parent.
-
 use num_traits::PrimInt;
 
-use crate::tree::{
-    tree::{NodeStore, Tree, WithChildren},
-    tree_path::CompressedTreePath,
-};
+use crate::tree::tree_path::CompressedTreePath;
+use hyper_ast::types::{NodeStore, Tree, WithChildren};
 
-pub trait Initializable<IdC, IdD> {
+pub trait Initializable<'a, IdC, IdD> {
     fn new<
-        T: Tree<TreeId = IdC>, // + WithHashs<HK = HK, HP = HP>,
+        // + WithHashs<HK = HK, HP = HP>,
         // HK: HashKind,
         // HP: PrimInt,
-        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+        //NodeStore<'b, T::TreeId, T>,
+        S,
     >(
-        store: &S,
+        store: &'a S,
         root: &IdC,
-    ) -> Self;
+    ) -> Self
+    where
+        // for<'a> < <S as NodeStore2<IdC>>::R  as GenericItem<'a>>::Item:
+        // WithChildren<TreeId = IdC>,
+        S: NodeStore<IdC>, //NodeStoreExt<'a, T, R>,
+        S::R<'a>: WithChildren<TreeId = IdC>;
 }
 
-pub trait ShallowDecompressedTreeStore<IdC, IdD>: Initializable<IdC, IdD> {
+pub trait ShallowDecompressedTreeStore<'a, IdC, IdD>: Initializable<'a, IdC, IdD> {
     fn len(&self) -> usize;
     // fn node_count(&self) -> IdD {
     //     cast(self.len()).unwrap()
@@ -29,78 +32,90 @@ pub trait ShallowDecompressedTreeStore<IdC, IdD>: Initializable<IdC, IdD> {
     fn leaf_count(&self) -> IdD;
     fn root(&self) -> IdD;
     fn path<Idx: PrimInt>(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<Idx>;
-    fn child<T: WithChildren<TreeId = IdC>, S: for<'a> NodeStore<'a, T::TreeId, &'a T>>(
+    fn child<'b, S>(
         &self,
-        store: &S,
+        store: &'b S,
         x: &IdD,
-        p: &[T::ChildIdx],
-    ) -> IdD;
+        p: &[<S::R<'b> as WithChildren>::ChildIdx],
+    ) -> IdD
+    where
+        'a: 'b,
+        S: NodeStore<IdC>,
+        // for<'a> < <S as NodeStore2<IdC>>::R  as GenericItem<'a>>::Item:WithChildren<TreeId = IdC>,
+        S::R<'b>: WithChildren<TreeId = IdC>;
     // fn child_count<T: Tree<TreeId = IdC>, S: for<'a> NodeStore<'a,T>>(
     //     &self,
     //     store: &S,
     //     x: &IdD,
     // ) -> IdD;
-    fn children<T: WithChildren<TreeId = IdC>, S: for<'a> NodeStore<'a, T::TreeId, &'a T>>(
-        &self,
-        store: &S,
-        x: &IdD,
-    ) -> Vec<IdD>;
+    fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    where
+        'a: 'b,
+        S: 'b + NodeStore<IdC>,
+        // for<'c> < <S as NodeStore2<IdC>>::R  as GenericItem<'c>>::Item:WithChildren<TreeId = IdC>,
+        S::R<'b>: WithChildren<TreeId = IdC>;
 }
 
-pub trait DecompressedTreeStore<IdC, IdD>: ShallowDecompressedTreeStore<IdC, IdD> {
-    fn descendants<T: Tree<TreeId = IdC>, S: for<'a> NodeStore<'a, T::TreeId, &'a T>>(
-        &self,
-        store: &S,
-        x: &IdD,
-    ) -> Vec<IdD>;
-    fn descendants_count<T: Tree<TreeId = IdC>, S: for<'a> NodeStore<'a, T::TreeId, &'a T>>(
-        &self,
-        store: &S,
-        x: &IdD,
-    ) -> usize;
+pub trait DecompressedTreeStore<'a, IdC, IdD>: ShallowDecompressedTreeStore<'a, IdC, IdD> {
+    // fn descendants<'a, T: 'a + Tree<TreeId = IdC>, S>(&self, store: &'a S, x: &IdD) -> Vec<IdD>
+    // where
+    //     S: 'a + NodeStore2<T::TreeId, R<'a> = T> //NodeStore<'a, T::TreeId, T>
+    // ;
+    fn descendants<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    where
+        S: 'b + NodeStore<IdC>,
+        // for<'a> < <S as NodeStore2<IdC>>::R  as GenericItem<'a>>::Item:WithChildren<TreeId = IdC>,
+        S::R<'b>: WithChildren<TreeId = IdC>;
+    fn descendants_count<'b, S>(&self, store: &'b S, x: &IdD) -> usize
+    where
+        S: 'b + NodeStore<IdC>,
+        // for<'a> < <S as NodeStore2<IdC>>::R  as GenericItem<'a>>::Item:WithChildren<TreeId = IdC>,
+        S::R<'b>: WithChildren<TreeId = IdC>;
+    // S: 'a + NodeStore2<T::TreeId, R<'a> = T> //NodeStore<'a, T::TreeId, T>
     fn first_descendant(&self, i: &IdD) -> IdD;
 }
 
-pub trait DecompressedWithParent<IdD> {
+pub trait DecompressedWithParent<'a, IdC, IdD> {
     fn has_parent(&self, id: &IdD) -> bool;
     fn parent(&self, id: &IdD) -> Option<IdD>;
-    fn position_in_parent<T: WithChildren, S: for<'a> NodeStore<'a, T::TreeId, &'a T>>(
-        &self,
-        store: &S,
-        c: &IdD,
-    ) -> T::ChildIdx;
+    fn position_in_parent<S>(&self, store: &S, c: &IdD) -> <S::R<'a> as WithChildren>::ChildIdx
+    where
+        S: NodeStore<IdC>,
+        // for<'a> < <S as NodeStore2<IdC>>::R  as GenericItem<'a>>::Item:WithChildren<TreeId = IdC>,
+        S::R<'a>: WithChildren<TreeId = IdC>;
+    // S: 'a + NodeStore2<T::TreeId, R<'a> = T> //NodeStore<'a, T::TreeId, T>
 }
 
-pub trait DecompressedWithSiblings<IdD> {
+pub trait DecompressedWithSiblings<'a, IdC, IdD> {
     fn siblings_count(&self, id: &IdD) -> Option<IdD>;
-    fn position_in_parent<T: Tree, S: for<'a> NodeStore<'a, T::TreeId, &'a T>>(
-        &self,
-        store: &S,
-        c: &IdD,
-    ) -> T::ChildIdx;
+    fn position_in_parent<Idx, S>(&self, store: &S, c: &IdD) -> Idx
+    where
+        S: 'a + NodeStore<IdC>,
+        // for<'a> < <S as NodeStore2<IdC>>::R  as GenericItem<'a>>::Item:WithChildren<TreeId = IdC>,
+        S::R<'a>: WithChildren<TreeId = IdC>;
 }
 
-pub trait BreathFirstIterable<'a, IdC, IdD>: DecompressedTreeStore<IdC, IdD> {
+pub trait BreathFirstIterable<'a, IdC, IdD>: DecompressedTreeStore<'a, IdC, IdD> {
     type It: Iterator<Item = IdD>;
     fn iter_bf(&'a self) -> Self::It;
 }
 
-pub trait PostOrderIterable<IdC, IdD>: DecompressedTreeStore<IdC, IdD> {
+pub trait PostOrderIterable<'a, IdC, IdD>: DecompressedTreeStore<'a, IdC, IdD> {
     type It: Iterator<Item = IdD>;
     fn iter_df_post(&self) -> Self::It;
 }
 
-pub trait BreathFirstContiguousSiblings<IdC, IdD>: DecompressedTreeStore<IdC, IdD> {
+pub trait BreathFirstContiguousSiblings<'a, IdC, IdD>: DecompressedTreeStore<'a, IdC, IdD> {
     fn has_children(&self, id: &IdD) -> bool;
     fn first_child(&self, id: &IdD) -> Option<IdD>;
 }
 
-pub trait PostOrder<IdC, IdD>: PostOrderIterable<IdC, IdD> {
+pub trait PostOrder<'a, IdC, IdD>: PostOrderIterable<'a, IdC, IdD> {
     fn lld(&self, i: &IdD) -> IdD;
     fn tree(&self, id: &IdD) -> IdC;
 }
 
-pub trait PostOrderKeyRoots<IdC, IdD: PrimInt + Into<usize>>: PostOrder<IdC, IdD> {
+pub trait PostOrderKeyRoots<'a, IdC, IdD: PrimInt>: PostOrder<'a, IdC, IdD> {
     fn kr(&self, x: IdD) -> IdD;
 }
 
@@ -131,12 +146,18 @@ impl<IdD: PrimInt> Iterator for Iter<IdD> {
     }
 }
 
-fn size<T: WithChildren, NS: for<'a> NodeStore<'a, T::TreeId, &'a T>>(
-    store: &NS,
-    x: &T::TreeId,
-) -> usize {
+fn size<'a, IdC, S>(store: &'a S, x: &IdC) -> usize
+where
+    S: 'a + NodeStore<IdC>,
+    // for<'a> < <S as NodeStore2<IdC>>::R  as GenericItem<'a>>::Item:WithChildren<TreeId = IdC>,
+    S::R<'a>: WithChildren<TreeId = IdC>, // S: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>
+{
     let tmp = store.resolve(&x);
-    let cs = tmp.get_children().to_owned();
+    let cs = if let Some(cs) = tmp.try_get_children() {
+        cs
+    } else {
+        return 1;
+    };
 
     let mut z = 0;
     for x in cs {

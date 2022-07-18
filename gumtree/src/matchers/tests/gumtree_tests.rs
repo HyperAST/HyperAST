@@ -1,3 +1,5 @@
+use hyper_ast::types::NodeStore;
+
 use crate::{
     matchers::{
         decompressed_tree_store::{
@@ -10,10 +12,8 @@ use crate::{
         },
         mapping_store::{DefaultMappingStore, MappingStore},
     },
-    tests::{
-        examples::{example_bottom_up, example_gumtree},
-    },
-    tree::{simple_tree::{vpair_to_stores, Tree, NS}},
+    tests::examples::{example_bottom_up, example_eq_simple_class_rename, example_gumtree},
+    tree::simple_tree::{vpair_to_stores, Tree, TreeRef, NS},
 };
 
 #[test]
@@ -21,12 +21,14 @@ fn test_min_height_threshold() {
     let (_label_store, node_store, src, dst) = vpair_to_stores(example_gumtree());
     let mappings = DefaultMappingStore::new();
     // GreedySubtreeMatcher.MIN_HEIGHT = 0;
-    let mapper = GreedySubtreeMatcher::<CompletePostOrder<_, u16>, _, _, _, 0>::matchh(
-        &node_store,
-        &src,
-        &dst,
-        mappings,
-    );
+    let mapper = GreedySubtreeMatcher::<
+        CompletePostOrder<_, u16>,
+        CompletePostOrder<_, u16>,
+        _,
+        Tree,
+        _,
+        0,
+    >::matchh(&node_store, &src, &dst, mappings);
     let SubtreeMatcher {
         src_arena,
         dst_arena,
@@ -48,12 +50,14 @@ fn test_min_height_threshold() {
     }
     let mappings = DefaultMappingStore::new();
     // GreedySubtreeMatcher.MIN_HEIGHT = 1;
-    let mapper = GreedySubtreeMatcher::<CompletePostOrder<_, u16>, _, _, _, 1>::matchh(
-        &node_store,
-        &src,
-        &dst,
-        mappings,
-    );
+    let mapper = GreedySubtreeMatcher::<
+        CompletePostOrder<_, u16>,
+        CompletePostOrder<_, u16>,
+        _,
+        Tree,
+        _,
+        1,
+    >::matchh(&node_store, &src, &dst, mappings);
     let SubtreeMatcher {
         src_arena,
         dst_arena,
@@ -101,17 +105,20 @@ fn test_sim_and_size_threshold() {
         assert!(ms1.has(&f, &s), "{} -x-> {}", f, s);
     }
 
-    let mut mapper =
-        GreedyBottomUpMatcher::<CompletePostOrder<u16, u16>, _, _, NS<Tree>, _, 0, 1, 1>::new(
-            &node_store,
-            &label_store,
-            src_arena,
-            dst_arena,
-            ms1,
-        );
+    let mut mapper = GreedyBottomUpMatcher::<
+        CompletePostOrder<u16, u16>,
+        CompletePostOrder<u16, u16>,
+        _,
+        _,
+        NS<Tree>,
+        _,
+        0,
+        1,
+        1,
+    >::new(&node_store, &label_store, src_arena, dst_arena, ms1);
     GreedyBottomUpMatcher::execute(&mut mapper);
 
-    let BottomUpMatcher {
+    let BottomUpMatcher::<_, _, _, Tree, _> {
         src_arena,
         dst_arena,
         mappings: ms1,
@@ -129,7 +136,7 @@ fn test_sim_and_size_threshold() {
     assert!(ms1.has(&src, &dst));
 
     let ms2 = ms.clone();
-    let mut mapper = GreedyBottomUpMatcher::<_, _, _, NS<Tree>, _, 0, 1, 2>::new(
+    let mut mapper = GreedyBottomUpMatcher::<_, _, _, _, NS<Tree>, _, 0, 1, 2>::new(
         &node_store,
         &label_store,
         src_arena,
@@ -137,7 +144,7 @@ fn test_sim_and_size_threshold() {
         ms2,
     );
     GreedyBottomUpMatcher::execute(&mut mapper);
-    let BottomUpMatcher {
+    let BottomUpMatcher::<_, _, _, Tree, _> {
         src_arena,
         dst_arena,
         mappings: ms2,
@@ -156,7 +163,7 @@ fn test_sim_and_size_threshold() {
     assert_eq!(7, ms2.len());
 
     let ms3 = ms.clone();
-    let mut mapper = GreedyBottomUpMatcher::<_, _, _, NS<Tree>, _, 10, 1, 2>::new(
+    let mut mapper = GreedyBottomUpMatcher::<_, _, _, _, NS<Tree>, _, 10, 1, 2>::new(
         &node_store,
         &label_store,
         src_arena,
@@ -164,7 +171,7 @@ fn test_sim_and_size_threshold() {
         ms3,
     );
     GreedyBottomUpMatcher::execute(&mut mapper);
-    let BottomUpMatcher {
+    let BottomUpMatcher::<_, _, _, Tree, _> {
         src_arena,
         dst_arena,
         mappings: ms3,
@@ -183,6 +190,47 @@ fn test_sim_and_size_threshold() {
     assert!(ms3.has(&from_src(&[0, 0]), &from_dst(&[0, 0])));
     assert!(ms3.has(&from_src(&[0, 1]), &from_dst(&[0, 1])));
     assert!(ms3.has(&from_src(&[0, 2]), &from_dst(&[0, 2])));
+}
+
+#[test]
+fn test_eq_simple_class_rename() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
+    let (label_store, node_store, src, dst) = vpair_to_stores(example_eq_simple_class_rename());
+    // assert_eq!(label_store.resolve(&0).to_owned(), b"");
+    let mappings = DefaultMappingStore::new();
+
+    let mapper = GreedyBottomUpMatcher::<
+        CompletePostOrder<_, u16>, //
+        CompletePostOrder<_, _>,
+        _,
+        _,
+        NS<Tree>,
+        _,
+        100,
+        1,
+        2,
+    >::matchh(&node_store, &label_store, &src, &dst, mappings);
+    let BottomUpMatcher::<_, _, _, Tree, _> {
+        src_arena,
+        dst_arena,
+        mappings,
+        ..
+    } = mapper.into();
+    dbg!(&mappings);
+    use crate::actions::bfs_wrapper;
+    use crate::actions::Actions;
+    let dst_arena = bfs_wrapper::SD::from(&node_store, &dst_arena);
+    let actions = crate::actions::script_generator2::ScriptGenerator::<
+        _,
+        TreeRef<Tree>,
+        _,
+        _, // bfs_wrapper::SD<_, _, CompletePostOrder<_, u16>>,
+        NS<Tree>,
+    >::compute_actions(&node_store, &src_arena, &dst_arena, &mappings);
+    dbg!(actions.len());
+    dbg!(actions);
 }
 
 // test mapping stores

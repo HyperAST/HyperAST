@@ -14,7 +14,7 @@ use crate::{
     impact::serialize::{CachedHasher, Keyed, MySerialize},
     nodes::{CompressedNode, HashSize, RefContainer, Space},
     store::labels::DefaultLabelIdentifier,
-    types::{Type, Typed, WithChildren},
+    types::{GenericItem, Type, Typed, WithChildren},
     utils::make_hash,
 };
 
@@ -79,10 +79,58 @@ impl<'a> Hash for HashedNode {
         self.hashs.hash(&Default::default()).hash(state)
     }
 }
+impl<'a> crate::types::Typed for HashedNode {
+    type Type = Type;
 
-impl crate::types::Node for HashedNode {}
-impl crate::types::Stored for HashedNode {
-    type TreeId = NodeIdentifier;
+    fn get_type(&self) -> Type {
+        panic!()
+    }
+}
+
+impl<'a> crate::types::Labeled for HashedNode {
+    type Label = DefaultLabelIdentifier;
+
+    fn get_label(&self) -> &DefaultLabelIdentifier {
+        panic!()
+    }
+}
+
+impl<'a> crate::types::WithChildren for HashedNode {
+    type ChildIdx = u16;
+
+    fn child_count(&self) -> Self::ChildIdx {
+        todo!()
+    }
+
+    fn get_child(&self, idx: &Self::ChildIdx) -> Self::TreeId {
+        todo!()
+    }
+
+    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
+        todo!()
+    }
+
+    fn get_children(&self) -> &[Self::TreeId] {
+        todo!()
+    }
+
+    fn get_children_cpy(&self) -> Vec<Self::TreeId> {
+        todo!()
+    }
+
+    fn try_get_children(&self) -> Option<&[Self::TreeId]> {
+        todo!()
+    }
+}
+
+impl<'a> crate::types::Tree for HashedNode {
+    fn has_children(&self) -> bool {
+        todo!()
+    }
+
+    fn has_label(&self) -> bool {
+        todo!()
+    }
 }
 
 // impl Symbol<HashedNode> for legion::Entity {}
@@ -296,6 +344,10 @@ impl<'a> crate::types::Node for HashedNodeRef<'a> {}
 impl<'a> crate::types::Stored for HashedNodeRef<'a> {
     type TreeId = NodeIdentifier;
 }
+impl<'a> crate::types::Node for HashedNode {}
+impl<'a> crate::types::Stored for HashedNode {
+    type TreeId = NodeIdentifier;
+}
 
 impl<'a> HashedNodeRef<'a> {
     fn cs<'b>(&'b self) -> Result<&'b [<Self as crate::types::Stored>::TreeId], ComponentError> {
@@ -372,6 +424,14 @@ impl<'a> crate::types::WithChildren for HashedNodeRef<'a> {
         cs
     }
 
+    fn get_children_cpy<'b>(&'b self) -> Vec<Self::TreeId> {
+        let cs = self.cs().unwrap_or_else(|x| {
+            log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+            panic!("{}", x)
+        });
+        cs.to_vec()
+    }
+
     fn try_get_children<'b>(&'b self) -> Option<&'b [Self::TreeId]> {
         self.cs().ok()
     }
@@ -399,7 +459,16 @@ impl<'a> crate::types::Tree for HashedNodeRef<'a> {
     }
 
     fn try_get_label(&self) -> Option<&Self::Label> {
-        self.0.get_component::<DefaultLabelIdentifier>().ok()
+        self.0
+            .get_component::<DefaultLabelIdentifier>()
+            .ok()
+            // .or_else(|| {
+            //     let a = self.0.get_component::<Box<[Space]>>();
+            //     let mut b = String::new();
+            //     a.iter()
+            //         .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
+
+            // })
     }
 }
 
@@ -568,8 +637,28 @@ impl Debug for NodeStore {
     }
 }
 
-impl<'b, 'a: 'b> crate::types::NodeStore<'a, NodeIdentifier, HashedNodeRef<'b>> for NodeStore {
-    fn resolve(&'a self, id: &NodeIdentifier) -> HashedNodeRef<'b> {
+// impl<'a> crate::types::NodeStore<'a, NodeIdentifier, HashedNodeRef<'a>> for NodeStore {
+//     fn resolve(&'a self, id: &NodeIdentifier) -> HashedNodeRef<'a> {
+//         self.internal
+//             .entry_ref(id.clone())
+//             .map(|x| HashedNodeRef(x))
+//             .unwrap()
+//     }
+// }
+
+// impl crate::types::NodeStore3<NodeIdentifier> for NodeStore {
+//     type R = dyn for<'any> GenericItem<'any, Item = HashedNodeRef<'any>>;
+//     fn resolve(&self, id: &NodeIdentifier) -> HashedNodeRef<'_> {
+//         self.internal
+//             .entry_ref(id.clone())
+//             .map(|x| HashedNodeRef(x))
+//             .unwrap()
+//     }
+// }
+
+impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
+    type R<'a> = HashedNodeRef<'a>;
+    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
         self.internal
             .entry_ref(id.clone())
             .map(|x| HashedNodeRef(x))
@@ -577,8 +666,70 @@ impl<'b, 'a: 'b> crate::types::NodeStore<'a, NodeIdentifier, HashedNodeRef<'b>> 
     }
 }
 
-impl<'a> crate::types::NodeStoreMut<'a, HashedNode, HashedNodeRef<'a>> for NodeStore {}
+// impl crate::types::NodeStore4<NodeIdentifier> for NodeStore {
+//     type R<'a> = HashedNodeRef<'a>;
+//     fn resolve(&self, id: &NodeIdentifier) -> HashedNodeRef<'_> {
+//         self.internal
+//             .entry_ref(id.clone())
+//             .map(|x| HashedNodeRef(x))
+//             .unwrap()
+//     }
+// }
 
+// impl crate::types::NodeStore2<NodeIdentifier> for NodeStore{
+//     type R<'a> = HashedNodeRef<'a>;
+//     fn resolve(&self, id: &NodeIdentifier) -> HashedNodeRef<'_> {
+//         self.internal
+//             .entry_ref(id.clone())
+//             .map(|x| HashedNodeRef(x))
+//             .unwrap()
+//     }
+// }
+
+// impl<'a> crate::types::NodeStoreMut<'a, HashedNode, HashedNodeRef<'a>> for NodeStore {
+//     fn get_or_insert(
+//         &mut self,
+//         node: HashedNode,
+//     ) -> <HashedNodeRef<'a> as crate::types::Stored>::TreeId {
+//         todo!()
+//     }
+// }
+impl<'a> crate::types::NodeStoreMut<HashedNode> for NodeStore {
+    fn get_or_insert(
+        &mut self,
+        node: HashedNode,
+    ) -> <HashedNodeRef<'a> as crate::types::Stored>::TreeId {
+        todo!()
+    }
+}
+
+// impl<'a> crate::types::NodeStoreExt<'a, HashedNode, HashedNodeRef<'a>> for NodeStore {
+//     fn build_then_insert(
+//         &mut self,
+//         t: <HashedNodeRef<'a> as crate::types::Typed>::Type,
+//         l: <HashedNodeRef<'a> as crate::types::Labeled>::Label,
+//         cs: Vec<<HashedNodeRef<'a> as crate::types::Stored>::TreeId>,
+//     ) -> <HashedNodeRef<'a> as crate::types::Stored>::TreeId {
+//         todo!()
+//     }
+// }
+
+/// WARN this is polyglote related
+/// for now I only implemented for java.
+/// In the future you should use the Type of the node
+/// and maybe an additional context might be necessary depending on choices to materialize polyglot nodes
+impl crate::types::NodeStoreExt<HashedNode> for NodeStore {
+    fn build_then_insert(
+        &mut self,
+        i: <HashedNode as crate::types::Stored>::TreeId,
+        t: <HashedNode as crate::types::Typed>::Type,
+        l: Option<<HashedNode as crate::types::Labeled>::Label>,
+        cs: Vec<<HashedNode as crate::types::Stored>::TreeId>,
+    ) -> <HashedNode as crate::types::Stored>::TreeId {
+        // self.internal.
+        todo!()
+    }
+}
 impl NodeStore {
     pub fn len(&self) -> usize {
         self.internal.len()

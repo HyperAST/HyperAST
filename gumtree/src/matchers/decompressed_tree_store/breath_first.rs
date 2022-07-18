@@ -1,9 +1,7 @@
 use num_traits::{cast, one, zero, PrimInt};
 
-use crate::tree::{
-    tree::{NodeStore, Stored, Tree, WithChildren},
-    tree_path::CompressedTreePath,
-};
+use crate::tree::tree_path::CompressedTreePath;
+use hyper_ast::types::{GenericItem, NodeStore, Stored, Tree, WithChildren};
 
 use super::{DecompressedTreeStore, Initializable, Iter, ShallowDecompressedTreeStore};
 
@@ -17,7 +15,9 @@ pub struct BreathFirst<IdC, IdD: PrimInt> {
     id_first_child: Vec<IdD>,
 }
 
-impl<IdC: Clone, IdD: PrimInt> BreathFirstContiguousSiblings<IdC, IdD> for BreathFirst<IdC, IdD> {
+impl<'d, IdC: Clone, IdD: PrimInt> BreathFirstContiguousSiblings<'d, IdC, IdD>
+    for BreathFirst<IdC, IdD>
+{
     fn has_children(&self, id: &IdD) -> bool {
         self.first_child(id) != None
     }
@@ -41,7 +41,7 @@ impl<'a, IdC: Clone, IdD: PrimInt> BreathFirstIterable<'a, IdC, IdD> for BreathF
         }
     }
 }
-impl<IdC: Clone, IdD: PrimInt> DecompressedWithParent<IdD> for BreathFirst<IdC, IdD> {
+impl<'d, IdC: Clone, IdD: PrimInt> DecompressedWithParent<'d, IdC, IdD> for BreathFirst<IdC, IdD> {
     fn parent(&self, id: &IdD) -> Option<IdD> {
         let r = self.id_parent[id.to_usize().unwrap()];
         if r == num_traits::zero() {
@@ -55,25 +55,31 @@ impl<IdC: Clone, IdD: PrimInt> DecompressedWithParent<IdD> for BreathFirst<IdC, 
         self.parent(id) != None
     }
 
-    fn position_in_parent<T: WithChildren, S: for<'a> NodeStore<'a, T::TreeId, &'a T>>(
-        &self,
-        _store: &S,
-        c: &IdD,
-    ) -> T::ChildIdx {
+    fn position_in_parent<S>(&self, _store: &S, c: &IdD) -> <S::R<'d> as WithChildren>::ChildIdx
+    where
+        S: NodeStore<IdC>,
+        S::R<'d>: WithChildren<TreeId = IdC>,
+    {
         let p = self.parent(c).unwrap();
         cast(*c - self.first_child(&p).unwrap()).unwrap()
     }
 }
 
-impl<IdC: Clone, IdD: PrimInt> Initializable<IdC, IdD> for BreathFirst<IdC, IdD> {
+impl<'d, IdC: Clone, IdD: PrimInt> Initializable<'d, IdC, IdD> for BreathFirst<IdC, IdD> {
     fn new<
-        T: Tree<TreeId = IdC>,
+        // 'a,
+        // T: 'a + Tree<TreeId = IdC>,
         // HK: HashKind, HP: PrimInt,
-        S: for<'a> NodeStore<'a, T::TreeId, &'a T>,
+        S, //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
     >(
-        store: &S,
+        store: &'d S,
         root: &IdC,
-    ) -> Self {
+    ) -> Self
+    where
+        S: NodeStore<IdC>,
+        // for<'a> <<S as NodeStore2<IdC>>::R as GenericItem<'a>>::Item: WithChildren<TreeId = IdC>,
+        S::R<'d>: WithChildren<TreeId = IdC>,
+    {
         let mut leaf_count = zero();
         let mut id_compressed: Vec<IdC> = vec![root.clone()];
         let mut id_parent: Vec<IdD> = vec![num_traits::zero()];
@@ -82,17 +88,19 @@ impl<IdC: Clone, IdD: PrimInt> Initializable<IdC, IdD> for BreathFirst<IdC, IdD>
 
         while i < id_compressed.len() {
             let node = store.resolve(&id_compressed[i]);
-            let l = node.get_children();
-            id_first_child.push(if l.len() > 0 {
+            let l = node.try_get_children();
+            id_first_child.push(if l.map_or(0,|x|x.len()) > 0 {
                 cast(id_compressed.len()).unwrap()
             } else {
                 num_traits::zero()
             });
-            if l.len() == 0 {
+            if l.map_or(0,|x|x.len()) == 0 {
                 leaf_count = leaf_count + one();
             }
-            id_parent.extend(l.iter().map(|_| cast::<usize, IdD>(i).unwrap()));
-            id_compressed.extend_from_slice(l);
+            if let Some(l) = l {
+                id_parent.extend(l.iter().map(|_| cast::<usize, IdD>(i).unwrap()));
+                id_compressed.extend_from_slice(l);
+            }
 
             i += 1;
         }
@@ -106,7 +114,9 @@ impl<IdC: Clone, IdD: PrimInt> Initializable<IdC, IdD> for BreathFirst<IdC, IdD>
     }
 }
 
-impl<IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<IdC, IdD> for BreathFirst<IdC, IdD> {
+impl<'a, IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<'a, IdC, IdD>
+    for BreathFirst<IdC, IdD>
+{
     fn original(&self, id: &IdD) -> IdC {
         self.id_compressed[id.to_usize().unwrap()].clone()
     }
@@ -123,16 +133,21 @@ impl<IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<IdC, IdD> for Breath
         zero()
     }
 
-    fn child<T: Stored<TreeId = IdC> + WithChildren, S: for<'a> NodeStore<'a, T::TreeId, &'a T>>(
-        &self,
-        store: &S,
-        x: &IdD,
-        p: &[T::ChildIdx],
-    ) -> IdD {
+    fn child<'b,S>(&self, store: &'b S, x: &IdD, p: &[<S::R<'b> as WithChildren>::ChildIdx]) -> IdD
+    where
+        S: NodeStore<IdC>,
+        // for<'a> <<S as NodeStore2<IdC>>::R as GenericItem<'a>>::Item: WithChildren<TreeId = IdC>,
+        S::R<'b>: WithChildren<TreeId = IdC>,
+    {
         let mut r = *x;
         for d in p {
             let a = self.original(&r);
-            let cs: Vec<_> = store.resolve(&a).get_children().to_owned();
+
+            let cs: Vec<_> = {
+                let n = store.resolve(&a);
+                let cs = n.get_children();
+                cs.to_owned()
+            };
             if cs.len() > 0 {
                 r = self.first_child(&r).unwrap() + cast(*d).unwrap();
             } else {
@@ -142,14 +157,12 @@ impl<IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<IdC, IdD> for Breath
         r
     }
 
-    fn children<
-        T: Stored<TreeId = IdC> + WithChildren,
-        S: for<'a> NodeStore<'a, T::TreeId, &'a T>,
-    >(
-        &self,
-        store: &S,
-        x: &IdD,
-    ) -> Vec<IdD> {
+    fn children<'b,S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    where
+        S: 'b + NodeStore<IdC>,
+        // for<'a> <<S as NodeStore2<IdC>>::R as GenericItem<'a>>::Item: WithChildren<TreeId = IdC>,
+        S::R<'b>: WithChildren<TreeId = IdC>,
+    {
         let node = store.resolve(&self.original(x));
         let l: usize = cast(node.child_count()).unwrap();
         let s: usize = cast(*x).unwrap();
@@ -164,15 +177,13 @@ impl<IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<IdC, IdD> for Breath
     }
 }
 
-impl<IdC: Clone, IdD: PrimInt> DecompressedTreeStore<IdC, IdD> for BreathFirst<IdC, IdD> {
-    fn descendants<
-        T: Stored<TreeId = IdC> + WithChildren,
-        S: for<'a> NodeStore<'a, T::TreeId, &'a T>,
-    >(
-        &self,
-        store: &S,
-        x: &IdD,
-    ) -> Vec<IdD> {
+impl<'a, IdC: Clone, IdD: PrimInt> DecompressedTreeStore<'a, IdC, IdD> for BreathFirst<IdC, IdD> {
+    fn descendants<'b,S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    where
+        S: 'b + NodeStore<IdC>,
+        // for<'b> <<S as NodeStore2<IdC>>::R as GenericItem<'b>>::Item: WithChildren<TreeId = IdC>,
+        S::R<'b>: WithChildren<TreeId = IdC>, // S: 'b + NodeStore2<T::TreeId, R<'b> = T>, //NodeStore<'b, T::TreeId, T>
+    {
         // todo possible opti by also making descendants contiguous in arena
         let mut id: Vec<IdD> = vec![*x];
         let mut i: usize = cast(*x).unwrap();
@@ -188,14 +199,12 @@ impl<IdC: Clone, IdD: PrimInt> DecompressedTreeStore<IdC, IdD> for BreathFirst<I
         id
     }
 
-    fn descendants_count<
-        T: Stored<TreeId = IdC> + WithChildren,
-        S: for<'a> NodeStore<'a, T::TreeId, &'a T>,
-    >(
-        &self,
-        store: &S,
-        x: &IdD,
-    ) -> usize {
+    fn descendants_count<'b,S>(&self, store: &'b S, x: &IdD) -> usize
+    where
+        S: 'b + NodeStore<IdC>,
+        // for<'b> <<S as NodeStore2<IdC>>::R as GenericItem<'b>>::Item: WithChildren<TreeId = IdC>,
+        S::R<'b>: WithChildren<TreeId = IdC>,
+    {
         // todo possible opti by also making descendants contiguous in arena
         let mut id: Vec<IdD> = vec![*x];
         let mut i: usize = cast(*x).unwrap();

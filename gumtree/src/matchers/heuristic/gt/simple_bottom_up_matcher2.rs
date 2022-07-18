@@ -2,15 +2,13 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use num_traits::{cast, zero, PrimInt, ToPrimitive};
 
-use crate::{
-    matchers::{
-        decompressed_tree_store::{BreathFirstContiguousSiblings, DecompressedWithParent},
-        mapping_store::{DefaultMappingStore, MappingStore},
-        matcher::Matcher,
-        similarity_metrics,
-    },
-    tree::tree::{NodeStore, Tree, WithHashs},
+use crate::matchers::{
+    decompressed_tree_store::{BreathFirstContiguousSiblings, DecompressedWithParent},
+    mapping_store::{DefaultMappingStore, MappingStore},
+    matcher::Matcher,
+    similarity_metrics,
 };
+use hyper_ast::types::{NodeStore, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
@@ -18,22 +16,32 @@ use super::bottom_up_matcher::BottomUpMatcher;
 
 pub struct SimpleBottomUpMatcher<
     'a,
-    D: BreathFirstContiguousSiblings<T::TreeId, IdD> + DecompressedWithParent<IdD>,
+    Dsrc,
+    Ddst,
     IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
-    T: Tree + WithHashs,
-    S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
-    // const SIM_THRESHOLD: u64 = (0.4).bytes(),
+    T: 'a + Tree + WithHashs,
+    S, //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
+       // const SIM_THRESHOLD: u64 = (0.4).bytes(),
 > {
-    internal: BottomUpMatcher<'a, D, IdD, T, S>,
+    internal: BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S>,
 }
 
 impl<
         'a,
-        D: 'a + BreathFirstContiguousSiblings<T::TreeId, IdD> + DecompressedWithParent<IdD>,
-        IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
+        Dsrc: 'a
+            + BreathFirstContiguousSiblings<'a, T::TreeId, IdD>
+            + DecompressedWithParent<'a, T::TreeId, IdD>,
+        Ddst: 'a
+            + BreathFirstContiguousSiblings<'a, T::TreeId, IdD>
+            + DecompressedWithParent<'a, T::TreeId, IdD>,
+        IdD: 'a + PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: 'a + Tree + WithHashs,
-        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
-    > Matcher<'a, D, T, S> for SimpleBottomUpMatcher<'a, D, IdD, T, S>
+        S, //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
+    > Matcher<'a, Dsrc, Ddst, T, S> for SimpleBottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S>
+where
+    S: 'a + NodeStore<T::TreeId>,
+    // for<'c> < <S as NodeStore2<T::TreeId>>::R  as GenericItem<'c>>::Item:Tree<TreeId = T::TreeId,Type = T::Type,Label = T::Label,ChildIdx = T::ChildIdx> + WithHashs<HK = T::HK, HP = T::HP>,
+    S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type> + WithHashs<HK = T::HK, HP = T::HP>,
 {
     type Store = DefaultMappingStore<IdD>;
 
@@ -41,15 +49,15 @@ impl<
 
     fn matchh(
         compressed_node_store: &'a S,
-        src: &'a T::TreeId,
-        dst: &'a T::TreeId,
+        src: &T::TreeId,
+        dst: &T::TreeId,
         mappings: Self::Store,
     ) -> Self::Store {
         let mut matcher = SimpleBottomUpMatcher {
-            internal: BottomUpMatcher::<'a, D, IdD, T, S> {
+            internal: BottomUpMatcher::<'a, Dsrc, Ddst, IdD, T, S> {
                 node_store: compressed_node_store,
-                src_arena: D::new(compressed_node_store, src),
-                dst_arena: D::new(compressed_node_store, dst),
+                src_arena: Dsrc::new(compressed_node_store, src),
+                dst_arena: Ddst::new(compressed_node_store, dst),
                 mappings,
                 phantom: PhantomData,
             },
@@ -65,11 +73,20 @@ impl<
 
 impl<
         'a,
-        D: 'a + BreathFirstContiguousSiblings<T::TreeId, IdD> + DecompressedWithParent<IdD>,
+        Dsrc: 'a
+            + BreathFirstContiguousSiblings<'a, T::TreeId, IdD>
+            + DecompressedWithParent<'a, T::TreeId, IdD>,
+        Ddst: 'a
+            + BreathFirstContiguousSiblings<'a, T::TreeId, IdD>
+            + DecompressedWithParent<'a, T::TreeId, IdD>,
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
-        T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
-    > SimpleBottomUpMatcher<'a, D, IdD, T, S>
+        T: 'a + Tree + WithHashs,
+        S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
+    > SimpleBottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S>
+where
+    S: 'a + NodeStore<T::TreeId>,
+    // for<'c> < <S as NodeStore2<T::TreeId>>::R  as GenericItem<'c>>::Item:Tree<TreeId = T::TreeId,Type = T::Type,Label = T::Label,ChildIdx = T::ChildIdx> + WithHashs<HK = T::HK, HP = T::HP>,
+    S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type> + WithHashs<HK = T::HK, HP = T::HP>,
 {
     fn execute(&mut self) {
         for i in (0..self.internal.src_arena.len()).rev() {

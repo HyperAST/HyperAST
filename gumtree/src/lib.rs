@@ -1,4 +1,4 @@
-// #![feature(generic_associated_types)]
+#![feature(generic_associated_types)]
 pub mod actions;
 pub mod matchers;
 pub mod tree;

@@ -10,13 +10,14 @@ use std::{
 
 use hyper_ast::{
     full::FullNode,
-    hashed::{IndexingHashBuilder, MetaDataHashsBuilder},
+    hashed::{HashedNode, IndexingHashBuilder, MetaDataHashsBuilder},
     nodes::IoOut,
     store::{
         labels::LabelStore,
-        nodes::legion::{CSStaticCount, PendingInsert, CS0},
+        nodes::legion::{CSStaticCount, HashedNodeRef, PendingInsert, CS0},
     },
     tree_gen::{BasicGlobalData, GlobalData, SpacedGlobalData, TextedGlobalData, TreeGen},
+    types::{self, HashKind, NodeStoreExt, WithHashs},
     utils::{self, clamp_u64_to_u32},
 };
 use legion::{
@@ -63,20 +64,22 @@ pub type EntryR<'a> = EntryRef<'a>;
 
 pub type NodeIdentifier = legion::Entity;
 
-pub struct HashedNodeRef<'a>(EntryRef<'a>);
+// pub struct HashedNodeRef<'a>(EntryRef<'a>);
 
 pub type FNode = FullNode<BasicGlobalData, Local>;
 
 pub type LabelIdentifier = DefaultSymbol;
 
-pub struct JavaTreeGen<'a> {
+pub struct JavaTreeGen<'stores, 'cache> {
     pub line_break: Vec<u8>,
-    pub stores: &'a mut SimpleStores,
-    pub md_cache: &'a mut MDCache,
+    pub stores: &'stores mut SimpleStores,
+    pub md_cache: &'cache mut MDCache,
 }
 
 pub type MDCache = HashMap<NodeIdentifier, MD>;
 
+// TODO only keep compute intensive metadata (where space/time tradeoff is worth storing)
+// eg. decls refs, maybe hashes but not size and height
 pub struct MD {
     metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
     ana: Option<PartialAnalysis>,
@@ -200,7 +203,7 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 }
 
-impl<'a> ZippedTreeGen for JavaTreeGen<'a> {
+impl<'stores, 'cache> ZippedTreeGen for JavaTreeGen<'stores, 'cache> {
     type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores;
     type Text = [u8];
@@ -251,7 +254,6 @@ impl<'a> ZippedTreeGen for JavaTreeGen<'a> {
         let parent_indentation = &stack.last().unwrap().indentation();
         let kind = node.kind();
         let kind = type_store.get(kind);
-
         let indent = compute_indentation(
             &self.line_break,
             text,
@@ -259,20 +261,18 @@ impl<'a> ZippedTreeGen for JavaTreeGen<'a> {
             global.sum_byte_length(),
             &parent_indentation,
         );
-        let labeled = node.has_label();
-        let ana = self.build_ana(&kind);
         Acc {
+            labeled: node.has_label(),
+            start_byte: node.start_byte(),
+            end_byte: node.end_byte(),
+            metrics: Default::default(),
+            ana: self.build_ana(&kind),
+            padding_start: global.sum_byte_length(),
+            indentation: indent,
             simple: BasicAccumulator {
                 kind,
                 children: vec![],
             },
-            labeled,
-            start_byte: node.start_byte(),
-            end_byte: node.end_byte(),
-            metrics: Default::default(),
-            ana,
-            padding_start: global.sum_byte_length(),
-            indentation: indent,
         }
     }
 
@@ -303,7 +303,7 @@ impl<'a> ZippedTreeGen for JavaTreeGen<'a> {
         self.make(global, acc, label)
     }
 }
-impl<'a> JavaTreeGen<'a> {
+impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
     fn make_spacing(
         spacing: Vec<Space>,
         node_store: &mut NodeStore,
@@ -351,7 +351,10 @@ impl<'a> JavaTreeGen<'a> {
         full_spaces_node
     }
 
-    pub fn new<'b>(stores: &'b mut SimpleStores, md_cache: &'b mut MDCache) -> JavaTreeGen<'b> {
+    pub fn new<'a, 'b>(
+        stores: &'a mut SimpleStores,
+        md_cache: &'b mut MDCache,
+    ) -> JavaTreeGen<'a, 'b> {
         JavaTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores,
@@ -372,7 +375,7 @@ impl<'a> JavaTreeGen<'a> {
         }
     }
 
-    pub fn generate_file<'b: 'a>(
+    pub fn generate_file<'b: 'stores>(
         &mut self,
         name: &[u8],
         text: &'b [u8],
@@ -489,9 +492,9 @@ pub fn eq_node<'a>(
     };
 }
 
-impl<'a> TreeGen for JavaTreeGen<'a> {
+impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
     type Acc = Acc;
-    type Global = SpacedGlobalData<'a>;
+    type Global = SpacedGlobalData<'stores>;
     fn make(
         &mut self,
         global: &mut <Self as TreeGen>::Global,
@@ -592,6 +595,7 @@ fn compress(
             NodeStore::insert_after_prepare(vacant, c)
         }};
     }
+    // NOTE needed as macro because I only implemented BulkHasher and Bloom for u8 and u16
     macro_rules! bloom {
         ( $t:ty ) => {{
             type B = $t;
@@ -842,6 +846,150 @@ fn partial_ana_extraction(
         }
         None
     }
+}
+
+impl<'stores, 'cache> hyper_ast::types::NodeStore<NodeIdentifier> for JavaTreeGen<'stores, 'cache> {
+    type R<'a> = HashedNodeRef<'a> where Self: 'a, 'stores:'a;
+
+    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+        self.stores.node_store.resolve(*id)
+    }
+}
+
+impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> {
+    fn build_then_insert(
+        &mut self,
+        i: <HashedNode as hyper_ast::types::Stored>::TreeId,
+        t: <HashedNode as types::Typed>::Type,
+        l: Option<<HashedNode as types::Labeled>::Label>,
+        cs: Vec<<HashedNode as types::Stored>::TreeId>,
+    ) -> <HashedNode as types::Stored>::TreeId {
+        if t == Type::Spaces {
+            // TODO improve ergonomics
+            // should ge spaces as label then reconstruct spaces and insert as done with every other nodes
+            // WARN it wont work for new spaces (l parameter is not used, and label do not return spacing) 
+            return i;
+        }
+        let mut acc: Acc = {
+            let kind = t;
+            Acc {
+                labeled: l.is_some(),
+                start_byte: 0,
+                end_byte: 0,
+                metrics: Default::default(),
+                ana: None,
+                padding_start: 0,
+                indentation: vec![],
+                simple: BasicAccumulator {
+                    kind,
+                    children: vec![],
+                },
+            }
+        };
+        for c in cs {
+            let local = {
+                print_tree_syntax(&self.stores.node_store, &self.stores.label_store, &c);
+                println!();
+                let md = self.md_cache.get(&c);
+                let (ana, metrics) = if let Some(md) = md {
+                    let ana = md.ana.clone();
+                    let metrics = md.metrics;
+                    (ana, metrics)
+                } else {
+                    let node = self.stores.node_store.resolve(c);
+                    let hashs = SyntaxNodeHashs {
+                        structt: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Struct),
+                        label:  WithHashs::hash(&node, &SyntaxNodeHashsKinds::Label),
+                        syntax:  WithHashs::hash(&node, &SyntaxNodeHashsKinds::Syntax),
+                    };
+                    let metrics = SubTreeMetrics {
+                        size:node.get_component::<compo::Size>().map_or(1,|x|x.0),
+                        height:node.get_component::<compo::Height>().map_or(1,|x|x.0),
+                        hashs,
+                    };
+                    (None, metrics)
+                };
+                Local {
+                    compressed_node: c,
+                    metrics,
+                    ana,
+                }
+            };
+            let global = BasicGlobalData::default();
+            let full_node = FullNode { global, local };
+            acc.push(full_node);
+        }
+        let post = {
+            let node_store = &mut self.stores.node_store;
+            let label_store = &mut self.stores.label_store;
+
+            let hashs = acc.metrics.hashs;
+            let size = acc.metrics.size + 1;
+            let height = acc.metrics.height + 1;
+            let label = l.map(|l| label_store.resolve(&l));
+            let hbuilder = hashed::Builder::new(hashs, &acc.simple.kind, &label, size);
+            let hsyntax = hbuilder.most_discriminating();
+            let hashable = &hsyntax;
+
+            let label_id = l;
+            let eq = eq_node(&acc.simple.kind, label_id.as_ref(), &acc.simple.children);
+
+            let insertion = node_store.prepare_insertion(&hashable, eq);
+
+            let local = if let Some(id) = insertion.occupied_id() {
+                let md = self.md_cache.get(&id).unwrap();
+                let ana = md.ana.clone();
+                let metrics = md.metrics;
+                Local {
+                    compressed_node: id,
+                    metrics,
+                    ana,
+                }
+            } else {
+                let ana = None;
+                let hashs = hbuilder.build();
+                let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte) as u32);
+
+                let compressed_node = compress(
+                    label_id, &ana, acc.simple, bytes_len, size, height, insertion, hashs,
+                );
+
+                let metrics = SubTreeMetrics {
+                    size,
+                    height,
+                    hashs,
+                };
+
+                // TODO see if possible to only keep md in md_cache, but would need a generational cache I think
+                self.md_cache.insert(
+                    compressed_node,
+                    MD {
+                        metrics: metrics.clone(),
+                        ana: ana.clone(),
+                    },
+                );
+                Local {
+                    compressed_node,
+                    metrics,
+                    ana,
+                }
+            };
+            local
+        };
+        post.compressed_node
+    }
+}
+
+pub fn print_tree_ids(node_store: &NodeStore, id: &NodeIdentifier) {
+    nodes::print_tree_ids(
+        |id| -> _ {
+            node_store
+                .resolve(id.clone())
+                .into_compressed_node()
+                .unwrap()
+        },
+        id,
+    )
 }
 
 pub fn print_tree_structure(node_store: &NodeStore, id: &NodeIdentifier) {

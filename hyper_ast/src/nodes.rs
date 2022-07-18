@@ -5,9 +5,13 @@ use std::{
     marker::PhantomData,
 };
 
+use num::ToPrimitive;
 use string_interner::{DefaultSymbol, Symbol};
 
-use crate::{types::Type, impact::serialize::{MySerialize, Keyed}};
+use crate::{
+    impact::serialize::{Keyed, MySerialize},
+    types::Type,
+};
 
 pub type TypeIdentifier = Type;
 
@@ -15,7 +19,7 @@ type Label = Vec<u8>;
 
 pub trait RefContainer {
     type Result;
-    fn check<U: MySerialize+Keyed<usize>>(&self, rf: U) -> Self::Result;
+    fn check<U: MySerialize + Keyed<usize>>(&self, rf: U) -> Self::Result;
 }
 
 /// identifying data for a node in an HyperAST
@@ -173,14 +177,14 @@ impl<N, L: Eq> crate::types::Labeled for CompressedNode<N, L> {
 }
 
 impl<N: Eq + Clone, L> crate::types::WithChildren for CompressedNode<N, L> {
-    type ChildIdx = u8;
-    fn child_count(&self) -> u8 {
+    type ChildIdx = u16;
+    fn child_count(&self) -> Self::ChildIdx {
         match self {
             CompressedNode::Children2 {
                 children: _,
                 kind: _,
             } => 2,
-            CompressedNode::Children { children, kind: _ } => children.len() as u8,
+            CompressedNode::Children { children, kind: _ } => children.len().to_u16().unwrap(),
             _ => 0,
         }
     }
@@ -205,11 +209,19 @@ impl<N: Eq + Clone, L> crate::types::WithChildren for CompressedNode<N, L> {
         }
     }
 
-    fn get_children<'a>(&'a self) -> &'a [Self::TreeId] {
+    fn get_children<'a>(&'a self) -> &[Self::TreeId] {
         match self {
             CompressedNode::Children2 { children, kind: _ } => &*children,
             CompressedNode::Children { children, kind: _ } => &*children,
             _ => &[],
+        }
+    }
+
+    fn get_children_cpy<'a>(&'a self) -> Vec<Self::TreeId> {
+        match self {
+            CompressedNode::Children2 { children, kind: _ } => children.to_vec(),
+            CompressedNode::Children { children, kind: _ } => children.to_vec(),
+            _ => vec![],
         }
     }
 
@@ -452,6 +464,41 @@ trait DisplayTreeStruct<IdN: Clone, IdL>: Display {
             write!(f, "[{} drop scopes]", todo!())
         }
     }
+}
+pub fn print_tree_ids<
+    IdN: Debug,
+    IdL,
+    T: Borrow<CompressedNode<IdN, IdL>>,
+    F: Copy + Fn(&IdN) -> T,
+>(
+    f: F,
+    id: &IdN,
+) {
+    match f(id).borrow() {
+        CompressedNode::Type(_) => {
+            print!("[{:?}]", id);
+            // None
+        }
+        CompressedNode::Label { label: _, .. } => {
+            print!("{{{:?}}}", id);
+            // None
+        }
+        CompressedNode::Children2 { children, .. } => {
+            print!("({:?} ", id);
+            for id in children {
+                print_tree_ids(f, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Children { children, .. } => {
+            print!("({:?} ", id);
+            for id in children.iter() {
+                print_tree_ids(f, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Spaces(_) => print!("{{{:?}}}", id),
+    };
 }
 pub fn print_tree_structure<
     IdN,

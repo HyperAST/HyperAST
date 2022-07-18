@@ -2,16 +2,16 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use num_traits::{cast, one, PrimInt};
 
-use crate::{
-    matchers::{
-        decompressed_tree_store::{
-            DecompressedTreeStore, DecompressedWithParent, PostOrder, SimpleZsTree,
-        },
-        mapping_store::{DefaultMappingStore, MappingStore},
-        optimal::zs::ZsMatcher,
-        similarity_metrics,
+use crate::matchers::{
+    decompressed_tree_store::{
+        DecompressedTreeStore, DecompressedWithParent, PostOrder, SimpleZsTree,
     },
-    tree::tree::{LabelStore, NodeStore, SlicedLabel, Tree, WithHashs},
+    mapping_store::{DefaultMappingStore, MappingStore},
+    optimal::zs::ZsMatcher,
+    similarity_metrics,
+};
+use hyper_ast::types::{
+    LabelStore, NodeStore, SlicedLabel, Tree, Typed, WithHashs,
 };
 
 use super::bottom_up_matcher::BottomUpMatcher;
@@ -19,17 +19,18 @@ use super::bottom_up_matcher::BottomUpMatcher;
 /// todo PostOrder might not be necessary
 pub struct GreedyBottomUpMatcher<
     'a,
-    D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD> + PostOrder<T::TreeId, IdD>,
+    Dsrc,
+    Ddst,
     IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
     T: 'a + Tree + WithHashs,
-    S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+    S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
     LS: LabelStore<SlicedLabel, I = T::Label>,
     const SIZE_THRESHOLD: usize,  // = 1000,
     const SIM_THRESHOLD_NUM: u64, // = 1,
     const SIM_THRESHOLD_DEN: u64, // = 2,
 > {
     label_store: &'a LS,
-    internal: BottomUpMatcher<'a, D, IdD, T, S>,
+    internal: BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S>,
     // compressed_node_store: &'a S,
     // pub(crate) src_arena: D,
     // pub(crate) dst_arena: D,
@@ -38,21 +39,26 @@ pub struct GreedyBottomUpMatcher<
 
 impl<
         'a,
-        D: 'a
-            + DecompressedTreeStore<T::TreeId, IdD>
-            + DecompressedWithParent<IdD>
-            + PostOrder<T::TreeId, IdD>,
+        Dsrc: 'a
+            + DecompressedTreeStore<'a, T::TreeId, IdD>
+            + DecompressedWithParent<'a, T::TreeId, IdD>
+            + PostOrder<'a, T::TreeId, IdD>,
+        Ddst: 'a
+            + DecompressedTreeStore<'a, T::TreeId, IdD>
+            + DecompressedWithParent<'a, T::TreeId, IdD>
+            + PostOrder<'a, T::TreeId, IdD>,
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+        S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
         LS: LabelStore<SlicedLabel, I = T::Label>,
         const SIZE_THRESHOLD: usize,  // = 1000,
         const SIM_THRESHOLD_NUM: u64, // = 1,
         const SIM_THRESHOLD_DEN: u64, // = 2,
-    > Into<BottomUpMatcher<'a, D, IdD, T, S>>
+    > Into<BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S>>
     for GreedyBottomUpMatcher<
         'a,
-        D,
+        Dsrc,
+        Ddst,
         IdD,
         T,
         S,
@@ -62,20 +68,24 @@ impl<
         SIM_THRESHOLD_DEN,
     >
 {
-    fn into(self) -> BottomUpMatcher<'a, D, IdD, T, S> {
+    fn into(self) -> BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S> {
         self.internal
     }
 }
 
 impl<
         'a,
-        D: 'a
-            + DecompressedTreeStore<T::TreeId, IdD>
-            + DecompressedWithParent<IdD>
-            + PostOrder<T::TreeId, IdD>,
+        Dsrc: 'a
+            + DecompressedTreeStore<'a, T::TreeId, IdD>
+            + DecompressedWithParent<'a, T::TreeId, IdD>
+            + PostOrder<'a, T::TreeId, IdD>,
+        Ddst: 'a
+            + DecompressedTreeStore<'a, T::TreeId, IdD>
+            + DecompressedWithParent<'a, T::TreeId, IdD>
+            + PostOrder<'a, T::TreeId, IdD>,
         IdD: 'a + PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+        S, //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
         LS: 'a + LabelStore<SlicedLabel, I = T::Label>,
         const SIZE_THRESHOLD: usize, // = 1000,
         // Integer.parseInt(System.getProperty("gt.bum.szt", "1000"));
@@ -85,7 +95,8 @@ impl<
     >
     GreedyBottomUpMatcher<
         'a,
-        D,
+        Dsrc,
+        Ddst,
         IdD,
         T,
         S,
@@ -95,17 +106,23 @@ impl<
         SIM_THRESHOLD_DEN,
     >
 where
-    T::TreeId: 'a + PrimInt,
+    S: 'a + NodeStore<T::TreeId>,
+    // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
+    //     + WithHashs<HK = T::HK, HP = T::HP>,
+    S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
+        + WithHashs<HK = T::HK, HP = T::HP>,
+    T::TreeId: 'a + Clone,
 {
     pub fn new(
         node_store: &'a S,
         label_store: &'a LS,
-        src_arena: D,
-        dst_arena: D,
+        src_arena: Dsrc,
+        dst_arena: Ddst,
         mappings: DefaultMappingStore<IdD>,
     ) -> GreedyBottomUpMatcher<
         'a,
-        D,
+        Dsrc,
+        Ddst,
         IdD,
         T,
         S,
@@ -134,7 +151,8 @@ where
         mappings: DefaultMappingStore<IdD>,
     ) -> GreedyBottomUpMatcher<
         'a,
-        D,
+        Dsrc,
+        Ddst,
         IdD,
         T,
         S,
@@ -146,8 +164,8 @@ where
         let mut matcher = Self::new(
             compressed_node_store,
             label_store,
-            D::new(compressed_node_store, src),
-            D::new(compressed_node_store, dst),
+            Dsrc::new(compressed_node_store, src),
+            Ddst::new(compressed_node_store, dst),
             mappings,
         );
         matcher.internal.mappings.topit(
@@ -167,8 +185,7 @@ where
         // todo caution about, it is in postorder and it depends on decomp store
         // -1 as root is handled after forloop
         for i in 0..self.internal.src_arena.len() - 1 {
-            let a: IdD = num_traits::cast(i).unwrap(); //unsafe as it depends on decompressed store
-            println!("{}", self.src_has_children(a));
+            let a: IdD = num_traits::cast(i).unwrap(); // might be problematic as it depends on decompressed store?
             if !(self.internal.mappings.is_src(&a) || !self.src_has_children(a)) {
                 let candidates = self.internal.getDstCandidates(&a);
                 let mut found = false;
@@ -206,6 +223,8 @@ where
             self.internal.src_arena.root(),
             self.internal.dst_arena.root(),
         );
+        dbg!(6666666);
+        dbg!(&self.internal.mappings);
         self.last_chance_match_zs::<IdD>(
             self.internal.src_arena.root(),
             self.internal.dst_arena.root(),
@@ -245,6 +264,8 @@ where
                     dst,
                     mappings,
                 );
+                dbg!(333);
+                dbg!(&matcher.mappings);
 
                 matcher.mappings
             };
