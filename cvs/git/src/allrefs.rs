@@ -1,11 +1,11 @@
 use std::{
-    borrow::Borrow, collections::HashSet, fmt::Display, io::Write, mem::swap, path::Path,
+    borrow::Borrow, fmt::Display, io::Write, path::Path,
     time::Instant,
 };
 
 use hyper_ast::{
     position::{
-        ExploreStructuralPositions, Position, Scout, SpHandle, StructuralPosition,
+        Position, Scout, SpHandle, StructuralPosition,
         StructuralPositionStore, TreePath,
     },
     store::{

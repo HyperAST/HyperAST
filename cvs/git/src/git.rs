@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use git2::{ObjectType, Oid, RemoteCallbacks, Repository, Revwalk, TreeEntry};
+use git2::{Oid, RemoteCallbacks, Repository, Revwalk, TreeEntry};
 use hyper_ast::position::Position;
 
 pub fn all_commits_between<'a>(
@@ -37,9 +37,9 @@ pub fn retrieve_commit<'a>(
     s: &str,
 ) -> Result<git2::Commit<'a>, git2::Error> {
     if let Ok(c) = repository.find_reference(s) {
-        if let Ok (c) = c.peel_to_commit() {
+        if let Ok(c) = c.peel_to_commit() {
             Ok(c)
-        }else {
+        } else {
             repository.find_commit(Oid::from_str(s)?)
         }
     } else {
@@ -170,16 +170,16 @@ pub fn up_to_date_repo(path: &Path, mut fo: git2::FetchOptions, url: Url) -> Rep
     }
 }
 
-pub(crate) enum BasicGitObjects {
+pub(crate) enum BasicGitObject {
     Blob(Oid, Vec<u8>),
     Tree(Oid, Vec<u8>),
 }
 
 // impl<'a> From<TreeEntry<'a>> for BasicGitObjects {
 //     fn from(x: TreeEntry<'a>) -> Self {
-//         if x.kind().unwrap().eq(&ObjectType::Tree) {
+//         if x.kind().unwrap().eq(&git2::ObjectType::Tree) {
 //             Self::Tree(x.id(), x.name_bytes().to_owned())
-//         } else if x.kind().unwrap().eq(&ObjectType::Blob) {
+//         } else if x.kind().unwrap().eq(&git2::ObjectType::Blob) {
 //             Self::Blob(x.id(), x.name_bytes().to_owned())
 //         } else {
 //             panic!("{:?} {:?}",x.kind(), x.name_bytes())
@@ -187,13 +187,13 @@ pub(crate) enum BasicGitObjects {
 //     }
 // }
 
-impl<'a> TryFrom<TreeEntry<'a>> for BasicGitObjects {
+impl<'a> TryFrom<TreeEntry<'a>> for BasicGitObject {
     type Error = TreeEntry<'a>;
 
     fn try_from(x: TreeEntry<'a>) -> Result<Self, Self::Error> {
-        if x.kind().unwrap().eq(&ObjectType::Tree) {
+        if x.kind().unwrap().eq(&git2::ObjectType::Tree) {
             Ok(Self::Tree(x.id(), x.name_bytes().to_owned()))
-        } else if x.kind().unwrap().eq(&ObjectType::Blob) {
+        } else if x.kind().unwrap().eq(&git2::ObjectType::Blob) {
             Ok(Self::Blob(x.id(), x.name_bytes().to_owned()))
         } else {
             Err(x)
@@ -201,11 +201,75 @@ impl<'a> TryFrom<TreeEntry<'a>> for BasicGitObjects {
     }
 }
 
-impl<'a> BasicGitObjects {
-    pub fn name(&self) -> &[u8] {
+impl NamedObject for BasicGitObject {
+    fn name(&self) -> &[u8] {
         match self {
-            BasicGitObjects::Blob(_, n) => &n,
-            BasicGitObjects::Tree(_, n) => &n,
+            BasicGitObject::Blob(_, n) => &n,
+            BasicGitObject::Tree(_, n) => &n,
+        }
+    }
+}
+impl TypedObject for BasicGitObject {
+    fn r#type(&self) -> ObjectType {
+        match self {
+            BasicGitObject::Blob(..) => ObjectType::File,
+            BasicGitObject::Tree(..) => ObjectType::Dir,
+        }
+    }
+}
+impl UniqueObject for BasicGitObject {
+    type Id = Oid;
+    fn id(&self) -> &Oid {
+        match self {
+            BasicGitObject::Tree { 0: id, .. } => id,
+            BasicGitObject::Blob { 0: id, .. } => id,
+        }
+    }
+}
+
+pub trait NamedObject {
+    fn name(&self) -> &[u8];
+}
+
+pub enum ObjectType {
+    File,
+    Dir,
+}
+
+pub trait TypedObject {
+    fn r#type(&self) -> ObjectType;
+}
+pub trait UniqueObject {
+    type Id: Clone;
+    fn id(&self) -> &Self::Id;
+}
+
+enum File<'a, 'b, Id> {
+    File(Id, Vec<u8>, &'a [u8]),
+    Dir(Id, Vec<u8>, &'b [Id]),
+}
+impl<'a, 'b, Id> NamedObject for File<'a, 'b, Id> {
+    fn name(&self) -> &[u8] {
+        match self {
+            File::Dir { 1: name, .. } => name,
+            File::File { 1: name, .. } => name,
+        }
+    }
+}
+impl<'a, 'b, Id: Clone> UniqueObject for File<'a, 'b, Id> {
+    type Id = Id;
+    fn id(&self) -> &Id {
+        match self {
+            File::Dir { 0: id, .. } => id,
+            File::File { 0: id, .. } => id,
+        }
+    }
+}
+impl<'a, 'b, Id> TypedObject for File<'a, 'b, Id> {
+    fn r#type(&self) -> ObjectType {
+        match self {
+            File::Dir(..) => ObjectType::Dir,
+            File::File(..) => ObjectType::File,
         }
     }
 }
