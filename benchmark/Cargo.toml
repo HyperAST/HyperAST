@@ -34,3 +34,10 @@ jemallocator = "0.3.2"
 [[bin]]
 name = "reserializing"
 path = "src/reserializing.rs"
+
+# [profile.release]
+## release optimizations
+# lto = "fat"
+# codegen-units = 1
+# rustflags = ["-C target-cpu=native"]
+# panic = "abort"
