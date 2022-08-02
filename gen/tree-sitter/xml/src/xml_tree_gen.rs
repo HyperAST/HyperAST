@@ -200,14 +200,18 @@ impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
         acc: <Self as TreeGen>::Acc,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let node_store = &mut self.stores.node_store;
-        let spacing = try_get_spacing(
+        let spacing = get_spacing(
             acc.padding_start,
             acc.start_byte,
             text,
             parent.indentation(),
         );
         if let Some(spacing) = spacing {
-            parent.push(Self::make_spacing(spacing, node_store, global));
+            parent.push(FullNode {
+                global: global.into(),
+                local: self.make_spacing(spacing),
+            });
+            // parent.push(Self::make_spacing(spacing, node_store, global));
         }
         let label = if acc.labeled {
             std::str::from_utf8(&text[acc.start_byte..acc.end_byte])
@@ -493,24 +497,32 @@ impl<'a> TreeGen for XmlTreeGen<'a> {
 
 impl<'a> XmlTreeGen<'a> {
     fn make_spacing(
-        spacing: Vec<Space>,
-        node_store: &mut NodeStore,
-        global: &mut <Self as TreeGen>::Global,
-    ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
-        let hsyntax = utils::clamp_u64_to_u32(&utils::hash(&spacing));
+        &mut self,
+        spacing: Vec<u8>, //Space>,
+                          // node_store: &mut NodeStore,
+                          // global: &mut <Self as TreeGen>::Global,
+    ) -> Local {
+        // <<Self as TreeGen>::Acc as Accumulator>::Node {
+        let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
+        let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
+        let hbuilder: hashed::Builder<SyntaxNodeHashs<u32>> =
+            hashed::Builder::new(Default::default(), &Type::Spaces, &spacing, 1);
+        let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
-        let spaces = spacing.into_boxed_slice();
-
         let eq = |x: EntryRef| {
-            let t = x.get_component::<Box<[Space]>>().ok();
-            if t != Some(&spaces) {
+            let t = x.get_component::<Type>();
+            if t != Ok(&Type::Spaces) {
+                return false;
+            }
+            let l = x.get_component::<LabelIdentifier>();
+            if l != Ok(&spacing_id) {
                 return false;
             }
             true
         };
 
-        let insertion = node_store.prepare_insertion(&hashable, eq);
+        let insertion = self.stores.node_store.prepare_insertion(&hashable, eq);
 
         let hashs = SyntaxNodeHashs {
             structt: 0,
@@ -522,22 +534,21 @@ impl<'a> XmlTreeGen<'a> {
             id
         } else {
             let vacant = insertion.vacant();
-            NodeStore::insert_after_prepare(vacant, (Type::Spaces, spaces, hashs, BloomSize::None))
+            NodeStore::insert_after_prepare(
+                vacant,
+                (Type::Spaces, spacing_id, hashs, BloomSize::None),
+            )
         };
 
-        let full_spaces_node = FullNode {
-            global: global.into(),
-            local: Local {
-                compressed_node,
-                metrics: SubTreeMetrics {
-                    size: 1,
-                    height: 1,
-                    hashs,
-                },
-                ana: Default::default(),
+        Local {
+            compressed_node,
+            metrics: SubTreeMetrics {
+                size: 1,
+                height: 1,
+                hashs,
             },
-        };
-        full_spaces_node
+            ana: Default::default(),
+        }
     }
 
     pub fn new(stores: &mut SimpleStores) -> XmlTreeGen {
@@ -569,7 +580,7 @@ impl<'a> XmlTreeGen<'a> {
         let mut xx = TTreeCursor(cursor);
         let mut global = Global::from(TextedGlobalData::new(Default::default(), text));
 
-        let spacing = try_get_spacing(
+        let spacing = get_spacing(
             init.padding_start,
             init.start_byte,
             text,
@@ -577,14 +588,12 @@ impl<'a> XmlTreeGen<'a> {
         );
         if let Some(spacing) = spacing {
             global.down();
-            init.push(Self::make_spacing(
-                spacing,
-                &mut self.stores.node_store,
-                &mut global,
-            ));
+            init.push(FullNode {
+                global: global.into(),
+                local: self.make_spacing(spacing),
+            });
             global.right();
         }
-        let label = Some(std::str::from_utf8(name).unwrap().to_owned());
         let mut stack = vec![init];
 
         self.gen(text, &mut stack, &mut xx, &mut global);
@@ -592,7 +601,7 @@ impl<'a> XmlTreeGen<'a> {
         let mut acc = stack.pop().unwrap();
 
         if has_final_space(&0, global.sum_byte_length(), text) {
-            let spacing = try_get_spacing(
+            let spacing = get_spacing(
                 global.sum_byte_length(),
                 text.len(),
                 text,
@@ -600,14 +609,13 @@ impl<'a> XmlTreeGen<'a> {
             );
             if let Some(spacing) = spacing {
                 global.right();
-                acc.push(Self::make_spacing(
-                    spacing,
-                    &mut self.stores.node_store,
-                    &mut global,
-                ))
+                acc.push(FullNode {
+                    global: global.into(),
+                    local: self.make_spacing(spacing),
+                });
             }
         }
-
+        let label = Some(std::str::from_utf8(name).unwrap().to_owned());
         let full_node = self.make(&mut global, acc, label);
         full_node
     }

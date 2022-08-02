@@ -399,10 +399,14 @@ pub fn get_spacing(
     pos: usize,
     text: &[u8],
     parent_indentation: &Spaces,
-) -> Option<Spaces> {
+) -> Option<Vec<u8>> {
     if padding_start != pos {
         let spaces = &text[padding_start..pos];
-        let spaces = Space::format_indentation(spaces);
+        // let spaces = Space::format_indentation(spaces);
+        spaces
+            .iter()
+            .for_each(|x| assert!(*x == b' ' || *x == b'\n' || *x == b'\t' || *x == b'\r'));
+        let spaces = spaces.to_vec();
         // let spaces = Space::replace_indentation(parent_indentation, &spaces);
         // TODO put back the relativisation later, can pose issues when computing len of a subtree (contextually if we make the optimisation)
         Some(spaces)
@@ -416,11 +420,21 @@ pub fn try_get_spacing(
     pos: usize,
     text: &[u8],
     parent_indentation: &Spaces,
-) -> Option<Spaces> {
+) -> Option<Vec<u8>> {
+// ) -> Option<Spaces> {
     if padding_start != pos {
         let spaces = &text[padding_start..pos];
         // println!("{:?}",std::str::from_utf8(spaces).unwrap());
-        let spaces = Space::try_format_indentation(spaces)?;
+        if spaces
+            .iter()
+            .find(|&x| *x != b' ' && *x != b'\n' && *x != b'\t' && *x != b'\r')
+            .is_some()
+        {
+            return None;
+        }
+        let spaces = spaces.to_vec();
+
+        // let spaces = Space::try_format_indentation(spaces)?;
         // let spaces = Space::replace_indentation(parent_indentation, &spaces);
         // TODO put back the relativisation later, can pose issues when computing len of a subtree (contextually if we make the optimisation)
         Some(spaces)

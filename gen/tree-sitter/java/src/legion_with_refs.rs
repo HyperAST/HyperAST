@@ -5,7 +5,7 @@ use std::{
     hash::Hash,
     io::stdout,
     ops::Deref,
-    vec,
+    vec, any::Any,
 };
 
 use hyper_ast::{
@@ -301,7 +301,7 @@ impl<'stores, 'cache> ZippedTreeGen for JavaTreeGen<'stores, 'cache> {
             parent.indentation(),
         );
         if let Some(spacing) = spacing {
-            parent.push(Self::make_spacing(spacing, node_store, global));
+            parent.push(FullNode {global: global.into(), local:self.make_spacing(spacing)});
         }
         let label = if acc.labeled {
             std::str::from_utf8(&text[acc.start_byte..acc.end_byte])
@@ -315,51 +315,62 @@ impl<'stores, 'cache> ZippedTreeGen for JavaTreeGen<'stores, 'cache> {
 }
 impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
     fn make_spacing(
-        spacing: Vec<Space>,
-        node_store: &mut NodeStore,
-        global: &mut <Self as TreeGen>::Global,
-    ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
-        let hsyntax = utils::clamp_u64_to_u32(&utils::hash(&spacing));
+        &mut self,
+        spacing: Vec<u8>, //Space>,
+        // node_store: &mut NodeStore,
+        // global: &mut <Self as TreeGen>::Global,
+    ) -> Local {
+    // ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
+        let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
+        let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
+        // let hsyntax = utils::clamp_u64_to_u32(&utils::hash(&spacing));
+        let hbuilder: hashed::Builder<SyntaxNodeHashs<u32>> = hashed::Builder::new(Default::default(), &Type::Spaces, &spacing, 1);
+        let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
-        let spaces = spacing.into_boxed_slice();
-
         let eq = |x: EntryRef| {
-            let t = x.get_component::<Box<[Space]>>().ok();
-            if t != Some(&spaces) {
+            // let t = x.get_component::<Box<[Space]>>().ok();
+            let t = x.get_component::<Type>();
+            if t != Ok(&Type::Spaces) {
+                return false;
+            }
+            let l = x.get_component::<LabelIdentifier>();
+            if l != Ok(&spacing_id) {
                 return false;
             }
             true
         };
 
-        let insertion = node_store.prepare_insertion(&hashable, eq);
+        let insertion = self.stores.node_store.prepare_insertion(&hashable, eq);
 
-        let hashs = SyntaxNodeHashs {
-            structt: 0,
-            label: 0,
-            syntax: hsyntax,
-        };
+        let hashs = hbuilder.build();
+        // let hashs = SyntaxNodeHashs {
+        //     structt: 0,
+        //     label: 0,
+        //     syntax: hsyntax,
+        // };
 
         let compressed_node = if let Some(id) = insertion.occupied_id() {
             id
         } else {
             let vacant = insertion.vacant();
-            NodeStore::insert_after_prepare(vacant, (Type::Spaces, spaces, hashs, BloomSize::None))
+            NodeStore::insert_after_prepare(vacant, (Type::Spaces, spacing_id, hashs, BloomSize::None))
         };
-        let full_spaces_node = FullNode {
-            global: global.into(),
-            local: Local {
-                compressed_node,
-                metrics: SubTreeMetrics {
-                    size: 1,
-                    height: 1,
-                    hashs,
-                },
-                ana: Default::default(),
-                mcc: Mcc::new(&Type::Spaces),
+        // let full_spaces_node = FullNode {
+        //     global: global.into(),
+        //     local: ,
+        // };
+        // full_spaces_node
+        Local {
+            compressed_node,
+            metrics: SubTreeMetrics {
+                size: 1,
+                height: 1,
+                hashs,
             },
-        };
-        full_spaces_node
+            ana: Default::default(),
+            mcc: Mcc::new(&Type::Spaces),
+        }
     }
 
     pub fn new<'a, 'b>(
@@ -404,11 +415,11 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
         );
         if let Some(spacing) = spacing {
             global.down();
-            init.push(Self::make_spacing(
-                spacing,
-                &mut self.stores.node_store,
-                &mut global,
-            ));
+            init.push(FullNode {global: global.into(), local:self.make_spacing(spacing)});
+            // init.push(self.make_spacing(
+            //     spacing,
+            //     &mut global,
+            // ));
             global.right();
         }
         let mut stack = vec![init];
@@ -426,11 +437,12 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
             );
             if let Some(spacing) = spacing {
                 global.right();
-                acc.push(Self::make_spacing(
-                    spacing,
-                    &mut self.stores.node_store,
-                    &mut global,
-                ))
+                acc.push(FullNode {global: global.into(), local:self.make_spacing(spacing)});
+                // acc.push(self.make_spacing(
+                //     spacing,
+                //     // &mut self.stores.node_store,
+                //     &mut global,
+                // ))
             }
         }
         let label = Some(std::str::from_utf8(name).unwrap().to_owned());
@@ -893,9 +905,11 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
         cs: Vec<<HashedNode as types::Stored>::TreeId>,
     ) -> <HashedNode as types::Stored>::TreeId {
         if t == Type::Spaces {
-            // TODO improve ergonomics
-            // should ge spaces as label then reconstruct spaces and insert as done with every other nodes
-            // WARN it wont work for new spaces (l parameter is not used, and label do not return spacing)
+        //     // TODO improve ergonomics
+        //     // should ge spaces as label then reconstruct spaces and insert as done with every other nodes
+        //     // WARN it wont work for new spaces (l parameter is not used, and label do not return spacing)
+            let spacing = self.stores.label_store.resolve(&l.unwrap()).as_bytes().to_vec();
+            self.make_spacing(spacing);
             return i;
         }
         let mut acc: Acc = {
@@ -917,8 +931,8 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
         };
         for c in cs {
             let local = {
-                print_tree_syntax(&self.stores.node_store, &self.stores.label_store, &c);
-                println!();
+                // print_tree_syntax(&self.stores.node_store, &self.stores.label_store, &c);
+                // println!();
                 let md = self.md_cache.get(&c);
                 let (ana, metrics, mcc) = if let Some(md) = md {
                     let ana = md.ana.clone();
@@ -1068,6 +1082,20 @@ pub fn print_tree_labels(node_store: &NodeStore, label_store: &LabelStore, id: &
 
 pub fn print_tree_syntax(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
     nodes::print_tree_syntax(
+        |id| -> _ {
+            node_store
+                .resolve(id.clone())
+                .into_compressed_node()
+                .unwrap()
+        },
+        |id| -> _ { label_store.resolve(id).to_owned() },
+        id,
+        &mut Into::<IoOut<_>>::into(stdout()),
+    )
+}
+
+pub fn print_tree_syntax_with_ids(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
+    nodes::print_tree_syntax_with_ids(
         |id| -> _ {
             node_store
                 .resolve(id.clone())

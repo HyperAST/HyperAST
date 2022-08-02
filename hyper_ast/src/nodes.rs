@@ -49,7 +49,7 @@ pub enum CompressedNode<NodeId, LabelId> {
     Label { label: LabelId, kind: Type },
     Children2 { children: [NodeId; 2], kind: Type },
     Children { children: Box<[NodeId]>, kind: Type },
-    Spaces(Box<[Space]>),
+    Spaces(LabelId), //Box<[Space]>),
 }
 
 pub(crate) enum SimpNode<NodeId, LabelId> {
@@ -312,6 +312,18 @@ impl Space {
         }
     }
 }
+
+impl Space {
+    pub(crate) fn to_string(&self) -> &str {
+        match self {
+            Space::Space => " ",
+            Space::NewLine => "\n",
+            Space::CariageReturn => "\r",
+            Space::Tabulation => "\t",
+            Space::ParentIndentation => "0",
+        }
+    }
+}
 // impl Deref for Spaces {
 
 // }
@@ -341,7 +353,8 @@ impl Space {
                 CR => Space::CariageReturn,
                 x => {
                     log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-                    panic!("{} {:?}", x as u8, spaces)
+                    println!("{:?}", std::str::from_utf8(spaces));
+                    panic!("{:?}", spaces)
                 }
             })
             .collect()
@@ -639,9 +652,66 @@ pub fn print_tree_syntax<
             print!(")");
         }
         CompressedNode::Spaces(s) => {
+            let s = &g(s);
             print!("(_ ");
             let a = &*s;
-            a.iter().for_each(|a| print!("{:?}", a));
+            // print!("{}",s);
+            print!("{:?}", Space::format_indentation(s.as_bytes()));
+            // a.iter().for_each(|a| print!("{:?}", a));
+            print!(")");
+        }
+    };
+}
+
+
+pub fn print_tree_syntax_with_ids<
+    IdN:Debug,
+    IdL,
+    T: Borrow<CompressedNode<IdN, IdL>>,
+    F: Copy + Fn(&IdN) -> T,
+    G: Copy + Fn(&IdL) -> String,
+    W: std::fmt::Write,
+>(
+    f: F,
+    g: G,
+    id: &IdN,
+    out: &mut W,
+) {
+    match f(id).borrow() {
+        CompressedNode::Type(kind) => {
+            print!("{:?}{}", id, kind.to_string());
+            // None
+        }
+        CompressedNode::Label { kind, label } => {
+            let s = &g(label);
+            if s.len() > 20 {
+                print!("({:?}{}='{}...')", id, kind.to_string(), &s[..20]);
+            } else {
+                print!("({:?}{}='{}')", id, kind.to_string(), s);
+            }
+            // None
+        }
+        CompressedNode::Children2 { kind, children } => {
+            print!("({:?}{} ", id, kind.to_string());
+            for id in children {
+                print_tree_syntax_with_ids(f, g, &id, out);
+            }
+            print!(")");
+        }
+        CompressedNode::Children { kind, children } => {
+            print!("({:?}{} ", id,  kind.to_string());
+            for id in children.iter() {
+                print_tree_syntax_with_ids(f, g, &id, out);
+            }
+            print!(")");
+        }
+        CompressedNode::Spaces(s) => {
+            let s = &g(s);
+            print!("({:?}_ ",id);
+            // let a = &*s;
+            // print!("{}",s);
+            print!("{:?}", Space::format_indentation(s.as_bytes()));
+            // a.iter().for_each(|a| print!("{:?}", a));
             print!(")");
         }
     };
@@ -689,11 +759,16 @@ pub fn serialize<
             None
         }
         CompressedNode::Spaces(s) => {
-            let a = &*s;
-            let mut b = String::new();
-            a.iter()
-                .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
-            out.write_str(&b).unwrap();
+            let s = g(s);
+            // let a = &*s;
+            let mut b:String = //s; //String::new();
+            Space::format_indentation(s.as_bytes())
+                .iter()
+                .map(|x| x.to_string())
+                .collect();
+            // a.iter()
+            //     .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
+            // out.write_str(&b).unwrap();
             Some(if b.contains("\n") {
                 b
             } else {

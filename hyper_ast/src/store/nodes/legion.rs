@@ -216,10 +216,14 @@ impl<'a> HashedNodeRef<'a> {
     pub fn into_compressed_node(
         &self,
     ) -> Result<CompressedNode<legion::Entity, DefaultLabelIdentifier>, ComponentError> {
-        if let Ok(spaces) = self.0.get_component::<Box<[Space]>>() {
+        // if let Ok(spaces) = self.0.get_component::<Box<[Space]>>() {
+        //     return Ok(CompressedNode::Spaces(spaces.clone()));
+        // }
+        let kind = self.0.get_component::<Type>()?;
+        if *kind == Type::Spaces {
+            let spaces = self.0.get_component::<DefaultLabelIdentifier>().unwrap();
             return Ok(CompressedNode::Spaces(spaces.clone()));
         }
-        let kind = self.0.get_component::<Type>()?;
         let a = self.0.get_component::<DefaultLabelIdentifier>();
         let label: Option<DefaultLabelIdentifier> = a.ok().map(|x| x.clone());
         let children = self.try_get_children().map(|x| x.to_vec());
