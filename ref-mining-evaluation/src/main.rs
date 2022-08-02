@@ -1,4 +1,5 @@
 #![feature(iter_intersperse)]
+#![feature(entry_insert)]
 
 pub mod compare;
 pub mod comparisons;
@@ -6,15 +7,13 @@ pub mod relations;
 pub mod stats;
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    fmt::Display,
-    fs::{self, File},
-    io::{self, stdout, Read, Seek, SeekFrom},
-    ops::Add,
+    collections::{BTreeMap, HashMap},
+    fs::File,
+    io::{self, Read, Seek, SeekFrom},
 };
 
 use clap::{Parser, Subcommand};
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use relations::{Info, Perfs};
 use rusted_gumtree_cvs_git::git::{fetch_repository, read_position, read_position_floating_lines};
 use serde::{Deserialize, Serialize};
@@ -24,7 +23,7 @@ use termion::color;
 use crate::{
     compare::Comparator,
     comparisons::{ComparedRanges, Comparison, Comparisons},
-    relations::{PerModule, Position, Range, Relation, Relations, RelationsWithPerfs},
+    relations::{PerModule, Position, Range, Relation, RelationsWithPerfs},
 };
 
 macro_rules! inv_reset {
@@ -266,15 +265,13 @@ fn main() {
                     });
                     match (bl_rs, t_rs) {
                         (None, None) => vec![],
-                        (None, Some(x))=> {
-                            vec![
-                                CommitStats {
-                                    construction_perfs: x.construction_perfs,
-                                    search_perfs: x.search_perfs,
-                                    info: x.info.unwrap(),
-                                    processor: "evaluation".to_string(),
-                                }
-                            ]
+                        (None, Some(x)) => {
+                            vec![CommitStats {
+                                construction_perfs: x.construction_perfs,
+                                search_perfs: x.search_perfs,
+                                info: x.info.unwrap(),
+                                processor: "evaluation".to_string(),
+                            }]
                         }
                         (Some(_), None) => vec![],
                         (Some(bl_rs), Some(t_rs)) => {
@@ -295,7 +292,7 @@ fn main() {
                                     search_perfs: t_rs.search_perfs,
                                     info: t_rs.info.unwrap(),
                                     processor: "evaluation".to_string(),
-                                }
+                                },
                             ]
                         }
                     }
