@@ -45,14 +45,7 @@ where
     pub(super) fn getDstCandidates(&self, src: &IdD) -> Vec<IdD> {
         let mut seeds = vec![];
         let s = &self.src_arena.original(src);
-        let aaa: Vec<_> = {
-            self.src_arena
-                .descendants(self.node_store, src)
-                .iter()
-                .cloned()
-                .collect()
-        };
-        for c in vec![] {
+        for c in self.src_arena.descendants(self.node_store, src) {
             if self.mappings.is_src(&c) {
                 let m = self.mappings.get_dst(&c);
                 seeds.push(m);
