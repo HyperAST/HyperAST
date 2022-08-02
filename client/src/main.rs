@@ -21,7 +21,7 @@ use hyper_gumtree::{
         mapping_store::{DefaultMappingStore, VecStore},
         optimal::zs::ZsMatcher,
     },
-    tree::tree_path::TreePath,
+    tree::tree_path::{CompressedTreePath, TreePath},
 };
 
 fn main_compress() {
@@ -137,6 +137,7 @@ fn main_compress() {
 }
 
 use hyper_ast::{
+    cyclomatic::{Mcc, MetaData},
     filter::BloomResult,
     hashed::HashedNode,
     nodes::RefContainer,
@@ -154,11 +155,11 @@ use hyper_ast::{
         SimpleStores, TypeStore,
     },
     tree_gen::ZippedTreeGen,
-    types::{Labeled, NodeStoreExt, Stored, Tree, Typed, WithChildren},
-    utils::memusage_linux, cyclomatic::{Mcc, MetaData},
+    types::{Labeled, NodeStore as _, NodeStoreExt, Stored, Tree, Type, Typed, WithChildren},
+    utils::memusage_linux,
 };
 use rusted_gumtree_gen_ts_java::legion_with_refs::{
-    print_tree_ids, print_tree_syntax, JavaTreeGen,
+    print_tree_ids, print_tree_syntax, print_tree_syntax_with_ids, JavaTreeGen,
 };
 
 // static CASE_1: &'static str = "class A{}";
@@ -250,8 +251,17 @@ fn main() {
     );
     println!();
 
-    dbg!(java_tree_gen.stores.node_store.resolve(full_node1.local.compressed_node).get_type());
-    dbg!(Mcc::retrieve(&java_tree_gen.stores.node_store.resolve(full_node1.local.compressed_node)));
+    dbg!(java_tree_gen
+        .stores
+        .node_store
+        .resolve(full_node1.local.compressed_node)
+        .get_type());
+    dbg!(Mcc::retrieve(
+        &java_tree_gen
+            .stores
+            .node_store
+            .resolve(full_node1.local.compressed_node)
+    ));
 
     let src = full_node1.local.compressed_node;
     let dst = full_node2.local.compressed_node;
@@ -278,49 +288,86 @@ fn main() {
 
             dbg!(ms);
         }
-        let mapper = GreedyBottomUpMatcher::<
+        let mapper = GreedySubtreeMatcher::<
+            CompletePostOrder<_, u16>,
+            CompletePostOrder<_, u16>,
+            _,
+            HashedNodeRef,
+            _,
+            // 2,
+        >::matchh(
+            &java_tree_gen.stores.node_store,
+            &src,
+            &dst,
+            mappings,
+        );
+        let SubtreeMatcher {
+            src_arena,
+            dst_arena,
+            mappings,
+            ..
+        } = mapper.into();
+        // let mapper = GreedyBottomUpMatcher::<
+        //     CompletePostOrder<_, u16>,
+        //     CompletePostOrder<_, u16>,
+        //     _,
+        //     HashedNodeRef,
+        //     _,
+        //     _,
+        //     1000,
+        //     1,
+        //     2,
+        // >::matchh(
+        //     &java_tree_gen.stores.node_store,
+        //     &java_tree_gen.stores.label_store,
+        //     &src,
+        //     &dst,
+        //     mappings,
+        // );
+        let mut mapper = GreedyBottomUpMatcher::<
             CompletePostOrder<_, u16>,
             CompletePostOrder<_, u16>,
             _,
             HashedNodeRef,
             _,
             _,
-            1000,
-            1,
-            1,
-        >::matchh(
+            // 1000,
+            // 1,
+            // 2,
+        >::new(
             &java_tree_gen.stores.node_store,
             &java_tree_gen.stores.label_store,
-            &src,
-            &dst,
+            src_arena,
+            dst_arena,
             mappings,
         );
+        mapper.execute();
         let BottomUpMatcher {
             src_arena,
             dst_arena,
-            mappings: ms,
+            mappings,
             ..
         } = mapper.into();
-        println!("ms={:?}", ms);
-        println!("{:?} {:?}", dst_arena.root(), dst);
-        println!("{:?}", dst_arena);
-        println!(
-            "{:?}",
-            dst_arena
-                .iter_df_post()
-                .map(|id: u16| dst_arena.original(&id))
-                .collect::<Vec<_>>()
-        );
+        println!("ms={:?}", mappings);
+        // println!("{:?} {:?}", dst_arena.root(), dst);
+        // println!("{:?}", dst_arena);
+        // println!(
+        //     "{:?}",
+        //     dst_arena
+        //         .iter_df_post()
+        //         .map(|id: u16| dst_arena.original(&id))
+        //         .collect::<Vec<_>>()
+        // );
         let dst_arena = bfs_wrapper::SD::from(&java_tree_gen.stores.node_store, &dst_arena);
-        println!("{:?} {:?}", dst_arena.root(), dst);
-        println!("{:?}", dst_arena);
-        println!(
-            "{:?}",
-            dst_arena
-                .iter_bf()
-                .map(|id| dst_arena.original(&id))
-                .collect::<Vec<_>>()
-        );
+        // println!("{:?} {:?}", dst_arena.root(), dst);
+        // println!("{:?}", dst_arena);
+        // println!(
+        //     "{:?}",
+        //     dst_arena
+        //         .iter_bf()
+        //         .map(|id| dst_arena.original(&id))
+        //         .collect::<Vec<_>>()
+        // );
         let script_gen = ScriptGenerator::<
             _,
             HashedNodeRef,
@@ -331,7 +378,7 @@ fn main() {
             &java_tree_gen.stores.node_store,
             &src_arena,
             &dst_arena,
-            &ms,
+            &mappings,
         )
         .generate();
 
@@ -352,28 +399,61 @@ fn main() {
     //     node_store: NodeStore::new(),
     // };
     // let mut md_cache = Default::default();
-    {
-        // let mut java_tree_gen = JavaTreeGen {
-        //     line_break: "\n".as_bytes().to_vec(),
-        //     stores: &mut stores,
-        //     md_cache: &mut md_cache,
-        // };
+    // let mut java_tree_gen = JavaTreeGen {
+    //     line_break: "\n".as_bytes().to_vec(),
+    //     stores: &mut stores,
+    //     md_cache: &mut md_cache,
+    // };
 
-        // println!("{:?}", actions.len());
-        let mut root = vec![src];
-        for x in actions.iter() {
-            use hyper_ast::types::LabelStore;
-            let SimpleAction { path, action } = x;
+    fn access(store: &NodeStore, r: NodeIdentifier, p: &CompressedTreePath<u16>) -> NodeIdentifier {
+        let mut x = r;
+        for p in p.iter() {
+            x = store.resolve(x).get_child(&p);
+        }
+        x
+    }
+
+    // println!("{:?}", actions.len());
+    let mut root = vec![src];
+    for x in actions.iter() {
+        use hyper_ast::types::LabelStore;
+        let SimpleAction { path, action } = x;
+        let id = access(
+            &java_tree_gen.stores.node_store,
+            if let Act::Delete {} = action {
+                src
+            } else {
+                dst
+            },
+            &path.ori,
+        );
+        if java_tree_gen.stores.node_store.resolve(id).get_type() != Type::Spaces {
             match action {
                 Act::Delete {} => {
-                    println!("del {:?}", path);
+                    print!("del {:?} ", path);
+                    let id = access(&java_tree_gen.stores.node_store, src, &path.ori);
+                    print_tree_syntax(
+                        &java_tree_gen.stores.node_store,
+                        &java_tree_gen.stores.label_store,
+                        &id,
+                    );
+                    println!();
                 }
                 Act::Update { new } => println!(
                     "upd {:?} {:?}",
                     java_tree_gen.stores.label_store.resolve(new),
                     path
                 ),
-                Act::Move { from } => println!("mov {:?} {:?}", from, path),
+                Act::Move { from } => {
+                    print!("mov {:?} {:?}", from, path);
+                    let id = access(&java_tree_gen.stores.node_store, src, &from.ori);
+                    print_tree_syntax(
+                        &java_tree_gen.stores.node_store,
+                        &java_tree_gen.stores.label_store,
+                        &id,
+                    );
+                    println!();
+                }
                 Act::MovUpd { from, new } => {
                     println!(
                         "mou {:?} {:?} {:?}",
@@ -392,26 +472,36 @@ fn main() {
                     println!();
                 }
             }
-            // java_tree_gen2.apply_action(x, &mut root);
-            apply_action::<HashedNode, JavaTreeGen<'_, '_>>(x, &mut root, &mut java_tree_gen);
-            // java_tree_gen2.build_then_insert(todo!(), todo!(), todo!());
         }
-        let then = root; //ActionsVec::apply_actions(actions.iter(), *src, &mut node_store);
-
-        print_tree_syntax(
-            &java_tree_gen.stores.node_store,
-            &java_tree_gen.stores.label_store,
-            &dst,
-        );
-        println!();
-        print_tree_syntax(
-            &java_tree_gen.stores.node_store,
-            &java_tree_gen.stores.label_store,
-            then.last().unwrap(),
-        );
-        println!();
-        assert_eq!(*then.last().unwrap(), dst);
+        // java_tree_gen2.apply_action(x, &mut root);
+        apply_action::<HashedNode, JavaTreeGen<'_, '_>>(x, &mut root, &mut java_tree_gen);
+        // java_tree_gen2.build_then_insert(todo!(), todo!(), todo!());
     }
+    let then = root; //ActionsVec::apply_actions(actions.iter(), *src, &mut node_store);
+
+    print_tree_syntax_with_ids(
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
+        &dst,
+    );
+    println!();
+    print_tree_syntax_with_ids(
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
+        then.last().unwrap(),
+    );
+    println!();
+    // print_tree_ids(
+    //     &java_tree_gen.stores.node_store,
+    //     &full_node1.local.compressed_node,
+    // );
+    // println!();
+    // print_tree_ids(
+    //     &java_tree_gen.stores.node_store,
+    //     &full_node2.local.compressed_node,
+    // );
+    // println!();
+    assert_eq!(*then.last().unwrap(), dst);
 
     // println!();
     // print_tree_syntax(
@@ -541,34 +631,6 @@ fn main() {
     //     // stdout().flush().unwrap();
 }
 
-static CASE_BIG1: &'static str = r#"/***/
+static CASE_BIG1: &'static str = r#"class A{class C{}class B{{while(1){if(1){}else{}};}}}class D{class E{}class F{{while(2){if(2){}else{}};}}}"#;
 
-package fr.inria.controlflow;
-
-import org.junit.Test;
-import spoon.processing.AbstractProcessor;
-import spoon.processing.ProcessingManager;
-import spoon.reflect.code.CtIf;
-import spoon.reflect.factory.Factory;
-
-import static junit.framework.TestCase.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-class A{class B{{while(1){if(1){}else{}};}}}"#;
-
-static CASE_BIG2: &'static str = r#"/***/
-
-package fr.inria.controlflow;
-
-import org.junit.Test;
-import spoon.processing.AbstractProcessor;
-import spoon.processing.ProcessingManager;
-import spoon.reflect.code.CtIf;
-import bbbbbbbbbbbbbbbbbb.CtMethod;
-import spoon.reflect.factory.Factory;
-import aaaaaaaaaaaaaaaaaa.QueueProcessingManager;
-
-import static junit.framework.TestCase.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-class A{}class B{{while(1){};}}"#;
+static CASE_BIG2: &'static str = r#"class A{class C{}}class B{{while(1){if(1){}else{}};}}class D{class E{}}class F{{while(2){if(2){}else{}};}}"#;
