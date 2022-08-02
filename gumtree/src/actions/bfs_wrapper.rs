@@ -62,15 +62,15 @@ impl<'a, IdC, IdD: PrimInt, D: PostOrder<'a, IdC, IdD>> SD<'a, IdC, IdD, D> {
 
         while map.len() < x.len() {
             let curr = &map[i];
-            eprintln!("curr={:?}", curr.to_usize().unwrap());
+            // eprintln!("curr={:?}", curr.to_usize().unwrap());
             let cs = x.children(s, curr);
             // if cs.is_empty() {
             //     fc.push(cast(map.len()).unwrap());
             // }
-            eprintln!(
-                "{:?}",
-                cs.iter().map(|x| x.to_usize().unwrap()).collect::<Vec<_>>()
-            );
+            // eprintln!(
+            //     "{:?}",
+            //     cs.iter().map(|x| x.to_usize().unwrap()).collect::<Vec<_>>()
+            // );
             rev[cast::<_, usize>(*curr).unwrap()] = cast(i).unwrap();
             map.extend(cs);
             i += 1;

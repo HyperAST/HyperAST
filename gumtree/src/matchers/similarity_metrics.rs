@@ -44,18 +44,18 @@ fn number_of_common_descendants<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
     dst: &[Id],
     mappings: &Store,
 ) -> u32 {
-    let min: usize = cast(dst[0]).unwrap();
-    let max: usize = cast::<_, usize>(dst[dst.len() - 1]).unwrap() + 1;
+    let min = dst[0].to_usize().unwrap();
+    let max = dst[dst.len() - 1].to_usize().unwrap() + 1;
     let mut a = bitvec::bitvec![0;max-min];
     dst.iter()
-        .for_each(|x| a.set(cast::<Id, usize>(*x).unwrap() - min, true));
+        .for_each(|x| a.set(x.to_usize().unwrap() - min, true));
     let dst_descendants: bitvec::boxed::BitBox = a.into_boxed_bitslice();
     let mut common = 0;
 
     for t in src {
         if mappings.is_src(t) {
-            let m = mappings.get_dst(t);
-            if dst_descendants[cast::<Id, usize>(m).unwrap() - min] {
+            let m = mappings.get_dst(t).to_usize().unwrap();
+            if m-min < dst_descendants.len() && dst_descendants[m - min] {
                 common += 1;
             }
         }

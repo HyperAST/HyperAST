@@ -93,7 +93,7 @@ where
             let i = cast(i).unwrap();
             let a: IdD = num_traits::cast(i).unwrap();
             if !(self.internal.mappings.is_src(&a) || !self.internal.src_arena.has_children(&i)) {
-                let candidates = self.internal.getDstCandidates(&a);
+                let candidates = self.internal.get_dst_candidates(&a);
                 let mut found = false;
                 let mut best = zero();
                 let mut max: f64 = -1.;

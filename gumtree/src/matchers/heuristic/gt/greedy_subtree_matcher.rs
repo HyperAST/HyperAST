@@ -10,19 +10,17 @@ use crate::matchers::{
     similarity_metrics,
 };
 use bitvec::order::Lsb0;
-use hyper_ast::types::{
-    HashKind, Labeled, NodeStore, Tree, Typed, WithChildren, WithHashs,
-};
+use hyper_ast::types::{HashKind, Labeled, NodeStore, Tree, Typed, WithChildren, WithHashs};
 use num_traits::{cast, one, zero, PrimInt};
 
 pub struct GreedySubtreeMatcher<
     'a,
     Dsrc,
     Ddst,
-    IdD: PrimInt,            // + Into<usize> + std::ops::SubAssign + Debug,
-    T: 'a + Tree,            // + WithHashs,
-    S,                       //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a,T::TreeId, T>,
-    const MIN_HEIGHT: usize, // = 2
+    IdD: PrimInt,
+    T: 'a + Tree,
+    S,
+    const MIN_HEIGHT: usize = 2,
 > {
     internal: SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT>,
 }
@@ -52,7 +50,7 @@ where
     where
         Self: 'a,
     {
-        let mut matcher = GreedySubtreeMatcher::<'a, Dsrc,Ddst, IdD, T, S, MIN_HEIGHT> {
+        let mut matcher = GreedySubtreeMatcher::<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT> {
             // label_store,
             internal: SubtreeMatcher {
                 node_store,
@@ -81,7 +79,6 @@ where
         // Select unique mappings first and extract ambiguous mappings.
         let mut ambiguous_list: Vec<Mapping<IdD>> = vec![];
         let mut ignored = vec![false; self.internal.src_arena.len()];
-        multi_mappings.allMappedSrcs();
         for src in multi_mappings.allMappedSrcs() {
             let mut is_mapping_unique = false;
             if multi_mappings.isSrcUnique(&src) {

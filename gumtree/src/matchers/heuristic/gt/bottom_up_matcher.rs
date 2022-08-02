@@ -42,7 +42,7 @@ where
     // for<'c> < <S as NodeStore2<T::TreeId>>::R  as GenericItem<'c>>::Item:Tree<TreeId = T::TreeId,Type = T::Type,Label = T::Label,ChildIdx = T::ChildIdx> + WithHashs<HK = T::HK,HP = T::HP>,
     S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type> + WithHashs<HK = T::HK, HP = T::HP>,
 {
-    pub(super) fn getDstCandidates(&self, src: &IdD) -> Vec<IdD> {
+    pub(super) fn get_dst_candidates(&self, src: &IdD) -> Vec<IdD> {
         let mut seeds = vec![];
         let s = &self.src_arena.original(src);
         for c in self.src_arena.descendants(self.node_store, src) {

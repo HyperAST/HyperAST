@@ -129,17 +129,17 @@ pub fn apply_action<T, S>(
         log::trace!("sub path {:?}", from.mid.iter().collect::<Vec<_>>());
         let mut path = from.mid.iter();
         let fp = path.next().unwrap().to_usize().unwrap();
-        dbg!(&fp);
+        // dbg!(&fp);
         let r = &mut roots[fp];
         let mut x = *r;
         let mut parents: Vec<(T::TreeId, T::ChildIdx, Vec<T::TreeId>)> = vec![];
         while let Some(p) = path.next() {
-            dbg!(&p);
+            // dbg!(&p);
             let node = s.resolve(&x);
             let cs = node.get_children().to_vec();
             parents.push((x, p, cs.iter().cloned().collect()));
             let i = p.to_usize().unwrap();
-            dbg!(cs.len());
+            // dbg!(cs.len());
             if i < cs.len() {
                 x = cs[i].clone();
             } else {
@@ -296,7 +296,7 @@ pub fn apply_action<T, S>(
             if i.to_usize().unwrap() < cs.len() {
                 children.extend_from_slice(&cs[i.to_usize().unwrap()..]);
             }
-            dbg!(children.len());
+            // dbg!(children.len());
             let (t, l) = fun_name(s, &x);
             s.build_then_insert(x, t, l, children)
         }

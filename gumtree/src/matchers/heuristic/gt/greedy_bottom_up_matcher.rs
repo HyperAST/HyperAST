@@ -25,9 +25,9 @@ pub struct GreedyBottomUpMatcher<
     T: 'a + Tree + WithHashs,
     S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
     LS: LabelStore<SlicedLabel, I = T::Label>,
-    const SIZE_THRESHOLD: usize,  // = 1000,
-    const SIM_THRESHOLD_NUM: u64, // = 1,
-    const SIM_THRESHOLD_DEN: u64, // = 2,
+    const SIZE_THRESHOLD: usize = 1000,  // = 1000,
+    const SIM_THRESHOLD_NUM: u64 = 1, // = 1,
+    const SIM_THRESHOLD_DEN: u64 = 2, // = 2,
 > {
     label_store: &'a LS,
     internal: BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S>,
@@ -176,20 +176,19 @@ where
         matcher
     }
 
-    pub(crate) fn execute(&mut self) {
+    pub fn execute(&mut self) {
         assert_eq!(
             self.internal.src_arena.root(),
             cast::<_, IdD>(self.internal.src_arena.len()).unwrap() - one()
         );
         assert!(self.internal.src_arena.len() > 0);
-        // todo caution about, it is in postorder and it depends on decomp store
-        // -1 as root is handled after forloop
-        for i in 0..self.internal.src_arena.len() - 1 {
-            let a: IdD = num_traits::cast(i).unwrap(); // might be problematic as it depends on decompressed store?
+        // // WARN it is in postorder and it depends on decomp store
+        // // -1 as root is handled after forloop
+        for a in self.internal.src_arena.iter_df_post() {
+            // let a: IdD = cast(i).unwrap(); // might be problematic as it depends on decompressed store?
             if !(self.internal.mappings.is_src(&a) || !self.src_has_children(a)) {
-                let candidates = self.internal.getDstCandidates(&a);
-                let mut found = false;
-                let mut best = num_traits::zero();
+                let candidates = self.internal.get_dst_candidates(&a);
+                let mut best = None;
                 let mut max: f64 = -1.;
 
                 for cand in candidates {
@@ -197,7 +196,7 @@ where
                         &self
                             .internal
                             .src_arena
-                            .descendants(self.internal.node_store, &cast(i).unwrap()),
+                            .descendants(self.internal.node_store, &a),
                         &self
                             .internal
                             .dst_arena
@@ -206,13 +205,11 @@ where
                     );
                     if sim > max && sim >= SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64 {
                         max = sim;
-                        best = cand;
-                        found = true;
+                        best = Some(cand);
                     }
                 }
 
-                if found {
-                    // self.internal.lastChanceMatch_Zs::<_,SIZE_THRESHOLD>(self.label_store,a, best);
+                if let Some(best) = best {
                     self.last_chance_match_zs::<IdD>(a, best);
                     self.internal.mappings.link(a, best);
                 }
@@ -223,8 +220,7 @@ where
             self.internal.src_arena.root(),
             self.internal.dst_arena.root(),
         );
-        dbg!(6666666);
-        dbg!(&self.internal.mappings);
+
         self.last_chance_match_zs::<IdD>(
             self.internal.src_arena.root(),
             self.internal.dst_arena.root(),
@@ -264,9 +260,6 @@ where
                     dst,
                     mappings,
                 );
-                dbg!(333);
-                dbg!(&matcher.mappings);
-
                 matcher.mappings
             };
             for (i, t) in mappings

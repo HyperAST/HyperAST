@@ -29,7 +29,13 @@ where
     // for<'c> <<S as NodeStore2<IdC>>::R as GenericItem<'c>>::Item: WithChildren<TreeId = IdC>,
     S::R<'a>: WithChildren<TreeId = IdC>,
 {
-    let cs = store.resolve(&x).get_children().to_owned();
+    let node = store.resolve(&x);
+    let cs = node.try_get_children();
+    let cs = if let Some(cs) = cs {
+        cs.to_owned()
+    } else {
+        return 0;
+    };
     if cs.is_empty() {
         return 0;
     }

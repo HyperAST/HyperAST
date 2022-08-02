@@ -207,7 +207,7 @@ where
         self.ori_mappings = Some(ms);
         self.cpy_mappings = ms.clone();
         // dbg!(&self.src_arena_dont_use);
-        dbg!("aaaaaaaaaaaa");
+        // dbg!("aaaaaaaaaaaa");
         let len = self.src_arena_dont_use.len();
         let root = self.src_arena_dont_use.root();
         self.moved.resize(len, false);
@@ -691,7 +691,7 @@ where
             }
         }
         r.reverse();
-        dbg!(&r.iter().map(|x| x.to_usize()).collect::<Vec<_>>());
+        // dbg!(&r.iter().map(|x| x.to_usize()).collect::<Vec<_>>());
         CompressedTreePath::from(r)
     }
 
