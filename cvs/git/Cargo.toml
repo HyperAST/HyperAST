@@ -1,5 +1,5 @@
 [package]
-name = "rusted_gumtree_cvs_git"
+name = "hyper_ast_cvs_git"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,8 +8,8 @@ edition = "2021"
 [dependencies]
 git2 = "0.13.24"
 tree-sitter = "0.20.0"
-rusted_gumtree_gen_ts_java = { path = "../../gen/tree-sitter/java" }
-rusted_gumtree_gen_ts_xml = { path = "../../gen/tree-sitter/xml" }
+hyper_ast_gen_ts_java = { path = "../../gen/tree-sitter/java" }
+hyper_ast_gen_ts_xml = { path = "../../gen/tree-sitter/xml" }
 hyper_ast = { path = "../../hyper_ast" } 
 env_logger = "0.9.0"
 log = { version = "0.4.6", features = ["max_level_trace", "release_max_level_warn"] }

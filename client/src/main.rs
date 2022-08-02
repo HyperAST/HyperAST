@@ -25,7 +25,7 @@ use hyper_gumtree::{
 };
 
 fn main_compress() {
-    // use rusted_gumtree_gen_ts_java::java_tree_gen_full_compress::{
+    // use hyper_ast_gen_ts_java::java_tree_gen_full_compress::{
     //     JavaTreeGen, LabelStore, NodeStore, SimpleStores,
     // };
     //     println!("Hello, world!");
@@ -158,7 +158,7 @@ use hyper_ast::{
     types::{Labeled, NodeStore as _, NodeStoreExt, Stored, Tree, Type, Typed, WithChildren},
     utils::memusage_linux,
 };
-use rusted_gumtree_gen_ts_java::legion_with_refs::{
+use hyper_ast_gen_ts_java::legion_with_refs::{
     print_tree_ids, print_tree_syntax, print_tree_syntax_with_ids, JavaTreeGen,
 };
 
@@ -521,7 +521,7 @@ fn main() {
     //     &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
     // );
 
-    //     use rusted_gumtree_gen_ts_java::java_tree_gen_no_compress_arena::{JavaTreeGen, LabelStore, NodeStore,SimpleStores,HashedNode};
+    //     use hyper_ast_gen_ts_java::java_tree_gen_no_compress_arena::{JavaTreeGen, LabelStore, NodeStore,SimpleStores,HashedNode};
     //     // tree_sitter_cli::generate::parse_grammar;
 
     //     println!("Hello, world!");

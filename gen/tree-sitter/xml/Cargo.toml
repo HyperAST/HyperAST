@@ -1,5 +1,5 @@
 [package]
-name = "rusted_gumtree_gen_ts_xml"
+name = "hyper_ast_gen_ts_xml"
 version = "0.1.0"
 edition = "2021"
 

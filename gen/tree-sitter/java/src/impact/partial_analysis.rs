@@ -2036,7 +2036,7 @@ impl PartialAnalysis {
                 {
                     // TODO check if right is ok to be none
                     // reproduce ConstantDeclaration Declarations([(None, Field(3), Runtime([2]))]) None'
-                    // with ["target/release/rusted_gumtree_benchmark", "apache/dubbo", "", "e831b464837ae5d2afac9841559420aeaef6c52b", "", "results_1000_commits/dubbo"]
+                    // with ["target/release/hyper_ast_benchmark", "apache/dubbo", "", "e831b464837ae5d2afac9841559420aeaef6c52b", "", "results_1000_commits/dubbo"]
                     State::Declarations(v)
                 }
                 (State::Modifiers(v, n), State::ScopedTypeIdentifier(t))
@@ -4154,7 +4154,7 @@ impl PartialAnalysis {
                         if kind == &Type::MethodInvocation =>
                     {
                         // TODO check, I suppose it is caused by module identifiers
-                        // to reproduce on ["target/release/rusted_gumtree_benchmark", "alibaba/fastjson", "", "f56b5d895f97f4cc3bd787c600a3ee67ba56d4db", "", "results_1000_commits2/fastjson"]
+                        // to reproduce on ["target/release/hyper_ast_benchmark", "alibaba/fastjson", "", "f56b5d895f97f4cc3bd787c600a3ee67ba56d4db", "", "results_1000_commits2/fastjson"]
                         // State::InvocationId(o, i)
                         let r =
                             acc.solver

@@ -14,7 +14,7 @@ use hyper_ast::{
     tree_gen::SubTreeMetrics,
     types::{LabelStore, Type},
 };
-use rusted_gumtree_gen_ts_java::legion_with_refs::{eq_node, hash32};
+use hyper_ast_gen_ts_java::legion_with_refs::{eq_node, hash32};
 
 use crate::{
     git::{BasicGitObject, ObjectType, NamedObject, TypedObject},

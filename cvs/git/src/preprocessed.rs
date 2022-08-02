@@ -12,7 +12,7 @@ use hyper_ast::{
     utils::memusage_linux,
 };
 use log::info;
-use rusted_gumtree_gen_ts_java::impact::partial_analysis::PartialAnalysis;
+use hyper_ast_gen_ts_java::impact::partial_analysis::PartialAnalysis;
 
 use crate::{
     git::{all_commits_between, retrieve_commit},
@@ -22,8 +22,8 @@ use crate::{
     maven_processor::MavenProcessor,
     Accumulator, Commit, Processor, SimpleStores, MD,
 };
-use rusted_gumtree_gen_ts_java::legion_with_refs as java_tree_gen;
-use rusted_gumtree_gen_ts_xml::xml_tree_gen::XmlTreeGen;
+use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
+use hyper_ast_gen_ts_xml::xml_tree_gen::XmlTreeGen;
 
 /// Preprocess a git repository
 /// using the hyperAST and caching git object transformations
@@ -183,7 +183,7 @@ impl PreProcessedRepository {
                     let mut out = BuffOut {
                         buff: "".to_owned(),
                     };
-                    rusted_gumtree_gen_ts_java::legion_with_refs::serialize(
+                    hyper_ast_gen_ts_java::legion_with_refs::serialize(
                         &self.main_stores.node_store,
                         &self.main_stores.label_store,
                         &full_node.local.compressed_node,

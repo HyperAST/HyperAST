@@ -21,7 +21,7 @@ use hyper_ast::{
     types::{LabelStore, Labeled, Tree, Type, Typed, WithChildren},
 };
 use num::ToPrimitive;
-// use rusted_gumtree_core::tree::tree::{WithChildren, Tree, Labeled};
+// use hyper_ast_core::tree::tree::{WithChildren, Tree, Labeled};
 
 use crate::{
     impact::{

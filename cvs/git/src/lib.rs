@@ -18,8 +18,8 @@ use hyper_ast::{store::defaults::LabelIdentifier, utils::Bytes};
 use maven::MD;
 extern crate test;
 
-// use rusted_gumtree_gen_ts_java::java_tree_gen_full_compress_legion_ref as java_tree_gen;
-// use rusted_gumtree_gen_ts_xml::xml_tree_gen::{self, XmlTreeGen};
+// use hyper_ast_gen_ts_java::java_tree_gen_full_compress_legion_ref as java_tree_gen;
+// use hyper_ast_gen_ts_xml::xml_tree_gen::{self, XmlTreeGen};
 
 pub type SimpleStores = hyper_ast::store::SimpleStores;
 

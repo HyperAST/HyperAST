@@ -11,7 +11,7 @@ use hyper_ast::{
     },
     types::{LabelStore, Type},
 };
-use rusted_gumtree_gen_ts_java::{
+use hyper_ast_gen_ts_java::{
     impact::partial_analysis::PartialAnalysis,
     legion_with_refs::{self, eq_node, BulkHasher},
 };
@@ -136,7 +136,7 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
 fn make(
     acc: JavaAcc,
     stores: &mut SimpleStores,
-) -> rusted_gumtree_gen_ts_java::legion_with_refs::Local {
+) -> hyper_ast_gen_ts_java::legion_with_refs::Local {
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
 

@@ -6,11 +6,11 @@ use hyper_ast::{
 
 use crate::java::handle_java_file;
 
-use rusted_gumtree_gen_ts_java::impact::{
+use hyper_ast_gen_ts_java::impact::{
     element::{IdentifierFormat, LabelPtr},
     partial_analysis::PartialAnalysis,
 };
-use rusted_gumtree_gen_ts_java::{
+use hyper_ast_gen_ts_java::{
     impact::{element::RefsEnum, usage},
     legion_with_refs as java_tree_gen,
 };

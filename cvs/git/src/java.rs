@@ -5,9 +5,9 @@ use hyper_ast::{
     store::defaults::{LabelIdentifier, NodeIdentifier},
     types::Type,
 };
-use rusted_gumtree_gen_ts_java::impact::partial_analysis::PartialAnalysis;
+use hyper_ast_gen_ts_java::impact::partial_analysis::PartialAnalysis;
 
-use rusted_gumtree_gen_ts_java::legion_with_refs as java_tree_gen;
+use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
 
 pub(crate) fn handle_java_file<'stores,'cache,'b: 'stores>(
     tree_gen: &mut java_tree_gen::JavaTreeGen<'stores,'cache>,

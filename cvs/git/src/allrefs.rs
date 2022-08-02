@@ -14,7 +14,7 @@ use hyper_ast::{
     },
     types::{LabelStore, Labeled, Type, Typed, WithChildren},
 };
-use rusted_gumtree_gen_ts_java::{
+use hyper_ast_gen_ts_java::{
     impact::{
         element::{IdentifierFormat, LabelPtr, RefPtr, RefsEnum},
         partial_analysis::PartialAnalysis,

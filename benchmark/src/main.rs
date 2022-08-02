@@ -10,12 +10,12 @@ use std::{
     time::{Instant, SystemTime},
 };
 
-use rusted_gumtree_cvs_git::{
+use hyper_ast_cvs_git::{
     allrefs::write_referencial_relations,
     git::{fetch_github_repository, retrieve_commit},
     preprocessed::{self, PreProcessedRepository},
 };
-use rusted_gumtree_gen_ts_java::utils::memusage_linux;
+use hyper_ast_gen_ts_java::utils::memusage_linux;
 use serde::{Deserialize, Serialize, Serializer};
 
 use crate::write_serializer::{WriteJson, WritePartialJson};
