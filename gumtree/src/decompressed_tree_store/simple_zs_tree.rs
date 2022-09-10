@@ -48,18 +48,13 @@ impl<'d, IdC: Clone, IdD: PrimInt> PostOrderKeyRoots<'d, IdC, IdD> for SimpleZsT
 
 impl<'d, IdC: Clone, IdD: PrimInt> Initializable<'d, IdC, IdD> for SimpleZsTree<IdC, IdD> {
     fn new<
-        // 'a,
-        // T: 'a + Stored<TreeId = IdC> + WithChildren, // + WithHashs<HK = HK, HP = HP>,
-        // HK: HashKind,
-        // HP: PrimInt,
-        S, //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
+        S,
     >(
         store: &'d S,
         root: &IdC,
     ) -> SimpleZsTree<IdC, IdD>
     where
         S: 'd + NodeStore<IdC>,
-        // for<'c> <<S as NodeStore2<IdC>>::R as GenericItem<'c>>::Item: WithChildren<TreeId = IdC>,
         S::R<'d>: WithChildren<TreeId = IdC>,
     {
         struct R<IdC, Idx, IdD> {
@@ -167,7 +162,6 @@ impl<'d, IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<'d, IdC, IdD>
     fn child<'b,S>(&self, store: &'b S, x: &IdD, p: &[<S::R<'b> as WithChildren>::ChildIdx]) -> IdD
     where
         S: NodeStore<IdC>,
-        // for<'c> <<S as NodeStore2<IdC>>::R as GenericItem<'c>>::Item: WithChildren<TreeId = IdC>,
         S::R<'b>: WithChildren<TreeId = IdC>,
     {
         let mut r = *x;
@@ -190,7 +184,6 @@ impl<'d, IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<'d, IdC, IdD>
     fn children<'b,S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
     where
         S: 'b + NodeStore<IdC>,
-        // for<'c> <<S as NodeStore2<IdC>>::R as GenericItem<'c>>::Item: WithChildren<TreeId = IdC>,
         S::R<'b>: WithChildren<TreeId = IdC>,
     {
         let a = self.original(x);

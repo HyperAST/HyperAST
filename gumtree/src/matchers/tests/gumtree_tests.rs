@@ -2,15 +2,15 @@ use hyper_ast::types::NodeStore;
 
 use crate::{
     matchers::{
-        decompressed_tree_store::{
-            CompletePostOrder, Initializable as _, ShallowDecompressedTreeStore,
-        },
         heuristic::gt::{
             bottom_up_matcher::BottomUpMatcher,
             greedy_bottom_up_matcher::GreedyBottomUpMatcher,
             greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
         },
         mapping_store::{DefaultMappingStore, MappingStore},
+    },
+    decompressed_tree_store::{
+        CompletePostOrder, Initializable as _, ShallowDecompressedTreeStore, complete_post_order::DisplayCompletePostOrder, bfs_wrapper::SimpleBfsMapper,
     },
     tests::examples::{example_bottom_up, example_eq_simple_class_rename, example_gumtree},
     tree::simple_tree::{vpair_to_stores, Tree, TreeRef, NS},
@@ -219,9 +219,9 @@ fn test_eq_simple_class_rename() {
         ..
     } = mapper.into();
     dbg!(&mappings);
-    use crate::actions::bfs_wrapper;
+    use crate::decompressed_tree_store::bfs_wrapper;
     use crate::actions::Actions;
-    let dst_arena = bfs_wrapper::SD::from(&node_store, &dst_arena);
+    let dst_arena = SimpleBfsMapper::from(&node_store, &dst_arena);
     let actions = crate::actions::script_generator2::ScriptGenerator::<
         _,
         TreeRef<Tree>,
@@ -302,3 +302,14 @@ fn test_eq_simple_class_rename() {
 //     assertTrue(ms.isSrcUnique(t3));
 //     assertTrue(ms.isDstUnique(t4));
 // }
+
+#[test]
+fn test_post2pre_order() {
+    let (label_store, node_store, src, _) =
+        vpair_to_stores(crate::tests::examples::example_very_simple_post_order());
+    let mut ms: DefaultMappingStore<u16> = DefaultMappingStore::new();
+    let src = &src;
+
+    let src_arena = CompletePostOrder::<_, u16>::new(&node_store, src);
+    println!("{}",DisplayCompletePostOrder{ inner: &src_arena, node_store: &node_store, label_store: &label_store })
+}

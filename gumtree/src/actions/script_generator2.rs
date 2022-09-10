@@ -1,20 +1,20 @@
 /// inspired by the implementation in gumtree
-use std::{fmt::Debug, marker::PhantomData};
+use std::{fmt::Debug};
 
 use bitvec::order::Lsb0;
 use num_traits::{cast, PrimInt, ToPrimitive};
 
 use crate::{
     matchers::{
-        decompressed_tree_store::{
-            BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
-        },
         mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
+    },
+    decompressed_tree_store::{
+        BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
     },
     tree::tree_path::{CompressedTreePath, TreePath},
     utils::sequence_algorithms::longest_common_subsequence,
 };
-use hyper_ast::types::{GenericItem, Labeled, NodeStore, Stored, Tree, WithChildren};
+use hyper_ast::types::{Labeled, NodeStore, Stored, Tree, WithChildren};
 
 use super::action_vec::ActionsVec;
 
@@ -268,11 +268,6 @@ where
                 } else if let Some(k) = k {
                     CompressedTreePath::from(vec![k])
                 } else {
-                    // let len = self.mid_arena[cast::<_, usize>(self.mid_root[0]).unwrap()]
-                    //     .children
-                    //     .as_ref()
-                    //     .unwrap()
-                    //     .len();
                     CompressedTreePath::from(vec![num_traits::one()])
                 };
                 let path = ApplicablePath { ori, mid };
@@ -293,24 +288,28 @@ where
                     } else {
                         self.mid_root.push(w);
                     }
+                    assert!({
+                        self.path(w);
+                        true
+                    });
                 };
-                assert_eq!(CompressedTreePath::from(vec![0,0,12]).iter().collect::<Vec<_>>(),vec![0,0,12]);
-                assert_eq!(CompressedTreePath::from(vec![0,0,0,12]).iter().collect::<Vec<_>>(),vec![0,0,0,12]);
-                assert_eq!(CompressedTreePath::from(vec![0,0,0,0,12]).iter().collect::<Vec<_>>(),vec![0,0,0,0,12]);
-                assert_eq!(CompressedTreePath::from(vec![0,0,0,0,0,12]).iter().collect::<Vec<_>>(),vec![0,0,0,0,0,12]);
-                assert_eq!(CompressedTreePath::from(vec![0,0,0,0,0,20]).iter().collect::<Vec<_>>(),vec![0,0,0,0,0,20]);
-                assert_eq!(CompressedTreePath::from(vec![20,0,0,0,0,12]).iter().collect::<Vec<_>>(),vec![20,0,0,0,0,12]);
-                assert_eq!(
-                    self.access(&action.path.mid)
-                        .unwrap_or_else(|_| panic!("wrong insertion path {:?}", &action.path.mid))
-                        ,w
-                );
+                // assert_eq!(CompressedTreePath::from(vec![0,0,12]).iter().collect::<Vec<_>>(),vec![0,0,12]);
+                // assert_eq!(CompressedTreePath::from(vec![0,0,0,12]).iter().collect::<Vec<_>>(),vec![0,0,0,12]);
+                // assert_eq!(CompressedTreePath::from(vec![0,0,0,0,12]).iter().collect::<Vec<_>>(),vec![0,0,0,0,12]);
+                // assert_eq!(CompressedTreePath::from(vec![0,0,0,0,0,12]).iter().collect::<Vec<_>>(),vec![0,0,0,0,0,12]);
+                // assert_eq!(CompressedTreePath::from(vec![0,0,0,0,0,20]).iter().collect::<Vec<_>>(),vec![0,0,0,0,0,20]);
+                // assert_eq!(CompressedTreePath::from(vec![20,0,0,0,0,12]).iter().collect::<Vec<_>>(),vec![20,0,0,0,0,12]);
+                // assert_eq!(
+                //     self.access(&action.path.mid)
+                //         .unwrap_or_else(|_| panic!("wrong insertion path {:?}", &action.path.mid))
+                //         ,w
+                // );
                 self.actions.push(action);
             } else {
                 // dbg!(&self.mid_arena);
                 w = self.cpy_mappings.get_src(&x);
                 let v = {
-                    let v = self.mid_arena[cast::<_, usize>(w).unwrap()].parent;
+                    let v = self.mid_arena[w.to_usize().unwrap()].parent;
                     if v == w {
                         None
                     } else {
@@ -318,7 +317,7 @@ where
                     }
                 };
                 let w_l = {
-                    let c = &self.mid_arena[cast::<_, usize>(w).unwrap()].compressed;
+                    let c = &self.mid_arena[w.to_usize().unwrap()].compressed;
                     self.store.resolve(c).try_get_label().cloned()
                 };
                 let x_l = {
@@ -332,16 +331,37 @@ where
                         ori: self.orig_src(w),
                         mid: self.path(w),
                     };
-
+                    if let Some(z) = z {
+                        assert!({
+                            self.path(z);
+                            let mut z = z;
+                            loop {
+                                let p = self.mid_arena[z.to_usize().unwrap()].parent;
+                                if p == z {
+                                    break;
+                                } else {
+                                    assert_ne!(w,z,"{v:?}");
+                                    z = p;
+                                }
+                            }
+                            true
+                        });
+                    }
                     // remove moved node
                     // TODO do not mutate existing node
                     if let Some(v) = v {
-                        let cs = self.mid_arena[cast::<_, usize>(v).unwrap()]
+                        let cs = self.mid_arena[v.to_usize().unwrap()]
                             .children
                             .as_mut()
                             .unwrap();
                         let idx = cs.iter().position(|x| x == &w).unwrap();
                         cs.remove(idx);
+                    }
+                    if let Some(z) = z {
+                        assert!({
+                            self.path(z);
+                            true
+                        });
                     }
 
                     let k = if let Some(y) = y {
@@ -379,13 +399,17 @@ where
                             } else {
                                 self.mid_arena[z].children = Some(vec![w])
                             };
-                            self.mid_arena[cast::<_, usize>(w).unwrap()].parent = cast(z).unwrap();
+                            self.mid_arena[w.to_usize().unwrap()].parent = cast(z).unwrap();
                         } else {
-                            self.mid_arena[cast::<_, usize>(w).unwrap()].parent = cast(w).unwrap();
+                            self.mid_arena[w.to_usize().unwrap()].parent = cast(w).unwrap();
                         }
+                        assert!({
+                            self.path(w);
+                            true
+                        });
                     };
                     if let Act::MovUpd { .. } = act {
-                        self.mid_arena[cast::<_, usize>(w).unwrap()].compressed =
+                        self.mid_arena[w.to_usize().unwrap()].compressed =
                             self.dst_arena.original(&x);
                     }
                     let path = ApplicablePath { ori, mid };
@@ -401,8 +425,7 @@ where
                         path,
                         action: Act::Update { new: x_l.unwrap() },
                     };
-                    self.mid_arena[cast::<_, usize>(w).unwrap()].compressed =
-                        self.dst_arena.original(&x);
+                    self.mid_arena[w.to_usize().unwrap()].compressed = self.dst_arena.original(&x);
                     self.actions.push(action);
                 } else {
                     // not changed
@@ -433,7 +456,7 @@ where
                 } else {
                     break;
                 };
-                let curr = &self.mid_arena[cast::<_, usize>(id).unwrap()];
+                let curr = &self.mid_arena[id.to_usize().unwrap()];
                 if let Some(cs) = &curr.children {
                     if cs.len() == idx {
                         next = Some(id);
@@ -459,9 +482,9 @@ where
                     ori,
                     mid: self.path(w),
                 };
-                let v = self.mid_arena[cast::<_, usize>(w).unwrap()].parent;
+                let v = self.mid_arena[w.to_usize().unwrap()].parent;
                 if v != w {
-                    let cs = self.mid_arena[cast::<_, usize>(v).unwrap()]
+                    let cs = self.mid_arena[v.to_usize().unwrap()]
                         .children
                         .as_mut()
                         .unwrap();
@@ -496,7 +519,7 @@ where
 
     pub(crate) fn align_children(&mut self, w: &IdD, x: &IdD) {
         let d = vec![];
-        let w_c = self.mid_arena[cast::<_, usize>(*w).unwrap()]
+        let w_c = self.mid_arena[(*w).to_usize().unwrap()]
             .children
             .as_ref()
             .unwrap_or(&d); //self.src_arena.children(self.store, w);
@@ -553,11 +576,27 @@ where
                     // };
                     // self.apply_action(&action, &self.ori_to_copy(*a));
                     let z: usize = cast(*w).unwrap();
+                    let cs = self.mid_arena[z.to_usize().unwrap()]
+                        .children
+                        .as_mut()
+                        .unwrap();
+                    let idx = cs.iter().position(|x| x == a).unwrap();
+                    cs.remove(idx);
                     if let Some(cs) = self.mid_arena[z].children.as_mut() {
-                        cs.insert(cast(k).unwrap(), *a)
+                        let k = cast(k).unwrap();
+                        if k < cs.len() {
+                            cs.insert(k, *a)
+                        } else {
+                            cs.push(*a)
+                        }
                     } else {
                         self.mid_arena[z].children = Some(vec![*a])
                     };
+                    self.mid_arena[a.to_usize().unwrap()].parent = cast(z).unwrap();
+                    assert!({
+                        self.path(*a);
+                        true
+                    });
                     // self.apply_move(&action, &Some(*w), &self.ori_to_copy(*a), b);
                     self.actions.push(action);
                     self.src_in_order.push(*a);
@@ -596,8 +635,8 @@ where
         let u = self.cpy_mappings.get_src(&v.unwrap());
         // // let upos = self.src_arena.position_in_parent(self.store, &u);
         let upos: T::ChildIdx = {
-            let p = self.mid_arena[cast::<_, usize>(u).unwrap()].parent;
-            let r = self.mid_arena[cast::<_, usize>(p).unwrap()]
+            let p = self.mid_arena[u.to_usize().unwrap()].parent;
+            let r = self.mid_arena[p.to_usize().unwrap()]
                 .children
                 .as_ref()
                 .unwrap()
@@ -616,8 +655,8 @@ where
         .into_iter()
         .map(|m: (IdD, IdD)| {
             (
-                src_children[cast::<_, usize>(m.0).unwrap()],
-                dst_children[cast::<_, usize>(m.1).unwrap()],
+                src_children[m.0.to_usize().unwrap()],
+                dst_children[m.1.to_usize().unwrap()],
             )
         })
         .collect()
@@ -698,9 +737,9 @@ where
     fn path(&self, mut z: IdD) -> CompressedTreePath<T::ChildIdx> {
         let mut r = vec![];
         loop {
-            let p = self.mid_arena[cast::<_, usize>(z).unwrap()].parent;
+            let p = self.mid_arena[z.to_usize().unwrap()].parent;
             if p == z {
-                let i = self.mid_root.iter().position(|x| x == &z).unwrap();
+                let i = self.mid_root.iter().position(|x| x == &z).expect("expect the position of z in children of mid_root");
                 r.push(cast(i).unwrap());
                 break;
             } else {
@@ -712,7 +751,7 @@ where
                     )
                     .iter()
                     .position(|x| x == &z)
-                    .unwrap();
+                    .expect("expect the position of z in children of p");
                 r.push(cast(i).unwrap());
                 z = p;
             }
@@ -766,7 +805,7 @@ impl<'a, IdC, IdD: num_traits::PrimInt> Iterator for Iter<'a, IdC, IdD> {
             } else {
                 return None;
             };
-            let curr = &self.mid_arena[cast::<_, usize>(id).unwrap()];
+            let curr = &self.mid_arena[id.to_usize().unwrap()];
             if let Some(cs) = &curr.children {
                 if cs.len() == idx {
                     return Some(id);

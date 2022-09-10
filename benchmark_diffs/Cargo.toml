@@ -1,5 +1,5 @@
 [package]
-name = "hyper_ast_benchmark"
+name = "hyper_ast_benchmark_diffs"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,23 +7,16 @@ edition = "2021"
 
 [dependencies]
 tree-sitter = "0.20.0"
+hyper_ast = { path = "../hyper_ast" }
 hyper_gumtree = { path = "../gumtree" }
-hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
 hyper_ast_cvs_git = { path = "../cvs/git" }
+hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
 env_logger = "0.9.0"
 log = { version = "0.4.6", features = ["max_level_debug", "release_max_level_warn"] }
 
-pommes = "0.0.2"
-
-
-serde = { version = "1.0.130" }
-serde-xml-rs = "0.5.1"
-
-
 cfg-if = "1.0"
 
-# TODO use it
-criterion = "0.3.6"
+comfy-table = "6.0.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.3.2"
@@ -33,13 +26,20 @@ jemallocator = "0.3.2"
 # [profile.release]
 # debug = 1
 
-[[bin]]
-name = "reserializing"
-path = "src/reserializing.rs"
-
 # [profile.release]
 ## release optimizations
 # lto = "fat"
 # codegen-units = 1
 # rustflags = ["-C target-cpu=native"]
 # panic = "abort"
+
+[profile.test]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
+lto = false
+panic = 'unwind'
+incremental = true
+codegen-units = 16
+rpath = false

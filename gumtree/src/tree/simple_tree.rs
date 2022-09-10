@@ -209,6 +209,18 @@ impl hyper_ast::types::Typed for Tree {
         self.t
     }
 }
+
+impl hyper_ast::types::WithSerialization for Tree {
+    fn bytes_len(&self) -> usize {
+        todo!()
+    }
+}
+
+impl<T> hyper_ast::types::WithSerialization for TreeRef<'_, T> {
+    fn bytes_len(&self) -> usize {
+        todo!()
+    }
+}
 impl<T> Clone for TreeRef<'_, T> {
     fn clone(&self) -> Self {
         Self(self.0.clone())

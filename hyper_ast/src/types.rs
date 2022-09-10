@@ -843,6 +843,10 @@ pub trait WithStats {
     fn height(&self) -> usize;
 }
 
+pub trait WithSerialization {
+    fn bytes_len(&self) -> usize;
+}
+
 pub trait WithHashs {
     type HK: HashKind;
     type HP: PrimInt + PartialEq + Eq;

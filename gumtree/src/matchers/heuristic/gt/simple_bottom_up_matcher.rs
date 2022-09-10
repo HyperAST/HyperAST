@@ -2,10 +2,10 @@ use std::marker::PhantomData;
 
 use num_traits::ToPrimitive;
 
+use crate::decompressed_tree_store::{
+    BreathFirstContiguousSiblings, DecompressedTreeStore, DecompressedWithParent,
+};
 use crate::matchers::{
-    decompressed_tree_store::{
-        BreathFirstContiguousSiblings, DecompressedTreeStore, DecompressedWithParent,
-    },
     mapping_store::{DefaultMappingStore, MappingStore},
     matcher::Matcher,
     similarity_metrics,

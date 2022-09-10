@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use num_traits::{cast, one, zero, PrimInt};
 
 use crate::tree::tree_path::CompressedTreePath;
@@ -55,15 +57,48 @@ impl<'d, IdC: Clone, IdD: PrimInt> DecompressedWithParent<'d, IdC, IdD> for Brea
         self.parent(id) != None
     }
 
-    fn position_in_parent<S>(&self, _store: &S, c: &IdD) -> <S::R<'d> as WithChildren>::ChildIdx
+    fn position_in_parent<'b, S>(&self, _store: &'b S, c: &IdD) -> <S::R<'b> as WithChildren>::ChildIdx
     where
         S: NodeStore<IdC>,
-        S::R<'d>: WithChildren<TreeId = IdC>,
+        S::R<'b>: WithChildren<TreeId = IdC>,
     {
         let p = self.parent(c).unwrap();
         cast(*c - self.first_child(&p).unwrap()).unwrap()
     }
+
+    type PIt<'b>=IterParents<'b, IdD> where IdD: 'b, IdC:'b;
+
+    fn parents(
+        &self,
+        id: IdD,
+    ) -> Self::PIt<'_> {
+        IterParents {
+            id,
+            id_parent: &self.id_parent,
+        }
+    }
 }
+
+pub struct IterParents<'a,IdD> {
+    id: IdD,
+    id_parent: &'a Vec<IdD>,
+}
+
+impl<'a, IdD: PrimInt> Iterator
+    for IterParents<'a, IdD>
+{
+    type Item = IdD;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let r = self.id_parent[self.id.to_usize().unwrap()];
+        if r == num_traits::zero() {
+            return None
+        }
+        self.id = r.clone();
+        Some(r)
+    }
+}
+
 
 impl<'d, IdC: Clone, IdD: PrimInt> Initializable<'d, IdC, IdD> for BreathFirst<IdC, IdD> {
     fn new<

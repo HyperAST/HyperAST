@@ -2,17 +2,15 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use num_traits::{cast, one, PrimInt};
 
+use crate::decompressed_tree_store::{
+    DecompressedTreeStore, DecompressedWithParent, PostOrder, SimpleZsTree,
+};
 use crate::matchers::{
-    decompressed_tree_store::{
-        DecompressedTreeStore, DecompressedWithParent, PostOrder, SimpleZsTree,
-    },
     mapping_store::{DefaultMappingStore, MappingStore},
     optimal::zs::ZsMatcher,
     similarity_metrics,
 };
-use hyper_ast::types::{
-    LabelStore, NodeStore, SlicedLabel, Tree, Typed, WithHashs,
-};
+use hyper_ast::types::{LabelStore, NodeStore, SlicedLabel, Tree, Typed, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
@@ -25,9 +23,9 @@ pub struct GreedyBottomUpMatcher<
     T: 'a + Tree + WithHashs,
     S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
     LS: LabelStore<SlicedLabel, I = T::Label>,
-    const SIZE_THRESHOLD: usize = 1000,  // = 1000,
-    const SIM_THRESHOLD_NUM: u64 = 1, // = 1,
-    const SIM_THRESHOLD_DEN: u64 = 2, // = 2,
+    const SIZE_THRESHOLD: usize = 1000,
+    const SIM_THRESHOLD_NUM: u64 = 1,
+    const SIM_THRESHOLD_DEN: u64 = 2,
 > {
     label_store: &'a LS,
     internal: BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S>,
@@ -182,15 +180,23 @@ where
             cast::<_, IdD>(self.internal.src_arena.len()).unwrap() - one()
         );
         assert!(self.internal.src_arena.len() > 0);
+        // println!("mappings={}", self.internal.mappings.len());
         // // WARN it is in postorder and it depends on decomp store
         // // -1 as root is handled after forloop
+        let mut c = 0;
+        let mut c2 = 0;
         for a in self.internal.src_arena.iter_df_post() {
             // let a: IdD = cast(i).unwrap(); // might be problematic as it depends on decompressed store?
+            if self.internal.src_arena.parent(&a).is_none() {
+                continue;
+            }
+            c += 1;
             if !(self.internal.mappings.is_src(&a) || !self.src_has_children(a)) {
+                c2 += 1;
                 let candidates = self.internal.get_dst_candidates(&a);
                 let mut best = None;
                 let mut max: f64 = -1.;
-
+                // println!("% {} {} {}", candidates.len(),self.internal.mappings.is_src(&a),!self.src_has_children(a));
                 for cand in candidates {
                     let sim = similarity_metrics::dice_similarity(
                         &self
@@ -220,11 +226,13 @@ where
             self.internal.src_arena.root(),
             self.internal.dst_arena.root(),
         );
-
+        c += 1;
         self.last_chance_match_zs::<IdD>(
             self.internal.src_arena.root(),
             self.internal.dst_arena.root(),
         );
+        // println!("nodes:{}", c);
+        // println!("nodes:{}", c2);
     }
 
     fn src_has_children(&mut self, src: IdD) -> bool {

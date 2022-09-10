@@ -2,8 +2,8 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use num_traits::{cast, zero, PrimInt, ToPrimitive};
 
+use crate::decompressed_tree_store::{BreathFirstContiguousSiblings, DecompressedWithParent};
 use crate::matchers::{
-    decompressed_tree_store::{BreathFirstContiguousSiblings, DecompressedWithParent},
     mapping_store::{DefaultMappingStore, MappingStore},
     matcher::Matcher,
     similarity_metrics,

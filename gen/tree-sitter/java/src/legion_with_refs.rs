@@ -321,6 +321,7 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
         // global: &mut <Self as TreeGen>::Global,
     ) -> Local {
     // ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
+        let bytes_len= spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
         // let hsyntax = utils::clamp_u64_to_u32(&utils::hash(&spacing));
@@ -354,7 +355,8 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
             id
         } else {
             let vacant = insertion.vacant();
-            NodeStore::insert_after_prepare(vacant, (Type::Spaces, spacing_id, hashs, BloomSize::None))
+            let bytes_len = compo::BytesLen(bytes_len.to_u32().unwrap());
+            NodeStore::insert_after_prepare(vacant, (Type::Spaces, spacing_id, bytes_len, hashs, BloomSize::None))
         };
         // let full_spaces_node = FullNode {
         //     global: global.into(),
@@ -565,7 +567,7 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
                 &insertion,
             );
             let hashs = hbuilder.build();
-            let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte) as u32);
+            let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte).to_u32().unwrap());
 
             let mcc = acc.mcc;
 
@@ -1129,6 +1131,27 @@ pub fn serialize<W: std::fmt::Write>(
     )
 }
 
+pub fn json_serialize<W: std::fmt::Write>(
+    node_store: &NodeStore,
+    label_store: &LabelStore,
+    id: &NodeIdentifier,
+    out: &mut W,
+    parent_indent: &str,
+) -> Option<String> {
+    nodes::json_serialize::<_,_,_,_,_,_,true>(
+        |id| -> _ {
+            node_store
+                .resolve(id.clone())
+                .into_compressed_node()
+                .unwrap()
+        },
+        |id| -> _ { label_store.resolve(id).to_owned() },
+        id,
+        out,
+        parent_indent,
+    )
+}
+
 pub struct TreeSerializer<'a> {
     node_store: &'a NodeStore,
     label_store: &'a LabelStore,
@@ -1146,6 +1169,27 @@ impl<'a> TreeSerializer<'a> {
 impl<'a> Display for TreeSerializer<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         serialize(self.node_store, self.label_store, &self.id, f, "\n");
+        Ok(())
+    }
+}
+
+pub struct TreeJsonSerializer<'a> {
+    node_store: &'a NodeStore,
+    label_store: &'a LabelStore,
+    id: NodeIdentifier,
+}
+impl<'a> TreeJsonSerializer<'a> {
+    pub fn new(node_store: &'a NodeStore, label_store: &'a LabelStore, id: NodeIdentifier) -> Self {
+        Self {
+            node_store,
+            label_store,
+            id,
+        }
+    }
+}
+impl<'a> Display for TreeJsonSerializer<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        json_serialize(self.node_store, self.label_store, &self.id, f, "\n");
         Ok(())
     }
 }

@@ -7,10 +7,10 @@ use num_traits::{cast, PrimInt, ToPrimitive};
 
 use crate::{
     matchers::{
-        decompressed_tree_store::{
-            BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
-        },
         mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
+    },
+    decompressed_tree_store::{
+        BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
     },
     utils::sequence_algorithms::longest_common_subsequence,
 };

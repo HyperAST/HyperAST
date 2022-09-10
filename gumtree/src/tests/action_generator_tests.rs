@@ -1,13 +1,11 @@
+use crate::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
 use crate::tree::simple_tree::Tree;
 use crate::{
-    actions::{
-        bfs_wrapper,
-        script_generator::{self, Actions, SimpleAction, TestActions},
+    actions::script_generator::{self, Actions, SimpleAction, TestActions},
+    decompressed_tree_store::{
+        bfs_wrapper, CompletePostOrder, Initializable, ShallowDecompressedTreeStore,
     },
-    matchers::{
-        decompressed_tree_store::{CompletePostOrder, Initializable, ShallowDecompressedTreeStore},
-        mapping_store::{DefaultMappingStore, MappingStore},
-    },
+    matchers::mapping_store::{DefaultMappingStore, MappingStore},
     tests::examples::{example_action, example_gt_java_code},
     tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
 };
@@ -84,7 +82,7 @@ fn test_with_action_example() {
         })
     );
 
-    let dst_arena = bfs_wrapper::SD::from(&node_store, &dst_arena);
+    let dst_arena = SimpleBfsMapper::from(&node_store, &dst_arena);
     // let actions = script_generator::ScriptGenerator::<
     //     _,
     //     TreeRef<Tree>,
@@ -102,7 +100,7 @@ fn test_with_action_example() {
         _,
         TreeRef<Tree>,
         _,
-        bfs_wrapper::SD<_, _, CompletePostOrder<_, IdD>>,
+        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
         _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
@@ -294,7 +292,7 @@ fn test_with_zs_custom_example() {
     ms.link(from_src(&[1, 2]), from_dst(&[0, 1, 2]));
     ms.link(from_src(&[1, 3]), from_dst(&[0, 1, 3]));
 
-    let dst_arena = bfs_wrapper::SD::from(&node_store, &dst_arena);
+    let dst_arena = SimpleBfsMapper::from(&node_store, &dst_arena);
     // let actions = script_generator::ScriptGenerator::<
     //     _,
     //     TreeRef<Tree>,
@@ -312,7 +310,7 @@ fn test_with_zs_custom_example() {
         _,
         TreeRef<Tree>,
         _,
-        bfs_wrapper::SD<_, _, CompletePostOrder<_, IdD>>,
+        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
         _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 

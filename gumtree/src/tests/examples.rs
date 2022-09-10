@@ -262,3 +262,30 @@ pub(crate) fn example_eq_simple_class_rename() -> (ST<u8>, ST<u8>) {
     ]);
     (src, dst)
 }
+
+
+pub(crate) fn example_very_simple_post_order() -> (ST<u8>, ST<u8>) {
+    let src = tree!(
+        6, "6"; [
+            tree!(2, "2"; [
+                tree!(0, "0"),
+                tree!(1, "1"),
+            ]),
+            tree!(5, "5"; [
+                tree!(3, "3"),
+                tree!(4, "4"),
+            ]),
+    ]);
+    let dst = tree!(
+        6, "6"; [
+            tree!(2, "2"; [
+                tree!(0, "0"),
+                tree!(1, "1"),
+            ]),
+            tree!(5, "5"; [
+                tree!(3, "3"),
+                tree!(4, "4"),
+            ]),
+    ]);
+    (src, dst)
+}

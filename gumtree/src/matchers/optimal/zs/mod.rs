@@ -3,16 +3,12 @@ use std::{collections::VecDeque, fmt::Debug, marker::PhantomData};
 use num_traits::{cast, one, zero, PrimInt};
 use str_distance::DistanceMetric;
 
-use crate::matchers::{
-    decompressed_tree_store::{
-        DecompressedTreeStore, Initializable as _, PostOrderKeyRoots, ShallowDecompressedTreeStore,
-        SimpleZsTree as ZsTree,
-    },
-    mapping_store::{DefaultMappingStore, MappingStore},
+use crate::decompressed_tree_store::{
+    DecompressedTreeStore, Initializable as _, PostOrderKeyRoots, ShallowDecompressedTreeStore,
+    SimpleZsTree as ZsTree,
 };
-use hyper_ast::types::{
-    LabelStore, Labeled, NodeStore, SlicedLabel, Tree, Typed, WithHashs,
-};
+use crate::matchers::mapping_store::{DefaultMappingStore, MappingStore};
+use hyper_ast::types::{LabelStore, Labeled, NodeStore, SlicedLabel, Tree, Typed, WithHashs};
 
 pub struct ZsMatcher<
     'a,
@@ -265,16 +261,16 @@ where
             const S: usize = 3;
             let l1 = {
                 let mut tmp = "".to_string();
-                tmp.push_str(&"#".repeat(S-1));
+                tmp.push_str(&"#".repeat(S - 1));
                 tmp.push_str(&l1);
-                tmp.push_str(&"#".repeat(S-1));
+                tmp.push_str(&"#".repeat(S - 1));
                 tmp
             };
             let l2 = {
                 let mut tmp = "".to_string();
-                tmp.push_str(&"#".repeat(S-1));
+                tmp.push_str(&"#".repeat(S - 1));
                 tmp.push_str(&l2);
-                tmp.push_str(&"#".repeat(S-1));
+                tmp.push_str(&"#".repeat(S - 1));
                 tmp
             };
             str_distance::qgram::QGram::new(S).normalized(l1.as_bytes(), l2.as_bytes())
@@ -288,12 +284,12 @@ where
 mod tests {
 
     use super::*;
-    use crate::matchers::decompressed_tree_store::SimpleZsTree;
+    use crate::decompressed_tree_store::SimpleZsTree;
 
     use crate::matchers::mapping_store::VecStore;
     use crate::tree::simple_tree::Tree;
     use crate::{
-        matchers::decompressed_tree_store::Initializable,
+        decompressed_tree_store::Initializable,
         tests::examples::example_zs_paper,
         tree::simple_tree::{vpair_to_stores, TreeRef},
     };

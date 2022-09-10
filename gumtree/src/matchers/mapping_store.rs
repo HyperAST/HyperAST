@@ -153,7 +153,9 @@ impl<T: PrimInt> MappingStore for MultiVecStore<T> {
     type Ele = T;
 
     fn len(&self) -> usize {
-        self.src_to_dsts.iter().filter(|x| (**x).is_some()).count()
+        self.src_to_dsts.iter().filter_map(|x| x.as_ref())
+        .map(|x|x.len())
+        .sum()
     }
 
     fn link(&mut self, src: T, dst: T) {

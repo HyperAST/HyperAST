@@ -5,15 +5,14 @@ use std::{fmt::Debug, sync::Mutex};
 use hyper_gumtree::{
     actions::{
         action_vec::{apply_action, ActionsVec},
-        bfs_wrapper,
         script_generator2::{Act, ScriptGenerator, SimpleAction},
         Actions,
     },
+    decompressed_tree_store::{
+        bfs_wrapper, BreathFirst, BreathFirstIterable, CompletePostOrder, Initializable,
+        PostOrderIterable, ShallowDecompressedTreeStore, SimpleZsTree,
+    },
     matchers::{
-        decompressed_tree_store::{
-            BreathFirst, BreathFirstIterable, CompletePostOrder, Initializable, PostOrderIterable,
-            ShallowDecompressedTreeStore, SimpleZsTree,
-        },
         heuristic::gt::{
             bottom_up_matcher::BottomUpMatcher, greedy_bottom_up_matcher::GreedyBottomUpMatcher,
             greedy_subtree_matcher::SubtreeMatcher,
@@ -295,12 +294,7 @@ fn main() {
             HashedNodeRef,
             _,
             // 2,
-        >::matchh(
-            &java_tree_gen.stores.node_store,
-            &src,
-            &dst,
-            mappings,
-        );
+        >::matchh(&java_tree_gen.stores.node_store, &src, &dst, mappings);
         let SubtreeMatcher {
             src_arena,
             dst_arena,
@@ -358,7 +352,7 @@ fn main() {
         //         .map(|id: u16| dst_arena.original(&id))
         //         .collect::<Vec<_>>()
         // );
-        let dst_arena = bfs_wrapper::SD::from(&java_tree_gen.stores.node_store, &dst_arena);
+        let dst_arena = bfs_wrapper::SimpleBfsMapper::from(&java_tree_gen.stores.node_store, &dst_arena);
         // println!("{:?} {:?}", dst_arena.root(), dst);
         // println!("{:?}", dst_arena);
         // println!(

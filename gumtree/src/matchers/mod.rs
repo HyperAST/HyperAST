@@ -1,4 +1,3 @@
-pub mod decompressed_tree_store;
 pub mod heuristic;
 pub mod mapping_store;
 pub mod matcher;

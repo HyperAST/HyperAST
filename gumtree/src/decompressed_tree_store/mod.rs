@@ -1,9 +1,22 @@
+use std::{fmt::Debug, marker::PhantomData};
+
 /// different decompressed tree layouts optimized for different traversals and exposing different features.
 /// Here decomressed means that nodes are not shared ie. they only have one parent.
 use num_traits::PrimInt;
 
 use crate::tree::tree_path::CompressedTreePath;
 use hyper_ast::types::{NodeStore, Tree, WithChildren};
+
+// pub mod breath_first;
+pub mod bfs_wrapper;
+pub mod breath_first;
+pub mod complete_post_order;
+pub mod pre_order_wrapper;
+pub use breath_first::BreathFirst;
+pub mod simple_zs_tree;
+pub use simple_zs_tree::SimpleZsTree;
+// pub mod complete_post_order;
+pub use complete_post_order::CompletePostOrder;
 
 pub trait Initializable<'a, IdC, IdD> {
     fn new<
@@ -75,14 +88,57 @@ pub trait DecompressedTreeStore<'a, IdC, IdD>: ShallowDecompressedTreeStore<'a, 
     fn first_descendant(&self, i: &IdD) -> IdD;
 }
 
-pub trait DecompressedWithParent<'a, IdC, IdD> {
+// pub struct IterNormPath<'x, IdC, IdD: Clone, D: DecompressedWithParent<'x, IdC, IdD>> {
+//     id: IdD,
+//     internal: &'x D,
+//     phantom: PhantomData<*const IdC>,
+// }
+
+// impl<'x, IdC, IdD: Clone, D: DecompressedWithParent<'x, IdC, IdD>> Iterator
+//     for IterNormPath<'x, IdC, IdD, D>
+// {
+//     type Item = IdD;
+
+//     fn next(&mut self) -> Option<Self::Item> {
+//         self.id = self.internal.parent(&self.id)?;
+//         Some(self.id.clone())
+//     }
+// }
+
+pub trait DecompressedWithParent<'a, IdC, IdD: Clone> {
     fn has_parent(&self, id: &IdD) -> bool;
     fn parent(&self, id: &IdD) -> Option<IdD>;
-    fn position_in_parent<S>(&self, store: &S, c: &IdD) -> <S::R<'a> as WithChildren>::ChildIdx
+    type PIt<'b>: 'b + Iterator<Item=IdD> where Self: 'b;
+    fn parents(
+        &self,
+        id: IdD,
+    ) -> Self::PIt<'_>;
+    // fn norm_path(
+    //     &self,
+    //     id: IdD,
+    // ) -> Self::PIt<'_>;
+    // fn parents<'b,D:DecompressedWithParent<'b, IdC, IdD>>(
+    //     d: &'b D,
+    //     id: IdD,
+    // ) -> impl Iterator<Item=IdD>
+    // where
+    //     Self: Sized,
+    // {
+    //     IterParents {
+    //         id: id.clone(),
+    //         internal: d,
+    //         phantom: PhantomData,
+    //     }
+    // }
+    fn position_in_parent<'b, S>(
+        &self,
+        store: &'b S,
+        c: &IdD,
+    ) -> <S::R<'b> as WithChildren>::ChildIdx
     where
         S: NodeStore<IdC>,
         // for<'a> < <S as NodeStore2<IdC>>::R  as GenericItem<'a>>::Item:WithChildren<TreeId = IdC>,
-        S::R<'a>: WithChildren<TreeId = IdC>;
+        S::R<'b>: WithChildren<TreeId = IdC>;
     // S: 'a + NodeStore2<T::TreeId, R<'a> = T> //NodeStore<'a, T::TreeId, T>
 }
 
@@ -118,13 +174,6 @@ pub trait PostOrder<'a, IdC, IdD>: PostOrderIterable<'a, IdC, IdD> {
 pub trait PostOrderKeyRoots<'a, IdC, IdD: PrimInt>: PostOrder<'a, IdC, IdD> {
     fn kr(&self, x: IdD) -> IdD;
 }
-
-pub mod breath_first;
-pub use breath_first::BreathFirst;
-pub mod simple_zs_tree;
-pub use simple_zs_tree::SimpleZsTree;
-pub mod complete_post_order;
-pub use complete_post_order::CompletePostOrder;
 
 pub struct Iter<IdD> {
     current: IdD,
@@ -165,3 +214,44 @@ where
     }
     z + 1
 }
+
+pub trait MapDecompressed<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<'a, IdC, IdD>>:
+    Sized
+{
+    /// Converts to this type from the input type.
+    fn map_it<S>(_: &'a S, _: &'a D) -> Self
+    where
+        S: NodeStore<IdC>,
+        S::R<'a>: WithChildren<TreeId = IdC>;
+}
+
+pub trait WrapDecompressed<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<'a, IdC, IdD>>:
+    Sized
+{
+    /// Converts to this type from the input type.
+    fn wrap_it<S>(_: &'a S, _: &'a D) -> Self
+    where
+        S: NodeStore<IdC>,
+        S::R<'a>: WithChildren<TreeId = IdC>;
+}
+
+// pub struct SimpleMapper<'a, IdC, IdD, D: DecompressedTreeStore<'a, IdC, IdD>> {
+//     map: Vec<IdD>,
+//     // fc: Vec<IdD>,
+//     rev: Vec<IdD>,
+//     back: &'a D,
+//     phantom: PhantomData<*const IdC>,
+// }
+
+// impl<'a, IdC, IdD: Debug, D: Debug + DecompressedTreeStore<'a, IdC, IdD>> Debug
+//     for SimpleMapper<'a, IdC, IdD, D>
+// {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("SD")
+//             .field("map", &self.map)
+//             .field("rev", &self.rev)
+//             .field("back", &self.back)
+//             .field("phantom", &self.phantom)
+//             .finish()
+//     }
+// }

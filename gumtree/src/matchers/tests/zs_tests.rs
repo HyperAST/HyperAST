@@ -1,8 +1,8 @@
 use crate::tests::examples::example_eq_simple_class_rename;
 use crate::tree::simple_tree::Tree;
 use crate::{
+    decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore, SimpleZsTree},
     matchers::{
-        decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore, SimpleZsTree},
         mapping_store::{DefaultMappingStore, MappingStore},
         optimal::zs::ZsMatcher,
     },
@@ -14,10 +14,7 @@ use hyper_ast::types::{LabelStore, Labeled, NodeStore, Typed};
 #[test]
 fn test_zs_paper_for_initial_layout() {
     let (label_store, ..) = vpair_to_stores(example_zs_paper());
-    println!(
-        "{}",
-        label_store.resolve(&0).to_owned()
-    );
+    println!("{}", label_store.resolve(&0).to_owned());
     // assert_eq!(label_store.resolve(&0).to_owned(), b"");
 }
 
@@ -143,7 +140,7 @@ fn test_with_slide_example() {
     let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_slides());
     // assert_eq!(label_store.resolve(&0).to_owned(), b"");
     let mappings = DefaultMappingStore::new();
-    let mapper = ZsMatcher::<CompletePostOrder<u16, u16>, _,_, _, _>::matchh(
+    let mapper = ZsMatcher::<CompletePostOrder<u16, u16>, _, _, _, _>::matchh(
         &node_store,
         &label_store,
         src,
@@ -217,4 +214,3 @@ fn test_with_slide_example2() {
         &dst_arena.child(&node_store, dst, &[2])
     ));
 }
-

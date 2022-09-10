@@ -333,6 +333,24 @@ impl<'a> crate::types::Typed for HashedNodeRef<'a> {
     }
 }
 
+impl<'a> crate::types::WithStats for HashedNodeRef<'a> {
+    fn size(&self) -> usize {
+        todo!()
+        // self.0.get_component::<compo::BytesLen>().unwrap().0.to_usize().unwrap()
+    }
+
+    fn height(&self) -> usize {
+        todo!()
+        // self.0.get_component::<compo::Height>().unwrap().0.to_usize().unwrap()
+    }
+}
+
+impl<'a> crate::types::WithSerialization for HashedNodeRef<'a> {
+    fn bytes_len(&self) -> usize {
+        self.0.get_component::<compo::BytesLen>().unwrap().0.to_usize().unwrap()
+    }
+}
+
 impl<'a> crate::types::Labeled for HashedNodeRef<'a> {
     type Label = DefaultLabelIdentifier;
 
@@ -386,14 +404,7 @@ impl<'a> crate::types::WithChildren for HashedNodeRef<'a> {
 
     fn child_count(&self) -> u16 {
         self.cs()
-            .unwrap_or_else(|x| {
-                panic!(
-                    "too much children: {}\n{}",
-                    x,
-                    std::backtrace::Backtrace::force_capture()
-                );
-            })
-            .len()
+            .map_or(0,|x|x.len())
             .to_u16()
             .expect("too much children")
     }

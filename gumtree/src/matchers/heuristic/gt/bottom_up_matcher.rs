@@ -4,9 +4,9 @@ use num_traits::{zero, PrimInt, ToPrimitive};
 
 use crate::{
     matchers::{
-        decompressed_tree_store::{DecompressedTreeStore, DecompressedWithParent},
         mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
     },
+    decompressed_tree_store::{DecompressedTreeStore, DecompressedWithParent},
     utils::sequence_algorithms::longest_common_subsequence,
 };
 use hyper_ast::types::{HashKind, NodeStore, Tree, Typed, WithHashs};

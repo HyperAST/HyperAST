@@ -1,4 +1,4 @@
-use num_traits::{cast, PrimInt};
+use num_traits::{cast, PrimInt, ToPrimitive};
 
 use super::mapping_store::MonoMappingStore;
 
@@ -55,11 +55,17 @@ fn number_of_common_descendants<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
     for t in src {
         if mappings.is_src(t) {
             let m = mappings.get_dst(t).to_usize().unwrap();
-            if m-min < dst_descendants.len() && dst_descendants[m - min] {
+            if dst_descendants.len() != 0
+                && min <= m
+                && m - min < dst_descendants.len()
+                && dst_descendants[m - min]
+            {
                 common += 1;
             }
         }
     }
+
+    // println!("{}", src.len());
 
     return common;
 }
