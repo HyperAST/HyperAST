@@ -1,15 +1,15 @@
 [package]
-name = "rusted_gumtree_benchmark"
+name = "hyper_ast_benchmark"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-git2 = "0.13.24"
 tree-sitter = "0.20.0"
-rusted_gumtree_gen_ts_java = { path = "../gen/tree-sitter/java" }
-rusted_gumtree_cvs_git = { path = "../cvs/git" }
+hyper_gumtree = { path = "../gumtree" }
+hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
+hyper_ast_cvs_git = { path = "../cvs/git" }
 env_logger = "0.9.0"
 log = { version = "0.4.6", features = ["max_level_debug", "release_max_level_warn"] }
 
@@ -19,11 +19,27 @@ pommes = "0.0.2"
 serde = { version = "1.0.130" }
 serde-xml-rs = "0.5.1"
 
+
+cfg-if = "1.0"
+
+# TODO use it
+criterion = "0.3.6"
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = "0.3.2"
+
 [build-dependencies]
 
 # [profile.release]
 # debug = 1
 
-# [[bin]]
-# name = "bench"
-# path = "src/bin/main.rs"
+[[bin]]
+name = "reserializing"
+path = "src/reserializing.rs"
+
+# [profile.release]
+## release optimizations
+# lto = "fat"
+# codegen-units = 1
+# rustflags = ["-C target-cpu=native"]
+# panic = "abort"

@@ -1,22 +1,25 @@
-// use rusted_gumtree_core::tree::tree::{NodeStore, Stored, NodeStoreMut};
+use hyper_ast::types::{Stored};
 
-use hyper_ast::types::{NodeStore, Stored, NodeStoreMut};
 
 pub struct Arena<T>(stack_graphs::arena::Arena<T>);
 
-impl<'a, T> NodeStore<'a, T::TreeId, &'a T> for Arena<T>
-where
-    T: 'a + Stored<TreeId = stack_graphs::arena::Handle<T>>,
-{
-    fn resolve(&'a self, id: &T::TreeId) -> &'a T {
-        self.0.get(*id)
-    }
-}
-impl<'a, T> NodeStoreMut<'a, T, &'a T> for Arena<T>
-where
-    T: 'a + Stored<TreeId = stack_graphs::arena::Handle<T>>,
-{
-}
+// impl<'a, T> NodeStore<'a, T::TreeId, &'a T> for Arena<T>
+// where
+//     T: 'a + Stored<TreeId = stack_graphs::arena::Handle<T>>,
+// {
+//     fn resolve(&'a self, id: &T::TreeId) -> &'a T {
+//         self.0.get(*id)
+//     }
+// }
+// impl<'a, T> NodeStoreMut<'a, T, &'a T> for Arena<T>
+// where
+//     T: 'a + Stored<TreeId = stack_graphs::arena::Handle<T>>,
+// {
+//     fn get_or_insert(&mut self, node: T) -> <T as Stored>::TreeId {
+//         todo!()
+//     }
+// }
+
 impl<'a, T> Arena<T>
 where
     T: 'a + Stored<TreeId = stack_graphs::arena::Handle<T>>,

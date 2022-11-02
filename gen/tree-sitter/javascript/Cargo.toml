@@ -1,5 +1,5 @@
 [package]
-name = "rusted_gumtree_gen_ts_javascript"
+name = "hyper_ast_gen_ts_javascript"
 version = "0.1.0"
 edition = "2018"
 
@@ -7,8 +7,9 @@ edition = "2018"
 
 [dependencies]
 tree-sitter = "0.20.0"
-tree-sitter-javascript = { path = "tree-sitter-javascript", version="0.20.0" }
+tree-sitter-javascript = {path="tree-sitter-javascript", version="0.20.0"}
 hyper_ast = { path = "../../../hyper_ast" }
+
 
 [build-dependencies]
 cc="*"

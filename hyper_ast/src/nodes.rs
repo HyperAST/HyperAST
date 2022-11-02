@@ -5,18 +5,21 @@ use std::{
     marker::PhantomData,
 };
 
+use num::ToPrimitive;
 use string_interner::{DefaultSymbol, Symbol};
 
-use crate::types::Type;
+use crate::{
+    impact::serialize::{Keyed, MySerialize},
+    types::Type,
+};
 
 pub type TypeIdentifier = Type;
 
 type Label = Vec<u8>;
 
 pub trait RefContainer {
-    type Ref: ?Sized;
     type Result;
-    fn check<U: Borrow<Self::Ref> + AsRef<[u8]>>(&self, rf: U) -> Self::Result;
+    fn check<U: MySerialize + Keyed<usize>>(&self, rf: U) -> Self::Result;
 }
 
 /// identifying data for a node in an HyperAST
@@ -46,7 +49,7 @@ pub enum CompressedNode<NodeId, LabelId> {
     Label { label: LabelId, kind: Type },
     Children2 { children: [NodeId; 2], kind: Type },
     Children { children: Box<[NodeId]>, kind: Type },
-    Spaces(Box<[Space]>),
+    Spaces(LabelId), //Box<[Space]>),
 }
 
 pub(crate) enum SimpNode<NodeId, LabelId> {
@@ -174,14 +177,14 @@ impl<N, L: Eq> crate::types::Labeled for CompressedNode<N, L> {
 }
 
 impl<N: Eq + Clone, L> crate::types::WithChildren for CompressedNode<N, L> {
-    type ChildIdx = u8;
-    fn child_count(&self) -> u8 {
+    type ChildIdx = u16;
+    fn child_count(&self) -> Self::ChildIdx {
         match self {
             CompressedNode::Children2 {
                 children: _,
                 kind: _,
             } => 2,
-            CompressedNode::Children { children, kind: _ } => children.len() as u8,
+            CompressedNode::Children { children, kind: _ } => children.len().to_u16().unwrap(),
             _ => 0,
         }
     }
@@ -206,26 +209,28 @@ impl<N: Eq + Clone, L> crate::types::WithChildren for CompressedNode<N, L> {
         }
     }
 
-    // fn descendants_count(&self) -> Self::TreeId {
-    //     match self {
-    //         CompressedNode::Children2 {
-    //             children: _,
-    //             kind: _,
-    //         } => todo!(),
-    //         CompressedNode::Children {
-    //             children: _,
-    //             kind: _,
-    //         } => todo!(),
-    //         _ => 0,
-    //     }
-    // }
-
-    fn get_children<'a>(&'a self) -> &'a [Self::TreeId] {
+    fn get_children<'a>(&'a self) -> &[Self::TreeId] {
         match self {
             CompressedNode::Children2 { children, kind: _ } => &*children,
             CompressedNode::Children { children, kind: _ } => &*children,
             _ => &[],
         }
+    }
+
+    fn get_children_cpy<'a>(&'a self) -> Vec<Self::TreeId> {
+        match self {
+            CompressedNode::Children2 { children, kind: _ } => children.to_vec(),
+            CompressedNode::Children { children, kind: _ } => children.to_vec(),
+            _ => vec![],
+        }
+    }
+
+    fn try_get_children<'a>(&'a self) -> Option<&'a [Self::TreeId]> {
+        Some(match self {
+            CompressedNode::Children2 { children, kind: _ } => &*children,
+            CompressedNode::Children { children, kind: _ } => &*children,
+            _ => &[],
+        })
     }
 }
 impl<N, L> crate::types::Node for CompressedNode<N, L> {}
@@ -307,6 +312,18 @@ impl Space {
         }
     }
 }
+
+impl Space {
+    pub(crate) fn to_string(&self) -> &str {
+        match self {
+            Space::Space => " ",
+            Space::NewLine => "\n",
+            Space::CariageReturn => "\r",
+            Space::Tabulation => "\t",
+            Space::ParentIndentation => "0",
+        }
+    }
+}
 // impl Deref for Spaces {
 
 // }
@@ -336,7 +353,8 @@ impl Space {
                 CR => Space::CariageReturn,
                 x => {
                     log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-                    panic!("{} {:?}", x as u8, spaces)
+                    println!("{:?}", std::str::from_utf8(spaces));
+                    panic!("{:?}", spaces)
                 }
             })
             .collect()
@@ -460,6 +478,41 @@ trait DisplayTreeStruct<IdN: Clone, IdL>: Display {
         }
     }
 }
+pub fn print_tree_ids<
+    IdN: Debug,
+    IdL,
+    T: Borrow<CompressedNode<IdN, IdL>>,
+    F: Copy + Fn(&IdN) -> T,
+>(
+    f: F,
+    id: &IdN,
+) {
+    match f(id).borrow() {
+        CompressedNode::Type(_) => {
+            print!("[{:?}]", id);
+            // None
+        }
+        CompressedNode::Label { label: _, .. } => {
+            print!("{{{:?}}}", id);
+            // None
+        }
+        CompressedNode::Children2 { children, .. } => {
+            print!("({:?} ", id);
+            for id in children {
+                print_tree_ids(f, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Children { children, .. } => {
+            print!("({:?} ", id);
+            for id in children.iter() {
+                print_tree_ids(f, &id);
+            }
+            print!(")");
+        }
+        CompressedNode::Spaces(_) => print!("{{{:?}}}", id),
+    };
+}
 pub fn print_tree_structure<
     IdN,
     IdL,
@@ -487,7 +540,6 @@ pub fn print_tree_structure<
         }
         CompressedNode::Children { kind, children } => {
             print!("({} ", kind.to_string());
-            let children = children.clone();
             for id in children.iter() {
                 print_tree_structure(f, &id);
             }
@@ -531,7 +583,6 @@ pub fn print_tree_labels<
         }
         CompressedNode::Children { kind, children } => {
             print!("({} ", kind.to_string());
-            let children = children.clone();
             for id in children.iter() {
                 print_tree_labels(f, g, &id);
             }
@@ -595,16 +646,71 @@ pub fn print_tree_syntax<
         }
         CompressedNode::Children { kind, children } => {
             print!("({} ", kind.to_string());
-            let children = children.clone();
             for id in children.iter() {
                 print_tree_syntax(f, g, &id, out);
             }
             print!(")");
         }
         CompressedNode::Spaces(s) => {
+            let s = &g(s);
             print!("(_ ");
             let a = &*s;
-            a.iter().for_each(|a| print!("{:?}", a));
+            // print!("{}",s);
+            print!("{:?}", Space::format_indentation(s.as_bytes()));
+            // a.iter().for_each(|a| print!("{:?}", a));
+            print!(")");
+        }
+    };
+}
+
+pub fn print_tree_syntax_with_ids<
+    IdN: Debug,
+    IdL,
+    T: Borrow<CompressedNode<IdN, IdL>>,
+    F: Copy + Fn(&IdN) -> T,
+    G: Copy + Fn(&IdL) -> String,
+    W: std::fmt::Write,
+>(
+    f: F,
+    g: G,
+    id: &IdN,
+    out: &mut W,
+) {
+    match f(id).borrow() {
+        CompressedNode::Type(kind) => {
+            print!("{:?}{}", id, kind.to_string());
+            // None
+        }
+        CompressedNode::Label { kind, label } => {
+            let s = &g(label);
+            if s.len() > 20 {
+                print!("({:?}{}='{}...')", id, kind.to_string(), &s[..20]);
+            } else {
+                print!("({:?}{}='{}')", id, kind.to_string(), s);
+            }
+            // None
+        }
+        CompressedNode::Children2 { kind, children } => {
+            print!("({:?}{} ", id, kind.to_string());
+            for id in children {
+                print_tree_syntax_with_ids(f, g, &id, out);
+            }
+            print!(")");
+        }
+        CompressedNode::Children { kind, children } => {
+            print!("({:?}{} ", id, kind.to_string());
+            for id in children.iter() {
+                print_tree_syntax_with_ids(f, g, &id, out);
+            }
+            print!(")");
+        }
+        CompressedNode::Spaces(s) => {
+            let s = &g(s);
+            print!("({:?}_ ", id);
+            // let a = &*s;
+            // print!("{}",s);
+            print!("{:?}", Space::format_indentation(s.as_bytes()));
+            // a.iter().for_each(|a| print!("{:?}", a));
             print!(")");
         }
     };
@@ -641,7 +747,6 @@ pub fn serialize<
             None
         }
         CompressedNode::Children { kind: _, children } => {
-            let children = &(*children);
             let mut it = children.iter();
             let mut ind = serialize(f, g, &it.next().unwrap(), out, parent_indent)
                 .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
@@ -652,11 +757,161 @@ pub fn serialize<
             None
         }
         CompressedNode::Spaces(s) => {
-            let a = &*s;
-            let mut b = String::new();
-            a.iter()
-                .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
+            let s = g(s);
+            // let a = &*s;
+            let mut b:String = //s; //String::new();
+            Space::format_indentation(s.as_bytes())
+                .iter()
+                .map(|x| x.to_string())
+                .collect();
+            // a.iter()
+            //     .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
             out.write_str(&b).unwrap();
+            Some(if b.contains("\n") {
+                b
+            } else {
+                parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
+            })
+        }
+    }
+}
+
+fn escape(src: &str) -> String {
+    use std::fmt::Write;
+    let mut escaped = String::with_capacity(src.len());
+    let mut utf16_buf = [0u16; 2];
+    for c in src.chars() {
+        match c {
+            ' ' => escaped += " ",
+            '\x08' => escaped += "\\b",
+            '\x0c' => escaped += "\\f",
+            '\n' => escaped += "\\n",
+            '\r' => escaped += "\\r",
+            '\t' => escaped += "\\t",
+            '"' => escaped += "\\\"",
+            '\\' => escaped += "\\\\",
+            c if c.is_ascii_graphic() => escaped.push(c),
+            c => {
+                let encoded = c.encode_utf16(&mut utf16_buf);
+                for utf16 in encoded {
+                    write!(&mut escaped, "\\u{:04X}", utf16).unwrap();
+                }
+            }
+        }
+    }
+    escaped
+}
+
+pub fn json_serialize<
+    IdN,
+    IdL,
+    T: Borrow<CompressedNode<IdN, IdL>>,
+    F: Copy + Fn(&IdN) -> T,
+    G: Copy + Fn(&IdL) -> String,
+    W: std::fmt::Write,
+    const SPC:bool,
+>(
+    f: F,
+    g: G,
+    id: &IdN,
+    out: &mut W,
+    parent_indent: &str,
+) -> Option<String> {
+    match f(id).borrow() {
+        // CompressedNode::Type(kind) => {
+        //     print!("{}", kind.to_string());
+        //     // None
+        // }
+        // CompressedNode::Label { kind, label } => {
+        //     let s = &g(label);
+        //     if s.len() > 20 {
+        //         print!("({}='{}...')", kind.to_string(), &s[..20]);
+        //     } else {
+        //         print!("({}='{}')", kind.to_string(), s);
+        //     }
+        //     // None
+        // }
+        // CompressedNode::Children2 { kind, children } => {
+        //     print!("({} ", kind.to_string());
+        //     for id in children {
+        //         print_tree_syntax(f, g, &id, out);
+        //     }
+        //     print!(")");
+        // }
+        // CompressedNode::Children { kind, children } => {
+        //     print!("({} ", kind.to_string());
+        //     for id in children.iter() {
+        //         print_tree_syntax(f, g, &id, out);
+        //     }
+        //     print!(")");
+        // }
+        // CompressedNode::Spaces(s) => {
+        //     let s = &g(s);
+        //     print!("(_ ");
+        //     let a = &*s;
+        //     // print!("{}",s);
+        //     print!("{:?}", Space::format_indentation(s.as_bytes()));
+        //     // a.iter().for_each(|a| print!("{:?}", a));
+        //     print!(")");
+        // }
+        CompressedNode::Type(kind) => {
+            out.write_str("\"").unwrap();
+            out.write_str(&kind.to_string()).unwrap();
+            out.write_str("\"").unwrap();
+            None
+        }
+        CompressedNode::Label { kind, label } => {
+            out.write_str("{\"kind\":\"").unwrap();
+            out.write_str(&kind.to_string()).unwrap();
+            out.write_str("\",\"label\":\"").unwrap();
+            let s = g(label);
+            out.write_str(&escape(&s)).unwrap();
+            out.write_str("\"}").unwrap();
+            None
+        }
+        CompressedNode::Children2 { kind, children } => {
+            out.write_str("{\"kind\":\"").unwrap();
+            out.write_str(&kind.to_string()).unwrap();
+            out.write_str("\",\"children\":[").unwrap();
+            let ind = json_serialize::<_,_,_,_,_,_,SPC>(f, g, &children[0], out, parent_indent)
+                .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
+            out.write_str(",").unwrap();
+            json_serialize::<_,_,_,_,_,_,SPC>(f, g, &children[1], out, &ind);
+            out.write_str("]}").unwrap();
+            None
+        }
+        CompressedNode::Children { kind, children } => {
+            out.write_str("{\"kind\":\"").unwrap();
+            out.write_str(&kind.to_string()).unwrap();
+            out.write_str("\",\"children\":[").unwrap();
+            let mut it = children.iter();
+            let mut ind = json_serialize::<_,_,_,_,_,_,SPC>(f, g, &it.next().unwrap(), out, parent_indent)
+                .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
+            for id in it {
+                out.write_str(",").unwrap();
+                ind = json_serialize::<_,_,_,_,_,_,SPC>(f, g, &id, out, &ind)
+                    .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
+            }
+            out.write_str("]}").unwrap();
+            None
+        }
+        CompressedNode::Spaces(s) => {
+            let s = g(s);
+            let b:String = //s; //String::new();
+            Space::format_indentation(s.as_bytes())
+                .iter()
+                .map(|x| x.to_string())
+                .collect();
+            if SPC {
+                // let a = &*s;
+                // a.iter()
+                //     .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
+                out.write_str("{\"kind\":\"").unwrap();
+                out.write_str(&"spaces").unwrap();
+                out.write_str("\",\"label\":\"").unwrap();
+                out.write_str(&escape(&b)).unwrap();
+                out.write_str("\"}").unwrap();
+            }
             Some(if b.contains("\n") {
                 b
             } else {

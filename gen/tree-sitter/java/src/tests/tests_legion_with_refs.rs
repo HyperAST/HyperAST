@@ -6,11 +6,9 @@ use std::{
 
 use hyper_ast::{
     store::{TypeStore, SimpleStores, labels::LabelStore, nodes::DefaultNodeStore as NodeStore}, 
-    nodes::RefContainer, tree_gen::TreeGen, filter::BloomResult, 
+    nodes::RefContainer, tree_gen::ZippedTreeGen, filter::BloomResult, 
     position::{ExploreStructuralPositions, StructuralPositionStore, StructuralPosition, Scout, TreePath}, types::WithChildren, utils::memusage_linux};
 use pretty_assertions::assert_eq;
-
-use tree_sitter::{Language, Parser};
 
 use crate::{
     legion_with_refs::{
@@ -18,19 +16,7 @@ use crate::{
     },
 };
 
-// use crate::java_tree_gen::{JavaTreeGen, TreeContext, TreeGenerator};
-
-extern "C" {
-    fn tree_sitter_java() -> Language;
-}
-
 fn run(text: &[u8]) {
-    let mut parser = Parser::new();
-
-    {
-        let language = unsafe { tree_sitter_java() };
-        parser.set_language(language).unwrap();
-    }
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
         type_store: TypeStore {},
@@ -42,7 +28,8 @@ fn run(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let tree = parser.parse(text, None).unwrap();
+    
+    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
@@ -78,13 +65,7 @@ fn test_cases() {
 #[test]
 fn test_equals() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
-    let text = CASE_28.as_bytes();
-    let mut parser = Parser::new();
-
-    {
-        let language = unsafe { tree_sitter_java() };
-        parser.set_language(language).unwrap();
-    }
+    let text = CASE_33.as_bytes();
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
         type_store: TypeStore {},
@@ -96,7 +77,7 @@ fn test_equals() {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let tree = parser.parse(text, None).unwrap();
+    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
@@ -117,6 +98,7 @@ fn test_equals() {
         &mut out,
         &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
     );
+    println!();
 
     {
         // playing with refs
@@ -133,14 +115,14 @@ fn test_equals() {
         let bb = "B".as_bytes().to_owned().into_boxed_slice();
         let d = bb.as_ref(); //_full_node.local.refs.unwrap().iter().next().unwrap();
 
-        let c = b.check(d);
+        // let c = b.check(d);
 
         let s = std::str::from_utf8(d).unwrap();
         println!("{}", java_tree_gen.stores.label_store);
-        match c {
-            BloomResult::MaybeContain => println!("Maybe contains {}", s),
-            BloomResult::DoNotContain => println!("Do not contains {}", s),
-        }
+        // match c {
+        //     BloomResult::MaybeContain => println!("Maybe contains {}", s),
+        //     BloomResult::DoNotContain => println!("Do not contains {}", s),
+        // }
     }
 //     use hyper_ast::position::extract_position;
 //     let mut position = extract_position(&java_tree_gen.stores, d_it.parents(), d_it.offsets());
@@ -150,12 +132,6 @@ fn test_equals() {
 
 #[test]
 fn test_special() {
-    let mut parser = Parser::new();
-
-    {
-        let language = unsafe { tree_sitter_java() };
-        parser.set_language(language).unwrap();
-    }
 
     // let mut parser: Parser, old_tree: Option<&Tree>
     let mut stores = SimpleStores {
@@ -212,7 +188,7 @@ public class A {
         // ";
         source_code1.as_bytes()
     };
-    let tree = parser.parse(text, None).unwrap();
+    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
 
     let _full_node = java_tree_gen.generate_file(b"", text, tree.walk());
@@ -309,7 +285,7 @@ public class A {
         // ";
         source_code1.as_bytes()
     };
-    let tree = parser.parse(text, None).unwrap();
+    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
@@ -379,12 +355,6 @@ impl std::fmt::Write for BuffOut {
 fn test_offset_computation() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
     let text = CASE_29.as_bytes();
-    let mut parser = Parser::new();
-
-    {
-        let language = unsafe { tree_sitter_java() };
-        parser.set_language(language).unwrap();
-    }
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
         type_store: TypeStore {},
@@ -396,7 +366,7 @@ fn test_offset_computation() {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let tree = parser.parse(text, None).unwrap();
+    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     let mut s = StructuralPositionStore::from(StructuralPosition::new(full_node.local.compressed_node));
@@ -429,12 +399,6 @@ fn test_offset_computation() {
 fn test_offset_computation2() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
     let text = CASE_30.as_bytes();
-    let mut parser = Parser::new();
-
-    {
-        let language = unsafe { tree_sitter_java() };
-        parser.set_language(language).unwrap();
-    }
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
         type_store: TypeStore {},
@@ -446,7 +410,7 @@ fn test_offset_computation2() {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let tree = parser.parse(text, None).unwrap();
+    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     let mut s = StructuralPositionStore::from(StructuralPosition::new(full_node.local.compressed_node));
@@ -486,6 +450,69 @@ fn test_offset_computation2() {
 static CASE_1: &'static str = "
 class A {
     char[] c = new char[] { (char) x };
+}
+";
+static CASE_1_1: &'static str = "package q.w.e;
+class A {
+    char c = null;
+}
+";
+static CASE_1_2: &'static str = "package q.w.e;
+class A {
+    A c = null;
+}
+";
+static CASE_1_3: &'static str = "package q.w.e;
+class A {
+    E c = null;
+}
+";
+
+static CASE_1_4: &'static str = "package q.w.e;
+class A  extends E {
+    X c = null;
+}
+";
+static CASE_1_5: &'static str = "package q.w.e;
+class A  extends E {
+    E c = null;
+}
+";
+static CASE_1_6: &'static str = "package q.w.e;
+class A  extends E {
+    E E = null;
+}
+";
+
+static CASE_1_7: &'static str = "package q.w.e;
+class A  extends E {
+    E E = null;
+    E e = E;
+}
+";
+static CASE_1_8: &'static str = "package q.w.e;
+import a.z.E;
+
+class A  extends E {
+    E E = null;
+    E e = E;
+}
+";
+static CASE_1_9: &'static str = "package q.w.e;
+import a.z.*;
+
+class A  extends E {
+    E E = null;
+    E e = E;
+}
+";
+static CASE_1_10: &'static str = "package q.w.e;
+import a.z.E;
+import a.z.*;
+
+class A  extends E {
+    E E = null;
+    E e = E;
 }
 ";
 
@@ -679,9 +706,17 @@ class A {
         test(1);
         A b = new A();
         b.test(a);
+        b.test(x);
         test(a);
         String s = \"\";
         b.test(s);
+    }
+}";
+
+static CASE_8_1: &'static str = "package q.w.e;
+class A {
+    <T> void test(T x) {
+        test(x);
     }
 }";
 
@@ -726,6 +761,7 @@ public class A {
 
 // TODO handle fall through variable declaration
 static CASE_12: &'static str = "package a;
+import z.VM;
 public class A {
     public static long f() {
         switch (VM.initLevel()) {
@@ -740,6 +776,7 @@ public class A {
             default:
                 // system fully initialized
                 assert VM.isBooted() && scl != null;
+                A d = null;
                 SecurityManager sm = System.getSecurityManager();
                 if (sm != null) {
                     checkClassLoaderPermission(scl, Reflection.getCallerClass());
@@ -796,6 +833,24 @@ static CASE_15: &'static str = "package q.w.e;
 class A<V> {
     public Enumeration<V> elements() {
         return this.<V>getEnumeration(VALUES);
+    }
+}";
+static CASE_15_1: &'static str = "package q.w.e;
+class A<V> {
+    public Enumeration<V> elements() {
+        return this.<V>getEnumeration(VALUES);
+    }
+    public Enumeration<V> getEnumeration(V v) {
+        return v.a;
+    }
+}";
+static CASE_15_2: &'static str = "package q.w.e;
+class A<V> {
+    public Enumeration<V> elements() {
+        return this.<V>getEnumeration();
+    }
+    public Enumeration<V> getEnumeration() {
+        return v.a;
     }
 }";
 
@@ -2166,6 +2221,144 @@ public class InnerTypeOk {
     Entry<String, String> test;
   }
 }"#;
+
+static CASE_31: &'static str = r#"
+package q.w.e;
+
+public class A {
+    public static class B {
+        public A f() {
+            return null;
+        }
+    }
+}"#;
+
+static CASE_32: &'static str = r#"
+package q.w.e;
+
+public class A {
+    public static void main(final String[] args) {
+        launch(args);
+    }
+}"#;
+
+
+static CASE_33: &'static str = r#"package io.quarkus.spring.web.deployment;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
+import javax.ws.rs.core.Response;
+import javax.ws.rs.ext.ExceptionMapper;
+import javax.ws.rs.ext.Provider;
+
+import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationValue;
+import org.jboss.jandex.DotName;
+
+import io.quarkus.gizmo.ClassCreator;
+import io.quarkus.gizmo.ClassOutput;
+import io.quarkus.gizmo.MethodCreator;
+import io.quarkus.gizmo.MethodDescriptor;
+import io.quarkus.gizmo.ResultHandle;
+import io.quarkus.runtime.util.HashUtil;
+
+abstract class AbstractExceptionMapperGenerator {
+
+    protected static final DotName RESPONSE_STATUS = DotName
+            .createSimple("org.springframework.web.bind.annotation.ResponseStatus");
+
+    protected final DotName exceptionDotName;
+    protected final ClassOutput classOutput;
+
+    private final boolean isResteasyClassic;
+
+    AbstractExceptionMapperGenerator(DotName exceptionDotName, ClassOutput classOutput, boolean isResteasyClassic) {
+        this.exceptionDotName = exceptionDotName;
+        this.classOutput = classOutput;
+        this.isResteasyClassic = isResteasyClassic;
+    }
+
+    abstract void generateMethodBody(MethodCreator toResponse);
+
+    String generate() {
+        String generatedClassName = "io.quarkus.spring.web.mappers." + exceptionDotName.withoutPackagePrefix() + "_Mapper_"
+                + HashUtil.sha1(exceptionDotName.toString());
+        String exceptionClassName = exceptionDotName.toString();
+
+        try (ClassCreator cc = ClassCreator.builder()
+                .classOutput(classOutput).className(generatedClassName)
+                .interfaces(ExceptionMapper.class)
+                .signature(String.format("Ljava/lang/Object;Ljavax/ws/rs/ext/ExceptionMapper<L%s;>;",
+                        exceptionClassName.replace('.', '/')))
+                .build()) {
+
+            preGenerateMethodBody(cc);
+
+            try (MethodCreator toResponse = cc.getMethodCreator("toResponse", Response.class.getName(), exceptionClassName)) {
+                generateMethodBody(toResponse);
+            }
+
+            // bridge method
+            try (MethodCreator bridgeToResponse = cc.getMethodCreator("toResponse", Response.class, Throwable.class)) {
+                MethodDescriptor toResponse = MethodDescriptor.ofMethod(generatedClassName, "toResponse",
+                        Response.class.getName(), exceptionClassName);
+                ResultHandle castedObject = bridgeToResponse.checkCast(bridgeToResponse.getMethodParam(0), exceptionClassName);
+                ResultHandle result = bridgeToResponse.invokeVirtualMethod(toResponse, bridgeToResponse.getThis(),
+                        castedObject);
+                bridgeToResponse.returnValue(result);
+            }
+        }
+
+        if (isResteasyClassic) {
+            String generatedSubtypeClassName = "io.quarkus.spring.web.mappers.Subtype" + exceptionDotName.withoutPackagePrefix()
+                    + "Mapper_" + HashUtil.sha1(exceptionDotName.toString());
+            // additionally generate a dummy subtype to get past the RESTEasy's ExceptionMapper check for synthetic classes
+            try (ClassCreator cc = ClassCreator.builder()
+                    .classOutput(classOutput).className(generatedSubtypeClassName)
+                    .superClass(generatedClassName)
+                    .build()) {
+                cc.addAnnotation(Provider.class);
+            }
+
+            return generatedSubtypeClassName;
+        }
+        return generatedClassName;
+    }
+
+    protected void preGenerateMethodBody(ClassCreator cc) {
+
+    }
+
+    protected int getHttpStatusFromAnnotation(AnnotationInstance responseStatusInstance) {
+        AnnotationValue code = responseStatusInstance.value("code");
+        if (code != null) {
+            return enumValueToHttpStatus(code.asString());
+        }
+
+        AnnotationValue value = responseStatusInstance.value();
+        if (value != null) {
+            return enumValueToHttpStatus(value.asString());
+        }
+
+        return 500; // the default value of @ResponseStatus
+    }
+
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    private int enumValueToHttpStatus(String enumValue) {
+        try {
+            Class<?> httpStatusClass = Class.forName("org.springframework.http.HttpStatus");
+            Enum correspondingEnum = Enum.valueOf((Class<Enum>) httpStatusClass, enumValue);
+            Method valueMethod = httpStatusClass.getDeclaredMethod("value");
+            return (int) valueMethod.invoke(correspondingEnum);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException("No spring web dependency found on the build classpath");
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}"#;
+
 
 enum D {
     F(&'static str),

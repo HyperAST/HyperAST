@@ -1,7 +1,7 @@
 use std::{fmt::{Display, Debug}, hash::Hash, collections::HashMap};
 
 use super::{
-    element::{ExplorableRef, LabelPtr, Nodes, RawLabelPtr, RefPtr},
+    element::{ExplorableRef, Nodes, RawLabelPtr, RefPtr},
     label_value::LabelValue,
     reference::DisplayRef,
 };
@@ -69,11 +69,11 @@ impl<Node: Clone> DeclType<Node> {
     pub fn map<N, FN: FnMut(&Node) -> N>(&self, mut f: FN) -> DeclType<N>
 where {
         match self {
-            DeclType::Runtime(b) => DeclType::Runtime(b.iter().map(|x| f(x)).collect()),
+            DeclType::Runtime(b) => DeclType::Runtime(b.iter().map(f).collect()),
             DeclType::Compile(t, s, i) => DeclType::Compile(
                 f(t),
-                s.iter().map(|x| f(x)).collect(),
-                i.iter().map(|x| f(x)).collect(),
+                s.iter().map(&mut f).collect(),
+                i.iter().map(&mut f).collect(),
             ),
         }
     }
@@ -112,11 +112,11 @@ impl<'a> Debug for DebugDecls<'a> {
             let kr = match k.node() {
                 None => ExplorableRef {
                     rf: 0,
-                    nodes: &self.nodes,
+                    nodes: self.nodes,
                 },
                 Some(rf) => ExplorableRef {
                     rf: *rf,
-                    nodes: &self.nodes,
+                    nodes: self.nodes,
                 },
             };
             match v {
@@ -126,7 +126,7 @@ impl<'a> Debug for DebugDecls<'a> {
                     for v in b.iter() {
                         let r = ExplorableRef {
                             rf: *v,
-                            nodes: &self.nodes,
+                            nodes: self.nodes,
                         };
                         write!(f," ({:?}) {:?}", *v, r)?;
                     }
@@ -136,7 +136,7 @@ impl<'a> Debug for DebugDecls<'a> {
                     // TODO print more things
                     let r = ExplorableRef {
                         rf: *v,
-                        nodes: &self.nodes,
+                        nodes: self.nodes,
                     };
                     write!(f,"   {:?}: {:?} => {:?}", k, kr, r)?;
                     if s.len() > 0 {
@@ -145,7 +145,7 @@ impl<'a> Debug for DebugDecls<'a> {
                     for v in s.iter() {
                         let v = ExplorableRef {
                             rf: *v,
-                            nodes: &self.nodes,
+                            nodes: self.nodes,
                         };
                         write!(f," {:?},", v)?;
                     }
@@ -155,7 +155,7 @@ impl<'a> Debug for DebugDecls<'a> {
                     for v in b.iter() {
                         let v = ExplorableRef {
                             rf: *v,
-                            nodes: &self.nodes,
+                            nodes: self.nodes,
                         };
                         write!(f," {:?},", v)?;
                     }

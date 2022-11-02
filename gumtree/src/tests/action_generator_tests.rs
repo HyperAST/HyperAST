@@ -1,18 +1,15 @@
+use crate::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
+use crate::tree::simple_tree::Tree;
 use crate::{
-    actions::{
-        bfs_wrapper,
-        script_generator::{self, Actions, SimpleAction, TestActions},
+    actions::script_generator::{self, Actions, SimpleAction, TestActions},
+    decompressed_tree_store::{
+        bfs_wrapper, CompletePostOrder, Initializable, ShallowDecompressedTreeStore,
     },
-    matchers::{
-        decompressed_tree_store::{CompletePostOrder, Initializable, ShallowDecompressedTreeStore},
-        mapping_store::{DefaultMappingStore, MappingStore},
-    },
-    tests::{
-        examples::{example_action, example_gt_java_code},
-        simple_tree::{vpair_to_stores, Tree, NS},
-    },
-    tree::tree::{LabelStore, Labeled, NodeStore},
+    matchers::mapping_store::{DefaultMappingStore, MappingStore},
+    tests::examples::{example_action, example_gt_java_code},
+    tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
 };
+use hyper_ast::types::{LabelStore, Labeled, NodeStore};
 use std::fmt;
 
 pub struct Fmt<F>(pub F)
@@ -31,6 +28,16 @@ where
 #[test]
 fn test_with_action_example() {
     let (label_store, node_store, src, dst) = vpair_to_stores(example_action());
+
+    println!(
+        "src tree:\n{:?}",
+        DisplayTree::new(&label_store, &node_store, src)
+    );
+    println!(
+        "dst tree:\n{:?}",
+        DisplayTree::new(&label_store, &node_store, dst)
+    );
+
     let mut ms = DefaultMappingStore::new();
     let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &src);
     let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &dst);
@@ -48,53 +55,59 @@ fn test_with_action_example() {
     ms.link(from_src(&[4]), from_dst(&[3]));
     ms.link(from_src(&[4, 0]), from_dst(&[3, 0, 0, 0]));
 
-    println!("{:?}", Fmt(|f| { node_store.fmt(f, &label_store) }));
-
+    let g = |x: &u16| -> String {
+        let n = node_store.resolve(x);
+        let x = n.get_label();
+        label_store.resolve(x).to_string()
+    };
     println!(
         "#src\n{:?}",
         Fmt(|f| {
-            let a = |x: &u16| -> String {
-                let n = node_store.resolve(x);
-                let x = &n.get_label();
-                std::str::from_utf8(&label_store.resolve(x))
-                    .unwrap()
-                    .to_owned()
-            };
-            src_arena.fmt(f, a)
+            src_arena
+                .iter()
+                .enumerate()
+                .for_each(|(i, x)| write!(f, "[{}]: {}\n", i, g(x)).unwrap());
+            write!(f, "")
         })
     );
 
     println!(
         "#dst\n{:?}",
         Fmt(|f| {
-            let a = |x: &u16| -> String {
-                let n = node_store.resolve(x);
-                let x = &n.get_label();
-                std::str::from_utf8(&label_store.resolve(x))
-                    .unwrap()
-                    .to_owned()
-            };
-            dst_arena.fmt(f, a)
+            dst_arena
+                .iter()
+                .enumerate()
+                .for_each(|(i, x)| write!(f, "[{}]: {}\n", i, g(x)).unwrap());
+            write!(f, "")
         })
     );
 
+    let dst_arena = SimpleBfsMapper::from(&node_store, &dst_arena);
+    // let actions = script_generator::ScriptGenerator::<
+    //     _,
+    //     TreeRef<Tree>,
+    //     _,
+    //     bfs_wrapper::SD<_, _, CompletePostOrder<_, IdD>>,
+    //     _,
+    // >::compute_actions(
+    //     &node_store,
+    //     &src_arena,
+    //     &dst_arena,
+    //     &ms,
+    // );
+
     let actions = script_generator::ScriptGenerator::<
         _,
-        Tree,
+        TreeRef<Tree>,
         _,
-        bfs_wrapper::SD<_, _, CompletePostOrder<_, IdD>>,
-        NS<Tree>,
-    >::compute_actions(
-        &node_store,
-        &src_arena,
-        &bfs_wrapper::SD::from(&node_store, &dst_arena),
-        &ms,
-    );
+        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
+        _,
+    >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     let lab = |x: &IdD| {
-        std::str::from_utf8(&label_store.resolve(&node_store.resolve(x).get_label()))
-            .unwrap()
-            .to_owned()
+        label_store
+            .resolve(&node_store.resolve(x).get_label())
+            .to_string()
     };
 
     println!("{:?}", actions);
@@ -272,31 +285,34 @@ fn test_with_zs_custom_example() {
     ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
     let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
     let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
-    // ms.addMapping(src, dst.getChild(0));
     ms.link(from_src(&[]), from_dst(&[0]));
-    // ms.addMapping(src.getChild(0), dst.getChild("0.0"));
     ms.link(from_src(&[0]), from_dst(&[0, 0]));
-    // ms.addMapping(src.getChild(1), dst.getChild("0.1"));
     ms.link(from_src(&[1]), from_dst(&[0, 1]));
-    // ms.addMapping(src.getChild("1.0"), dst.getChild("0.1.0"));
     ms.link(from_src(&[1, 0]), from_dst(&[0, 1, 0]));
-    // ms.addMapping(src.getChild("1.2"), dst.getChild("0.1.2"));
     ms.link(from_src(&[1, 2]), from_dst(&[0, 1, 2]));
-    // ms.addMapping(src.getChild("1.3"), dst.getChild("0.1.3"));
     ms.link(from_src(&[1, 3]), from_dst(&[0, 1, 3]));
+
+    let dst_arena = SimpleBfsMapper::from(&node_store, &dst_arena);
+    // let actions = script_generator::ScriptGenerator::<
+    //     _,
+    //     TreeRef<Tree>,
+    //     _,
+    //     bfs_wrapper::SD<_, _, CompletePostOrder<_, IdD>>,
+    //     NS<Tree>,
+    // >::compute_actions(
+    //     &node_store,
+    //     &src_arena,
+    //     &dst_arena,
+    //     &ms,
+    // );
 
     let actions = script_generator::ScriptGenerator::<
         _,
-        Tree,
+        TreeRef<Tree>,
         _,
-        bfs_wrapper::SD<_, _, CompletePostOrder<_, IdD>>,
-        NS<Tree>,
-    >::compute_actions(
-        &node_store,
-        &src_arena,
-        &bfs_wrapper::SD::from(&node_store, &dst_arena),
-        &ms,
-    );
+        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
+        _,
+    >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     // new Delete(src.getChild("1.1"))
     assert!(actions.has_actions(&[SimpleAction::Delete {

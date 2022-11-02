@@ -3,14 +3,14 @@ pub mod obj_creation;
 pub mod extends_package_local;
 
 use crate::{git::fetch_github_repository, preprocessed::PreProcessedRepository};
-use rusted_gumtree_gen_ts_java::impact::element::RefsEnum;
+use hyper_ast_gen_ts_java::impact::element::RefsEnum;
 use std::env;
 
 use hyper_ast::{
     // types::{Labeled, Tree, WithChildren},
     utils::memusage_linux,
 };
-use rusted_gumtree_gen_ts_java::impact::{element::{IdentifierFormat, LabelPtr}, partial_analysis::PartialAnalysis};
+use hyper_ast_gen_ts_java::impact::{element::{IdentifierFormat, LabelPtr}, partial_analysis::PartialAnalysis};
 
 #[test]
 fn example_main() {

@@ -1,25 +1,30 @@
+/// inspired by the implementation in gumtree
 use std::fmt::Debug;
 
 use bitvec::order::Lsb0;
-use num_traits::{cast, PrimInt};
+use hyper_ast::types::{GenericItem, Labeled, NodeStore, Stored, WithChildren};
+use num_traits::{cast, PrimInt, ToPrimitive};
 
 use crate::{
     matchers::{
-        decompressed_tree_store::{
-            BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
-        },
         mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
     },
-    tree::tree::{Labeled, NodeStore, Stored, WithChildren},
+    decompressed_tree_store::{
+        BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
+    },
     utils::sequence_algorithms::longest_common_subsequence,
 };
 
 pub trait Actions {
     fn len(&self) -> usize;
 }
+pub struct ActionsVec<A>(Vec<A>);
 
-#[derive(Debug)]
-pub struct ActionsVec<A: Debug>(Vec<A>);
+impl<A: Debug> Debug for ActionsVec<A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
 
 #[derive(PartialEq, Eq)]
 pub enum SimpleAction<Src, Dst, T: Stored + Labeled + WithChildren> {
@@ -54,7 +59,8 @@ pub enum SimpleAction<Src, Dst, T: Stored + Labeled + WithChildren> {
 
 impl<Src: Debug, Dst: Debug, T: Stored + Labeled + WithChildren> Debug for SimpleAction<Src, Dst, T>
 where
-    T::TreeId: PrimInt,
+    T::TreeId: Debug,
+    T::ChildIdx: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -65,33 +71,19 @@ where
                 old: _,
                 new: _,
             } => write!(f, "Upd {:?} {:?}", src, dst),
-            SimpleAction::Move { sub, parent, idx } => write!(
-                f,
-                "Mov {:?} {:?} {:?}",
-                sub,
-                parent,
-                cast::<_, u16>(*idx).unwrap()
-            ),
+            SimpleAction::Move { sub, parent, idx } => {
+                write!(f, "Mov {:?} {:?} {:?}", sub, parent, idx)
+            }
             SimpleAction::MoveUpdate {
                 sub,
                 parent,
                 idx,
                 old: _,
                 new: _,
-            } => write!(
-                f,
-                "MovUpd {:?} {:?} {:?}",
-                sub,
-                parent,
-                cast::<_, u16>(*idx).unwrap()
-            ),
-            SimpleAction::Insert { sub, parent, idx } => write!(
-                f,
-                "Ins {:?} {:?} {:?}",
-                cast::<_, usize>(*sub).unwrap(),
-                parent,
-                cast::<_, u16>(*idx).unwrap()
-            ),
+            } => write!(f, "MovUpd {:?} {:?} {:?}", sub, parent, idx),
+            SimpleAction::Insert { sub, parent, idx } => {
+                write!(f, "Ins {:?} {:?} {:?}", sub, parent, idx)
+            }
         }
     }
 }
@@ -111,7 +103,8 @@ impl<
         IdD: std::cmp::PartialEq + Debug,
     > TestActions<IdD, T> for ActionsVec<SimpleAction<IdD, IdD, T>>
 where
-    T::TreeId: PrimInt,
+    T::TreeId: Debug,
+    T::ChildIdx: Debug,
 {
     fn has_actions(&self, items: &[SimpleAction<IdD, IdD, T>]) -> bool {
         items.iter().all(|x| self.0.contains(x))
@@ -134,10 +127,12 @@ pub struct ScriptGenerator<
     IdD: PrimInt + Debug,
     T: 'a + Stored + Labeled + WithChildren,
     SS,
-    SD: BreathFirstIterable<'a, T::TreeId, IdD> + DecompressedWithParent<IdD>,
-    S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
-> where
-    T::TreeId: PrimInt,
+    SD: BreathFirstIterable<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
+    S,
+    // S: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
+>
+// T::TreeId: Debug,
+// T::ChildIdx: Debug,
 {
     store: &'a S,
     src_arena_dont_use: &'a SS,
@@ -149,7 +144,7 @@ pub struct ScriptGenerator<
     cpy_mappings: DefaultMappingStore<IdD>,
     moved: bitvec::vec::BitVec,
 
-    actions: ActionsVec<SimpleAction<IdD, IdD, T>>,
+    pub actions: ActionsVec<SimpleAction<IdD, IdD, T>>,
 
     src_in_order: InOrderNodes<IdD>,
     dst_in_order: InOrderNodes<IdD>,
@@ -159,17 +154,22 @@ impl<
         'a,
         IdD: PrimInt + Debug,
         T: 'a + Stored + Labeled + WithChildren,
-        SS: DecompressedTreeStore<T::TreeId, IdD>
-            + DecompressedWithParent<IdD>
-            + PostOrder<T::TreeId, IdD>,
-        SD: DecompressedTreeStore<T::TreeId, IdD>
-            + DecompressedWithParent<IdD>
+        SS: DecompressedTreeStore<'a,T::TreeId, IdD>
+            + DecompressedWithParent<'a,T::TreeId, IdD>
+            + PostOrder<'a,T::TreeId, IdD>,
+        SD: DecompressedTreeStore<'a, T::TreeId, IdD>
+            + DecompressedWithParent<'a, T::TreeId, IdD>
             + BreathFirstIterable<'a, T::TreeId, IdD>,
-        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
+        S: 'a,//:'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
     > ScriptGenerator<'a, IdD, T, SS, SD, S>
 where
+    S: 'a + NodeStore<T::TreeId>,
+    // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item:
+    //     hyper_ast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>+WithChildren,
+    S::R<'a>: hyper_ast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>,
     T::Label: Copy,
-    T::TreeId: PrimInt,
+    T::TreeId: Debug,
+    T::ChildIdx: Debug,
 {
     pub fn compute_actions(
         store: &'a S,
@@ -177,10 +177,19 @@ where
         dst_arena: &'a SD,
         ms: &'a DefaultMappingStore<IdD>,
     ) -> ActionsVec<SimpleAction<IdD, IdD, T>> {
-        Self::new(store, src_arena, dst_arena)
+        ScriptGenerator::<'a, IdD, T, SS, SD, S>::new(store, src_arena, dst_arena)
             .init_cpy(ms)
             .generate()
             .actions
+    }
+    pub fn precompute_actions(
+        store: &'a S,
+        src_arena: &'a SS,
+        dst_arena: &'a SD,
+        ms: &'a DefaultMappingStore<IdD>,
+    ) -> ScriptGenerator<'a, IdD, T, SS, SD, S> {
+        ScriptGenerator::<'a, IdD, T, SS, SD, S>::new(store, src_arena, dst_arena)
+            .init_cpy(ms)
     }
 
     fn new(store: &'a S, src_arena: &'a SS, dst_arena: &'a SD) -> Self {
@@ -226,7 +235,8 @@ where
         self
     }
 
-    fn generate(mut self) -> Self {
+    pub fn generate(mut self) -> Self
+    {
         // fake root ?
         // fake root link ?
 
@@ -641,7 +651,8 @@ impl<'a, IdC, IdD: num_traits::PrimInt> Iterator for Iter<'a, IdC, IdD> {
 
 impl<T: Stored + Labeled + WithChildren, IdD: Debug> ActionsVec<SimpleAction<IdD, IdD, T>>
 where
-    T::TreeId: PrimInt,
+    T::TreeId: Debug,
+    T::ChildIdx: Debug,
 {
     pub(crate) fn push(&mut self, action: SimpleAction<IdD, IdD, T>) {
         self.0.push(action)

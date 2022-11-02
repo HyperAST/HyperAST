@@ -1,6 +1,7 @@
+/// Path in tree optimized for memory footprint
 use std::{fmt::Debug, marker::PhantomData};
 
-use num_traits::{cast, PrimInt};
+use num_traits::{cast, PrimInt, ToPrimitive};
 
 pub trait TreePath<'a, Idx> {
     type ItemIterator: Iterator<Item = Idx>;
@@ -34,23 +35,52 @@ pub struct CompressedTreePath<Idx> {
     phantom: PhantomData<*const Idx>,
 }
 
-impl<Idx: PrimInt> PartialEq for CompressedTreePath<Idx> {
+impl<Idx: PartialEq> PartialEq for CompressedTreePath<Idx> {
     fn eq(&self, other: &Self) -> bool {
+        self.bits == other.bits
+        // let mut other = other.iter();
+        // for s in self.iter() {
+        //     if let Some(other) = other.next() {
+        //         if s != other {
+        //             return false;
+        //         }
+        //     } else {
+        //         return false;
+        //     }
+        // }
+        // true
+    }
+}
+impl<Idx: Eq> Eq for CompressedTreePath<Idx> {}
+
+pub enum SharedPath<P> {
+    Exact(P),
+    Remain(P),
+    Submatch(P),
+    Different(P),
+}
+
+impl<Idx: PrimInt> CompressedTreePath<Idx> {
+    pub fn shared_ancestors(&self, other: &Self) -> SharedPath<Vec<Idx>> {
         let mut other = other.iter();
+        let mut r = vec![];
         for s in self.iter() {
             if let Some(other) = other.next() {
                 if s != other {
-                    return false;
+                    return SharedPath::Different(r);
                 }
+                r.push(s);
             } else {
-                return false;
+                return SharedPath::Submatch(r);
             }
         }
-        true
+        if other.next().is_some() {
+            SharedPath::Remain(r)
+        } else {
+            SharedPath::Exact(r)
+        }
     }
 }
-
-impl<Idx: PrimInt> Eq for CompressedTreePath<Idx> {}
 
 impl<Idx: PrimInt> Debug for CompressedTreePath<Idx> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -68,7 +98,8 @@ impl<Idx: PrimInt> Debug for CompressedTreePath<Idx> {
 impl<Idx: PrimInt> CompressedTreePath<Idx> {
     fn iter(&self) -> impl Iterator<Item = Idx> + '_ {
         Iter {
-            side: false,
+            is_even: (self.bits[0] & 1) == 1,
+            side: true,
             slice: &self.bits,
             phantom: PhantomData,
         }
@@ -79,7 +110,8 @@ impl<'a, Idx: 'a + PrimInt> TreePath<'a, Idx> for CompressedTreePath<Idx> {
     type ItemIterator = Iter<'a, Idx>;
     fn iter(&'a self) -> Self::ItemIterator {
         Iter {
-            side: false,
+            is_even: (self.bits[0] & 1) == 1,
+            side: true,
             slice: &self.bits,
             phantom: PhantomData,
         }
@@ -94,12 +126,14 @@ impl<'a, Idx: 'a + PrimInt> TreePath<'a, Idx> for CompressedTreePath<Idx> {
     }
 }
 
-impl<Idx: PrimInt> From<&[Idx]> for CompressedTreePath<Idx> {
+impl<Idx: ToPrimitive> From<&[Idx]> for CompressedTreePath<Idx> {
     fn from(x: &[Idx]) -> Self {
-        let mut v: Vec<u8> = vec![];
-        let mut side = false;
+        let mut bits = vec![];
+        let mut i = 0;
+        bits.push(0);
+        let mut side = true;
         for x in x {
-            let mut a: usize = cast(*x).unwrap();
+            let mut a: usize = x.to_usize().unwrap();
             loop {
                 let mut br = false;
                 let b = if a >= 128 {
@@ -108,8 +142,8 @@ impl<Idx: PrimInt> From<&[Idx]> for CompressedTreePath<Idx> {
                 } else if a >= 32 {
                     a = a - 32;
                     16 - 2 as u8
-                } else if a >= 16 - 2 {
-                    a = a - 16 - 3;
+                } else if a >= 16 - 3 {
+                    a = a - (16 - 3);
                     16 - 3 as u8
                 } else {
                     br = true;
@@ -117,9 +151,10 @@ impl<Idx: PrimInt> From<&[Idx]> for CompressedTreePath<Idx> {
                 };
 
                 if side {
-                    v.push(b << 4)
+                    bits[i] |= b << 4;
                 } else {
-                    v.push(b)
+                    i += 1;
+                    bits.push(b);
                 }
                 side = !side;
                 if br {
@@ -127,8 +162,11 @@ impl<Idx: PrimInt> From<&[Idx]> for CompressedTreePath<Idx> {
                 }
             }
         }
+        if side {
+            bits[0] |= 1
+        }
         Self {
-            bits: v.into_boxed_slice(),
+            bits: bits.into_boxed_slice(),
             phantom: PhantomData,
         }
     }
@@ -154,6 +192,7 @@ impl<'a, Idx: 'a + Copy> Iterator for IterSimple<'a, Idx> {
 
 /// advanced iterator used to get back path as Idx from compressed path
 pub struct Iter<'a, Idx> {
+    is_even: bool,
     side: bool,
     slice: &'a [u8],
     phantom: PhantomData<*const Idx>,
@@ -164,6 +203,10 @@ impl<'a, Idx: 'a + PrimInt> Iterator for Iter<'a, Idx> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.slice.is_empty() {
+            return None;
+        }
+        if self.is_even && self.slice.len() == 1 && self.side {
+            self.slice = &self.slice[1..];
             return None;
         }
         let mut c = num_traits::zero();
@@ -180,16 +223,22 @@ impl<'a, Idx: 'a + PrimInt> Iterator for Iter<'a, Idx> {
             } else if a == 16 - 2 {
                 32
             } else if a == 16 - 3 {
-                16 - 2
+                16 - 3
             } else {
                 br = true;
                 a
             };
             c = c + cast(b).unwrap();
-            self.slice = &self.slice[1..];
+            if self.side {
+                self.slice = &self.slice[1..];
+            }
             self.side = !self.side;
             if br {
                 break;
+            }
+            if self.is_even && self.slice.len() == 1 && self.side {
+                self.slice = &self.slice[1..];
+                return Some(c);
             }
         }
         Some(c)

@@ -4,39 +4,45 @@ use num_traits::{zero, PrimInt, ToPrimitive};
 
 use crate::{
     matchers::{
-        decompressed_tree_store::{DecompressedTreeStore, DecompressedWithParent},
         mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
     },
-    tree::tree::{HashKind, NodeStore, Tree, Typed, WithHashs},
+    decompressed_tree_store::{DecompressedTreeStore, DecompressedWithParent},
     utils::sequence_algorithms::longest_common_subsequence,
 };
+use hyper_ast::types::{HashKind, NodeStore, Tree, Typed, WithHashs};
 
 // use super::{decompressed_tree_store::DecompressedTreeStore, mapping_store::DefaultMappingStore, matcher::Matcher, similarity_metrics};
 
 pub struct BottomUpMatcher<
     'a,
-    D: DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
+    Dsrc,
+    Ddst,
     IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
-    T: Tree + WithHashs,
-    S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
-    // const SIM_THRESHOLD: u64 = (0.4).bytes(),
+    T: 'a + Tree + WithHashs,
+    S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
+       // const SIM_THRESHOLD: u64 = (0.4).bytes(),
 > {
     pub(super) node_store: &'a S,
-    pub(crate) src_arena: D,
-    pub(crate) dst_arena: D,
-    pub(crate) mappings: DefaultMappingStore<IdD>,
+    pub src_arena: Dsrc,
+    pub dst_arena: Ddst,
+    pub mappings: DefaultMappingStore<IdD>,
     pub(super) phantom: PhantomData<*const T>,
 }
 
 impl<
         'a,
-        D: 'a + DecompressedTreeStore<T::TreeId, IdD> + DecompressedWithParent<IdD>,
+        Dsrc: DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
+        Ddst: DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
-        T: Tree + WithHashs,
-        S: for<'b> NodeStore<'b, T::TreeId, &'b T>,
-    > BottomUpMatcher<'a, D, IdD, T, S>
+        T: 'a + Tree + WithHashs,
+        S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
+    > BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S>
+where
+    S: 'a + NodeStore<T::TreeId>,
+    // for<'c> < <S as NodeStore2<T::TreeId>>::R  as GenericItem<'c>>::Item:Tree<TreeId = T::TreeId,Type = T::Type,Label = T::Label,ChildIdx = T::ChildIdx> + WithHashs<HK = T::HK,HP = T::HP>,
+    S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type> + WithHashs<HK = T::HK, HP = T::HP>,
 {
-    pub(super) fn getDstCandidates(&self, src: &IdD) -> Vec<IdD> {
+    pub(super) fn get_dst_candidates(&self, src: &IdD) -> Vec<IdD> {
         let mut seeds = vec![];
         let s = &self.src_arena.original(src);
         for c in self.src_arena.descendants(self.node_store, src) {

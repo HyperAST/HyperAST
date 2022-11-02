@@ -13,6 +13,8 @@ pub mod compat;
 pub mod utils;
 pub mod position;
 pub mod usage;
+pub mod impact;
+pub mod cyclomatic;
 
 #[cfg(test)]
 mod tests;

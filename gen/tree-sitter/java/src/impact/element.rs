@@ -1,13 +1,17 @@
 use std::collections::HashMap;
-use std::fmt::Debug;
-use std::hash::{BuildHasher, BuildHasherDefault, Hash};
+use std::fmt::{Debug};
+use std::hash::{Hash};
+use std::marker::PhantomData;
 use std::ops::{Deref, Index};
 
+use hyper_ast::filter::default::VaryHasher;
+use hyper_ast::impact::serialize::{
+    CachedHasher, Keyed, MySerialize, MySerializePar, MySerializeSco, MySerializer, Table,
+};
 use hyper_ast::utils;
 use string_interner::{DefaultSymbol, Symbol};
 
-// use crate::store::vec_map_store::{self, VecMapStore};
-// use crate::utils::hash;
+
 
 use super::java_element::Primitive;
 use super::label_value::LabelValue;
@@ -169,7 +173,19 @@ impl<Node: Eq + Hash + Clone> ListSet<Node> {
         self.0.iter()
     }
 }
-
+impl<Node> ListSet<Node> {
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+impl<Node> Default for ListSet<Node> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
 impl<Node: Eq + Hash> ListSet<Node> {
     // fn position(&self, x: &Node) -> Option<usize> {
     //     let mut i = 0;
@@ -222,11 +238,33 @@ impl<Node: Eq + Hash> FromIterator<Node> for ListSet<Node> {
     fn from_iter<T: IntoIterator<Item = Node>>(iter: T) -> Self {
         let mut r = vec![];
         for x in iter.into_iter() {
-            if r.contains(&x) {
+            if !r.contains(&x) {
                 r.push(x);
             }
         }
         Self(r.into_boxed_slice())
+    }
+}
+
+impl<Node: Eq + Hash + Clone> From<Box<[Node]>> for ListSet<Node> {
+    fn from(x: Box<[Node]>) -> Self {
+        x.into_iter().cloned().collect()
+    }
+}
+
+impl<Node: Eq + Hash> From<Vec<Node>> for ListSet<Node> {
+    fn from(x: Vec<Node>) -> Self {
+        x.into_iter().collect()
+    }
+}
+
+impl<Node: Clone> IntoIterator for ListSet<Node> {
+    type Item = Node;
+
+    type IntoIter = std::vec::IntoIter<Node>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.to_vec().into_iter()
     }
 }
 
@@ -261,7 +299,7 @@ pub enum RefsEnum<Node, Leaf> {
 impl<Node: Eq + Hash + Clone, Leaf: Eq + Hash> Hash for RefsEnum<Node, Leaf> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            RefsEnum::Mask(_, _) => 0,
+            RefsEnum::Mask(_, _) => 1,
             RefsEnum::Or(_) => 1,
             RefsEnum::Root => 2,
             RefsEnum::MaybeMissing => 3,
@@ -276,23 +314,29 @@ impl<Node: Eq + Hash + Clone, Leaf: Eq + Hash> Hash for RefsEnum<Node, Leaf> {
             RefsEnum::This(_) => 11,
             RefsEnum::Super(_) => 12,
             RefsEnum::ArrayAccess(_) => 13,
-        }.hash(state);
+        }
+        .hash(state);
     }
 }
 impl<Node: Eq + Hash + Clone, Leaf: Eq + Hash> Eq for RefsEnum<Node, Leaf> {}
 impl<Node: Eq + Hash + Clone, Leaf: Eq + Hash> PartialEq for RefsEnum<Node, Leaf> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Mask(l0, l1), Self::Mask(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::Or(l0), Self::Or(r0)) => l0 == r0,
-            (Self::ScopedIdentifier(l0, l1), Self::ScopedIdentifier(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::ScopedIdentifier(l0, l1), Self::ScopedIdentifier(r0, r1)) => {
+                l0 == r0 && l1 == r1
+            }
             (Self::ScopedIdentifier(l0, l1), Self::TypeIdentifier(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::TypeIdentifier(l0, l1), Self::ScopedIdentifier(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::TypeIdentifier(l0, l1), Self::TypeIdentifier(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::MethodReference(l0, l1), Self::MethodReference(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::ConstructorReference(l0), Self::ConstructorReference(r0)) => l0 == r0,
-            (Self::Invocation(l0, l1, l2), Self::Invocation(r0, r1, r2)) => l0 == r0 && l1 == r1 && l2 == r2,
-            (Self::ConstructorInvocation(l0, l1), Self::ConstructorInvocation(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::Invocation(l0, l1, l2), Self::Invocation(r0, r1, r2)) => {
+                l0 == r0 && l1 == r1 && l2 == r2
+            }
+            (Self::ConstructorInvocation(l0, l1), Self::ConstructorInvocation(r0, r1)) => {
+                l0 == r0 && l1 == r1
+            }
             (Self::Primitive(l0), Self::Primitive(r0)) => l0 == r0,
             (Self::Array(l0), Self::Array(r0)) => l0 == r0,
             (Self::This(l0), Self::This(r0)) => l0 == r0,
@@ -308,12 +352,18 @@ impl<Node: Eq + Hash + Clone, Leaf: Eq + Hash> RefsEnum<Node, Leaf> {
         match (self, other) {
             (Self::Mask(l0, l1), Self::Mask(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::Or(l0), Self::Or(r0)) => l0 == r0,
-            (Self::ScopedIdentifier(l0, l1), Self::ScopedIdentifier(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::ScopedIdentifier(l0, l1), Self::ScopedIdentifier(r0, r1)) => {
+                l0 == r0 && l1 == r1
+            }
             (Self::TypeIdentifier(l0, l1), Self::TypeIdentifier(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::MethodReference(l0, l1), Self::MethodReference(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::ConstructorReference(l0), Self::ConstructorReference(r0)) => l0 == r0,
-            (Self::Invocation(l0, l1, l2), Self::Invocation(r0, r1, r2)) => l0 == r0 && l1 == r1 && l2 == r2,
-            (Self::ConstructorInvocation(l0, l1), Self::ConstructorInvocation(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::Invocation(l0, l1, l2), Self::Invocation(r0, r1, r2)) => {
+                l0 == r0 && l1 == r1 && l2 == r2
+            }
+            (Self::ConstructorInvocation(l0, l1), Self::ConstructorInvocation(r0, r1)) => {
+                l0 == r0 && l1 == r1
+            }
             (Self::Primitive(l0), Self::Primitive(r0)) => l0 == r0,
             (Self::Array(l0), Self::Array(r0)) => l0 == r0,
             (Self::This(l0), Self::This(r0)) => l0 == r0,
@@ -328,6 +378,7 @@ impl<Node: Clone, Leaf> RefsEnum<Node, Leaf> {
     pub(crate) fn object(&self) -> Option<Node> {
         let r = match self {
             RefsEnum::Mask(o, _) => o,
+            RefsEnum::Or(_) => return None,
             RefsEnum::ScopedIdentifier(o, _) => o,
             RefsEnum::MethodReference(o, _) => o,
             RefsEnum::ConstructorReference(o) => o,
@@ -337,7 +388,11 @@ impl<Node: Clone, Leaf> RefsEnum<Node, Leaf> {
             RefsEnum::This(o) => o,
             RefsEnum::Super(o) => o,
             RefsEnum::ArrayAccess(o) => o,
-            _ => return None,
+            RefsEnum::Root => return None,
+            RefsEnum::MaybeMissing => return None,
+            RefsEnum::TypeIdentifier(o, _) => o,
+            RefsEnum::Primitive(_) => return None,
+            // _ => return None,
         };
         Some(r.clone())
     }
@@ -347,7 +402,9 @@ impl<Node: Clone, Leaf: Clone> RefsEnum<Node, Leaf> {
     pub(crate) fn with_object(&self, o: Node) -> Self {
         match self {
             RefsEnum::Mask(_, b) => RefsEnum::Mask(o, b.clone()),
+            RefsEnum::Or(_) => panic!(),
             RefsEnum::ScopedIdentifier(_, i) => RefsEnum::ScopedIdentifier(o, i.clone()),
+            RefsEnum::TypeIdentifier(_, i) => RefsEnum::TypeIdentifier(o, i.clone()),
             RefsEnum::MethodReference(_, i) => RefsEnum::MethodReference(o, i.clone()),
             RefsEnum::ConstructorReference(_) => RefsEnum::ConstructorReference(o),
             RefsEnum::Invocation(_, i, p) => RefsEnum::Invocation(o, i.clone(), p.clone()),
@@ -356,7 +413,10 @@ impl<Node: Clone, Leaf: Clone> RefsEnum<Node, Leaf> {
             RefsEnum::This(_) => RefsEnum::This(o),
             RefsEnum::Super(_) => RefsEnum::Super(o),
             RefsEnum::ArrayAccess(_) => RefsEnum::ArrayAccess(o),
-            _ => panic!(),
+            RefsEnum::Root => panic!(),
+            RefsEnum::MaybeMissing => panic!(),
+            RefsEnum::Primitive(_) => panic!(),
+            // _ => panic!(),
         }
     }
 }
@@ -372,10 +432,11 @@ impl<Node, Leaf: Eq> RefsEnum<Node, Leaf> {
             (RefsEnum::This(_), RefsEnum::This(_)) => true,
             (RefsEnum::Super(_), RefsEnum::Super(_)) => true,
             (RefsEnum::Mask(_, u), RefsEnum::Mask(_, v)) => u.len() == v.len(),
+            (RefsEnum::Or(u), RefsEnum::Or(v)) => u.len() == v.len(),
             (RefsEnum::ScopedIdentifier(_, i), RefsEnum::ScopedIdentifier(_, j)) => i == j,
             (RefsEnum::TypeIdentifier(_, i), RefsEnum::TypeIdentifier(_, j)) => i == j,
             (RefsEnum::MethodReference(_, i), RefsEnum::MethodReference(_, j)) => i == j,
-            (RefsEnum::ConstructorReference(i), RefsEnum::ConstructorReference(j)) => true,
+            (RefsEnum::ConstructorReference(_), RefsEnum::ConstructorReference(_)) => true,
             (RefsEnum::Invocation(_, i, _), RefsEnum::Invocation(_, j, _)) => i == j, // TODO count parameters
             (RefsEnum::ConstructorInvocation(_, _), RefsEnum::ConstructorInvocation(_, _)) => true, // TODO count parameters
             _ => false,
@@ -384,14 +445,21 @@ impl<Node, Leaf: Eq> RefsEnum<Node, Leaf> {
 }
 
 #[derive(Debug, Clone)]
-pub enum Arguments<Node>
-{
+pub enum Arguments<Node> {
     Unknown,
     Given(Box<[Node]>),
 }
 impl<Node: Eq + Hash> Hash for Arguments<Node> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         core::mem::discriminant(self).hash(state);
+    }
+}
+impl<Node: Clone> Into<Box<[Node]>> for Arguments<Node> {
+    fn into(self) -> Box<[Node]> {
+        match self {
+            Arguments::Unknown => Default::default(),
+            Arguments::Given(v) => v,
+        }
     }
 }
 impl<Node: Eq + Hash> Eq for Arguments<Node> {}
@@ -405,7 +473,7 @@ impl<Node: Eq + Hash> PartialEq for Arguments<Node> {
 }
 
 impl<Node: Eq + Hash> Arguments<Node> {
-    pub fn map<T: Eq + Hash,F:FnMut(&Node)->T>(&self, f:F) -> Arguments<T> {
+    pub fn map<T: Eq + Hash, F: FnMut(&Node) -> T>(&self, f: F) -> Arguments<T> {
         match self {
             Arguments::Unknown => Arguments::Unknown,
             Arguments::Given(x) => Arguments::Given(x.iter().map(f).collect()),
@@ -486,24 +554,24 @@ impl<'a> ExplorableRef<'a> {
                 out.extend(b".psuper");
             }
             RefsEnum::Or(v) => {
-                out.extend(b".[|");
-                // for p in v.iter() {
-                //     assert_ne!(*p, self.rf);
-                //     self.with(*p).ser(out);
-                //     out.push(b"|"[0]);
-                // }
+                out.extend(b"[");
+                for p in v.iter() {
+                    assert_ne!(*p, self.rf);
+                    out.push(b"|"[0]);
+                    self.with(*p).ser(out);
+                }
                 out.extend(b"|]");
             }
             RefsEnum::Mask(o, v) => {
                 assert_ne!(*o, self.rf);
                 self.with(*o).ser(out);
-                // out.extend(b".{");
-                // for p in v.deref() {
-                //     assert_ne!(*p, self.rf);
-                //     self.with(*p).ser(out);
-                //     out.push(b","[0]);
-                // }
-                // out.extend(b"}");
+                out.extend(b".{");
+                for p in v.deref() {
+                    assert_ne!(*p, self.rf);
+                    self.with(*p).ser(out);
+                    out.push(b","[0]);
+                }
+                out.extend(b"}");
             }
             RefsEnum::ScopedIdentifier(o, i) => {
                 assert_ne!(*o, self.rf);
@@ -517,7 +585,7 @@ impl<'a> ExplorableRef<'a> {
             RefsEnum::TypeIdentifier(o, i) => {
                 assert_ne!(*o, self.rf);
                 self.with(*o).ser(out);
-                out.push(b"."[0]);
+                out.push(b"%"[0]);
                 // let b: [u8; 4] = (i.to_usize() as u32).to_be_bytes();
                 let b = i.as_ref().to_usize().to_string();
                 let b = b.as_bytes();
@@ -610,7 +678,7 @@ impl<'a> ExplorableRef<'a> {
                     out.extend(b".psuper");
                 }
                 RefsEnum::Or(v) => {
-                    out.extend(b".[|");
+                    out.extend(b"[|");
                     for p in v.iter() {
                         assert_ne!(*p, self.rf);
                         out.extend(self.with(*p).ser_cached(cache));
@@ -621,13 +689,13 @@ impl<'a> ExplorableRef<'a> {
                 RefsEnum::Mask(o, v) => {
                     assert_ne!(*o, self.rf);
                     out.extend(self.with(*o).ser_cached(cache));
-                    // out.extend(b".{");
-                    // for p in v.deref() {
-                    //     assert_ne!(*p, self.rf);
-                    //     out.extend(self.with(*p).ser_cached(cache));
-                    //     out.push(b","[0]);
-                    // }
-                    // out.extend(b"}");
+                    out.extend(b".{");
+                    for p in v.deref() {
+                        assert_ne!(*p, self.rf);
+                        out.extend(self.with(*p).ser_cached(cache));
+                        out.push(b","[0]);
+                    }
+                    out.extend(b"}");
                 }
                 RefsEnum::ScopedIdentifier(o, i) => {
                     assert_ne!(*o, self.rf);
@@ -703,6 +771,107 @@ impl<'a> ExplorableRef<'a> {
     }
 }
 
+impl<'a> Keyed<usize> for ExplorableRef<'a> {
+    fn key(&self) -> usize {
+        self.rf
+    }
+}
+
+impl<'a> MySerialize for ExplorableRef<'a> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: MySerializer,
+    {
+        match &self.nodes[self.rf] {
+            RefsEnum::Root => serializer.collect_str("/"),
+            RefsEnum::MaybeMissing => serializer.collect_str("?"),
+            RefsEnum::Primitive(i) => {
+                let b = "p".to_string() + &i.to_string();
+                serializer.collect_str(&b)
+            }
+            RefsEnum::Array(o) => {
+                assert_ne!(*o, self.rf);
+                let mut s = serializer.serialize_sco(Some(1))?;
+                // serializer.collect_str("[")?;
+                s.serialize_object(&self.with(*o))?;
+                // serializer.collect_str("]")
+                s.end("]")
+            }
+            RefsEnum::ArrayAccess(o) => {
+                assert_ne!(*o, self.rf);
+                let mut s = serializer.serialize_sco(Some(1))?;
+                s.serialize_object(&self.with(*o))?;
+                s.end("[?]")
+            }
+            RefsEnum::This(o) => {
+                assert_ne!(*o, self.rf);
+                let mut s = serializer.serialize_sco(Some(1))?;
+                s.serialize_object(&self.with(*o))?;
+                s.end(".pthis")
+            }
+            RefsEnum::Super(o) => {
+                assert_ne!(*o, self.rf);
+                let mut s = serializer.serialize_sco(Some(1))?;
+                s.serialize_object(&self.with(*o))?;
+                s.end(".psuper")
+            }
+            RefsEnum::Or(v) => {
+                let mut s = serializer.serialize_par(Some(v.len()))?;
+                for p in v.iter() {
+                    assert_ne!(*p, self.rf);
+                    s.serialize_element(&self.with(*p))?;
+                }
+                s.end()
+            }
+            RefsEnum::Mask(o, v) => {
+                assert_ne!(*o, self.rf);
+                self.with(*o).serialize(serializer)
+            }
+            RefsEnum::ScopedIdentifier(o, i) => {
+                assert_ne!(*o, self.rf);
+                let mut s = serializer.serialize_sco(Some(1))?;
+                s.serialize_object(&self.with(*o))?;
+                let b = ".".to_string() + &i.as_ref().to_usize().to_string();
+                s.end(&b)
+            }
+            RefsEnum::TypeIdentifier(o, i) => {
+                assert_ne!(*o, self.rf);
+                let mut s = serializer.serialize_sco(Some(1))?;
+                s.serialize_object(&self.with(*o))?;
+                let b = ".".to_string() + &i.as_ref().to_usize().to_string();
+                s.end(&b)
+            }
+            RefsEnum::MethodReference(o, i) => {
+                assert_ne!(*o, self.rf);
+                let mut s = serializer.serialize_sco(Some(1))?;
+                s.serialize_object(&self.with(*o))?;
+                let b = "::".to_string() + &i.as_ref().to_usize().to_string();
+                s.end(&b)
+            }
+            RefsEnum::ConstructorReference(o) => {
+                assert_ne!(*o, self.rf);
+                let mut s = serializer.serialize_sco(Some(1))?;
+                s.serialize_object(&self.with(*o))?;
+                s.end("::new")
+            }
+            RefsEnum::Invocation(o, i, p) => {
+                assert_ne!(*o, self.rf);
+                // TODO handle executables fully
+                let mut s = serializer.serialize_sco(Some(1))?;
+                s.serialize_object(&self.with(*o))?;
+                s.end("()")
+            }
+            RefsEnum::ConstructorInvocation(i, p) => {
+                assert_ne!(*i, self.rf);
+                // TODO handle executables fully
+                let mut s = serializer.serialize_sco(Some(1))?;
+                s.serialize_object(&self.with(*i))?;
+                s.end("#()")
+            }
+        }
+    }
+}
+
 impl<'a> Debug for ExplorableRef<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut out = vec![];
@@ -711,13 +880,14 @@ impl<'a> Debug for ExplorableRef<'a> {
     }
 }
 
-impl<'a> Into<Box<[u8]>> for ExplorableRef<'a> {
-    fn into(self) -> Box<[u8]> {
-        let mut r = vec![];
-        self.ser(&mut r);
-        r.into()
-    }
-}
+// impl<'a> Into<Box<[u8]>> for ExplorableRef<'a> {
+//     fn into(self) -> Box<[u8]> {
+//         panic!();
+//         let mut r = vec![];
+//         self.ser(&mut r);
+//         r.into()
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub struct Nodes(Vec<RefsEnum<RefPtr, LabelPtr>>);
@@ -750,6 +920,38 @@ impl Nodes {
     pub fn with(&self, rf: RefPtr) -> ExplorableRef {
         ExplorableRef { rf, nodes: self }
     }
+
+    pub fn get(&self, other: RefsEnum<RefPtr, LabelPtr>) -> Option<RefPtr> {
+        // TODO analyze perfs to find if Vec or HashSet or something else works better
+        self.iter().position(|x| other.strict_eq(x))
+    }
+
+    /// flatten Or and filter Masks
+    /// do not create new references
+    /// useful to cut short search for declarations,
+    /// indeed as we share `self.nodes` with declarations
+    /// if we cannot flatten a case we are sure
+    /// that there is no corresponding declaration
+    pub fn straight_possibilities(&self, other: RefPtr) -> Vec<RefPtr> {
+        let o = &self[other].clone();
+        if let RefsEnum::Mask(oo, _) = o {
+            self.straight_possibilities(*oo)
+        } else if let RefsEnum::Or(v) = o {
+            v.iter()
+                .flat_map(|&o| self.straight_possibilities(o))
+                .collect()
+        } else if let Some(oo) = o.object() {
+            self.straight_possibilities(oo)
+                .into_iter()
+                .filter_map(|oo| {
+                    let x = o.with_object(oo);
+                    self.get(x)
+                })
+                .collect()
+        } else {
+            vec![other]
+        }
+    }
 }
 
 pub struct NodesIter<'a> {
@@ -771,5 +973,69 @@ impl<'a> Iterator for NodesIter<'a> {
             self.rf += 1;
             Some(r)
         }
+    }
+}
+
+pub struct BulkHasher<'a, It, S, H>
+where
+    It: Iterator<Item = ExplorableRef<'a>>,
+    H: VaryHasher<S>,
+{
+    table: Table<H>,
+    it: It,
+    branched: Vec<S>,
+    phantom: PhantomData<*const H>,
+}
+
+impl<'a, It, S, H> From<It> for BulkHasher<'a, It, S, H>
+where
+    It: Iterator<Item = ExplorableRef<'a>>,
+    H: VaryHasher<S>,
+{
+    fn from(it: It) -> Self {
+        Self {
+            table: Default::default(),
+            it,
+            branched: Default::default(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, It, H> Iterator for BulkHasher<'a, It, u8, H>
+where
+    It: Iterator<Item = ExplorableRef<'a>>,
+    H: VaryHasher<u8>,
+{
+    type Item = u8;
+    fn next(&mut self) -> Option<u8> {
+        if let Some(x) = self.branched.pop() {
+            return Some(x);
+        }
+        let x = self.it.next()?;
+        let s = CachedHasher::<usize, u8, H>::new(&mut self.table, x.key());
+        let x = x.serialize(s).unwrap();
+        let x = &self.table[x];
+        self.branched = x.iter().map(VaryHasher::finish).collect();
+        self.next()
+    }
+}
+
+impl<'a, It, H> Iterator for BulkHasher<'a, It, u16, H>
+where
+    It: Iterator<Item = ExplorableRef<'a>>,
+    H: VaryHasher<u16>,
+{
+    type Item = u16;
+    fn next(&mut self) -> Option<u16> {
+        if let Some(x) = self.branched.pop() {
+            return Some(x);
+        }
+        let x = self.it.next()?;
+        let s = CachedHasher::<usize, u16, H>::new(&mut self.table, x.key());
+        let x = x.serialize(s).unwrap();
+        let x = &self.table[x];
+        self.branched = x.iter().map(VaryHasher::finish).collect();
+        self.next()
     }
 }

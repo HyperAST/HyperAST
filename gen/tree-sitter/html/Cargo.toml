@@ -1,5 +1,5 @@
 [package]
-name = "rusted_gumtree_gen_ts_html"
+name = "hyper_ast_gen_ts_html"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,8 +7,8 @@ edition = "2021"
 
 [dependencies]
 tree-sitter = "0.20.0"
+tree-sitter-html = {path="tree-sitter-html", version="0.20.0"}
 hyper_ast = { path = "../../../hyper_ast" }
-tree-sitter-html = { path="tree-sitter-html", version = "0.20"}
 
 libc = "0.2"
 

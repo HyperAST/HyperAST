@@ -1,19 +1,21 @@
 [package]
-name = "rusted_gumtree_cvs_git"
+name = "hyper_ast_cvs_git"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-git2 = "0.13.24"
+git2 = { version = "0.13.24", features = ["vendored-libgit2"]}
 tree-sitter = "0.20.0"
-hyper_gumtree = { path = "../../gumtree" }
-rusted_gumtree_gen_ts_java = { path = "../../gen/tree-sitter/java" }
-rusted_gumtree_gen_ts_xml = { path = "../../gen/tree-sitter/xml" }
-hyper_ast = { path = "../../hyper_ast" } 
+hyper_ast_gen_ts_java = { path = "../../gen/tree-sitter/java" }
+hyper_ast_gen_ts_xml = { path = "../../gen/tree-sitter/xml" }
+hyper_ast = { path = "../../hyper_ast" }
 env_logger = "0.9.0"
-log = { version = "0.4.6", features = ["max_level_trace", "release_max_level_info"] }
+log = { version = "0.4.6", features = [
+    "max_level_trace",
+    "release_max_level_warn",
+] }
 tuples = "=1.4.1"
 
 

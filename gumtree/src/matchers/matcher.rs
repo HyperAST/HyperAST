@@ -1,28 +1,18 @@
-use crate::tree::tree::{NodeStore, Tree, WithHashs, Stored};
+use hyper_ast::types::{NodeStore, Tree, WithHashs};
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use std::mem::size_of;
-
-//     #[test]
-//     fn test_size() {
-//         println!("{}", size_of::<u64>());
-//         println!("{}", size_of::<Option<u64>>());
-//         println!("{}", size_of::<std::mem::ManuallyDrop<Box<[u8]>>>());
-//         println!("{}", size_of::<std::mem::ManuallyDrop<u64>>());
-//         println!("{}", size_of::<u16>());
-//     }
-// }
-
-pub trait Matcher<'a, D, T: 'a + Stored + Tree + WithHashs, S: NodeStore<'a, T::TreeId, &'a T>> {
+pub trait Matcher<'a, Dsrc, Ddst, T: 'a + Tree + WithHashs, S>
+where
+    //S:'a+NodeStore2<T::TreeId,R<'a>=T>,//
+    S: 'a + NodeStore<T::TreeId>,
+    S::R<'a>: Tree<TreeId = T::TreeId>,
+{
     type Store;
     type Ele;
 
     fn matchh(
         compressed_node_store: &'a S,
-        src: &'a T::TreeId,
-        dst: &'a T::TreeId,
+        src: &T::TreeId,
+        dst: &T::TreeId,
         mappings: Self::Store,
     ) -> Self::Store;
 }

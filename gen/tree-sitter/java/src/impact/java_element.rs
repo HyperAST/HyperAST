@@ -2,8 +2,6 @@ use std::fmt::Display;
 
 use hyper_ast::types::Type;
 
-// use rusted_gumtree_core::tree::tree::Type;
-
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum Primitive {

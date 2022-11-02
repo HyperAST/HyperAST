@@ -6,11 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# git2 = "0.13.24"
-# tree-sitter = "0.20.0"
-# rusted_gumtree_core = { path = "../core" }
-# rusted_gumtree_gen_ts_java = { path = "../gen/tree-sitter/java" }
-rusted_gumtree_cvs_git = { path = "../cvs/git" }
+hyper_ast_cvs_git = { path = "../cvs/git" }
 hyper_ast = { path = "../hyper_ast" }
 # env_logger = "0.9.0"
 # log = { version = "0.4.6", features = ["max_level_debug", "release_max_level_info"] }
@@ -25,6 +21,10 @@ clap = { version = "3.1.6",features = ["derive"] }
 termion = "1.5.6"
 
 rayon = "1.5.2"
+
+
+# TODO try using that
+indicatif = "0.17.0"
 
 [build-dependencies]
 

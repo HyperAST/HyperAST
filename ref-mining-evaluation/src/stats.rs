@@ -82,15 +82,15 @@ impl CompStats {
             // r as f64 / c as f64
         };
 
-        let mean_of_exact_references = accu.t_positives as f64 / (accu.count as f64);
+        let mean_of_exact_references = accu.t_positives as f64 / (accu.count as f64 + 0.000001);
         // comp.exact.iter().map(|x| x.exact.len()).sum::<usize>()
         //     as f64
         //     / comp.exact.len() as f64;
 
-        let mean_of_remaining_refs_in_baseline = accu.f_negatives as f64 / (accu.count as f64);
+        let mean_of_remaining_refs_in_baseline = accu.f_negatives as f64 / (accu.count as f64 + 0.000001);
             // comp.exact.iter().map(|x| x.left.len()).sum::<usize>() as f64 / comp.exact.len() as f64;
 
-        let mean_of_remaining_refs_in_tool_results = accu.f_positives as f64 / (accu.count as f64);
+        let mean_of_remaining_refs_in_tool_results = accu.f_positives as f64 / (accu.count as f64 + 0.000001);
         // comp
         //     .exact
         //     .iter()

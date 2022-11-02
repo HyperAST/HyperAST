@@ -7,34 +7,35 @@ use std::{
 use hyper_ast::{
     hashed::SyntaxNodeHashs,
     position::{StructuralPosition, TreePath},
-    store::{labels::DefaultLabelIdentifier, nodes::DefaultNodeIdentifier as NodeIdentifier},
+    store::defaults::{LabelIdentifier, NodeIdentifier},
     tree_gen::SubTreeMetrics,
     types::{LabelStore as _, Labeled, Tree, Type, Typed, WithChildren},
 };
-use rusted_gumtree_gen_ts_java::legion_with_refs as java_tree_gen;
-use rusted_gumtree_gen_ts_xml::legion::XmlTreeGen;
+use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
+use hyper_ast_gen_ts_xml::xml_tree_gen::{self, XmlTreeGen};
 
-use crate::{SimpleStores, PROPAGATE_ERROR_ON_BAD_CST_NODE};
+use crate::{Accumulator, SimpleStores, PROPAGATE_ERROR_ON_BAD_CST_NODE};
 
-pub(crate) fn handle_pom_file(
-    tree_gen: &mut XmlTreeGen,
+pub(crate) fn handle_pom_file<'a>(
+    tree_gen: &mut XmlTreeGen<'a>,
     name: &[u8],
-    text: &[u8],
+    text: &'a [u8],
 ) -> Result<POM, ()> {
-    let tree = match tree_gen.tree_sitter_parse(text) {
+    let tree = match xml_tree_gen::XmlTreeGen::tree_sitter_parse(text) {
         Ok(tree) => tree,
         Err(tree) => {
             log::warn!("bad CST");
             // println!("{}", name);
             log::debug!("{}", tree.root_node().to_sexp());
             if PROPAGATE_ERROR_ON_BAD_CST_NODE {
-                return Err(())
+                return Err(());
             } else {
                 tree
             }
         }
     };
     let x = tree_gen.generate_file(&name, text, tree.walk()).local;
+    // TODO extract submodules, dependencies and directories. maybe even more ie. artefact id, ...
     let x = POM {
         compressed_node: x.compressed_node,
         metrics: x.metrics,
@@ -181,13 +182,29 @@ pub struct MD {
 
 pub struct MavenModuleAcc {
     pub(crate) name: String,
-    pub(crate) children_names: Vec<DefaultLabelIdentifier>,
-    pub(crate) children: Vec<hyper_ast::store::nodes::DefaultNodeIdentifier>,
+    pub(crate) children_names: Vec<LabelIdentifier>,
+    pub(crate) children: Vec<NodeIdentifier>,
     pub(crate) metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>, //java_tree_gen::SubTreeMetrics<SyntaxNodeHashs<u32>>,
     pub(crate) ana: MavenPartialAnalysis,
     pub(crate) sub_modules: Option<Vec<PathBuf>>,
     pub(crate) main_dirs: Option<Vec<PathBuf>>,
     pub(crate) test_dirs: Option<Vec<PathBuf>>,
+}
+
+impl From<String> for MavenModuleAcc {
+    fn from(name: String) -> Self {
+        Self {
+            name,
+            children_names: Default::default(),
+            children: Default::default(),
+            // simple: BasicAccumulator::new(kind),
+            metrics: Default::default(),
+            ana: MavenPartialAnalysis::new(),
+            sub_modules: None,
+            main_dirs: None,
+            test_dirs: None,
+        }
+    }
 }
 
 impl MavenModuleAcc {
@@ -237,7 +254,7 @@ impl MavenModuleAcc {
 }
 
 impl MavenModuleAcc {
-    pub(crate) fn push_pom(&mut self, name: DefaultLabelIdentifier, full_node: POM) {
+    pub(crate) fn push_pom(&mut self, name: LabelIdentifier, full_node: POM) {
         self.children.push(full_node.compressed_node);
         self.children_names.push(name);
         self.main_dirs = Some(full_node.source_dirs.iter().map(|x| x.into()).collect());
@@ -255,8 +272,8 @@ impl MavenModuleAcc {
     }
     pub(crate) fn push_submodule(
         &mut self,
-        name: DefaultLabelIdentifier,
-        full_node: (hyper_ast::store::nodes::DefaultNodeIdentifier, MD),
+        name: LabelIdentifier,
+        full_node: (NodeIdentifier, MD),
     ) {
         self.children.push(full_node.0);
         self.children_names.push(name);
@@ -266,7 +283,7 @@ impl MavenModuleAcc {
     }
     pub(crate) fn push_source_directory(
         &mut self,
-        name: DefaultLabelIdentifier,
+        name: LabelIdentifier,
         full_node: java_tree_gen::Local,
     ) {
         self.children.push(full_node.compressed_node);
@@ -281,7 +298,7 @@ impl MavenModuleAcc {
     }
     pub(crate) fn push_test_source_directory(
         &mut self,
-        name: DefaultLabelIdentifier,
+        name: LabelIdentifier,
         full_node: java_tree_gen::Local,
     ) {
         self.children.push(full_node.compressed_node);
@@ -447,4 +464,37 @@ impl<'a, T: TreePath<NodeIdentifier>> IterMavenModules<'a, T> {
             .is_some();
         contains_pom
     }
+}
+
+impl hyper_ast::tree_gen::Accumulator for MavenModuleAcc {
+    type Node= (LabelIdentifier, (NodeIdentifier, MD));
+    fn push(&mut self, (name, full_node): Self::Node) {
+        self.children.push(full_node.0);
+        self.children_names.push(name);
+        self.metrics.acc(full_node.1.metrics);
+        // TODO ana
+        // full_node.2.acc(&Type::Directory, &mut self.ana);
+    }
+
+    // fn push(
+    //     &mut self,
+    //     _full_node: (NodeIdentifier, MD),
+    // ) {
+    //     panic!()
+    // }
+}
+
+impl Accumulator for MavenModuleAcc {
+    type Unlabeled = (NodeIdentifier, MD);
+    // fn push(
+    //     &mut self,
+    //     name: LabelIdentifier,
+    //     full_node: (NodeIdentifier, MD),
+    // ) {
+    //     self.children.push(full_node.0);
+    //     self.children_names.push(name);
+    //     self.metrics.acc(full_node.1.metrics);
+    //     // TODO ana
+    //     // full_node.2.acc(&Type::Directory, &mut self.ana);
+    // }
 }

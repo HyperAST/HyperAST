@@ -1,57 +1,59 @@
 ///! fully compress all subtrees from an Xml CST
-use std::{
-    fmt::{Debug},
-    vec,
-};
+use std::{fmt::Debug, vec};
 
-use legion::{
-    world::{EntryRef},
-};
-use tree_sitter::{Language, Parser, TreeCursor};
+use legion::world::EntryRef;
 use tuples::CombinConcat;
 
 use hyper_ast::{
-    store::labels::LabelStore,
     filter::BF,
     filter::{Bloom, BloomSize},
     full::FullNode,
-    hashed::{self, NodeHashs, SyntaxNodeHashs},
+    hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, NodeHashs, SyntaxNodeHashs},
     // impact::{element::RefsEnum, elements::*, partial_analysis::PartialAnalysis},
     nodes::{self, SimpleNode1, Space},
-    store::{TypeStore, nodes::DefaultNodeStore as NodeStore, nodes::legion::{NodeIdentifier, HashedNodeRef, CS}},
-    tree_gen::{
-        compute_indentation, get_spacing, has_final_space, 
-        // label_for_cursor, 
-        AccIndentation,
-        Accumulator, BasicAccumulator, Spaces, TreeGen, parser::{Node as _,TreeCursor as _}, SubTreeMetrics,
+    store::{labels::LabelStore, SimpleStores},
+    store::{
+        nodes::legion::{HashedNodeRef, NodeIdentifier, CS},
+        nodes::DefaultNodeStore as NodeStore,
+        TypeStore,
     },
-    utils::{self, clamp_u64_to_u32}, types::{LabelStore as _, Type, Typed, Tree as _},
+    tree_gen::{
+        compute_indentation,
+        get_spacing,
+        has_final_space,
+        parser::{Node as _, TreeCursor as _},
+        try_compute_indentation,
+        // label_for_cursor,
+        AccIndentation,
+        Accumulator,
+        BasicAccumulator,
+        BasicGlobalData,
+        GlobalData,
+        SpacedGlobalData,
+        Spaces,
+        SubTreeMetrics,
+        TextedGlobalData,
+        TreeGen,
+        ZippedTreeGen,
+    },
+    types::{LabelStore as _, Tree as _, Type, Typed},
+    utils::{self, clamp_u64_to_u32},
 };
-
-// pub type HashedNode<'a> = HashedCompressedNode<SyntaxNodeHashs<HashSize>,SymbolU32<&'a HashedNode>,LabelIdentifier>;
-
-extern "C" {
-    fn tree_sitter_html() -> Language;
-}
 
 pub type LabelIdentifier = hyper_ast::store::labels::DefaultLabelIdentifier;
 
-pub struct XmlTreeGen {
+pub struct XmlTreeGen<'a> {
     pub line_break: Vec<u8>,
-    pub stores: SimpleStores,
+    pub stores: &'a mut SimpleStores,
 }
 
-#[derive(Debug)]
-pub struct Global {
-    pub(crate) depth: usize,
-    pub(crate) position: usize,
-}
+pub type Global<'a> = SpacedGlobalData<'a>;
 
 /// TODO temporary placeholder
-#[derive(Debug,Clone,Default)]
+#[derive(Debug, Clone, Default)]
 pub struct PartialAnalysis {}
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Local {
     pub compressed_node: NodeIdentifier,
     pub metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
@@ -67,44 +69,18 @@ impl Local {
     }
 }
 
-// #[derive(Default, Debug, Clone, Copy)]
-// pub struct SubTreeMetrics<U: NodeHashs> {
-//     pub hashs: U,
-//     pub size: u32,
-//     pub height: u32,
-// }
-
-// impl<U: NodeHashs> SubTreeMetrics<U> {
-//     pub fn acc(&mut self, other: Self) {
-//         self.height = self.height.max(other.height);
-//         self.size += other.size;
-//         self.hashs.acc(&other.hashs);
-//     }
-// }
-
 pub struct Acc {
     simple: BasicAccumulator<Type, NodeIdentifier>,
-    label:Option<String>,
+    labeled: bool,
     start_byte: usize,
+    end_byte: usize,
     metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
     ana: Option<PartialAnalysis>,
     padding_start: usize,
     indentation: Spaces,
 }
 
-// impl Acc {
-//     pub(crate) fn new(kind: Type) -> Self {
-//         Self {
-//             simple: BasicAccumulator::new(kind),
-//             metrics: Default::default(),
-//             ana: Default::default(),
-//             padding_start: 0,
-//             indentation: Space::format_indentation(&"\n".as_bytes().to_vec()),
-//         }
-//     }
-// }
-
-pub type FNode = FullNode<Global, Local>;
+pub type FNode = FullNode<BasicGlobalData, Local>;
 impl Accumulator for Acc {
     type Node = FNode;
     fn push(&mut self, full_node: Self::Node) {
@@ -117,23 +93,6 @@ impl AccIndentation for Acc {
         &self.indentation
     }
 }
-
-pub struct SimpleStores {
-    pub label_store: LabelStore,
-    pub type_store: TypeStore,
-    pub node_store: NodeStore,
-}
-
-impl Default for SimpleStores {
-    fn default() -> Self {
-        Self {
-            label_store: LabelStore::new(),
-            type_store: TypeStore {},
-            node_store: NodeStore::new(),
-        }
-    }
-}
-
 
 #[repr(transparent)]
 pub struct TNode<'a>(tree_sitter::Node<'a>);
@@ -156,7 +115,7 @@ impl<'a> hyper_ast::tree_gen::parser::Node<'a> for TNode<'a> {
     }
 
     fn child(&self, i: usize) -> Option<Self> {
-        self.0.child(i).map(|x|TNode(x))
+        self.0.child(i).map(|x| TNode(x))
     }
 
     fn is_named(&self) -> bool {
@@ -166,7 +125,7 @@ impl<'a> hyper_ast::tree_gen::parser::Node<'a> for TNode<'a> {
 #[repr(transparent)]
 pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
 
-impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a,TNode<'a>> for TTreeCursor<'a> {
+impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<'a> {
     fn node(&self) -> TNode<'a> {
         TNode(self.0.node())
     }
@@ -184,9 +143,8 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a,TNode<'a>> for TTreeCursor<'
     }
 }
 
-impl<'a> TreeGen for XmlTreeGen {
+impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
     type Node1 = SimpleNode1<NodeIdentifier, String>;
-    type Acc = Acc;
     type Stores = SimpleStores;
     type Text = [u8];
     type Node<'b> = TNode<'b>;
@@ -201,59 +159,67 @@ impl<'a> TreeGen for XmlTreeGen {
         text: &[u8],
         node: &Self::Node<'_>,
         stack: &Vec<Self::Acc>,
-        sum_byte_length: usize,
+        global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc {
         let type_store = &mut self.stores().type_store;
         let parent_indentation = &stack.last().unwrap().indentation();
         let kind = node.kind();
-        let kind = type_store.get(kind);
+        let kind = type_store.get_xml(kind);
         // let kind = handle_wildcard_kind(kind, node);
 
-        let indent = compute_indentation(
+        let indent = try_compute_indentation(
             &self.line_break,
             text,
             node.start_byte(),
-            sum_byte_length,
+            global.sum_byte_length(),
             &parent_indentation,
         );
-        let label = node.extract_label(text)
-            .and_then(|x| Some(std::str::from_utf8(&x).unwrap().to_owned()));
+        let labeled = node.has_label();
         let ana = self.build_ana(&kind);
         Acc {
             simple: BasicAccumulator {
                 kind,
                 children: vec![],
             },
-            label,
-            start_byte:node.start_byte(),
+            labeled,
+            start_byte: node.start_byte(),
+            end_byte: node.end_byte(),
             metrics: Default::default(),
             ana,
-            padding_start: sum_byte_length,
+            padding_start: global.sum_byte_length(),
             indentation: indent,
         }
     }
-    
+
     fn post(
         &mut self,
         parent: &mut <Self as TreeGen>::Acc,
-        depth: usize,
-        position: usize,
+        global: &mut Self::Global,
         text: &[u8],
-        // node: &Self::Node<'_>,
         acc: <Self as TreeGen>::Acc,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let node_store = &mut self.stores.node_store;
-
-        Self::handle_spacing(
+        let spacing = get_spacing(
             acc.padding_start,
             acc.start_byte,
             text,
-            node_store,
-            &(depth + 1),
-            position,
-            parent,
+            parent.indentation(),
         );
-        self.make(depth, position, acc)
+        if let Some(spacing) = spacing {
+            parent.push(FullNode {
+                global: global.into(),
+                local: self.make_spacing(spacing),
+            });
+            // parent.push(Self::make_spacing(spacing, node_store, global));
+        }
+        let label = if acc.labeled {
+            std::str::from_utf8(&text[acc.start_byte..acc.end_byte])
+                .ok()
+                .map(|x| x.to_string())
+        } else {
+            None
+        };
+        self.make(global, acc, label)
     }
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
@@ -267,16 +233,16 @@ impl<'a> TreeGen for XmlTreeGen {
             0,
             &Space::format_indentation(&self.line_break),
         );
-        let label = node.extract_label(text)
-            .and_then(|x| Some(std::str::from_utf8(&x).unwrap().to_owned()));
+        let labeled = node.has_label();
         let ana = self.build_ana(&kind);
         Acc {
             simple: BasicAccumulator {
                 kind,
                 children: vec![],
             },
-            label,
-            start_byte:node.start_byte(),
+            labeled,
+            start_byte: node.start_byte(),
+            end_byte: node.end_byte(),
             metrics: Default::default(),
             ana,
             padding_start: 0,
@@ -284,217 +250,23 @@ impl<'a> TreeGen for XmlTreeGen {
         }
     }
 }
-
-// /// make new types to handle wildcard precisely
-// fn handle_wildcard_kind(kind: Type, node: &tree_sitter::Node) -> Type {
-//     if kind == Type::Wildcard {
-//         if node.child_by_field_name(b"extends").is_some() {
-//             Type::WildcardExtends
-//         } else if node.child_by_field_name(b"super").is_some() {
-//             Type::WildcardSuper
-//         } else {
-//             kind
-//         }
-//     } else {
-//         kind
-//     }
-// }
-
-#[derive(PartialEq, Eq)]
-enum Has {
-    Down,
-    Up,
-    Right,
-}
-
-impl XmlTreeGen {
-    fn handle_spacing(
-        padding_start: usize,
-        pos: usize,
-        text: &[u8],
-        node_store: &mut NodeStore,
-        depth: &usize,
-        position: usize,
-        parent: &mut <Self as TreeGen>::Acc,
-    ) {
-        let tmp = get_spacing(padding_start, pos, text, parent.indentation());
-        if let Some(relativized) = tmp {
-            let hsyntax = utils::clamp_u64_to_u32(&utils::hash(&relativized));
-            let hashable = &hsyntax;
-
-            let spaces = relativized.into_boxed_slice();
-
-            let eq = |x: EntryRef| {
-                let t = x.get_component::<Box<[Space]>>().ok();
-                if t != Some(&spaces) {
-                    return false;
-                }
-                true
-            };
-
-            let insertion = node_store.prepare_insertion(&hashable, eq);
-
-            let hashs = SyntaxNodeHashs {
-                structt: 0,
-                label: 0,
-                syntax: hsyntax,
-            };
-
-            let compressed_node = if let Some(id) = insertion.occupied_id() {
-                id
-            } else {
-                let vacant = insertion.vacant();
-                NodeStore::insert_after_prepare(
-                    vacant,
-                    (Type::Spaces, spaces, hashs, BloomSize::None),
-                )
-            };
-
-            let full_spaces_node = FullNode {
-                global: Global {
-                    depth: *depth,
-                    position,
-                },
-                local: Local {
-                    compressed_node,
-                    metrics: SubTreeMetrics {
-                        size: 1,
-                        height: 1,
-                        hashs,
-                    },
-                    ana: Default::default(),
-                },
-            };
-            parent.push(full_spaces_node);
-        };
-    }
-
-    /// end of tree but not end of file,
-    /// thus to be a bijection, we need to get the last spaces
-    fn handle_final_space(
-        depth: &usize,
-        sum_byte_length: usize,
-        text: &[u8],
-        node_store: &mut NodeStore,
-        position: usize,
-        parent: &mut <Self as TreeGen>::Acc,
-    ) {
-        if has_final_space(depth, sum_byte_length, text) {
-            Self::handle_spacing(
-                sum_byte_length,
-                text.len(),
-                text,
-                node_store,
-                depth,
-                position,
-                parent,
-            )
-        }
-    }
-
-    pub fn new() -> Self {
-        Self {
-            line_break: "\n".as_bytes().to_vec(),
-            stores: SimpleStores {
-                label_store: LabelStore::new(),
-                type_store: TypeStore {},
-                node_store: NodeStore::new(),
-            },
-        }
-    }
-
-    pub fn generate_file(
-        &mut self,
-        name: &[u8],
-        text: &[u8],
-        cursor: TreeCursor,
-    ) -> FullNode<Global, Local> {
-        let mut init = self.init_val(text, &TNode(cursor.node()));
-        init.label = Some(std::str::from_utf8(name).unwrap().to_owned());
-        let mut stack = vec![init];
-        let mut xx = TTreeCursor(cursor);
-        let sum_byte_length = self.gen(text, &mut stack, &mut xx);
-        let mut acc = stack.pop().unwrap();
-        Self::handle_final_space(
-            &0,
-            sum_byte_length,
-            text,
-            &mut self.stores.node_store,
-            acc.metrics.size as usize + 1,
-            &mut acc,
-        );
-        let full_node = self.make(
-            0,
-            acc.metrics.size as usize,
-            acc,
-        );
-        full_node
-    }
-
-    pub fn main() {
-        let mut parser = Parser::new();
-        parser.set_language(unsafe { tree_sitter_html() }).unwrap();
-
-        let text = {
-            let source_code1 = "class A {void test() {}}";
-            source_code1.as_bytes()
-        };
-        // let mut parser: Parser, old_tree: Option<&Tree>
-        let tree = parser.parse(text, None).unwrap();
-        let mut xml_tree_gen = XmlTreeGen {
-            line_break: "\n".as_bytes().to_vec(),
-            stores: SimpleStores {
-                label_store: LabelStore::new(),
-                type_store: TypeStore {},
-                node_store: NodeStore::new(),
-            },
-        };
-        let _full_node = xml_tree_gen.generate_file(b"", text, tree.walk());
-
-        // print_tree_structure(
-        //     &xml_tree_gen.stores.node_store,
-        //     &_full_node.local.compressed_node,
-        // );
-
-        let tree = parser.parse(text, Some(&tree)).unwrap();
-        let _full_node = xml_tree_gen.generate_file(b"", text, tree.walk());
-    }
-
-    fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {
-        let label_store = &mut self.stores.label_store;
-        if kind == &Type::ClassBody
-            || kind == &Type::PackageDeclaration
-            || kind == &Type::ClassDeclaration
-            || kind == &Type::EnumDeclaration
-            || kind == &Type::InterfaceDeclaration
-            || kind == &Type::AnnotationTypeDeclaration
-            || kind == &Type::Program
-        {
-            Some(PartialAnalysis{})
-        } else {
-            None
-        }
-    }
+impl<'a> TreeGen for XmlTreeGen<'a> {
+    type Acc = Acc;
+    type Global = SpacedGlobalData<'a>;
     fn make(
         &mut self,
-        depth: usize,
-        position: usize,
+        global: &mut <Self as TreeGen>::Global,
         acc: <Self as TreeGen>::Acc,
+        label: Option<String>,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
-        let label = acc.label;
-        let metrics = acc.metrics;
-        let hashed_kind = &clamp_u64_to_u32(&utils::hash(&acc.simple.kind));
-        let hashed_label = &clamp_u64_to_u32(&utils::hash(&label));
-        let hsyntax = hashed::inner_node_hash(
-            hashed_kind,
-            hashed_label,
-            &acc.metrics.size,
-            &acc.metrics.hashs.syntax,
-        );
-        let hashable = &hsyntax; //(hlabel as u64) << 32 & hsyntax as u64;
-
+        let hashs = acc.metrics.hashs;
+        let size = acc.metrics.size + 1;
+        let height = acc.metrics.height + 1;
+        let hbuilder = hashed::Builder::new(hashs, &acc.simple.kind, &label, size);
+        let hsyntax = hbuilder.most_discriminating();
+        let hashable = &hsyntax;
         let (ana, label) = if let Some(label) = label.as_ref() {
             assert!(acc.ana.is_none());
             if &acc.simple.kind == &Type::Comment {
@@ -503,15 +275,12 @@ impl XmlTreeGen {
                 let tl = acc.simple.kind.literal_type();
                 // let tl = label_store.get_or_insert(tl);
                 (
-                    Some(PartialAnalysis{}),
+                    Some(PartialAnalysis {}),
                     Some(label_store.get_or_insert(label.as_str())),
                 )
             } else {
                 let rf = label_store.get_or_insert(label.as_str());
-                (
-                    Some(PartialAnalysis{}),
-                    Some(rf),
-                )
+                (Some(PartialAnalysis {}), Some(rf))
             }
         } else if acc.simple.kind.is_primitive() {
             let node = node_store.resolve(acc.simple.children[0]);
@@ -520,10 +289,7 @@ impl XmlTreeGen {
                 todo!("{:?} {:?}", acc.simple.kind, ana)
             }
             // let rf = label_store.get_or_insert(label.as_str());
-            (
-                Some(PartialAnalysis{}),
-                None,
-            )
+            (Some(PartialAnalysis {}), None)
         } else if let Some(ana) = acc.ana {
             // nothing to do, resolutions at the end of post ?
             (Some(ana), None)
@@ -534,12 +300,10 @@ impl XmlTreeGen {
             || acc.simple.kind == Type::Block
             || acc.simple.kind == Type::ElementValueArrayInitializer
         {
-            (
-                Some(PartialAnalysis{}),
-                None,
-            )
-        } else if acc.simple.kind == Type::ArgumentList || acc.simple.kind == Type::FormalParameters
-        || acc.simple.kind == Type::AnnotationArgumentList
+            (Some(PartialAnalysis {}), None)
+        } else if acc.simple.kind == Type::ArgumentList
+            || acc.simple.kind == Type::FormalParameters
+            || acc.simple.kind == Type::AnnotationArgumentList
         {
             assert!(acc
                 .simple
@@ -547,10 +311,7 @@ impl XmlTreeGen {
                 .iter()
                 .all(|x| { !node_store.resolve(*x).has_children() }));
             // TODO decls
-            (
-                Some(PartialAnalysis{}),
-                None,
-            )
+            (Some(PartialAnalysis {}), None)
         } else if acc.simple.kind == Type::SwitchLabel || acc.simple.kind == Type::Modifiers {
             // TODO decls
             (None, None)
@@ -596,7 +357,7 @@ impl XmlTreeGen {
             } else {
                 let cs = x.get_component::<CS<legion::Entity>>().ok();
                 let r = match cs {
-                    Some(CS(cs)) => cs == &acc.simple.children,
+                    Some(CS(cs)) => cs.as_ref() == &acc.simple.children,
                     None => acc.simple.children.is_empty(),
                 };
                 if !r {
@@ -608,21 +369,7 @@ impl XmlTreeGen {
         };
         let insertion = node_store.prepare_insertion(&hashable, eq);
 
-        let hashs = SyntaxNodeHashs {
-            structt: hashed::inner_node_hash(
-                hashed_kind,
-                &0,
-                &acc.metrics.size,
-                &acc.metrics.hashs.structt,
-            ),
-            label: hashed::inner_node_hash(
-                hashed_kind,
-                hashed_label,
-                &acc.metrics.size,
-                &acc.metrics.hashs.label,
-            ),
-            syntax: hsyntax,
-        };
+        let hashs = hbuilder.build();
 
         let ana = match ana {
             Some(ana) => Some(ana), // TODO partialana resolution such as deps in pom.xml
@@ -635,17 +382,21 @@ impl XmlTreeGen {
             match label {
                 None => {
                     macro_rules! insert {
-                        ( $c:expr, $t:ty ) => {
+                        ( $c:expr, $t:ty ) => {{
+                            // let it = ana.as_ref().unwrap().solver.iter_refs();
+                            // let it =
+                            //     BulkHasher::<_, <$t as BF<[u8]>>::S, <$t as BF<[u8]>>::H>::from(it);
                             NodeStore::insert_after_prepare(
                                 vacant,
-                                $c.concat((<$t>::SIZE, <$t>::from(ana.as_ref().unwrap().refs()))),
+                                // $c.concat((<$t>::SIZE, <$t>::from(it))),
+                                $c
                             )
-                        };
+                        }};
                     }
                     match acc.simple.children.len() {
                         0 => {
-                            assert_eq!(0, metrics.size);
-                            assert_eq!(0, metrics.height);
+                            assert_eq!(0, size);
+                            assert_eq!(0, height);
                             NodeStore::insert_after_prepare(
                                 vacant,
                                 (acc.simple.kind.clone(), hashs, BloomSize::None),
@@ -680,12 +431,12 @@ impl XmlTreeGen {
                         //     ),
                         // ),
                         _ => {
-                            let a = acc.simple.children;
+                            let a = acc.simple.children.into_boxed_slice();
                             use hyper_ast::store::nodes::legion::compo;
                             let c = (
                                 acc.simple.kind.clone(),
-                                compo::Size(metrics.size + 1),
-                                compo::Height(metrics.height + 1),
+                                compo::Size(size),
+                                compo::Height(height),
                                 hashs,
                                 CS(a),
                             );
@@ -737,13 +488,13 @@ impl XmlTreeGen {
         };
 
         let metrics = SubTreeMetrics {
-            size: metrics.size + 1,
-            height: metrics.height + 1,
+            size,
+            height,
             hashs,
         };
 
         let full_node = FullNode {
-            global: Global { depth, position },
+            global: global.into(),
             local: Local {
                 compressed_node,
                 metrics,
@@ -751,6 +502,148 @@ impl XmlTreeGen {
             },
         };
         full_node
+    }
+}
+
+impl<'a> XmlTreeGen<'a> {
+    fn make_spacing(
+        &mut self,
+        spacing: Vec<u8>, //Space>,
+                          // node_store: &mut NodeStore,
+                          // global: &mut <Self as TreeGen>::Global,
+    ) -> Local {
+        // <<Self as TreeGen>::Acc as Accumulator>::Node {
+        let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
+        let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
+        let hbuilder: hashed::Builder<SyntaxNodeHashs<u32>> =
+            hashed::Builder::new(Default::default(), &Type::Spaces, &spacing, 1);
+        let hsyntax = hbuilder.most_discriminating();
+        let hashable = &hsyntax;
+
+        let eq = |x: EntryRef| {
+            let t = x.get_component::<Type>();
+            if t != Ok(&Type::Spaces) {
+                return false;
+            }
+            let l = x.get_component::<LabelIdentifier>();
+            if l != Ok(&spacing_id) {
+                return false;
+            }
+            true
+        };
+
+        let insertion = self.stores.node_store.prepare_insertion(&hashable, eq);
+
+        let hashs = SyntaxNodeHashs {
+            structt: 0,
+            label: 0,
+            syntax: hsyntax,
+        };
+
+        let compressed_node = if let Some(id) = insertion.occupied_id() {
+            id
+        } else {
+            let vacant = insertion.vacant();
+            NodeStore::insert_after_prepare(
+                vacant,
+                (Type::Spaces, spacing_id, hashs, BloomSize::None),
+            )
+        };
+
+        Local {
+            compressed_node,
+            metrics: SubTreeMetrics {
+                size: 1,
+                height: 1,
+                hashs,
+            },
+            ana: Default::default(),
+        }
+    }
+
+    pub fn new(stores: &mut SimpleStores) -> XmlTreeGen {
+        XmlTreeGen {
+            line_break: "\n".as_bytes().to_vec(),
+            stores,
+        }
+    }
+
+    pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
+        let mut parser = tree_sitter::Parser::new();
+        let language = tree_sitter_html::language();
+        parser.set_language(language).unwrap();
+        let tree = parser.parse(text, None).unwrap();
+        if tree.root_node().has_error() {
+            Err(tree)
+        } else {
+            Ok(tree)
+        }
+    }
+
+    pub fn generate_file(
+        &mut self,
+        name: &[u8],
+        text: &'a [u8],
+        cursor: tree_sitter::TreeCursor,
+    ) -> FullNode<BasicGlobalData, Local> {
+        let mut init = self.init_val(text, &TNode(cursor.node()));
+        let mut xx = TTreeCursor(cursor);
+        let mut global = Global::from(TextedGlobalData::new(Default::default(), text));
+
+        let spacing = get_spacing(
+            init.padding_start,
+            init.start_byte,
+            text,
+            init.indentation(),
+        );
+        if let Some(spacing) = spacing {
+            global.down();
+            init.push(FullNode {
+                global: global.into(),
+                local: self.make_spacing(spacing),
+            });
+            global.right();
+        }
+        let mut stack = vec![init];
+
+        self.gen(text, &mut stack, &mut xx, &mut global);
+
+        let mut acc = stack.pop().unwrap();
+
+        if has_final_space(&0, global.sum_byte_length(), text) {
+            let spacing = get_spacing(
+                global.sum_byte_length(),
+                text.len(),
+                text,
+                acc.indentation(),
+            );
+            if let Some(spacing) = spacing {
+                global.right();
+                acc.push(FullNode {
+                    global: global.into(),
+                    local: self.make_spacing(spacing),
+                });
+            }
+        }
+        let label = Some(std::str::from_utf8(name).unwrap().to_owned());
+        let full_node = self.make(&mut global, acc, label);
+        full_node
+    }
+
+    fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {
+        let label_store = &mut self.stores.label_store;
+        if kind == &Type::ClassBody
+            || kind == &Type::PackageDeclaration
+            || kind == &Type::ClassDeclaration
+            || kind == &Type::EnumDeclaration
+            || kind == &Type::InterfaceDeclaration
+            || kind == &Type::AnnotationTypeDeclaration
+            || kind == &Type::Program
+        {
+            Some(PartialAnalysis {})
+        } else {
+            None
+        }
     }
 }
 
@@ -815,9 +708,9 @@ pub fn serialize<W: std::fmt::Write>(
 /// TODO partialana
 impl PartialAnalysis {
     pub(crate) fn refs_count(&self) -> usize {
-        0//TODO
+        0 //TODO
     }
     pub(crate) fn refs(&self) -> impl Iterator<Item = Vec<u8>> {
-        vec![vec![0_u8]].into_iter()//TODO
+        vec![vec![0_u8]].into_iter() //TODO
     }
 }

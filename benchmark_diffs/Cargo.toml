@@ -1,0 +1,45 @@
+[package]
+name = "hyper_ast_benchmark_diffs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tree-sitter = "0.20.0"
+hyper_ast = { path = "../hyper_ast" }
+hyper_gumtree = { path = "../gumtree" }
+hyper_ast_cvs_git = { path = "../cvs/git" }
+hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
+env_logger = "0.9.0"
+log = { version = "0.4.6", features = ["max_level_debug", "release_max_level_warn"] }
+
+cfg-if = "1.0"
+
+comfy-table = "6.0.0"
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = "0.3.2"
+
+[build-dependencies]
+
+# [profile.release]
+# debug = 1
+
+# [profile.release]
+## release optimizations
+# lto = "fat"
+# codegen-units = 1
+# rustflags = ["-C target-cpu=native"]
+# panic = "abort"
+
+[profile.test]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
+lto = false
+panic = 'unwind'
+incremental = true
+codegen-units = 16
+rpath = false

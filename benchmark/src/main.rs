@@ -10,22 +10,33 @@ use std::{
     time::{Instant, SystemTime},
 };
 
-use rusted_gumtree_cvs_git::{
+use hyper_ast_cvs_git::{
     allrefs::write_referencial_relations,
     git::{fetch_github_repository, retrieve_commit},
     preprocessed::{self, PreProcessedRepository},
 };
-use rusted_gumtree_gen_ts_java::utils::memusage_linux;
+use hyper_ast_gen_ts_java::utils::memusage_linux;
 use serde::{Deserialize, Serialize, Serializer};
 
 use crate::write_serializer::{WriteJson, WritePartialJson};
+
+
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 // WARN there is a big impact of the buff writer capacity
 const BUFF_WRITER_CAPACITY: usize = 4 * 8 * 1024;
 
 fn main() {
+    benchmark_main()
+}
+fn benchmark_main() {
     // let f = env_logger::fmt::BufferWriter
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
         .format(|buf, record| {
             if record.level().to_level_filter() > log::LevelFilter::Debug {
                 writeln!(buf, "{}", record.args())
@@ -97,7 +108,7 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
         before,
         after,
         dir_path,
-        10000
+        1000
     );
     let mu = memusage_linux();
     log::warn!("total memory used {}", mu);
@@ -112,6 +123,7 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
     let mu = memusage_linux();
     let mut i = 0;
     for c in &preprocessed.processing_ordered_commits {
+        log::warn!("search of commit {:?}", c.to_string());
         let c = preprocessed.commits.get_key_value(c).unwrap();
         let root = c.1.ast_root;
         let out = out.as_ref().map(|x| x.join(c.0.to_string()));
@@ -167,14 +179,14 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
                 construction_perfs,
                 search_perfs: Some(Perfs {
                     time: search_time,
-                    memory: with_search_memory_fooprint.try_into().unwrap(),
+                    memory: with_search_memory_fooprint.max(0).unsigned_abs(),
                 }),
                 info,
             };
             instance
                 .serialize(WritePartialJson::from(&mut buf))
                 .unwrap();
-
+            
             buf.flush().unwrap();
         } else {
             todo!();

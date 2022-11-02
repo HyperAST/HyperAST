@@ -10,6 +10,8 @@ pub mod partial_analysis;
 
 pub mod usage;
 
+pub mod bytes_interner;
+
 
 #[cfg(test)]
 mod stack_graph_test;
