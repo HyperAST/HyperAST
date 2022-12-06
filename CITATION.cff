@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: If you use the HyperAST, please cite this paper.
+preferred-citation:
+  title: "HyperAST: Enabling Efficient Analysis of Software Histories at Scale"
+  url: "https://hal.inria.fr/hal-03764541v1/document"
+  year: "2022"
+  type: conference
+  conference: "ASE 2022 - 37th IEEE/ACM International Conference on Automated Software Engineering"
+  authors:
+    - family-names: Le Dilavrec
+      given-names: Quentin
+    - family-names: Khelladi
+      given-names: Djamel Eddine
+    - family-names: Blouin
+      given-names: Arnaud
+    - family-names: Jézéquel
+      given-names: Jean-Marc
