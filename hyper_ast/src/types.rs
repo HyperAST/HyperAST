@@ -3,8 +3,8 @@ use std::hash::Hash;
 use std::str::FromStr;
 
 use num::PrimInt;
-use strum_macros::Display;
 use strum_macros::EnumString;
+use strum_macros::Display;
 
 pub trait HashKind {
     fn structural() -> Self;
@@ -448,31 +448,31 @@ pub enum Type {
     xml_TS4,
     #[strum(serialize = "#REQUIRED")]
     xml_TS5,
-    // #[strum(serialize = "%")]
+    #[strum(serialize = "%")]
     xml_TS6,
-    // #[strum(serialize = "&")]
+    #[strum(serialize = "&")]
     xml_TS7,
     #[strum(serialize = "'")]
     xml_TS8,
-    // #[strum(serialize = "(")]
+    #[strum(serialize = "(")]
     xml_TS9,
-    // #[strum(serialize = ")")]
+    #[strum(serialize = ")")]
     xml_TS10,
     #[strum(serialize = ")*")]
     xml_TS11,
-    // #[strum(serialize = "*")]
+    #[strum(serialize = "*")]
     xml_TS12,
-    // #[strum(serialize = "+")]
+    #[strum(serialize = "+")]
     xml_TS13,
-    // #[strum(serialize = ",")]
+    #[strum(serialize = ",")]
     xml_TS14,
     #[strum(serialize = "-->")]
     xml_TS15,
     #[strum(serialize = "/>")]
     xml_TS16,
-    // #[strum(serialize = ";")]
+    #[strum(serialize = ";")]
     xml_TS17,
-    // #[strum(serialize = "<")]
+    #[strum(serialize = "<")]
     xml_TS18,
     #[strum(serialize = "<!--")]
     xml_TS19,
@@ -494,11 +494,11 @@ pub enum Type {
     xml_TS27,
     #[strum(serialize = "<?xml")]
     xml_TS28,
-    // #[strum(serialize = "=")]
+    #[strum(serialize = "=")]
     xml_TS29,
-    // #[strum(serialize = ">")]
+    #[strum(serialize = ">")]
     xml_TS30,
-    // #[strum(serialize = "?")]
+    #[strum(serialize = "?")]
     xml_TS31,
     #[strum(serialize = "?>")]
     xml_TS32,
@@ -532,9 +532,9 @@ pub enum Type {
     xml_TS46,
     #[strum(serialize = "SYSTEM")]
     xml_TS47,
-    // #[strum(serialize = "[")]
+    #[strum(serialize = "[")]
     xml_TS48,
-    // #[strum(serialize = "]")]
+    #[strum(serialize = "]")]
     xml_TS49,
     #[strum(serialize = "]]>")]
     xml_TS50,
@@ -548,7 +548,7 @@ pub enum Type {
     xml_TS54,
     #[strum(serialize = "yes")]
     xml_TS55,
-    // #[strum(serialize = "|")]
+    #[strum(serialize = "|")]
     xml_TS56,
 }
 

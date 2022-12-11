@@ -771,10 +771,9 @@ pub mod compressed_bf_post_process {
                 match g(&c.compute().0) {
                     Err(e) => {
                         unmatched_m += 1;
-                        log::debug!("{}", e);
                         let r = stores.node_store.resolve(src.1);
                         let t = r.get_type();
-                        dbg!(t);
+                        log::debug!("{} {:?}", e, t);
                     }
                     Ok(_) => {
                         matched_m += 1;

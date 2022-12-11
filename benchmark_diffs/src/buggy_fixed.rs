@@ -411,7 +411,7 @@ mod test {
             line_break: "\n".as_bytes().to_vec(),
             stores: &mut stores,
         };
-        print!("len={}: ", buggy.len());
+        println!("len={}: ", buggy.len());
         let (src_tr, dst_tr) = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
@@ -453,6 +453,7 @@ mod test {
             &src,
             &mut Into::<IoOut<_>>::into(stdout()),
         );
+        println!();
         print_tree_syntax_with_ids(
             |id: &NodeIdentifier| -> _ {
                 tree_gen
@@ -466,26 +467,134 @@ mod test {
             &dst,
             &mut Into::<IoOut<_>>::into(stdout()),
         );
-        {
-            let stores = &tree_gen.stores;
-            let mappings = VecStore::default();
-            type DS = CompletePostOrder<NodeIdentifier, u32>;
-            let mapper = GreedySubtreeMatcher::<DS, DS, _, HashedNodeRef, _, _>::matchh(
-                &stores.node_store,
-                &src,
-                &dst,
-                mappings,
-            );
-            let SubtreeMatcher {
-                src_arena,
-                dst_arena,
-                mappings,
-                ..
-            } = mapper.into();
-            print_mappings(&dst_arena, &src_arena, stores, &mappings);
-        }
+        println!();
+        let stores = &tree_gen.stores;
+        let mappings = VecStore::default();
+        type DS = CompletePostOrder<NodeIdentifier, u32>;
+        let mapper = GreedySubtreeMatcher::<DS, DS, _, HashedNodeRef, _, _>::matchh(
+            &stores.node_store,
+            &src,
+            &dst,
+            mappings,
+        );
+        let SubtreeMatcher {
+            src_arena,
+            dst_arena,
+            mappings,
+            ..
+        } = mapper.into();
+        print_mappings(&dst_arena, &src_arena, stores, &mappings);
 
-        subprocess(&stores, src, dst, "gumtree-simple", "JSON");
+        let gt_out = subprocess(&stores, src, dst, "gumtree-subtree", "JSON");
+
+        let pp = SimpleJsonPostProcess::new(&gt_out);
+        let gt_timings = pp.performances();
+        let counts = pp.counts();
+        dbg!(gt_timings, counts.mappings, counts.actions);
+        let valid = pp.validity_mappings(&stores, &src_arena, src, &dst_arena, dst, &mappings);
+        dbg!(valid.additional_mappings, valid.missing_mappings);
+    }
+
+    static CASE_SIMPLE: &'static str = r#"<project>
+</project>"#;
+
+    #[test]
+    fn test_spoon_pom_bad_subtree_match_same_content() {
+        // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
+        println!("{:?}", std::env::current_dir());
+        let buggy = CASE_SIMPLE;
+        let fixed = CASE_SIMPLE;
+        let mut stores = SimpleStores {
+            label_store: LabelStore::new(),
+            type_store: TypeStore {},
+            node_store: NodeStore::new(),
+        };
+        let mut tree_gen = XmlTreeGen {
+            line_break: "\n".as_bytes().to_vec(),
+            stores: &mut stores,
+        };
+        println!("len={}: ", buggy.len());
+        let (src_tr, dst_tr) = {
+            let tree_gen = &mut tree_gen;
+            let full_node1 = {
+                let tree = match XmlTreeGen::tree_sitter_parse(buggy.as_bytes()) {
+                    Ok(t) => t,
+                    Err(t) => t,
+                };
+                let full_node1 =
+                    tree_gen.generate_file("".as_bytes(), buggy.as_bytes(), tree.walk());
+                full_node1
+            };
+            let full_node2 = {
+                let tree = match XmlTreeGen::tree_sitter_parse(fixed.as_bytes()) {
+                    Ok(t) => t,
+                    Err(t) => t,
+                };
+                let full_node1 =
+                    tree_gen.generate_file("".as_bytes(), fixed.as_bytes(), tree.walk());
+                full_node1
+            };
+            (full_node1, full_node2)
+        };
+        let src = src_tr.local.compressed_node;
+        // let src = tree_gen.stores.node_store.resolve(src).get_child(&0);
+        let dst = dst_tr.local.compressed_node;
+        // let dst = tree_gen.stores.node_store.resolve(dst).get_child(&0);
+
+        use hyper_ast::types::LabelStore as _;
+        print_tree_syntax_with_ids(
+            |id: &NodeIdentifier| -> _ {
+                tree_gen
+                    .stores
+                    .node_store
+                    .resolve(id.clone())
+                    .into_compressed_node()
+                    .unwrap()
+            },
+            |id| -> _ { tree_gen.stores.label_store.resolve(id).to_owned() },
+            &src,
+            &mut Into::<IoOut<_>>::into(stdout()),
+        );
+        println!();
+        print_tree_syntax_with_ids(
+            |id: &NodeIdentifier| -> _ {
+                tree_gen
+                    .stores
+                    .node_store
+                    .resolve(id.clone())
+                    .into_compressed_node()
+                    .unwrap()
+            },
+            |id| -> _ { tree_gen.stores.label_store.resolve(id).to_owned() },
+            &dst,
+            &mut Into::<IoOut<_>>::into(stdout()),
+        );
+        println!();
+        let stores = &tree_gen.stores;
+        let mappings = VecStore::default();
+        type DS = CompletePostOrder<NodeIdentifier, u32>;
+        let mapper = GreedySubtreeMatcher::<DS, DS, _, HashedNodeRef, _, _>::matchh(
+            &stores.node_store,
+            &src,
+            &dst,
+            mappings,
+        );
+        let SubtreeMatcher {
+            src_arena,
+            dst_arena,
+            mappings,
+            ..
+        } = mapper.into();
+        print_mappings(&dst_arena, &src_arena, stores, &mappings);
+
+        let gt_out = subprocess(&stores, src, dst, "gumtree-subtree", "JSON");
+
+        let pp = SimpleJsonPostProcess::new(&gt_out);
+        let gt_timings = pp.performances();
+        let counts = pp.counts();
+        dbg!(gt_timings, counts.mappings, counts.actions);
+        let valid = pp.validity_mappings(&stores, &src_arena, src, &dst_arena, dst, &mappings);
+        dbg!(valid.additional_mappings, valid.missing_mappings);
     }
 
     pub static CASE9: &'static str = r#"<project>
@@ -606,7 +715,7 @@ mod test {
             line_break: "\n".as_bytes().to_vec(),
             stores: &mut stores,
         };
-        print!("len={}: ", buggy.len());
+        println!("len={}: ", buggy.len());
         let (src_tr, dst_tr) = {
             let full_node1 = {
                 let tree = match XmlTreeGen::tree_sitter_parse(buggy.as_bytes()) {
@@ -643,6 +752,7 @@ mod test {
             &src,
             &mut Into::<IoOut<_>>::into(stdout()),
         );
+        println!();
         print_tree_syntax_with_ids(
             |id: &NodeIdentifier| -> _ {
                 tree_gen
@@ -656,6 +766,7 @@ mod test {
             &dst,
             &mut Into::<IoOut<_>>::into(stdout()),
         );
+        println!();
         let stores = &tree_gen.stores;
         let mappings = VecStore::default();
         type DS = CompletePostOrder<NodeIdentifier, u32>;
