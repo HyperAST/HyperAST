@@ -38,12 +38,10 @@ fn benchmark_main() {
     let repo_name = args
         .get(1)
         .expect("give an argument like openjdk/jdk or INRIA/spoon"); //"openjdk/jdk";//"INRIA/spoon";
-    let before = args.get(2).map_or("", |x| x);
-    let after = args.get(3).map_or("", |x| x);
 
     println!(
         "(eq, not): {:?}",
-        check_random_files_reserialization(repo_name, before, after)
+        check_random_files_reserialization(repo_name)
     );
 }
 
@@ -72,8 +70,8 @@ pub struct Instance {
 
 fn check_random_files_reserialization(
     repo_name: &String,
-    before: &str,
-    after: &str,
+    // before: &str,
+    // after: &str,
 ) -> (usize, usize) {
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
     preprocessed.check_random_files_reserialization(&mut fetch_github_repository(&repo_name))

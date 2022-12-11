@@ -1,16 +1,14 @@
-use core::{fmt, panic};
+use core::fmt;
 use std::{
     fmt::{Debug, Display},
     io::stdout,
-    iter::Peekable,
-    ops::AddAssign,
     path::{Path, PathBuf},
 };
 
 use num::ToPrimitive;
 
 use crate::{
-    nodes::{print_tree_syntax, IoOut, Space},
+    nodes::{print_tree_syntax, IoOut},
     store::{defaults::NodeIdentifier, SimpleStores},
     types::{LabelStore, Labeled, Tree, Type, Typed, WithChildren},
 };
@@ -326,12 +324,12 @@ impl From<NodeIdentifier> for StructuralPosition {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct StructuralPositionWithIndentation {
-    pub(crate) nodes: Vec<NodeIdentifier>,
-    pub(crate) offsets: Vec<usize>,
-    pub(crate) indentations: Vec<Box<[Space]>>,
-}
+// #[derive(Clone, Debug)]
+// pub struct StructuralPositionWithIndentation {
+//     pub(crate) nodes: Vec<NodeIdentifier>,
+//     pub(crate) offsets: Vec<usize>,
+//     pub(crate) indentations: Vec<Box<[Space]>>,
+// }
 
 pub struct StructuralPositionStore {
     pub nodes: Vec<NodeIdentifier>,
@@ -343,21 +341,21 @@ pub struct StructuralPositionStore {
 #[derive(Clone, Copy, Debug)]
 pub struct SpHandle(usize);
 
-struct IterStructuralPositions<'a> {
-    sps: &'a StructuralPositionStore,
-    ends: core::slice::Iter<'a, usize>,
-}
+// struct IterStructuralPositions<'a> {
+//     sps: &'a StructuralPositionStore,
+//     ends: core::slice::Iter<'a, usize>,
+// }
 
-impl<'a> Iterator for IterStructuralPositions<'a> {
-    type Item = StructuralPosition;
+// impl<'a> Iterator for IterStructuralPositions<'a> {
+//     type Item = StructuralPosition;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        let x = *self.ends.next()?;
-        let it = ExploreStructuralPositions::new(self.sps, x);
-        // let r = Position;
-        todo!()
-    }
-}
+//     fn next(&mut self) -> Option<Self::Item> {
+//         let x = *self.ends.next()?;
+//         let it = ExploreStructuralPositions::new(self.sps, x);
+//         // let r = Position;
+//         todo!()
+//     }
+// }
 
 #[derive(Clone, Debug)]
 pub struct Scout {
@@ -633,11 +631,14 @@ pub struct ExploreStructuralPositions<'a> {
 }
 /// precondition: root node do not contain a File node
 /// TODO make whole thing more specific to a path in a tree
-pub fn compute_range<It:Iterator>(
+pub fn compute_range<It: Iterator>(
     root: NodeIdentifier,
     offsets: &mut It,
     stores: &SimpleStores,
-) -> (usize, usize, NodeIdentifier) where It::Item: ToPrimitive {
+) -> (usize, usize, NodeIdentifier)
+where
+    It::Item: ToPrimitive,
+{
     let mut offset = 0;
     let mut x = root;
     for o in offsets {
@@ -657,21 +658,28 @@ pub fn compute_range<It:Iterator>(
             if let Some(a) = cs.get(o.to_usize().unwrap()) {
                 x = *a;
             } else {
-                break
+                break;
             }
         } else {
             break;
         }
     }
     let b = stores.node_store.resolve(x);
-    (offset, offset+b.try_get_bytes_len(0).unwrap_or(0).to_usize().unwrap(), x)
+    (
+        offset,
+        offset + b.try_get_bytes_len(0).unwrap_or(0).to_usize().unwrap(),
+        x,
+    )
 }
 
-pub fn compute_position<It:Iterator>(
+pub fn compute_position<It: Iterator>(
     root: NodeIdentifier,
     offsets: &mut It,
     stores: &SimpleStores,
-) -> (Position, NodeIdentifier) where It::Item: ToPrimitive {
+) -> (Position, NodeIdentifier)
+where
+    It::Item: ToPrimitive,
+{
     let mut offset = 0;
     let mut x = root;
     let mut path = vec![];
@@ -707,7 +715,7 @@ pub fn compute_position<It:Iterator>(
             if let Some(a) = cs.get(o.to_usize().unwrap()) {
                 x = *a;
             } else {
-                break
+                break;
             }
         } else {
             break;
@@ -721,17 +729,20 @@ pub fn compute_position<It:Iterator>(
         path.push(l);
     }
 
-    let len = if !t.is_directory() { 
+    let len = if !t.is_directory() {
         b.get_bytes_len(0).to_usize().unwrap()
     } else {
         0
     };
     let path = PathBuf::from_iter(path.iter());
-    (Position {
-        file: path,
-        offset,
-        len,
-    }, x)
+    (
+        Position {
+            file: path,
+            offset,
+            len,
+        },
+        x,
+    )
 }
 
 impl<'a> ExploreStructuralPositions<'a> {
@@ -930,8 +941,10 @@ impl StructuralPositionStore {
         r
     }
 
-    /// intended to easily compare to positions from other ASTs eg. spoon
-    pub fn to_relaxed_positions(&self, stores: &SimpleStores) -> Vec<Position> {
+    /// would ease approximate comparisons with other ASTs eg. spoon
+    /// the basic idea would be to take the position of the parent.
+    /// would be better to directly use a relaxed comparison.
+    pub fn to_relaxed_positions(&self, _stores: &SimpleStores) -> Vec<Position> {
         todo!()
     }
 

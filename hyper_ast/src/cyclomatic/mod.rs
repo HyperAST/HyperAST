@@ -1,5 +1,3 @@
-use std::num::NonZeroU32;
-
 use legion::world::ComponentError;
 
 use crate::{
@@ -29,7 +27,7 @@ pub fn is_cyclomatic_persisted(t: &Type) -> bool {
 /// modern tools do.
 /// From https://bitbucket.org/sealuzh/lisa/src/master/lisa-module/src/main/scala/ch/uzh/ifi/seal/lisa/module/analysis/object-oriented/MccAnalysis.scala
 /// same POV https://github.com/qxo/eclipse-metrics-plugin/blob/08e51bd48725494aaa82023716ce659504948610/net.sourceforge.metrics/src/net/sourceforge/metrics/calculators/McCabe.java
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Mcc {
     value: u32,
 }
@@ -64,7 +62,7 @@ impl Mcc {
 }
 
 impl MetaData for Mcc {
-    type R = Result<u32,ComponentError>;
+    type R = Result<u32, ComponentError>;
 
     fn retrieve(node: &HashedNodeRef) -> Self::R {
         let kind = node.get_type();

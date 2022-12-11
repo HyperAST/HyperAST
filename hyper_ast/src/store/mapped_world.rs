@@ -1,10 +1,7 @@
 use std::{
-    cell::{Ref, RefCell},
-    collections::hash_map::DefaultHasher,
     fmt::Debug,
-    hash::{BuildHasher, Hash, Hasher},
+    hash::{BuildHasher, Hash},
     marker::PhantomData,
-    rc::Rc,
 };
 
 use crate::{
@@ -230,7 +227,6 @@ where
             ..
         } = self;
         let hash = make_hash(hasher, &node);
-        let a = &dedup.len();
         let entry = dedup.raw_entry_mut().from_hash(hash, |symbol| {
             // SAFETY: This is safe because we only operate on symbols that
             //         we receive from our backend making them valid.

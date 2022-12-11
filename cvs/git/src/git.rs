@@ -245,35 +245,35 @@ pub trait UniqueObject {
     fn id(&self) -> &Self::Id;
 }
 
-enum File<'a, 'b, Id> {
-    File(Id, Vec<u8>, &'a [u8]),
-    Dir(Id, Vec<u8>, &'b [Id]),
-}
-impl<'a, 'b, Id> NamedObject for File<'a, 'b, Id> {
-    fn name(&self) -> &[u8] {
-        match self {
-            File::Dir { 1: name, .. } => name,
-            File::File { 1: name, .. } => name,
-        }
-    }
-}
-impl<'a, 'b, Id: Clone> UniqueObject for File<'a, 'b, Id> {
-    type Id = Id;
-    fn id(&self) -> &Id {
-        match self {
-            File::Dir { 0: id, .. } => id,
-            File::File { 0: id, .. } => id,
-        }
-    }
-}
-impl<'a, 'b, Id> TypedObject for File<'a, 'b, Id> {
-    fn r#type(&self) -> ObjectType {
-        match self {
-            File::Dir(..) => ObjectType::Dir,
-            File::File(..) => ObjectType::File,
-        }
-    }
-}
+// enum File<'a, 'b, Id> {
+//     File(Id, Vec<u8>, &'a [u8]),
+//     Dir(Id, Vec<u8>, &'b [Id]),
+// }
+// impl<'a, 'b, Id> NamedObject for File<'a, 'b, Id> {
+//     fn name(&self) -> &[u8] {
+//         match self {
+//             File::Dir { 1: name, .. } => name,
+//             File::File { 1: name, .. } => name,
+//         }
+//     }
+// }
+// impl<'a, 'b, Id: Clone> UniqueObject for File<'a, 'b, Id> {
+//     type Id = Id;
+//     fn id(&self) -> &Id {
+//         match self {
+//             File::Dir { 0: id, .. } => id,
+//             File::File { 0: id, .. } => id,
+//         }
+//     }
+// }
+// impl<'a, 'b, Id> TypedObject for File<'a, 'b, Id> {
+//     fn r#type(&self) -> ObjectType {
+//         match self {
+//             File::Dir(..) => ObjectType::Dir,
+//             File::File(..) => ObjectType::File,
+//         }
+//     }
+// }
 
 pub fn read_position(
     repo: &Repository,

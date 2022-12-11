@@ -11,7 +11,10 @@ hyper_gumtree = { path = "../gumtree" }
 hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
 hyper_ast_cvs_git = { path = "../cvs/git" }
 env_logger = "0.9.0"
-log = { version = "0.4.6", features = ["max_level_debug", "release_max_level_warn"] }
+log = { version = "0.4.6", features = [
+    "max_level_debug",
+    "release_max_level_warn",
+] }
 
 pommes = "0.0.2"
 
@@ -26,7 +29,7 @@ cfg-if = "1.0"
 criterion = "0.3.6"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = "0.3.2"
+jemallocator = "0.5.0"
 
 [build-dependencies]
 

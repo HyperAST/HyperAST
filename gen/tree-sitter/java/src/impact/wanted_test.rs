@@ -1,20 +1,17 @@
-
-
-
 #[test]
 fn test() {
 
     // per commit (from head ? from first (empty) ?)
     // - parse changed files in post-order
-    //    index to later decide 
+    //    index to later decide
     //          (there is a tradeoff btw same parent hierarchy (decompressed nodes) and subtree reuse, for caches)
     //          use path for indexing
     //    if subtree reach a certain threshold
-    //      - compress + index 
+    //      - compress + index
     //          same ast used in same commit = clone (state)
     //          same ast used in different commits
     //            without a insert = clone (state)
-    //            with an insert = duplication (change) 
+    //            with an insert = duplication (change)
     //              TODO cache path + version if compressed ast is an insertion (not mapped to same parent (or none) in previous version)
     //          a clone can later be considered a move if original is later removed
     //      - compute other things:
@@ -26,26 +23,21 @@ fn test() {
     //        - decide if knowing that it does not contain (reference, or complete reference) is ok,
     //            ie. try to keep a constant/low number of needed refs for each node
     //            shared nodes (not subtree) could benefit from sharing ext references between versions
-    // 
-
+    //
 }
 
-
+#[cfg(test)]
+#[allow(unused)]
 mod try_typed_store {
     use hyper_ast::types::Type;
 
-
-    enum Element {
+    pub enum Element {
         Block(Box<Block>),
-        Statement{
-            
-        },
+        Statement {},
     }
 
-    struct Block {
-        kind:Type,
-        elements:[Element],
+    pub struct Block {
+        kind: Type,
+        elements: [Element],
     }
-
-
 }

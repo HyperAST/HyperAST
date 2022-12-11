@@ -1,5 +1,3 @@
-use crate::tree_gen::Accumulator;
-
 #[derive(Debug)]
 pub struct FullNode<Global, Local> {
     pub global: Global,

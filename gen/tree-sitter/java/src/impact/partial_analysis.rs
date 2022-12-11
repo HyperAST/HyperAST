@@ -1,11 +1,10 @@
 use std::{collections::HashMap, fmt::Display, hash::Hash, ops::Deref};
 
-use bitvec::order::Lsb0;
 use enumset::{enum_set, EnumSet, EnumSetType};
 use hyper_ast::types::{LabelStore, Type};
 use num::ToPrimitive;
 
-use crate::impact::{element::{Arguments, ExplorableRef, ListSet}, solver::{SolvingAssocTable, SolvingResult}};
+use crate::impact::{element::{Arguments, ListSet}, solver::{SolvingAssocTable, SolvingResult}};
 
 use super::{
     declaration::{DeclType, Declarator, DisplayDecl},
@@ -13,7 +12,7 @@ use super::{
     java_element::Primitive,
     label_value::LabelValue,
     reference::DisplayRef,
-    solver::{MultiResult, Solver},
+    solver::Solver,
 };
 
 pub fn leaf_state(
@@ -366,7 +365,7 @@ impl PartialAnalysis {
             }
             _ => (),
         };
-        let (_, mut prev_solver) = solver.resolve(cache);
+        let (_, prev_solver) = solver.resolve(cache);
         let mut solver = Solver::default();
         let mut counted_intern = solver.counted_extend(&prev_solver);
         let current_node = self.current_node.map(|x| counted_intern.intern_external(&mut solver,x),|x| x);
@@ -703,7 +702,7 @@ impl PartialAnalysis {
                         package: None,
                         asterisk_imports,
                         global,
-                        mut local,
+                        local,
                     },
                     State::PackageDeclaration(p),
                 ) => {
@@ -784,7 +783,7 @@ impl PartialAnalysis {
                         package: p,
                         mut asterisk_imports,
                         global,
-                        mut local,
+                        local,
                     },
                     State::ImportDeclaration {
                         identifier: i,
@@ -794,13 +793,14 @@ impl PartialAnalysis {
                 ) => {
                     // assert!(p.is_some());
                     // TODO do something with sstatic and asterisk
+                    let _ = sstatic;
                     if asterisk {
                         let d = sync!(i);
                         // TODO static
                         asterisk_imports.push(d);
                     } else {
                         let Old(i) = i;
-                        let shorten = match &self.solver.nodes[i] {
+                        match &self.solver.nodes[i] {
                             RefsEnum::ScopedIdentifier(o, i) => {
                                 let o = sync!(Old(*o));
                                 let r = mm!();
@@ -833,6 +833,7 @@ impl PartialAnalysis {
                                 let d =
                                     acc.solver
                                         .intern_ref(RefsEnum::Invocation(o, *i, p.clone())); // TODO use it
+                                let _ = d;
                                 acc.solver.add_decl(
                                     Declarator::Type(shorten),
                                     DeclType::Runtime(vec![].into()),

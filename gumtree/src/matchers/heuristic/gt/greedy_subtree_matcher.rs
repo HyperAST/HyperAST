@@ -13,7 +13,7 @@ use crate::matchers::{
 use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyper_ast::compat::HashMap;
 use hyper_ast::types::{HashKind, Labeled, NodeStore, Tree, Typed, WithChildren, WithHashs};
-use num_traits::{cast, one, zero, PrimInt, ToPrimitive};
+use num_traits::{one, zero, PrimInt, ToPrimitive};
 
 pub struct GreedySubtreeMatcher<
     'a,
@@ -95,11 +95,11 @@ where
         let mut ignored = bitvec::bitbox![0;self.internal.src_arena.len()];
         let mut src_ignored = bitvec::bitbox![0;self.internal.src_arena.len()];
         let mut dst_ignored = bitvec::bitbox![0;self.internal.dst_arena.len()];
-        for src in multi_mappings.allMappedSrcs() {
+        for src in multi_mappings.all_mapped_srcs() {
             let mut is_mapping_unique = false;
-            if multi_mappings.isSrcUnique(&src) {
+            if multi_mappings.is_src_unique(&src) {
                 let dst = multi_mappings.get_dsts(&src)[0];
-                if multi_mappings.isDstUnique(&dst) {
+                if multi_mappings.is_dst_unique(&dst) {
                     self.internal.add_mapping_recursively(&src, &dst);
                     is_mapping_unique = true;
                     // src_ignored.set(src.to_usize().unwrap(), true);
@@ -326,12 +326,13 @@ where
     //     let bl = self.internal.dst_arena.parent(&blink.1);
     //     al.cmp(&bl)
     // }
-    fn compare_pos(&self, alink: &(IdD, IdD), blink: &(IdD, IdD)) -> std::cmp::Ordering {
-        if alink.0 != blink.0 {
-            return alink.0.cmp(&blink.0);
-        }
-        return alink.1.cmp(&blink.1);
-    }
+
+    // fn compare_pos(&self, alink: &(IdD, IdD), blink: &(IdD, IdD)) -> std::cmp::Ordering {
+    //     if alink.0 != blink.0 {
+    //         return alink.0.cmp(&blink.0);
+    //     }
+    //     return alink.1.cmp(&blink.1);
+    // }
 
     fn compare_delta_pos(&self, alink: &(IdD, IdD), blink: &(IdD, IdD)) -> std::cmp::Ordering {
         return (alink
@@ -348,28 +349,28 @@ where
         );
     }
 
-    fn sim_sort(
-        &self,
-        ambiguous_mappings: Vec<Mapping<IdD>>,
-    ) -> impl Iterator<Item = Mapping<IdD>> {
-        let mut similarities: Vec<_> = ambiguous_mappings
-            .into_iter()
-            .map(|p| (p, self.internal.similarity(&p.0, &p.1)))
-            .collect();
-        similarities.sort_by(|(alink, asim), (blink, bsim)| -> std::cmp::Ordering {
-            if asim != bsim {
-                // todo caution about exact comparing of floats
-                if let Some(r) = asim.partial_cmp(&bsim) {
-                    return r;
-                }
-            }
-            if alink.0 != blink.0 {
-                return alink.0.cmp(&blink.0);
-            }
-            return alink.1.cmp(&blink.1);
-        });
-        similarities.into_iter().map(|(x, _)| x)
-    }
+    // fn sim_sort(
+    //     &self,
+    //     ambiguous_mappings: Vec<Mapping<IdD>>,
+    // ) -> impl Iterator<Item = Mapping<IdD>> {
+    //     let mut similarities: Vec<_> = ambiguous_mappings
+    //         .into_iter()
+    //         .map(|p| (p, self.internal.similarity(&p.0, &p.1)))
+    //         .collect();
+    //     similarities.sort_by(|(alink, asim), (blink, bsim)| -> std::cmp::Ordering {
+    //         if asim != bsim {
+    //             // todo caution about exact comparing of floats
+    //             if let Some(r) = asim.partial_cmp(&bsim) {
+    //                 return r;
+    //             }
+    //         }
+    //         if alink.0 != blink.0 {
+    //             return alink.0.cmp(&blink.0);
+    //         }
+    //         return alink.1.cmp(&blink.1);
+    //     });
+    //     similarities.into_iter().map(|(x, _)| x)
+    // }
 }
 
 // TODO remove lifetime from Decompressed traits, anyway we could always add back a wrapper that materializes the relation to the node store
@@ -556,6 +557,7 @@ where
         multi_mappings
     }
 
+    #[allow(unused)] // alternative
     fn similarity(&self, src: &IdD, dst: &IdD) -> f64 {
         let p_src = self.src_arena.parent(src).unwrap();
         let p_dst = self.dst_arena.parent(dst).unwrap();

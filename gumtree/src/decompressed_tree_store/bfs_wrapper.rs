@@ -9,11 +9,7 @@ use crate::{
     },
     tree::tree_path::CompressedTreePath,
 };
-use hyper_ast::types::{NodeStore, Tree, WithChildren};
-
-use super::{MapDecompressed, PostOrderIterable};
-
-
+use hyper_ast::types::{NodeStore, WithChildren};
 
 pub struct SimpleBfsMapper<'a, IdC, IdD, D: DecompressedTreeStore<'a, IdC, IdD>> {
     map: Vec<IdD>,
@@ -173,7 +169,11 @@ impl<
         self.back.parent(id)
     }
 
-    fn position_in_parent<'b, S>(&self, store: &'b S, c: &IdD) -> <S::R<'b> as WithChildren>::ChildIdx
+    fn position_in_parent<'b, S>(
+        &self,
+        store: &'b S,
+        c: &IdD,
+    ) -> <S::R<'b> as WithChildren>::ChildIdx
     where
         S: NodeStore<IdC>,
         S::R<'b>: WithChildren<TreeId = IdC>,
@@ -183,10 +183,7 @@ impl<
 
     type PIt<'a>=D::PIt<'a> where D: 'a, Self:'a;
 
-    fn parents(
-        &self,
-        id: IdD,
-    ) -> Self::PIt<'_> {
+    fn parents(&self, id: IdD) -> Self::PIt<'_> {
         self.back.parents(id)
     }
 }

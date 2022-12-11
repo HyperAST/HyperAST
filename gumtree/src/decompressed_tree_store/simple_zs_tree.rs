@@ -24,6 +24,12 @@ pub struct SimpleZsTree<IdC, IdD> {
     kr: Vec<IdD>,
 }
 
+impl<'d, IdC: Clone, IdD: PrimInt> SimpleZsTree<IdC, IdD> {
+    pub fn leaf_count(&self) -> IdD {
+        self.leaf_count
+    }
+}
+
 impl<'d, IdC: Clone, IdD: PrimInt> PostOrder<'d, IdC, IdD> for SimpleZsTree<IdC, IdD> {
     fn lld(&self, i: &IdD) -> IdD {
         self.llds[(*i).to_usize().unwrap() - 1] + num_traits::one()

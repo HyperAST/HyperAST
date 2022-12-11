@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, fmt::Debug, hash::Hash, ops::Deref};
+use std::{fmt::Debug, hash::Hash, ops::Deref};
 
 use hashbrown::hash_map::DefaultHashBuilder;
 use legion::{
@@ -12,9 +12,9 @@ use crate::{
     filter::{Bloom, BloomResult, BloomSize, BF},
     hashed::{NodeHashs, SyntaxNodeHashs, SyntaxNodeHashsKinds},
     impact::serialize::{CachedHasher, Keyed, MySerialize},
-    nodes::{CompressedNode, HashSize, RefContainer, Space},
+    nodes::{CompressedNode, HashSize, RefContainer},
     store::labels::DefaultLabelIdentifier,
-    types::{GenericItem, Type, Typed, WithChildren},
+    types::{Type, Typed, WithChildren},
     utils::make_hash,
 };
 
@@ -50,7 +50,7 @@ pub mod compo {
 #[derive(PartialEq, Eq)]
 pub struct CSStaticCount(pub u8);
 pub struct CS0<T: Eq, const N: usize>(pub [T; N]);
-struct CSE<const N: usize>([legion::Entity; N]);
+pub struct CSE<const N: usize>([legion::Entity; N]);
 #[derive(PartialEq, Eq, Debug)]
 pub struct CS<T: Eq>(pub Box<[T]>);
 impl<'a, T: Eq> From<&'a CS<T>> for &'a [T] {
@@ -95,43 +95,43 @@ impl<'a> crate::types::Labeled for HashedNode {
     }
 }
 
-impl<'a> crate::types::WithChildren for HashedNode {
-    type ChildIdx = u16;
+// impl<'a> crate::types::WithChildren for HashedNode {
+//     type ChildIdx = u16;
 
-    fn child_count(&self) -> Self::ChildIdx {
-        todo!()
-    }
+//     fn child_count(&self) -> Self::ChildIdx {
+//         todo!()
+//     }
 
-    fn get_child(&self, idx: &Self::ChildIdx) -> Self::TreeId {
-        todo!()
-    }
+//     fn get_child(&self, idx: &Self::ChildIdx) -> Self::TreeId {
+//         todo!()
+//     }
 
-    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
-        todo!()
-    }
+//     fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
+//         todo!()
+//     }
 
-    fn get_children(&self) -> &[Self::TreeId] {
-        todo!()
-    }
+//     fn get_children(&self) -> &[Self::TreeId] {
+//         todo!()
+//     }
 
-    fn get_children_cpy(&self) -> Vec<Self::TreeId> {
-        todo!()
-    }
+//     fn get_children_cpy(&self) -> Vec<Self::TreeId> {
+//         todo!()
+//     }
 
-    fn try_get_children(&self) -> Option<&[Self::TreeId]> {
-        todo!()
-    }
-}
+//     fn try_get_children(&self) -> Option<&[Self::TreeId]> {
+//         todo!()
+//     }
+// }
 
-impl<'a> crate::types::Tree for HashedNode {
-    fn has_children(&self) -> bool {
-        todo!()
-    }
+// impl<'a> crate::types::Tree for HashedNode {
+//     fn has_children(&self) -> bool {
+//         todo!()
+//     }
 
-    fn has_label(&self) -> bool {
-        todo!()
-    }
-}
+//     fn has_label(&self) -> bool {
+//         todo!()
+//     }
+// }
 
 // impl Symbol<HashedNode> for legion::Entity {}
 
@@ -169,9 +169,9 @@ impl<'a> Deref for HashedNodeRef<'a> {
 }
 
 impl<'a> HashedNodeRef<'a> {
-    pub(crate) fn new(entry: EntryRef<'a>) -> Self {
-        Self(entry)
-    }
+    // pub(crate) fn new(entry: EntryRef<'a>) -> Self {
+    //     Self(entry)
+    // }
 
     /// Returns the entity's archetype.
     pub fn archetype(&self) -> &Archetype {
@@ -237,7 +237,7 @@ impl<'a> HashedNodeRef<'a> {
     }
 
     // TODO when relativisation is applied, caller of this method should provide the size of the paren ident
-    pub fn get_bytes_len(&self, p_indent_len: u32) -> u32 {
+    pub fn get_bytes_len(&self, _p_indent_len: u32) -> u32 {
         // use crate::types::Typed;
         if self.get_type() == Type::Spaces {
             self.0
@@ -272,7 +272,7 @@ impl<'a> HashedNodeRef<'a> {
     }
 
     // TODO when relativisation is applied, caller of this method should provide the size of the paren ident
-    pub fn try_get_bytes_len(&self, p_indent_len: u32) -> Option<u32> {
+    pub fn try_get_bytes_len(&self, _p_indent_len: u32) -> Option<u32> {
         // use crate::types::Typed;
         if self.get_type() == Type::Spaces {
             self.0.get_component::<compo::BytesLen>().map(|x| x.0).ok()
@@ -355,7 +355,10 @@ impl<'a> crate::types::WithStats for HashedNodeRef<'a> {
 
 impl<'a> crate::types::WithSerialization for HashedNodeRef<'a> {
     fn try_bytes_len(&self) -> Option<usize> {
-        self.0.get_component::<compo::BytesLen>().ok().map(|x|x.0.to_usize().unwrap())
+        self.0
+            .get_component::<compo::BytesLen>()
+            .ok()
+            .map(|x| x.0.to_usize().unwrap())
     }
 }
 
@@ -412,7 +415,7 @@ impl<'a> crate::types::WithChildren for HashedNodeRef<'a> {
 
     fn child_count(&self) -> u16 {
         self.cs()
-            .map_or(0,|x|x.len())
+            .map_or(0, |x| x.len())
             .to_u16()
             .expect("too much children")
     }
@@ -482,16 +485,14 @@ impl<'a> crate::types::Tree for HashedNodeRef<'a> {
     }
 
     fn try_get_label(&self) -> Option<&Self::Label> {
-        self.0
-            .get_component::<DefaultLabelIdentifier>()
-            .ok()
-            // .or_else(|| {
-            //     let a = self.0.get_component::<Box<[Space]>>();
-            //     let mut b = String::new();
-            //     a.iter()
-            //         .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
+        self.0.get_component::<DefaultLabelIdentifier>().ok()
+        // .or_else(|| {
+        //     let a = self.0.get_component::<Box<[Space]>>();
+        //     let mut b = String::new();
+        //     a.iter()
+        //         .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
 
-            // })
+        // })
     }
 }
 
@@ -660,25 +661,6 @@ impl Debug for NodeStore {
     }
 }
 
-// impl<'a> crate::types::NodeStore<'a, NodeIdentifier, HashedNodeRef<'a>> for NodeStore {
-//     fn resolve(&'a self, id: &NodeIdentifier) -> HashedNodeRef<'a> {
-//         self.internal
-//             .entry_ref(id.clone())
-//             .map(|x| HashedNodeRef(x))
-//             .unwrap()
-//     }
-// }
-
-// impl crate::types::NodeStore3<NodeIdentifier> for NodeStore {
-//     type R = dyn for<'any> GenericItem<'any, Item = HashedNodeRef<'any>>;
-//     fn resolve(&self, id: &NodeIdentifier) -> HashedNodeRef<'_> {
-//         self.internal
-//             .entry_ref(id.clone())
-//             .map(|x| HashedNodeRef(x))
-//             .unwrap()
-//     }
-// }
-
 impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
     type R<'a> = HashedNodeRef<'a>;
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
@@ -689,70 +671,6 @@ impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
     }
 }
 
-// impl crate::types::NodeStore4<NodeIdentifier> for NodeStore {
-//     type R<'a> = HashedNodeRef<'a>;
-//     fn resolve(&self, id: &NodeIdentifier) -> HashedNodeRef<'_> {
-//         self.internal
-//             .entry_ref(id.clone())
-//             .map(|x| HashedNodeRef(x))
-//             .unwrap()
-//     }
-// }
-
-// impl crate::types::NodeStore2<NodeIdentifier> for NodeStore{
-//     type R<'a> = HashedNodeRef<'a>;
-//     fn resolve(&self, id: &NodeIdentifier) -> HashedNodeRef<'_> {
-//         self.internal
-//             .entry_ref(id.clone())
-//             .map(|x| HashedNodeRef(x))
-//             .unwrap()
-//     }
-// }
-
-// impl<'a> crate::types::NodeStoreMut<'a, HashedNode, HashedNodeRef<'a>> for NodeStore {
-//     fn get_or_insert(
-//         &mut self,
-//         node: HashedNode,
-//     ) -> <HashedNodeRef<'a> as crate::types::Stored>::TreeId {
-//         todo!()
-//     }
-// }
-impl<'a> crate::types::NodeStoreMut<HashedNode> for NodeStore {
-    fn get_or_insert(
-        &mut self,
-        node: HashedNode,
-    ) -> <HashedNodeRef<'a> as crate::types::Stored>::TreeId {
-        todo!()
-    }
-}
-
-// impl<'a> crate::types::NodeStoreExt<'a, HashedNode, HashedNodeRef<'a>> for NodeStore {
-//     fn build_then_insert(
-//         &mut self,
-//         t: <HashedNodeRef<'a> as crate::types::Typed>::Type,
-//         l: <HashedNodeRef<'a> as crate::types::Labeled>::Label,
-//         cs: Vec<<HashedNodeRef<'a> as crate::types::Stored>::TreeId>,
-//     ) -> <HashedNodeRef<'a> as crate::types::Stored>::TreeId {
-//         todo!()
-//     }
-// }
-
-/// WARN this is polyglote related
-/// for now I only implemented for java.
-/// In the future you should use the Type of the node
-/// and maybe an additional context might be necessary depending on choices to materialize polyglot nodes
-impl crate::types::NodeStoreExt<HashedNode> for NodeStore {
-    fn build_then_insert(
-        &mut self,
-        i: <HashedNode as crate::types::Stored>::TreeId,
-        t: <HashedNode as crate::types::Typed>::Type,
-        l: Option<<HashedNode as crate::types::Labeled>::Label>,
-        cs: Vec<<HashedNode as crate::types::Stored>::TreeId>,
-    ) -> <HashedNode as crate::types::Stored>::TreeId {
-        // self.internal.
-        todo!()
-    }
-}
 impl NodeStore {
     pub fn len(&self) -> usize {
         self.internal.len()
@@ -774,3 +692,87 @@ impl NodeStore {
         }
     }
 }
+
+// // impl<'a> crate::types::NodeStore<'a, NodeIdentifier, HashedNodeRef<'a>> for NodeStore {
+// //     fn resolve(&'a self, id: &NodeIdentifier) -> HashedNodeRef<'a> {
+// //         self.internal
+// //             .entry_ref(id.clone())
+// //             .map(|x| HashedNodeRef(x))
+// //             .unwrap()
+// //     }
+// // }
+
+// // impl crate::types::NodeStore3<NodeIdentifier> for NodeStore {
+// //     type R = dyn for<'any> GenericItem<'any, Item = HashedNodeRef<'any>>;
+// //     fn resolve(&self, id: &NodeIdentifier) -> HashedNodeRef<'_> {
+// //         self.internal
+// //             .entry_ref(id.clone())
+// //             .map(|x| HashedNodeRef(x))
+// //             .unwrap()
+// //     }
+// // }
+
+// // impl crate::types::NodeStore4<NodeIdentifier> for NodeStore {
+// //     type R<'a> = HashedNodeRef<'a>;
+// //     fn resolve(&self, id: &NodeIdentifier) -> HashedNodeRef<'_> {
+// //         self.internal
+// //             .entry_ref(id.clone())
+// //             .map(|x| HashedNodeRef(x))
+// //             .unwrap()
+// //     }
+// // }
+
+// // impl crate::types::NodeStore2<NodeIdentifier> for NodeStore{
+// //     type R<'a> = HashedNodeRef<'a>;
+// //     fn resolve(&self, id: &NodeIdentifier) -> HashedNodeRef<'_> {
+// //         self.internal
+// //             .entry_ref(id.clone())
+// //             .map(|x| HashedNodeRef(x))
+// //             .unwrap()
+// //     }
+// // }
+
+// // impl<'a> crate::types::NodeStoreMut<'a, HashedNode, HashedNodeRef<'a>> for NodeStore {
+// //     fn get_or_insert(
+// //         &mut self,
+// //         node: HashedNode,
+// //     ) -> <HashedNodeRef<'a> as crate::types::Stored>::TreeId {
+// //         todo!()
+// //     }
+// // }
+// impl<'a> crate::types::NodeStoreMut<HashedNode> for NodeStore {
+//     fn get_or_insert(
+//         &mut self,
+//         node: HashedNode,
+//     ) -> <HashedNodeRef<'a> as crate::types::Stored>::TreeId {
+//         todo!()
+//     }
+// }
+
+// // impl<'a> crate::types::NodeStoreExt<'a, HashedNode, HashedNodeRef<'a>> for NodeStore {
+// //     fn build_then_insert(
+// //         &mut self,
+// //         t: <HashedNodeRef<'a> as crate::types::Typed>::Type,
+// //         l: <HashedNodeRef<'a> as crate::types::Labeled>::Label,
+// //         cs: Vec<<HashedNodeRef<'a> as crate::types::Stored>::TreeId>,
+// //     ) -> <HashedNodeRef<'a> as crate::types::Stored>::TreeId {
+// //         todo!()
+// //     }
+// // }
+
+// /// WARN this is polyglote related
+// /// for now I only implemented for java.
+// /// In the future you should use the Type of the node
+// /// and maybe an additional context might be necessary depending on choices to materialize polyglot nodes
+// impl crate::types::NodeStoreExt<HashedNode> for NodeStore {
+//     fn build_then_insert(
+//         &mut self,
+//         i: <HashedNode as crate::types::Stored>::TreeId,
+//         t: <HashedNode as crate::types::Typed>::Type,
+//         l: Option<<HashedNode as crate::types::Labeled>::Label>,
+//         cs: Vec<<HashedNode as crate::types::Stored>::TreeId>,
+//     ) -> <HashedNode as crate::types::Stored>::TreeId {
+//         // self.internal.
+//         todo!()
+//     }
+// }

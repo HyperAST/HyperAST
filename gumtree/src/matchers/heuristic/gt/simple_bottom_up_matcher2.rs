@@ -4,11 +4,7 @@ use num_traits::{cast, zero, PrimInt, ToPrimitive};
 
 use crate::decompressed_tree_store::{BreathFirstContiguousSiblings, DecompressedWithParent};
 use crate::matchers::mapping_store::MonoMappingStore;
-use crate::matchers::{
-    mapping_store::{DefaultMappingStore, MappingStore},
-    matcher::Matcher,
-    similarity_metrics,
-};
+use crate::matchers::{matcher::Matcher, similarity_metrics};
 use hyper_ast::types::{NodeStore, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
@@ -39,7 +35,7 @@ impl<
         IdD: 'a + PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: 'a + Tree + WithHashs,
         S, //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
-        M: MonoMappingStore<Ele=IdD>,
+        M: MonoMappingStore<Ele = IdD>,
     > Matcher<'a, Dsrc, Ddst, T, S> for SimpleBottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M>
 where
     S: 'a + NodeStore<T::TreeId>,
@@ -85,7 +81,7 @@ impl<
         IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
         T: 'a + Tree + WithHashs,
         S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
-        M: MonoMappingStore<Ele=IdD>,
+        M: MonoMappingStore<Ele = IdD>,
     > SimpleBottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M>
 where
     S: 'a + NodeStore<T::TreeId>,
@@ -101,7 +97,7 @@ where
                 let mut found = false;
                 let mut best = zero();
                 let mut max: f64 = -1.;
-                let tSize = self
+                let size = self
                     .internal
                     .src_arena
                     .descendants(self.internal.node_store, &i)
@@ -116,7 +112,7 @@ where
                                 .src_arena
                                 .descendants(self.internal.node_store, &cand)
                                 .len()
-                                + tSize)
+                                + size)
                                 .to_f64()
                                 .unwrap())
                             .log10());

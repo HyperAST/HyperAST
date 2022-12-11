@@ -56,8 +56,13 @@ fn run(text: &[u8]) {
 }
 
 #[test]
-fn test_case() {
+fn test_case1() {
     run(CASE_1.as_bytes())
+}
+
+#[test]
+fn test_case2() {
+    run(CASE_2.as_bytes())
 }
 
 // #[test]

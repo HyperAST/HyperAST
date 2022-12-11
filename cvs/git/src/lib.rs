@@ -33,8 +33,8 @@ pub struct Impacts();
 
 #[derive(Clone)]
 pub struct Commit {
-    meta_data: MD,
-    parents: Vec<git2::Oid>,
+    pub meta_data: MD,
+    pub parents: Vec<git2::Oid>,
     processing_time: u128,
     memory_used: Bytes,
     pub ast_root: hyper_ast::store::nodes::DefaultNodeIdentifier,

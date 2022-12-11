@@ -1,5 +1,5 @@
 use core::{iter::Enumerate, marker::PhantomData, slice};
-use std::num::{NonZeroU32};
+use std::num::NonZeroU32;
 
 use crate::compat::{DefaultHashBuilder, HashMap};
 
@@ -640,7 +640,7 @@ impl<S: Symbol> BytesMap<S> {
     pub fn get(&self, symbol: S) -> Option<&[u8]> {
         let c = self.slices.get(symbol.to_usize())?;
         let c = (*c)?;
-        let l:u32 = c.1.try_into().unwrap();
+        let l: u32 = c.1.try_into().unwrap();
         Some(&self.buffer[(c.0 as usize)..(l as usize)])
     }
 }

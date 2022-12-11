@@ -879,6 +879,7 @@ impl<'a, IdC, IdD: num_traits::PrimInt> Iterator for Iter<'a, IdC, IdD> {
 
 impl<IdD: Hash + Eq + Clone> InOrderNodes<IdD> {
     /// TODO add precondition to try to linerarly remove element (if both ordered the same way it's easy to remove without looking at lists multiple times)
+    /// Maybe use a bloom filter with a collision set ? do we have a good estimate of the number of element to store ?
     fn remove_all(&mut self, w: &[IdD]) {
         w.iter().for_each(|x| {
             self.1.remove(x);

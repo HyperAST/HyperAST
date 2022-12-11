@@ -20,7 +20,7 @@ use crate::{
     java_processor::JavaProcessor,
     maven::{handle_pom_file, MavenModuleAcc, POM},
     maven_processor::MavenProcessor,
-    Accumulator, Commit, Processor, SimpleStores, MD,
+    Commit, Processor, SimpleStores, MD,
 };
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
 use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
@@ -503,7 +503,11 @@ impl PreProcessedRepository {
 }
 
 // TODO try to separate processing from caching from git
+#[cfg(test)]
+#[allow(unused)]
 mod experiments {
+    use crate::Accumulator;
+
     use super::*;
 
     pub struct PreProcessedRepository2 {

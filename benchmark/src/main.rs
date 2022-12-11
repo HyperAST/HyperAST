@@ -3,23 +3,21 @@ pub mod write_serializer;
 use std::{
     env,
     fs::File,
-    io::{self, BufWriter, Seek, SeekFrom, Write},
-    ops::Add,
+    io::{self, BufWriter, Write},
     path::PathBuf,
     str::FromStr,
-    time::{Instant, SystemTime},
+    time::Instant,
 };
 
 use hyper_ast_cvs_git::{
     allrefs::write_referencial_relations,
     git::{fetch_github_repository, retrieve_commit},
-    preprocessed::{self, PreProcessedRepository},
+    preprocessed::PreProcessedRepository,
 };
 use hyper_ast_gen_ts_java::utils::memusage_linux;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 use crate::write_serializer::{WriteJson, WritePartialJson};
-
 
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
@@ -108,7 +106,7 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
         before,
         after,
         dir_path,
-        1000
+        1000,
     );
     let mu = memusage_linux();
     log::warn!("total memory used {}", mu);
@@ -186,10 +184,9 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
             instance
                 .serialize(WritePartialJson::from(&mut buf))
                 .unwrap();
-            
+
             buf.flush().unwrap();
         } else {
-            todo!();
             let mut out = io::stdout();
             write_referencial_relations(&preprocessed, root, &mut out);
             out.flush().unwrap();
@@ -202,7 +199,12 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
     log::warn!("hyperAST size: {}", mu - memusage_linux());
 }
 
-fn single_commit_ref_ana(repo_name: &String, after: &str, dir_path: &str, out: Option<PathBuf>) {
+pub fn single_commit_ref_ana(
+    repo_name: &String,
+    after: &str,
+    dir_path: &str,
+    out: Option<PathBuf>,
+) {
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
     preprocessed.pre_process_single(&mut fetch_github_repository(&repo_name), after, dir_path);
     let mu = memusage_linux();

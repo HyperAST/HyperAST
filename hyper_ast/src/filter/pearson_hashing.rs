@@ -1,6 +1,4 @@
-use std::{borrow::Borrow, hash::{BuildHasher, Hash, Hasher}, collections::hash_map::DefaultHasher};
-
-use string_interner::DefaultHashBuilder;
+use std::borrow::Borrow;
 
 pub(crate) const T: [u8; 256] = [
     29, 186, 180, 162, 184, 218, 3, 141, 55, 0, 72, 98, 226, 108, 220, 158, 231, 248, 247, 251,
@@ -52,54 +50,54 @@ pub fn pearson_mod<T: Borrow<[u8]>, const MOD: u8>(x0: usize, x: T) -> u8 {
 
     return ret;
 }
-// TODO make better hash function
-/// broken
-fn xor_rot<T: Borrow<[u8]>>(x0: usize, x: T) -> u16 {
-    let mut ret = T[x0] as u16;
-
-    for b in x.borrow() {
-        ret = (ret ^ (T[*b as usize] as u16)).rotate_left(11);
-    }
-
-    return ret;
-}
-
-fn xor_rot_mod<T: Borrow<[u8]>, const MOD: u16>(x0: usize, x: T) -> u16 {
-    todo!("broken")
-    // let mut ret = T[x0] as u16;
-    // let v = x.borrow();
-    // let mut hasher = DefaultHasher::new();
-    // v.hash(&mut hasher);
-    // ret ^ (hasher.finish() % (MOD as u64)) as u16
-    // let mut i = 0;
-    // if i < v.len() {
-    //     ret = ((ret << 8) | (T[v[i] as usize] as u16)) % MOD;
-    // }
-    // while i < v.len() {
-    //     let mut curr = (T[v[i] as usize] as u16) << 8;
-    //     i += 1;
-    //     if i < v.len() {
-    //         curr = curr | (T[v[i] as usize] as u16);
-    //     } else {
-    //         curr = curr | (T[x0] as u16);
-    //     }
-    //     ret = (ret ^ curr).rotate_left(5) % MOD;
-    // }
-
-    // return ret;
-}
 
 #[cfg(test)]
 mod test {
-    use crate::filter::pearson_hashing::xor_rot_mod;
 
-    #[test]
-    fn test() {
-        let a = xor_rot_mod::<_, 512>(0, [100]);
-        println!("{}",a);
-        let a = xor_rot_mod::<_, 512>(0, [1,6]);
-        println!("{}",a);
-        let a = xor_rot_mod::<_, 512>(0, [200,4,8,4,1,0,43,104]);
-        println!("{}",a);
-    }
+    // TODO make better hash function
+    // fn xor_rot<T: Borrow<[u8]>>(x0: usize, x: T) -> u16 {
+    //     todo!("broken")
+    //     let mut ret = T[x0] as u16;
+
+    //     for b in x.borrow() {
+    //         ret = (ret ^ (T[*b as usize] as u16)).rotate_left(11);
+    //     }
+
+    //     return ret;
+    // }
+
+    // fn xor_rot_mod<T: Borrow<[u8]>, const MOD: u16>(x0: usize, x: T) -> u16 {
+    //     todo!("broken")
+    //     // let mut ret = T[x0] as u16;
+    //     // let v = x.borrow();
+    //     // let mut hasher = DefaultHasher::new();
+    //     // v.hash(&mut hasher);
+    //     // ret ^ (hasher.finish() % (MOD as u64)) as u16
+    //     // let mut i = 0;
+    //     // if i < v.len() {
+    //     //     ret = ((ret << 8) | (T[v[i] as usize] as u16)) % MOD;
+    //     // }
+    //     // while i < v.len() {
+    //     //     let mut curr = (T[v[i] as usize] as u16) << 8;
+    //     //     i += 1;
+    //     //     if i < v.len() {
+    //     //         curr = curr | (T[v[i] as usize] as u16);
+    //     //     } else {
+    //     //         curr = curr | (T[x0] as u16);
+    //     //     }
+    //     //     ret = (ret ^ curr).rotate_left(5) % MOD;
+    //     // }
+
+    //     // return ret;
+    // }
+
+    // #[test]
+    // fn test() {
+    //     let a = xor_rot_mod::<_, 512>(0, [100]);
+    //     println!("{}", a);
+    //     let a = xor_rot_mod::<_, 512>(0, [1, 6]);
+    //     println!("{}", a);
+    //     let a = xor_rot_mod::<_, 512>(0, [200, 4, 8, 4, 1, 0, 43, 104]);
+    //     println!("{}", a);
+    // }
 }

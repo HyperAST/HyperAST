@@ -10,7 +10,9 @@ edition = "2021"
 # atomic-counter = "1.0.1"
 num = "0.4.0"
 cfg-if = "1.0"
-hashbrown = { version = "0.11.2", default-features = false, features = ["ahash"] }
+hashbrown = { version = "0.11.2", default-features = false, features = [
+    "ahash",
+] }
 # fasthash="0.4.0"
 
 # hyper_ast_core = { path = "../../../core" }
@@ -18,7 +20,7 @@ hashbrown = { version = "0.11.2", default-features = false, features = ["ahash"]
 
 #  # logging
 env_logger = "0.9.0"
-log = { version = "0.4.6" }#, features = ["max_level_debug", "release_max_level_warn"] }
+log = { version = "0.4.6" } #, features = ["max_level_debug", "release_max_level_warn"] }
 
 
 # # promizing to store subtrees efficiently
@@ -29,9 +31,9 @@ log = { version = "0.4.6" }#, features = ["max_level_debug", "release_max_level_
 # enumset = "1.0.8"
 
 ## store
-legion = {version="0.4.0", features = ["extended-tuple-impls"]}
-bitvec = "0.22.3" # TODO upgrade
-controlled-option = "0.4.1" # check if really needed
+legion = { version = "0.4.0", features = ["extended-tuple-impls"] }
+bitvec = "0.22.3"                                                   # TODO upgrade
+controlled-option = "0.4.1"                                         # check if really needed
 string-interner = "0.14.0"
 
 # # memusage
@@ -46,8 +48,8 @@ stack-graphs = "=0.3.0"
 
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = "0.3.2"
-jemalloc-ctl = "0.3.2"
+jemallocator = "0.5.0"
+jemalloc-ctl = "0.5.0"
 
 [features]
 default = ["jemalloc"]

@@ -2,12 +2,10 @@ use crate::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
 use crate::tree::simple_tree::Tree;
 use crate::{
     actions::script_generator::{self, Actions, SimpleAction, TestActions},
-    decompressed_tree_store::{
-        bfs_wrapper, CompletePostOrder, Initializable, ShallowDecompressedTreeStore,
-    },
+    decompressed_tree_store::{CompletePostOrder, Initializable, ShallowDecompressedTreeStore},
     matchers::mapping_store::{DefaultMappingStore, MappingStore},
     tests::examples::{example_action, example_gt_java_code},
-    tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
+    tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef},
 };
 use hyper_ast::types::{LabelStore, Labeled, NodeStore};
 use std::fmt;

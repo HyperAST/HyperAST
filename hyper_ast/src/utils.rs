@@ -64,12 +64,6 @@ impl std::ops::Add for MemoryUsage {
     }
 }
 
-
-#[cfg(not(target_env = "msvc"))]
-use jemallocator::Jemalloc;
-
-
-
 #[cfg(all(target_os = "linux", target_env = "gnu", not(feature = "jemalloc")))]
 pub fn memusage_linux() -> MemoryUsage {
     // todo!()
@@ -104,6 +98,7 @@ pub fn memusage_linux() -> MemoryUsage {
     //         allocated: Bytes(alloc),
     //     }
     // }
+    log::debug!("no way of measuring heap precisely");
     let allocated = 0;
     MemoryUsage {
         allocated: Bytes(allocated as isize),
@@ -113,14 +108,14 @@ pub fn memusage_linux() -> MemoryUsage {
 #[cfg(all(target_os = "linux", target_env = "gnu", feature = "jemalloc"))]
 pub fn memusage_linux() -> MemoryUsage {
     // #[cfg(not(target_env = "msvc"))]
-    use jemalloc_ctl::{stats, epoch};
+    use jemalloc_ctl::{epoch, stats};
     // Obtain a MIB for the `epoch`, `stats.allocated`, and
     // `atats.resident` keys:
     let e = epoch::mib().unwrap();
     let allocated = stats::allocated::mib().unwrap();
     // let resident = stats::resident::mib().unwrap();
     e.advance().unwrap();
-    
+
     // Read statistics using MIB key:
     let allocated = allocated.read().unwrap();
     // let allocated = 0;
@@ -130,8 +125,6 @@ pub fn memusage_linux() -> MemoryUsage {
         allocated: Bytes(allocated as isize),
     }
 }
-
-
 
 #[derive(Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct Bytes(isize);

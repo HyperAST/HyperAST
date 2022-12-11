@@ -2,13 +2,11 @@ use crate::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
 use crate::tree::simple_tree::Tree;
 use crate::{
     actions::{
-        action_vec::{apply_actions, ActionsVec, TestActions},
-        script_generator2::{Act, ScriptGenerator, SimpleAction},
+        action_vec::{apply_actions, TestActions},
+        script_generator2::ScriptGenerator,
         Actions,
     },
-    decompressed_tree_store::{
-        bfs_wrapper, CompletePostOrder, Initializable, ShallowDecompressedTreeStore,
-    },
+    decompressed_tree_store::{CompletePostOrder, Initializable, ShallowDecompressedTreeStore},
     matchers::mapping_store::{DefaultMappingStore, MappingStore},
     tests::{
         action_generator2_tests::{make_delete, make_insert, make_move, make_update, Fmt},
@@ -82,7 +80,7 @@ fn test_no_actions() {
         SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
         NS<Tree>,
         _,
-        >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
+    >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     let mut node_store = node_store;
     let mut root = vec![s_src];

@@ -3,12 +3,12 @@ use crate::types::Type;
 use crate::nodes::TypeIdentifier;
 
 pub mod handle;
-pub mod radix_hash_store;
-pub mod vec_map_store;
-pub mod ecs;
-pub mod mapped_world;
 pub mod labels;
+pub mod mapped_world;
 pub mod nodes;
+// pub mod ecs; // TODO try a custom ecs ?
+// pub mod radix_hash_store; // TODO yet another WIP store
+// pub mod vec_map_store; // TODO yet another WIP store
 
 pub struct TypeStore {}
 
@@ -20,8 +20,6 @@ impl TypeStore {
         Type::parse_xml(kind)
     }
 }
-
-
 
 pub struct SimpleStores {
     pub label_store: labels::LabelStore,

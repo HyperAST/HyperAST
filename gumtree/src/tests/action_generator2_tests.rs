@@ -8,20 +8,18 @@ use crate::{
         Actions,
     },
     decompressed_tree_store::{
-        bfs_wrapper, CompletePostOrder, Initializable, ShallowDecompressedTreeStore,
+        CompletePostOrder, Initializable, ShallowDecompressedTreeStore,
     },
     matchers::mapping_store::{DefaultMappingStore, MappingStore},
     tests::examples::{example_action, example_action2, example_gt_java_code},
     tree::{
         simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
-        tree_path::TreePath,
     },
 };
 use hyper_ast::types::{
     LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Tree as _, Typed, WithChildren,
 };
 
-use num_traits::ToPrimitive;
 use std::fmt;
 
 type IdD = u16;

@@ -1,5 +1,4 @@
-#![feature(generic_associated_types)]
-
+#[allow(unused)]
 pub mod xml_tree_gen;
 
 #[cfg(test)]

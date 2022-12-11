@@ -1,20 +1,18 @@
 #![feature(min_specialization)]
-#![feature(generic_associated_types)]
-#![feature(backtrace)]
 
-pub mod types;
-pub mod nodes;
-pub mod hashed;
-pub mod full;
-pub mod tree_gen;
-pub mod store;
-pub mod filter;
 pub mod compat;
-pub mod utils;
-pub mod position;
-pub mod usage;
-pub mod impact;
 pub mod cyclomatic;
+pub mod filter;
+pub mod full;
+pub mod hashed;
+pub mod impact;
+pub mod nodes;
+pub mod position;
+pub mod store;
+pub mod tree_gen;
+pub mod types;
+pub mod usage;
+pub mod utils;
 
 #[cfg(test)]
 mod tests;

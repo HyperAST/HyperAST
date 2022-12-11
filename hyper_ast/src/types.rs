@@ -3,8 +3,8 @@ use std::hash::Hash;
 use std::str::FromStr;
 
 use num::PrimInt;
+use strum_macros::Display;
 use strum_macros::EnumString;
-use strum_macros::ToString;
 
 pub trait HashKind {
     fn structural() -> Self;
@@ -12,8 +12,9 @@ pub trait HashKind {
 }
 
 /// for now the types are shared between all languages
-#[derive(Debug, EnumString, ToString)]
+#[derive(Debug, EnumString, Display)]
 #[strum(serialize_all = "snake_case")]
+#[allow(non_camel_case_types)]
 #[derive(Hash, Clone, Copy, PartialEq, Eq)]
 pub enum Type {
     MavenDirectory,
@@ -129,7 +130,7 @@ pub enum Type {
     SynchronizedStatement,
     TernaryExpression,
     ThrowStatement,
-    Throws,
+    Throws, // TODO change rule in grammar to throws_modifier
     TryStatement,
     TryWithResourcesExtendedStatement,
     TryWithResourcesStatement,
@@ -345,7 +346,7 @@ pub enum Type {
     #[strum(serialize = "throw")]
     TS90,
     #[strum(serialize = "throws")]
-    TS91, // TODO check this keyword as it collide with a grammar rule
+    TS91, // TODO check this keyword as it collides with a grammar rule
     #[strum(serialize = "to")]
     TS92,
     #[strum(serialize = "transient")]
@@ -447,31 +448,31 @@ pub enum Type {
     xml_TS4,
     #[strum(serialize = "#REQUIRED")]
     xml_TS5,
-    #[strum(serialize = "%")]
+    // #[strum(serialize = "%")]
     xml_TS6,
-    #[strum(serialize = "&")]
+    // #[strum(serialize = "&")]
     xml_TS7,
     #[strum(serialize = "'")]
     xml_TS8,
-    #[strum(serialize = "(")]
+    // #[strum(serialize = "(")]
     xml_TS9,
-    #[strum(serialize = ")")]
+    // #[strum(serialize = ")")]
     xml_TS10,
     #[strum(serialize = ")*")]
     xml_TS11,
-    #[strum(serialize = "*")]
+    // #[strum(serialize = "*")]
     xml_TS12,
-    #[strum(serialize = "+")]
+    // #[strum(serialize = "+")]
     xml_TS13,
-    #[strum(serialize = ",")]
+    // #[strum(serialize = ",")]
     xml_TS14,
     #[strum(serialize = "-->")]
     xml_TS15,
     #[strum(serialize = "/>")]
     xml_TS16,
-    #[strum(serialize = ";")]
+    // #[strum(serialize = ";")]
     xml_TS17,
-    #[strum(serialize = "<")]
+    // #[strum(serialize = "<")]
     xml_TS18,
     #[strum(serialize = "<!--")]
     xml_TS19,
@@ -493,11 +494,11 @@ pub enum Type {
     xml_TS27,
     #[strum(serialize = "<?xml")]
     xml_TS28,
-    #[strum(serialize = "=")]
+    // #[strum(serialize = "=")]
     xml_TS29,
-    #[strum(serialize = ">")]
+    // #[strum(serialize = ">")]
     xml_TS30,
-    #[strum(serialize = "?")]
+    // #[strum(serialize = "?")]
     xml_TS31,
     #[strum(serialize = "?>")]
     xml_TS32,
@@ -531,9 +532,9 @@ pub enum Type {
     xml_TS46,
     #[strum(serialize = "SYSTEM")]
     xml_TS47,
-    #[strum(serialize = "[")]
+    // #[strum(serialize = "[")]
     xml_TS48,
-    #[strum(serialize = "]")]
+    // #[strum(serialize = "]")]
     xml_TS49,
     #[strum(serialize = "]]>")]
     xml_TS50,
@@ -547,7 +548,7 @@ pub enum Type {
     xml_TS54,
     #[strum(serialize = "yes")]
     xml_TS55,
-    #[strum(serialize = "|")]
+    // #[strum(serialize = "|")]
     xml_TS56,
 }
 
@@ -823,7 +824,7 @@ pub trait WithChildren: Node + Stored {
 }
 
 /// just to show that it is not efficient
-mod Owned {
+mod owned {
     use std::cell::{Ref, RefMut};
 
     use super::*;
@@ -953,7 +954,7 @@ pub trait TreePath {}
 //     fn resolve(&self, id: &IdN) -> Self::R<'_>;
 // }
 pub trait GenericItem<'a> {
-    type Item;//:WithChildren;
+    type Item; //:WithChildren;
 }
 // pub trait NodeStore3<IdN> {
 //     type R: ?Sized + for<'any> GenericItem<'any>;
@@ -964,7 +965,9 @@ pub trait GenericItem<'a> {
 //     fn resolve(&'a self, id: &IdN) -> Self::R;
 // }
 pub trait NodeStore<IdN> {
-    type R<'a> where Self: 'a;
+    type R<'a>
+    where
+        Self: 'a;
     fn resolve(&self, id: &IdN) -> Self::R<'_>;
 }
 
@@ -977,13 +980,17 @@ pub trait NodeStore<IdN> {
 //     fn build_then_insert(&mut self, t: D::Type, l: D::Label, cs: Vec<T::TreeId>) -> T::TreeId;
 // }
 
-pub trait NodeStoreMut<T: Stored>
-{
+pub trait NodeStoreMut<T: Stored> {
     fn get_or_insert(&mut self, node: T) -> T::TreeId;
 }
-pub trait NodeStoreExt<T: Tree>
-{
-    fn build_then_insert(&mut self, i: T::TreeId, t: T::Type, l: Option<T::Label>, cs: Vec<T::TreeId>) -> T::TreeId;
+pub trait NodeStoreExt<T: Tree> {
+    fn build_then_insert(
+        &mut self,
+        i: T::TreeId,
+        t: T::Type,
+        l: Option<T::Label>,
+        cs: Vec<T::TreeId>,
+    ) -> T::TreeId;
 }
 
 pub trait VersionedNodeStore<'a, IdN>: NodeStore<IdN> {
@@ -1054,7 +1061,6 @@ impl Type {
             "TextDecl" => Self::xml_TextDecl,
             "TokenizedType" => Self::xml_TokenizedType,
             "VersionInfo" => Self::xml_VersionInfo,
-            "XMLDecl" => Self::xml_XMLDecl,
             "children" => Self::xml_Children,
             "contentspec" => Self::xml_Contentspec,
             "doctypedecl" => Self::xml_Doctypedecl,

@@ -1,13 +1,7 @@
-use std::{
-    borrow::Borrow, fmt::Display, io::Write, path::Path,
-    time::Instant,
-};
+use std::{borrow::Borrow, fmt::Display, io::Write, path::Path, time::Instant};
 
 use hyper_ast::{
-    position::{
-        Position, Scout, SpHandle, StructuralPosition,
-        StructuralPositionStore, TreePath,
-    },
+    position::{Position, Scout, SpHandle, StructuralPosition, StructuralPositionStore, TreePath},
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
         nodes::legion::HashedNodeRef,
@@ -26,6 +20,12 @@ use hyper_ast_gen_ts_java::{
 
 use crate::{maven::IterMavenModules, preprocessed::PreProcessedRepository};
 
+const REFERENCES_SERIALIZATION_SUMMARY: bool = false;
+
+/// TODO before enabling, make sure the recusive reference search works, it is often needed for members eg. chained calls
+const SEARCH_MEMBERS: bool = false;
+
+/// Write in [`out`], the JSON formated reprentation of the reference relations at [`root`] in [`prepro`].
 pub fn write_referencial_relations<W: Write>(
     prepro: &PreProcessedRepository,
     root: NodeIdentifier,
@@ -64,8 +64,11 @@ pub fn write_referencial_relations<W: Write>(
                 let decl = decl.make_position(&prepro.main_stores);
                 let time = now.elapsed().as_nanos();
                 log::info!("time taken for refs search of {} :\t{}", decl, time);
-                writer.positions_of_referencial_relations(decl, sk, time, references);
-                // writer.summary_of_referencial_relations(decl, rk, time, references);
+                if REFERENCES_SERIALIZATION_SUMMARY {
+                    writer.summary_of_referencial_relations(decl, sk, time, references);
+                } else {
+                    writer.positions_of_referencial_relations(decl, sk, time, references);
+                }
             }
         }
         write!(out, "]}}").unwrap();
@@ -144,16 +147,16 @@ fn find_declaration_references(
                 &p_in_of,
             );
         Some((SearchKinds::TypeDecl, rs))
-    // } else if t == Type::FieldDeclaration
-    // // || t == Type::ConstantDeclaration
-    // {
-    //     let rs = RefsFinder::new(prepro, structural_positions)
-    //         .find_field_declaration_references_unchecked(
-    //             (declaration.clone(), 0).into(),
-    //             maven_module.node().unwrap(),
-    //             &p_in_of,
-    //         );
-    //     rs
+    } else if SEARCH_MEMBERS && t == Type::FieldDeclaration
+    // || t == Type::ConstantDeclaration
+    {
+        let rs = RefsFinder::new(prepro, structural_positions)
+            .find_field_declaration_references_unchecked(
+                (declaration.clone(), 0).into(),
+                root_folder.node().unwrap(),
+                &p_in_of,
+            );
+        Some((SearchKinds::TypeDecl, rs))
     } else if t == Type::ClassBody {
         let rs = RefsFinder::new(prepro, structural_positions)
             .find_this_unchecked((declaration.clone(), 0).into());
@@ -168,11 +171,7 @@ fn find_declaration_references(
         || t == Type::TypeParameter
     {
         let rs = RefsFinder::new(prepro, structural_positions)
-            .find_localvar_declaration_references_unchecked(
-                (declaration.clone(), 0).into(),
-                root_folder.node().unwrap(),
-                &p_in_of,
-            );
+            .find_localvar_declaration_references_unchecked((declaration.clone(), 0).into());
         Some((SearchKinds::LocalDecl, rs))
     } else {
         None
@@ -339,7 +338,7 @@ impl<'a> RefsFinder<'a> {
         mirror_packages: &[Scout],
     ) -> Vec<SpHandle> {
         let mut r = vec![];
-        let p = decl.make_position(&self.structural_positions, &self.prepro.main_stores);
+        // let p = decl.make_position(&self.structural_positions, &self.prepro.main_stores);
         let res = self.find_type_declaration_references(
             &mut r,
             &decl,
@@ -348,7 +347,7 @@ impl<'a> RefsFinder<'a> {
             mirror_packages,
         );
         if let Err(SearchStopEvent::NoMore) = res {
-            log::error!("search early");
+            log::error!("search stoped early");
             // log::error!("search of {} ended with {:?}", p, err);
         }
         r
@@ -434,9 +433,10 @@ impl<'a> RefsFinder<'a> {
         let mut cursor = Cursor { scout, prev, curr };
 
         let qual_ref = self.go_through_type_declarations_for_field(r, &mut cursor, qual_ref)?;
-        // let (package_ref, fq_decl_ref) = self.go_through_program(r, &mut cursor, qual_ref)?;
-        // self.go_through_package(r, &mut cursor, mirror_packages, &package_ref, &fq_decl_ref)?;
-        // self.go_through_directories(r, &mut cursor, &package_ref, &fq_decl_ref, limit)?;
+        // TODO make sure it does not need special handling
+        let (package_ref, fq_decl_ref) = self.go_through_program(r, &mut cursor, qual_ref)?;
+        self.go_through_package(r, &mut cursor, mirror_packages, &package_ref, &fq_decl_ref)?;
+        self.go_through_directories(r, &mut cursor, &package_ref, &fq_decl_ref, limit)?;
 
         Ok(())
     }
@@ -472,15 +472,10 @@ impl<'a> RefsFinder<'a> {
         self.ana.solver.intern(RefsEnum::ScopedIdentifier(mm, name))
     }
 
-    fn find_localvar_declaration_references_unchecked(
-        self,
-        decl: Scout,
-        limit: &NodeIdentifier,
-        mirror_packages: &[Scout],
-    ) -> Vec<SpHandle> {
+    fn find_localvar_declaration_references_unchecked(self, decl: Scout) -> Vec<SpHandle> {
         let mut r = vec![];
         let p = decl.make_position(&self.structural_positions, &self.prepro.main_stores);
-        let res = self.find_localvar_declaration_references(&mut r, &decl, limit, mirror_packages);
+        let res = self.find_localvar_declaration_references(&mut r, &decl);
         if let Err(err) = res {
             log::error!("search of {} ended with {:?}", p, err);
         }
@@ -491,8 +486,6 @@ impl<'a> RefsFinder<'a> {
         mut self,
         r: &mut Vec<SpHandle>,
         decl: &Scout,
-        limit: &NodeIdentifier,
-        mirror_packages: &[Scout],
     ) -> Result<(), SearchStopEvent> {
         let mut scout = decl.clone();
         self.structural_positions.push(&mut scout); // memory footprint ?
@@ -808,7 +801,7 @@ impl<'a> RefsFinder<'a> {
                 let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
                 let bb = self.prepro.main_stores.node_store.resolve(xx);
                 let tt = bb.get_type();
-                let (xx, bb, tt) = if tt == Type::ObjectCreationExpression {
+                let (_, bb, _) = if tt == Type::ObjectCreationExpression {
                     return Err(SearchStopEvent::Blocked);
                 } else if tt == Type::EnumBody {
                     for (i, xx) in bb.get_children().iter().enumerate() {
@@ -990,7 +983,7 @@ impl<'a> RefsFinder<'a> {
         cursor: &mut Cursor,
         qual_ref: RefPtr,
     ) -> Result<(RefPtr, RefPtr), SearchStopEvent> {
-        let mut before_p_ref = qual_ref;
+        let before_p_ref;
         let mut max_qual_ref = qual_ref;
         let mut package_ref = self.ana.solver.intern(RefsEnum::MaybeMissing);
         // go through classes if inner
@@ -1198,6 +1191,7 @@ impl<'a> RefsFinder<'a> {
         None
     }
 
+    /// top down search of references matching [`p`][`i`]
     fn search(&mut self, p: &RefPtr, i: &RefPtr, s: &Scout) -> Vec<SpHandle> {
         // self.structural_positions
         //     .check_with(&self.prepro.main_stores, s)

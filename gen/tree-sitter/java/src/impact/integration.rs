@@ -1,5 +1,4 @@
-use hyper_ast::types::{Stored};
-
+use hyper_ast::types::Stored;
 
 pub struct Arena<T>(stack_graphs::arena::Arena<T>);
 
@@ -35,7 +34,6 @@ impl<'a, T> Arena<T> {
     }
 }
 
-
 impl<'a, T> Into<stack_graphs::arena::Arena<T>> for Arena<T> {
     fn into(self) -> stack_graphs::arena::Arena<T> {
         self.0
@@ -47,4 +45,3 @@ impl<'a, T> From<stack_graphs::arena::Arena<T>> for Arena<T> {
         Self(a)
     }
 }
-

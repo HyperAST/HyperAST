@@ -1,19 +1,19 @@
 use core::fmt;
 use std::{
     io::{stdout, Write},
-    ops::Deref,
 };
 
 use hyper_ast::{
     store::{TypeStore, SimpleStores, labels::LabelStore, nodes::DefaultNodeStore as NodeStore}, 
-    nodes::RefContainer, tree_gen::ZippedTreeGen, filter::BloomResult, 
-    position::{ExploreStructuralPositions, StructuralPositionStore, StructuralPosition, Scout, TreePath}, types::WithChildren, utils::memusage_linux};
+    tree_gen::ZippedTreeGen,
+    position::{ExploreStructuralPositions, StructuralPositionStore, StructuralPosition, Scout, TreePath}, 
+    types::WithChildren, utils::memusage_linux, nodes::RefContainer, filter::BloomResult};
 use pretty_assertions::assert_eq;
 
 use crate::{
     legion_with_refs::{
-        print_tree_labels, print_tree_syntax, serialize, JavaTreeGen,
-    },
+         print_tree_syntax, serialize, JavaTreeGen,
+    }, impact::element::{RefsEnum, LabelPtr, IdentifierFormat},
 };
 
 fn run(text: &[u8]) {
@@ -54,8 +54,13 @@ fn run(text: &[u8]) {
 #[test]
 fn test_cases() {
     let cases = [
-        CASE_1, CASE_2, CASE_3, CASE_4, CASE_5, CASE_6, CASE_7, CASE_8, CASE_9, CASE_10, CASE_11,
-        CASE_12, CASE_13,
+        CASE_1, CASE_1_1, CASE_1_2, CASE_1_3, CASE_1_4, CASE_1_5, CASE_1_5, CASE_1_6, CASE_1_7, CASE_1_8, CASE_1_9, CASE_1_10,
+        CASE_2, CASE_3, CASE_4, CASE_5, CASE_6, CASE_7, CASE_8, CASE_8_1, CASE_9, 
+        CASE_10, CASE_11, CASE_11_BIS, CASE_12, CASE_13, CASE_14, 
+        CASE_15, CASE_15_1, CASE_15_2, CASE_16, CASE_17, CASE_18, CASE_19,
+        CASE_20, CASE_21, CASE_22, CASE_23, CASE_24,
+        CASE_25, CASE_26, CASE_27, CASE_28, CASE_29, 
+        CASE_30, CASE_31, CASE_32, CASE_33, A
     ];
     for case in cases {
         run(case.as_bytes())
@@ -101,28 +106,35 @@ fn test_equals() {
     println!();
 
     {
+        let stores = java_tree_gen.stores;
         // playing with refs
         let a = &full_node.local.compressed_node;
-
-        let b = java_tree_gen.stores.node_store.resolve(*a);
-        match full_node.local.ana.as_ref() {
-            Some(x) => {
-                println!("refs:",);
-                x.print_refs(&java_tree_gen.stores.label_store);
-            }
-            None => println!("None"),
+        let Some(mut ana) = full_node.local.ana else {
+            panic!("None");
         };
-        let bb = "B".as_bytes().to_owned().into_boxed_slice();
-        let d = bb.as_ref(); //_full_node.local.refs.unwrap().iter().next().unwrap();
+        println!("refs:",);
+        ana.print_refs(&stores.label_store);
 
-        // let c = b.check(d);
-
-        let s = std::str::from_utf8(d).unwrap();
-        println!("{}", java_tree_gen.stores.label_store);
-        // match c {
-        //     BloomResult::MaybeContain => println!("Maybe contains {}", s),
-        //     BloomResult::DoNotContain => println!("Do not contains {}", s),
-        // }
+        let b = stores.node_store.resolve(*a);
+        use hyper_ast::types::LabelStore;
+        macro_rules! scoped_ref {
+            ( $o:expr, $i:expr ) => {{
+                let o = $o;
+                let i = $i;
+                let f = IdentifierFormat::from(i);
+                let i = stores.label_store.get_or_insert(i);
+                let i = LabelPtr::new(i, f);
+                ana.solver.intern_ref(RefsEnum::ScopedIdentifier(o, i))
+            }};
+        }
+        let root = ana.solver.intern(RefsEnum::Root);
+        let i = scoped_ref!(root, "B");
+        let d = ana.solver.nodes.with(i);
+        let c = b.check(d);
+        match c {
+            BloomResult::MaybeContain => println!("Maybe contains B"),
+            BloomResult::DoNotContain => println!("Do not contains B"),
+        }
     }
 //     use hyper_ast::position::extract_position;
 //     let mut position = extract_position(&java_tree_gen.stores, d_it.parents(), d_it.offsets());
@@ -386,6 +398,7 @@ fn test_offset_computation() {
         let x = f(x,2);
         let x = f(x,7);
         let x = f(x,24);
+        let _ = x;
     }
     s.check(&stores).unwrap();
     let x = s.push(&mut scout);
@@ -395,6 +408,7 @@ fn test_offset_computation() {
     println!("|{}|",std::str::from_utf8(&text[p.range()]).unwrap());
     assert_eq!(std::str::from_utf8(&text[p.range()]).unwrap(),r#"ModelUtils.canBeBuilt(new File("./target/spooned/spoon/test/template/ReturnReplaceResult.java"), 8);"#);
 }
+
 #[test]
 fn test_offset_computation2() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
@@ -432,6 +446,7 @@ fn test_offset_computation2() {
         };
         let x = full_node.local.compressed_node;
         let x = f(x,5);
+        let _ = x;
     }
     s.check(&stores).unwrap();
     let x = s.push(&mut scout);
@@ -750,7 +765,7 @@ public class A {
 }
 ";
 
-static CASE_11_bis: &'static str = "package a;
+static CASE_11_BIS: &'static str = "package a;
 public class A {
     int start, len;
     public static long f() {
@@ -2359,6 +2374,10 @@ abstract class AbstractExceptionMapperGenerator {
     }
 }"#;
 
+#[test]
+fn test() {
+    let _ = PACKAGE_CASE_0;
+}
 
 enum D {
     F(&'static str),

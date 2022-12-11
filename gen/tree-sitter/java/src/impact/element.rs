@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::fmt::{Debug};
-use std::hash::{Hash};
+use std::fmt::Debug;
+use std::hash::Hash;
 use std::marker::PhantomData;
 use std::ops::{Deref, Index};
 
@@ -11,10 +11,7 @@ use hyper_ast::impact::serialize::{
 use hyper_ast::utils;
 use string_interner::{DefaultSymbol, Symbol};
 
-
-
 use super::java_element::Primitive;
-use super::label_value::LabelValue;
 
 pub type RefPtr = usize;
 
@@ -59,11 +56,11 @@ impl From<&str> for IdentifierFormat {
         let mut full_lower = true;
         let mut first_upper = false;
         let mut first_lower = false;
-        let mut rest_full_upper = true;
+        let mut _rest_full_upper = true;
         let mut rest_full_lower = true;
         // but not first char of identifier
         let mut just_after_underscore_upper = true;
-        let mut just_after_underscore_lower = true;
+        let mut _just_after_underscore_lower = true;
         let mut first = true;
         let mut just_after_underscore = false;
         for c in label.chars() {
@@ -91,12 +88,12 @@ impl From<&str> for IdentifierFormat {
                         if just_after_underscore {
                             just_after_underscore_upper = false;
                         } else {
-                            rest_full_upper = false;
+                            _rest_full_upper = false;
                         }
                     } else if c.is_ascii_uppercase() {
                         full_lower = false;
                         if just_after_underscore {
-                            just_after_underscore_lower = false;
+                            _just_after_underscore_lower = false;
                         } else {
                             rest_full_lower = false;
                         }
@@ -114,7 +111,7 @@ impl From<&str> for IdentifierFormat {
                 Self::ScreamingSnakeCase
             } else if first_lower && just_after_underscore_upper && rest_full_lower {
                 Self::CamelSnakeCase
-            // } else if first_lower && just_after_underscore_lower {
+            // } else if first_lower && _just_after_underscore_lower {
             //     Self::SnakeCase
             } else if first_upper && just_after_underscore_upper && rest_full_lower {
                 Self::PascalSnakeCase
@@ -510,12 +507,12 @@ impl<'a> ExplorableRef<'a> {
         }
     }
     /// in case a ref can branch ie. case of masking is a sort of branch
-    fn iter(self) -> LabelValue {
-        todo!()
-        // let mut r = vec![];
-        // self.ser(&mut r);
-        // r.into()
-    }
+    // fn iter(self) -> LabelValue {
+    //     todo!()
+    //     // let mut r = vec![];
+    //     // self.ser(&mut r);
+    //     // r.into()
+    // }
     pub fn bytes(self) -> Box<[u8]> {
         let mut r = vec![];
         self.ser(&mut r);
@@ -524,7 +521,7 @@ impl<'a> ExplorableRef<'a> {
 }
 
 impl<'a> ExplorableRef<'a> {
-    fn ser(&self, out: &mut Vec<u8>) {
+    pub fn ser(&self, out: &mut Vec<u8>) {
         match &self.nodes[self.rf] {
             RefsEnum::Root => out.extend(b"/"),
             RefsEnum::MaybeMissing => out.extend(b"?"),
@@ -643,10 +640,9 @@ impl<'a> ExplorableRef<'a> {
         }
     }
 
-    fn ser_cached<'b>(&'b self, cache: &'b mut HashMap<RefPtr, Box<[u8]>>) -> &'b [u8] {
-        if let Some(x) = cache.get(&self.rf) {
-            // x.as_ref()
-            todo!()
+    pub fn ser_cached<'b>(&'b self, cache: &'b mut HashMap<RefPtr, Box<[u8]>>) -> &'b [u8] {
+        if cache.contains_key(&self.rf) {
+            cache.get(&self.rf).unwrap()
         } else {
             let mut out = vec![];
             match &self.nodes[self.rf] {
@@ -823,7 +819,7 @@ impl<'a> MySerialize for ExplorableRef<'a> {
                 }
                 s.end()
             }
-            RefsEnum::Mask(o, v) => {
+            RefsEnum::Mask(o, _v) => {
                 assert_ne!(*o, self.rf);
                 self.with(*o).serialize(serializer)
             }
@@ -854,14 +850,14 @@ impl<'a> MySerialize for ExplorableRef<'a> {
                 s.serialize_object(&self.with(*o))?;
                 s.end("::new")
             }
-            RefsEnum::Invocation(o, i, p) => {
+            RefsEnum::Invocation(o, _i, _p) => {
                 assert_ne!(*o, self.rf);
                 // TODO handle executables fully
                 let mut s = serializer.serialize_sco(Some(1))?;
                 s.serialize_object(&self.with(*o))?;
                 s.end("()")
             }
-            RefsEnum::ConstructorInvocation(i, p) => {
+            RefsEnum::ConstructorInvocation(i, _p) => {
                 assert_ne!(*i, self.rf);
                 // TODO handle executables fully
                 let mut s = serializer.serialize_sco(Some(1))?;

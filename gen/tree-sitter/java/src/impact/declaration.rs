@@ -1,4 +1,8 @@
-use std::{fmt::{Display, Debug}, hash::Hash, collections::HashMap};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+    hash::Hash,
+};
 
 use super::{
     element::{ExplorableRef, Nodes, RawLabelPtr, RefPtr},
@@ -122,13 +126,13 @@ impl<'a> Debug for DebugDecls<'a> {
             match v {
                 DeclType::Runtime(b) => {
                     // TODO print more things
-                    writeln!(f,"   {:?}: {:?} =>", k, kr)?;
+                    writeln!(f, "   {:?}: {:?} =>", k, kr)?;
                     for v in b.iter() {
                         let r = ExplorableRef {
                             rf: *v,
                             nodes: self.nodes,
                         };
-                        write!(f," ({:?}) {:?}", *v, r)?;
+                        write!(f, " ({:?}) {:?}", *v, r)?;
                     }
                     writeln!(f)?;
                 }
@@ -138,26 +142,26 @@ impl<'a> Debug for DebugDecls<'a> {
                         rf: *v,
                         nodes: self.nodes,
                     };
-                    write!(f,"   {:?}: {:?} => {:?}", k, kr, r)?;
+                    write!(f, "   {:?}: {:?} => {:?}", k, kr, r)?;
                     if s.len() > 0 {
-                        write!(f," extends")?;
+                        write!(f, " extends")?;
                     }
                     for v in s.iter() {
                         let v = ExplorableRef {
                             rf: *v,
                             nodes: self.nodes,
                         };
-                        write!(f," {:?},", v)?;
+                        write!(f, " {:?},", v)?;
                     }
                     if b.len() > 0 {
-                        write!(f," implements")?;
+                        write!(f, " implements")?;
                     }
                     for v in b.iter() {
                         let v = ExplorableRef {
                             rf: *v,
                             nodes: self.nodes,
                         };
-                        write!(f," {:?},", v)?;
+                        write!(f, " {:?},", v)?;
                     }
                     writeln!(f)?;
                 }
@@ -174,7 +178,7 @@ pub struct DisplayDecl<'a, 'b, LS: LabelStore<str>> {
 }
 
 impl<'a, 'b, LS: LabelStore<str>> DisplayDecl<'a, 'b, LS> {
-    fn with(&self, decl: (&'a Declarator<RefPtr>, &'a DeclType<RefPtr>)) -> Self {
+    pub fn with(&self, decl: (&'a Declarator<RefPtr>, &'a DeclType<RefPtr>)) -> Self {
         Self {
             decl,
             nodes: self.nodes,

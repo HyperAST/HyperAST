@@ -63,7 +63,7 @@ fn html_tree_sitter_on_pom() {
 }
 
 #[test]
-fn hyperAST_on_pom() {
+fn hyper_ast_on_pom() {
     let mut parser = Parser::new();
 
     {

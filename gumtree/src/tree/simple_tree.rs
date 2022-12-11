@@ -1,24 +1,17 @@
 use std::{
     borrow::Borrow,
-    cell::RefCell,
     fmt::{Debug, Display},
     marker::PhantomData,
-    ops::Deref,
 };
 
 use num_traits::{cast, NumCast, PrimInt, ToPrimitive};
 
-use hyper_ast::{
-    store::ecs::EntryRef,
-    types::{
-        AsTreeRef, GenericItem, HashKind, LabelStore, Labeled, NodeStore, NodeStoreMut, Stored,
-        Typed, WithChildren,
-    },
+use hyper_ast::types::{
+    HashKind, LabelStore, Labeled, NodeStore, NodeStoreMut, Stored, Typed, WithChildren,
 };
 
-use crate::actions::{action_vec::ActionsVec, script_generator2::SimpleAction};
-
-pub(crate) struct SimpleTree<K> {
+#[allow(dead_code)]
+pub struct SimpleTree<K> {
     kind: K,
     label: Option<String>,
     children: Vec<SimpleTree<K>>,
@@ -34,6 +27,7 @@ impl<K> SimpleTree<K> {
     }
 }
 
+#[cfg(test)]
 fn store<'a>(ls: &mut LS<u16>, ns: &mut NS<Tree>, node: &SimpleTree<u8>) -> u16 {
     let lid = node
         .label
@@ -48,6 +42,7 @@ fn store<'a>(ls: &mut LS<u16>, ns: &mut NS<Tree>, node: &SimpleTree<u8>) -> u16 
     ns.get_or_insert(t)
 }
 
+#[cfg(test)]
 pub(crate) fn vpair_to_stores<'a>(
     (src, dst): (SimpleTree<u8>, SimpleTree<u8>),
 ) -> (LS<u16>, NS<Tree>, u16, u16) {
@@ -69,8 +64,8 @@ pub(crate) struct DisplayTree<'a, 'b, I: num_traits::PrimInt, T: WithChildren> {
     node: u16,
     depth: usize,
 }
-
 impl<'a, 'b> DisplayTree<'a, 'b, u16, Tree> {
+    #[allow(dead_code)]
     pub fn new(ls: &'a LS<u16>, ns: &'b NS<Tree>, node: u16) -> Self {
         Self {
             ls,
@@ -139,6 +134,7 @@ impl<'a, 'b> Debug for DisplayTree<'a, 'b, u16, Tree> {
     }
 }
 
+#[allow(dead_code)]
 fn make_stores<'a>() -> (LS<u16>, NS<Tree>) {
     let label_store = LS::<u16> {
         // v: RefCell::new(vec![b"".to_vec()]),
@@ -188,9 +184,9 @@ pub struct Tree {
 impl hyper_ast::types::NodeStoreExt<Tree> for NS<Tree> {
     fn build_then_insert(
         &mut self,
-        i: <Tree as hyper_ast::types::Stored>::TreeId,
+        _i: <Tree as hyper_ast::types::Stored>::TreeId,
         t: <Tree as hyper_ast::types::Typed>::Type,
-        l: Option<<Tree as hyper_ast::types::Labeled>::Label>,
+        _l: Option<<Tree as hyper_ast::types::Labeled>::Label>,
         cs: Vec<<Tree as Stored>::TreeId>,
     ) -> <Tree as Stored>::TreeId {
         let node = Tree {
@@ -604,6 +600,7 @@ impl<'a, I: PrimInt> LabelStore<hyper_ast::types::SlicedLabel> for LS<I> {
     }
 }
 
+#[allow(unused_macros)]
 macro_rules! tree {
     ( $k:expr ) => {
         SimpleTree::new($k, None, vec![])
@@ -618,4 +615,6 @@ macro_rules! tree {
         SimpleTree::new($k, None, vec![$($x),+])
     };
 }
+
+#[allow(unused_imports)]
 pub(crate) use tree;

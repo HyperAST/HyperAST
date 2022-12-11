@@ -6,11 +6,7 @@ use crate::decompressed_tree_store::{
     BreathFirstContiguousSiblings, DecompressedTreeStore, DecompressedWithParent,
 };
 use crate::matchers::mapping_store::MonoMappingStore;
-use crate::matchers::{
-    mapping_store::{DefaultMappingStore, MappingStore},
-    matcher::Matcher,
-    similarity_metrics,
-};
+use crate::matchers::{matcher::Matcher, similarity_metrics};
 use hyper_ast::types::{NodeStore, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
@@ -19,7 +15,7 @@ use super::bottom_up_matcher::BottomUpMatcher;
 
 type IdD = u16;
 
-const SIM_THRESHOLD: f64 = 0.4;
+// const SIM_THRESHOLD: f64 = 0.4;
 
 pub struct SimpleBottomUpMatcher<
     'a,
@@ -70,7 +66,7 @@ where
         mappings: Self::Store,
     ) -> Self::Store {
         let mut matcher = Self {
-            internal: BottomUpMatcher::<'a, Dsrc, Ddst, IdD, T, S,M> {
+            internal: BottomUpMatcher::<'a, Dsrc, Ddst, IdD, T, S, M> {
                 node_store: compressed_node_store,
                 src_arena: Dsrc::new(compressed_node_store, src),
                 dst_arena: Ddst::new(compressed_node_store, dst),

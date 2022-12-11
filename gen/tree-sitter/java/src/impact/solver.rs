@@ -1,15 +1,13 @@
 use std::{
     collections::HashMap,
-    error::Error,
     fmt::Debug,
     ops::{Deref, Index},
 };
 
 use num::ToPrimitive;
 use string_interner::Symbol;
-use tuples::TupleCollect;
 
-use crate::impact::declaration::{DebugDecls, DeclsIter};
+use crate::impact::declaration::DebugDecls;
 
 use super::{
     declaration::{self, DeclType, Declarator},
@@ -18,7 +16,6 @@ use super::{
         RefsEnum,
     },
     java_element::Primitive,
-    label_value::LabelValue,
     reference,
 };
 
@@ -44,7 +41,7 @@ impl Default for Solver {
     }
 }
 
-pub(crate) struct MultiResult<T>(Option<Box<[T]>>);
+pub struct MultiResult<T>(Option<Box<[T]>>);
 
 impl<T> Default for MultiResult<T> {
     fn default() -> Self {
@@ -102,7 +99,7 @@ impl<T> MultiResult<T> {
         self.0.iter().flat_map(|x| x.iter())
     }
 
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.0.is_none()
     }
 }
@@ -146,7 +143,7 @@ impl Solver {
         self.nodes.get(other)
     }
 
-    fn iter_nodes<'a>(&'a self) -> element::NodesIter<'a> {
+    pub fn iter_nodes<'a>(&'a self) -> element::NodesIter<'a> {
         element::NodesIter {
             rf: 0,
             nodes: &self.nodes,
@@ -247,7 +244,9 @@ impl Solver {
                 r
             }
             x => {
-                let o = x.object().unwrap_or_else(|| panic!("should have an object {:?}", x));
+                let o = x
+                    .object()
+                    .unwrap_or_else(|| panic!("should have an object {:?}", x));
                 let o = rec(&o);
                 self.intern(x.with_object(o))
             }
@@ -297,7 +296,9 @@ impl Solver {
                 Some(refs!(tmp))
             }
             x => {
-                let o = x.object().unwrap_or_else(|| panic!("should have an object {:?}", x));
+                let o = x
+                    .object()
+                    .unwrap_or_else(|| panic!("should have an object {:?}", x));
                 let o = self.try_solve_node_with(o, p)?;
                 let tmp = x.with_object(o);
                 Some(refs!(tmp))
@@ -344,7 +345,9 @@ impl Solver {
                 Some(refs!(tmp))
             }
             x => {
-                let o = x.object().unwrap_or_else(|| panic!("should have an object {:?}", x));
+                let o = x
+                    .object()
+                    .unwrap_or_else(|| panic!("should have an object {:?}", x));
                 let o = self.try_unsolve_node_with(o, p)?;
                 let tmp = x.with_object(o);
                 Some(refs!(tmp))
@@ -367,7 +370,7 @@ impl Solver {
         self.intern(x)
     }
 
-    fn no_choice(&mut self, other: RefPtr) -> RefPtr {
+    pub fn no_choice(&mut self, other: RefPtr) -> RefPtr {
         let o = self.nodes[other].object();
         let o = if let Some(o) = o {
             self.no_choice(o)
@@ -510,7 +513,9 @@ impl Solver {
                 r
             }
             x => {
-                let o = x.object().unwrap_or_else(|| panic!("should have an object {:?}", x));
+                let o = x
+                    .object()
+                    .unwrap_or_else(|| panic!("should have an object {:?}", x));
                 let o = self.local_solve_intern_external(cache, other.with(o));
                 self.intern(x.with_object(o))
             }
@@ -524,7 +529,7 @@ impl Solver {
                     b[0] // TODO
                 }
             }
-            Some(DeclType::Compile(r, s, i)) => {
+            Some(DeclType::Compile(r, _s, _i)) => {
                 // log::trace!("solved local variable: {:?}", r);
                 // self.solve_intern_external(cache, other.with(r))
                 *r
@@ -649,7 +654,7 @@ impl Solver {
             }
             RefsEnum::Invocation(o, i, p) => {
                 let o = rec(*o);
-                let p = p.map(|x|rec(*x).ptr);
+                let p = p.map(|x| rec(*x).ptr);
 
                 CountedRefPtr {
                     ptr: self.intern(RefsEnum::Invocation(o.ptr, *i, p)),
@@ -658,7 +663,7 @@ impl Solver {
             }
             RefsEnum::ConstructorInvocation(i, p) => {
                 let i = rec(*i);
-                let p = p.map(|x|rec(*x).ptr);
+                let p = p.map(|x| rec(*x).ptr);
                 let ptr = self.intern(RefsEnum::ConstructorInvocation(i.ptr, p));
                 assert_ne!(ptr, i.ptr);
                 CountedRefPtr {
@@ -667,7 +672,9 @@ impl Solver {
                 }
             }
             x => {
-                let o = x.object().unwrap_or_else(|| panic!("should have an object {:?}", x));
+                let o = x
+                    .object()
+                    .unwrap_or_else(|| panic!("should have an object {:?}", x));
                 let o = rec(o);
                 let ptr = self.intern(x.with_object(o.ptr));
                 CountedRefPtr {
@@ -686,10 +693,7 @@ impl Solver {
         r
     }
 
-    pub(crate) fn counted_extend<'a>(
-        &mut self,
-        solver: &'a Solver,
-    ) -> CountedInternalizer<'a> {
+    pub(crate) fn counted_extend<'a>(&mut self, solver: &'a Solver) -> CountedInternalizer<'a> {
         let mut cached = CountedInternalizer {
             count: 0,
             cache: Default::default(),
@@ -742,7 +746,7 @@ impl Default for SolvingResult {
     }
 }
 impl<Node: Eq> FromIterator<Node> for SolvingResult {
-    fn from_iter<T: IntoIterator<Item = Node>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = Node>>(_iter: T) -> Self {
         panic!("should not be possible")
         // let mut r = vec![];
         // for x in iter.into_iter() {
@@ -812,10 +816,10 @@ impl SolvingAssocTable {
         }
         self.intern[index] = Some(v);
     }
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.intern.len()
     }
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.intern.is_empty()
     }
 }
@@ -868,37 +872,37 @@ impl Solver {
         (cache, r)
     }
 
-    pub(crate) fn solving_result(&mut self, refs: &[RefPtr]) -> SolvingResult {
-        if refs.is_empty() {
-            panic!()
-        } else if refs.len() == 1 {
-            SolvingResult::new(refs[0], refs.iter().cloned().collect())
-        } else {
-            let refs = refs.iter().cloned();
-            let result = self.intern(RefsEnum::Or(refs.clone().collect()));
-            SolvingResult::new(result, refs.collect())
-        }
-    }
+    // pub(crate) fn solving_result(&mut self, refs: &[RefPtr]) -> SolvingResult {
+    //     if refs.is_empty() {
+    //         panic!()
+    //     } else if refs.len() == 1 {
+    //         SolvingResult::new(refs[0], refs.iter().cloned().collect())
+    //     } else {
+    //         let refs = refs.iter().cloned();
+    //         let result = self.intern(RefsEnum::Or(refs.clone().collect()));
+    //         SolvingResult::new(result, refs.collect())
+    //     }
+    // }
 
-    /// flatten Or and filter Masks
-    pub(crate) fn possibilities(&mut self, other: RefPtr) -> Vec<RefPtr> {
-        let o = &self.nodes[other].clone();
-        if let RefsEnum::Mask(oo, _) = o {
-            self.possibilities(*oo)
-        } else if let RefsEnum::Or(v) = o {
-            v.iter().flat_map(|&o| self.possibilities(o)).collect()
-        } else if let Some(o) = o.object() {
-            self.possibilities(o)
-                .into_iter()
-                .map(|o| {
-                    let x = self.nodes[other].with_object(o);
-                    self.intern(x)
-                })
-                .collect()
-        } else {
-            vec![other]
-        }
-    }
+    // /// flatten Or and filter Masks
+    // pub(crate) fn possibilities(&mut self, other: RefPtr) -> Vec<RefPtr> {
+    //     let o = &self.nodes[other].clone();
+    //     if let RefsEnum::Mask(oo, _) = o {
+    //         self.possibilities(*oo)
+    //     } else if let RefsEnum::Or(v) = o {
+    //         v.iter().flat_map(|&o| self.possibilities(o)).collect()
+    //     } else if let Some(o) = o.object() {
+    //         self.possibilities(o)
+    //             .into_iter()
+    //             .map(|o| {
+    //                 let x = self.nodes[other].with_object(o);
+    //                 self.intern(x)
+    //             })
+    //             .collect()
+    //     } else {
+    //         vec![other]
+    //     }
+    // }
 
     /// flatten Or and filter Masks
     /// do not create new references
@@ -2264,7 +2268,7 @@ impl Solver {
                 }
             }
             RefsEnum::Mask(o, _) => *o,
-            x => return false,
+            _ => return false,
         };
         self.is_package(r)
     }

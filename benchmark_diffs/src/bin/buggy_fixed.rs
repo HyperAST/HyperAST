@@ -6,6 +6,13 @@ use std::{
 use hyper_ast_benchmark_diffs::{with_profiling, buggy_fixed::run_dir,
 };
 
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 pub(crate) fn main() {
     with_profiling(Path::new("profile.pb"), || {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();

@@ -1,17 +1,10 @@
-use core::fmt;
-use std::{
-    io::{stdout, Write},
-    ops::Deref,
-};
-
 use hyper_ast::{
     filter::{Bloom, BloomResult, BF},
     nodes::RefContainer,
     position::{
-        ExploreStructuralPositions, Scout, StructuralPosition, StructuralPositionStore, TreePath,
+         Scout, StructuralPosition, StructuralPositionStore, TreePath,
     },
     store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores, TypeStore},
-    tree_gen::ZippedTreeGen,
     types::WithChildren,
     types::{LabelStore as _, Type, Typed}, impact::serialize::CachedHasher,
 };
@@ -19,7 +12,6 @@ use hyper_ast::{
 use hyper_ast_gen_ts_java::legion_with_refs::{
     print_tree_syntax, BulkHasher,
 };
-use tree_sitter::{Language, Parser};
 
 use crate::java::handle_java_file;
 
@@ -32,7 +24,23 @@ use hyper_ast_gen_ts_java::{
     legion_with_refs as java_tree_gen,
 };
 
+
 fn run(text: &[u8]) {
+    let mut stores = SimpleStores {
+        label_store: LabelStore::new(),
+        type_store: TypeStore {},
+        node_store: NodeStore::new(),
+    };
+    let mut md_cache = Default::default();
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+}
+
+fn run1(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
         type_store: TypeStore {},
@@ -69,7 +77,7 @@ fn run(text: &[u8]) {
     let mut sp_store =
         StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
 
-    let mm = ana.solver.intern(RefsEnum::MaybeMissing);
+    // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     let root = ana.solver.intern(RefsEnum::Root);
     let package_ref = scoped!(root, "spoon");
 
@@ -136,7 +144,7 @@ fn test_case() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
         .is_test(true)
         .init();
-    run(CASE_1.as_bytes())
+    run1(CASE_1.as_bytes())
 }
 
 // #[test]
@@ -242,7 +250,6 @@ fn run2(text: &[u8]) {
         None => println!("None"),
     };
     let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
-    let v = AA;
     macro_rules! scoped {
         ( $o:expr, $i:expr ) => {{
             let o = $o;
@@ -256,7 +263,7 @@ fn run2(text: &[u8]) {
     let mut sp_store =
         StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
 
-    let mm = ana.solver.intern(RefsEnum::MaybeMissing);
+    // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     let root = ana.solver.intern(RefsEnum::Root);
     let package_ref = scoped!(root, "spoon");
 
@@ -467,7 +474,6 @@ fn run3(text: &[u8]) {
         None => println!("None"),
     };
     let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
-    let v = AA;
     macro_rules! scoped {
         ( $o:expr, $i:expr ) => {{
             let o = $o;
@@ -625,7 +631,7 @@ fn run3_1(text: &[u8]) {
         None => println!("None"),
     };
     let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
-    let v = AA;
+    let _ = AA;
     macro_rules! scoped {
         ( $o:expr, $i:expr ) => {{
             let o = $o;
@@ -649,7 +655,7 @@ fn run3_1(text: &[u8]) {
     let mut sp_store =
         StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
 
-    let mm = ana.solver.intern(RefsEnum::MaybeMissing);
+    // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     let root = ana.solver.intern(RefsEnum::Root);
     let package_ref = scoped!(root, "spoon");
     let package_lang = scoped!(scoped!(root, "java"), "lang");
@@ -730,6 +736,14 @@ public interface JDTBuilder extends Builder {
     AAA getAAA();
 }"#;
 
+#[test]
+fn test_case4() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
+    run(CASE_4.as_bytes())
+}
+
 /// search spoon.legacy.NameFilter
 static CASE_5: &'static str = r#"package spoon.test.filters;
 
@@ -740,6 +754,14 @@ public class FilterTest {
         NameFilter<CtNamedElement> nameFilter = new NameFilter<>(name);
     }
 }"#;
+
+#[test]
+fn test_case5() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
+    run(CASE_5.as_bytes())
+}
 
 fn run6(text: &[u8]) {
     let mut stores = SimpleStores {
@@ -764,7 +786,6 @@ fn run6(text: &[u8]) {
         None => println!("None"),
     };
     let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
-    let v = AA;
     macro_rules! scoped {
         ( $o:expr, $i:expr ) => {{
             let o = $o;
@@ -860,7 +881,6 @@ fn run7(text: &[u8]) {
         None => println!("None"),
     };
     let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
-    let v = AA;
     macro_rules! scoped {
         ( $o:expr, $i:expr ) => {{
             let o = $o;
@@ -884,7 +904,7 @@ fn run7(text: &[u8]) {
     let mut sp_store =
         StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
 
-    let mm = ana.solver.intern(RefsEnum::MaybeMissing);
+    // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     let root = ana.solver.intern(RefsEnum::Root);
     let package_ref = scoped!(root, "spoon");
 
@@ -979,21 +999,23 @@ fn test_hashing() {
     let package_ref = scoped!(root, "spoon");
     let package_ref2 = scoped!(scoped!(package_ref, "reflect"), "declaration");
     let i = scoped_ref!(package_ref2, "CtAnonymousExecutable");
+    let _ = i;
     let package_lang = scoped!(scoped!(root, "java"), "lang");
     let lang_obj = scoped_type!(package_lang, "Object");
     let uncertain = ana.solver.intern(RefsEnum::Or(
         vec![lang_obj, package_lang, package_ref, root].into(),
     ));
-    let i = scoped_ref!(uncertain, "TYPE_MEMBER");
+    // let i = scoped_ref!(uncertain, "TYPE_MEMBER");
     let i = scoped_ref!(uncertain, "obj");
-    // let d = ana.solver.nodes.with(i);
+    let d = ana.solver.nodes.with(i);
     let it = ana.solver.iter_refs();
     type T = Bloom<&'static [u8], u16>;
     let it = BulkHasher::<_, <T as BF<[u8]>>::S, <T as BF<[u8]>>::H>::from(it);
     // let it:Vec<_> = it.collect();
     let bloom = T::from(it);
-    eprintln!("{:?}", bloom)
-    // b.check(d)
+    eprintln!("{:?}", bloom);
+    let r = CachedHasher::<usize, <T as BF<[u8]>>::S, <T as BF<[u8]>>::H>::once(d)[0];
+    bloom.check_raw(r);
 }
 
 fn run8(text: &[u8]) {
@@ -1111,6 +1133,14 @@ public class SwitchNode extends AbstractNode implements InlineNode {
     }
 
 }"#;
+
+#[test]
+fn test_case9() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
+    run(CASE_9.as_bytes())
+}
 
 fn run10(text: &[u8]) {
     let mut stores = SimpleStores {
@@ -1334,17 +1364,18 @@ fn run11(text: &[u8]) {
             let o = $o;
             let i = $i;
             let f = IdentifierFormat::from(i);
-            let i = stores.label_store.get_or_insert(i);
+            let i = java_tree_gen.stores.label_store.get_or_insert(i);
             let i = LabelPtr::new(i, f);
             ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
         }};
     }
-    let mut sp_store =
-        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+    // let sp_store =
+    //     StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
 
     // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
-    // let root = ana.solver.intern(RefsEnum::Root);
-    // let package_ref = scoped!(root, "spoon");
+    let root = ana.solver.intern(RefsEnum::Root);
+    let package_ref = scoped!(root, "spoon");
+    let _ = package_ref;
 
     print_tree_syntax(
         &java_tree_gen.stores.node_store,
@@ -1361,7 +1392,7 @@ fn test_case11() {
         .init();
     run11(CASE_11.as_bytes());
     println!("{}", CASE_11.as_bytes().len());
-    println!("{}", CASE_11_bis.as_bytes().len());
+    println!("{}", CASE_11_BIS.as_bytes().len());
 }
 
 static CASE_11: &'static str = r#"/**
@@ -1525,7 +1556,7 @@ public class AllBranchesReturnTest {
 
 }
 "#;
-static CASE_11_bis: &'static str = r#"/**
+static CASE_11_BIS: &'static str = r#"/**
  * The MIT License
  * <p>
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -1687,6 +1718,14 @@ public class AllBranchesReturnTest {
 }
 "#;
 
+#[test]
+fn test_case_11_bis() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
+    run(CASE_11_BIS.as_bytes())
+}
+
 
 
 fn run12(text: &[u8]) {
@@ -1711,19 +1750,19 @@ fn run12(text: &[u8]) {
         }
         None => println!("None"),
     };
-    let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
-    macro_rules! scoped {
-        ( $o:expr, $i:expr ) => {{
-            let o = $o;
-            let i = $i;
-            let f = IdentifierFormat::from(i);
-            let i = stores.label_store.get_or_insert(i);
-            let i = LabelPtr::new(i, f);
-            ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
-        }};
-    }
-    let mut sp_store =
-        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+    // let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
+    // macro_rules! scoped {
+    //     ( $o:expr, $i:expr ) => {{
+    //         let o = $o;
+    //         let i = $i;
+    //         let f = IdentifierFormat::from(i);
+    //         let i = stores.label_store.get_or_insert(i);
+    //         let i = LabelPtr::new(i, f);
+    //         ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
+    //     }};
+    // }
+    // let mut sp_store =
+    //     StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
 
     // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     // let root = ana.solver.intern(RefsEnum::Root);
@@ -1779,19 +1818,19 @@ fn run13(text: &[u8]) {
         }
         None => println!("None"),
     };
-    let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
-    macro_rules! scoped {
-        ( $o:expr, $i:expr ) => {{
-            let o = $o;
-            let i = $i;
-            let f = IdentifierFormat::from(i);
-            let i = stores.label_store.get_or_insert(i);
-            let i = LabelPtr::new(i, f);
-            ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
-        }};
-    }
-    let mut sp_store =
-        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+    // let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
+    // macro_rules! scoped {
+    //     ( $o:expr, $i:expr ) => {{
+    //         let o = $o;
+    //         let i = $i;
+    //         let f = IdentifierFormat::from(i);
+    //         let i = stores.label_store.get_or_insert(i);
+    //         let i = LabelPtr::new(i, f);
+    //         ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
+    //     }};
+    // }
+    // let mut sp_store =
+    //     StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
 
     // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     // let root = ana.solver.intern(RefsEnum::Root);

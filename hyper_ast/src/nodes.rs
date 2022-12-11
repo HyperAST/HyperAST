@@ -1,12 +1,9 @@
 use std::{
     borrow::Borrow,
     fmt::{Debug, Display, Write},
-    io::stdout,
-    marker::PhantomData,
 };
 
 use num::ToPrimitive;
-use string_interner::{DefaultSymbol, Symbol};
 
 use crate::{
     impact::serialize::{Keyed, MySerialize},
@@ -15,19 +12,17 @@ use crate::{
 
 pub type TypeIdentifier = Type;
 
-type Label = Vec<u8>;
-
 pub trait RefContainer {
     type Result;
     fn check<U: MySerialize + Keyed<usize>>(&self, rf: U) -> Self::Result;
 }
 
 /// identifying data for a node in an HyperAST
-pub struct SimpleNode1<Child, Label> {
-    pub(crate) kind: TypeIdentifier,
-    pub(crate) label: Option<Label>,
-    pub(crate) children: Vec<Child>,
-}
+// pub struct SimpleNode1<Child, Label> {
+//     pub(crate) kind: TypeIdentifier,
+//     pub(crate) label: Option<Label>,
+//     pub(crate) children: Vec<Child>,
+// }
 
 // pub type DefaultLabelIdentifier = DefaultSymbol;
 // pub type DefaultNodeIdentifier = legion::Entity;
@@ -52,27 +47,27 @@ pub enum CompressedNode<NodeId, LabelId> {
     Spaces(LabelId), //Box<[Space]>),
 }
 
-pub(crate) enum SimpNode<NodeId, LabelId> {
-    Type(Type),
-    Label { label: LabelId, kind: Type },
-    Children { children: Box<[NodeId]>, kind: Type },
-    Spaces(Box<[Space]>),
-}
+// pub(crate) enum SimpNode<NodeId, LabelId> {
+//     Type(Type),
+//     Label { label: LabelId, kind: Type },
+//     Children { children: Box<[NodeId]>, kind: Type },
+//     Spaces(Box<[Space]>),
+// }
 
-mod TypeBaggableNodes {
-    use std::marker::PhantomData;
+// mod type_baggable_nodes {
+//     use std::marker::PhantomData;
 
-    struct Keyword<Type> {
-        kind: Type,
-    }
+//     struct Keyword<Type> {
+//         kind: Type,
+//     }
 
-    struct UnsizedNode<Type, NodeId, LabelId> {
-        // kind: Type,
-        _phantom: PhantomData<*const (Type, NodeId, LabelId)>,
-        bytes: [u8],
-        // children: [MyUnion<LabelId,NodeId>],
-    }
-}
+//     struct UnsizedNode<Type, NodeId, LabelId> {
+//         // kind: Type,
+//         _phantom: PhantomData<*const (Type, NodeId, LabelId)>,
+//         bytes: [u8],
+//         // children: [MyUnion<LabelId,NodeId>],
+//     }
+// }
 
 // #[repr(C)]
 // union MyUnion<NodeId, LabelId> {
@@ -302,7 +297,7 @@ impl Display for Space {
 }
 
 impl Space {
-    pub(crate) fn fmt<W: Write>(&self, w: &mut W, p: &str) -> std::fmt::Result {
+    pub fn fmt<W: Write>(&self, w: &mut W, p: &str) -> std::fmt::Result {
         match self {
             Space::Space => write!(w, " "),
             Space::NewLine => write!(w, "\n"),
@@ -314,7 +309,7 @@ impl Space {
 }
 
 impl Space {
-    pub(crate) fn to_string(&self) -> &str {
+    pub fn to_string(&self) -> &str {
         match self {
             Space::Space => " ",
             Space::NewLine => "\n",
@@ -352,6 +347,7 @@ impl Space {
                 '\t' => Space::Tabulation,
                 CR => Space::CariageReturn,
                 x => {
+                    log::debug!("{:?}", x);
                     log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
                     println!("{:?}", std::str::from_utf8(spaces));
                     panic!("{:?}", spaces)
@@ -370,6 +366,7 @@ impl Space {
                 '\t' => Some(Space::Tabulation),
                 CR => Some(Space::CariageReturn),
                 x => {
+                    log::debug!("{:?}", x);
                     err = true;
                     None
                 }
@@ -382,7 +379,7 @@ impl Space {
         }
     }
     /// TODO test with nssss, n -> n
-    pub(crate) fn replace_indentation(indentation: &[Space], spaces: &[Space]) -> Vec<Space> {
+    pub fn replace_indentation(indentation: &[Space], spaces: &[Space]) -> Vec<Space> {
         let mut r = vec![];
         let mut tmp = vec![];
         let mut i = 0;
@@ -439,45 +436,45 @@ impl Space {
     // }
 }
 
-trait DisplayTreeStruct<IdN: Clone, IdL>: Display {
-    fn node(&self, id: &IdN) -> CompressedNode<IdN, IdL>;
+// trait DisplayTreeStruct<IdN: Clone, IdL>: Display {
+//     fn node(&self, id: &IdN) -> CompressedNode<IdN, IdL>;
 
-    fn print_tree_structure(&self, id: &IdN) {
-        match self.node(id) {
-            CompressedNode::Type(kind) => {
-                print!("{}", kind.to_string());
-                // None
-            }
-            CompressedNode::Label { kind, label: _ } => {
-                print!("({})", kind.to_string());
-                // None
-            }
-            CompressedNode::Children2 { kind, children } => {
-                print!("({} ", kind.to_string());
-                for id in children.iter() {
-                    self.print_tree_structure(id);
-                }
-                print!(")");
-            }
-            CompressedNode::Children { kind, children } => {
-                print!("({} ", kind.to_string());
-                let children = children.clone();
-                for id in children.iter() {
-                    self.print_tree_structure(id);
-                }
-                print!(")");
-            }
-            CompressedNode::Spaces(_) => (),
-        };
-    }
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if f.alternate() {
-            write!(f, "[{}]", todo!())
-        } else {
-            write!(f, "[{} drop scopes]", todo!())
-        }
-    }
-}
+//     fn print_tree_structure(&self, id: &IdN) {
+//         match self.node(id) {
+//             CompressedNode::Type(kind) => {
+//                 print!("{}", kind.to_string());
+//                 // None
+//             }
+//             CompressedNode::Label { kind, label: _ } => {
+//                 print!("({})", kind.to_string());
+//                 // None
+//             }
+//             CompressedNode::Children2 { kind, children } => {
+//                 print!("({} ", kind.to_string());
+//                 for id in children.iter() {
+//                     self.print_tree_structure(id);
+//                 }
+//                 print!(")");
+//             }
+//             CompressedNode::Children { kind, children } => {
+//                 print!("({} ", kind.to_string());
+//                 let children = children.clone();
+//                 for id in children.iter() {
+//                     self.print_tree_structure(id);
+//                 }
+//                 print!(")");
+//             }
+//             CompressedNode::Spaces(_) => (),
+//         };
+//     }
+//     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+//         if f.alternate() {
+//             write!(f, "[{}]", todo!())
+//         } else {
+//             write!(f, "[{} drop scopes]", todo!())
+//         }
+//     }
+// }
 pub fn print_tree_ids<
     IdN: Debug,
     IdL,
@@ -654,7 +651,6 @@ pub fn print_tree_syntax<
         CompressedNode::Spaces(s) => {
             let s = &g(s);
             print!("(_ ");
-            let a = &*s;
             // print!("{}",s);
             print!("{:?}", Space::format_indentation(s.as_bytes()));
             // a.iter().for_each(|a| print!("{:?}", a));
@@ -759,7 +755,7 @@ pub fn serialize<
         CompressedNode::Spaces(s) => {
             let s = g(s);
             // let a = &*s;
-            let mut b:String = //s; //String::new();
+            let b:String = //s; //String::new();
             Space::format_indentation(s.as_bytes())
                 .iter()
                 .map(|x| x.to_string())
@@ -777,7 +773,6 @@ pub fn serialize<
 }
 
 fn escape(src: &str) -> String {
-    use std::fmt::Write;
     let mut escaped = String::with_capacity(src.len());
     let mut utf16_buf = [0u16; 2];
     for c in src.chars() {

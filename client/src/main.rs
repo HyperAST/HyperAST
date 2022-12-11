@@ -1,17 +1,9 @@
-#![feature(generic_associated_types)]
-
-use std::{fmt::Debug, sync::Mutex};
-
 use hyper_gumtree::{
     actions::{
-        action_vec::{apply_action, ActionsVec},
+        action_vec::apply_action,
         script_generator2::{Act, ScriptGenerator, SimpleAction},
-        Actions,
     },
-    decompressed_tree_store::{
-        bfs_wrapper, BreathFirst, BreathFirstIterable, CompletePostOrder, Initializable,
-        PostOrderIterable, ShallowDecompressedTreeStore, SimpleZsTree,
-    },
+    decompressed_tree_store::{bfs_wrapper, CompletePostOrder, SimpleZsTree},
     matchers::{
         heuristic::gt::{
             bottom_up_matcher::BottomUpMatcher, greedy_bottom_up_matcher::GreedyBottomUpMatcher,
@@ -23,129 +15,122 @@ use hyper_gumtree::{
     tree::tree_path::{CompressedTreePath, TreePath},
 };
 
-fn main_compress() {
-    // use hyper_ast_gen_ts_java::java_tree_gen_full_compress::{
-    //     JavaTreeGen, LabelStore, NodeStore, SimpleStores,
-    // };
-    //     println!("Hello, world!");
+// fn main_compress() {
+//     // use hyper_ast_gen_ts_java::java_tree_gen_full_compress::{
+//     //     JavaTreeGen, LabelStore, NodeStore, SimpleStores,
+//     // };
+//     //     println!("Hello, world!");
 
-    //     let mut parser = Parser::new();
+//     //     let mut parser = Parser::new();
 
-    //     {
-    //         let language = unsafe { tree_sitter_java() };
-    //         parser.set_language(language).unwrap();
-    //     }
+//     //     {
+//     //         let language = unsafe { tree_sitter_java() };
+//     //         parser.set_language(language).unwrap();
+//     //     }
 
-    //     let mut java_tree_gen = JavaTreeGen::new();
+//     //     let mut java_tree_gen = JavaTreeGen::new();
 
-    //     // src
-    //     let text = {
-    //         let source_code1 = "class A {
-    //     class B {
-    //         int a = 0xffff;
-    //     }
-    // }";
-    //         source_code1.as_bytes()
-    //     };
-    //     let tree = parser.parse(text, None).unwrap();
-    //     println!("{}", tree.root_node().to_sexp());
+//     //     // src
+//     //     let text = {
+//     //         let source_code1 = "class A {
+//     //     class B {
+//     //         int a = 0xffff;
+//     //     }
+//     // }";
+//     //         source_code1.as_bytes()
+//     //     };
+//     //     let tree = parser.parse(text, None).unwrap();
+//     //     println!("{}", tree.root_node().to_sexp());
 
-    //     let full_node_src = java_tree_gen.generate_default(text, tree.walk());
+//     //     let full_node_src = java_tree_gen.generate_default(text, tree.walk());
 
-    //     println!("debug full node 1: {:?}", &full_node_src);
+//     //     println!("debug full node 1: {:?}", &full_node_src);
 
-    //     // dst
-    //     let text = {
-    //         let source_code1 = "class A {
-    //     class C {
-    //         int a = 0xffff;
-    //     }
-    // }";
-    //         source_code1.as_bytes()
-    //     };
-    //     let tree = parser.parse(text, None).unwrap();
-    //     println!("{}", tree.root_node().to_sexp());
+//     //     // dst
+//     //     let text = {
+//     //         let source_code1 = "class A {
+//     //     class C {
+//     //         int a = 0xffff;
+//     //     }
+//     // }";
+//     //         source_code1.as_bytes()
+//     //     };
+//     //     let tree = parser.parse(text, None).unwrap();
+//     //     println!("{}", tree.root_node().to_sexp());
 
-    //     let full_node_dst = java_tree_gen.generate_default(text, tree.walk());
+//     //     let full_node_dst = java_tree_gen.generate_default(text, tree.walk());
 
-    //     println!("debug full node 2: {:?}", &full_node_dst);
+//     //     println!("debug full node 2: {:?}", &full_node_dst);
 
-    //     let JavaTreeGen {
-    //         line_break:_,
-    //         stores: SimpleStores {
-    //             label_store,
-    //             type_store:_,
-    //             node_store,
-    //         }
-    //     } = java_tree_gen;
+//     //     let JavaTreeGen {
+//     //         line_break:_,
+//     //         stores: SimpleStores {
+//     //             label_store,
+//     //             type_store:_,
+//     //             node_store,
+//     //         }
+//     //     } = java_tree_gen;
 
-    //     let mapping_store = DefaultMappingStore::default();
-    //     // let a = SimpleBottomUpMatcher::<
-    //     let a = ZsMatcher::<
-    //         CompletePostOrder<u32, u16>,
-    //         HashedCompressedNode<SyntaxNodeHashs<u32>, _, u32>,
-    //         u16,
-    //         NodeStore,
-    //         LabelStore,
-    //     >::matchh(
-    //         &node_store,
-    //         &label_store,
-    //         *full_node_src.id(),
-    //         *full_node_dst.id(),
-    //         mapping_store,
-    //     );
-    //     a.mappings
-    //         .src_to_dst
-    //         .iter()
-    //         .map(|x| if *x == 0 { None } else { Some(*x - 1) })
-    //         .zip(
-    //             a.mappings
-    //                 .dst_to_src
-    //                 .iter()
-    //                 .map(|x| if *x == 0 { None } else { Some(*x - 1) }),
-    //         )
-    //         .enumerate()
-    //         .for_each(|x| println!("{:?}", x));
-    //     // a.src_to_dst.iter().enumerate().for_each(|(i,m)| {
-    //     //     println!("{:?}", (i,m,&a.dst_to_src[*m as usize]));
-    //     // });
-    //     // println!("-----------");
-    //     // a.dst_to_src.iter().enumerate().for_each(|(i,m)| {
-    //     //     println!("{:?}", (i,m,&a.src_to_dst[*m as usize]));
-    //     // });
+//     //     let mapping_store = DefaultMappingStore::default();
+//     //     // let a = SimpleBottomUpMatcher::<
+//     //     let a = ZsMatcher::<
+//     //         CompletePostOrder<u32, u16>,
+//     //         HashedCompressedNode<SyntaxNodeHashs<u32>, _, u32>,
+//     //         u16,
+//     //         NodeStore,
+//     //         LabelStore,
+//     //     >::matchh(
+//     //         &node_store,
+//     //         &label_store,
+//     //         *full_node_src.id(),
+//     //         *full_node_dst.id(),
+//     //         mapping_store,
+//     //     );
+//     //     a.mappings
+//     //         .src_to_dst
+//     //         .iter()
+//     //         .map(|x| if *x == 0 { None } else { Some(*x - 1) })
+//     //         .zip(
+//     //             a.mappings
+//     //                 .dst_to_src
+//     //                 .iter()
+//     //                 .map(|x| if *x == 0 { None } else { Some(*x - 1) }),
+//     //         )
+//     //         .enumerate()
+//     //         .for_each(|x| println!("{:?}", x));
+//     //     // a.src_to_dst.iter().enumerate().for_each(|(i,m)| {
+//     //     //     println!("{:?}", (i,m,&a.dst_to_src[*m as usize]));
+//     //     // });
+//     //     // println!("-----------");
+//     //     // a.dst_to_src.iter().enumerate().for_each(|(i,m)| {
+//     //     //     println!("{:?}", (i,m,&a.src_to_dst[*m as usize]));
+//     //     // });
 
-    //     // // let mut out = String::new();
-    //     // let mut out = IoOut {
-    //     //     out: stdout()
-    //     // };
-    //     // serialize(
-    //     //     &java_tree_gen.node_store,
-    //     //     &java_tree_gen.label_store,
-    //     //     &full_node.id(),
-    //     //     &mut out,
-    //     //     &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
-    //     // );
-    //     // println!();
-    //     // print_tree_syntax(
-    //     //     &java_tree_gen.node_store,
-    //     //     &java_tree_gen.label_store,
-    //     //     &full_node.id(),
-    //     // );
-    //     // println!();
-    //     // stdout().flush().unwrap();
-}
+//     //     // // let mut out = String::new();
+//     //     // let mut out = IoOut {
+//     //     //     out: stdout()
+//     //     // };
+//     //     // serialize(
+//     //     //     &java_tree_gen.node_store,
+//     //     //     &java_tree_gen.label_store,
+//     //     //     &full_node.id(),
+//     //     //     &mut out,
+//     //     //     &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
+//     //     // );
+//     //     // println!();
+//     //     // print_tree_syntax(
+//     //     //     &java_tree_gen.node_store,
+//     //     //     &java_tree_gen.label_store,
+//     //     //     &full_node.id(),
+//     //     // );
+//     //     // println!();
+//     //     // stdout().flush().unwrap();
+// }
 
 use hyper_ast::{
     cyclomatic::{Mcc, MetaData},
-    filter::BloomResult,
     hashed::HashedNode,
-    nodes::RefContainer,
-    position::{
-        ExploreStructuralPositions, Scout, StructuralPosition, StructuralPositionStore,
-        TreePath as _,
-    },
     store::{
-        defaults::LabelIdentifier,
         labels::LabelStore,
         nodes::{
             legion::{HashedNodeRef, NodeIdentifier},
@@ -153,9 +138,7 @@ use hyper_ast::{
         },
         SimpleStores, TypeStore,
     },
-    tree_gen::ZippedTreeGen,
-    types::{Labeled, NodeStore as _, NodeStoreExt, Stored, Tree, Type, Typed, WithChildren},
-    utils::memusage_linux,
+    types::{Type, Typed, WithChildren},
 };
 use hyper_ast_gen_ts_java::legion_with_refs::{
     print_tree_ids, print_tree_syntax, print_tree_syntax_with_ids, JavaTreeGen,
@@ -164,8 +147,8 @@ use hyper_ast_gen_ts_java::legion_with_refs::{
 // static CASE_1: &'static str = "class A{}";
 // static CASE_2: &'static str = "class B{}";
 
-static CASE_1: &'static str = "class A{interface B{}}"; // 0.3.1.3.1 // 0.3.1
-static CASE_2: &'static str = "class A{}";
+// static CASE_1: &'static str = "class A{interface B{}}"; // 0.3.1.3.1 // 0.3.1
+// static CASE_2: &'static str = "class A{}";
 
 // static CASE_1: &'static str = "class A{} interface B{}";
 // static CASE_2: &'static str = "interface B{} class A{}";
@@ -255,7 +238,7 @@ fn main() {
         .node_store
         .resolve(full_node1.local.compressed_node)
         .get_type());
-    dbg!(Mcc::retrieve(
+    dbg!(&Mcc::retrieve(
         &java_tree_gen
             .stores
             .node_store
@@ -279,8 +262,8 @@ fn main() {
                 mappings,
             );
             let ZsMatcher {
-                src_arena,
-                dst_arena,
+                src_arena: _,
+                dst_arena: _,
                 mappings: ms,
                 ..
             } = mapper;
@@ -354,7 +337,8 @@ fn main() {
         //         .map(|id: u16| dst_arena.original(&id))
         //         .collect::<Vec<_>>()
         // );
-        let dst_arena = bfs_wrapper::SimpleBfsMapper::from(&java_tree_gen.stores.node_store, &dst_arena);
+        let dst_arena =
+            bfs_wrapper::SimpleBfsMapper::from(&java_tree_gen.stores.node_store, &dst_arena);
         // println!("{:?} {:?}", dst_arena.root(), dst);
         // println!("{:?}", dst_arena);
         // println!(

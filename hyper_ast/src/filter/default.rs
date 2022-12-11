@@ -7,7 +7,7 @@ use std::{
 use super::pearson_hashing::T;
 
 pub fn hash16<T: Borrow<[u8]>>(x0: usize, x: T) -> u16 {
-    let mut ret = T[x0] as u16;
+    let ret = T[x0] as u16;
     let v = x.borrow();
     let mut hasher = DefaultHasher::new();
     v.hash(&mut hasher);
@@ -15,7 +15,7 @@ pub fn hash16<T: Borrow<[u8]>>(x0: usize, x: T) -> u16 {
 }
 
 pub fn hash16_mod<T: Borrow<[u8]>, const MOD: u16>(x0: usize, x: T) -> u16 {
-    let mut ret = T[x0] as u16;
+    let ret = T[x0] as u16;
     let v = x.borrow();
     let mut hasher = DefaultHasher::new();
     v.hash(&mut hasher);
@@ -27,7 +27,7 @@ pub struct Pearson<const MOD: usize> {
     acc: u8,
 }
 
-pub trait VaryHasher<R> : Clone {
+pub trait VaryHasher<R>: Clone {
     const MOD: usize;
     fn new(init: usize) -> Self;
     fn finish(&self) -> R;

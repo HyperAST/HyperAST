@@ -18,10 +18,10 @@ use hyper_ast_gen_ts_java::{
 use tuples::CombinConcat;
 
 use crate::{
-    git::{BasicGitObject, NamedObject, ObjectType, TypedObject, UniqueObject},
+    git::BasicGitObject,
     java::JavaAcc,
     preprocessed::{IsSkippedAna, PreProcessedRepository},
-    Accumulator, Processor, SimpleStores, MAX_REFS,
+    Processor, SimpleStores, MAX_REFS,
 };
 
 pub(crate) fn prepare_dir_exploration(tree: git2::Tree) -> Vec<BasicGitObject> {
@@ -32,11 +32,11 @@ pub(crate) fn prepare_dir_exploration(tree: git2::Tree) -> Vec<BasicGitObject> {
         .collect()
 }
 
-pub(crate) struct JavaProcessor<'repo, 'prepro, 'd, 'c, Acc> {
+pub struct JavaProcessor<'repo, 'prepro, 'd, 'c, Acc> {
     repository: &'repo Repository,
     prepro: &'prepro mut PreProcessedRepository,
     stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
-    dir_path: &'d mut Peekable<Components<'c>>,
+    pub dir_path: &'d mut Peekable<Components<'c>>,
 }
 
 impl<'repo, 'b, 'd, 'c, Acc: From<String>> JavaProcessor<'repo, 'b, 'd, 'c, Acc> {
@@ -133,10 +133,7 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
     }
 }
 
-fn make(
-    acc: JavaAcc,
-    stores: &mut SimpleStores,
-) -> hyper_ast_gen_ts_java::legion_with_refs::Local {
+fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legion_with_refs::Local {
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
 
@@ -317,7 +314,11 @@ fn compress(
 }
 
 // TODO try to separate processing from caching from git
+#[cfg(test)]
+#[allow(unused)]
 mod experiments {
+    use crate::{git::{NamedObject, ObjectType, TypedObject, UniqueObject}, Accumulator};
+
     use super::*;
 
     pub(crate) struct GitProcessorMiddleWare<'repo, 'prepro, 'd, 'c> {

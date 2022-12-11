@@ -8,7 +8,7 @@ use crate::decompressed_tree_store::{
     SimpleZsTree as ZsTree,
 };
 use crate::matchers::mapping_store::{DefaultMappingStore, MappingStore};
-use hyper_ast::types::{LabelStore, Labeled, NodeStore, SlicedLabel, Tree, Typed, WithHashs};
+use hyper_ast::types::{LabelStore, Labeled, NodeStore, SlicedLabel, Tree, Typed};
 
 pub struct ZsMatcher<
     'a,
@@ -82,7 +82,13 @@ where
         dst: IdC,
         mappings: DefaultMappingStore<IdD>,
     ) -> ZsMatcher<'a, ZsTree<IdC, IdD>, IdD, IdC, S, LS> {
-        let mut matcher = ZsMatcher::<'a, ZsTree<IdC, IdD>, IdD, IdC, S, LS>::make(compressed_node_store, label_store, src, dst, mappings);
+        let mut matcher = ZsMatcher::<'a, ZsTree<IdC, IdD>, IdD, IdC, S, LS>::make(
+            compressed_node_store,
+            label_store,
+            src,
+            dst,
+            mappings,
+        );
         ZsMatcher::execute(&mut matcher);
         matcher
     }
@@ -275,7 +281,7 @@ where
             // TODO find a way to repeat at compile time
             //format!("{empty:#>width$}", empty = "", width = 3-1);
             //"#".repeat(3 - 1)
-            
+
             let l1 = {
                 let mut tmp = "".to_string();
                 tmp.push_str(S);
@@ -361,7 +367,7 @@ mod str_distance_patched {
                 return 1.0;
             }
             if std::cmp::min(len_a, len_b) <= self.q {
-                return if a.eq(b) {0.} else {1.}
+                return if a.eq(b) { 0. } else { 1. };
             }
             (self.distance(a, b) as f32 / (len_a + len_b - 2 * self.q + 2) as f32) as f64
         }
@@ -412,11 +418,9 @@ mod tests {
     use crate::decompressed_tree_store::SimpleZsTree;
 
     use crate::matchers::mapping_store::VecStore;
-    use crate::tree::simple_tree::Tree;
     use crate::{
-        decompressed_tree_store::Initializable,
-        tests::examples::example_zs_paper,
-        tree::simple_tree::{vpair_to_stores, TreeRef},
+        decompressed_tree_store::Initializable, tests::examples::example_zs_paper,
+        tree::simple_tree::vpair_to_stores,
     };
 
     #[test]

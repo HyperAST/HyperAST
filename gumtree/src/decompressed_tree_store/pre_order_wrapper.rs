@@ -8,7 +8,7 @@ use num_traits::{cast, zero, PrimInt, ToPrimitive, Zero};
 use crate::decompressed_tree_store::{
     DecompressedTreeStore, PostOrder, ShallowDecompressedTreeStore,
 };
-use hyper_ast::types::{NodeStore, Tree, Typed, WithChildren, WithSerialization};
+use hyper_ast::types::{NodeStore, Typed, WithChildren, WithSerialization};
 
 use super::{CompletePostOrder, SimpleZsTree};
 

@@ -1,13 +1,14 @@
 pub mod parser;
 
-use std::hash::Hash;
+// use std::hash::Hash;
 
 use crate::{
-    hashed::{inner_node_hash, NodeHashs, SyntaxNodeHashs},
-    nodes::{SimpleNode1, Space},
-    types::Node,
-    utils::{self, clamp_u64_to_u32},
+    hashed::NodeHashs,
+    // hashed::{inner_node_hash, SyntaxNodeHashs},
+    nodes::Space,
+    // utils::{self, clamp_u64_to_u32},
 };
+// use crate::nodes::SimpleNode1;
 
 use self::parser::{Node as _, TreeCursor as _};
 
@@ -207,7 +208,7 @@ where
     Self::Global: TotalBytesGlobalData,
 {
     // # results
-    type Node1;
+    // type Node1;
     type Stores;
     // # source
     type Text: ?Sized;
@@ -311,19 +312,19 @@ pub(crate) fn things_after_last_lb<'b>(lb: &[u8], spaces: &'b [u8]) -> Option<&'
         .and_then(|i| Some(&spaces[spaces.len() - i - 1..]))
 }
 
-pub fn hash_for_node<T: Hash, U>(
-    hashs: &SyntaxNodeHashs<u32>,
-    size: u32,
-    node: &SimpleNode1<U, T>,
-) -> SyntaxNodeHashs<u32> {
-    let hashed_kind = clamp_u64_to_u32(&utils::hash(&node.kind));
-    let hashed_label = clamp_u64_to_u32(&utils::hash(&node.label));
-    SyntaxNodeHashs {
-        structt: inner_node_hash(hashed_kind, 0, size, hashs.structt),
-        label: inner_node_hash(hashed_kind, hashed_label, size, hashs.label),
-        syntax: inner_node_hash(hashed_kind, hashed_label, size, hashs.syntax),
-    }
-}
+// pub fn hash_for_node<T: Hash, U>(
+//     hashs: &SyntaxNodeHashs<u32>,
+//     size: u32,
+//     node: &SimpleNode1<U, T>,
+// ) -> SyntaxNodeHashs<u32> {
+//     let hashed_kind = clamp_u64_to_u32(&utils::hash(&node.kind));
+//     let hashed_label = clamp_u64_to_u32(&utils::hash(&node.label));
+//     SyntaxNodeHashs {
+//         structt: inner_node_hash(hashed_kind, 0, size, hashs.structt),
+//         label: inner_node_hash(hashed_kind, hashed_label, size, hashs.label),
+//         syntax: inner_node_hash(hashed_kind, hashed_label, size, hashs.syntax),
+//     }
+// }
 
 pub fn compute_indentation<'a>(
     line_break: &Vec<u8>,
@@ -399,7 +400,7 @@ pub fn get_spacing(
     padding_start: usize,
     pos: usize,
     text: &[u8],
-    parent_indentation: &Spaces,
+    _parent_indentation: &Spaces,
 ) -> Option<Vec<u8>> {
     if padding_start != pos {
         let spaces = &text[padding_start..pos];
@@ -426,7 +427,7 @@ pub fn try_get_spacing(
     padding_start: usize,
     pos: usize,
     text: &[u8],
-    parent_indentation: &Spaces,
+    _parent_indentation: &Spaces,
 ) -> Option<Vec<u8>> {
     // ) -> Option<Spaces> {
     if padding_start != pos {

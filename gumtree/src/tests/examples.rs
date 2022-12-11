@@ -104,7 +104,8 @@ pub(crate) fn example_gumtree() -> (ST<u8>, ST<u8>) {
     (src, dst)
 }
 
-pub(crate) fn example_gumtree_ambiguous() -> (ST<u8>, ST<u8>) {
+#[allow(unused)]
+pub fn example_gumtree_ambiguous() -> (ST<u8>, ST<u8>) {
     let src = tree!(
         0,"a"; [
             tree!(0, "e"; [
@@ -262,7 +263,6 @@ pub(crate) fn example_eq_simple_class_rename() -> (ST<u8>, ST<u8>) {
     ]);
     (src, dst)
 }
-
 
 pub(crate) fn example_very_simple_post_order() -> (ST<u8>, ST<u8>) {
     let src = tree!(

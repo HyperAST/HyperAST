@@ -173,6 +173,7 @@ impl<'a> IterMavenModules2<'a> {
 #[derive(Debug, Clone)]
 pub struct MD {
     pub(crate) metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
+    #[allow(unused)] // TODO needed for scalable module level reference analysis
     pub(crate) ana: MavenPartialAnalysis,
 }
 
@@ -340,11 +341,11 @@ pub struct IterMavenModules<'a, T: TreePath<NodeIdentifier>> {
     stack: Vec<(NodeIdentifier, usize, Option<Vec<NodeIdentifier>>)>,
 }
 
-impl<'a, T: TreePath<NodeIdentifier>> Debug for IterMavenModules<'a, T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        todo!()
-    }
-}
+// impl<'a, T: TreePath<NodeIdentifier>> Debug for IterMavenModules<'a, T> {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         todo!()
+//     }
+// }
 
 impl<'a, T: TreePath<NodeIdentifier> + Debug + Clone> Iterator for IterMavenModules<'a, T> {
     type Item = T;

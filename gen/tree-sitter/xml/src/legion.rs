@@ -9,7 +9,7 @@ use hyper_ast::{
     full::FullNode,
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, NodeHashs, SyntaxNodeHashs},
     // impact::{element::RefsEnum, elements::*, partial_analysis::PartialAnalysis},
-    nodes::{self, IoOut, SimpleNode1, Space},
+    nodes::{self, IoOut, Space},
     store::{labels::LabelStore, nodes::legion::PendingInsert, SimpleStores},
     store::{
         nodes::legion::{compo, NodeIdentifier, CS},
@@ -22,6 +22,7 @@ use hyper_ast::{
     },
     types::{LabelStore as _, Type},
 };
+// use hyper_ast::nodes::SimpleNode1;
 
 pub type LabelIdentifier = hyper_ast::store::labels::DefaultLabelIdentifier;
 
@@ -127,7 +128,7 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
 }
 
 impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
-    type Node1 = SimpleNode1<NodeIdentifier, String>;
+    // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores;
     type Text = [u8];
     type Node<'b> = TNode<'b>;

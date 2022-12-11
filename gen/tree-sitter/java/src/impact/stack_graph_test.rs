@@ -1,12 +1,12 @@
 use stack_graphs::graph::{NodeID, StackGraph};
 
 mod types {
-    use stack_graphs::arena::Handle;
-    use stack_graphs::graph::{File as _File, Node as _Node, Symbol as _Symbol};
+    // use stack_graphs::arena::Handle;
+    // use stack_graphs::graph::{File as _File, Node as _Node, Symbol as _Symbol};
 
-    pub type File = Handle<_File>;
-    pub type Node = Handle<_Node>;
-    pub type Symbol = Handle<_Symbol>;
+    // pub type File = Handle<_File>;
+    // pub type Node = Handle<_Node>;
+    // pub type Symbol = Handle<_Symbol>;
 }
 
 #[test]

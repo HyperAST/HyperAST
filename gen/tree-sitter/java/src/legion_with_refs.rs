@@ -4,7 +4,6 @@ use std::{
     fmt::{Debug, Display},
     hash::Hash,
     io::stdout,
-    ops::Deref,
     vec,
 };
 
@@ -15,25 +14,23 @@ use hyper_ast::{
     nodes::IoOut,
     store::{
         labels::LabelStore,
-        nodes::legion::{CSStaticCount, HashedNodeRef, PendingInsert, CS0},
+        nodes::legion::{HashedNodeRef, PendingInsert},
     },
     tree_gen::{BasicGlobalData, GlobalData, SpacedGlobalData, TextedGlobalData, TreeGen},
-    types::{self, HashKind, NodeStoreExt, WithHashs},
-    utils::{self, clamp_u64_to_u32},
+    types::{self, NodeStoreExt, WithHashs},
+    utils::{self},
 };
 use legion::{
-    storage::{Archetype, Component},
-    world::{ComponentError, EntityLocation, EntryRef},
+    world::{EntryRef},
 };
-use num::ToPrimitive;
-use string_interner::{DefaultHashBuilder, DefaultSymbol};
+use string_interner::{DefaultSymbol};
 use tuples::CombinConcat;
 
 use hyper_ast::{
     filter::BF,
     filter::{Bloom, BloomSize},
     hashed::{self, NodeHashs, SyntaxNodeHashs, SyntaxNodeHashsKinds},
-    nodes::{self, CompressedNode, HashSize, SimpleNode1, Space},
+    nodes::{self, Space},
     store::{
         nodes::legion::{compo, CS},
         nodes::DefaultNodeStore as NodeStore,
@@ -52,6 +49,7 @@ use hyper_ast::{
         Typed,
     },
 };
+// use hyper_ast::nodes::SimpleNode1;
 
 use crate::impact::partial_analysis::PartialAnalysis;
 
@@ -224,7 +222,7 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
 }
 
 impl<'stores, 'cache> ZippedTreeGen for JavaTreeGen<'stores, 'cache> {
-    type Node1 = SimpleNode1<NodeIdentifier, String>;
+    // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores;
     type Text = [u8];
     type Node<'b> = TNode<'b>;
@@ -306,7 +304,6 @@ impl<'stores, 'cache> ZippedTreeGen for JavaTreeGen<'stores, 'cache> {
         text: &[u8],
         acc: <Self as TreeGen>::Acc,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
-        let node_store = &mut self.stores.node_store;
         let spacing = get_spacing(
             acc.padding_start,
             acc.start_byte,

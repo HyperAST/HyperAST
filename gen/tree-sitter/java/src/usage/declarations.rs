@@ -2,7 +2,7 @@ use core::fmt;
 use std::{fmt::Debug, ops::AddAssign};
 
 use hyper_ast::{
-    position::{Scout, StructuralPosition, TreePath},
+    position::{StructuralPosition, TreePath},
     store::{defaults::NodeIdentifier, SimpleStores},
     types::{Tree, Type, Typed, WithChildren},
 };
@@ -122,13 +122,11 @@ impl<'a, T: TreePath<NodeIdentifier> + Clone + Debug> Iterator for IterDeclarati
                     assert!(b.has_children(), "{:?}", t);
                     self.path.check(&self.stores).unwrap();
                     return Some(self.path.clone());
-                } else if t == Type::TypeParameter
-                {
+                } else if t == Type::TypeParameter {
                     assert!(b.has_children(), "{:?}", t);
                     self.path.check(&self.stores).unwrap();
                     return Some(self.path.clone());
-                } else if t == Type::ClassBody
-                {
+                } else if t == Type::ClassBody {
                     let mut p = self.path.clone();
                     p.pop();
                     let x = p.node().unwrap();

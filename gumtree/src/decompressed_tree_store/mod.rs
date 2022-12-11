@@ -1,11 +1,9 @@
-use std::{fmt::Debug, marker::PhantomData};
-
 /// different decompressed tree layouts optimized for different traversals and exposing different features.
 /// Here decomressed means that nodes are not shared ie. they only have one parent.
 use num_traits::PrimInt;
 
 use crate::tree::tree_path::CompressedTreePath;
-use hyper_ast::types::{NodeStore, Tree, WithChildren};
+use hyper_ast::types::{NodeStore, WithChildren};
 
 // pub mod breath_first;
 pub mod bfs_wrapper;
@@ -110,11 +108,10 @@ pub trait ContiguousDescendants<'a, IdC, IdD>: DecompressedTreeStore<'a, IdC, Id
 pub trait DecompressedWithParent<'a, IdC, IdD: Clone> {
     fn has_parent(&self, id: &IdD) -> bool;
     fn parent(&self, id: &IdD) -> Option<IdD>;
-    type PIt<'b>: 'b + Iterator<Item=IdD> where Self: 'b;
-    fn parents(
-        &self,
-        id: IdD,
-    ) -> Self::PIt<'_>;
+    type PIt<'b>: 'b + Iterator<Item = IdD>
+    where
+        Self: 'b;
+    fn parents(&self, id: IdD) -> Self::PIt<'_>;
     // fn norm_path(
     //     &self,
     //     id: IdD,

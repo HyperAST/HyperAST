@@ -1,5 +1,3 @@
-use crate::tests::examples::example_eq_simple_class_rename;
-use crate::tree::simple_tree::Tree;
 use crate::{
     decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore, SimpleZsTree},
     matchers::{
@@ -7,9 +5,9 @@ use crate::{
         optimal::zs::ZsMatcher,
     },
     tests::examples::{example_gt_java_code, example_gt_slides, example_zs_paper},
-    tree::simple_tree::{vpair_to_stores, DisplayTree, SimpleTree, TreeRef, LS, NS},
+    tree::simple_tree::{vpair_to_stores, DisplayTree},
 };
-use hyper_ast::types::{LabelStore, Labeled, NodeStore, Typed};
+use hyper_ast::types::LabelStore;
 
 #[test]
 fn test_zs_paper_for_initial_layout() {
@@ -47,16 +45,9 @@ fn test_with_custom_example() {
     let src = &src_arena.root();
     let dst = &dst_arena.root();
     assert_eq!(6, mappings.src_to_dst.iter().filter(|x| **x != 0).count());
-    let node_to_string = |g| {
-        let n = node_store.resolve(&g);
-        let a = label_store.resolve(n.get_label()).to_owned();
-        n.get_type().to_string() + ":" + &a
-    };
     println!(
         "{}",
         mappings.display(
-            // &|src: u16| node_to_string(src_arena.original(&(src - 1))),
-            // &|dst: u16| node_to_string(dst_arena.original(&(dst - 1)))
             &|src: u16| src_arena.original(&(src - 1)).to_string(),
             &|dst: u16| dst_arena.original(&(dst - 1)).to_string()
         )

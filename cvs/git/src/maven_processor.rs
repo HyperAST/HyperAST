@@ -23,7 +23,7 @@ use crate::{
     Processor, SimpleStores,
 };
 
-pub(crate) struct MavenProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
+pub struct MavenProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
     prepro: &'b mut PreProcessedRepository,
     repository: &'a Repository,
     stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
@@ -33,7 +33,7 @@ pub(crate) struct MavenProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, 
 impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
     MavenProcessor<'a, 'b, 'c, RMS, FFWD, Acc>
 {
-    pub(crate) fn new(
+    pub fn new(
         repository: &'a Repository,
         prepro: &'b mut PreProcessedRepository,
         mut dir_path: &'c mut Peekable<Components<'c>>,
@@ -305,7 +305,7 @@ fn drain_filter_strip(v: &mut Option<Vec<PathBuf>>, name: &[u8]) -> Vec<PathBuf>
 impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
     MavenProcessor<'a, 'b, 'c, RMS, FFWD, MavenModuleAcc>
 {
-    pub(crate) fn prepare_dir_exploration<It>(tree: It) -> Vec<It::Item>
+    pub fn prepare_dir_exploration<It>(tree: It) -> Vec<It::Item>
     where
         It: Iterator,
         It::Item: NamedObject + TypedObject,

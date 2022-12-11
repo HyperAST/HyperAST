@@ -1,9 +1,7 @@
-use std::marker::PhantomData;
-
 use num_traits::{cast, one, zero, PrimInt};
 
 use crate::tree::tree_path::CompressedTreePath;
-use hyper_ast::types::{GenericItem, NodeStore, Stored, Tree, WithChildren};
+use hyper_ast::types::{NodeStore, WithChildren};
 
 use super::{DecompressedTreeStore, Initializable, Iter, ShallowDecompressedTreeStore};
 
@@ -57,7 +55,11 @@ impl<'d, IdC: Clone, IdD: PrimInt> DecompressedWithParent<'d, IdC, IdD> for Brea
         self.parent(id) != None
     }
 
-    fn position_in_parent<'b, S>(&self, _store: &'b S, c: &IdD) -> <S::R<'b> as WithChildren>::ChildIdx
+    fn position_in_parent<'b, S>(
+        &self,
+        _store: &'b S,
+        c: &IdD,
+    ) -> <S::R<'b> as WithChildren>::ChildIdx
     where
         S: NodeStore<IdC>,
         S::R<'b>: WithChildren<TreeId = IdC>,
@@ -68,10 +70,7 @@ impl<'d, IdC: Clone, IdD: PrimInt> DecompressedWithParent<'d, IdC, IdD> for Brea
 
     type PIt<'b>=IterParents<'b, IdD> where IdD: 'b, IdC:'b;
 
-    fn parents(
-        &self,
-        id: IdD,
-    ) -> Self::PIt<'_> {
+    fn parents(&self, id: IdD) -> Self::PIt<'_> {
         IterParents {
             id,
             id_parent: &self.id_parent,
@@ -79,26 +78,23 @@ impl<'d, IdC: Clone, IdD: PrimInt> DecompressedWithParent<'d, IdC, IdD> for Brea
     }
 }
 
-pub struct IterParents<'a,IdD> {
+pub struct IterParents<'a, IdD> {
     id: IdD,
     id_parent: &'a Vec<IdD>,
 }
 
-impl<'a, IdD: PrimInt> Iterator
-    for IterParents<'a, IdD>
-{
+impl<'a, IdD: PrimInt> Iterator for IterParents<'a, IdD> {
     type Item = IdD;
 
     fn next(&mut self) -> Option<Self::Item> {
         let r = self.id_parent[self.id.to_usize().unwrap()];
         if r == num_traits::zero() {
-            return None
+            return None;
         }
         self.id = r.clone();
         Some(r)
     }
 }
-
 
 impl<'d, IdC: Clone, IdD: PrimInt> Initializable<'d, IdC, IdD> for BreathFirst<IdC, IdD> {
     fn new<
@@ -124,12 +120,12 @@ impl<'d, IdC: Clone, IdD: PrimInt> Initializable<'d, IdC, IdD> for BreathFirst<I
         while i < id_compressed.len() {
             let node = store.resolve(&id_compressed[i]);
             let l = node.try_get_children();
-            id_first_child.push(if l.map_or(0,|x|x.len()) > 0 {
+            id_first_child.push(if l.map_or(0, |x| x.len()) > 0 {
                 cast(id_compressed.len()).unwrap()
             } else {
                 num_traits::zero()
             });
-            if l.map_or(0,|x|x.len()) == 0 {
+            if l.map_or(0, |x| x.len()) == 0 {
                 leaf_count = leaf_count + one();
             }
             if let Some(l) = l {
@@ -168,7 +164,7 @@ impl<'a, IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<'a, IdC, IdD>
         zero()
     }
 
-    fn child<'b,S>(&self, store: &'b S, x: &IdD, p: &[<S::R<'b> as WithChildren>::ChildIdx]) -> IdD
+    fn child<'b, S>(&self, store: &'b S, x: &IdD, p: &[<S::R<'b> as WithChildren>::ChildIdx]) -> IdD
     where
         S: NodeStore<IdC>,
         // for<'a> <<S as NodeStore2<IdC>>::R as GenericItem<'a>>::Item: WithChildren<TreeId = IdC>,
@@ -192,7 +188,7 @@ impl<'a, IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<'a, IdC, IdD>
         r
     }
 
-    fn children<'b,S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
     where
         S: 'b + NodeStore<IdC>,
         // for<'a> <<S as NodeStore2<IdC>>::R as GenericItem<'a>>::Item: WithChildren<TreeId = IdC>,
@@ -213,7 +209,7 @@ impl<'a, IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<'a, IdC, IdD>
 }
 
 impl<'a, IdC: Clone, IdD: PrimInt> DecompressedTreeStore<'a, IdC, IdD> for BreathFirst<IdC, IdD> {
-    fn descendants<'b,S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    fn descendants<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
     where
         S: 'b + NodeStore<IdC>,
         // for<'b> <<S as NodeStore2<IdC>>::R as GenericItem<'b>>::Item: WithChildren<TreeId = IdC>,
@@ -234,7 +230,7 @@ impl<'a, IdC: Clone, IdD: PrimInt> DecompressedTreeStore<'a, IdC, IdD> for Breat
         id
     }
 
-    fn descendants_count<'b,S>(&self, store: &'b S, x: &IdD) -> usize
+    fn descendants_count<'b, S>(&self, store: &'b S, x: &IdD) -> usize
     where
         S: 'b + NodeStore<IdC>,
         // for<'b> <<S as NodeStore2<IdC>>::R as GenericItem<'b>>::Item: WithChildren<TreeId = IdC>,

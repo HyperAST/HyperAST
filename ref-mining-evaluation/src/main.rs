@@ -13,9 +13,9 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
+use hyper_ast_cvs_git::git::{fetch_repository, read_position, read_position_floating_lines};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use relations::{Info, Perfs};
-use hyper_ast_cvs_git::git::{fetch_repository, read_position, read_position_floating_lines};
 use serde::{Deserialize, Serialize};
 use stats::CompStats;
 use termion::color;
@@ -98,7 +98,7 @@ fn main() {
         Commands::Stats { file, .. } => {
             let relations =
                 handle_file_with_perfs(File::open(file).expect("should be a file")).unwrap();
-            // println!("{:#?}", relations);
+            println!("{:#?}", relations);
             // println!(
             //     "mean # of references: {}",
             //     relations.iter().map(|x| x.refs.len()).sum::<usize>() / relations.len()

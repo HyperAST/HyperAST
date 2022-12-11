@@ -4,6 +4,14 @@ use hyper_ast_cvs_git::preprocessed::PreProcessedRepository;
 use std::{env, io::Write, path::PathBuf, str::FromStr};
 
 use hyper_ast_benchmark_diffs::window_combination::windowed_commits_compare;
+
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug"))
         .format(|buf, record| {
@@ -77,7 +85,7 @@ fn issue_mappings_pomxml_spoon_pom_2() {
             "76ffd3353a535b0ce6edf0bf961a05236a40d3a1",
             "74ee133f4fe25d8606e0775ade577cd8e8b5cbfd",
         ),
-        "spoon-pom",// really ?
+        "spoon-pom",
         None,
     );
 }

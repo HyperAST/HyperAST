@@ -1,7 +1,6 @@
 use std::{
     fmt::{Debug, Display},
     hash::Hash,
-    ops::Index,
 };
 
 use hyper_ast::compat::HashMap;
@@ -29,10 +28,10 @@ pub trait MonoMappingStore: MappingStore {
 pub trait MultiMappingStore: MappingStore {
     fn get_srcs(&self, dst: &Self::Ele) -> &[Self::Ele];
     fn get_dsts(&self, src: &Self::Ele) -> &[Self::Ele];
-    fn allMappedSrcs(&self) -> Iter<Self::Ele>;
-    fn allMappedDsts(&self) -> Iter<Self::Ele>;
-    fn isSrcUnique(&self, dst: &Self::Ele) -> bool;
-    fn isDstUnique(&self, src: &Self::Ele) -> bool;
+    fn all_mapped_srcs(&self) -> Iter<Self::Ele>;
+    fn all_mapped_dsts(&self) -> Iter<Self::Ele>;
+    fn is_src_unique(&self, dst: &Self::Ele) -> bool;
+    fn is_dst_unique(&self, src: &Self::Ele) -> bool;
 }
 pub type DefaultMultiMappingStore<T> = MultiVecStore<T>;
 
@@ -61,7 +60,7 @@ impl<T: PrimInt + Debug> VecStore<T> {
             .map(|(src, dst)| (cast::<_, T>(src).unwrap(), *dst - one()))
     }
 
-    pub(crate) fn link_if_both_unmapped(&mut self, t1: T, t2: T) -> bool {
+    pub fn link_if_both_unmapped(&mut self, t1: T, t2: T) -> bool {
         if self.is_src(&t1) && self.is_dst(&t2) {
             self.link(t1, t2);
             true
@@ -290,23 +289,23 @@ impl<T: PrimInt> MultiMappingStore for MultiVecStore<T> {
             .unwrap_or(&[])
     }
 
-    fn allMappedSrcs(&self) -> Iter<Self::Ele> {
+    fn all_mapped_srcs(&self) -> Iter<Self::Ele> {
         Iter {
             v: self.src_to_dsts.iter().enumerate(),
         }
     }
 
-    fn allMappedDsts(&self) -> Iter<Self::Ele> {
+    fn all_mapped_dsts(&self) -> Iter<Self::Ele> {
         Iter {
             v: self.dst_to_srcs.iter().enumerate(),
         }
     }
 
-    fn isSrcUnique(&self, src: &Self::Ele) -> bool {
+    fn is_src_unique(&self, src: &Self::Ele) -> bool {
         self.get_dsts(src).len() == 1
     }
 
-    fn isDstUnique(&self, dst: &Self::Ele) -> bool {
+    fn is_dst_unique(&self, dst: &Self::Ele) -> bool {
         self.get_srcs(dst).len() == 1
     }
 }
@@ -427,7 +426,7 @@ impl<T: PrimInt + Debug + Hash> HashStore<T> {
         self.src_to_dst.iter().map(|(src, dst)| (*src, *dst))
     }
 
-    pub(crate) fn link_if_both_unmapped(&mut self, t1: T, t2: T) -> bool {
+    pub fn link_if_both_unmapped(&mut self, t1: T, t2: T) -> bool {
         if self.is_src(&t1) && self.is_dst(&t2) {
             self.link(t1, t2);
             true
@@ -477,7 +476,7 @@ impl<T: PrimInt + Debug + Hash> MappingStore for HashStore<T> {
         self.dst_to_src.contains_key(&dst)
     }
 
-    fn topit(&mut self, left: usize, right: usize) {}
+    fn topit(&mut self, _left: usize, _right: usize) {}
 
     fn has(&self, src: &Self::Ele, dst: &Self::Ele) -> bool {
         self.src_to_dst.contains_key(&src) && self.dst_to_src.contains_key(&dst)

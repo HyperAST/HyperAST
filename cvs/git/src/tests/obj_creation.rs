@@ -1,5 +1,5 @@
-
 /// should find new JLSViolation(reason) as a reference to JLSViolation class
+#[allow(unused)]
 static CASE_29: &'static str = r#"package spoon;
 
 import spoon.compiler.Environment;

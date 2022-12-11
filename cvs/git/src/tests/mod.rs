@@ -1,5 +1,6 @@
 pub mod direct_type_ref;
 pub mod obj_creation;
+#[cfg(test)]
 pub mod extends_package_local;
 
 use crate::{git::fetch_github_repository, preprocessed::PreProcessedRepository};
@@ -36,9 +37,9 @@ fn example_main() {
 
 pub fn find_refs_from_canonical_type(
     preprocessed: &mut PreProcessedRepository,
-    before: &str,
-    after: &str,
-    dir_path: &str,
+    _before: &str,
+    _after: &str,
+    _dir_path: &str,
 ) {
     {
         let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
@@ -69,19 +70,19 @@ pub fn find_refs_from_canonical_type(
             scoped!(scoped!(scoped!(i, "java"), "nio"), "file"),
             "InvalidPathException"
         );
+        let _ = i;
         // let i = scoped!(scoped!(scoped!(scoped!(i,"java"),"nio"),"file"),"Path");
         preprocessed.print_refs(&ana);
 
         // println!("{}", java_tree_gen.stores.label_store);
 
-        let repository = fetch_github_repository(preprocessed.name());
-        let root = preprocessed
-            .commits
-            .get(&repository.refname_to_id(before).unwrap())
-            .unwrap()
-            .ast_root;
-
-        todo!()// preprocessed.print_matched_references(&mut ana, i, root);
+        // let repository = fetch_github_repository(preprocessed.name());
+        // let root = preprocessed
+        //     .commits
+        //     .get(&repository.refname_to_id(before).unwrap())
+        //     .unwrap()
+        //     .ast_root;
+        // preprocessed.print_matched_references(&mut ana, i, root);
     }
 
     let mu = memusage_linux();

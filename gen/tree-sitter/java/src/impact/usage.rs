@@ -1,26 +1,20 @@
 use core::fmt;
-use std::{
-    fmt::Debug,
-    io::stdout,
-    ops::{AddAssign, Deref},
-};
 
 use hyper_ast::{
     filter::{BloomResult, BloomSize},
-    nodes::{print_tree_syntax, RefContainer},
+    nodes::{RefContainer},
     position::{
-        extract_position, ExploreStructuralPositions, Scout, SpHandle, StructuralPosition,
+         ExploreStructuralPositions, Scout, SpHandle,
         StructuralPositionStore, TreePath,
     },
     store::defaults::LabelIdentifier,
     store::nodes::legion::HashedNodeRef,
     store::{
-        defaults::{LabelValue, NodeIdentifier},
+        defaults::{NodeIdentifier},
         SimpleStores,
     },
     types::{LabelStore, Labeled, Tree, Type, Typed, WithChildren},
 };
-use num::ToPrimitive;
 // use hyper_ast_core::tree::tree::{WithChildren, Tree, Labeled};
 
 use crate::{
@@ -30,8 +24,6 @@ use crate::{
     },
     legion_with_refs::{
         self,
-        // HashedNodeRef,
-        JavaTreeGen,
     },
 };
 
@@ -751,7 +743,9 @@ impl<'a> RefsFinder<'a> {
         }
     }
 
-    fn exact_match_this_super(
+    /// WIP
+    /// TODO evaluate validity
+    pub fn exact_match_this_super(
         &mut self,
         b: &HashedNodeRef,
         o: usize,
@@ -849,7 +843,7 @@ impl<'a> RefsFinder<'a> {
     fn exact_match_resource(
         &mut self,
         b: &HashedNodeRef,
-        o: usize,
+        _o: usize,
         i: &LabelIdentifier,
         mut scout: &mut Scout,
     ) {
@@ -880,35 +874,6 @@ impl<'a> RefsFinder<'a> {
                 return;
             }
             j += 1;
-        }
-    }
-
-    fn exact_match_catch_type(
-        &mut self,
-        b: &HashedNodeRef,
-        o: usize,
-        i: &LabelIdentifier,
-        scout: &mut Scout,
-    ) {
-        assert!(b.has_children());
-        // TODO check for type union eg. A|B|C
-        let x = b.get_child(&0);
-        let b = self.stores.node_store.resolve(x);
-        let t = b.get_type();
-        // scout.goto(x, 0);
-        if t == Type::TypeIdentifier {
-            if let Some(l) = b.try_get_label() {
-                if l == i {
-                    log::debug!("success 7");
-                    // scout.up(self.sp_store);
-                    self.successful_match(scout); // TODO
-                }
-            } else {
-                todo!()
-            }
-        } else if is_individually_matched(t) || is_never_reference(t) {
-        } else {
-            missing_rule!("exact_match_catch_type missing {:?}", t)
         }
     }
 
@@ -961,7 +926,7 @@ impl<'a> RefsFinder<'a> {
     fn exact_match_annotated_type(
         &mut self,
         b: &HashedNodeRef,
-        o: usize,
+        _o: usize,
         i: &LabelIdentifier,
         scout: &mut Scout,
     ) {
@@ -994,7 +959,7 @@ impl<'a> RefsFinder<'a> {
     fn exact_match_class_literal(
         &mut self,
         b: &HashedNodeRef,
-        o: usize,
+        _o: usize,
         i: &LabelIdentifier,
         scout: &mut Scout,
     ) {
@@ -1241,7 +1206,7 @@ impl<'a> RefsFinder<'a> {
     fn exact_match_extend_impl_things(
         &mut self,
         b: &HashedNodeRef,
-        o: RefPtr,
+        _o: RefPtr,
         i: &LabelIdentifier,
         scout: &mut Scout,
     ) {
@@ -1348,7 +1313,7 @@ impl<'a> RefsFinder<'a> {
     fn exact_match_method_declaration(
         &mut self,
         b: &HashedNodeRef,
-        o: RefPtr,
+        _o: RefPtr,
         i: &LabelIdentifier,
         scout: &mut Scout,
     ) {
@@ -1390,7 +1355,7 @@ impl<'a> RefsFinder<'a> {
     fn exact_match_method_invocation(
         &mut self,
         b: &HashedNodeRef,
-        o: RefPtr,
+        _o: RefPtr,
         i: &LabelIdentifier,
         scout: &mut Scout,
     ) {
@@ -1679,7 +1644,7 @@ impl<'a> RefsFinder<'a> {
         b: &HashedNodeRef,
         o: usize,
         i: &LabelIdentifier,
-        mut scout: Scout,
+        scout: Scout,
     ) -> Option<usize> {
         assert!(b.has_children());
         let x = b.get_child_rev(&0);
@@ -1872,7 +1837,7 @@ impl<'a> RefsFinder<'a> {
         mut scout: &mut Scout,
     ) {
         assert!(b.has_children());
-        let (o_id, sup, i_id) = {
+        let (o_id, _sup, _i_id) = {
             let cs = b.get_children();
 
             (cs[0], cs.len() > 3, cs[cs.len() - 1])
@@ -1894,7 +1859,7 @@ impl<'a> RefsFinder<'a> {
                 }
             }
         } else {
-            if let Some(s) = self.is_field_access_exact_match(&b, o, i, scout.clone()) {
+            if let Some(_s) = self.is_field_access_exact_match(&b, o, i, scout.clone()) {
                 // *scout = s;
                 self.successful_match(&mut scout);
             }
@@ -1913,7 +1878,7 @@ impl<'a> RefsFinder<'a> {
         assert!(b.has_children());
         // TODO should handle and do a test case for explicit access to the member of a parent instance eg. A.super.b
         // TODO also look at how to handle precisely this.a or super.a
-        let (o_id, sup, i_id) = {
+        let (o_id, _sup, i_id) = {
             let cs = b.get_children();
 
             (cs[0], cs.len() > 3, cs[cs.len() - 1])
@@ -2168,14 +2133,14 @@ impl<'a> RefsFinder<'a> {
     pub fn successful_match(&mut self, scout: &mut Scout) {
         self.sp_store.check(&self.stores).expect("aa");
         scout.check(&self.stores).expect("bb");
-        let r = self.sp_store.push(scout);
+        let _r = self.sp_store.push(scout);
         if let Err(e) = self.sp_store.check(&self.stores) {
             log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
             log::error!("corrupted scout: {}", e)
         }
-        let x = scout.node_always(&self.sp_store);
-        let b = self.stores.node_store.resolve(x);
-        let t = b.get_type();
+        // let x = scout.node_always(&self.sp_store);
+        // let b = self.stores.node_store.resolve(x);
+        // let t = b.get_type();
 
         log::debug!("zszz {:?}", scout.make_position(&self.sp_store, self.stores));
         // if t == Type::ScopedTypeIdentifier || t == Type::GenericType || t == Type::TypeIdentifier {
@@ -2187,7 +2152,7 @@ impl<'a> RefsFinder<'a> {
             log::debug!("abort match because of relax");
             return;
         };
-        if let Err(e) = scout.check(&self.stores) {
+        if let Err(_) = scout.check(&self.stores) {
             log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
             log::error!("corrupted scout'")
         }

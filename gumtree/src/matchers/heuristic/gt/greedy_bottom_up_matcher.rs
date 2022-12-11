@@ -2,21 +2,12 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use num_traits::{cast, one, PrimInt};
 
-use crate::decompressed_tree_store::complete_post_order::DisplayCompletePostOrder;
-use crate::decompressed_tree_store::pre_order_wrapper::{
-    DisplaySimplePreOrderMapper, SimplePreOrderMapper,
-};
-use crate::decompressed_tree_store::simple_zs_tree::DisplaySimpleZsTree;
 use crate::decompressed_tree_store::{
-    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, PostOrder,
-    PostOrderIterable, ShallowDecompressedTreeStore, SimpleZsTree,
+    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, PostOrder, SimpleZsTree,
 };
 use crate::matchers::mapping_store::MonoMappingStore;
-use crate::matchers::similarity_metrics::number_of_common_descendants;
 use crate::matchers::{
-    mapping_store::{DefaultMappingStore, MappingStore},
-    optimal::zs::ZsMatcher,
-    similarity_metrics,
+    mapping_store::DefaultMappingStore, optimal::zs::ZsMatcher, similarity_metrics,
 };
 use hyper_ast::types::{
     LabelStore, NodeStore, SlicedLabel, Tree, Typed, WithHashs, WithSerialization,

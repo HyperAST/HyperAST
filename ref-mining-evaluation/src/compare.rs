@@ -1,8 +1,4 @@
-use std::{
-    borrow::BorrowMut,
-    collections::{BTreeMap, HashMap},
-    mem::{replace, take},
-};
+use std::{collections::BTreeMap, mem::take};
 
 use crate::{
     comparisons::{Comparison, Comparisons},
@@ -21,16 +17,15 @@ pub struct Comparator {
 
 impl Default for Comparator {
     fn default() -> Self {
-        Self { intersection_left: Default::default() }
+        Self {
+            intersection_left: Default::default(),
+        }
     }
 }
 
 impl Comparator {
-
-    pub fn set_intersection_left(self, intersection_left:bool) -> Self {
-        Self {
-            intersection_left,
-        }
+    pub fn set_intersection_left(self, intersection_left: bool) -> Self {
+        Self { intersection_left }
     }
 
     pub fn compare(&self, left: Relations, right: Relations) -> Comparisons {
