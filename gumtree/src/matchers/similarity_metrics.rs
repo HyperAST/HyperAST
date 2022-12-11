@@ -1,6 +1,62 @@
+use std::ops::Range;
+
 use num_traits::{cast, PrimInt, ToPrimitive};
 
-use super::mapping_store::MonoMappingStore;
+use crate::matchers::mapping_store::MappingStore;
+
+use super::mapping_store::{MonoMappingStore, VecStore};
+
+pub struct SimilarityMeasure {
+    ncd: u32,
+    src_l: usize,
+    dst_l: usize,
+}
+
+impl SimilarityMeasure {
+    pub fn new<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
+        src: &[Id],
+        dst: &[Id],
+        mappings: &Store,
+    ) -> Self {
+        Self {
+            ncd: number_of_common_descendants(src, dst, mappings),
+            src_l: src.len(),
+            dst_l: dst.len(),
+        }
+    }
+
+    pub fn range<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
+        src: &Range<Id>,
+        dst: &Range<Id>,
+        mappings: &Store,
+    ) -> Self {
+        Self {
+            ncd: number_of_common_descendants_ranges(src, dst, mappings),
+            src_l: (src.end - src.start).to_usize().unwrap(),
+            dst_l: (dst.end - dst.start).to_usize().unwrap(),
+        }
+    }
+
+    pub fn chawathe(&self) -> f64 {
+        let max = f64::max(self.src_l as f64, self.dst_l as f64);
+        self.ncd as f64 / max
+    }
+
+    pub fn overlap(&self) -> f64 {
+        let min = f64::min(self.src_l as f64, self.dst_l as f64);
+        self.ncd as f64 / min
+    }
+
+    pub fn dice(&self) -> f64 {
+        (2.0_f64 * (self.ncd as f64)) / (self.src_l as f64 + self.dst_l as f64)
+    }
+
+    pub fn jaccard(&self) -> f64 {
+        let num = self.ncd as f64;
+        let den = self.src_l as f64 + self.dst_l as f64 - num;
+        self.ncd as f64 / den
+    }
+}
 
 pub fn chawathe_similarity<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
     src: &[Id],
@@ -39,7 +95,7 @@ pub fn jaccard_similarity<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
     num / den
 }
 
-fn number_of_common_descendants<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
+pub fn number_of_common_descendants<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
     src: &[Id],
     dst: &[Id],
     mappings: &Store,
@@ -67,5 +123,49 @@ fn number_of_common_descendants<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
 
     // println!("{}", src.len());
 
+    // assert_eq!(common, {
+    //     let s: HashSet<_, RandomState> =
+    //         HashSet::from_iter(dst.iter().map(|x| x.to_usize().unwrap()));
+    //     let mut c = 0;
+    //     for t in src {
+    //         if mappings.is_src(t) {
+    //             let m = mappings.get_dst(t).to_usize().unwrap();
+    //             if s.contains(&m.to_usize().unwrap()) {
+    //                 c += 1;
+    //             }
+    //         }
+    //     }
+    //     c
+    // });
     return common;
+}
+
+pub fn number_of_common_descendants_ranges<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
+    src: &Range<Id>,
+    dst: &Range<Id>,
+    mappings: &Store,
+) -> u32 {
+    (src.start.to_usize().unwrap()..src.end.to_usize().unwrap())
+        .into_iter()
+        .filter(|t| mappings.is_src(&cast(*t).unwrap()))
+        .filter(|t| dst.contains(&mappings.get_dst(&cast(*t).unwrap())))
+        .count()
+        .try_into()
+        .unwrap()
+}
+
+pub fn number_of_common_descendants_ranges_par(
+    src: &Range<u32>,
+    dst: &Range<u32>,
+    mappings: &VecStore<u32>,
+) -> u32 {
+    use specs::prelude::ParallelIterator;
+    use specs::rayon::prelude::IntoParallelIterator;
+    (src.start.to_usize().unwrap()..src.end.to_usize().unwrap())
+        .into_par_iter()
+        .filter(|t| mappings.is_src(&(*t).try_into().unwrap()))
+        .filter(|t| dst.contains(&mappings.get_dst(&(*t).try_into().unwrap())))
+        .count()
+        .try_into()
+        .unwrap()
 }

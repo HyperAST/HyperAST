@@ -1,7 +1,10 @@
+cargo-features = ["profile-rustflags"]
+
 [package]
 name = "hyper_ast_benchmark_diffs"
 version = "0.1.0"
 edition = "2021"
+autobins = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -11,6 +14,9 @@ hyper_ast = { path = "../hyper_ast" }
 hyper_gumtree = { path = "../gumtree" }
 hyper_ast_cvs_git = { path = "../cvs/git" }
 hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
+hyper_ast_gen_ts_xml = { path = "../gen/tree-sitter/xml" }
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.79"
 env_logger = "0.9.0"
 log = { version = "0.4.6", features = ["max_level_debug", "release_max_level_warn"] }
 
@@ -18,28 +24,44 @@ cfg-if = "1.0"
 
 comfy-table = "6.0.0"
 
+num-traits = "0.2.14"
+tuples = "=1.4.1"
+
+rayon = "1.5.2"
+hashbrown = { version = "0.13.1", features = ["rayon"]}
+byteorder = "1.4.3"
+bitvec = "0.22.3"
+md5 = "0.7.0"
+
+pprof = { version = "0.10", features = ["prost-codec","flamegraph"] }
+
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.3.2"
 
-[build-dependencies]
+# [build-dependencies]
 
 # [profile.release]
 # debug = 1
 
-# [profile.release]
+[profile.release]
 ## release optimizations
+# debug = 0
 # lto = "fat"
 # codegen-units = 1
-# rustflags = ["-C target-cpu=native"]
+rustflags = ["-C target-cpu=native"]
 # panic = "abort"
 
 [profile.test]
 opt-level = 3
-debug = false
+debug = 1
 debug-assertions = false
 overflow-checks = false
-lto = false
-panic = 'unwind'
+lto = "fat"
+panic = 'abort'
 incremental = true
-codegen-units = 16
-rpath = false
+codegen-units = 1
+rpath = true
+
+# [[bin]]
+# name = "window_combination"
+# path = "binwindow_combination.rs"

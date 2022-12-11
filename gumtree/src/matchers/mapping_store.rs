@@ -1,14 +1,17 @@
 use std::{
     fmt::{Debug, Display},
+    hash::Hash,
     ops::Index,
 };
 
+use hyper_ast::compat::HashMap;
 use num_traits::{cast, one, zero, PrimInt};
 
-pub trait MappingStore: Clone {
+pub trait MappingStore: Clone + Default {
     type Ele: Eq;
     fn topit(&mut self, left: usize, right: usize);
     fn len(&self) -> usize;
+    fn capacity(&self) -> (usize, usize);
     fn has(&self, src: &Self::Ele, dst: &Self::Ele) -> bool;
     fn link(&mut self, src: Self::Ele, dst: Self::Ele);
     fn cut(&mut self, src: Self::Ele, dst: Self::Ele);
@@ -20,6 +23,7 @@ pub type DefaultMappingStore<T> = VecStore<T>;
 pub trait MonoMappingStore: MappingStore {
     fn get_src(&self, dst: &Self::Ele) -> Self::Ele;
     fn get_dst(&self, src: &Self::Ele) -> Self::Ele;
+    fn link_if_both_unmapped(&mut self, t1: Self::Ele, t2: Self::Ele) -> bool;
 }
 
 pub trait MultiMappingStore: MappingStore {
@@ -39,14 +43,16 @@ pub struct VecStore<T> {
     pub dst_to_src: Vec<T>,
 }
 
-impl<T: PrimInt + Debug> VecStore<T> {
-    pub fn new() -> Self {
+impl<T> Default for VecStore<T> {
+    fn default() -> Self {
         Self {
-            src_to_dst: vec![zero()],
-            dst_to_src: vec![zero()],
+            src_to_dst: Default::default(),
+            dst_to_src: Default::default(),
         }
     }
+}
 
+impl<T: PrimInt + Debug> VecStore<T> {
     pub fn iter(&self) -> impl Iterator<Item = (T, T)> + '_ {
         self.src_to_dst
             .iter()
@@ -93,6 +99,10 @@ impl<T: PrimInt + Debug> MappingStore for VecStore<T> {
         self.src_to_dst.iter().filter(|x| **x != zero()).count()
     }
 
+    fn capacity(&self) -> (usize, usize) {
+        (self.src_to_dst.len(), self.dst_to_src.len())
+    }
+
     fn link(&mut self, src: T, dst: T) {
         // assert_eq!(self.src_to_dst[src.to_usize().unwrap()], zero()); // maybe too strong req
         // assert_eq!(self.dst_to_src[dst.to_usize().unwrap()], zero()); // maybe too strong req
@@ -133,6 +143,15 @@ impl<T: PrimInt + Debug> MonoMappingStore for VecStore<T> {
     fn get_dst(&self, src: &T) -> T {
         self.src_to_dst[src.to_usize().unwrap()] - one()
     }
+
+    fn link_if_both_unmapped(&mut self, t1: T, t2: T) -> bool {
+        if self.is_src(&t1) && self.is_dst(&t2) {
+            self.link(t1, t2);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 pub struct MultiVecStore<T> {
@@ -149,13 +168,28 @@ impl<T: PrimInt> Clone for MultiVecStore<T> {
     }
 }
 
+impl<T> Default for MultiVecStore<T> {
+    fn default() -> Self {
+        Self {
+            src_to_dsts: Default::default(),
+            dst_to_srcs: Default::default(),
+        }
+    }
+}
+
 impl<T: PrimInt> MappingStore for MultiVecStore<T> {
     type Ele = T;
 
     fn len(&self) -> usize {
-        self.src_to_dsts.iter().filter_map(|x| x.as_ref())
-        .map(|x|x.len())
-        .sum()
+        self.src_to_dsts
+            .iter()
+            .filter_map(|x| x.as_ref())
+            .map(|x| x.len())
+            .sum()
+    }
+
+    fn capacity(&self) -> (usize, usize) {
+        (self.src_to_dsts.len(), self.dst_to_srcs.len())
     }
 
     fn link(&mut self, src: T, dst: T) {
@@ -223,9 +257,10 @@ impl<T: PrimInt> MappingStore for MultiVecStore<T> {
         self.dst_to_srcs[dst.to_usize().unwrap()].is_some()
     }
 
-    fn topit(&mut self, left: usize, right: usize) {
-        self.src_to_dsts.resize(left, None);
-        self.dst_to_srcs.resize(right, None);
+    fn topit(&mut self, _left: usize, _right: usize) {
+        todo!();
+        // self.src_to_dsts.resize(left, None);
+        // self.dst_to_srcs.resize(right, None);
     }
 
     fn has(&self, src: &Self::Ele, dst: &Self::Ele) -> bool {
@@ -371,3 +406,99 @@ where
 //     })
 //     .for_each(|x| println!("{:?}", x))
 // };
+
+#[derive(Debug)]
+pub struct HashStore<T> {
+    pub src_to_dst: HashMap<T, T>,
+    pub dst_to_src: HashMap<T, T>,
+}
+
+impl<T> Default for HashStore<T> {
+    fn default() -> Self {
+        Self {
+            src_to_dst: Default::default(),
+            dst_to_src: Default::default(),
+        }
+    }
+}
+
+impl<T: PrimInt + Debug + Hash> HashStore<T> {
+    pub fn iter(&self) -> impl Iterator<Item = (T, T)> + '_ {
+        self.src_to_dst.iter().map(|(src, dst)| (*src, *dst))
+    }
+
+    pub(crate) fn link_if_both_unmapped(&mut self, t1: T, t2: T) -> bool {
+        if self.is_src(&t1) && self.is_dst(&t2) {
+            self.link(t1, t2);
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl<T: PrimInt + Debug> Clone for HashStore<T> {
+    fn clone(&self) -> Self {
+        Self {
+            src_to_dst: self.src_to_dst.clone(),
+            dst_to_src: self.dst_to_src.clone(),
+        }
+    }
+}
+
+impl<T: PrimInt + Debug + Hash> MappingStore for HashStore<T> {
+    type Ele = T;
+
+    fn len(&self) -> usize {
+        self.src_to_dst.len()
+    }
+
+    fn capacity(&self) -> (usize, usize) {
+        (self.src_to_dst.len(), self.dst_to_src.len())
+    }
+
+    fn link(&mut self, src: T, dst: T) {
+        // assert_eq!(self.src_to_dst[src.to_usize().unwrap()], zero()); // maybe too strong req
+        // assert_eq!(self.dst_to_src[dst.to_usize().unwrap()], zero()); // maybe too strong req
+        self.src_to_dst.insert(src, dst);
+        self.dst_to_src.insert(dst, src);
+    }
+
+    fn cut(&mut self, src: T, dst: T) {
+        self.src_to_dst.remove(&src);
+        self.dst_to_src.remove(&dst);
+    }
+
+    fn is_src(&self, src: &T) -> bool {
+        self.src_to_dst.contains_key(&src)
+    }
+
+    fn is_dst(&self, dst: &T) -> bool {
+        self.dst_to_src.contains_key(&dst)
+    }
+
+    fn topit(&mut self, left: usize, right: usize) {}
+
+    fn has(&self, src: &Self::Ele, dst: &Self::Ele) -> bool {
+        self.src_to_dst.contains_key(&src) && self.dst_to_src.contains_key(&dst)
+    }
+}
+
+impl<T: PrimInt + Debug + Hash> MonoMappingStore for HashStore<T> {
+    fn get_src(&self, dst: &T) -> T {
+        *self.dst_to_src.get(dst).unwrap()
+    }
+
+    fn get_dst(&self, src: &T) -> T {
+        *self.src_to_dst.get(src).unwrap()
+    }
+
+    fn link_if_both_unmapped(&mut self, t1: T, t2: T) -> bool {
+        if self.is_src(&t1) && self.is_dst(&t2) {
+            self.link(t1, t2);
+            true
+        } else {
+            false
+        }
+    }
+}

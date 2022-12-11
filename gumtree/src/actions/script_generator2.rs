@@ -1,16 +1,20 @@
 /// inspired by the implementation in gumtree
-use std::{fmt::Debug};
+use std::{
+    collections::HashSet,
+    fmt::Debug,
+    hash::Hash,
+    time::{Duration, Instant},
+};
 
 use bitvec::order::Lsb0;
 use num_traits::{cast, PrimInt, ToPrimitive};
 
 use crate::{
-    matchers::{
-        mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
-    },
+    actions::Actions,
     decompressed_tree_store::{
         BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
     },
+    matchers::mapping_store::MonoMappingStore,
     tree::tree_path::{CompressedTreePath, TreePath},
     utils::sequence_algorithms::longest_common_subsequence,
 };
@@ -92,7 +96,7 @@ impl<L: Debug, Idx: PrimInt, I: Debug> Debug for SimpleAction<L, Idx, I> {
     }
 }
 
-struct InOrderNodes<IdD>(Option<Vec<IdD>>);
+struct InOrderNodes<IdD: Hash + PartialEq + Eq>(Option<Vec<IdD>>, HashSet<IdD>);
 
 /// FEATURE: share parents
 static COMPRESSION: bool = false;
@@ -101,6 +105,7 @@ struct MidNode<IdC, IdD> {
     parent: IdD,
     compressed: IdC,
     children: Option<Vec<IdD>>,
+    action: Option<usize>,
 }
 
 impl<IdC: Debug, IdD: Debug> Debug for MidNode<IdC, IdD> {
@@ -115,11 +120,12 @@ impl<IdC: Debug, IdD: Debug> Debug for MidNode<IdC, IdD> {
 
 pub struct ScriptGenerator<
     'a,
-    IdD: PrimInt + Debug,
+    IdD: PrimInt + Debug + Hash + PartialEq + Eq,
     T: 'a + Stored + Labeled + WithChildren,
     SS,
     SD, //: BreathFirstIterable<'a, T::TreeId, IdD> + DecompressedWithParent<IdD>,
     S,  //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
+    M: MonoMappingStore<Ele = IdD>,
 > where
     T::Label: Debug,
     T::TreeId: Debug,
@@ -132,19 +138,20 @@ pub struct ScriptGenerator<
     mid_root: Vec<IdD>,
     dst_arena: &'a SD,
     // ori_to_copy: DefaultMappingStore<IdD>,
-    ori_mappings: Option<&'a DefaultMappingStore<IdD>>,
-    cpy_mappings: DefaultMappingStore<IdD>,
-    moved: bitvec::vec::BitVec,
-
+    ori_mappings: Option<&'a M>,
+    cpy_mappings: M,
+    // moved: bitvec::vec::BitVec,
     pub actions: ActionsVec<SimpleAction<T::Label, T::ChildIdx, T::TreeId>>,
 
     src_in_order: InOrderNodes<IdD>,
     dst_in_order: InOrderNodes<IdD>,
 }
 
+static MERGE_SIM_ACTIONS: bool = false;
+
 impl<
         'a,
-        IdD: PrimInt + Debug,
+        IdD: PrimInt + Debug + Hash + PartialEq + Eq,
         T: 'a + Stored + Labeled + WithChildren,
         SS: DecompressedTreeStore<'a, T::TreeId, IdD>
             + DecompressedWithParent<'a, T::TreeId, IdD>
@@ -154,7 +161,8 @@ impl<
             + DecompressedWithParent<'a, T::TreeId, IdD>
             + BreathFirstIterable<'a, T::TreeId, IdD>,
         S, //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
-    > ScriptGenerator<'a, IdD, T, SS, SD, S>
+        M: MonoMappingStore<Ele = IdD>,
+    > ScriptGenerator<'a, IdD, T, SS, SD, S, M>
 where
     S: 'a + NodeStore<T::TreeId>,
     // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item:
@@ -168,20 +176,21 @@ where
         store: &'a S,
         src_arena: &'a SS,
         dst_arena: &'a SD,
-        ms: &'a DefaultMappingStore<IdD>,
+        ms: &'a M,
     ) -> ActionsVec<SimpleAction<T::Label, T::ChildIdx, T::TreeId>> {
-        ScriptGenerator::<'a, IdD, T, SS, SD, S>::new(store, src_arena, dst_arena)
+        ScriptGenerator::<'a, IdD, T, SS, SD, S, M>::new(store, src_arena, dst_arena)
             .init_cpy(ms)
             .generate()
             .actions
     }
+
     pub fn precompute_actions(
         store: &'a S,
         src_arena: &'a SS,
         dst_arena: &'a SD,
-        ms: &'a DefaultMappingStore<IdD>,
-    ) -> ScriptGenerator<'a, IdD, T, SS, SD, S> {
-        ScriptGenerator::<'a, IdD, T, SS, SD, S>::new(store, src_arena, dst_arena).init_cpy(ms)
+        ms: &'a M,
+    ) -> ScriptGenerator<'a, IdD, T, SS, SD, S, M> {
+        ScriptGenerator::<'a, IdD, T, SS, SD, S, M>::new(store, src_arena, dst_arena).init_cpy(ms)
     }
 
     fn new(store: &'a S, src_arena: &'a SS, dst_arena: &'a SD) -> Self {
@@ -194,23 +203,24 @@ where
             mid_root: vec![],
             dst_arena,
             ori_mappings: None,
-            cpy_mappings: DefaultMappingStore::new(),
+            cpy_mappings: Default::default(),
             actions: ActionsVec::new(),
-            src_in_order: InOrderNodes(None),
-            dst_in_order: InOrderNodes(None),
-            moved: bitvec::bitvec![],
+            src_in_order: InOrderNodes(None, Default::default()),
+            dst_in_order: InOrderNodes(None, Default::default()),
+            // moved: bitvec::bitvec![],
         }
     }
 
-    fn init_cpy(mut self, ms: &'a DefaultMappingStore<IdD>) -> Self {
+    fn init_cpy(mut self, ms: &'a M) -> Self {
         // copy mapping
+        // let now = Instant::now();
         self.ori_mappings = Some(ms);
         self.cpy_mappings = ms.clone();
         // dbg!(&self.src_arena_dont_use);
         // dbg!("aaaaaaaaaaaa");
         let len = self.src_arena_dont_use.len();
         let root = self.src_arena_dont_use.root();
-        self.moved.resize(len, false);
+        // self.moved.resize(len, false);
         for x in self.src_arena_dont_use.iter_df_post() {
             let children = self.src_arena_dont_use.children(self.store, &x);
             let children = if children.len() > 0 {
@@ -222,22 +232,29 @@ where
                 parent: self.src_arena_dont_use.parent(&x).unwrap_or(root),
                 compressed: self.src_arena_dont_use.original(&x),
                 children,
+                action: None,
             });
         }
         // self.mid_arena[self.src_arena_dont_use.root().to_usize().unwrap()].parent =
         // self.src_arena_dont_use.root();
         self.mid_root = vec![root];
         // dbg!(&self.mid_arena);
+        // let t = now.elapsed().as_secs_f64();
+        // dbg!(t);
         self
     }
 
     pub fn generate(mut self) -> Self {
         // fake root ?
         // fake root link ?
-
+        // let now = Instant::now();
         self.ins_mov_upd();
-
+        // let t = now.elapsed().as_secs_f64();
+        // dbg!(t);
+        // let now = Instant::now();
         self.del();
+        // let t = now.elapsed().as_secs_f64();
+        // dbg!(t);
         self
     }
 
@@ -250,7 +267,7 @@ where
 
     fn auxilary_ins_mov_upd(&mut self) {
         for x in self.dst_arena.iter_bf() {
-            log::debug!("{:?}", self.actions);
+            log::trace!("{:?}", self.actions);
             let w;
             let y = self.dst_arena.parent(&x);
             let z = y.map(|y| self.cpy_mappings.get_src(&y));
@@ -277,22 +294,40 @@ where
                         sub: self.dst_arena.original(&x),
                     },
                 };
-                {
-                    if let Some(z) = z {
-                        let z: usize = cast(z).unwrap();
-                        if let Some(cs) = self.mid_arena[z].children.as_mut() {
-                            cs.insert(cast(k.unwrap()).unwrap(), w);
+                if let Some(z) = z {
+                    let z: usize = cast(z).unwrap();
+                    if let Some(cs) = self.mid_arena[z].children.as_mut() {
+                        cs.insert(cast(k.unwrap()).unwrap(), w);
+                    } else {
+                        self.mid_arena[z].children = Some(vec![w])
+                    }
+                    if MERGE_SIM_ACTIONS {
+                        if let Some((
+                            p_act,
+                            Some(SimpleAction {
+                                action: Act::Insert { .. },
+                                ..
+                            }),
+                        )) = self.mid_arena[z].action.map(|x| (x, self.actions.get(x)))
+                        {
+                            self.mid_arena[w.to_usize().unwrap()].action = Some(p_act);
                         } else {
-                            self.mid_arena[z].children = Some(vec![w])
+                            self.mid_arena[w.to_usize().unwrap()].action = Some(self.actions.len());
+                            self.actions.push(action);
                         }
                     } else {
-                        self.mid_root.push(w);
+                        self.mid_arena[w.to_usize().unwrap()].action = Some(self.actions.len());
+                        self.actions.push(action);
                     }
-                    assert!({
-                        self.path(w);
-                        true
-                    });
-                };
+                } else {
+                    self.mid_root.push(w);
+                    self.mid_arena[w.to_usize().unwrap()].action = Some(self.actions.len());
+                    self.actions.push(action);
+                }
+                assert!({
+                    self.path(w);
+                    true
+                });
                 // assert_eq!(CompressedTreePath::from(vec![0,0,12]).iter().collect::<Vec<_>>(),vec![0,0,12]);
                 // assert_eq!(CompressedTreePath::from(vec![0,0,0,12]).iter().collect::<Vec<_>>(),vec![0,0,0,12]);
                 // assert_eq!(CompressedTreePath::from(vec![0,0,0,0,12]).iter().collect::<Vec<_>>(),vec![0,0,0,0,12]);
@@ -304,7 +339,6 @@ where
                 //         .unwrap_or_else(|_| panic!("wrong insertion path {:?}", &action.path.mid))
                 //         ,w
                 // );
-                self.actions.push(action);
             } else {
                 // dbg!(&self.mid_arena);
                 w = self.cpy_mappings.get_src(&x);
@@ -340,7 +374,7 @@ where
                                 if p == z {
                                     break;
                                 } else {
-                                    assert_ne!(w,z,"{v:?}");
+                                    assert_ne!(w, z, "{v:?}");
                                     z = p;
                                 }
                             }
@@ -383,10 +417,27 @@ where
 
                     let act = if w_l != x_l {
                         // and also rename
-                        Act::MovUpd {
-                            from,
-                            new: x_l.unwrap(),
-                        }
+                        // Act::MovUpd {
+                        //     from,
+                        //     new: x_l.unwrap(),
+                        // }
+                        let mid = if let Some(z) = z {
+                            self.path(z).extend(&[k])
+                        } else {
+                            CompressedTreePath::from(vec![k])
+                        };
+                        let ori = self.path_dst(&self.dst_arena.root(), &x);
+                        let path = ApplicablePath { ori, mid };
+                        let action = SimpleAction {
+                            path,
+                            action: Act::Update { new: x_l.unwrap() },
+                        };
+                        // dbg!(&action);
+                        self.mid_arena[w.to_usize().unwrap()].compressed =
+                            self.dst_arena.original(&x);
+                        self.mid_arena[w.to_usize().unwrap()].action = Some(self.actions.len());
+                        self.actions.push(action);
+                        Act::Move { from }
                     } else {
                         Act::Move { from }
                     };
@@ -403,6 +454,7 @@ where
                         } else {
                             self.mid_arena[w.to_usize().unwrap()].parent = cast(w).unwrap();
                         }
+                        self.mid_arena[w.to_usize().unwrap()].action = Some(self.actions.len());
                         assert!({
                             self.path(w);
                             true
@@ -426,11 +478,12 @@ where
                         action: Act::Update { new: x_l.unwrap() },
                     };
                     self.mid_arena[w.to_usize().unwrap()].compressed = self.dst_arena.original(&x);
+                    self.mid_arena[w.to_usize().unwrap()].action = Some(self.actions.len());
                     self.actions.push(action);
                 } else {
                     // not changed
                     // and no changes to parents
-                    // postentially try to share parent in super ast
+                    // postentially try to share/map parent in super ast
                     if COMPRESSION {
                         todo!()
                     }
@@ -493,6 +546,7 @@ where
                     let i = parent.len() - 1;
                     parent[i].1 -= 1;
                 } // TODO how to materialize nothing ?
+                self.mid_arena[v.to_usize().unwrap()].action = Some(self.actions.len());
                 let action = SimpleAction {
                     path,
                     action: Act::Delete {
@@ -501,7 +555,7 @@ where
                 };
                 // TODO self.apply_action(&action, &w);
                 self.actions.push(action);
-                log::debug!("{:?}", self.actions);
+                log::trace!("{:?}", self.actions);
             } else {
                 // not modified
                 // all parents were not modified
@@ -555,7 +609,7 @@ where
         for a in &s1 {
             for b in &s2 {
                 if self.ori_mappings.unwrap().has(&a, &b) && !lcs.contains(&(*a, *b)) {
-                    let k = self.find_pos(b, x);
+                    let k = self.find_pos(&b, x);
                     let path = ApplicablePath {
                         ori: self.orig_src(*w).extend(&[k]),
                         mid: self.path(*w),
@@ -593,6 +647,7 @@ where
                         self.mid_arena[z].children = Some(vec![*a])
                     };
                     self.mid_arena[a.to_usize().unwrap()].parent = cast(z).unwrap();
+                    self.mid_arena[a.to_usize().unwrap()].action = Some(self.actions.len());
                     assert!({
                         self.path(*a);
                         true
@@ -677,13 +732,11 @@ where
             parent: cast(z).unwrap(),
             compressed: self.dst_arena.original(x),
             children: None,
+            action: None,
         });
-        self.moved.push(false);
-
-        self.cpy_mappings.topit(
-            self.cpy_mappings.src_to_dst.len() + 1,
-            self.cpy_mappings.dst_to_src.len(),
-        );
+        // self.moved.push(false);
+        let (src_to_dst_l, dst_to_src_l) = self.cpy_mappings.capacity();
+        self.cpy_mappings.topit(src_to_dst_l + 1, dst_to_src_l);
         self.cpy_mappings.link(w, *x);
         w
     }
@@ -739,7 +792,11 @@ where
         loop {
             let p = self.mid_arena[z.to_usize().unwrap()].parent;
             if p == z {
-                let i = self.mid_root.iter().position(|x| x == &z).expect("expect the position of z in children of mid_root");
+                let i = self
+                    .mid_root
+                    .iter()
+                    .position(|x| x == &z)
+                    .expect("expect the position of z in children of mid_root");
                 r.push(cast(i).unwrap());
                 break;
             } else {
@@ -820,32 +877,58 @@ impl<'a, IdC, IdD: num_traits::PrimInt> Iterator for Iter<'a, IdC, IdD> {
     }
 }
 
-impl<IdD: Eq> InOrderNodes<IdD> {
+impl<IdD: Hash + Eq + Clone> InOrderNodes<IdD> {
     /// TODO add precondition to try to linerarly remove element (if both ordered the same way it's easy to remove without looking at lists multiple times)
     fn remove_all(&mut self, w: &[IdD]) {
-        if let Some(a) = self.0.take() {
-            let c: Vec<IdD> = a.into_iter().filter(|x| !w.contains(x)).collect();
-            if c.len() > 0 {
-                self.0 = Some(c);
-            }
-        }
+        w.iter().for_each(|x| {
+            self.1.remove(x);
+        });
+        // if let Some(a) = self.0.take() {
+        //     let mut i = 0;
+        //     let c: Vec<IdD> = a
+        //         .into_iter()
+        //         .filter(|x| {
+        //             // if i < w.len() && !w[i..].contains(x) {
+        //             //     i += 1;
+        //             //     true
+        //             // } else {
+        //             //     false
+        //             // }
+        //             !w.contains(x)
+        //         })
+        //         .collect();
+
+        //     assert_eq!(c.len(), self.1.len());
+        //     if c.len() > 0 {
+        //         self.0 = Some(c);
+        //     }
+        // } else {
+        //     assert!(self.1.is_empty());
+        // }
     }
 
     pub(crate) fn push(&mut self, x: IdD) {
-        if let Some(l) = self.0.as_mut() {
-            if !l.contains(&x) {
-                l.push(x)
-            }
-        } else {
-            self.0 = Some(vec![x])
-        }
+        self.1.insert(x.clone());
+        // if let Some(l) = self.0.as_mut() {
+        //     if !l.contains(&x) {
+        //         l.push(x)
+        //     }
+        //     assert_eq!(l.len(), self.1.len());
+        // } else {
+        //     assert_eq!(1, self.1.len());
+        //     self.0 = Some(vec![x])
+        // }
     }
 
     fn contains(&self, x: &IdD) -> bool {
-        if let Some(l) = &self.0 {
-            l.contains(x)
-        } else {
-            false
-        }
+        self.1.contains(x)
+        // if let Some(l) = &self.0 {
+        //     let r = l.contains(x);
+        //     assert_eq!(r, self.1.contains(x));
+        //     r
+        // } else {
+        //     assert!(self.1.is_empty());
+        //     false
+        // }
     }
 }

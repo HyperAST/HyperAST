@@ -79,7 +79,7 @@ fn main_compress() {
     //         }
     //     } = java_tree_gen;
 
-    //     let mapping_store = DefaultMappingStore::new();
+    //     let mapping_store = DefaultMappingStore::default();
     //     // let a = SimpleBottomUpMatcher::<
     //     let a = ZsMatcher::<
     //         CompletePostOrder<u32, u16>,
@@ -266,11 +266,11 @@ fn main() {
     let dst = full_node2.local.compressed_node;
 
     let actions = {
-        let mappings: VecStore<u16> = DefaultMappingStore::new();
+        let mappings: VecStore<u16> = DefaultMappingStore::default();
         // GreedySubtreeMatcher.MIN_HEIGHT = 0;
         // GreedyBottomUpMatcher
         {
-            let mappings: VecStore<u16> = DefaultMappingStore::new();
+            let mappings: VecStore<u16> = DefaultMappingStore::default();
             let mapper = ZsMatcher::<SimpleZsTree<_, _>, _, _, _, _>::matchh(
                 &java_tree_gen.stores.node_store,
                 &java_tree_gen.stores.label_store,
@@ -292,6 +292,7 @@ fn main() {
             CompletePostOrder<_, u16>,
             _,
             HashedNodeRef,
+            _,
             _,
             // 2,
         >::matchh(&java_tree_gen.stores.node_store, &src, &dst, mappings);
@@ -323,6 +324,7 @@ fn main() {
             CompletePostOrder<_, u16>,
             _,
             HashedNodeRef,
+            _,
             _,
             _,
             // 1000,
@@ -368,6 +370,7 @@ fn main() {
             _,
             _, // bfs_wrapper::SD<_, _, CompletePostOrder<_, u16>>,
             NodeStore,
+            _,
         >::precompute_actions(
             &java_tree_gen.stores.node_store,
             &src_arena,
@@ -569,7 +572,7 @@ fn main() {
     //             type_store: _,
     //         } } = java_tree_gen;
 
-    //     let mapping_store = DefaultMappingStore::new();
+    //     let mapping_store = DefaultMappingStore::default();
     //     // let a = SimpleBottomUpMatcher::<
     //     let a = ZsMatcher::<
     //         CompletePostOrder<_, u16>,

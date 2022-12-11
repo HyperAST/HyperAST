@@ -108,7 +108,7 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
         let skiped_ana = acc.skiped_ana;
         let name = acc.name.clone();
         let key = (oid, name.as_bytes().to_vec());
-        let full_node = make(acc, self.prepro.main_stores());
+        let full_node = make(acc, self.prepro.main_stores_mut());
         self.prepro
             .object_map_java
             .insert(key, (full_node.clone(), skiped_ana));
@@ -409,7 +409,7 @@ mod experiments {
             let skiped_ana = acc.skiped_ana;
             let name = acc.name.clone();
             let key = (oid, name.as_bytes().to_vec());
-            let full_node = make(acc, self.prepro.main_stores());
+            let full_node = make(acc, self.prepro.main_stores_mut());
             let full_node = (full_node, skiped_ana);
             self.prepro.object_map_java.insert(key, full_node.clone());
             let name = self.prepro.intern_label(&name);

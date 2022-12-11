@@ -38,7 +38,7 @@ fn test_with_action_example() {
         DisplayTree::new(&label_store, &node_store, dst)
     );
 
-    let mut ms = DefaultMappingStore::new();
+    let mut ms = DefaultMappingStore::default();
     let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &src);
     let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &dst);
     let src = &(src_arena.root());
@@ -277,7 +277,7 @@ type IdD = u16;
 #[test]
 fn test_with_zs_custom_example() {
     let (_, node_store, src, dst) = vpair_to_stores(example_gt_java_code());
-    let mut ms = DefaultMappingStore::new();
+    let mut ms = DefaultMappingStore::default();
     let src_arena = CompletePostOrder::<_, IdD>::new(&node_store, &src);
     let dst_arena = CompletePostOrder::<_, IdD>::new(&node_store, &dst);
     let src = &(src_arena.root());

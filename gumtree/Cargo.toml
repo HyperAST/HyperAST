@@ -11,9 +11,13 @@ strum = "0.23.0"
 strum_macros = "0.23.1"
 hungarian = "1.1.1"
 num-traits = "0.2.14"
-enum-map="1.1.1"
+enum-map="2.4.1"
 bitvec = "0.22.3"
 str-distance = "0.1.0"
 env_logger = "0.9.0"
 log = { version = "0.4.6", features = ["max_level_trace", "release_max_level_warn"] }
 hyper_ast = { path = "../hyper_ast" }
+
+
+[profile.test]
+opt-level = 3

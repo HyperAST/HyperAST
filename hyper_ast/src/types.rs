@@ -21,7 +21,7 @@ pub enum Type {
     // FileName,
     Spaces,
     // File,
-    xml_File,
+    // xml_File,
     #[strum(serialize = "ERROR")]
     Error,
 
@@ -389,6 +389,10 @@ pub enum Type {
     xml_AttlistDecl,
     xml_Attribute,
     xml_CData,
+    xml_Text,
+    xml_Sep1,
+    xml_Sep2,
+    xml_Sep3,
     xml_Comment,
     xml_DefaultDecl,
     xml_ETag,
@@ -650,6 +654,10 @@ impl Type {
         self == &Type::Directory || self == &Type::MavenDirectory
     }
 
+    pub fn is_file(&self) -> bool {
+        self == &Type::Program || self == &Type::xml_SourceFile
+    }
+
     pub fn is_type_body(&self) -> bool {
         self == &Type::ClassBody
             || self == &Type::InterfaceBody
@@ -844,7 +852,7 @@ pub trait WithStats {
 }
 
 pub trait WithSerialization {
-    fn bytes_len(&self) -> usize;
+    fn try_bytes_len(&self) -> Option<usize>;
 }
 
 pub trait WithHashs {
@@ -1012,13 +1020,17 @@ pub trait LabelStore<L: ?Sized> {
 impl Type {
     pub fn parse_xml(t: &str) -> Self {
         match t {
-            "file" => Self::xml_File,
+            // "file" => Self::xml_File,
             "source_file" => Self::xml_SourceFile,
             "XMLDecl" => Self::xml_XMLDecl,
             "AttValue" => Self::xml_AttValue,
             "AttlistDecl" => Self::xml_AttlistDecl,
             "Attribute" => Self::xml_Attribute,
             "CData" => Self::xml_CData,
+            "Text" => Self::xml_Text,
+            "Sep1" => Self::xml_Sep1,
+            "Sep2" => Self::xml_Sep2,
+            "Sep3" => Self::xml_Sep3,
             "Comment" => Self::xml_Comment,
             "DefaultDecl" => Self::xml_DefaultDecl,
             "ETag" => Self::xml_ETag,
@@ -1129,6 +1141,10 @@ impl Type {
             Self::xml_AttlistDecl => "AttlistDecl",
             Self::xml_Attribute => "Attribute",
             Self::xml_CData => "CData",
+            Self::xml_Text => "Text",
+            Self::xml_Sep1 => "Sep1",
+            Self::xml_Sep2 => "Sep2",
+            Self::xml_Sep3 => "Sep3",
             Self::xml_Comment => "Comment",
             Self::xml_DefaultDecl => "DefaultDecl",
             Self::xml_ETag => "ETag",
@@ -1152,7 +1168,6 @@ impl Type {
             Self::xml_TextDecl => "TextDecl",
             Self::xml_TokenizedType => "TokenizedType",
             Self::xml_VersionInfo => "VersionInfo",
-            Self::xml_XMLDecl => "XMLDecl",
             Self::xml_Children => "children",
             Self::xml_Contentspec => "contentspec",
             Self::xml_Doctypedecl => "doctypedecl",

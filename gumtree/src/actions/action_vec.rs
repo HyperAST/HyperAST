@@ -2,9 +2,16 @@ use std::fmt::Debug;
 
 use num_traits::ToPrimitive;
 
-use hyper_ast::types::{
-    AsTreeRef, Labeled, NodeStore, NodeStoreExt, Stored, Tree, Typed,
-    WithChildren,
+use hyper_ast::{
+    position::compute_range,
+    store::{
+        defaults::{LabelIdentifier, NodeIdentifier},
+        nodes::DefaultNodeIdentifier,
+        SimpleStores,
+    },
+    types::{
+        AsTreeRef, LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Tree, Typed, WithChildren,
+    },
 };
 
 use crate::tree::tree_path::TreePath;
@@ -19,6 +26,112 @@ pub struct ActionsVec<A>(pub Vec<A>);
 impl<A: Debug> Debug for ActionsVec<A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("ActionsVec").field(&self.0).finish()
+    }
+}
+
+pub fn actions_vec_f(
+    v: &ActionsVec<SimpleAction<LabelIdentifier, u16, NodeIdentifier>>,
+    stores: &SimpleStores,
+    ori: NodeIdentifier,
+) {
+    v.iter().for_each(|a| print_action(ori, stores, a));
+}
+
+fn format_action_pos(ori: NodeIdentifier, stores: &SimpleStores, a: &SimpleAction<LabelIdentifier, u16, NodeIdentifier>) -> String {
+    // TODO make whole thing more specific to a path in a tree
+    let mut end = None;
+    struct ItLast<T, It: Iterator<Item = T>> {
+        tmp: Option<T>,
+        it: It,
+    }
+
+    impl<T, It: Iterator<Item = T>> ItLast<T, It> {
+        fn new(it: It) -> Self {
+            Self { it, tmp: None }
+        }
+        fn end(self) -> Option<T> {
+            self.tmp
+        }
+    }
+
+    impl<T, It: Iterator<Item = T>> Iterator for ItLast<T, It> {
+        type Item = T;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            todo!()
+        }
+    }
+
+    struct A<'a, T, It: Iterator<Item = T>> {
+        curr: &'a mut Option<T>,
+        it: It,
+    }
+    impl<'a, T: Clone, It: Iterator<Item = T>> Iterator for A<'a, T, It> {
+        type Item = T;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.curr.is_none() {
+                let x = self.it.next()?;
+                self.curr.replace(x.clone());
+            }
+            let x = self.it.next()?;
+            self.curr.replace(x.clone())
+        }
+    }
+    let mut it = A {
+        curr: &mut end,
+        it: a.path.ori.iter()
+    };
+    let p = compute_range(ori, &mut it, stores);
+    format!("{:?} at {:?}", p, it.it.chain(vec![end.unwrap()].into_iter()).collect::<Vec<_>>())
+}
+
+fn print_action(ori: NodeIdentifier, stores: &SimpleStores, a: &SimpleAction<LabelIdentifier, u16, NodeIdentifier>) {
+    match &a.action {
+        Act::Delete {} => println!(
+            "Del {:?}",
+            compute_range(ori, &mut a.path.ori.iter(), stores)
+        ),
+        Act::Update { new } => println!(
+            "Upd {:?} {:?}",
+            stores.label_store.resolve(new),
+            compute_range(ori, &mut a.path.ori.iter(), stores)
+        ),
+        Act::Insert { sub } => println!(
+            "Ins {:?} {}",
+            {
+                let node = stores.node_store.resolve(*sub);
+                node.get_type()
+            },
+            format_action_pos(ori, stores, a)
+        ),
+        Act::Move { from } => println!(
+            "Mov {:?} {:?} {}",
+            {
+                let mut node = stores.node_store.resolve(ori);
+                for x in from.ori.iter() {
+                    let e = node.get_child(&x);
+                    node = stores.node_store.resolve(e);
+                }
+                node.get_type()
+            },
+            compute_range(ori, &mut from.ori.iter(), stores),
+            format_action_pos(ori, stores, a)
+        ),
+        Act::MovUpd { from, new } => println!(
+            "MovUpd {:?} {:?} {:?} {}",
+            {
+                let mut node = stores.node_store.resolve(ori);
+                for x in from.ori.iter() {
+                    let e = node.get_child(&x);
+                    node = stores.node_store.resolve(e);
+                }
+                node.get_type()
+            },
+            stores.label_store.resolve(new),
+            compute_range(ori, &mut from.ori.iter(), stores),
+            format_action_pos(ori, stores, a)
+        ),
     }
 }
 
@@ -46,6 +159,9 @@ impl<A: Eq> TestActions<A> for ActionsVec<A> {
 impl<L: Debug, Idx, I: Debug> ActionsVec<SimpleAction<L, Idx, I>> {
     pub(crate) fn push(&mut self, action: SimpleAction<L, Idx, I>) {
         self.0.push(action)
+    }
+    pub(crate) fn get(&self, i: usize) -> Option<&SimpleAction<L, Idx, I>> {
+        self.0.get(i)
     }
 
     pub(crate) fn new() -> Self {

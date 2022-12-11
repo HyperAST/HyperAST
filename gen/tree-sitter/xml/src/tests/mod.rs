@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use tree_sitter::{Parser};
 
-use crate::xml_tree_gen::XmlTreeGen;
+use crate::legion::XmlTreeGen;
 
 
 

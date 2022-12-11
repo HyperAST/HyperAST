@@ -12,7 +12,7 @@ use hyper_ast::{
     types::{LabelStore as _, Labeled, Tree, Type, Typed, WithChildren},
 };
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
-use hyper_ast_gen_ts_xml::xml_tree_gen::{self, XmlTreeGen};
+use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
 
 use crate::{Accumulator, SimpleStores, PROPAGATE_ERROR_ON_BAD_CST_NODE};
 
@@ -21,11 +21,11 @@ pub(crate) fn handle_pom_file<'a>(
     name: &[u8],
     text: &'a [u8],
 ) -> Result<POM, ()> {
-    let tree = match xml_tree_gen::XmlTreeGen::tree_sitter_parse(text) {
+    let tree = match XmlTreeGen::tree_sitter_parse(text) {
         Ok(tree) => tree,
         Err(tree) => {
             log::warn!("bad CST");
-            // println!("{}", name);
+            log::debug!("{:?}", std::str::from_utf8(name));
             log::debug!("{}", tree.root_node().to_sexp());
             if PROPAGATE_ERROR_ON_BAD_CST_NODE {
                 return Err(());
@@ -78,11 +78,7 @@ impl<'a> Iterator for IterMavenModules2<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next_node().map(|x| {
-            StructuralPosition::from((
-                self.parents().to_vec(),
-                self.offsets().to_vec(),
-                x,
-            ))
+            StructuralPosition::from((self.parents().to_vec(), self.offsets().to_vec(), x))
         })
     }
 }
@@ -467,7 +463,7 @@ impl<'a, T: TreePath<NodeIdentifier>> IterMavenModules<'a, T> {
 }
 
 impl hyper_ast::tree_gen::Accumulator for MavenModuleAcc {
-    type Node= (LabelIdentifier, (NodeIdentifier, MD));
+    type Node = (LabelIdentifier, (NodeIdentifier, MD));
     fn push(&mut self, (name, full_node): Self::Node) {
         self.children.push(full_node.0);
         self.children_names.push(name);

@@ -1,6 +1,6 @@
 use std::{fmt::Debug, marker::PhantomData};
 
-use num_traits::{cast, zero, PrimInt};
+use num_traits::{cast, zero, PrimInt, ToPrimitive};
 
 use crate::{
     decompressed_tree_store::{
@@ -46,7 +46,7 @@ impl<'a, IdC, IdD: PrimInt, D: PostOrder<'a, IdC, IdD>> SimpleBfsMapper<'a, IdC,
         // let mut fc = vec![num_traits::zero();x.len()];
         let mut rev = vec![num_traits::zero(); x.len()];
         let mut i = 0;
-        rev[cast::<_, usize>(x.root()).unwrap()] = cast(i).unwrap();
+        rev[x.root().to_usize().unwrap()] = cast(i).unwrap();
         map.push(x.root());
 
         while map.len() < x.len() {
@@ -60,7 +60,7 @@ impl<'a, IdC, IdD: PrimInt, D: PostOrder<'a, IdC, IdD>> SimpleBfsMapper<'a, IdC,
             //     "{:?}",
             //     cs.iter().map(|x| x.to_usize().unwrap()).collect::<Vec<_>>()
             // );
-            rev[cast::<_, usize>(*curr).unwrap()] = cast(i).unwrap();
+            rev[(*curr).to_usize().unwrap()] = cast(i).unwrap();
             map.extend(cs);
             i += 1;
         }
@@ -107,8 +107,8 @@ impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<'a, IdC, IdD>>
         self.back.root()
     }
 
-    fn path<Idx: PrimInt>(&self, _parent: &IdD, _descendant: &IdD) -> CompressedTreePath<Idx> {
-        todo!()
+    fn path<Idx: PrimInt>(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<Idx> {
+        self.back.path(parent, descendant)
     }
 
     fn child<'b, S>(
@@ -245,7 +245,7 @@ impl<'a, IdD: PrimInt> Iterator for Iter<'a, IdD> {
         } else {
             let r = self.curr;
             self.curr = r + 1;
-            Some(self.map[cast::<_, usize>(r).unwrap()])
+            Some(self.map[r.to_usize().unwrap()])
         }
     }
 }

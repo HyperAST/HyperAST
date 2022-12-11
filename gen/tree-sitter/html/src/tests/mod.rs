@@ -20,6 +20,33 @@ fn html_tree_sitter_simple() {
 }
 
 #[test]
+fn xml_tree_sitter_simple() {
+    
+    let mut parser = Parser::new();
+
+    {
+        parser.set_language(tree_sitter_html::language()).unwrap();
+    }
+
+
+    let text = {
+        let source_code1 = "<?xml version=\"1.0\"?><!-- q -->
+        <project>
+        <plugin>
+        </plugin>
+        <!-- This plugin's configuration is used to store Eclipse m2e settings only.
+        It has no influence on the Maven build itself. -->
+        <plugin>
+        </plugin>
+        </project>
+          ";
+        source_code1.as_bytes()
+    };
+    let tree = parser.parse(text, None).unwrap();
+    println!("{}", tree.root_node().to_sexp());
+}
+
+#[test]
 fn html_tree_sitter_on_pom() {
     let mut parser = Parser::new();
 

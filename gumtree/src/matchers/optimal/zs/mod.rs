@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, fmt::Debug, marker::PhantomData};
 
-use num_traits::{cast, one, zero, PrimInt};
+use num_traits::{cast, one, zero, PrimInt, ToPrimitive};
 use str_distance::DistanceMetric;
 
 use crate::decompressed_tree_store::{
@@ -29,7 +29,7 @@ pub struct ZsMatcher<
     pub dst_arena: D,
     pub mappings: DefaultMappingStore<IdD>,
     phantom: PhantomData<(*const IdC, &'a D)>,
-    tree_dist: Vec<Vec<f64>>,
+    pub(crate) tree_dist: Vec<Vec<f64>>,
     forest_dist: Vec<Vec<f64>>,
 }
 
@@ -37,7 +37,7 @@ impl<
         'a,
         D: 'a + DecompressedTreeStore<'a, IdC, IdD> + PostOrderKeyRoots<'a, IdC, IdD>,
         IdC: Clone,
-        IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
+        IdD: PrimInt + std::ops::SubAssign + Debug,
         S: NodeStore<IdC>,
         // S, //: NodeStore2<IdC, R<'a> = T>,//NodeStore<'a, IdC, T>,
         LS: LabelStore<SlicedLabel>,
@@ -48,10 +48,10 @@ where
     S::R<'a>: Tree<TreeId = IdC, Label = LS::I>,
 {
     fn f_dist(&self, row: IdD, col: IdD) -> f64 {
-        self.forest_dist[row.into()][col.into()]
+        self.forest_dist[row.to_usize().unwrap()][col.to_usize().unwrap()]
     }
 
-    pub fn matchh(
+    pub(crate) fn make(
         compressed_node_store: &'a S,
         label_store: &'a LS,
         src: IdC,
@@ -66,29 +66,40 @@ where
             tree_dist: vec![],
             phantom: PhantomData,
             forest_dist: vec![],
-            label_store: label_store,
+            label_store,
         };
         matcher.mappings.topit(
-            cast::<_, usize>(matcher.src_arena.len()).unwrap() + 1,
-            cast::<_, usize>(matcher.dst_arena.len()).unwrap() + 1,
+            matcher.src_arena.len().to_usize().unwrap() + 1,
+            matcher.dst_arena.len().to_usize().unwrap() + 1,
         );
+        matcher
+    }
+
+    pub fn matchh(
+        compressed_node_store: &'a S,
+        label_store: &'a LS,
+        src: IdC,
+        dst: IdC,
+        mappings: DefaultMappingStore<IdD>,
+    ) -> ZsMatcher<'a, ZsTree<IdC, IdD>, IdD, IdC, S, LS> {
+        let mut matcher = ZsMatcher::<'a, ZsTree<IdC, IdD>, IdD, IdC, S, LS>::make(compressed_node_store, label_store, src, dst, mappings);
         ZsMatcher::execute(&mut matcher);
         matcher
     }
 
-    fn execute(&mut self) {
+    pub(crate) fn execute(&mut self) {
         self.compute_tree_dist();
+        self.compute_mappings();
+    }
 
+    pub(crate) fn compute_mappings(&mut self) {
         let mut root_node_pair = true;
-
         let mut tree_pairs: VecDeque<(IdD, IdD)> = Default::default();
-
         // push the pair of trees (ted1,ted2) to stack
         tree_pairs.push_front((
-            cast::<_, IdD>(self.src_arena.len()).unwrap(),
-            cast::<_, IdD>(self.dst_arena.len()).unwrap(),
+            cast(self.src_arena.len()).unwrap(),
+            cast(self.dst_arena.len()).unwrap(),
         ));
-
         while !tree_pairs.is_empty() {
             let tree_pair = tree_pairs.pop_front().unwrap();
 
@@ -137,6 +148,7 @@ where
                             .get_type();
                         if t_src == t_dst {
                             self.mappings.link(row, col);
+                            // assert_eq!(self.mappings.get_dst(&row),col);
                         } else {
                             panic!("Should not map incompatible nodes.");
                         }
@@ -169,39 +181,35 @@ where
     }
 
     pub(crate) fn compute_tree_dist(&mut self) {
-        self.tree_dist = vec![
-            vec![0.0; cast::<_, usize>(self.dst_arena.len()).unwrap() + 1];
-            cast::<_, usize>(self.src_arena.len()).unwrap() + 1
-        ];
-        self.forest_dist = vec![
-            vec![0.0; cast::<_, usize>(self.dst_arena.len()).unwrap() + 1];
-            cast::<_, usize>(self.src_arena.len()).unwrap() + 1
-        ];
+        self.tree_dist = vec![vec![0.0; self.dst_arena.len() + 1]; self.src_arena.len() + 1];
+        self.forest_dist = vec![vec![0.0; self.dst_arena.len() + 1]; self.src_arena.len() + 1];
 
-        for i in 1..self.src_arena.leaf_count().into() {
-            for j in 1..self.dst_arena.leaf_count().into() {
+        for i in 1..self.src_arena.leaf_count().to_usize().unwrap() {
+            for j in 1..self.dst_arena.leaf_count().to_usize().unwrap() {
                 self.forest_dist(
                     self.src_arena.kr(cast(i).unwrap()),
                     self.dst_arena.kr(cast(j).unwrap()),
                 );
             }
         }
+        // println!("{:?}",&self.tree_dist);
+        // dbg!(&self.forest_dist);
     }
 
     pub(crate) fn forest_dist(&mut self, i: IdD, j: IdD) {
         let sa = &self.src_arena;
         let da = &self.dst_arena;
         // println!("i:{:?} j:{:?}", i, j);
-        let lldsrc = sa.lld(&i).into();
-        let llddst = da.lld(&j).into();
+        let lldsrc = sa.lld(&i).to_usize().unwrap();
+        let llddst = da.lld(&j).to_usize().unwrap();
         self.forest_dist[lldsrc - 1][llddst - 1] = 0.0;
-        for di in lldsrc..i.into() + 1 {
+        for di in lldsrc..i.to_usize().unwrap() + 1 {
             let odi = cast(di).unwrap();
             let srctree = sa.tree(&odi);
             let lldsrc2 = sa.lld(&odi);
             let cost_del = self.get_deletion_cost(&srctree);
             self.forest_dist[di][llddst - 1] = self.forest_dist[di - 1][llddst - 1] + cost_del;
-            for dj in llddst..j.into() + 1 {
+            for dj in llddst..j.to_usize().unwrap() + 1 {
                 let odj = cast(dj).unwrap();
                 let dsttree = da.tree(&odj);
                 let llddst2 = da.lld(&odj);
@@ -223,7 +231,8 @@ where
                             self.forest_dist[di - 1][dj] + cost_del,
                             self.forest_dist[di][dj - 1] + cost_ins,
                         ),
-                        self.forest_dist[lldsrc2.into() - 1][llddst2.into() - 1]
+                        self.forest_dist[lldsrc2.to_usize().unwrap() - 1]
+                            [llddst2.to_usize().unwrap() - 1]
                             + self.tree_dist[di][dj],
                     );
                 }
@@ -258,25 +267,141 @@ where
                 };
                 self.label_store.resolve(&r.get_label()).to_owned()
             };
-            const S: usize = 3;
+            if l1.len() == 0 || l2.len() == 0 {
+                return 1.;
+            }
+            const S_LEN: usize = 3;
+            const S: &str = "##";
+            // TODO find a way to repeat at compile time
+            //format!("{empty:#>width$}", empty = "", width = 3-1);
+            //"#".repeat(3 - 1)
+            
             let l1 = {
                 let mut tmp = "".to_string();
-                tmp.push_str(&"#".repeat(S - 1));
+                tmp.push_str(S);
                 tmp.push_str(&l1);
-                tmp.push_str(&"#".repeat(S - 1));
+                tmp.push_str(S);
                 tmp
             };
             let l2 = {
                 let mut tmp = "".to_string();
-                tmp.push_str(&"#".repeat(S - 1));
+                tmp.push_str(S);
                 tmp.push_str(&l2);
-                tmp.push_str(&"#".repeat(S - 1));
+                tmp.push_str(S);
                 tmp
             };
-            str_distance::qgram::QGram::new(S).normalized(l1.as_bytes(), l2.as_bytes())
+            // str_distance::qgram::QGram::new(S).normalized(l1.as_bytes(), l2.as_bytes())
+            str_distance_patched::QGram::new(S_LEN).normalized(l1.as_bytes(), l2.as_bytes())
         } else {
             f64::MAX
         }
+    }
+}
+
+/// TODO waiting for the release of fix of wrong variable on line 5 of normalized()
+mod str_distance_patched {
+    #[derive(Debug, Clone)]
+    pub struct QGram {
+        /// Length of the fragment
+        q: usize,
+    }
+
+    impl QGram {
+        pub fn new(q: usize) -> Self {
+            assert_ne!(q, 0);
+            Self { q }
+        }
+    }
+
+    use str_distance::qgram::QGramIter;
+    use str_distance::DistanceMetric;
+
+    impl DistanceMetric for QGram {
+        type Dist = usize;
+
+        fn distance<S, T>(&self, a: S, b: T) -> Self::Dist
+        where
+            S: IntoIterator,
+            T: IntoIterator,
+            <S as IntoIterator>::IntoIter: Clone,
+            <T as IntoIterator>::IntoIter: Clone,
+            <S as IntoIterator>::Item: PartialEq + PartialEq<<T as IntoIterator>::Item>,
+            <T as IntoIterator>::Item: PartialEq,
+        {
+            let a: Vec<_> = a.into_iter().collect();
+            let b: Vec<_> = b.into_iter().collect();
+
+            let iter_a = QGramIter::new(&a, self.q);
+            let iter_b = QGramIter::new(&b, self.q);
+
+            eq_map(iter_a, iter_b)
+                .into_iter()
+                .map(|(n1, n2)| if n1 > n2 { n1 - n2 } else { n2 - n1 })
+                .sum()
+        }
+
+        fn normalized<S, T>(&self, a: S, b: T) -> f64
+        where
+            S: IntoIterator,
+            T: IntoIterator,
+            <S as IntoIterator>::IntoIter: Clone,
+            <T as IntoIterator>::IntoIter: Clone,
+            <S as IntoIterator>::Item: PartialEq + PartialEq<<T as IntoIterator>::Item>,
+            <T as IntoIterator>::Item: PartialEq,
+        {
+            let a = a.into_iter();
+            let b = b.into_iter();
+
+            let len_a = a.clone().count();
+            let len_b = b.clone().count();
+            if len_a == 0 && len_b == 0 {
+                return 0.0;
+            }
+            if len_a == 0 || len_b == 0 {
+                return 1.0;
+            }
+            if std::cmp::min(len_a, len_b) <= self.q {
+                return if a.eq(b) {0.} else {1.}
+            }
+            (self.distance(a, b) as f32 / (len_a + len_b - 2 * self.q + 2) as f32) as f64
+        }
+    }
+    fn eq_map<'a, S, T>(a: QGramIter<'a, S>, b: QGramIter<'a, T>) -> Vec<(usize, usize)>
+    where
+        S: PartialEq + PartialEq<T>,
+        T: PartialEq,
+    {
+        // remove duplicates and count how often a qgram occurs
+        fn count_distinct<U: PartialEq>(v: &mut Vec<(U, usize)>) {
+            'outer: for idx in (0..v.len()).rev() {
+                let (qgram, num) = v.swap_remove(idx);
+                for (other, num_other) in v.iter_mut() {
+                    if *other == qgram {
+                        *num_other += num;
+                        continue 'outer;
+                    }
+                }
+                v.push((qgram, num));
+            }
+        }
+        let mut distinct_a: Vec<_> = a.map(|s| (s, 1)).collect();
+        let mut distinct_b: Vec<_> = b.map(|s| (s, 1)).collect();
+
+        count_distinct(&mut distinct_a);
+        count_distinct(&mut distinct_b);
+
+        let mut nums: Vec<_> = distinct_a.iter().map(|(_, n)| (*n, 0)).collect();
+
+        'outer: for (qgram_b, num_b) in distinct_b {
+            for (idx, (qgram_a, num_a)) in distinct_a.iter().enumerate() {
+                if *qgram_a == qgram_b {
+                    nums[idx] = (*num_a, num_b);
+                    continue 'outer;
+                }
+            }
+            nums.push((0, num_b));
+        }
+        nums
     }
 }
 
@@ -323,7 +448,7 @@ mod tests {
             a
         };
 
-        let mappings: VecStore<u16> = DefaultMappingStore::new();
+        let mappings: VecStore<u16> = Default::default();
         let mut matcher = ZsMatcher::<_, u16, u16, _, _> {
             compressed_node_store: &compressed_node_store,
             src_arena,

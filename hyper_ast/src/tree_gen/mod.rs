@@ -171,6 +171,7 @@ impl<'a> SpacedGlobalData<'a> {
 }
 impl<'a> TotalBytesGlobalData for SpacedGlobalData<'a> {
     fn set_sum_byte_length(&mut self, sum_byte_length: usize) {
+        assert!(self.sum_byte_length <= sum_byte_length);
         self.sum_byte_length = sum_byte_length;
     }
 }
@@ -403,9 +404,15 @@ pub fn get_spacing(
     if padding_start != pos {
         let spaces = &text[padding_start..pos];
         // let spaces = Space::format_indentation(spaces);
-        spaces
-            .iter()
-            .for_each(|x| assert!(*x == b' ' || *x == b'\n' || *x == b'\t' || *x == b'\r'));
+        spaces.iter().for_each(|x| {
+            assert!(
+                *x == b' ' || *x == b'\n' || *x == b'\t' || *x == b'\r',
+                "{} {} {:?}",
+                x,
+                padding_start,
+                std::str::from_utf8(&spaces).unwrap()
+            )
+        });
         let spaces = spaces.to_vec();
         // let spaces = Space::replace_indentation(parent_indentation, &spaces);
         // TODO put back the relativisation later, can pose issues when computing len of a subtree (contextually if we make the optimisation)
@@ -421,7 +428,7 @@ pub fn try_get_spacing(
     text: &[u8],
     parent_indentation: &Spaces,
 ) -> Option<Vec<u8>> {
-// ) -> Option<Spaces> {
+    // ) -> Option<Spaces> {
     if padding_start != pos {
         let spaces = &text[padding_start..pos];
         // println!("{:?}",std::str::from_utf8(spaces).unwrap());

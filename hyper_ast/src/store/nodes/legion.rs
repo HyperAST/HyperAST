@@ -240,17 +240,24 @@ impl<'a> HashedNodeRef<'a> {
     pub fn get_bytes_len(&self, p_indent_len: u32) -> u32 {
         // use crate::types::Typed;
         if self.get_type() == Type::Spaces {
-            self.get_component::<Box<[Space]>>()
-                .expect("spaces node should have spaces")
-                .iter()
-                .map(|x| {
-                    if x == &Space::ParentIndentation {
-                        p_indent_len
-                    } else {
-                        1
-                    }
-                })
-                .sum()
+            self.0
+                .get_component::<compo::BytesLen>()
+                .expect(&format!(
+                    "node with type {:?} don't have a len",
+                    self.get_type()
+                ))
+                .0
+            // self.get_component::<Box<[Space]>>()
+            //     .expect("spaces node should have spaces")
+            //     .iter()
+            //     .map(|x| {
+            //         if x == &Space::ParentIndentation {
+            //             p_indent_len
+            //         } else {
+            //             1
+            //         }
+            //     })
+            //     .sum()
         } else {
             self.0
                 .get_component::<compo::BytesLen>()
@@ -268,18 +275,19 @@ impl<'a> HashedNodeRef<'a> {
     pub fn try_get_bytes_len(&self, p_indent_len: u32) -> Option<u32> {
         // use crate::types::Typed;
         if self.get_type() == Type::Spaces {
-            let s = self.get_component::<Box<[Space]>>().ok()?;
-            let s = s
-                .iter()
-                .map(|x| {
-                    if x == &Space::ParentIndentation {
-                        p_indent_len
-                    } else {
-                        1
-                    }
-                })
-                .sum();
-            Some(s)
+            self.0.get_component::<compo::BytesLen>().map(|x| x.0).ok()
+            // let s = self.get_component::<Box<[Space]>>().ok()?;
+            // let s = s
+            //     .iter()
+            //     .map(|x| {
+            //         if x == &Space::ParentIndentation {
+            //             p_indent_len
+            //         } else {
+            //             1
+            //         }
+            //     })
+            //     .sum();
+            // Some(s)
         } else {
             self.0.get_component::<compo::BytesLen>().map(|x| x.0).ok()
         }
@@ -346,8 +354,8 @@ impl<'a> crate::types::WithStats for HashedNodeRef<'a> {
 }
 
 impl<'a> crate::types::WithSerialization for HashedNodeRef<'a> {
-    fn bytes_len(&self) -> usize {
-        self.0.get_component::<compo::BytesLen>().unwrap().0.to_usize().unwrap()
+    fn try_bytes_len(&self) -> Option<usize> {
+        self.0.get_component::<compo::BytesLen>().ok().map(|x|x.0.to_usize().unwrap())
     }
 }
 

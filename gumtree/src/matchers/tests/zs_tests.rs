@@ -30,7 +30,7 @@ fn test_with_custom_example() {
         "dst tree:\n{:?}",
         DisplayTree::new(&label_store, &node_store, dst)
     );
-    let mappings = DefaultMappingStore::new();
+    let mappings = DefaultMappingStore::default();
     let mapper = ZsMatcher::<SimpleZsTree<u16, u16>, u16, u16, _, _>::matchh(
         &node_store,
         &label_store,
@@ -96,7 +96,7 @@ fn test_with_custom_example() {
 fn test_with_custom_example2() {
     let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_java_code());
     // assert_eq!(label_store.resolve(&0).to_owned(), b"");
-    let mappings = DefaultMappingStore::new();
+    let mappings = DefaultMappingStore::default();
     let mapper = ZsMatcher::<CompletePostOrder<u16, u16>, _, _, _, _>::matchh(
         &node_store,
         &label_store,
@@ -139,7 +139,7 @@ fn test_with_custom_example2() {
 fn test_with_slide_example() {
     let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_slides());
     // assert_eq!(label_store.resolve(&0).to_owned(), b"");
-    let mappings = DefaultMappingStore::new();
+    let mappings = DefaultMappingStore::default();
     let mapper = ZsMatcher::<CompletePostOrder<u16, u16>, _, _, _, _>::matchh(
         &node_store,
         &label_store,
@@ -179,7 +179,7 @@ fn test_with_slide_example() {
 fn test_with_slide_example2() {
     let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_slides());
     // assert_eq!(label_store.resolve(&0).to_owned(), b"");
-    let mappings = DefaultMappingStore::new();
+    let mappings = DefaultMappingStore::default();
     let mapper = ZsMatcher::<CompletePostOrder<u16, u16>, _, _, _, _>::matchh(
         &node_store,
         &label_store,

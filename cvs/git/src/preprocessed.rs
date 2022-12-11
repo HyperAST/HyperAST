@@ -23,7 +23,7 @@ use crate::{
     Accumulator, Commit, Processor, SimpleStores, MD,
 };
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
-use hyper_ast_gen_ts_xml::xml_tree_gen::XmlTreeGen;
+use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
 
 /// Preprocess a git repository
 /// using the hyperAST and caching git object transformations
@@ -31,8 +31,8 @@ use hyper_ast_gen_ts_xml::xml_tree_gen::XmlTreeGen;
 /// Its only function should be to persist caches accoss processings
 /// and exposing apis to hyperAST users
 pub struct PreProcessedRepository {
-    name: String,
-    pub(crate) main_stores: SimpleStores,
+    pub name: String,
+    pub main_stores: SimpleStores,
 
     pub object_map: BTreeMap<git2::Oid, (hyper_ast::store::nodes::DefaultNodeIdentifier, MD)>,
     pub object_map_pom: BTreeMap<git2::Oid, POM>,
@@ -45,8 +45,11 @@ pub struct PreProcessedRepository {
 pub(crate) type IsSkippedAna = bool;
 
 impl PreProcessedRepository {
-    pub fn main_stores(&mut self) -> &mut SimpleStores {
+    pub fn main_stores_mut(&mut self) -> &mut SimpleStores {
         &mut self.main_stores
+    }
+    pub fn main_stores(&mut self) -> &SimpleStores {
+        &self.main_stores
     }
     pub fn intern_label(&mut self, name: &str) -> LabelIdentifier {
         self.main_stores.label_store.get(name).unwrap()
@@ -357,7 +360,8 @@ impl PreProcessedRepository {
         }
     }
 
-    /// RMS: resursive module search
+    /// RMS: Resursive Module Search
+    /// FFWD: Fast ForWarD to java directories without looking at maven stuff
     fn handle_maven_module<'a, 'b, const RMS: bool, const FFWD: bool>(
         &mut self,
         repository: &'a Repository,
@@ -378,7 +382,7 @@ impl PreProcessedRepository {
     ) -> <JavaAcc as hyper_ast::tree_gen::Accumulator>::Node {
         let full_node = self.handle_java_directory(repository, dir_path, name, oid);
         let name = self
-            .main_stores()
+            .main_stores_mut()
             .label_store
             .get_or_insert(std::str::from_utf8(name).unwrap());
         (name, full_node)
@@ -395,7 +399,7 @@ impl PreProcessedRepository {
             // TODO reinit already computed node for post order
             let full_node = already.clone();
             let name = self
-                .main_stores()
+                .main_stores_mut()
                 .label_store
                 .get_or_insert(std::str::from_utf8(&name).unwrap());
             assert!(!parent_acc.children_names.contains(&name));
@@ -412,7 +416,7 @@ impl PreProcessedRepository {
         let x = full_node.unwrap();
         self.object_map_pom.insert(blob.id(), x.clone());
         let name = self
-            .main_stores()
+            .main_stores_mut()
             .label_store
             .get_or_insert(std::str::from_utf8(&name).unwrap());
         assert!(!parent_acc.children_names.contains(&name));
@@ -430,7 +434,7 @@ impl PreProcessedRepository {
             let full_node = already.clone();
             let skiped_ana = *skiped_ana;
             let name = self
-                .main_stores()
+                .main_stores_mut()
                 .label_store
                 .get_or_insert(std::str::from_utf8(&name).unwrap());
             assert!(!w.children_names.contains(&name));
@@ -449,7 +453,7 @@ impl PreProcessedRepository {
             self.object_map_java
                 .insert((blob.id(), name.clone()), (full_node.clone(), skiped_ana));
             let name = self
-                .main_stores()
+                .main_stores_mut()
                 .label_store
                 .get_or_insert(std::str::from_utf8(&name).unwrap());
             assert!(!w.children_names.contains(&name));

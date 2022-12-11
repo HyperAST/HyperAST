@@ -1,12 +1,10 @@
 use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
 
-use num_traits::{zero, PrimInt, ToPrimitive};
+use num_traits::PrimInt;
 
 use crate::{
-    matchers::{
-        mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
-    },
     decompressed_tree_store::{DecompressedTreeStore, DecompressedWithParent},
+    matchers::mapping_store::MonoMappingStore,
     utils::sequence_algorithms::longest_common_subsequence,
 };
 use hyper_ast::types::{HashKind, NodeStore, Tree, Typed, WithHashs};
@@ -17,15 +15,16 @@ pub struct BottomUpMatcher<
     'a,
     Dsrc,
     Ddst,
-    IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
+    IdD: PrimInt + std::ops::SubAssign + Debug,
     T: 'a + Tree + WithHashs,
     S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
-       // const SIM_THRESHOLD: u64 = (0.4).bytes(),
+    // const SIM_THRESHOLD: u64 = (0.4).bytes(),
+    M: MonoMappingStore<Ele = IdD>,
 > {
     pub(super) node_store: &'a S,
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,
-    pub mappings: DefaultMappingStore<IdD>,
+    pub mappings: M,
     pub(super) phantom: PhantomData<*const T>,
 }
 
@@ -33,10 +32,11 @@ impl<
         'a,
         Dsrc: DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
         Ddst: DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
-        IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
+        IdD: PrimInt + std::ops::SubAssign + Debug,
         T: 'a + Tree + WithHashs,
         S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
-    > BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S>
+        M: MonoMappingStore<Ele = IdD>,
+    > BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M>
 where
     S: 'a + NodeStore<T::TreeId>,
     // for<'c> < <S as NodeStore2<T::TreeId>>::R  as GenericItem<'c>>::Item:Tree<TreeId = T::TreeId,Type = T::Type,Label = T::Label,ChildIdx = T::ChildIdx> + WithHashs<HK = T::HK,HP = T::HP>,
@@ -52,20 +52,19 @@ where
             }
         }
         let mut candidates = vec![];
-        let mut visited: Vec<bool> = vec![false; self.dst_arena.len()];
+        let mut visited = bitvec::bitbox![0;self.dst_arena.len()];
+        let t = self.node_store.resolve(s).get_type();
         for mut seed in seeds {
-            while seed != zero() {
-                let parent = if let Some(p) = self.dst_arena.parent(&seed) {
-                    p
-                } else {
+            loop {
+                let Some(parent) = self.dst_arena.parent(&seed) else {
                     break;
                 };
                 if visited[parent.to_usize().unwrap()] {
                     break;
                 }
-                visited[parent.to_usize().unwrap()] = true;
+                visited.set(parent.to_usize().unwrap(), true);
                 let p = &self.dst_arena.original(&parent);
-                if self.node_store.resolve(p).get_type() == self.node_store.resolve(s).get_type()
+                if self.node_store.resolve(p).get_type() == t
                     && !(self.mappings.is_dst(&parent) || parent == self.dst_arena.root())
                 {
                     candidates.push(parent);
@@ -79,9 +78,9 @@ where
     pub(super) fn last_chance_match_histogram(&mut self, src: &IdD, dst: &IdD) {
         self.lcs_equal_matching(src, dst);
         self.lcs_structure_matching(src, dst);
-        if src != &zero() && dst != &zero() {
+        if !src.is_zero() && !dst.is_zero() {
             self.histogram_matching(src, dst); //self.histogramMaking(src, dst),
-        } else if !(src == &zero() || dst == &zero()) {
+        } else if !(src.is_zero() || dst.is_zero()) {
             if self
                 .node_store
                 .resolve(

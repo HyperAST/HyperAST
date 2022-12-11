@@ -211,13 +211,13 @@ impl hyper_ast::types::Typed for Tree {
 }
 
 impl hyper_ast::types::WithSerialization for Tree {
-    fn bytes_len(&self) -> usize {
+    fn try_bytes_len(&self) -> Option<usize> {
         todo!()
     }
 }
 
 impl<T> hyper_ast::types::WithSerialization for TreeRef<'_, T> {
-    fn bytes_len(&self) -> usize {
+    fn try_bytes_len(&self) -> Option<usize> {
         todo!()
     }
 }

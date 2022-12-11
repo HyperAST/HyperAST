@@ -1,4 +1,4 @@
 [workspace]
 members = ["gumtree", "hyper_ast", "gen/tree-sitter/*", "cvs/git","client","benchmark","tree-sitter_types","ref-mining-evaluation","benchmark_diffs"]
 exclude = ["gen/tree-sitter/java/tree-sitter-java"]
-default-members = ["gumtree", "gen/tree-sitter/java", "gen/tree-sitter/xml", "cvs/git","benchmark","ref-mining-evaluation"]
+default-members = ["gumtree", "gen/tree-sitter/java", "gen/tree-sitter/xml", "cvs/git","benchmark","ref-mining-evaluation","benchmark_diffs"]

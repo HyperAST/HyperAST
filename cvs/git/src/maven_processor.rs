@@ -83,7 +83,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                     let w = &mut self.stack.last_mut().unwrap().2;
                     let name = self
                         .prepro
-                        .main_stores()
+                        .main_stores_mut()
                         .label_store
                         .get_or_insert(std::str::from_utf8(&name).unwrap());
                     assert!(!w.children_names.contains(&name));
@@ -92,7 +92,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                 }
                 // TODO use maven pom.xml to find source_dir  and tests_dir ie. ignore resources, maybe also tests
                 // TODO maybe at some point try to handle maven modules and source dirs that reference parent directory in their path
-                log::info!("mm tree {:?}", std::str::from_utf8(&name));
+                log::debug!("mm tree {:?}", std::str::from_utf8(&name));
 
                 let parent_acc = &mut self.stack.last_mut().unwrap().2;
                 if FFWD {
@@ -168,7 +168,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
     }
     fn post(&mut self, oid: Oid, acc: MavenModuleAcc) -> Option<(NodeIdentifier, MD)> {
         let name = acc.name.clone();
-        let full_node = Self::make(acc, self.prepro.main_stores());
+        let full_node = Self::make(acc, self.prepro.main_stores_mut());
         self.prepro.object_map.insert(oid, full_node.clone());
 
         let name = self.prepro.main_stores.label_store.get_or_insert(name);

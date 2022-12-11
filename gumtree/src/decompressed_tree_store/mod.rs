@@ -87,7 +87,9 @@ pub trait DecompressedTreeStore<'a, IdC, IdD>: ShallowDecompressedTreeStore<'a, 
     // S: 'a + NodeStore2<T::TreeId, R<'a> = T> //NodeStore<'a, T::TreeId, T>
     fn first_descendant(&self, i: &IdD) -> IdD;
 }
-
+pub trait ContiguousDescendants<'a, IdC, IdD>: DecompressedTreeStore<'a, IdC, IdD> {
+    fn descendants_range(&self, x: &IdD) -> std::ops::Range<IdD>;
+}
 // pub struct IterNormPath<'x, IdC, IdD: Clone, D: DecompressedWithParent<'x, IdC, IdD>> {
 //     id: IdD,
 //     internal: &'x D,

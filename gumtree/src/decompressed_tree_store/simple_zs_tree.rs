@@ -1,9 +1,13 @@
-use num_traits::{cast, one, zero, PrimInt};
+use std::fmt::{Debug, Display};
+
+use bitvec::bitvec;
+use num_traits::{cast, one, zero, PrimInt, ToPrimitive};
 
 use crate::tree::tree_path::CompressedTreePath;
-use hyper_ast::types::{NodeStore, WithChildren};
+use hyper_ast::types::{LabelStore, NodeStore, Typed, WithChildren, WithSerialization};
 
 use super::{
+    pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
     size, DecompressedTreeStore, Initializable, Iter, PostOrder, PostOrderIterable,
     PostOrderKeyRoots, ShallowDecompressedTreeStore,
 };
@@ -47,12 +51,7 @@ impl<'d, IdC: Clone, IdD: PrimInt> PostOrderKeyRoots<'d, IdC, IdD> for SimpleZsT
 }
 
 impl<'d, IdC: Clone, IdD: PrimInt> Initializable<'d, IdC, IdD> for SimpleZsTree<IdC, IdD> {
-    fn new<
-        S,
-    >(
-        store: &'d S,
-        root: &IdC,
-    ) -> SimpleZsTree<IdC, IdD>
+    fn new<S>(store: &'d S, root: &IdC) -> SimpleZsTree<IdC, IdD>
     where
         S: 'd + NodeStore<IdC>,
         S::R<'d>: WithChildren<TreeId = IdC>,
@@ -74,7 +73,9 @@ impl<'d, IdC: Clone, IdD: PrimInt> Initializable<'d, IdC, IdD> for SimpleZsTree<
         loop {
             if let Some(R { curr, idx, lld }) = stack.pop() {
                 let x = store.resolve(&curr);
-                let l = x.try_get_children().map_or(zero(), |x|cast(x.len()).unwrap());
+                let l = x
+                    .try_get_children()
+                    .map_or(zero(), |x| cast(x.len()).unwrap());
 
                 if l == zero() {
                     // leaf
@@ -116,12 +117,12 @@ impl<'d, IdC: Clone, IdD: PrimInt> Initializable<'d, IdC, IdD> for SimpleZsTree<
 
         let node_count = id_compressed.len();
         let mut kr = vec![num_traits::zero(); leaf_count + 1];
-        let mut visited = vec![false; node_count];
+        let mut visited = bitvec![0;node_count];
         let mut k = kr.len() - 1;
         for i in (1..node_count).rev() {
             if !visited[llds[i].to_usize().unwrap()] {
                 kr[k] = cast(i + 1).unwrap();
-                visited[llds[i].to_usize().unwrap()] = true;
+                visited.set(llds[i].to_usize().unwrap(), true);
                 if k > 0 {
                     k -= 1;
                 }
@@ -156,10 +157,10 @@ impl<'d, IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<'d, IdC, IdD>
     }
 
     fn root(&self) -> IdD {
-        cast::<_, IdD>(self.len()).unwrap() - one() // todo test changing it
+        cast(self.len() - 1).unwrap()
     }
 
-    fn child<'b,S>(&self, store: &'b S, x: &IdD, p: &[<S::R<'b> as WithChildren>::ChildIdx]) -> IdD
+    fn child<'b, S>(&self, store: &'b S, x: &IdD, p: &[<S::R<'b> as WithChildren>::ChildIdx]) -> IdD
     where
         S: NodeStore<IdC>,
         S::R<'b>: WithChildren<TreeId = IdC>,
@@ -170,8 +171,8 @@ impl<'d, IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<'d, IdC, IdD>
             let cs: Vec<_> = store.resolve(&a).get_children().to_owned();
             if cs.len() > 0 {
                 let mut z = 0;
-                for x in cs[0..cast::<_, usize>(*d).unwrap() + 1].to_owned() {
-                    z += size(store, &x);
+                for x in cs[0..d.to_usize().unwrap() + 1].to_owned() {
+                    z += size(store, &x); // TODO check if we can make it significantly faster using metadata
                 }
                 r = self.lld(&r) + cast(z).unwrap() - one();
             } else {
@@ -181,7 +182,7 @@ impl<'d, IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<'d, IdC, IdD>
         r
     }
 
-    fn children<'b,S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
     where
         S: 'b + NodeStore<IdC>,
         S::R<'b>: WithChildren<TreeId = IdC>,
@@ -201,8 +202,9 @@ impl<'d, IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<'d, IdC, IdD>
         todo!()
     }
 }
+
 impl<'d, IdC: Clone, IdD: PrimInt> DecompressedTreeStore<'d, IdC, IdD> for SimpleZsTree<IdC, IdD> {
-    fn descendants<'b,S>(&self, _store: &'b S, x: &IdD) -> Vec<IdD>
+    fn descendants<'b, S>(&self, _store: &'b S, x: &IdD) -> Vec<IdD>
     where
         S: 'b + NodeStore<IdC>,
         S::R<'b>: WithChildren<TreeId = IdC>,
@@ -213,14 +215,45 @@ impl<'d, IdC: Clone, IdD: PrimInt> DecompressedTreeStore<'d, IdC, IdD> for Simpl
     }
 
     fn first_descendant(&self, i: &IdD) -> IdD {
-        self.llds[(*i).to_usize().unwrap()]
+        self.lld(i)
     }
 
-    fn descendants_count<'b,S>(&self, _store: &'b S, x: &IdD) -> usize
+    fn descendants_count<'b, S>(&self, _store: &'b S, x: &IdD) -> usize
     where
         S: 'b + NodeStore<IdC>,
         S::R<'b>: WithChildren<TreeId = IdC>,
     {
-        cast::<_, usize>(self.lld(x) - *x).unwrap()
+        (self.lld(x) - *x).to_usize().unwrap()
+    }
+}
+
+pub struct DisplaySimpleZsTree<'a, IdC, IdD: PrimInt, S, LS>
+where
+    S: NodeStore<IdC>,
+    S::R<'a>: WithChildren<TreeId = IdC>,
+    LS: LabelStore<str>,
+{
+    pub inner: &'a SimpleZsTree<IdC, IdD>,
+    pub node_store: &'a S,
+    pub label_store: &'a LS,
+}
+
+impl<'a, IdC: Clone + Eq + Debug, IdD: PrimInt, S, LS> Display
+    for DisplaySimpleZsTree<'a, IdC, IdD, S, LS>
+where
+    S: NodeStore<IdC>,
+    S::R<'a>: WithChildren<TreeId = IdC> + Typed + WithSerialization,
+    <S::R<'a> as Typed>::Type: Debug,
+    LS: LabelStore<str>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let m = SimplePreOrderMapper::from(self.inner);
+        DisplaySimplePreOrderMapper {
+            inner: &m,
+            node_store: self.node_store,
+        }
+        .fmt(f)
+        .unwrap();
+        Ok(())
     }
 }

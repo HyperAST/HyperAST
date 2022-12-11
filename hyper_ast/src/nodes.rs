@@ -805,11 +805,11 @@ fn escape(src: &str) -> String {
 pub fn json_serialize<
     IdN,
     IdL,
-    T: Borrow<CompressedNode<IdN, IdL>>,
+    T: crate::types::Tree<TreeId = IdN, Type = Type, Label = IdL>,
     F: Copy + Fn(&IdN) -> T,
     G: Copy + Fn(&IdL) -> String,
     W: std::fmt::Write,
-    const SPC:bool,
+    const SPC: bool,
 >(
     f: F,
     g: G,
@@ -817,106 +817,82 @@ pub fn json_serialize<
     out: &mut W,
     parent_indent: &str,
 ) -> Option<String> {
-    match f(id).borrow() {
-        // CompressedNode::Type(kind) => {
-        //     print!("{}", kind.to_string());
-        //     // None
-        // }
-        // CompressedNode::Label { kind, label } => {
-        //     let s = &g(label);
-        //     if s.len() > 20 {
-        //         print!("({}='{}...')", kind.to_string(), &s[..20]);
-        //     } else {
-        //         print!("({}='{}')", kind.to_string(), s);
-        //     }
-        //     // None
-        // }
-        // CompressedNode::Children2 { kind, children } => {
-        //     print!("({} ", kind.to_string());
-        //     for id in children {
-        //         print_tree_syntax(f, g, &id, out);
-        //     }
-        //     print!(")");
-        // }
-        // CompressedNode::Children { kind, children } => {
-        //     print!("({} ", kind.to_string());
-        //     for id in children.iter() {
-        //         print_tree_syntax(f, g, &id, out);
-        //     }
-        //     print!(")");
-        // }
-        // CompressedNode::Spaces(s) => {
-        //     let s = &g(s);
-        //     print!("(_ ");
-        //     let a = &*s;
-        //     // print!("{}",s);
-        //     print!("{:?}", Space::format_indentation(s.as_bytes()));
-        //     // a.iter().for_each(|a| print!("{:?}", a));
-        //     print!(")");
-        // }
-        CompressedNode::Type(kind) => {
+    let b = f(id);
+    let kind = b.get_type();
+    let label = b.try_get_label();
+    let children = b.try_get_children();
+
+    if kind == Type::Spaces {
+        let s = g(label.unwrap());
+        let b:String = //s; //String::new();
+        Space::format_indentation(s.as_bytes())
+            .iter()
+            .map(|x| x.to_string())
+            .collect();
+        if SPC {
+            // let a = &*s;
+            // a.iter()
+            //     .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
+            out.write_str("{\"kind\":\"").unwrap();
+            // out.write_str(&kind.to_string()).unwrap();
+            out.write_str(&"spaces").unwrap();
+            out.write_str("\",\"label\":\"").unwrap();
+            out.write_str(&escape(&b)).unwrap();
+            out.write_str("\"}").unwrap();
+        }
+        return Some(if b.contains("\n") {
+            b
+        } else {
+            parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
+        });
+    }
+
+    match (label, children) {
+        (None, None) => {
             out.write_str("\"").unwrap();
-            out.write_str(&kind.to_string()).unwrap();
+            out.write_str(&escape(&kind.to_string())).unwrap();
             out.write_str("\"").unwrap();
             None
         }
-        CompressedNode::Label { kind, label } => {
+        (label, Some(children)) => {
             out.write_str("{\"kind\":\"").unwrap();
-            out.write_str(&kind.to_string()).unwrap();
+            out.write_str(&escape(&kind.to_string())).unwrap();
+            if let Some(label) = label {
+                out.write_str("\",\"label\":\"").unwrap();
+                let s = g(label);
+                out.write_str(&escape(&s)).unwrap();
+            }
+            if !children.is_empty() {
+                out.write_str("\",\"children\":[").unwrap();
+                let mut it = children.iter();
+                let mut ind = json_serialize::<_, _, _, _, _, _, SPC>(
+                    f,
+                    g,
+                    &it.next().unwrap(),
+                    out,
+                    parent_indent,
+                )
+                .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
+                for id in it {
+                    out.write_str(",").unwrap();
+                    ind = json_serialize::<_, _, _, _, _, _, SPC>(f, g, &id, out, &ind).unwrap_or(
+                        parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned(),
+                    );
+                }
+                out.write_str("]}").unwrap();
+            } else {
+                out.write_str("\"}").unwrap();
+            }
+            None
+        }
+        (Some(label), None) => {
+            out.write_str("{\"kind\":\"").unwrap();
+            out.write_str(&escape(&kind.to_string())).unwrap();
             out.write_str("\",\"label\":\"").unwrap();
             let s = g(label);
             out.write_str(&escape(&s)).unwrap();
             out.write_str("\"}").unwrap();
             None
-        }
-        CompressedNode::Children2 { kind, children } => {
-            out.write_str("{\"kind\":\"").unwrap();
-            out.write_str(&kind.to_string()).unwrap();
-            out.write_str("\",\"children\":[").unwrap();
-            let ind = json_serialize::<_,_,_,_,_,_,SPC>(f, g, &children[0], out, parent_indent)
-                .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
-            out.write_str(",").unwrap();
-            json_serialize::<_,_,_,_,_,_,SPC>(f, g, &children[1], out, &ind);
-            out.write_str("]}").unwrap();
-            None
-        }
-        CompressedNode::Children { kind, children } => {
-            out.write_str("{\"kind\":\"").unwrap();
-            out.write_str(&kind.to_string()).unwrap();
-            out.write_str("\",\"children\":[").unwrap();
-            let mut it = children.iter();
-            let mut ind = json_serialize::<_,_,_,_,_,_,SPC>(f, g, &it.next().unwrap(), out, parent_indent)
-                .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
-            for id in it {
-                out.write_str(",").unwrap();
-                ind = json_serialize::<_,_,_,_,_,_,SPC>(f, g, &id, out, &ind)
-                    .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
-            }
-            out.write_str("]}").unwrap();
-            None
-        }
-        CompressedNode::Spaces(s) => {
-            let s = g(s);
-            let b:String = //s; //String::new();
-            Space::format_indentation(s.as_bytes())
-                .iter()
-                .map(|x| x.to_string())
-                .collect();
-            if SPC {
-                // let a = &*s;
-                // a.iter()
-                //     .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
-                out.write_str("{\"kind\":\"").unwrap();
-                out.write_str(&"spaces").unwrap();
-                out.write_str("\",\"label\":\"").unwrap();
-                out.write_str(&escape(&b)).unwrap();
-                out.write_str("\"}").unwrap();
-            }
-            Some(if b.contains("\n") {
-                b
-            } else {
-                parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
-            })
         }
     }
 }

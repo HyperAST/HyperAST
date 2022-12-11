@@ -50,7 +50,7 @@ fn test_with_action_example() {
         "dst tree:\n{:?}",
         DisplayTree::new(&label_store, &node_store, dst)
     );
-    let mut ms = DefaultMappingStore::new();
+    let mut ms = DefaultMappingStore::default();
     let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &src);
     let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &dst);
     let dst_arena2 = SimpleBfsMapper::from(&node_store, &dst_arena);
@@ -103,6 +103,7 @@ fn test_with_action_example() {
                 _,
                 SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
                 NS<Tree>,
+                _,
             >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
 
         log::debug!("{:?}", actions);
@@ -450,7 +451,7 @@ fn test_with_action_example2() {
         "dst tree:\n{:?}",
         DisplayTree::new(&label_store, &node_store, dst)
     );
-    let mut ms = DefaultMappingStore::new();
+    let mut ms = DefaultMappingStore::default();
     let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &src);
     let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &dst);
     let dst_arena2 = SimpleBfsMapper::from(&node_store, &dst_arena);
@@ -504,6 +505,7 @@ fn test_with_action_example2() {
             _,
             SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
             NS<Tree>,
+            _,
         >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
 
         log::debug!("{:?}", actions);
@@ -687,7 +689,7 @@ fn test_with_zs_custom_example() {
     let src_arena = CompletePostOrder::<_, IdD>::new(&node_store, &src);
     let dst_arena = CompletePostOrder::<_, IdD>::new(&node_store, &dst);
     let dst_arena2 = SimpleBfsMapper::from(&node_store, &dst_arena);
-    let mut ms = DefaultMappingStore::new();
+    let mut ms = DefaultMappingStore::default();
     let actions = {
         let src = &(src_arena.root());
         let dst = &(dst_arena.root());
@@ -713,7 +715,8 @@ fn test_with_zs_custom_example() {
             _,
             SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
             NS<Tree>,
-        >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
+                _,
+            >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
 
         log::debug!("{:?}", actions);
         macro_rules! test_action {

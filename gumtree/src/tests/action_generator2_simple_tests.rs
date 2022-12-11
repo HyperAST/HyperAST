@@ -32,7 +32,7 @@ fn test_no_actions() {
         "dst tree:\n{:?}",
         DisplayTree::new(&label_store, &node_store, s_dst)
     );
-    let mut ms = DefaultMappingStore::new();
+    let mut ms = DefaultMappingStore::default();
     let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_src);
     let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_dst);
     let src = &(src_arena.root());
@@ -81,7 +81,8 @@ fn test_no_actions() {
         _,
         SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
         NS<Tree>,
-    >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
+        _,
+        >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     let mut node_store = node_store;
     let mut root = vec![s_src];
@@ -107,7 +108,7 @@ fn test_delete_actions_1() {
         "dst tree:\n{:?}",
         DisplayTree::new(&label_store, &node_store, s_dst)
     );
-    let mut ms = DefaultMappingStore::new();
+    let mut ms = DefaultMappingStore::default();
     let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_src);
     let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_dst);
     let src = &(src_arena.root());
@@ -154,6 +155,7 @@ fn test_delete_actions_1() {
         _,
         SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
         NS<Tree>,
+        _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     println!("{:?}", actions);
@@ -190,7 +192,7 @@ fn test_insert_actions_1() {
         "dst tree:\n{:?}",
         DisplayTree::new(&label_store, &node_store, s_dst)
     );
-    let mut ms = DefaultMappingStore::new();
+    let mut ms = DefaultMappingStore::default();
     let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_src);
     let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_dst);
     let src = &(src_arena.root());
@@ -237,6 +239,7 @@ fn test_insert_actions_1() {
         _,
         SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
         NS<Tree>,
+        _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     println!("{:?}", actions);
@@ -272,7 +275,7 @@ fn test_rename_actions_1() {
         "dst tree:\n{:?}",
         DisplayTree::new(&label_store, &node_store, s_dst)
     );
-    let mut ms = DefaultMappingStore::new();
+    let mut ms = DefaultMappingStore::default();
     let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_src);
     let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_dst);
     let src = &(src_arena.root());
@@ -321,6 +324,7 @@ fn test_rename_actions_1() {
         _,
         SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
         NS<Tree>,
+        _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     println!("{:?}", actions);
@@ -361,7 +365,7 @@ fn test_move_actions_1() {
         "dst tree:\n{:?}",
         DisplayTree::new(&label_store, &node_store, s_dst)
     );
-    let mut ms = DefaultMappingStore::new();
+    let mut ms = DefaultMappingStore::default();
     let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_src);
     let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_dst);
     let src = &(src_arena.root());
@@ -410,6 +414,7 @@ fn test_move_actions_1() {
         _,
         SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
         NS<Tree>,
+        _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     println!("{:?}", actions);

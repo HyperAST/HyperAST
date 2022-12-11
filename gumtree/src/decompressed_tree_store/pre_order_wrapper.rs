@@ -8,9 +8,9 @@ use num_traits::{cast, zero, PrimInt, ToPrimitive, Zero};
 use crate::decompressed_tree_store::{
     DecompressedTreeStore, PostOrder, ShallowDecompressedTreeStore,
 };
-use hyper_ast::types::{NodeStore, Typed, WithChildren, WithSerialization};
+use hyper_ast::types::{NodeStore, Tree, Typed, WithChildren, WithSerialization};
 
-use super::CompletePostOrder;
+use super::{CompletePostOrder, SimpleZsTree};
 
 pub struct SimplePreOrderMapper<'a, IdC, IdD, D: DecompressedTreeStore<'a, IdC, IdD>> {
     pub map: Vec<IdD>,
@@ -93,17 +93,13 @@ impl<'a, IdC, IdD: PrimInt, D: PostOrder<'a, IdC, IdD>> From<&'a D>
     }
 }
 
-pub struct DisplaySimplePreOrderMapper<'a,'b, IdC: Clone, IdD: PrimInt, S>
-where
-    S: NodeStore<IdC>,
-    S::R<'a>: WithChildren<TreeId = IdC>,
-{
-    pub inner: &'b SimplePreOrderMapper<'a, IdC, IdD, CompletePostOrder<IdC, IdD>>,
+pub struct DisplaySimplePreOrderMapper<'a, 'b, IdC, IdD: PrimInt, S, D: PostOrder<'b, IdC, IdD>> {
+    pub inner: &'b SimplePreOrderMapper<'b, IdC, IdD, D>,
     pub node_store: &'a S,
 }
 
-impl<'a,'b, IdC: Clone + Debug, IdD: PrimInt, S> Display
-    for DisplaySimplePreOrderMapper<'a,'b, IdC, IdD, S>
+impl<'a, 'b, IdC: Clone + Debug + Eq, IdD: PrimInt, S> Display
+    for DisplaySimplePreOrderMapper<'a, 'b, IdC, IdD, S, CompletePostOrder<IdC, IdD>>
 where
     S: NodeStore<IdC>,
     S::R<'a>: WithChildren<TreeId = IdC> + Typed + WithSerialization,
@@ -115,7 +111,7 @@ where
             let o = self.inner.map[i];
             let ori = self.inner.back.original(&o);
             let node = self.node_store.resolve(&ori);
-            let len = node.bytes_len();
+            let len = node.try_bytes_len().unwrap_or(0);
             writeln!(
                 f,
                 "{:>3}:{} {:?}    [{},{}]",
@@ -123,7 +119,38 @@ where
                 "  ".repeat(self.inner.depth[i].to_usize().unwrap()),
                 node.get_type(),
                 pos,
-                pos+len,
+                pos + len,
+            )?;
+            if node.child_count().is_zero() {
+                pos += len;
+            }
+        }
+        Ok(())
+    }
+}
+impl<'a, 'b, IdC: Clone, IdD: PrimInt, S> Display
+    for DisplaySimplePreOrderMapper<'a, 'b, IdC, IdD, S, SimpleZsTree<IdC, IdD>>
+where
+    IdC: Debug + Eq,
+    S: NodeStore<IdC>,
+    S::R<'a>: WithChildren<TreeId = IdC> + Typed + WithSerialization, //<TreeId = IdC> + Typed,
+    <S::R<'a> as Typed>::Type: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut pos = 0;
+        for i in 0..self.inner.map.len() {
+            let o = self.inner.map[i];
+            let ori = self.inner.back.original(&o);
+            let node = self.node_store.resolve(&ori);
+            let len = node.try_bytes_len().unwrap_or(0);
+            writeln!(
+                f,
+                "{:>3}:{} {:?}    [{},{}]",
+                o.to_usize().unwrap(),
+                "  ".repeat(self.inner.depth[i].to_usize().unwrap()),
+                node.get_type(),
+                pos,
+                pos + len,
             )?;
             if node.child_count().is_zero() {
                 pos += len;

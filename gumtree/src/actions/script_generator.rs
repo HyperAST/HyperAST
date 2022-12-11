@@ -200,7 +200,7 @@ where
             mid_root: src_arena.root(),
             dst_arena,
             ori_mappings: None,
-            cpy_mappings: DefaultMappingStore::new(),
+            cpy_mappings: Default::default(),
             actions: ActionsVec::new(),
             src_in_order: InOrderNodes(None),
             dst_in_order: InOrderNodes(None),
@@ -441,8 +441,8 @@ where
 
         for a in &s1 {
             for b in &s2 {
-                if self.ori_mappings.unwrap().has(&a, &b) && !lcs.contains(&(*a, *b)) {
-                    let k = self.find_pos(b, x);
+                if self.ori_mappings.unwrap().has(a, b) && !lcs.contains(&(*a, *b)) {
+                let k = self.find_pos(b, x);
                     let action = SimpleAction::Move {
                         sub: self.ori_to_copy(*a),
                         parent: Some(*x),

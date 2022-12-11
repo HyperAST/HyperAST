@@ -2,19 +2,16 @@ use std::hash::Hash;
 use std::{fmt::Debug, marker::PhantomData};
 
 use crate::decompressed_tree_store::{
-    DecompressedTreeStore, DecompressedWithParent, ShallowDecompressedTreeStore,
+    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent,
 };
 use crate::matchers::heuristic::gt::height;
-use crate::matchers::similarity_metrics::dice_similarity;
+use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{
-    mapping_store::{
-        DefaultMappingStore, DefaultMultiMappingStore, MappingStore, MultiMappingStore,
-    },
+    mapping_store::{DefaultMultiMappingStore, MappingStore, MultiMappingStore},
     similarity_metrics,
 };
 use crate::utils::sequence_algorithms::longest_common_subsequence;
-use bitvec::order::Lsb0;
-use bitvec::store::BitStore;
+use hyper_ast::compat::HashMap;
 use hyper_ast::types::{HashKind, Labeled, NodeStore, Tree, Typed, WithChildren, WithHashs};
 use num_traits::{cast, one, zero, PrimInt, ToPrimitive};
 
@@ -25,20 +22,28 @@ pub struct GreedySubtreeMatcher<
     IdD: PrimInt,
     T: 'a + Tree,
     S,
+    M: MonoMappingStore<Ele = IdD>,
     const MIN_HEIGHT: usize = 1,
 > {
-    internal: SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT>,
+    internal: SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>,
 }
 
 impl<
         'a,
-        Dsrc: 'a + DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
-        Ddst: 'a + DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
-        IdD: 'a + PrimInt + Debug, // + Into<usize> + std::ops::SubAssign,
+        Dsrc: 'a
+            + DecompressedTreeStore<'a, T::TreeId, IdD>
+            + DecompressedWithParent<'a, T::TreeId, IdD>
+            + ContiguousDescendants<'a, T::TreeId, IdD>,
+        Ddst: 'a
+            + DecompressedTreeStore<'a, T::TreeId, IdD>
+            + DecompressedWithParent<'a, T::TreeId, IdD>
+            + ContiguousDescendants<'a, T::TreeId, IdD>,
+        IdD: 'a + PrimInt + Debug + Hash, // + Into<usize> + std::ops::SubAssign,
         T: Tree + WithHashs,
         S, //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
+        M: MonoMappingStore<Ele = IdD>,
         const MIN_HEIGHT: usize, // = 2
-    > GreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT>
+    > GreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>
 where
     S: 'a + NodeStore<T::TreeId>,
     // for<'c> < <S as NodeStore2<T::TreeId>>::R  as GenericItem<'c>>::Item:Tree<TreeId = T::TreeId,Type = T::Type,Label = T::Label,ChildIdx = T::ChildIdx> + WithHashs<HK = T::HK,HP = T::HP>,
@@ -51,12 +56,12 @@ where
         node_store: &'a S,
         src: &'a T::TreeId,
         dst: &'a T::TreeId,
-        mappings: DefaultMappingStore<IdD>,
-    ) -> GreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT>
+        mappings: M,
+    ) -> GreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>
     where
         Self: 'a,
     {
-        let mut matcher = GreedySubtreeMatcher::<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT> {
+        let mut matcher = GreedySubtreeMatcher::<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT> {
             // label_store,
             internal: SubtreeMatcher {
                 node_store,
@@ -75,13 +80,17 @@ where
     }
 
     pub(crate) fn execute(&mut self) {
+        let now = std::time::Instant::now();
         let m = self.internal.matchh_to_be_filtered();
+        let match_t = now.elapsed().as_secs_f64();
+        dbg!(match_t);
         self.filter_mappings(m);
+        let filter_t = now.elapsed().as_secs_f64();
+        dbg!(filter_t);
     }
 
     fn filter_mappings(&mut self, multi_mappings: DefaultMultiMappingStore<IdD>) {
         // Select unique mappings first and extract ambiguous mappings.
-        // println!("multi_mappings:{}", multi_mappings.len());
         let mut ambiguous_list: Vec<Mapping<IdD>> = vec![];
         let mut ignored = bitvec::bitbox![0;self.internal.src_arena.len()];
         let mut src_ignored = bitvec::bitbox![0;self.internal.src_arena.len()];
@@ -122,7 +131,7 @@ where
             }
         }
 
-        let mapping_list = self.sort(ambiguous_list);
+        let mapping_list: Vec<_> = self.sort(ambiguous_list).collect();
 
         // Select the best ambiguous mappings
         for (src, dst) in mapping_list {
@@ -148,74 +157,57 @@ where
         }
     }
 
-    fn sort(&self, ambiguous_mappings: Vec<Mapping<IdD>>) -> impl Iterator<Item = Mapping<IdD>> {
-        let mut indir: Vec<_> = (0..ambiguous_mappings.len()).collect();
-        let mut sib_sim = (
-            vec![0.0_f64; ambiguous_mappings.len()],
-            bitvec::bitbox![0;ambiguous_mappings.len()],
-        );
-        let mut psib_sim = (
-            vec![0.0_f64; ambiguous_mappings.len()],
-            bitvec::bitbox![0;ambiguous_mappings.len()],
-        );
-        let mut p_in_p_sim = (
-            vec![0.0_f64; ambiguous_mappings.len()],
-            bitvec::bitbox![0;ambiguous_mappings.len()],
-        );
-        // sib_sim.1.resize(ambiguous_mappings.len(), false);
-        indir.sort_by(|a, b| {
-            let cached_coef_sib = |l: &usize| {
-                if !sib_sim.1[*l] {
-                    sib_sim.0[*l] = self.coef_sib(&ambiguous_mappings[*l])
-                }
-                // println!("sib={}", sib_sim.0[*l]);
-                sib_sim.0[*l]
+    fn sort(
+        &self,
+        mut ambiguous_mappings: Vec<Mapping<IdD>>,
+    ) -> impl Iterator<Item = Mapping<IdD>> {
+        let mut sib_sim = HashMap::<Mapping<IdD>, f64>::default();
+        let mut psib_sim = HashMap::<Mapping<IdD>, f64>::default();
+        let mut p_in_p_sim = HashMap::<Mapping<IdD>, f64>::default();
+        dbg!(&ambiguous_mappings.len());
+        ambiguous_mappings.sort_by(|a, b| {
+            let cached_coef_sib = |l: &Mapping<IdD>| {
+                sib_sim
+                    .entry(*l)
+                    .or_insert_with(|| self.coef_sib(&l))
+                    .clone()
             };
-            let cached_coef_parent = |l: &usize| {
-                if !psib_sim.1[*l] {
-                    psib_sim.0[*l] = self.coef_parent(&ambiguous_mappings[*l])
-                }
-                psib_sim.0[*l]
+            let cached_coef_parent = |l: &Mapping<IdD>| {
+                psib_sim
+                    .entry(*l)
+                    .or_insert_with(|| self.coef_parent(&l))
+                    .clone()
             };
-            let (alink, blink) = (&ambiguous_mappings[*a], &ambiguous_mappings[*b]);
+            let (alink, blink) = (a, b);
             if self.same_parents(alink, blink) {
-                return std::cmp::Ordering::Equal;
+                std::cmp::Ordering::Equal
             } else {
-                // println!("a,b={},{}", a, b);
                 self.cached_compare(cached_coef_sib, a, b)
                     .reverse()
-                    .then_with(|| {
-                        // println!("a,b'={},{}", a, b);
-                        self.cached_compare(cached_coef_parent, a, b).reverse()
-                    })
+                    .then_with(|| self.cached_compare(cached_coef_parent, a, b).reverse())
             }
             .then_with(|| {
-                // println!("a,b''={},{}", a, b);
                 self.cached_compare(
-                    |l: &usize| {
-                        if !p_in_p_sim.1[*l] {
-                            p_in_p_sim.0[*l] = self.coef_pos_in_parent(&ambiguous_mappings[*l])
-                        }
-                        p_in_p_sim.0[*l]
+                    |l: &Mapping<IdD>| {
+                        p_in_p_sim
+                            .entry(*l)
+                            .or_insert_with(|| self.coef_pos_in_parent(&l))
+                            .clone()
                     },
                     a,
                     b,
                 )
             })
-            // .then_with(|| self.compare_parent_pos(alink, blink))
-            .then_with(|| {
-                // println!("a,b'''={},{}", a, b);
-                self.compare_pos(alink, blink)
-            })
+            .then_with(|| self.compare_delta_pos(alink, blink))
         });
-        indir.into_iter().map(move |x| ambiguous_mappings[x])
+        ambiguous_mappings.into_iter()
     }
 
-    fn cached_compare<F: FnMut(&usize) -> O, O: PartialOrd>(
+    fn cached_compare<I, F: FnMut(&I) -> O, O: PartialOrd>(
         &self,
         mut cached: F,
-        a: &usize,
-        b: &usize,
+        a: &I,
+        b: &I,
     ) -> std::cmp::Ordering {
         cached(a)
             .partial_cmp(&cached(b))
@@ -223,19 +215,19 @@ where
     }
 
     fn coef_sib(&self, l: &(IdD, IdD)) -> f64 {
-        let p_src = self.internal.src_arena.parent(&l.0).unwrap();
-        let p_dst = self.internal.dst_arena.parent(&l.1).unwrap();
-        similarity_metrics::dice_similarity(
-            &self
-                .internal
-                .src_arena
-                .descendants(self.internal.node_store, &p_src),
-            &self
-                .internal
-                .dst_arena
-                .descendants(self.internal.node_store, &p_dst),
+        let (p_src, p_dst) = self.parents(l);
+        similarity_metrics::SimilarityMeasure::range(
+            &self.internal.src_arena.descendants_range(&p_src), //descendants
+            &self.internal.dst_arena.descendants_range(&p_dst),
             &self.internal.mappings,
         )
+        .dice()
+    }
+
+    fn parents(&self, l: &(IdD, IdD)) -> (IdD, IdD) {
+        let p_src = self.internal.src_arena.parent(&l.0).unwrap();
+        let p_dst = self.internal.dst_arena.parent(&l.1).unwrap();
+        (p_src, p_dst)
     }
 
     fn coef_parent(&self, l: &(IdD, IdD)) -> f64 {
@@ -341,6 +333,21 @@ where
         return alink.1.cmp(&blink.1);
     }
 
+    fn compare_delta_pos(&self, alink: &(IdD, IdD), blink: &(IdD, IdD)) -> std::cmp::Ordering {
+        return (alink
+            .0
+            .to_usize()
+            .unwrap()
+            .abs_diff(alink.1.to_usize().unwrap()))
+        .cmp(
+            &blink
+                .0
+                .to_usize()
+                .unwrap()
+                .abs_diff(blink.1.to_usize().unwrap()),
+        );
+    }
+
     fn sim_sort(
         &self,
         ambiguous_mappings: Vec<Mapping<IdD>>,
@@ -392,19 +399,32 @@ impl<
         IdD: PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree,      // + WithHashs,
         S,            //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
+        M: MonoMappingStore<Ele = IdD>,
         const MIN_HEIGHT: usize,
-    > Into<SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT>>
-    for GreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT>
+    > Into<SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>>
+    for GreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>
 where
     S: 'a + NodeStore<T::TreeId>,
     S::R<'a>: Tree<TreeId = T::TreeId>,
 {
-    fn into(self) -> SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT> {
+    fn into(self) -> SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT> {
         self.internal
     }
 }
 
 type Mapping<T> = (T, T);
+
+struct Mapping2<T>(T, T);
+
+impl<IdD: ToPrimitive> Debug for &Mapping2<IdD> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?}",
+            (self.0.to_usize().unwrap(), self.1.to_usize().unwrap()),
+        )
+    }
+}
 
 pub struct SubtreeMatcher<
     'a,
@@ -413,12 +433,13 @@ pub struct SubtreeMatcher<
     IdD: 'a + PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
     T: 'a + Tree,      // + WithHashs,
     S,                 //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
+    M: MonoMappingStore<Ele = IdD>,
     const MIN_HEIGHT: usize,
 > {
     pub(super) node_store: &'a S,
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,
-    pub mappings: DefaultMappingStore<IdD>,
+    pub mappings: M,
     pub(super) phantom: PhantomData<*const T>,
 }
 
@@ -429,8 +450,9 @@ impl<
         IdD: PrimInt + Debug, // + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
         S, //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
+        M: MonoMappingStore<Ele = IdD>,
         const MIN_HEIGHT: usize,
-    > SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, MIN_HEIGHT>
+    > SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>
 where
     S: 'a + NodeStore<T::TreeId>,
     // for<'c> < <S as NodeStore2<T::TreeId>>::R  as GenericItem<'c>>::Item:Tree<TreeId = T::TreeId,Type = T::Type,Label = T::Label,ChildIdx = T::ChildIdx> + WithHashs<HK = T::HK,HP = T::HP>,
@@ -464,7 +486,6 @@ where
             src_to_dsts: vec![None; self.src_arena.len()],
             dst_to_srcs: vec![None; self.dst_arena.len()],
         };
-
         let mut src_trees =
             PriorityTreeList::new(self.node_store, &self.src_arena, self.src_arena.root());
         let mut dst_trees =
@@ -475,15 +496,18 @@ where
             // println!("multi_mappings={}", multi_mappings.len());
             while src_trees.peek_height() != dst_trees.peek_height() {
                 self.pop_larger(&mut src_trees, &mut dst_trees);
+                // if src_trees.peek_height() == -1 || dst_trees.peek_height() == -1 {
+                //     break;
+                // }
             }
 
             let current_height_src_trees = src_trees.pop().unwrap();
             let current_height_dst_trees = dst_trees.pop().unwrap();
 
-            let mut marks_for_src_trees = vec![false; current_height_src_trees.len()];
-            let mut marks_for_dst_trees = vec![false; current_height_dst_trees.len()];
+            let mut marks_for_src_trees = bitvec::bitbox![0;current_height_src_trees.len()];
+            let mut marks_for_dst_trees = bitvec::bitbox![0;current_height_dst_trees.len()];
             // println!(
-            //     "marks={},{}",
+            //     "{aaa} marks={},{}",
             //     marks_for_src_trees.len(),
             //     marks_for_dst_trees.len()
             // );
@@ -492,7 +516,6 @@ where
                 for j in 0..current_height_dst_trees.len() {
                     let src = current_height_src_trees[i];
                     let dst = current_height_dst_trees[j];
-
                     if self.isomorphic(&src, &dst) {
                         // println!("isomorphic={},{}", i, j);
                         // println!(
@@ -508,8 +531,8 @@ where
                         // );
                         // println!("id={:?},{:?}", src, dst);
                         multi_mappings.link(src, dst);
-                        marks_for_src_trees[i] = true;
-                        marks_for_dst_trees[j] = true;
+                        marks_for_src_trees.set(i, true);
+                        marks_for_dst_trees.set(j, true);
                     }
                 }
             }
@@ -588,15 +611,21 @@ where
         let src = self.src_arena.original(src);
         let dst = self.dst_arena.original(dst);
 
-        self.isomorphic2(&src, &dst)
+        self.isomorphic_aux::<true>(&src, &dst)
     }
 
-    pub(crate) fn isomorphic2(&self, src: &T::TreeId, dst: &T::TreeId) -> bool {
+    /// if H then test the hash otherwise do not test it,
+    /// considering hash colisions testing it should only be useful once.
+    pub(crate) fn isomorphic_aux<const H: bool>(&self, src: &T::TreeId, dst: &T::TreeId) -> bool {
         if src == dst {
             return true;
         }
         let src = self.node_store.resolve(src);
-        let src_h = src.hash(&mut &T::HK::label());
+        let src_h = if H {
+            Some(src.hash(&mut &T::HK::label()))
+        } else {
+            None
+        };
         let src_t = src.get_type();
         let src_l = if src.has_label() {
             Some(src.get_label())
@@ -607,9 +636,11 @@ where
 
         let dst = self.node_store.resolve(dst);
 
-        let dst_h = dst.hash(&mut &T::HK::label());
-        if src_h != dst_h {
-            return false;
+        if let Some(src_h) = src_h {
+            let dst_h = dst.hash(&mut &T::HK::label());
+            if src_h != dst_h {
+                return false;
+            }
         }
         let dst_t = dst.get_type();
         if src_t != dst_t {
@@ -630,7 +661,7 @@ where
                     false
                 } else {
                     for (src, dst) in src_c.iter().zip(dst_c.iter()) {
-                        if !self.isomorphic2(src, dst) {
+                        if !self.isomorphic_aux::<false>(src, dst) {
                             return false;
                         }
                     }

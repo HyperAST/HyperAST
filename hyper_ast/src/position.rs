@@ -10,25 +10,29 @@ use std::{
 use num::ToPrimitive;
 
 use crate::{
-    nodes::{self, print_tree_syntax, IoOut, Space},
+    nodes::{print_tree_syntax, IoOut, Space},
     store::{defaults::NodeIdentifier, SimpleStores},
     types::{LabelStore, Labeled, Tree, Type, Typed, WithChildren},
 };
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct Position {
     file: PathBuf,
     offset: usize,
     len: usize,
 }
-impl Position {
-    pub fn default() -> Self {
+
+impl Default for Position {
+    fn default() -> Self {
         Self {
             file: PathBuf::default(),
             offset: 0,
             len: 0,
         }
     }
+}
+
+impl Position {
     pub fn new(file: PathBuf, offset: usize, len: usize) -> Self {
         Self { file, offset, len }
     }
@@ -626,6 +630,108 @@ impl From<(StructuralPosition, usize)> for Scout {
 pub struct ExploreStructuralPositions<'a> {
     sps: &'a StructuralPositionStore,
     i: usize,
+}
+/// precondition: root node do not contain a File node
+/// TODO make whole thing more specific to a path in a tree
+pub fn compute_range<It:Iterator>(
+    root: NodeIdentifier,
+    offsets: &mut It,
+    stores: &SimpleStores,
+) -> (usize, usize, NodeIdentifier) where It::Item: ToPrimitive {
+    let mut offset = 0;
+    let mut x = root;
+    for o in offsets {
+        // dbg!(offset);
+        let b = stores.node_store.resolve(x);
+        // dbg!(b.get_type());
+        // dbg!(o.to_usize().unwrap());
+        if let Some(cs) = b.try_get_children() {
+            let cs = cs.clone();
+            for y in 0..o.to_usize().unwrap() {
+                let b = stores.node_store.resolve(cs[y]);
+                offset += b.try_get_bytes_len(0).unwrap_or(0).to_usize().unwrap();
+            }
+            // if o.to_usize().unwrap() >= cs.len() {
+            //     // dbg!("fail");
+            // }
+            if let Some(a) = cs.get(o.to_usize().unwrap()) {
+                x = *a;
+            } else {
+                break
+            }
+        } else {
+            break;
+        }
+    }
+    let b = stores.node_store.resolve(x);
+    (offset, offset+b.try_get_bytes_len(0).unwrap_or(0).to_usize().unwrap(), x)
+}
+
+pub fn compute_position<It:Iterator>(
+    root: NodeIdentifier,
+    offsets: &mut It,
+    stores: &SimpleStores,
+) -> (Position, NodeIdentifier) where It::Item: ToPrimitive {
+    let mut offset = 0;
+    let mut x = root;
+    let mut path = vec![];
+    for o in &mut *offsets {
+        // dbg!(offset);
+        let b = stores.node_store.resolve(x);
+        // dbg!(b.get_type());
+        // dbg!(o.to_usize().unwrap());
+
+        let t = b.get_type();
+
+        if t.is_directory() || t.is_file() {
+            let l = stores.label_store.resolve(b.get_label());
+            path.push(l);
+        }
+
+        if let Some(cs) = b.try_get_children() {
+            let cs = cs.clone();
+            if !t.is_directory() {
+                for y in 0..o.to_usize().unwrap() {
+                    let b = stores.node_store.resolve(cs[y]);
+                    offset += b.get_bytes_len(0).to_usize().unwrap();
+                }
+            } else {
+                // for y in 0..o.to_usize().unwrap() {
+                //     let b = stores.node_store.resolve(cs[y]);
+                //     println!("{:?}",b.get_type());
+                // }
+            }
+            // if o.to_usize().unwrap() >= cs.len() {
+            //     // dbg!("fail");
+            // }
+            if let Some(a) = cs.get(o.to_usize().unwrap()) {
+                x = *a;
+            } else {
+                break
+            }
+        } else {
+            break;
+        }
+    }
+    assert!(offsets.next().is_none());
+    let b = stores.node_store.resolve(x);
+    let t = b.get_type();
+    if t.is_directory() || t.is_file() {
+        let l = stores.label_store.resolve(b.get_label());
+        path.push(l);
+    }
+
+    let len = if !t.is_directory() { 
+        b.get_bytes_len(0).to_usize().unwrap()
+    } else {
+        0
+    };
+    let path = PathBuf::from_iter(path.iter());
+    (Position {
+        file: path,
+        offset,
+        len,
+    }, x)
 }
 
 impl<'a> ExploreStructuralPositions<'a> {

@@ -5,6 +5,7 @@ use num_traits::ToPrimitive;
 use crate::decompressed_tree_store::{
     BreathFirstContiguousSiblings, DecompressedTreeStore, DecompressedWithParent,
 };
+use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{
     mapping_store::{DefaultMappingStore, MappingStore},
     matcher::Matcher,
@@ -26,9 +27,10 @@ pub struct SimpleBottomUpMatcher<
     Ddst,
     T: hyper_ast::types::Tree + hyper_ast::types::WithHashs,
     S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
-       // const SIM_THRESHOLD: u64 = (0.4).bytes(),
+    // const SIM_THRESHOLD: u64 = (0.4).bytes(),
+    M: MonoMappingStore<Ele = IdD>,
 > {
-    internal: BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S>,
+    internal: BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M>,
     // compressed_node_store: &'a S,
     // src_arena: D,
     // dst_arena: D,
@@ -48,7 +50,8 @@ impl<
             + BreathFirstContiguousSiblings<'a, T::TreeId, IdD>,
         T: 'a + Tree + WithHashs,
         S, //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
-    > Matcher<'a, Dsrc, Ddst, T, S> for SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S>
+        M: MonoMappingStore<Ele = IdD>,
+    > Matcher<'a, Dsrc, Ddst, T, S> for SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
 where
     S: 'a + NodeStore<T::TreeId>,
     // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
@@ -56,7 +59,7 @@ where
     S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
         + WithHashs<HK = T::HK, HP = T::HP>,
 {
-    type Store = DefaultMappingStore<IdD>;
+    type Store = M;
 
     type Ele = IdD;
 
@@ -67,7 +70,7 @@ where
         mappings: Self::Store,
     ) -> Self::Store {
         let mut matcher = Self {
-            internal: BottomUpMatcher::<'a, Dsrc, Ddst, IdD, T, S> {
+            internal: BottomUpMatcher::<'a, Dsrc, Ddst, IdD, T, S,M> {
                 node_store: compressed_node_store,
                 src_arena: Dsrc::new(compressed_node_store, src),
                 dst_arena: Ddst::new(compressed_node_store, dst),
@@ -94,7 +97,8 @@ impl<
             + BreathFirstContiguousSiblings<'a, T::TreeId, IdD>,
         T: 'a + Tree + WithHashs,
         S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
-    > SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S>
+        M: MonoMappingStore<Ele = IdD>,
+    > SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
 where
     S: 'a + NodeStore<T::TreeId>,
     // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>

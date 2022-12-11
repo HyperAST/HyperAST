@@ -1,41 +1,26 @@
 ///! fully compress all subtrees from an Xml CST
-use std::{fmt::Debug, vec};
+use std::{fmt::Debug, io::stdout, vec};
 
 use legion::world::EntryRef;
 use tuples::CombinConcat;
 
 use hyper_ast::{
-    filter::{BloomSize},
+    filter::BloomSize,
     full::FullNode,
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, NodeHashs, SyntaxNodeHashs},
     // impact::{element::RefsEnum, elements::*, partial_analysis::PartialAnalysis},
-    nodes::{self, SimpleNode1, Space},
-    store::{labels::LabelStore, SimpleStores},
+    nodes::{self, IoOut, SimpleNode1, Space},
+    store::{labels::LabelStore, nodes::legion::PendingInsert, SimpleStores},
     store::{
-        nodes::legion::{NodeIdentifier, CS},
+        nodes::legion::{compo, NodeIdentifier, CS},
         nodes::DefaultNodeStore as NodeStore,
     },
     tree_gen::{
-        compute_indentation,
-        get_spacing,
-        has_final_space,
-        parser::{Node as _},
-        try_compute_indentation,
-        try_get_spacing,
-        AccIndentation,
-        Accumulator,
-        BasicAccumulator,
-        BasicGlobalData,
-        GlobalData,
-        SpacedGlobalData,
-        Spaces,
-        SubTreeMetrics,
-        TextedGlobalData,
-        TreeGen,
-        ZippedTreeGen,
+        compute_indentation, get_spacing, has_final_space, parser::Node as _, AccIndentation,
+        Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, SpacedGlobalData, Spaces,
+        SubTreeMetrics, TextedGlobalData, TreeGen, ZippedTreeGen,
     },
     types::{LabelStore as _, Type},
-    utils::{self, clamp_u64_to_u32},
 };
 
 pub type LabelIdentifier = hyper_ast::store::labels::DefaultLabelIdentifier;
@@ -113,7 +98,7 @@ impl<'a> hyper_ast::tree_gen::parser::Node<'a> for TNode<'a> {
     }
 
     fn child(&self, i: usize) -> Option<Self> {
-        self.0.child(i).map(|x| TNode(x))
+        self.0.child(i).map(TNode)
     }
 
     fn is_named(&self) -> bool {
@@ -152,23 +137,16 @@ impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
         &mut self.stores
     }
 
-    fn pre(
-        &mut self,
-        text: &[u8],
-        node: &Self::Node<'_>,
-        stack: &Vec<Self::Acc>,
-        global: &mut Self::Global,
-    ) -> <Self as TreeGen>::Acc {
+    fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
         let type_store = &mut self.stores().type_store;
-        let parent_indentation = &stack.last().unwrap().indentation();
-        let kind = node.kind();
-        let kind = type_store.get_xml(kind);
-
-        let indent = try_compute_indentation(
+        let kind = type_store.get_xml(node.kind());
+        let parent_indentation = Space::try_format_indentation(&self.line_break)
+            .unwrap_or_else(|| vec![Space::Space; self.line_break.len()]);
+        let indent = compute_indentation(
             &self.line_break,
             text,
             node.start_byte(),
-            global.sum_byte_length(),
+            0,
             &parent_indentation,
         );
         let labeled = node.has_label();
@@ -183,8 +161,44 @@ impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
             end_byte: node.end_byte(),
             metrics: Default::default(),
             ana,
+            padding_start: 0,
+            indentation: indent,
+        }
+    }
+
+    fn pre(
+        &mut self,
+        text: &[u8],
+        node: &Self::Node<'_>,
+        stack: &Vec<Self::Acc>,
+        global: &mut Self::Global,
+    ) -> <Self as TreeGen>::Acc {
+        let type_store = &mut self.stores().type_store;
+        let parent_indentation = &stack.last().unwrap().indentation();
+        let kind = node.kind();
+        let kind = type_store.get_xml(kind);
+        let indent = compute_indentation(
+            &self.line_break,
+            text,
+            node.start_byte(),
+            global.sum_byte_length(),
+            &parent_indentation,
+        );
+        // if global.sum_byte_length() < 400 {
+        //     dbg!((kind,node.start_byte(),node.end_byte(),global.sum_byte_length(),indent.len()));
+        // }
+        Acc {
+            labeled: node.has_label(),
+            start_byte: node.start_byte(),
+            end_byte: node.end_byte(),
+            metrics: Default::default(),
+            ana: self.build_ana(&kind),
             padding_start: global.sum_byte_length(),
             indentation: indent,
+            simple: BasicAccumulator {
+                kind,
+                children: vec![],
+            },
         }
     }
 
@@ -207,7 +221,6 @@ impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
                 global: global.into(),
                 local: self.make_spacing(spacing),
             });
-            // parent.push(Self::make_spacing(spacing, node_store, global));
         }
         let label = if acc.labeled {
             std::str::from_utf8(&text[acc.start_byte..acc.end_byte])
@@ -218,287 +231,14 @@ impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
         };
         self.make(global, acc, label)
     }
-
-    fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
-        let type_store = &mut self.stores().type_store;
-        let kind = type_store.get_xml(node.kind());
-
-        let indent = compute_indentation(
-            &self.line_break,
-            text,
-            node.start_byte(),
-            0,
-            &Space::format_indentation(&self.line_break),
-        );
-        let labeled = node.has_label();
-        let ana = self.build_ana(&kind);
-        Acc {
-            simple: BasicAccumulator {
-                kind,
-                children: vec![],
-            },
-            labeled,
-            start_byte: node.start_byte(),
-            end_byte: node.end_byte(),
-            metrics: Default::default(),
-            ana,
-            padding_start: 0,
-            indentation: indent,
-        }
-    }
-}
-impl<'a> TreeGen for XmlTreeGen<'a> {
-    type Acc = Acc;
-    type Global = SpacedGlobalData<'a>;
-    fn make(
-        &mut self,
-        global: &mut <Self as TreeGen>::Global,
-        acc: <Self as TreeGen>::Acc,
-        label: Option<String>,
-    ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
-        let node_store = &mut self.stores.node_store;
-        let label_store = &mut self.stores.label_store;
-        let hashs = acc.metrics.hashs;
-        let size = acc.metrics.size + 1;
-        let height = acc.metrics.height + 1;
-        let hbuilder = hashed::Builder::new(hashs, &acc.simple.kind, &label, size);
-        let hsyntax = hbuilder.most_discriminating();
-        let hashable = &hsyntax;
-
-        let (ana, label) = if let Some(label) = label.as_ref() {
-            (
-                None as Option<PartialAnalysis>,
-                Some(label_store.get_or_insert(label.as_str())),
-            )
-        } else {
-            (None, None)
-        };
-
-        // let ana = if acc.simple.kind.eq(&Type::File) {
-        //     Some(PartialAnalysis {})
-        // } else {
-        //     ana
-        // };
-
-        let eq = |x: EntryRef| {
-            let t = x.get_component::<Type>().ok();
-            if &t != &Some(&acc.simple.kind) {
-                // println!("typed: {:?} {:?}", acc.simple.kind, t);
-                return false;
-            }
-            let l = x.get_component::<LabelIdentifier>().ok();
-            if l != label.as_ref() {
-                // println!("labeled: {:?} {:?}", acc.simple.kind, label);
-                return false;
-            } else {
-                let cs = x.get_component::<CS<legion::Entity>>().ok();
-                let r = match cs {
-                    Some(CS(cs)) => cs.as_ref() == acc.simple.children,
-                    None => acc.simple.children.is_empty(),
-                };
-                if !r {
-                    // println!("cs: {:?} {:?}", acc.simple.kind, acc.simple.children);
-                    return false;
-                }
-            }
-            true
-        };
-        let insertion = node_store.prepare_insertion(&hashable, eq);
-
-        let hashs = hbuilder.build();
-
-        let ana = match ana {
-            Some(ana) => Some(ana), // TODO partial ana resolution such as deps in pom.xml
-            None => None,
-        };
-        let compressed_node = if let Some(id) = insertion.occupied_id() {
-            id
-        } else {
-            let vacant = insertion.vacant();
-            match label {
-                None => {
-                    macro_rules! insert {
-                        ( $c:expr, $t:ty ) => {
-                            NodeStore::insert_after_prepare(
-                                vacant,
-                                $c.concat((<$t>::Size, <$t>::from(ana.as_ref().unwrap().refs()))),
-                            )
-                        };
-                    }
-                    match acc.simple.children.len() {
-                        0 => {
-                            assert_eq!(1, size);
-                            assert_eq!(1, height);
-                            NodeStore::insert_after_prepare(
-                                vacant,
-                                (acc.simple.kind.clone(), hashs, BloomSize::None),
-                            )
-                        }
-                        // 1 => NodeStore::insert_after_prepare(
-                        //     vacant,
-                        //     rest,
-                        //     (acc.simple.kind.clone(), CS0([acc.simple.children[0]])),
-                        // ),
-                        // 2 => NodeStore::insert_after_prepare(
-                        //     vacant,
-                        //     rest,
-                        //     (
-                        //         acc.simple.kind.clone(),
-                        //         CS0([
-                        //             acc.simple.children[0],
-                        //             acc.simple.children[1],
-                        //         ]),
-                        //     ),
-                        // ),
-                        // 3 => NodeStore::insert_after_prepare(
-                        //     vacant,
-                        //     rest,
-                        //     (
-                        //         acc.simple.kind.clone(),
-                        //         CS0([
-                        //             acc.simple.children[0],
-                        //             acc.simple.children[1],
-                        //             acc.simple.children[2],
-                        //         ]),
-                        //     ),
-                        // ),
-                        _ => {
-                            let a = acc.simple.children.into_boxed_slice();
-                            use hyper_ast::store::nodes::legion::compo;
-                            if let Some(ana) = &ana {
-                                let c = (
-                                    acc.simple.kind.clone(),
-                                    compo::Size(size),
-                                    compo::Height(height),
-                                    hashs,
-                                    ana.clone(),
-                                    CS(a),
-                                );
-                                NodeStore::insert_after_prepare(
-                                    vacant,
-                                    c.concat((BloomSize::None,)),
-                                )
-                            } else {
-                                let c = (
-                                    acc.simple.kind.clone(),
-                                    compo::Size(size),
-                                    compo::Height(height),
-                                    hashs,
-                                    CS(a),
-                                );
-                                NodeStore::insert_after_prepare(
-                                    vacant,
-                                    c.concat((BloomSize::None,)),
-                                )
-                            }
-                            // match ana.as_ref().map(|x| x.refs_count()).unwrap_or(0) {
-                            //     x if x > 1024 => NodeStore::insert_after_prepare(
-                            //         vacant,
-                            //         c.concat((BloomSize::Much,)),
-                            //     ),
-                            //     x if x > 512 => {
-                            //         insert!(c, Bloom::<&'static [u8], [u64; 32]>)
-                            //     }
-                            //     x if x > 256 => {
-                            //         insert!(c, Bloom::<&'static [u8], [u64; 16]>)
-                            //     }
-                            //     x if x > 150 => {
-                            //         insert!(c, Bloom::<&'static [u8], [u64; 8]>)
-                            //     }
-                            //     x if x > 100 => {
-                            //         insert!(c, Bloom::<&'static [u8], [u64; 4]>)
-                            //     }
-                            //     x if x > 30 => {
-                            //         insert!(c, Bloom::<&'static [u8], [u64; 2]>)
-                            //     }
-                            //     x if x > 15 => {
-                            //         insert!(c, Bloom::<&'static [u8], u64>)
-                            //     }
-                            //     x if x > 8 => {
-                            //         insert!(c, Bloom::<&'static [u8], u32>)
-                            //     }
-                            //     x if x > 0 => {
-                            //         insert!(c, Bloom::<&'static [u8], u16>)
-                            //     }
-                            //     _ => NodeStore::insert_after_prepare(
-                            //         vacant,
-                            //         c.concat((BloomSize::None,)),
-                            //     ),
-                            // }
-                        }
-                    }
-                }
-                Some(label) => {
-                    match acc.simple.children.len() {
-                        0 => {
-                            NodeStore::insert_after_prepare(
-                                vacant,
-                                (acc.simple.kind.clone(), hashs, label, BloomSize::None), // None not sure
-                            )
-                        }
-                        _ => {
-                            let a = acc.simple.children.into_boxed_slice();
-                            use hyper_ast::store::nodes::legion::compo;
-                            if let Some(ana) = &ana {
-                                let c = (
-                                    acc.simple.kind.clone(),
-                                    compo::Size(size),
-                                    compo::Height(height),
-                                    hashs,
-                                    label,
-                                    ana.clone(),
-                                    CS(a),
-                                );
-                                NodeStore::insert_after_prepare(
-                                    vacant,
-                                    c.concat((BloomSize::None,)),
-                                )
-                            } else {
-                                let c = (
-                                    acc.simple.kind.clone(),
-                                    compo::Size(size),
-                                    compo::Height(height),
-                                    hashs,
-                                    label,
-                                    CS(a),
-                                );
-                                NodeStore::insert_after_prepare(
-                                    vacant,
-                                    c.concat((BloomSize::None,)),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        };
-
-        let metrics = SubTreeMetrics {
-            size,
-            height,
-            hashs,
-        };
-
-        let full_node = FullNode {
-            global: global.into(),
-            local: Local {
-                compressed_node,
-                metrics,
-                ana,
-            },
-        };
-        full_node
-    }
 }
 
 impl<'a> XmlTreeGen<'a> {
     fn make_spacing(
         &mut self,
         spacing: Vec<u8>, //Space>,
-                          // node_store: &mut NodeStore,
-                          // global: &mut <Self as TreeGen>::Global,
     ) -> Local {
-        // <<Self as TreeGen>::Acc as Accumulator>::Node {
+        let bytes_len = spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
         let hbuilder: hashed::Builder<SyntaxNodeHashs<u32>> =
@@ -520,22 +260,18 @@ impl<'a> XmlTreeGen<'a> {
 
         let insertion = self.stores.node_store.prepare_insertion(&hashable, eq);
 
-        let hashs = SyntaxNodeHashs {
-            structt: 0,
-            label: 0,
-            syntax: hsyntax,
-        };
+        let hashs = hbuilder.build();
 
         let compressed_node = if let Some(id) = insertion.occupied_id() {
             id
         } else {
             let vacant = insertion.vacant();
+            let bytes_len = compo::BytesLen(bytes_len.try_into().unwrap());
             NodeStore::insert_after_prepare(
                 vacant,
-                (Type::Spaces, spacing_id, hashs, BloomSize::None),
+                (Type::Spaces, spacing_id, bytes_len, hashs, BloomSize::None),
             )
         };
-
         Local {
             compressed_node,
             metrics: SubTreeMetrics {
@@ -572,9 +308,9 @@ impl<'a> XmlTreeGen<'a> {
         text: &'a [u8],
         cursor: tree_sitter::TreeCursor,
     ) -> FullNode<BasicGlobalData, Local> {
+        let mut global = Global::from(TextedGlobalData::new(Default::default(), text));
         let mut init = self.init_val(text, &TNode(cursor.node()));
         let mut xx = TTreeCursor(cursor);
-        let mut global = Global::from(TextedGlobalData::new(Default::default(), text));
 
         let spacing = get_spacing(
             init.padding_start,
@@ -584,6 +320,7 @@ impl<'a> XmlTreeGen<'a> {
         );
         if let Some(spacing) = spacing {
             global.down();
+            init.start_byte = 0;
             init.push(FullNode {
                 global: global.into(),
                 local: self.make_spacing(spacing),
@@ -632,6 +369,171 @@ impl<'a> XmlTreeGen<'a> {
     }
 }
 
+pub fn eq_node<'a>(
+    kind: &'a Type,
+    label_id: Option<&'a LabelIdentifier>,
+    children: &'a [NodeIdentifier],
+) -> impl Fn(EntryRef) -> bool + 'a {
+    move |x: EntryRef| {
+        let t = x.get_component::<Type>();
+        if t != Ok(kind) {
+            return false;
+        }
+        let l = x.get_component::<LabelIdentifier>().ok();
+        if l != label_id {
+            return false;
+        } else {
+            let cs = x.get_component::<CS<legion::Entity>>();
+            let r = match cs {
+                Ok(CS(cs)) => cs.as_ref() == children,
+                Err(_) => children.is_empty(),
+            };
+            if !r {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+impl<'stores> TreeGen for XmlTreeGen<'stores> {
+    type Acc = Acc;
+    type Global = SpacedGlobalData<'stores>;
+    fn make(
+        &mut self,
+        global: &mut <Self as TreeGen>::Global,
+        acc: <Self as TreeGen>::Acc,
+        label: Option<String>,
+    ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
+        let node_store = &mut self.stores.node_store;
+        let label_store = &mut self.stores.label_store;
+        let hashs = acc.metrics.hashs;
+        let size = acc.metrics.size + 1;
+        let height = acc.metrics.height + 1;
+        let hbuilder = hashed::Builder::new(hashs, &acc.simple.kind, &label, size);
+        let hsyntax = hbuilder.most_discriminating();
+        let hashable = &hsyntax;
+
+        let label_id = label
+            .as_ref()
+            .map(|label| label_store.get_or_insert(label.as_str()));
+        let eq = eq_node(&acc.simple.kind, label_id.as_ref(), &acc.simple.children);
+
+        let insertion = node_store.prepare_insertion(&hashable, eq);
+
+        // let ana = None as Option<PartialAnalysis>;
+
+        // let ana = match ana {
+        //     Some(ana) => Some(ana), // TODO partial ana resolution such as deps in pom.xml
+        //     None => None,
+        // };
+
+        let local = if let Some(compressed_node) = insertion.occupied_id() {
+            let ana = None;
+            let hashs = hbuilder.build();
+            let metrics = SubTreeMetrics {
+                size,
+                height,
+                hashs,
+            };
+            Local {
+                compressed_node,
+                metrics,
+                ana,
+            }
+        } else {
+            let ana = None;
+            let hashs = hbuilder.build();
+            let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte).try_into().unwrap());
+            let compressed_node = compress(
+                label_id, &ana, acc.simple, bytes_len, size, height, insertion, hashs,
+            );
+
+            let metrics = SubTreeMetrics {
+                size,
+                height,
+                hashs,
+            };
+            Local {
+                compressed_node,
+                metrics,
+                ana,
+            }
+        };
+
+        let full_node = FullNode {
+            global: global.into(),
+            local,
+        };
+        full_node
+    }
+}
+
+fn compress(
+    label_id: Option<LabelIdentifier>,
+    ana: &Option<PartialAnalysis>,
+    simple: BasicAccumulator<Type, NodeIdentifier>,
+    bytes_len: compo::BytesLen,
+    size: u32,
+    height: u32,
+    insertion: PendingInsert,
+    hashs: SyntaxNodeHashs<u32>,
+) -> legion::Entity {
+    let vacant = insertion.vacant();
+    macro_rules! insert {
+        ( $c0:expr, $($c:expr),* $(,)? ) => {{
+            let c = $c0;
+            $(
+                let c = c.concat($c);
+            )*
+            NodeStore::insert_after_prepare(vacant, c)
+        }};
+    }
+    macro_rules! children_dipatch {
+        ( $c0:expr, $($c:expr),* $(,)? ) => {{
+            let c = $c0;
+            $(
+                let c = c.concat($c);
+            )*
+            match simple.children.len() {
+                0 => {
+                    assert_eq!(1, size);
+                    assert_eq!(1, height);
+                    insert!(
+                        c,
+                        (BloomSize::None,)
+                    )
+                }
+                _ => {
+                    let a = simple.children.into_boxed_slice();
+                    let c = c.concat((compo::Size(size), compo::Height(height),));
+                    let c = c.concat((CS(a),));
+                    insert!(
+                        c,
+                    )
+                }
+            }}
+        };
+    }
+    let base = (simple.kind.clone(), hashs, bytes_len);
+    match (label_id, 0) {
+        (None, _) => children_dipatch!(base,),
+        (Some(label), _) => children_dipatch!(base, (label,),),
+    }
+}
+
+pub fn print_tree_ids(node_store: &NodeStore, id: &NodeIdentifier) {
+    nodes::print_tree_ids(
+        |id| -> _ {
+            node_store
+                .resolve(id.clone())
+                .into_compressed_node()
+                .unwrap()
+        },
+        id,
+    )
+}
+
 pub fn print_tree_structure(node_store: &NodeStore, id: &NodeIdentifier) {
     nodes::print_tree_structure(
         |id| -> _ {
@@ -658,7 +560,7 @@ pub fn print_tree_labels(node_store: &NodeStore, label_store: &LabelStore, id: &
 }
 
 pub fn print_tree_syntax(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
-    nodes::print_tree_labels(
+    nodes::print_tree_syntax(
         |id| -> _ {
             node_store
                 .resolve(id.clone())
@@ -667,6 +569,25 @@ pub fn print_tree_syntax(node_store: &NodeStore, label_store: &LabelStore, id: &
         },
         |id| -> _ { label_store.resolve(id).to_owned() },
         id,
+        &mut Into::<IoOut<_>>::into(stdout()),
+    )
+}
+
+pub fn print_tree_syntax_with_ids(
+    node_store: &NodeStore,
+    label_store: &LabelStore,
+    id: &NodeIdentifier,
+) {
+    nodes::print_tree_syntax_with_ids(
+        |id| -> _ {
+            node_store
+                .resolve(id.clone())
+                .into_compressed_node()
+                .unwrap()
+        },
+        |id| -> _ { label_store.resolve(id).to_owned() },
+        id,
+        &mut Into::<IoOut<_>>::into(stdout()),
     )
 }
 

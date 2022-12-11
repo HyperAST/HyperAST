@@ -3,7 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use git2::{Oid, RemoteCallbacks, Repository, Revwalk, TreeEntry};
+pub use git2::Oid;
+use git2::{RemoteCallbacks, Repository, Revwalk, TreeEntry};
 use hyper_ast::position::Position;
 
 pub fn all_commits_between<'a>(

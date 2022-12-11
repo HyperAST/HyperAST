@@ -1,23 +1,28 @@
-use std::fmt::{Debug, Display};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+    hash::Hash,
+};
 
-use num_traits::{cast, one, zero, PrimInt, ToPrimitive};
+use num_traits::{cast, one, zero, PrimInt, ToPrimitive, Zero};
 
 use crate::tree::tree_path::CompressedTreePath;
-use hyper_ast::types::{
-    LabelStore, NodeStore, Stored, Tree, Typed, WithChildren, WithSerialization,
+use hyper_ast::{
+    position::Position,
+    types::{LabelStore, Labeled, NodeStore, Tree, Type, Typed, WithChildren, WithSerialization},
 };
 
 use super::{
     pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
-    size, DecompressedTreeStore, DecompressedWithParent, Initializable, Iter, PostOrder,
-    PostOrderIterable, PostOrderKeyRoots, ShallowDecompressedTreeStore,
+    size, ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, Initializable,
+    Iter, PostOrder, PostOrderIterable, PostOrderKeyRoots, ShallowDecompressedTreeStore,
 };
 
 /// made for TODO
 /// - post order
 /// - key roots
 /// - parents
-pub struct CompletePostOrder<IdC, IdD: PrimInt> {
+pub struct CompletePostOrder<IdC, IdD> {
     leaf_count: IdD,
     id_compressed: Vec<IdC>,
     id_parent: Vec<IdD>,
@@ -66,7 +71,7 @@ where
     pub label_store: &'a LS,
 }
 
-impl<'a, IdC: Clone + Debug, IdD: PrimInt, S, LS> Display
+impl<'a, IdC: Clone + Eq + Debug, IdD: PrimInt, S, LS> Display
     for DisplayCompletePostOrder<'a, IdC, IdD, S, LS>
 where
     S: NodeStore<IdC>,
@@ -98,7 +103,7 @@ where
     }
 }
 
-impl<'d, IdC: Clone, IdD: PrimInt> DecompressedWithParent<'d, IdC, IdD>
+impl<'d, IdC: Clone + Eq + Debug, IdD: PrimInt> DecompressedWithParent<'d, IdC, IdD>
     for CompletePostOrder<IdC, IdD>
 {
     fn parent(&self, id: &IdD) -> Option<IdD> {
@@ -146,6 +151,7 @@ impl<'d, IdC: Clone, IdD: PrimInt> DecompressedWithParent<'d, IdC, IdD>
         }
     }
 }
+
 pub struct IterParents<'a, IdD> {
     id: IdD,
     id_parent: &'a [IdD],
@@ -164,17 +170,25 @@ impl<'a, IdD: PrimInt> Iterator for IterParents<'a, IdD> {
     }
 }
 
-impl<'d, IdC: Clone + Debug, IdD: PrimInt> PostOrder<'d, IdC, IdD> for CompletePostOrder<IdC, IdD> {
+impl<'d, IdC: Clone + Debug + Eq, IdD: PrimInt> PostOrder<'d, IdC, IdD>
+    for CompletePostOrder<IdC, IdD>
+{
     fn lld(&self, i: &IdD) -> IdD {
-        self.llds[(*i).to_usize().unwrap() - 1] + num_traits::one()
+        self.llds[(*i).to_usize().unwrap()] + num_traits::one()
     }
 
     fn tree(&self, id: &IdD) -> IdC {
-        self.id_compressed[id.to_usize().unwrap() - 1].clone()
+        self.id_compressed[id.to_usize().unwrap()].clone()
     }
 }
 
-impl<'d, IdC: Clone + Debug, IdD: PrimInt> PostOrderIterable<'d, IdC, IdD>
+impl<'d, IdC, IdD: PrimInt> CompletePostOrder<IdC, IdD> {
+    fn size(&self, i: &IdD) -> IdD {
+        *i - self.llds[(*i).to_usize().unwrap()] + one()
+    }
+}
+
+impl<'d, IdC: Clone + Debug + Eq, IdD: PrimInt> PostOrderIterable<'d, IdC, IdD>
     for CompletePostOrder<IdC, IdD>
 {
     type It = Iter<IdD>;
@@ -186,7 +200,7 @@ impl<'d, IdC: Clone + Debug, IdD: PrimInt> PostOrderIterable<'d, IdC, IdD>
     }
 }
 
-impl<'d, IdC: Clone + Debug, IdD: PrimInt> PostOrderKeyRoots<'d, IdC, IdD>
+impl<'d, IdC: Clone + Debug + Eq, IdD: PrimInt> PostOrderKeyRoots<'d, IdC, IdD>
     for CompletePostOrder<IdC, IdD>
 {
     fn kr(&self, x: IdD) -> IdD {
@@ -240,7 +254,8 @@ impl<'d, IdC: Clone, IdD: PrimInt> Initializable<'d, IdC, IdD> for CompletePostO
                 let l = x.try_get_children();
                 if l.is_none() || l.unwrap().len() == 0 {
                     // leaf
-                    let curr_idx = cast(id_compressed.len()).unwrap();
+                    let curr_idx = cast(id_compressed.len())
+                        .unwrap_or_else(|| panic!("{}", id_compressed.len()));
                     if let Some(tmp) = stack.last_mut() {
                         if tmp.idx == one() {
                             tmp.lld = curr_idx;
@@ -313,7 +328,7 @@ impl<'d, IdC: Clone, IdD: PrimInt> Initializable<'d, IdC, IdD> for CompletePostO
     }
 }
 
-impl<'a, IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<'a, IdC, IdD>
+impl<'a, IdC: Clone + Eq + Debug, IdD: PrimInt> ShallowDecompressedTreeStore<'a, IdC, IdD>
     for CompletePostOrder<IdC, IdD>
 {
     fn len(&self) -> usize {
@@ -363,32 +378,30 @@ impl<'a, IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<'a, IdC, IdD>
         S::R<'b>: WithChildren<TreeId = IdC>,
     {
         let a = self.original(x);
-        let cs: Vec<_> = store
-            .resolve(&a)
-            .try_get_children()
-            .map_or(vec![], |x| x.to_owned());
-        // println!(
-        //     "cs={:?}",
-        //     cs.iter().collect::<Vec<_>>()
-        // );
-        if cs.len() == 0 {
+        let cs_len = store.resolve(&a).child_count().to_usize().unwrap();
+        if cs_len == 0 {
             return vec![];
         }
-        let mut r = vec![zero(); cs.len()];
+        let mut r = vec![zero(); cs_len];
         let mut c = *x - one(); // = self.first_descendant(x);
-        let mut i = cs.len() - 1;
-        let mut it = (0..cs.len()).rev();
+        let mut i = cs_len - 1;
+        // let mut it = (0..cs_len).rev();
         r[i] = c;
         while i > 0 {
-            let y = it.next().unwrap();
+            // let y = it.next().unwrap();
             // println!(
             //     "i={:?} c={:?} size={:?} r={:?}", i, c.to_usize().unwrap(), size(store, &cs[y]),
             //     r.iter().map(|x| x.to_usize().unwrap()).collect::<Vec<_>>()
             // );
             i -= 1;
-            c = c - cast(size(store, &cs[y])).unwrap();
+            let s = self.size(&c);
+            c = c - s;
             r[i] = c;
         }
+        assert_eq!(
+            self.lld(x).to_usize().unwrap(),
+            self.lld(&c).to_usize().unwrap()
+        );
         r
     }
 
@@ -418,7 +431,7 @@ impl<'a, IdC: Clone, IdD: PrimInt> ShallowDecompressedTreeStore<'a, IdC, IdD>
     }
 }
 
-impl<'d, IdC: Clone, IdD: PrimInt> DecompressedTreeStore<'d, IdC, IdD>
+impl<'d, IdC: Clone + Eq + Debug, IdD: PrimInt> DecompressedTreeStore<'d, IdC, IdD>
     for CompletePostOrder<IdC, IdD>
 {
     fn descendants<'b, S>(&self, _store: &S, x: &IdD) -> Vec<IdD>
@@ -432,7 +445,7 @@ impl<'d, IdC: Clone, IdD: PrimInt> DecompressedTreeStore<'d, IdC, IdD>
     }
 
     fn first_descendant(&self, i: &IdD) -> IdD {
-        self.llds[(*i).to_usize().unwrap()]
+        self.llds[(*i).to_usize().unwrap()] // TODO use ldd
     }
 
     fn descendants_count<'b, S>(&self, _store: &S, x: &IdD) -> usize
@@ -441,5 +454,266 @@ impl<'d, IdC: Clone, IdD: PrimInt> DecompressedTreeStore<'d, IdC, IdD>
         S::R<'b>: WithChildren<TreeId = IdC>,
     {
         (*x - self.first_descendant(x) + one()).to_usize().unwrap()
+    }
+}
+
+impl<'d, IdC: Clone + Eq + Debug, IdD: PrimInt> ContiguousDescendants<'d, IdC, IdD>
+    for CompletePostOrder<IdC, IdD>
+{
+    fn descendants_range(&self, x: &IdD) -> std::ops::Range<IdD> {
+        self.first_descendant(x)..*x
+    }
+}
+
+pub struct RecCachedPositionProcessor<'a, IdC, IdD: Hash + Eq> {
+    pub(crate) ds: &'a CompletePostOrder<IdC, IdD>,
+    root: IdC,
+    cache: HashMap<IdD, Position>,
+}
+
+impl<'a, IdC: Clone + Eq + Debug, IdD: PrimInt + Hash + Eq> CompletePostOrder<IdC, IdD> {
+    pub fn lsib(&self, c: &IdD, p_lld: &IdD) -> Option<IdD> {
+        assert!(p_lld <= c, "{:?}<={:?}", p_lld.to_usize(), c.to_usize());
+        let lld = self.first_descendant(c);
+        assert!(lld <= *c);
+        if lld.is_zero() {
+            return None;
+        }
+        let sib = lld - num_traits::one();
+        if &sib < p_lld {
+            None
+        } else {
+            Some(sib)
+        }
+    }
+}
+
+impl<'a, IdC: Clone + Eq + Debug, IdD: PrimInt + Hash + Eq>
+    From<(&'a CompletePostOrder<IdC, IdD>, IdC)> for RecCachedPositionProcessor<'a, IdC, IdD>
+{
+    fn from((ds, root): (&'a CompletePostOrder<IdC, IdD>, IdC)) -> Self {
+        Self {
+            ds,
+            root,
+            cache: Default::default(),
+        }
+    }
+}
+
+impl<'a, IdC: Clone + Eq + Debug, IdD: PrimInt + Hash + Eq>
+    RecCachedPositionProcessor<'a, IdC, IdD>
+{
+    pub fn position<'b, S, LS>(&mut self, store: &'b S, lstore: &'b LS, c: &IdD) -> &Position
+    where
+        S: NodeStore<IdC>,
+        LS: LabelStore<str>,
+        S::R<'b>: Tree<Type = Type, TreeId = IdC, Label = LS::I> + WithSerialization,
+    {
+        if self.cache.contains_key(&c) {
+            return self.cache.get(&c).unwrap();
+        } else if let Some(p) = self.ds.parent(c) {
+            let p_r = store.resolve(&self.ds.original(&p));
+            let p_t = p_r.get_type();
+            if p_t.is_directory() {
+                let ori = self.ds.original(&c);
+                if self.root == ori {
+                    let r = store.resolve(&ori);
+                    return self.cache.entry(*c).or_insert(Position::new(
+                        lstore.resolve(&r.get_label()).into(),
+                        0,
+                        r.try_bytes_len().unwrap_or(0),
+                    ));
+                }
+                let mut pos = self
+                    .cache
+                    .get(&p)
+                    .cloned()
+                    .unwrap_or_else(|| self.position(store, lstore, &p).clone());
+                let r = store.resolve(&ori);
+                pos.inc_path(lstore.resolve(&r.get_label()));
+                pos.set_len(r.try_bytes_len().unwrap_or(0));
+                return self.cache.entry(*c).or_insert(pos);
+            }
+
+            let p_lld = self.ds.first_descendant(&p);
+            if let Some(lsib) = self.ds.lsib(c, &p_lld) {
+                assert_ne!(lsib.to_usize(), c.to_usize());
+                let mut pos = self
+                    .cache
+                    .get(&lsib)
+                    .cloned()
+                    .unwrap_or_else(|| self.position(store, lstore, &lsib).clone());
+                pos.inc_offset(pos.range().end - pos.range().start);
+                let r = store.resolve(&self.ds.original(&c));
+                pos.set_len(r.try_bytes_len().unwrap());
+                self.cache.entry(*c).or_insert(pos)
+            } else {
+                assert!(
+                    self.ds.position_in_parent(store, c).is_zero(),
+                    "{:?}",
+                    self.ds.position_in_parent(store, c).to_usize()
+                );
+                let ori = self.ds.original(&c);
+                if self.root == ori {
+                    let r = store.resolve(&ori);
+                    return self.cache.entry(*c).or_insert(Position::new(
+                        "".into(),
+                        0,
+                        r.try_bytes_len().unwrap(),
+                    ));
+                }
+                let mut pos = self
+                    .cache
+                    .get(&p)
+                    .cloned()
+                    .unwrap_or_else(|| self.position(store, lstore, &p).clone());
+                let r = store.resolve(&ori);
+                pos.set_len(
+                    r.try_bytes_len()
+                        .unwrap_or_else(|| panic!("{:?}", r.get_type())),
+                );
+                self.cache.entry(*c).or_insert(pos)
+            }
+        } else {
+            let ori = self.ds.original(&c);
+            assert_eq!(self.root, ori);
+            let r = store.resolve(&ori);
+            let t = r.get_type();
+            let pos = if t.is_directory() || t.is_file() {
+                let file = lstore.resolve(&r.get_label()).into();
+                let offset = 0;
+                let len = r.try_bytes_len().unwrap_or(0);
+                Position::new(file, offset, len)
+            } else {
+                let file = "".into();
+                let offset = 0;
+                let len = r.try_bytes_len().unwrap_or(0);
+                Position::new(file, offset, len)
+            };
+            self.cache.entry(*c).or_insert(pos)
+        }
+    }
+}
+pub struct RecCachedProcessor<'a, IdC, IdD: Hash + Eq, T, F, G> {
+    pub(crate) ds: &'a CompletePostOrder<IdC, IdD>,
+    root: IdC,
+    cache: HashMap<IdD, T>,
+    with_p: F,
+    with_lsib: G,
+}
+
+impl<'a, IdC: Clone + Eq + Debug, IdD: PrimInt + Hash + Eq, T, F, G>
+    From<(&'a CompletePostOrder<IdC, IdD>, IdC, F, G)>
+    for RecCachedProcessor<'a, IdC, IdD, T, F, G>
+{
+    fn from((ds, root, with_p, with_lsib): (&'a CompletePostOrder<IdC, IdD>, IdC, F, G)) -> Self {
+        Self {
+            ds,
+            root,
+            cache: Default::default(),
+            with_p,
+            with_lsib,
+        }
+    }
+}
+
+impl<'a, IdC: Clone + Eq + Debug, IdD: PrimInt + Hash + Eq, T: Clone + Default, F, G>
+    RecCachedProcessor<'a, IdC, IdD, T, F, G>
+where
+    F: Fn(T, IdC) -> T,
+    G: Fn(T, IdC) -> T,
+{
+    pub fn position<'b, S>(&mut self, store: &'b S, c: &IdD) -> &T
+    where
+        S: NodeStore<IdC>,
+        S::R<'b>: Tree<Type = Type, TreeId = IdC> + WithSerialization,
+    {
+        if self.cache.contains_key(&c) {
+            return self.cache.get(&c).unwrap();
+        } else if let Some(p) = self.ds.parent(c) {
+            let p_r = store.resolve(&self.ds.original(&p));
+            let p_t = p_r.get_type();
+            if p_t.is_directory() {
+                let ori = self.ds.original(&c);
+                if self.root == ori {
+                    // let r = store.resolve(&ori);
+                    return self
+                        .cache
+                        .entry(*c)
+                        .or_insert((self.with_p)(Default::default(), ori));
+                    // Position::new(
+                    //     lstore.resolve(&r.get_label()).into(),
+                    //     0,
+                    //     r.try_bytes_len().unwrap_or(0),
+                    // )
+                }
+                let pos = self.position(store, &p).clone();
+                // let r = store.resolve(&ori);
+                // pos.inc_path(lstore.resolve(&r.get_label()));
+                // pos.set_len(r.try_bytes_len().unwrap_or(0));
+                // return self.cache.entry(*c).or_insert(pos);
+                return self.cache.entry(*c).or_insert((self.with_p)(pos, ori));
+            }
+
+            let p_lld = self.ds.first_descendant(&p);
+            if let Some(lsib) = self.ds.lsib(c, &p_lld) {
+                assert_ne!(lsib.to_usize(), c.to_usize());
+                let pos = self.position(store, &lsib).clone();
+                // pos.inc_offset(pos.range().end - pos.range().start);
+                // let r = store.resolve(&self.ds.original(&c));
+                // pos.set_len(r.try_bytes_len().unwrap());
+                // self.cache.entry(*c).or_insert(pos)
+                self.cache
+                    .entry(*c)
+                    .or_insert((self.with_lsib)(pos, self.ds.original(&c)))
+            } else {
+                assert!(
+                    self.ds.position_in_parent(store, c).is_zero(),
+                    "{:?}",
+                    self.ds.position_in_parent(store, c).to_usize()
+                );
+                let ori = self.ds.original(&c);
+                if self.root == ori {
+                    // let r = store.resolve(&ori);
+                    return self
+                        .cache
+                        .entry(*c)
+                        .or_insert((self.with_p)(Default::default(), ori));
+                    // Position::new(
+                    //     "".into(),
+                    //     0,
+                    //     r.try_bytes_len().unwrap(),
+                    // )
+                }
+                let pos = self.position(store, &p).clone();
+                // let r = store.resolve(&ori);
+                // pos.set_len(
+                //     r.try_bytes_len()
+                //         .unwrap_or_else(|| panic!("{:?}", r.get_type())),
+                // );
+                // self.cache.entry(*c).or_insert(pos)
+                self.cache.entry(*c).or_insert((self.with_p)(pos, ori))
+            }
+        } else {
+            let ori = self.ds.original(&c);
+            assert_eq!(self.root, ori);
+            // let r = store.resolve(&ori);
+            // let t = r.get_type();
+            // let pos = if t.is_directory() || t.is_file() {
+            //     let file = lstore.resolve(&r.get_label()).into();
+            //     let offset = 0;
+            //     let len = r.try_bytes_len().unwrap_or(0);
+            //     Position::new(file, offset, len)
+            // } else {
+            //     let file = "".into();
+            //     let offset = 0;
+            //     let len = r.try_bytes_len().unwrap_or(0);
+            //     Position::new(file, offset, len)
+            // };
+            // self.cache.entry(*c).or_insert(pos)
+            self.cache
+                .entry(*c)
+                .or_insert((self.with_p)(Default::default(), ori))
+        }
     }
 }

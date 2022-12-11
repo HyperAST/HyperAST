@@ -2,15 +2,25 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use num_traits::{cast, one, PrimInt};
 
-use crate::decompressed_tree_store::{
-    DecompressedTreeStore, DecompressedWithParent, PostOrder, SimpleZsTree,
+use crate::decompressed_tree_store::complete_post_order::DisplayCompletePostOrder;
+use crate::decompressed_tree_store::pre_order_wrapper::{
+    DisplaySimplePreOrderMapper, SimplePreOrderMapper,
 };
+use crate::decompressed_tree_store::simple_zs_tree::DisplaySimpleZsTree;
+use crate::decompressed_tree_store::{
+    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, PostOrder,
+    PostOrderIterable, ShallowDecompressedTreeStore, SimpleZsTree,
+};
+use crate::matchers::mapping_store::MonoMappingStore;
+use crate::matchers::similarity_metrics::number_of_common_descendants;
 use crate::matchers::{
     mapping_store::{DefaultMappingStore, MappingStore},
     optimal::zs::ZsMatcher,
     similarity_metrics,
 };
-use hyper_ast::types::{LabelStore, NodeStore, SlicedLabel, Tree, Typed, WithHashs};
+use hyper_ast::types::{
+    LabelStore, NodeStore, SlicedLabel, Tree, Typed, WithHashs, WithSerialization,
+};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
@@ -19,16 +29,17 @@ pub struct GreedyBottomUpMatcher<
     'a,
     Dsrc,
     Ddst,
-    IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
+    IdD: PrimInt + std::ops::SubAssign + Debug,
     T: 'a + Tree + WithHashs,
     S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
     LS: LabelStore<SlicedLabel, I = T::Label>,
+    M: MonoMappingStore<Ele = IdD>,
     const SIZE_THRESHOLD: usize = 1000,
     const SIM_THRESHOLD_NUM: u64 = 1,
     const SIM_THRESHOLD_DEN: u64 = 2,
 > {
     label_store: &'a LS,
-    internal: BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S>,
+    internal: BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M>,
     // compressed_node_store: &'a S,
     // pub(crate) src_arena: D,
     // pub(crate) dst_arena: D,
@@ -45,14 +56,15 @@ impl<
             + DecompressedTreeStore<'a, T::TreeId, IdD>
             + DecompressedWithParent<'a, T::TreeId, IdD>
             + PostOrder<'a, T::TreeId, IdD>,
-        IdD: PrimInt + Into<usize> + std::ops::SubAssign + Debug,
+        IdD: PrimInt + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
         S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
         LS: LabelStore<SlicedLabel, I = T::Label>,
+        M: MonoMappingStore<Ele = IdD>,
         const SIZE_THRESHOLD: usize,  // = 1000,
         const SIM_THRESHOLD_NUM: u64, // = 1,
         const SIM_THRESHOLD_DEN: u64, // = 2,
-    > Into<BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S>>
+    > Into<BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M>>
     for GreedyBottomUpMatcher<
         'a,
         Dsrc,
@@ -61,12 +73,13 @@ impl<
         T,
         S,
         LS,
+        M,
         SIZE_THRESHOLD,
         SIM_THRESHOLD_NUM,
         SIM_THRESHOLD_DEN,
     >
 {
-    fn into(self) -> BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S> {
+    fn into(self) -> BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M> {
         self.internal
     }
 }
@@ -76,15 +89,18 @@ impl<
         Dsrc: 'a
             + DecompressedTreeStore<'a, T::TreeId, IdD>
             + DecompressedWithParent<'a, T::TreeId, IdD>
-            + PostOrder<'a, T::TreeId, IdD>,
+            + PostOrder<'a, T::TreeId, IdD>
+            + ContiguousDescendants<'a, T::TreeId, IdD>,
         Ddst: 'a
             + DecompressedTreeStore<'a, T::TreeId, IdD>
             + DecompressedWithParent<'a, T::TreeId, IdD>
-            + PostOrder<'a, T::TreeId, IdD>,
-        IdD: 'a + PrimInt + Into<usize> + std::ops::SubAssign + Debug,
+            + PostOrder<'a, T::TreeId, IdD>
+            + ContiguousDescendants<'a, T::TreeId, IdD>,
+        IdD: 'a + PrimInt + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
         S, //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
         LS: 'a + LabelStore<SlicedLabel, I = T::Label>,
+        M: MonoMappingStore<Ele = IdD>,
         const SIZE_THRESHOLD: usize, // = 1000,
         // Integer.parseInt(System.getProperty("gt.bum.szt", "1000"));
         const SIM_THRESHOLD_NUM: u64, // = 1,
@@ -99,6 +115,7 @@ impl<
         T,
         S,
         LS,
+        M,
         SIZE_THRESHOLD,
         SIM_THRESHOLD_NUM,
         SIM_THRESHOLD_DEN,
@@ -108,15 +125,17 @@ where
     // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
     //     + WithHashs<HK = T::HK, HP = T::HP>,
     S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
-        + WithHashs<HK = T::HK, HP = T::HP>,
-    T::TreeId: 'a + Clone,
+        + WithHashs<HK = T::HK, HP = T::HP>
+        + WithSerialization,
+    T::TreeId: 'a + Clone + Debug,
+    T::Type: Debug,
 {
     pub fn new(
         node_store: &'a S,
         label_store: &'a LS,
         src_arena: Dsrc,
         dst_arena: Ddst,
-        mappings: DefaultMappingStore<IdD>,
+        mappings: M,
     ) -> GreedyBottomUpMatcher<
         'a,
         Dsrc,
@@ -125,6 +144,7 @@ where
         T,
         S,
         LS,
+        M,
         SIZE_THRESHOLD,
         SIM_THRESHOLD_NUM,
         SIM_THRESHOLD_DEN,
@@ -146,7 +166,7 @@ where
         label_store: &'a LS,
         src: &'a T::TreeId,
         dst: &'a T::TreeId,
-        mappings: DefaultMappingStore<IdD>,
+        mappings: M,
     ) -> GreedyBottomUpMatcher<
         'a,
         Dsrc,
@@ -155,6 +175,7 @@ where
         T,
         S,
         LS,
+        M,
         SIZE_THRESHOLD,
         SIM_THRESHOLD_NUM,
         SIM_THRESHOLD_DEN,
@@ -183,32 +204,22 @@ where
         // println!("mappings={}", self.internal.mappings.len());
         // // WARN it is in postorder and it depends on decomp store
         // // -1 as root is handled after forloop
-        let mut c = 0;
-        let mut c2 = 0;
         for a in self.internal.src_arena.iter_df_post() {
             // let a: IdD = cast(i).unwrap(); // might be problematic as it depends on decompressed store?
             if self.internal.src_arena.parent(&a).is_none() {
                 continue;
             }
-            c += 1;
             if !(self.internal.mappings.is_src(&a) || !self.src_has_children(a)) {
-                c2 += 1;
                 let candidates = self.internal.get_dst_candidates(&a);
                 let mut best = None;
                 let mut max: f64 = -1.;
-                // println!("% {} {} {}", candidates.len(),self.internal.mappings.is_src(&a),!self.src_has_children(a));
                 for cand in candidates {
-                    let sim = similarity_metrics::dice_similarity(
-                        &self
-                            .internal
-                            .src_arena
-                            .descendants(self.internal.node_store, &a),
-                        &self
-                            .internal
-                            .dst_arena
-                            .descendants(self.internal.node_store, &cand),
+                    let sim = similarity_metrics::SimilarityMeasure::range(
+                        &self.internal.src_arena.descendants_range(&a),
+                        &self.internal.dst_arena.descendants_range(&cand),
                         &self.internal.mappings,
-                    );
+                    )
+                    .dice();
                     if sim > max && sim >= SIM_THRESHOLD_NUM as f64 / SIM_THRESHOLD_DEN as f64 {
                         max = sim;
                         best = Some(cand);
@@ -226,7 +237,6 @@ where
             self.internal.src_arena.root(),
             self.internal.dst_arena.root(),
         );
-        c += 1;
         self.last_chance_match_zs::<IdD>(
             self.internal.src_arena.root(),
             self.internal.dst_arena.root(),
@@ -236,15 +246,18 @@ where
     }
 
     fn src_has_children(&mut self, src: IdD) -> bool {
-        self.internal
+        let r = self
+            .internal
             .node_store
             .resolve(&self.internal.src_arena.original(&src))
-            .has_children()
+            .has_children();
+        assert_eq!(r, self.internal.src_arena.lld(&src) <= src);
+        r
     }
 
     pub(crate) fn last_chance_match_zs<IdDZs>(&mut self, src: IdD, dst: IdD)
     where
-        IdDZs: 'a + PrimInt + Debug + Into<usize> + std::ops::SubAssign,
+        IdDZs: 'a + PrimInt + Debug + std::ops::SubAssign,
     {
         let src_offset = self.internal.src_arena.first_descendant(&src);
         let dst_offset = self.internal.dst_arena.first_descendant(&dst);
@@ -259,41 +272,39 @@ where
         let src = self.internal.src_arena.original(&src);
         let dst = self.internal.dst_arena.original(&dst);
         if src_s < cast(SIZE_THRESHOLD).unwrap() || dst_s < cast(SIZE_THRESHOLD).unwrap() {
-            let mappings = DefaultMappingStore::<IdDZs>::new();
-            let mappings = {
-                let matcher = ZsMatcher::<'a, SimpleZsTree<T::TreeId, IdDZs>, _, _, _, _>::matchh(
+            let mappings = DefaultMappingStore::<IdDZs>::default();
+            let matcher = {
+                let mut matcher = ZsMatcher::<'a, SimpleZsTree<T::TreeId, IdDZs>, _, _, _, _>::make(
                     self.internal.node_store,
                     self.label_store,
                     src,
                     dst,
                     mappings,
                 );
-                matcher.mappings
+                matcher.compute_tree_dist();
+                matcher.compute_mappings();
+                matcher
             };
-            for (i, t) in mappings
-                .src_to_dst
-                .iter()
-                .enumerate()
-                .filter(|x| *x.1 != num_traits::zero())
-                .map(|(src, dst)| (cast::<_, IdDZs>(src).unwrap(), *dst))
-            {
+            let mappings = matcher.mappings;
+            for (i, t) in mappings.iter() {
                 //remapping
                 let src: IdD = src_offset + cast(i - num_traits::one()).unwrap();
-                let dst: IdD =
-                    dst_offset + cast(t - num_traits::one() - num_traits::one()).unwrap();
+                let dst: IdD = dst_offset + cast(t - num_traits::one()).unwrap();
                 // use it
-                if !self.internal.mappings.is_src(&src) && !self.internal.mappings.is_dst(&dst) {
-                    let tsrc = self
-                        .internal
-                        .node_store
-                        .resolve(&self.internal.src_arena.original(&src))
-                        .get_type();
-                    let tdst = self
-                        .internal
-                        .node_store
-                        .resolve(&self.internal.dst_arena.original(&dst))
-                        .get_type();
-
+                let bbb =
+                    !self.internal.mappings.is_src(&src) && !self.internal.mappings.is_dst(&dst);
+                let tsrc = self
+                    .internal
+                    .node_store
+                    .resolve(&self.internal.src_arena.original(&src))
+                    .get_type();
+                let tdst = self
+                    .internal
+                    .node_store
+                    // .resolve(&matcher.src_arena.tree(&t))
+                    .resolve(&self.internal.dst_arena.original(&dst))
+                    .get_type();
+                if bbb {
                     if tsrc == tdst {
                         self.internal.mappings.link(src, dst);
                     }

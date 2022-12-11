@@ -1,11 +1,11 @@
-///! fully compress all subtrees
+///! fully compress all subtrees from a Java CST
 use std::{
     collections::HashMap,
     fmt::{Debug, Display},
     hash::Hash,
     io::stdout,
     ops::Deref,
-    vec, any::Any,
+    vec,
 };
 
 use hyper_ast::{
@@ -71,6 +71,9 @@ pub type FNode = FullNode<BasicGlobalData, Local>;
 
 pub type LabelIdentifier = DefaultSymbol;
 
+// TODO try to use a const generic for space less generation ?
+// SPC: consider spaces ie. add them to the HyperAST,
+// NOTE there is a big issue with the byteLen of subtree then.
 pub struct JavaTreeGen<'stores, 'cache> {
     pub line_break: Vec<u8>,
     pub stores: &'stores mut SimpleStores,
@@ -87,6 +90,16 @@ pub struct MD {
     metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
     ana: Option<PartialAnalysis>,
     mcc: Mcc,
+}
+
+impl From<Local> for MD {
+    fn from(x: Local) -> Self {
+        MD {
+            metrics: x.metrics,
+            ana: x.ana,
+            mcc: x.mcc,
+        }
+    }
 }
 
 pub type Global<'a> = SpacedGlobalData<'a>;
@@ -301,7 +314,10 @@ impl<'stores, 'cache> ZippedTreeGen for JavaTreeGen<'stores, 'cache> {
             parent.indentation(),
         );
         if let Some(spacing) = spacing {
-            parent.push(FullNode {global: global.into(), local:self.make_spacing(spacing)});
+            parent.push(FullNode {
+                global: global.into(),
+                local: self.make_spacing(spacing),
+            });
         }
         let label = if acc.labeled {
             std::str::from_utf8(&text[acc.start_byte..acc.end_byte])
@@ -317,20 +333,16 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
     fn make_spacing(
         &mut self,
         spacing: Vec<u8>, //Space>,
-        // node_store: &mut NodeStore,
-        // global: &mut <Self as TreeGen>::Global,
     ) -> Local {
-    // ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
-        let bytes_len= spacing.len();
+        let bytes_len = spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
-        // let hsyntax = utils::clamp_u64_to_u32(&utils::hash(&spacing));
-        let hbuilder: hashed::Builder<SyntaxNodeHashs<u32>> = hashed::Builder::new(Default::default(), &Type::Spaces, &spacing, 1);
+        let hbuilder: hashed::Builder<SyntaxNodeHashs<u32>> =
+            hashed::Builder::new(Default::default(), &Type::Spaces, &spacing, 1);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
         let eq = |x: EntryRef| {
-            // let t = x.get_component::<Box<[Space]>>().ok();
             let t = x.get_component::<Type>();
             if t != Ok(&Type::Spaces) {
                 return false;
@@ -345,24 +357,17 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
         let insertion = self.stores.node_store.prepare_insertion(&hashable, eq);
 
         let hashs = hbuilder.build();
-        // let hashs = SyntaxNodeHashs {
-        //     structt: 0,
-        //     label: 0,
-        //     syntax: hsyntax,
-        // };
 
         let compressed_node = if let Some(id) = insertion.occupied_id() {
             id
         } else {
             let vacant = insertion.vacant();
-            let bytes_len = compo::BytesLen(bytes_len.to_u32().unwrap());
-            NodeStore::insert_after_prepare(vacant, (Type::Spaces, spacing_id, bytes_len, hashs, BloomSize::None))
+            let bytes_len = compo::BytesLen(bytes_len.try_into().unwrap());
+            NodeStore::insert_after_prepare(
+                vacant,
+                (Type::Spaces, spacing_id, bytes_len, hashs, BloomSize::None),
+            )
         };
-        // let full_spaces_node = FullNode {
-        //     global: global.into(),
-        //     local: ,
-        // };
-        // full_spaces_node
         Local {
             compressed_node,
             metrics: SubTreeMetrics {
@@ -390,7 +395,6 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
         let mut parser = tree_sitter::Parser::new();
         let language = tree_sitter_java::language();
         parser.set_language(language).unwrap();
-
         let tree = parser.parse(text, None).unwrap();
         if tree.root_node().has_error() {
             Err(tree)
@@ -417,11 +421,11 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
         );
         if let Some(spacing) = spacing {
             global.down();
-            init.push(FullNode {global: global.into(), local:self.make_spacing(spacing)});
-            // init.push(self.make_spacing(
-            //     spacing,
-            //     &mut global,
-            // ));
+            init.start_byte = 0;
+            init.push(FullNode {
+                global: global.into(),
+                local: self.make_spacing(spacing),
+            });
             global.right();
         }
         let mut stack = vec![init];
@@ -439,12 +443,10 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
             );
             if let Some(spacing) = spacing {
                 global.right();
-                acc.push(FullNode {global: global.into(), local:self.make_spacing(spacing)});
-                // acc.push(self.make_spacing(
-                //     spacing,
-                //     // &mut self.stores.node_store,
-                //     &mut global,
-                // ))
+                acc.push(FullNode {
+                    global: global.into(),
+                    local: self.make_spacing(spacing),
+                });
             }
         }
         let label = Some(std::str::from_utf8(name).unwrap().to_owned());
@@ -492,10 +494,10 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
 
 pub fn eq_node<'a>(
     kind: &'a Type,
-    label_id: Option<&'a string_interner::symbol::SymbolU32>,
+    label_id: Option<&'a LabelIdentifier>,
     children: &'a [NodeIdentifier],
 ) -> impl Fn(EntryRef) -> bool + 'a {
-    return move |x: EntryRef| {
+    move |x: EntryRef| {
         let t = x.get_component::<Type>();
         if t != Ok(kind) {
             return false;
@@ -514,7 +516,7 @@ pub fn eq_node<'a>(
             }
         }
         true
-    };
+    }
 }
 
 impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
@@ -528,7 +530,6 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
-
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
@@ -546,13 +547,13 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
 
         let insertion = node_store.prepare_insertion(&hashable, eq);
 
-        let local = if let Some(id) = insertion.occupied_id() {
-            let md = self.md_cache.get(&id).unwrap();
+        let local = if let Some(compressed_node) = insertion.occupied_id() {
+            let md = self.md_cache.get(&compressed_node).unwrap();
             let ana = md.ana.clone();
             let metrics = md.metrics;
             let mcc = md.mcc.clone();
             Local {
-                compressed_node: id,
+                compressed_node,
                 metrics,
                 ana,
                 mcc,
@@ -567,10 +568,8 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
                 &insertion,
             );
             let hashs = hbuilder.build();
-            let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte).to_u32().unwrap());
-
+            let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte).try_into().unwrap());
             let mcc = acc.mcc;
-
             let compressed_node = compress(
                 label_id,
                 &ana,
@@ -615,7 +614,7 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
 }
 
 fn compress(
-    label_id: Option<string_interner::symbol::SymbolU32>,
+    label_id: Option<LabelIdentifier>,
     ana: &Option<PartialAnalysis>,
     simple: BasicAccumulator<Type, NodeIdentifier>,
     bytes_len: compo::BytesLen,
@@ -649,7 +648,7 @@ fn compress(
         ( $($c:expr),+ $(,)? ) => {
             match ana.as_ref().map(|x| x.estimated_refs_count()).unwrap_or(0) {
                 x if x > 2048 => {
-                    insert!($($c),+ , (BloomSize::Much,),)
+                    insert!($($c),+, (BloomSize::Much,),)
                 }
                 x if x > 1024 => {
                     insert!($($c),+, bloom!(Bloom::<&'static [u8], [u64; 64]>))
@@ -856,6 +855,8 @@ fn partial_ana_extraction(
         || kind == Type::Dimensions
         || kind == Type::Block
         || kind == Type::ElementValueArrayInitializer
+        || kind == Type::PackageDeclaration
+        || kind == Type::TypeParameter
     {
         make(None)
     } else if is_possibly_empty(kind) {
@@ -907,10 +908,15 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
         cs: Vec<<HashedNode as types::Stored>::TreeId>,
     ) -> <HashedNode as types::Stored>::TreeId {
         if t == Type::Spaces {
-        //     // TODO improve ergonomics
-        //     // should ge spaces as label then reconstruct spaces and insert as done with every other nodes
-        //     // WARN it wont work for new spaces (l parameter is not used, and label do not return spacing)
-            let spacing = self.stores.label_store.resolve(&l.unwrap()).as_bytes().to_vec();
+            //     // TODO improve ergonomics
+            //     // should ge spaces as label then reconstruct spaces and insert as done with every other nodes
+            //     // WARN it wont work for new spaces (l parameter is not used, and label do not return spacing)
+            let spacing = self
+                .stores
+                .label_store
+                .resolve(&l.unwrap())
+                .as_bytes()
+                .to_vec();
             self.make_spacing(spacing);
             return i;
         }
@@ -1096,7 +1102,11 @@ pub fn print_tree_syntax(node_store: &NodeStore, label_store: &LabelStore, id: &
     )
 }
 
-pub fn print_tree_syntax_with_ids(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
+pub fn print_tree_syntax_with_ids(
+    node_store: &NodeStore,
+    label_store: &LabelStore,
+    id: &NodeIdentifier,
+) {
     nodes::print_tree_syntax_with_ids(
         |id| -> _ {
             node_store
@@ -1131,20 +1141,15 @@ pub fn serialize<W: std::fmt::Write>(
     )
 }
 
-pub fn json_serialize<W: std::fmt::Write>(
+pub fn json_serialize<W: std::fmt::Write, const SPC: bool>(
     node_store: &NodeStore,
     label_store: &LabelStore,
     id: &NodeIdentifier,
     out: &mut W,
     parent_indent: &str,
 ) -> Option<String> {
-    nodes::json_serialize::<_,_,_,_,_,_,true>(
-        |id| -> _ {
-            node_store
-                .resolve(id.clone())
-                .into_compressed_node()
-                .unwrap()
-        },
+    nodes::json_serialize::<_, _, _, _, _, _, SPC>(
+        |id| -> _ { node_store.resolve(id.clone()) },
         |id| -> _ { label_store.resolve(id).to_owned() },
         id,
         out,
@@ -1173,12 +1178,12 @@ impl<'a> Display for TreeSerializer<'a> {
     }
 }
 
-pub struct TreeJsonSerializer<'a> {
+pub struct TreeJsonSerializer<'a, const SPC: bool = true> {
     node_store: &'a NodeStore,
     label_store: &'a LabelStore,
     id: NodeIdentifier,
 }
-impl<'a> TreeJsonSerializer<'a> {
+impl<'a, const SPC: bool> TreeJsonSerializer<'a, SPC> {
     pub fn new(node_store: &'a NodeStore, label_store: &'a LabelStore, id: NodeIdentifier) -> Self {
         Self {
             node_store,
@@ -1187,9 +1192,9 @@ impl<'a> TreeJsonSerializer<'a> {
         }
     }
 }
-impl<'a> Display for TreeJsonSerializer<'a> {
+impl<'a, const SPC: bool> Display for TreeJsonSerializer<'a, SPC> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        json_serialize(self.node_store, self.label_store, &self.id, f, "\n");
+        json_serialize::<_, SPC>(self.node_store, self.label_store, &self.id, f, "\n");
         Ok(())
     }
 }
