@@ -819,6 +819,42 @@ fn escape(src: &str) -> String {
     escaped
 }
 
+
+pub struct TreeJsonSerializer<'a, IdN, NS, LS, const SPC: bool = true> {
+    node_store: &'a NS,
+    label_store: &'a LS,
+    id: IdN,
+}
+
+impl<'a, IdN, NS, LS, const SPC: bool> TreeJsonSerializer<'a, IdN, NS, LS, SPC> {
+    pub fn new(node_store: &'a NS, label_store: &'a LS, id: IdN) -> Self {
+        Self {
+            node_store,
+            label_store,
+            id,
+        }
+    }
+}
+
+impl<'a, IdN, NS, LS, const SPC: bool> Display for TreeJsonSerializer<'a, IdN, NS, LS, SPC>
+where
+    NS: crate::types::NodeStore<IdN>,
+    <NS as crate::types::NodeStore<IdN>>::R<'a>: crate::types::Tree<TreeId=IdN, Type = Type,Label = LS::I>,
+    LS: crate::types::LabelStore<str>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let id = &self.id;
+        json_serialize::<_, _, _, _, _, _, SPC>(
+            |id| -> _ { self.node_store.resolve(id.clone()) },
+            |id| -> _ { self.label_store.resolve(id).to_owned() },
+            id,
+            f,
+            "\n",
+        );
+        Ok(())
+    }
+}
+
 pub fn json_serialize<
     IdN,
     IdL,

@@ -857,6 +857,7 @@ pub trait IterableChildren<T> {
 pub trait Children<IdX, T>: std::ops::Index<IdX, Output = T> + IterableChildren<T> {
     fn child_count(&self) -> IdX;
     fn get(&self, i: IdX) -> Option<&T>;
+    fn rev(&self, i: IdX) -> Option<&T>;
     fn after(&self, i: IdX) -> &Self;
     fn before(&self, i: IdX) -> &Self;
     fn between(&self, start: IdX, end: IdX) -> &Self;
@@ -891,7 +892,13 @@ where
     }
 
     fn get(&self, i: IdX) -> Option<&T> {
-        self.get(i.to_usize().unwrap())
+        self.get(i.to_usize()?)
+    }
+
+    fn rev(&self, idx: IdX) -> Option<&T> {
+        let c = <[T]>::len(&self);
+        let c = c.checked_sub(idx.to_usize()?.checked_add(1)?)?;
+        self.get(c.to_usize()?)
     }
 
     fn after(&self, i: IdX) -> &Self {
@@ -1008,6 +1015,12 @@ impl<T> Children<u16, T> for MySlice<T> {
         self.0.get(usize::from(i))
     }
 
+    fn rev(&self, idx: u16) -> Option<&T> {
+        let c: u16 = self.child_count();
+        let c = c.checked_sub(idx.checked_add(1)?)?;
+        self.get(c)
+    }
+
     fn after(&self, i: u16) -> &Self {
         (&self.0[i.into()..]).into()
     }
@@ -1033,6 +1046,13 @@ impl<T> Children<u8, T> for MySlice<T> {
     fn get(&self, i: u8) -> Option<&T> {
         self.0.get(usize::from(i))
     }
+
+    fn rev(&self, idx: u8) -> Option<&T> {
+        let c: u8 = self.child_count();
+        let c = c.checked_sub(idx.checked_add(1)?)?;
+        self.get(c)
+    }
+
 
     fn after(&self, i: u8) -> &Self {
         (&self.0[i.into()..]).into()

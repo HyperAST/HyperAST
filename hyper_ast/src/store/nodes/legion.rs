@@ -14,7 +14,7 @@ use crate::{
     impact::serialize::{CachedHasher, Keyed, MySerialize},
     nodes::{CompressedNode, HashSize, RefContainer},
     store::labels::DefaultLabelIdentifier,
-    types::{Children, MySlice, Type, Typed, WithChildren, IterableChildren},
+    types::{Children, IterableChildren, MySlice, Type, Typed, WithChildren},
     utils::make_hash,
 };
 
@@ -53,6 +53,7 @@ pub struct CS0<T: Eq, const N: usize>(pub [T; N]);
 pub struct CSE<const N: usize>([legion::Entity; N]);
 #[derive(PartialEq, Eq, Debug)]
 pub struct CS<T: Eq>(pub Box<[T]>);
+pub struct NoSpaceCS<T: Eq>(pub Box<[T]>);
 impl<'a, T: Eq> From<&'a CS<T>> for &'a [T] {
     fn from(cs: &'a CS<T>) -> Self {
         &cs.0
@@ -386,7 +387,9 @@ impl<'a> crate::types::Stored for HashedNode {
 }
 
 impl<'a> HashedNodeRef<'a> {
-    fn cs(&self) -> Result<&<Self as crate::types::WithChildren>::Children<'_>, ComponentError> {
+    pub fn cs(
+        &self,
+    ) -> Result<&<Self as crate::types::WithChildren>::Children<'_>, ComponentError> {
         // let scount = self.0.get_component::<CSStaticCount>().ok();
         // if let Some(CSStaticCount(scount)) = scount {
         // if *scount == 1 {
@@ -412,6 +415,15 @@ impl<'a> HashedNodeRef<'a> {
             .map(|x| (*x.0).into());
         r
         // }
+    }
+    pub fn no_spaces(
+        &self,
+    ) -> Result<&<Self as crate::types::WithChildren>::Children<'_>, ComponentError> {
+        self.0
+            .get_component::<NoSpaceCS<legion::Entity>>()
+            .map(|x| &*x.0)
+            .or_else(|_| self.0.get_component::<CS<legion::Entity>>().map(|x| &*x.0))
+            .map(|x| (*x).into())
     }
 }
 
@@ -452,7 +464,8 @@ impl<'a> crate::types::WithChildren for HashedNodeRef<'a> {
         // });
         // v.0.get(v.len() - 1 - num::cast::<_, usize>(*idx).unwrap()).cloned()
         let c: Self::ChildIdx = v.child_count();
-        v.get(c - 1 - idx).cloned()
+        let c = c.checked_sub(idx.checked_add(1)?)?;
+        v.get(c).cloned()
     }
 
     // unsafe fn children_unchecked<'b>(&'b self) -> &'b [Self::TreeId] {
@@ -490,9 +503,7 @@ impl<'a> crate::types::WithHashs for HashedNodeRef<'a> {
 
 impl<'a> crate::types::Tree for HashedNodeRef<'a> {
     fn has_children(&self) -> bool {
-        self.cs()
-            .map(|x| !x.is_empty())
-            .unwrap_or(false)
+        self.cs().map(|x| !x.is_empty()).unwrap_or(false)
     }
 
     fn has_label(&self) -> bool {

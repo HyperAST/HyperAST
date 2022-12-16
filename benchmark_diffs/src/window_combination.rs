@@ -1,7 +1,16 @@
-use std::{fs::File, io::BufWriter, io::Write, path::PathBuf};
+use std::{fs::File, io::BufWriter, io::Write, path::PathBuf, fmt::Debug};
 
-use hyper_ast::{store::nodes::legion::compo, utils::memusage_linux};
+use hyper_ast::{
+    store::{
+        defaults::NodeIdentifier,
+        nodes::legion::{compo, HashedNodeRef, NodeStore},
+        SimpleStores, labels::DefaultLabelIdentifier,
+    },
+    types::{self, IterableChildren, Children, MySlice},
+    utils::memusage_linux,
+};
 use hyper_ast_cvs_git::{git::fetch_github_repository, preprocessed::PreProcessedRepository};
+use num_traits::ToPrimitive;
 
 use crate::{
     algorithms::{self, DiffResult},
@@ -60,11 +69,12 @@ pub fn windowed_commits_compare(
         for oid_dst in &c[1..] {
             log::warn!("diff of {oid_src} and {oid_dst}");
 
+            let stores = &preprocessed.main_stores;
+
             let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
             let src_tr = commit_src.1.ast_root;
             // let src_tr = preprocessed.child_by_name(src_tr, "hadoop-common-project").unwrap();
-            let src_s = preprocessed
-                .main_stores
+            let src_s = stores
                 .node_store
                 .resolve(src_tr)
                 .get_component::<compo::Size>()
@@ -74,13 +84,17 @@ pub fn windowed_commits_compare(
             let commit_dst = preprocessed.commits.get_key_value(&oid_dst).unwrap();
             let dst_tr = commit_dst.1.ast_root;
             // let dst_tr = preprocessed.child_by_name(dst_tr, "hadoop-common-project").unwrap();
-            let dst_s = preprocessed
-                .main_stores
+            let dst_s = stores
                 .node_store
                 .resolve(dst_tr)
                 .get_component::<compo::Size>()
                 .map(|x| x.0)
                 .unwrap_or(1);
+
+            let label_store = &stores.label_store;
+            let node_store = &AAA {
+                s: &stores.node_store,
+            };
 
             let mu = memusage_linux();
 
@@ -91,13 +105,14 @@ pub fn windowed_commits_compare(
                 mappings,
                 actions,
                 gen_t,
-            } = algorithms::gumtree::diff(&preprocessed.main_stores, &src_tr, &dst_tr);
+            } = algorithms::gumtree::diff(node_store, label_store, &src_tr, &dst_tr);
             let hast_actions = actions.len();
-            log::warn!("ed+mappings size: {}", mu - memusage_linux());
+            log::warn!("ed+mappings size: {}", memusage_linux() - mu);
 
             let gt_out_format = "COMPRESSED"; //"COMPRESSED"; // JSON
             let gt_out = other_tools::gumtree::subprocess(
-                &preprocessed.main_stores,
+                node_store,
+                label_store,
                 src_tr,
                 dst_tr,
                 "gumtree",
@@ -112,7 +127,8 @@ pub fn windowed_commits_compare(
                 let (pp, counts) = pp.counts();
                 let (pp, gt_timings) = pp.performances();
                 let valid = pp.validity_mappings(
-                    &preprocessed.main_stores,
+                    node_store,
+                    label_store,
                     &src_arena,
                     src_tr,
                     &dst_arena,
@@ -125,7 +141,8 @@ pub fn windowed_commits_compare(
                 let gt_timings = pp.performances();
                 let counts = pp.counts();
                 let valid = pp.validity_mappings(
-                    &preprocessed.main_stores,
+                    node_store,
+                    label_store,
                     &src_arena,
                     src_tr,
                     &dst_arena,
@@ -436,7 +453,8 @@ mod test {
 
         let gt_out_format = "JSON"; //"COMPRESSED"; // JSON
         let gt_out = other_tools::gumtree::subprocess(
-            &preprocessed.main_stores,
+            &preprocessed.main_stores.node_store,
+            &preprocessed.main_stores.label_store,
             src_tr,
             dst_tr,
             "gumtree-subtree",
@@ -448,7 +466,8 @@ mod test {
         let counts = pp.counts();
         dbg!(gt_timings, counts.mappings, counts.actions);
         let valid = pp.validity_mappings(
-            &preprocessed.main_stores,
+            &preprocessed.main_stores.node_store,
+            &preprocessed.main_stores.label_store,
             &src_arena,
             src_tr,
             &dst_arena,
@@ -458,3 +477,254 @@ mod test {
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
 }
+
+
+
+
+
+
+
+struct AAA<'a> {
+    s: &'a NodeStore,
+}
+
+struct NoSpaceWrapper<'a> {
+    inner: HashedNodeRef<'a>,
+}
+
+impl<'a> types::Typed for NoSpaceWrapper<'a> {
+    type Type = types::Type;
+
+    fn get_type(&self) -> types::Type {
+        self.inner.get_type()
+    }
+}
+
+impl<'a> types::WithStats for NoSpaceWrapper<'a> {
+    fn size(&self) -> usize {
+        self.inner.size()
+    }
+
+    fn height(&self) -> usize {
+        self.inner.height()
+    }
+}
+
+impl<'a> types::WithSerialization for NoSpaceWrapper<'a> {
+    fn try_bytes_len(&self) -> Option<usize> {
+        self.inner.try_bytes_len()
+    }
+}
+
+impl<'a> types::Labeled for NoSpaceWrapper<'a> {
+    type Label = DefaultLabelIdentifier;
+
+    fn get_label(&self) -> &DefaultLabelIdentifier {
+        self.inner.get_label()
+    }
+}
+
+impl<'a> types::Node for NoSpaceWrapper<'a> {}
+
+impl<'a> types::Stored for NoSpaceWrapper<'a> {
+    type TreeId = NodeIdentifier;
+}
+
+// impl<'a> NoSpaceWrapper<'a> {
+//     fn cs(&self) -> Option<&NoSpaceSlice<<Self as types::Stored>::TreeId>> {
+//         self.inner.cs().map(|x|x.into()).ok()
+//     }
+// }
+
+impl<'a> types::WithChildren for NoSpaceWrapper<'a> {
+    type ChildIdx = u16;
+    type Children<'b> = MySlice<Self::TreeId> where Self: 'b;
+
+    fn child_count(&self) -> u16 {
+        self.inner.no_spaces().map_or(0,|x| x.child_count())
+    }
+
+    fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+        self.inner.no_spaces().ok().and_then(|x|x.get(*idx).copied())
+    }
+
+    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+        self.inner.no_spaces().ok().and_then(|x|x.rev(*idx).copied())
+    }
+
+    fn children(&self) -> Option<&Self::Children<'_>> {
+        self.inner.no_spaces().ok()
+    }
+}
+
+impl<'a> types::WithHashs for NoSpaceWrapper<'a> {
+    type HK = hyper_ast::hashed::SyntaxNodeHashsKinds;
+    type HP = hyper_ast::nodes::HashSize;
+
+    fn hash(&self, kind: &Self::HK) -> Self::HP {
+        self.inner.hash(kind)
+    }
+}
+
+impl<'a> types::Tree for NoSpaceWrapper<'a> {
+    fn has_children(&self) -> bool {
+        self.inner.has_children()
+    }
+
+    fn has_label(&self) -> bool {
+        self.inner.has_label()
+    }
+
+    fn try_get_label(&self) -> Option<&Self::Label> {
+        self.inner.try_get_label()
+    }
+}
+
+impl<'store> types::NodeStore<NodeIdentifier> for AAA<'store> {
+    type R<'a> = NoSpaceWrapper<'a> where Self: 'a;
+    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+        NoSpaceWrapper {
+            inner: types::NodeStore::resolve(self.s, id),
+        }
+    }
+}
+
+
+// #[repr(transparent)]
+// pub struct NoSpaceSlice<T>(pub [T]);
+
+// impl<'a, T> From<&'a [T]> for &'a NoSpaceSlice<T> {
+//     fn from(value: &'a [T]) -> Self {
+//         unsafe { std::mem::transmute(value) }
+//     }
+// }
+
+// impl<'a, T> From<&'a MySlice<T>> for &'a NoSpaceSlice<T> {
+//     fn from(value: &'a MySlice<T>) -> Self {
+//         unsafe { std::mem::transmute(value) }
+//     }
+// }
+
+// impl<T> std::ops::Index<u16> for NoSpaceSlice<T> {
+//     type Output = T;
+
+//     fn index(&self, index: u16) -> &Self::Output {
+//         &self.0[index as usize]
+//     }
+// }
+
+// impl<T> std::ops::Index<u8> for NoSpaceSlice<T> {
+//     type Output = T;
+
+//     fn index(&self, index: u8) -> &Self::Output {
+//         &self.0[index as usize]
+//     }
+// }
+
+// impl<T> std::ops::Index<usize> for NoSpaceSlice<T> {
+//     type Output = T;
+
+//     fn index(&self, index: usize) -> &Self::Output {
+//         &self.0[index]
+//     }
+// }
+
+// impl<T: Clone> From<&NoSpaceSlice<T>> for Vec<T> {
+//     fn from(value: &NoSpaceSlice<T>) -> Self {
+//         value.0.to_vec()
+//     }
+// }
+
+// impl<T: Debug> Debug for NoSpaceSlice<T> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         Debug::fmt(&self.0, f)
+//     }
+// }
+
+// impl<T: Debug> Default for &NoSpaceSlice<T> {
+//     fn default() -> Self {
+//         let r: &[T] = &[];
+//         r.into()
+//     }
+// }
+
+// impl<T> IterableChildren<T> for NoSpaceSlice<T> {
+//     type ChildrenIter<'a> = core::slice::Iter<'a, T> where T: 'a;
+
+//     fn iter_children(&self) -> Self::ChildrenIter<'_> {
+//         <[T]>::iter(&self.0)
+//     }
+
+//     fn is_empty(&self) -> bool {
+//         <[T]>::is_empty(&self.0)
+//     }
+// }
+// impl<'a> NoSpaceWrapper<'a> {
+//     fn skip_spaces(&self) -> usize {
+//         self.cs().map_or(0,|x| x.child_count())
+//     }
+// }
+
+// impl<T> Children<u16, T> for NoSpaceSlice<T> {
+//     fn child_count(&self) -> u16 {
+//         <[T]>::len(&self.0).to_u16().unwrap()
+//     }
+
+//     fn get(&self, i: u16) -> Option<&T> {
+//         self.0.get(usize::from(i))
+//     }
+
+//     fn rev(&self, idx: u16) -> Option<&T> {
+//         let c: u16 = self.child_count();
+//         let c = c.checked_sub(idx.checked_add(1)?)?;
+//         self.get(c)
+//     }
+
+//     fn after(&self, i: u16) -> &Self {
+//         (&self.0[i.into()..]).into()
+//     }
+
+//     fn before(&self, i: u16) -> &Self {
+//         (&self.0[..i.into()]).into()
+//     }
+
+//     fn between(&self, start: u16, end: u16) -> &Self {
+//         (&self.0[start.into()..end.into()]).into()
+//     }
+
+//     fn inclusive(&self, start: u16, end: u16) -> &Self {
+//         (&self.0[start.into()..=end.into()]).into()
+//     }
+// }
+
+// impl<T> Children<u8, T> for NoSpaceSlice<T> {
+//     fn child_count(&self) -> u8 {
+//         <[T]>::len(&self.0).to_u8().unwrap()
+//     }
+
+//     fn get(&self, i: u8) -> Option<&T> {
+//         self.0.get(usize::from(i))
+//     }
+
+//     fn rev(&self, idx: u8) -> Option<&T> {
+//         let c: u8 = self.child_count();
+//         let c = c.checked_sub(idx.checked_add(1)?)?;
+//         self.get(c)
+//     }
+
+//     fn after(&self, i: u8) -> &Self {
+//         (&self.0[i.into()..]).into()
+//     }
+
+//     fn before(&self, i: u8) -> &Self {
+//         (&self.0[..i.into()]).into()
+//     }
+
+//     fn between(&self, start: u8, end: u8) -> &Self {
+//         (&self.0[start.into()..end.into()]).into()
+//     }
+
+//     fn inclusive(&self, start: u8, end: u8) -> &Self {
+//         (&self.0[start.into()..=end.into()]).into()
+//     }
+// }

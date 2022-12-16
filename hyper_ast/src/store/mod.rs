@@ -21,10 +21,10 @@ impl TypeStore {
     }
 }
 
-pub struct SimpleStores {
+pub struct SimpleStores<NS=nodes::DefaultNodeStore> {
     pub label_store: labels::LabelStore,
     pub type_store: TypeStore,
-    pub node_store: nodes::DefaultNodeStore,
+    pub node_store: NS,
 }
 
 impl Default for SimpleStores {

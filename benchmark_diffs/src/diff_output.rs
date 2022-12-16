@@ -3,7 +3,7 @@ use std::ops::Range;
 use hyper_ast::{
     position::{compute_position, Position},
     store::{defaults::NodeIdentifier, SimpleStores},
-    types::{LabelStore, Tree as _, Typed},
+    types::{self, Tree as _, Typed},
 };
 use hyper_gumtree::tree::tree_path::{CompressedTreePath, TreePath};
 use serde::Deserialize;
@@ -49,36 +49,46 @@ pub enum Kind {
     #[serde(rename = "delete-node")]
     Del,
 }
-impl From<(&NodeIdentifier, &SimpleStores, &CompressedTreePath<u16>)> for Tree {
-    fn from((ori, stores, p): (&NodeIdentifier, &SimpleStores, &CompressedTreePath<u16>)) -> Self {
-        // dbg!(p.iter().count());
-        let (pos, x) = compute_position(*ori, &mut p.iter(), stores);
-        let Range { start, end } = pos.range();
-        let file = pos.file().to_string_lossy().to_string();
-        // dbg!(end);
-        let r = stores.node_store.resolve(x);
-        Tree {
-            r#type: r.get_type().to_string(),
-            label: r
-                .try_get_label()
-                .map(|x| stores.label_store.resolve(x).to_string())
-                .filter(|x| !x.is_empty()),
-            file,
-            start,
-            end,
-        }
+
+impl<'a, IdN: Clone, NS: types::NodeStore<IdN>, LS: types::LabelStore<str>>
+    From<(
+        (&'a NS, &'a LS),
+        IdN,
+        &CompressedTreePath<<NS::R<'a> as types::WithChildren>::ChildIdx>,
+    )> for Tree
+where
+    NS::R<'a>:
+        types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I> + types::WithSerialization,
+{
+    fn from(
+        ((node_store, label_store), ori, p): (
+            (&'a NS, &'a LS),
+            IdN,
+            &CompressedTreePath<<NS::R<'a> as types::WithChildren>::ChildIdx>,
+        ),
+    ) -> Self {
+        (
+            (node_store, label_store),
+            compute_position(ori, &mut p.iter(), node_store, label_store),
+        )
+            .into()
     }
 }
-impl From<(&SimpleStores, (Position, NodeIdentifier))> for Tree {
-    fn from((stores, (pos, x)): (&SimpleStores, (Position, NodeIdentifier))) -> Self {
+
+impl<'a, IdN, NS: 'a + types::NodeStore<IdN>, LS: types::LabelStore<str>> From<((&'a NS, &'a LS), (Position, IdN))>
+    for Tree
+where
+    NS::R<'a>: types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I>,
+{
+    fn from(((node_store, label_store), (pos, x)): ((&'a NS, &'a LS), (Position, IdN))) -> Self {
         let Range { start, end } = pos.range();
         let file = pos.file().to_string_lossy().to_string();
-        let r = stores.node_store.resolve(x);
+        let r = node_store.resolve(&x);
         Tree {
             r#type: r.get_type().to_string(),
             label: r
                 .try_get_label()
-                .map(|x| stores.label_store.resolve(x).to_string())
+                .map(|x| label_store.resolve(x).to_string())
                 .filter(|x| !x.is_empty()),
             file,
             start,

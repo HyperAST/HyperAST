@@ -10,7 +10,9 @@ use num::ToPrimitive;
 use crate::{
     nodes::{print_tree_syntax, IoOut},
     store::{defaults::NodeIdentifier, SimpleStores},
-    types::{LabelStore, Labeled, Tree, Type, Typed, WithChildren, Children},
+    types::{
+        self, Children, IterableChildren, LabelStore, Labeled, Tree, Type, Typed, WithChildren,
+    },
 };
 
 #[derive(PartialEq, Eq, Hash, Clone)]
@@ -672,48 +674,54 @@ where
     )
 }
 
-pub fn compute_position<It: Iterator>(
-    root: NodeIdentifier,
+pub fn compute_position<'store, T, NS, LS, It: Iterator>(
+    root: T::TreeId,
     offsets: &mut It,
-    stores: &SimpleStores,
-) -> (Position, NodeIdentifier)
+    node_store: &'store NS,
+    label_store: &'store LS,
+) -> (Position, T::TreeId)
 where
-    It::Item: ToPrimitive,
+    It::Item: Clone,
+    T::TreeId: Clone,
+    NS: 'store + types::NodeStore<T::TreeId, R<'store> = T>,
+    T: types::Tree<Type = types::Type, Label = LS::I, ChildIdx = It::Item>
+        + types::WithSerialization,
+    LS: types::LabelStore<str>,
 {
     let mut offset = 0;
     let mut x = root;
     let mut path = vec![];
     for o in &mut *offsets {
         // dbg!(offset);
-        let b = stores.node_store.resolve(x);
+        let b = node_store.resolve(&x);
         // dbg!(b.get_type());
         // dbg!(o.to_usize().unwrap());
 
         let t = b.get_type();
 
         if t.is_directory() || t.is_file() {
-            let l = stores.label_store.resolve(b.get_label());
+            let l = label_store.resolve(b.get_label());
             path.push(l);
         }
 
         if let Some(cs) = b.children() {
             let cs = cs.clone();
             if !t.is_directory() {
-                for y in 0..o.to_usize().unwrap() {
-                    let b = stores.node_store.resolve(cs[y]);
-                    offset += b.get_bytes_len(0).to_usize().unwrap();
+                for y in cs.before(o.clone()).iter_children() {
+                    let b = node_store.resolve(y);
+                    offset += b.try_bytes_len().unwrap().to_usize().unwrap();
                 }
             } else {
                 // for y in 0..o.to_usize().unwrap() {
-                //     let b = stores.node_store.resolve(cs[y]);
+                //     let b = node_store.resolve(cs[y]);
                 //     println!("{:?}",b.get_type());
                 // }
             }
             // if o.to_usize().unwrap() >= cs.len() {
             //     // dbg!("fail");
             // }
-            if let Some(a) = cs.get(o.to_u16().unwrap()) {
-                x = *a;
+            if let Some(a) = cs.get(o) {
+                x = a.clone();
             } else {
                 break;
             }
@@ -722,15 +730,15 @@ where
         }
     }
     assert!(offsets.next().is_none());
-    let b = stores.node_store.resolve(x);
+    let b = node_store.resolve(&x);
     let t = b.get_type();
     if t.is_directory() || t.is_file() {
-        let l = stores.label_store.resolve(b.get_label());
+        let l = label_store.resolve(b.get_label());
         path.push(l);
     }
 
     let len = if !t.is_directory() {
-        b.get_bytes_len(0).to_usize().unwrap()
+        b.try_bytes_len().unwrap().to_usize().unwrap()
     } else {
         0
     };

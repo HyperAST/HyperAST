@@ -9,7 +9,7 @@ use hyper_ast::{
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder},
     store::{
         defaults::NodeIdentifier,
-        nodes::legion::{NodeStore, CS},
+        nodes::legion::{NodeStore, CS, compo},
     },
     tree_gen::SubTreeMetrics,
     types::{LabelStore, Type},
@@ -236,6 +236,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                     Type::MavenDirectory,
                     label,
                     hashs,
+                    compo::Size(size),
                     CS(acc.children_names.into_boxed_slice()), // TODO extract dir names
                     CS(acc.children.into_boxed_slice()),
                     BloomSize::Much,

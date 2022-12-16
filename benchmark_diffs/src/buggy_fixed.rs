@@ -31,7 +31,8 @@ fn test_simple_1() {
     println!(
         "{}",
         algorithms::gumtree::diff(
-            &java_tree_gen.stores,
+            &java_tree_gen.stores.node_store,
+            &java_tree_gen.stores.label_store,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node
         )
@@ -66,7 +67,8 @@ fn test_crash1() {
     print!("{:?} len={}: ", buggy_path, buggy.len());
     let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
     let len = algorithms::gumtree::diff(
-        &java_tree_gen.stores,
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     )
@@ -78,7 +80,7 @@ fn test_crash1() {
 #[cfg(test)]
 mod examples {
 
-    use hyper_ast_gen_ts_java::legion_with_refs::TreeJsonSerializer;
+    use hyper_ast::nodes::TreeJsonSerializer;
 
     use crate::diff_output;
 
@@ -104,7 +106,8 @@ mod examples {
         print!("len={}: ", buggy.len());
         let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
         let len = algorithms::gumtree::diff(
-            &java_tree_gen.stores,
+            &java_tree_gen.stores.node_store,
+            &java_tree_gen.stores.label_store,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
         )
@@ -154,7 +157,8 @@ mod examples {
         print!("len={}: ", buggy.len());
         let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
         let len = algorithms::gumtree::diff(
-            &java_tree_gen.stores,
+            &java_tree_gen.stores.node_store,
+            &java_tree_gen.stores.label_store,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
         )
@@ -243,7 +247,8 @@ mod examples {
         println!("{} len={}", "buggy", buggy.len());
         let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
         let len = algorithms::gumtree::diff(
-            &java_tree_gen.stores,
+            &java_tree_gen.stores.node_store,
+            &java_tree_gen.stores.label_store,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
         )
@@ -269,7 +274,7 @@ mod examples {
 
         src_f
             .write_all(
-                (TreeJsonSerializer::<true>::new(
+                (TreeJsonSerializer::<_,_,_,true>::new(
                     &java_tree_gen.stores.node_store,
                     &java_tree_gen.stores.label_store,
                     src_tr.local.compressed_node.clone(),
@@ -283,7 +288,7 @@ mod examples {
         // dbg!(&dst);
         dst_f
             .write_all(
-                (TreeJsonSerializer::<true>::new(
+                (TreeJsonSerializer::<_,_,_,true>::new(
                     &java_tree_gen.stores.node_store,
                     &java_tree_gen.stores.label_store,
                     dst_tr.local.compressed_node.clone(),
@@ -486,13 +491,13 @@ mod test {
         } = mapper.into();
         print_mappings(&dst_arena, &src_arena, stores, &mappings);
 
-        let gt_out = subprocess(&stores, src, dst, "gumtree-subtree", "JSON");
+        let gt_out = subprocess(&stores.node_store,&stores.label_store, src, dst, "gumtree-subtree", "JSON");
 
         let pp = SimpleJsonPostProcess::new(&gt_out);
         let gt_timings = pp.performances();
         let counts = pp.counts();
         dbg!(gt_timings, counts.mappings, counts.actions);
-        let valid = pp.validity_mappings(&stores, &src_arena, src, &dst_arena, dst, &mappings);
+        let valid = pp.validity_mappings(&stores.node_store,&stores.label_store, &src_arena, src, &dst_arena, dst, &mappings);
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
 
@@ -588,13 +593,13 @@ mod test {
         } = mapper.into();
         print_mappings(&dst_arena, &src_arena, stores, &mappings);
 
-        let gt_out = subprocess(&stores, src, dst, "gumtree-subtree", "JSON");
+        let gt_out = subprocess(&stores.node_store,&stores.label_store, src, dst, "gumtree-subtree", "JSON");
 
         let pp = SimpleJsonPostProcess::new(&gt_out);
         let gt_timings = pp.performances();
         let counts = pp.counts();
         dbg!(gt_timings, counts.mappings, counts.actions);
-        let valid = pp.validity_mappings(&stores, &src_arena, src, &dst_arena, dst, &mappings);
+        let valid = pp.validity_mappings(&stores.node_store,&stores.label_store, &src_arena, src, &dst_arena, dst, &mappings);
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
 
@@ -785,13 +790,13 @@ mod test {
         } = mapper.into();
         print_mappings(&dst_arena, &src_arena, stores, &mappings);
 
-        let gt_out = subprocess(&stores, src, dst, "gumtree-subtree", "JSON");
+        let gt_out = subprocess(&stores.node_store,&stores.label_store, src, dst, "gumtree-subtree", "JSON");
 
         let pp = SimpleJsonPostProcess::new(&gt_out);
         let gt_timings = pp.performances();
         let counts = pp.counts();
         dbg!(gt_timings, counts.mappings, counts.actions);
-        let valid = pp.validity_mappings(&stores, &src_arena, src, &dst_arena, dst, &mappings);
+        let valid = pp.validity_mappings(&stores.node_store,&stores.label_store, &src_arena, src, &dst_arena, dst, &mappings);
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
 }
@@ -826,7 +831,8 @@ fn compare_perfs() {
     println!("{:?} len={}", buggy_path, buggy.len());
     let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
     let len = algorithms::gumtree::diff(
-        &java_tree_gen.stores,
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     )
@@ -906,7 +912,8 @@ pub fn bad_perfs() {
     println!("{:?} len={}", buggy_path, buggy.len());
     let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
     let len = algorithms::gumtree::diff(
-        &java_tree_gen.stores,
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     )
@@ -967,7 +974,8 @@ pub fn bad_perfs2() {
     println!("{:?} len={}", buggy_path, buggy.len());
     let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
     let len = algorithms::gumtree::diff(
-        &java_tree_gen.stores,
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     )
@@ -1133,7 +1141,8 @@ fn bad_perfs_helper(buggy_path: std::path::PathBuf, fixed_path: std::path::PathB
         actions,
         gen_t,
     } = algorithms::gumtree::diff(
-        &java_tree_gen.stores,
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     );
@@ -1152,7 +1161,8 @@ fn bad_perfs_helper(buggy_path: std::path::PathBuf, fixed_path: std::path::PathB
     };
     let hast_timings = [subtree_matcher_t, bottomup_matcher_t, gen_t];
     let gt_out = other_tools::gumtree::subprocess(
-        &java_tree_gen.stores,
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
         src_tr.local.compressed_node,
         dst_tr.local.compressed_node,
         "gumtree",
@@ -1163,7 +1173,8 @@ fn bad_perfs_helper(buggy_path: std::path::PathBuf, fixed_path: std::path::PathB
     let gt_timings = pp.performances();
     let counts = pp.counts();
     let valid = pp.validity_mappings(
-        &java_tree_gen.stores,
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
         &src_arena,
         src_tr.local.compressed_node,
         &dst_arena,
@@ -1234,7 +1245,8 @@ fn test_all() {
             println!("{:?} len={}", buggy_path, buggy.len());
             let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
             let len = algorithms::gumtree::diff(
-                &java_tree_gen.stores,
+                &java_tree_gen.stores.node_store,
+                &java_tree_gen.stores.label_store,
                 &src_tr.local.compressed_node,
                 &dst_tr.local.compressed_node,
             )
@@ -1364,7 +1376,8 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
     let fixed_s = dst_tr.local.metrics.size;
     let gt_out_format = "COMPRESSED"; // JSON
     let gt_out = other_tools::gumtree::subprocess(
-        &java_tree_gen.stores,
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
         src_tr.local.compressed_node,
         dst_tr.local.compressed_node,
         "gumtree",
@@ -1379,7 +1392,8 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
         actions,
         gen_t,
     } = algorithms::gumtree::diff(
-        &java_tree_gen.stores,
+        &java_tree_gen.stores.node_store,
+        &java_tree_gen.stores.label_store,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     );
@@ -1393,7 +1407,8 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
         let (pp, counts) = pp.counts();
         let (pp, gt_timings) = pp.performances();
         let valid = pp.validity_mappings(
-            &java_tree_gen.stores,
+            &java_tree_gen.stores.node_store,
+            &java_tree_gen.stores.label_store,
             &src_arena,
             src_tr.local.compressed_node,
             &dst_arena,
@@ -1406,7 +1421,8 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
         let gt_timings = pp.performances();
         let counts = pp.counts();
         let valid = pp.validity_mappings(
-            &java_tree_gen.stores,
+            &java_tree_gen.stores.node_store,
+            &java_tree_gen.stores.label_store,
             &src_arena,
             src_tr.local.compressed_node,
             &dst_arena,
@@ -1460,7 +1476,8 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
 
     let gt_out_format = "COMPRESSED"; // JSON
     let gt_out = other_tools::gumtree::subprocess(
-        &java_gen.main_stores,
+        &java_gen.main_stores.node_store,
+        &java_gen.main_stores.label_store,
         src_tr.compressed_node,
         dst_tr.compressed_node,
         "gumtree",
@@ -1475,7 +1492,8 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
         actions: hast_actions,
         gen_t,
     } = algorithms::gumtree::diff(
-        &java_gen.main_stores,
+        &java_gen.main_stores.node_store,
+        &java_gen.main_stores.label_store,
         &src_tr.compressed_node,
         &dst_tr.compressed_node,
     );
@@ -1488,7 +1506,8 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
         let (pp, counts) = pp.counts();
         let (pp, gt_timings) = pp.performances();
         let valid = pp.validity_mappings(
-            &java_gen.main_stores,
+            &java_gen.main_stores.node_store,
+            &java_gen.main_stores.label_store,
             &src_arena,
             src_tr.compressed_node,
             &dst_arena,
@@ -1501,7 +1520,8 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
         let gt_timings = pp.performances();
         let counts = pp.counts();
         let valid = pp.validity_mappings(
-            &java_gen.main_stores,
+            &java_gen.main_stores.node_store,
+            &java_gen.main_stores.label_store,
             &src_arena,
             src_tr.compressed_node,
             &dst_arena,

@@ -14,16 +14,14 @@ use hyper_ast::{
     nodes::IoOut,
     store::{
         labels::LabelStore,
-        nodes::legion::{HashedNodeRef, PendingInsert},
+        nodes::legion::{HashedNodeRef, PendingInsert, NoSpaceCS},
     },
     tree_gen::{BasicGlobalData, GlobalData, SpacedGlobalData, TextedGlobalData, TreeGen},
     types::{self, NodeStoreExt, WithHashs},
     utils::{self},
 };
-use legion::{
-    world::{EntryRef},
-};
-use string_interner::{DefaultSymbol};
+use legion::world::EntryRef;
+use string_interner::DefaultSymbol;
 use tuples::CombinConcat;
 
 use hyper_ast::{
@@ -114,6 +112,9 @@ pub struct Local {
 
 impl Local {
     fn acc(self, acc: &mut Acc) {
+        if acc.simple.kind != Type::Spaces {
+            acc.no_space.push(self.compressed_node)
+        }
         acc.simple.push(self.compressed_node);
         acc.metrics.acc(self.metrics);
 
@@ -151,6 +152,7 @@ impl<U: NodeHashs> SubTreeMetrics<U> {
 
 pub struct Acc {
     simple: BasicAccumulator<Type, NodeIdentifier>,
+    no_space: Vec<NodeIdentifier>,
     labeled: bool,
     start_byte: usize,
     end_byte: usize,
@@ -254,6 +256,7 @@ impl<'stores, 'cache> ZippedTreeGen for JavaTreeGen<'stores, 'cache> {
                 kind,
                 children: vec![],
             },
+            no_space: vec![],
             labeled,
             start_byte: node.start_byte(),
             end_byte: node.end_byte(),
@@ -296,6 +299,7 @@ impl<'stores, 'cache> ZippedTreeGen for JavaTreeGen<'stores, 'cache> {
                 kind,
                 children: vec![],
             },
+            no_space: vec![],
         }
     }
 
@@ -573,6 +577,7 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
                 label_id,
                 &ana,
                 acc.simple,
+                acc.no_space,
                 bytes_len,
                 size,
                 height,
@@ -616,6 +621,7 @@ fn compress(
     label_id: Option<LabelIdentifier>,
     ana: &Option<PartialAnalysis>,
     simple: BasicAccumulator<Type, NodeIdentifier>,
+    no_space: Vec<NodeIdentifier>,
     bytes_len: compo::BytesLen,
     size: u32,
     height: u32,
@@ -725,8 +731,9 @@ fn compress(
                 // }
                 _ => {
                     let a = simple.children.into_boxed_slice();
+                    let b = no_space.into_boxed_slice();
                     let c = c.concat((compo::Size(size), compo::Height(height),));
-                    let c = c.concat((CS(a),));
+                    let c = c.concat((CS(a),NoSpaceCS(b),));
                     bloom_dipatch!(
                         c,
                     )
@@ -934,6 +941,7 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
                     kind,
                     children: vec![],
                 },
+                no_space: vec![],
             }
         };
         for c in cs {
@@ -1014,6 +1022,7 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
                     label_id,
                     &ana,
                     acc.simple,
+                    acc.no_space,
                     bytes_len,
                     size,
                     height,
@@ -1177,13 +1186,13 @@ impl<'a> Display for TreeSerializer<'a> {
     }
 }
 
-pub struct TreeJsonSerializer<'a, const SPC: bool = true> {
-    node_store: &'a NodeStore,
-    label_store: &'a LabelStore,
-    id: NodeIdentifier,
+pub struct TreeJsonSerializer<'a, IdN, NS, LS, const SPC: bool = true> {
+    node_store: &'a NS,
+    label_store: &'a LS,
+    id: IdN,
 }
-impl<'a, const SPC: bool> TreeJsonSerializer<'a, SPC> {
-    pub fn new(node_store: &'a NodeStore, label_store: &'a LabelStore, id: NodeIdentifier) -> Self {
+impl<'a, IdN, NS, LS, const SPC: bool> TreeJsonSerializer<'a, IdN, NS, LS, SPC> {
+    pub fn new(node_store: &'a NS, label_store: &'a LS, id: IdN) -> Self {
         Self {
             node_store,
             label_store,
@@ -1191,9 +1200,21 @@ impl<'a, const SPC: bool> TreeJsonSerializer<'a, SPC> {
         }
     }
 }
-impl<'a, const SPC: bool> Display for TreeJsonSerializer<'a, SPC> {
+impl<'a, IdN, NS, LS, const SPC: bool> Display for TreeJsonSerializer<'a, IdN, NS, LS, SPC>
+where
+    NS: hyper_ast::types::NodeStore<IdN>,
+    <NS as hyper_ast::types::NodeStore<IdN>>::R<'a>: hyper_ast::types::Tree<TreeId=IdN, Type = Type,Label = LS::I>,
+    LS: hyper_ast::types::LabelStore<String>,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        json_serialize::<_, SPC>(self.node_store, self.label_store, &self.id, f, "\n");
+        let id = &self.id;
+        nodes::json_serialize::<_, _, _, _, _, _, SPC>(
+            |id| -> _ { self.node_store.resolve(id.clone()) },
+            |id| -> _ { self.label_store.resolve(id).to_owned() },
+            id,
+            f,
+            "\n",
+        );
         Ok(())
     }
 }

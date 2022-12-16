@@ -7,10 +7,14 @@ use tuples::CombinConcat;
 use hyper_ast::{
     filter::BloomSize,
     full::FullNode,
-    hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, NodeHashs, SyntaxNodeHashs},
+    hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
     // impact::{element::RefsEnum, elements::*, partial_analysis::PartialAnalysis},
     nodes::{self, IoOut, Space},
-    store::{labels::LabelStore, nodes::legion::PendingInsert, SimpleStores},
+    store::{
+        labels::LabelStore,
+        nodes::legion::{NoSpaceCS, PendingInsert},
+        SimpleStores,
+    },
     store::{
         nodes::legion::{compo, NodeIdentifier, CS},
         nodes::DefaultNodeStore as NodeStore,
@@ -46,6 +50,9 @@ pub struct Local {
 
 impl Local {
     fn acc(self, acc: &mut Acc) {
+        if acc.simple.kind != Type::Spaces {
+            acc.no_space.push(self.compressed_node)
+        }
         acc.simple.push(self.compressed_node);
         acc.metrics.acc(self.metrics);
 
@@ -55,6 +62,7 @@ impl Local {
 
 pub struct Acc {
     simple: BasicAccumulator<Type, NodeIdentifier>,
+    no_space: Vec<NodeIdentifier>,
     labeled: bool,
     start_byte: usize,
     end_byte: usize,
@@ -157,6 +165,7 @@ impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
                 kind,
                 children: vec![],
             },
+            no_space: vec![],
             labeled,
             start_byte: node.start_byte(),
             end_byte: node.end_byte(),
@@ -200,6 +209,7 @@ impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
                 kind,
                 children: vec![],
             },
+            no_space: vec![],
         }
     }
 
@@ -210,7 +220,6 @@ impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
         text: &[u8],
         acc: <Self as TreeGen>::Acc,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
-        let node_store = &mut self.stores.node_store;
         let spacing = get_spacing(
             acc.padding_start,
             acc.start_byte,
@@ -447,7 +456,15 @@ impl<'stores> TreeGen for XmlTreeGen<'stores> {
             let hashs = hbuilder.build();
             let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte).try_into().unwrap());
             let compressed_node = compress(
-                label_id, &ana, acc.simple, bytes_len, size, height, insertion, hashs,
+                label_id,
+                &ana,
+                acc.simple,
+                acc.no_space,
+                bytes_len,
+                size,
+                height,
+                insertion,
+                hashs,
             );
 
             let metrics = SubTreeMetrics {
@@ -474,6 +491,7 @@ fn compress(
     label_id: Option<LabelIdentifier>,
     ana: &Option<PartialAnalysis>,
     simple: BasicAccumulator<Type, NodeIdentifier>,
+    no_space: Vec<NodeIdentifier>,
     bytes_len: compo::BytesLen,
     size: u32,
     height: u32,
@@ -496,8 +514,8 @@ fn compress(
             $(
                 let c = c.concat($c);
             )*
-            match simple.children.len() {
-                0 => {
+            match (simple.children.len(), no_space.len()) {
+                (0,_) => {
                     assert_eq!(1, size);
                     assert_eq!(1, height);
                     insert!(
@@ -505,10 +523,19 @@ fn compress(
                         (BloomSize::None,)
                     )
                 }
-                _ => {
+                (x,y) if x == y => {
                     let a = simple.children.into_boxed_slice();
                     let c = c.concat((compo::Size(size), compo::Height(height),));
                     let c = c.concat((CS(a),));
+                    insert!(
+                        c,
+                    )
+                }
+                _ => {
+                    let a = simple.children.into_boxed_slice();
+                    let b = no_space.into_boxed_slice();
+                    let c = c.concat((compo::Size(size), compo::Height(height),));
+                    let c = c.concat((CS(a), NoSpaceCS(b),));
                     insert!(
                         c,
                     )
