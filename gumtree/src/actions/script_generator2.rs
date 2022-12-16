@@ -3,10 +3,8 @@ use std::{
     collections::HashSet,
     fmt::Debug,
     hash::Hash,
-    time::{Duration, Instant},
 };
 
-use bitvec::order::Lsb0;
 use num_traits::{cast, PrimInt, ToPrimitive};
 
 use crate::{
@@ -119,26 +117,25 @@ impl<IdC: Debug, IdD: Debug> Debug for MidNode<IdC, IdD> {
 }
 
 pub struct ScriptGenerator<
-    'a,
+    'store: 'a1 + 'a2 + 'm,
+    'a1: 'm, 'a2: 'm, 'm,
     IdD: PrimInt + Debug + Hash + PartialEq + Eq,
-    T: 'a + Stored + Labeled + WithChildren,
-    SS,
-    SD, //: BreathFirstIterable<'a, T::TreeId, IdD> + DecompressedWithParent<IdD>,
-    S,  //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
+    T: 'store + Stored + Labeled + WithChildren,
+    SS, SD, S,
     M: MonoMappingStore<Ele = IdD>,
 > where
     T::Label: Debug,
     T::TreeId: Debug,
 {
-    pub store: &'a S,
-    src_arena_dont_use: &'a SS,
+    pub store: &'store S,
+    src_arena_dont_use: &'a1 SS,
     cpy2ori: Vec<IdD>,
     ori2cpy: Vec<usize>,
     mid_arena: Vec<MidNode<T::TreeId, IdD>>, //SuperTreeStore<T::TreeId>,
     mid_root: Vec<IdD>,
-    dst_arena: &'a SD,
+    dst_arena: &'a2 SD,
     // ori_to_copy: DefaultMappingStore<IdD>,
-    ori_mappings: Option<&'a M>,
+    ori_mappings: Option<&'m M>,
     cpy_mappings: M,
     // moved: bitvec::vec::BitVec,
     pub actions: ActionsVec<SimpleAction<T::Label, T::ChildIdx, T::TreeId>>,
@@ -150,50 +147,52 @@ pub struct ScriptGenerator<
 static MERGE_SIM_ACTIONS: bool = false;
 
 impl<
-        'a,
-        IdD: PrimInt + Debug + Hash + PartialEq + Eq,
-        T: 'a + Stored + Labeled + WithChildren,
-        SS: DecompressedTreeStore<'a, T::TreeId, IdD>
-            + DecompressedWithParent<'a, T::TreeId, IdD>
-            + PostOrder<'a, T::TreeId, IdD>
+        'store: 'a1 + 'a2 + 'm,
+        'a1: 'm, 'a2: 'm, 'm,
+        IdD: 'store + PrimInt + Debug + Hash + PartialEq + Eq,
+        T: 'store + Tree,
+        SS: DecompressedTreeStore<'a1, T, IdD>
+            + DecompressedWithParent<'a1, T, IdD>
+            + PostOrder<'a1, T, IdD>
             + Debug,
-        SD: DecompressedTreeStore<'a, T::TreeId, IdD>
-            + DecompressedWithParent<'a, T::TreeId, IdD>
-            + BreathFirstIterable<'a, T::TreeId, IdD>,
-        S, //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
+        SD: DecompressedTreeStore<'a2, T, IdD>
+            + DecompressedWithParent<'a2, T, IdD>
+            + BreathFirstIterable<'a2, T, IdD>,
+        S,
         M: MonoMappingStore<Ele = IdD>,
-    > ScriptGenerator<'a, IdD, T, SS, SD, S, M>
+    > ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M>
 where
-    S: 'a + NodeStore<T::TreeId>,
-    // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item:
-    //     hyper_ast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>,
-    for<'x> S::R<'x>:
-        hyper_ast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>,
+    S: NodeStore<T::TreeId, R<'store> = T>,
     T::Label: Debug + Copy,
     T::TreeId: Debug,
 {
     pub fn compute_actions(
-        store: &'a S,
-        src_arena: &'a SS,
-        dst_arena: &'a SD,
-        ms: &'a M,
+        store: &'store S,
+        src_arena: &'a1 SS,
+        dst_arena: &'a2 SD,
+        ms: &'store M,
     ) -> ActionsVec<SimpleAction<T::Label, T::ChildIdx, T::TreeId>> {
-        ScriptGenerator::<'a, IdD, T, SS, SD, S, M>::new(store, src_arena, dst_arena)
-            .init_cpy(ms)
-            .generate()
-            .actions
+        ScriptGenerator::<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M>::new(
+            store, src_arena, dst_arena,
+        )
+        .init_cpy(ms)
+        .generate()
+        .actions
     }
 
     pub fn precompute_actions(
-        store: &'a S,
-        src_arena: &'a SS,
-        dst_arena: &'a SD,
-        ms: &'a M,
-    ) -> ScriptGenerator<'a, IdD, T, SS, SD, S, M> {
-        ScriptGenerator::<'a, IdD, T, SS, SD, S, M>::new(store, src_arena, dst_arena).init_cpy(ms)
+        store: &'store S,
+        src_arena: &'a1 SS,
+        dst_arena: &'a2 SD,
+        ms: &'m M,
+    ) -> ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M> {
+        ScriptGenerator::<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M>::new(
+            store, src_arena, dst_arena,
+        )
+        .init_cpy(ms)
     }
 
-    fn new(store: &'a S, src_arena: &'a SS, dst_arena: &'a SD) -> Self {
+    fn new(store: &'store S, src_arena: &'a1 SS, dst_arena: &'a2 SD) -> Self {
         Self {
             store,
             src_arena_dont_use: src_arena,
@@ -211,14 +210,14 @@ where
         }
     }
 
-    fn init_cpy(mut self, ms: &'a M) -> Self {
+    fn init_cpy(mut self, ms: &'m M) -> Self {
         // copy mapping
         // let now = Instant::now();
         self.ori_mappings = Some(ms);
         self.cpy_mappings = ms.clone();
         // dbg!(&self.src_arena_dont_use);
         // dbg!("aaaaaaaaaaaa");
-        let len = self.src_arena_dont_use.len();
+        // let len = self.src_arena_dont_use.len();
         let root = self.src_arena_dont_use.root();
         // self.moved.resize(len, false);
         for x in self.src_arena_dont_use.iter_df_post() {
@@ -741,27 +740,12 @@ where
         w
     }
 
-    fn iter_mid_in_post_order<'b>(
-        root: IdD,
-        mid_arena: &'b mut [MidNode<T::TreeId, IdD>],
-    ) -> Iter<'b, T::TreeId, IdD> {
-        let parent: Vec<(IdD, usize)> = vec![(root, num_traits::zero())];
-        Iter { parent, mid_arena }
-    }
-
     fn copy_to_orig(&self, w: IdD) -> IdD {
         if self.src_arena_dont_use.len() <= cast(w).unwrap() {
             let w: usize = cast(w).unwrap();
             return self.cpy2ori[w - self.src_arena_dont_use.len()];
         }
         w
-    }
-
-    pub(crate) fn ori_to_copy(&self, a: IdD) -> IdD {
-        if self.src_arena_dont_use.len() <= cast(a).unwrap() {
-            panic!()
-        }
-        a
     }
 
     fn orig_src(&self, v: IdD) -> CompressedTreePath<T::ChildIdx> {
@@ -817,36 +801,8 @@ where
         r.into()
     }
 
-    fn access(&self, p: &CompressedTreePath<T::ChildIdx>) -> Result<IdD, ()> {
-        let mut p = p.iter();
-
-        let mut x = self.mid_root[p.next().unwrap().to_usize().unwrap()];
-        for p in p {
-            let curr = &self.mid_arena[x.to_usize().unwrap()];
-            x = curr.children.as_ref().ok_or(())?[p.to_usize().unwrap()];
-        }
-        Ok(x)
-    }
 }
 
-// struct Iter<'a, 'b, IdC, IdD: PrimInt> {
-//     roots: core::slice::Iter<'b, IdD>,
-//     aux: IterAux<'a, IdC, IdD>,
-// }
-
-// impl<'a, 'b, IdC, IdD: num_traits::PrimInt> Iterator for Iter<'a, 'b, IdC, IdD> {
-//     type Item = IdD;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         loop {
-//             if let Some(x) = self.aux.next() {
-//                 return Some(x);
-//             }
-//             let parent: Vec<(IdD, usize)> = vec![(self.roots.next()?.clone(), num_traits::zero())];
-//             self.aux.parent = parent;
-//         }
-//     }
-// }
 struct Iter<'a, IdC, IdD: PrimInt> {
     parent: Vec<(IdD, usize)>,
     mid_arena: &'a mut [MidNode<IdC, IdD>],

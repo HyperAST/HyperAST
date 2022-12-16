@@ -37,23 +37,23 @@ pub struct SimpleBottomUpMatcher<
 impl<
         'a,
         Dsrc: 'a
-            + DecompressedTreeStore<'a, T::TreeId, IdD>
-            + DecompressedWithParent<'a, T::TreeId, IdD>
-            + BreathFirstContiguousSiblings<'a, T::TreeId, IdD>,
+            + DecompressedTreeStore<'a, T, IdD>
+            + DecompressedWithParent<'a, T, IdD>
+            + BreathFirstContiguousSiblings<'a, T, IdD>,
         Ddst: 'a
-            + DecompressedTreeStore<'a, T::TreeId, IdD>
-            + DecompressedWithParent<'a, T::TreeId, IdD>
-            + BreathFirstContiguousSiblings<'a, T::TreeId, IdD>,
+            + DecompressedTreeStore<'a, T, IdD>
+            + DecompressedWithParent<'a, T, IdD>
+            + BreathFirstContiguousSiblings<'a, T, IdD>,
         T: 'a + Tree + WithHashs,
         S, //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
         M: MonoMappingStore<Ele = IdD>,
     > Matcher<'a, Dsrc, Ddst, T, S> for SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
 where
-    S: 'a + NodeStore<T::TreeId>,
+    S: 'a + NodeStore<T::TreeId,R<'a>=T>,
     // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
     //     + WithHashs<HK = T::HK, HP = T::HP>,
-    S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
-        + WithHashs<HK = T::HK, HP = T::HP>,
+    // S::R<'a>: Tree<Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
+    //     + WithHashs<HK = T::HK, HP = T::HP>,
 {
     type Store = M;
 
@@ -85,22 +85,22 @@ where
 
 impl<
         'a,
-        Dsrc: DecompressedTreeStore<'a, T::TreeId, IdD>
-            + DecompressedWithParent<'a, T::TreeId, IdD>
-            + BreathFirstContiguousSiblings<'a, T::TreeId, IdD>,
-        Ddst: DecompressedTreeStore<'a, T::TreeId, IdD>
-            + DecompressedWithParent<'a, T::TreeId, IdD>
-            + BreathFirstContiguousSiblings<'a, T::TreeId, IdD>,
+        Dsrc: DecompressedTreeStore<'a, T, IdD>
+            + DecompressedWithParent<'a, T, IdD>
+            + BreathFirstContiguousSiblings<'a, T, IdD>,
+        Ddst: DecompressedTreeStore<'a, T, IdD>
+            + DecompressedWithParent<'a, T, IdD>
+            + BreathFirstContiguousSiblings<'a, T, IdD>,
         T: 'a + Tree + WithHashs,
         S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
         M: MonoMappingStore<Ele = IdD>,
     > SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
 where
-    S: 'a + NodeStore<T::TreeId>,
+    S: 'a + NodeStore<T::TreeId,R<'a>=T>,
     // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
     // + WithHashs<HK = T::HK, HP = T::HP>,
-    S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
-        + WithHashs<HK = T::HK, HP = T::HP>,
+    // S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
+    //     + WithHashs<HK = T::HK, HP = T::HP>,
 {
     fn execute(&mut self) {
         for i in (0..self.internal.src_arena.len()).rev() {

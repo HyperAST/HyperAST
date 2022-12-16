@@ -14,7 +14,7 @@ use crate::{
     impact::serialize::{CachedHasher, Keyed, MySerialize},
     nodes::{CompressedNode, HashSize, RefContainer},
     store::labels::DefaultLabelIdentifier,
-    types::{Type, Typed, WithChildren},
+    types::{Children, MySlice, Type, Typed, WithChildren, IterableChildren},
     utils::make_hash,
 };
 
@@ -226,7 +226,10 @@ impl<'a> HashedNodeRef<'a> {
         }
         let a = self.0.get_component::<DefaultLabelIdentifier>();
         let label: Option<DefaultLabelIdentifier> = a.ok().map(|x| x.clone());
-        let children = self.try_get_children().map(|x| x.to_vec());
+        let children = self.children().map(|x| {
+            let it = x.iter_children();
+            it.map(|x| x.clone()).collect()
+        });
         // .0.get_component::<CS<legion::Entity>>();
         // let children = children.ok().map(|x| x.0.clone());
         Ok(CompressedNode::new(
@@ -308,7 +311,7 @@ impl<'a> HashedNodeRef<'a> {
             .get_component::<CS<<HashedNodeRef<'a> as crate::types::Labeled>::Label>>()
             .ok()?;
         let idx = labels.0.iter().position(|x| x == name);
-        idx.map(|idx| self.get_child(&idx.to_u16().unwrap()))
+        idx.map(|idx| self.child(&idx.to_u16().unwrap()).unwrap())
     }
 
     pub fn get_child_idx_by_name(
@@ -383,7 +386,7 @@ impl<'a> crate::types::Stored for HashedNode {
 }
 
 impl<'a> HashedNodeRef<'a> {
-    fn cs<'b>(&'b self) -> Result<&'b [<Self as crate::types::Stored>::TreeId], ComponentError> {
+    fn cs(&self) -> Result<&<Self as crate::types::WithChildren>::Children<'_>, ComponentError> {
         // let scount = self.0.get_component::<CSStaticCount>().ok();
         // if let Some(CSStaticCount(scount)) = scount {
         // if *scount == 1 {
@@ -403,62 +406,72 @@ impl<'a> HashedNodeRef<'a> {
         //     panic!()
         // }
         // } else {
-        self.0
+        let r = self
+            .0
             .get_component::<CS<legion::Entity>>()
-            .map(|x| x.into())
+            .map(|x| (*x.0).into());
+        r
         // }
     }
 }
 
 impl<'a> crate::types::WithChildren for HashedNodeRef<'a> {
     type ChildIdx = u16;
+    type Children<'b> = MySlice<Self::TreeId> where Self: 'b;
 
     fn child_count(&self) -> u16 {
         self.cs()
-            .map_or(0, |x| x.len())
+            .map_or(0, |x| {
+                let c: u16 = x.child_count();
+                c
+            })
             .to_u16()
             .expect("too much children")
     }
 
-    fn get_child(&self, idx: &Self::ChildIdx) -> Self::TreeId {
+    fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
         self.cs()
             .unwrap_or_else(|x| {
                 log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
                 panic!("{}", x)
             })
-            .get(num::cast::<_, usize>(*idx).unwrap())
+            .0
+            .get(idx.to_usize().unwrap())
             .map(|x| *x)
-            .unwrap_or_else(|| {
-                log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-                panic!()
-            })
+        // .unwrap_or_else(|| {
+        //     log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+        //     panic!()
+        // })
     }
 
-    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
-        let v = self.cs().unwrap_or_else(|x| {
-            log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-            panic!("{}", x)
-        });
-        v[v.len() - 1 - num::cast::<_, usize>(*idx).unwrap()]
+    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+        let v = self.cs().ok()?;
+        // .unwrap_or_else(|x| {
+        //     log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+        //     panic!("{}", x)
+        // });
+        // v.0.get(v.len() - 1 - num::cast::<_, usize>(*idx).unwrap()).cloned()
+        let c: Self::ChildIdx = v.child_count();
+        v.get(c - 1 - idx).cloned()
     }
 
-    fn get_children<'b>(&'b self) -> &'b [Self::TreeId] {
-        let cs = self.cs().unwrap_or_else(|x| {
-            log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-            panic!("{}", x)
-        });
-        cs
-    }
+    // unsafe fn children_unchecked<'b>(&'b self) -> &'b [Self::TreeId] {
+    //     let cs = self.cs().unwrap_or_else(|x| {
+    //         log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+    //         panic!("{}", x)
+    //     });
+    //     cs
+    // }
 
-    fn get_children_cpy<'b>(&'b self) -> Vec<Self::TreeId> {
-        let cs = self.cs().unwrap_or_else(|x| {
-            log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-            panic!("{}", x)
-        });
-        cs.to_vec()
-    }
+    // fn get_children_cpy<'b>(&'b self) -> Vec<Self::TreeId> {
+    //     let cs = self.cs().unwrap_or_else(|x| {
+    //         log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+    //         panic!("{}", x)
+    //     });
+    //     cs.to_vec()
+    // }
 
-    fn try_get_children<'b>(&'b self) -> Option<&'b [Self::TreeId]> {
+    fn children(&self) -> Option<&Self::Children<'_>> {
         self.cs().ok()
     }
 }
@@ -477,7 +490,9 @@ impl<'a> crate::types::WithHashs for HashedNodeRef<'a> {
 
 impl<'a> crate::types::Tree for HashedNodeRef<'a> {
     fn has_children(&self) -> bool {
-        self.cs().map(|x| !x.is_empty()).unwrap_or(false)
+        self.cs()
+            .map(|x| !x.is_empty())
+            .unwrap_or(false)
     }
 
     fn has_label(&self) -> bool {

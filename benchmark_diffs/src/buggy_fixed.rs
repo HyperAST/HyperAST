@@ -470,7 +470,8 @@ mod test {
         println!();
         let stores = &tree_gen.stores;
         let mappings = VecStore::default();
-        type DS = CompletePostOrder<NodeIdentifier, u32>;
+
+        type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
         let mapper = GreedySubtreeMatcher::<DS, DS, _, HashedNodeRef, _, _>::matchh(
             &stores.node_store,
             &src,
@@ -572,7 +573,7 @@ mod test {
         println!();
         let stores = &tree_gen.stores;
         let mappings = VecStore::default();
-        type DS = CompletePostOrder<NodeIdentifier, u32>;
+        type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
         let mapper = GreedySubtreeMatcher::<DS, DS, _, HashedNodeRef, _, _>::matchh(
             &stores.node_store,
             &src,
@@ -769,7 +770,7 @@ mod test {
         println!();
         let stores = &tree_gen.stores;
         let mappings = VecStore::default();
-        type DS = CompletePostOrder<NodeIdentifier, u32>;
+        type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
         let mapper = GreedySubtreeMatcher::<DS, DS, _, HashedNodeRef, _, _>::matchh(
             &stores.node_store,
             &src,

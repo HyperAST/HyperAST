@@ -1,10 +1,10 @@
-use hyper_ast::types::{NodeStore, WithChildren};
+use hyper_ast::types::{NodeStore, WithChildren, IterableChildren};
 
 pub mod bottom_up_matcher;
 pub mod greedy_bottom_up_matcher;
 pub mod greedy_subtree_matcher;
 pub mod simple_bottom_up_matcher;
-pub mod simple_bottom_up_matcher2;
+// pub mod simple_bottom_up_matcher2;
 
 pub fn size<'a, IdC: Clone, S>(store: &'a S, x: &IdC) -> usize
 where
@@ -12,9 +12,10 @@ where
     // for<'c> <<S as NodeStore2<IdC>>::R as GenericItem<'c>>::Item: WithChildren<TreeId = IdC>,
     S::R<'a>: WithChildren<TreeId = IdC>,
 {
-    let cs = store.resolve(&x).get_children().to_owned();
+    let node = store.resolve(&x);
+    let cs = node.children().unwrap();
     let mut z = 0;
-    for x in &cs {
+    for x in cs.iter_children() {
         z = z + size(store, x);
     }
     z + 1
@@ -28,9 +29,9 @@ where
     S::R<'a>: WithChildren<TreeId = IdC>,
 {
     let node = store.resolve(&x);
-    let cs = node.try_get_children();
+    let cs = node.children();
     let cs = if let Some(cs) = cs {
-        cs.to_owned()
+        cs
     } else {
         return 0;
     };
@@ -38,7 +39,7 @@ where
         return 0;
     }
     let mut z = 0;
-    for c in &cs {
+    for c in cs.iter_children() {
         z = z.max(height(store, c));
     }
     z + 1

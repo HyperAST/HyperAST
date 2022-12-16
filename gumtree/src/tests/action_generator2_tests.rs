@@ -7,14 +7,10 @@ use crate::{
         script_generator2::{Act, ApplicablePath, ScriptGenerator, SimpleAction},
         Actions,
     },
-    decompressed_tree_store::{
-        CompletePostOrder, Initializable, ShallowDecompressedTreeStore,
-    },
+    decompressed_tree_store::{CompletePostOrder, Initializable, ShallowDecompressedTreeStore},
     matchers::mapping_store::{DefaultMappingStore, MappingStore},
     tests::examples::{example_action, example_action2, example_gt_java_code},
-    tree::{
-        simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
-    },
+    tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
 };
 use hyper_ast::types::{
     LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Tree as _, Typed, WithChildren,
@@ -99,7 +95,7 @@ fn test_with_action_example() {
                 _,
                 TreeRef<Tree>,
                 _,
-                SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
+                SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
                 NS<Tree>,
                 _,
             >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
@@ -501,7 +497,7 @@ fn test_with_action_example2() {
             _,
             TreeRef<Tree>,
             _,
-            SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
+            SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
             NS<Tree>,
             _,
         >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
@@ -569,7 +565,10 @@ fn test_with_action_example2() {
 pub(crate) fn make_move<T: Stored + Labeled + WithChildren>(
     from: (&[T::ChildIdx], &[T::ChildIdx]),
     to: (&[T::ChildIdx], &[T::ChildIdx]),
-) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId> {
+) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId>
+where
+    <T as WithChildren>::ChildIdx: num_traits::ToPrimitive,
+{
     SimpleAction {
         path: ApplicablePath {
             ori: to.0.into(),
@@ -587,7 +586,10 @@ pub(crate) fn make_move_update<T: Stored + Labeled + WithChildren>(
     from: (&[T::ChildIdx], &[T::ChildIdx]),
     new: T::Label,
     to: (&[T::ChildIdx], &[T::ChildIdx]),
-) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId> {
+) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId>
+where
+    <T as WithChildren>::ChildIdx: num_traits::ToPrimitive,
+{
     SimpleAction {
         path: ApplicablePath {
             ori: to.0.into(),
@@ -605,7 +607,10 @@ pub(crate) fn make_move_update<T: Stored + Labeled + WithChildren>(
 
 pub(crate) fn make_delete<T: Stored + Labeled + WithChildren>(
     path: (&[T::ChildIdx], &[T::ChildIdx]),
-) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId> {
+) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId>
+where
+    <T as WithChildren>::ChildIdx: num_traits::ToPrimitive,
+{
     SimpleAction {
         path: ApplicablePath {
             ori: path.0.into(),
@@ -618,7 +623,10 @@ pub(crate) fn make_delete<T: Stored + Labeled + WithChildren>(
 pub(crate) fn make_insert<T: Stored + Labeled + WithChildren>(
     sub: T::TreeId,
     path: (&[T::ChildIdx], &[T::ChildIdx]),
-) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId> {
+) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId>
+where
+    <T as WithChildren>::ChildIdx: num_traits::ToPrimitive,
+{
     SimpleAction {
         path: ApplicablePath {
             ori: path.0.into(),
@@ -631,7 +639,10 @@ pub(crate) fn make_insert<T: Stored + Labeled + WithChildren>(
 pub(crate) fn make_update<T: Stored + Labeled + WithChildren>(
     new: T::Label,
     path: (&[T::ChildIdx], &[T::ChildIdx]),
-) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId> {
+) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId>
+where
+    <T as WithChildren>::ChildIdx: num_traits::ToPrimitive,
+{
     SimpleAction {
         path: ApplicablePath {
             ori: path.0.into(),
@@ -711,10 +722,10 @@ fn test_with_zs_custom_example() {
             _,
             TreeRef<Tree>,
             _,
-            SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
+            SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
             NS<Tree>,
-                _,
-            >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
+            _,
+        >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
 
         log::debug!("{:?}", actions);
         macro_rules! test_action {

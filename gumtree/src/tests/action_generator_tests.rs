@@ -98,7 +98,7 @@ fn test_with_action_example() {
         _,
         TreeRef<Tree>,
         _,
-        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
+        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
         _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
@@ -308,7 +308,7 @@ fn test_with_zs_custom_example() {
         _,
         TreeRef<Tree>,
         _,
-        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
+        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
         _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 

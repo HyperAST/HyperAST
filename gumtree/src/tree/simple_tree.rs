@@ -7,7 +7,7 @@ use std::{
 use num_traits::{cast, NumCast, PrimInt, ToPrimitive};
 
 use hyper_ast::types::{
-    HashKind, LabelStore, Labeled, NodeStore, NodeStoreMut, Stored, Typed, WithChildren,
+    HashKind, LabelStore, Labeled, MySlice, NodeStore, NodeStoreMut, Stored, Typed, WithChildren,
 };
 
 #[allow(dead_code)]
@@ -91,17 +91,19 @@ where
             cs.get_type(),
             self.ls.resolve(cs.get_label())
         )?;
-        let cs = cs.get_children().to_vec();
-        for n in cs {
-            Display::fmt(
-                &Self {
-                    ls: self.ls,
-                    ns: self.ns,
-                    node: n,
-                    depth: self.depth + 1,
-                },
-                f,
-            )?;
+        if let Some(cs) = cs.children() {
+            let cs: Vec<_> = cs.into();
+            for n in cs {
+                Display::fmt(
+                    &Self {
+                        ls: self.ls,
+                        ns: self.ns,
+                        node: n,
+                        depth: self.depth + 1,
+                    },
+                    f,
+                )?;
+            }
         }
         Ok(())
     }
@@ -118,17 +120,19 @@ impl<'a, 'b> Debug for DisplayTree<'a, 'b, u16, Tree> {
             self.ls.resolve(cs.get_label()),
             self.node,
         )?;
-        let cs = cs.get_children().to_vec();
-        for n in cs {
-            Debug::fmt(
-                &Self {
-                    ls: self.ls,
-                    ns: self.ns,
-                    node: n,
-                    depth: self.depth + 1,
-                },
-                f,
-            )?;
+        if let Some(cs) = cs.children() {
+            let cs: Vec<_> = cs.into();
+            for n in cs {
+                Debug::fmt(
+                    &Self {
+                        ls: self.ls,
+                        ns: self.ns,
+                        node: n,
+                        depth: self.depth + 1,
+                    },
+                    f,
+                )?;
+            }
         }
         Ok(())
     }
@@ -279,28 +283,23 @@ impl<T: hyper_ast::types::Stored> hyper_ast::types::Stored for TreeRef<'_, T> {
 impl WithChildren for Tree {
     type ChildIdx = u8;
 
+    type Children<'a> = MySlice<Self::TreeId>;
+
     fn child_count(&self) -> Self::ChildIdx {
         self.children.len() as u8
     }
 
-    fn get_child(&self, idx: &Self::ChildIdx) -> Self::TreeId {
-        self.children[*idx as usize]
+    fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+        self.children.get(idx.to_usize().unwrap()).map(|x| *x)
     }
 
-    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
-        self.children[self.children.len() - (*idx as usize) - 1]
+    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+        let idx = num_traits::CheckedSub::checked_sub(&self.child_count(), &(*idx + 1))?;
+        self.children.get(idx.to_usize().unwrap()).copied()
     }
 
-    fn get_children(&self) -> &[Self::TreeId] {
-        &self.children
-    }
-
-    fn get_children_cpy(&self) -> Vec<Self::TreeId> {
-        self.children.to_vec()
-    }
-
-    fn try_get_children(&self) -> Option<&[Self::TreeId]> {
-        Some(&self.children)
+    fn children(&self) -> Option<&Self::Children<'_>> {
+        Some(self.children.as_slice().into())
     }
 }
 
@@ -310,28 +309,22 @@ where
 {
     type ChildIdx = T::ChildIdx;
 
+    type Children<'a> = T::Children<'a> where Self: 'a;
+
     fn child_count(&self) -> Self::ChildIdx {
         self.0.child_count()
     }
 
-    fn get_child(&self, idx: &Self::ChildIdx) -> Self::TreeId {
-        self.0.get_child(idx)
+    fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+        self.0.child(idx)
     }
 
-    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
-        self.0.get_child_rev(idx)
+    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+        self.0.child_rev(idx)
     }
 
-    fn get_children(&self) -> &[Self::TreeId] {
-        self.0.get_children()
-    }
-
-    fn get_children_cpy(&self) -> Vec<Self::TreeId> {
-        self.0.get_children().to_vec()
-    }
-
-    fn try_get_children(&self) -> Option<&[Self::TreeId]> {
-        self.0.try_get_children()
+    fn children(&self) -> Option<&Self::Children<'_>> {
+        self.0.children()
     }
 }
 

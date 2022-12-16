@@ -12,7 +12,7 @@ use crate::matchers::{
 };
 use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyper_ast::compat::HashMap;
-use hyper_ast::types::{HashKind, Labeled, NodeStore, Tree, Typed, WithChildren, WithHashs};
+use hyper_ast::types::{HashKind, NodeStore, Tree, WithHashs, IterableChildren};
 use num_traits::{one, zero, PrimInt, ToPrimitive};
 
 pub struct GreedySubtreeMatcher<
@@ -31,13 +31,13 @@ pub struct GreedySubtreeMatcher<
 impl<
         'a,
         Dsrc: 'a
-            + DecompressedTreeStore<'a, T::TreeId, IdD>
-            + DecompressedWithParent<'a, T::TreeId, IdD>
-            + ContiguousDescendants<'a, T::TreeId, IdD>,
+            + DecompressedTreeStore<'a, T, IdD>
+            + DecompressedWithParent<'a, T, IdD>
+            + ContiguousDescendants<'a, T, IdD>,
         Ddst: 'a
-            + DecompressedTreeStore<'a, T::TreeId, IdD>
-            + DecompressedWithParent<'a, T::TreeId, IdD>
-            + ContiguousDescendants<'a, T::TreeId, IdD>,
+            + DecompressedTreeStore<'a, T, IdD>
+            + DecompressedWithParent<'a, T, IdD>
+            + ContiguousDescendants<'a, T, IdD>,
         IdD: 'a + PrimInt + Debug + Hash, // + Into<usize> + std::ops::SubAssign,
         T: Tree + WithHashs,
         S, //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
@@ -45,10 +45,9 @@ impl<
         const MIN_HEIGHT: usize, // = 2
     > GreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>
 where
-    S: 'a + NodeStore<T::TreeId>,
-    // for<'c> < <S as NodeStore2<T::TreeId>>::R  as GenericItem<'c>>::Item:Tree<TreeId = T::TreeId,Type = T::Type,Label = T::Label,ChildIdx = T::ChildIdx> + WithHashs<HK = T::HK,HP = T::HP>,
-    S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
-        + WithHashs<HK = T::HK, HP = T::HP>,
+    S: 'a + NodeStore<T::TreeId,R<'a>=T>,
+    // S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
+    //     + WithHashs<HK = T::HK, HP = T::HP>,
     T::TreeId: Clone,
     T::Label: Clone,
 {
@@ -395,8 +394,8 @@ where
 // }
 impl<
         'a,
-        Dsrc: DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
-        Ddst: DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
+        Dsrc: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
+        Ddst: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
         IdD: PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree,      // + WithHashs,
         S,            //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
@@ -405,8 +404,9 @@ impl<
     > Into<SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>>
     for GreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>
 where
-    S: 'a + NodeStore<T::TreeId>,
-    S::R<'a>: Tree<TreeId = T::TreeId>,
+    // S: 'a + NodeStore<T::TreeId>,
+    S: 'a + NodeStore<T::TreeId,R<'a>=T>,
+    // S::R<'a>: Tree<TreeId = T::TreeId>,
 {
     fn into(self) -> SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT> {
         self.internal
@@ -446,8 +446,8 @@ pub struct SubtreeMatcher<
 
 impl<
         'a,
-        Dsrc: DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
-        Ddst: DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
+        Dsrc: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
+        Ddst: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
         IdD: PrimInt + Debug, // + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
         S, //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
@@ -455,10 +455,11 @@ impl<
         const MIN_HEIGHT: usize,
     > SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>
 where
-    S: 'a + NodeStore<T::TreeId>,
+    S: 'a + NodeStore<T::TreeId,R<'a>=T>,
+    // S: 'a + NodeStore<T::TreeId>,
     // for<'c> < <S as NodeStore2<T::TreeId>>::R  as GenericItem<'c>>::Item:Tree<TreeId = T::TreeId,Type = T::Type,Label = T::Label,ChildIdx = T::ChildIdx> + WithHashs<HK = T::HK,HP = T::HP>,
-    S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
-        + WithHashs<HK = T::HK, HP = T::HP>,
+    // S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
+    //     + WithHashs<HK = T::HK, HP = T::HP>,
     T::TreeId: Clone,
 {
     pub(crate) fn add_mapping_recursively(&mut self, src: &IdD, dst: &IdD) {
@@ -634,7 +635,7 @@ where
         } else {
             None
         };
-        let src_c = src.try_get_children().map(|x| x.to_vec());
+        let src_c:Option<Vec<_>> = src.children().map(|x| x.iter_children().collect());
 
         let dst = self.node_store.resolve(dst);
 
@@ -654,7 +655,7 @@ where
             }
         };
 
-        let dst_c = dst.try_get_children().map(|x| x.to_vec());
+        let dst_c:Option<Vec<_>> = dst.children().map(|x| x.iter_children().collect());
 
         match (src_c, dst_c) {
             (None, None) => true,
@@ -691,16 +692,17 @@ struct PriorityTreeList<'a, 'b, D, IdD, T: Tree, S, const MIN_HEIGHT: usize> {
 impl<
         'a,
         'b,
-        D: DecompressedTreeStore<'a, T::TreeId, IdD>,
+        D: DecompressedTreeStore<'a, T, IdD>,
         IdD: PrimInt,
         T: Tree,
         S, //: NodeStore2<T::TreeId, R<'b> = T>,//NodeStore<'b, T::TreeId, T>,
         const MIN_HEIGHT: usize,
     > PriorityTreeList<'a, 'b, D, IdD, T, S, MIN_HEIGHT>
 where
-    S: 'a + NodeStore<T::TreeId>,
+    S: 'a + NodeStore<T::TreeId,R<'a>=T>,
+    // S: 'a + NodeStore<T::TreeId>,
     // for<'c> < <S as NodeStore2<T::TreeId>>::R  as GenericItem<'c>>::Item:Tree<TreeId = T::TreeId,Type = T::Type,Label = T::Label,ChildIdx = T::ChildIdx>,
-    S::R<'a>: Tree<TreeId = T::TreeId>,
+    // S::R<'a>: Tree<TreeId = T::TreeId>,
     T::TreeId: Clone,
 {
     pub(super) fn new(store: &'a S, arena: &'b D, tree: IdD) -> Self {

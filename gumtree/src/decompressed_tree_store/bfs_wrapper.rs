@@ -1,6 +1,6 @@
-use std::{fmt::Debug, marker::PhantomData};
+use std::{borrow::Borrow, fmt::Debug, marker::PhantomData};
 
-use num_traits::{cast, zero, PrimInt, ToPrimitive};
+use num_traits::{cast, zero, PrimInt};
 
 use crate::{
     decompressed_tree_store::{
@@ -11,33 +11,46 @@ use crate::{
 };
 use hyper_ast::types::{NodeStore, WithChildren};
 
-pub struct SimpleBfsMapper<'a, IdC, IdD, D: DecompressedTreeStore<'a, IdC, IdD>> {
+pub struct SimpleBfsMapper<
+    'a,
+    T: WithChildren,
+    IdD,
+    DTS: DecompressedTreeStore<'a, T, IdD>,
+    D: Borrow<DTS> = DTS,
+> {
     map: Vec<IdD>,
     // fc: Vec<IdD>,
     rev: Vec<IdD>,
-    back: &'a D,
-    phantom: PhantomData<*const IdC>,
+    pub back: D,
+    phantom: PhantomData<&'a (T, DTS)>,
 }
 
-impl<'a, IdC, IdD: Debug, D: Debug + DecompressedTreeStore<'a, IdC, IdD>> Debug
-    for SimpleBfsMapper<'a, IdC, IdD, D>
+impl<
+        'a,
+        T: WithChildren,
+        IdD: Debug,
+        DTS: DecompressedTreeStore<'a, T, IdD> + Debug,
+        D: Borrow<DTS>,
+    > Debug for SimpleBfsMapper<'a, T, IdD, DTS, D>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SD")
             .field("map", &self.map)
             .field("rev", &self.rev)
-            .field("back", &self.back)
+            .field("back", &self.back.borrow())
             .field("phantom", &self.phantom)
             .finish()
     }
 }
 
-impl<'a, IdC, IdD: PrimInt, D: PostOrder<'a, IdC, IdD>> SimpleBfsMapper<'a, IdC, IdD, D> {
-    pub fn from<S>(s: &'a S, x: &'a D) -> Self
+impl<'a, T: 'a + WithChildren, IdD: PrimInt, DTS: PostOrder<'a, T, IdD>, D: Borrow<DTS>>
+    SimpleBfsMapper<'a, T, IdD, DTS, D>
+{
+    pub fn from<S>(store: &'a S, back: D) -> Self
     where
-        S: NodeStore<IdC>,
-        S::R<'a>: WithChildren<TreeId = IdC>,
+        S: NodeStore<T::TreeId, R<'a> = T>,
     {
+        let x = back.borrow();
         let mut map = Vec::with_capacity(x.len());
         // let mut fc = vec![num_traits::zero();x.len()];
         let mut rev = vec![num_traits::zero(); x.len()];
@@ -48,7 +61,7 @@ impl<'a, IdC, IdD: PrimInt, D: PostOrder<'a, IdC, IdD>> SimpleBfsMapper<'a, IdC,
         while map.len() < x.len() {
             let curr = &map[i];
             // eprintln!("curr={:?}", curr.to_usize().unwrap());
-            let cs = x.children(s, curr);
+            let cs = x.children(store, curr);
             // if cs.is_empty() {
             //     fc.push(cast(map.len()).unwrap());
             // }
@@ -66,130 +79,124 @@ impl<'a, IdC, IdD: PrimInt, D: PostOrder<'a, IdC, IdD>> SimpleBfsMapper<'a, IdC,
             map,
             // fc,
             rev,
-            back: x,
+            back,
             phantom: PhantomData,
         }
     }
 }
 
-impl<'a, IdC, IdD, D: DecompressedTreeStore<'a, IdC, IdD>> Initializable<'a, IdC, IdD>
-    for SimpleBfsMapper<'a, IdC, IdD, D>
+impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: Borrow<DTS>>
+    Initializable<'a, T> for SimpleBfsMapper<'a, T, IdD, DTS, D>
 {
-    fn new<S>(_store: &'a S, _root: &IdC) -> Self
+    fn new<S>(_store: &'a S, _root: &T::TreeId) -> Self
     where
-        S: 'a + NodeStore<IdC>,
-        S::R<'a>: WithChildren<TreeId = IdC>,
+        S: NodeStore<T::TreeId, R<'a> = T>,
     {
         panic!()
     }
 }
-// TODO back should be owned to disallow mutability from elsewhere
-impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<'a, IdC, IdD>>
-    ShallowDecompressedTreeStore<'a, IdC, IdD> for SimpleBfsMapper<'a, IdC, IdD, D>
+
+impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: Borrow<DTS>>
+    ShallowDecompressedTreeStore<'a, T, IdD> for SimpleBfsMapper<'a, T, IdD, DTS, D>
 {
     fn len(&self) -> usize {
         self.map.len()
     }
 
-    fn original(&self, id: &IdD) -> IdC {
-        self.back.original(id)
+    fn original(&self, id: &IdD) -> T::TreeId {
+        self.back.borrow().original(id)
     }
 
     fn leaf_count(&self) -> IdD {
-        self.back.leaf_count()
+        self.back.borrow().leaf_count()
     }
 
     fn root(&self) -> IdD {
-        self.back.root()
+        self.back.borrow().root()
     }
 
     fn path<Idx: PrimInt>(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<Idx> {
-        self.back.path(parent, descendant)
+        self.back.borrow().path(parent, descendant)
     }
 
-    fn child<'b, S>(
-        &self,
-        _store: &'b S,
-        _x: &IdD,
-        _p: &[<S::R<'b> as WithChildren>::ChildIdx],
-    ) -> IdD
+    fn child<'b, S>(&self, store: &'b S, x: &IdD, p: &[T::ChildIdx]) -> IdD
     where
-        'a: 'b,
-        S: NodeStore<IdC>,
-        S::R<'b>: WithChildren<TreeId = IdC>,
+        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
-        todo!()
+        self.back.borrow().child(store, x,p)
     }
 
     fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
     where
-        'a: 'b,
-        S: 'b + NodeStore<IdC>,
-        S::R<'b>: WithChildren<TreeId = IdC>,
+        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
-        self.back.children(store, x)
+        self.back.borrow().children(store, x)
     }
 }
 
-impl<'a, IdC, IdD: PrimInt, D: DecompressedTreeStore<'a, IdC, IdD>>
-    DecompressedTreeStore<'a, IdC, IdD> for SimpleBfsMapper<'a, IdC, IdD, D>
+impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: Borrow<DTS>>
+    DecompressedTreeStore<'a, T, IdD> for SimpleBfsMapper<'a, T, IdD, DTS, D>
 {
-    fn descendants<'b, S>(&self, _store: &S, _x: &IdD) -> Vec<IdD>
+    fn descendants<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
     where
-        S: 'b + NodeStore<IdC>,
-        S::R<'b>: WithChildren<TreeId = IdC>,
+        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
-        todo!()
+        self.back.borrow().descendants(store, x)
     }
 
-    fn descendants_count<'b, S>(&self, _store: &'b S, _x: &IdD) -> usize
+    fn descendants_count<'b, S>(&self, store: &'b S, x: &IdD) -> usize
     where
-        S: 'b + NodeStore<IdC>,
-        S::R<'b>: WithChildren<TreeId = IdC>,
+        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
+        // S: 'b + NodeStore<IdC>,
+        // S::R<'b>: WithChildren<TreeId = IdC>,
     {
-        todo!()
+        self.back.borrow().descendants_count(store, x)
     }
 
-    fn first_descendant(&self, _i: &IdD) -> IdD {
-        todo!()
+    fn first_descendant(&self, i: &IdD) -> IdD {
+        self.back.borrow().first_descendant(i)
     }
 }
 impl<
         'd,
-        IdC,
+        T: WithChildren,
         IdD: PrimInt,
-        D: DecompressedTreeStore<'d, IdC, IdD> + DecompressedWithParent<'d, IdC, IdD>,
-    > DecompressedWithParent<'d, IdC, IdD> for SimpleBfsMapper<'d, IdC, IdD, D>
+        DTS: DecompressedTreeStore<'d, T, IdD> + DecompressedWithParent<'d, T, IdD>,
+        D: Borrow<DTS>,
+    > DecompressedWithParent<'d, T, IdD> for SimpleBfsMapper<'d, T, IdD, DTS, D>
 {
-    fn has_parent(&self, _id: &IdD) -> bool {
-        todo!()
+    fn has_parent(&self, id: &IdD) -> bool {
+        self.back.borrow().has_parent(id)
     }
 
     fn parent(&self, id: &IdD) -> Option<IdD> {
-        self.back.parent(id)
+        self.back.borrow().parent(id)
     }
 
-    fn position_in_parent<'b, S>(
-        &self,
-        store: &'b S,
-        c: &IdD,
-    ) -> <S::R<'b> as WithChildren>::ChildIdx
+    fn position_in_parent<'b, S>(&self, store: &'b S, c: &IdD) -> T::ChildIdx
     where
-        S: NodeStore<IdC>,
-        S::R<'b>: WithChildren<TreeId = IdC>,
+        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
+        // S: NodeStore<IdC>,
+        // S::R<'b>: WithChildren<TreeId = IdC>,
+        // <S::R<'b> as WithChildren>::ChildIdx: PrimInt,
     {
-        self.back.position_in_parent(store, c)
+        self.back.borrow().position_in_parent(store, c)
     }
 
-    type PIt<'a>=D::PIt<'a> where D: 'a, Self:'a;
+    type PIt<'a>=DTS::PIt<'a> where D: 'a, Self:'a;
 
     fn parents(&self, id: IdD) -> Self::PIt<'_> {
-        self.back.parents(id)
+        self.back.borrow().parents(id)
     }
 }
 
-impl<'d, IdC, IdD: 'static + PrimInt, D: DecompressedTreeStore<'d, IdC, IdD>>
-    BreathFirstIterable<'d, IdC, IdD> for SimpleBfsMapper<'d, IdC, IdD, D>
+impl<
+        'd,
+        T: WithChildren,
+        IdD: 'static + Clone,
+        DTS: DecompressedTreeStore<'d, T, IdD>,
+        D: Borrow<DTS>,
+    > BreathFirstIterable<'d, T, IdD> for SimpleBfsMapper<'d, T, IdD, DTS, D>
 {
     type It = Iter<'d, IdD>;
 
@@ -233,7 +240,7 @@ pub struct Iter<'a, IdD> {
     map: &'a [IdD],
 }
 
-impl<'a, IdD: PrimInt> Iterator for Iter<'a, IdD> {
+impl<'a, IdD: Clone> Iterator for Iter<'a, IdD> {
     type Item = IdD;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -242,7 +249,7 @@ impl<'a, IdD: PrimInt> Iterator for Iter<'a, IdD> {
         } else {
             let r = self.curr;
             self.curr = r + 1;
-            Some(self.map[r.to_usize().unwrap()])
+            Some(self.map[r].clone())
         }
     }
 }

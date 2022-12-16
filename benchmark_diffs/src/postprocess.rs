@@ -7,7 +7,8 @@ use std::{
 
 use hyper_ast::{
     position::Position,
-    store::{defaults::NodeIdentifier, SimpleStores},
+    store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef, SimpleStores},
+    types::{NodeStore, Stored, Tree, Type, WithChildren, WithSerialization},
 };
 use hyper_gumtree::decompressed_tree_store::{
     complete_post_order::{DisplayCompletePostOrder, RecCachedProcessor},
@@ -509,6 +510,8 @@ impl CompressedBfPostProcess {
 }
 
 pub mod compressed_bf_post_process {
+    use hyper_ast::store::nodes::legion::HashedNodeRef;
+
     use super::*;
     pub struct PP0 {
         pub(super) file: std::io::Cursor<Vec<u8>>,
@@ -556,12 +559,12 @@ pub mod compressed_bf_post_process {
     }
 
     impl PP2 {
-        pub fn validity_mappings(
+        pub fn validity_mappings<'store: 'a, 'a>(
             mut self,
-            stores: &SimpleStores,
-            src_arena: &CompletePostOrder<NodeIdentifier, u32>,
+            stores: &'store SimpleStores,
+            src_arena: &'a CompletePostOrder<HashedNodeRef<'store>, u32>,
             src_tr: NodeIdentifier,
-            dst_arena: &CompletePostOrder<NodeIdentifier, u32>,
+            dst_arena: &'a CompletePostOrder<HashedNodeRef<'store>, u32>,
             dst_tr: NodeIdentifier,
             mappings: &VecStore<u32>,
         ) -> ValidityRes<usize> {
@@ -572,7 +575,6 @@ pub mod compressed_bf_post_process {
             use hyper_ast::types::LabelStore;
             use hyper_ast::types::Labeled;
             use hyper_ast::types::Typed;
-            use hyper_ast::types::WithSerialization;
             let now = Instant::now();
 
             let mut gt_bf = bitvec::bitvec![bitvec::order::Lsb0, u64; 0;bf_l];
@@ -657,9 +659,9 @@ pub mod compressed_bf_post_process {
             };
 
             let mut formator_src =
-                FormatCached::from((stores, src_arena, src_tr, with_p, with_lsib));
+                FormatCached::from((&stores.node_store, src_arena, src_tr, with_p, with_lsib));
             let mut formator_dst =
-                FormatCached::from((stores, dst_arena, dst_tr, with_p, with_lsib));
+                FormatCached::from((&stores.node_store, dst_arena, dst_tr, with_p, with_lsib));
 
             let mut is_not_here = |x| {
                 hast_bf.set((x % bf_l as u32) as usize, true);
@@ -852,19 +854,18 @@ impl SimpleJsonPostProcess {
         let actions = self.file.actions.len();
         Counts { mappings, actions }
     }
-    pub fn validity_mappings(
+    pub fn validity_mappings<'store: 'a, 'a>(
         &self,
-        stores: &SimpleStores,
-        src_arena: &CompletePostOrder<NodeIdentifier, u32>,
+        stores: &'store SimpleStores,
+        src_arena: &'a CompletePostOrder<HashedNodeRef<'store>, u32>,
         src_tr: NodeIdentifier,
-        dst_arena: &CompletePostOrder<NodeIdentifier, u32>,
+        dst_arena: &'a CompletePostOrder<HashedNodeRef<'store>, u32>,
         dst_tr: NodeIdentifier,
         mappings: &VecStore<u32>,
     ) -> ValidityRes<Vec<diff_output::Match>> {
         use hyper_ast::types::LabelStore;
         use hyper_ast::types::Labeled;
         use hyper_ast::types::Typed;
-        use hyper_ast::types::WithSerialization;
         let with_p = |mut pos: Position, ori| {
             let r = stores.node_store.resolve(ori);
             let t = r.get_type();
@@ -880,8 +881,10 @@ impl SimpleJsonPostProcess {
             pos.set_len(r.try_bytes_len().unwrap());
             pos
         };
-        let mut formator_src = FormatCached::from((stores, src_arena, src_tr, with_p, with_lsib));
-        let mut formator_dst = FormatCached::from((stores, dst_arena, dst_tr, with_p, with_lsib));
+        let mut formator_src =
+            FormatCached::from((&stores.node_store, src_arena, src_tr, with_p, with_lsib));
+        let mut formator_dst =
+            FormatCached::from((&stores.node_store, dst_arena, dst_tr, with_p, with_lsib));
         let mut formator = |a, b| diff_output::Match {
             src: (stores, formator_src.format(a)).into(),
             dest: (stores, formator_dst.format(b)).into(),
@@ -1063,67 +1066,67 @@ impl SimpleJsonPostProcess {
 //     todo!()
 // }
 
-struct FormatCached<'a, T, F, G> {
-    stores: &'a SimpleStores,
-    arena: &'a CompletePostOrder<NodeIdentifier, u32>,
-    cache: RecCachedProcessor<'a, NodeIdentifier, u32, T, F, G>,
+struct FormatCached<'store: 'a, 'a, S, T: Stored, U, F, G> {
+    store: &'store S,
+    arena: &'a CompletePostOrder<T, u32>,
+    cache: RecCachedProcessor<'a, T, u32, U, F, G>,
 }
 
-impl<'a, T, F: Clone, G: Clone>
-    From<(
-        &'a SimpleStores,
-        &'a CompletePostOrder<NodeIdentifier, u32>,
-        NodeIdentifier,
-        F,
-        G,
-    )> for FormatCached<'a, T, F, G>
+impl<'store, 'a, S, T: WithChildren, U, F: Clone, G: Clone>
+    From<(&'store S, &'a CompletePostOrder<T, u32>, T::TreeId, F, G)>
+    for FormatCached<'store, 'a, S, T, U, F, G>
 {
     fn from(
-        (stores, arena, tr, with_p, with_lsib): (
-            &'a SimpleStores,
-            &'a CompletePostOrder<NodeIdentifier, u32>,
-            NodeIdentifier,
+        (store, arena, tr, with_p, with_lsib): (
+            &'store S,
+            &'a CompletePostOrder<T, u32>,
+            T::TreeId,
             F,
             G,
         ),
     ) -> Self {
         Self {
-            stores,
+            store,
             arena,
             cache: RecCachedProcessor::from((arena, tr, with_p, with_lsib)),
         }
     }
 }
-impl<'a, T: Clone + Default, F, G> FormatCached<'a, T, F, G>
+impl<'store, 'a, S, T: Tree<Type = Type> + WithSerialization, U: Clone + Default, F, G>
+    FormatCached<'store, 'a, S, T, U, F, G>
 where
-    F: Fn(T, NodeIdentifier) -> T,
-    G: Fn(T, NodeIdentifier) -> T,
+    S: NodeStore<T::TreeId, R<'store> = T>,
+    T::TreeId: Clone + Debug,
+    F: Fn(U, T::TreeId) -> U,
+    G: Fn(U, T::TreeId) -> U,
 {
-    fn format(&mut self, x: u32) -> (T, NodeIdentifier) {
+    fn format(&mut self, x: u32) -> (U, T::TreeId) {
         (
-            self.cache.position(&self.stores.node_store, &x).clone(),
+            self.cache.position(self.store, &x).clone(),
             self.arena.original(&x),
         )
     }
 }
 
 pub fn print_mappings<
+    'store: 'a,
+    'a,
     IdD: PrimInt + Debug,
     M: hyper_gumtree::matchers::mapping_store::MonoMappingStore<Ele = IdD>,
 >(
-    dst_arena: &CompletePostOrder<NodeIdentifier, IdD>,
-    src_arena: &CompletePostOrder<NodeIdentifier, IdD>,
-    stores: &SimpleStores,
+    dst_arena: &'a CompletePostOrder<HashedNodeRef<'store>, IdD>,
+    src_arena: &'a CompletePostOrder<HashedNodeRef<'store>, IdD>,
+    stores: &'store SimpleStores,
     mappings: &M,
 ) {
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);
-    let dst_arena = DisplayCompletePostOrder {
-        inner: dst_arena,
+    let disp = DisplayCompletePostOrder {
         node_store: &stores.node_store,
+        inner: &dst_arena,
         label_store: &stores.label_store,
-    }
-    .to_string();
+    };
+    let dst_arena = disp.to_string();
     let mappings = src_arena
         .map
         .iter()

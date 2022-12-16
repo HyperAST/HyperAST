@@ -77,7 +77,7 @@ fn test_no_actions() {
         _,
         TreeRef<Tree>,
         _,
-        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
+        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
         NS<Tree>,
         _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
@@ -151,7 +151,7 @@ fn test_delete_actions_1() {
         _,
         TreeRef<Tree>,
         _,
-        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
+        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
         NS<Tree>,
         _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
@@ -235,7 +235,7 @@ fn test_insert_actions_1() {
         _,
         TreeRef<Tree>,
         _,
-        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
+        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
         NS<Tree>,
         _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
@@ -320,7 +320,7 @@ fn test_rename_actions_1() {
         _,
         TreeRef<Tree>,
         _,
-        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
+        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
         NS<Tree>,
         _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
@@ -410,7 +410,7 @@ fn test_move_actions_1() {
         _,
         TreeRef<Tree>,
         _,
-        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>>,
+        SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
         NS<Tree>,
         _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);

@@ -132,7 +132,7 @@ pub fn windowed_commits_compare(
                     dst_tr,
                     &mappings,
                 );
-                Some((gt_timings, counts, valid.map(|x|x.len())))
+                Some((gt_timings, counts, valid.map(|x| x.len())))
             } else {
                 unimplemented!("gt_out_format {} is not implemented", gt_out_format)
             };
@@ -207,10 +207,7 @@ mod test {
 
     use super::*;
 
-    use hyper_ast::{
-        store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef},
-        types::WithChildren,
-    };
+    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::WithChildren};
     use hyper_gumtree::{
         decompressed_tree_store::CompletePostOrder,
         matchers::{
@@ -260,7 +257,7 @@ mod test {
         let src = &src_tr;
         let dst = &dst_tr;
         let mappings = VecStore::default();
-        type DS = CompletePostOrder<NodeIdentifier, u32>;
+        type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
         let mapper = GreedySubtreeMatcher::<DS, DS, _, HashedNodeRef, _, _>::matchh(
             &stores.node_store,
             &src,
@@ -374,7 +371,7 @@ mod test {
         let src_tr = preprocessed.child_by_name(src_tr, "spoon-pom").unwrap();
         let src_tr = preprocessed.child_by_name(src_tr, "pom.xml").unwrap();
         // let src_tr = stores.node_store.resolve(src_tr).get_child(&0);
-        dbg!(stores.node_store.resolve(src_tr).get_children().len());
+        dbg!(stores.node_store.resolve(src_tr).child_count());
 
         let commit_dst = preprocessed.commits.get_key_value(&oid_dst).unwrap();
         let dst_tr = commit_dst.1.ast_root;
@@ -385,7 +382,7 @@ mod test {
         let src = &src_tr;
         let dst = &dst_tr;
         let mappings = VecStore::default();
-        type DS = CompletePostOrder<NodeIdentifier, u32>;
+        type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
         let mapper = GreedySubtreeMatcher::<DS, DS, _, HashedNodeRef, _, _>::matchh(
             &stores.node_store,
             &src,

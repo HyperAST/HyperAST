@@ -3,11 +3,11 @@ use std::{
     fmt::{Debug, Display, Write},
 };
 
-use num::ToPrimitive;
+use num::{ToPrimitive};
 
 use crate::{
     impact::serialize::{Keyed, MySerialize},
-    types::Type,
+    types::{Type, MySlice, IterableChildren},
 };
 
 pub type TypeIdentifier = Type;
@@ -173,6 +173,9 @@ impl<N, L: Eq> crate::types::Labeled for CompressedNode<N, L> {
 
 impl<N: Eq + Clone, L> crate::types::WithChildren for CompressedNode<N, L> {
     type ChildIdx = u16;
+    type Children<'a> = MySlice<N> where Self: 'a;
+    // type Children<'a> = [N] where Self:'a;
+
     fn child_count(&self) -> Self::ChildIdx {
         match self {
             CompressedNode::Children2 {
@@ -184,50 +187,69 @@ impl<N: Eq + Clone, L> crate::types::WithChildren for CompressedNode<N, L> {
         }
     }
 
-    fn get_child(&self, idx: &Self::ChildIdx) -> N {
+    fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
         match self {
-            CompressedNode::Children2 { children, kind: _ } if *idx == 0 => children[0].clone(),
-            CompressedNode::Children2 { children, kind: _ } if *idx == 1 => children[1].clone(),
-            CompressedNode::Children { children, kind: _ } => children[*idx as usize].clone(),
-            _ => panic!(),
-        }
-    }
-
-    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
-        match self {
-            CompressedNode::Children2 { children, kind: _ } if *idx == 1 => children[0].clone(),
-            CompressedNode::Children2 { children, kind: _ } if *idx == 0 => children[1].clone(),
-            CompressedNode::Children { children, kind: _ } => {
-                children[children.len() - 1 - (*idx as usize)].clone()
+            CompressedNode::Children2 { children, kind: _ } if *idx == 0 => {
+                Some(children[0].clone())
             }
-            _ => panic!(),
+            CompressedNode::Children2 { children, kind: _ } if *idx == 1 => {
+                Some(children[1].clone())
+            }
+            CompressedNode::Children { children, kind: _ } => Some(children[*idx as usize].clone()),
+            _ => None,
         }
     }
 
-    fn get_children<'a>(&'a self) -> &[Self::TreeId] {
+    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
         match self {
-            CompressedNode::Children2 { children, kind: _ } => &*children,
-            CompressedNode::Children { children, kind: _ } => &*children,
-            _ => &[],
+            CompressedNode::Children2 { children, kind: _ } if *idx == 1 => {
+                Some(children[0].clone())
+            }
+            CompressedNode::Children2 { children, kind: _ } if *idx == 0 => {
+                Some(children[1].clone())
+            }
+            CompressedNode::Children { children, kind: _ } => {
+                Some(children[children.len() - 1 - (*idx as usize)].clone())
+            }
+            _ => None,
         }
     }
 
-    fn get_children_cpy<'a>(&'a self) -> Vec<Self::TreeId> {
-        match self {
-            CompressedNode::Children2 { children, kind: _ } => children.to_vec(),
-            CompressedNode::Children { children, kind: _ } => children.to_vec(),
-            _ => vec![],
-        }
-    }
+    // fn children_unchecked<'a>(&'a self) -> &[Self::TreeId] {
+    //     match self {
+    //         CompressedNode::Children2 { children, kind: _ } => &*children,
+    //         CompressedNode::Children { children, kind: _ } => &*children,
+    //         _ => &[],
+    //     }
+    // }
 
-    fn try_get_children<'a>(&'a self) -> Option<&'a [Self::TreeId]> {
-        Some(match self {
-            CompressedNode::Children2 { children, kind: _ } => &*children,
-            CompressedNode::Children { children, kind: _ } => &*children,
-            _ => &[],
-        })
+    // fn get_children_cpy<'a>(&'a self) -> Vec<Self::TreeId> {
+    //     match self {
+    //         CompressedNode::Children2 { children, kind: _ } => children.to_vec(),
+    //         CompressedNode::Children { children, kind: _ } => children.to_vec(),
+    //         _ => vec![],
+    //     }
+    // }
+
+    fn children<'a>(&'a self) -> Option<&'a <Self as crate::types::WithChildren>::Children<'a>> {
+        fn f<'a, N,L>(x: &'a CompressedNode<N,L>) -> &'a [N] {
+            match x {
+                CompressedNode::Children2 { children, kind: _ } => {
+                    &*children
+                }
+                CompressedNode::Children { children, kind: _ } => {
+                    &**children
+                },
+                _ => {
+                    &[]
+                }
+            }
+        }
+        // TODO check if it work, not sure
+        Some(f(self).into())
     }
 }
+
 impl<N, L> crate::types::Node for CompressedNode<N, L> {}
 impl<N: Eq, L> crate::types::Stored for CompressedNode<N, L> {
     type TreeId = N;
@@ -815,7 +837,7 @@ pub fn json_serialize<
     let b = f(id);
     let kind = b.get_type();
     let label = b.try_get_label();
-    let children = b.try_get_children();
+    let children = b.children();
 
     if kind == Type::Spaces {
         let s = g(label.unwrap());
@@ -859,7 +881,7 @@ pub fn json_serialize<
             }
             if !children.is_empty() {
                 out.write_str("\",\"children\":[").unwrap();
-                let mut it = children.iter();
+                let mut it = children.iter_children();
                 let mut ind = json_serialize::<_, _, _, _, _, _, SPC>(
                     f,
                     g,

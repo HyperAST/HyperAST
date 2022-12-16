@@ -8,18 +8,18 @@ use crate::decompressed_tree_store::{
     SimpleZsTree as ZsTree,
 };
 use crate::matchers::mapping_store::{DefaultMappingStore, MappingStore};
-use hyper_ast::types::{LabelStore, Labeled, NodeStore, SlicedLabel, Tree, Typed};
+use hyper_ast::types::{LabelStore, NodeStore, SlicedLabel, Tree};
 
 pub struct ZsMatcher<
     'a,
-    D: 'a + DecompressedTreeStore<'a, IdC, IdD>,
-    // T: 'a + Tree + WithHashs,
+    D: 'a,// + DecompressedTreeStore<'a, T, IdD>,
     // IdD: PrimInt + Into<usize>,
     // S: NodeStore<'a, T::TreeId, T>,
     // LS: LabelStore<SlicedLabel, I = T::Label>,
     // T: 'a + Tree + WithHashs,
     IdD,
-    IdC,
+    T: 'a + Tree,
+    // IdC,
     S, //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
     LS,
 > {
@@ -28,24 +28,23 @@ pub struct ZsMatcher<
     pub src_arena: D,
     pub dst_arena: D,
     pub mappings: DefaultMappingStore<IdD>,
-    phantom: PhantomData<(*const IdC, &'a D)>,
+    // phantom: PhantomData<(*const IdC, &'a D)>,
     pub(crate) tree_dist: Vec<Vec<f64>>,
     forest_dist: Vec<Vec<f64>>,
+    pub(super) phantom: PhantomData<*const T>,
 }
 
 impl<
         'a,
-        D: 'a + DecompressedTreeStore<'a, IdC, IdD> + PostOrderKeyRoots<'a, IdC, IdD>,
-        IdC: Clone,
+        D: 'a + DecompressedTreeStore<'a, T, IdD> + PostOrderKeyRoots<'a, T, IdD>,
+        T: 'a + Tree,
         IdD: PrimInt + std::ops::SubAssign + Debug,
-        S: NodeStore<IdC>,
-        // S, //: NodeStore2<IdC, R<'a> = T>,//NodeStore<'a, IdC, T>,
+        S: NodeStore<T::TreeId,R<'a>=T>,
         LS: LabelStore<SlicedLabel>,
-    > ZsMatcher<'a, D, IdD, IdC, S, LS>
+    > ZsMatcher<'a, D, IdD, T, S, LS>
 where
-    S: 'a + NodeStore<IdC>,
-    // for<'c> < <S as NodeStore2<IdC>>::R  as GenericItem<'c>>::Item:Tree<TreeId = IdC,Label = LS::I>,
-    S::R<'a>: Tree<TreeId = IdC, Label = LS::I>,
+    T::TreeId: Clone,
+    T: Tree<Label = LS::I>,
 {
     fn f_dist(&self, row: IdD, col: IdD) -> f64 {
         self.forest_dist[row.to_usize().unwrap()][col.to_usize().unwrap()]
@@ -54,11 +53,11 @@ where
     pub(crate) fn make(
         compressed_node_store: &'a S,
         label_store: &'a LS,
-        src: IdC,
-        dst: IdC,
+        src: T::TreeId,
+        dst: T::TreeId,
         mappings: DefaultMappingStore<IdD>,
-    ) -> ZsMatcher<'a, ZsTree<IdC, IdD>, IdD, IdC, S, LS> {
-        let mut matcher = ZsMatcher::<'a, ZsTree<IdC, IdD>, IdD, IdC, S, LS> {
+    ) -> ZsMatcher<'a, ZsTree<T, IdD>, IdD, T, S, LS> {
+        let mut matcher = ZsMatcher::<'a, ZsTree<T, IdD>, IdD, T, S, LS> {
             compressed_node_store,
             src_arena: ZsTree::new(compressed_node_store, &src),
             dst_arena: ZsTree::new(compressed_node_store, &dst),
@@ -78,11 +77,11 @@ where
     pub fn matchh(
         compressed_node_store: &'a S,
         label_store: &'a LS,
-        src: IdC,
-        dst: IdC,
+        src: T::TreeId,
+        dst: T::TreeId,
         mappings: DefaultMappingStore<IdD>,
-    ) -> ZsMatcher<'a, ZsTree<IdC, IdD>, IdD, IdC, S, LS> {
-        let mut matcher = ZsMatcher::<'a, ZsTree<IdC, IdD>, IdD, IdC, S, LS>::make(
+    ) -> ZsMatcher<'a, ZsTree<T, IdD>, IdD, T, S, LS> {
+        let mut matcher = ZsMatcher::<'a, ZsTree<T, IdD>, IdD, T, S, LS>::make(
             compressed_node_store,
             label_store,
             src,
@@ -246,15 +245,15 @@ where
         }
     }
 
-    fn get_deletion_cost(&self, _di: &IdC) -> f64 {
+    fn get_deletion_cost(&self, _di: &T::TreeId) -> f64 {
         1.0
     }
 
-    fn get_insertion_cost(&self, _dj: &IdC) -> f64 {
+    fn get_insertion_cost(&self, _dj: &T::TreeId) -> f64 {
         1.0
     }
 
-    fn get_update_cost(&self, n1: &IdC, n2: &IdC) -> f64 {
+    fn get_update_cost(&self, n1: &T::TreeId, n2: &T::TreeId) -> f64 {
         let t1 = self.compressed_node_store.resolve(n1).get_type();
         let t2 = self.compressed_node_store.resolve(n2).get_type();
         if t1 == t2 {
@@ -428,7 +427,7 @@ mod tests {
         let (label_store, compressed_node_store, src, dst) = vpair_to_stores(example_zs_paper());
         // assert_eq!(label_store.resolve(&0).to_owned(), b"");
         let src_arena = {
-            let a: SimpleZsTree<u16, u16> = SimpleZsTree::<_, _>::new(&compressed_node_store, &src);
+            let a: SimpleZsTree<_, u16> = SimpleZsTree::<_, _>::new(&compressed_node_store, &src);
             // // assert_eq!(a.id_compressed, vec![0, 1, 2, 3, 4, 5]);
             // // // assert_eq!(a.id_parent, vec![0, 0, 0, 1, 1, 4]);
             // // // assert_eq!(a.id_first_child, vec![1, 3, 0, 0, 5, 0]);
@@ -453,7 +452,7 @@ mod tests {
         };
 
         let mappings: VecStore<u16> = Default::default();
-        let mut matcher = ZsMatcher::<_, u16, u16, _, _> {
+        let mut matcher = ZsMatcher::<_, u16, _, _, _> {
             compressed_node_store: &compressed_node_store,
             src_arena,
             dst_arena,

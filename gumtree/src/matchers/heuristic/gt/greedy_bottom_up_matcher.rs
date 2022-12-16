@@ -10,7 +10,7 @@ use crate::matchers::{
     mapping_store::DefaultMappingStore, optimal::zs::ZsMatcher, similarity_metrics,
 };
 use hyper_ast::types::{
-    LabelStore, NodeStore, SlicedLabel, Tree, Typed, WithHashs, WithSerialization,
+    LabelStore, NodeStore, SlicedLabel, Tree, WithHashs,
 };
 
 use super::bottom_up_matcher::BottomUpMatcher;
@@ -40,13 +40,13 @@ pub struct GreedyBottomUpMatcher<
 impl<
         'a,
         Dsrc: 'a
-            + DecompressedTreeStore<'a, T::TreeId, IdD>
-            + DecompressedWithParent<'a, T::TreeId, IdD>
-            + PostOrder<'a, T::TreeId, IdD>,
+            + DecompressedTreeStore<'a, T, IdD>
+            + DecompressedWithParent<'a, T, IdD>
+            + PostOrder<'a, T, IdD>,
         Ddst: 'a
-            + DecompressedTreeStore<'a, T::TreeId, IdD>
-            + DecompressedWithParent<'a, T::TreeId, IdD>
-            + PostOrder<'a, T::TreeId, IdD>,
+            + DecompressedTreeStore<'a, T, IdD>
+            + DecompressedWithParent<'a, T, IdD>
+            + PostOrder<'a, T, IdD>,
         IdD: PrimInt + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
         S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
@@ -78,15 +78,15 @@ impl<
 impl<
         'a,
         Dsrc: 'a
-            + DecompressedTreeStore<'a, T::TreeId, IdD>
-            + DecompressedWithParent<'a, T::TreeId, IdD>
-            + PostOrder<'a, T::TreeId, IdD>
-            + ContiguousDescendants<'a, T::TreeId, IdD>,
+            + DecompressedTreeStore<'a, T, IdD>
+            + DecompressedWithParent<'a, T, IdD>
+            + PostOrder<'a, T, IdD>
+            + ContiguousDescendants<'a, T, IdD>,
         Ddst: 'a
-            + DecompressedTreeStore<'a, T::TreeId, IdD>
-            + DecompressedWithParent<'a, T::TreeId, IdD>
-            + PostOrder<'a, T::TreeId, IdD>
-            + ContiguousDescendants<'a, T::TreeId, IdD>,
+            + DecompressedTreeStore<'a, T, IdD>
+            + DecompressedWithParent<'a, T, IdD>
+            + PostOrder<'a, T, IdD>
+            + ContiguousDescendants<'a, T, IdD>,
         IdD: 'a + PrimInt + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
         S, //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
@@ -112,12 +112,13 @@ impl<
         SIM_THRESHOLD_DEN,
     >
 where
-    S: 'a + NodeStore<T::TreeId>,
+    S: 'a + NodeStore<T::TreeId,R<'a>=T>,
+    // S: 'a + NodeStore<T::TreeId>,
     // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
     //     + WithHashs<HK = T::HK, HP = T::HP>,
-    S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
-        + WithHashs<HK = T::HK, HP = T::HP>
-        + WithSerialization,
+    // S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
+    //     + WithHashs<HK = T::HK, HP = T::HP>
+    //     + WithSerialization,
     T::TreeId: 'a + Clone + Debug,
     T::Type: Debug,
 {
@@ -265,7 +266,7 @@ where
         if src_s < cast(SIZE_THRESHOLD).unwrap() || dst_s < cast(SIZE_THRESHOLD).unwrap() {
             let mappings = DefaultMappingStore::<IdDZs>::default();
             let matcher = {
-                let mut matcher = ZsMatcher::<'a, SimpleZsTree<T::TreeId, IdDZs>, _, _, _, _>::make(
+                let mut matcher = ZsMatcher::<'a, SimpleZsTree<T, IdDZs>, _, _, _, _>::make(
                     self.internal.node_store,
                     self.label_store,
                     src,

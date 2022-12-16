@@ -338,7 +338,7 @@ fn main() {
         //         .collect::<Vec<_>>()
         // );
         let dst_arena =
-            bfs_wrapper::SimpleBfsMapper::from(&java_tree_gen.stores.node_store, &dst_arena);
+            bfs_wrapper::SimpleBfsMapper::from(&java_tree_gen.stores.node_store, dst_arena);
         // println!("{:?} {:?}", dst_arena.root(), dst);
         // println!("{:?}", dst_arena);
         // println!(
@@ -389,7 +389,7 @@ fn main() {
     fn access(store: &NodeStore, r: NodeIdentifier, p: &CompressedTreePath<u16>) -> NodeIdentifier {
         let mut x = r;
         for p in p.iter() {
-            x = store.resolve(x).get_child(&p);
+            x = store.resolve(x).child(&p).unwrap();
         }
         x
     }

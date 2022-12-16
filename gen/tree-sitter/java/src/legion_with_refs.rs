@@ -135,7 +135,9 @@ impl Local {
 #[derive(Default, Debug, Clone, Copy)]
 pub struct SubTreeMetrics<U: NodeHashs> {
     pub hashs: U,
+    /// WIP make it space independent
     pub size: u32,
+    /// WIP make it space independent
     pub height: u32,
 }
 
@@ -368,8 +370,8 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
         Local {
             compressed_node,
             metrics: SubTreeMetrics {
-                size: 1,
-                height: 1,
+                size: 0,
+                height: 0,
                 hashs,
             },
             ana: Default::default(),
@@ -951,12 +953,12 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
                         label: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Label),
                         syntax: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Syntax),
                     };
+                    let kind = node.get_type();
                     let metrics = SubTreeMetrics {
                         size: node.get_component::<compo::Size>().map_or(1, |x| x.0),
                         height: node.get_component::<compo::Height>().map_or(1, |x| x.0),
                         hashs,
                     };
-                    let kind = node.get_type();
                     let mcc = node
                         .get_component::<Mcc>()
                         .map_or(Mcc::new(&kind), |x| x.clone());

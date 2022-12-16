@@ -6,7 +6,7 @@ use hyper_ast::{
         defaults::{LabelIdentifier, NodeIdentifier},
         nodes::legion::HashedNodeRef,
     },
-    types::{LabelStore, Labeled, Type, Typed, WithChildren},
+    types::{LabelStore, Labeled, Type, Typed, WithChildren, IterableChildren},
 };
 use hyper_ast_gen_ts_java::{
     impact::{
@@ -455,7 +455,7 @@ impl<'a> RefsFinder<'a> {
         );
         let name = {
             let mut i = None;
-            for xx in b.get_children() {
+            for xx in b.children().unwrap().iter_children() {
                 let bb = self.prepro.main_stores.node_store.resolve(*xx);
                 if bb.get_type() == Type::VariableDeclarator {
                     i = self.extract_identifier(&bb);
@@ -517,7 +517,7 @@ impl<'a> RefsFinder<'a> {
             if t == Type::Identifier {
                 i = Some(*b.get_label());
             } else if t == Type::LocalVariableDeclaration || t == Type::SpreadParameter {
-                for xx in b.get_children() {
+                for xx in b.children().unwrap().iter_children() {
                     let bb = self.prepro.main_stores.node_store.resolve(*xx);
                     if bb.get_type() == Type::VariableDeclarator {
                         i = self.extract_identifier(&bb);
@@ -553,7 +553,7 @@ impl<'a> RefsFinder<'a> {
             return self.go_through_block(r, cursor, qual_ref);
         }
 
-        for (i, xx) in bb.get_children().iter().enumerate() {
+        for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
             cursor.scout.goto(*xx, i);
             if Some(*xx) != cursor.prev {
                 log::debug!(
@@ -601,7 +601,7 @@ impl<'a> RefsFinder<'a> {
             .resolve(decl.node_always(&self.structural_positions));
         let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
         let mut scout = decl.clone();
-        for (i, xx) in b.get_children().iter().enumerate() {
+        for (i, xx) in b.children().unwrap().iter_children().enumerate() {
             scout.goto(*xx, i);
 
             log::debug!("try search this");
@@ -641,7 +641,7 @@ impl<'a> RefsFinder<'a> {
         let qual_thiss = self.ana.solver.intern(RefsEnum::This(qual_ref));
 
         let mut scout = decl.clone();
-        for (i, xx) in b.get_children().iter().enumerate() {
+        for (i, xx) in b.children().unwrap().iter_children().enumerate() {
             scout.goto(*xx, i);
 
             log::debug!("try search this");
@@ -702,7 +702,7 @@ impl<'a> RefsFinder<'a> {
                         &self.prepro.main_stores.label_store
                     ))
                 );
-                for (i, xx) in b.get_children().iter().enumerate() {
+                for (i, xx) in b.children().unwrap().iter_children().enumerate() {
                     cursor.scout.goto(*xx, i);
                     if Some(*xx) != cursor.prev.clone() {
                         // search ?.A or ?.B.A or ...
@@ -719,7 +719,7 @@ impl<'a> RefsFinder<'a> {
                 if tt == Type::ObjectCreationExpression {
                     return Err(SearchStopEvent::Blocked);
                 } else if tt == Type::EnumBody {
-                    for (i, xx) in bb.get_children().iter().enumerate() {
+                    for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
                         cursor.scout.goto(*xx, i);
                         if Some(*xx) != cursor.prev.clone() {
                             // search ?.A or ?.B.A or ...
@@ -784,7 +784,7 @@ impl<'a> RefsFinder<'a> {
                         &self.prepro.main_stores.label_store
                     ))
                 );
-                for (i, xx) in b.get_children().iter().enumerate() {
+                for (i, xx) in b.children().unwrap().iter_children().enumerate() {
                     cursor.scout.goto(*xx, i);
                     if Some(*xx) != cursor.prev.clone() {
                         // search ?.A or ?.B.A or ...
@@ -804,7 +804,7 @@ impl<'a> RefsFinder<'a> {
                 let (_, bb, _) = if tt == Type::ObjectCreationExpression {
                     return Err(SearchStopEvent::Blocked);
                 } else if tt == Type::EnumBody {
-                    for (i, xx) in bb.get_children().iter().enumerate() {
+                    for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
                         cursor.scout.goto(*xx, i);
                         if Some(*xx) != cursor.prev.clone() {
                             // search ?.A or ?.B.A or ...
@@ -863,7 +863,7 @@ impl<'a> RefsFinder<'a> {
                 return Err(SearchStopEvent::Blocked);
             } else if t == Type::ConstructorBody {
                 let mut scout = cursor.scout.clone();
-                for (i, xx) in b.get_children().iter().skip(prev_offset).enumerate() {
+                for (i, xx) in b.children().unwrap().iter_children().skip(prev_offset).enumerate() {
                     scout.goto(*xx, i);
                     log::trace!("go_through_type_declarations s4");
                     r.extend(self.search(&mm, &qual_ref, &cursor.scout));
@@ -872,7 +872,7 @@ impl<'a> RefsFinder<'a> {
                 return Err(SearchStopEvent::Blocked);
             } else if t == Type::Block {
                 let mut scout = cursor.scout.clone();
-                for (i, xx) in b.get_children().iter().skip(prev_offset).enumerate() {
+                for (i, xx) in b.children().unwrap().iter_children().skip(prev_offset).enumerate() {
                     scout.goto(*xx, i);
                     log::trace!("go_through_type_declarations s5");
                     r.extend(self.search(&mm, &qual_ref, &cursor.scout));
@@ -910,7 +910,7 @@ impl<'a> RefsFinder<'a> {
                         &self.prepro.main_stores.label_store
                     ))
                 );
-                for (i, xx) in b.get_children().iter().enumerate() {
+                for (i, xx) in b.children().unwrap().iter_children().enumerate() {
                     cursor.scout.goto(*xx, i);
                     if Some(*xx) != cursor.prev.clone() {
                         // search ?.A or ?.B.A or ...
@@ -1001,7 +1001,7 @@ impl<'a> RefsFinder<'a> {
         );
         // go through program i.e. package declaration
         before_p_ref = max_qual_ref;
-        for (i, xx) in b.get_children().iter().enumerate() {
+        for (i, xx) in b.children().unwrap().iter_children().enumerate() {
             cursor.scout.goto(*xx, i);
             let bb = self.prepro.main_stores.node_store.resolve(*xx);
             let tt = bb.get_type();
@@ -1069,7 +1069,7 @@ impl<'a> RefsFinder<'a> {
                 .make_position(&self.structural_positions, &self.prepro.main_stores)
         );
 
-        for (i, xx) in bb.get_children().iter().enumerate() {
+        for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
             cursor.scout.goto(*xx, i);
             if Some(*xx) != cursor.prev {
                 log::debug!(
@@ -1096,7 +1096,7 @@ impl<'a> RefsFinder<'a> {
                 .main_stores
                 .node_store
                 .resolve(pack.node_always(&self.structural_positions));
-            for (i, xx) in bb.get_children().iter().enumerate() {
+            for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
                 let bb = self.prepro.main_stores.node_store.resolve(*xx);
                 let t = bb.get_type();
                 pack.goto(*xx, i);
@@ -1137,7 +1137,7 @@ impl<'a> RefsFinder<'a> {
             let xx = cursor.curr.ok_or(SearchStopEvent::NoMore)?;
             let bb = self.prepro.main_stores.node_store.resolve(xx);
             // log::debug!("search in package {:?} {:?}", cursor.curr, t);
-            for (i, xx) in bb.get_children().iter().enumerate() {
+            for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
                 cursor.scout.goto(*xx, i);
                 if Some(*xx) != cursor.prev {
                     r.extend(self.search(package_ref, fq_decl_ref, &cursor.scout));
@@ -1169,7 +1169,7 @@ impl<'a> RefsFinder<'a> {
             let scout = x.clone();
             let xx = x.node_always(&self.structural_positions);
             let bb = self.prepro.main_stores.node_store.resolve(xx);
-            for (i, xx) in bb.get_children().iter().enumerate() {
+            for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
                 cursor.scout.goto(*xx, i);
                 if Some(*xx) != cursor.prev {
                     r.extend(self.search(package_ref, fq_decl_ref, &scout));
@@ -1181,7 +1181,7 @@ impl<'a> RefsFinder<'a> {
     }
 
     fn extract_identifier(&mut self, b: &HashedNodeRef) -> Option<LabelIdentifier> {
-        for xx in b.get_children() {
+        for xx in b.children().unwrap().iter_children() {
             let bb = self.prepro.main_stores.node_store.resolve(*xx);
             if bb.get_type() == Type::Identifier {
                 let i = bb.get_label();

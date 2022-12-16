@@ -10,7 +10,7 @@ use num::ToPrimitive;
 use crate::{
     nodes::{print_tree_syntax, IoOut},
     store::{defaults::NodeIdentifier, SimpleStores},
-    types::{LabelStore, Labeled, Tree, Type, Typed, WithChildren},
+    types::{LabelStore, Labeled, Tree, Type, Typed, WithChildren, Children},
 };
 
 #[derive(PartialEq, Eq, Hash, Clone)]
@@ -100,7 +100,7 @@ pub fn extract_position(
 
     let b = stores.node_store.resolve(p);
     let c = {
-        let v = b.get_children()[..o - 1].to_vec();
+        let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
         v.iter()
             .map(|x| {
                 let b = stores.node_store.resolve(*x);
@@ -183,7 +183,7 @@ impl TreePath<NodeIdentifier> for StructuralPosition {
             let o = self.offsets[i] - 1;
             let p = self.nodes[i - 1];
             let b = stores.node_store.resolve(p);
-            if !b.has_children() || e != b.get_child(&o.to_u16().expect("too big")) {
+            if !b.has_children() || Some(e) != b.child(&o.to_u16().expect("too big")) {
                 return Err(());
             }
             i -= 1;
@@ -231,7 +231,7 @@ impl StructuralPosition {
                 // println!("t1:{:?}", t);
                 let o = self.offsets[i];
                 let c: usize = {
-                    let v = b.get_children()[..o - 1].to_vec();
+                    let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
                     v.iter()
                         .map(|x| {
                             let b = stores.node_store.resolve(*x);
@@ -271,7 +271,7 @@ impl StructuralPosition {
             let b = stores.node_store.resolve(p);
             let o = self.offsets[i];
             let c: usize = {
-                let v = b.get_children()[..o - 1].to_vec();
+                let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
                 v.iter()
                     .map(|x| {
                         let b = stores.node_store.resolve(*x);
@@ -537,7 +537,7 @@ impl Scout {
                 // println!("t1:{:?}", t);
                 let o = self.path.offsets[i];
                 let c: usize = {
-                    let v = b.get_children()[..o - 1].to_vec();
+                    let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
                     v.iter()
                         .map(|x| {
                             let b = stores.node_store.resolve(*x);
@@ -584,7 +584,7 @@ impl Scout {
             // println!("t3:{:?}", t);
             let o = self.path.offsets[i];
             let c: usize = {
-                let v = b.get_children()[..o - 1].to_vec();
+                let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
                 v.iter()
                     .map(|x| {
                         let b = stores.node_store.resolve(*x);
@@ -646,7 +646,7 @@ where
         let b = stores.node_store.resolve(x);
         // dbg!(b.get_type());
         // dbg!(o.to_usize().unwrap());
-        if let Some(cs) = b.try_get_children() {
+        if let Some(cs) = b.children() {
             let cs = cs.clone();
             for y in 0..o.to_usize().unwrap() {
                 let b = stores.node_store.resolve(cs[y]);
@@ -655,7 +655,7 @@ where
             // if o.to_usize().unwrap() >= cs.len() {
             //     // dbg!("fail");
             // }
-            if let Some(a) = cs.get(o.to_usize().unwrap()) {
+            if let Some(a) = cs.get(o.to_u16().unwrap()) {
                 x = *a;
             } else {
                 break;
@@ -696,7 +696,7 @@ where
             path.push(l);
         }
 
-        if let Some(cs) = b.try_get_children() {
+        if let Some(cs) = b.children() {
             let cs = cs.clone();
             if !t.is_directory() {
                 for y in 0..o.to_usize().unwrap() {
@@ -712,7 +712,7 @@ where
             // if o.to_usize().unwrap() >= cs.len() {
             //     // dbg!("fail");
             // }
-            if let Some(a) = cs.get(o.to_usize().unwrap()) {
+            if let Some(a) = cs.get(o.to_u16().unwrap()) {
                 x = *a;
             } else {
                 break;
@@ -805,7 +805,7 @@ impl<'a> ExploreStructuralPositions<'a> {
                 //     it.sps.offsets[it.sps.parents[it.i - 1]]
                 // );
                 let o = self.peek_offset().unwrap();
-                if self.peek_node().unwrap() != b.get_children()[o - 1] {
+                if self.peek_node().unwrap() != b.children().unwrap()[o - 1] {
                     print_tree_syntax(
                         |x| {
                             stores
@@ -818,22 +818,22 @@ impl<'a> ExploreStructuralPositions<'a> {
                         &p,
                         &mut Into::<IoOut<_>>::into(stdout()),
                     );
-                    if self.peek_node().unwrap() != b.get_children()[o - 1] {
+                    if self.peek_node().unwrap() != b.children().unwrap()[o - 1] {
                         log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
                     }
                     assert_eq!(
                         self.peek_node().unwrap(),
-                        b.get_children()[o - 1],
+                        b.children().unwrap()[o - 1],
                         "p:{:?} b.cs:{:?} o:{} o p:{} i p:{}",
                         p,
-                        b.get_children(),
+                        b.children().unwrap(),
                         self.peek_offset().unwrap(),
                         self.sps.offsets[self.sps.parents[self.i - 1]],
                         self.sps.parents[self.i - 1],
                     );
                 }
                 let c: usize = {
-                    let v = b.get_children()[..o - 1].to_vec();
+                    let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
                     v.iter()
                         .map(|x| {
                             let b = stores.node_store.resolve(*x);
@@ -966,7 +966,7 @@ impl StructuralPositionStore {
             }
             let o = o - 1;
             let b = stores.node_store.resolve(p);
-            if !b.has_children() || e != b.get_child(&o.to_u16().expect("too big")) {
+            if !b.has_children() || Some(e) != b.child(&o.to_u16().expect("too big")) {
                 return Err(if b.has_children() {
                     format!("error on link: {} {} {:?}", b.child_count(), o, p,)
                 } else {
@@ -980,7 +980,7 @@ impl StructuralPositionStore {
             let o = self.offsets[i] - 1;
             let p = self.nodes[self.parents[i]];
             let b = stores.node_store.resolve(p);
-            if !b.has_children() || e != b.get_child(&o.to_u16().expect("too big")) {
+            if !b.has_children() || Some(e) != b.child(&o.to_u16().expect("too big")) {
                 return Err(if b.has_children() {
                     format!("error: {} {} {:?}", b.child_count(), o, p,)
                 } else {
@@ -1005,7 +1005,7 @@ impl StructuralPositionStore {
             let o = self.offsets[i] - 1;
             let p = self.nodes[self.parents[i]];
             let b = stores.node_store.resolve(p);
-            if !b.has_children() || e != b.get_child(&o.to_u16().expect("too big")) {
+            if !b.has_children() || Some(e) != b.child(&o.to_u16().expect("too big")) {
                 return Err(if b.has_children() {
                     format!("error: {} {} {:?}", b.child_count(), o, p,)
                 } else {

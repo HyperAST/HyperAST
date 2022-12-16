@@ -4,7 +4,7 @@ use std::{fmt::Debug, ops::AddAssign};
 use hyper_ast::{
     position::{StructuralPosition, TreePath},
     store::{defaults::NodeIdentifier, SimpleStores},
-    types::{Tree, Type, Typed, WithChildren},
+    types::{Tree, Type, Typed, WithChildren, IterableChildren},
 };
 
 pub struct IterDeclarations<'a, T: TreePath<NodeIdentifier>> {
@@ -34,10 +34,10 @@ impl<'a, T: TreePath<NodeIdentifier> + Clone + Debug> Iterator for IterDeclarati
                     {
                         let b = self.stores.node_store.resolve(node);
                         if b.has_children() {
-                            let cs = b.get_children();
+                            assert!(offset < b.child_count().into());
+                            let cs = b.children();
                             // println!("children: {:?} {} {:?}", node,cs.len(),cs);
-                            assert!(offset < cs.len());
-                            assert_eq!(child, cs[offset]);
+                            assert_eq!(child, cs.unwrap()[offset]);
                         } else {
                             panic!()
                         }
@@ -107,8 +107,9 @@ impl<'a, T: TreePath<NodeIdentifier> + Clone + Debug> Iterator for IterDeclarati
                 }
 
                 if b.has_children() {
-                    let children = b.get_children();
-                    self.stack.push((node, 0, Some(children.to_vec())));
+                    let children = b.children();
+                    let children = children.unwrap();
+                    self.stack.push((node, 0, Some(children.iter_children().cloned().collect())));
                 }
 
                 if t.is_type_declaration() || t.is_parameter() {
@@ -143,8 +144,8 @@ impl<'a, T: TreePath<NodeIdentifier> + Clone + Debug> Iterator for IterDeclarati
                     assert!(b.has_children(), "{:?}", t);
                     self.path.check(&self.stores).unwrap();
                     // TODO also need to find an "=" and find the name just before
-
-                    for xx in b.get_children() {
+                    let cs = b.children().unwrap();
+                    for xx in cs.iter_children() {
                         let bb = self.stores.node_store.resolve(*xx);
                         if bb.get_type() == Type::TS30 {
                             return Some(self.path.clone());
@@ -228,9 +229,9 @@ impl<'a> Iterator for IterDeclarationsUnstableOpti<'a> {
         self.parents.push(x);
         self.offsets.push(0);
         self.remaining.push(None);
-        if b.has_children() {
+        if let Some(cs) = b.children() {
             self.remaining
-                .extend(b.get_children().iter().rev().map(|x| Some(*x)));
+                .extend(cs.iter_children().rev().map(|x| Some(*x)));
         }
 
         if t.is_type_declaration() {

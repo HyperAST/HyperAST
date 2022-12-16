@@ -9,7 +9,7 @@ use hyper_ast::{
     position::{StructuralPosition, TreePath},
     store::defaults::{LabelIdentifier, NodeIdentifier},
     tree_gen::SubTreeMetrics,
-    types::{LabelStore as _, Labeled, Tree, Type, Typed, WithChildren},
+    types::{IterableChildren, LabelStore as _, Labeled, Tree, Type, Typed, WithChildren},
 };
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
 use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
@@ -131,13 +131,19 @@ impl<'a> IterMavenModules2<'a> {
         self.offsets.push(0);
         self.remaining.push(None);
         if b.has_children() {
-            self.remaining
-                .extend(b.get_children().iter().rev().map(|x| Some(*x)));
+            self.remaining.extend(
+                b.children()
+                    .unwrap()
+                    .iter_children()
+                    .rev()
+                    .map(|x| Some(*x)),
+            );
         }
 
         let contains_pom = b
-            .get_children()
-            .iter()
+            .children()
+            .unwrap_or_default()
+            .iter_children()
             .find(|x| {
                 if let Some(n) = self.stores.node_store.try_resolve(**x) {
                     log::debug!("f {:?}", n.get_type());
@@ -360,10 +366,11 @@ impl<'a, T: TreePath<NodeIdentifier> + Debug + Clone> Iterator for IterMavenModu
                     {
                         let b = self.stores.node_store.resolve(node);
                         if b.has_children() {
-                            let cs = b.get_children();
+                            let len = b.child_count();
+                            let cs = b.children().unwrap();
                             // println!("children: {:?} {} {:?}", node,cs.len(),cs);
-                            assert!(offset < cs.len());
-                            assert_eq!(child, cs[offset]);
+                            assert!(offset < len as usize);
+                            assert_eq!(child, cs[offset as u16]);
                         } else {
                             panic!()
                         }
@@ -404,8 +411,8 @@ impl<'a, T: TreePath<NodeIdentifier> + Debug + Clone> Iterator for IterMavenModu
                 }
 
                 if b.has_children() {
-                    let children = b.get_children();
-                    self.stack.push((node, 0, Some(children.to_vec())));
+                    let children = b.children();
+                    self.stack.push((node, 0, Some(children.unwrap().iter_children().cloned().collect())));
                 }
 
                 if self.is_matching(&b) {
@@ -439,8 +446,9 @@ impl<'a, T: TreePath<NodeIdentifier>> IterMavenModules<'a, T> {
     }
     fn is_matching(&self, b: &hyper_ast::store::nodes::legion::HashedNodeRef) -> bool {
         let contains_pom = b
-            .get_children()
-            .iter()
+            .children()
+            .unwrap()
+            .iter_children()
             .find(|x| {
                 if let Some(n) = self.stores.node_store.try_resolve(**x) {
                     log::debug!("f {:?}", n.get_type());

@@ -76,6 +76,7 @@ pub(crate) fn example_gt_slides() -> (ST<u8>, ST<u8>) {
     (src, dst)
 }
 
+#[allow(unused)]
 pub(crate) fn example_gumtree() -> (ST<u8>, ST<u8>) {
     let src = tree!(
         0,"a"; [
@@ -137,6 +138,7 @@ pub fn example_gumtree_ambiguous() -> (ST<u8>, ST<u8>) {
     (src, dst)
 }
 
+#[allow(unused)]
 pub(crate) fn example_bottom_up() -> (ST<u8>, ST<u8>) {
     // types : ["td";"md";"vis";"name";"block";"s"]
     let src = tree!(
@@ -236,6 +238,7 @@ pub(crate) fn example_action2() -> (ST<u8>, ST<u8>) {
 }
 
 /// class A {} renamed to B
+#[allow(unused)]
 pub(crate) fn example_eq_simple_class_rename() -> (ST<u8>, ST<u8>) {
     let src = tree!(
         0, "program"; [
@@ -264,6 +267,7 @@ pub(crate) fn example_eq_simple_class_rename() -> (ST<u8>, ST<u8>) {
     (src, dst)
 }
 
+#[allow(unused)]
 pub(crate) fn example_very_simple_post_order() -> (ST<u8>, ST<u8>) {
     let src = tree!(
         6, "6"; [

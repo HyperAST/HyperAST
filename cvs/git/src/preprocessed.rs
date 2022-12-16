@@ -8,7 +8,7 @@ use std::{
 use git2::{Oid, Repository};
 use hyper_ast::{
     store::{defaults::LabelIdentifier, nodes::DefaultNodeIdentifier as NodeIdentifier},
-    types::{LabelStore as _, Type, Typed, WithChildren},
+    types::{LabelStore as _, Type, Typed, WithChildren, IterableChildren},
     utils::memusage_linux,
 };
 use log::info;
@@ -485,13 +485,14 @@ impl PreProcessedRepository {
         let n = self.main_stores.node_store.resolve(d);
         log::info!("{}", name);
         let i = n.get_child_idx_by_name(&self.main_stores.label_store.get(name)?);
-        i.map(|i| (n.get_child(&i), i as usize))
+        i.map(|i| (n.child(&i).unwrap(), i as usize))
     }
     pub fn child_by_type(&self, d: NodeIdentifier, t: &Type) -> Option<(NodeIdentifier, usize)> {
         let n = self.main_stores.node_store.resolve(d);
         let s = n
-            .get_children()
-            .iter()
+            .children()
+            .unwrap()
+            .iter_children()
             .enumerate()
             .find(|(_, x)| {
                 let n = self.main_stores.node_store.resolve(**x);

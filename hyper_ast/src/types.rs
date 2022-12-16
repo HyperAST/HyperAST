@@ -1,10 +1,12 @@
 use std::borrow::Borrow;
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::str::FromStr;
 
 use num::PrimInt;
-use strum_macros::EnumString;
+use num::ToPrimitive;
 use strum_macros::Display;
+use strum_macros::EnumString;
 
 pub trait HashKind {
     fn structural() -> Self;
@@ -812,16 +814,290 @@ pub trait Typed {
     fn get_type(&self) -> Self::Type;
 }
 
-pub trait WithChildren: Node + Stored {
+// impl<T, A: Allocator> ops::Deref for Vec<T, A> {
+//     type Target = [T];
+
+//     #[inline]
+//     fn deref(&self) -> &[T] {
+//         unsafe { slice::from_raw_parts(self.as_ptr(), self.len) }
+//     }
+// }
+pub trait WithChildren: Node + Stored
+// where
+//     <Self::Children as std::ops::Deref>::Target: std::ops::Index<<Self as WithChildren>::ChildIdx, Output = <Self as Stored>::TreeId>
+//         + Sized,
+{
     type ChildIdx: PrimInt;
+    type Children<'a>: Children<Self::ChildIdx, Self::TreeId> + ?Sized
+    where
+        Self: 'a;
+    // type Children<'a>: std::ops::Index<Self::ChildIdx, Output = Self::TreeId> + IntoIterator<Item = Self::TreeId>
+    // where
+    //     Self: 'a;
 
     fn child_count(&self) -> Self::ChildIdx;
-    fn get_child(&self, idx: &Self::ChildIdx) -> Self::TreeId;
-    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId;
-    fn get_children(&self) -> &[Self::TreeId];
-    fn get_children_cpy(&self) -> Vec<Self::TreeId>;
-    fn try_get_children(&self) -> Option<&[Self::TreeId]>;
+    fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId>;
+    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId>;
+    fn children(&self) -> Option<&Self::Children<'_>>;
+    // unsafe fn children_unchecked(&self) -> <Self::Children as std::ops::Deref>::Target
+    // where
+    //     <Self::Children as std::ops::Deref>::Target: std::ops::Index<<Self as WithChildren>::ChildIdx, Output = <Self as Stored>::TreeId>
+    //         + Sized;
+    // fn get_children_cpy(&self) -> Self::Children;
 }
+pub trait IterableChildren<T> {
+    type ChildrenIter<'a>: Iterator<Item = &'a T>
+    where
+        T: 'a,
+        Self: 'a;
+    fn iter_children(&self) -> Self::ChildrenIter<'_>;
+    fn is_empty(&self) -> bool;
+}
+
+pub trait Children<IdX, T>: std::ops::Index<IdX, Output = T> + IterableChildren<T> {
+    fn child_count(&self) -> IdX;
+    fn get(&self, i: IdX) -> Option<&T>;
+    fn after(&self, i: IdX) -> &Self;
+    fn before(&self, i: IdX) -> &Self;
+    fn between(&self, start: IdX, end: IdX) -> &Self;
+    fn inclusive(&self, start: IdX, end: IdX) -> &Self;
+}
+
+// pub trait AsSlice<'a, IdX, T: 'a> {
+//     type Slice: std::ops::Index<IdX, Output = [T]> + ?Sized;
+
+//     fn as_slice(&self) -> &Self::Slice;
+// }
+
+impl<T> IterableChildren<T> for [T] {
+    type ChildrenIter<'a> = core::slice::Iter<'a, T> where T: 'a;
+
+    fn iter_children(&self) -> Self::ChildrenIter<'_> {
+        <[T]>::iter(&self)
+    }
+
+    fn is_empty(&self) -> bool {
+        <[T]>::is_empty(&self)
+    }
+}
+
+impl<IdX: num::NumCast, T> Children<IdX, T> for [T]
+where
+    IdX: std::slice::SliceIndex<[T], Output = T>,
+{
+    fn child_count(&self) -> IdX {
+        IdX::from(<[T]>::len(&self)).unwrap()
+        // num::cast::<_, IdX>(<[T]>::len(&self)).unwrap()
+    }
+
+    fn get(&self, i: IdX) -> Option<&T> {
+        self.get(i.to_usize().unwrap())
+    }
+
+    fn after(&self, i: IdX) -> &Self {
+        (&self[i.to_usize().unwrap()..]).into()
+    }
+
+    fn before(&self, i: IdX) -> &Self {
+        (&self[..i.to_usize().unwrap()]).into()
+    }
+
+    fn between(&self, start: IdX, end: IdX) -> &Self {
+        (&self[start.to_usize().unwrap()..end.to_usize().unwrap()]).into()
+    }
+
+    fn inclusive(&self, start: IdX, end: IdX) -> &Self {
+        (&self[start.to_usize().unwrap()..=end.to_usize().unwrap()]).into()
+    }
+}
+
+#[repr(transparent)]
+pub struct MySlice<T>(pub [T]);
+
+impl<'a, T> From<&'a [T]> for &'a MySlice<T> {
+    fn from(value: &'a [T]) -> Self {
+        unsafe { std::mem::transmute(value) }
+    }
+}
+
+impl<T> std::ops::Index<u16> for MySlice<T> {
+    type Output = T;
+
+    fn index(&self, index: u16) -> &Self::Output {
+        &self.0[index as usize]
+    }
+}
+
+impl<T> std::ops::Index<u8> for MySlice<T> {
+    type Output = T;
+
+    fn index(&self, index: u8) -> &Self::Output {
+        &self.0[index as usize]
+    }
+}
+
+impl<T> std::ops::Index<usize> for MySlice<T> {
+    type Output = T;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
+    }
+}
+
+impl<T: Clone> From<&MySlice<T>> for Vec<T> {
+    fn from(value: &MySlice<T>) -> Self {
+        value.0.to_vec()
+    }
+}
+
+impl<T: Debug> Debug for MySlice<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.0, f)
+    }
+}
+
+impl<T: Debug> Default for &MySlice<T> {
+    fn default() -> Self {
+        let r: &[T] = &[];
+        r.into()
+    }
+}
+
+// impl<T> std::ops::Index<core::ops::RangeTo<usize>> for MySlice<T> {
+//     type Output=[T];
+
+//     fn index(&self, index: core::ops::RangeTo<usize>) -> &Self::Output {
+//         &self.0[index]
+//     }
+// }
+
+// impl<T> std::ops::Index<core::ops::Range<usize>> for MySlice<T> {
+//     type Output=[T];
+
+//     fn index(&self, index: core::ops::Range<usize>) -> &Self::Output {
+//         &self.0[index]
+//     }
+// }
+
+// impl<IdX, T> std::ops::Index<IdX> for MySlice<T> where IdX: std::slice::SliceIndex<[T], Output = T> {
+//     type Output=T;
+
+//     fn index(&self, index: usize) -> &Self::Output {
+//         &self.0[index as usize]
+//     }
+// }
+
+impl<T> IterableChildren<T> for MySlice<T> {
+    type ChildrenIter<'a> = core::slice::Iter<'a, T> where T: 'a;
+
+    fn iter_children(&self) -> Self::ChildrenIter<'_> {
+        <[T]>::iter(&self.0)
+    }
+
+    fn is_empty(&self) -> bool {
+        <[T]>::is_empty(&self.0)
+    }
+}
+
+impl<T> Children<u16, T> for MySlice<T> {
+    fn child_count(&self) -> u16 {
+        <[T]>::len(&self.0).to_u16().unwrap()
+    }
+
+    fn get(&self, i: u16) -> Option<&T> {
+        self.0.get(usize::from(i))
+    }
+
+    fn after(&self, i: u16) -> &Self {
+        (&self.0[i.into()..]).into()
+    }
+
+    fn before(&self, i: u16) -> &Self {
+        (&self.0[..i.into()]).into()
+    }
+
+    fn between(&self, start: u16, end: u16) -> &Self {
+        (&self.0[start.into()..end.into()]).into()
+    }
+
+    fn inclusive(&self, start: u16, end: u16) -> &Self {
+        (&self.0[start.into()..=end.into()]).into()
+    }
+}
+
+impl<T> Children<u8, T> for MySlice<T> {
+    fn child_count(&self) -> u8 {
+        <[T]>::len(&self.0).to_u8().unwrap()
+    }
+
+    fn get(&self, i: u8) -> Option<&T> {
+        self.0.get(usize::from(i))
+    }
+
+    fn after(&self, i: u8) -> &Self {
+        (&self.0[i.into()..]).into()
+    }
+
+    fn before(&self, i: u8) -> &Self {
+        (&self.0[..i.into()]).into()
+    }
+
+    fn between(&self, start: u8, end: u8) -> &Self {
+        (&self.0[start.into()..end.into()]).into()
+    }
+
+    fn inclusive(&self, start: u8, end: u8) -> &Self {
+        (&self.0[start.into()..=end.into()]).into()
+    }
+}
+
+// impl<'a, T: 'a> AsSlice<'a, core::ops::RangeTo<usize>, T> for MySlice<T> {
+//     type Slice = MySlice<T>;
+
+//     fn as_slice(&self) -> &Self::Slice {
+//         self
+//     }
+// }
+
+// impl<'a, T: 'a> AsSlice<'a, core::ops::Range<usize>, T> for MySlice<T> {
+//     type Slice = MySlice<T>;
+
+//     fn as_slice(&self) -> &Self::Slice {
+//         self
+//     }
+// }
+
+// fn f () {
+//     let v = vec![];
+//     v.get_unchecked(index)
+// }
+// #[repr(transparent)]
+// struct Children<'a, I>(&'a [I]);
+
+// impl<'a, I> Children<'a, I> {
+//     fn new(data: Vec<u8>) -> Self {
+//         Children { data }
+//     }
+// }
+
+// impl<'a, I, Idx> std::ops::Index<Idx> for Children<'a, I>
+// where
+//     Idx: std::slice::SliceIndex<[I], Output = I>,
+// {
+//     type Output = I;
+
+//     fn index(&self, index: Idx) -> &Self::Output {
+//         &self.0[index]
+//     }
+// }
+
+// impl<'a, I, Idx: PrimInt> std::ops::Index<Idx> for Children<'a, I> {
+//     type Output = I;
+
+//     fn index(&self, index: Idx) -> &Self::Output {
+//         &self.0[index.to_usize().unwrap()]
+//     }
+// }
 
 /// just to show that it is not efficient
 mod owned {
@@ -867,14 +1143,22 @@ pub trait Labeled {
     fn get_label<'a>(&'a self) -> &'a Self::Label;
 }
 
-pub trait Tree: Typed + Labeled + WithChildren {
+pub trait Tree: Typed + Labeled + WithChildren
+// where
+//     <Self::Children as std::ops::Deref>::Target: std::ops::Index<<Self as WithChildren>::ChildIdx, Output = <Self as Stored>::TreeId>
+//         + Sized,
+{
     fn has_children(&self) -> bool;
     fn has_label(&self) -> bool;
     fn try_get_label<'a>(&'a self) -> Option<&'a Self::Label> {
         self.has_label().then(|| self.get_label())
     }
 }
-pub trait DeCompressedTree<T: PrimInt>: Tree {
+pub trait DeCompressedTree<T: PrimInt>: Tree
+// where
+//     <Self::Children as std::ops::Deref>::Target: std::ops::Index<<Self as WithChildren>::ChildIdx, Output = <Self as Stored>::TreeId>
+//         + Sized,
+{
     fn get_parent(&self) -> T;
     // fn has_parent(&self) -> bool;
 }
@@ -983,7 +1267,11 @@ pub trait NodeStore<IdN> {
 pub trait NodeStoreMut<T: Stored> {
     fn get_or_insert(&mut self, node: T) -> T::TreeId;
 }
-pub trait NodeStoreExt<T: Tree> {
+pub trait NodeStoreExt<T: Tree>
+// where
+//     <T::Children as std::ops::Deref>::Target:
+//         std::ops::Index<<T as WithChildren>::ChildIdx, Output = <T as Stored>::TreeId> + Sized,
+{
     fn build_then_insert(
         &mut self,
         i: T::TreeId,

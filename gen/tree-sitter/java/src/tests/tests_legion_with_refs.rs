@@ -386,7 +386,7 @@ fn test_offset_computation() {
     {
         let mut f = |x,i:u16| {
             let b = stores.node_store.resolve(x);
-            let x = b.get_child(&i);
+            let x = b.child(&i).unwrap();
             scout.goto(x,i as usize);
             scout.up(&s);
             scout.goto(x,i as usize);
@@ -438,7 +438,7 @@ fn test_offset_computation2() {
     {
         let mut f = |x,i:u16| {
             let b = stores.node_store.resolve(x);
-            let x = b.get_child(&i);
+            let x = b.child(&i).unwrap();
             scout.goto(x,i as usize);
             scout.up(&s);
             scout.goto(x,i as usize);

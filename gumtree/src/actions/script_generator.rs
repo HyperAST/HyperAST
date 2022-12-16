@@ -2,8 +2,8 @@
 use std::fmt::Debug;
 
 use bitvec::order::Lsb0;
-use hyper_ast::types::{GenericItem, Labeled, NodeStore, Stored, WithChildren};
-use num_traits::{cast, PrimInt, ToPrimitive};
+use hyper_ast::types::{Labeled, NodeStore, Stored, WithChildren};
+use num_traits::{cast, PrimInt};
 
 use crate::{
     matchers::{
@@ -127,7 +127,7 @@ pub struct ScriptGenerator<
     IdD: PrimInt + Debug,
     T: 'a + Stored + Labeled + WithChildren,
     SS,
-    SD: BreathFirstIterable<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
+    SD: BreathFirstIterable<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
     S,
     // S: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
 >
@@ -154,19 +154,20 @@ impl<
         'a,
         IdD: PrimInt + Debug,
         T: 'a + Stored + Labeled + WithChildren,
-        SS: DecompressedTreeStore<'a,T::TreeId, IdD>
-            + DecompressedWithParent<'a,T::TreeId, IdD>
-            + PostOrder<'a,T::TreeId, IdD>,
-        SD: DecompressedTreeStore<'a, T::TreeId, IdD>
-            + DecompressedWithParent<'a, T::TreeId, IdD>
-            + BreathFirstIterable<'a, T::TreeId, IdD>,
+        SS: DecompressedTreeStore<'a,T, IdD>
+            + DecompressedWithParent<'a,T, IdD>
+            + PostOrder<'a,T, IdD>,
+        SD: DecompressedTreeStore<'a, T, IdD>
+            + DecompressedWithParent<'a, T, IdD>
+            + BreathFirstIterable<'a, T, IdD>,
         S: 'a,//:'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
     > ScriptGenerator<'a, IdD, T, SS, SD, S>
 where
-    S: 'a + NodeStore<T::TreeId>,
+    S: NodeStore<T::TreeId, R<'a> = T>,
+        // S: 'a + NodeStore<T::TreeId>,
     // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item:
     //     hyper_ast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>+WithChildren,
-    S::R<'a>: hyper_ast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>,
+    // S::R<'a>: hyper_ast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>,
     T::Label: Copy,
     T::TreeId: Debug,
     T::ChildIdx: Debug,

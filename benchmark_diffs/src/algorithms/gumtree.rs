@@ -2,12 +2,12 @@ use std::time::Instant;
 
 use hyper_ast::store::{
     defaults::NodeIdentifier,
-    nodes::legion::{HashedNodeRef, NodeStore},
+    nodes::legion::{HashedNodeRef},
     SimpleStores,
 };
 use hyper_gumtree::{
     actions::script_generator2::ScriptGenerator,
-    decompressed_tree_store::bfs_wrapper::SimpleBfsMapper,
+    decompressed_tree_store::{bfs_wrapper::SimpleBfsMapper, CompletePostOrder},
     matchers::{
         heuristic::gt::{
             bottom_up_matcher::BottomUpMatcher,
@@ -18,11 +18,11 @@ use hyper_gumtree::{
     },
 };
 
-use crate::algorithms::DS;
+type DS<'store> = CompletePostOrder<HashedNodeRef<'store>, u32>;
 
 use super::DiffResult;
 
-pub fn diff(stores: &SimpleStores, src: &NodeIdentifier, dst: &NodeIdentifier) -> DiffResult<2> {
+pub fn diff<'store>(stores: &'store SimpleStores, src: &'store NodeIdentifier, dst: &'store NodeIdentifier) -> DiffResult<u32, DS<'store>, DS<'store>,2> {
     let mappings = VecStore::default();
     let now = Instant::now();
     let mapper = GreedySubtreeMatcher::<DS, DS, _, HashedNodeRef, _, _>::matchh(
@@ -62,17 +62,17 @@ pub fn diff(stores: &SimpleStores, src: &NodeIdentifier, dst: &NodeIdentifier) -
     let bottomup_mappings_s = mappings.len();
     dbg!(&bottomup_matcher_t, &bottomup_mappings_s);
     let now = Instant::now();
-    let dst_arena_bfs = SimpleBfsMapper::from(&stores.node_store, &dst_arena);
-    let script_gen = ScriptGenerator::<_, HashedNodeRef, _, _, NodeStore, _>::precompute_actions(
+    let dst_arena_bfs = SimpleBfsMapper::from(&stores.node_store, dst_arena);
+    let ScriptGenerator { actions, .. } = ScriptGenerator::precompute_actions(
         &stores.node_store,
         &src_arena,
         &dst_arena_bfs,
         &mappings,
     )
     .generate();
-    let ScriptGenerator { actions, .. } = script_gen;
     let gen_t = now.elapsed().as_secs_f64();
     dbg!(gen_t);
+    let dst_arena = dst_arena_bfs.back;
     DiffResult {
         mapping_durations: [subtree_matcher_t, bottomup_matcher_t],
         src_arena,

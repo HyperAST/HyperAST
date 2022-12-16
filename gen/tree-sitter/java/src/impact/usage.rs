@@ -13,8 +13,9 @@ use hyper_ast::{
         defaults::{NodeIdentifier},
         SimpleStores,
     },
-    types::{LabelStore, Labeled, Tree, Type, Typed, WithChildren},
+    types::{LabelStore, Labeled, Tree, Type, Typed, WithChildren, IterableChildren, Children},
 };
+use num::ToPrimitive;
 // use hyper_ast_core::tree::tree::{WithChildren, Tree, Labeled};
 
 use crate::{
@@ -130,7 +131,7 @@ impl<'a> RefsFinder<'a> {
                 let x;
                 assert!(b.has_children());
                 loop {
-                    let y = b.get_child(&i);
+                    let y = b.child(&i).unwrap();
                     let b = self.stores.node_store.resolve(y);
                     let t = b.get_type();
                     if t == Type::ScopedAbsoluteIdentifier || t == Type::Identifier {
@@ -220,7 +221,7 @@ impl<'a> RefsFinder<'a> {
                 let mut sstatic = false;
                 let mut asterisk = false;
                 assert!(b.has_children());
-                for c in b.get_children() {
+                for c in b.children().unwrap().iter_children() {
                     let b = self.stores.node_store.resolve(*c);
                     match b.get_type() {
                         Type::TS86 => sstatic = true,
@@ -562,7 +563,7 @@ impl<'a> RefsFinder<'a> {
         log::debug!("c_count {}",b.child_count());
         // scout.down();
 
-        for (i, x) in b.get_children().clone().iter().enumerate() {
+        for (i, x) in b.children().unwrap().iter_children().enumerate() {
             // scout.inc(*x);
             assert_eq!(current,scout.node_always(&self.sp_store));
             scout.goto(*x, i);
@@ -753,7 +754,7 @@ impl<'a> RefsFinder<'a> {
         scout: &mut Scout,
     ) {
         assert!(b.has_children());
-        let x = b.get_child(&0);
+        let x = b.child(&0).unwrap();
         let b = self.stores.node_store.resolve(x);
         let t = b.get_type();
         if t == Type::TypeIdentifier {
@@ -789,7 +790,7 @@ impl<'a> RefsFinder<'a> {
         }
         assert!(b.has_children());
         let len = b.child_count();
-        let x = b.get_child(&(len - 1));
+        let x = b.child(&(len - 1)).unwrap();
         let bb = self.stores.node_store.resolve(x);
         let t = bb.get_type();
         if t == Type::Identifier {
@@ -816,7 +817,7 @@ impl<'a> RefsFinder<'a> {
             return;
         }
         assert!(b.has_children());
-        for (j, x) in b.get_children().iter().enumerate() {
+        for (j, x) in b.children().unwrap().iter_children().enumerate() {
             let x = *x;
             let r = self.stores.node_store.resolve(x);
             let t = r.get_type();
@@ -850,7 +851,7 @@ impl<'a> RefsFinder<'a> {
         assert!(b.has_children());
         let mut j = 0;
         loop {
-            let x = b.get_child(&j);
+            let x = b.child(&j).unwrap();
             let r = self.stores.node_store.resolve(x);
             let t = r.get_type();
             if t == Type::TypeIdentifier {
@@ -894,7 +895,7 @@ impl<'a> RefsFinder<'a> {
             let t;
             let  mut x;
             loop {
-                x = b.get_child(&i);
+                x = b.child(&i).unwrap();
                 let b = self.stores.node_store.resolve(x);
                 let tt = b.get_type();
                 if tt == Type::Modifiers {
@@ -931,7 +932,7 @@ impl<'a> RefsFinder<'a> {
         scout: &mut Scout,
     ) {
         assert!(b.has_children());
-        let x = b.get_child_rev(&0);
+        let x = b.child_rev(&0).unwrap();
         let len = b.child_count() as usize;
         let bb = self.stores.node_store.resolve(x);
         let t = bb.get_type();
@@ -964,7 +965,7 @@ impl<'a> RefsFinder<'a> {
         scout: &mut Scout,
     ) {
         assert!(b.has_children());
-        let x = b.get_child(&0);
+        let x = b.child(&0).unwrap();
         let bb = self.stores.node_store.resolve(x);
         let t = bb.get_type();
         if t == Type::TypeIdentifier || t == Type::Identifier {
@@ -995,7 +996,7 @@ impl<'a> RefsFinder<'a> {
         if &RefsEnum::MaybeMissing != self.ana.solver.nodes.with(o).as_ref() {
             return;
         }
-        let x = b.get_child(&0);
+        let x = b.child(&0).unwrap();
         let b = self.stores.node_store.resolve(x);
         let t = b.get_type();
         if t == Type::TypeIdentifier {
@@ -1046,7 +1047,7 @@ impl<'a> RefsFinder<'a> {
         }
         let mut ok = false;
         let mut ok2 = false;
-        for (j, &x) in b.get_children().iter().enumerate() {
+        for (j, &x) in b.children().unwrap().iter_children().enumerate() {
             let r = self.stores.node_store.resolve(x);
             let t = r.get_type();
             if t == Type::TS7 {
@@ -1104,7 +1105,7 @@ impl<'a> RefsFinder<'a> {
         if &RefsEnum::MaybeMissing != self.ana.solver.nodes.with(o).as_ref() {
             return;
         }
-        let x = b.get_child(&0);
+        let x = b.child(&0).unwrap();
         let bb = self.stores.node_store.resolve(x);
         let t = bb.get_type();
         if t == Type::Identifier {
@@ -1122,7 +1123,7 @@ impl<'a> RefsFinder<'a> {
         } else {
             todo!("{:?}", t)
         }
-        let x = b.get_child_rev(&0);
+        let x = b.child_rev(&0).unwrap();
         let len = b.child_count();
         let bb = self.stores.node_store.resolve(x);
         let t = bb.get_type();
@@ -1155,7 +1156,7 @@ impl<'a> RefsFinder<'a> {
         if &RefsEnum::MaybeMissing != self.ana.solver.nodes.with(o).as_ref() {
             return;
         }
-        let x = b.get_child(&0);
+        let x = b.child(&0).unwrap();
         let b = self.stores.node_store.resolve(x);
         let t = b.get_type();
         if t == Type::TypeIdentifier {
@@ -1184,7 +1185,7 @@ impl<'a> RefsFinder<'a> {
         if &RefsEnum::MaybeMissing != self.ana.solver.nodes.with(o).as_ref() {
             return;
         }
-        let x = b.get_child(&0);
+        let x = b.child(&0).unwrap();
         let b = self.stores.node_store.resolve(x);
         let t = b.get_type();
         if t == Type::TypeIdentifier {
@@ -1217,7 +1218,7 @@ impl<'a> RefsFinder<'a> {
         let mut ok = false;
         let l = b.child_count();
         while j < l {
-            let x = b.get_child(&j);
+            let x = b.child(&j).unwrap();
             r = self.stores.node_store.resolve(x);
             t = r.get_type();
             if t == Type::TS60 {
@@ -1280,11 +1281,11 @@ impl<'a> RefsFinder<'a> {
         }
         assert!(b.has_children());
         let (r, t,j,x) = {
-            let x = b.get_child(&0);
+            let x = b.child(&0).unwrap();
             let r = self.stores.node_store.resolve(x);
             let t = r.get_type();
             if t == Type::Modifiers {
-                let x = b.get_child(&2);
+                let x = b.child(&2).unwrap();
                 let r = self.stores.node_store.resolve(x);
                 let t = r.get_type();
                 // scout.goto(x, 2);
@@ -1323,7 +1324,7 @@ impl<'a> RefsFinder<'a> {
         let t;
         let mut x;
         loop {
-            x = b.get_child(&j);
+            x = b.child(&j).unwrap();
             let b = self.stores.node_store.resolve(x);
             let tt = b.get_type();
             if tt == Type::Modifiers {
@@ -1360,7 +1361,7 @@ impl<'a> RefsFinder<'a> {
         scout: &mut Scout,
     ) {
         assert!(b.has_children());
-        let x = b.get_child(&0);
+        let x = b.child(&0).unwrap();
         scout.goto(x, 0);
         let b = self.stores.node_store.resolve(x);
         let t = b.get_type();
@@ -1405,9 +1406,10 @@ impl<'a> RefsFinder<'a> {
         scout: &mut Scout,
     ) {
         assert!(b.has_children());
-        let cs = b.get_children();
-        let mut j = cs.len() - 1;
+        let j = b.child_count() - 1;
+        let cs = b.children().unwrap();
         let has_body = self.stores.node_store.resolve(cs[j]).get_type() == Type::ClassBody;
+        let mut j = j.into();
         if has_body {
             log::debug!("object creation expression has body");
             j -= 1;
@@ -1459,7 +1461,7 @@ impl<'a> RefsFinder<'a> {
 
                 let mut scout2 = scout.clone();
                 scout2.goto(x, j);
-                let x = r.get_child(&0);
+                let x = r.child(&0).unwrap();
                 let b = self.stores.node_store.resolve(x);
                 let t = b.get_type();
                 if t == Type::TypeIdentifier {
@@ -1490,7 +1492,7 @@ impl<'a> RefsFinder<'a> {
                     o = oo;
                     matched = true;
                 } else {
-                    let x = r.get_child(&0);
+                    let x = r.child(&0).unwrap();
                     scout2.goto(x, 0);
                     let b = self.stores.node_store.resolve(x);
                     let t = b.get_type();
@@ -1647,7 +1649,7 @@ impl<'a> RefsFinder<'a> {
         scout: Scout,
     ) -> Option<usize> {
         assert!(b.has_children());
-        let x = b.get_child_rev(&0);
+        let x = b.child_rev(&0).unwrap();
         let bb = self.stores.node_store.resolve(x);
         let t = bb.get_type();
 
@@ -1663,7 +1665,7 @@ impl<'a> RefsFinder<'a> {
             panic!("{:?}", t)
         }
 
-        let x = b.get_child(&0);
+        let x = b.child(&0).unwrap();
         let bb = self.stores.node_store.resolve(x);
         let t = bb.get_type();
         if t == Type::TypeIdentifier {
@@ -1729,7 +1731,7 @@ impl<'a> RefsFinder<'a> {
         }
         let mut ok = false;
         let mut ok2 = false;
-        for (j, &x) in b.get_children().iter().enumerate() {
+        for (j, &x) in b.children().unwrap().iter_children().enumerate() {
             let r = self.stores.node_store.resolve(x);
             let t = r.get_type();
             if t == Type::TS7 {
@@ -1789,7 +1791,7 @@ impl<'a> RefsFinder<'a> {
         }
         let mut ok = true;
         let mut ok2 = false;
-        for (j, &x) in b.get_children().iter().enumerate() {
+        for (j, &x) in b.children().unwrap().iter_children().enumerate() {
             let r = self.stores.node_store.resolve(x);
             let t = r.get_type();
             if t == Type::TS41 {
@@ -1838,9 +1840,9 @@ impl<'a> RefsFinder<'a> {
     ) {
         assert!(b.has_children());
         let (o_id, _sup, _i_id) = {
-            let cs = b.get_children();
-
-            (cs[0], cs.len() > 3, cs[cs.len() - 1])
+            let len = b.child_count();
+            let cs = b.children().unwrap();
+            (cs[0_u16], len > 3, cs[len - 1])
         };
         let o_b = self.stores.node_store.resolve(o_id);
         let o_t = o_b.get_type();
@@ -1879,9 +1881,9 @@ impl<'a> RefsFinder<'a> {
         // TODO should handle and do a test case for explicit access to the member of a parent instance eg. A.super.b
         // TODO also look at how to handle precisely this.a or super.a
         let (o_id, _sup, i_id) = {
-            let cs = b.get_children();
-
-            (cs[0], cs.len() > 3, cs[cs.len() - 1])
+            let len = b.child_count();
+            let cs = b.children().unwrap();
+            (cs[0_u16], len > 3, cs[len - 1])
         };
         let o_b = self.stores.node_store.resolve(o_id);
         let o_t = o_b.get_type();
@@ -2004,7 +2006,7 @@ impl<'a> RefsFinder<'a> {
     ) -> Option<Scout> {
         assert!(b.has_children());
         // TODO should handle and do a test case for explicit access to the member of a parent instance eg. A.super.b
-        let x = b.get_child(&0);
+        let x = b.child(&0).unwrap();
         let bb = self.stores.node_store.resolve(x);
         let t = bb.get_type();
         let mut matching_o = false;
@@ -2108,7 +2110,7 @@ impl<'a> RefsFinder<'a> {
             todo!("{:?}", t)
         }
         if matching_o {
-            let x = b.get_child_rev(&0);
+            let x = b.child_rev(&0).unwrap();
             let bb = self.stores.node_store.resolve(x);
             let t = bb.get_type();
 
@@ -2164,13 +2166,14 @@ impl<'a> RefsFinder<'a> {
             let t = b.get_type();
             if t == Type::ObjectCreationExpression {
                 assert!(b.has_children());
-                let cs = b.get_children();
-                let x = cs[cs.len() - 1];
+                let len = b.child_count();
+                let cs = b.children().unwrap();
+                let x = cs[len - 1];
                 let b = self.stores.node_store.resolve(x);
                 let t = b.get_type();
                 if t == Type::ClassBody {
                     let mut scout = scout.clone();
-                    scout.goto(x, cs.len() - 1);
+                    scout.goto(x, len.to_usize().unwrap() - 1);
                     let r = self.sp_store.push(&mut scout);
                     if let Err(e) = self.sp_store.check(&self.stores) {
                         log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
@@ -2266,8 +2269,8 @@ impl<'a> RefsFinder<'a> {
                 self.relax_to_type(parent_scout)
             } else if tt == Type::CastExpression { // WARN for spoon
                 assert!(bb.has_children());
-                let cs = bb.get_children();
-                for x in &cs[o..] {
+                let cs = bb.children().unwrap();
+                for x in cs.after(o.to_u16().unwrap()).iter_children() {
                     let t = self.stores.node_store.resolve(*x).get_type();
                     if t == Type::TS8 {
                         return Some(scout);
@@ -2386,9 +2389,9 @@ impl<'a> RefsFinder<'a> {
                 self.relax_to_typed(parent_scout)
             } else if tt == Type::CastExpression {
                 assert!(bb.has_children());
-                let cs = bb.get_children();
+                let cs = bb.children().unwrap();
                 let o = scout.offset_always(&self.sp_store);
-                for x in &cs[o..] {
+                for x in cs.after(o.to_u16().unwrap()).iter_children() {
                     let t = self.stores.node_store.resolve(*x).get_type();
                     if t == Type::TS8 {
                         return Some(scout);
@@ -2605,9 +2608,9 @@ pub fn remake_pkg_ref(
     let t = b.get_type();
     if t == Type::ScopedAbsoluteIdentifier {
         assert!(b.has_children());
-        let x = b.get_child(&0);
+        let x = b.child(&0).unwrap();
         let o = remake_pkg_ref(stores, ana, x)?;
-        let x = b.get_child(&2);
+        let x = b.child(&2).unwrap();
         let b = stores.node_store.resolve(x);
         if let Some(i) = b.try_get_label() {
             let f = IdentifierFormat::from(stores.label_store.resolve(i));
@@ -2626,7 +2629,7 @@ pub fn remake_pkg_ref(
         Some(i)
     } else if t == Type::PackageDeclaration {
         assert!(b.has_children());
-        let x = b.get_child(&2);
+        let x = b.child(&2).unwrap();
         remake_pkg_ref(stores, ana, x)
     } else if t == Type::Spaces {
         log::error!("remake_pkg_ref space");
@@ -2645,7 +2648,7 @@ pub fn eq_root_scoped(d: ExplorableRef, stores: &SimpleStores, b: HashedNodeRef)
             if t == Type::ScopedAbsoluteIdentifier {
                 let mut bo = false;
                 assert!(b.has_children());
-                for x in b.get_children().iter().rev() {
+                for x in b.children().unwrap().iter_children().rev() {
                     // log::trace!("d:{:?}",d);
                     let b = stores.node_store.resolve(*x);
                     let t = b.get_type();
@@ -2708,7 +2711,7 @@ impl<'a> RefsFinder<'a> {
             return;
         }
         assert!(b.has_children());
-        for (j, &x) in b.get_children().iter().enumerate() {
+        for (j, &x) in b.children().unwrap().iter_children().enumerate() {
             let r = self.stores.node_store.resolve(x);
             let t = r.get_type();
             if t == Type::ConstructorDeclaration {
@@ -2747,7 +2750,7 @@ impl<'a> RefsFinder<'a> {
             if !b.has_children() {
                 return;
             }
-            scout.goto(b.get_child(&0), 0);
+            scout.goto(b.child(&0).unwrap(), 0);
             log::trace!(
                 "rec search 'this' ref {}",
                 DisplayRef::from((self.ana.solver.nodes.with(target), &self.stores.label_store)),
@@ -2803,7 +2806,7 @@ impl<'a> RefsFinder<'a> {
         assert!(b.has_children());
         log::debug!("c_count {}", b.child_count());
         let mut i = 0;
-        for x in b.get_children().clone() {
+        for x in b.children().unwrap().iter_children().clone() {
             scout.goto(*x, i);
             i += 1;
             log::trace!(

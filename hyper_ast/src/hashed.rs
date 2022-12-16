@@ -3,7 +3,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use crate::types::HashKind;
+use crate::types::{HashKind, MySlice};
 use crate::{
     store::labels::DefaultLabelIdentifier, store::nodes::DefaultNodeIdentifier, types::Type,
 };
@@ -235,33 +235,34 @@ impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L> crate::types::
     for HashedCompressedNode<U, N, L>
 {
     type ChildIdx = u16;
+    type Children<'a> = MySlice<Self::TreeId> where Self: 'a;
 
     fn child_count(&self) -> u16 {
         self.node.child_count()
     }
 
-    fn get_child(&self, idx: &Self::ChildIdx) -> N {
-        self.node.get_child(idx)
+    fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+        self.node.child(idx)
     }
 
-    fn get_child_rev(&self, idx: &Self::ChildIdx) -> Self::TreeId {
-        self.node.get_child_rev(idx)
+    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+        self.node.child_rev(idx)
     }
 
     // fn descendants_count(&self) -> Self::TreeId {
     //     self.node.descendants_count()
     // }
 
-    fn get_children<'a>(&'a self) -> &'a [Self::TreeId] {
-        self.node.get_children()
-    }
+    // fn children_unchecked<'a>(&'a self) -> &'a [Self::TreeId] {
+    //     self.node.children_unchecked()
+    // }
 
-    fn get_children_cpy<'a>(&'a self) -> Vec<Self::TreeId> {
-        self.node.get_children_cpy()
-    }
+    // fn get_children_cpy<'a>(&'a self) -> Vec<Self::TreeId> {
+    //     self.node.get_children_cpy()
+    // }
 
-    fn try_get_children<'a>(&'a self) -> Option<&'a [Self::TreeId]> {
-        self.node.try_get_children()
+    fn children<'a>(&'a self) -> Option<&'a Self::Children<'a>> {
+        self.node.children()
     }
 }
 

@@ -30,17 +30,18 @@ pub struct BottomUpMatcher<
 
 impl<
         'a,
-        Dsrc: DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
-        Ddst: DecompressedTreeStore<'a, T::TreeId, IdD> + DecompressedWithParent<'a, T::TreeId, IdD>,
+        Dsrc: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
+        Ddst: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
         IdD: PrimInt + std::ops::SubAssign + Debug,
         T: 'a + Tree + WithHashs,
         S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
         M: MonoMappingStore<Ele = IdD>,
     > BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M>
 where
-    S: 'a + NodeStore<T::TreeId>,
+    S: 'a + NodeStore<T::TreeId,R<'a>=T>,
+    // S: 'a + NodeStore<T::TreeId>,
     // for<'c> < <S as NodeStore2<T::TreeId>>::R  as GenericItem<'c>>::Item:Tree<TreeId = T::TreeId,Type = T::Type,Label = T::Label,ChildIdx = T::ChildIdx> + WithHashs<HK = T::HK,HP = T::HP>,
-    S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type> + WithHashs<HK = T::HK, HP = T::HP>,
+    // S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type> + WithHashs<HK = T::HK, HP = T::HP>,
 {
     pub(super) fn get_dst_candidates(&self, src: &IdD) -> Vec<IdD> {
         let mut seeds = vec![];

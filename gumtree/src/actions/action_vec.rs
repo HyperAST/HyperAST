@@ -6,11 +6,11 @@ use hyper_ast::{
     position::compute_range,
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
-        nodes::DefaultNodeIdentifier,
         SimpleStores,
     },
     types::{
-        AsTreeRef, LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Tree, Typed, WithChildren,
+        Children, LabelStore, NodeStore, NodeStoreExt, Tree, Typed,
+        WithChildren, IterableChildren,
     },
 };
 
@@ -37,30 +37,34 @@ pub fn actions_vec_f(
     v.iter().for_each(|a| print_action(ori, stores, a));
 }
 
-fn format_action_pos(ori: NodeIdentifier, stores: &SimpleStores, a: &SimpleAction<LabelIdentifier, u16, NodeIdentifier>) -> String {
+fn format_action_pos(
+    ori: NodeIdentifier,
+    stores: &SimpleStores,
+    a: &SimpleAction<LabelIdentifier, u16, NodeIdentifier>,
+) -> String {
     // TODO make whole thing more specific to a path in a tree
     let mut end = None;
-    struct ItLast<T, It: Iterator<Item = T>> {
-        tmp: Option<T>,
-        it: It,
-    }
+    // struct ItLast<T, It: Iterator<Item = T>> {
+    //     tmp: Option<T>,
+    //     it: It,
+    // }
 
-    impl<T, It: Iterator<Item = T>> ItLast<T, It> {
-        fn new(it: It) -> Self {
-            Self { it, tmp: None }
-        }
-        fn end(self) -> Option<T> {
-            self.tmp
-        }
-    }
+    // impl<T, It: Iterator<Item = T>> ItLast<T, It> {
+    //     fn new(it: It) -> Self {
+    //         Self { it, tmp: None }
+    //     }
+    //     fn end(self) -> Option<T> {
+    //         self.tmp
+    //     }
+    // }
 
-    impl<T, It: Iterator<Item = T>> Iterator for ItLast<T, It> {
-        type Item = T;
+    // impl<T, It: Iterator<Item = T>> Iterator for ItLast<T, It> {
+    //     type Item = T;
 
-        fn next(&mut self) -> Option<Self::Item> {
-            todo!()
-        }
-    }
+    //     fn next(&mut self) -> Option<Self::Item> {
+    //         todo!()
+    //     }
+    // }
 
     struct A<'a, T, It: Iterator<Item = T>> {
         curr: &'a mut Option<T>,
@@ -80,13 +84,23 @@ fn format_action_pos(ori: NodeIdentifier, stores: &SimpleStores, a: &SimpleActio
     }
     let mut it = A {
         curr: &mut end,
-        it: a.path.ori.iter()
+        it: a.path.ori.iter(),
     };
     let p = compute_range(ori, &mut it, stores);
-    format!("{:?} at {:?}", p, it.it.chain(vec![end.unwrap()].into_iter()).collect::<Vec<_>>())
+    format!(
+        "{:?} at {:?}",
+        p,
+        it.it
+            .chain(vec![end.unwrap()].into_iter())
+            .collect::<Vec<_>>()
+    )
 }
 
-fn print_action(ori: NodeIdentifier, stores: &SimpleStores, a: &SimpleAction<LabelIdentifier, u16, NodeIdentifier>) {
+fn print_action(
+    ori: NodeIdentifier,
+    stores: &SimpleStores,
+    a: &SimpleAction<LabelIdentifier, u16, NodeIdentifier>,
+) {
     match &a.action {
         Act::Delete {} => println!(
             "Del {:?}",
@@ -110,7 +124,7 @@ fn print_action(ori: NodeIdentifier, stores: &SimpleStores, a: &SimpleAction<Lab
             {
                 let mut node = stores.node_store.resolve(ori);
                 for x in from.ori.iter() {
-                    let e = node.get_child(&x);
+                    let e = node.child(&x).unwrap();
                     node = stores.node_store.resolve(e);
                 }
                 node.get_type()
@@ -123,7 +137,7 @@ fn print_action(ori: NodeIdentifier, stores: &SimpleStores, a: &SimpleAction<Lab
             {
                 let mut node = stores.node_store.resolve(ori);
                 for x in from.ori.iter() {
-                    let e = node.get_child(&x);
+                    let e = node.child(&x).unwrap();
                     node = stores.node_store.resolve(e);
                 }
                 node.get_type()
@@ -178,7 +192,7 @@ impl<L: Debug, Idx, I: Debug> ActionsVec<SimpleAction<L, Idx, I>> {
 /// Also actions are applied in order, thus there is a single way of applying actions.
 /// It might not have enough info to it flexibly, action_tree could definetly be more flexible.
 // pub fn apply_actions<S: for<'b> NodeStoreMut<'b, <T as Stored>::TreeId, &'b T>>(
-pub(crate) fn apply_actions<T, S>(
+pub fn apply_actions<T, S>(
     actions: ActionsVec<SimpleAction<T::Label, T::ChildIdx, T::TreeId>>,
     root: &mut Vec<T::TreeId>,
     node_store: &mut S,
@@ -252,11 +266,11 @@ pub fn apply_action<T, S>(
         while let Some(p) = path.next() {
             // dbg!(&p);
             let node = s.resolve(&x);
-            let cs = node.get_children().to_vec();
-            parents.push((x, p, cs.iter().cloned().collect()));
-            let i = p.to_usize().unwrap();
+            let cs = node.children().unwrap();
+            parents.push((x, p, cs.iter_children().cloned().collect()));
+            let i = p;
             // dbg!(cs.len());
-            if i < cs.len() {
+            if i < cs.child_count() {
                 x = cs[i].clone();
             } else {
                 assert!(path.next().is_none());
@@ -315,13 +329,21 @@ pub fn apply_action<T, S>(
     while let Some(p) = path.next() {
         // dbg!(&p);
         let node = s.resolve(&x);
-        let cs = node.try_get_children().map_or(vec![], |x| x.to_vec());
-        parents.push((x, p, cs.clone()));
-        let i = p.to_usize().unwrap();
-        if i < cs.len() {
-            x = cs[i].clone();
+        let cs = node.children();
+        let i = p;
+        // TODO use pattern match
+        if cs.is_some() && i < cs.unwrap().child_count() {
+            let tmp = cs.unwrap()[i].clone();
+            parents.push((x, p, cs.unwrap().iter_children().cloned().collect()));
+            x = tmp;
         } else {
-            log::error!("{:?} > {:?}", i, cs.len());
+            if cs.is_some() && !cs.unwrap().is_empty() {
+                parents.push((x, p, cs.unwrap().iter_children().cloned().collect()));
+                log::error!("{:?} > {:?}", i, cs.unwrap().child_count());
+            } else {
+                parents.push((x, p, Default::default()));
+                log::error!("{:?} > {:?}", i, 0);
+            }
             assert_eq!(path.next(), None);
             break;
         }
@@ -375,10 +397,11 @@ pub fn apply_action<T, S>(
                     let (t, cs) = {
                         let node = s.resolve(&x);
                         let t = node.get_type().to_owned();
-                        let cs = node.get_children().to_vec();
+                        let cs = node.children();
+                        let cs = cs.map(|cs| cs.iter_children().cloned().collect());
                         (t, cs)
                     };
-                    s.build_then_insert(x, t, Some(new.clone()), cs)
+                    s.build_then_insert(x, t, Some(new.clone()), cs.unwrap_or_default())
                 };
                 children.push(sub);
                 children.extend_from_slice(&cs[i.to_usize().unwrap() + 1..]);
@@ -388,12 +411,11 @@ pub fn apply_action<T, S>(
                 let (t, cs) = {
                     let node = s.resolve(&x);
                     let t = node.get_type().to_owned();
-                    let cs = node.get_children().to_vec();
+                    let cs = node.children();
+                    let cs = cs.map(|cs| cs.iter_children().cloned().collect());
                     (t, cs)
                 };
-                let mut children = Vec::with_capacity(cs.len());
-                children.extend_from_slice(&cs[..]);
-                s.build_then_insert(x, t, Some(new.clone()), children)
+                s.build_then_insert(x, t, Some(new.clone()), cs.unwrap_or_default())
             }
         }
 
