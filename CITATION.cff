@@ -4,8 +4,8 @@ preferred-citation:
   title: "HyperAST: Enabling Efficient Analysis of Software Histories at Scale"
   url: "https://hal.inria.fr/hal-03764541v1/document"
   year: "2022"
-  type: conference
-  conference: "ASE 2022 - 37th IEEE/ACM International Conference on Automated Software Engineering"
+  type: conference-paper
+  booktitle: "ASE 2022 - 37th IEEE/ACM International Conference on Automated Software Engineering"
   authors:
     - family-names: Le Dilavrec
       given-names: Quentin
