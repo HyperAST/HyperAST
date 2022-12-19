@@ -1,9 +1,6 @@
 use std::{fmt::Debug, time::Instant};
 
-use hyper_ast::{
-    store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef, SimpleStores},
-    types::{self, WithHashs},
-};
+use hyper_ast::types;
 use hyper_gumtree::{
     actions::script_generator2::ScriptGenerator,
     decompressed_tree_store::{bfs_wrapper::SimpleBfsMapper, CompletePostOrder},
@@ -11,7 +8,7 @@ use hyper_gumtree::{
         heuristic::gt::{
             bottom_up_matcher::BottomUpMatcher,
             greedy_bottom_up_matcher::GreedyBottomUpMatcher,
-            greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
+            lazy_greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
         },
         mapping_store::{MappingStore, VecStore},
     },
@@ -41,7 +38,9 @@ where
     <NS::R<'store> as types::Typed>::Type: Debug,
     NS: types::NodeStore<IdN>,
     LS: types::LabelStore<str>,
-    NS::R<'store>: types::Tree<TreeId = IdN, Label = LS::I> + WithHashs,
+    NS::R<'store>: types::Tree<Type = types::Type, TreeId = IdN, Label = LS::I>
+        + types::WithHashs
+        + types::WithStats,
 {
     let mappings = VecStore::default();
     let now = Instant::now();

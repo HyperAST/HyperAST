@@ -7,15 +7,18 @@ use std::{
 
 use hyper_ast::{
     position::Position,
-    store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef, SimpleStores},
-    types::{self, NodeStore, Stored, Tree, Type, WithChildren, WithSerialization},
+    types::{self, LabelStore, NodeStore, Stored, Tree, Type, WithChildren, WithSerialization},
 };
-use hyper_gumtree::decompressed_tree_store::{
-    complete_post_order::{DisplayCompletePostOrder, RecCachedProcessor},
-    pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
-    CompletePostOrder, ShallowDecompressedTreeStore,
+use hyper_gumtree::{
+    decompressed_tree_store::{
+        complete_post_order::{DisplayCompletePostOrder, RecCachedProcessor},
+        pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
+        CompletePostOrder, ShallowDecompressedTreeStore,
+    },
+    matchers::mapping_store::MonoMappingStore,
+    tree::tree_path::CompressedTreePath,
 };
-use hyper_gumtree::matchers::mapping_store::VecStore;
+use hyper_gumtree::{matchers::mapping_store::VecStore, tree::tree_path::TreePath};
 use num_traits::{PrimInt, ToPrimitive};
 use rayon::prelude::ParallelIterator;
 
@@ -510,7 +513,7 @@ impl CompressedBfPostProcess {
 }
 
 pub mod compressed_bf_post_process {
-    use hyper_ast::{store::nodes::legion::HashedNodeRef, types};
+    use hyper_ast::types;
 
     use super::*;
     pub struct PP0 {
@@ -562,7 +565,7 @@ pub mod compressed_bf_post_process {
         pub fn validity_mappings<'store: 'a, 'a, IdN, NS, LS>(
             mut self,
             node_store: &'store NS,
-            label_store: &'store LS,
+            _label_store: &'store LS,
             src_arena: &'a CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
             src_tr: IdN,
             dst_arena: &'a CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
@@ -570,18 +573,16 @@ pub mod compressed_bf_post_process {
             mappings: &VecStore<u32>,
         ) -> ValidityRes<usize>
         where
-            IdN: Clone + Debug,
+            IdN: Clone + Debug + Eq,
             NS: 'store + types::NodeStore<IdN>,
             <NS as types::NodeStore<IdN>>::R<'store>:
-                types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I> + WithSerialization,
+                types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I>,
             LS: types::LabelStore<str>,
         {
             use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
             let bf_f = self.file.read_u32::<BigEndian>().unwrap() as usize;
             let bf_l = self.file.read_u32::<BigEndian>().unwrap() as usize;
 
-            use hyper_ast::types::LabelStore;
-            use hyper_ast::types::Labeled;
             use hyper_ast::types::Typed;
             let now = Instant::now();
 
@@ -600,76 +601,38 @@ pub mod compressed_bf_post_process {
 
             let mut hast_bf = bitvec::bitvec![bitvec::order::Lsb0, u64; 0;bf_l];
 
-            #[derive(Clone)]
-            struct DPos {
-                file: md5::Digest,
-                start: u32,
-                len: u32,
-            }
 
-            impl DPos {
-                fn digest(&self, c: &mut md5::Context) {
-                    c.consume(self.file.0);
-                    c.consume(self.start.to_be_bytes());
-                    c.consume((self.start + self.len).to_be_bytes());
+            type V<'store, NS, IdN> = Option<(
+                md5::Digest,
+                <<NS as types::NodeStore<IdN>>::R<'store> as types::WithChildren>::ChildIdx,
+            )>;
 
-                    // d.update(t.getType().toString().getBytes());
-                    // if (t.hasLabel()) {
-                    //     d.update(t.getLabel().getBytes());
-                    // }
-                    // d.update(computeFile2(t));
-                    // d.update(Ints.toByteArray(t.getPos()));
-                    // d.update(Ints.toByteArray(t.getEndPos()));
-                }
-            }
-
-            impl Default for DPos {
-                fn default() -> Self {
-                    Self {
-                        file: md5::Digest(Default::default()),
-                        start: 0,
-                        len: 0,
-                    }
-                }
-            }
-
-            let with_p = |mut pos: DPos, ori| {
-                let r = node_store.resolve(&ori);
-                let t = r.get_type();
-                if t.is_directory() || t.is_file() {
-                    let label = label_store.resolve(&r.get_label());
-                    // if pos.path.to_string_lossy().len() == 0 {
-                    //     dbg!(&label);
-                    //     dbg!(&pos.file.0);
-                    // }
-                    if label != "" {
+            let with_p = |pos: V<'store, NS, IdN>, _ori: IdN| -> V<'store, NS, IdN> {
+                Some((
+                    if let Some((x, i)) = pos {
                         let mut c = md5::Context::new();
-                        // let bo = pos.file.0;
-                        c.consume(pos.file.0);
-                        c.consume(label);
-                        pos.file = c.compute();
-                        // if label == "src" {
-                        //     dbg!(&pos.file.0);
-                        //     // [-128, -25, 54, -113, -44, 107, -11, 49, 60, -13, -45, -116, -68, 38, -107, -30]
-                        // }
-                    }
-                }
-                pos.len = r.try_bytes_len().unwrap_or(0).to_u32().unwrap();
-                pos
+                        c.consume(x.0);
+                        c.consume(i.to_u32().unwrap().to_be_bytes());
+                        c.compute()
+                    } else {
+                        md5::Digest(Default::default())
+                    },
+                    num_traits::zero(),
+                ))
             };
-            let with_lsib = |mut pos: DPos, lsib| {
-                // assert!(pos.path.to_string_lossy().len()>0, "{:?} {} {}", pos.file.0, pos.start, pos.len);
-                pos.start = pos.start + pos.len;
-                let r = node_store.resolve(&lsib);
-                assert!(!r.get_type().is_directory() && !r.get_type().is_file());
-                pos.len = r.try_bytes_len().unwrap().to_u32().unwrap();
-                pos
+            let with_lsib = |pos: V<'store, NS, IdN>, _lsib: IdN| -> V<'store, NS, IdN> {
+                let mut pos = pos.unwrap();
+                pos.1 = pos.1 + num_traits::one();
+                Some(pos)
             };
 
-            let mut formator_src =
-                FormatCached::from((node_store, src_arena, src_tr, with_p, with_lsib));
-            let mut formator_dst =
-                FormatCached::from((node_store, dst_arena, dst_tr, with_p, with_lsib));
+            // let mut formator_src =
+            //     FormatCached::from((node_store, src_arena, src_tr, with_p, with_lsib));
+            // let mut formator_dst =
+            //     FormatCached::from((node_store, dst_arena, dst_tr, with_p, with_lsib));
+
+            let mut formator_src = PathCached::from((src_arena, src_tr, with_p, with_lsib));
+            let mut formator_dst = PathCached::from((dst_arena, dst_tr, with_p, with_lsib));
 
             let mut is_not_here = |x| {
                 hast_bf.set((x % bf_l as u32) as usize, true);
@@ -765,17 +728,44 @@ pub mod compressed_bf_post_process {
                 c2.consume(d);
                 c2.consume("/file.txt");
                 let d = c2.compute().0;
+                // dbg!(d);
                 g(&d).unwrap();
             }
+
+            // {
+            //     let mut c = md5::Context::new();
+            //     c.consume(0_u32.to_be_bytes());
+            //     dbg!(0_u32.to_be_bytes());
+            //     let d = c.compute().0;
+            //     dbg!(d);
+            //     g(&d).unwrap();
+            // }
             let now = Instant::now();
             let mut matched_m = 0;
             let mut unmatched_m = 0;
             for (src, dst) in mappings.iter() {
+                let f = |src: V<'store, NS, IdN>| {
+                    if let Some(src) = src {
+                        let mut c = md5::Context::new();
+                        c.consume(src.0 .0);
+                        c.consume(src.1.to_u32().unwrap().to_be_bytes());
+                        c.compute().0
+                    } else {
+                        panic!()
+                        // let mut c = md5::Context::new();
+                        // c.consume(0.to_u32().unwrap().to_be_bytes());
+                        // c.compute().0
+                    }
+                };
                 let mut c = md5::Context::new();
                 let src = formator_src.format(src);
-                src.0.digest(&mut c);
+                let d = f(src.0);
+                c.consume(d);
+                // src.0.digest(&mut c);
                 let dst = formator_dst.format(dst);
-                dst.0.digest(&mut c);
+                let d = f(dst.0);
+                c.consume(d);
+                // dst.0.digest(&mut c);
                 match g(&c.compute().0) {
                     Err(e) => {
                         unmatched_m += 1;
@@ -833,14 +823,16 @@ impl<T> ValidityRes<T> {
 /// Note. that it would also be more efficient to compare edit scripts,
 /// but the exact positions taken to represent evolutions is different
 /// between gumtree and our implementation.
+/// WARN does not work well with the no space wrapper.
+/// TODO compute the byte length of subtree independently of spaces
 pub struct SimpleJsonPostProcess {
-    file: diff_output::F,
+    file: diff_output::F<diff_output::Tree>,
 }
 
 impl SimpleJsonPostProcess {
     pub fn new(file: &Path) -> Self {
         let now = Instant::now();
-        let gt_out = serde_json::from_reader::<_, diff_output::F>(
+        let gt_out = serde_json::from_reader::<_, diff_output::F<diff_output::Tree>>(
             File::open(file).expect("should be a file"),
         )
         .unwrap();
@@ -861,7 +853,7 @@ impl SimpleJsonPostProcess {
         Counts { mappings, actions }
     }
     pub fn validity_mappings<'store: 'a, 'a, IdN, NS, LS>(
-        mut self,
+        self,
         node_store: &'store NS,
         label_store: &'store LS,
         src_arena: &'a CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
@@ -869,7 +861,7 @@ impl SimpleJsonPostProcess {
         dst_arena: &'a CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
         dst_tr: IdN,
         mappings: &VecStore<u32>,
-    ) -> ValidityRes<Vec<diff_output::Match>>
+    ) -> ValidityRes<Vec<diff_output::Match<diff_output::Tree>>>
     where
         IdN: Clone + Debug,
         NS: 'store + types::NodeStore<IdN>,
@@ -877,7 +869,6 @@ impl SimpleJsonPostProcess {
             types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I> + WithSerialization,
         LS: types::LabelStore<str>,
     {
-        use hyper_ast::types::LabelStore;
         use hyper_ast::types::Labeled;
         use hyper_ast::types::Typed;
         let with_p = |mut pos: Position, ori| {
@@ -899,14 +890,13 @@ impl SimpleJsonPostProcess {
             FormatCached::from((node_store, src_arena, src_tr, with_p, with_lsib));
         let mut formator_dst =
             FormatCached::from((node_store, dst_arena, dst_tr, with_p, with_lsib));
-        let a = formator_src.format(3);
         let mut formator = |a, b| diff_output::Match {
             src: ((node_store, label_store), formator_src.format(a)).into(),
             dest: ((node_store, label_store), formator_dst.format(b)).into(),
         };
         use hashbrown::HashSet;
         let now = Instant::now();
-        let hast_mappings: Vec<diff_output::Match> = mappings
+        let hast_mappings: Vec<diff_output::Match<diff_output::Tree>> = mappings
             .iter()
             // .src_to_dst.par_iter().enumerate().filter(|x| *x.1 != 0).map(|(src, dst)| (num_traits::cast(src).unwrap(), *dst - 1))
             .map(|(a, b)| formator(a, b))
@@ -915,8 +905,10 @@ impl SimpleJsonPostProcess {
         dbg!(hast_m_formating_t);
         let now = Instant::now();
         dbg!(hast_mappings.len());
-        let hast_mappings: HashSet<&diff_output::Match> = hast_mappings.iter().collect();
-        let gt_mappings: HashSet<&diff_output::Match> = self.file.matches.iter().collect();
+        let hast_mappings: HashSet<&diff_output::Match<diff_output::Tree>> =
+            hast_mappings.iter().collect();
+        let gt_mappings: HashSet<&diff_output::Match<diff_output::Tree>> =
+            self.file.matches.iter().collect();
         let mappings_formating_t = now.elapsed().as_secs_f64();
         dbg!(mappings_formating_t);
         let now = Instant::now();
@@ -930,156 +922,121 @@ impl SimpleJsonPostProcess {
         }
     }
 }
-// /// Exact comparison of mappings
-// ///
-// /// Slow for large codebases .ie minutes on something like Spoon.
-// /// The main slowing factor is io because the subcommand serialize mappings to a json file then we parse it.
-// /// It could be improved using another intermediate representation.
-// /// Note. that it would also be more efficient to compare edit scripts,
-// /// but the exact positions taken to represent evolutions is different
-// /// between gumtree and our implementation.
-// fn comparing_outputs(
-//     gt_out: &Path,
-//     stores: &SimpleStores,
-//     src_arena: CompletePostOrder<NodeIdentifier, u32>,
-//     src_tr: NodeIdentifier,
-//     dst_arena: CompletePostOrder<NodeIdentifier, u32>,
-//     dst_tr: NodeIdentifier,
-//     mappings: VecStore<u32>,
-//     actions: ActionsVec<SimpleAction<LabelIdentifier, u16, NodeIdentifier>>,
-//     timings: Vec<f64>,
-// ) -> CompResult {
-//     let now = Instant::now();
-//     let gt_out =
-//         serde_json::from_reader::<_, diff_output::F>(File::open(gt_out).expect("should be a file"))
-//             .unwrap();
-//     let gt_out_parsing_t = now.elapsed().as_secs_f64();
-//     dbg!(gt_out_parsing_t);
-//     dbg!(&gt_out
-//         .times
-//         .iter()
-//         .map(|x| Duration::from_nanos(*x as u64).as_secs_f64())
-//         .collect::<Vec<_>>());
-//     use hyper_ast::types::LabelStore;
-//     use hyper_ast::types::Labeled;
-//     use hyper_ast::types::Typed;
-//     use hyper_ast::types::WithSerialization;
-//     let with_p = |mut pos: Position, ori| {
-//         let r = stores.node_store.resolve(ori);
-//         let t = r.get_type();
-//         if t.is_directory() || t.is_file() {
-//             pos.inc_path(stores.label_store.resolve(&r.get_label()));
-//         }
-//         pos.set_len(r.try_bytes_len().unwrap_or(0));
-//         pos
-//     };
-//     let with_lsib = |mut pos: Position, lsib| {
-//         pos.inc_offset(pos.range().end - pos.range().start);
-//         let r = stores.node_store.resolve(lsib);
-//         pos.set_len(r.try_bytes_len().unwrap());
-//         pos
-//     };
-//     let mut formator_src = FormatCached::from((stores, &src_arena, src_tr, with_p, with_lsib));
-//     let mut formator_dst = FormatCached::from((stores, &dst_arena, dst_tr, with_p, with_lsib));
-//     let mut formator = |a, b| diff_output::Match {
-//         src: (stores, formator_src.format(a)).into(),
-//         dest: (stores, formator_dst.format(b)).into(),
-//     };
-//     use hashbrown::HashSet;
-//     let now = Instant::now();
-//     let hast_mappings: Vec<diff_output::Match> = mappings
-//         .iter()
-//         // .src_to_dst.par_iter().enumerate().filter(|x| *x.1 != 0).map(|(src, dst)| (num_traits::cast(src).unwrap(), *dst - 1))
-//         .map(|(a, b)| formator(a, b))
-//         .collect();
-//     let hast_m_formating_t = now.elapsed().as_secs_f64();
-//     dbg!(hast_m_formating_t);
-//     let now = Instant::now();
-//     dbg!(hast_mappings.len());
-//     let hast_mappings: HashSet<&diff_output::Match> = hast_mappings.iter().collect();
-//     let gt_mappings: HashSet<&diff_output::Match> = gt_out.matches.iter().collect();
-//     let mappings_formating_t = now.elapsed().as_secs_f64();
-//     dbg!(mappings_formating_t);
-//     let now = Instant::now();
-//     let missings_mappings: Vec<_> = gt_mappings.par_difference(&hast_mappings).collect();
-//     let additional_mappings: Vec<_> = hast_mappings.par_difference(&gt_mappings).collect();
-//     let mappings_compare_t = now.elapsed().as_secs_f64();
-//     dbg!(mappings_compare_t);
-//     let gt_len = gt_out.actions.len();
-//     let hast_len = actions.len();
-//     if !(missings_mappings.is_empty() && additional_mappings.is_empty()) {
-//         // if missings_mappings.len() < 110 {
-//         //     dbg!(&missings_mappings);
-//         // }
-//         // if additional_mappings.len() < 110 {
-//         //     dbg!(&additional_mappings);
-//         // } else if src_arena.len() < 20000 && dst_arena.len() < 20000 {
-//         //     print_mappings(&dst_arena, &src_arena, &stores, &mappings);
-//         // } else {
-//         //     // dbg!(&missings_mappings.iter().find(|x|x.src.r#type=="comment"&&x.src.file.contains("src/main/java/spoon/support/compiler/SpoonPom.java")));
-//         //     // dbg!(&additional_mappings.iter().find(|x|x.src.r#type=="comment"&&x.src.file.contains("src/main/java/spoon/support/compiler/SpoonPom.java")));
-//         //     dbg!(&missings_mappings[..3]);
-//         //     dbg!(&additional_mappings[..3]);
-//         // }
-//         // dbg!(&missings_mappings[..3]);
-//         // dbg!(&additional_mappings[..3]);
-//         // dbg!(&missings_mappings.iter().find(|x|x.src.r#type=="package_declaration"));
-//         // dbg!(&additional_mappings.iter().find(|x|x.src.r#type=="package_declaration"));
-//         dbg!(&missings_mappings
-//             .iter()
-//             .filter(|x| x.src.end < 300)
-//             .collect::<Vec<_>>());
-//         dbg!(&additional_mappings
-//             .iter()
-//             .filter(|x| x.src.end < 300)
-//             .collect::<Vec<_>>());
-//         // print_mappings(&dst_arena, &src_arena, stores, &mappings);
-//         dbg!(
-//             gt_out
-//                 .times
-//                 .iter()
-//                 .map(|x| Duration::from_nanos(*x as u64).as_secs_f64())
-//                 .collect::<Vec<_>>(),
-//             &timings,
-//             actions.len(),
-//             "mapping",
-//             format!(
-//                 "baseline={} missing={} additional={}",
-//                 gt_mappings.len(),
-//                 missings_mappings.len(),
-//                 additional_mappings.len()
-//             )
-//         );
-//         None
-//     } else if gt_len != hast_len {
-//         dbg!(
-//             gt_out
-//                 .times
-//                 .iter()
-//                 .map(|x| Duration::from_nanos(*x as u64).as_secs_f64())
-//                 .collect::<Vec<_>>(),
-//             &timings,
-//             actions.len(),
-//             "gen",
-//             format!("different sizes gt={} hast={}", gt_len, hast_len)
-//         );
-//         None
-//     } else {
-//         dbg!(&timings, actions.len());
-//         Some(format!("{:?},{}", timings, actions.len()))
-//         // TODO problem comparing actions, (related to considered position of elements (before, during, after))
-//         // dbg!(gt_len, hast_len, missings.len(), additional.len());
-//         // dbg!(&missings, &hast_actions);
-//         // panic!();
-//         // CompResult::Failure {
-//         //     timings,
-//         //     actions: actions.len(),
-//         //     stage: "gen".to_string(),
-//         //     reason: format!("{:?};{:?}", missings, additional),
-//         // }
-//     };
-//     todo!()
-// }
+pub struct PathJsonPostProcess {
+    file: diff_output::F<diff_output::Path>,
+}
+
+impl PathJsonPostProcess {
+    pub fn new(file: &Path) -> Self {
+        let now = Instant::now();
+        let gt_out = serde_json::from_reader::<_, diff_output::F<diff_output::Path>>(
+            File::open(file).expect("should be a file"),
+        )
+        .unwrap();
+        let gt_out_parsing_t = now.elapsed().as_secs_f64();
+        dbg!(gt_out_parsing_t);
+        Self { file: gt_out }
+    }
+    pub fn performances(&self) -> Vec<f64> {
+        self.file
+            .times
+            .iter()
+            .map(|x| Duration::from_nanos(*x as u64).as_secs_f64())
+            .collect::<Vec<_>>()
+    }
+    pub fn counts(&self) -> Counts {
+        let mappings = self.file.matches.len();
+        let actions = self.file.actions.len();
+        Counts { mappings, actions }
+    }
+    pub fn validity_mappings<'store: 'a, 'a, IdN, NS, LS>(
+        self,
+        _node_store: &'store NS,
+        _label_store: &'store LS,
+        src_arena: &'a CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
+        src_tr: IdN,
+        dst_arena: &'a CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
+        dst_tr: IdN,
+        mappings: &VecStore<u32>,
+    ) -> ValidityRes<Vec<diff_output::Match<diff_output::Path>>>
+    where
+        IdN: Clone + Debug,
+        NS: 'store + types::NodeStore<IdN>,
+        <NS as types::NodeStore<IdN>>::R<'store>:
+            types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I>,
+        LS: types::LabelStore<str>,
+    {
+        type CP<'store, NS, IdN> = Option<(
+            CompressedTreePath<
+                <<NS as types::NodeStore<IdN>>::R<'store> as types::WithChildren>::ChildIdx,
+            >,
+            <<NS as types::NodeStore<IdN>>::R<'store> as types::WithChildren>::ChildIdx,
+        )>;
+        let with_p = |pos: CP<'store, NS, IdN>, _ori: IdN| -> CP<'store, NS, IdN> {
+            Some((
+                if let Some((ctp, i)) = pos {
+                    ctp.extend(&[i])
+                } else {
+                    vec![].into()
+                },
+                num_traits::zero(),
+            ))
+        };
+        let with_lsib = |pos: CP<'store, NS, IdN>, _lsib: IdN| -> CP<'store, NS, IdN> {
+            let mut pos = pos.unwrap();
+            pos.1 = pos.1 + num_traits::one();
+            Some(pos)
+        };
+        let mut formator_src = PathCached::from((src_arena, src_tr, with_p, with_lsib));
+        let mut formator_dst = PathCached::from((dst_arena, dst_tr, with_p, with_lsib));
+        let mut formator = |a, b| diff_output::Match::<diff_output::Path> {
+            src: {
+                if let Some(a) = formator_src.format(a).0 {
+                    let mut v: Vec<_> = a.0.iter().map(|x| x.to_u32().unwrap()).collect();
+                    v.push(a.1.to_u32().unwrap());
+                    diff_output::Path(v)
+                } else {
+                    diff_output::Path(vec![])
+                }
+            },
+            dest: {
+                if let Some(a) = formator_dst.format(b).0 {
+                    let mut v: Vec<_> = a.0.iter().map(|x| x.to_u32().unwrap()).collect();
+                    v.push(a.1.to_u32().unwrap());
+                    diff_output::Path(v)
+                } else {
+                    diff_output::Path(vec![])
+                }
+            },
+        };
+        use hashbrown::HashSet;
+        let now = Instant::now();
+        let hast_mappings: Vec<diff_output::Match<diff_output::Path>> = mappings
+            .iter()
+            // .src_to_dst.par_iter().enumerate().filter(|x| *x.1 != 0).map(|(src, dst)| (num_traits::cast(src).unwrap(), *dst - 1))
+            .map(|(a, b)| formator(a, b))
+            .collect();
+        let hast_m_formating_t = now.elapsed().as_secs_f64();
+        dbg!(hast_m_formating_t);
+        let now = Instant::now();
+        dbg!(hast_mappings.len());
+        let hast_mappings: HashSet<&diff_output::Match<diff_output::Path>> =
+            hast_mappings.iter().collect();
+        let gt_mappings: HashSet<&diff_output::Match<diff_output::Path>> =
+            self.file.matches.iter().collect();
+        let mappings_formating_t = now.elapsed().as_secs_f64();
+        dbg!(mappings_formating_t);
+        let now = Instant::now();
+        let missings_mappings: Vec<_> = gt_mappings.par_difference(&hast_mappings).collect();
+        let additional_mappings: Vec<_> = hast_mappings.par_difference(&gt_mappings).collect();
+        let mappings_compare_t = now.elapsed().as_secs_f64();
+        dbg!(mappings_compare_t);
+        ValidityRes {
+            missing_mappings: missings_mappings.into_iter().cloned().cloned().collect(),
+            additional_mappings: additional_mappings.into_iter().cloned().cloned().collect(),
+        }
+    }
+}
 
 struct FormatCached<'store: 'a, 'a, S, T: Stored, U, F, G> {
     store: &'store S,
@@ -1122,24 +1079,59 @@ where
         )
     }
 }
+struct PathCached<'a, T: Stored, U, F, G> {
+    arena: &'a CompletePostOrder<T, u32>,
+    cache: RecCachedProcessor<'a, T, u32, U, F, G>,
+}
+
+impl<'a, T: WithChildren, U, F: Clone, G: Clone>
+    From<(&'a CompletePostOrder<T, u32>, T::TreeId, F, G)> for PathCached<'a, T, U, F, G>
+{
+    fn from(
+        (arena, tr, with_p, with_lsib): (&'a CompletePostOrder<T, u32>, T::TreeId, F, G),
+    ) -> Self {
+        Self {
+            arena,
+            cache: RecCachedProcessor::from((arena, tr, with_p, with_lsib)),
+        }
+    }
+}
+
+impl<'a, T: Tree, U: Clone + Default, F, G> PathCached<'a, T, U, F, G>
+where
+    T::TreeId: Clone + Debug,
+    F: Fn(U, T::TreeId) -> U,
+    G: Fn(U, T::TreeId) -> U,
+{
+    fn format(&mut self, x: u32) -> (U, T::TreeId) {
+        (self.cache.position2(&x).clone(), self.arena.original(&x))
+    }
+}
 
 pub fn print_mappings<
     'store: 'a,
     'a,
     IdD: PrimInt + Debug,
-    M: hyper_gumtree::matchers::mapping_store::MonoMappingStore<Ele = IdD>,
+    M: MonoMappingStore<Ele = IdD>,
+    IdN: Clone + Eq + Debug,
+    NS: NodeStore<IdN>,
+    LS: LabelStore<str>,
 >(
-    dst_arena: &'a CompletePostOrder<HashedNodeRef<'store>, IdD>,
-    src_arena: &'a CompletePostOrder<HashedNodeRef<'store>, IdD>,
-    stores: &'store SimpleStores,
+    dst_arena: &'a CompletePostOrder<NS::R<'store>, IdD>,
+    src_arena: &'a CompletePostOrder<NS::R<'store>, IdD>,
+    node_store: &'store NS,
+    label_store: &'store LS,
     mappings: &M,
-) {
+) where
+    <NS as types::NodeStore<IdN>>::R<'store>: Tree<TreeId = IdN> + types::WithSerialization,
+    <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug,
+{
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);
     let disp = DisplayCompletePostOrder {
-        node_store: &stores.node_store,
+        node_store,
         inner: &dst_arena,
-        label_store: &stores.label_store,
+        label_store,
     };
     let dst_arena = disp.to_string();
     let mappings = src_arena
@@ -1167,9 +1159,89 @@ pub fn print_mappings<
         });
     let src_arena = DisplaySimplePreOrderMapper {
         inner: &src_arena,
-        node_store: &stores.node_store,
+        node_store: node_store,
     }
     .to_string();
+    let cols = vec![src_arena, mappings, dst_arena];
+    let sizes: Vec<_> = cols
+        .iter()
+        .map(|x| x.lines().map(|x| x.len()).max().unwrap_or(0))
+        .collect();
+    let mut cols: Vec<_> = cols.iter().map(|x| x.lines()).collect();
+    loop {
+        let mut b = false;
+        print!("|");
+        for i in 0..cols.len() {
+            if let Some(l) = cols[i].next() {
+                print!(" {}{} |", l, " ".repeat(sizes[i] - l.len()));
+                b = true;
+            } else {
+                print!(" {} |", " ".repeat(sizes[i]));
+            }
+        }
+        println!();
+        if !b {
+            break;
+        }
+    }
+}
+
+pub fn print_mappings_no_ranges<
+    'store: 'a,
+    'a,
+    IdD: PrimInt + Debug,
+    M: MonoMappingStore<Ele = IdD>,
+    IdN: Clone + Eq + Debug,
+    NS: NodeStore<IdN>,
+    LS: LabelStore<str>,
+>(
+    dst_arena: &'a CompletePostOrder<NS::R<'store>, IdD>,
+    src_arena: &'a CompletePostOrder<NS::R<'store>, IdD>,
+    node_store: &'store NS,
+    label_store: &'store LS,
+    mappings: &M,
+) where
+    <NS as types::NodeStore<IdN>>::R<'store>: Tree<TreeId = IdN>,
+    <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug,
+{
+    let mut mapped = vec![false; dst_arena.len()];
+    let src_arena = SimplePreOrderMapper::from(src_arena);
+    let disp = DisplayCompletePostOrder {
+        node_store,
+        inner: &dst_arena,
+        label_store,
+    };
+    let dst_arena = format!("{:?}", disp);
+    let mappings = src_arena
+        .map
+        .iter()
+        .map(|x| {
+            if mappings.is_src(x) {
+                let dst = mappings.get_dst(x);
+                if mapped[dst.to_usize().unwrap()] {
+                    assert!(false, "GreedySubtreeMatcher {}", dst.to_usize().unwrap())
+                }
+                mapped[dst.to_usize().unwrap()] = true;
+                Some(dst)
+            } else {
+                None
+            }
+        })
+        .fold("".to_string(), |x, c| {
+            if let Some(c) = c {
+                let c = c.to_usize().unwrap();
+                format!("{x}{c}\n")
+            } else {
+                format!("{x} \n")
+            }
+        });
+    let src_arena = format!(
+        "{:?}",
+        DisplaySimplePreOrderMapper {
+            inner: &src_arena,
+            node_store: node_store,
+        }
+    );
     let cols = vec![src_arena, mappings, dst_arena];
     let sizes: Vec<_> = cols
         .iter()

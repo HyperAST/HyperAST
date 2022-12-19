@@ -3,15 +3,14 @@ use std::{fmt::Debug, marker::PhantomData};
 use num_traits::{cast, one, PrimInt};
 
 use crate::decompressed_tree_store::{
-    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, PostOrder, SimpleZsTree,
+    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, Initializable, PostOrder,
+    SimpleZsTree,
 };
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{
     mapping_store::DefaultMappingStore, optimal::zs::ZsMatcher, similarity_metrics,
 };
-use hyper_ast::types::{
-    LabelStore, NodeStore, SlicedLabel, Tree, WithHashs,
-};
+use hyper_ast::types::{LabelStore, NodeStore, SlicedLabel, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
@@ -22,7 +21,7 @@ pub struct GreedyBottomUpMatcher<
     Ddst,
     IdD: PrimInt + std::ops::SubAssign + Debug,
     T: 'a + Tree + WithHashs,
-    S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
+    S,
     LS: LabelStore<SlicedLabel, I = T::Label>,
     M: MonoMappingStore<Ele = IdD>,
     const SIZE_THRESHOLD: usize = 1000,
@@ -31,10 +30,6 @@ pub struct GreedyBottomUpMatcher<
 > {
     label_store: &'a LS,
     internal: BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M>,
-    // compressed_node_store: &'a S,
-    // pub(crate) src_arena: D,
-    // pub(crate) dst_arena: D,
-    // pub mappings: DefaultMappingStore<IdD>,
 }
 
 impl<
@@ -81,15 +76,17 @@ impl<
             + DecompressedTreeStore<'a, T, IdD>
             + DecompressedWithParent<'a, T, IdD>
             + PostOrder<'a, T, IdD>
+            + Initializable<'a, T>
             + ContiguousDescendants<'a, T, IdD>,
         Ddst: 'a
             + DecompressedTreeStore<'a, T, IdD>
             + DecompressedWithParent<'a, T, IdD>
             + PostOrder<'a, T, IdD>
+            + Initializable<'a, T>
             + ContiguousDescendants<'a, T, IdD>,
         IdD: 'a + PrimInt + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S, //: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
+        S: 'a + NodeStore<T::TreeId, R<'a> = T>,
         LS: 'a + LabelStore<SlicedLabel, I = T::Label>,
         M: MonoMappingStore<Ele = IdD>,
         const SIZE_THRESHOLD: usize, // = 1000,
@@ -112,13 +109,6 @@ impl<
         SIM_THRESHOLD_DEN,
     >
 where
-    S: 'a + NodeStore<T::TreeId,R<'a>=T>,
-    // S: 'a + NodeStore<T::TreeId>,
-    // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
-    //     + WithHashs<HK = T::HK, HP = T::HP>,
-    // S::R<'a>: Tree<TreeId = T::TreeId, Type = T::Type, Label = T::Label, ChildIdx = T::ChildIdx>
-    //     + WithHashs<HK = T::HK, HP = T::HP>
-    //     + WithSerialization,
     T::TreeId: 'a + Clone + Debug,
     T::Type: Debug,
 {

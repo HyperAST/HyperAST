@@ -10,19 +10,7 @@ use crate::decompressed_tree_store::{
 use crate::matchers::mapping_store::{DefaultMappingStore, MappingStore};
 use hyper_ast::types::{LabelStore, NodeStore, SlicedLabel, Tree};
 
-pub struct ZsMatcher<
-    'a,
-    D: 'a,// + DecompressedTreeStore<'a, T, IdD>,
-    // IdD: PrimInt + Into<usize>,
-    // S: NodeStore<'a, T::TreeId, T>,
-    // LS: LabelStore<SlicedLabel, I = T::Label>,
-    // T: 'a + Tree + WithHashs,
-    IdD,
-    T: 'a + Tree,
-    // IdC,
-    S, //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
-    LS,
-> {
+pub struct ZsMatcher<'a, D: 'a, IdD, T: 'a + Tree, S, LS> {
     compressed_node_store: &'a S,
     label_store: &'a LS,
     pub src_arena: D,
@@ -39,7 +27,7 @@ impl<
         D: 'a + DecompressedTreeStore<'a, T, IdD> + PostOrderKeyRoots<'a, T, IdD>,
         T: 'a + Tree,
         IdD: PrimInt + std::ops::SubAssign + Debug,
-        S: NodeStore<T::TreeId,R<'a>=T>,
+        S: NodeStore<T::TreeId, R<'a> = T>,
         LS: LabelStore<SlicedLabel>,
     > ZsMatcher<'a, D, IdD, T, S, LS>
 where

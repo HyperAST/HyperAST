@@ -52,7 +52,6 @@ impl<'a, T: 'a + WithChildren, IdD: PrimInt, DTS: PostOrder<'a, T, IdD>, D: Borr
     {
         let x = back.borrow();
         let mut map = Vec::with_capacity(x.len());
-        // let mut fc = vec![num_traits::zero();x.len()];
         let mut rev = vec![num_traits::zero(); x.len()];
         let mut i = 0;
         rev[x.root().to_usize().unwrap()] = cast(i).unwrap();
@@ -60,15 +59,7 @@ impl<'a, T: 'a + WithChildren, IdD: PrimInt, DTS: PostOrder<'a, T, IdD>, D: Borr
 
         while map.len() < x.len() {
             let curr = &map[i];
-            // eprintln!("curr={:?}", curr.to_usize().unwrap());
             let cs = x.children(store, curr);
-            // if cs.is_empty() {
-            //     fc.push(cast(map.len()).unwrap());
-            // }
-            // eprintln!(
-            //     "{:?}",
-            //     cs.iter().map(|x| x.to_usize().unwrap()).collect::<Vec<_>>()
-            // );
             rev[(*curr).to_usize().unwrap()] = cast(i).unwrap();
             map.extend(cs);
             i += 1;
@@ -123,7 +114,7 @@ impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: Borrow
     where
         S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
-        self.back.borrow().child(store, x,p)
+        self.back.borrow().child(store, x, p)
     }
 
     fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
@@ -173,14 +164,8 @@ impl<
         self.back.borrow().parent(id)
     }
 
-    fn position_in_parent<'b, S>(&self, store: &'b S, c: &IdD) -> T::ChildIdx
-    where
-        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
-        // S: NodeStore<IdC>,
-        // S::R<'b>: WithChildren<TreeId = IdC>,
-        // <S::R<'b> as WithChildren>::ChildIdx: PrimInt,
-    {
-        self.back.borrow().position_in_parent(store, c)
+    fn position_in_parent(&self, c: &IdD) -> Option<T::ChildIdx> {
+        self.back.borrow().position_in_parent(c)
     }
 
     type PIt<'a>=DTS::PIt<'a> where D: 'a, Self:'a;

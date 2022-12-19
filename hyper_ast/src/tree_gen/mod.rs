@@ -49,14 +49,19 @@ pub trait AccIndentation: Accumulator {
 #[derive(Default, Debug, Clone, Copy)]
 pub struct SubTreeMetrics<U: NodeHashs> {
     pub hashs: U,
+    /// WIP make it space independent
     pub size: u32,
+    /// WIP make it space independent, I believe is already is
     pub height: u32,
+
+    pub size_no_spaces: u32,
 }
 
 impl<U: NodeHashs> SubTreeMetrics<U> {
     pub fn acc(&mut self, other: Self) {
         self.height = self.height.max(other.height);
         self.size += other.size;
+        self.size_no_spaces += other.size_no_spaces;
         self.hashs.acc(&other.hashs);
     }
 }

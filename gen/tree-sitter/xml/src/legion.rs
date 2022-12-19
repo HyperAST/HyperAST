@@ -12,7 +12,7 @@ use hyper_ast::{
     nodes::{self, IoOut, Space},
     store::{
         labels::LabelStore,
-        nodes::legion::{NoSpaceCS, PendingInsert},
+        nodes::legion::{NoSpacesCS, PendingInsert},
         SimpleStores,
     },
     store::{
@@ -26,7 +26,6 @@ use hyper_ast::{
     },
     types::{LabelStore as _, Type},
 };
-// use hyper_ast::nodes::SimpleNode1;
 
 pub type LabelIdentifier = hyper_ast::store::labels::DefaultLabelIdentifier;
 
@@ -50,7 +49,7 @@ pub struct Local {
 
 impl Local {
     fn acc(self, acc: &mut Acc) {
-        if acc.simple.kind != Type::Spaces {
+        if self.metrics.size_no_spaces > 0 {
             acc.no_space.push(self.compressed_node)
         }
         acc.simple.push(self.compressed_node);
@@ -270,7 +269,9 @@ impl<'a> XmlTreeGen<'a> {
 
         let insertion = self.stores.node_store.prepare_insertion(&hashable, eq);
 
-        let hashs = hbuilder.build();
+        let mut hashs = hbuilder.build();
+        hashs.structt = 0;
+        hashs.label = 0;
 
         let compressed_node = if let Some(id) = insertion.occupied_id() {
             id
@@ -288,6 +289,7 @@ impl<'a> XmlTreeGen<'a> {
                 size: 1,
                 height: 1,
                 hashs,
+                size_no_spaces: 0,
             },
             ana: Default::default(),
         }
@@ -420,7 +422,8 @@ impl<'stores> TreeGen for XmlTreeGen<'stores> {
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
-        let hbuilder = hashed::Builder::new(hashs, &acc.simple.kind, &label, size);
+        let size_no_spaces = acc.metrics.size_no_spaces + 1;
+        let hbuilder = hashed::Builder::new(hashs, &acc.simple.kind, &label, size_no_spaces);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
@@ -445,6 +448,7 @@ impl<'stores> TreeGen for XmlTreeGen<'stores> {
                 size,
                 height,
                 hashs,
+                size_no_spaces,
             };
             Local {
                 compressed_node,
@@ -463,6 +467,7 @@ impl<'stores> TreeGen for XmlTreeGen<'stores> {
                 bytes_len,
                 size,
                 height,
+                size_no_spaces,
                 insertion,
                 hashs,
             );
@@ -471,6 +476,7 @@ impl<'stores> TreeGen for XmlTreeGen<'stores> {
                 size,
                 height,
                 hashs,
+                size_no_spaces,
             };
             Local {
                 compressed_node,
@@ -489,12 +495,13 @@ impl<'stores> TreeGen for XmlTreeGen<'stores> {
 
 fn compress(
     label_id: Option<LabelIdentifier>,
-    ana: &Option<PartialAnalysis>,
+    _ana: &Option<PartialAnalysis>,
     simple: BasicAccumulator<Type, NodeIdentifier>,
     no_space: Vec<NodeIdentifier>,
     bytes_len: compo::BytesLen,
     size: u32,
     height: u32,
+    size_no_spaces: u32,
     insertion: PendingInsert,
     hashs: SyntaxNodeHashs<u32>,
 ) -> legion::Entity {
@@ -514,8 +521,8 @@ fn compress(
             $(
                 let c = c.concat($c);
             )*
-            match (simple.children.len(), no_space.len()) {
-                (0,_) => {
+            match simple.children.len() {
+                0 => {
                     assert_eq!(1, size);
                     assert_eq!(1, height);
                     insert!(
@@ -523,22 +530,16 @@ fn compress(
                         (BloomSize::None,)
                     )
                 }
-                (x,y) if x == y => {
+                x => {
                     let a = simple.children.into_boxed_slice();
-                    let c = c.concat((compo::Size(size), compo::Height(height),));
+                    let c = c.concat((compo::Size(size), compo::SizeNoSpaces(size_no_spaces), compo::Height(height), ));
                     let c = c.concat((CS(a),));
-                    insert!(
-                        c,
-                    )
-                }
-                _ => {
-                    let a = simple.children.into_boxed_slice();
-                    let b = no_space.into_boxed_slice();
-                    let c = c.concat((compo::Size(size), compo::Height(height),));
-                    let c = c.concat((CS(a), NoSpaceCS(b),));
-                    insert!(
-                        c,
-                    )
+                    if x == no_space.len() {
+                        insert!(c,)
+                    } else {
+                        let b = no_space.into_boxed_slice();
+                        insert!(c, (NoSpacesCS(b),))
+                    }
                 }
             }}
         };

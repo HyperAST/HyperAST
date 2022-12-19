@@ -4,12 +4,12 @@ pub mod bottom_up_matcher;
 pub mod greedy_bottom_up_matcher;
 pub mod greedy_subtree_matcher;
 pub mod simple_bottom_up_matcher;
+pub mod lazy_greedy_subtree_matcher;
 // pub mod simple_bottom_up_matcher2;
 
 pub fn size<'a, IdC: Clone, S>(store: &'a S, x: &IdC) -> usize
 where
     S: 'a + NodeStore<IdC>,
-    // for<'c> <<S as NodeStore2<IdC>>::R as GenericItem<'c>>::Item: WithChildren<TreeId = IdC>,
     S::R<'a>: WithChildren<TreeId = IdC>,
 {
     let node = store.resolve(&x);
@@ -25,7 +25,6 @@ where
 pub fn height<'a, IdC: Clone, S>(store: &'a S, x: &IdC) -> usize
 where
     S: 'a + NodeStore<IdC>,
-    // for<'c> <<S as NodeStore2<IdC>>::R as GenericItem<'c>>::Item: WithChildren<TreeId = IdC>,
     S::R<'a>: WithChildren<TreeId = IdC>,
 {
     let node = store.resolve(&x);

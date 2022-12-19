@@ -1,6 +1,4 @@
-use std::{
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use hyper_ast::{
     cyclomatic::Mcc,
@@ -12,12 +10,12 @@ use hyper_ast::{
         nodes::legion::{compo, EntryRef, NodeStore, PendingInsert, CS},
         SimpleStores,
     },
-    tree_gen::BasicGlobalData,
+    tree_gen::{BasicGlobalData, SubTreeMetrics},
     types::{LabelStore as _, Type},
 };
 use hyper_ast_gen_ts_java::{
     impact::partial_analysis::PartialAnalysis,
-    legion_with_refs::{BulkHasher, JavaTreeGen, Local, MDCache, SubTreeMetrics, MD},
+    legion_with_refs::{BulkHasher, JavaTreeGen, Local, MDCache, MD},
 };
 
 pub fn iter_dirs(root_buggy: &std::path::Path) -> impl Iterator<Item = std::fs::DirEntry> {
@@ -274,7 +272,10 @@ pub(crate) struct JavaProcessor<'fs, 'prepro, Acc> {
 }
 impl<'fs, 'prepro> JavaProcessor<'fs, 'prepro, JavaAcc> {
     fn new(
-        prepro: &'prepro mut JavaPreprocessFileSys, filesys: &'fs mut FileSys, path: PathBuf) -> Self {
+        prepro: &'prepro mut JavaPreprocessFileSys,
+        filesys: &'fs mut FileSys,
+        path: PathBuf,
+    ) -> Self {
         let dir = filesys.find_file(&path);
         let name = dir.name();
         let prepared = prepare_dir_exploration(dir);
@@ -384,7 +385,8 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
     let hashs = acc.metrics.hashs;
     let size = acc.metrics.size + 1;
     let height = acc.metrics.height + 1;
-    let hbuilder = hashed::Builder::new(hashs, &Type::Directory, &acc.name, size);
+    let size_no_spaces = acc.metrics.size_no_spaces + 1;
+    let hbuilder = hashed::Builder::new(hashs, &Type::Directory, &acc.name, size_no_spaces);
     let hashable = &hbuilder.most_discriminating();
     let label_id = label_store.get_or_insert(acc.name.clone());
 
@@ -437,6 +439,7 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
         let metrics = SubTreeMetrics {
             size,
             height,
+            size_no_spaces,
             hashs,
         };
 
@@ -462,6 +465,7 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
         acc.children_names,
         size,
         height,
+        size_no_spaces,
         hashs,
         acc.skiped_ana,
         &ana,
@@ -482,6 +486,7 @@ fn compress(
     children_names: Vec<LabelIdentifier>,
     size: u32,
     height: u32,
+    size_no_spaces: u32,
     hashs: SyntaxNodeHashs<u32>,
     skiped_ana: bool,
     ana: &PartialAnalysis,
@@ -516,6 +521,7 @@ fn compress(
                 label_id,
                 compo::Size(size),
                 compo::Height(height),
+                compo::SizeNoSpaces(size_no_spaces),
                 hashs,
                 CS(children_names.into_boxed_slice()),
                 CS(children.into_boxed_slice()),
@@ -589,8 +595,12 @@ pub fn parse_dir_pair(
     dst: &Path,
 ) -> (Local, Local) {
     let mut filesys = FileSys {};
-    let src = java_gen.handle_java_directory(src.to_path_buf(), &mut filesys).0;
-    let dst = java_gen.handle_java_directory(dst.to_path_buf(), &mut filesys).0;
+    let src = java_gen
+        .handle_java_directory(src.to_path_buf(), &mut filesys)
+        .0;
+    let dst = java_gen
+        .handle_java_directory(dst.to_path_buf(), &mut filesys)
+        .0;
     // let src = parse_filesys(java_gen, src);
     // let dst = parse_filesys(java_gen, dst);
     (src, dst)

@@ -1,21 +1,20 @@
-use std::{fs::File, io::BufWriter, io::Write, path::PathBuf, fmt::Debug};
+use std::{fs::File, io::BufWriter, io::Write, path::PathBuf};
 
 use hyper_ast::{
     store::{
         defaults::NodeIdentifier,
-        nodes::legion::{compo, HashedNodeRef, NodeStore},
-        SimpleStores, labels::DefaultLabelIdentifier,
+        labels::DefaultLabelIdentifier,
+        nodes::legion::{HashedNodeRef, NodeStore},
     },
-    types::{self, IterableChildren, Children, MySlice},
+    types::{self, Children, MySlice, WithStats},
     utils::memusage_linux,
 };
 use hyper_ast_cvs_git::{git::fetch_github_repository, preprocessed::PreProcessedRepository};
-use num_traits::ToPrimitive;
 
 use crate::{
     algorithms::{self, DiffResult},
     other_tools,
-    postprocess::{CompressedBfPostProcess, SimpleJsonPostProcess},
+    postprocess::{CompressedBfPostProcess, PathJsonPostProcess},
 };
 
 use hyper_gumtree::actions::Actions;
@@ -74,27 +73,19 @@ pub fn windowed_commits_compare(
             let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
             let src_tr = commit_src.1.ast_root;
             // let src_tr = preprocessed.child_by_name(src_tr, "hadoop-common-project").unwrap();
-            let src_s = stores
-                .node_store
-                .resolve(src_tr)
-                .get_component::<compo::Size>()
-                .map(|x| x.0)
-                .unwrap_or(1);
+            let src_s = stores.node_store.resolve(src_tr).size();
+
+            dbg!(src_s, stores.node_store.resolve(src_tr).size_no_spaces());
 
             let commit_dst = preprocessed.commits.get_key_value(&oid_dst).unwrap();
             let dst_tr = commit_dst.1.ast_root;
             // let dst_tr = preprocessed.child_by_name(dst_tr, "hadoop-common-project").unwrap();
-            let dst_s = stores
-                .node_store
-                .resolve(dst_tr)
-                .get_component::<compo::Size>()
-                .map(|x| x.0)
-                .unwrap_or(1);
+            let dst_s = stores.node_store.resolve(dst_tr).size();
+            dbg!(dst_s, stores.node_store.resolve(dst_tr).size_no_spaces());
 
             let label_store = &stores.label_store;
-            let node_store = &AAA {
-                s: &stores.node_store,
-            };
+            let node_store = &stores.node_store;
+            let node_store = &NoSpaceNodeStoreWrapper { s: node_store };
 
             let mu = memusage_linux();
 
@@ -137,7 +128,7 @@ pub fn windowed_commits_compare(
                 );
                 Some((gt_timings, counts, valid))
             } else if gt_out_format == "JSON" {
-                let pp = SimpleJsonPostProcess::new(&gt_out);
+                let pp = PathJsonPostProcess::new(&gt_out);
                 let gt_timings = pp.performances();
                 let counts = pp.counts();
                 let valid = pp.validity_mappings(
@@ -149,6 +140,20 @@ pub fn windowed_commits_compare(
                     dst_tr,
                     &mappings,
                 );
+                // let pp = SimpleJsonPostProcess::new(&gt_out);
+                // let gt_timings = pp.performances();
+                // let counts = pp.counts();
+                // let valid = pp.validity_mappings(
+                //     node_store,
+                //     label_store,
+                //     &src_arena,
+                //     src_tr,
+                //     &dst_arena,
+                //     dst_tr,
+                //     &mappings,
+                // );
+                // dbg!(&valid.missing_mappings.iter().filter(|x|x.src.start<500).collect::<Vec<_>>());
+                // dbg!(&valid.additional_mappings.iter().filter(|x|x.src.start<500).collect::<Vec<_>>());
                 Some((gt_timings, counts, valid.map(|x| x.len())))
             } else {
                 unimplemented!("gt_out_format {} is not implemented", gt_out_format)
@@ -233,7 +238,7 @@ mod test {
         },
     };
 
-    use crate::postprocess::print_mappings;
+    use crate::postprocess::{print_mappings, SimpleJsonPostProcess};
 
     #[test]
     fn issue_mappings_pomxml_spoon_pom() {
@@ -287,7 +292,13 @@ mod test {
             mappings,
             ..
         } = mapper.into();
-        print_mappings(&dst_arena, &src_arena, stores, &mappings);
+        print_mappings(
+            &dst_arena,
+            &src_arena,
+            &stores.node_store,
+            &stores.label_store,
+            &mappings,
+        );
         // let subtree_matcher_t = now.elapsed().as_secs_f64();
         // let subtree_mappings_s = mappings.len();
         // dbg!(&subtree_matcher_t, &subtree_mappings_s);
@@ -412,7 +423,13 @@ mod test {
             mappings,
             ..
         } = mapper.into();
-        print_mappings(&dst_arena, &src_arena, stores, &mappings);
+        print_mappings(
+            &dst_arena,
+            &src_arena,
+            &stores.node_store,
+            &stores.label_store,
+            &mappings,
+        );
         // let subtree_matcher_t = now.elapsed().as_secs_f64();
         // let subtree_mappings_s = mappings.len();
         // dbg!(&subtree_matcher_t, &subtree_mappings_s);
@@ -478,17 +495,11 @@ mod test {
     }
 }
 
-
-
-
-
-
-
-struct AAA<'a> {
-    s: &'a NodeStore,
+pub(crate) struct NoSpaceNodeStoreWrapper<'a> {
+    pub(crate) s: &'a NodeStore,
 }
 
-struct NoSpaceWrapper<'a> {
+pub(crate) struct NoSpaceWrapper<'a> {
     inner: HashedNodeRef<'a>,
 }
 
@@ -502,7 +513,7 @@ impl<'a> types::Typed for NoSpaceWrapper<'a> {
 
 impl<'a> types::WithStats for NoSpaceWrapper<'a> {
     fn size(&self) -> usize {
-        self.inner.size()
+        self.inner.size_no_spaces()
     }
 
     fn height(&self) -> usize {
@@ -510,11 +521,12 @@ impl<'a> types::WithStats for NoSpaceWrapper<'a> {
     }
 }
 
-impl<'a> types::WithSerialization for NoSpaceWrapper<'a> {
-    fn try_bytes_len(&self) -> Option<usize> {
-        self.inner.try_bytes_len()
-    }
-}
+// impl<'a> types::WithSerialization for NoSpaceWrapper<'a> {
+//     /// WARN return the len with spaces ?
+//     fn try_bytes_len(&self) -> Option<usize> {
+//         self.inner.try_bytes_len()
+//     }
+// }
 
 impl<'a> types::Labeled for NoSpaceWrapper<'a> {
     type Label = DefaultLabelIdentifier;
@@ -541,15 +553,21 @@ impl<'a> types::WithChildren for NoSpaceWrapper<'a> {
     type Children<'b> = MySlice<Self::TreeId> where Self: 'b;
 
     fn child_count(&self) -> u16 {
-        self.inner.no_spaces().map_or(0,|x| x.child_count())
+        self.inner.no_spaces().map_or(0, |x| x.child_count())
     }
 
     fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
-        self.inner.no_spaces().ok().and_then(|x|x.get(*idx).copied())
+        self.inner
+            .no_spaces()
+            .ok()
+            .and_then(|x| x.get(*idx).copied())
     }
 
     fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
-        self.inner.no_spaces().ok().and_then(|x|x.rev(*idx).copied())
+        self.inner
+            .no_spaces()
+            .ok()
+            .and_then(|x| x.rev(*idx).copied())
     }
 
     fn children(&self) -> Option<&Self::Children<'_>> {
@@ -580,7 +598,7 @@ impl<'a> types::Tree for NoSpaceWrapper<'a> {
     }
 }
 
-impl<'store> types::NodeStore<NodeIdentifier> for AAA<'store> {
+impl<'store> types::NodeStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'store> {
     type R<'a> = NoSpaceWrapper<'a> where Self: 'a;
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
         NoSpaceWrapper {
@@ -589,6 +607,9 @@ impl<'store> types::NodeStore<NodeIdentifier> for AAA<'store> {
     }
 }
 
+// TODO materialize nodes type in the handle ie. NodeIdentier, 
+// to allow filtering spaces in a slice,
+// without having to access the node store.
 
 // #[repr(transparent)]
 // pub struct NoSpaceSlice<T>(pub [T]);

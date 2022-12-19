@@ -40,6 +40,7 @@ pub struct NodeStore {
 pub mod compo {
     pub struct More<T>(pub T);
     pub struct Size(pub u32);
+    pub struct SizeNoSpaces(pub u32);
     pub struct Height(pub u32);
     pub struct BytesLen(pub u32);
 
@@ -53,7 +54,7 @@ pub struct CS0<T: Eq, const N: usize>(pub [T; N]);
 pub struct CSE<const N: usize>([legion::Entity; N]);
 #[derive(PartialEq, Eq, Debug)]
 pub struct CS<T: Eq>(pub Box<[T]>);
-pub struct NoSpaceCS<T: Eq>(pub Box<[T]>);
+pub struct NoSpacesCS<T: Eq>(pub Box<[T]>);
 impl<'a, T: Eq> From<&'a CS<T>> for &'a [T] {
     fn from(cs: &'a CS<T>) -> Self {
         &cs.0
@@ -347,13 +348,29 @@ impl<'a> crate::types::Typed for HashedNodeRef<'a> {
 
 impl<'a> crate::types::WithStats for HashedNodeRef<'a> {
     fn size(&self) -> usize {
-        todo!()
-        // self.0.get_component::<compo::BytesLen>().unwrap().0.to_usize().unwrap()
+        self.0
+            .get_component::<compo::Size>()
+            .ok()
+            .and_then(|x| x.0.to_usize())
+            .unwrap_or(1)
     }
 
     fn height(&self) -> usize {
-        todo!()
-        // self.0.get_component::<compo::Height>().unwrap().0.to_usize().unwrap()
+        self.0
+            .get_component::<compo::Height>()
+            .ok()
+            .and_then(|x| x.0.to_usize())
+            .unwrap_or(1)
+    }
+}
+
+impl<'a> HashedNodeRef<'a> {
+    pub fn size_no_spaces(&self) -> usize {
+        self.0
+            .get_component::<compo::SizeNoSpaces>()
+            .ok()
+            .and_then(|x| x.0.to_usize())
+            .unwrap_or(1)
     }
 }
 
@@ -420,7 +437,7 @@ impl<'a> HashedNodeRef<'a> {
         &self,
     ) -> Result<&<Self as crate::types::WithChildren>::Children<'_>, ComponentError> {
         self.0
-            .get_component::<NoSpaceCS<legion::Entity>>()
+            .get_component::<NoSpacesCS<legion::Entity>>()
             .map(|x| &*x.0)
             .or_else(|_| self.0.get_component::<CS<legion::Entity>>().map(|x| &*x.0))
             .map(|x| (*x).into())

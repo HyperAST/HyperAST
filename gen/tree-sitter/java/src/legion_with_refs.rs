@@ -14,20 +14,23 @@ use hyper_ast::{
     nodes::IoOut,
     store::{
         labels::LabelStore,
-        nodes::legion::{HashedNodeRef, PendingInsert, NoSpaceCS},
+        nodes::legion::{HashedNodeRef, NoSpacesCS, PendingInsert},
     },
-    tree_gen::{BasicGlobalData, GlobalData, SpacedGlobalData, TextedGlobalData, TreeGen},
-    types::{self, NodeStoreExt, WithHashs},
+    tree_gen::{
+        BasicGlobalData, GlobalData, SpacedGlobalData, SubTreeMetrics, TextedGlobalData, TreeGen,
+    },
+    types::{self, NodeStoreExt, WithHashs, WithStats},
     utils::{self},
 };
 use legion::world::EntryRef;
+use num::ToPrimitive;
 use string_interner::DefaultSymbol;
 use tuples::CombinConcat;
 
 use hyper_ast::{
     filter::BF,
     filter::{Bloom, BloomSize},
-    hashed::{self, NodeHashs, SyntaxNodeHashs, SyntaxNodeHashsKinds},
+    hashed::{self, SyntaxNodeHashs, SyntaxNodeHashsKinds},
     nodes::{self, Space},
     store::{
         nodes::legion::{compo, CS},
@@ -112,7 +115,7 @@ pub struct Local {
 
 impl Local {
     fn acc(self, acc: &mut Acc) {
-        if acc.simple.kind != Type::Spaces {
+        if self.metrics.size_no_spaces > 0 {
             acc.no_space.push(self.compressed_node)
         }
         acc.simple.push(self.compressed_node);
@@ -130,23 +133,6 @@ impl Local {
             }
         }
         self.mcc.acc(&mut acc.mcc)
-    }
-}
-
-#[derive(Default, Debug, Clone, Copy)]
-pub struct SubTreeMetrics<U: NodeHashs> {
-    pub hashs: U,
-    /// WIP make it space independent
-    pub size: u32,
-    /// WIP make it space independent
-    pub height: u32,
-}
-
-impl<U: NodeHashs> SubTreeMetrics<U> {
-    pub fn acc(&mut self, other: Self) {
-        self.height = self.height.max(other.height);
-        self.size += other.size;
-        self.hashs.acc(&other.hashs);
     }
 }
 
@@ -359,7 +345,9 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
 
         let insertion = self.stores.node_store.prepare_insertion(&hashable, eq);
 
-        let hashs = hbuilder.build();
+        let mut hashs = hbuilder.build();
+        hashs.structt = 0;
+        hashs.label = 0;
 
         let compressed_node = if let Some(id) = insertion.occupied_id() {
             id
@@ -374,8 +362,9 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
         Local {
             compressed_node,
             metrics: SubTreeMetrics {
-                size: 0,
+                size: 1,
                 height: 0,
+                size_no_spaces: 0,
                 hashs,
             },
             ana: Default::default(),
@@ -536,7 +525,8 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
-        let hbuilder = hashed::Builder::new(hashs, &acc.simple.kind, &label, size);
+        let size_no_spaces = acc.metrics.size_no_spaces + 1;
+        let hbuilder = hashed::Builder::new(hashs, &acc.simple.kind, &label, size_no_spaces);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
@@ -581,6 +571,7 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
                 bytes_len,
                 size,
                 height,
+                size_no_spaces,
                 insertion,
                 hashs,
                 mcc.clone(),
@@ -589,6 +580,7 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
             let metrics = SubTreeMetrics {
                 size,
                 height,
+                size_no_spaces,
                 hashs,
             };
 
@@ -625,6 +617,7 @@ fn compress(
     bytes_len: compo::BytesLen,
     size: u32,
     height: u32,
+    size_no_spaces: u32,
     insertion: PendingInsert,
     hashs: SyntaxNodeHashs<u32>,
     mcc: Mcc,
@@ -696,10 +689,7 @@ fn compress(
                 0 => {
                     assert_eq!(1, size);
                     assert_eq!(1, height);
-                    insert!(
-                        c,
-                        (BloomSize::None,)
-                    )
+                    insert!(c, (BloomSize::None,))
                 }
                 // TODO try to reduce indirections
                 // might need more data inline in child pointer to be worth the added contruction cost
@@ -729,14 +719,16 @@ fn compress(
                 //         c,
                 //     )
                 // }
-                _ => {
+                x => {
                     let a = simple.children.into_boxed_slice();
-                    let b = no_space.into_boxed_slice();
-                    let c = c.concat((compo::Size(size), compo::Height(height),));
-                    let c = c.concat((CS(a),NoSpaceCS(b),));
-                    bloom_dipatch!(
-                        c,
-                    )
+                    let c = c.concat((compo::Size(size), compo::SizeNoSpaces(size_no_spaces), compo::Height(height),));
+                    let c = c.concat((CS(a),));
+                    if x == no_space.len() {
+                        bloom_dipatch!(c)
+                    } else {
+                        let b = no_space.into_boxed_slice();
+                        bloom_dipatch!(c, (NoSpacesCS(b),))
+                    }
                 }
             }}
         };
@@ -963,8 +955,9 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
                     };
                     let kind = node.get_type();
                     let metrics = SubTreeMetrics {
-                        size: node.get_component::<compo::Size>().map_or(1, |x| x.0),
-                        height: node.get_component::<compo::Height>().map_or(1, |x| x.0),
+                        size: node.size().to_u32().unwrap(),
+                        height: node.height().to_u32().unwrap(),
+                        size_no_spaces: node.size_no_spaces().to_u32().unwrap(),
                         hashs,
                     };
                     let mcc = node
@@ -990,8 +983,9 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
             let hashs = acc.metrics.hashs;
             let size = acc.metrics.size + 1;
             let height = acc.metrics.height + 1;
+            let size_no_spaces = acc.metrics.size_no_spaces + 1;
             let label = l.map(|l| label_store.resolve(&l));
-            let hbuilder = hashed::Builder::new(hashs, &acc.simple.kind, &label, size);
+            let hbuilder = hashed::Builder::new(hashs, &acc.simple.kind, &label, size_no_spaces);
             let hsyntax = hbuilder.most_discriminating();
             let hashable = &hsyntax;
 
@@ -1026,6 +1020,7 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
                     bytes_len,
                     size,
                     height,
+                    size_no_spaces,
                     insertion,
                     hashs,
                     mcc.clone(),
@@ -1034,6 +1029,7 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
                 let metrics = SubTreeMetrics {
                     size,
                     height,
+                    size_no_spaces,
                     hashs,
                 };
 
@@ -1203,7 +1199,8 @@ impl<'a, IdN, NS, LS, const SPC: bool> TreeJsonSerializer<'a, IdN, NS, LS, SPC> 
 impl<'a, IdN, NS, LS, const SPC: bool> Display for TreeJsonSerializer<'a, IdN, NS, LS, SPC>
 where
     NS: hyper_ast::types::NodeStore<IdN>,
-    <NS as hyper_ast::types::NodeStore<IdN>>::R<'a>: hyper_ast::types::Tree<TreeId=IdN, Type = Type,Label = LS::I>,
+    <NS as hyper_ast::types::NodeStore<IdN>>::R<'a>:
+        hyper_ast::types::Tree<TreeId = IdN, Type = Type, Label = LS::I>,
     LS: hyper_ast::types::LabelStore<String>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {

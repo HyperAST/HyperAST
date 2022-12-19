@@ -135,6 +135,29 @@ where
         Ok(())
     }
 }
+impl<'a, 'b, T: Tree, IdD: PrimInt, S> Debug
+    for DisplaySimplePreOrderMapper<'a, 'b, T, IdD, S, CompletePostOrder<T, IdD>>
+where
+    T::TreeId: Clone + Debug + Eq,
+    S: NodeStore<T::TreeId, R<'a> = T>,
+    T::Type: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for i in 0..self.inner.map.len() {
+            let o = self.inner.map[i];
+            let ori = self.inner.back.original(&o);
+            let node = self.node_store.resolve(&ori);
+            writeln!(
+                f,
+                "{:>3}:{} {:?}",
+                o.to_usize().unwrap(),
+                "  ".repeat(self.inner.depth[i].to_usize().unwrap()),
+                node.get_type(),
+            )?;
+        }
+        Ok(())
+    }
+}
 impl<'a, 'b, T: Tree + WithSerialization, IdD: PrimInt, S> Display
     for DisplaySimplePreOrderMapper<'a, 'b, T, IdD, S, SimpleZsTree<T, IdD>>
 where

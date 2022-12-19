@@ -4,21 +4,22 @@ use std::{
     hash::Hash,
 };
 
-use num_traits::{cast, one, zero, PrimInt, ToPrimitive, Zero};
+use num_traits::{cast, PrimInt, ToPrimitive, Zero};
 
 use crate::tree::tree_path::CompressedTreePath;
 use hyper_ast::{
     position::Position,
     types::{
-        self, Children, IterableChildren, LabelStore, NodeStore, Stored, Tree, Type, WithChildren,
-        WithSerialization,
+        self, LabelStore, NodeStore, Stored, Tree, Type, WithChildren, WithSerialization, WithStats,
     },
 };
 
 use super::{
     pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
-    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, Initializable, Iter,
-    PostOrder, PostOrderIterable, PostOrderKeyRoots, ShallowDecompressedTreeStore,
+    simple_post_order::SimplePostOrder,
+    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, Initializable,
+    InitializableWithStats, Iter, PostOrder, PostOrderIterable, PostOrderKeyRoots,
+    ShallowDecompressedTreeStore,
 };
 
 /// made for TODO
@@ -26,19 +27,14 @@ use super::{
 /// - key roots
 /// - parents
 pub struct CompletePostOrder<T: Stored, IdD> {
-    leaf_count: IdD,
-    id_compressed: Vec<T::TreeId>,
-    id_parent: Vec<IdD>,
-    /// leftmost leaf descendant of nodes
-    pub(crate) llds: Vec<IdD>,
+    simple: SimplePostOrder<T, IdD>,
     /// LR_keyroots(T) = {k | there exists no k’> k such that l(k)= l(k’)}.
     kr: Vec<IdD>,
-    _phantom: std::marker::PhantomData<*const T>,
 }
 
 impl<T: Stored, IdD: PrimInt + Into<usize>> CompletePostOrder<T, IdD> {
     pub fn iter(&self) -> impl Iterator<Item = &T::TreeId> {
-        self.id_compressed.iter()
+        self.simple.iter()
     }
 }
 
@@ -48,10 +44,7 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CompletePostOrder")
-            .field("leaf_count", &self.leaf_count)
-            .field("id_compressed", &self.id_compressed)
-            .field("id_parent", &self.id_parent)
-            .field("llds", &self.llds)
+            .field("simple", &self.simple)
             .field("kr", &self.kr)
             .finish()
     }
@@ -77,6 +70,28 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let m = SimplePreOrderMapper::from(self.inner);
+        std::fmt::Display::fmt(
+            &DisplaySimplePreOrderMapper {
+                inner: &m,
+                node_store: self.node_store,
+            },
+            f,
+        )
+        .unwrap();
+        Ok(())
+    }
+}
+
+impl<'store: 'a, 'a, T: Tree, IdD: PrimInt, S, LS> Debug
+    for DisplayCompletePostOrder<'store, 'a, T, IdD, S, LS>
+where
+    S: NodeStore<T::TreeId, R<'store> = T>,
+    T::TreeId: Clone + Debug,
+    T::Type: Debug,
+    LS: LabelStore<str>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let m = SimplePreOrderMapper::from(self.inner);
         DisplaySimplePreOrderMapper {
             inner: &m,
             node_store: self.node_store,
@@ -93,49 +108,21 @@ where
     T::TreeId: Clone + Eq + Debug,
 {
     fn parent(&self, id: &IdD) -> Option<IdD> {
-        if id == &self.root() {
-            None
-        } else {
-            Some(self.id_parent[id.to_usize().unwrap()])
-        }
+        self.simple.parent(id)
     }
 
     fn has_parent(&self, id: &IdD) -> bool {
-        self.parent(id) != None
+        self.simple.has_parent(id)
     }
 
-    fn position_in_parent<'b, S>(
-        &self,
-        _store: &'b S,
-        c: &IdD,
-    ) -> <S::R<'b> as WithChildren>::ChildIdx
-    where
-        S: NodeStore<T::TreeId>,
-        S::R<'b>: WithChildren<TreeId = T::TreeId>,
-        <S::R<'b> as WithChildren>::ChildIdx: PrimInt,
-    {
-        let p = self.parent(c).unwrap();
-        let mut r = 0;
-        let mut c = *c;
-        let min = self.first_descendant(&p);
-        loop {
-            let lld = self.first_descendant(&c);
-            if lld == min {
-                break;
-            }
-            c = lld - one();
-            r += 1;
-        }
-        cast(r).unwrap()
+    fn position_in_parent(&self, c: &IdD) -> Option<T::ChildIdx> {
+        self.simple.position_in_parent(c)
     }
 
-    type PIt<'a> = IterParents<'a, IdD> where IdD: 'a, T::TreeId:'a, T: 'a;
+    type PIt<'a> = <SimplePostOrder<T,IdD> as DecompressedWithParent<'a, T, IdD>>::PIt<'a> where IdD: 'a, T: 'a;
 
     fn parents(&self, id: IdD) -> Self::PIt<'_> {
-        IterParents {
-            id,
-            id_parent: &self.id_parent,
-        }
+        self.simple.parents(id)
     }
 }
 
@@ -162,17 +149,11 @@ where
     T::TreeId: Clone + Eq + Debug,
 {
     fn lld(&self, i: &IdD) -> IdD {
-        self.llds[(*i).to_usize().unwrap()] + num_traits::one()
+        self.simple.lld(i)
     }
 
     fn tree(&self, id: &IdD) -> T::TreeId {
-        self.id_compressed[id.to_usize().unwrap()].clone()
-    }
-}
-
-impl<'d, T: WithChildren, IdD: PrimInt> CompletePostOrder<T, IdD> {
-    fn size(&self, i: &IdD) -> IdD {
-        *i - self.llds[(*i).to_usize().unwrap()] + one()
+        self.simple.tree(id)
     }
 }
 
@@ -183,10 +164,7 @@ where
 {
     type It = Iter<IdD>;
     fn iter_df_post(&self) -> Iter<IdD> {
-        Iter {
-            current: zero(),
-            len: (cast(self.id_compressed.len())).unwrap(),
-        }
+        self.simple.iter_df_post()
     }
 }
 
@@ -209,93 +187,26 @@ where
     where
         S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,
     {
-        struct R<IdC, Idx, IdD> {
-            curr: IdC,
-            idx: Idx,
-            lld: IdD,
-            children: Vec<IdD>,
-        }
+        let simple = SimplePostOrder::new(store, root);
+        let kr = SimplePostOrder::compute_kr(&simple);
+        Self { simple, kr }
+    }
+}
 
-        let mut leaf_count = 0;
-        let mut stack = vec![R {
-            curr: root.clone(),
-            idx: zero(),
-            lld: IdD::zero(),
-            children: vec![],
-        }];
-        let mut llds: Vec<IdD> = vec![];
-        let mut id_compressed = vec![];
-        let mut id_parent = vec![];
-        while let Some(R {
-            curr,
-            idx,
-            lld,
-            children,
-        }) = stack.pop()
-        {
-            let x = store.resolve(&curr);
-            let l = x.children().filter(|x| !x.is_empty());
-            if let Some(child) = l.and_then(|l| l.get(idx)) {
-                stack.push(R {
-                    curr,
-                    idx: idx + one(),
-                    lld,
-                    children,
-                });
-                stack.push(R {
-                    curr: child.clone(),
-                    idx: zero(),
-                    lld: zero(),
-                    children: vec![],
-                });
-            } else {
-                let curr_idx = cast(id_compressed.len()).unwrap();
-                let value = if l.is_none() {
-                    leaf_count += 1;
-                    curr_idx
-                } else {
-                    for x in children {
-                        id_parent[x.to_usize().unwrap()] = curr_idx;
-                    }
-                    lld
-                };
-                if let Some(tmp) = stack.last_mut() {
-                    if tmp.idx == one() {
-                        tmp.lld = value;
-                    }
-                    tmp.children.push(curr_idx);
-                }
-                llds.push(value);
-                id_compressed.push(curr);
-                id_parent.push(zero());
-            }
-        }
+impl<'a, T, IdD: PrimInt> InitializableWithStats<'a, T> for CompletePostOrder<T, IdD>
+where
+    T: Tree<Type = types::Type> + WithChildren + WithStats,
+    T::TreeId: Clone,
+    <T as WithChildren>::ChildIdx: PrimInt,
+{
+    fn considering_stats<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
+    where
+        S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,
+    {
+        let simple = SimplePostOrder::considering_stats(store, root);
+        let kr = SimplePostOrder::compute_kr(&simple);
 
-        let node_count = id_compressed.len();
-        let mut kr = vec![num_traits::zero(); leaf_count + 1];
-        let mut visited = vec![false; node_count];
-        let mut k = kr.len() - 1;
-        for i in (1..node_count).rev() {
-            if !visited[llds[i].to_usize().unwrap()] {
-                kr[k] = cast(i + 1).unwrap();
-                visited[llds[i].to_usize().unwrap()] = true;
-                if k > 0 {
-                    k -= 1;
-                }
-            }
-        }
-        let leaf_count = cast(leaf_count).unwrap();
-        id_compressed.shrink_to_fit();
-        llds.shrink_to_fit();
-        kr.shrink_to_fit();
-        Self {
-            leaf_count,
-            id_compressed,
-            llds,
-            kr,
-            id_parent,
-            _phantom: Default::default(),
-        }
+        Self { simple, kr }
     }
 }
 impl<'a, T: 'a + WithChildren, IdD: PrimInt> ShallowDecompressedTreeStore<'a, T, IdD>
@@ -304,11 +215,11 @@ where
     T::TreeId: Clone + Eq + Debug,
 {
     fn len(&self) -> usize {
-        self.id_compressed.len()
+        self.simple.len()
     }
 
     fn original(&self, id: &IdD) -> T::TreeId {
-        self.id_compressed[id.to_usize().unwrap()].clone()
+        self.simple.original(id)
     }
 
     fn leaf_count(&self) -> IdD {
@@ -323,75 +234,18 @@ where
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
     {
-        let mut r = *x;
-        for d in p {
-            let a = self.original(&r);
-            let node = store.resolve(&a);
-            let cs = node.children().filter(|x| x.is_empty());
-            let Some(cs) = cs  else {
-                panic!("no children in this tree")
-            };
-            let mut z = 0;
-            let cs = cs.before(*d + one());
-            let cs: Vec<T::TreeId> = cs.iter_children().cloned().collect();
-            for x in cs {
-                z += Self::size2(store, &x);
-            }
-            r = self.first_descendant(&r) + cast(z).unwrap() - one();
-        }
-        r
+        self.simple.child(store, x, p)
     }
 
     fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
     {
-        let a = self.original(x);
-        let node = store.resolve(&a);
-        let cs_len = node.child_count().to_usize().unwrap();
-        if cs_len == 0 {
-            return vec![];
-        }
-        let mut r = vec![zero(); cs_len];
-        let mut c = *x - one();
-        let mut i = cs_len - 1;
-        r[i] = c;
-        while i > 0 {
-            i -= 1;
-            let s = self.size(&c);
-            c = c - s;
-            r[i] = c;
-        }
-        assert_eq!(
-            self.lld(x).to_usize().unwrap(),
-            self.lld(&c).to_usize().unwrap()
-        );
-        r
+        self.simple.children(store, x)
     }
 
     fn path<Idx: PrimInt>(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<Idx> {
-        let mut idxs: Vec<Idx> = vec![];
-        let mut curr = *descendant;
-        loop {
-            if let Some(p) = self.parent(&curr) {
-                let lld: usize = cast(self.llds[p.to_usize().unwrap()]).unwrap();
-                // TODO use other llds to skip nodes for count
-                let idx = self.id_parent[lld..cast(curr).unwrap()]
-                    .iter()
-                    .filter(|x| **x == p)
-                    .count();
-                let idx = cast(idx).unwrap();
-                idxs.push(idx);
-                if &p == parent {
-                    break;
-                }
-                curr = p;
-            } else {
-                break;
-            }
-        }
-        idxs.reverse();
-        idxs.into()
+        self.simple.path(parent, descendant)
     }
 }
 
@@ -400,24 +254,22 @@ impl<'d, T: 'd + WithChildren, IdD: PrimInt> DecompressedTreeStore<'d, T, IdD>
 where
     T::TreeId: Clone + Eq + Debug,
 {
-    fn descendants<'b, S>(&self, _store: &S, x: &IdD) -> Vec<IdD>
+    fn descendants<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
     where
         S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
-        (self.first_descendant(x).to_usize().unwrap()..x.to_usize().unwrap())
-            .map(|x| cast(x).unwrap())
-            .collect()
+        self.simple.descendants(store, x)
     }
 
     fn first_descendant(&self, i: &IdD) -> IdD {
-        self.llds[(*i).to_usize().unwrap()] // TODO use ldd
+        self.simple.first_descendant(i)
     }
 
-    fn descendants_count<'b, S>(&self, _store: &S, x: &IdD) -> usize
+    fn descendants_count<'b, S>(&self, store: &'b S, x: &IdD) -> usize
     where
         S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
-        (*x - self.first_descendant(x) + one()).to_usize().unwrap()
+        self.simple.descendants_count(store, x)
     }
 }
 
@@ -442,39 +294,7 @@ where
     T::TreeId: Clone + Debug,
 {
     pub fn lsib(&self, c: &IdD, p_lld: &IdD) -> Option<IdD> {
-        assert!(p_lld <= c, "{:?}<={:?}", p_lld.to_usize(), c.to_usize());
-        let lld = self.first_descendant(c);
-        assert!(lld <= *c);
-        if lld.is_zero() {
-            return None;
-        }
-        let sib = lld - num_traits::one();
-        if &sib < p_lld {
-            None
-        } else {
-            Some(sib)
-        }
-    }
-}
-
-impl<'a, T: WithChildren, IdD: PrimInt> CompletePostOrder<T, IdD>
-where
-    T::TreeId: Clone + Debug,
-{
-    fn size2<'b, S>(store: &'b S, x: &T::TreeId) -> usize
-    where
-        S: NodeStore<T::TreeId, R<'b> = T>,
-    {
-        let tmp = store.resolve(x);
-        let Some(cs) = tmp.children() else {
-                return 1;
-            };
-
-        let mut z = 0;
-        for x in cs.iter_children() {
-            z += Self::size2(store, x);
-        }
-        z + 1
+        self.simple.lsib(c, p_lld)
     }
 }
 
@@ -495,12 +315,8 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
         T::TreeId: Clone + Debug,
-        // S: NodeStore<IdC>,
         LS: LabelStore<str>,
         T: Tree<Type = Type, Label = LS::I> + WithSerialization,
-        // <S::R<'b> as WithChildren>::ChildIdx: PrimInt,
-        // for<'c> <S::R<'b> as WithChildren>::Children<'c>:
-        //     types::Children<<S::R<'b> as WithChildren>::ChildIdx, IdC>,
     {
         if self.cache.contains_key(&c) {
             return self.cache.get(&c).unwrap();
@@ -542,9 +358,9 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
                 self.cache.entry(*c).or_insert(pos)
             } else {
                 assert!(
-                    self.ds.position_in_parent(store, c).is_zero(),
+                    self.ds.position_in_parent(c).unwrap().is_zero(),
                     "{:?}",
-                    self.ds.position_in_parent(store, c).to_usize()
+                    self.ds.position_in_parent(c).unwrap().to_usize()
                 );
                 let ori = self.ds.original(&c);
                 if self.root == ori {
@@ -664,9 +480,9 @@ where
                     .or_insert((self.with_lsib)(pos, self.ds.original(&c)))
             } else {
                 assert!(
-                    self.ds.position_in_parent(store, c).is_zero(),
+                    self.ds.position_in_parent(c).unwrap().is_zero(),
                     "{:?}",
-                    self.ds.position_in_parent(store, c).to_usize()
+                    self.ds.position_in_parent(c).unwrap().to_usize()
                 );
                 let ori = self.ds.original(&c);
                 if self.root == ori {
@@ -707,6 +523,46 @@ where
             //     Position::new(file, offset, len)
             // };
             // self.cache.entry(*c).or_insert(pos)
+            self.cache
+                .entry(*c)
+                .or_insert((self.with_p)(Default::default(), ori))
+        }
+    }
+    pub fn position2(&mut self, c: &IdD) -> &U
+    where
+        T::TreeId: Clone + Debug,
+        T: WithChildren,
+    {
+        if self.cache.contains_key(&c) {
+            return self.cache.get(&c).unwrap();
+        } else if let Some(p) = self.ds.parent(c) {
+            let p_lld = self.ds.first_descendant(&p);
+            if let Some(lsib) = self.ds.lsib(c, &p_lld) {
+                assert_ne!(lsib.to_usize(), c.to_usize());
+                let pos = self.position2(&lsib).clone();
+                self.cache
+                    .entry(*c)
+                    .or_insert((self.with_lsib)(pos, self.ds.original(&c)))
+            } else {
+                assert!(
+                    self.ds.position_in_parent(c).unwrap().is_zero(),
+                    "{:?}",
+                    self.ds.position_in_parent(c).unwrap().to_usize()
+                );
+                let ori = self.ds.original(&c);
+                if self.root == ori {
+                    // let r = store.resolve(&ori);
+                    return self
+                        .cache
+                        .entry(*c)
+                        .or_insert((self.with_p)(Default::default(), ori));
+                }
+                let pos = self.position2(&p).clone();
+                self.cache.entry(*c).or_insert((self.with_p)(pos, ori))
+            }
+        } else {
+            let ori = self.ds.original(&c);
+            assert_eq!(self.root, ori);
             self.cache
                 .entry(*c)
                 .or_insert((self.with_p)(Default::default(), ori))

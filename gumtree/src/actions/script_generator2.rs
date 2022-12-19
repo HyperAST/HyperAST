@@ -673,7 +673,7 @@ where
                 }
             }
         }
-        let xpos = cast(self.dst_arena.position_in_parent(self.store, x)).unwrap(); //child.positionInParent();
+        let xpos = cast(self.dst_arena.position_in_parent(x).unwrap()).unwrap(); //child.positionInParent();
         let mut v: Option<IdD> = None;
         for i in 0..xpos {
             let c: &IdD = &siblings[i];
@@ -759,7 +759,7 @@ where
         loop {
             let p = self.dst_arena.parent(&x);
             if let Some(p) = p {
-                r.push(self.dst_arena.position_in_parent(self.store, &x));
+                r.push(self.dst_arena.position_in_parent(&x).unwrap());
                 x = p
             } else {
                 assert_eq!(root, &x);

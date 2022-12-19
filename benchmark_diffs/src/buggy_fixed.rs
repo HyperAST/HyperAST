@@ -274,7 +274,7 @@ mod examples {
 
         src_f
             .write_all(
-                (TreeJsonSerializer::<_,_,_,true>::new(
+                (TreeJsonSerializer::<_, _, _, true>::new(
                     &java_tree_gen.stores.node_store,
                     &java_tree_gen.stores.label_store,
                     src_tr.local.compressed_node.clone(),
@@ -288,7 +288,7 @@ mod examples {
         // dbg!(&dst);
         dst_f
             .write_all(
-                (TreeJsonSerializer::<_,_,_,true>::new(
+                (TreeJsonSerializer::<_, _, _, true>::new(
                     &java_tree_gen.stores.node_store,
                     &java_tree_gen.stores.label_store,
                     dst_tr.local.compressed_node.clone(),
@@ -319,7 +319,7 @@ mod examples {
         drop(json_f);
         dbg!(&json);
 
-        let o = serde_json::from_reader::<_, diff_output::F>(
+        let o = serde_json::from_reader::<_, diff_output::F<diff_output::Tree>>(
             File::open(json).expect("should be a file"),
         )
         .unwrap();
@@ -333,18 +333,23 @@ mod examples {
 mod test {
     use std::io::stdout;
 
-    use crate::{other_tools::gumtree::subprocess, postprocess::print_mappings};
+    use crate::{
+        other_tools::gumtree::subprocess,
+        postprocess::{print_mappings, print_mappings_no_ranges, PathJsonPostProcess},
+    };
 
     use super::*;
     use hyper_ast::{
         nodes::{print_tree_syntax_with_ids, IoOut},
         store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef},
+        types::Typed,
     };
     use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
     use hyper_gumtree::{
         decompressed_tree_store::CompletePostOrder,
         matchers::{
-            heuristic::gt::greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
+            heuristic::gt::lazy_greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
+            // heuristic::gt::greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
             mapping_store::VecStore,
         },
     };
@@ -410,7 +415,7 @@ mod test {
         let mut stores = SimpleStores {
             label_store: LabelStore::new(),
             type_store: TypeStore {},
-            node_store: NodeStore::new(),
+            node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
         };
         let mut tree_gen = XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
@@ -444,44 +449,42 @@ mod test {
         let dst = dst_tr.local.compressed_node;
         // let dst = tree_gen.stores.node_store.resolve(dst).get_child(&0);
 
-        use hyper_ast::types::LabelStore as _;
-        print_tree_syntax_with_ids(
-            |id: &NodeIdentifier| -> _ {
-                tree_gen
-                    .stores
-                    .node_store
-                    .resolve(id.clone())
-                    .into_compressed_node()
-                    .unwrap()
-            },
-            |id| -> _ { tree_gen.stores.label_store.resolve(id).to_owned() },
-            &src,
-            &mut Into::<IoOut<_>>::into(stdout()),
-        );
-        println!();
-        print_tree_syntax_with_ids(
-            |id: &NodeIdentifier| -> _ {
-                tree_gen
-                    .stores
-                    .node_store
-                    .resolve(id.clone())
-                    .into_compressed_node()
-                    .unwrap()
-            },
-            |id| -> _ { tree_gen.stores.label_store.resolve(id).to_owned() },
-            &dst,
-            &mut Into::<IoOut<_>>::into(stdout()),
-        );
-        println!();
-        let stores = &tree_gen.stores;
+        let label_store = &tree_gen.stores.label_store;
+        // let node_store = &tree_gen.stores.node_store;
+        let node_store = &crate::window_combination::NoSpaceNodeStoreWrapper {
+            s: &tree_gen.stores.node_store,
+        };
+
+        // print_tree_syntax_with_ids(
+        //     |id: &NodeIdentifier| -> _ {
+        //         node_store
+        //             .resolve(&id.clone())
+        //             .into_compressed_node()
+        //             .unwrap()
+        //     },
+        //     |id| -> _ { tree_gen.stores.label_store.resolve(id).to_owned() },
+        //     &src,
+        //     &mut Into::<IoOut<_>>::into(stdout()),
+        // );
+        // println!();
+        // print_tree_syntax_with_ids(
+        //     |id: &NodeIdentifier| -> _ {
+        //         node_store
+        //             .resolve(&id.clone())
+        //             .into_compressed_node()
+        //             .unwrap()
+        //     },
+        //     |id| -> _ { tree_gen.stores.label_store.resolve(id).to_owned() },
+        //     &dst,
+        //     &mut Into::<IoOut<_>>::into(stdout()),
+        // );
+        // println!();
+        // let stores = &tree_gen.stores;
         let mappings = VecStore::default();
 
-        type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
-        let mapper = GreedySubtreeMatcher::<DS, DS, _, HashedNodeRef, _, _>::matchh(
-            &stores.node_store,
-            &src,
-            &dst,
-            mappings,
+        type DS<T> = CompletePostOrder<T, u32>;
+        let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
+            node_store, &src, &dst, mappings,
         );
         let SubtreeMatcher {
             src_arena,
@@ -489,20 +492,27 @@ mod test {
             mappings,
             ..
         } = mapper.into();
-        print_mappings(&dst_arena, &src_arena, stores, &mappings);
+        // print_mappings(&dst_arena, &src_arena, node_store, label_store, &mappings);
 
-        let gt_out = subprocess(&stores.node_store,&stores.label_store, src, dst, "gumtree-subtree", "JSON");
+        let gt_out = subprocess(node_store, label_store, src, dst, "gumtree-subtree", "PATH");
 
-        let pp = SimpleJsonPostProcess::new(&gt_out);
+        let pp = PathJsonPostProcess::new(&gt_out);
         let gt_timings = pp.performances();
         let counts = pp.counts();
         dbg!(gt_timings, counts.mappings, counts.actions);
-        let valid = pp.validity_mappings(&stores.node_store,&stores.label_store, &src_arena, src, &dst_arena, dst, &mappings);
+        let valid = pp.validity_mappings(
+            node_store,
+            label_store,
+            &src_arena,
+            src,
+            &dst_arena,
+            dst,
+            &mappings,
+        );
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
 
-    static CASE_SIMPLE: &'static str = r#"<project>
-</project>"#;
+    static CASE_SIMPLE: &'static str = r#"<project></project>"#;
 
     #[test]
     fn test_spoon_pom_bad_subtree_match_same_content() {
@@ -547,43 +557,45 @@ mod test {
         let dst = dst_tr.local.compressed_node;
         // let dst = tree_gen.stores.node_store.resolve(dst).get_child(&0);
 
-        use hyper_ast::types::LabelStore as _;
-        print_tree_syntax_with_ids(
-            |id: &NodeIdentifier| -> _ {
-                tree_gen
-                    .stores
-                    .node_store
-                    .resolve(id.clone())
-                    .into_compressed_node()
-                    .unwrap()
-            },
-            |id| -> _ { tree_gen.stores.label_store.resolve(id).to_owned() },
-            &src,
-            &mut Into::<IoOut<_>>::into(stdout()),
-        );
-        println!();
-        print_tree_syntax_with_ids(
-            |id: &NodeIdentifier| -> _ {
-                tree_gen
-                    .stores
-                    .node_store
-                    .resolve(id.clone())
-                    .into_compressed_node()
-                    .unwrap()
-            },
-            |id| -> _ { tree_gen.stores.label_store.resolve(id).to_owned() },
-            &dst,
-            &mut Into::<IoOut<_>>::into(stdout()),
-        );
-        println!();
-        let stores = &tree_gen.stores;
+        let label_store = &tree_gen.stores.label_store;
+        let node_store = &tree_gen.stores.node_store;
+        // let node_store = &crate::window_combination::AAA {
+        //     s: &tree_gen.stores.node_store,
+        // };
+
+        // use hyper_ast::types::LabelStore as _;
+        // print_tree_syntax_with_ids(
+        //     |id: &NodeIdentifier| -> _ {
+        //         tree_gen
+        //             .stores
+        //             .node_store
+        //             .resolve(id.clone())
+        //             .into_compressed_node()
+        //             .unwrap()
+        //     },
+        //     |id| -> _ { tree_gen.stores.label_store.resolve(id).to_owned() },
+        //     &src,
+        //     &mut Into::<IoOut<_>>::into(stdout()),
+        // );
+        // println!();
+        // print_tree_syntax_with_ids(
+        //     |id: &NodeIdentifier| -> _ {
+        //         tree_gen
+        //             .stores
+        //             .node_store
+        //             .resolve(id.clone())
+        //             .into_compressed_node()
+        //             .unwrap()
+        //     },
+        //     |id| -> _ { tree_gen.stores.label_store.resolve(id).to_owned() },
+        //     &dst,
+        //     &mut Into::<IoOut<_>>::into(stdout()),
+        // );
+        // println!();
         let mappings = VecStore::default();
-        type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
-        let mapper = GreedySubtreeMatcher::<DS, DS, _, HashedNodeRef, _, _>::matchh(
-            &stores.node_store,
-            &src,
-            &dst,
-            mappings,
+        type DS<T> = CompletePostOrder<T, u32>;
+        let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
+            node_store, &src, &dst, mappings,
         );
         let SubtreeMatcher {
             src_arena,
@@ -591,18 +603,120 @@ mod test {
             mappings,
             ..
         } = mapper.into();
-        print_mappings(&dst_arena, &src_arena, stores, &mappings);
+        // print_mappings(
+        //     &dst_arena,
+        //     &src_arena,
+        //     node_store,
+        //     label_store,
+        //     &mappings,
+        // );
 
-        let gt_out = subprocess(&stores.node_store,&stores.label_store, src, dst, "gumtree-subtree", "JSON");
+        let gt_out = subprocess(node_store, label_store, src, dst, "gumtree-subtree", "JSON");
 
-        let pp = SimpleJsonPostProcess::new(&gt_out);
+        let pp = PathJsonPostProcess::new(&gt_out);
         let gt_timings = pp.performances();
         let counts = pp.counts();
         dbg!(gt_timings, counts.mappings, counts.actions);
-        let valid = pp.validity_mappings(&stores.node_store,&stores.label_store, &src_arena, src, &dst_arena, dst, &mappings);
+        let valid = pp.validity_mappings(
+            node_store,
+            label_store,
+            &src_arena,
+            src,
+            &dst_arena,
+            dst,
+            &mappings,
+        );
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
 
+    #[test]
+    fn test_spoon_pom_bad_subtree_match_same_content_compressed() {
+        // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
+        println!("{:?}", std::env::current_dir());
+        let buggy = CASE_SIMPLE;
+        let fixed = CASE_SIMPLE;
+        let mut stores = SimpleStores {
+            label_store: LabelStore::new(),
+            type_store: TypeStore {},
+            node_store: NodeStore::new(),
+        };
+        let mut tree_gen = XmlTreeGen {
+            line_break: "\n".as_bytes().to_vec(),
+            stores: &mut stores,
+        };
+        println!("len={}: ", buggy.len());
+        let (src_tr, dst_tr) = {
+            let tree_gen = &mut tree_gen;
+            let full_node1 = {
+                let tree = match XmlTreeGen::tree_sitter_parse(buggy.as_bytes()) {
+                    Ok(t) => t,
+                    Err(t) => t,
+                };
+                let full_node1 =
+                    tree_gen.generate_file("".as_bytes(), buggy.as_bytes(), tree.walk());
+                full_node1
+            };
+            let full_node2 = {
+                let tree = match XmlTreeGen::tree_sitter_parse(fixed.as_bytes()) {
+                    Ok(t) => t,
+                    Err(t) => t,
+                };
+                let full_node1 =
+                    tree_gen.generate_file("".as_bytes(), fixed.as_bytes(), tree.walk());
+                full_node1
+            };
+            (full_node1, full_node2)
+        };
+        let src = src_tr.local.compressed_node;
+        dbg!(tree_gen.stores.node_store.resolve(src).get_type());
+        let dst = dst_tr.local.compressed_node;
+
+        let label_store = &tree_gen.stores.label_store;
+        let node_store = &tree_gen.stores.node_store;
+        let node_store = &crate::window_combination::NoSpaceNodeStoreWrapper { s: node_store };
+        let mappings = VecStore::default();
+        type DS<T> = CompletePostOrder<T, u32>;
+        let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
+            node_store, &src, &dst, mappings,
+        );
+        let SubtreeMatcher {
+            src_arena,
+            dst_arena,
+            mappings,
+            ..
+        } = mapper.into();
+        // print_mappings(
+        //     &dst_arena,
+        //     &src_arena,
+        //     node_store,
+        //     label_store,
+        //     &mappings,
+        // );
+
+        let gt_out = subprocess(
+            node_store,
+            label_store,
+            src,
+            dst,
+            "gumtree-subtree",
+            "COMPRESSED",
+        );
+
+        let pp = CompressedBfPostProcess::create(&gt_out);
+        let (pp, counts) = pp.counts();
+        let (pp, gt_timings) = pp.performances();
+        dbg!(gt_timings, counts.mappings, counts.actions);
+        let valid = pp.validity_mappings(
+            node_store,
+            label_store,
+            &src_arena,
+            src,
+            &dst_arena,
+            dst,
+            &mappings,
+        );
+        dbg!(valid.additional_mappings, valid.missing_mappings);
+    }
     pub static CASE9: &'static str = r#"<project>
     <dependencies>
     </dependencies>
@@ -788,15 +902,147 @@ mod test {
             mappings,
             ..
         } = mapper.into();
-        print_mappings(&dst_arena, &src_arena, stores, &mappings);
+        print_mappings(
+            &dst_arena,
+            &src_arena,
+            &stores.node_store,
+            &stores.label_store,
+            &mappings,
+        );
 
-        let gt_out = subprocess(&stores.node_store,&stores.label_store, src, dst, "gumtree-subtree", "JSON");
+        let gt_out = subprocess(
+            &stores.node_store,
+            &stores.label_store,
+            src,
+            dst,
+            "gumtree-subtree",
+            "JSON",
+        );
 
         let pp = SimpleJsonPostProcess::new(&gt_out);
-        let gt_timings = pp.performances();
         let counts = pp.counts();
+        let gt_timings = pp.performances();
         dbg!(gt_timings, counts.mappings, counts.actions);
-        let valid = pp.validity_mappings(&stores.node_store,&stores.label_store, &src_arena, src, &dst_arena, dst, &mappings);
+        let valid = pp.validity_mappings(
+            &stores.node_store,
+            &stores.label_store,
+            &src_arena,
+            src,
+            &dst_arena,
+            dst,
+            &mappings,
+        );
+        dbg!(valid.additional_mappings, valid.missing_mappings);
+    }
+
+    pub static CASE11: &'static str = r#"<build>
+    <plugins>
+        <plugin>
+            <version>3.3.0</version>
+        </plugin>
+    </plugins>
+    <pluginManagement>
+    </pluginManagement>
+</build>
+"#;
+
+    static CASE12: &'static str = r#"<build>
+    <plugins>
+    </plugins>
+    <pluginManagement>
+            <plugin>
+                <version>3.3.0</version>
+            </plugin>
+    </pluginManagement>
+</build>
+"#;
+
+    #[test]
+    fn test_spoon_pom_bad_subtree_match_no_spaces() {
+        // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
+        println!("{:?}", std::env::current_dir());
+        let buggy = CASE12;
+        let fixed = CASE11;
+        let mut stores = SimpleStores {
+            label_store: LabelStore::new(),
+            type_store: TypeStore {},
+            node_store: NodeStore::new(),
+        };
+        let mut tree_gen = XmlTreeGen {
+            line_break: "\n".as_bytes().to_vec(),
+            stores: &mut stores,
+        };
+        println!("len={}: ", buggy.len());
+        let (src_tr, dst_tr) = {
+            let tree_gen = &mut tree_gen;
+            let full_node1 = {
+                let tree = match XmlTreeGen::tree_sitter_parse(buggy.as_bytes()) {
+                    Ok(t) => t,
+                    Err(t) => t,
+                };
+                let full_node1 =
+                    tree_gen.generate_file("".as_bytes(), buggy.as_bytes(), tree.walk());
+                full_node1
+            };
+            let full_node2 = {
+                let tree = match XmlTreeGen::tree_sitter_parse(fixed.as_bytes()) {
+                    Ok(t) => t,
+                    Err(t) => t,
+                };
+                let full_node1 =
+                    tree_gen.generate_file("".as_bytes(), fixed.as_bytes(), tree.walk());
+                full_node1
+            };
+            (full_node1, full_node2)
+        };
+        let src = src_tr.local.compressed_node;
+        // let src = tree_gen.stores.node_store.resolve(src).child(&0).unwrap();
+        // let src = tree_gen.stores.node_store.resolve(src).child(&6).unwrap();
+        // let src = tree_gen.stores.node_store.resolve(src).child(&4).unwrap();
+        dbg!(tree_gen.stores.node_store.resolve(src).get_type());
+        let dst = dst_tr.local.compressed_node;
+        // let dst = tree_gen.stores.node_store.resolve(dst).child(&0).unwrap();
+        // let dst = tree_gen.stores.node_store.resolve(dst).child(&6).unwrap();
+        // let dst = tree_gen.stores.node_store.resolve(dst).child(&4).unwrap();
+
+        let label_store = &tree_gen.stores.label_store;
+        let node_store = &tree_gen.stores.node_store;
+        let node_store = &crate::window_combination::NoSpaceNodeStoreWrapper { s: node_store };
+        let mappings = VecStore::default();
+        type DS<T> = CompletePostOrder<T, u32>;
+        let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
+            node_store, &src, &dst, mappings,
+        );
+        let SubtreeMatcher {
+            src_arena,
+            dst_arena,
+            mappings,
+            ..
+        } = mapper.into();
+        print_mappings_no_ranges(&dst_arena, &src_arena, node_store, label_store, &mappings);
+
+        let gt_out = subprocess(
+            node_store,
+            label_store,
+            src,
+            dst,
+            "gumtree-subtree",
+            "COMPRESSED",
+        );
+
+        let pp = CompressedBfPostProcess::create(&gt_out);
+        let (pp, counts) = pp.counts();
+        let (pp, gt_timings) = pp.performances();
+        dbg!(gt_timings, counts.mappings, counts.actions);
+        let valid = pp.validity_mappings(
+            node_store,
+            label_store,
+            &src_arena,
+            src,
+            &dst_arena,
+            dst,
+            &mappings,
+        );
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
 }

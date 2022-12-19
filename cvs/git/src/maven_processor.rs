@@ -9,7 +9,7 @@ use hyper_ast::{
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder},
     store::{
         defaults::NodeIdentifier,
-        nodes::legion::{NodeStore, CS, compo},
+        nodes::legion::{compo, NodeStore, CS},
     },
     tree_gen::SubTreeMetrics,
     types::{LabelStore, Type},
@@ -17,7 +17,7 @@ use hyper_ast::{
 use hyper_ast_gen_ts_java::legion_with_refs::{eq_node, hash32};
 
 use crate::{
-    git::{BasicGitObject, ObjectType, NamedObject, TypedObject},
+    git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
     maven::{MavenModuleAcc, MD},
     preprocessed::PreProcessedRepository,
     Processor, SimpleStores,
@@ -200,7 +200,8 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
-        let hbuilder = hashed::Builder::new(hashs, &dir_hash, &acc.name, size);
+        let size_no_spaces = acc.metrics.size_no_spaces + 1;
+        let hbuilder = hashed::Builder::new(hashs, &dir_hash, &acc.name, size_no_spaces);
         let hashable = hbuilder.most_discriminating();
         let label = stores.label_store.get_or_insert(acc.name.clone());
 
@@ -237,6 +238,8 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                     label,
                     hashs,
                     compo::Size(size),
+                    compo::Height(height),
+                    compo::SizeNoSpaces(size_no_spaces),
                     CS(acc.children_names.into_boxed_slice()), // TODO extract dir names
                     CS(acc.children.into_boxed_slice()),
                     BloomSize::Much,
@@ -248,6 +251,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             size,
             height,
             hashs,
+            size_no_spaces,
         };
 
         let full_node = (node_id.clone(), MD { metrics, ana });

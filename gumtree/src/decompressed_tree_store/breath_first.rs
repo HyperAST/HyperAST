@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use num_traits::{cast, one, zero, PrimInt};
 
 use crate::tree::tree_path::CompressedTreePath;
-use hyper_ast::types::{IterableChildren};
+use hyper_ast::types::IterableChildren;
 use hyper_ast::types::{NodeStore, Stored, WithChildren};
 
 use super::{DecompressedTreeStore, Initializable, Iter, ShallowDecompressedTreeStore};
@@ -67,15 +67,9 @@ where
         self.parent(id) != None
     }
 
-    fn position_in_parent<'b, S>(&self, _store: &'b S, c: &IdD) -> T::ChildIdx
-    where
-        S: NodeStore<T::TreeId, R<'b> = T>,
-        // S: NodeStore<IdC>,
-        // S::R<'b>: WithChildren<TreeId = IdC>,
-        // <S::R<'b> as WithChildren>::ChildIdx: PrimInt,
-    {
-        let p = self.parent(c).unwrap();
-        cast(*c - self.first_child(&p).unwrap()).unwrap()
+    fn position_in_parent(&self, c: &IdD) -> Option<T::ChildIdx> {
+        let p = self.parent(c)?;
+        Some(cast(*c - self.first_child(&p).unwrap()).unwrap())
     }
 
     type PIt<'b>=IterParents<'b, IdD> where IdD: 'b, T::TreeId:'b, T: 'b;

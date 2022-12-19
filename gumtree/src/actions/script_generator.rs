@@ -6,12 +6,10 @@ use hyper_ast::types::{Labeled, NodeStore, Stored, WithChildren};
 use num_traits::{cast, PrimInt};
 
 use crate::{
-    matchers::{
-        mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
-    },
     decompressed_tree_store::{
         BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
     },
+    matchers::mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
     utils::sequence_algorithms::longest_common_subsequence,
 };
 
@@ -154,17 +152,17 @@ impl<
         'a,
         IdD: PrimInt + Debug,
         T: 'a + Stored + Labeled + WithChildren,
-        SS: DecompressedTreeStore<'a,T, IdD>
-            + DecompressedWithParent<'a,T, IdD>
-            + PostOrder<'a,T, IdD>,
+        SS: DecompressedTreeStore<'a, T, IdD>
+            + DecompressedWithParent<'a, T, IdD>
+            + PostOrder<'a, T, IdD>,
         SD: DecompressedTreeStore<'a, T, IdD>
             + DecompressedWithParent<'a, T, IdD>
             + BreathFirstIterable<'a, T, IdD>,
-        S: 'a,//:'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
+        S: 'a, //:'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
     > ScriptGenerator<'a, IdD, T, SS, SD, S>
 where
     S: NodeStore<T::TreeId, R<'a> = T>,
-        // S: 'a + NodeStore<T::TreeId>,
+    // S: 'a + NodeStore<T::TreeId>,
     // for<'c> <<S as NodeStore2<T::TreeId>>::R as GenericItem<'c>>::Item:
     //     hyper_ast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>+WithChildren,
     // S::R<'a>: hyper_ast::types::Tree<TreeId = T::TreeId, Label = T::Label, ChildIdx = T::ChildIdx>,
@@ -189,8 +187,7 @@ where
         dst_arena: &'a SD,
         ms: &'a DefaultMappingStore<IdD>,
     ) -> ScriptGenerator<'a, IdD, T, SS, SD, S> {
-        ScriptGenerator::<'a, IdD, T, SS, SD, S>::new(store, src_arena, dst_arena)
-            .init_cpy(ms)
+        ScriptGenerator::<'a, IdD, T, SS, SD, S>::new(store, src_arena, dst_arena).init_cpy(ms)
     }
 
     fn new(store: &'a S, src_arena: &'a SS, dst_arena: &'a SD) -> Self {
@@ -236,8 +233,7 @@ where
         self
     }
 
-    pub fn generate(mut self) -> Self
-    {
+    pub fn generate(mut self) -> Self {
         // fake root ?
         // fake root link ?
 
@@ -443,7 +439,7 @@ where
         for a in &s1 {
             for b in &s2 {
                 if self.ori_mappings.unwrap().has(a, b) && !lcs.contains(&(*a, *b)) {
-                let k = self.find_pos(b, x);
+                    let k = self.find_pos(b, x);
                     let action = SimpleAction::Move {
                         sub: self.ori_to_copy(*a),
                         parent: Some(*x),
@@ -472,7 +468,7 @@ where
                 }
             }
         }
-        let xpos = cast(self.dst_arena.position_in_parent(self.store, x)).unwrap(); //child.positionInParent();
+        let xpos = cast(self.dst_arena.position_in_parent(x).unwrap()).unwrap();
         let mut v: Option<IdD> = None;
         for i in 0..xpos {
             let c: &IdD = &siblings[i];

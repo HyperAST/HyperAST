@@ -269,8 +269,8 @@ impl MavenModuleAcc {
                 .collect(),
         );
         self.sub_modules = Some(full_node.submodules.iter().map(|x| x.into()).collect());
+        self.metrics.acc(full_node.metrics);
         // TODO
-        // self.metrics.acc(full_node.1);
         // full_node.2.acc(&Type::Directory, &mut self.ana);
     }
     pub(crate) fn push_submodule(
@@ -295,6 +295,7 @@ impl MavenModuleAcc {
             hashs: full_node.metrics.hashs,
             size: full_node.metrics.size,
             height: full_node.metrics.height,
+            size_no_spaces: full_node.metrics.size_no_spaces,
         });
         // TODO ana
         // full_node.2.acc(&Type::Directory, &mut self.ana);
@@ -310,6 +311,7 @@ impl MavenModuleAcc {
             hashs: full_node.metrics.hashs,
             size: full_node.metrics.size,
             height: full_node.metrics.height,
+            size_no_spaces: full_node.metrics.size_no_spaces,
         });
         // TODO ana
         // full_node.2.acc(&Type::Directory, &mut self.ana);
@@ -412,7 +414,11 @@ impl<'a, T: TreePath<NodeIdentifier> + Debug + Clone> Iterator for IterMavenModu
 
                 if b.has_children() {
                     let children = b.children();
-                    self.stack.push((node, 0, Some(children.unwrap().iter_children().cloned().collect())));
+                    self.stack.push((
+                        node,
+                        0,
+                        Some(children.unwrap().iter_children().cloned().collect()),
+                    ));
                 }
 
                 if self.is_matching(&b) {

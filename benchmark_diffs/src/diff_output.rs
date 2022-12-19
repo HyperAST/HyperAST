@@ -2,29 +2,28 @@ use std::ops::Range;
 
 use hyper_ast::{
     position::{compute_position, Position},
-    store::{defaults::NodeIdentifier, SimpleStores},
     types::{self, Tree as _, Typed},
 };
 use hyper_gumtree::tree::tree_path::{CompressedTreePath, TreePath};
 use serde::Deserialize;
 #[derive(Deserialize)]
-pub struct F {
+pub struct F<T> {
     pub times: Vec<usize>,
-    pub matches: Vec<Match>,
-    pub actions: Vec<Act>,
+    pub matches: Vec<Match<T>>,
+    pub actions: Vec<Act<T>>,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
-pub struct Match {
-    pub src: Tree,
-    pub dest: Tree,
+pub struct Match<T> {
+    pub src: T,
+    pub dest: T,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Hash, Debug)]
-pub struct Act {
+pub struct Act<T> {
     pub action: Kind,
-    pub tree: Tree,
-    pub parent: Option<Tree>,
+    pub tree: T,
+    pub parent: Option<T>,
     pub at: Option<usize>,
     pub label: Option<String>,
 }
@@ -37,6 +36,9 @@ pub struct Tree {
     pub start: usize,
     pub end: usize,
 }
+
+#[derive(Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
+pub struct Path(pub Vec<u32>);
 
 #[derive(Deserialize, PartialEq, Eq, Hash, Debug)]
 pub enum Kind {
@@ -75,8 +77,8 @@ where
     }
 }
 
-impl<'a, IdN, NS: 'a + types::NodeStore<IdN>, LS: types::LabelStore<str>> From<((&'a NS, &'a LS), (Position, IdN))>
-    for Tree
+impl<'a, IdN, NS: 'a + types::NodeStore<IdN>, LS: types::LabelStore<str>>
+    From<((&'a NS, &'a LS), (Position, IdN))> for Tree
 where
     NS::R<'a>: types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I>,
 {
