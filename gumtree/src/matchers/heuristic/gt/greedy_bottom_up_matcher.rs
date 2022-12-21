@@ -4,7 +4,7 @@ use num_traits::{cast, one, PrimInt};
 
 use crate::decompressed_tree_store::{
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, Initializable, PostOrder,
-    SimpleZsTree,
+    PostOrderIterable, SimpleZsTree,
 };
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{
@@ -14,7 +14,10 @@ use hyper_ast::types::{LabelStore, NodeStore, SlicedLabel, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
-/// todo PostOrder might not be necessary
+/// TODO wait for #![feature(adt_const_params)] #95174 to be improved
+///
+/// it will allow to make use complex types as const generics
+/// ie. make the different threshold neater
 pub struct GreedyBottomUpMatcher<
     'a,
     Dsrc,
@@ -44,7 +47,7 @@ impl<
             + PostOrder<'a, T, IdD>,
         IdD: PrimInt + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S, //: 'a+NodeStore2<T::TreeId,R<'a>=T>,//NodeStore<'a, T::TreeId, T>,
+        S,
         LS: LabelStore<SlicedLabel, I = T::Label>,
         M: MonoMappingStore<Ele = IdD>,
         const SIZE_THRESHOLD: usize,  // = 1000,
@@ -70,18 +73,21 @@ impl<
     }
 }
 
+/// TODO PostOrder might not be necessary
 impl<
         'a,
         Dsrc: 'a
             + DecompressedTreeStore<'a, T, IdD>
             + DecompressedWithParent<'a, T, IdD>
             + PostOrder<'a, T, IdD>
+            + PostOrderIterable<'a, T, IdD>
             + Initializable<'a, T>
             + ContiguousDescendants<'a, T, IdD>,
         Ddst: 'a
             + DecompressedTreeStore<'a, T, IdD>
             + DecompressedWithParent<'a, T, IdD>
             + PostOrder<'a, T, IdD>
+            + PostOrderIterable<'a, T, IdD>
             + Initializable<'a, T>
             + ContiguousDescendants<'a, T, IdD>,
         IdD: 'a + PrimInt + std::ops::SubAssign + Debug,
@@ -89,11 +95,9 @@ impl<
         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
         LS: 'a + LabelStore<SlicedLabel, I = T::Label>,
         M: MonoMappingStore<Ele = IdD>,
-        const SIZE_THRESHOLD: usize, // = 1000,
-        // Integer.parseInt(System.getProperty("gt.bum.szt", "1000"));
-        const SIM_THRESHOLD_NUM: u64, // = 1,
-        const SIM_THRESHOLD_DEN: u64, // = 2,
-                                      // Double.parseDouble(System.getProperty("gt.bum.smt", "0.5"));
+        const SIZE_THRESHOLD: usize,
+        const SIM_THRESHOLD_NUM: u64,
+        const SIM_THRESHOLD_DEN: u64,
     >
     GreedyBottomUpMatcher<
         'a,
@@ -118,19 +122,7 @@ where
         src_arena: Dsrc,
         dst_arena: Ddst,
         mappings: M,
-    ) -> GreedyBottomUpMatcher<
-        'a,
-        Dsrc,
-        Ddst,
-        IdD,
-        T,
-        S,
-        LS,
-        M,
-        SIZE_THRESHOLD,
-        SIM_THRESHOLD_NUM,
-        SIM_THRESHOLD_DEN,
-    > {
+    ) -> Self {
         Self {
             label_store,
             internal: BottomUpMatcher {
@@ -149,19 +141,7 @@ where
         src: &'a T::TreeId,
         dst: &'a T::TreeId,
         mappings: M,
-    ) -> GreedyBottomUpMatcher<
-        'a,
-        Dsrc,
-        Ddst,
-        IdD,
-        T,
-        S,
-        LS,
-        M,
-        SIZE_THRESHOLD,
-        SIM_THRESHOLD_NUM,
-        SIM_THRESHOLD_DEN,
-    > {
+    ) -> Self {
         let mut matcher = Self::new(
             compressed_node_store,
             label_store,

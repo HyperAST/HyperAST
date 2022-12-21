@@ -7,7 +7,7 @@ use num_traits::{cast, PrimInt};
 
 use crate::{
     decompressed_tree_store::{
-        BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
+        BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder, PostOrderIterable,
     },
     matchers::mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
     utils::sequence_algorithms::longest_common_subsequence,
@@ -154,6 +154,7 @@ impl<
         T: 'a + Stored + Labeled + WithChildren,
         SS: DecompressedTreeStore<'a, T, IdD>
             + DecompressedWithParent<'a, T, IdD>
+            + PostOrderIterable<'a, T, IdD>
             + PostOrder<'a, T, IdD>,
         SD: DecompressedTreeStore<'a, T, IdD>
             + DecompressedWithParent<'a, T, IdD>

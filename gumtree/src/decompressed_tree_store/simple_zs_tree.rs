@@ -1,16 +1,12 @@
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 
 use bitvec::bitvec;
 use num_traits::{cast, one, zero, PrimInt};
 
 use crate::tree::tree_path::CompressedTreePath;
-use hyper_ast::types::{
-    Children, IterableChildren, LabelStore, NodeStore, Stored, Tree, WithChildren,
-    WithSerialization,
-};
+use hyper_ast::types::{Children, IterableChildren, NodeStore, Stored, WithChildren};
 
 use super::{
-    pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
     DecompressedTreeStore, Initializable, Iter, PostOrder, PostOrderIterable, PostOrderKeyRoots,
     ShallowDecompressedTreeStore,
 };
@@ -18,6 +14,7 @@ use super::{
 /// made for the zs diff algo
 /// - post order
 /// - key roots
+/// Compared to simple and complete post order it does not have parents
 #[derive(Debug)]
 pub struct SimpleZsTree<T: Stored, IdD> {
     leaf_count: IdD,
@@ -62,6 +59,26 @@ where
 
     fn tree(&self, id: &IdD) -> T::TreeId {
         self.id_compressed[(*id).to_usize().unwrap() - 1].clone()
+    }
+}
+
+impl<'a, T: WithChildren, IdD: PrimInt + Eq> SimpleZsTree<T, IdD>
+where
+    T::TreeId: Clone + Debug,
+{
+    pub fn lsib(&self, c: &IdD, p_lld: &IdD) -> Option<IdD> {
+        assert!(p_lld <= c, "{:?}<={:?}", p_lld.to_usize(), c.to_usize());
+        let lld = self.first_descendant(c);
+        assert!(lld <= *c);
+        if lld.is_zero() {
+            return None;
+        }
+        let sib = lld - num_traits::one();
+        if &sib < p_lld {
+            None
+        } else {
+            Some(sib)
+        }
     }
 }
 
@@ -270,34 +287,5 @@ where
                                             //     types::Children<<S::R<'b> as WithChildren>::ChildIdx, IdC>,
     {
         (self.lld(x) - *x).to_usize().unwrap()
-    }
-}
-
-pub struct DisplaySimpleZsTree<'a, T: Stored, IdD: PrimInt, S, LS>
-where
-    LS: LabelStore<str>,
-{
-    pub inner: &'a SimpleZsTree<T, IdD>,
-    pub node_store: &'a S,
-    pub label_store: &'a LS,
-}
-
-impl<'a, T: Tree + WithSerialization, IdD: PrimInt, S, LS> Display
-    for DisplaySimpleZsTree<'a, T, IdD, S, LS>
-where
-    S: NodeStore<T::TreeId, R<'a> = T>,
-    T::TreeId: Clone + Eq + Debug,
-    T::Type: Debug,
-    LS: LabelStore<str>,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let m = SimplePreOrderMapper::from(self.inner);
-        DisplaySimplePreOrderMapper {
-            inner: &m,
-            node_store: self.node_store,
-        }
-        .fmt(f)
-        .unwrap();
-        Ok(())
     }
 }

@@ -13,7 +13,7 @@ use hyper_gumtree::{
     decompressed_tree_store::{
         complete_post_order::{DisplayCompletePostOrder, RecCachedProcessor},
         pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
-        CompletePostOrder, ShallowDecompressedTreeStore,
+        DecompressedWithSiblings, PostOrder, ShallowDecompressedTreeStore,
     },
     matchers::mapping_store::MonoMappingStore,
     tree::tree_path::CompressedTreePath,
@@ -562,13 +562,13 @@ pub mod compressed_bf_post_process {
     }
 
     impl PP2 {
-        pub fn validity_mappings<'store: 'a, 'a, IdN, NS, LS>(
+        pub fn validity_mappings<'store: 'a, 'a, IdN, NS, LS, SD, DD>(
             mut self,
             node_store: &'store NS,
             _label_store: &'store LS,
-            src_arena: &'a CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
+            src_arena: &'a SD, //CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
             src_tr: IdN,
-            dst_arena: &'a CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
+            dst_arena: &'a DD, //CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
             dst_tr: IdN,
             mappings: &VecStore<u32>,
         ) -> ValidityRes<usize>
@@ -578,6 +578,12 @@ pub mod compressed_bf_post_process {
             <NS as types::NodeStore<IdN>>::R<'store>:
                 types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I>,
             LS: types::LabelStore<str>,
+            SD: ShallowDecompressedTreeStore<'a, NS::R<'store>, u32>
+                + PostOrder<'a, NS::R<'store>, u32>
+                + DecompressedWithSiblings<'a, NS::R<'store>, u32>,
+            DD: ShallowDecompressedTreeStore<'a, NS::R<'store>, u32>
+                + PostOrder<'a, NS::R<'store>, u32>
+                + DecompressedWithSiblings<'a, NS::R<'store>, u32>,
         {
             use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
             let bf_f = self.file.read_u32::<BigEndian>().unwrap() as usize;
@@ -600,7 +606,6 @@ pub mod compressed_bf_post_process {
             let gt_bf = gt_bf;
 
             let mut hast_bf = bitvec::bitvec![bitvec::order::Lsb0, u64; 0;bf_l];
-
 
             type V<'store, NS, IdN> = Option<(
                 md5::Digest,
@@ -852,13 +857,13 @@ impl SimpleJsonPostProcess {
         let actions = self.file.actions.len();
         Counts { mappings, actions }
     }
-    pub fn validity_mappings<'store: 'a, 'a, IdN, NS, LS>(
+    pub fn validity_mappings<'store: 'a, 'a, IdN, NS, LS, SD, DD>(
         self,
         node_store: &'store NS,
         label_store: &'store LS,
-        src_arena: &'a CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
+        src_arena: &'a SD,
         src_tr: IdN,
-        dst_arena: &'a CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
+        dst_arena: &'a DD,
         dst_tr: IdN,
         mappings: &VecStore<u32>,
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Tree>>>
@@ -868,6 +873,12 @@ impl SimpleJsonPostProcess {
         <NS as types::NodeStore<IdN>>::R<'store>:
             types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I> + WithSerialization,
         LS: types::LabelStore<str>,
+        SD: ShallowDecompressedTreeStore<'a, NS::R<'store>, u32>
+            + PostOrder<'a, NS::R<'store>, u32>
+            + DecompressedWithSiblings<'a, NS::R<'store>, u32>,
+        DD: ShallowDecompressedTreeStore<'a, NS::R<'store>, u32>
+            + PostOrder<'a, NS::R<'store>, u32>
+            + DecompressedWithSiblings<'a, NS::R<'store>, u32>,
     {
         use hyper_ast::types::Labeled;
         use hyper_ast::types::Typed;
@@ -949,13 +960,13 @@ impl PathJsonPostProcess {
         let actions = self.file.actions.len();
         Counts { mappings, actions }
     }
-    pub fn validity_mappings<'store: 'a, 'a, IdN, NS, LS>(
+    pub fn validity_mappings<'store: 'a, 'a, IdN, NS, LS, SD, DD>(
         self,
         _node_store: &'store NS,
         _label_store: &'store LS,
-        src_arena: &'a CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
+        src_arena: &'a SD,
         src_tr: IdN,
-        dst_arena: &'a CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
+        dst_arena: &'a DD,
         dst_tr: IdN,
         mappings: &VecStore<u32>,
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Path>>>
@@ -965,6 +976,12 @@ impl PathJsonPostProcess {
         <NS as types::NodeStore<IdN>>::R<'store>:
             types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I>,
         LS: types::LabelStore<str>,
+        SD: ShallowDecompressedTreeStore<'a, NS::R<'store>, u32>
+            + PostOrder<'a, NS::R<'store>, u32>
+            + DecompressedWithSiblings<'a, NS::R<'store>, u32>,
+        DD: ShallowDecompressedTreeStore<'a, NS::R<'store>, u32>
+            + PostOrder<'a, NS::R<'store>, u32>
+            + DecompressedWithSiblings<'a, NS::R<'store>, u32>,
     {
         type CP<'store, NS, IdN> = Option<(
             CompressedTreePath<
@@ -1038,25 +1055,16 @@ impl PathJsonPostProcess {
     }
 }
 
-struct FormatCached<'store: 'a, 'a, S, T: Stored, U, F, G> {
+struct FormatCached<'store: 'a, 'a, S, T: Stored, D, U, F, G> {
     store: &'store S,
-    arena: &'a CompletePostOrder<T, u32>,
-    cache: RecCachedProcessor<'a, T, u32, U, F, G>,
+    arena: &'a D,
+    cache: RecCachedProcessor<'a, T, D, u32, U, F, G>,
 }
 
-impl<'store, 'a, S, T: WithChildren, U, F: Clone, G: Clone>
-    From<(&'store S, &'a CompletePostOrder<T, u32>, T::TreeId, F, G)>
-    for FormatCached<'store, 'a, S, T, U, F, G>
+impl<'store, 'a, S, T: WithChildren, D, U, F: Clone, G: Clone>
+    From<(&'store S, &'a D, T::TreeId, F, G)> for FormatCached<'store, 'a, S, T, D, U, F, G>
 {
-    fn from(
-        (store, arena, tr, with_p, with_lsib): (
-            &'store S,
-            &'a CompletePostOrder<T, u32>,
-            T::TreeId,
-            F,
-            G,
-        ),
-    ) -> Self {
+    fn from((store, arena, tr, with_p, with_lsib): (&'store S, &'a D, T::TreeId, F, G)) -> Self {
         Self {
             store,
             arena,
@@ -1064,11 +1072,14 @@ impl<'store, 'a, S, T: WithChildren, U, F: Clone, G: Clone>
         }
     }
 }
-impl<'store: 'a, 'a, S, T: Tree<Type = Type> + WithSerialization, U: Clone + Default, F, G>
-    FormatCached<'store, 'a, S, T, U, F, G>
+impl<'store: 'a, 'a, S, T: Tree<Type = Type> + WithSerialization, D, U: Clone + Default, F, G>
+    FormatCached<'store, 'a, S, T, D, U, F, G>
 where
     S: 'store + NodeStore<T::TreeId, R<'store> = T>,
     T::TreeId: Clone + Debug,
+    D: ShallowDecompressedTreeStore<'a, T, u32>
+        + PostOrder<'a, T, u32>
+        + DecompressedWithSiblings<'a, T, u32>,
     F: Fn(U, T::TreeId) -> U,
     G: Fn(U, T::TreeId) -> U,
 {
@@ -1079,17 +1090,15 @@ where
         )
     }
 }
-struct PathCached<'a, T: Stored, U, F, G> {
-    arena: &'a CompletePostOrder<T, u32>,
-    cache: RecCachedProcessor<'a, T, u32, U, F, G>,
+struct PathCached<'a, T: Stored, D, U, F, G> {
+    arena: &'a D,
+    cache: RecCachedProcessor<'a, T, D, u32, U, F, G>,
 }
 
-impl<'a, T: WithChildren, U, F: Clone, G: Clone>
-    From<(&'a CompletePostOrder<T, u32>, T::TreeId, F, G)> for PathCached<'a, T, U, F, G>
+impl<'a, T: WithChildren, D, U, F: Clone, G: Clone> From<(&'a D, T::TreeId, F, G)>
+    for PathCached<'a, T, D, U, F, G>
 {
-    fn from(
-        (arena, tr, with_p, with_lsib): (&'a CompletePostOrder<T, u32>, T::TreeId, F, G),
-    ) -> Self {
+    fn from((arena, tr, with_p, with_lsib): (&'a D, T::TreeId, F, G)) -> Self {
         Self {
             arena,
             cache: RecCachedProcessor::from((arena, tr, with_p, with_lsib)),
@@ -1097,9 +1106,12 @@ impl<'a, T: WithChildren, U, F: Clone, G: Clone>
     }
 }
 
-impl<'a, T: Tree, U: Clone + Default, F, G> PathCached<'a, T, U, F, G>
+impl<'a, T: Tree, D, U: Clone + Default, F, G> PathCached<'a, T, D, U, F, G>
 where
     T::TreeId: Clone + Debug,
+    D: ShallowDecompressedTreeStore<'a, T, u32>
+        + PostOrder<'a, T, u32>
+        + DecompressedWithSiblings<'a, T, u32>,
     F: Fn(U, T::TreeId) -> U,
     G: Fn(U, T::TreeId) -> U,
 {
@@ -1111,28 +1123,29 @@ where
 pub fn print_mappings<
     'store: 'a,
     'a,
-    IdD: PrimInt + Debug,
+    IdD: 'a + PrimInt + Debug,
     M: MonoMappingStore<Ele = IdD>,
     IdN: Clone + Eq + Debug,
     NS: NodeStore<IdN>,
     LS: LabelStore<str>,
+    SD,
+    DD,
 >(
-    dst_arena: &'a CompletePostOrder<NS::R<'store>, IdD>,
-    src_arena: &'a CompletePostOrder<NS::R<'store>, IdD>,
+    dst_arena: &'a DD, //CompletePostOrder<NS::R<'store>, IdD>,
+    src_arena: &'a SD, //CompletePostOrder<NS::R<'store>, IdD>,
     node_store: &'store NS,
     label_store: &'store LS,
     mappings: &M,
 ) where
-    <NS as types::NodeStore<IdN>>::R<'store>: Tree<TreeId = IdN> + types::WithSerialization,
+    <NS as types::NodeStore<IdN>>::R<'store>:
+        'store + Tree<TreeId = IdN> + types::WithSerialization,
     <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug,
+    SD: ShallowDecompressedTreeStore<'a, NS::R<'store>, IdD> + PostOrder<'a, NS::R<'store>, IdD>, // + DecompressedWithParent<'a, NS::R<'store>, IdD>,
+    DD: ShallowDecompressedTreeStore<'a, NS::R<'store>, IdD> + PostOrder<'a, NS::R<'store>, IdD>, //+ DecompressedWithParent<'a, NS::R<'store>, IdD>,
 {
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);
-    let disp = DisplayCompletePostOrder {
-        node_store,
-        inner: &dst_arena,
-        label_store,
-    };
+    let disp = DisplayCompletePostOrder::new(node_store, label_store, dst_arena);
     let dst_arena = disp.to_string();
     let mappings = src_arena
         .map
@@ -1189,28 +1202,26 @@ pub fn print_mappings<
 pub fn print_mappings_no_ranges<
     'store: 'a,
     'a,
-    IdD: PrimInt + Debug,
+    IdD: 'a + PrimInt + Debug,
     M: MonoMappingStore<Ele = IdD>,
     IdN: Clone + Eq + Debug,
     NS: NodeStore<IdN>,
     LS: LabelStore<str>,
+    DD: PostOrder<'a, NS::R<'store>, IdD>,
+    SD: PostOrder<'a, NS::R<'store>, IdD>,
 >(
-    dst_arena: &'a CompletePostOrder<NS::R<'store>, IdD>,
-    src_arena: &'a CompletePostOrder<NS::R<'store>, IdD>,
+    dst_arena: &'a DD,
+    src_arena: &'a SD,
     node_store: &'store NS,
     label_store: &'store LS,
     mappings: &M,
 ) where
-    <NS as types::NodeStore<IdN>>::R<'store>: Tree<TreeId = IdN>,
+    <NS as types::NodeStore<IdN>>::R<'store>: 'store + Tree<TreeId = IdN>,
     <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug,
 {
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);
-    let disp = DisplayCompletePostOrder {
-        node_store,
-        inner: &dst_arena,
-        label_store,
-    };
+    let disp = DisplayCompletePostOrder::new(node_store, label_store, dst_arena);
     let dst_arena = format!("{:?}", disp);
     let mappings = src_arena
         .map

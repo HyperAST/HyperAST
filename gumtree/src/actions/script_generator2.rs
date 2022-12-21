@@ -1,9 +1,5 @@
 /// inspired by the implementation in gumtree
-use std::{
-    collections::HashSet,
-    fmt::Debug,
-    hash::Hash,
-};
+use std::{collections::HashSet, fmt::Debug, hash::Hash};
 
 use num_traits::{cast, PrimInt, ToPrimitive};
 
@@ -11,6 +7,7 @@ use crate::{
     actions::Actions,
     decompressed_tree_store::{
         BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
+        PostOrderIterable,
     },
     matchers::mapping_store::MonoMappingStore,
     tree::tree_path::{CompressedTreePath, TreePath},
@@ -118,10 +115,14 @@ impl<IdC: Debug, IdD: Debug> Debug for MidNode<IdC, IdD> {
 
 pub struct ScriptGenerator<
     'store: 'a1 + 'a2 + 'm,
-    'a1: 'm, 'a2: 'm, 'm,
+    'a1: 'm,
+    'a2: 'm,
+    'm,
     IdD: PrimInt + Debug + Hash + PartialEq + Eq,
     T: 'store + Stored + Labeled + WithChildren,
-    SS, SD, S,
+    SS,
+    SD,
+    S,
     M: MonoMappingStore<Ele = IdD>,
 > where
     T::Label: Debug,
@@ -148,12 +149,15 @@ static MERGE_SIM_ACTIONS: bool = false;
 
 impl<
         'store: 'a1 + 'a2 + 'm,
-        'a1: 'm, 'a2: 'm, 'm,
+        'a1: 'm,
+        'a2: 'm,
+        'm,
         IdD: 'store + PrimInt + Debug + Hash + PartialEq + Eq,
         T: 'store + Tree,
         SS: DecompressedTreeStore<'a1, T, IdD>
             + DecompressedWithParent<'a1, T, IdD>
             + PostOrder<'a1, T, IdD>
+            + PostOrderIterable<'a1, T, IdD>
             + Debug,
         SD: DecompressedTreeStore<'a2, T, IdD>
             + DecompressedWithParent<'a2, T, IdD>
@@ -800,7 +804,6 @@ where
         r.reverse();
         r.into()
     }
-
 }
 
 struct Iter<'a, IdC, IdD: PrimInt> {

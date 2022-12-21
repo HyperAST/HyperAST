@@ -346,9 +346,11 @@ mod test {
     };
     use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
     use hyper_gumtree::{
-        decompressed_tree_store::CompletePostOrder,
+        decompressed_tree_store::{lazy_post_order::LazyPostOrder, Initializable},
         matchers::{
-            heuristic::gt::lazy_greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
+            heuristic::gt::lazy_greedy_subtree_matcher::{
+                LazyGreedySubtreeMatcher, SubtreeMatcher,
+            },
             // heuristic::gt::greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
             mapping_store::VecStore,
         },
@@ -482,8 +484,8 @@ mod test {
         // let stores = &tree_gen.stores;
         let mappings = VecStore::default();
 
-        type DS<T> = CompletePostOrder<T, u32>;
-        let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
+        type DS<T> = LazyPostOrder<T, u32>;
+        let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
             node_store, &src, &dst, mappings,
         );
         let SubtreeMatcher {
@@ -593,8 +595,8 @@ mod test {
         // );
         // println!();
         let mappings = VecStore::default();
-        type DS<T> = CompletePostOrder<T, u32>;
-        let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
+        type DS<T> = LazyPostOrder<T, u32>;
+        let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
             node_store, &src, &dst, mappings,
         );
         let SubtreeMatcher {
@@ -675,8 +677,8 @@ mod test {
         let node_store = &tree_gen.stores.node_store;
         let node_store = &crate::window_combination::NoSpaceNodeStoreWrapper { s: node_store };
         let mappings = VecStore::default();
-        type DS<T> = CompletePostOrder<T, u32>;
-        let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
+        type DS<T> = LazyPostOrder<T, u32>;
+        let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
             node_store, &src, &dst, mappings,
         );
         let SubtreeMatcher {
@@ -692,6 +694,9 @@ mod test {
         //     label_store,
         //     &mappings,
         // );
+
+        let src_arena = src_arena.complete(node_store);
+        let dst_arena = dst_arena.complete(node_store);
 
         let gt_out = subprocess(
             node_store,
@@ -889,8 +894,8 @@ mod test {
         println!();
         let stores = &tree_gen.stores;
         let mappings = VecStore::default();
-        type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
-        let mapper = GreedySubtreeMatcher::<DS, DS, _, HashedNodeRef, _, _>::matchh(
+        type DS<'a> = LazyPostOrder<HashedNodeRef<'a>, u32>;
+        let mapper = LazyGreedySubtreeMatcher::<DS, DS, _, HashedNodeRef, _, _>::matchh(
             &stores.node_store,
             &src,
             &dst,
@@ -1009,8 +1014,8 @@ mod test {
         let node_store = &tree_gen.stores.node_store;
         let node_store = &crate::window_combination::NoSpaceNodeStoreWrapper { s: node_store };
         let mappings = VecStore::default();
-        type DS<T> = CompletePostOrder<T, u32>;
-        let mapper = GreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
+        type DS<T> = LazyPostOrder<T, u32>;
+        let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
             node_store, &src, &dst, mappings,
         );
         let SubtreeMatcher {
@@ -1019,6 +1024,120 @@ mod test {
             mappings,
             ..
         } = mapper.into();
+
+        let src_arena = src_arena.complete(node_store);
+        let dst_arena = dst_arena.complete(node_store);
+
+        print_mappings_no_ranges(&dst_arena, &src_arena, node_store, label_store, &mappings);
+
+        let gt_out = subprocess(
+            node_store,
+            label_store,
+            src,
+            dst,
+            "gumtree-subtree",
+            "COMPRESSED",
+        );
+
+        let pp = CompressedBfPostProcess::create(&gt_out);
+        let (pp, counts) = pp.counts();
+        let (pp, gt_timings) = pp.performances();
+        dbg!(gt_timings, counts.mappings, counts.actions);
+        let valid = pp.validity_mappings(
+            node_store,
+            label_store,
+            &src_arena,
+            src,
+            &dst_arena,
+            dst,
+            &mappings,
+        );
+        dbg!(valid.additional_mappings, valid.missing_mappings);
+    }
+
+    #[test]
+    fn test_spoon_pom_bad_subtree_match_no_spaces_2() {
+        // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
+        println!("{:?}", std::env::current_dir());
+        let buggy = CASE10;
+        let fixed = CASE9;
+        let mut stores = SimpleStores {
+            label_store: LabelStore::new(),
+            type_store: TypeStore {},
+            node_store: NodeStore::new(),
+        };
+        let mut tree_gen = XmlTreeGen {
+            line_break: "\n".as_bytes().to_vec(),
+            stores: &mut stores,
+        };
+        println!("len={}: ", buggy.len());
+        let (src_tr, dst_tr) = {
+            let tree_gen = &mut tree_gen;
+            let full_node1 = {
+                let tree = match XmlTreeGen::tree_sitter_parse(buggy.as_bytes()) {
+                    Ok(t) => t,
+                    Err(t) => t,
+                };
+                let full_node1 =
+                    tree_gen.generate_file("".as_bytes(), buggy.as_bytes(), tree.walk());
+                full_node1
+            };
+            let full_node2 = {
+                let tree = match XmlTreeGen::tree_sitter_parse(fixed.as_bytes()) {
+                    Ok(t) => t,
+                    Err(t) => t,
+                };
+                let full_node1 =
+                    tree_gen.generate_file("".as_bytes(), fixed.as_bytes(), tree.walk());
+                full_node1
+            };
+            (full_node1, full_node2)
+        };
+        let src = src_tr.local.compressed_node;
+        // let src = tree_gen.stores.node_store.resolve(src).child(&0).unwrap();
+        // let src = tree_gen.stores.node_store.resolve(src).child(&6).unwrap();
+        // let src = tree_gen.stores.node_store.resolve(src).child(&4).unwrap();
+        dbg!(tree_gen.stores.node_store.resolve(src).get_type());
+        let dst = dst_tr.local.compressed_node;
+        // let dst = tree_gen.stores.node_store.resolve(dst).child(&0).unwrap();
+        // let dst = tree_gen.stores.node_store.resolve(dst).child(&6).unwrap();
+        // let dst = tree_gen.stores.node_store.resolve(dst).child(&4).unwrap();
+
+        let label_store = &tree_gen.stores.label_store;
+        let node_store = &tree_gen.stores.node_store;
+        let node_store = &crate::window_combination::NoSpaceNodeStoreWrapper { s: node_store };
+        let mappings = VecStore::default();
+        type DS<T> = LazyPostOrder<T, u32>;
+        // let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
+        //     node_store, &src, &dst, mappings,
+        // );
+        let mapper = {
+            let node_store = node_store;
+            let src = &src;
+            let dst = &dst;
+            let mappings = mappings;
+            let src_arena = DS::new(node_store, src);
+            let dst_arena = DS::new(node_store, dst);
+            // src_arena.decompress_descendants(node_store, &src_arena.root());
+            // dst_arena.decompress_descendants(node_store, &dst_arena.root());
+            // src_arena.go_through_descendants(node_store, &src_arena.root());
+            // dst_arena.go_through_descendants(node_store, &dst_arena.root());
+            let mut matcher = LazyGreedySubtreeMatcher::<_, _, _, _, _, _, 1>::new(
+                node_store, src_arena, dst_arena, mappings,
+            );
+            LazyGreedySubtreeMatcher::execute(&mut matcher);
+            matcher
+        };
+        let SubtreeMatcher {
+            src_arena,
+            dst_arena,
+            mappings,
+            ..
+        } = mapper.into();
+
+        let src_arena = src_arena.complete(node_store);
+        let dst_arena = dst_arena.complete(node_store);
+
         print_mappings_no_ranges(&dst_arena, &src_arena, node_store, label_store, &mappings);
 
         let gt_out = subprocess(

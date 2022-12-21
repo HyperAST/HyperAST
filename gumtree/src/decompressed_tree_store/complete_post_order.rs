@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     fmt::{Debug, Display},
     hash::Hash,
+    marker::PhantomData,
 };
 
 use num_traits::{cast, PrimInt, ToPrimitive, Zero};
@@ -9,17 +10,14 @@ use num_traits::{cast, PrimInt, ToPrimitive, Zero};
 use crate::tree::tree_path::CompressedTreePath;
 use hyper_ast::{
     position::Position,
-    types::{
-        self, LabelStore, NodeStore, Stored, Tree, Type, WithChildren, WithSerialization, WithStats,
-    },
+    types::{self, LabelStore, NodeStore, Stored, Tree, Type, WithChildren, WithSerialization},
 };
 
 use super::{
     pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
     simple_post_order::SimplePostOrder,
-    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, Initializable,
-    InitializableWithStats, Iter, PostOrder, PostOrderIterable, PostOrderKeyRoots,
-    ShallowDecompressedTreeStore,
+    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, Initializable, Iter,
+    PostOrder, PostOrderIterable, PostOrderKeyRoots, ShallowDecompressedTreeStore, DecompressedWithSiblings,
 };
 
 /// made for TODO
@@ -32,9 +30,19 @@ pub struct CompletePostOrder<T: Stored, IdD> {
     kr: Vec<IdD>,
 }
 
-impl<T: Stored, IdD: PrimInt + Into<usize>> CompletePostOrder<T, IdD> {
+impl<T: Stored, IdD: PrimInt> CompletePostOrder<T, IdD> {
     pub fn iter(&self) -> impl Iterator<Item = &T::TreeId> {
         self.simple.iter()
+    }
+}
+
+impl<T: WithChildren, IdD: PrimInt> From<SimplePostOrder<T, IdD>> for CompletePostOrder<T, IdD>
+where
+    T::TreeId: Clone,
+{
+    fn from(simple: SimplePostOrder<T, IdD>) -> Self {
+        let kr = SimplePostOrder::compute_kr(&simple);
+        Self { simple, kr }
     }
 }
 
@@ -50,23 +58,44 @@ where
     }
 }
 
-pub struct DisplayCompletePostOrder<'store: 'a, 'a, T: Stored, IdD: PrimInt, S, LS>
+pub struct DisplayCompletePostOrder<'store: 'a, 'a, T: Stored, IdD: PrimInt, S, LS, D>
 where
-    S: NodeStore<T::TreeId, R<'store> = T>,
+    T: WithChildren,
+    S: NodeStore<T::TreeId>,
     LS: LabelStore<str>,
+    D: ShallowDecompressedTreeStore<'a, T, IdD>,
 {
-    pub inner: &'a CompletePostOrder<T, IdD>,
-    pub node_store: &'store S,
-    pub label_store: &'store LS,
+    inner: &'a D,
+    node_store: &'store S,
+    label_store: &'store LS,
+    _phantom: PhantomData<(&'store T, &'a IdD)>,
 }
-
-impl<'store: 'a, 'a, T: Tree + WithSerialization, IdD: PrimInt, S, LS> Display
-    for DisplayCompletePostOrder<'store, 'a, T, IdD, S, LS>
+impl<'store: 'a, 'a, T: Stored, IdD: PrimInt, S, LS, D>
+    DisplayCompletePostOrder<'store, 'a, T, IdD, S, LS, D>
 where
-    S: NodeStore<T::TreeId, R<'store> = T>,
+    T: WithChildren,
+    S: NodeStore<T::TreeId>,
+    LS: LabelStore<str>,
+    D: ShallowDecompressedTreeStore<'a, T, IdD>,
+{
+    pub fn new(node_store: &'store S, label_store: &'store LS, inner: &'a D) -> Self {
+        Self {
+            inner,
+            node_store,
+            label_store,
+            _phantom: PhantomData,
+        }
+    }
+}
+impl<'store: 'a, 'a, T, IdD: PrimInt, S, LS, D> Display
+    for DisplayCompletePostOrder<'store, 'a, T, IdD, S, LS, D>
+where
     T::TreeId: Clone + Debug,
+    S: NodeStore<T::TreeId, R<'store> = T>,
+    T: Tree + WithSerialization,
     T::Type: Debug,
     LS: LabelStore<str>,
+    D: DecompressedTreeStore<'a, T, IdD> + PostOrder<'a, T, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let m = SimplePreOrderMapper::from(self.inner);
@@ -82,21 +111,25 @@ where
     }
 }
 
-impl<'store: 'a, 'a, T: Tree, IdD: PrimInt, S, LS> Debug
-    for DisplayCompletePostOrder<'store, 'a, T, IdD, S, LS>
+impl<'store: 'a, 'a, T, IdD: PrimInt, S, LS, D> Debug
+    for DisplayCompletePostOrder<'store, 'a, T, IdD, S, LS, D>
 where
-    S: NodeStore<T::TreeId, R<'store> = T>,
     T::TreeId: Clone + Debug,
+    S: NodeStore<T::TreeId, R<'store> = T>,
+    T: Tree,
     T::Type: Debug,
     LS: LabelStore<str>,
+    D: DecompressedTreeStore<'a, T, IdD> + PostOrder<'a, T, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let m = SimplePreOrderMapper::from(self.inner);
-        DisplaySimplePreOrderMapper {
-            inner: &m,
-            node_store: self.node_store,
-        }
-        .fmt(f)
+        std::fmt::Debug::fmt(
+            &DisplaySimplePreOrderMapper {
+                inner: &m,
+                node_store: self.node_store,
+            },
+            f,
+        )
         .unwrap();
         Ok(())
     }
@@ -124,6 +157,17 @@ where
     fn parents(&self, id: IdD) -> Self::PIt<'_> {
         self.simple.parents(id)
     }
+
+}
+
+impl<'d, T: WithChildren, IdD: PrimInt> DecompressedWithSiblings<'d, T, IdD>
+    for CompletePostOrder<T, IdD>
+where
+    T::TreeId: Clone + Eq + Debug,
+{
+    fn lsib(&self, x: &IdD) -> Option<IdD> {
+        DecompressedWithSiblings::lsib(&self.simple, x)
+    }
 }
 
 pub struct IterParents<'a, IdD> {
@@ -144,7 +188,7 @@ impl<'a, IdD: PrimInt> Iterator for IterParents<'a, IdD> {
     }
 }
 
-impl<'a, T: 'a + WithChildren, IdD: PrimInt> PostOrder<'a, T, IdD> for CompletePostOrder<T, IdD>
+impl<'a, T: WithChildren, IdD: PrimInt> PostOrder<'a, T, IdD> for CompletePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug,
 {
@@ -157,8 +201,7 @@ where
     }
 }
 
-impl<'d, T: 'd + WithChildren, IdD: PrimInt> PostOrderIterable<'d, T, IdD>
-    for CompletePostOrder<T, IdD>
+impl<'d, T: WithChildren, IdD: PrimInt> PostOrderIterable<'d, T, IdD> for CompletePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug,
 {
@@ -193,23 +236,7 @@ where
     }
 }
 
-impl<'a, T, IdD: PrimInt> InitializableWithStats<'a, T> for CompletePostOrder<T, IdD>
-where
-    T: Tree<Type = types::Type> + WithChildren + WithStats,
-    T::TreeId: Clone,
-    <T as WithChildren>::ChildIdx: PrimInt,
-{
-    fn considering_stats<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
-    where
-        S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,
-    {
-        let simple = SimplePostOrder::considering_stats(store, root);
-        let kr = SimplePostOrder::compute_kr(&simple);
-
-        Self { simple, kr }
-    }
-}
-impl<'a, T: 'a + WithChildren, IdD: PrimInt> ShallowDecompressedTreeStore<'a, T, IdD>
+impl<'a, T: WithChildren, IdD: PrimInt> ShallowDecompressedTreeStore<'a, T, IdD>
     for CompletePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug,
@@ -249,7 +276,7 @@ where
     }
 }
 
-impl<'d, T: 'd + WithChildren, IdD: PrimInt> DecompressedTreeStore<'d, T, IdD>
+impl<'d, T: WithChildren, IdD: PrimInt> DecompressedTreeStore<'d, T, IdD>
     for CompletePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug,
@@ -273,7 +300,7 @@ where
     }
 }
 
-impl<'d, T: 'd + WithChildren, IdD: PrimInt> ContiguousDescendants<'d, T, IdD>
+impl<'d, T: WithChildren, IdD: PrimInt> ContiguousDescendants<'d, T, IdD>
     for CompletePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug,
@@ -287,15 +314,6 @@ pub struct RecCachedPositionProcessor<'a, T: WithChildren, IdD: Hash + Eq> {
     pub(crate) ds: &'a CompletePostOrder<T, IdD>,
     root: T::TreeId,
     cache: HashMap<IdD, Position>,
-}
-
-impl<'a, T: WithChildren, IdD: PrimInt + Hash + Eq> CompletePostOrder<T, IdD>
-where
-    T::TreeId: Clone + Debug,
-{
-    pub fn lsib(&self, c: &IdD, p_lld: &IdD) -> Option<IdD> {
-        self.simple.lsib(c, p_lld)
-    }
 }
 
 impl<'a, T: WithChildren, IdD: PrimInt + Hash + Eq> From<(&'a CompletePostOrder<T, IdD>, T::TreeId)>
@@ -344,8 +362,7 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
                 return self.cache.entry(*c).or_insert(pos);
             }
 
-            let p_lld = self.ds.first_descendant(&p);
-            if let Some(lsib) = self.ds.lsib(c, &p_lld) {
+            if let Some(lsib) = self.ds.lsib(c) {
                 assert_ne!(lsib.to_usize(), c.to_usize());
                 let mut pos = self
                     .cache
@@ -403,21 +420,18 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
         }
     }
 }
-pub struct RecCachedProcessor<'a, T: Stored, IdD: Hash + Eq, U, F, G> {
-    pub(crate) ds: &'a CompletePostOrder<T, IdD>,
+pub struct RecCachedProcessor<'a, T: Stored, D, IdD: Hash + Eq, U, F, G> {
+    pub(crate) ds: &'a D,
     root: T::TreeId,
     cache: HashMap<IdD, U>,
     with_p: F,
     with_lsib: G,
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt + Hash + Eq, U, F, G>
-    From<(&'a CompletePostOrder<T, IdD>, T::TreeId, F, G)>
-    for RecCachedProcessor<'a, T, IdD, U, F, G>
+impl<'a, T: WithChildren, D, IdD: PrimInt + Hash + Eq, U, F, G> From<(&'a D, T::TreeId, F, G)>
+    for RecCachedProcessor<'a, T, D, IdD, U, F, G>
 {
-    fn from(
-        (ds, root, with_p, with_lsib): (&'a CompletePostOrder<T, IdD>, T::TreeId, F, G),
-    ) -> Self {
+    fn from((ds, root, with_p, with_lsib): (&'a D, T::TreeId, F, G)) -> Self {
         Self {
             ds,
             root,
@@ -428,9 +442,12 @@ impl<'a, T: WithChildren, IdD: PrimInt + Hash + Eq, U, F, G>
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt + Hash + Eq, U: Clone + Default, F, G>
-    RecCachedProcessor<'a, T, IdD, U, F, G>
+impl<'a, T: WithChildren, D, IdD: PrimInt + Hash + Eq, U: Clone + Default, F, G>
+    RecCachedProcessor<'a, T, D, IdD, U, F, G>
 where
+    D: DecompressedTreeStore<'a, T, IdD>
+        + DecompressedWithSiblings<'a, T, IdD>
+        + PostOrder<'a, T, IdD>,
     F: Fn(U, T::TreeId) -> U,
     G: Fn(U, T::TreeId) -> U,
 {
@@ -467,8 +484,7 @@ where
                 return self.cache.entry(*c).or_insert((self.with_p)(pos, ori));
             }
 
-            let p_lld = self.ds.first_descendant(&p);
-            if let Some(lsib) = self.ds.lsib(c, &p_lld) {
+            if let Some(lsib) = self.ds.lsib(c) {
                 assert_ne!(lsib.to_usize(), c.to_usize());
                 let pos = self.position(store, &lsib).clone();
                 // pos.inc_offset(pos.range().end - pos.range().start);
@@ -536,8 +552,7 @@ where
         if self.cache.contains_key(&c) {
             return self.cache.get(&c).unwrap();
         } else if let Some(p) = self.ds.parent(c) {
-            let p_lld = self.ds.first_descendant(&p);
-            if let Some(lsib) = self.ds.lsib(c, &p_lld) {
+            if let Some(lsib) = self.ds.lsib(c) {
                 assert_ne!(lsib.to_usize(), c.to_usize());
                 let pos = self.position2(&lsib).clone();
                 self.cache

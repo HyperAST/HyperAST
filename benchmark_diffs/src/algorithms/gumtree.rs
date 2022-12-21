@@ -3,18 +3,21 @@ use std::{fmt::Debug, time::Instant};
 use hyper_ast::types;
 use hyper_gumtree::{
     actions::script_generator2::ScriptGenerator,
-    decompressed_tree_store::{bfs_wrapper::SimpleBfsMapper, CompletePostOrder},
+    decompressed_tree_store::{
+        bfs_wrapper::SimpleBfsMapper, lazy_post_order::LazyPostOrder, CompletePostOrder,
+    },
     matchers::{
         heuristic::gt::{
             bottom_up_matcher::BottomUpMatcher,
             greedy_bottom_up_matcher::GreedyBottomUpMatcher,
-            lazy_greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
+            lazy_greedy_subtree_matcher::{LazyGreedySubtreeMatcher, SubtreeMatcher},
         },
         mapping_store::{MappingStore, VecStore},
     },
 };
 
-type DS<T> = CompletePostOrder<T, u32>;
+type DS<T> = LazyPostOrder<T, u32>;
+type CDS<T> = CompletePostOrder<T, u32>;
 
 use super::DiffResult;
 
@@ -28,8 +31,8 @@ pub fn diff<'store, IdN, NS, LS>(
     LS::I,
     <NS::R<'store> as types::WithChildren>::ChildIdx,
     u32,
-    DS<NS::R<'store>>,
-    DS<NS::R<'store>>,
+    CDS<NS::R<'store>>,
+    CDS<NS::R<'store>>,
     2,
 >
 where
@@ -44,9 +47,10 @@ where
 {
     let mappings = VecStore::default();
     let now = Instant::now();
-    let mapper = GreedySubtreeMatcher::<DS<NS::R<'store>>, DS<NS::R<'store>>, _, _, _, _>::matchh(
-        node_store, src, dst, mappings,
-    );
+    let mapper =
+        LazyGreedySubtreeMatcher::<DS<NS::R<'store>>, DS<NS::R<'store>>, _, _, _, _>::matchh(
+            node_store, src, dst, mappings,
+        );
     let SubtreeMatcher {
         src_arena,
         dst_arena,
@@ -57,8 +61,12 @@ where
     let subtree_mappings_s = mappings.len();
     dbg!(&subtree_matcher_t, &subtree_mappings_s);
     let now = Instant::now();
+    let src_arena = src_arena.complete(node_store);
+    let dst_arena = dst_arena.complete(node_store);
+    let src_arena = CompletePostOrder::from(src_arena);
+    let dst_arena = CompletePostOrder::from(dst_arena);
     let mut mapper =
-        GreedyBottomUpMatcher::<DS<NS::R<'store>>, DS<NS::R<'store>>, _, _, _, _, _>::new(
+        GreedyBottomUpMatcher::<CDS<NS::R<'store>>, CDS<NS::R<'store>>, _, _, _, _, _>::new(
             node_store,
             label_store,
             src_arena,

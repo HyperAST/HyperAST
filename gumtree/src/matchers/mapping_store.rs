@@ -26,10 +26,14 @@ pub trait MonoMappingStore: MappingStore {
 }
 
 pub trait MultiMappingStore: MappingStore {
+    type Iter<'a>: Iterator<Item = Self::Ele>
+    where
+        Self::Ele: 'a,
+        Self: 'a;
     fn get_srcs(&self, dst: &Self::Ele) -> &[Self::Ele];
     fn get_dsts(&self, src: &Self::Ele) -> &[Self::Ele];
-    fn all_mapped_srcs(&self) -> Iter<Self::Ele>;
-    fn all_mapped_dsts(&self) -> Iter<Self::Ele>;
+    fn all_mapped_srcs(&self) -> Self::Iter<'_>;
+    fn all_mapped_dsts(&self) -> Self::Iter<'_>;
     fn is_src_unique(&self, dst: &Self::Ele) -> bool;
     fn is_dst_unique(&self, src: &Self::Ele) -> bool;
 }
@@ -275,6 +279,7 @@ impl<T: PrimInt> MappingStore for MultiVecStore<T> {
 }
 
 impl<T: PrimInt> MultiMappingStore for MultiVecStore<T> {
+    type Iter<'a> = Iter<'a,Self::Ele> where Self::Ele: 'a;
     fn get_srcs(&self, dst: &Self::Ele) -> &[Self::Ele] {
         self.dst_to_srcs[cast::<_, usize>(*dst).unwrap()]
             .as_ref()

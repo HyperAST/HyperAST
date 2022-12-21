@@ -5,12 +5,8 @@ use std::{
 
 use num_traits::{cast, zero, PrimInt, ToPrimitive, Zero};
 
-use crate::decompressed_tree_store::{
-    DecompressedTreeStore, PostOrder, ShallowDecompressedTreeStore,
-};
+use crate::decompressed_tree_store::{DecompressedTreeStore, PostOrder};
 use hyper_ast::types::{NodeStore, Tree, WithChildren, WithSerialization};
-
-use super::{CompletePostOrder, SimpleZsTree};
 
 pub struct SimplePreOrderMapper<'a, T: WithChildren, IdD, D: DecompressedTreeStore<'a, T, IdD>> {
     pub map: Vec<IdD>,
@@ -94,23 +90,35 @@ impl<'a, T: 'a + WithChildren, IdD: PrimInt, D: PostOrder<'a, T, IdD>> From<&'a 
 }
 
 pub struct DisplaySimplePreOrderMapper<
-    'a,
+    'store: 'a,
+    'a: 'b,
     'b,
     T: WithChildren,
     IdD: PrimInt,
     S,
-    D: PostOrder<'b, T, IdD>,
+    D: PostOrder<'a, T, IdD>,
 > {
-    pub inner: &'b SimplePreOrderMapper<'b, T, IdD, D>,
-    pub node_store: &'a S,
+    pub inner: &'b SimplePreOrderMapper<'a, T, IdD, D>,
+    pub node_store: &'store S,
 }
 
-impl<'a, 'b, T: Tree + WithSerialization, IdD: PrimInt, S> Display
-    for DisplaySimplePreOrderMapper<'a, 'b, T, IdD, S, CompletePostOrder<T, IdD>>
+// impl<'store: 'a, 'a, IdN , IdD: PrimInt, S, LS, D> Display
+//     for DisplayCompletePostOrder<'store, 'a, IdN, IdD, S, LS, D>
+// where
+//     S: NodeStore<IdN>,
+//     S::R<'a>: Tree + WithSerialization,
+//     <S::R<'a> as Stored>::TreeId: Clone + Debug,
+//     <S::R<'a> as Typed>::Type: Debug,
+//     LS: LabelStore<str>,
+//     D: DecompressedTreeStore<'a, S::R<'a>, IdD> + PostOrder<'a, S::R<'a>, IdD>
+// {
+impl<'store: 'a, 'a: 'b, 'b, T: Tree + WithSerialization, IdD: PrimInt, S, D> Display
+    for DisplaySimplePreOrderMapper<'store, 'a, 'b, T, IdD, S, D>
 where
     T::TreeId: Clone + Debug + Eq,
-    S: NodeStore<T::TreeId, R<'a> = T>,
+    S: NodeStore<T::TreeId, R<'store> = T>,
     T::Type: Debug,
+    D: PostOrder<'a, T, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut pos = 0;
@@ -135,12 +143,13 @@ where
         Ok(())
     }
 }
-impl<'a, 'b, T: Tree, IdD: PrimInt, S> Debug
-    for DisplaySimplePreOrderMapper<'a, 'b, T, IdD, S, CompletePostOrder<T, IdD>>
+impl<'store: 'a, 'a: 'b, 'b, T: Tree, IdD: PrimInt, S, D> Debug
+    for DisplaySimplePreOrderMapper<'store, 'a, 'b, T, IdD, S, D>
 where
     T::TreeId: Clone + Debug + Eq,
-    S: NodeStore<T::TreeId, R<'a> = T>,
+    S: NodeStore<T::TreeId, R<'store> = T>,
     T::Type: Debug,
+    D: PostOrder<'a, T, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for i in 0..self.inner.map.len() {
@@ -158,36 +167,37 @@ where
         Ok(())
     }
 }
-impl<'a, 'b, T: Tree + WithSerialization, IdD: PrimInt, S> Display
-    for DisplaySimplePreOrderMapper<'a, 'b, T, IdD, S, SimpleZsTree<T, IdD>>
-where
-    T::TreeId: Clone + Debug + Eq,
-    S: NodeStore<T::TreeId, R<'a> = T>,
-    T::Type: Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut pos = 0;
-        for i in 0..self.inner.map.len() {
-            let o = self.inner.map[i];
-            let ori = self.inner.back.original(&o);
-            let node = self.node_store.resolve(&ori);
-            let len = node.try_bytes_len().unwrap_or(0);
-            writeln!(
-                f,
-                "{:>3}:{} {:?}    [{},{}]",
-                o.to_usize().unwrap(),
-                "  ".repeat(self.inner.depth[i].to_usize().unwrap()),
-                node.get_type(),
-                pos,
-                pos + len,
-            )?;
-            if node.child_count().is_zero() {
-                pos += len;
-            }
-        }
-        Ok(())
-    }
-}
+
+// impl<'a, 'b, T: Tree + WithSerialization, IdD: PrimInt, S> Display
+//     for DisplaySimplePreOrderMapper<'a, 'b, T, IdD, S, SimpleZsTree<T, IdD>>
+// where
+//     T::TreeId: Clone + Debug + Eq,
+//     S: NodeStore<T::TreeId, R<'a> = T>,
+//     T::Type: Debug,
+// {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         let mut pos = 0;
+//         for i in 0..self.inner.map.len() {
+//             let o = self.inner.map[i];
+//             let ori = self.inner.back.original(&o);
+//             let node = self.node_store.resolve(&ori);
+//             let len = node.try_bytes_len().unwrap_or(0);
+//             writeln!(
+//                 f,
+//                 "{:>3}:{} {:?}    [{},{}]",
+//                 o.to_usize().unwrap(),
+//                 "  ".repeat(self.inner.depth[i].to_usize().unwrap()),
+//                 node.get_type(),
+//                 pos,
+//                 pos + len,
+//             )?;
+//             if node.child_count().is_zero() {
+//                 pos += len;
+//             }
+//         }
+//         Ok(())
+//     }
+// }
 
 // pub struct Iter<'a, IdD> {
 //     curr: usize,

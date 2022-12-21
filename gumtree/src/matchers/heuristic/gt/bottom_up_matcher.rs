@@ -13,8 +13,6 @@ use hyper_ast::types::{HashKind, NodeStore, Tree, Typed, WithHashs};
 
 pub struct BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M>
 where
-    IdD: PrimInt + std::ops::SubAssign + Debug,
-    T: 'a + Tree + WithHashs,
     M: MonoMappingStore<Ele = IdD>,
 {
     pub(super) node_store: &'a S,
@@ -29,11 +27,10 @@ impl<
         Dsrc: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
         Ddst: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
         IdD: PrimInt + std::ops::SubAssign + Debug,
-        T: 'a + Tree + WithHashs,
+        T: 'a + Tree,
         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
         M: MonoMappingStore<Ele = IdD>,
     > BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M>
-where
 {
     pub(super) fn get_dst_candidates(&self, src: &IdD) -> Vec<IdD> {
         let mut seeds = vec![];
@@ -67,7 +64,20 @@ where
         }
         candidates
     }
+}
 
+// TODO make a lazy get_dst_candidates
+
+impl<
+        'a,
+        Dsrc: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
+        Ddst: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
+        IdD: PrimInt + std::ops::SubAssign + Debug,
+        T: 'a + Tree + WithHashs,
+        S: 'a + NodeStore<T::TreeId, R<'a> = T>,
+        M: MonoMappingStore<Ele = IdD>,
+    > BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M>
+{
     pub(super) fn last_chance_match_histogram(&mut self, src: &IdD, dst: &IdD) {
         self.lcs_equal_matching(src, dst);
         self.lcs_structure_matching(src, dst);

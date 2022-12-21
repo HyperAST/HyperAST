@@ -57,6 +57,21 @@ fn concecutive_commits() {
 
 #[test]
 fn issue_mappings_pomxml_spoon_pom() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug"))
+        .format(|buf, record| {
+            if record.level().to_level_filter() > log::LevelFilter::Debug {
+                writeln!(buf, "{}", record.args())
+            } else {
+                writeln!(
+                    buf,
+                    "[{} {}] {}",
+                    buf.timestamp_millis(),
+                    record.level(),
+                    record.args()
+                )
+            }
+        })
+        .init();
     // INRIA/spoon 7c7f094bb22a350fa64289a94880cc3e7231468f 78d88752a9f4b5bc490f5e6fb0e31dc9c2cf4bcd "spoon-pom" "" 2
     let preprocessed = PreProcessedRepository::new("INRIA/spoon");
     windowed_commits_compare(

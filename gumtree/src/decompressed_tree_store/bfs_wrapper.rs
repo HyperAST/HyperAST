@@ -50,7 +50,7 @@ impl<'a, T: 'a + WithChildren, IdD: PrimInt, DTS: PostOrder<'a, T, IdD>, D: Borr
     where
         S: NodeStore<T::TreeId, R<'a> = T>,
     {
-        let x = back.borrow();
+        let x: &DTS = back.borrow();
         let mut map = Vec::with_capacity(x.len());
         let mut rev = vec![num_traits::zero(); x.len()];
         let mut i = 0;
@@ -114,14 +114,16 @@ impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: Borrow
     where
         S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
-        self.back.borrow().child(store, x, p)
+        let b: &DTS = self.back.borrow();
+        b.child(store, x, p)
     }
 
     fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
     where
         S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
-        self.back.borrow().children(store, x)
+        let b: &DTS = self.back.borrow();
+        b.children(store, x)
     }
 }
 
