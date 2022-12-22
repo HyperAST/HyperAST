@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use num_traits::{cast, one, zero, PrimInt};
+use num_traits::{cast, zero, PrimInt};
 
 use crate::tree::tree_path::CompressedTreePath;
 use hyper_ast::types::IterableChildren;
@@ -8,11 +8,10 @@ use hyper_ast::types::{NodeStore, Stored, WithChildren};
 
 use super::{DecompressedTreeStore, Initializable, Iter, ShallowDecompressedTreeStore};
 
-use super::{BreathFirstContiguousSiblings, BreathFirstIterable, DecompressedWithParent};
+use super::{BreadthFirstIterable, BreathFirstContiguousSiblings, DecompressedWithParent};
 
-/// vec of decompressed nodes layed out in pre order with contiguous siblings
+/// Decompressed subtree of an HyperAST layed out in breadth-first ie. contiguous siblings
 pub struct BreathFirst<T: Stored, IdD: PrimInt> {
-    leaf_count: IdD,
     id_compressed: Vec<T::TreeId>,
     id_parent: Vec<IdD>,
     id_first_child: Vec<IdD>,
@@ -38,7 +37,8 @@ where
     }
 }
 
-impl<'a, T: WithChildren, IdD: 'a + PrimInt> BreathFirstIterable<'a, T, IdD> for BreathFirst<T, IdD>
+impl<'a, T: WithChildren, IdD: 'a + PrimInt> BreadthFirstIterable<'a, T, IdD>
+    for BreathFirst<T, IdD>
 where
     T::TreeId: Clone,
 {
@@ -80,6 +80,10 @@ where
             id_parent: &self.id_parent,
         }
     }
+
+    fn path(&self, _parent: &IdD, _descendant: &IdD) -> CompressedTreePath<T::ChildIdx> {
+        todo!()
+    }
 }
 
 pub struct IterParents<'a, IdD> {
@@ -107,13 +111,7 @@ where
     fn new<S>(store: &'a S, root: &T::TreeId) -> Self
     where
         S: NodeStore<T::TreeId, R<'a> = T>,
-        // S: NodeStore<IdC>,
-        // S::R<'a>: WithChildren<TreeId = IdC>,
-        // <S::R<'a> as WithChildren>::ChildIdx: PrimInt,
-        // for<'b> <S::R<'a> as WithChildren>::Children<'b>:
-        //     types::Children<<S::R<'a> as WithChildren>::ChildIdx, IdC>,
     {
-        let mut leaf_count = zero();
         let mut id_compressed: Vec<T::TreeId> = vec![root.clone()];
         let mut id_parent: Vec<IdD> = vec![num_traits::zero()];
         let mut id_first_child: Vec<IdD> = vec![];
@@ -127,9 +125,6 @@ where
             } else {
                 num_traits::zero()
             });
-            if l.map_or(true, |x| x.is_empty()) {
-                leaf_count = leaf_count + one();
-            }
             if let Some(l) = l {
                 id_parent.extend(l.iter_children().map(|_| cast::<usize, IdD>(i).unwrap()));
                 id_compressed.extend(l.iter_children().cloned());
@@ -139,7 +134,6 @@ where
         }
 
         BreathFirst {
-            leaf_count,
             id_compressed,
             id_parent,
             id_first_child,
@@ -161,9 +155,9 @@ where
         self.id_compressed.len()
     }
 
-    fn leaf_count(&self) -> IdD {
-        self.leaf_count
-    }
+    // fn leaf_count(&self) -> IdD {
+    //     self.leaf_count
+    // }
 
     fn root(&self) -> IdD {
         zero()
@@ -172,11 +166,6 @@ where
     fn child<'b, S>(&self, store: &'b S, x: &IdD, p: &[T::ChildIdx]) -> IdD
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
-        // S: NodeStore<IdC>,
-        // S::R<'b>: WithChildren<TreeId = IdC>,
-        // <S::R<'b> as WithChildren>::ChildIdx: PrimInt,
-        // for<'c> <S::R<'b> as WithChildren>::Children<'c>:
-        //     types::Children<<S::R<'b> as WithChildren>::ChildIdx, IdC>,
     {
         let mut r = *x;
         for d in p {
@@ -198,11 +187,6 @@ where
     fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
-        // S: 'b + NodeStore<IdC>,
-        // S::R<'b>: WithChildren<TreeId = IdC>,
-        // <S::R<'b> as WithChildren>::ChildIdx: PrimInt,
-        // for<'c> <S::R<'b> as WithChildren>::Children<'c>:
-        //     types::Children<<S::R<'b> as WithChildren>::ChildIdx, IdC>,
     {
         let node = store.resolve(&self.original(x));
         let l: usize = cast(node.child_count()).unwrap();
@@ -211,10 +195,6 @@ where
         r.map(|x| cast::<usize, IdD>(x).unwrap())
             .collect::<Vec<_>>()
             .to_owned()
-    }
-
-    fn path<Idx: PrimInt>(&self, _parent: &IdD, _descendant: &IdD) -> CompressedTreePath<Idx> {
-        todo!()
     }
 }
 
@@ -225,11 +205,6 @@ where
     fn descendants<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
-        // S: 'b + NodeStore<IdC>,
-        // S::R<'b>: WithChildren<TreeId = IdC>,
-        // <S::R<'b> as WithChildren>::ChildIdx: PrimInt,
-        // for<'c> <S::R<'b> as WithChildren>::Children<'c>:
-        //     types::Children<<S::R<'b> as WithChildren>::ChildIdx, IdC>,
     {
         // TODO possible opti by also making descendants contiguous in arena
         let mut id: Vec<IdD> = vec![*x];
@@ -249,13 +224,8 @@ where
     fn descendants_count<'b, S>(&self, store: &'b S, x: &IdD) -> usize
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
-        // S: 'b + NodeStore<IdC>,
-        // S::R<'b>: WithChildren<TreeId = IdC>,
-        // <S::R<'b> as WithChildren>::ChildIdx: PrimInt,
-        // for<'c> <S::R<'b> as WithChildren>::Children<'c>:
-        //     types::Children<<S::R<'b> as WithChildren>::ChildIdx, IdC>,
     {
-        // todo possible opti by also making descendants contiguous in arena
+        // TODO possible opti by also making descendants contiguous in arena
         let mut id: Vec<IdD> = vec![*x];
         let mut i: usize = cast(*x).unwrap();
 

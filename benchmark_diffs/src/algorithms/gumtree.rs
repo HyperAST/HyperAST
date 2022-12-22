@@ -12,7 +12,7 @@ use hyper_gumtree::{
             greedy_bottom_up_matcher::GreedyBottomUpMatcher,
             lazy_greedy_subtree_matcher::{LazyGreedySubtreeMatcher, SubtreeMatcher},
         },
-        mapping_store::{MappingStore, VecStore},
+        mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
     },
 };
 
@@ -47,10 +47,9 @@ where
 {
     let mappings = VecStore::default();
     let now = Instant::now();
-    let mapper =
-        LazyGreedySubtreeMatcher::<DS<NS::R<'store>>, DS<NS::R<'store>>, _, _, _, _>::matchh(
-            node_store, src, dst, mappings,
-        );
+    let mapper = LazyGreedySubtreeMatcher::<DS<NS::R<'store>>, DS<NS::R<'store>>, _, _, _>::matchh::<
+        DefaultMultiMappingStore<_>,
+    >(node_store, src, dst, mappings);
     let SubtreeMatcher {
         src_arena,
         dst_arena,
@@ -66,7 +65,7 @@ where
     let src_arena = CompletePostOrder::from(src_arena);
     let dst_arena = CompletePostOrder::from(dst_arena);
     let mut mapper =
-        GreedyBottomUpMatcher::<CDS<NS::R<'store>>, CDS<NS::R<'store>>, _, _, _, _, _>::new(
+        GreedyBottomUpMatcher::<CDS<NS::R<'store>>, CDS<NS::R<'store>>, _, _, _, _>::new(
             node_store,
             label_store,
             src_arena,

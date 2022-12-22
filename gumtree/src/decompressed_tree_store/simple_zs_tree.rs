@@ -1,51 +1,56 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Deref};
 
 use bitvec::bitvec;
 use num_traits::{cast, one, zero, PrimInt};
 
-use crate::tree::tree_path::CompressedTreePath;
-use hyper_ast::types::{Children, IterableChildren, NodeStore, Stored, WithChildren};
+use crate::decompressed_tree_store::basic_post_order::BasicPOSlice;
+use hyper_ast::types::{Children, IterableChildren, NodeStore, Stored, WithChildren, WithStats};
 
 use super::{
-    DecompressedTreeStore, Initializable, Iter, PostOrder, PostOrderIterable, PostOrderKeyRoots,
-    ShallowDecompressedTreeStore,
+    basic_post_order::BasicPostOrder, simple_post_order::SimplePostOrder, CompletePostOrder,
+    DecompressedTreeStore, Initializable, InitializableWithStats, Iter, PostOrder,
+    PostOrderIterable, PostOrderKeyRoots, ShallowDecompressedTreeStore,
 };
 
 /// made for the zs diff algo
 /// - post order
 /// - key roots
 /// Compared to simple and complete post order it does not have parents
-#[derive(Debug)]
 pub struct SimpleZsTree<T: Stored, IdD> {
-    leaf_count: IdD,
-    id_compressed: Vec<T::TreeId>,
-    pub(crate) llds: Vec<IdD>,
+    basic: BasicPostOrder<T, IdD>,
     /// LR_keyroots(T) = {k | there exists no k’> k such that l(k)=l(k’)}.
-    kr: Vec<IdD>,
-    _phantom: std::marker::PhantomData<*const T>,
+    pub(crate) kr: Box<[IdD]>,
 }
 
-impl<'d, T: Stored, IdD: PrimInt> SimpleZsTree<T, IdD> {
-    pub fn leaf_count(&self) -> IdD {
-        self.leaf_count
+impl<T: Stored, IdD> Deref for SimpleZsTree<T, IdD> {
+    type Target = BasicPostOrder<T, IdD>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.basic
     }
 }
 
-impl<'d, T: WithChildren, IdD: PrimInt> SimpleZsTree<T, IdD> {
-    fn size<'a, S>(store: &'a S, x: &T::TreeId) -> usize
-    where
-        S: NodeStore<T::TreeId, R<'a> = T>,
-    {
-        let tmp = store.resolve(x);
-        let Some(cs) = tmp.children() else {
-            return 1;
-        };
+impl<T: WithChildren, IdD: PrimInt> From<SimplePostOrder<T, IdD>> for SimpleZsTree<T, IdD>
+where
+    T::TreeId: Clone,
+{
+    fn from(simple: SimplePostOrder<T, IdD>) -> Self {
+        let kr = simple.compute_kr();
+        let basic = simple.basic;
+        Self { basic, kr }
+    }
+}
 
-        let mut z = 0;
-        for x in cs.iter_children() {
-            z += Self::size(store, x);
+impl<T: WithChildren, IdD: PrimInt> From<CompletePostOrder<T, IdD>> for SimpleZsTree<T, IdD>
+where
+    T::TreeId: Clone,
+{
+    fn from(complete: CompletePostOrder<T, IdD>) -> Self {
+        let basic = complete.simple.basic;
+        Self {
+            basic,
+            kr: complete.kr,
         }
-        z + 1
     }
 }
 
@@ -54,31 +59,15 @@ where
     T::TreeId: Clone,
 {
     fn lld(&self, i: &IdD) -> IdD {
-        self.llds[(*i).to_usize().unwrap() - 1] + num_traits::one()
+        self.basic.lld(&(*i - one()))
+        // self.basic.lld(i) // TODO Remove bad fixing offset
     }
 
     fn tree(&self, id: &IdD) -> T::TreeId {
-        self.id_compressed[(*id).to_usize().unwrap() - 1].clone()
-    }
-}
-
-impl<'a, T: WithChildren, IdD: PrimInt + Eq> SimpleZsTree<T, IdD>
-where
-    T::TreeId: Clone + Debug,
-{
-    pub fn lsib(&self, c: &IdD, p_lld: &IdD) -> Option<IdD> {
-        assert!(p_lld <= c, "{:?}<={:?}", p_lld.to_usize(), c.to_usize());
-        let lld = self.first_descendant(c);
-        assert!(lld <= *c);
-        if lld.is_zero() {
-            return None;
-        }
-        let sib = lld - num_traits::one();
-        if &sib < p_lld {
-            None
-        } else {
-            Some(sib)
-        }
+        let r = self.id_compressed[id.to_usize().unwrap() - 1].clone();
+        assert!(r == self.basic.tree(&(*id - one())));
+        r
+        // self.basic.tree(id) // TODO Remove bad fixing offset
     }
 }
 
@@ -88,10 +77,7 @@ where
 {
     type It = Iter<IdD>;
     fn iter_df_post(&self) -> Iter<IdD> {
-        Iter {
-            current: zero(),
-            len: (cast(self.id_compressed.len())).unwrap(),
-        }
+        self.basic.iter_df_post()
     }
 }
 
@@ -99,12 +85,15 @@ impl<'d, T: 'd + WithChildren, IdD: PrimInt> PostOrderKeyRoots<'d, T, IdD> for S
 where
     T::TreeId: Clone,
 {
-    fn kr(&self, x: IdD) -> IdD {
-        self.kr[x.to_usize().unwrap()]
+    //     fn kr(&self, x: IdD) -> IdD {
+    //         self.kr[x.to_usize().unwrap()]
+    //     }
+    fn iter_kr(&self) -> std::slice::Iter<'_, IdD> {
+        self.kr.iter()
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> Initializable<'a, T> for SimpleZsTree<T, IdD>
+impl<'a, T: WithChildren, IdD: PrimInt + Debug> Initializable<'a, T> for SimpleZsTree<T, IdD>
 where
     T::TreeId: Clone,
 {
@@ -172,16 +161,119 @@ where
                 }
             }
         }
-        let leaf_count = cast(leaf_count).unwrap();
         id_compressed.shrink_to_fit();
+        let id_compressed = id_compressed.into_boxed_slice();
         llds.shrink_to_fit();
+        let llds = llds.into_boxed_slice();
         kr.shrink_to_fit();
-        Self {
-            leaf_count,
-            id_compressed,
-            llds,
-            kr,
+        kr.reverse();
+        kr.pop();
+        let kr = kr.into_boxed_slice();
+
+        let basic = BasicPOSlice::<T, IdD> {
+            id_compressed: &id_compressed,
+            llds: &llds,
             _phantom: std::marker::PhantomData,
+        };
+        let basic_kr = basic.compute_kr();
+        assert_eq!(kr, basic_kr);
+
+        Self {
+            basic: BasicPostOrder {
+                id_compressed,
+                llds,
+                _phantom: std::marker::PhantomData,
+            },
+            kr,
+        }
+    }
+}
+
+impl<'a, T: WithChildren + WithStats, IdD: PrimInt + Debug> InitializableWithStats<'a, T>
+    for SimpleZsTree<T, IdD>
+where
+    T::TreeId: Clone,
+{
+    fn considering_stats<S>(store: &'a S, root: &<T as Stored>::TreeId) -> Self
+    where
+        S: NodeStore<<T as Stored>::TreeId, R<'a> = T>,
+    {
+        let pred_len = store.resolve(root).size();
+        struct R<IdC, Idx, IdD> {
+            curr: IdC,
+            idx: Idx,
+            lld: IdD,
+        }
+
+        let mut leaf_count = 0;
+        let mut stack = vec![R {
+            curr: root.clone(),
+            idx: zero(),
+            lld: zero(),
+        }];
+        let mut llds: Vec<IdD> = vec![];
+        let mut id_compressed: Vec<T::TreeId> = vec![];
+        while let Some(ele) = stack.pop() {
+            let R { curr, idx, lld } = ele;
+            let x = store.resolve(&curr);
+            let l = x.children();
+            let l = l.filter(|x| !x.is_empty());
+            if let Some(child) = l.and_then(|l| l.get(idx)) {
+                stack.push(R {
+                    curr,
+                    idx: idx + one(),
+                    lld,
+                });
+                stack.push(R {
+                    curr: child.clone(),
+                    idx: zero(),
+                    lld: zero(),
+                });
+            } else {
+                let value = if l.is_none() {
+                    leaf_count += 1;
+                    cast(id_compressed.len()).unwrap()
+                } else {
+                    lld
+                };
+                if let Some(tmp) = stack.last_mut() {
+                    if tmp.idx == one() {
+                        tmp.lld = value;
+                    }
+                }
+                id_compressed.push(curr.clone());
+                llds.push(value);
+            }
+        }
+
+        let node_count = id_compressed.len();
+        let mut kr = vec![num_traits::zero(); leaf_count + 1];
+        let mut visited = bitvec![0;node_count];
+        let mut k = kr.len() - 1;
+        for i in (1..node_count).rev() {
+            if !visited[llds[i].to_usize().unwrap()] {
+                kr[k] = cast(i + 1).unwrap();
+                visited.set(llds[i].to_usize().unwrap(), true);
+                if k > 0 {
+                    k -= 1;
+                }
+            }
+        }
+        id_compressed.shrink_to_fit();
+        let id_compressed = id_compressed.into_boxed_slice();
+        llds.shrink_to_fit();
+        let llds = llds.into_boxed_slice();
+        kr.shrink_to_fit();
+        let kr = kr.into_boxed_slice();
+        assert_eq!(id_compressed.len(), pred_len);
+        assert_eq!(llds.len(), pred_len);
+        Self {
+            basic: BasicPostOrder {
+                id_compressed,
+                llds,
+                _phantom: std::marker::PhantomData,
+            },
+            kr,
         }
     }
 }
@@ -192,67 +284,29 @@ where
     T::TreeId: Clone,
 {
     fn len(&self) -> usize {
-        self.id_compressed.len()
+        self.basic.len()
     }
 
     fn original(&self, id: &IdD) -> T::TreeId {
-        self.id_compressed[(*id).to_usize().unwrap()].clone()
-    }
-
-    fn leaf_count(&self) -> IdD {
-        cast(self.kr.len()).unwrap()
+        self.basic.original(id)
     }
 
     fn root(&self) -> IdD {
-        cast(self.len() - 1).unwrap()
+        self.basic.root()
     }
 
     fn child<'b, S>(&self, store: &'b S, x: &IdD, p: &[T::ChildIdx]) -> IdD
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
     {
-        let mut r = *x;
-        for d in p {
-            let a = self.original(&r);
-            let node = store.resolve(&a);
-            let cs = node.children().unwrap();
-            // TODO use lld to decide if it is a leaf, should make things faster and cleaner
-            if cs.is_empty() {
-                panic!("no children in this tree")
-            } else {
-                let mut z = 0;
-                // TODO going in reverse it should be possible to use the llds to get left sibling
-                // also possible to use parents to move faster to the right
-                // but it should be simple and fst to get the size of subtree in metadata
-                // NOTE #descendants x == size x + 1
-                let cs = cs.before(*d + one());
-                for x in cs.iter_children() {
-                    z += Self::size(store, x); // TODO check if we can make it significantly faster using metadata
-                }
-                r = self.lld(&r) + cast(z).unwrap() - one();
-            }
-        }
-        r
+        self.basic.child(store, x, p)
     }
 
     fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
     {
-        let a = self.original(x);
-        let node = store.resolve(&a);
-        let cs = node.children().unwrap();
-        let mut r = vec![];
-        let mut c = self.lld(x);
-        for x in cs.iter_children() {
-            c = c + cast(Self::size(store, &x)).unwrap() - one();
-            r.push(c);
-        }
-        r
-    }
-
-    fn path<Idx: PrimInt>(&self, _parent: &IdD, _descendant: &IdD) -> CompressedTreePath<Idx> {
-        todo!()
+        self.basic.children(store, x)
     }
 }
 
@@ -261,31 +315,36 @@ impl<'d, T: WithChildren + 'd, IdD: PrimInt> DecompressedTreeStore<'d, T, IdD>
 where
     T::TreeId: Clone,
 {
-    fn descendants<'b, S>(&self, _store: &'b S, x: &IdD) -> Vec<IdD>
+    fn descendants<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
     where
-        S: NodeStore<T::TreeId, R<'b> = T>, // S: 'b + NodeStore<IdC>,
-                                            // S::R<'b>: WithChildren<TreeId = IdC>,
-                                            // <S::R<'b> as WithChildren>::ChildIdx: PrimInt,
-                                            // for<'c> <S::R<'b> as WithChildren>::Children<'c>:
-                                            //     types::Children<<S::R<'b> as WithChildren>::ChildIdx, IdC>,
+        S: NodeStore<T::TreeId, R<'b> = T>,
     {
-        (self.lld(x).to_usize().unwrap()..x.to_usize().unwrap())
-            .map(|x| cast(x).unwrap())
-            .collect()
+        self.basic.descendants(store, x)
     }
 
     fn first_descendant(&self, i: &IdD) -> IdD {
-        self.lld(i)
+        self.basic.first_descendant(i)
     }
 
-    fn descendants_count<'b, S>(&self, _store: &'b S, x: &IdD) -> usize
+    fn descendants_count<'b, S>(&self, store: &'b S, x: &IdD) -> usize
     where
-        S: NodeStore<T::TreeId, R<'b> = T>, // S: 'b + NodeStore<IdC>,
-                                            // S::R<'b>: WithChildren<TreeId = IdC>,
-                                            // <S::R<'b> as WithChildren>::ChildIdx: PrimInt,
-                                            // for<'c> <S::R<'b> as WithChildren>::Children<'c>:
-                                            //     types::Children<<S::R<'b> as WithChildren>::ChildIdx, IdC>,
+        S: NodeStore<T::TreeId, R<'b> = T>,
     {
-        (self.lld(x) - *x).to_usize().unwrap()
+        let r = (self.lld(x) - *x).to_usize().unwrap();
+        assert!(r == self.basic.descendants_count(store, x));
+        r
+    }
+}
+
+impl<T: Stored, IdD: PrimInt + Debug> Debug for SimpleZsTree<T, IdD>
+where
+    T::TreeId: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SimplePostOrder")
+            .field("id_compressed", &self.id_compressed)
+            .field("llds", &self.llds)
+            .field("kr", &self.kr)
+            .finish()
     }
 }

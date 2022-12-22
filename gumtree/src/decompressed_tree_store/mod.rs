@@ -1,18 +1,23 @@
-//! different decompressed tree layouts optimized for different traversals and exposing different features.
-//! Here decomressed means that nodes are not shared ie. they only have one parent.
+//! different decompressed tree layouts optimized for different traversals and exposing different behavior.
+//!
+//! Here decomressed means that nodes are not shared ie. each node only has one parent.
+//!
+//! The most important layout is Post Order.
+//! We need both post-order traversal and breadth-first.
 use num_traits::PrimInt;
 
 use crate::tree::tree_path::CompressedTreePath;
 use hyper_ast::types::{NodeStore, Stored, WithChildren, WithStats};
 
 // pub mod breath_first;
+pub mod basic_post_order;
 pub mod bfs_wrapper;
-pub mod breath_first;
+pub mod breadth_first;
 pub mod complete_post_order;
 pub mod lazy_post_order;
 pub mod pre_order_wrapper;
 pub mod simple_post_order;
-pub use breath_first::BreathFirst;
+pub use breadth_first::BreathFirst;
 pub mod simple_zs_tree;
 pub use complete_post_order::CompletePostOrder;
 pub use simple_zs_tree::SimpleZsTree;
@@ -51,9 +56,7 @@ pub trait LazyInitializable<'a, T: Stored + WithStats> {
 pub trait ShallowDecompressedTreeStore<'a, T: WithChildren, IdD, IdS = IdD> {
     fn len(&self) -> usize;
     fn original(&self, id: &IdS) -> T::TreeId;
-    fn leaf_count(&self) -> IdS;
     fn root(&self) -> IdS;
-    fn path<Idx: PrimInt>(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<Idx>;
     fn child<'b, S>(&self, store: &'b S, x: &IdD, p: &[T::ChildIdx]) -> IdS
     where
         //'a: 'b,
@@ -105,6 +108,13 @@ pub trait ContiguousDescendants<'a, T: WithChildren, IdD, IdS = IdD>:
     DecompressedTreeStore<'a, T, IdD, IdS>
 {
     fn descendants_range(&self, x: &IdD) -> std::ops::Range<IdS>;
+
+    type Slice<'b>
+    where
+        Self: 'b;
+
+    /// The contguous slice of descendants of x and x
+    fn slice(&self, x: &IdD) -> Self::Slice<'_>;
 }
 
 pub trait DecompressedWithParent<'a, T: WithChildren, IdD> {
@@ -115,6 +125,7 @@ pub trait DecompressedWithParent<'a, T: WithChildren, IdD> {
         Self: 'b;
     fn parents(&self, id: IdD) -> Self::PIt<'_>;
     fn position_in_parent(&self, c: &IdD) -> Option<T::ChildIdx>;
+    fn path(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<T::ChildIdx>;
     // fn position_in_parent<'b, S>(
     //     &self,
     //     store: &'b S,
@@ -146,7 +157,9 @@ pub trait DecompressedWithSiblings<'a, T: WithChildren, IdD>:
     //     S::R<'a>: WithChildren<TreeId = IdC>;
 }
 
-pub trait BreathFirstIterable<'a, T: WithChildren, IdD>: DecompressedTreeStore<'a, T, IdD> {
+pub trait BreadthFirstIterable<'a, T: WithChildren, IdD>:
+    DecompressedTreeStore<'a, T, IdD>
+{
     type It: Iterator<Item = IdD>;
     fn iter_bf(&'a self) -> Self::It;
 }
@@ -169,7 +182,7 @@ pub trait PostOrder<'a, T: WithChildren, IdD>: DecompressedTreeStore<'a, T, IdD>
 }
 
 pub trait PostOrderKeyRoots<'a, T: WithChildren, IdD: PrimInt>: PostOrder<'a, T, IdD> {
-    fn kr(&self, x: IdD) -> IdD;
+    fn iter_kr(&self) -> std::slice::Iter<'_, IdD>;
 }
 
 pub struct Iter<IdD> {

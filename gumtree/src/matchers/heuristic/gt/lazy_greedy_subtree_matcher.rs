@@ -6,69 +6,113 @@ use crate::decompressed_tree_store::{
     Shallow,
 };
 use crate::matchers::mapping_store::MonoMappingStore;
-use crate::matchers::{
-    mapping_store::{DefaultMultiMappingStore, MultiMappingStore},
-    similarity_metrics,
-};
+use crate::matchers::{mapping_store::MultiMappingStore, similarity_metrics};
 use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyper_ast::compat::HashMap;
 use hyper_ast::types::{HashKind, IterableChildren, NodeStore, Tree, WithHashs, WithStats};
 use logging_timer::time;
 use num_traits::{PrimInt, ToPrimitive};
 
-pub struct LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, const MIN_HEIGHT: usize = 1>
+pub struct LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, T, S, M, const MIN_HEIGHT: usize = 1>
 where
     M: MonoMappingStore,
     T: 'a + Tree,
 {
-    internal: SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>,
+    internal: SubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>,
 }
 
 impl<
         'a,
         Dsrc: 'a
             + DecompressedWithParent<'a, T, Dsrc::IdD>
-            + ContiguousDescendants<'a, T, Dsrc::IdD, IdD>
+            + ContiguousDescendants<'a, T, Dsrc::IdD, M::Src>
             + Initializable<'a, T>
-            + LazyDecompressedTreeStore<'a, T, IdD>,
+            + LazyDecompressedTreeStore<'a, T, M::Src>,
         Ddst: 'a
             + DecompressedWithParent<'a, T, Ddst::IdD>
-            + ContiguousDescendants<'a, T, Ddst::IdD, IdD>
+            + ContiguousDescendants<'a, T, Ddst::IdD, M::Dst>
             + Initializable<'a, T>
-            + LazyDecompressedTreeStore<'a, T, IdD, IdD = Dsrc::IdD>,
-        IdD: 'a + PrimInt + Debug + Hash,
+            + LazyDecompressedTreeStore<'a, T, M::Dst>,
         T: Tree + WithHashs + WithStats,
         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
-        M: MonoMappingStore<Ele = IdD>,
+        M: MonoMappingStore,
         const MIN_HEIGHT: usize, // = 2
-    > LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>
+    > LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>
 where
     T::TreeId: Clone,
     T::Label: Clone,
     Dsrc::IdD: Debug + Hash + Eq + PrimInt,
+    Ddst::IdD: Debug + Hash + Eq + PrimInt,
+    M::Src: 'a + PrimInt + Debug + Hash,
+    M::Dst: 'a + PrimInt + Debug + Hash,
 {
-    pub fn matchh(
+    pub fn matchh<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>>(
         node_store: &'a S,
         src: &'a T::TreeId,
         dst: &'a T::TreeId,
         mappings: M,
-    ) -> LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>
+    ) -> LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>
     where
         Self: 'a,
     {
         let src_arena = Dsrc::new(node_store, src);
         let dst_arena = Ddst::new(node_store, dst);
         let mut matcher = Self::new(node_store, src_arena, dst_arena, mappings);
-        Self::execute(&mut matcher);
+        Self::execute::<MM>(&mut matcher);
         matcher
     }
 
+    // [2022-12-19T17:00:02.948Z WARN] considering_stats(), Elapsed=383.306235ms
+    // [2022-12-19T17:00:03.334Z WARN] considering_stats(), Elapsed=385.759276ms
+    // [2022-12-19T17:00:03.725Z WARN] matchh_to_be_filtered(), Elapsed=388.976068ms
+    // [2022-12-19T17:00:03.732Z WARN] filter_mappings(), Elapsed=7.145745ms
+
+    // with WithStats to get height through metadata
+    // [2022-12-19T17:11:48.121Z WARN] matchh_to_be_filtered(), Elapsed=16.639973ms
+
+    pub fn execute<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>>(&mut self) {
+        let mut mm: MM = Default::default();
+        mm.topit(self.internal.src_arena.len(), self.internal.dst_arena.len());
+        // DefaultMultiMappingStore {
+        //     src_to_dsts: vec![None; self.internal.src_arena.len()],
+        //     dst_to_srcs: vec![None; self.internal.dst_arena.len()],
+        // };
+        self.internal.matchh_to_be_filtered(&mut mm);
+        self.filter_mappings(mm);
+    }
+}
+
+impl<
+        'a,
+        Dsrc: 'a
+            + DecompressedWithParent<'a, T, Dsrc::IdD>
+            + ContiguousDescendants<'a, T, Dsrc::IdD, M::Src>
+            + Initializable<'a, T>
+            + LazyDecompressedTreeStore<'a, T, M::Src>,
+        Ddst: 'a
+            + DecompressedWithParent<'a, T, Ddst::IdD>
+            + ContiguousDescendants<'a, T, Ddst::IdD, M::Dst>
+            + Initializable<'a, T>
+            + LazyDecompressedTreeStore<'a, T, M::Dst>,
+        T: Tree + WithHashs + WithStats,
+        S: 'a + NodeStore<T::TreeId, R<'a> = T>,
+        M: MonoMappingStore,
+        const MIN_HEIGHT: usize, // = 2
+    > LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>
+where
+    T::TreeId: Clone,
+    T::Label: Clone,
+    Dsrc::IdD: Debug + Hash + Eq + Copy,
+    Ddst::IdD: Debug + Hash + Eq + Copy,
+    M::Src: 'a + PrimInt + Debug + Hash,
+    M::Dst: 'a + PrimInt + Debug + Hash,
+{
     pub fn new(
         node_store: &S,
         src_arena: Dsrc,
         dst_arena: Ddst,
         mappings: M,
-    ) -> LazyGreedySubtreeMatcher<Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT> {
+    ) -> LazyGreedySubtreeMatcher<Dsrc, Ddst, T, S, M, MIN_HEIGHT> {
         let mut matcher = LazyGreedySubtreeMatcher {
             internal: SubtreeMatcher {
                 node_store,
@@ -85,51 +129,13 @@ where
         matcher
     }
 
-    // [2022-12-19T17:00:02.948Z WARN] considering_stats(), Elapsed=383.306235ms
-    // [2022-12-19T17:00:03.334Z WARN] considering_stats(), Elapsed=385.759276ms
-    // [2022-12-19T17:00:03.725Z WARN] matchh_to_be_filtered(), Elapsed=388.976068ms
-    // [2022-12-19T17:00:03.732Z WARN] filter_mappings(), Elapsed=7.145745ms
-
-    // with WithStats to get height through metadata
-    // [2022-12-19T17:11:48.121Z WARN] matchh_to_be_filtered(), Elapsed=16.639973ms
-
-    pub fn execute(&mut self) {
-        let mut mm = DefaultMultiMappingStore::<Dsrc::IdD> {
-            src_to_dsts: vec![None; self.internal.src_arena.len()],
-            dst_to_srcs: vec![None; self.internal.dst_arena.len()],
-        };
-        self.internal.matchh_to_be_filtered(&mut mm);
-        self.filter_mappings(mm);
-    }
-}
-
-impl<
-        'a,
-        Dsrc: 'a
-            + DecompressedWithParent<'a, T, Dsrc::IdD>
-            + ContiguousDescendants<'a, T, Dsrc::IdD, IdD>
-            + Initializable<'a, T>
-            + LazyDecompressedTreeStore<'a, T, IdD>,
-        Ddst: 'a
-            + DecompressedWithParent<'a, T, Ddst::IdD>
-            + ContiguousDescendants<'a, T, Ddst::IdD, IdD>
-            + Initializable<'a, T>
-            + LazyDecompressedTreeStore<'a, T, IdD, IdD = Dsrc::IdD>,
-        IdD: 'a + PrimInt + Debug + Hash,
-        T: Tree + WithHashs + WithStats,
-        S: 'a + NodeStore<T::TreeId, R<'a> = T>,
-        M: MonoMappingStore<Ele = IdD>,
-        const MIN_HEIGHT: usize, // = 2
-    > LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>
-where
-    T::TreeId: Clone,
-    T::Label: Clone,
-    Dsrc::IdD: Debug + Hash + Eq + Copy,
-{
     #[time("warn")]
-    fn filter_mappings<MM: MultiMappingStore<Ele = Dsrc::IdD>>(&mut self, multi_mappings: MM) {
+    fn filter_mappings<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>>(
+        &mut self,
+        multi_mappings: MM,
+    ) {
         // Select unique mappings first and extract ambiguous mappings.
-        let mut ambiguous_list: Vec<Mapping<Dsrc::IdD>> = vec![];
+        let mut ambiguous_list: Vec<(Dsrc::IdD, Ddst::IdD)> = vec![];
         let mut ignored = bitvec::bitbox![0;self.internal.src_arena.len()];
         let mut src_ignored = bitvec::bitbox![0;self.internal.src_arena.len()];
         let mut dst_ignored = bitvec::bitbox![0;self.internal.dst_arena.len()];
@@ -184,19 +190,19 @@ where
         }
     }
 
-    fn sort(&self, ambiguous_mappings: &mut Vec<Mapping<Dsrc::IdD>>) {
-        let mut sib_sim = HashMap::<Mapping<Dsrc::IdD>, f64>::default();
-        let mut psib_sim = HashMap::<Mapping<Dsrc::IdD>, f64>::default();
-        let mut p_in_p_sim = HashMap::<Mapping<Dsrc::IdD>, f64>::default();
+    fn sort(&self, ambiguous_mappings: &mut Vec<(Dsrc::IdD, Ddst::IdD)>) {
+        let mut sib_sim = HashMap::<(Dsrc::IdD, Ddst::IdD), f64>::default();
+        let mut psib_sim = HashMap::<(Dsrc::IdD, Ddst::IdD), f64>::default();
+        let mut p_in_p_sim = HashMap::<(Dsrc::IdD, Ddst::IdD), f64>::default();
         dbg!(&ambiguous_mappings.len());
         ambiguous_mappings.sort_by(|a, b| {
-            let cached_coef_sib = |l: &Mapping<Dsrc::IdD>| {
+            let cached_coef_sib = |l: &(Dsrc::IdD, Ddst::IdD)| {
                 sib_sim
                     .entry(*l)
                     .or_insert_with(|| self.coef_sib(&l))
                     .clone()
             };
-            let cached_coef_parent = |l: &Mapping<Dsrc::IdD>| {
+            let cached_coef_parent = |l: &(Dsrc::IdD, Ddst::IdD)| {
                 psib_sim
                     .entry(*l)
                     .or_insert_with(|| self.coef_parent(&l))
@@ -212,7 +218,7 @@ where
             }
             .then_with(|| {
                 self.cached_compare(
-                    |l: &Mapping<Dsrc::IdD>| {
+                    |l: &(Dsrc::IdD, Ddst::IdD)| {
                         p_in_p_sim
                             .entry(*l)
                             .or_insert_with(|| self.coef_pos_in_parent(&l))
@@ -256,7 +262,7 @@ where
     fn coef_parent(&self, l: &(Dsrc::IdD, Ddst::IdD)) -> f64 {
         let s1: Vec<_> = Dsrc::parents(&self.internal.src_arena, l.0).collect();
         let s2: Vec<_> = Ddst::parents(&self.internal.dst_arena, l.1).collect();
-        let common = longest_common_subsequence::<_, usize, _>(&s1, &s2, |a, b| {
+        let common = longest_common_subsequence::<_, _, usize, _>(&s1, &s2, |a, b| {
             let (t, l) = {
                 let o = self.internal.src_arena.original(a.shallow());
                 let n = self.internal.node_store.resolve(&o);
@@ -356,26 +362,23 @@ where
 
 impl<
         'a,
-        Dsrc: LazyDecompressedTreeStore<'a, T, IdD>,
-        Ddst: LazyDecompressedTreeStore<'a, T, IdD, IdD = Dsrc::IdD>,
-        IdD: PrimInt,
+        Dsrc: LazyDecompressedTreeStore<'a, T, M::Src>,
+        Ddst: LazyDecompressedTreeStore<'a, T, M::Dst>,
         T: Tree + WithStats,
         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
-        M: MonoMappingStore<Ele = Dsrc::IdD>,
+        M: MonoMappingStore,
         const MIN_HEIGHT: usize,
-    > Into<SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>>
-    for LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>
+    > Into<SubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>>
+    for LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>
 {
-    fn into(self) -> SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT> {
+    fn into(self) -> SubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT> {
         self.internal
     }
 }
 
-type Mapping<T> = (T, T);
+struct Mapping<T>(T, T);
 
-struct Mapping2<T>(T, T);
-
-impl<IdD: ToPrimitive> Debug for &Mapping2<IdD> {
+impl<IdD: ToPrimitive> Debug for &Mapping<IdD> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -385,30 +388,29 @@ impl<IdD: ToPrimitive> Debug for &Mapping2<IdD> {
     }
 }
 
-pub struct SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M: MonoMappingStore, const MIN_HEIGHT: usize> {
+pub struct SubtreeMatcher<'a, Dsrc, Ddst, T, S, M: MonoMappingStore, const MIN_HEIGHT: usize> {
     pub(super) node_store: &'a S,
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,
     pub mappings: M,
-    pub(super) phantom: PhantomData<*const (T, IdD)>,
+    pub(super) phantom: PhantomData<*const T>,
 }
 
 impl<
         'a,
-        Dsrc: 'a + DecompressedWithParent<'a, T, Dsrc::IdD> + LazyDecompressedTreeStore<'a, T, IdD>,
-        Ddst: 'a
-            + DecompressedWithParent<'a, T, Ddst::IdD>
-            + LazyDecompressedTreeStore<'a, T, IdD, IdD = Dsrc::IdD>,
-        IdD: Debug + Copy,
+        Dsrc: 'a + DecompressedWithParent<'a, T, Dsrc::IdD> + LazyDecompressedTreeStore<'a, T, M::Src>,
+        Ddst: 'a + DecompressedWithParent<'a, T, Ddst::IdD> + LazyDecompressedTreeStore<'a, T, M::Dst>,
         T: Tree + WithHashs + WithStats,
         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
-        M: MonoMappingStore<Ele = IdD>,
+        M: MonoMappingStore,
         const MIN_HEIGHT: usize,
-    > SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>
+    > SubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>
 where
     T::TreeId: Clone,
     Dsrc::IdD: Clone,
     Ddst::IdD: Clone,
+    M::Src: Debug + Copy,
+    M::Dst: Debug + Copy,
 {
     pub(crate) fn add_mapping_recursively(&mut self, src: &Dsrc::IdD, dst: &Ddst::IdD) {
         self.mappings
@@ -422,7 +424,7 @@ where
     }
 
     #[time("warn")]
-    fn matchh_to_be_filtered<MM: MultiMappingStore<Ele = Dsrc::IdD>>(
+    fn matchh_to_be_filtered<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>>(
         &mut self,
         multi_mappings: &mut MM,
     ) {
@@ -443,17 +445,18 @@ where
             'a,
             '_,
             Dsrc,
-            IdD,
+            M::Src,
             Dsrc::IdD,
             T,
             S,
             MIN_HEIGHT,
         >,
+
                           dst_trees: &mut PriorityTreeList<
             'a,
             '_,
             Ddst,
-            IdD,
+            M::Dst,
             Ddst::IdD,
             T,
             S,

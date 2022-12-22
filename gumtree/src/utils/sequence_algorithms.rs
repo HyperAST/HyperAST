@@ -103,9 +103,9 @@ pub fn longest_common_sequence<'a>(s1: &'a str, s2: &str) -> &'a str {
 //     longest_common_subsequence(s0,s1,ITree::isIsoStructuralTo)
 // }
 
-pub fn longest_common_subsequence<T: Eq, U: PrimInt, F: Fn(&T, &T) -> bool>(
-    s0: &[T],
-    s1: &[T],
+pub fn longest_common_subsequence<T1, T2, U: PrimInt, F: Fn(&T1, &T2) -> bool>(
+    s0: &[T1],
+    s1: &[T2],
     cmp: F,
 ) -> Vec<(U, U)> {
     let mut lens: Vec<Vec<u32>> = vec![vec![0u32; s1.len() + 1]; s0.len() + 1]; // u32[s0.len() + 1][s1.len() + 1];

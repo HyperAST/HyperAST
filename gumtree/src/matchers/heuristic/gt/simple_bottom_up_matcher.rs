@@ -20,9 +20,9 @@ type IdD = u16;
 pub struct SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
 where
     T: hyper_ast::types::Tree + hyper_ast::types::WithHashs,
-    M: MonoMappingStore<Ele = IdD>,
+    M: MonoMappingStore<Src = IdD, Dst = IdD>,
 {
-    internal: BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M>,
+    internal: BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>,
 }
 
 impl<
@@ -39,7 +39,7 @@ impl<
             + BreathFirstContiguousSiblings<'a, T, IdD>,
         T: 'a + Tree + WithHashs,
         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
-        M: MonoMappingStore<Ele = IdD>,
+        M: MonoMappingStore<Src = IdD, Dst = IdD>,
     > Matcher<'a, Dsrc, Ddst, T, S> for SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
 {
     type Store = M;
@@ -53,7 +53,7 @@ impl<
         mappings: Self::Store,
     ) -> Self::Store {
         let mut matcher = Self {
-            internal: BottomUpMatcher::<'a, Dsrc, Ddst, IdD, T, S, M> {
+            internal: BottomUpMatcher::<'a, Dsrc, Ddst, T, S, M> {
                 node_store: compressed_node_store,
                 src_arena: Dsrc::new(compressed_node_store, src),
                 dst_arena: Ddst::new(compressed_node_store, dst),
@@ -80,7 +80,7 @@ impl<
             + BreathFirstContiguousSiblings<'a, T, IdD>,
         T: 'a + Tree + WithHashs,
         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
-        M: MonoMappingStore<Ele = IdD>,
+        M: MonoMappingStore<Src = IdD, Dst = IdD>,
     > SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
 {
     fn execute(&mut self) {

@@ -7,35 +7,42 @@ use hyper_ast::compat::HashMap;
 use num_traits::{cast, one, zero, PrimInt};
 
 pub trait MappingStore: Clone + Default {
-    type Ele: Eq;
+    type Src;
+    type Dst;
     fn topit(&mut self, left: usize, right: usize);
     fn len(&self) -> usize;
     fn capacity(&self) -> (usize, usize);
-    fn has(&self, src: &Self::Ele, dst: &Self::Ele) -> bool;
-    fn link(&mut self, src: Self::Ele, dst: Self::Ele);
-    fn cut(&mut self, src: Self::Ele, dst: Self::Ele);
-    fn is_src(&self, src: &Self::Ele) -> bool;
-    fn is_dst(&self, dst: &Self::Ele) -> bool;
+    fn has(&self, src: &Self::Src, dst: &Self::Dst) -> bool;
+    fn link(&mut self, src: Self::Src, dst: Self::Dst);
+    fn cut(&mut self, src: Self::Src, dst: Self::Dst);
+    fn is_src(&self, src: &Self::Src) -> bool;
+    fn is_dst(&self, dst: &Self::Dst) -> bool;
 }
 pub type DefaultMappingStore<T> = VecStore<T>;
 
 pub trait MonoMappingStore: MappingStore {
-    fn get_src(&self, dst: &Self::Ele) -> Self::Ele;
-    fn get_dst(&self, src: &Self::Ele) -> Self::Ele;
-    fn link_if_both_unmapped(&mut self, t1: Self::Ele, t2: Self::Ele) -> bool;
+    type Iter<'a>: Iterator<Item = (Self::Src, Self::Dst)>
+    where
+        Self: 'a;
+    fn get_src(&self, dst: &Self::Dst) -> Self::Src;
+    fn get_dst(&self, src: &Self::Src) -> Self::Dst;
+    fn link_if_both_unmapped(&mut self, t1: Self::Src, t2: Self::Dst) -> bool;
+    fn iter(&self) -> Self::Iter<'_>;
 }
 
 pub trait MultiMappingStore: MappingStore {
-    type Iter<'a>: Iterator<Item = Self::Ele>
+    type Iter1<'a>: Iterator<Item = Self::Src>
     where
-        Self::Ele: 'a,
         Self: 'a;
-    fn get_srcs(&self, dst: &Self::Ele) -> &[Self::Ele];
-    fn get_dsts(&self, src: &Self::Ele) -> &[Self::Ele];
-    fn all_mapped_srcs(&self) -> Self::Iter<'_>;
-    fn all_mapped_dsts(&self) -> Self::Iter<'_>;
-    fn is_src_unique(&self, dst: &Self::Ele) -> bool;
-    fn is_dst_unique(&self, src: &Self::Ele) -> bool;
+    type Iter2<'a>: Iterator<Item = Self::Dst>
+    where
+        Self: 'a;
+    fn get_srcs(&self, dst: &Self::Dst) -> &[Self::Src];
+    fn get_dsts(&self, src: &Self::Src) -> &[Self::Dst];
+    fn all_mapped_srcs(&self) -> Self::Iter1<'_>;
+    fn all_mapped_dsts(&self) -> Self::Iter2<'_>;
+    fn is_src_unique(&self, dst: &Self::Src) -> bool;
+    fn is_dst_unique(&self, src: &Self::Dst) -> bool;
 }
 pub type DefaultMultiMappingStore<T> = MultiVecStore<T>;
 
@@ -56,7 +63,7 @@ impl<T> Default for VecStore<T> {
 }
 
 impl<T: PrimInt + Debug> VecStore<T> {
-    pub fn iter(&self) -> impl Iterator<Item = (T, T)> + '_ {
+    pub fn _iter(&self) -> impl Iterator<Item = (T, T)> + '_ {
         self.src_to_dst
             .iter()
             .enumerate()
@@ -96,7 +103,8 @@ impl<T: PrimInt + Debug> Clone for VecStore<T> {
 }
 
 impl<T: PrimInt + Debug> MappingStore for VecStore<T> {
-    type Ele = T;
+    type Src = T;
+    type Dst = T;
 
     fn len(&self) -> usize {
         self.src_to_dst.iter().filter(|x| **x != zero()).count()
@@ -132,7 +140,7 @@ impl<T: PrimInt + Debug> MappingStore for VecStore<T> {
         self.dst_to_src.resize(right, zero());
     }
 
-    fn has(&self, src: &Self::Ele, dst: &Self::Ele) -> bool {
+    fn has(&self, src: &Self::Src, dst: &Self::Src) -> bool {
         self.src_to_dst[src.to_usize().unwrap()] == *dst + one()
             && self.dst_to_src[dst.to_usize().unwrap()] == *src + one()
     }
@@ -153,6 +161,40 @@ impl<T: PrimInt + Debug> MonoMappingStore for VecStore<T> {
             true
         } else {
             false
+        }
+    }
+
+    type Iter<'a> = MonoIter<'a,T,T>
+    where
+        Self: 'a;
+
+    fn iter(&self) -> Self::Iter<'_> {
+        MonoIter {
+            v: self.src_to_dst.iter().enumerate(),
+            // .filter(|x|*x.1 != zero()),
+            // .map(|(src, dst)| (cast::<_, T>(src).unwrap(), *dst - one())),
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+pub struct MonoIter<'a, T: 'a + PrimInt, U: 'a> {
+    v: std::iter::Enumerate<core::slice::Iter<'a, U>>,
+    _phantom: std::marker::PhantomData<*const T>,
+}
+
+impl<'a, T: PrimInt, U: PrimInt> Iterator for MonoIter<'a, T, U> {
+    type Item = (T, U);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut a = self.v.next();
+        loop {
+            let (i, x) = a?;
+            if x.to_usize().unwrap() != 0 {
+                return Some((cast::<_, T>(i).unwrap(), *x - one()));
+            } else {
+                a = self.v.next();
+            }
         }
     }
 }
@@ -181,7 +223,8 @@ impl<T> Default for MultiVecStore<T> {
 }
 
 impl<T: PrimInt> MappingStore for MultiVecStore<T> {
-    type Ele = T;
+    type Src = T;
+    type Dst = T;
 
     fn len(&self) -> usize {
         self.src_to_dsts
@@ -260,13 +303,12 @@ impl<T: PrimInt> MappingStore for MultiVecStore<T> {
         self.dst_to_srcs[dst.to_usize().unwrap()].is_some()
     }
 
-    fn topit(&mut self, _left: usize, _right: usize) {
-        todo!();
-        // self.src_to_dsts.resize(left, None);
-        // self.dst_to_srcs.resize(right, None);
+    fn topit(&mut self, left: usize, right: usize) {
+        self.src_to_dsts.resize(left, None);
+        self.dst_to_srcs.resize(right, None);
     }
 
-    fn has(&self, src: &Self::Ele, dst: &Self::Ele) -> bool {
+    fn has(&self, src: &Self::Src, dst: &Self::Dst) -> bool {
         self.src_to_dsts[src.to_usize().unwrap()]
             .as_ref()
             .and_then(|v| Some(v.contains(dst)))
@@ -279,38 +321,39 @@ impl<T: PrimInt> MappingStore for MultiVecStore<T> {
 }
 
 impl<T: PrimInt> MultiMappingStore for MultiVecStore<T> {
-    type Iter<'a> = Iter<'a,Self::Ele> where Self::Ele: 'a;
-    fn get_srcs(&self, dst: &Self::Ele) -> &[Self::Ele] {
+    type Iter1<'a> = Iter<'a,T> where T: 'a  ;
+    type Iter2<'a> = Iter<'a,T> where T: 'a ;
+    fn get_srcs(&self, dst: &Self::Dst) -> &[Self::Src] {
         self.dst_to_srcs[cast::<_, usize>(*dst).unwrap()]
             .as_ref()
             .and_then(|x| Some(x.as_slice()))
             .unwrap_or(&[])
     }
 
-    fn get_dsts(&self, src: &Self::Ele) -> &[Self::Ele] {
+    fn get_dsts(&self, src: &Self::Src) -> &[Self::Dst] {
         self.src_to_dsts[cast::<_, usize>(*src).unwrap()]
             .as_ref()
             .and_then(|x| Some(x.as_slice()))
             .unwrap_or(&[])
     }
 
-    fn all_mapped_srcs(&self) -> Iter<Self::Ele> {
+    fn all_mapped_srcs(&self) -> Iter<Self::Src> {
         Iter {
             v: self.src_to_dsts.iter().enumerate(),
         }
     }
 
-    fn all_mapped_dsts(&self) -> Iter<Self::Ele> {
+    fn all_mapped_dsts(&self) -> Iter<Self::Dst> {
         Iter {
             v: self.dst_to_srcs.iter().enumerate(),
         }
     }
 
-    fn is_src_unique(&self, src: &Self::Ele) -> bool {
+    fn is_src_unique(&self, src: &Self::Src) -> bool {
         self.get_dsts(src).len() == 1
     }
 
-    fn is_dst_unique(&self, dst: &Self::Ele) -> bool {
+    fn is_dst_unique(&self, dst: &Self::Dst) -> bool {
         self.get_srcs(dst).len() == 1
     }
 }
@@ -451,7 +494,8 @@ impl<T: PrimInt + Debug> Clone for HashStore<T> {
 }
 
 impl<T: PrimInt + Debug + Hash> MappingStore for HashStore<T> {
-    type Ele = T;
+    type Src = T;
+    type Dst = T;
 
     fn len(&self) -> usize {
         self.src_to_dst.len()
@@ -483,7 +527,7 @@ impl<T: PrimInt + Debug + Hash> MappingStore for HashStore<T> {
 
     fn topit(&mut self, _left: usize, _right: usize) {}
 
-    fn has(&self, src: &Self::Ele, dst: &Self::Ele) -> bool {
+    fn has(&self, src: &Self::Src, dst: &Self::Src) -> bool {
         self.src_to_dst.contains_key(&src) && self.dst_to_src.contains_key(&dst)
     }
 }
@@ -504,5 +548,28 @@ impl<T: PrimInt + Debug + Hash> MonoMappingStore for HashStore<T> {
         } else {
             false
         }
+    }
+
+    type Iter<'a> = HMIter<'a,T,T>
+    where
+        Self: 'a;
+
+    fn iter(&self) -> Self::Iter<'_> {
+        HMIter {
+            v: self.src_to_dst.iter(),
+        }
+    }
+}
+
+pub struct HMIter<'a, T: 'a + PrimInt, U: 'a> {
+    v: hyper_ast::compat::hash_map::Iter<'a, T, U>,
+}
+
+impl<'a, T: PrimInt, U: PrimInt> Iterator for HMIter<'a, T, U> {
+    type Item = (T, U);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (x, y) = self.v.next()?;
+        Some((*x, *y))
     }
 }

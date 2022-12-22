@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
 
-use num_traits::PrimInt;
+use num_traits::{PrimInt, ToPrimitive, Zero};
 
 use crate::{
     decompressed_tree_store::{DecompressedTreeStore, DecompressedWithParent},
@@ -11,9 +11,9 @@ use hyper_ast::types::{HashKind, NodeStore, Tree, Typed, WithHashs};
 
 // use super::{decompressed_tree_store::DecompressedTreeStore, mapping_store::DefaultMappingStore, matcher::Matcher, similarity_metrics};
 
-pub struct BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M>
+pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
 where
-    M: MonoMappingStore<Ele = IdD>,
+    M: MonoMappingStore,
 {
     pub(super) node_store: &'a S,
     pub src_arena: Dsrc,
@@ -24,15 +24,17 @@ where
 
 impl<
         'a,
-        Dsrc: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
-        Ddst: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
-        IdD: PrimInt + std::ops::SubAssign + Debug,
+        Dsrc: DecompressedTreeStore<'a, T, M::Src> + DecompressedWithParent<'a, T, M::Src>,
+        Ddst: DecompressedTreeStore<'a, T, M::Dst> + DecompressedWithParent<'a, T, M::Dst>,
         T: 'a + Tree,
         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
-        M: MonoMappingStore<Ele = IdD>,
-    > BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M>
+        M: MonoMappingStore,
+    > BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
+where
+    M::Src: PrimInt + std::ops::SubAssign + Debug,
+    M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
-    pub(super) fn get_dst_candidates(&self, src: &IdD) -> Vec<IdD> {
+    pub(super) fn get_dst_candidates(&self, src: &M::Src) -> Vec<M::Dst> {
         let mut seeds = vec![];
         let s = &self.src_arena.original(src);
         for c in self.src_arena.descendants(self.node_store, src) {
@@ -70,15 +72,17 @@ impl<
 
 impl<
         'a,
-        Dsrc: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
-        Ddst: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
-        IdD: PrimInt + std::ops::SubAssign + Debug,
+        Dsrc: DecompressedTreeStore<'a, T, M::Src> + DecompressedWithParent<'a, T, M::Src>,
+        Ddst: DecompressedTreeStore<'a, T, M::Dst> + DecompressedWithParent<'a, T, M::Dst>,
         T: 'a + Tree + WithHashs,
         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
-        M: MonoMappingStore<Ele = IdD>,
-    > BottomUpMatcher<'a, Dsrc, Ddst, IdD, T, S, M>
+        M: MonoMappingStore,
+    > BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
+where
+    M::Src: PrimInt + std::ops::SubAssign + Debug,
+    M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
-    pub(super) fn last_chance_match_histogram(&mut self, src: &IdD, dst: &IdD) {
+    pub(super) fn last_chance_match_histogram(&mut self, src: &M::Src, dst: &M::Dst) {
         self.lcs_equal_matching(src, dst);
         self.lcs_structure_matching(src, dst);
         if !src.is_zero() && !dst.is_zero() {
@@ -106,32 +110,7 @@ impl<
         }
     }
 
-    // pub(crate) fn last_chance_match_zs<LS:LabelStore<I = T::Label>,ZsS:ZsStore<T::TreeId,IdD>+DecompressedTreeStore<T::TreeId,IdD>,const SIZE_THRESHOLD: usize>(&mut self, label_store:&LS, src: IdD, dst: IdD) {
-
-    //     let x = self.src_arena.original(src);
-
-    //     let y = self.dst_arena.original(dst);
-
-    //     if size(self.compressed_node_store, x) < SIZE_THRESHOLD
-    //             || size(self.compressed_node_store, y) < SIZE_THRESHOLD {
-    //         let mappings = DefaultMappingStore::<IdD>::new();
-    //         let matcher = ZsMatcher::<'a,
-    //             ZsS,_,_,_,_
-    //         >::matchh(
-    //             self.compressed_node_store, label_store, &x, &y, mappings);
-    //         // Matcher m = new ZsMatcher();
-    //         // MappingStore zsMappings = m.match(src, dst, new MappingStore(src, dst));
-    //         // for (Mapping candidate : zsMappings) {
-    //         //     ITree srcCand = candidate.first;
-    //         //     ITree dstCand = candidate.second;
-    //         //     if (mappings.isMappingAllowed(srcCand, dstCand))
-    //         //         mappings.addMapping(srcCand, dstCand);
-    //         // }
-    //     }
-    //     todo!() // take inspiration from simple but not same as it needs zsmatcher
-    // }
-
-    pub(super) fn are_srcs_unmapped(&self, src: &IdD) -> bool {
+    pub(super) fn are_srcs_unmapped(&self, src: &M::Src) -> bool {
         // look at descendants
         // in mappings
         self.src_arena
@@ -139,16 +118,16 @@ impl<
             .iter()
             .all(|x| !self.mappings.is_src(x))
     }
-    pub(super) fn are_dsts_unmapped(&self, dst: &IdD) -> bool {
+    pub(super) fn are_dsts_unmapped(&self, dst: &M::Dst) -> bool {
         // look at descendants
         // in mappings
         self.dst_arena
             .descendants(self.node_store, dst)
             .iter()
-            .all(|x| !self.mappings.is_src(x))
+            .all(|x| !self.mappings.is_dst(x))
     }
 
-    pub(crate) fn add_mapping_recursively(&mut self, src: &IdD, dst: &IdD) {
+    pub(crate) fn add_mapping_recursively(&mut self, src: &M::Src, dst: &M::Dst) {
         self.src_arena
             .descendants(self.node_store, src)
             .iter()
@@ -156,10 +135,10 @@ impl<
             .for_each(|(src, dst)| self.mappings.link(*src, *dst));
     }
 
-    pub(super) fn lcs_matching<F: Fn(&Self, &IdD, &IdD) -> bool>(
+    pub(super) fn lcs_matching<F: Fn(&Self, &M::Src, &M::Dst) -> bool>(
         &mut self,
-        src: &IdD,
-        dst: &IdD,
+        src: &M::Src,
+        dst: &M::Dst,
         cmp: F,
     ) {
         let src_children = &self.src_arena.children(self.node_store, src);
@@ -168,7 +147,7 @@ impl<
         // self.compressed_node_store
         // .get_node_at_id(&self.src_arena.original(src));
         let lcs =
-            longest_common_subsequence::<_, usize, _>(src_children, dst_children, |src, dst| {
+            longest_common_subsequence::<_, _, usize, _>(src_children, dst_children, |src, dst| {
                 cmp(self, src, dst)
             });
         for x in lcs {
@@ -180,7 +159,7 @@ impl<
         }
     }
 
-    fn lcs_hash_matching(&mut self, h: &T::HK, src: &IdD, dst: &IdD) {
+    fn lcs_hash_matching(&mut self, h: &T::HK, src: &M::Src, dst: &M::Dst) {
         // todo with longestCommonSubsequenceWithIsomorphism
         self.lcs_matching(src, dst, |s, src, dst| {
             let a = {
@@ -197,16 +176,16 @@ impl<
         })
     }
 
-    pub(super) fn lcs_equal_matching(&mut self, src: &IdD, dst: &IdD) {
+    pub(super) fn lcs_equal_matching(&mut self, src: &M::Src, dst: &M::Dst) {
         self.lcs_hash_matching(&HashKind::label(), src, dst)
     }
 
-    pub(super) fn lcs_structure_matching(&mut self, src: &IdD, dst: &IdD) {
+    pub(super) fn lcs_structure_matching(&mut self, src: &M::Src, dst: &M::Dst) {
         self.lcs_hash_matching(&HashKind::structural(), src, dst)
     }
 
-    pub(super) fn histogram_matching(&mut self, src: &IdD, dst: &IdD) {
-        let mut src_histogram: HashMap<<T as Typed>::Type, Vec<IdD>> = HashMap::new(); //Map<Type, List<ITree>>
+    pub(super) fn histogram_matching(&mut self, src: &M::Src, dst: &M::Dst) {
+        let mut src_histogram: HashMap<<T as Typed>::Type, Vec<M::Src>> = HashMap::new(); //Map<Type, List<ITree>>
         for c in self.src_arena.children(self.node_store, src) {
             let t = &self
                 .node_store
@@ -218,7 +197,7 @@ impl<
             src_histogram.get_mut(t).unwrap().push(c);
         }
 
-        let mut dst_histogram: HashMap<<T as Typed>::Type, Vec<IdD>> = HashMap::new(); //Map<Type, List<ITree>>
+        let mut dst_histogram: HashMap<<T as Typed>::Type, Vec<M::Dst>> = HashMap::new(); //Map<Type, List<ITree>>
         for c in self.dst_arena.children(self.node_store, dst) {
             let t = &self
                 .node_store
@@ -243,36 +222,4 @@ impl<
         }
         todo!()
     }
-
-    // pub(super) fn src_children(&self, src: &IdD) -> Vec<IdD> {
-    //     Self::get_children(self.compressed_node_store, &self.src_arena, src)
-    // }
-
-    // pub(super) fn dst_children(&self, dst: &IdD) -> Vec<IdD> {
-    //     Self::get_children(self.compressed_node_store, &self.dst_arena, dst)
-    // }
-
-    // pub(super) fn get_children(store: &S, arena: &D, dst: &IdD) -> Vec<IdD> {
-    //     let s = arena.first_child(*dst).unwrap();
-    //     let s: usize = cast(s).unwrap();
-    //     let l = store.get_node_at_id(&arena.original(*dst)).child_count();
-    //     let r = s..s + cast::<_, usize>(l).unwrap();
-    //     r.into_iter().map(|x| cast(x).unwrap()).collect()
-    // }
-
-    // pub(super) fn getDescendants_decompressedG(&self, arena: &D, x: IdD) -> Vec<IdD> {
-    //     // todo possible opti by also making descendants contigous in arena
-    //     let mut id: Vec<IdD> = vec![x];
-    //     let mut id_compressed: Vec<T::TreeId> = vec![arena.original(x)];
-    //     let mut i: usize = cast(x).unwrap();
-
-    //     while i < id.len() {
-    //         let node = self.compressed_node_store.get_node_at_id(&id_compressed[i]);
-    //         let l = node.get_children();
-    //         id_compressed.extend_from_slice(l);
-
-    //         i += 1;
-    //     }
-    //     id
-    // }
 }

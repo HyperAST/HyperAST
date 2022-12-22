@@ -6,7 +6,7 @@ use num_traits::{cast, PrimInt, ToPrimitive};
 use crate::{
     actions::Actions,
     decompressed_tree_store::{
-        BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
+        BreadthFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
         PostOrderIterable,
     },
     matchers::mapping_store::MonoMappingStore,
@@ -123,7 +123,7 @@ pub struct ScriptGenerator<
     SS,
     SD,
     S,
-    M: MonoMappingStore<Ele = IdD>,
+    M: MonoMappingStore<Src = IdD, Dst = IdD>,
 > where
     T::Label: Debug,
     T::TreeId: Debug,
@@ -147,6 +147,7 @@ pub struct ScriptGenerator<
 
 static MERGE_SIM_ACTIONS: bool = false;
 
+// TODO split IdD in 2 to help typecheck ids
 impl<
         'store: 'a1 + 'a2 + 'm,
         'a1: 'm,
@@ -161,9 +162,9 @@ impl<
             + Debug,
         SD: DecompressedTreeStore<'a2, T, IdD>
             + DecompressedWithParent<'a2, T, IdD>
-            + BreathFirstIterable<'a2, T, IdD>,
+            + BreadthFirstIterable<'a2, T, IdD>,
         S,
-        M: MonoMappingStore<Ele = IdD>,
+        M: MonoMappingStore<Src = IdD, Dst = IdD>,
     > ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M>
 where
     S: NodeStore<T::TreeId, R<'store> = T>,

@@ -3,6 +3,7 @@ use std::{
     fmt::{Debug, Display},
     hash::Hash,
     marker::PhantomData,
+    ops::Deref,
 };
 
 use num_traits::{cast, PrimInt, ToPrimitive, Zero};
@@ -15,9 +16,10 @@ use hyper_ast::{
 
 use super::{
     pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
-    simple_post_order::SimplePostOrder,
-    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, Initializable, Iter,
-    PostOrder, PostOrderIterable, PostOrderKeyRoots, ShallowDecompressedTreeStore, DecompressedWithSiblings,
+    simple_post_order::{SimplePOSlice, SimplePostOrder},
+    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings,
+    Initializable, Iter, PostOrder, PostOrderIterable, PostOrderKeyRoots,
+    ShallowDecompressedTreeStore,
 };
 
 /// made for TODO
@@ -25,9 +27,30 @@ use super::{
 /// - key roots
 /// - parents
 pub struct CompletePostOrder<T: Stored, IdD> {
-    simple: SimplePostOrder<T, IdD>,
-    /// LR_keyroots(T) = {k | there exists no k’> k such that l(k)= l(k’)}.
-    kr: Vec<IdD>,
+    pub(super) simple: SimplePostOrder<T, IdD>,
+    /// LR_keyroots(T) = {k | there exists no k < k' such that l(k) = l(k’)}.
+    pub(super) kr: Box<[IdD]>,
+}
+
+impl<T: Stored, IdD> Deref for CompletePostOrder<T, IdD> {
+    type Target = SimplePostOrder<T, IdD>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.simple
+    }
+}
+
+pub struct CompletePOSlice<'a, T: Stored, IdD> {
+    pub(super) simple: SimplePOSlice<'a, T, IdD>,
+    pub(super) kr: &'a [IdD],
+}
+
+impl<'a, T: Stored, IdD> Deref for CompletePOSlice<'a, T, IdD> {
+    type Target = SimplePOSlice<'a, T, IdD>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.simple
+    }
 }
 
 impl<T: Stored, IdD: PrimInt> CompletePostOrder<T, IdD> {
@@ -41,7 +64,7 @@ where
     T::TreeId: Clone,
 {
     fn from(simple: SimplePostOrder<T, IdD>) -> Self {
-        let kr = SimplePostOrder::compute_kr(&simple);
+        let kr = simple.compute_kr();
         Self { simple, kr }
     }
 }
@@ -158,6 +181,9 @@ where
         self.simple.parents(id)
     }
 
+    fn path(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<T::ChildIdx> {
+        self.simple.path(parent, descendant)
+    }
 }
 
 impl<'d, T: WithChildren, IdD: PrimInt> DecompressedWithSiblings<'d, T, IdD>
@@ -216,8 +242,11 @@ impl<'d, T: WithChildren + 'd, IdD: PrimInt> PostOrderKeyRoots<'d, T, IdD>
 where
     T::TreeId: Clone + Eq + Debug,
 {
-    fn kr(&self, x: IdD) -> IdD {
-        self.kr[x.to_usize().unwrap()]
+    // fn kr(&self, x: IdD) -> IdD {
+    //     self.kr[x.to_usize().unwrap()]
+    // }
+    fn iter_kr(&self) -> std::slice::Iter<'_, IdD> {
+        self.kr.iter()
     }
 }
 
@@ -231,7 +260,7 @@ where
         S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,
     {
         let simple = SimplePostOrder::new(store, root);
-        let kr = SimplePostOrder::compute_kr(&simple);
+        let kr = simple.compute_kr();
         Self { simple, kr }
     }
 }
@@ -249,9 +278,9 @@ where
         self.simple.original(id)
     }
 
-    fn leaf_count(&self) -> IdD {
-        cast(self.kr.len()).unwrap()
-    }
+    // fn leaf_count(&self) -> IdD {
+    //     cast(self.kr.len()).unwrap()
+    // }
 
     fn root(&self) -> IdD {
         cast(self.len() - 1).unwrap()
@@ -269,10 +298,6 @@ where
         S: NodeStore<T::TreeId, R<'b> = T>,
     {
         self.simple.children(store, x)
-    }
-
-    fn path<Idx: PrimInt>(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<Idx> {
-        self.simple.path(parent, descendant)
     }
 }
 
@@ -300,13 +325,25 @@ where
     }
 }
 
-impl<'d, T: WithChildren, IdD: PrimInt> ContiguousDescendants<'d, T, IdD>
+impl<'a, T: WithChildren, IdD: PrimInt> ContiguousDescendants<'a, T, IdD>
     for CompletePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug,
 {
     fn descendants_range(&self, x: &IdD) -> std::ops::Range<IdD> {
         self.first_descendant(x)..*x
+    }
+
+    type Slice<'b>=CompletePOSlice<'b,T,IdD>
+    where
+        Self: 'b;
+
+    fn slice(&self, x: &IdD) -> Self::Slice<'_> {
+        let range = self.slice_range(x);
+        CompletePOSlice {
+            simple: self.simple.slice(x),
+            kr: todo!("need to change kr to a bitset"),
+        }
     }
 }
 

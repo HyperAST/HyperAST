@@ -13,7 +13,7 @@ pub struct SimilarityMeasure {
 }
 
 impl SimilarityMeasure {
-    pub fn new<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
+    pub fn new<Id: PrimInt, Store: MonoMappingStore<Src = Id, Dst = Id>>(
         src: &[Id],
         dst: &[Id],
         mappings: &Store,
@@ -25,9 +25,9 @@ impl SimilarityMeasure {
         }
     }
 
-    pub fn range<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
-        src: &Range<Id>,
-        dst: &Range<Id>,
+    pub fn range<Id1: PrimInt, Id2: PrimInt, Store: MonoMappingStore<Src = Id1, Dst = Id2>>(
+        src: &Range<Id1>,
+        dst: &Range<Id2>,
         mappings: &Store,
     ) -> Self {
         Self {
@@ -58,36 +58,52 @@ impl SimilarityMeasure {
     }
 }
 
-pub fn chawathe_similarity<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
-    src: &[Id],
-    dst: &[Id],
+pub fn chawathe_similarity<
+    Id1: PrimInt,
+    Id2: PrimInt,
+    Store: MonoMappingStore<Src = Id1, Dst = Id2>,
+>(
+    src: &[Id1],
+    dst: &[Id2],
     mappings: &Store,
 ) -> f64 {
     let max = f64::max(src.len() as f64, dst.len() as f64);
     number_of_common_descendants(src, dst, mappings) as f64 / max
 }
 
-pub fn overlap_similarity<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
-    src: &[Id],
-    dst: &[Id],
+pub fn overlap_similarity<
+    Id1: PrimInt,
+    Id2: PrimInt,
+    Store: MonoMappingStore<Src = Id1, Dst = Id2>,
+>(
+    src: &[Id1],
+    dst: &[Id2],
     mappings: &Store,
 ) -> f64 {
     let min = f64::min(src.len() as f64, dst.len() as f64);
     number_of_common_descendants(src, dst, mappings) as f64 / min
 }
 
-pub fn dice_similarity<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
-    src: &[Id],
-    dst: &[Id],
+pub fn dice_similarity<
+    Id1: PrimInt,
+    Id2: PrimInt,
+    Store: MonoMappingStore<Src = Id1, Dst = Id2>,
+>(
+    src: &[Id1],
+    dst: &[Id2],
     mappings: &Store,
 ) -> f64 {
     let common_descendants = number_of_common_descendants(src, dst, mappings) as f64;
     (2.0_f64 * common_descendants) / (src.len() as f64 + dst.len() as f64)
 }
 
-pub fn jaccard_similarity<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
-    src: &[Id],
-    dst: &[Id],
+pub fn jaccard_similarity<
+    Id1: PrimInt,
+    Id2: PrimInt,
+    Store: MonoMappingStore<Src = Id1, Dst = Id2>,
+>(
+    src: &[Id1],
+    dst: &[Id2],
     mappings: &Store,
 ) -> f64 {
     let num = number_of_common_descendants(src, dst, mappings) as f64;
@@ -95,9 +111,13 @@ pub fn jaccard_similarity<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
     num / den
 }
 
-pub fn number_of_common_descendants<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
-    src: &[Id],
-    dst: &[Id],
+pub fn number_of_common_descendants<
+    Id1: PrimInt,
+    Id2: PrimInt,
+    Store: MonoMappingStore<Src = Id1, Dst = Id2>,
+>(
+    src: &[Id1],
+    dst: &[Id2],
     mappings: &Store,
 ) -> u32 {
     let min = dst[0].to_usize().unwrap();
@@ -140,9 +160,13 @@ pub fn number_of_common_descendants<Id: PrimInt, Store: MonoMappingStore<Ele = I
     return common;
 }
 
-pub fn number_of_common_descendants_ranges<Id: PrimInt, Store: MonoMappingStore<Ele = Id>>(
-    src: &Range<Id>,
-    dst: &Range<Id>,
+pub fn number_of_common_descendants_ranges<
+    Id1: PrimInt,
+    Id2: PrimInt,
+    Store: MonoMappingStore<Src = Id1, Dst = Id2>,
+>(
+    src: &Range<Id1>,
+    dst: &Range<Id2>,
     mappings: &Store,
 ) -> u32 {
     (src.start.to_usize().unwrap()..src.end.to_usize().unwrap())

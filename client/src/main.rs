@@ -249,17 +249,14 @@ fn main() {
     let dst = full_node2.local.compressed_node;
 
     let actions = {
-        let mappings: VecStore<u16> = DefaultMappingStore::default();
         // GreedySubtreeMatcher.MIN_HEIGHT = 0;
         // GreedyBottomUpMatcher
         {
-            let mappings: VecStore<u16> = DefaultMappingStore::default();
-            let mapper = ZsMatcher::<SimpleZsTree<_, _>, _, _, _, _>::matchh(
+            let mapper = ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, _>>::matchh(
                 &java_tree_gen.stores.node_store,
                 &java_tree_gen.stores.label_store,
                 src,
                 dst,
-                mappings,
             );
             let ZsMatcher {
                 src_arena: _,
@@ -270,6 +267,7 @@ fn main() {
 
             dbg!(ms);
         }
+        let mappings: VecStore<u16> = DefaultMappingStore::default();
         let mapper = GreedySubtreeMatcher::<
             CompletePostOrder<_, u16>,
             CompletePostOrder<_, u16>,
@@ -306,7 +304,6 @@ fn main() {
             CompletePostOrder<_, u16>,
             CompletePostOrder<_, u16>,
             _,
-            HashedNodeRef,
             _,
             _,
             _,

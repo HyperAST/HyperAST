@@ -3,236 +3,117 @@ use std::{collections::VecDeque, fmt::Debug, marker::PhantomData};
 use num_traits::{cast, one, zero, PrimInt, ToPrimitive};
 use str_distance::DistanceMetric;
 
-use crate::decompressed_tree_store::{
-    DecompressedTreeStore, Initializable as _, PostOrderKeyRoots, ShallowDecompressedTreeStore,
-    SimpleZsTree as ZsTree,
-};
-use crate::matchers::mapping_store::{DefaultMappingStore, MappingStore};
-use hyper_ast::types::{LabelStore, NodeStore, SlicedLabel, Tree};
+use crate::decompressed_tree_store::{DecompressedTreeStore, Initializable, PostOrderKeyRoots};
+use crate::matchers::mapping_store::MonoMappingStore;
+use hyper_ast::types::{LabelStore, NodeStore, SlicedLabel, Stored, Tree};
 
-pub struct ZsMatcher<'a, D: 'a, IdD, T: 'a + Tree, S, LS> {
-    compressed_node_store: &'a S,
+pub struct ZsMatcher<M, SD, DD = SD> {
+    pub mappings: M,
+    pub src_arena: SD,
+    pub dst_arena: DD,
+}
+
+impl<SD, DD, M: MonoMappingStore> ZsMatcher<M, SD, DD> {
+    pub fn matchh<'a, T, S, LS>(
+        node_store: &'a S,
+        label_store: &'a LS,
+        src: T::TreeId,
+        dst: T::TreeId,
+    ) -> Self
+    where
+        T::TreeId: Clone,
+        T: Tree<Label = LS::I>,
+        M::Src: PrimInt + std::ops::SubAssign + Debug,
+        M::Dst: PrimInt + std::ops::SubAssign + Debug,
+        SD: 'a
+            + DecompressedTreeStore<'a, T, M::Src>
+            + PostOrderKeyRoots<'a, T, M::Src>
+            + Initializable<'a, T>,
+        DD: 'a
+            + DecompressedTreeStore<'a, T, M::Dst>
+            + PostOrderKeyRoots<'a, T, M::Dst>
+            + Initializable<'a, T>,
+        T: 'a + Tree,
+        S: NodeStore<T::TreeId, R<'a> = T>,
+        LS: LabelStore<SlicedLabel>,
+    {
+        let src_arena = SD::new(node_store, &src);
+        let dst_arena = DD::new(node_store, &dst);
+        Self::match_with(node_store, label_store, src_arena, dst_arena)
+    }
+
+    pub fn match_with<'a, T, S, LS>(
+        node_store: &'a S,
+        label_store: &'a LS,
+        src_arena: SD,
+        dst_arena: DD,
+    ) -> Self
+    where
+        T::TreeId: Clone,
+        T: Tree<Label = LS::I>,
+        M::Src: PrimInt + std::ops::SubAssign + Debug,
+        M::Dst: PrimInt + std::ops::SubAssign + Debug,
+        SD: 'a
+            + DecompressedTreeStore<'a, T, M::Src>
+            + PostOrderKeyRoots<'a, T, M::Src>
+            + Initializable<'a, T>,
+        DD: 'a
+            + DecompressedTreeStore<'a, T, M::Dst>
+            + PostOrderKeyRoots<'a, T, M::Dst>
+            + Initializable<'a, T>,
+        T: 'a + Tree,
+        S: NodeStore<T::TreeId, R<'a> = T>,
+        LS: LabelStore<SlicedLabel>,
+    {
+        let mut mappings = M::default();
+        mappings.topit(
+            src_arena.len().to_usize().unwrap() + 1,
+            dst_arena.len().to_usize().unwrap() + 1,
+        );
+        let base = MatcherImpl::<_, _, S::R<'a>, _, _, M> {
+            node_store,
+            label_store,
+            src_arena: &src_arena,
+            dst_arena: &dst_arena,
+            phantom: PhantomData,
+        };
+        let mut dist = base.compute_dist();
+        base.compute_mappings(&mut mappings, &mut dist);
+        Self {
+            src_arena,
+            dst_arena,
+            mappings,
+        }
+    }
+}
+
+pub struct MatcherImpl<'a, 'b, SD, DD, T: 'a + Stored, S, LS, M>
+where
+    S: NodeStore<T::TreeId, R<'a> = T>,
+{
+    node_store: &'a S,
     label_store: &'a LS,
-    pub src_arena: D,
-    pub dst_arena: D,
-    pub mappings: DefaultMappingStore<IdD>,
-    // phantom: PhantomData<(*const IdC, &'a D)>,
-    pub(crate) tree_dist: Vec<Vec<f64>>,
-    forest_dist: Vec<Vec<f64>>,
-    pub(super) phantom: PhantomData<*const T>,
+    pub src_arena: &'b SD,
+    pub dst_arena: &'b DD,
+    pub(super) phantom: PhantomData<*const (T, M)>,
 }
 
 impl<
-        'a,
-        D: 'a + DecompressedTreeStore<'a, T, IdD> + PostOrderKeyRoots<'a, T, IdD>,
+        'a: 'b,
+        'b,
+        SD: 'a + DecompressedTreeStore<'a, T, M::Src> + PostOrderKeyRoots<'a, T, M::Src>,
+        DD: 'a + DecompressedTreeStore<'a, T, M::Dst> + PostOrderKeyRoots<'a, T, M::Dst>,
         T: 'a + Tree,
-        IdD: PrimInt + std::ops::SubAssign + Debug,
         S: NodeStore<T::TreeId, R<'a> = T>,
         LS: LabelStore<SlicedLabel>,
-    > ZsMatcher<'a, D, IdD, T, S, LS>
+        M: MonoMappingStore,
+    > MatcherImpl<'a, 'b, SD, DD, T, S, LS, M>
 where
     T::TreeId: Clone,
     T: Tree<Label = LS::I>,
+    M::Src: PrimInt + std::ops::SubAssign + Debug,
+    M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
-    fn f_dist(&self, row: IdD, col: IdD) -> f64 {
-        self.forest_dist[row.to_usize().unwrap()][col.to_usize().unwrap()]
-    }
-
-    pub(crate) fn make(
-        compressed_node_store: &'a S,
-        label_store: &'a LS,
-        src: T::TreeId,
-        dst: T::TreeId,
-        mappings: DefaultMappingStore<IdD>,
-    ) -> ZsMatcher<'a, ZsTree<T, IdD>, IdD, T, S, LS> {
-        let mut matcher = ZsMatcher::<'a, ZsTree<T, IdD>, IdD, T, S, LS> {
-            compressed_node_store,
-            src_arena: ZsTree::new(compressed_node_store, &src),
-            dst_arena: ZsTree::new(compressed_node_store, &dst),
-            mappings,
-            tree_dist: vec![],
-            phantom: PhantomData,
-            forest_dist: vec![],
-            label_store,
-        };
-        matcher.mappings.topit(
-            matcher.src_arena.len().to_usize().unwrap() + 1,
-            matcher.dst_arena.len().to_usize().unwrap() + 1,
-        );
-        matcher
-    }
-
-    pub fn matchh(
-        compressed_node_store: &'a S,
-        label_store: &'a LS,
-        src: T::TreeId,
-        dst: T::TreeId,
-        mappings: DefaultMappingStore<IdD>,
-    ) -> ZsMatcher<'a, ZsTree<T, IdD>, IdD, T, S, LS> {
-        let mut matcher = ZsMatcher::<'a, ZsTree<T, IdD>, IdD, T, S, LS>::make(
-            compressed_node_store,
-            label_store,
-            src,
-            dst,
-            mappings,
-        );
-        ZsMatcher::execute(&mut matcher);
-        matcher
-    }
-
-    pub(crate) fn execute(&mut self) {
-        self.compute_tree_dist();
-        self.compute_mappings();
-    }
-
-    pub(crate) fn compute_mappings(&mut self) {
-        let mut root_node_pair = true;
-        let mut tree_pairs: VecDeque<(IdD, IdD)> = Default::default();
-        // push the pair of trees (ted1,ted2) to stack
-        tree_pairs.push_front((
-            cast(self.src_arena.len()).unwrap(),
-            cast(self.dst_arena.len()).unwrap(),
-        ));
-        while !tree_pairs.is_empty() {
-            let tree_pair = tree_pairs.pop_front().unwrap();
-
-            let last_row = tree_pair.0;
-            let last_col = tree_pair.1;
-
-            // compute forest distance matrix
-            if !root_node_pair {
-                self.forest_dist(last_row, last_col);
-            }
-
-            root_node_pair = false;
-
-            // compute mapping for current forest distance matrix
-            let first_row: IdD = self.src_arena.lld(&last_row) - one();
-            let first_col: IdD = self.dst_arena.lld(&last_col) - one();
-
-            let mut row: IdD = cast(last_row).unwrap();
-            let mut col: IdD = cast(last_col).unwrap();
-
-            while (row > first_row) || (col > first_col) {
-                if (row > first_row)
-                    && (self.f_dist(row - one(), col) + 1.0 == self.f_dist(row, col))
-                {
-                    // node with postorderID row is deleted from ted1
-                    row -= one();
-                } else if (col > first_col)
-                    && (self.f_dist(row, col - one()) + 1.0 == self.f_dist(row, col))
-                {
-                    // node with postorderID col is inserted into ted2
-                    col -= one();
-                } else {
-                    // node with postorderID row in ted1 is renamed to node col
-                    // in ted2
-                    if (self.src_arena.lld(&row) == self.src_arena.lld(&last_row))
-                        && (self.dst_arena.lld(&col) == self.dst_arena.lld(&last_col))
-                    {
-                        // if both subforests are trees, map nodes
-                        let t_src = self
-                            .compressed_node_store
-                            .resolve(&self.src_arena.tree(&row))
-                            .get_type();
-                        let t_dst = self
-                            .compressed_node_store
-                            .resolve(&self.dst_arena.tree(&col))
-                            .get_type();
-                        if t_src == t_dst {
-                            self.mappings.link(row, col);
-                            // assert_eq!(self.mappings.get_dst(&row),col);
-                        } else {
-                            panic!("Should not map incompatible nodes.");
-                        }
-                        if row > zero() {
-                            row -= one();
-                        }
-                        if col > zero() {
-                            col -= one();
-                        }
-                    } else {
-                        // pop subtree pair
-                        tree_pairs.push_front((row, col));
-                        // continue with forest to the left of the popped
-                        // subtree pair
-
-                        if row > zero() {
-                            row = self.src_arena.lld(&row) - one();
-                        } else {
-                            row = zero()
-                        }
-                        if col > zero() {
-                            col = self.dst_arena.lld(&col) - one();
-                        } else {
-                            col = zero()
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    pub(crate) fn compute_tree_dist(&mut self) {
-        self.tree_dist = vec![vec![0.0; self.dst_arena.len() + 1]; self.src_arena.len() + 1];
-        self.forest_dist = vec![vec![0.0; self.dst_arena.len() + 1]; self.src_arena.len() + 1];
-
-        for i in 1..self.src_arena.leaf_count().to_usize().unwrap() {
-            for j in 1..self.dst_arena.leaf_count().to_usize().unwrap() {
-                self.forest_dist(
-                    self.src_arena.kr(cast(i).unwrap()),
-                    self.dst_arena.kr(cast(j).unwrap()),
-                );
-            }
-        }
-        // println!("{:?}",&self.tree_dist);
-        // dbg!(&self.forest_dist);
-    }
-
-    pub(crate) fn forest_dist(&mut self, i: IdD, j: IdD) {
-        let sa = &self.src_arena;
-        let da = &self.dst_arena;
-        // println!("i:{:?} j:{:?}", i, j);
-        let lldsrc = sa.lld(&i).to_usize().unwrap();
-        let llddst = da.lld(&j).to_usize().unwrap();
-        self.forest_dist[lldsrc - 1][llddst - 1] = 0.0;
-        for di in lldsrc..i.to_usize().unwrap() + 1 {
-            let odi = cast(di).unwrap();
-            let srctree = sa.tree(&odi);
-            let lldsrc2 = sa.lld(&odi);
-            let cost_del = self.get_deletion_cost(&srctree);
-            self.forest_dist[di][llddst - 1] = self.forest_dist[di - 1][llddst - 1] + cost_del;
-            for dj in llddst..j.to_usize().unwrap() + 1 {
-                let odj = cast(dj).unwrap();
-                let dsttree = da.tree(&odj);
-                let llddst2 = da.lld(&odj);
-                let cost_ins = self.get_insertion_cost(&dsttree);
-                self.forest_dist[lldsrc - 1][dj] = self.forest_dist[lldsrc - 1][dj - 1] + cost_ins;
-                if lldsrc2 == sa.lld(&i) && (llddst2 == da.lld(&j)) {
-                    let cost_upd = self.get_update_cost(&srctree, &dsttree);
-                    self.forest_dist[di][dj] = f64::min(
-                        f64::min(
-                            self.forest_dist[di - 1][dj] + cost_del,
-                            self.forest_dist[di][dj - 1] + cost_ins,
-                        ),
-                        self.forest_dist[di - 1][dj - 1] + cost_upd,
-                    );
-                    self.tree_dist[di][dj] = self.forest_dist[di][dj];
-                } else {
-                    self.forest_dist[di][dj] = f64::min(
-                        f64::min(
-                            self.forest_dist[di - 1][dj] + cost_del,
-                            self.forest_dist[di][dj - 1] + cost_ins,
-                        ),
-                        self.forest_dist[lldsrc2.to_usize().unwrap() - 1]
-                            [llddst2.to_usize().unwrap() - 1]
-                            + self.tree_dist[di][dj],
-                    );
-                }
-            }
-        }
-    }
-
     fn get_deletion_cost(&self, _di: &T::TreeId) -> f64 {
         1.0
     }
@@ -242,19 +123,19 @@ where
     }
 
     fn get_update_cost(&self, n1: &T::TreeId, n2: &T::TreeId) -> f64 {
-        let t1 = self.compressed_node_store.resolve(n1).get_type();
-        let t2 = self.compressed_node_store.resolve(n2).get_type();
+        let t1 = self.node_store.resolve(n1).get_type();
+        let t2 = self.node_store.resolve(n2).get_type();
         if t1 == t2 {
             // todo relax comparison on types ?
             let l1 = {
-                let r = self.compressed_node_store.resolve(n1);
+                let r = self.node_store.resolve(n1);
                 if !r.has_label() {
                     return 1.0;
                 };
                 self.label_store.resolve(&r.get_label()).to_owned()
             };
             let l2 = {
-                let r = self.compressed_node_store.resolve(n2);
+                let r = self.node_store.resolve(n2);
                 if !r.has_label() {
                     return 1.0;
                 };
@@ -287,6 +168,181 @@ where
             str_distance_patched::QGram::new(S_LEN).normalized(l1.as_bytes(), l2.as_bytes())
         } else {
             f64::MAX
+        }
+    }
+}
+
+pub struct ZsMatcherDist {
+    pub(crate) tree: Vec<Vec<f64>>,
+    forest: Vec<Vec<f64>>,
+}
+
+// TODO make a fully typed interface to each dist
+impl ZsMatcherDist {
+    fn f_dist<IdD1: PrimInt, IdD2: PrimInt>(&self, row: IdD1, col: IdD2) -> f64 {
+        self.forest[row.to_usize().unwrap()][col.to_usize().unwrap()]
+    }
+}
+
+impl<
+        'a: 'b,
+        'b,
+        SD: 'a + DecompressedTreeStore<'a, T, M::Src> + PostOrderKeyRoots<'a, T, M::Src>,
+        DD: 'a + DecompressedTreeStore<'a, T, M::Dst> + PostOrderKeyRoots<'a, T, M::Dst>,
+        T: 'a + Tree,
+        S: NodeStore<T::TreeId, R<'a> = T>,
+        LS: LabelStore<SlicedLabel>,
+        M: MonoMappingStore,
+    > MatcherImpl<'a, 'b, SD, DD, T, S, LS, M>
+where
+    T::TreeId: Clone,
+    T: Tree<Label = LS::I>,
+    M::Src: PrimInt + std::ops::SubAssign + Debug,
+    M::Dst: PrimInt + std::ops::SubAssign + Debug,
+{
+    pub(crate) fn compute_dist(&self) -> ZsMatcherDist {
+        let mut dist = ZsMatcherDist {
+            tree: vec![vec![0.0; self.dst_arena.len() + 1]; self.src_arena.len() + 1],
+            forest: vec![vec![0.0; self.dst_arena.len() + 1]; self.src_arena.len() + 1],
+        };
+        let kr = self
+            .src_arena
+            .iter_kr()
+            .rev()
+            .flat_map(|src| self.dst_arena.iter_kr().rev().map(|dst| (*src, *dst)));
+        for (i, j) in kr {
+            self.forest_dist(&mut dist, &i, &j)
+        }
+        dist
+    }
+
+    pub(crate) fn forest_dist(&self, dist: &mut ZsMatcherDist, i: &M::Src, j: &M::Dst) {
+        let sa = &self.src_arena;
+        let da = &self.dst_arena;
+        // println!("i:{:?} j:{:?}", i, j);
+        let lldsrc = sa.lld(i).to_usize().unwrap();
+        let llddst = da.lld(j).to_usize().unwrap();
+        dist.forest[lldsrc - 1][llddst - 1] = 0.0;
+        for di in lldsrc..i.to_usize().unwrap() + 1 {
+            let odi = cast(di).unwrap();
+            let srctree = sa.tree(&odi);
+            let lldsrc2 = sa.lld(&odi);
+            let cost_del = self.get_deletion_cost(&srctree);
+            dist.forest[di][llddst - 1] = dist.forest[di - 1][llddst - 1] + cost_del;
+            for dj in llddst..j.to_usize().unwrap() + 1 {
+                let odj = cast(dj).unwrap();
+                let dsttree = da.tree(&odj);
+                let llddst2 = da.lld(&odj);
+                let cost_ins = self.get_insertion_cost(&dsttree);
+                dist.forest[lldsrc - 1][dj] = dist.forest[lldsrc - 1][dj - 1] + cost_ins;
+                if lldsrc2 == sa.lld(&i) && (llddst2 == da.lld(&j)) {
+                    let cost_upd = self.get_update_cost(&srctree, &dsttree);
+                    dist.forest[di][dj] = f64::min(
+                        f64::min(
+                            dist.forest[di - 1][dj] + cost_del,
+                            dist.forest[di][dj - 1] + cost_ins,
+                        ),
+                        dist.forest[di - 1][dj - 1] + cost_upd,
+                    );
+                    dist.tree[di][dj] = dist.forest[di][dj];
+                } else {
+                    dist.forest[di][dj] = f64::min(
+                        f64::min(
+                            dist.forest[di - 1][dj] + cost_del,
+                            dist.forest[di][dj - 1] + cost_ins,
+                        ),
+                        dist.f_dist(lldsrc2 - one(), llddst2 - one()) + dist.tree[di][dj],
+                    );
+                }
+            }
+        }
+    }
+
+    pub(crate) fn compute_mappings(&self, mappings: &mut M, dist: &mut ZsMatcherDist) {
+        let mut root_node_pair = true;
+        let mut tree_pairs: VecDeque<(M::Src, M::Dst)> = Default::default();
+        // push the pair of trees (ted1,ted2) to stack
+        tree_pairs.push_front((
+            cast(self.src_arena.len()).unwrap(),
+            cast(self.dst_arena.len()).unwrap(),
+        ));
+        while !tree_pairs.is_empty() {
+            let tree_pair = tree_pairs.pop_front().unwrap();
+
+            let last_row = tree_pair.0;
+            let last_col = tree_pair.1;
+
+            // compute forest distance matrix
+            if !root_node_pair {
+                self.forest_dist(dist, &last_row, &last_col);
+            }
+
+            root_node_pair = false;
+
+            // compute mapping for current forest distance matrix
+            let first_row: M::Src = self.src_arena.lld(&last_row) - one();
+            let first_col: M::Dst = self.dst_arena.lld(&last_col) - one();
+
+            let mut row: M::Src = cast(last_row).unwrap();
+            let mut col: M::Dst = cast(last_col).unwrap();
+
+            while (row > first_row) || (col > first_col) {
+                if (row > first_row)
+                    && (dist.f_dist(row - one(), col) + 1.0 == dist.f_dist(row, col))
+                {
+                    // node with postorderID row is deleted from ted1
+                    row -= one();
+                } else if (col > first_col)
+                    && (dist.f_dist(row, col - one()) + 1.0 == dist.f_dist(row, col))
+                {
+                    // node with postorderID col is inserted into ted2
+                    col -= one();
+                } else {
+                    // node with postorderID row in ted1 is renamed to node col
+                    // in ted2
+                    if (self.src_arena.lld(&row) == self.src_arena.lld(&last_row))
+                        && (self.dst_arena.lld(&col) == self.dst_arena.lld(&last_col))
+                    {
+                        // if both subforests are trees, map nodes
+                        let t_src = self
+                            .node_store
+                            .resolve(&self.src_arena.tree(&row))
+                            .get_type();
+                        let t_dst = self
+                            .node_store
+                            .resolve(&self.dst_arena.tree(&col))
+                            .get_type();
+                        if t_src == t_dst {
+                            mappings.link(row, col);
+                            // assert_eq!(self.mappings.get_dst(&row),col);
+                        } else {
+                            panic!("Should not map incompatible nodes.");
+                        }
+                        if row > zero() {
+                            row -= one();
+                        }
+                        if col > zero() {
+                            col -= one();
+                        }
+                    } else {
+                        // pop subtree pair
+                        tree_pairs.push_front((row, col));
+                        // continue with forest to the left of the popped
+                        // subtree pair
+
+                        if row > zero() {
+                            row = self.src_arena.lld(&row) - one();
+                        } else {
+                            row = zero()
+                        }
+                        if col > zero() {
+                            col = self.dst_arena.lld(&col) - one();
+                        } else {
+                            col = zero()
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -402,9 +458,9 @@ mod str_distance_patched {
 mod tests {
 
     use super::*;
-    use crate::decompressed_tree_store::SimpleZsTree;
+    use crate::decompressed_tree_store::{ShallowDecompressedTreeStore, SimpleZsTree as ZsTree};
 
-    use crate::matchers::mapping_store::VecStore;
+    use crate::matchers::mapping_store::DefaultMappingStore;
     use crate::{
         decompressed_tree_store::Initializable, tests::examples::example_zs_paper,
         tree::simple_tree::vpair_to_stores,
@@ -415,122 +471,66 @@ mod tests {
         let (label_store, compressed_node_store, src, dst) = vpair_to_stores(example_zs_paper());
         // assert_eq!(label_store.resolve(&0).to_owned(), b"");
         let src_arena = {
-            let a: SimpleZsTree<_, u16> = SimpleZsTree::<_, _>::new(&compressed_node_store, &src);
+            let a: ZsTree<_, u16> = ZsTree::<_, _>::new(&compressed_node_store, &src);
             // // assert_eq!(a.id_compressed, vec![0, 1, 2, 3, 4, 5]);
             // // // assert_eq!(a.id_parent, vec![0, 0, 0, 1, 1, 4]);
             // // // assert_eq!(a.id_first_child, vec![1, 3, 0, 0, 5, 0]);
             // // assert_eq!(a.llds, vec![3, 3, 2, 3, 5, 5]);
             // // assert_eq!(a.kr, vec![0, 2, 4]);
             // assert_eq!(a.id_compressed, vec![3, 5, 4, 1, 2, 0]);
-            // assert_eq!(a.llds, vec![0, 1, 1, 0, 4, 0]);
-            // assert_eq!(a.kr, vec![2, 4, 5]);
+            assert_eq!(&*a.llds, &vec![0, 1, 1, 0, 4, 0]);
+            assert_eq!(
+                a.iter_kr().rev().map(|x| x - 1).collect::<Vec<_>>(),
+                vec![2, 4, 5]
+            );
             a
         };
         let dst_arena = {
-            let a = ZsTree::<_, _>::new(&compressed_node_store, &dst);
+            let a = ZsTree::<_, u16>::new(&compressed_node_store, &dst);
             // // assert_eq!(a.id_compressed, vec![6, 7, 2, 8, 3, 5]);
             // // // assert_eq!(a.id_parent, vec![0, 0, 0, 1, 3, 3]);
             // // // assert_eq!(a.id_first_child, vec![1, 3, 0, 4, 0, 0]);
             // // assert_eq!(a.llds, vec![4, 4, 2, 4, 4, 5]);
             // // assert_eq!(a.kr, vec![0, 2, 5]);
-            // assert_eq!(a.id_compressed, vec![3, 5, 8, 7, 2, 6]);
-            // assert_eq!(a.llds, vec![0, 1, 0, 0, 4, 0]);
-            // assert_eq!(a.kr, vec![1, 4, 5]);
+            // assert_eq!(&*a.id_compressed, &vec![3, 5, 8, 7, 2, 6]);
+            assert_eq!(&*a.llds, &vec![0, 1, 0, 0, 4, 0]);
+            assert_eq!(
+                a.iter_kr().rev().map(|x| x - 1).collect::<Vec<_>>(),
+                vec![1, 4, 5]
+            );
             a
         };
 
-        let mappings: VecStore<u16> = Default::default();
-        let mut matcher = ZsMatcher::<_, u16, _, _, _> {
-            compressed_node_store: &compressed_node_store,
-            src_arena,
-            dst_arena,
-            mappings,
-            phantom: PhantomData,
-            tree_dist: vec![],
-            forest_dist: vec![],
+        let matcher = MatcherImpl::<_, _, _, _, _, DefaultMappingStore<_>> {
+            node_store: &compressed_node_store,
             label_store: &label_store,
+            src_arena: &src_arena,
+            dst_arena: &dst_arena,
+            phantom: PhantomData,
         };
-        // matcher
-        //     .mappings
-        //     .topit(matcher.src_arena.len(), matcher.dst_arena.len());
 
-        matcher.tree_dist = vec![
+        let tree_dist = vec![
             vec![0.0; matcher.dst_arena.len() as usize + 1];
             matcher.src_arena.len() as usize + 1
         ];
-        matcher.forest_dist = vec![
+        let forest_dist = vec![
             vec![0.0; matcher.dst_arena.len() as usize + 1];
             matcher.src_arena.len() as usize + 1
         ];
-        matcher.forest_dist(4, 5);
-        println!("{:?}", matcher.tree_dist);
-        matcher.tree_dist = vec![
+        let mut dist = ZsMatcherDist {
+            tree: tree_dist,
+            forest: forest_dist,
+        };
+        matcher.forest_dist(&mut dist, &4, &5);
+        println!("{:?}", dist.tree);
+        dist.tree = vec![
             vec![0.0; matcher.dst_arena.len() as usize + 1];
             matcher.src_arena.len() as usize + 1
         ];
-        matcher.forest_dist = vec![
+        dist.forest = vec![
             vec![0.0; matcher.dst_arena.len() as usize + 1];
             matcher.src_arena.len() as usize + 1
         ];
-        matcher.forest_dist(4, 5);
+        matcher.forest_dist(&mut dist, &4, &5);
     }
 }
-
-// impl<IdC: PrimInt, IdD: PrimInt + Into<usize>> ZsTree<IdC, IdD> {
-//     fn rec_postorder<
-//         T: Tree<TreeId = IdC> + WithHashs<HK = HK, HP = HP>,
-//         HK: HashKind,
-//         HP: PrimInt,
-//         S: for<'b> NodeStore<'b,T>,
-//     >(
-//         store: &S,
-//         curr: &IdC,
-//     ) -> Vec<IdC> {
-//         let mut i: T::ChildIdx = zero();
-//         let mut r = vec![];
-//         loop {
-//             let x = store.get_node_at_id(&curr);
-//             let l = x.child_count();
-
-//             if i < l {
-//                 let curr = x.get_child(&i);
-//                 let tmp = Self::rec_postorder(store, &curr);
-//                 r.extend_from_slice(&tmp);
-//                 i = i + one();
-//             } else {
-//                 break;
-//             }
-//         }
-//         r
-//     }
-
-//     fn postorder<
-//         T: Tree<TreeId = IdC> + WithHashs<HK = HK, HP = HP>,
-//         HK: HashKind,
-//         HP: PrimInt,
-//         S: for<'b> NodeStore<'b,T>,
-//     >(
-//         store: &S,
-//         root: &IdC,
-//     ) -> Vec<IdC> {
-//         let mut stack = vec![(*root, zero())];
-//         let mut r = vec![];
-//         loop {
-//             if let Some((curr, idx)) = stack.pop() {
-//                 let x = store.get_node_at_id(&curr);
-//                 let l = x.child_count();
-
-//                 if idx < l {
-//                     let child = x.get_child(&idx);
-//                     stack.push((curr, idx + one()));
-//                     stack.push((child, zero()));
-//                 } else {
-//                     r.push(curr);
-//                 }
-//             } else {
-//                 break;
-//             }
-//         }
-//         r
-//     }
-// }

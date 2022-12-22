@@ -21,7 +21,8 @@ pub(crate) fn main() {
         std::fs::read_dir(data_root).expect("should be a dir");
         let root_buggy = data_root.join("buggy/Jsoup"); // /Jsoup/92
         let root_fixed = data_root.join("fixed/Jsoup"); // /Jsoup/92
-        run_dir(&root_buggy, &root_fixed).unwrap();
+        let res = run_dir(&root_buggy, &root_fixed).unwrap();
+        dbg!(res);
         println!("success");
     });
 }

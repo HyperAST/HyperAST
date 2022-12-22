@@ -19,7 +19,7 @@ pub struct GreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, const MIN_HEIGHT: 
 where
     IdD: PrimInt,
     T: 'a + Tree,
-    M: MonoMappingStore<Ele = IdD>,
+    M: MonoMappingStore<Src = IdD>,
 {
     internal: SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>,
 }
@@ -39,7 +39,7 @@ impl<
         IdD: 'a + PrimInt + Debug + Hash,
         T: Tree + WithHashs,
         S,
-        M: MonoMappingStore<Ele = IdD>,
+        M: MonoMappingStore<Src = IdD, Dst = IdD>,
         const MIN_HEIGHT: usize, // = 2
     > GreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>
 where
@@ -216,7 +216,7 @@ where
         let s1: Vec<_> = Dsrc::parents(&self.internal.src_arena, l.0).collect();
         let s2: Vec<_> = Ddst::parents(&self.internal.dst_arena, l.1).collect();
         // let s2: Vec<_> = self.internal.dst_arena.parents::<Ddst>(&l.1).collect();
-        let common = longest_common_subsequence::<_, usize, _>(&s1, &s2, |a, b| {
+        let common = longest_common_subsequence::<_, _, usize, _>(&s1, &s2, |a, b| {
             let (t, l) = {
                 let o = self.internal.src_arena.original(a);
                 let n = self.internal.node_store.resolve(&o);
@@ -384,7 +384,7 @@ impl<
         IdD: PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree,      // + WithHashs,
         S,            //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
-        M: MonoMappingStore<Ele = IdD>,
+        M: MonoMappingStore<Src = IdD>,
         const MIN_HEIGHT: usize,
     > Into<SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>>
     for GreedySubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>
@@ -419,7 +419,7 @@ pub struct SubtreeMatcher<
     IdD: 'a + PrimInt, // + Into<usize> + std::ops::SubAssign + Debug,
     T: 'a + Tree,      // + WithHashs,
     S,                 //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
-    M: MonoMappingStore<Ele = IdD>,
+    M: MonoMappingStore<Src = IdD>,
     const MIN_HEIGHT: usize,
 > {
     pub(super) node_store: &'a S,
@@ -436,7 +436,7 @@ impl<
         IdD: PrimInt + Debug, // + Into<usize> + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
         S, //: NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
-        M: MonoMappingStore<Ele = IdD>,
+        M: MonoMappingStore<Src = IdD, Dst = IdD>,
         const MIN_HEIGHT: usize,
     > SubtreeMatcher<'a, Dsrc, Ddst, IdD, T, S, M, MIN_HEIGHT>
 where

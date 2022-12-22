@@ -4,13 +4,14 @@ use num_traits::{cast, zero, PrimInt};
 
 use crate::{
     decompressed_tree_store::{
-        BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, Initializable,
+        BreadthFirstIterable, DecompressedTreeStore, DecompressedWithParent, Initializable,
         PostOrder, ShallowDecompressedTreeStore,
     },
     tree::tree_path::CompressedTreePath,
 };
 use hyper_ast::types::{NodeStore, WithChildren};
 
+/// Wrap or just map a decommpressed tree in breadth-first eg. post-order,
 pub struct SimpleBfsMapper<
     'a,
     T: WithChildren,
@@ -24,6 +25,8 @@ pub struct SimpleBfsMapper<
     pub back: D,
     phantom: PhantomData<&'a (T, DTS)>,
 }
+
+// TODO deref to back
 
 impl<
         'a,
@@ -98,16 +101,12 @@ impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: Borrow
         self.back.borrow().original(id)
     }
 
-    fn leaf_count(&self) -> IdD {
-        self.back.borrow().leaf_count()
-    }
+    // fn leaf_count(&self) -> IdD {
+    //     self.back.borrow().leaf_count()
+    // }
 
     fn root(&self) -> IdD {
         self.back.borrow().root()
-    }
-
-    fn path<Idx: PrimInt>(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<Idx> {
-        self.back.borrow().path(parent, descendant)
     }
 
     fn child<'b, S>(&self, store: &'b S, x: &IdD, p: &[T::ChildIdx]) -> IdD
@@ -175,6 +174,10 @@ impl<
     fn parents(&self, id: IdD) -> Self::PIt<'_> {
         self.back.borrow().parents(id)
     }
+
+    fn path(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<T::ChildIdx> {
+        self.back.borrow().path(parent, descendant)
+    }
 }
 
 impl<
@@ -183,7 +186,7 @@ impl<
         IdD: 'static + Clone,
         DTS: DecompressedTreeStore<'d, T, IdD>,
         D: Borrow<DTS>,
-    > BreathFirstIterable<'d, T, IdD> for SimpleBfsMapper<'d, T, IdD, DTS, D>
+    > BreadthFirstIterable<'d, T, IdD> for SimpleBfsMapper<'d, T, IdD, DTS, D>
 {
     type It = Iter<'d, IdD>;
 

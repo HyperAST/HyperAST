@@ -341,7 +341,7 @@ mod test {
     use super::*;
     use hyper_ast::{
         nodes::{print_tree_syntax_with_ids, IoOut},
-        store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef},
+        store::defaults::NodeIdentifier,
         types::Typed,
     };
     use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
@@ -352,7 +352,7 @@ mod test {
                 LazyGreedySubtreeMatcher, SubtreeMatcher,
             },
             // heuristic::gt::greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
-            mapping_store::VecStore,
+            mapping_store::{DefaultMultiMappingStore, VecStore},
         },
     };
     static CASE7: &'static str = r#"<project>
@@ -485,9 +485,9 @@ mod test {
         let mappings = VecStore::default();
 
         type DS<T> = LazyPostOrder<T, u32>;
-        let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
-            node_store, &src, &dst, mappings,
-        );
+        let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh::<
+            DefaultMultiMappingStore<_>,
+        >(node_store, &src, &dst, mappings);
         let SubtreeMatcher {
             src_arena,
             dst_arena,
@@ -596,9 +596,9 @@ mod test {
         // println!();
         let mappings = VecStore::default();
         type DS<T> = LazyPostOrder<T, u32>;
-        let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
-            node_store, &src, &dst, mappings,
-        );
+        let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh::<
+            DefaultMultiMappingStore<_>,
+        >(node_store, &src, &dst, mappings);
         let SubtreeMatcher {
             src_arena,
             dst_arena,
@@ -678,9 +678,9 @@ mod test {
         let node_store = &crate::window_combination::NoSpaceNodeStoreWrapper { s: node_store };
         let mappings = VecStore::default();
         type DS<T> = LazyPostOrder<T, u32>;
-        let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
-            node_store, &src, &dst, mappings,
-        );
+        let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh::<
+            DefaultMultiMappingStore<_>,
+        >(node_store, &src, &dst, mappings);
         let SubtreeMatcher {
             src_arena,
             dst_arena,
@@ -894,13 +894,10 @@ mod test {
         println!();
         let stores = &tree_gen.stores;
         let mappings = VecStore::default();
-        type DS<'a> = LazyPostOrder<HashedNodeRef<'a>, u32>;
-        let mapper = LazyGreedySubtreeMatcher::<DS, DS, _, HashedNodeRef, _, _>::matchh(
-            &stores.node_store,
-            &src,
-            &dst,
-            mappings,
-        );
+        type DS<T> = LazyPostOrder<T, u32>;
+        let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh::<
+            DefaultMultiMappingStore<_>,
+        >(&stores.node_store, &src, &dst, mappings);
         let SubtreeMatcher {
             src_arena,
             dst_arena,
@@ -1015,9 +1012,9 @@ mod test {
         let node_store = &crate::window_combination::NoSpaceNodeStoreWrapper { s: node_store };
         let mappings = VecStore::default();
         type DS<T> = LazyPostOrder<T, u32>;
-        let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
-            node_store, &src, &dst, mappings,
-        );
+        let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh::<
+            DefaultMultiMappingStore<_>,
+        >(node_store, &src, &dst, mappings);
         let SubtreeMatcher {
             src_arena,
             dst_arena,
@@ -1122,10 +1119,10 @@ mod test {
             // dst_arena.decompress_descendants(node_store, &dst_arena.root());
             // src_arena.go_through_descendants(node_store, &src_arena.root());
             // dst_arena.go_through_descendants(node_store, &dst_arena.root());
-            let mut matcher = LazyGreedySubtreeMatcher::<_, _, _, _, _, _, 1>::new(
+            let mut matcher = LazyGreedySubtreeMatcher::<_, _, _, _, _, 1>::new(
                 node_store, src_arena, dst_arena, mappings,
             );
-            LazyGreedySubtreeMatcher::execute(&mut matcher);
+            LazyGreedySubtreeMatcher::execute::<DefaultMultiMappingStore<_>>(&mut matcher);
             matcher
         };
         let SubtreeMatcher {
@@ -1840,14 +1837,6 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     let fixed_s = dst_tr.metrics.size;
 
     let gt_out_format = "COMPRESSED"; // JSON
-    let gt_out = other_tools::gumtree::subprocess(
-        &java_gen.main_stores.node_store,
-        &java_gen.main_stores.label_store,
-        src_tr.compressed_node,
-        dst_tr.compressed_node,
-        "gumtree",
-        gt_out_format,
-    );
 
     let DiffResult {
         mapping_durations: [subtree_matcher_t, bottomup_matcher_t],
@@ -1861,6 +1850,15 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
         &java_gen.main_stores.label_store,
         &src_tr.compressed_node,
         &dst_tr.compressed_node,
+    );
+
+    let gt_out = other_tools::gumtree::subprocess(
+        &java_gen.main_stores.node_store,
+        &java_gen.main_stores.label_store,
+        src_tr.compressed_node,
+        dst_tr.compressed_node,
+        "gumtree",
+        gt_out_format,
     );
 
     let timings = vec![subtree_matcher_t, bottomup_matcher_t, gen_t];

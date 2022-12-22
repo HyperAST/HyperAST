@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Deref};
 
 use num_traits::{cast, one, zero, PrimInt, ToPrimitive, Zero};
 
@@ -12,38 +12,42 @@ use hyper_ast::{
 };
 
 use super::{
+    basic_post_order::{BasicPOSlice, BasicPostOrder},
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings,
-    Initializable, Iter, PostOrder, PostOrderIterable, ShallowDecompressedTreeStore,
+    Initializable, PostOrder, ShallowDecompressedTreeStore,
 };
 
 pub struct SimplePostOrder<T: Stored, IdD> {
-    pub(super) leaf_count: usize,
-    pub(super) id_compressed: Box<[T::TreeId]>,
+    pub(super) basic: BasicPostOrder<T, IdD>,
     pub(super) id_parent: Box<[IdD]>,
-    /// leftmost leaf descendant of nodes
-    pub(crate) llds: Box<[IdD]>,
-    pub(super) _phantom: std::marker::PhantomData<*const T>,
 }
 
-impl<T: Stored, IdD: PrimInt> SimplePostOrder<T, IdD> {
-    pub fn iter(&self) -> impl Iterator<Item = &T::TreeId> {
-        self.id_compressed.iter()
+impl<T: Stored, IdD> Deref for SimplePostOrder<T, IdD> {
+    type Target = BasicPostOrder<T, IdD>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.basic
     }
 }
 
-impl<T: Stored, IdD: PrimInt + Debug> Debug for SimplePostOrder<T, IdD>
-where
-    T::TreeId: Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SimplePostOrder")
-            .field("leaf_count", &self.leaf_count)
-            .field("id_compressed", &self.id_compressed)
-            .field("id_parent", &self.id_parent)
-            .field("llds", &self.llds)
-            .finish()
+pub struct SimplePOSlice<'a, T: Stored, IdD> {
+    pub(super) basic: BasicPOSlice<'a, T, IdD>,
+    pub(super) id_parent: &'a [IdD],
+}
+
+impl<'a, T: Stored, IdD> Deref for SimplePOSlice<'a, T, IdD> {
+    type Target = BasicPOSlice<'a, T, IdD>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.basic
     }
 }
+
+// impl<T: Stored, IdD: PrimInt> SimplePostOrder<T, IdD> {
+//     pub fn iter(&self) -> impl Iterator<Item = &T::TreeId> {
+//         self.id_compressed.iter()
+//     }
+// }
 
 impl<'d, T: WithChildren, IdD: PrimInt> SimplePostOrder<T, IdD>
 where
@@ -95,6 +99,31 @@ where
             id_parent: &self.id_parent,
         }
     }
+
+    fn path(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<T::ChildIdx> {
+        let mut idxs: Vec<T::ChildIdx> = vec![];
+        let mut curr = *descendant;
+        loop {
+            if let Some(p) = self.parent(&curr) {
+                let lld: usize = cast(self.llds[p.to_usize().unwrap()]).unwrap();
+                // TODO use other llds to skip nodes for count
+                let idx = self.id_parent[lld..cast(curr).unwrap()]
+                    .iter()
+                    .filter(|x| **x == p)
+                    .count();
+                let idx = cast(idx).unwrap();
+                idxs.push(idx);
+                if &p == parent {
+                    break;
+                }
+                curr = p;
+            } else {
+                break;
+            }
+        }
+        idxs.reverse();
+        idxs.into()
+    }
 }
 
 impl<'d, T: WithChildren, IdD: PrimInt> DecompressedWithSiblings<'d, T, IdD>
@@ -132,32 +161,32 @@ where
     T::TreeId: Clone + Eq + Debug,
 {
     fn lld(&self, i: &IdD) -> IdD {
-        self.llds[(*i).to_usize().unwrap()] + num_traits::one()
+        self.basic.lld(i)
     }
 
     fn tree(&self, id: &IdD) -> T::TreeId {
-        self.id_compressed[id.to_usize().unwrap()].clone()
+        self.basic.tree(id)
     }
 }
 
-impl<'d, T: WithChildren, IdD: PrimInt> SimplePostOrder<T, IdD> {
-    pub(crate) fn size(&self, i: &IdD) -> IdD {
-        *i - self.llds[(*i).to_usize().unwrap()] + one()
-    }
-}
+// impl<'d, T: WithChildren, IdD: PrimInt> SimplePostOrder<T, IdD> {
+//     pub(crate) fn size(&self, i: &IdD) -> IdD {
+//         *i - self.llds[(*i).to_usize().unwrap()] + one()
+//     }
+// }
 
-impl<'d, T: WithChildren, IdD: PrimInt> PostOrderIterable<'d, T, IdD> for SimplePostOrder<T, IdD>
-where
-    T::TreeId: Clone + Eq + Debug,
-{
-    type It = Iter<IdD>;
-    fn iter_df_post(&self) -> Iter<IdD> {
-        Iter {
-            current: zero(),
-            len: (cast(self.id_compressed.len())).unwrap(),
-        }
-    }
-}
+// impl<'d, T: WithChildren, IdD: PrimInt> PostOrderIterable<'d, T, IdD> for SimplePostOrder<T, IdD>
+// where
+//     T::TreeId: Clone + Eq + Debug,
+// {
+//     type It = Iter<IdD>;
+//     fn iter_df_post(&self) -> Iter<IdD> {
+//         Iter {
+//             current: zero(),
+//             len: (cast(self.id_compressed.len())).unwrap(),
+//         }
+//     }
+// }
 
 impl<'a, T, IdD: PrimInt> Initializable<'a, T> for SimplePostOrder<T, IdD>
 where
@@ -170,56 +199,10 @@ where
         S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,
     {
         let simple = SimplePostOrder::new(store, root);
-        let mut kr = Self::compute_kr(&simple);
-        let SimplePostOrder::<T, IdD> {
-            leaf_count,
-            id_compressed,
-            id_parent,
-            llds,
-            _phantom,
-        } = simple;
-
-        let leaf_count = cast(leaf_count).unwrap();
-        kr.shrink_to_fit();
         Self {
-            leaf_count,
-            id_compressed,
-            llds,
-            id_parent,
-            _phantom: Default::default(),
+            basic: simple.basic,
+            id_parent: simple.id_parent,
         }
-    }
-}
-
-impl<'a, T, IdD: PrimInt> SimplePostOrder<T, IdD>
-where
-    T: WithChildren,
-    T::TreeId: Clone,
-    <T as WithChildren>::ChildIdx: PrimInt,
-{
-    pub(crate) fn compute_kr(simple: &SimplePostOrder<T, IdD>) -> Vec<IdD>
-where {
-        let SimplePostOrder::<T, IdD> {
-            leaf_count,
-            id_compressed,
-            llds,
-            ..
-        } = simple;
-
-        let node_count = id_compressed.len();
-        let mut kr = vec![num_traits::zero(); leaf_count + 1];
-        let mut visited = vec![false; node_count];
-        let mut k = kr.len() - 1;
-        for i in (1..node_count).rev() {
-            if !visited[llds[i].to_usize().unwrap()] {
-                kr[k] = cast(i + 1).unwrap();
-                visited[llds[i].to_usize().unwrap()] = true;
-                if k > 0 {
-                    k -= 1;
-                }
-            }
-        }
-        kr
     }
 }
 
@@ -232,7 +215,6 @@ where
     where
         S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,
     {
-        let mut leaf_count = 0;
         let mut stack = vec![Element {
             curr: root.clone(),
             idx: zero(),
@@ -267,7 +249,6 @@ where
             } else {
                 let curr_idx = cast(id_compressed.len()).unwrap();
                 let value = if l.is_none() {
-                    leaf_count += 1;
                     curr_idx
                 } else {
                     for x in children {
@@ -290,11 +271,12 @@ where
         let id_parent = id_parent.into();
         let llds = llds.into();
         SimplePostOrder {
-            leaf_count,
-            id_compressed,
+            basic: BasicPostOrder {
+                id_compressed,
+                llds,
+                _phantom: std::marker::PhantomData,
+            },
             id_parent,
-            llds,
-            _phantom: Default::default(),
         }
     }
 }
@@ -317,10 +299,6 @@ where
 
     fn original(&self, id: &IdD) -> T::TreeId {
         self.id_compressed[id.to_usize().unwrap()].clone()
-    }
-
-    fn leaf_count(&self) -> IdD {
-        cast(self.leaf_count).unwrap()
     }
 
     fn root(&self) -> IdD {
@@ -376,31 +354,6 @@ where
         );
         r
     }
-
-    fn path<Idx: PrimInt>(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<Idx> {
-        let mut idxs: Vec<Idx> = vec![];
-        let mut curr = *descendant;
-        loop {
-            if let Some(p) = self.parent(&curr) {
-                let lld: usize = cast(self.llds[p.to_usize().unwrap()]).unwrap();
-                // TODO use other llds to skip nodes for count
-                let idx = self.id_parent[lld..cast(curr).unwrap()]
-                    .iter()
-                    .filter(|x| **x == p)
-                    .count();
-                let idx = cast(idx).unwrap();
-                idxs.push(idx);
-                if &p == parent {
-                    break;
-                }
-                curr = p;
-            } else {
-                break;
-            }
-        }
-        idxs.reverse();
-        idxs.into()
-    }
 }
 
 impl<'d, T: WithChildren, IdD: PrimInt> DecompressedTreeStore<'d, T, IdD>
@@ -437,12 +390,20 @@ where
     fn descendants_range(&self, x: &IdD) -> std::ops::Range<IdD> {
         self.first_descendant(x)..*x
     }
-}
 
-pub struct RecCachedPositionProcessor<'a, T: WithChildren, IdD: Hash + Eq> {
-    pub(crate) ds: &'a SimplePostOrder<T, IdD>,
-    root: T::TreeId,
-    cache: HashMap<IdD, Position>,
+    type Slice<'b> = SimplePOSlice<'b,T,IdD> where Self: 'b;
+
+    fn slice(&self, x: &IdD) -> Self::Slice<'_> {
+        let range = self.slice_range(x);
+        SimplePOSlice {
+            id_parent: &self.id_parent[range.clone()],
+            basic: BasicPOSlice {
+                id_compressed: &self.id_compressed[range.clone()],
+                llds: &self.llds[range],
+                _phantom: std::marker::PhantomData,
+            },
+        }
+    }
 }
 
 impl<'a, T: WithChildren, IdD: PrimInt + Eq> SimplePostOrder<T, IdD>
@@ -484,6 +445,25 @@ where
         }
         z + 1
     }
+}
+
+impl<T: Stored, IdD: PrimInt + Debug> Debug for SimplePostOrder<T, IdD>
+where
+    T::TreeId: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SimplePostOrder")
+            .field("id_compressed", &self.id_compressed)
+            .field("id_parent", &self.id_parent)
+            .field("llds", &self.llds)
+            .finish()
+    }
+}
+
+pub struct RecCachedPositionProcessor<'a, T: WithChildren, IdD: Hash + Eq> {
+    pub(crate) ds: &'a SimplePostOrder<T, IdD>,
+    root: T::TreeId,
+    cache: HashMap<IdD, Position>,
 }
 
 impl<'a, T: WithChildren, IdD: PrimInt + Hash + Eq> From<(&'a SimplePostOrder<T, IdD>, T::TreeId)>

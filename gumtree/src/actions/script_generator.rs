@@ -7,7 +7,8 @@ use num_traits::{cast, PrimInt};
 
 use crate::{
     decompressed_tree_store::{
-        BreathFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder, PostOrderIterable,
+        BreadthFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
+        PostOrderIterable,
     },
     matchers::mapping_store::{DefaultMappingStore, MappingStore, MonoMappingStore},
     utils::sequence_algorithms::longest_common_subsequence,
@@ -125,12 +126,9 @@ pub struct ScriptGenerator<
     IdD: PrimInt + Debug,
     T: 'a + Stored + Labeled + WithChildren,
     SS,
-    SD: BreathFirstIterable<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
+    SD: BreadthFirstIterable<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
     S,
-    // S: 'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
 >
-// T::TreeId: Debug,
-// T::ChildIdx: Debug,
 {
     store: &'a S,
     src_arena_dont_use: &'a SS,
@@ -158,7 +156,7 @@ impl<
             + PostOrder<'a, T, IdD>,
         SD: DecompressedTreeStore<'a, T, IdD>
             + DecompressedWithParent<'a, T, IdD>
-            + BreathFirstIterable<'a, T, IdD>,
+            + BreadthFirstIterable<'a, T, IdD>,
         S: 'a, //:'a + NodeStore2<T::TreeId, R<'a> = T>, //NodeStore<'a, T::TreeId, T>,
     > ScriptGenerator<'a, IdD, T, SS, SD, S>
 where
