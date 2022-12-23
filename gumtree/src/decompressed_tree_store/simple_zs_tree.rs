@@ -1,16 +1,16 @@
-use std::{fmt::Debug, ops::Deref};
+use std::{fmt::Debug, marker::PhantomData, ops::Deref};
 
-use bitvec::bitvec;
 use num_traits::{cast, one, zero, PrimInt};
 
-use crate::decompressed_tree_store::basic_post_order::BasicPOSlice;
 use hyper_ast::types::{Children, IterableChildren, NodeStore, Stored, WithChildren, WithStats};
 
 use super::{
     basic_post_order::BasicPostOrder, simple_post_order::SimplePostOrder, CompletePostOrder,
-    DecompressedTreeStore, Initializable, InitializableWithStats, Iter, PostOrder,
+    DecompressedTreeStore, Initializable, InitializableWithStats, Iter, IterKr, PostOrder,
     PostOrderIterable, PostOrderKeyRoots, ShallowDecompressedTreeStore,
 };
+
+use logging_timer::time;
 
 /// made for the zs diff algo
 /// - post order
@@ -19,7 +19,7 @@ use super::{
 pub struct SimpleZsTree<T: Stored, IdD> {
     basic: BasicPostOrder<T, IdD>,
     /// LR_keyroots(T) = {k | there exists no k’> k such that l(k)=l(k’)}.
-    pub(crate) kr: Box<[IdD]>,
+    pub(crate) kr: bitvec::boxed::BitBox,
 }
 
 impl<T: Stored, IdD> Deref for SimpleZsTree<T, IdD> {
@@ -35,7 +35,7 @@ where
     T::TreeId: Clone,
 {
     fn from(simple: SimplePostOrder<T, IdD>) -> Self {
-        let kr = simple.compute_kr();
+        let kr = simple.compute_kr_bitset();
         let basic = simple.basic;
         Self { basic, kr }
     }
@@ -84,8 +84,13 @@ where
     //     fn kr(&self, x: IdD) -> IdD {
     //         self.kr[x.to_usize().unwrap()]
     //     }
-    fn iter_kr(&self) -> std::slice::Iter<'_, IdD> {
-        self.kr.iter()
+
+    type Iter<'b> = IterKr<'b,IdD>
+    where
+        Self: 'b;
+
+    fn iter_kr(&self) -> Self::Iter<'_> {
+        IterKr(self.kr.iter_ones(), PhantomData)
     }
 }
 
@@ -93,91 +98,14 @@ impl<'a, T: WithChildren, IdD: PrimInt + Debug> Initializable<'a, T> for SimpleZ
 where
     T::TreeId: Clone,
 {
+    #[time("warn")]
     fn new<S>(store: &'a S, root: &T::TreeId) -> SimpleZsTree<T, IdD>
     where
         S: NodeStore<T::TreeId, R<'a> = T>,
     {
-        struct R<IdC, Idx, IdD> {
-            curr: IdC,
-            idx: Idx,
-            lld: IdD,
-        }
-
-        let mut leaf_count = 0;
-        let mut stack = vec![R {
-            curr: root.clone(),
-            idx: zero(),
-            lld: zero(),
-        }];
-        let mut llds: Vec<IdD> = vec![];
-        let mut id_compressed: Vec<T::TreeId> = vec![];
-        while let Some(ele) = stack.pop() {
-            let R { curr, idx, lld } = ele;
-            let x = store.resolve(&curr);
-            let l = x.children();
-            let l = l.filter(|x| !x.is_empty());
-            if let Some(child) = l.and_then(|l| l.get(idx)) {
-                stack.push(R {
-                    curr,
-                    idx: idx + one(),
-                    lld,
-                });
-                stack.push(R {
-                    curr: child.clone(),
-                    idx: zero(),
-                    lld: zero(),
-                });
-            } else {
-                let value = if l.is_none() {
-                    leaf_count += 1;
-                    cast(id_compressed.len()).unwrap()
-                } else {
-                    lld
-                };
-                if let Some(tmp) = stack.last_mut() {
-                    if tmp.idx == one() {
-                        tmp.lld = value;
-                    }
-                }
-                id_compressed.push(curr.clone());
-                llds.push(value);
-            }
-        }
-
-        let node_count = id_compressed.len();
-        let mut kr = vec![num_traits::zero(); leaf_count + 1];
-        let mut visited = bitvec![0;node_count];
-        let mut k = kr.len() - 1;
-        for i in (1..node_count).rev() {
-            if !visited[llds[i].to_usize().unwrap()] {
-                kr[k] = cast(i).unwrap();
-                visited.set(llds[i].to_usize().unwrap(), true);
-                if k > 0 {
-                    k -= 1;
-                }
-            }
-        }
-        id_compressed.shrink_to_fit();
-        let id_compressed = id_compressed.into_boxed_slice();
-        llds.shrink_to_fit();
-        let llds = llds.into_boxed_slice();
-        kr.shrink_to_fit();
-
-        kr.reverse();
-        kr.pop();
-        let kr = kr.into_boxed_slice();
-        let basic = BasicPostOrder::<T, IdD> {
-            id_compressed: id_compressed,
-            llds: llds,
-            _phantom: std::marker::PhantomData,
-        };
-        let basic_kr = basic.compute_kr();
-        assert_eq!(kr, basic_kr);
-
-        Self {
-            basic,
-            kr,
-        }
+        let basic = BasicPostOrder::<T, IdD>::new(store, root);
+        let kr = basic.compute_kr_bitset();
+        Self { basic, kr }
     }
 }
 
@@ -238,25 +166,10 @@ where
             }
         }
 
-        let node_count = id_compressed.len();
-        let mut kr = vec![num_traits::zero(); leaf_count + 1];
-        let mut visited = bitvec![0;node_count];
-        let mut k = kr.len() - 1;
-        for i in (1..node_count).rev() {
-            if !visited[llds[i].to_usize().unwrap()] {
-                kr[k] = cast(i).unwrap();
-                visited.set(llds[i].to_usize().unwrap(), true);
-                if k > 0 {
-                    k -= 1;
-                }
-            }
-        }
         id_compressed.shrink_to_fit();
         let id_compressed = id_compressed.into_boxed_slice();
         llds.shrink_to_fit();
         let llds = llds.into_boxed_slice();
-        kr.shrink_to_fit();
-        let kr = kr.into_boxed_slice();
         assert_eq!(id_compressed.len(), pred_len);
         assert_eq!(llds.len(), pred_len);
 
@@ -265,8 +178,7 @@ where
             llds,
             _phantom: std::marker::PhantomData,
         };
-        let basic_kr = basic.compute_kr();
-        assert_eq!(kr, basic_kr);
+        let kr = basic.compute_kr_bitset();
         Self { basic, kr }
     }
 }

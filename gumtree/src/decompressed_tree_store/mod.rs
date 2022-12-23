@@ -15,6 +15,7 @@ pub mod bfs_wrapper;
 pub mod breadth_first;
 pub mod complete_post_order;
 pub mod lazy_post_order;
+pub mod lazy_post_order2;
 pub mod pre_order_wrapper;
 pub mod simple_post_order;
 pub use breadth_first::BreathFirst;
@@ -104,6 +105,8 @@ pub trait DecompressedTreeStore<'a, T: WithChildren, IdD, IdS = IdD>:
         S: NodeStore<T::TreeId, R<'b> = T>;
     fn first_descendant(&self, i: &IdD) -> IdS;
 }
+
+/// If you want to add bounds on Self::Slice, make a specialized trait like POBorrowSlice
 pub trait ContiguousDescendants<'a, T: WithChildren, IdD, IdS = IdD>:
     DecompressedTreeStore<'a, T, IdD, IdS>
 {
@@ -115,6 +118,18 @@ pub trait ContiguousDescendants<'a, T: WithChildren, IdD, IdS = IdD>:
 
     /// The contguous slice of descendants of x and x
     fn slice(&self, x: &IdD) -> Self::Slice<'_>;
+}
+
+/// Specialize ContiguousDescendants to specify in trait the bound of Self::Slice (here SlicePo)
+/// WIP see https://blog.rust-lang.org/2022/10/28/gats-stabilization.html#implied-static-requirement-from-higher-ranked-trait-bounds
+pub trait POBorrowSlice<'a, T: WithChildren, IdD, IdS = IdD>:
+    ContiguousDescendants<'a, T, IdD, IdS>
+{
+    type SlicePo<'b>: PostOrderKeyRoots<'b, T, IdD>
+    where
+        Self: 'b;
+
+    fn slice_po(&self, x: &IdD) -> Self::SlicePo<'_>;
 }
 
 pub trait DecompressedWithParent<'a, T: WithChildren, IdD> {
@@ -181,8 +196,11 @@ pub trait PostOrder<'a, T: WithChildren, IdD>: DecompressedTreeStore<'a, T, IdD>
     fn tree(&self, id: &IdD) -> T::TreeId;
 }
 
-pub trait PostOrderKeyRoots<'a, T: WithChildren, IdD: PrimInt>: PostOrder<'a, T, IdD> {
-    fn iter_kr(&self) -> std::slice::Iter<'_, IdD>;
+pub trait PostOrderKeyRoots<'a, T: WithChildren, IdD>: PostOrder<'a, T, IdD> {
+    type Iter<'b>: Iterator<Item = IdD>
+    where
+        Self: 'b;
+    fn iter_kr(&self) -> Self::Iter<'_>;
 }
 
 pub struct Iter<IdD> {
@@ -202,6 +220,19 @@ impl<IdD: PrimInt> Iterator for Iter<IdD> {
             self.current = r + one();
             Some(r)
         }
+    }
+}
+
+pub struct IterKr<'a, IdD>(
+    bitvec::slice::IterOnes<'a, bitvec::prelude::LocalBits, usize>,
+    std::marker::PhantomData<*const IdD>,
+);
+
+impl<'a, IdD: PrimInt> Iterator for IterKr<'a, IdD> {
+    type Item = IdD;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        num_traits::cast(self.0.next()?)
     }
 }
 

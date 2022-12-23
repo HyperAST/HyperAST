@@ -6,6 +6,7 @@ use std::{
     ops::Deref,
 };
 
+use bitvec::slice::BitSlice;
 use num_traits::{cast, PrimInt, ToPrimitive, Zero};
 
 use crate::tree::tree_path::CompressedTreePath;
@@ -18,9 +19,11 @@ use super::{
     pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
     simple_post_order::{SimplePOSlice, SimplePostOrder},
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings,
-    Initializable, Iter, PostOrder, PostOrderIterable, PostOrderKeyRoots,
+    Initializable, Iter, IterKr, POBorrowSlice, PostOrder, PostOrderIterable, PostOrderKeyRoots,
     ShallowDecompressedTreeStore,
 };
+
+use logging_timer::time;
 
 /// made for TODO
 /// - post order
@@ -29,7 +32,7 @@ use super::{
 pub struct CompletePostOrder<T: Stored, IdD> {
     pub(super) simple: SimplePostOrder<T, IdD>,
     /// LR_keyroots(T) = {k | there exists no k < k' such that l(k) = l(k’)}.
-    pub(super) kr: Box<[IdD]>,
+    pub(super) kr: bitvec::boxed::BitBox,
 }
 
 impl<T: Stored, IdD> Deref for CompletePostOrder<T, IdD> {
@@ -40,16 +43,12 @@ impl<T: Stored, IdD> Deref for CompletePostOrder<T, IdD> {
     }
 }
 
-pub struct CompletePOSlice<'a, T: Stored, IdD> {
-    pub(super) simple: SimplePOSlice<'a, T, IdD>,
-    pub(super) kr: &'a [IdD],
-}
-
-impl<'a, T: Stored, IdD> Deref for CompletePOSlice<'a, T, IdD> {
-    type Target = SimplePOSlice<'a, T, IdD>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.simple
+impl<T: Stored, IdD> CompletePostOrder<T, IdD> {
+    pub fn as_slice(&self) -> CompletePOSlice<'_, T, IdD> {
+        CompletePOSlice {
+            simple: self.simple.as_slice(),
+            kr: &self.kr,
+        }
     }
 }
 
@@ -63,8 +62,9 @@ impl<T: WithChildren, IdD: PrimInt> From<SimplePostOrder<T, IdD>> for CompletePo
 where
     T::TreeId: Clone,
 {
+    #[time("warn")]
     fn from(simple: SimplePostOrder<T, IdD>) -> Self {
-        let kr = simple.compute_kr();
+        let kr = simple.compute_kr_bitset();
         Self { simple, kr }
     }
 }
@@ -227,7 +227,7 @@ where
     }
 }
 
-impl<'d, T: WithChildren, IdD: PrimInt> PostOrderIterable<'d, T, IdD> for CompletePostOrder<T, IdD>
+impl<'a, T: WithChildren, IdD: PrimInt> PostOrderIterable<'a, T, IdD> for CompletePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug,
 {
@@ -237,7 +237,7 @@ where
     }
 }
 
-impl<'d, T: WithChildren + 'd, IdD: PrimInt> PostOrderKeyRoots<'d, T, IdD>
+impl<'a, T: WithChildren + 'a, IdD: PrimInt> PostOrderKeyRoots<'a, T, IdD>
     for CompletePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug,
@@ -245,8 +245,12 @@ where
     // fn kr(&self, x: IdD) -> IdD {
     //     self.kr[x.to_usize().unwrap()]
     // }
-    fn iter_kr(&self) -> std::slice::Iter<'_, IdD> {
-        self.kr.iter()
+    type Iter<'b> = IterKr<'b,IdD>
+    where
+        Self: 'b;
+
+    fn iter_kr(&self) -> Self::Iter<'_> {
+        IterKr(self.kr.iter_ones(), PhantomData)
     }
 }
 
@@ -259,9 +263,7 @@ where
     where
         S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,
     {
-        let simple = SimplePostOrder::new(store, root);
-        let kr = simple.compute_kr();
-        Self { simple, kr }
+        SimplePostOrder::new(store, root).into()
     }
 }
 
@@ -342,8 +344,22 @@ where
         let range = self.slice_range(x);
         CompletePOSlice {
             simple: self.simple.slice(x),
-            kr: todo!("need to change kr to a bitset"),
+            kr: &self.kr[range],
         }
+    }
+}
+
+impl<'a, T: WithChildren, IdD: PrimInt> POBorrowSlice<'a, T, IdD> for CompletePostOrder<T, IdD>
+where
+    T::TreeId: Clone + Eq + Debug,
+{
+    type SlicePo<'b>=Self::Slice<'b>
+    where
+        Self: 'b;
+
+    #[time("warn")]
+    fn slice_po(&self, x: &IdD) -> Self::Slice<'_> {
+        self.slice(x)
     }
 }
 
@@ -619,5 +635,108 @@ where
                 .entry(*c)
                 .or_insert((self.with_p)(Default::default(), ori))
         }
+    }
+}
+
+pub struct CompletePOSlice<'a, T: Stored, IdD> {
+    pub(super) simple: SimplePOSlice<'a, T, IdD>,
+    pub(super) kr: &'a BitSlice,
+}
+
+impl<'a, T: Stored, IdD> Deref for CompletePOSlice<'a, T, IdD> {
+    type Target = SimplePOSlice<'a, T, IdD>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.simple
+    }
+}
+
+impl<'a, T: WithChildren, IdD: PrimInt> ShallowDecompressedTreeStore<'a, T, IdD>
+    for CompletePOSlice<'a, T, IdD>
+where
+    T::TreeId: Clone + Eq + Debug,
+{
+    fn len(&self) -> usize {
+        self.simple.len()
+    }
+
+    fn original(&self, id: &IdD) -> T::TreeId {
+        self.simple.original(id)
+    }
+
+    // fn leaf_count(&self) -> IdD {
+    //     cast(self.kr.len()).unwrap()
+    // }
+
+    fn root(&self) -> IdD {
+        cast(self.len() - 1).unwrap()
+    }
+
+    fn child<'b, S>(&self, store: &'b S, x: &IdD, p: &[T::ChildIdx]) -> IdD
+    where
+        S: NodeStore<T::TreeId, R<'b> = T>,
+    {
+        self.simple.child(store, x, p)
+    }
+
+    fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    where
+        S: NodeStore<T::TreeId, R<'b> = T>,
+    {
+        self.simple.children(store, x)
+    }
+}
+
+impl<'a, T: WithChildren, IdD: PrimInt> DecompressedTreeStore<'a, T, IdD>
+    for CompletePOSlice<'a, T, IdD>
+where
+    T::TreeId: Clone + Eq + Debug,
+{
+    fn descendants<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    where
+        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
+    {
+        self.simple.descendants(store, x)
+    }
+
+    fn first_descendant(&self, i: &IdD) -> IdD {
+        self.simple.first_descendant(i)
+    }
+
+    fn descendants_count<'b, S>(&self, store: &'b S, x: &IdD) -> usize
+    where
+        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
+    {
+        self.simple.descendants_count(store, x)
+    }
+}
+
+impl<'a, T: WithChildren, IdD: PrimInt> PostOrder<'a, T, IdD> for CompletePOSlice<'a, T, IdD>
+where
+    T::TreeId: Clone + Eq + Debug,
+{
+    fn lld(&self, i: &IdD) -> IdD {
+        self.simple.lld(i)
+    }
+
+    fn tree(&self, id: &IdD) -> T::TreeId {
+        self.simple.tree(id)
+    }
+}
+
+impl<'a, T: WithChildren + 'a, IdD: PrimInt> PostOrderKeyRoots<'a, T, IdD>
+    for CompletePOSlice<'a, T, IdD>
+where
+    T::TreeId: Clone + Eq + Debug,
+{
+    // fn kr(&self, x: IdD) -> IdD {
+    //     self.kr[x.to_usize().unwrap()]
+    // }
+    type Iter<'b> = IterKr<'b,IdD>
+    where
+        Self: 'b;
+
+    fn iter_kr(&self) -> Self::Iter<'_> {
+        IterKr(self.kr.iter_ones(), PhantomData)
     }
 }

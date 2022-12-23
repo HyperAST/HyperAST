@@ -2,6 +2,12 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
 use num_traits::{cast, one, zero, PrimInt, ToPrimitive, Zero};
 
+use super::{
+    basic_post_order::BasicPostOrder,
+    simple_post_order::{SimplePOSlice, SimplePostOrder},
+    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings,
+    Initializable, LazyDecompressedTreeStore, PostOrder, Shallow, ShallowDecompressedTreeStore,
+};
 use crate::tree::tree_path::CompressedTreePath;
 use hyper_ast::{
     position::Position,
@@ -10,13 +16,7 @@ use hyper_ast::{
         WithSerialization, WithStats,
     },
 };
-
-use super::{
-    basic_post_order::BasicPostOrder,
-    simple_post_order::{SimplePOSlice, SimplePostOrder},
-    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings,
-    Initializable, LazyDecompressedTreeStore, PostOrder, Shallow, ShallowDecompressedTreeStore,
-};
+use logging_timer::time;
 
 pub struct LazyPostOrder<T: Stored, IdD> {
     pub(super) id_compressed: Box<[T::TreeId]>,
@@ -211,6 +211,7 @@ where
             q.extend(self.children(store, &x));
         }
     }
+    #[time("warn")]
     pub fn complete<S>(mut self, store: &'a S) -> SimplePostOrder<T, IdD>
     where
         T::TreeId: Eq,

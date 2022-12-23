@@ -30,16 +30,6 @@ impl<T: Stored, IdD> BasicPostOrder<T, IdD> {
     }
 }
 
-pub struct BasicPOSlice<'a, T: Stored, IdD> {
-    /// Ids of subtrees in HyperAST
-    pub(super) id_compressed: &'a [T::TreeId],
-    /// leftmost leaf descendant of nodes
-    ///
-    /// it is so powerful even the basic layout should keep it
-    pub(crate) llds: &'a [IdD],
-    pub(super) _phantom: std::marker::PhantomData<*const T>,
-}
-
 impl<T: Stored, IdD: PrimInt> BasicPostOrder<T, IdD> {
     pub fn iter(&self) -> impl Iterator<Item = &T::TreeId> {
         self.id_compressed.iter()
@@ -123,7 +113,7 @@ where
     <T as WithChildren>::ChildIdx: PrimInt,
 {
     /// WARN oposite order than id_compressed
-    pub(crate) fn compute_kr(&self) -> Box<[IdD]>
+    pub fn compute_kr(&self) -> Box<[IdD]>
 where {
         let BasicPOSlice::<T, IdD> {
             id_compressed,
@@ -145,7 +135,7 @@ where {
     /// use a bitset to mark key roots
     ///
     /// should be easier to split and maybe more efficient
-    pub(crate) fn compute_kr_bitset(&self) -> bitvec::boxed::BitBox
+    pub fn compute_kr_bitset(&self) -> bitvec::boxed::BitBox
 where {
         // use bitvec::prelude::Lsb0;
         let BasicPOSlice::<T, IdD> {
@@ -418,5 +408,128 @@ where
             z += Self::size2(store, x);
         }
         z + 1
+    }
+}
+
+pub struct BasicPOSlice<'a, T: Stored, IdD> {
+    /// Ids of subtrees in HyperAST
+    pub(super) id_compressed: &'a [T::TreeId],
+    /// leftmost leaf descendant of nodes
+    ///
+    /// it is so powerful even the basic layout should keep it
+    pub(crate) llds: &'a [IdD],
+    pub(super) _phantom: std::marker::PhantomData<*const T>,
+}
+
+impl<'d, T: WithChildren, IdD: PrimInt> BasicPOSlice<'d, T, IdD> {
+    pub(crate) fn size(&self, i: &IdD) -> IdD {
+        *i - self.llds[(*i).to_usize().unwrap()] + one()
+    }
+}
+
+impl<'a, T: WithChildren, IdD: PrimInt> PostOrder<'a, T, IdD> for BasicPOSlice<'a, T, IdD>
+where
+    T::TreeId: Clone + Eq,
+{
+    fn lld(&self, i: &IdD) -> IdD {
+        self.llds[(*i).to_usize().unwrap()] - self.llds[0]
+    }
+
+    fn tree(&self, id: &IdD) -> T::TreeId {
+        self.id_compressed[id.to_usize().unwrap()].clone()
+    }
+}
+
+impl<'a, T: WithChildren, IdD: PrimInt> ShallowDecompressedTreeStore<'a, T, IdD>
+    for BasicPOSlice<'a, T, IdD>
+where
+    T::TreeId: Clone + Eq,
+{
+    fn len(&self) -> usize {
+        self.id_compressed.len()
+    }
+
+    fn original(&self, id: &IdD) -> T::TreeId {
+        self.id_compressed[id.to_usize().unwrap()].clone()
+    }
+
+    fn root(&self) -> IdD {
+        cast(self.len() - 1).unwrap()
+    }
+
+    fn child<'b, S>(&self, store: &'b S, x: &IdD, p: &[T::ChildIdx]) -> IdD
+    where
+        S: NodeStore<T::TreeId, R<'b> = T>,
+    {
+        let mut r = *x;
+        for d in p {
+            let a = self.original(&r);
+            let node = store.resolve(&a);
+            let cs = node.children().filter(|x| x.is_empty());
+            let Some(cs) = cs  else {
+                panic!("no children in this tree")
+            };
+            let mut z = 0;
+            let cs = cs.before(*d + one());
+            let cs: Vec<T::TreeId> = cs.iter_children().cloned().collect();
+            for x in cs {
+                z += BasicPostOrder::<T, IdD>::size2::<S>(store, &x);
+            }
+            r = self.first_descendant(&r) + cast(z).unwrap() - one();
+        }
+        r
+    }
+
+    fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    where
+        S: NodeStore<T::TreeId, R<'b> = T>,
+    {
+        let a = self.original(x);
+        let node = store.resolve(&a);
+        let cs_len = node.child_count().to_usize().unwrap();
+        if cs_len == 0 {
+            return vec![];
+        }
+        let mut r = vec![zero(); cs_len];
+        let mut c = *x - one();
+        let mut i = cs_len - 1;
+        r[i] = c;
+        while i > 0 {
+            i -= 1;
+            let s = self.size(&c);
+            c = c - s;
+            r[i] = c;
+        }
+        assert_eq!(
+            self.lld(x).to_usize().unwrap(),
+            self.lld(&c).to_usize().unwrap()
+        );
+        r
+    }
+}
+
+impl<'a, T: WithChildren, IdD: PrimInt> DecompressedTreeStore<'a, T, IdD>
+    for BasicPOSlice<'a, T, IdD>
+where
+    T::TreeId: Clone + Eq,
+{
+    fn descendants<'b, S>(&self, _store: &'b S, x: &IdD) -> Vec<IdD>
+    where
+        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
+    {
+        (self.first_descendant(x).to_usize().unwrap()..x.to_usize().unwrap())
+            .map(|x| cast(x).unwrap())
+            .collect()
+    }
+
+    fn first_descendant(&self, i: &IdD) -> IdD {
+        self.lld(i)
+    }
+
+    fn descendants_count<'b, S>(&self, _store: &'b S, x: &IdD) -> usize
+    where
+        S: 'b + NodeStore<T::TreeId, R<'b> = T>,
+    {
+        (*x - self.first_descendant(x) + one()).to_usize().unwrap()
     }
 }

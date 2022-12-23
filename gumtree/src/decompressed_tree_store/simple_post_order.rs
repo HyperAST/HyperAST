@@ -30,6 +30,16 @@ impl<T: Stored, IdD> Deref for SimplePostOrder<T, IdD> {
     }
 }
 
+impl<T: Stored, IdD> SimplePostOrder<T, IdD> {
+    pub fn as_slice(&self) -> SimplePOSlice<'_, T, IdD> {
+        SimplePOSlice {
+            basic: self.basic.as_slice(),
+            id_parent: &self.id_parent,
+        }
+    }
+}
+
+/// WIP WithParent (need some additional offset computations)
 pub struct SimplePOSlice<'a, T: Stored, IdD> {
     pub(super) basic: BasicPOSlice<'a, T, IdD>,
     pub(super) id_parent: &'a [IdD],

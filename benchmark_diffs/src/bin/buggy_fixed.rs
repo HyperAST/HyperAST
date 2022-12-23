@@ -1,19 +1,30 @@
-use std::{
-    env,
-    path::Path,
-};
+use std::{env, path::Path};
 
-use hyper_ast_benchmark_diffs::{with_profiling, buggy_fixed::run_dir,
-};
-
+use hyper_ast_benchmark_diffs::{buggy_fixed::run_dir, with_profiling};
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
+use std::io::Write;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
 pub(crate) fn main() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug"))
+        .format(|buf, record| {
+            if record.level().to_level_filter() > log::LevelFilter::Debug {
+                writeln!(buf, "{}", record.args())
+            } else {
+                writeln!(
+                    buf,
+                    "[{} {}] {}",
+                    buf.timestamp_millis(),
+                    record.level(),
+                    record.args()
+                )
+            }
+        })
+        .init();
     with_profiling(Path::new("profile.pb"), || {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         let data_root = root.parent().unwrap().join("gt_datasets/defects4j");
