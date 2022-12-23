@@ -368,9 +368,7 @@ where
     where
         S: NodeStore<<T>::TreeId, R<'b> = T>,
     {
-        // TODO do some refactoring, this is ugly
-        let a = self.original(x);
-        let node = store.resolve(&a);
+        let node = store.resolve(&self.original(x));
         let Some(cs) = node.children() else {
             return vec![];
         };
@@ -378,34 +376,24 @@ where
         if cs_len == 0 {
             return vec![];
         }
-        let x_size = node.size() - 1;
-        assert_eq!(
-            x.to_usize().unwrap() - x_size,
-            self._lld(x.to_usize().unwrap()).to_usize().unwrap()
-        );
         let mut r = vec![zero(); cs_len];
         let mut c = *x - one();
         let mut i = cs_len - 1;
-        let mut child_size = 0;
-        r[i] = c;
-        self.id_compressed[c.to_usize().unwrap()] = cs[cast(i).unwrap()].clone();
-        self.id_parent[c.to_usize().unwrap()] = x.clone();
-        let mut s = store.resolve(&cs[cast(i).unwrap()]).size();
-        child_size += store.resolve(&cs[cast(i).unwrap()]).size();
-        self.llds[c.to_usize().unwrap()] = *x - cast::<_, IdD>(child_size).unwrap();
-        assert_eq!(self._size(&c).to_usize().unwrap(), s);
-        while i > 0 {
+        loop {
+            let c_n = &cs[cast(i).unwrap()];
+            let s = store.resolve(c_n).size();
+            let offset = c.to_usize().unwrap();
+            r[i] = c;
+            self.id_compressed[offset] = c_n.clone();
+            self.id_parent[offset] = x.clone();
+            self.llds[offset] = c + one() - cast(s).unwrap();
+            if i == 0 {
+                break;
+            }
             c = c - cast(s).unwrap();
             i -= 1;
-            r[i] = c;
-            self.id_compressed[c.to_usize().unwrap()] = cs[cast(i).unwrap()].clone();
-            self.id_parent[c.to_usize().unwrap()] = x.clone();
-            s = store.resolve(&cs[cast(i).unwrap()]).size();
-            child_size += store.resolve(&cs[cast(i).unwrap()]).size();
-            self.llds[c.to_usize().unwrap()] = *x - cast::<_, IdD>(child_size).unwrap();
-            assert_eq!(self._size(&c).to_usize().unwrap(), s);
         }
-        assert_eq!(x_size, child_size);
+
         assert_eq!(
             self._lld(x.to_usize().unwrap()).to_usize().unwrap(),
             self._lld(c.to_usize().unwrap()).to_usize().unwrap()
