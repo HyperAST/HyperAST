@@ -59,15 +59,11 @@ where
     T::TreeId: Clone,
 {
     fn lld(&self, i: &IdD) -> IdD {
-        self.basic.lld(&(*i - one()))
-        // self.basic.lld(i) // TODO Remove bad fixing offset
+        self.basic.lld(i)
     }
 
     fn tree(&self, id: &IdD) -> T::TreeId {
-        let r = self.id_compressed[id.to_usize().unwrap() - 1].clone();
-        assert!(r == self.basic.tree(&(*id - one())));
-        r
-        // self.basic.tree(id) // TODO Remove bad fixing offset
+        self.basic.tree(id)
     }
 }
 
@@ -154,7 +150,7 @@ where
         let mut k = kr.len() - 1;
         for i in (1..node_count).rev() {
             if !visited[llds[i].to_usize().unwrap()] {
-                kr[k] = cast(i + 1).unwrap();
+                kr[k] = cast(i).unwrap();
                 visited.set(llds[i].to_usize().unwrap(), true);
                 if k > 0 {
                     k -= 1;
@@ -166,24 +162,20 @@ where
         llds.shrink_to_fit();
         let llds = llds.into_boxed_slice();
         kr.shrink_to_fit();
+
         kr.reverse();
         kr.pop();
         let kr = kr.into_boxed_slice();
-
-        let basic = BasicPOSlice::<T, IdD> {
-            id_compressed: &id_compressed,
-            llds: &llds,
+        let basic = BasicPostOrder::<T, IdD> {
+            id_compressed: id_compressed,
+            llds: llds,
             _phantom: std::marker::PhantomData,
         };
         let basic_kr = basic.compute_kr();
         assert_eq!(kr, basic_kr);
 
         Self {
-            basic: BasicPostOrder {
-                id_compressed,
-                llds,
-                _phantom: std::marker::PhantomData,
-            },
+            basic,
             kr,
         }
     }
@@ -252,7 +244,7 @@ where
         let mut k = kr.len() - 1;
         for i in (1..node_count).rev() {
             if !visited[llds[i].to_usize().unwrap()] {
-                kr[k] = cast(i + 1).unwrap();
+                kr[k] = cast(i).unwrap();
                 visited.set(llds[i].to_usize().unwrap(), true);
                 if k > 0 {
                     k -= 1;
@@ -267,14 +259,15 @@ where
         let kr = kr.into_boxed_slice();
         assert_eq!(id_compressed.len(), pred_len);
         assert_eq!(llds.len(), pred_len);
-        Self {
-            basic: BasicPostOrder {
-                id_compressed,
-                llds,
-                _phantom: std::marker::PhantomData,
-            },
-            kr,
-        }
+
+        let basic = BasicPostOrder {
+            id_compressed,
+            llds,
+            _phantom: std::marker::PhantomData,
+        };
+        let basic_kr = basic.compute_kr();
+        assert_eq!(kr, basic_kr);
+        Self { basic, kr }
     }
 }
 
@@ -330,7 +323,7 @@ where
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
     {
-        let r = (self.lld(x) - *x).to_usize().unwrap();
+        let r = (self.lld(x) + one() - *x).to_usize().unwrap();
         assert!(r == self.basic.descendants_count(store, x));
         r
     }

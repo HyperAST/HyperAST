@@ -217,41 +217,41 @@ where
     }
 
     pub(crate) fn forest_dist(&self, dist: &mut ZsMatcherDist, i: &M::Src, j: &M::Dst) {
-        let sa = &self.src_arena;
-        let da = &self.dst_arena;
+        let sa = self.src_arena;
+        let da = self.dst_arena;
         // println!("i:{:?} j:{:?}", i, j);
-        let lldsrc = sa.lld(i).to_usize().unwrap();
-        let llddst = da.lld(j).to_usize().unwrap();
-        dist.forest[lldsrc - 1][llddst - 1] = 0.0;
-        for di in lldsrc..i.to_usize().unwrap() + 1 {
+        let lldsrc = sa.lld(&i).to_usize().unwrap();
+        let llddst = da.lld(&j).to_usize().unwrap();
+        dist.forest[lldsrc][llddst] = 0.0;
+        for di in lldsrc..=i.to_usize().unwrap() {
             let odi = cast(di).unwrap();
             let srctree = sa.tree(&odi);
             let lldsrc2 = sa.lld(&odi);
             let cost_del = self.get_deletion_cost(&srctree);
-            dist.forest[di][llddst - 1] = dist.forest[di - 1][llddst - 1] + cost_del;
-            for dj in llddst..j.to_usize().unwrap() + 1 {
+            dist.forest[di + 1][llddst] = dist.forest[di][llddst] + cost_del;
+            for dj in llddst..=j.to_usize().unwrap() {
                 let odj = cast(dj).unwrap();
                 let dsttree = da.tree(&odj);
                 let llddst2 = da.lld(&odj);
                 let cost_ins = self.get_insertion_cost(&dsttree);
-                dist.forest[lldsrc - 1][dj] = dist.forest[lldsrc - 1][dj - 1] + cost_ins;
+                dist.forest[lldsrc][dj + 1] = dist.forest[lldsrc][dj] + cost_ins;
                 if lldsrc2 == sa.lld(&i) && (llddst2 == da.lld(&j)) {
                     let cost_upd = self.get_update_cost(&srctree, &dsttree);
-                    dist.forest[di][dj] = f64::min(
+                    dist.forest[di + 1][dj + 1] = f64::min(
                         f64::min(
-                            dist.forest[di - 1][dj] + cost_del,
-                            dist.forest[di][dj - 1] + cost_ins,
+                            dist.forest[di][dj + 1] + cost_del,
+                            dist.forest[di + 1][dj] + cost_ins,
                         ),
-                        dist.forest[di - 1][dj - 1] + cost_upd,
+                        dist.forest[di][dj] + cost_upd,
                     );
-                    dist.tree[di][dj] = dist.forest[di][dj];
+                    dist.tree[di + 1][dj + 1] = dist.forest[di + 1][dj + 1];
                 } else {
-                    dist.forest[di][dj] = f64::min(
+                    dist.forest[di + 1][dj + 1] = f64::min(
                         f64::min(
-                            dist.forest[di - 1][dj] + cost_del,
-                            dist.forest[di][dj - 1] + cost_ins,
+                            dist.forest[di][dj + 1] + cost_del,
+                            dist.forest[di + 1][dj] + cost_ins,
                         ),
-                        dist.f_dist(lldsrc2 - one(), llddst2 - one()) + dist.tree[di][dj],
+                        dist.f_dist(lldsrc2, llddst2) + dist.tree[di + 1][dj + 1],
                     );
                 }
             }
@@ -263,8 +263,10 @@ where
         let mut tree_pairs: VecDeque<(M::Src, M::Dst)> = Default::default();
         // push the pair of trees (ted1,ted2) to stack
         tree_pairs.push_front((
-            cast(self.src_arena.len()).unwrap(),
-            cast(self.dst_arena.len()).unwrap(),
+            self.src_arena.root() + one(),
+            self.dst_arena.root() + one(),
+            // cast(self.src_arena.len() - 1).unwrap(),
+            // cast(self.dst_arena.len() - 1).unwrap(),
         ));
         while !tree_pairs.is_empty() {
             let tree_pair = tree_pairs.pop_front().unwrap();
@@ -274,17 +276,17 @@ where
 
             // compute forest distance matrix
             if !root_node_pair {
-                self.forest_dist(dist, &last_row, &last_col);
+                self.forest_dist(dist, &(last_row - one()), &(last_col - one()));
             }
 
             root_node_pair = false;
 
             // compute mapping for current forest distance matrix
-            let first_row: M::Src = self.src_arena.lld(&last_row) - one();
-            let first_col: M::Dst = self.dst_arena.lld(&last_col) - one();
+            let first_row: M::Src = self.src_arena.lld(&(last_row - one()));
+            let first_col: M::Dst = self.dst_arena.lld(&(last_col - one()));
 
-            let mut row: M::Src = cast(last_row).unwrap();
-            let mut col: M::Dst = cast(last_col).unwrap();
+            let mut row: M::Src = last_row;
+            let mut col: M::Dst = last_col;
 
             while (row > first_row) || (col > first_col) {
                 if (row > first_row)
@@ -300,20 +302,22 @@ where
                 } else {
                     // node with postorderID row in ted1 is renamed to node col
                     // in ted2
-                    if (self.src_arena.lld(&row) == self.src_arena.lld(&last_row))
-                        && (self.dst_arena.lld(&col) == self.dst_arena.lld(&last_col))
+                    if (self.src_arena.lld(&(row - one()))
+                        == self.src_arena.lld(&(last_row - one())))
+                        && (self.dst_arena.lld(&(col - one()))
+                            == self.dst_arena.lld(&(last_col - one())))
                     {
                         // if both subforests are trees, map nodes
                         let t_src = self
                             .node_store
-                            .resolve(&self.src_arena.tree(&row))
+                            .resolve(&self.src_arena.tree(&(row - one())))
                             .get_type();
                         let t_dst = self
                             .node_store
-                            .resolve(&self.dst_arena.tree(&col))
+                            .resolve(&self.dst_arena.tree(&(col - one())))
                             .get_type();
                         if t_src == t_dst {
-                            mappings.link(row, col);
+                            mappings.link(row - one(), col - one());
                             // assert_eq!(self.mappings.get_dst(&row),col);
                         } else {
                             panic!("Should not map incompatible nodes.");
@@ -329,14 +333,15 @@ where
                         tree_pairs.push_front((row, col));
                         // continue with forest to the left of the popped
                         // subtree pair
-
                         if row > zero() {
-                            row = self.src_arena.lld(&row) - one();
+                            row = row - one();
+                            row = self.src_arena.lld(&row);
                         } else {
                             row = zero()
                         }
                         if col > zero() {
-                            col = self.dst_arena.lld(&col) - one();
+                            col = col - one();
+                            col = self.dst_arena.lld(&col);
                         } else {
                             col = zero()
                         }
@@ -480,7 +485,7 @@ mod tests {
             // assert_eq!(a.id_compressed, vec![3, 5, 4, 1, 2, 0]);
             assert_eq!(&*a.llds, &vec![0, 1, 1, 0, 4, 0]);
             assert_eq!(
-                a.iter_kr().rev().map(|x| x - 1).collect::<Vec<_>>(),
+                a.iter_kr().rev().map(|x| *x).collect::<Vec<_>>(),
                 vec![2, 4, 5]
             );
             a
@@ -495,7 +500,7 @@ mod tests {
             // assert_eq!(&*a.id_compressed, &vec![3, 5, 8, 7, 2, 6]);
             assert_eq!(&*a.llds, &vec![0, 1, 0, 0, 4, 0]);
             assert_eq!(
-                a.iter_kr().rev().map(|x| x - 1).collect::<Vec<_>>(),
+                a.iter_kr().rev().map(|x| *x).collect::<Vec<_>>(),
                 vec![1, 4, 5]
             );
             a

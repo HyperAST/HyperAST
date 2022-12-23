@@ -28,6 +28,11 @@ impl<A: Debug> Debug for ActionsVec<A> {
         f.debug_tuple("ActionsVec").field(&self.0).finish()
     }
 }
+impl<A> Default for ActionsVec<A> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
 
 pub fn actions_vec_f(
     v: &ActionsVec<SimpleAction<LabelIdentifier, u16, NodeIdentifier>>,

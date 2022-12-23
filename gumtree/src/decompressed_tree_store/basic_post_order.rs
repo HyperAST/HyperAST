@@ -63,7 +63,7 @@ where
     T::TreeId: Clone + Eq,
 {
     fn lld(&self, i: &IdD) -> IdD {
-        self.llds[(*i).to_usize().unwrap()] + num_traits::one() // TODO remove +1
+        self.llds[(*i).to_usize().unwrap()]
     }
 
     fn tree(&self, id: &IdD) -> T::TreeId {
@@ -135,7 +135,7 @@ where {
         let mut visited = bitvec::bitvec![0; node_count];
         for i in (1..node_count).rev() {
             if !visited[llds[i].to_usize().unwrap()] {
-                kr.push(cast(i + 1).unwrap());
+                kr.push(cast(i).unwrap());
                 visited.set(llds[i].to_usize().unwrap(), true);
             }
         }
@@ -159,7 +159,7 @@ where {
         let mut visited = bitvec::bitvec![0; node_count];
         for i in (1..node_count).rev() {
             if !visited[llds[i].to_usize().unwrap()] {
-                kr.set(i + 1, true);
+                kr.set(i, true);
                 // kr.push(cast(i + 1).unwrap());
                 visited.set(llds[i].to_usize().unwrap(), true);
             }

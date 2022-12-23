@@ -211,7 +211,7 @@ where
             .node_store
             .resolve(&self.internal.src_arena.original(&src))
             .has_children();
-        assert_eq!(r, self.internal.src_arena.lld(&src) <= src);
+        assert_eq!(r, self.internal.src_arena.lld(&src) < src);
         r
     }
 
@@ -244,8 +244,8 @@ where
             let mappings = matcher.mappings;
             for (i, t) in mappings.iter() {
                 //remapping
-                let src: M::Src = src_offset + cast(i - num_traits::one()).unwrap();
-                let dst: M::Dst = dst_offset + cast(t - num_traits::one()).unwrap();
+                let src: M::Src = src_offset + cast(i).unwrap();
+                let dst: M::Dst = dst_offset + cast(t).unwrap();
                 // use it
                 let bbb =
                     !self.internal.mappings.is_src(&src) && !self.internal.mappings.is_dst(&dst);
