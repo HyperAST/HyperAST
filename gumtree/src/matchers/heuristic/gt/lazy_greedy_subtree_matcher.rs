@@ -264,11 +264,11 @@ where
         let s2: Vec<_> = Ddst::parents(&self.internal.dst_arena, l.1).collect();
         let common = longest_common_subsequence::<_, _, usize, _>(&s1, &s2, |a, b| {
             let (t, l) = {
-                let o = self.internal.src_arena.original(a.shallow());
+                let o = self.internal.src_arena.original(a);
                 let n = self.internal.node_store.resolve(&o);
                 (n.get_type(), n.try_get_label().cloned())
             };
-            let o = self.internal.dst_arena.original(b.shallow());
+            let o = self.internal.dst_arena.original(b);
             let n = self.internal.node_store.resolve(&o);
             t == n.get_type() && l.as_ref() == n.try_get_label()
         });
@@ -488,8 +488,8 @@ where
                     let src = current_height_src_trees[i].clone();
                     let dst = current_height_dst_trees[j].clone();
                     let is_iso = {
-                        let src = src_trees.arena.original(src.shallow());
-                        let dst = dst_trees.arena.original(dst.shallow());
+                        let src = src_trees.arena.original(&src);
+                        let dst = dst_trees.arena.original(&dst);
                         Self::isomorphic_aux::<true>(self.node_store, &src, &dst)
                     };
                     if is_iso {
@@ -605,7 +605,7 @@ where
     D::IdD: Clone,
 {
     pub(super) fn new(store: &'a S, tree: D::IdD, arena: &'b mut D) -> Self {
-        let h = store.resolve(&arena.original(tree.shallow())).height() - 1;
+        let h = store.resolve(&arena.original(&tree)).height() - 1;
         let list_size = if h >= MIN_HEIGHT {
             h + 1 - MIN_HEIGHT
         } else {
@@ -632,11 +632,7 @@ where
     }
 
     fn add_tree(&mut self, tree: D::IdD) {
-        let h = self
-            .store
-            .resolve(&self.arena.original(tree.shallow()))
-            .height()
-            - 1;
+        let h = self.store.resolve(&self.arena.original(&tree)).height() - 1;
         self.add_tree_aux(tree, h)
     }
 

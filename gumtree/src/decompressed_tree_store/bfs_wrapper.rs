@@ -101,10 +101,6 @@ impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: Borrow
         self.back.borrow().original(id)
     }
 
-    // fn leaf_count(&self) -> IdD {
-    //     self.back.borrow().leaf_count()
-    // }
-
     fn root(&self) -> IdD {
         self.back.borrow().root()
     }
@@ -198,31 +194,6 @@ impl<
         }
     }
 }
-
-// impl<'d, IdC, IdD: 'static + PrimInt, D: PostOrderIterable<'d, IdC, IdD>>
-//     PostOrderIterable<'d, IdC, IdD> for SimpleMapper<'d, IdC, IdD, D>
-// {
-//     type It=D::It;
-
-//     fn iter_df_post(&self) -> Self::It {
-//         unimplemented!("mapped items");
-//         self.back.iter_df_post()
-//     }
-// }
-
-// impl<'d, IdC, IdD: 'static + PrimInt, D: PostOrder<'d, IdC, IdD>>
-//     PostOrder<'d, IdC, IdD> for SimpleMapper<'d, IdC, IdD, D>
-// {
-//     fn lld(&self, id: &IdD) -> IdD {
-//         unimplemented!("map id and lld");
-//         self.back.lld(i)
-//     }
-
-//     fn tree(&self, id: &IdD) -> IdC {
-//         unimplemented!("map id and tree");
-//         self.back.tree(id)
-//     }
-// }
 
 pub struct Iter<'a, IdD> {
     curr: usize,

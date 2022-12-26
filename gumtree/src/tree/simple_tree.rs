@@ -8,6 +8,7 @@ use num_traits::{cast, NumCast, PrimInt, ToPrimitive};
 
 use hyper_ast::types::{
     HashKind, LabelStore, Labeled, MySlice, NodeStore, NodeStoreMut, Stored, Typed, WithChildren,
+    WithStats,
 };
 
 #[allow(dead_code)]
@@ -29,16 +30,34 @@ impl<K> SimpleTree<K> {
 
 #[cfg(test)]
 fn store<'a>(ls: &mut LS<u16>, ns: &mut NS<Tree>, node: &SimpleTree<u8>) -> u16 {
-    let lid = node
-        .label
-        .as_ref()
-        .map(|x| ls.get_or_insert(x.as_str()))
-        .unwrap_or(0);
-    let t = Tree {
-        t: node.kind,
-        label: lid,
-        children: node.children.iter().map(|x| store(ls, ns, x)).collect(),
-    };
+    fn store_aux<'a>(ls: &mut LS<u16>, ns: &mut NS<Tree>, node: &SimpleTree<u8>) -> Tree {
+        let lid = node
+            .label
+            .as_ref()
+            .map(|x| ls.get_or_insert(x.as_str()))
+            .unwrap_or(0);
+        let mut size = 1;
+        let mut height = 0;
+        let children = node
+            .children
+            .iter()
+            .map(|x| {
+                let t = store_aux(ls, ns, x);
+                size += t.size;
+                height = height.max(t.height);
+                ns.get_or_insert(t)
+            })
+            .collect();
+        height += 1;
+        Tree {
+            t: node.kind,
+            label: lid,
+            children,
+            size,
+            height,
+        }
+    }
+    let t = store_aux(ls, ns, node);
     ns.get_or_insert(t)
 }
 
@@ -86,10 +105,12 @@ where
         let cs = self.ns.resolve(&self.node);
         writeln!(
             f,
-            "{}|-{}:{}",
+            "{}|-{}:{} \ts{}\th{}",
             " ".repeat(self.depth),
             cs.get_type(),
-            self.ls.resolve(cs.get_label())
+            self.ls.resolve(cs.get_label()),
+            cs.size(),
+            cs.height(),
         )?;
         if let Some(cs) = cs.children() {
             let cs: Vec<_> = cs.into();
@@ -114,11 +135,13 @@ impl<'a, 'b> Debug for DisplayTree<'a, 'b, u16, Tree> {
         let cs = self.ns.resolve(&self.node);
         writeln!(
             f,
-            "{}|-{}:{}    \t({})",
+            "{}|-{}:{}    \t({})\ts{}\th{}",
             " ".repeat(self.depth),
             cs.get_type(),
             self.ls.resolve(cs.get_label()),
             self.node,
+            cs.size(),
+            cs.height(),
         )?;
         if let Some(cs) = cs.children() {
             let cs: Vec<_> = cs.into();
@@ -154,6 +177,8 @@ pub struct Tree {
     pub(crate) t: u8,
     pub(crate) label: u16,
     pub(crate) children: Vec<u16>,
+    pub(crate) size: u16,
+    pub(crate) height: u16,
 }
 
 // impl<'a> ApplicableActions<Tree,TreeRef<'a,Tree>> for ActionsVec<SimpleAction<Tree>> {
@@ -197,6 +222,8 @@ impl hyper_ast::types::NodeStoreExt<Tree> for NS<Tree> {
             t,
             label: 0,
             children: cs,
+            size: 0,
+            height: 0,
         };
         self.get_or_insert(node)
     }
@@ -325,6 +352,29 @@ where
 
     fn children(&self) -> Option<&Self::Children<'_>> {
         self.0.children()
+    }
+}
+
+impl WithStats for Tree {
+    fn size(&self) -> usize {
+        self.size.to_usize().unwrap()
+    }
+
+    fn height(&self) -> usize {
+        self.height.to_usize().unwrap()
+    }
+}
+
+impl<T: Stored + WithStats> WithStats for TreeRef<'_, T>
+where
+    T::TreeId: Clone,
+{
+    fn size(&self) -> usize {
+        self.0.size()
+    }
+
+    fn height(&self) -> usize {
+        self.0.height()
     }
 }
 

@@ -67,10 +67,15 @@ where
     T::TreeId: Clone,
 {
     type It = Iter<IdD>;
-    fn iter_df_post(&self) -> Iter<IdD> {
+    fn iter_df_post<const ROOT: bool>(&self) -> Iter<IdD> {
+        let len = if ROOT {
+            cast(self.id_compressed.len()).unwrap()
+        } else {
+            self.root()
+        };
         Iter {
             current: zero(),
-            len: (cast(self.id_compressed.len())).unwrap(),
+            len,
         }
     }
 }
@@ -115,18 +120,13 @@ where
     /// WARN oposite order than id_compressed
     pub fn compute_kr(&self) -> Box<[IdD]>
 where {
-        let BasicPOSlice::<T, IdD> {
-            id_compressed,
-            llds,
-            ..
-        } = self;
-        let node_count = id_compressed.len();
+        let node_count = self.id_compressed.len();
         let mut kr = Vec::with_capacity(node_count);
         let mut visited = bitvec::bitvec![0; node_count];
         for i in (1..node_count).rev() {
-            if !visited[llds[i].to_usize().unwrap()] {
+            if !visited[self._lld(i).to_usize().unwrap()] {
                 kr.push(cast(i).unwrap());
-                visited.set(llds[i].to_usize().unwrap(), true);
+                visited.set(self._lld(i).to_usize().unwrap(), true);
             }
         }
         kr.into_boxed_slice()
@@ -138,20 +138,15 @@ where {
     pub fn compute_kr_bitset(&self) -> bitvec::boxed::BitBox
 where {
         // use bitvec::prelude::Lsb0;
-        let BasicPOSlice::<T, IdD> {
-            id_compressed,
-            llds,
-            ..
-        } = self;
-        let node_count = id_compressed.len();
+        let node_count = self.id_compressed.len();
         let mut kr = bitvec::bitbox!(0;node_count);
         // let mut kr = Vec::with_capacity(node_count);
-        let mut visited = bitvec::bitvec![0; node_count];
+        let mut visited = bitvec::bitbox!(0; node_count);
         for i in (1..node_count).rev() {
-            if !visited[llds[i].to_usize().unwrap()] {
+            if !visited[self._lld(i).to_usize().unwrap()] {
                 kr.set(i, true);
                 // kr.push(cast(i + 1).unwrap());
-                visited.set(llds[i].to_usize().unwrap(), true);
+                visited.set(self._lld(i).to_usize().unwrap(), true);
             }
         }
         // kr.into_boxed_slice()
@@ -425,6 +420,9 @@ impl<'d, T: WithChildren, IdD: PrimInt> BasicPOSlice<'d, T, IdD> {
     pub(crate) fn size(&self, i: &IdD) -> IdD {
         *i - self.llds[(*i).to_usize().unwrap()] + one()
     }
+    fn _lld(&self, i: usize) -> IdD {
+        self.llds[i] - self.llds[0]
+    }
 }
 
 impl<'a, T: WithChildren, IdD: PrimInt> PostOrder<'a, T, IdD> for BasicPOSlice<'a, T, IdD>
@@ -432,7 +430,7 @@ where
     T::TreeId: Clone + Eq,
 {
     fn lld(&self, i: &IdD) -> IdD {
-        self.llds[(*i).to_usize().unwrap()] - self.llds[0]
+        self._lld(i.to_usize().unwrap())
     }
 
     fn tree(&self, id: &IdD) -> T::TreeId {

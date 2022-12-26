@@ -3,9 +3,9 @@ use std::{env, fs::File, io::Write, path::Path, time::Instant};
 use crate::{
     algorithms::{self, DiffResult},
     other_tools,
-    postprocess::{CompressedBfPostProcess, SimpleJsonPostProcess},
+    postprocess::{CompressedBfPostProcess, SimpleJsonPostProcess, PathJsonPostProcess},
     preprocess::{iter_dirs, parse_dir_pair, parse_string_pair, JavaPreprocessFileSys},
-    tempfile,
+    tempfile, window_combination::NoSpaceNodeStoreWrapper,
 };
 use hyper_ast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores, TypeStore};
 use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
@@ -1830,6 +1830,11 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     let (src_tr, dst_tr) = parse_dir_pair(&mut java_gen, &src, &dst);
     let parse_t = now.elapsed().as_secs_f64();
 
+
+    let label_store = &java_gen.main_stores.label_store;
+    let node_store = &java_gen.main_stores.node_store;
+    let node_store = &NoSpaceNodeStoreWrapper { s: node_store };
+
     dbg!(&parse_t);
     dbg!(&src_tr.metrics.size);
     dbg!(&dst_tr.metrics.size);
@@ -1846,15 +1851,15 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
         actions: hast_actions,
         gen_t,
     } = algorithms::gumtree::diff(
-        &java_gen.main_stores.node_store,
-        &java_gen.main_stores.label_store,
+        node_store,
+        label_store,
         &src_tr.compressed_node,
         &dst_tr.compressed_node,
     );
 
     let gt_out = other_tools::gumtree::subprocess(
-        &java_gen.main_stores.node_store,
-        &java_gen.main_stores.label_store,
+        node_store,
+        label_store,
         src_tr.compressed_node,
         dst_tr.compressed_node,
         "gumtree",
@@ -1869,8 +1874,8 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
         let (pp, counts) = pp.counts();
         let (pp, gt_timings) = pp.performances();
         let valid = pp.validity_mappings(
-            &java_gen.main_stores.node_store,
-            &java_gen.main_stores.label_store,
+            node_store,
+            label_store,
             &src_arena,
             src_tr.compressed_node,
             &dst_arena,
@@ -1879,12 +1884,12 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
         );
         Some((gt_timings, counts, valid))
     } else if gt_out_format == "JSON" {
-        let pp = SimpleJsonPostProcess::new(&gt_out);
+        let pp = PathJsonPostProcess::new(&gt_out);
         let gt_timings = pp.performances();
         let counts = pp.counts();
         let valid = pp.validity_mappings(
-            &java_gen.main_stores.node_store,
-            &java_gen.main_stores.label_store,
+            node_store,
+            label_store,
             &src_arena,
             src_tr.compressed_node,
             &dst_arena,

@@ -3,10 +3,12 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash};
 use num_traits::{cast, one, zero, PrimInt, ToPrimitive, Zero};
 
 use super::{
-    basic_post_order::BasicPostOrder,
+    basic_post_order::{BasicPOSlice, BasicPostOrder},
+    complete_post_order::CompletePOSlice,
     simple_post_order::{SimplePOSlice, SimplePostOrder},
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings,
-    Initializable, LazyDecompressedTreeStore, PostOrder, Shallow, ShallowDecompressedTreeStore,
+    Initializable, Iter, LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrder,
+    PostOrderIterable, Shallow, ShallowDecompressedTreeStore,
 };
 use crate::tree::tree_path::CompressedTreePath;
 use hyper_ast::{
@@ -168,8 +170,6 @@ where
 impl<'a, T: WithChildren, IdD: PrimInt> LazyPostOrder<T, IdD> {
     pub(crate) fn _size(&self, i: &IdD) -> IdD {
         *i - self.llds[(*i).to_usize().unwrap()] + one()
-        // *i + one() - self.llds[(*i).to_usize().unwrap()] = size
-        //  self.llds[(*i).to_usize().unwrap()]  = size - i - 1
     }
 
     fn _lld(&self, i: usize) -> IdD {
@@ -185,10 +185,111 @@ impl<'a, T: WithChildren, IdD: PrimInt> LazyPostOrder<T, IdD> {
 
 impl<'a, T: WithChildren + WithStats, IdD: PrimInt + Shallow<IdD> + Debug> LazyPostOrder<T, IdD>
 where
-    // <Self as LazyDecompressedTreeStore<'a, T, IdD>>::IdD: PrimInt,
     <T as Stored>::TreeId: Clone,
     <T as Stored>::TreeId: Debug,
 {
+    fn continuous_aux<'b, S>(
+        &mut self,
+        store: &'b S,
+        x: &<Self as LazyDecompressedTreeStore<T, IdD>>::IdD,
+    ) -> Option<Vec<T::TreeId>>
+    where
+        S: NodeStore<<T>::TreeId, R<'b> = T>,
+    {
+        let node = store.resolve(&self.original(x));
+        self.llds[x.to_usize().unwrap()] = *x + one() - cast(node.size()).unwrap();
+        let cs = node.children()?;
+        let cs_len = cs.child_count().to_usize().unwrap();
+        if cs_len == 0 {
+            return None;
+        }
+        let c = *x - one();
+        let i = cs_len - 1;
+        let c_n = &cs[cast(i).unwrap()];
+        let offset = c.to_usize().unwrap();
+        self.id_compressed[offset] = c_n.clone();
+        self.id_parent[offset] = x.clone();
+        Some(
+            cs.before(cs.child_count() - one())
+                .iter_children()
+                .cloned()
+                .collect(),
+        )
+    }
+
+    fn decompress_descendants_continuous<'b, S>(
+        &mut self,
+        store: &'b S,
+        x: &<Self as LazyDecompressedTreeStore<T, IdD>>::IdD,
+    ) where
+        S: NodeStore<<T>::TreeId, R<'b> = T>,
+    {
+        // PAVE CESAR oO
+        let mut c = *x;
+        let mut s: Vec<(IdD, Vec<T::TreeId>)> = vec![];
+        loop {
+            // Termination: when s is empty, done by second loop
+            loop {
+                // Termination: go down the last child, finish when no more remains
+                let rem = self.continuous_aux(store, &c);
+                // let ran = self.first_descendant(&c).to_usize().unwrap()..=c.to_usize().unwrap();
+                // println!(
+                //     "{}",
+                //     ran.clone()
+                //         .collect::<Vec<_>>()
+                //         .iter()
+                //         .zip(self.id_parent[ran.clone()].iter())
+                //         .zip(self.llds[ran.clone()].iter())
+                //         .map(|((x1, x2), x3)| (x1, x2, x3))
+                //         .fold(" i, p, l".to_string(), |s, x| format!("{s}\n{:?}", x))
+                // );
+                let Some(rem) = rem else {
+                    if c > zero() {
+                        c = c - one();
+                    }
+                    break;
+                };
+                s.push((c, rem));
+                c = c - one();
+            }
+            let mut next = None;
+            loop {
+                // Termination: either rem diminish, or if rem is empty s diminish
+                let Some((p,mut rem)) = s.pop() else {
+                    break;
+                };
+                let Some(z) = rem.pop() else {
+                    assert!(c <= self.lld(&p));
+                    continue;
+                };
+                assert!(self.lld(&p) <= c);
+                next = Some((p, z));
+                s.push((p, rem));
+                break;
+            }
+            let Some((p,z)) = next else {
+                let ran = self.first_descendant(x).to_usize().unwrap()..=x.to_usize().unwrap();
+                if self.len() < 100 {
+                    println!(
+                        "{}",
+                        ran.clone()
+                            .collect::<Vec<_>>()
+                            .iter()
+                            .zip(self.id_parent[ran.clone()].iter())
+                            .zip(self.llds[ran.clone()].iter())
+                            .map(|((x1, x2), x3)| (x1, x2, x3))
+                            .fold(" i, p, l".to_string(), |s, x| format!("{s}\n{:?}", x))
+                    );
+                }
+                assert!(self._size(x) == zero() || self.tree(&c) != self.tree(x));
+                assert!(c == self.lld(x) || c + one() == self.lld(x));
+                break;
+            };
+            self.id_parent[c.to_usize().unwrap()] = p;
+            self.id_compressed[c.to_usize().unwrap()] = z;
+        }
+    }
+
     pub fn decompress_descendants<'b, S>(&mut self, store: &'b S, x: &IdD)
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
@@ -208,6 +309,10 @@ where
         let mut q = vec![x.clone()];
         while let Some(x) = q.pop() {
             assert!(self.id_parent[x.to_usize().unwrap()] != zero());
+            assert_eq!(
+                self._size(&x).to_usize().unwrap(),
+                store.resolve(&self.original(&x)).size()
+            );
             q.extend(self.children(store, &x));
         }
     }
@@ -236,19 +341,31 @@ where
             self.parent(x).map_or(true, |p| p != zero()),
             "x is not initialized"
         );
+        // self.decompress_descendants_continuous(store, &x);
+        // // self.go_through_descendants(store, &x);
         let first = self.first_descendant(x);
         let mut i = x.clone();
         while i > first {
+            // dbg!(i);
+            // dbg!(self.parent(&i));
+            // dbg!(self.lld(&i));
             if self.id_parent[i.to_usize().unwrap() - 1] != zero() {
                 i = i - one();
             } else {
-                self.decompress_descendants(store, &i);
+                assert!(
+                    self.parent(&i).map_or(true, |p| p != zero()),
+                    "i is not initialized"
+                );
+
+                // self.decompress_descendants(store, &i);
+                self.decompress_descendants_continuous(store, &i);
                 i = self.lld(&i);
             }
             if i == first {
                 break;
             }
         }
+        self.decompress_children(store, x).len();
     }
 }
 
@@ -368,6 +485,10 @@ where
     where
         S: NodeStore<<T>::TreeId, R<'b> = T>,
     {
+        debug_assert!(
+            self.id_parent.len() == 0 || self.id_parent[x.to_usize().unwrap()] != zero(),
+            "x has not been initialized"
+        );
         let node = store.resolve(&self.original(x));
         let Some(cs) = node.children() else {
             return vec![];
@@ -400,6 +521,50 @@ where
         );
         r
     }
+
+    fn decompress_to<'b, S>(&mut self, store: &'b S, x: &IdD) -> Self::IdD
+    where
+        S: NodeStore<<T>::TreeId, R<'b> = T>,
+    {
+        let mut p = *x;
+        // TODO do some kind of dichotomy
+        loop {
+            if self.is_decompressed(&p) {
+                while x < &self.lld(&p) {
+                    p = self.parent(&p).unwrap();
+                }
+                break;
+            }
+            p = p + one();
+        }
+        while &p > x {
+            debug_assert!(&self.lld(&p) <= x);
+            let cs = self.decompress_children(store, &p);
+            let cs = cs.into_iter().rev();
+            // TODO do some kind of dichotomy
+            for a in cs {
+                if &a < x {
+                    break;
+                }
+                p = a;
+                if &a == x {
+                    break;
+                }
+            }
+        }
+        assert_eq!(&p, x);
+        *x
+    }
+}
+
+impl<'a, T: WithChildren, IdD: PrimInt + Shallow<IdD> + Debug> LazyPostOrder<T, IdD>
+where
+    <T as Stored>::TreeId: Clone,
+    <T as Stored>::TreeId: Debug,
+{
+    fn is_decompressed(&self, x: &IdD) -> bool {
+        self.id_parent.len() == 0 || self.id_parent[x.to_usize().unwrap()] != zero()
+    }
 }
 
 impl<'d, T: WithChildren, IdD: PrimInt> DecompressedTreeStore<'d, T, IdD> for LazyPostOrder<T, IdD>
@@ -427,7 +592,7 @@ where
     }
 }
 
-impl<'d, T: 'd + WithChildren, IdD: PrimInt> ContiguousDescendants<'d, T, IdD>
+impl<'d, T: 'd + WithChildren, IdD: PrimInt> ContiguousDescendants<'d, T, IdD, IdD>
     for LazyPostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug,
@@ -443,6 +608,64 @@ where
         // Would need to complete the subtree under x, need the node store to do so
         // TODO could also make a lazy slice !!
         todo!()
+    }
+}
+
+impl<'d, T: 'd + WithChildren, IdD: PrimInt> LazyPostOrder<T, IdD>
+where
+    T::TreeId: Clone + Eq + Debug,
+{
+    pub(super) fn slice_range(&self, x: &IdD) -> std::ops::RangeInclusive<usize> {
+        self.first_descendant(x).to_usize().unwrap()..=x.to_usize().unwrap()
+    }
+}
+
+impl<'d, T: 'd + WithChildren, IdD: PrimInt> LazyPOBorrowSlice<'d, T, IdD, IdD>
+    for LazyPostOrder<T, IdD>
+where
+    T: WithStats,
+    T::TreeId: Clone + Eq + Debug,
+    IdD: Shallow<IdD> + Debug,
+{
+    type SlicePo<'b> = CompletePOSlice<'b,T,IdD, bitvec::boxed::BitBox>
+    where
+        Self: 'b;
+
+    fn slice_po<'b, S>(&mut self, store: &'b S, x: &IdD) -> Self::SlicePo<'_>
+    where
+        S: NodeStore<<T>::TreeId, R<'b> = T>,
+    {
+        self.complete_subtree(store, x);
+        let range = self.slice_range(x);
+        let basic = BasicPOSlice {
+            id_compressed: &self.id_compressed[range.clone()],
+            llds: &self.llds[range.clone()],
+            _phantom: std::marker::PhantomData,
+        };
+        let kr = basic.compute_kr_bitset();
+        let simple = SimplePOSlice {
+            basic,
+            id_parent: &self.id_parent[range],
+        };
+        CompletePOSlice { simple, kr }
+    }
+}
+
+impl<'d, T: WithChildren + 'd, IdD: PrimInt> PostOrderIterable<'d, T, IdD> for LazyPostOrder<T, IdD>
+where
+    T::TreeId: Clone + Debug,
+{
+    type It = Iter<IdD>;
+    fn iter_df_post<const ROOT: bool>(&self) -> Iter<IdD> {
+        let len = if ROOT {
+            cast(self.id_compressed.len()).unwrap()
+        } else {
+            self.root()
+        };
+        Iter {
+            current: zero(),
+            len,
+        }
     }
 }
 

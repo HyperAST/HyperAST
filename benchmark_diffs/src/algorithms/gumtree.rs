@@ -8,8 +8,8 @@ use hyper_gumtree::{
     },
     matchers::{
         heuristic::gt::{
-            bottom_up_matcher::BottomUpMatcher,
-            greedy_bottom_up_matcher::GreedyBottomUpMatcher,
+            lazy_bottom_up_matcher::BottomUpMatcher,
+            lazy_greedy_bottom_up_matcher::GreedyBottomUpMatcher,
             lazy_greedy_subtree_matcher::{LazyGreedySubtreeMatcher, SubtreeMatcher},
         },
         mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
@@ -60,18 +60,13 @@ where
     let subtree_mappings_s = mappings.len();
     dbg!(&subtree_matcher_t, &subtree_mappings_s);
     let now = Instant::now();
-    let src_arena = src_arena.complete(node_store);
-    let dst_arena = dst_arena.complete(node_store);
-    let src_arena = CompletePostOrder::from(src_arena);
-    let dst_arena = CompletePostOrder::from(dst_arena);
-    let mut mapper =
-        GreedyBottomUpMatcher::<CDS<NS::R<'store>>, CDS<NS::R<'store>>, _, _, _, _>::new(
-            node_store,
-            label_store,
-            src_arena,
-            dst_arena,
-            mappings,
-        );
+    let mut mapper = GreedyBottomUpMatcher::<_, _, _, _, _, _, VecStore<_>>::new(
+        node_store,
+        label_store,
+        src_arena,
+        dst_arena,
+        mappings,
+    );
     dbg!(&now.elapsed().as_secs_f64());
     mapper.execute();
     dbg!(&now.elapsed().as_secs_f64());
@@ -86,6 +81,10 @@ where
     let bottomup_mappings_s = mappings.len();
     dbg!(&bottomup_matcher_t, &bottomup_mappings_s);
     let now = Instant::now();
+    let src_arena = src_arena.complete(node_store);
+    let src_arena = CompletePostOrder::from(src_arena);
+    let dst_arena = dst_arena.complete(node_store);
+    let dst_arena = CompletePostOrder::from(dst_arena);
     let dst_arena_bfs = SimpleBfsMapper::from(node_store, dst_arena);
     let ScriptGenerator { actions, .. } =
         ScriptGenerator::precompute_actions(node_store, &src_arena, &dst_arena_bfs, &mappings)

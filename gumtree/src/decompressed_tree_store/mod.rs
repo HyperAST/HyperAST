@@ -15,7 +15,6 @@ pub mod bfs_wrapper;
 pub mod breadth_first;
 pub mod complete_post_order;
 pub mod lazy_post_order;
-pub mod lazy_post_order2;
 pub mod pre_order_wrapper;
 pub mod simple_post_order;
 pub use breadth_first::BreathFirst;
@@ -56,7 +55,7 @@ pub trait LazyInitializable<'a, T: Stored + WithStats> {
 
 pub trait ShallowDecompressedTreeStore<'a, T: WithChildren, IdD, IdS = IdD> {
     fn len(&self) -> usize;
-    fn original(&self, id: &IdS) -> T::TreeId;
+    fn original(&self, id: &IdD) -> T::TreeId;
     fn root(&self) -> IdS;
     fn child<'b, S>(&self, store: &'b S, x: &IdD, p: &[T::ChildIdx]) -> IdS
     where
@@ -90,6 +89,9 @@ pub trait LazyDecompressedTreeStore<'a, T: WithChildren + WithStats, IdS>:
     fn starter(&self) -> Self::IdD;
     #[must_use]
     fn decompress_children<'b, S>(&mut self, store: &'b S, x: &Self::IdD) -> Vec<Self::IdD>
+    where
+        S: NodeStore<T::TreeId, R<'b> = T>;
+    fn decompress_to<'b, S>(&mut self, store: &'b S, x: &IdS) -> Self::IdD
     where
         S: NodeStore<T::TreeId, R<'b> = T>;
 }
@@ -130,6 +132,18 @@ pub trait POBorrowSlice<'a, T: WithChildren, IdD, IdS = IdD>:
         Self: 'b;
 
     fn slice_po(&self, x: &IdD) -> Self::SlicePo<'_>;
+}
+
+pub trait LazyPOBorrowSlice<'a, T: WithChildren, IdD, IdS = IdD>:
+    ContiguousDescendants<'a, T, IdD, IdS>
+{
+    type SlicePo<'b>: PostOrderKeyRoots<'b, T, IdD>
+    where
+        Self: 'b;
+
+    fn slice_po<'b, S>(&mut self, store: &'b S, x: &IdD) -> Self::SlicePo<'_>
+    where
+        S: NodeStore<T::TreeId, R<'b> = T>;
 }
 
 pub trait DecompressedWithParent<'a, T: WithChildren, IdD> {
@@ -179,9 +193,11 @@ pub trait BreadthFirstIterable<'a, T: WithChildren, IdD>:
     fn iter_bf(&'a self) -> Self::It;
 }
 
-pub trait PostOrderIterable<'a, T: WithChildren, IdD>: DecompressedTreeStore<'a, T, IdD> {
-    type It: Iterator<Item = IdD>;
-    fn iter_df_post(&self) -> Self::It;
+pub trait PostOrderIterable<'a, T: WithChildren, IdD, IdS = IdD>:
+    DecompressedTreeStore<'a, T, IdD, IdS>
+{
+    type It: Iterator<Item = IdS>;
+    fn iter_df_post<const ROOT: bool>(&self) -> Self::It;
 }
 
 pub trait BreathFirstContiguousSiblings<'a, T: WithChildren, IdD>:
@@ -191,8 +207,10 @@ pub trait BreathFirstContiguousSiblings<'a, T: WithChildren, IdD>:
     fn first_child(&self, id: &IdD) -> Option<IdD>;
 }
 
-pub trait PostOrder<'a, T: WithChildren, IdD>: DecompressedTreeStore<'a, T, IdD> {
-    fn lld(&self, i: &IdD) -> IdD;
+pub trait PostOrder<'a, T: WithChildren, IdD, IdS = IdD>:
+    DecompressedTreeStore<'a, T, IdD, IdS>
+{
+    fn lld(&self, i: &IdD) -> IdS;
     fn tree(&self, id: &IdD) -> T::TreeId;
 }
 

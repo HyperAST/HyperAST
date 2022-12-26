@@ -210,7 +210,7 @@ where
         self.ori_mappings = Some(ms);
         self.cpy_mappings = ms.clone();
         self.moved.resize(self.src_arena_dont_use.len(), false);
-        for x in self.src_arena_dont_use.iter_df_post() {
+        for x in self.src_arena_dont_use.iter_df_post::<true>() {
             let children = self.src_arena_dont_use.children(self.store, &x);
             let children = if children.len() > 0 {
                 Some(children)

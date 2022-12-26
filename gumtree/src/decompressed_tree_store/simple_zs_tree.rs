@@ -72,8 +72,8 @@ where
     T::TreeId: Clone,
 {
     type It = Iter<IdD>;
-    fn iter_df_post(&self) -> Iter<IdD> {
-        self.basic.iter_df_post()
+    fn iter_df_post<const ROOT: bool>(&self) -> Iter<IdD> {
+        self.basic.iter_df_post::<ROOT>()
     }
 }
 
@@ -125,7 +125,6 @@ where
             lld: IdD,
         }
 
-        let mut leaf_count = 0;
         let mut stack = vec![R {
             curr: root.clone(),
             idx: zero(),
@@ -151,7 +150,6 @@ where
                 });
             } else {
                 let value = if l.is_none() {
-                    leaf_count += 1;
                     cast(id_compressed.len()).unwrap()
                 } else {
                     lld

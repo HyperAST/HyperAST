@@ -225,7 +225,7 @@ where
         // let len = self.src_arena_dont_use.len();
         let root = self.src_arena_dont_use.root();
         // self.moved.resize(len, false);
-        for x in self.src_arena_dont_use.iter_df_post() {
+        for x in self.src_arena_dont_use.iter_df_post::<true>() {
             let children = self.src_arena_dont_use.children(self.store, &x);
             let children = if children.len() > 0 {
                 Some(children)

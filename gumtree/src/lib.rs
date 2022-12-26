@@ -1,3 +1,4 @@
+#![feature(test)]
 pub mod actions;
 pub mod matchers;
 pub mod tree;

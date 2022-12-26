@@ -1,4 +1,5 @@
 use std::{
+    borrow::Borrow,
     collections::HashMap,
     fmt::{Debug, Display},
     hash::Hash,
@@ -44,7 +45,7 @@ impl<T: Stored, IdD> Deref for CompletePostOrder<T, IdD> {
 }
 
 impl<T: Stored, IdD> CompletePostOrder<T, IdD> {
-    pub fn as_slice(&self) -> CompletePOSlice<'_, T, IdD> {
+    pub fn as_slice(&self) -> CompletePOSlice<'_, T, IdD, &'_ BitSlice> {
         CompletePOSlice {
             simple: self.simple.as_slice(),
             kr: &self.kr,
@@ -232,8 +233,8 @@ where
     T::TreeId: Clone + Eq + Debug,
 {
     type It = Iter<IdD>;
-    fn iter_df_post(&self) -> Iter<IdD> {
-        self.simple.iter_df_post()
+    fn iter_df_post<const ROOT: bool>(&self) -> Iter<IdD> {
+        self.simple.iter_df_post::<ROOT>()
     }
 }
 
@@ -336,7 +337,7 @@ where
         self.first_descendant(x)..*x
     }
 
-    type Slice<'b>=CompletePOSlice<'b,T,IdD>
+    type Slice<'b>=CompletePOSlice<'b,T,IdD,&'b BitSlice>
     where
         Self: 'b;
 
@@ -357,7 +358,6 @@ where
     where
         Self: 'b;
 
-    #[time("warn")]
     fn slice_po(&self, x: &IdD) -> Self::Slice<'_> {
         self.slice(x)
     }
@@ -638,12 +638,12 @@ where
     }
 }
 
-pub struct CompletePOSlice<'a, T: Stored, IdD> {
+pub struct CompletePOSlice<'a, T: Stored, IdD, Kr: Borrow<BitSlice>> {
     pub(super) simple: SimplePOSlice<'a, T, IdD>,
-    pub(super) kr: &'a BitSlice,
+    pub(super) kr: Kr,
 }
 
-impl<'a, T: Stored, IdD> Deref for CompletePOSlice<'a, T, IdD> {
+impl<'a, T: Stored, IdD, Kr: Borrow<BitSlice>> Deref for CompletePOSlice<'a, T, IdD, Kr> {
     type Target = SimplePOSlice<'a, T, IdD>;
 
     fn deref(&self) -> &Self::Target {
@@ -651,8 +651,8 @@ impl<'a, T: Stored, IdD> Deref for CompletePOSlice<'a, T, IdD> {
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> ShallowDecompressedTreeStore<'a, T, IdD>
-    for CompletePOSlice<'a, T, IdD>
+impl<'a, T: WithChildren, IdD: PrimInt, Kr: Borrow<BitSlice>>
+    ShallowDecompressedTreeStore<'a, T, IdD> for CompletePOSlice<'a, T, IdD, Kr>
 where
     T::TreeId: Clone + Eq + Debug,
 {
@@ -687,8 +687,8 @@ where
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> DecompressedTreeStore<'a, T, IdD>
-    for CompletePOSlice<'a, T, IdD>
+impl<'a, T: WithChildren, IdD: PrimInt, Kr: Borrow<BitSlice>> DecompressedTreeStore<'a, T, IdD>
+    for CompletePOSlice<'a, T, IdD, Kr>
 where
     T::TreeId: Clone + Eq + Debug,
 {
@@ -711,7 +711,8 @@ where
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> PostOrder<'a, T, IdD> for CompletePOSlice<'a, T, IdD>
+impl<'a, T: WithChildren, IdD: PrimInt, Kr: Borrow<BitSlice>> PostOrder<'a, T, IdD>
+    for CompletePOSlice<'a, T, IdD, Kr>
 where
     T::TreeId: Clone + Eq + Debug,
 {
@@ -724,8 +725,8 @@ where
     }
 }
 
-impl<'a, T: WithChildren + 'a, IdD: PrimInt> PostOrderKeyRoots<'a, T, IdD>
-    for CompletePOSlice<'a, T, IdD>
+impl<'a, T: WithChildren + 'a, IdD: PrimInt, Kr: Borrow<BitSlice>> PostOrderKeyRoots<'a, T, IdD>
+    for CompletePOSlice<'a, T, IdD, Kr>
 where
     T::TreeId: Clone + Eq + Debug,
 {
@@ -737,6 +738,6 @@ where
         Self: 'b;
 
     fn iter_kr(&self) -> Self::Iter<'_> {
-        IterKr(self.kr.iter_ones(), PhantomData)
+        IterKr(self.kr.borrow().iter_ones(), PhantomData)
     }
 }

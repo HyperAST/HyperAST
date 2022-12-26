@@ -6,3 +6,5 @@ pub mod examples;
 pub mod hungarian_tests;
 pub mod pair_tests;
 pub mod simple_examples;
+#[cfg(test)]
+pub mod lazy_decompression_tests;
