@@ -2,6 +2,64 @@ use crate::tree::simple_tree::{tree, SimpleTree};
 
 type ST<K> = SimpleTree<K>;
 
+pub(crate) fn example_single() -> (ST<u8>, ST<u8>) {
+    let src = tree!(0, "f");
+    let dst = tree!(0, "f");
+    (src, dst)
+}
+
+pub(crate) fn example_simple() -> (ST<u8>, ST<u8>) {
+    let src = tree!(
+        0, "f"; [
+            tree!(0, "d"),
+            tree!(0, "e"),
+    ]);
+    let dst = tree!(
+        0, "f"; [
+            tree!(0, "c"),
+            tree!(0, "e"),
+    ]);
+    (src, dst)
+}
+
+pub(crate) fn example_simple1() -> (ST<u8>, ST<u8>) {
+    let src = tree!(
+        0, "f"; [
+            tree!(0, "g"; [
+                tree!(0, "d"),
+                tree!(0, "e"),
+            ])
+    ]);
+    let dst = tree!(
+        0, "f"; [
+            tree!(0, "g"; [
+                tree!(0, "c"),
+                tree!(0, "e"),
+            ])
+    ]);
+    (src, dst)
+}
+
+pub(crate) fn example_move() -> (ST<u8>, ST<u8>) {
+    let src = tree!(
+        0, "f"; [
+            tree!(0, "g"; [
+                tree!(0, "d"),
+                tree!(0, "e"),
+            ]),
+            tree!(0, "h")
+    ]);
+    let dst = tree!(
+        0, "f"; [
+            tree!(0, "g"),
+            tree!(0, "h"; [
+                tree!(0, "d"),
+                tree!(0, "e"),
+            ]),
+    ]);
+    (src, dst)
+}
+
 pub(crate) fn example_zs_paper() -> (ST<u8>, ST<u8>) {
     let src = tree!(
         0, "f"; [
