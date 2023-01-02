@@ -134,6 +134,23 @@ where
         idxs.reverse();
         idxs.into()
     }
+
+    fn lca(&self, a: &IdD, b: &IdD) -> IdD {
+        let mut a = *a;
+        let mut b = *b;
+        loop {
+            if a == b {
+                return a
+            } else if a < b {
+                a = self.parent(&a).unwrap();
+            } else if b < self.root() {
+                b = self.parent(&b).unwrap();
+            } else {
+                assert!(a==b);
+                return a
+            }
+        }
+    }
 }
 
 impl<'d, T: WithChildren, IdD: PrimInt> DecompressedWithSiblings<'d, T, IdD>
@@ -323,7 +340,7 @@ where
         for d in p {
             let a = self.original(&r);
             let node = store.resolve(&a);
-            let cs = node.children().filter(|x| x.is_empty());
+            let cs = node.children().filter(|x| !x.is_empty());
             let Some(cs) = cs  else {
                 panic!("no children in this tree")
             };
@@ -389,6 +406,10 @@ where
         S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
         (*x - self.first_descendant(x) + one()).to_usize().unwrap()
+    }
+
+    fn is_descendant(&self, desc: &IdD,of: &IdD) -> bool {
+        self.basic.is_descendant(desc, of)
     }
 }
 

@@ -66,6 +66,7 @@ impl<'d, T: WithChildren + 'd, IdD: PrimInt> PostOrderIterable<'d, T, IdD>
 where
     T::TreeId: Clone,
 {
+    // TODO add a lifetime to make sure the len does not change
     type It = Iter<IdD>;
     fn iter_df_post<const ROOT: bool>(&self) -> Iter<IdD> {
         let len = if ROOT {
@@ -333,6 +334,10 @@ where
     {
         (*x - self.first_descendant(x) + one()).to_usize().unwrap()
     }
+    
+    fn is_descendant(&self, desc: &IdD,of: &IdD) -> bool {
+        desc < of && &self.first_descendant(of) <= desc
+    }
 }
 
 impl<'d, T: 'd + WithChildren, IdD: PrimInt> BasicPostOrder<T, IdD>
@@ -529,5 +534,9 @@ where
         S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
         (*x - self.first_descendant(x) + one()).to_usize().unwrap()
+    }
+    
+    fn is_descendant(&self, desc: &IdD,of: &IdD) -> bool {
+        desc < of && &self.first_descendant(of) <= desc
     }
 }

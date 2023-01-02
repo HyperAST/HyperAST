@@ -237,6 +237,10 @@ where
         assert!(r == self.basic.descendants_count(store, x));
         r
     }
+
+    fn is_descendant(&self, desc: &IdD,of: &IdD) -> bool {
+        desc < of && &self.first_descendant(of) <= desc
+    }
 }
 
 impl<T: Stored, IdD: PrimInt + Debug> Debug for SimpleZsTree<T, IdD>

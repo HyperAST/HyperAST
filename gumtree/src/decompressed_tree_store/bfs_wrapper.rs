@@ -144,6 +144,10 @@ impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: Borrow
     fn first_descendant(&self, i: &IdD) -> IdD {
         self.back.borrow().first_descendant(i)
     }
+
+    fn is_descendant(&self, desc: &IdD, of: &IdD) -> bool {
+        self.back.borrow().is_descendant(desc, of)
+    }
 }
 impl<
         'd,
@@ -173,6 +177,10 @@ impl<
 
     fn path(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<T::ChildIdx> {
         self.back.borrow().path(parent, descendant)
+    }
+
+    fn lca(&self, a: &IdD, b: &IdD) -> IdD {
+        self.back.borrow().lca(a, b)
     }
 }
 

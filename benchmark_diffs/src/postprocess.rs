@@ -1138,7 +1138,7 @@ pub fn print_mappings<
     mappings: &M,
 ) where
     <NS as types::NodeStore<IdN>>::R<'store>:
-        'store + Tree<TreeId = IdN> + types::WithSerialization,
+        'store + Tree<TreeId = IdN, Label = LS::I> + types::WithSerialization,
     <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug,
     SD: ShallowDecompressedTreeStore<'a, NS::R<'store>, IdD> + PostOrder<'a, NS::R<'store>, IdD>, // + DecompressedWithParent<'a, NS::R<'store>, IdD>,
     DD: ShallowDecompressedTreeStore<'a, NS::R<'store>, IdD> + PostOrder<'a, NS::R<'store>, IdD>, //+ DecompressedWithParent<'a, NS::R<'store>, IdD>,
@@ -1172,7 +1172,8 @@ pub fn print_mappings<
         });
     let src_arena = DisplaySimplePreOrderMapper {
         inner: &src_arena,
-        node_store: node_store,
+        node_store,
+        label_store,
     }
     .to_string();
     let cols = vec![src_arena, mappings, dst_arena];
@@ -1216,7 +1217,7 @@ pub fn print_mappings_no_ranges<
     label_store: &'store LS,
     mappings: &M,
 ) where
-    <NS as types::NodeStore<IdN>>::R<'store>: 'store + Tree<TreeId = IdN>,
+    <NS as types::NodeStore<IdN>>::R<'store>: 'store + Tree<TreeId = IdN, Label = LS::I>,
     <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug,
 {
     let mut mapped = vec![false; dst_arena.len()];
@@ -1250,7 +1251,8 @@ pub fn print_mappings_no_ranges<
         "{:?}",
         DisplaySimplePreOrderMapper {
             inner: &src_arena,
-            node_store: node_store,
+            node_store,
+            label_store
         }
     );
     let cols = vec![src_arena, mappings, dst_arena];

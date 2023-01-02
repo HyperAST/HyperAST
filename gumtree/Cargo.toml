@@ -2,6 +2,7 @@
 name = "hyper_gumtree"
 version = "0.1.0"
 edition = "2021"
+autobenches = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -19,6 +20,16 @@ log = { version = "0.4.6", features = ["max_level_trace", "release_max_level_war
 hyper_ast = { path = "../hyper_ast" }
 
 logging_timer = "1.1.0"
+
+[dev-dependencies]
+criterion = { version = "0.4", features = ["rayon", "plotters", "cargo_bench_support", "html_reports", "real_blackbox"] }
+
+[lib]
+bench = false
+
+[[bench]]
+name = "compressed_path_iter"
+harness = false
 
 [profile.test]
 opt-level = 3

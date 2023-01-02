@@ -227,11 +227,11 @@ where
             forest: vec![vec![0.0; self.dst_arena.len() + 1]; self.src_arena.len() + 1],
         };
         let mut src_kr: Vec<_> = self.src_arena.iter_kr().collect();
-        if src_kr[src_kr.len() - 1] != self.src_arena.root() {
+        if src_kr.len() == 0  || src_kr[src_kr.len() - 1] != self.src_arena.root() {
             src_kr.push(self.src_arena.root());
         }
         let mut dst_kr: Vec<_> = self.dst_arena.iter_kr().collect();
-        if dst_kr[dst_kr.len() - 1] != self.dst_arena.root() {
+        if dst_kr.len() == 0  || dst_kr[dst_kr.len() - 1] != self.dst_arena.root() {
             dst_kr.push(self.dst_arena.root());
         }
         for i in &src_kr {
@@ -396,7 +396,7 @@ where
 }
 
 /// TODO waiting for the release of fix of wrong variable on line 5 of normalized()
-mod str_distance_patched {
+pub mod str_distance_patched {
     #[derive(Debug, Clone)]
     pub struct QGram {
         /// Length of the fragment
@@ -507,7 +507,7 @@ mod str_distance_patched {
     }
 }
 
-pub(super) mod qgrams {
+pub mod qgrams {
     use std::collections::HashMap;
 
     use hyper_ast::compat::DefaultHashBuilder;

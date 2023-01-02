@@ -106,6 +106,7 @@ pub trait DecompressedTreeStore<'a, T: WithChildren, IdD, IdS = IdD>:
     where
         S: NodeStore<T::TreeId, R<'b> = T>;
     fn first_descendant(&self, i: &IdD) -> IdS;
+    fn is_descendant(&self, desc: &IdS, of: &IdD) -> bool;
 }
 
 /// If you want to add bounds on Self::Slice, make a specialized trait like POBorrowSlice
@@ -155,6 +156,8 @@ pub trait DecompressedWithParent<'a, T: WithChildren, IdD> {
     fn parents(&self, id: IdD) -> Self::PIt<'_>;
     fn position_in_parent(&self, c: &IdD) -> Option<T::ChildIdx>;
     fn path(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<T::ChildIdx>;
+    /// lowest common ancestor
+    fn lca(&self, a: &IdD, b: &IdD) -> IdD;
     // fn position_in_parent<'b, S>(
     //     &self,
     //     store: &'b S,

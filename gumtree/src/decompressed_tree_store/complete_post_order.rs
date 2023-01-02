@@ -118,7 +118,7 @@ where
     S: NodeStore<T::TreeId, R<'store> = T>,
     T: Tree + WithSerialization,
     T::Type: Debug,
-    LS: LabelStore<str>,
+    LS: LabelStore<str, I = T::Label>,
     D: DecompressedTreeStore<'a, T, IdD> + PostOrder<'a, T, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -127,11 +127,10 @@ where
             &DisplaySimplePreOrderMapper {
                 inner: &m,
                 node_store: self.node_store,
+                label_store: self.label_store,
             },
             f,
         )
-        .unwrap();
-        Ok(())
     }
 }
 
@@ -142,20 +141,16 @@ where
     S: NodeStore<T::TreeId, R<'store> = T>,
     T: Tree,
     T::Type: Debug,
-    LS: LabelStore<str>,
+    LS: LabelStore<str, I = T::Label>,
     D: DecompressedTreeStore<'a, T, IdD> + PostOrder<'a, T, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let m = SimplePreOrderMapper::from(self.inner);
-        std::fmt::Debug::fmt(
-            &DisplaySimplePreOrderMapper {
-                inner: &m,
-                node_store: self.node_store,
-            },
-            f,
-        )
-        .unwrap();
-        Ok(())
+        DisplaySimplePreOrderMapper {
+            inner: &m,
+            node_store: self.node_store,
+            label_store: self.label_store,
+        }.fmt(f)
     }
 }
 
@@ -180,6 +175,10 @@ where
 
     fn parents(&self, id: IdD) -> Self::PIt<'_> {
         self.simple.parents(id)
+    }
+
+    fn lca(&self, a: &IdD, b: &IdD) -> IdD {
+        self.simple.lca(a, b)
     }
 
     fn path(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<T::ChildIdx> {
@@ -325,6 +324,10 @@ where
         S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
         self.simple.descendants_count(store, x)
+    }
+
+    fn is_descendant(&self, desc: &IdD, of: &IdD) -> bool {
+        self.simple.is_descendant(desc, of)
     }
 }
 
@@ -708,6 +711,10 @@ where
         S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
         self.simple.descendants_count(store, x)
+    }
+
+    fn is_descendant(&self, desc: &IdD, of: &IdD) -> bool {
+        self.simple.is_descendant(desc, of)
     }
 }
 

@@ -3,19 +3,62 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use num_traits::{cast, PrimInt, ToPrimitive};
 
-pub trait TreePath<'a, Idx> {
-    type ItemIterator: Iterator<Item = Idx>;
-    fn iter(&'a self) -> Self::ItemIterator;
+pub trait TreePath<Idx> {
+    // TODO move lifetime to associated type
+    type ItemIterator<'a>: Iterator<Item = Idx>
+    where
+        Self: 'a;
+    fn iter(&self) -> Self::ItemIterator<'_>;
     fn extend(&self, path: &[Idx]) -> Self;
 }
+
+pub trait TreePathUp<Idx> {
+    type TP: TreePath<Idx>;
+    fn up(&self) -> &Idx;
+    fn path(&self) -> &Self::TP;
+    fn create(&self, up: Idx, path: Self::TP) -> Self;
+}
+
+#[derive(Clone)]
+struct CompressedTreePathUp<Idx> {
+    up: Idx,
+    compressed: CompressedTreePath<Idx>,
+}
+
+impl<Idx: PrimInt> TreePathUp<Idx> for CompressedTreePathUp<Idx> {
+    type TP = CompressedTreePath<Idx>;
+
+    fn up(&self) -> &Idx {
+        &self.up
+    }
+
+    fn path(&self) -> &Self::TP {
+        &self.compressed
+    }
+
+    fn create(&self, up: Idx, path: Self::TP) -> Self {
+        Self {
+            up,
+            compressed: path,
+        }
+    }
+}
+
+impl<Idx: PartialEq> PartialEq for CompressedTreePathUp<Idx> {
+    fn eq(&self, other: &Self) -> bool {
+        self.up == other.up && self.compressed == other.compressed
+    }
+}
+
+impl<Idx: Eq> Eq for CompressedTreePathUp<Idx> {}
 
 struct SimpleTreePath<Idx> {
     vec: Vec<Idx>,
 }
 
-impl<'a, Idx: 'a + PrimInt> TreePath<'a, Idx> for SimpleTreePath<Idx> {
-    type ItemIterator = IterSimple<'a, Idx>;
-    fn iter(&'a self) -> Self::ItemIterator {
+impl<Idx: PrimInt> TreePath<Idx> for SimpleTreePath<Idx> {
+    type ItemIterator<'a> = IterSimple<'a, Idx> where Idx: 'a;
+    fn iter(&self) -> Self::ItemIterator<'_> {
         IterSimple {
             internal: self.vec.iter(),
         }
@@ -35,20 +78,15 @@ pub struct CompressedTreePath<Idx> {
     phantom: PhantomData<*const Idx>,
 }
 
+impl<Idx: PartialEq> CompressedTreePath<Idx> {
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bits
+    }
+}
+
 impl<Idx: PartialEq> PartialEq for CompressedTreePath<Idx> {
     fn eq(&self, other: &Self) -> bool {
         self.bits == other.bits
-        // let mut other = other.iter();
-        // for s in self.iter() {
-        //     if let Some(other) = other.next() {
-        //         if s != other {
-        //             return false;
-        //         }
-        //     } else {
-        //         return false;
-        //     }
-        // }
-        // true
     }
 }
 impl<Idx: Eq> Eq for CompressedTreePath<Idx> {}
@@ -106,9 +144,19 @@ impl<Idx: PrimInt> CompressedTreePath<Idx> {
     }
 }
 
-impl<'a, Idx: 'a + PrimInt> TreePath<'a, Idx> for CompressedTreePath<Idx> {
-    type ItemIterator = Iter<'a, Idx>;
-    fn iter(&'a self) -> Self::ItemIterator {
+impl<Idx: PrimInt> IntoIterator for CompressedTreePath<Idx> {
+    type Item = Idx;
+
+    type IntoIter = IntoIter<Idx>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter::new(self.bits)
+    }
+}
+
+impl<Idx: PrimInt> TreePath<Idx> for CompressedTreePath<Idx> {
+    type ItemIterator<'a> = Iter<'a, Idx> where Idx: 'a;
+    fn iter(&self) -> Self::ItemIterator<'_> {
         Iter {
             is_even: (self.bits[0] & 1) == 1,
             side: true,
@@ -242,5 +290,211 @@ impl<'a, Idx: 'a + PrimInt> Iterator for Iter<'a, Idx> {
             }
         }
         Some(c)
+    }
+}
+pub use indexed::IntoIter;
+
+pub mod slicing {
+    use super::*;
+    /// advanced iterator used to get back path as Idx from compressed path
+    pub struct IntoIter<Idx> {
+        is_even: bool,
+        side: bool,
+        slice: Box<[u8]>,
+        phantom: PhantomData<*const Idx>,
+    }
+
+    impl<Idx: PrimInt> IntoIter<Idx> {
+        pub fn new(bits: Box<[u8]>) -> Self {
+            Self {
+                is_even: (bits[0] & 1) == 1,
+                side: true,
+                slice: bits,
+                phantom: PhantomData,
+            }
+        }
+    }
+
+    impl<Idx: PrimInt> Iterator for IntoIter<Idx> {
+        type Item = Idx;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.slice.is_empty() {
+                return None;
+            }
+            if self.is_even && self.slice.len() == 1 && self.side {
+                self.slice = self.slice[1..].into();
+                return None;
+            }
+            let mut c = num_traits::zero();
+            loop {
+                let a = &self.slice[0];
+                let a = if self.side {
+                    (a & 0b11110000) >> 4
+                } else {
+                    a & 0b00001111
+                };
+                let mut br = false;
+                let b = if a == 16 - 1 {
+                    128
+                } else if a == 16 - 2 {
+                    32
+                } else if a == 16 - 3 {
+                    16 - 3
+                } else {
+                    br = true;
+                    a
+                };
+                c = c + cast(b).unwrap();
+                if self.side {
+                    self.slice = self.slice[1..].into();
+                }
+                self.side = !self.side;
+                if br {
+                    break;
+                }
+                if self.is_even && self.slice.len() == 1 && self.side {
+                    self.slice = self.slice[1..].into();
+                    return Some(c);
+                }
+            }
+            Some(c)
+        }
+    }
+}
+
+pub mod indexed {
+    use super::*;
+
+    /// advanced iterator used to get back path as Idx from compressed path
+    pub struct IntoIter<Idx> {
+        is_even: bool,
+        side: bool,
+        slice: Box<[u8]>,
+        adv: usize,
+        phantom: PhantomData<*const Idx>,
+    }
+
+    impl<Idx: PrimInt> IntoIter<Idx> {
+        pub fn new(bits: Box<[u8]>) -> Self {
+            Self {
+                is_even: (bits[0] & 1) == 1,
+                side: true,
+                slice: bits,
+                adv: 0,
+                phantom: PhantomData,
+            }
+        }
+    }
+
+    impl<Idx: PrimInt> Iterator for IntoIter<Idx> {
+        type Item = Idx;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.adv >= self.slice.len() {
+                return None;
+            }
+            if self.is_even && self.slice.len() - self.adv == 1 && self.side {
+                self.adv += 1;
+                return None;
+            }
+            let mut c = num_traits::zero();
+            loop {
+                let a = &self.slice[self.adv];
+                let a = if self.side {
+                    (a & 0b11110000) >> 4
+                } else {
+                    a & 0b00001111
+                };
+                let mut br = false;
+                let b = if a == 16 - 1 {
+                    128
+                } else if a == 16 - 2 {
+                    32
+                } else if a == 16 - 3 {
+                    16 - 3
+                } else {
+                    br = true;
+                    a
+                };
+                c = c + cast(b).unwrap();
+                if self.side {
+                    self.adv += 1;
+                }
+                self.side = !self.side;
+                if br {
+                    break;
+                }
+                if self.is_even && self.slice.len() - self.adv == 1 && self.side {
+                    self.adv += 1;
+                    return Some(c);
+                }
+            }
+            Some(c)
+        }
+    }
+
+    #[test]
+    fn identity() {
+        let v = vec![
+            1, 4684, 68, 46, 84, 684, 68, 46, 846, 4460, 0, 00, 8, 0, 8, 0, 0, 0, 1, 12, 1, 2, 1,
+            21, 2, 1, 2, 12, 1,
+        ];
+        let path = CompressedTreePath::<u16>::from(v.clone());
+        let bits = path.as_bytes();
+        let res: Vec<_> = IntoIter::new(bits.into()).collect();
+        assert_eq!(v, res);
+    }
+}
+
+#[cfg(test)]
+mod small_vec_stuff_for_compressed_path {
+    use std::mem::size_of;
+
+    #[test]
+    fn vec() {
+        dbg!(size_of::<[u8; 4]>());
+        dbg!(size_of::<Vec<u8>>());
+        enum Small<T, const N: usize> {
+            Vec(Vec<T>),
+            Arr(u8, [T; N]),
+        }
+        dbg!(size_of::<Small<u8, 1>>());
+        dbg!(size_of::<Small<u8, 2>>());
+        dbg!(size_of::<Small<u8, 3>>());
+        dbg!(size_of::<Small<u8, 4>>());
+        dbg!(size_of::<Small<u8, 10>>());
+        dbg!(size_of::<Small<u8, 15>>());
+        dbg!(size_of::<Small<u8, 16>>());
+        dbg!(size_of::<Small<u8, 17>>());
+        dbg!(size_of::<Small<u8, 18>>());
+        dbg!(size_of::<Small<u8, 20>>());
+    }
+
+    #[test]
+    fn boxed() {
+        use std::mem::size_of;
+        dbg!(size_of::<[u8; 4]>());
+        dbg!(size_of::<Box<[u8]>>());
+        dbg!(size_of::<Vec<u8>>());
+        enum Small<T, const N: usize> {
+            Box(Box<[T]>),
+            Arr(u8, [T; N]),
+        }
+        dbg!(size_of::<Small<u8, 1>>());
+        dbg!(size_of::<Small<u8, 2>>());
+        dbg!(size_of::<Small<u8, 3>>());
+        dbg!(size_of::<Small<u8, 4>>());
+        dbg!(size_of::<Small<u8, 5>>());
+        dbg!(size_of::<Small<u8, 6>>());
+        dbg!(size_of::<Small<u8, 7>>());
+        dbg!(size_of::<Small<u8, 8>>());
+        dbg!(size_of::<Small<u8, 9>>());
+        dbg!(size_of::<Small<u8, 10>>());
+        dbg!(size_of::<Small<u8, 15>>());
+        dbg!(size_of::<Small<u8, 16>>());
+        dbg!(size_of::<Small<u8, 17>>());
+        dbg!(size_of::<Small<u8, 18>>());
+        dbg!(size_of::<Small<u8, 20>>());
     }
 }

@@ -84,6 +84,11 @@ where
     fn path(&self, _parent: &IdD, _descendant: &IdD) -> CompressedTreePath<T::ChildIdx> {
         todo!()
     }
+
+    fn lca(&self, a: &IdD, b: &IdD) -> IdD {
+        todo!()
+    }
+    
 }
 
 pub struct IterParents<'a, IdD> {
@@ -241,6 +246,10 @@ where
     }
 
     fn first_descendant(&self, _i: &IdD) -> IdD {
+        todo!()
+    }
+    
+    fn is_descendant(&self, desc: &IdD,of: &IdD) -> bool {
         todo!()
     }
 }

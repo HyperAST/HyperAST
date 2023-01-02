@@ -122,6 +122,10 @@ where
         idxs.reverse();
         idxs.into()
     }
+
+    fn lca(&self, a: &IdD, b: &IdD) -> IdD {
+        todo!()
+    }
 }
 
 impl<'d, T: WithChildren, IdD: PrimInt> DecompressedWithSiblings<'d, T, IdD>
@@ -589,6 +593,10 @@ where
         S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
         (self._size(x)).to_usize().unwrap() - 1
+    }
+
+    fn is_descendant(&self, desc: &IdD,of: &IdD) -> bool {
+        desc < of && &self.first_descendant(of) <= desc
     }
 }
 
