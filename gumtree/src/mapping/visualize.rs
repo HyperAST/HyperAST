@@ -1,3 +1,10 @@
+//! pretty-print trees with mappings
+//! eg.
+//! |   3: 0; f     | 3 |   3: 0; f     |
+//! |   2:   0; g   |   |   2:   0; g   |
+//! |   0:     0; d | 0 |   0:     0; c |
+//! |   1:     0; e | 1 |   1:     0; e |
+//!
 use std::fmt::Debug;
 
 use hyper_ast::types::{self, LabelStore, NodeStore, Tree};
@@ -90,7 +97,6 @@ pub fn print_mappings_no_ranges<
         }
     }
 }
-
 
 pub fn print_mappings_no_ranges_label<
     'store: 'a,

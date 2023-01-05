@@ -96,35 +96,41 @@ where
             id_parent: &self.id_parent,
         }
     }
-
-    fn path(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<T::ChildIdx> {
+    fn path(&self, parent: &IdD, descendant: &IdD) -> Vec<T::ChildIdx> {
+        let ref this = self;
         let mut idxs: Vec<T::ChildIdx> = vec![];
         let mut curr = *descendant;
-        loop {
-            if let Some(p) = self.parent(&curr) {
-                let lld: usize = cast(self.llds[p.to_usize().unwrap()]).unwrap();
-                let lld = lld - 1;
-                // TODO use other llds to skip nodes for count
-                let idx = self.id_parent[lld..cast(curr).unwrap()]
-                    .iter()
-                    .filter(|x| **x == p)
-                    .count();
-                let idx = cast(idx).unwrap();
-                idxs.push(idx);
-                if &p == parent {
-                    break;
-                }
-                curr = p;
-            } else {
-                break;
-            }
+        while &curr != parent {
+            let p = this.parent(&curr).expect("reached root before given parent");
+            let idx = this._position_in_parent(&curr, &p);
+            idxs.push(idx);
+            curr = p;
         }
         idxs.reverse();
-        idxs.into()
+        idxs
     }
 
     fn lca(&self, a: &IdD, b: &IdD) -> IdD {
         todo!()
+    }
+}
+impl<T: WithChildren, IdD: PrimInt> LazyPostOrder<T, IdD>
+where
+    T::TreeId: Clone + Eq + Debug,
+{
+    fn _position_in_parent(&self, c: &IdD, p: &IdD) -> T::ChildIdx {
+        let mut r = 0;
+        let mut c = *c;
+        let min = self.first_descendant(p);
+        loop {
+            let lld = self.first_descendant(&c);
+            if lld == min {
+                break;
+            }
+            c = lld - one();
+            r += 1;
+        }
+        cast(r).unwrap()
     }
 }
 

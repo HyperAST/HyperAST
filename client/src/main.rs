@@ -352,6 +352,7 @@ fn main() {
             _, // bfs_wrapper::SD<_, _, CompletePostOrder<_, u16>>,
             NodeStore,
             _,
+            _,
         >::precompute_actions(
             &java_tree_gen.stores.node_store,
             &src_arena,
@@ -452,7 +453,7 @@ fn main() {
             }
         }
         // java_tree_gen2.apply_action(x, &mut root);
-        apply_action::<HashedNode, JavaTreeGen<'_, '_>>(x, &mut root, &mut java_tree_gen);
+        apply_action::<HashedNode, JavaTreeGen<'_, '_>, _>(x, &mut root, &mut java_tree_gen);
         // java_tree_gen2.build_then_insert(todo!(), todo!(), todo!());
     }
     let then = root; //ActionsVec::apply_actions(actions.iter(), *src, &mut node_store);

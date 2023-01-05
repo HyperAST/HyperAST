@@ -81,8 +81,10 @@ where
         }
     }
 
-    fn path(&self, _parent: &IdD, _descendant: &IdD) -> CompressedTreePath<T::ChildIdx> {
-        todo!()
+
+
+    fn path(&self, _parent: &IdD, _descendant: &IdD) -> Vec<T::ChildIdx> {
+            todo!()
     }
 
     fn lca(&self, a: &IdD, b: &IdD) -> IdD {

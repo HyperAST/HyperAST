@@ -17,19 +17,19 @@ use hyper_ast::types::{Labeled, NodeStore, Stored, Tree, WithChildren};
 
 use super::action_vec::ActionsVec;
 
-pub struct ApplicablePath<Idx> {
-    pub ori: CompressedTreePath<Idx>,
-    pub mid: CompressedTreePath<Idx>,
+pub struct ApplicablePath<P> {
+    pub ori: P,
+    pub mid: P,
 }
 
-impl<Idx: PartialEq> PartialEq for ApplicablePath<Idx> {
+impl<P: PartialEq> PartialEq for ApplicablePath<P> {
     fn eq(&self, other: &Self) -> bool {
         self.ori == other.ori && self.mid == other.mid
     }
 }
-impl<Idx: Eq> Eq for ApplicablePath<Idx> {}
+impl<P: Eq> Eq for ApplicablePath<P> {}
 
-impl<Idx: PrimInt> Debug for ApplicablePath<Idx> {
+impl<P: Debug> Debug for ApplicablePath<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ApplicablePath")
             .field("orig", &self.ori)
@@ -38,11 +38,11 @@ impl<Idx: PrimInt> Debug for ApplicablePath<Idx> {
     }
 }
 
-pub enum Act<L, Idx, I> {
+pub enum Act<L, P, I> {
     Delete {},
     Update { new: L },
-    Move { from: ApplicablePath<Idx> },
-    MovUpd { from: ApplicablePath<Idx>, new: L },
+    Move { from: ApplicablePath<P> },
+    MovUpd { from: ApplicablePath<P>, new: L },
     Insert { sub: I },
 }
 
@@ -66,20 +66,20 @@ impl<L: PartialEq, Idx: PartialEq, I: PartialEq> PartialEq for Act<L, Idx, I> {
         }
     }
 }
-impl<L: Eq, Idx: Eq, I: Eq> Eq for Act<L, Idx, I> {}
+impl<L: Eq, P: Eq, I: Eq> Eq for Act<L, P, I> {}
 
-pub struct SimpleAction<L, Idx, I> {
-    pub path: ApplicablePath<Idx>,
-    pub action: Act<L, Idx, I>,
+pub struct SimpleAction<L, P, I> {
+    pub path: ApplicablePath<P>,
+    pub action: Act<L, P, I>,
 }
-impl<L: PartialEq, Idx: PartialEq, I: PartialEq> PartialEq for SimpleAction<L, Idx, I> {
+impl<L: PartialEq, P: PartialEq, I: PartialEq> PartialEq for SimpleAction<L, P, I> {
     fn eq(&self, other: &Self) -> bool {
         self.path == other.path && self.action == other.action
     }
 }
-impl<L: Eq, Idx: Eq, I: Eq> Eq for SimpleAction<L, Idx, I> {}
+impl<L: Eq, P: Eq, I: Eq> Eq for SimpleAction<L, P, I> {}
 
-impl<L: Debug, Idx: PrimInt, I: Debug> Debug for SimpleAction<L, Idx, I> {
+impl<L: Debug, P: Debug, I: Debug> Debug for SimpleAction<L, P, I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.action {
             Act::Delete {} => write!(f, "Del {:?}", self.path),
@@ -120,10 +120,11 @@ pub struct ScriptGenerator<
     'm,
     IdD: PrimInt + Debug + Hash + PartialEq + Eq,
     T: 'store + Stored + Labeled + WithChildren,
-    SS,
+    SS: DecompressedWithParent<'a1, T, IdD>,
     SD,
     S,
     M: MonoMappingStore<Src = IdD, Dst = IdD>,
+    P,
 > where
     T::Label: Debug,
     T::TreeId: Debug,
@@ -139,7 +140,7 @@ pub struct ScriptGenerator<
     ori_mappings: Option<&'m M>,
     cpy_mappings: M,
     // moved: bitvec::vec::BitVec,
-    pub actions: ActionsVec<SimpleAction<T::Label, T::ChildIdx, T::TreeId>>,
+    pub actions: ActionsVec<SimpleAction<T::Label, P, T::TreeId>>,
 
     src_in_order: InOrderNodes<IdD>,
     dst_in_order: InOrderNodes<IdD>,
@@ -165,19 +166,21 @@ impl<
             + BreadthFirstIterable<'a2, T, IdD>,
         S,
         M: MonoMappingStore<Src = IdD, Dst = IdD>,
-    > ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M>
+        P: TreePath<Item = T::ChildIdx>,
+    > ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M, P>
 where
     S: NodeStore<T::TreeId, R<'store> = T>,
     T::Label: Debug + Copy,
     T::TreeId: Debug,
+    P: From<Vec<T::ChildIdx>> + Debug,
 {
     pub fn compute_actions(
         store: &'store S,
         src_arena: &'a1 SS,
         dst_arena: &'a2 SD,
         ms: &'store M,
-    ) -> ActionsVec<SimpleAction<T::Label, T::ChildIdx, T::TreeId>> {
-        ScriptGenerator::<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M>::new(
+    ) -> ActionsVec<SimpleAction<T::Label, P, T::TreeId>> {
+        ScriptGenerator::<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M, P>::new(
             store, src_arena, dst_arena,
         )
         .init_cpy(ms)
@@ -190,8 +193,8 @@ where
         src_arena: &'a1 SS,
         dst_arena: &'a2 SD,
         ms: &'m M,
-    ) -> ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M> {
-        ScriptGenerator::<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M>::new(
+    ) -> Self {
+        Self::new(
             store, src_arena, dst_arena,
         )
         .init_cpy(ms)
@@ -285,11 +288,12 @@ where
                 w = self.make_inserted_node(&x, &z);
                 let ori = self.path_dst(&self.dst_arena.root(), &x);
                 let mid = if let Some(z) = z {
-                    self.path(z).extend(&[k.unwrap()])
+                    let p: P = self.path(z).into();
+                    p.extend(&[k.unwrap()])
                 } else if let Some(k) = k {
-                    CompressedTreePath::from(vec![k])
+                    vec![k].into()
                 } else {
-                    CompressedTreePath::from(vec![num_traits::one()])
+                    vec![num_traits::one()].into()
                 };
                 let path = ApplicablePath { ori, mid };
                 let action = SimpleAction {
@@ -410,7 +414,7 @@ where
                     let mid = if let Some(z) = z {
                         self.path(z).extend(&[k])
                     } else {
-                        CompressedTreePath::from(vec![k])
+                        vec![k].into()
                     };
                     let ori = self.path_dst(&self.dst_arena.root(), &x);
                     // let ori = if let Some(z) = z {
@@ -428,7 +432,7 @@ where
                         let mid = if let Some(z) = z {
                             self.path(z).extend(&[k])
                         } else {
-                            CompressedTreePath::from(vec![k])
+                            vec![k].into()
                         };
                         let ori = self.path_dst(&self.dst_arena.root(), &x);
                         let path = ApplicablePath { ori, mid };
@@ -753,12 +757,12 @@ where
         w
     }
 
-    fn orig_src(&self, v: IdD) -> CompressedTreePath<T::ChildIdx> {
+    fn orig_src(&self, v: IdD) -> P {
         self.src_arena_dont_use
-            .path(&self.src_arena_dont_use.root(), &self.copy_to_orig(v))
+            .path(&self.src_arena_dont_use.root(), &self.copy_to_orig(v)).into()
     }
 
-    fn path_dst(&self, root: &IdD, x: &IdD) -> CompressedTreePath<T::ChildIdx> {
+    fn path_dst(&self, root: &IdD, x: &IdD) -> P {
         let mut r = vec![];
         let mut x = *x;
         loop {
@@ -773,10 +777,10 @@ where
         }
         r.reverse();
         // dbg!(&r.iter().map(|x| x.to_usize()).collect::<Vec<_>>());
-        CompressedTreePath::from(r)
+        r.into()
     }
 
-    fn path(&self, mut z: IdD) -> CompressedTreePath<T::ChildIdx> {
+    fn path(&self, mut z: IdD) -> P {
         let mut r = vec![];
         loop {
             let p = self.mid_arena[z.to_usize().unwrap()].parent;

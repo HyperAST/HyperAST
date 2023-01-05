@@ -1,5 +1,8 @@
+use crate::actions;
+use crate::actions::action_vec::ActionsVec;
 use crate::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
 use crate::tree::simple_tree::Tree;
+use crate::tree::tree_path::CompressedTreePath;
 use crate::{
     actions::{
         action_vec::{apply_actions, TestActions},
@@ -73,18 +76,19 @@ fn test_no_actions() {
     );
 
     let dst_arena = SimpleBfsMapper::from(&node_store, &dst_arena);
-    let actions = ScriptGenerator::<
+    let actions: ActionsVec<_> = ScriptGenerator::<
         _,
         TreeRef<Tree>,
         _,
         SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
         NS<Tree>,
         _,
+        _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     let mut node_store = node_store;
     let mut root = vec![s_src];
-    apply_actions::<_, NS<Tree>>(actions, &mut root, &mut node_store);
+    apply_actions::<_, NS<Tree>, CompressedTreePath<_>>(actions, &mut root, &mut node_store);
     let then = *root.last().unwrap();
 
     println!(
@@ -154,12 +158,13 @@ fn test_delete_actions_1() {
         SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
         NS<Tree>,
         _,
+        _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     println!("{:?}", actions);
 
     // del f
-    let a = make_delete::<Tree>((&[0, 0], &[0, 0]));
+    let a = make_delete::<Tree, CompressedTreePath<_>>((&[0, 0], &[0, 0]));
     println!("{:?}", a);
     assert!(actions.has_actions(&[a,]));
 
@@ -167,7 +172,7 @@ fn test_delete_actions_1() {
 
     let mut node_store = node_store;
     let mut root = vec![s_src];
-    apply_actions::<_, NS<Tree>>(actions, &mut root, &mut node_store);
+    apply_actions::<_, NS<Tree>, _>(actions, &mut root, &mut node_store);
     let then = *root.last().unwrap();
 
     println!(
@@ -238,12 +243,16 @@ fn test_insert_actions_1() {
         SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
         NS<Tree>,
         _,
+        _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     println!("{:?}", actions);
 
     // ins f
-    let a = make_insert::<Tree>(dst_arena.original(&from_dst(&[0, 0])), (&[0, 0], &[0, 0]));
+    let a = make_insert::<Tree, CompressedTreePath<_>>(
+        dst_arena.original(&from_dst(&[0, 0])),
+        (&[0, 0], &[0, 0]),
+    );
     println!("{:?}", a);
     assert!(actions.has_actions(&[a,]));
 
@@ -251,7 +260,7 @@ fn test_insert_actions_1() {
 
     let mut node_store = node_store;
     let mut root = vec![s_src];
-    apply_actions::<_, NS<Tree>>(actions, &mut root, &mut node_store);
+    apply_actions::<_, NS<Tree>, _>(actions, &mut root, &mut node_store);
     let then = *root.last().unwrap();
 
     println!(
@@ -323,12 +332,13 @@ fn test_rename_actions_1() {
         SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
         NS<Tree>,
         _,
+        _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     println!("{:?}", actions);
 
     // upd f
-    let a = make_update::<Tree>(
+    let a = make_update::<Tree, CompressedTreePath<_>>(
         *node_store
             .resolve(&dst_arena.original(&from_dst(&[0, 0])))
             .get_label(),
@@ -341,7 +351,7 @@ fn test_rename_actions_1() {
 
     let mut node_store = node_store;
     let mut root = vec![s_src];
-    apply_actions::<_, NS<Tree>>(actions, &mut root, &mut node_store);
+    apply_actions::<_, NS<Tree>, _>(actions, &mut root, &mut node_store);
     let then = *root.last().unwrap();
 
     println!(
@@ -413,12 +423,13 @@ fn test_move_actions_1() {
         SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
         NS<Tree>,
         _,
+        _,
     >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     println!("{:?}", actions);
 
     // move f to b.1
-    let a = make_move::<Tree>((&[0, 0], &[0, 0]), (&[1, 1], &[1, 1]));
+    let a = make_move::<Tree, CompressedTreePath<_>>((&[0, 0], &[0, 0]), (&[1, 1], &[1, 1]));
     println!("{:?}", a);
     assert!(actions.has_actions(&[a,]));
 
@@ -426,7 +437,7 @@ fn test_move_actions_1() {
 
     let mut node_store = node_store;
     let mut root = vec![s_src];
-    apply_actions::<_, NS<Tree>>(actions, &mut root, &mut node_store);
+    apply_actions::<_, NS<Tree>, _>(actions, &mut root, &mut node_store);
     let then = *root.last().unwrap();
 
     println!(

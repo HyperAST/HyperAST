@@ -6,7 +6,6 @@
 //! We need both post-order traversal and breadth-first.
 use num_traits::PrimInt;
 
-use crate::tree::tree_path::CompressedTreePath;
 use hyper_ast::types::{NodeStore, Stored, WithChildren, WithStats};
 
 // pub mod breath_first;
@@ -155,7 +154,7 @@ pub trait DecompressedWithParent<'a, T: WithChildren, IdD> {
         Self: 'b;
     fn parents(&self, id: IdD) -> Self::PIt<'_>;
     fn position_in_parent(&self, c: &IdD) -> Option<T::ChildIdx>;
-    fn path(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<T::ChildIdx>;
+    fn path(&self, parent: &IdD, descendant: &IdD) -> Vec<T::ChildIdx>;
     /// lowest common ancestor
     fn lca(&self, a: &IdD, b: &IdD) -> IdD;
     // fn position_in_parent<'b, S>(

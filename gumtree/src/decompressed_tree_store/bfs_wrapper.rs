@@ -175,7 +175,7 @@ impl<
         self.back.borrow().parents(id)
     }
 
-    fn path(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<T::ChildIdx> {
+    fn path(&self, parent: &IdD, descendant: &IdD) -> Vec<T::ChildIdx> {
         self.back.borrow().path(parent, descendant)
     }
 

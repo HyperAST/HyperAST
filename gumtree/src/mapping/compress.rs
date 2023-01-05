@@ -1,25 +1,31 @@
+//! commpress mappings
+//! 
+//! - [ ] wrap a Legion world to provide the compressed mapping store
+//! - [ ] add an oracle implemented with a bloom filter
+//!   ie. if a subtree does not contain rest of path, skip
+//! - [ ] add sinks for nodes without mappings ?
+//!   - that way we can split and tell if something is definetly mapped
+//!     ie. if sinks do not contain path to existing node, then if there is a single maybe mapped, it must contain it
+//! - [ ] mark subtrees that have only have mapped nodes
+//!   - permits early next
+
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::marker::PhantomData;
 
 use hyper_ast::types::{Stored, WithChildren};
 use num_traits::{PrimInt, ToPrimitive};
 
 use crate::decompressed_tree_store::{
-    DecompressedTreeStore, DecompressedWithParent, PostOrderIterable, ShallowDecompressedTreeStore,
+    DecompressedTreeStore, DecompressedWithParent, PostOrderIterable,
 };
 use crate::mapping::CmBuilder;
+use crate::matchers::mapping_store::VecStore;
 use crate::matchers::mapping_store::{MappingStore, MonoMappingStore};
-use crate::tree::tree_path::{CompressedTreePath, TreePath};
-use crate::{
-    decompressed_tree_store::simple_post_order::SimplePostOrder, matchers::mapping_store::VecStore,
-};
+use crate::tree::tree_path::TreePath;
 
-use super::{ArenaMStore, CompressedMappingStore, Mree, SimpleCompressedMapping};
-
-// type IdM = usize;
-
-type M<IdM, Idx> = SimpleCompressedMapping<IdM, Idx>;
+use super::CompressedMappingStore;
 
 #[derive(Debug)]
 struct Acc<IdM, IdD, Idx> {
@@ -33,34 +39,39 @@ struct Acc<IdM, IdD, Idx> {
 struct Child<IdM, IdD, Idx> {
     compressed: IdM,
     src_parent: Option<IdD>,
-    mapping: Option<ChildMapping<IdD, Idx>>,
+    pos: Option<Idx>,
 }
 
-#[derive(Debug)]
-struct ChildMapping<IdD, Idx> {
-    src: IdD,
-    pos: Idx,
-}
-
-pub struct MappedHelper<'a, T: Stored, IdD> {
-    dsrc: &'a SimplePostOrder<T, IdD>,
-    ddst: &'a SimplePostOrder<T, IdD>,
+pub struct MappedHelper<'a, T: Stored, IdD, Dsrc, Ddst> {
+    dsrc: &'a Dsrc,
+    ddst: &'a Ddst, //SimplePostOrder<T, IdD>,
     mappings: &'a VecStore<IdD>,
+    _phantom: PhantomData<*const T>,
 }
 
-impl<'m, 'a, T: WithChildren, IdD: PrimInt> MappedHelper<'a, T, IdD>
+impl<'m, 'a, T: WithChildren, IdD: PrimInt, Dsrc, Ddst> MappedHelper<'a, T, IdD, Dsrc, Ddst>
 where
+    Dsrc: DecompressedWithParent<'a, T, IdD>,
+    Ddst: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
     T::TreeId: Clone + Debug,
-    T::ChildIdx: Debug,
     IdD: Hash + Debug,
 {
-    fn process_direct_children<IdM, B: CmBuilder<IdM, T::ChildIdx>>(
+    fn should_wait(&mut self, src_parent: &IdD, dst: &IdD) -> bool {
+        self.mappings
+            .is_src(src_parent)
+            .then(|| self.mappings.get_dst(src_parent))
+            .map_or(false, |d_p| self.ddst.is_descendant(dst, &d_p))
+    }
+
+    fn process_direct_children<IdM, B: CmBuilder<IdM, TPath>, TPath: TreePath<Item = T::ChildIdx>>(
         &self,
         direct: Vec<Option<Child<IdM, IdD, T::ChildIdx>>>,
         builder: &mut B,
         additional: &mut Vec<Vec<Child<IdM, IdD, T::ChildIdx>>>,
         src: Option<IdD>,
-    ) {
+    ) where
+        TPath: From<Vec<T::ChildIdx>>,
+    {
         for (i, c) in direct.into_iter().enumerate() {
             let i = num_traits::cast(i).unwrap();
             // builder.push(vec![]);
@@ -70,32 +81,40 @@ where
         }
     }
 
-    fn process_additional_children<IdM, B: CmBuilder<IdM, T::ChildIdx>>(
+    fn process_additional_children<
+        IdM,
+        B: CmBuilder<IdM, TPath>,
+        TPath: TreePath<Item = T::ChildIdx>,
+    >(
         &self,
         curr_additional: Vec<(T::ChildIdx, Child<IdM, IdD, T::ChildIdx>)>,
         builder: &mut B,
         additional: &mut Vec<Vec<Child<IdM, IdD, T::ChildIdx>>>,
         src: Option<IdD>,
-    ) {
+    ) where
+        TPath: From<Vec<T::ChildIdx>>,
+    {
         for (i, c) in curr_additional {
             self.process_aux(c, src, i, builder, additional);
         }
     }
 
-    fn process_aux<IdM, B: CmBuilder<IdM, T::ChildIdx>>(
+    fn process_aux<IdM, B: CmBuilder<IdM, TPath>, TPath: TreePath<Item = T::ChildIdx>>(
         &self,
         c: Child<IdM, IdD, T::ChildIdx>,
         src: Option<IdD>,
         i: T::ChildIdx,
         builder: &mut B,
         additional: &mut Vec<Vec<Child<IdM, IdD, T::ChildIdx>>>,
-    ) {
+    ) where
+        TPath: From<Vec<T::ChildIdx>>,
+    {
         match (c, src) {
             (
                 Child {
                     compressed,
                     src_parent: Some(src_parent),
-                    mapping: Some(ChildMapping { src: _, pos }),
+                    pos: Some(pos),
                 },
                 Some(src),
             ) if src == src_parent => {
@@ -107,7 +126,7 @@ where
                 Child {
                     compressed,
                     src_parent: Some(src_parent),
-                    mapping: None,
+                    pos: None,
                 },
                 Some(src),
             ) if Some(src) == self.dsrc.parent(&src_parent) => {
@@ -121,16 +140,26 @@ where
     }
 }
 
-pub struct CompressorHelper<'m, 'a, T: WithChildren, IdD, CM: CompressedMappingStore> {
+pub struct CompressorHelper<'m, 'a, T: WithChildren, IdD, CM: CompressedMappingStore, Dsrc, Ddst> {
     cm: &'m mut CM,
-    ctx: MappedHelper<'a, T, IdD>,
+    ctx: MappedHelper<'a, T, IdD, Dsrc, Ddst>,
 }
 
-impl<'m, 'a, T: WithChildren, IdD: PrimInt, CM: CompressedMappingStore<Idx = T::ChildIdx>>
-    CompressorHelper<'m, 'a, T, IdD, CM>
+impl<
+        'm,
+        'a,
+        T: WithChildren,
+        IdD: PrimInt,
+        CM: CompressedMappingStore<Idx = T::ChildIdx>,
+        Dsrc,
+        Ddst,
+    > CompressorHelper<'m, 'a, T, IdD, CM, Dsrc, Ddst>
 where
+    Dsrc: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
+    Ddst: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
     T::TreeId: Clone + Debug,
     IdD: Hash + Debug,
+    CM::P: TreePath<Item = T::ChildIdx> + From<Vec<CM::Idx>>,
 {
     fn compress_additional_children(
         &mut self,
@@ -149,8 +178,9 @@ where
             .enumerate()
             .flat_map(|(i, c)| c.into_iter().map(move |c| (i, c)))
         {
-            let Some(m) = &c.mapping else {continue};
+            let Some(m) = &c.pos else {continue};
             match (src, c.src_parent) {
+                // TODO when there is no src, try to get the dst of src_parent and see if it is a parent of dst
                 (Some(src), Some(src_parent)) if self.ctx.dsrc.parent(&src) == Some(src_parent) => {
                     let mut builder = CM::Builder::default();
                     builder.push(num_traits::cast(i).unwrap(), c.compressed, vec![].into());
@@ -158,11 +188,7 @@ where
                     let c = Child {
                         compressed,
                         src_parent: Some(src_parent),
-                        mapping: Some(ChildMapping {
-                            src: num_traits::zero(),
-                            pos: m.pos, // TODO not sur it is ok, also need a test where intermediary pos changes
-                                        // pos: self.ctx.dsrc.position_in_parent(&src).unwrap(),
-                        }),
+                        pos: Some(*m),
                     };
                     additional_p.push((dst_pos, c));
                 }
@@ -177,27 +203,46 @@ where
                     let c = Child {
                         compressed,
                         src_parent: Some(src_parent),
-                        mapping: None,
+                        pos: None,
                     };
                     additional_p.push((dst_pos, c));
                 }
                 (Some(src), Some(src_parent)) if self.ctx.dsrc.is_descendant(&src_parent, &src) => {
-                    let p = self.ctx.dsrc.path(&src, &src_parent);
-                    let p = p.extend(&[m.pos]);
+                    let p: CM::P = self.ctx.dsrc.path(&src, &src_parent).into();
+                    let p = p.extend(&[*m]);
                     grouped.entry(src).or_insert(Default::default()).push(
                         num_traits::cast(i).unwrap(),
                         c.compressed,
                         p,
                     )
                 }
+                (_, Some(src_parent)) if !self.ctx.dsrc.has_parent(&src_parent) => {
+                    let mut builder = CM::Builder::default();
+                    builder.push(num_traits::cast(i).unwrap(), c.compressed, vec![*m].into());
+                    let compressed = self.cm.insert(builder);
+                    let c = Child {
+                        compressed,
+                        src_parent: Some(src_parent),
+                        pos: None,
+                    };
+                    additional_p.push((dst_pos, c));
+                }
+                (_, Some(src_parent)) if self.ctx.should_wait(&src_parent, &dst) => {
+                    let mut builder = CM::Builder::default();
+                    builder.push(num_traits::cast(i).unwrap(), c.compressed, vec![].into());
+                    let compressed = self.cm.insert(builder);
+                    let c = Child {
+                        compressed,
+                        src_parent: Some(src_parent),
+                        // mapping: None, // TODO check if regression
+                        pos: Some(*m),
+                    };
+                    additional_p.push((dst_pos, c));
+                }
                 (_, Some(src_parent)) => grouped
                     .entry(src_parent)
                     .or_insert(Default::default())
-                    .push(
-                        num_traits::cast(i).unwrap(),
-                        c.compressed,
-                        vec![m.pos].into(),
-                    ),
+                    .push(num_traits::cast(i).unwrap(), c.compressed, vec![*m].into()),
                 _ => additional_p.push((num_traits::cast(i).unwrap(), c)),
             };
         }
@@ -207,10 +252,7 @@ where
                 let c = Child {
                     compressed,
                     src_parent: self.ctx.dsrc.parent(&src),
-                    mapping: Some(ChildMapping {
-                        src: num_traits::zero(),
-                        pos: self.ctx.dsrc.position_in_parent(&src).unwrap(),
-                    }),
+                    pos: Some(self.ctx.dsrc.position_in_parent(&src).unwrap()),
                 };
                 additional_p.push((dst_pos, c));
             }
@@ -220,28 +262,35 @@ where
             let c = Child {
                 compressed,
                 src_parent: self.ctx.dsrc.parent(&src_parent),
-                mapping: Some(ChildMapping {
-                    src: num_traits::zero(),
-                    pos: self.ctx.dsrc.position_in_parent(&src_parent).unwrap(),
-                }),
+                pos: self.ctx.dsrc.position_in_parent(&src_parent),
             };
             additional_p.push((dst_pos, c));
         }
     }
 }
 
-pub struct Compressor<'m, 'a, T: WithChildren, IdD, CM: CompressedMappingStore> {
+pub struct Compressor<'m, 'a, T: WithChildren, IdD, CM: CompressedMappingStore, Dsrc, Ddst> {
     waiting: HashMap<IdD, Acc<CM::Id, IdD, T::ChildIdx>>,
-    helper: CompressorHelper<'m, 'a, T, IdD, CM>,
+    helper: CompressorHelper<'m, 'a, T, IdD, CM, Dsrc, Ddst>,
 }
 
-impl<'m, 'a, T: WithChildren, IdD: PrimInt, CM: CompressedMappingStore<Idx = T::ChildIdx>>
-    Compressor<'m, 'a, T, IdD, CM>
+impl<
+        'm,
+        'a,
+        T: WithChildren,
+        IdD: PrimInt,
+        CM: CompressedMappingStore<Idx = T::ChildIdx>,
+        Dsrc,
+        Ddst,
+    > Compressor<'m, 'a, T, IdD, CM, Dsrc, Ddst>
 where
+    Dsrc: DecompressedTreeStore<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
+    Ddst: DecompressedWithParent<'a, T, IdD> + PostOrderIterable<'a, T, IdD>,
     T::TreeId: Clone + Debug,
     T::ChildIdx: Debug,
     IdD: Hash + Debug,
     CM::Id: Clone + Debug,
+    CM::P: From<Vec<CM::Idx>>,
 {
     pub fn compress(&mut self) -> CM::Id {
         for dst in self.helper.ctx.ddst.iter_df_post::<false>() {
@@ -277,10 +326,7 @@ where
                     waiting_p.direct.push(Some(Child {
                         compressed,
                         src_parent,
-                        mapping: Some(ChildMapping {
-                            src,
-                            pos,
-                        })
+                        pos: Some(pos)
                     }));
                     return;
                 };
@@ -317,7 +363,7 @@ where
             waiting_p.direct.push(Some(Child {
                 compressed,
                 src_parent,
-                mapping: Some(ChildMapping { src, pos }),
+                pos: Some(pos),
             }));
             waiting_p.has_mapped = true;
         } else {
@@ -402,11 +448,18 @@ where
             );
             for (i, x) in additional.into_iter().enumerate() {
                 for x in x {
-                    builder.push(
-                        num_traits::cast(i).unwrap(),
-                        x.compressed,
-                        x.mapping.map_or(vec![], |x| vec![x.pos]).into(),
-                    );
+                    let p: CM::P = self
+                        .helper
+                        .ctx
+                        .dsrc
+                        .path(&src.unwrap(), &x.src_parent.unwrap())
+                        .into();
+                    let p = if let Some(x) = x.pos {
+                        p.extend(&[x])
+                    } else {
+                        p
+                    };
+                    builder.push(num_traits::cast(i).unwrap(), x.compressed, p);
                 }
             }
         }
@@ -420,31 +473,40 @@ where
 
 #[cfg(test)]
 mod test {
+    use std::marker::PhantomData;
+
     use crate::{
-        decompressed_tree_store::{CompletePostOrder, DecompressedWithParent, Initializable, PostOrderIterable},
+        decompressed_tree_store::{
+            CompletePostOrder, DecompressedWithParent, Initializable, PostOrderIterable,
+        },
         mapping::{
             compress::{Compressor, CompressorHelper, MappedHelper},
             remapping::Remapper,
             visualize::print_mappings_no_ranges,
-            ArenaMStore, CompressedMappingStore,
+            ArenaMStore, CompressedMappingStore, SimpleCompressedMapping,
         },
-        matchers::mapping_store::{DefaultMappingStore, MappingStore},
+        matchers::mapping_store::{self, DefaultMappingStore, MappingStore},
         tests::examples,
         tree::{
             simple_tree::{vpair_to_stores, Tree, TreeRef},
-            tree_path::TreePath,
+            tree_path::{self, TreePath},
         },
     };
 
     use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
+
+    /// use SimpleTreePath for debugging (because lldb is able to display it)
+    /// use CompressedTreePath for perfs
+    type TP<Idx> = tree_path::CompressedTreePath<Idx>;
+    type D<T, IdD> = CompletePostOrder<T, IdD>;
 
     #[test]
     fn hands_on() {
         let (label_store, node_store, src, dst) =
             vpair_to_stores((examples::example_move1().0, examples::example_move().1));
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = D::<TreeRef<Tree>, u16>::new(&node_store, &src);
+        let dst_arena = D::<TreeRef<Tree>, u16>::new(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
@@ -463,7 +525,7 @@ mod test {
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
 
-        let mut cm = ArenaMStore { v: vec![] };
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
         let mut compressor = Compressor {
             helper: CompressorHelper {
                 cm: &mut cm,
@@ -471,6 +533,7 @@ mod test {
                     dsrc: &src_arena,
                     ddst: &dst_arena,
                     mappings: &mappings,
+                    _phantom: PhantomData,
                 },
             },
             waiting: Default::default(),
@@ -488,7 +551,6 @@ mod test {
         assert!(it.next().is_none());
         let compressed_root: usize = compressor.finalyze();
         dbg!(compressed_root);
-        panic!();
         let r = cm.resolve(compressed_root);
         dbg!(r);
         assert!(r.is_mapped);
@@ -509,14 +571,11 @@ mod test {
         let r1 = cm.resolve(r.mm[1][1].0);
         dbg!(r1);
         assert!(!r1.is_mapped);
-        assert_eq!(1, r1.mm.len());
-        let r2 = cm.resolve(r1.mm[0][0].0);
-        dbg!(r2);
-        assert!(!r2.is_mapped);
-        let r3 = cm.resolve(r2.mm[0][0].0);
+        assert_eq!(2, r1.mm.len());
+        let r3 = cm.resolve(r1.mm[0][0].0);
         dbg!(r3);
         assert!(r3.is_mapped);
-        let r4 = cm.resolve(r2.mm[1][0].0);
+        let r4 = cm.resolve(r1.mm[1][0].0);
         dbg!(r4);
         assert!(r4.is_mapped);
 
@@ -549,31 +608,196 @@ mod test {
     }
 
     #[test]
-    fn test_move_mix2b() {
+    fn hands_on2() {
         let (label_store, node_store, src, dst) =
-            vpair_to_stores((examples::example_move1().0, examples::example_move().1));
+            vpair_to_stores(examples::example_gumtree_ambiguous());
         let mut mappings = DefaultMappingStore::default();
         let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
         let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
-        mappings.link(0, 1);
-        mappings.link(1, 2);
-        mappings.link(3, 0);
-        mappings.link(4, 3);
-        mappings.link(5, 4);
-        // |   5: 0; f       | 4 |   4: 0; f     |
-        // |   3:   0; g     | 0 |   0:   0; g   |
-        // |   2:     0; i   |   |   3:   0; h   |
-        // |   0:       0; d | 1 |   1:     0; d |
-        // |   1:       0; e | 2 |   2:     0; e |
-        // |   4:   0; h     | 3 |               |
+        mappings.link(6, 10);
+        mappings.link(1, 4);
+        mappings.link(0, 3);
+        mappings.link(4, 2);
+        mappings.link(2, 0);
+        mappings.link(3, 1);
+        // |   6: 0; a     | 10 |  10: 0; z       |
+        // |   1:   0; e   | 4  |   2:   0; b     |
+        // |   0:     0; f | 3  |   0:     0; c   |
+        // |   4:   0; b   | 2  |   1:     0; d   |
+        // |   2:     0; c | 0  |   5:   1; h     |
+        // |   3:     0; d | 1  |   4:     0; e   |
+        // |   5:   0; g   |    |   3:       0; y |
+        // |               |    |   6:   0; g     |
+        // |               |    |   9:   0; b     |
+        // |               |    |   7:     0; c   |
+        // |               |    |   8:     0; d   |
 
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
 
-        let mut cm = ArenaMStore { v: vec![] };
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
+        let mut compressor = Compressor {
+            helper: CompressorHelper {
+                cm: &mut cm,
+                ctx: MappedHelper {
+                    dsrc: &src_arena,
+                    ddst: &dst_arena,
+                    mappings: &mappings,
+                    _phantom: PhantomData,
+                },
+            },
+            waiting: Default::default(),
+        };
+        let mut it = compressor.helper.ctx.ddst.iter_df_post::<false>();
+        compressor.next_po(it.next().unwrap());
+        dbg!(&compressor.waiting);
+        compressor.next_po(it.next().unwrap());
+        dbg!(&compressor.waiting);
+        compressor.next_po(it.next().unwrap());
+        dbg!(&compressor.waiting);
+        compressor.next_po(it.next().unwrap());
+        dbg!(&compressor.waiting);
+        compressor.next_po(it.next().unwrap());
+        dbg!(&compressor.waiting);
+        compressor.next_po(it.next().unwrap());
+        dbg!(&compressor.waiting);
+        compressor.next_po(it.next().unwrap());
+        dbg!(&compressor.waiting);
+        compressor.next_po(it.next().unwrap());
+        dbg!(&compressor.waiting);
+        compressor.next_po(it.next().unwrap());
+        dbg!(&compressor.waiting);
+        compressor.next_po(it.next().unwrap());
+        dbg!(&compressor.waiting);
+        // dbg!(&compressor.helper.cm.resolve(3));
+        assert!(it.next().is_none());
+        let compressed_root: usize = compressor.finalyze();
+        dbg!(compressed_root);
+        let r = cm.resolve(compressed_root);
+        dbg!(r);
+        assert!(r.is_mapped);
+        // assert_eq!(2, r.mm.len());
+        // assert_eq!(1, r.mm[0].len());
+        // {
+        //     let r0 = cm.resolve(r.mm[0][0].0);
+        //     assert!(r0.is_mapped, "{:?}", r0);
+        //     assert!(r0.mm.is_empty(), "{:?}", r0);
+        // }
+        // assert_eq!(2, r.mm[1].len());
+        // {
+        //     let r1 = cm.resolve(r.mm[1][0].0);
+        //     dbg!(r1);
+        //     assert!(r1.is_mapped);
+        //     assert_eq!(0, r1.mm.len());
+        // }
+        // let r1 = cm.resolve(r.mm[1][1].0);
+        // dbg!(r1);
+        // assert!(!r1.is_mapped);
+        // assert_eq!(2, r1.mm.len());
+        // let r3 = cm.resolve(r1.mm[0][0].0);
+        // dbg!(r3);
+        // assert!(r3.is_mapped);
+        // let r4 = cm.resolve(r1.mm[1][0].0);
+        // dbg!(r4);
+        // assert!(r4.is_mapped);
+
+        // dbg!(dst_arena.path(&dst_arena.root(), &1));
+        // {
+        //     let path = dst_arena.path(&dst_arena.root(), &0);
+        //     dbg!(&path);
+        //     let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
+        //     assert_eq!(Some(0), remapped.next());
+        //     assert_eq!(None, remapped.next());
+        // }
+        // {
+        //     let path = dst_arena.path(&dst_arena.root(), &1);
+        //     dbg!(&path);
+        //     let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
+        //     assert_eq!(Some(0), remapped.next());
+        //     assert_eq!(Some(0), remapped.next());
+        //     assert_eq!(Some(0), remapped.next());
+        //     assert_eq!(None, remapped.next());
+        // }
+        // {
+        //     let path = dst_arena.path(&dst_arena.root(), &2);
+        //     dbg!(&path);
+        //     let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
+        //     assert_eq!(Some(0), remapped.next());
+        //     assert_eq!(Some(0), remapped.next());
+        //     assert_eq!(Some(1), remapped.next());
+        //     assert_eq!(None, remapped.next());
+        // }
+
+        dbg!(&cm);
+        {
+            let path = dst_arena.path(&dst_arena.root(), &4);
+            dbg!(&path);
+            let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
+            assert_eq!(Some(0), remapped.next());
+            assert_eq!(None, remapped.next());
+        }
+    }
+
+    mod integration {
+        use crate::matchers::heuristic::gt::{
+            bottom_up_matcher::BottomUpMatcher,
+            greedy_bottom_up_matcher::GreedyBottomUpMatcher,
+            greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
+        };
+
+        use super::*;
+
+        #[test]
+        fn aaaa() {
+            let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_action2());
+            // let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_action2());
+            let mut mappings = DefaultMappingStore::default();
+            let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
+            let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+            mappings.topit(src_arena.len(), dst_arena.len());
+            print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+            println!();
+
+            let mappings = DefaultMappingStore::default();
+            let mapper = GreedySubtreeMatcher::<
+                CompletePostOrder<_, u16>,
+                CompletePostOrder<_, u16>,
+                _,
+                _,
+                _,
+                _,
+            >::matchh(&node_store, &src, &dst, mappings);
+            let SubtreeMatcher { mappings, .. } = mapper.into();
+            let mapper = GreedyBottomUpMatcher::<
+                CompletePostOrder<_, u16>,
+                CompletePostOrder<_, u16>,
+                _,
+                _,
+                _,
+                _,
+            >::matchh(&node_store, &label_store, &src, &dst, mappings);
+            let BottomUpMatcher {
+                src_arena,
+                dst_arena,
+                mappings,
+                ..
+            } = mapper.into();
+            print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+            println!();
+
+            auto(src_arena, dst_arena, mappings);
+        }
+    }
+
+    fn auto<'a>(
+        src_arena: CompletePostOrder<TreeRef<'a, Tree>, u16>,
+        dst_arena: CompletePostOrder<TreeRef<'a, Tree>, u16>,
+        mappings: mapping_store::VecStore<u16>,
+    ) {
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
         let compressed_root: usize = Compressor {
             helper: CompressorHelper {
                 cm: &mut cm,
@@ -581,10 +805,234 @@ mod test {
                     dsrc: &src_arena,
                     ddst: &dst_arena,
                     mappings: &mappings,
+                    _phantom: PhantomData,
                 },
             },
             waiting: Default::default(),
-        }.compress();
+        }
+        .compress();
+        dbg!(&cm);
+        for (src, dst) in mappings._iter() {
+            let src_path = src_arena.path(&src_arena.root(), &src);
+            let dst_path = dst_arena.path(&dst_arena.root(), &dst);
+            dbg!(&dst_path, &src_path);
+            let remapped = Remapper::new(&cm, compressed_root, dst_path.into_iter());
+            assert_eq!(src_path, remapped.into_iter().collect::<Vec<_>>());
+        }
+    }
+
+    #[test]
+    fn test_action2() {
+        let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_action2());
+        let mut mappings = DefaultMappingStore::default();
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        mappings.topit(src_arena.len(), dst_arena.len());
+        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        println!();
+        mappings.link(11, 12);
+        mappings.link(4, 2);
+        mappings.link(2, 0);
+        mappings.link(3, 1);
+        mappings.link(5, 5);
+        mappings.link(7, 6);
+        mappings.link(10, 11);
+        mappings.link(9, 8);
+        // |  11: 0; a     | 12 |  12: 0; Z         |
+        // |   1:   0; e   |    |   2:   0; b       |
+        // |   0:     0; f |    |   0:     0; c     |
+        // |   4:   0; b   | 2  |   1:     0; d     |
+        // |   2:     0; c | 0  |   5:   0; h       |
+        // |   3:     0; d | 1  |   4:     0; e     |
+        // |   6:   0; g   |    |   3:       0; y   |
+        // |   5:     0; h | 5  |   7:   0; x       |
+        // |   7:   0; i   | 6  |   6:     0; w     |
+        // |   8:   0; ii  |    |  11:   0; j       |
+        // |  10:   0; j   | 11 |  10:     0; u     |
+        // |   9:     0; k | 8  |   9:       0; v   |
+        // |               |    |   8:         0; k |
+
+        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        println!();
+
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
+        let compressed_root: usize = Compressor {
+            helper: CompressorHelper {
+                cm: &mut cm,
+                ctx: MappedHelper {
+                    dsrc: &src_arena,
+                    ddst: &dst_arena,
+                    mappings: &mappings,
+                    _phantom: PhantomData,
+                },
+            },
+            waiting: Default::default(),
+        }
+        .compress();
+        dbg!(compressed_root);
+        let r = cm.resolve(compressed_root);
+        dbg!(r);
+        dbg!(&cm);
+        {
+            let path = dst_arena.path(&dst_arena.root(), &8);
+            dbg!(&path);
+            let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
+            assert_eq!(Some(5), remapped.next());
+            assert_eq!(Some(0), remapped.next());
+            assert_eq!(None, remapped.next());
+        }
+    }
+
+    #[test]
+    fn test_gumtree_ambiguous() {
+        let (label_store, node_store, src, dst) =
+            vpair_to_stores(examples::example_gumtree_ambiguous());
+        let mut mappings = DefaultMappingStore::default();
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        mappings.topit(src_arena.len(), dst_arena.len());
+        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        println!();
+        mappings.link(6, 10);
+        mappings.link(1, 4);
+        mappings.link(0, 3);
+        mappings.link(4, 2);
+        mappings.link(2, 0);
+        mappings.link(3, 1);
+        // |   6: 0; a     | 10 |  10: 0; z       |
+        // |   1:   0; e   | 4  |   2:   0; b     |
+        // |   0:     0; f | 3  |   0:     0; c   |
+        // |   4:   0; b   | 2  |   1:     0; d   |
+        // |   2:     0; c | 0  |   5:   1; h     |
+        // |   3:     0; d | 1  |   4:     0; e   |
+        // |   5:   0; g   |    |   3:       0; y |
+        // |               |    |   6:   0; g     |
+        // |               |    |   9:   0; b     |
+        // |               |    |   7:     0; c   |
+        // |               |    |   8:     0; d   |
+
+        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        println!();
+
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
+        let compressed_root: usize = Compressor {
+            helper: CompressorHelper {
+                cm: &mut cm,
+                ctx: MappedHelper {
+                    dsrc: &src_arena,
+                    ddst: &dst_arena,
+                    mappings: &mappings,
+                    _phantom: PhantomData,
+                },
+            },
+            waiting: Default::default(),
+        }
+        .compress();
+        dbg!(compressed_root);
+        let r = cm.resolve(compressed_root);
+        dbg!(r);
+        dbg!(&cm);
+        {
+            let path = dst_arena.path(&dst_arena.root(), &4);
+            dbg!(&path);
+            let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
+            assert_eq!(Some(0), remapped.next());
+            assert_eq!(None, remapped.next());
+        }
+    }
+
+    #[test]
+    fn test_gt_java_code() {
+        let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_gt_java_code());
+        let mut mappings = DefaultMappingStore::default();
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        mappings.topit(src_arena.len(), dst_arena.len());
+        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        println!();
+        mappings.link(6, 7);
+        mappings.link(0, 0);
+        mappings.link(0, 5);
+        mappings.link(1, 1);
+        mappings.link(3, 3);
+        mappings.link(4, 4);
+        // |   6: 0; a      | 7 |   7: 0; z        |
+        // |   0:   0; b    | 5 |   6:   0; a      |
+        // |   5:   0; c    |   |   0:     0; b    |
+        // |   1:     0; d  | 1 |   5:     0; c    |
+        // |   2:     0; e  |   |   1:       0; d  |
+        // |   3:     0; f  | 3 |   2:       1; y  |
+        // |   4:     0; r1 | 4 |   3:       0; f  |
+        // |                |   |   4:       0; r2 |
+
+        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        println!();
+
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
+        let compressed_root: usize = Compressor {
+            helper: CompressorHelper {
+                cm: &mut cm,
+                ctx: MappedHelper {
+                    dsrc: &src_arena,
+                    ddst: &dst_arena,
+                    mappings: &mappings,
+                    _phantom: PhantomData,
+                },
+            },
+            waiting: Default::default(),
+        }
+        .compress();
+        dbg!(compressed_root);
+        let r = cm.resolve(compressed_root);
+        dbg!(r);
+        dbg!(&cm);
+        {
+            let path = dst_arena.path(&dst_arena.root(), &0);
+            dbg!(&path);
+            let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
+            assert_eq!(Some(0), remapped.next());
+            assert_eq!(None, remapped.next());
+        }
+    }
+
+    #[test]
+    fn test_move2() {
+        let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move2());
+        let mut mappings = DefaultMappingStore::default();
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        mappings.topit(src_arena.len(), dst_arena.len());
+        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        println!();
+        mappings.link(1, 1);
+        mappings.link(2, 2);
+        mappings.link(3, 0);
+        mappings.link(4, 4);
+        mappings.link(5, 5);
+        // |   5: 0; f     | 5 |   5: 0; f       |
+        // |   3:   0; g   | 0 |   0:   0; g     |
+        // |   0:     0; c |   |   4:   0; h     |
+        // |   1:     0; d | 1 |   3:     0; i   |
+        // |   2:     0; e | 2 |   1:       0; d |
+        // |   4:   0; h   | 4 |   2:       0; e |
+
+        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        println!();
+
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
+        let compressed_root: usize = Compressor {
+            helper: CompressorHelper {
+                cm: &mut cm,
+                ctx: MappedHelper {
+                    dsrc: &src_arena,
+                    ddst: &dst_arena,
+                    mappings: &mappings,
+                    _phantom: PhantomData,
+                },
+            },
+            waiting: Default::default(),
+        }
+        .compress();
         dbg!(compressed_root);
         let r = cm.resolve(compressed_root);
         dbg!(r);
@@ -610,12 +1058,204 @@ mod test {
         let r2 = cm.resolve(r1.mm[0][0].0);
         dbg!(r2);
         assert!(!r2.is_mapped);
+        assert_eq!(2, r2.mm.len());
         let r3 = cm.resolve(r2.mm[0][0].0);
         dbg!(r3);
         assert!(r3.is_mapped);
         let r4 = cm.resolve(r2.mm[1][0].0);
         dbg!(r4);
         assert!(r4.is_mapped);
+        {
+            let path = dst_arena.path(&dst_arena.root(), &0);
+            dbg!(&path);
+            let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
+            assert_eq!(Some(0), remapped.next());
+            assert_eq!(None, remapped.next());
+        }
+        {
+            let path = dst_arena.path(&dst_arena.root(), &1);
+            dbg!(&path); // 1.0.0
+            let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
+
+            assert_eq!(Some(0), remapped.next());
+            assert_eq!(Some(1), remapped.next());
+            assert_eq!(None, remapped.next());
+        }
+        {
+            let path = dst_arena.path(&dst_arena.root(), &2);
+            dbg!(&path);
+            let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
+            assert_eq!(Some(0), remapped.next());
+            assert_eq!(Some(2), remapped.next());
+            assert_eq!(None, remapped.next());
+        }
+    }
+
+    #[test]
+    fn test_move3() {
+        let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move3());
+        let mut mappings = DefaultMappingStore::default();
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        mappings.topit(src_arena.len(), dst_arena.len());
+        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        println!();
+        mappings.link(4, 1);
+        mappings.link(2, 2);
+        mappings.link(3, 3);
+        mappings.link(5, 5);
+        mappings.link(6, 6);
+        // |   6: 0; f     | 6 |   6: 0; f       |
+        // |   0:   0; x   |   |   0:   0; x     |
+        // |   4:   0; g   | 1 |   1:   0; g     |
+        // |   1:     0; c |   |   5:   0; h     |
+        // |   2:     0; d | 2 |   4:     0; i   |
+        // |   3:     0; e | 3 |   2:       0; d |
+        // |   5:   0; h   | 5 |   3:       0; e |
+        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        println!();
+
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
+        let compressed_root: usize = Compressor {
+            helper: CompressorHelper {
+                cm: &mut cm,
+                ctx: MappedHelper {
+                    dsrc: &src_arena,
+                    ddst: &dst_arena,
+                    mappings: &mappings,
+                    _phantom: PhantomData,
+                },
+            },
+            waiting: Default::default(),
+        }
+        .compress();
+        dbg!(compressed_root);
+        let r = cm.resolve(compressed_root);
+        dbg!(r);
+        assert!(r.is_mapped);
+        assert_eq!(3, r.mm.len());
+        assert_eq!(0, r.mm[0].len());
+        assert_eq!(1, r.mm[1].len());
+        {
+            let r0 = cm.resolve(r.mm[1][0].0);
+            assert!(r0.is_mapped, "{:?}", r0);
+            assert!(r0.mm.is_empty(), "{:?}", r0);
+        }
+        assert_eq!(2, r.mm[2].len());
+        {
+            let r1 = cm.resolve(r.mm[2][0].0);
+            dbg!(r1);
+            assert!(r1.is_mapped);
+            assert_eq!(0, r1.mm.len());
+        }
+        let r1 = cm.resolve(r.mm[2][1].0);
+        dbg!(r1);
+        assert!(!r1.is_mapped);
+        assert_eq!(1, r1.mm.len());
+        let r2 = cm.resolve(r1.mm[0][0].0);
+        dbg!(r2);
+        assert!(!r2.is_mapped);
+        assert_eq!(2, r2.mm.len());
+        let r3 = cm.resolve(r2.mm[0][0].0);
+        dbg!(r3);
+        assert!(r3.is_mapped);
+        let r4 = cm.resolve(r2.mm[1][0].0);
+        dbg!(r4);
+        assert!(r4.is_mapped);
+        {
+            let path = dst_arena.path(&dst_arena.root(), &1);
+            dbg!(&path);
+            let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
+            assert_eq!(Some(1), remapped.next());
+            assert_eq!(None, remapped.next());
+        }
+        {
+            let path = dst_arena.path(&dst_arena.root(), &2);
+            dbg!(&path); // 2.0.0
+            let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
+
+            assert_eq!(Some(1), remapped.next());
+            assert_eq!(Some(1), remapped.next());
+            assert_eq!(None, remapped.next());
+        }
+        {
+            let path = dst_arena.path(&dst_arena.root(), &3);
+            dbg!(&path);
+            let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
+            assert_eq!(Some(1), remapped.next());
+            assert_eq!(Some(2), remapped.next());
+            assert_eq!(None, remapped.next());
+        }
+    }
+
+    #[test]
+    fn test_move_mix2b() {
+        let (label_store, node_store, src, dst) =
+            vpair_to_stores((examples::example_move1().0, examples::example_move().1));
+        let mut mappings = DefaultMappingStore::default();
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        mappings.topit(src_arena.len(), dst_arena.len());
+        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        println!();
+        mappings.link(0, 1);
+        mappings.link(1, 2);
+        mappings.link(3, 0);
+        mappings.link(4, 3);
+        mappings.link(5, 4);
+        // |   5: 0; f       | 4 |   4: 0; f     |
+        // |   3:   0; g     | 0 |   0:   0; g   |
+        // |   2:     0; i   |   |   3:   0; h   |
+        // |   0:       0; d | 1 |   1:     0; d |
+        // |   1:       0; e | 2 |   2:     0; e |
+        // |   4:   0; h     | 3 |               |
+
+        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        println!();
+
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
+        let compressed_root: usize = Compressor {
+            helper: CompressorHelper {
+                cm: &mut cm,
+                ctx: MappedHelper {
+                    dsrc: &src_arena,
+                    ddst: &dst_arena,
+                    mappings: &mappings,
+                    _phantom: PhantomData,
+                },
+            },
+            waiting: Default::default(),
+        }
+        .compress();
+        dbg!(compressed_root);
+        let r = cm.resolve(compressed_root);
+        dbg!(r);
+        assert!(r.is_mapped);
+        assert_eq!(2, r.mm.len());
+        assert_eq!(1, r.mm[0].len());
+        {
+            let r0 = cm.resolve(r.mm[0][0].0);
+            assert!(r0.is_mapped, "{:?}", r0);
+            assert!(r0.mm.is_empty(), "{:?}", r0);
+        }
+        assert_eq!(2, r.mm[1].len());
+        {
+            let r1 = cm.resolve(r.mm[1][0].0);
+            dbg!(r1);
+            assert!(r1.is_mapped);
+            assert_eq!(0, r1.mm.len());
+        }
+        let r1 = cm.resolve(r.mm[1][1].0);
+        dbg!(r1);
+        assert_eq!(vec![0, 0], r.mm[1][1].1.iter().collect::<Vec<_>>());
+        assert!(!r1.is_mapped);
+        assert_eq!(2, r1.mm.len());
+        let r2 = cm.resolve(r1.mm[0][0].0);
+        dbg!(r2);
+        assert!(r2.is_mapped);
+        let r3 = cm.resolve(r1.mm[1][0].0);
+        dbg!(r3);
+        assert!(r3.is_mapped);
 
         dbg!(dst_arena.path(&dst_arena.root(), &1));
         {
@@ -670,7 +1310,7 @@ mod test {
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
 
-        let mut cm = ArenaMStore { v: vec![] };
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
         let compressed_root: usize = Compressor {
             helper: CompressorHelper {
                 cm: &mut cm,
@@ -678,6 +1318,7 @@ mod test {
                     dsrc: &src_arena,
                     ddst: &dst_arena,
                     mappings: &mappings,
+                    _phantom: PhantomData,
                 },
             },
             waiting: Default::default(),
@@ -726,7 +1367,7 @@ mod test {
             let path = dst_arena.path(&dst_arena.root(), &1);
             dbg!(&path); // 1.0.0
             let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
-            // TODO should be 0.0
+
             assert_eq!(Some(0), remapped.next());
             assert_eq!(Some(0), remapped.next());
             // assert_eq!(Some(0), remapped.next());
@@ -760,7 +1401,7 @@ mod test {
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
 
-        let mut cm = ArenaMStore { v: vec![] };
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
         let compressed_root: usize = Compressor {
             helper: CompressorHelper {
                 cm: &mut cm,
@@ -768,6 +1409,7 @@ mod test {
                     dsrc: &src_arena,
                     ddst: &dst_arena,
                     mappings: &mappings,
+                    _phantom: PhantomData,
                 },
             },
             waiting: Default::default(),
@@ -848,7 +1490,7 @@ mod test {
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
 
-        let mut cm = ArenaMStore { v: vec![] };
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
         let compressed_root: usize = Compressor {
             helper: CompressorHelper {
                 cm: &mut cm,
@@ -856,6 +1498,7 @@ mod test {
                     dsrc: &src_arena,
                     ddst: &dst_arena,
                     mappings: &mappings,
+                    _phantom: PhantomData,
                 },
             },
             waiting: Default::default(),
@@ -935,7 +1578,7 @@ mod test {
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
 
-        let mut cm = ArenaMStore { v: vec![] };
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
         let compressed_root: usize = Compressor {
             helper: CompressorHelper {
                 cm: &mut cm,
@@ -943,6 +1586,7 @@ mod test {
                     dsrc: &src_arena,
                     ddst: &dst_arena,
                     mappings: &mappings,
+                    _phantom: PhantomData,
                 },
             },
             waiting: Default::default(),
@@ -1017,7 +1661,7 @@ mod test {
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
 
-        let mut cm = ArenaMStore { v: vec![] };
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
         let compressed_root: usize = Compressor {
             helper: CompressorHelper {
                 cm: &mut cm,
@@ -1025,6 +1669,7 @@ mod test {
                     dsrc: &src_arena,
                     ddst: &dst_arena,
                     mappings: &mappings,
+                    _phantom: PhantomData,
                 },
             },
             waiting: Default::default(),
@@ -1051,6 +1696,7 @@ mod test {
             dbg!(&path);
             let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
             assert_eq!(Some(0), remapped.next());
+            assert_eq!(Some(0), remapped.next());
             assert_eq!(None, remapped.next());
         }
     }
@@ -1072,7 +1718,7 @@ mod test {
         // let mut mappings = mappings;
         // mappings.link(src, dst);
 
-        let mut cm = ArenaMStore { v: vec![] };
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
         let compressed_root: usize = Compressor {
             helper: CompressorHelper {
                 cm: &mut cm,
@@ -1080,6 +1726,7 @@ mod test {
                     dsrc: &src_arena,
                     ddst: &dst_arena,
                     mappings: &mappings,
+                    _phantom: PhantomData,
                 },
             },
             waiting: Default::default(),
@@ -1098,6 +1745,7 @@ mod test {
             let path = dst_arena.path(&dst_arena.root(), &0);
             dbg!(&path);
             let mut remapped = Remapper::new(&cm, compressed_root, path.into_iter());
+            assert_eq!(Some(0), remapped.next());
             assert_eq!(Some(0), remapped.next());
             assert_eq!(None, remapped.next());
         }
@@ -1119,7 +1767,7 @@ mod test {
         // let mut mappings = mappings;
         // mappings.link(src, dst);
 
-        let mut cm = ArenaMStore { v: vec![] };
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
         let compressed_root: usize = Compressor {
             helper: CompressorHelper {
                 cm: &mut cm,
@@ -1127,6 +1775,7 @@ mod test {
                     dsrc: &src_arena,
                     ddst: &dst_arena,
                     mappings: &mappings,
+                    _phantom: PhantomData,
                 },
             },
             waiting: Default::default(),
@@ -1169,7 +1818,7 @@ mod test {
         //     println!("mappings.link({},{});",src,dst);
         // }
 
-        let mut cm = ArenaMStore { v: vec![] };
+        let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
         let compressed_root: usize = Compressor {
             helper: CompressorHelper {
                 cm: &mut cm,
@@ -1177,6 +1826,7 @@ mod test {
                     dsrc: &src_arena,
                     ddst: &dst_arena,
                     mappings: &mappings,
+                    _phantom: PhantomData,
                 },
             },
             waiting: Default::default(),

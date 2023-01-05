@@ -5,6 +5,8 @@
 use std::fmt::Debug;
 
 use num_traits::PrimInt;
+use crate::tree::tree_path::CompressedTreePath;
+
 use super::{
     script_generator2::{Act, SimpleAction},
     Actions,
@@ -26,9 +28,9 @@ impl<A: Debug> Actions for ActionsTree<A> {
     }
 }
 
-impl<L,Idx:PrimInt,I> ActionsTree<SimpleAction<L,Idx,I>>
+impl<L,Idx:PrimInt,I> ActionsTree<SimpleAction<L,CompressedTreePath<Idx>,I>>
 {
-    pub(crate) fn push(&mut self, action: SimpleAction<L,Idx,I>) {
+    pub(crate) fn push(&mut self, action: SimpleAction<L,CompressedTreePath<Idx>,I>) {
         Self::push_aux(
             Node {
                 action,
@@ -37,7 +39,7 @@ impl<L,Idx:PrimInt,I> ActionsTree<SimpleAction<L,Idx,I>>
             &mut self.atomics,
         );
     }
-    fn push_aux(node: Node<SimpleAction<L,Idx,I>>, r: &mut Vec<Node<SimpleAction<L,Idx,I>>>) {
+    fn push_aux(node: Node<SimpleAction<L,CompressedTreePath<Idx>,I>>, r: &mut Vec<Node<SimpleAction<L,CompressedTreePath<Idx>,I>>>) {
         let mut i = 0;
         for x in r.iter_mut() {
             i += 1;
@@ -58,7 +60,7 @@ impl<L,Idx:PrimInt,I> ActionsTree<SimpleAction<L,Idx,I>>
         // }
     }
 
-    fn push_node(&mut self, node: Node<SimpleAction<L,Idx,I>>) {
+    fn push_node(&mut self, node: Node<SimpleAction<L,CompressedTreePath<Idx>,I>>) {
         Self::push_aux(node, &mut self.atomics);
     }
 

@@ -1,33 +1,29 @@
-use std::{borrow::Borrow, fmt::Debug, marker::PhantomData};
+//! Map tree pairs, allow to compress those mappings
 
-use num_traits::PrimInt;
+use std::{fmt::Debug, marker::PhantomData};
 
-use crate::tree::tree_path::CompressedTreePath;
+use num_traits::{PrimInt, ToPrimitive};
+
+use crate::tree::tree_path::{TreePath};
 
 pub mod compress;
 pub mod remapping;
 pub mod visualize;
 
+#[derive(Debug)]
 pub struct ArenaMStore<M: Mree> {
     v: Vec<M>,
 }
-// impl<M: Mree<Id = usize>> ArenaMStore<M>
-// where
-//     for<'a> &'a M: Mree<Id = usize, Idx = M::Idx>,
-// {
-//     fn insert(&mut self, x: M) -> usize {
-//         let id = self.v.len();
-//         self.v.push(x);
-//         id
-//     }
-// }
 
-impl<IdM, Idx: PrimInt> CmBuilder<IdM, Idx> for SimpleCompressedMapping<IdM, Idx> {
+impl<IdM, P: TreePath> CmBuilder<IdM, P> for SimpleCompressedMapping<IdM, P>
+where
+    P::Item: PrimInt,
+{
     fn mapped(&mut self) {
         self.is_mapped = true;
     }
 
-    fn push(&mut self, i: Idx, x: IdM, p: CompressedTreePath<Idx>) {
+    fn push(&mut self, i: P::Item, x: IdM, p: P) {
         let i = i.to_usize().unwrap();
         if self.mm.len() <= i {
             self.mm.resize_with(i + 1, || vec![]);
@@ -36,14 +32,18 @@ impl<IdM, Idx: PrimInt> CmBuilder<IdM, Idx> for SimpleCompressedMapping<IdM, Idx
     }
 }
 
-impl<IdM: Clone + PrimInt, Idx: PrimInt> CompressedMappingStore
-    for ArenaMStore<SimpleCompressedMapping<IdM, Idx>>
+impl<IdM: Clone + PrimInt, P: TreePath> CompressedMappingStore
+    for ArenaMStore<SimpleCompressedMapping<IdM, P>>
+where
+    P::Item: PrimInt,
+    P: Clone,
 {
     type Id = IdM;
 
-    type Idx = Idx;
+    type Idx = P::Item;
+    type P = P;
 
-    type R<'a> = &'a SimpleCompressedMapping<IdM, Idx>
+    type R<'a> = &'a SimpleCompressedMapping<IdM, P>
     where
         Self: 'a;
 
@@ -51,7 +51,7 @@ impl<IdM: Clone + PrimInt, Idx: PrimInt> CompressedMappingStore
         &self.v[id.to_usize().unwrap()]
     }
 
-    type Builder = SimpleCompressedMapping<IdM, Idx>;
+    type Builder = SimpleCompressedMapping<IdM, P>;
 
     fn insert(&mut self, x: Self::Builder) -> IdM {
         let id = self.v.len();
@@ -63,29 +63,30 @@ impl<IdM: Clone + PrimInt, Idx: PrimInt> CompressedMappingStore
 pub trait Mree {
     type Id;
     type Idx;
+    type P: IntoIterator<Item = Self::Idx>;
 
-    fn definitely_mapped(
-        &self,
-        i: Self::Idx,
-    ) -> Option<(Option<Self::Id>, CompressedTreePath<Self::Idx>)>;
-    fn maybe_mapped(&self, i: Self::Idx) -> Vec<(Self::Id, CompressedTreePath<Self::Idx>)>;
+    fn definitely_mapped(&self, i: Self::Idx) -> Option<(Option<Self::Id>, Self::P)>;
+    fn maybe_mapped(&self, i: Self::Idx) -> Vec<(Self::Id, Self::P)>;
     fn is_mapped(&self) -> bool;
 }
 
-impl<Id: Clone, Idx: PrimInt + Clone> Mree for SimpleCompressedMapping<Id, Idx> {
+impl<Id: Clone, P: IntoIterator> Mree for SimpleCompressedMapping<Id, P>
+where
+    P::Item: PrimInt + Clone,
+    P: Clone,
+{
     type Id = Id;
 
-    type Idx = Idx;
+    type Idx = P::Item;
 
-    fn definitely_mapped(
-        &self,
-        i: Self::Idx,
-    ) -> Option<(Option<Self::Id>, CompressedTreePath<Self::Idx>)> {
+    type P = P;
+
+    fn definitely_mapped(&self, i: Self::Idx) -> Option<(Option<Self::Id>, Self::P)> {
         // self.dm[i.to_usize().unwrap()].clone()
         None
     }
 
-    fn maybe_mapped(&self, i: Self::Idx) -> Vec<(Self::Id, CompressedTreePath<Self::Idx>)> {
+    fn maybe_mapped(&self, i: Self::Idx) -> Vec<(Self::Id, Self::P)> {
         self.mm[i.to_usize().unwrap()].clone()
     }
 
@@ -94,20 +95,23 @@ impl<Id: Clone, Idx: PrimInt + Clone> Mree for SimpleCompressedMapping<Id, Idx> 
     }
 }
 
-impl<Id: Clone, Idx: PrimInt + Clone> Mree for &SimpleCompressedMapping<Id, Idx> {
+impl<Id: Clone, P: IntoIterator> Mree for &SimpleCompressedMapping<Id, P>
+where
+    P::Item: PrimInt + Clone,
+    P: Clone,
+{
     type Id = Id;
 
-    type Idx = Idx;
+    type Idx = P::Item;
 
-    fn definitely_mapped(
-        &self,
-        i: Self::Idx,
-    ) -> Option<(Option<Self::Id>, CompressedTreePath<Self::Idx>)> {
+    type P = P;
+
+    fn definitely_mapped(&self, i: Self::Idx) -> Option<(Option<Self::Id>, Self::P)> {
         // self.dm[i.to_usize().unwrap()].clone()
         None
     }
 
-    fn maybe_mapped(&self, i: Self::Idx) -> Vec<(Self::Id, CompressedTreePath<Self::Idx>)> {
+    fn maybe_mapped(&self, i: Self::Idx) -> Vec<(Self::Id, Self::P)> {
         self.mm
             .get(i.to_usize().unwrap())
             .map_or(vec![], |x| x.clone())
@@ -118,13 +122,13 @@ impl<Id: Clone, Idx: PrimInt + Clone> Mree for &SimpleCompressedMapping<Id, Idx>
     }
 }
 
-pub struct SimpleCompressedMapping<Id, Idx> {
+pub struct SimpleCompressedMapping<Id, P: IntoIterator> {
     is_mapped: bool,
     // dm: Vec<Option<(Option<Id>, CompressedTreePath<Idx>)>>,
-    mm: Vec<Vec<(Id, CompressedTreePath<Idx>)>>,
+    mm: Vec<Vec<(Id, P)>>,
 }
 
-impl<IdM, Idx> Default for SimpleCompressedMapping<IdM, Idx> {
+impl<IdM, P: IntoIterator> Default for SimpleCompressedMapping<IdM, P> {
     fn default() -> Self {
         Self {
             is_mapped: Default::default(),
@@ -133,7 +137,7 @@ impl<IdM, Idx> Default for SimpleCompressedMapping<IdM, Idx> {
     }
 }
 
-impl<IdM: Debug, Idx: PrimInt> Debug for SimpleCompressedMapping<IdM, Idx> {
+impl<IdM: Debug, P: IntoIterator + Debug> Debug for SimpleCompressedMapping<IdM, P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SimpleCompressedMapping")
             .field("is_mapped", &self.is_mapped)
@@ -158,18 +162,19 @@ struct ShiftedCompressedMapping<Id, Idx> {
     phantom: PhantomData<*const Idx>,
 }
 
-pub trait CmBuilder<IdM, Idx>: Default {
+pub trait CmBuilder<IdM, P: TreePath>: Default {
     fn mapped(&mut self);
-    fn push(&mut self, i: Idx, x: IdM, p: CompressedTreePath<Idx>);
+    fn push(&mut self, i: P::Item, x: IdM, p: P);
 }
 
 pub trait CompressedMappingStore {
     type Id;
     type Idx;
-    type R<'a>: Mree<Id = Self::Id, Idx = Self::Idx>
+    type P: TreePath<Item=Self::Idx>;
+    type R<'a>: Mree<Id = Self::Id, Idx = Self::Idx, P = Self::P>
     where
         Self: 'a;
-    type Builder: CmBuilder<Self::Id, Self::Idx>;
+    type Builder: CmBuilder<Self::Id, Self::P>;
 
     fn resolve(&self, id: Self::Id) -> Self::R<'_>;
     fn insert(&mut self, x: Self::Builder) -> Self::Id;

@@ -9,8 +9,7 @@ use hyper_ast::{
         SimpleStores,
     },
     types::{
-        Children, LabelStore, NodeStore, NodeStoreExt, Tree, Typed,
-        WithChildren, IterableChildren,
+        Children, IterableChildren, LabelStore, NodeStore, NodeStoreExt, Tree, Typed, WithChildren,
     },
 };
 
@@ -34,18 +33,18 @@ impl<A> Default for ActionsVec<A> {
     }
 }
 
-pub fn actions_vec_f(
-    v: &ActionsVec<SimpleAction<LabelIdentifier, u16, NodeIdentifier>>,
+pub fn actions_vec_f<P: TreePath<Item = u16>>(
+    v: &ActionsVec<SimpleAction<LabelIdentifier, P, NodeIdentifier>>,
     stores: &SimpleStores,
     ori: NodeIdentifier,
 ) {
     v.iter().for_each(|a| print_action(ori, stores, a));
 }
 
-fn format_action_pos(
+fn format_action_pos<P: TreePath<Item = u16>>(
     ori: NodeIdentifier,
     stores: &SimpleStores,
-    a: &SimpleAction<LabelIdentifier, u16, NodeIdentifier>,
+    a: &SimpleAction<LabelIdentifier, P, NodeIdentifier>,
 ) -> String {
     // TODO make whole thing more specific to a path in a tree
     let mut end = None;
@@ -101,10 +100,10 @@ fn format_action_pos(
     )
 }
 
-fn print_action(
+fn print_action<P: TreePath<Item = u16>>(
     ori: NodeIdentifier,
     stores: &SimpleStores,
-    a: &SimpleAction<LabelIdentifier, u16, NodeIdentifier>,
+    a: &SimpleAction<LabelIdentifier, P, NodeIdentifier>,
 ) {
     match &a.action {
         Act::Delete {} => println!(
@@ -154,12 +153,12 @@ fn print_action(
     }
 }
 
-impl<A: Debug> Actions for ActionsVec<A> {
+impl<A> Actions for ActionsVec<A> {
     fn len(&self) -> usize {
         self.0.len()
     }
 }
-impl<A: Debug> ActionsVec<A> {
+impl<A> ActionsVec<A> {
     pub fn iter(&self) -> impl Iterator<Item = &A> + '_ {
         self.0.iter()
     }
@@ -175,11 +174,11 @@ impl<A: Eq> TestActions<A> for ActionsVec<A> {
     }
 }
 
-impl<L: Debug, Idx, I: Debug> ActionsVec<SimpleAction<L, Idx, I>> {
-    pub(crate) fn push(&mut self, action: SimpleAction<L, Idx, I>) {
+impl<L: Debug, P: TreePath, I: Debug> ActionsVec<SimpleAction<L, P, I>> {
+    pub(crate) fn push(&mut self, action: SimpleAction<L, P, I>) {
         self.0.push(action)
     }
-    pub(crate) fn get(&self, i: usize) -> Option<&SimpleAction<L, Idx, I>> {
+    pub(crate) fn get(&self, i: usize) -> Option<&SimpleAction<L, P, I>> {
         self.0.get(i)
     }
 
@@ -197,11 +196,12 @@ impl<L: Debug, Idx, I: Debug> ActionsVec<SimpleAction<L, Idx, I>> {
 /// Also actions are applied in order, thus there is a single way of applying actions.
 /// It might not have enough info to it flexibly, action_tree could definetly be more flexible.
 // pub fn apply_actions<S: for<'b> NodeStoreMut<'b, <T as Stored>::TreeId, &'b T>>(
-pub fn apply_actions<T, S>(
-    actions: ActionsVec<SimpleAction<T::Label, T::ChildIdx, T::TreeId>>,
+pub fn apply_actions<T, S, P>(
+    actions: ActionsVec<SimpleAction<T::Label, P, T::TreeId>>,
     root: &mut Vec<T::TreeId>,
     node_store: &mut S,
 ) where
+    P: TreePath<Item = T::ChildIdx> + Debug,
     T: hyper_ast::types::Tree,
     T::Type: Debug + Copy,
     T::Label: Debug + Copy,
@@ -224,11 +224,12 @@ pub fn apply_actions<T, S>(
     }
 }
 
-pub fn apply_action<T, S>(
-    a: &SimpleAction<T::Label, T::ChildIdx, T::TreeId>,
+pub fn apply_action<T, S, P>(
+    a: &SimpleAction<T::Label, P, T::TreeId>,
     root: &'_ mut Vec<T::TreeId>,
     s: &'_ mut S,
 ) where
+    P: TreePath<Item = T::ChildIdx> + Debug,
     T: hyper_ast::types::Tree,
     T::Type: Debug + Copy,
     T::Label: Debug + Copy,

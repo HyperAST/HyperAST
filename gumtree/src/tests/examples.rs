@@ -84,6 +84,54 @@ pub(crate) fn example_move1() -> (ST<u8>, ST<u8>) {
     (src, dst)
 }
 
+pub(crate) fn example_move2() -> (ST<u8>, ST<u8>) {
+    let src = tree!(
+        0, "f"; [
+            tree!(0, "g"; [
+                tree!(0, "c"),
+                tree!(0, "d"),
+                tree!(0, "e"),
+            ]),
+            tree!(0, "h")
+    ]);
+    let dst = tree!(
+        0, "f"; [
+            tree!(0, "g"),
+            tree!(0, "h"; [
+                tree!(0, "i"; [
+                    tree!(0, "d"),
+                    tree!(0, "e"),
+                ]),
+            ]),
+    ]);
+    (src, dst)
+}
+
+pub(crate) fn example_move3() -> (ST<u8>, ST<u8>) {
+    let src = tree!(
+        0, "f"; [
+            tree!(0, "x"),
+            tree!(0, "g"; [
+                tree!(0, "c"),
+                tree!(0, "d"),
+                tree!(0, "e"),
+            ]),
+            tree!(0, "h")
+    ]);
+    let dst = tree!(
+        0, "f"; [
+            tree!(0, "x"),
+            tree!(0, "g"),
+            tree!(0, "h"; [
+                tree!(0, "i"; [
+                    tree!(0, "d"),
+                    tree!(0, "e"),
+                ]),
+            ]),
+    ]);
+    (src, dst)
+}
+
 pub(crate) fn example_zs_paper() -> (ST<u8>, ST<u8>) {
     let src = tree!(
         0, "f"; [

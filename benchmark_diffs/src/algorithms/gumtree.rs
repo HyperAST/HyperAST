@@ -14,6 +14,7 @@ use hyper_gumtree::{
         },
         mapping_store::{DefaultMultiMappingStore, MappingStore, VecStore},
     },
+    tree::tree_path::CompressedTreePath,
 };
 
 type DS<T> = LazyPostOrder<T, u32>;
@@ -29,7 +30,7 @@ pub fn diff<'store, IdN, NS, LS>(
 ) -> DiffResult<
     IdN,
     LS::I,
-    <NS::R<'store> as types::WithChildren>::ChildIdx,
+    CompressedTreePath<<NS::R<'store> as types::WithChildren>::ChildIdx>,
     u32,
     CDS<NS::R<'store>>,
     CDS<NS::R<'store>>,
@@ -39,6 +40,7 @@ where
     IdN: Clone + Debug + Eq,
     LS::I: Debug,
     <NS::R<'store> as types::Typed>::Type: Debug,
+    <NS::R<'store> as types::WithChildren>::ChildIdx: Debug,
     NS: types::NodeStore<IdN>,
     LS: types::LabelStore<str>,
     NS::R<'store>: types::Tree<Type = types::Type, TreeId = IdN, Label = LS::I>

@@ -63,11 +63,10 @@ impl<'d, T: WithChildren, IdD: PrimInt> SimplePostOrder<T, IdD>
 where
     T::TreeId: Clone + Eq + Debug,
 {
-    fn position_in_parent(&self, c: &IdD) -> Option<T::ChildIdx> {
-        let p = self.parent(c)?;
+    fn _position_in_parent(&self, c: &IdD, p: &IdD) -> T::ChildIdx {
         let mut r = 0;
         let mut c = *c;
-        let min = self.first_descendant(&p);
+        let min = self.first_descendant(p);
         loop {
             let lld = self.first_descendant(&c);
             if lld == min {
@@ -76,7 +75,7 @@ where
             c = lld - one();
             r += 1;
         }
-        Some(cast(r).unwrap())
+        cast(r).unwrap()
     }
 }
 
@@ -98,7 +97,8 @@ where
     }
 
     fn position_in_parent(&self, c: &IdD) -> Option<T::ChildIdx> {
-        self.position_in_parent(c)
+        let p = self.parent(c)?;
+        Some(self._position_in_parent(c, &p))
     }
 
     type PIt<'a> = IterParents<'a, IdD> where IdD: 'a, T::TreeId:'a, T: 'a;
@@ -110,29 +110,18 @@ where
         }
     }
 
-    fn path(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<T::ChildIdx> {
+    fn path(&self, parent: &IdD, descendant: &IdD) -> Vec<T::ChildIdx> {
+        let ref this = self;
         let mut idxs: Vec<T::ChildIdx> = vec![];
         let mut curr = *descendant;
-        loop {
-            if let Some(p) = self.parent(&curr) {
-                let lld: usize = cast(self.llds[p.to_usize().unwrap()]).unwrap();
-                // TODO use other llds to skip nodes for count
-                let idx = self.id_parent[lld..cast(curr).unwrap()]
-                    .iter()
-                    .filter(|x| **x == p)
-                    .count();
-                let idx = cast(idx).unwrap();
-                idxs.push(idx);
-                if &p == parent {
-                    break;
-                }
-                curr = p;
-            } else {
-                break;
-            }
+        while &curr != parent {
+            let p = this.parent(&curr).expect("reached root before given parent");
+            let idx = this._position_in_parent(&curr, &p);
+            idxs.push(idx);
+            curr = p;
         }
         idxs.reverse();
-        idxs.into()
+        idxs
     }
 
     fn lca(&self, a: &IdD, b: &IdD) -> IdD {
@@ -140,14 +129,14 @@ where
         let mut b = *b;
         loop {
             if a == b {
-                return a
+                return a;
             } else if a < b {
                 a = self.parent(&a).unwrap();
             } else if b < self.root() {
                 b = self.parent(&b).unwrap();
             } else {
-                assert!(a==b);
-                return a
+                assert!(a == b);
+                return a;
             }
         }
     }
@@ -408,7 +397,7 @@ where
         (*x - self.first_descendant(x) + one()).to_usize().unwrap()
     }
 
-    fn is_descendant(&self, desc: &IdD,of: &IdD) -> bool {
+    fn is_descendant(&self, desc: &IdD, of: &IdD) -> bool {
         self.basic.is_descendant(desc, of)
     }
 }

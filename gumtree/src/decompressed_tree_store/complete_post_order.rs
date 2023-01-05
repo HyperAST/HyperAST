@@ -10,7 +10,7 @@ use std::{
 use bitvec::slice::BitSlice;
 use num_traits::{cast, PrimInt, ToPrimitive, Zero};
 
-use crate::tree::tree_path::CompressedTreePath;
+use crate::tree::tree_path::{CompressedTreePath, self, SimpleTreePath};
 use hyper_ast::{
     position::Position,
     types::{self, LabelStore, NodeStore, Stored, Tree, Type, WithChildren, WithSerialization},
@@ -150,7 +150,8 @@ where
             inner: &m,
             node_store: self.node_store,
             label_store: self.label_store,
-        }.fmt(f)
+        }
+        .fmt(f)
     }
 }
 
@@ -181,7 +182,7 @@ where
         self.simple.lca(a, b)
     }
 
-    fn path(&self, parent: &IdD, descendant: &IdD) -> CompressedTreePath<T::ChildIdx> {
+    fn path(&self, parent: &IdD, descendant: &IdD) -> Vec<T::ChildIdx> {
         self.simple.path(parent, descendant)
     }
 }

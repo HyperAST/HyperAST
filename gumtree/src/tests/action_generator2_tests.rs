@@ -1,6 +1,8 @@
 use crate::actions::action_vec::{apply_action, apply_actions};
 use crate::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
 use crate::tree::simple_tree::Tree;
+use crate::tree::tree_path::CompressedTreePath;
+use crate::tree::tree_path::TreePath;
 use crate::{
     actions::{
         action_vec::{ActionsVec, TestActions},
@@ -15,7 +17,6 @@ use crate::{
 use hyper_ast::types::{
     LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Tree as _, Typed, WithChildren,
 };
-
 use std::fmt;
 
 type IdD = u16;
@@ -90,7 +91,7 @@ fn test_with_action_example() {
                 write!(f, "")
             })
         );
-        let actions: ActionsVec<SimpleAction<u16, u8, u16>> =
+        let actions: ActionsVec<SimpleAction<u16, CompressedTreePath<u8>, u16>> =
             ScriptGenerator::<
                 _,
                 TreeRef<Tree>,
@@ -98,28 +99,29 @@ fn test_with_action_example() {
                 SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
                 NS<Tree>,
                 _,
+                _,
             >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
 
         log::debug!("{:?}", actions);
 
         macro_rules! test_action {
             ( ins $at:expr, $to:expr ) => {{
-                let a = make_insert::<Tree>(dst_arena.original(&from_dst(&$at)), (&$at, &$to));
+                let a = make_insert::<Tree, CompressedTreePath<_>>(dst_arena.original(&from_dst(&$at)), (&$at, &$to));
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
             ( del $at:expr, $to:expr ) => {{
-                let a = make_delete::<Tree>((&$at, &$to));
+                let a = make_delete::<Tree, CompressedTreePath<_>>((&$at, &$to));
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
             ( upd $lab:expr; $at:expr, $to:expr ) => {{
-                let a = make_update::<Tree>(label_store.get($lab).unwrap(), (&$at, &$to));
+                let a = make_update::<Tree, CompressedTreePath<_>>(label_store.get($lab).unwrap(), (&$at, &$to));
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
             ( mov $from:expr, $m_from:expr => $to:expr, $m_to:expr ) => {{
-                let a = make_move::<Tree>((&$from, &$m_from), (&$to, &$m_to));
+                let a = make_move::<Tree, CompressedTreePath<_>>((&$from, &$m_from), (&$to, &$m_to));
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
@@ -156,7 +158,7 @@ fn test_with_action_example() {
         drop(node);
         node_store.build_then_insert(root[0], t, l, vec![]);
     }
-    apply_actions::<_, NS<Tree>>(actions, &mut root, &mut node_store);
+    apply_actions::<_, NS<Tree>, _>(actions, &mut root, &mut node_store);
     let then = root; //ActionsVec::apply_actions(actions.iter(), *src, &mut node_store);
     assert_eq!(*then.last().unwrap(), dst);
 }
@@ -500,28 +502,29 @@ fn test_with_action_example2() {
             SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
             NS<Tree>,
             _,
+            _,
         >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
 
         log::debug!("{:?}", actions);
 
         macro_rules! test_action {
             ( ins $at:expr, $to:expr ) => {{
-                let a = make_insert::<Tree>(dst_arena.original(&from_dst(&$at)), (&$at, &$to));
+                let a = make_insert::<Tree, CompressedTreePath<_>>(dst_arena.original(&from_dst(&$at)), (&$at, &$to));
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
             ( del $at:expr, $to:expr ) => {{
-                let a = make_delete::<Tree>((&$at, &$to));
+                let a = make_delete::<Tree, CompressedTreePath<_>>((&$at, &$to));
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
             ( upd $lab:expr; $at:expr, $to:expr ) => {{
-                let a = make_update::<Tree>(label_store.get($lab).unwrap(), (&$at, &$to));
+                let a = make_update::<Tree, CompressedTreePath<_>>(label_store.get($lab).unwrap(), (&$at, &$to));
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
             ( mov $from:expr, $m_from:expr => $to:expr, $m_to:expr ) => {{
-                let a = make_move::<Tree>((&$from, &$m_from), (&$to, &$m_to));
+                let a = make_move::<Tree, CompressedTreePath<_>>((&$from, &$m_from), (&$to, &$m_to));
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
@@ -556,97 +559,102 @@ fn test_with_action_example2() {
             "mid tree:\n{:?}",
             DisplayTree::new(&label_store, &node_store, *root.last().unwrap())
         );
-        apply_action::<_, NS<Tree>>(a, &mut root, &mut node_store);
+        apply_action::<_, NS<Tree>, _>(a, &mut root, &mut node_store);
     }
     let then = root; //ActionsVec::apply_actions(actions.iter(), *src, &mut node_store);
     assert_eq!(*then.last().unwrap(), dst);
 }
 
-pub(crate) fn make_move<T: Stored + Labeled + WithChildren>(
+pub(crate) fn make_move<T: Stored + Labeled + WithChildren, P>(
     from: (&[T::ChildIdx], &[T::ChildIdx]),
     to: (&[T::ChildIdx], &[T::ChildIdx]),
-) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId>
+) -> SimpleAction<T::Label, P, T::TreeId>
 where
     <T as WithChildren>::ChildIdx: num_traits::ToPrimitive,
+    P: TreePath<Item = T::ChildIdx> + From<Vec<T::ChildIdx>>,
 {
     SimpleAction {
         path: ApplicablePath {
-            ori: to.0.into(),
-            mid: to.1.into(),
+            ori: to.0.to_vec().into(),
+            mid: to.1.to_vec().into(),
         },
         action: Act::Move {
             from: ApplicablePath {
-                ori: from.0.into(),
-                mid: from.1.into(),
+                ori: from.0.to_vec().into(),
+                mid: from.1.to_vec().into(),
             },
         },
     }
 }
-pub(crate) fn make_move_update<T: Stored + Labeled + WithChildren>(
+pub(crate) fn make_move_update<T: Stored + Labeled + WithChildren, P>(
     from: (&[T::ChildIdx], &[T::ChildIdx]),
     new: T::Label,
     to: (&[T::ChildIdx], &[T::ChildIdx]),
-) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId>
+) -> SimpleAction<T::Label, P, T::TreeId>
 where
     <T as WithChildren>::ChildIdx: num_traits::ToPrimitive,
+    P: TreePath<Item = T::ChildIdx> + From<Vec<T::ChildIdx>>,
 {
     SimpleAction {
         path: ApplicablePath {
-            ori: to.0.into(),
-            mid: to.1.into(),
+            ori: to.0.to_vec().into(),
+            mid: to.1.to_vec().into(),
         },
         action: Act::MovUpd {
             new,
             from: ApplicablePath {
-                ori: from.0.into(),
-                mid: from.1.into(),
+                ori: from.0.to_vec().into(),
+                mid: from.1.to_vec().into(),
             },
         },
     }
 }
 
-pub(crate) fn make_delete<T: Stored + Labeled + WithChildren>(
+pub(crate) fn make_delete<T: Stored + Labeled + WithChildren, P>(
     path: (&[T::ChildIdx], &[T::ChildIdx]),
-) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId>
+) -> SimpleAction<T::Label, P, T::TreeId>
 where
     <T as WithChildren>::ChildIdx: num_traits::ToPrimitive,
+    P: TreePath<Item = T::ChildIdx> + From<Vec<T::ChildIdx>>,
 {
     SimpleAction {
         path: ApplicablePath {
-            ori: path.0.into(),
-            mid: path.1.into(),
+            ori: path.0.to_vec().into(),
+            mid: path.1.to_vec().into(),
         },
         action: Act::Delete {},
     }
 }
 
-pub(crate) fn make_insert<T: Stored + Labeled + WithChildren>(
+pub(crate) fn make_insert<T: Stored + Labeled + WithChildren, P>(
     sub: T::TreeId,
     path: (&[T::ChildIdx], &[T::ChildIdx]),
-) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId>
+) -> SimpleAction<T::Label, P, T::TreeId>
 where
     <T as WithChildren>::ChildIdx: num_traits::ToPrimitive,
+    P: TreePath<Item = T::ChildIdx> + From<Vec<T::ChildIdx>>,
 {
     SimpleAction {
         path: ApplicablePath {
-            ori: path.0.into(),
-            mid: path.1.into(),
+            ori: path.0.to_vec().into(),
+            mid: path.1.to_vec().into(),
         },
         action: Act::Insert { sub },
     }
 }
 
-pub(crate) fn make_update<T: Stored + Labeled + WithChildren>(
+pub(crate) fn make_update<T: Stored + Labeled + WithChildren, P>(
     new: T::Label,
     path: (&[T::ChildIdx], &[T::ChildIdx]),
-) -> SimpleAction<T::Label, T::ChildIdx, T::TreeId>
+) -> SimpleAction<T::Label, P, T::TreeId>
 where
     <T as WithChildren>::ChildIdx: num_traits::ToPrimitive,
+    P: TreePath<Item = T::ChildIdx> + From<Vec<T::ChildIdx>>,
 {
     SimpleAction {
         path: ApplicablePath {
-            ori: path.0.into(),
-            mid: path.1.into(),
+            ori: path.0.to_vec().into(),
+            mid: path.1.to_vec().into(),
         },
         action: Act::Update { new },
     }
@@ -725,27 +733,31 @@ fn test_with_zs_custom_example() {
             SimpleBfsMapper<_, _, CompletePostOrder<_, IdD>, _>,
             NS<Tree>,
             _,
+            _,
         >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
 
         log::debug!("{:?}", actions);
         macro_rules! test_action {
             ( ins $at:expr, $to:expr ) => {{
-                let a = make_insert::<Tree>(dst_arena.original(&from_dst(&$at)), (&$at, &$to));
+                let a = make_insert::<Tree, CompressedTreePath<_>>(
+                    dst_arena.original(&from_dst(&$at)),
+                    (&$at, &$to),
+                );
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
             ( del $at:expr, $to:expr ) => {{
-                let a = make_delete::<Tree>((&$at, &$to));
+                let a = make_delete::<Tree, CompressedTreePath<_>>((&$at, &$to));
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
             ( upd $lab:expr; $at:expr, $to:expr ) => {{
-                let a = make_update::<Tree>(label_store.get($lab).unwrap(), (&$at, &$to));
+                let a = make_update::<Tree, CompressedTreePath<_>>(label_store.get($lab).unwrap(), (&$at, &$to));
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
             ( mov $from:expr, $m_from:expr => $to:expr, $m_to:expr ) => {{
-                let a = make_move::<Tree>((&$from, &$m_from), (&$to, &$m_to));
+                let a = make_move::<Tree, CompressedTreePath<_>>((&$from, &$m_from), (&$to, &$m_to));
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
@@ -771,7 +783,7 @@ fn test_with_zs_custom_example() {
             "mid tree:\n{:?}",
             DisplayTree::new(&label_store, &node_store, *root.last().unwrap())
         );
-        apply_action::<_, NS<Tree>>(a, &mut root, &mut node_store);
+        apply_action::<_, NS<Tree>, _>(a, &mut root, &mut node_store);
     }
     log::debug!(
         "mid tree:\n{:?}",
