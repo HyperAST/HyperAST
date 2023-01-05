@@ -1,24 +1,22 @@
-use crate::tree::tree_path::IntoIter;
+use crate::tree::tree_path::{CompressedTreePath, IntoIter};
 
 use num_traits::PrimInt;
 
-use super::{Mree, MS};
+use super::{CompressedMappingStore, Mree};
 
 // struct ArrayCompressedMapping<Id,Idx> {
 //     mm: [Option<Id>;8],
 //     offsets: [Idx;8],
 // }
 
-struct Remapper<'ms, It: Iterator, Ms: MS> {
+pub struct Remapper<'ms, It: Iterator, Ms: CompressedMappingStore> {
     ms: &'ms Ms,
-    source: Option<It>,
+    source: It,
     node: Option<Ms::Id>,
-    waiting: Option<IntoIter<Ms::Idx>>,
-    waiting2: Option<Ms::Idx>,
-    waiting3: Option<IntoIter<Ms::Idx>>,
+    waiting: Vec<IntoIter<Ms::Idx>>,
 }
 
-impl<'ms, It, Ms: MS> Iterator for Remapper<'ms, It, Ms>
+impl<'ms, It, Ms: CompressedMappingStore> Iterator for Remapper<'ms, It, Ms>
 where
     It: Iterator<Item = Ms::Idx> + Clone, // add bound to get an hash of what remains
     It::Item: PrimInt,
@@ -27,38 +25,40 @@ where
     type Item = Ms::Idx;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(mut waiting) = self.waiting.take() {
+        while let Some(mut waiting) = self.waiting.pop() {
             if let Some(n) = waiting.next() {
-                self.waiting = Some(waiting);
+                self.waiting.push(waiting);
                 return Some(n);
             }
         }
-        if let Some(waiting) = self.waiting3.take() {
-            self.waiting = Some(waiting);
-            return self.next();
-        }
-        let n = self.source.as_mut()?.next()?;
+        let n = self.source.next()?;
         let r = self.ms.resolve(self.node.clone()?);
         // TODO check if rest of path exists with a bloom filter here, else return None
 
         if let Some(child) = r.definitely_mapped(n) {
             self.node = child.0;
-            self.waiting = Some(child.1.into_iter());
+            self.waiting.push(child.1.into_iter());
             return self.next();
         }
 
         let child = r.maybe_mapped(n);
-
         for child in child {
             // If this whole stuff works, it is genius Xd
             // should focus on mm and add bloom filters to skip mree given a path, do this on nodes instead of children
-            let mut new = Self::new(self.ms, child.0, self.source.clone()?);
+            let mut new = Self::new(self.ms, child.0.clone(), self.source.clone());//TODO take owned slice, then give it back
             let n = new.next();
-            if n.is_some() {
+            if let Some(n) = n {
                 self.source = new.source;
-                self.waiting = Some(child.1.into_iter());
-                self.waiting2 = n;
-                self.waiting3 = new.waiting;
+                self.waiting.extend(new.waiting);
+                self.waiting
+                    .push(CompressedTreePath::from(vec![n]).into_iter());
+                self.waiting.push(child.1.into_iter());
+                // self.waiting = Some(child.1.into_iter());
+                // self.waiting2 = n;
+                // self.waiting3 = new.waiting;
+                return self.next();
+            } else if self.source.clone().next().is_none() && self.ms.resolve(child.0).is_mapped() {
+                self.waiting.push(child.1.into_iter());
                 return self.next();
             }
         }
@@ -66,20 +66,16 @@ where
     }
 }
 
-impl<'ms, It: Iterator, Ms: MS> Remapper<'ms, It, Ms>
+impl<'ms, It: Iterator, Ms: CompressedMappingStore> Remapper<'ms, It, Ms>
 where
     It::Item: PrimInt,
 {
     pub fn new(ms: &'ms Ms, root: Ms::Id, source: It) -> Self {
         Self {
-            source: Some(source),
+            source,
             ms,
             node: Some(root),
-            waiting: None,
-            waiting2: None,
-            waiting3: None,
+            waiting: vec![],
         }
     }
 }
-
-fn f<Ms: MS>() {}

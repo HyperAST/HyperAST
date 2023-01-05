@@ -1,4 +1,9 @@
-/// Path in tree optimized for memory footprint
+//! Path in tree optimized for memory footprint
+//! - [x] ref iter
+//! - [x] sliced box iter
+//! - [x] allow to go up (at the start, it is a path in a tree anyway)
+//! - [x] indexed box iter
+//! - [ ] low compute cost extend
 use std::{fmt::Debug, marker::PhantomData};
 
 use num_traits::{cast, PrimInt, ToPrimitive};
@@ -239,6 +244,7 @@ impl<'a, Idx: 'a + Copy> Iterator for IterSimple<'a, Idx> {
 }
 
 /// advanced iterator used to get back path as Idx from compressed path
+#[derive(Clone)]
 pub struct Iter<'a, Idx> {
     is_even: bool,
     side: bool,
@@ -297,6 +303,7 @@ pub use indexed::IntoIter;
 pub mod slicing {
     use super::*;
     /// advanced iterator used to get back path as Idx from compressed path
+    #[derive(Clone)]
     pub struct IntoIter<Idx> {
         is_even: bool,
         side: bool,
@@ -367,6 +374,7 @@ pub mod indexed {
     use super::*;
 
     /// advanced iterator used to get back path as Idx from compressed path
+    #[derive(Clone)]
     pub struct IntoIter<Idx> {
         is_even: bool,
         side: bool,
@@ -442,7 +450,7 @@ pub mod indexed {
         ];
         let path = CompressedTreePath::<u16>::from(v.clone());
         let bits = path.as_bytes();
-        let res: Vec<_> = IntoIter::new(bits.into()).collect();
+        let res: Vec<_> = IntoIter::<u16>::new(bits.into()).collect();
         assert_eq!(v, res);
     }
 }
