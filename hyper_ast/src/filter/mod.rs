@@ -34,7 +34,7 @@ pub trait BF<T: ?Sized> {
 
 /// (2^3)^S = 2^(3*S) bits = S bytes
 pub struct Bloom<T, V: BitViewSized> {
-    bits: bitvec::array::BitArray<Lsb0, V>,
+    bits: bitvec::array::BitArray<V, Lsb0>,
     _phantom: PhantomData<*const T>,
 }
 

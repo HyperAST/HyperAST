@@ -32,7 +32,7 @@ log = { version = "0.4.6" } #, features = ["max_level_debug", "release_max_level
 
 ## store
 legion = { version = "0.4.0", features = ["extended-tuple-impls"] }
-bitvec = "0.22.3"                                                   # TODO upgrade
+bitvec = "1.0.1"
 controlled-option = "0.4.1"                                         # check if really needed
 string-interner = "0.14.0"
 

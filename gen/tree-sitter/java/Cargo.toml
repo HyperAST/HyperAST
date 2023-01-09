@@ -11,7 +11,7 @@ tree-sitter = "0.20.0"
 tree-sitter-java = {path="tree-sitter-java", version="0.20.0"}
 atomic-counter = "1.0.1"
 num = "0.4.0"
-bitvec = "0.22.3"
+bitvec = "1.0.1"
 stack-graphs = "=0.3.0"
 controlled-option = "0.4.1"
 string-interner = "0.14.0"

@@ -638,20 +638,20 @@ pub mod compressed_bf_post_process {
             use hyper_ast::types::Typed;
             let now = Instant::now();
 
-            let mut gt_bf = bitvec::bitvec![bitvec::order::Lsb0, u64; 0;bf_l];
+            let mut gt_bf = bitvec::bitvec![u64,bitvec::order::Lsb0; 0;bf_l];
             dbg!(gt_bf.len());
             // dbg!(gt_bf.as_raw_slice().len());
             // dbg!(gt_bf.as_raw_slice().len() * 8);
             // dbg!(gt_bf.as_raw_slice().len() * 8 * 8);
             self.file
-                .read_u64_into::<LittleEndian>(gt_bf.as_mut_raw_slice())
+                .read_u64_into::<LittleEndian>(gt_bf.as_raw_mut_slice())
                 .unwrap();
             // dbg!(&gt_bf.as_raw_slice()[0].to_le_bytes());
             let gt_compressed_output_load_t = now.elapsed().as_secs_f64();
             dbg!(gt_compressed_output_load_t);
             let gt_bf = gt_bf;
 
-            let mut hast_bf = bitvec::bitvec![bitvec::order::Lsb0, u64; 0;bf_l];
+            let mut hast_bf = bitvec::bitvec![u64,bitvec::order::Lsb0; 0;bf_l];
 
             type V<'store, NS, IdN> = Option<(
                 md5::Digest,

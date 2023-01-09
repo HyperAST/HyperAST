@@ -33,7 +33,7 @@ tuples = "=1.4.1"
 rayon = "1.5.2"
 hashbrown = { version = "0.13.1", features = ["rayon"] }
 byteorder = "1.4.3"
-bitvec = "0.22.3"
+bitvec = "1.0.1"
 md5 = "0.7.0"
 
 pprof = { version = "0.10", features = ["prost-codec", "flamegraph"] }

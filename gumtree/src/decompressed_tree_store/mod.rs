@@ -259,7 +259,7 @@ impl<IdD: PrimInt> Iterator for Iter<IdD> {
 }
 
 pub struct IterKr<'a, IdD>(
-    bitvec::slice::IterOnes<'a, bitvec::prelude::LocalBits, usize>,
+    bitvec::slice::IterOnes<'a, usize, bitvec::prelude::LocalBits>,
     std::marker::PhantomData<*const IdD>,
 );
 
