@@ -6,7 +6,7 @@ use hyper_ast::types::{Children, IterableChildren, NodeStore, Stored, WithChildr
 
 use super::{
     basic_post_order::BasicPostOrder, simple_post_order::SimplePostOrder, CompletePostOrder,
-    DecompressedTreeStore, Initializable, InitializableWithStats, Iter, IterKr, PostOrder,
+    DecompressedTreeStore, InitializableWithStats, Iter, IterKr, PostOrder,
     PostOrderIterable, PostOrderKeyRoots, ShallowDecompressedTreeStore,
 };
 
@@ -94,16 +94,16 @@ where
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt + Debug> Initializable<'a, T> for SimpleZsTree<T, IdD>
+impl<'a, T: WithChildren, IdD: PrimInt + Debug> super::DecompressedSubtree<'a, T> for SimpleZsTree<T, IdD>
 where
     T::TreeId: Clone,
 {
     #[time("warn")]
-    fn new<S>(store: &'a S, root: &T::TreeId) -> SimpleZsTree<T, IdD>
+    fn decompress<S>(store: &'a S, root: &T::TreeId) -> SimpleZsTree<T, IdD>
     where
         S: NodeStore<T::TreeId, R<'a> = T>,
     {
-        let basic = BasicPostOrder::<T, IdD>::new(store, root);
+        let basic = BasicPostOrder::<T, IdD>::decompress(store, root);
         let kr = basic.compute_kr_bitset();
         Self { basic, kr }
     }

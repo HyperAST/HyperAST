@@ -1,6 +1,8 @@
+use hyper_ast::types::DecompressedSubtree;
+
 use crate::{
     decompressed_tree_store::{
-        lazy_post_order::LazyPostOrder, Initializable, LazyDecompressedTreeStore,
+        lazy_post_order::LazyPostOrder, LazyDecompressedTreeStore,
         ShallowDecompressedTreeStore,
     },
     tests,
@@ -21,8 +23,8 @@ fn test() {
         DisplayTree::new(&label_store, &node_store, dst)
     );
 
-    let mut src_arena = LazyPostOrder::<_, u16>::new(&node_store, &src);
-    let mut dst_arena = LazyPostOrder::<_, u16>::new(&node_store, &dst);
+    let mut src_arena = LazyPostOrder::<_, u16>::decompress(&node_store, &src);
+    let mut dst_arena = LazyPostOrder::<_, u16>::decompress(&node_store, &dst);
 
     dbg!(src_arena.root());
     dbg!(dst_arena.root());

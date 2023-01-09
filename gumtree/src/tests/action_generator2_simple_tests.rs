@@ -9,7 +9,7 @@ use crate::{
         script_generator2::ScriptGenerator,
         Actions,
     },
-    decompressed_tree_store::{CompletePostOrder, Initializable, ShallowDecompressedTreeStore},
+    decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore},
     matchers::mapping_store::{DefaultMappingStore, MappingStore},
     tests::{
         action_generator2_tests::{make_delete, make_insert, make_move, make_update, Fmt},
@@ -17,7 +17,7 @@ use crate::{
     },
     tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
 };
-use hyper_ast::types::{LabelStore, Labeled, NodeStore};
+use hyper_ast::types::{LabelStore, Labeled, NodeStore, DecompressedSubtree};
 
 type IdD = u16;
 
@@ -34,11 +34,11 @@ fn test_no_actions() {
         DisplayTree::new(&label_store, &node_store, s_dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_src);
-    let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_dst);
+    let src_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
-    ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
+    ms.topit(src_arena.len(), dst_arena.len());
     let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
     let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
     ms.link(from_src(&[]), from_dst(&[]));
@@ -84,7 +84,7 @@ fn test_no_actions() {
         NS<Tree>,
         _,
         _,
-    >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
+    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     let mut node_store = node_store;
     let mut root = vec![s_src];
@@ -111,11 +111,11 @@ fn test_delete_actions_1() {
         DisplayTree::new(&label_store, &node_store, s_dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_src);
-    let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_dst);
+    let src_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
-    ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
+    ms.topit(src_arena.len(), dst_arena.len());
     let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
     let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
     ms.link(from_src(&[]), from_dst(&[]));
@@ -159,7 +159,7 @@ fn test_delete_actions_1() {
         NS<Tree>,
         _,
         _,
-    >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
+    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     println!("{:?}", actions);
 
@@ -196,11 +196,11 @@ fn test_insert_actions_1() {
         DisplayTree::new(&label_store, &node_store, s_dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_src);
-    let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_dst);
+    let src_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
-    ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
+    ms.topit(src_arena.len(), dst_arena.len());
     let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
     let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
     ms.link(from_src(&[]), from_dst(&[]));
@@ -244,7 +244,7 @@ fn test_insert_actions_1() {
         NS<Tree>,
         _,
         _,
-    >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
+    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     println!("{:?}", actions);
 
@@ -283,11 +283,11 @@ fn test_rename_actions_1() {
         DisplayTree::new(&label_store, &node_store, s_dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_src);
-    let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_dst);
+    let src_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
-    ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
+    ms.topit(src_arena.len(), dst_arena.len());
     let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
     let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
     ms.link(from_src(&[]), from_dst(&[]));
@@ -333,7 +333,7 @@ fn test_rename_actions_1() {
         NS<Tree>,
         _,
         _,
-    >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
+    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     println!("{:?}", actions);
 
@@ -374,11 +374,11 @@ fn test_move_actions_1() {
         DisplayTree::new(&label_store, &node_store, s_dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_src);
-    let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &s_dst);
+    let src_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &s_dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
-    ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
+    ms.topit(src_arena.len(), dst_arena.len());
     let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
     let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
     ms.link(from_src(&[]), from_dst(&[]));
@@ -424,7 +424,7 @@ fn test_move_actions_1() {
         NS<Tree>,
         _,
         _,
-    >::compute_actions(&node_store, &src_arena, &dst_arena, &ms);
+    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms);
 
     println!("{:?}", actions);
 

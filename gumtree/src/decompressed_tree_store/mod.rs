@@ -21,21 +21,23 @@ pub mod simple_zs_tree;
 pub use complete_post_order::CompletePostOrder;
 pub use simple_zs_tree::SimpleZsTree;
 
-/// show that the decompression can be done
-/// - needed to initialize in matchers
-pub trait Initializable<'a, T: Stored> {
-    /// decompress the tree at [`root`] in [`store`]
-    fn new<S>(store: &'a S, root: &T::TreeId) -> Self
-    where
-        S: NodeStore<T::TreeId, R<'a> = T>;
-}
+pub use hyper_ast::types::DecompressedSubtree;
+
+// /// show that the decompression can be done
+// /// - needed to initialize in matchers
+// pub trait Initializable<'a, T: Stored> {
+//     /// decompress the tree at [`root`] in [`store`]
+//     fn decompress<S>(store: &'a S, root: &T::TreeId) -> Self
+//     where
+//         S: NodeStore<T::TreeId, R<'a> = T>;
+// }
 
 /// TODO remove this trait when the specialization feature improves
 ///
 /// NOTE compared to Initializable this trait only adds WithStats bound on T.
 ///
 /// the WithStats bound helps a lot with lazy decompressions
-pub trait InitializableWithStats<'a, T: Stored + WithStats>: Initializable<'a, T> {
+pub trait InitializableWithStats<'a, T: Stored + WithStats>: DecompressedSubtree<'a, T> {
     fn considering_stats<S>(store: &'a S, root: &T::TreeId) -> Self
     where
         S: NodeStore<T::TreeId, R<'a> = T>;
@@ -67,8 +69,16 @@ pub trait ShallowDecompressedTreeStore<'a, T: WithChildren, IdD, IdS = IdD> {
 }
 pub trait Shallow<T> {
     fn shallow(&self) -> &T;
+    // fn direct(&self) -> T where T: Clone{
+    //     self.shallow().clone()
+    // }
 }
 
+impl Shallow<u64> for u64 {
+    fn shallow(&self) -> &u64 {
+        self
+    }
+}
 impl Shallow<u32> for u32 {
     fn shallow(&self) -> &u32 {
         self
@@ -76,6 +86,11 @@ impl Shallow<u32> for u32 {
 }
 impl Shallow<u16> for u16 {
     fn shallow(&self) -> &u16 {
+        self
+    }
+}
+impl Shallow<u8> for u8 {
+    fn shallow(&self) -> &u8 {
         self
     }
 }

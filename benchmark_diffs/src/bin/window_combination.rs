@@ -36,23 +36,33 @@ fn main() {
     let before = args.get(2).map_or("", |x| x);
     let after = args.get(3).map_or("", |x| x);
     let dir_path = args.get(4).map_or("", |x| x);
-    let out = args.get(5).and_then(|x| {
+    let out_validity = args.get(5).and_then(|x| {
         if x.is_empty() {
             None
         } else {
-            PathBuf::from_str(x).ok()
+            Some(PathBuf::from_str(x).unwrap())
         }
     });
-    let window_size = args.get(6).map_or(2, |x| usize::from_str(x).unwrap());
+    let out_perfs = args.get(6).and_then(|x| {
+        if x.is_empty() {
+            None
+        } else {
+            Some(PathBuf::from_str(x).unwrap())
+        }
+    });
+    let out = out_validity.zip(out_perfs);
+    let window_size = args.get(7).map_or(2, |x| usize::from_str(x).unwrap());
+    let diff_algorithm = "Chawathe".to_string();
+    let diff_algorithm = args.get(8).unwrap_or(&diff_algorithm);
     // concecutive_commits
     let preprocessed = PreProcessedRepository::new(&repo_name);
-    windowed_commits_compare(window_size, preprocessed, (before, after), dir_path, out);
+    windowed_commits_compare(window_size, preprocessed, (before, after), dir_path, diff_algorithm, out);
 }
 
 #[test]
 fn concecutive_commits() {
     let preprocessed = PreProcessedRepository::new("repo_name");
-    windowed_commits_compare(2, preprocessed, ("before", "after"), "", None);
+    windowed_commits_compare(2, preprocessed, ("before", "after"), "", "Chawathe", None);
 }
 
 #[test]
@@ -82,6 +92,7 @@ fn issue_mappings_pomxml_spoon_pom() {
             "78d88752a9f4b5bc490f5e6fb0e31dc9c2cf4bcd",
         ),
         "spoon-pom",
+        "Chawathe",
         None,
     );
 }
@@ -101,6 +112,7 @@ fn issue_mappings_pomxml_spoon_pom_2() {
             "74ee133f4fe25d8606e0775ade577cd8e8b5cbfd",
         ),
         "spoon-pom",
+        "Chawathe",
         None,
     );
 }

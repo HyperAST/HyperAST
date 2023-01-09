@@ -3,11 +3,11 @@ use std::marker::PhantomData;
 use num_traits::ToPrimitive;
 
 use crate::decompressed_tree_store::{
-    BreathFirstContiguousSiblings, DecompressedTreeStore, DecompressedWithParent, Initializable,
+    BreathFirstContiguousSiblings, DecompressedTreeStore, DecompressedWithParent,
 };
 use crate::matchers::mapping_store::MonoMappingStore;
-use crate::matchers::{matcher::Matcher, similarity_metrics};
-use hyper_ast::types::{NodeStore, Tree, WithHashs};
+use crate::matchers::{similarity_metrics};
+use hyper_ast::types::{NodeStore, Tree, WithHashs, DecompressedSubtree};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
@@ -25,50 +25,50 @@ where
     internal: BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>,
 }
 
-impl<
-        'a,
-        Dsrc: 'a
-            + DecompressedTreeStore<'a, T, IdD>
-            + DecompressedWithParent<'a, T, IdD>
-            + Initializable<'a, T>
-            + BreathFirstContiguousSiblings<'a, T, IdD>,
-        Ddst: 'a
-            + DecompressedTreeStore<'a, T, IdD>
-            + DecompressedWithParent<'a, T, IdD>
-            + Initializable<'a, T>
-            + BreathFirstContiguousSiblings<'a, T, IdD>,
-        T: 'a + Tree + WithHashs,
-        S: 'a + NodeStore<T::TreeId, R<'a> = T>,
-        M: MonoMappingStore<Src = IdD, Dst = IdD>,
-    > Matcher<'a, Dsrc, Ddst, T, S> for SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
-{
-    type Store = M;
+// impl<
+//         'a,
+//         Dsrc: 'a
+//             + DecompressedTreeStore<'a, T, IdD>
+//             + DecompressedWithParent<'a, T, IdD>
+//             + DecompressedSubtree<'a, T>
+//             + BreathFirstContiguousSiblings<'a, T, IdD>,
+//         Ddst: 'a
+//             + DecompressedTreeStore<'a, T, IdD>
+//             + DecompressedWithParent<'a, T, IdD>
+//             + DecompressedSubtree<'a, T>
+//             + BreathFirstContiguousSiblings<'a, T, IdD>,
+//         T: 'a + Tree + WithHashs,
+//         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
+//         M: MonoMappingStore<Src = IdD, Dst = IdD>,
+//     > Matcher<'a, Dsrc, Ddst, T, S> for SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
+// {
+//     type Store = M;
 
-    type Ele = IdD;
+//     type Ele = IdD;
 
-    fn matchh(
-        compressed_node_store: &'a S,
-        src: &T::TreeId,
-        dst: &T::TreeId,
-        mappings: Self::Store,
-    ) -> Self::Store {
-        let mut matcher = Self {
-            internal: BottomUpMatcher::<'a, Dsrc, Ddst, T, S, M> {
-                node_store: compressed_node_store,
-                src_arena: Dsrc::new(compressed_node_store, src),
-                dst_arena: Ddst::new(compressed_node_store, dst),
-                mappings,
-                phantom: PhantomData,
-            },
-        };
-        matcher.internal.mappings.topit(
-            matcher.internal.src_arena.len(),
-            matcher.internal.dst_arena.len(),
-        );
-        Self::execute(&mut matcher);
-        matcher.internal.mappings
-    }
-}
+//     fn matchh(
+//         compressed_node_store: &'a S,
+//         src: &T::TreeId,
+//         dst: &T::TreeId,
+//         mappings: Self::Store,
+//     ) -> Self::Store {
+//         let mut matcher = Self {
+//             internal: BottomUpMatcher::<'a, Dsrc, Ddst, T, S, M> {
+//                 node_store: compressed_node_store,
+//                 src_arena: Dsrc::decompress(compressed_node_store, src),
+//                 dst_arena: Ddst::decompress(compressed_node_store, dst),
+//                 mappings,
+//                 _phantom: PhantomData,
+//             },
+//         };
+//         matcher.internal.mappings.topit(
+//             matcher.internal.src_arena.len(),
+//             matcher.internal.dst_arena.len(),
+//         );
+//         Self::execute(&mut matcher);
+//         matcher.internal.mappings
+//     }
+// }
 
 impl<
         'a,

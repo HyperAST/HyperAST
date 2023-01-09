@@ -2,12 +2,12 @@ use crate::decompressed_tree_store::bfs_wrapper::SimpleBfsMapper;
 use crate::tree::simple_tree::Tree;
 use crate::{
     actions::script_generator::{self, Actions, SimpleAction, TestActions},
-    decompressed_tree_store::{CompletePostOrder, Initializable, ShallowDecompressedTreeStore},
+    decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore},
     matchers::mapping_store::{DefaultMappingStore, MappingStore},
     tests::examples::{example_action, example_gt_java_code},
     tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef},
 };
-use hyper_ast::types::{LabelStore, Labeled, NodeStore};
+use hyper_ast::types::{LabelStore, Labeled, NodeStore, DecompressedSubtree};
 use std::fmt;
 
 pub struct Fmt<F>(pub F)
@@ -37,11 +37,11 @@ fn test_with_action_example() {
     );
 
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &src);
-    let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &dst);
+    let src_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
-    ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
+    ms.topit(src_arena.len(), dst_arena.len());
     let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
     let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
     ms.link(from_src(&[]), from_dst(&[]));
@@ -276,11 +276,11 @@ type IdD = u16;
 fn test_with_zs_custom_example() {
     let (_, node_store, src, dst) = vpair_to_stores(example_gt_java_code());
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, IdD>::new(&node_store, &src);
-    let dst_arena = CompletePostOrder::<_, IdD>::new(&node_store, &dst);
+    let src_arena = CompletePostOrder::<_, IdD>::decompress(&node_store, &src);
+    let dst_arena = CompletePostOrder::<_, IdD>::decompress(&node_store, &dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
-    ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
+    ms.topit(src_arena.len(), dst_arena.len());
     let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
     let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
     ms.link(from_src(&[]), from_dst(&[0]));

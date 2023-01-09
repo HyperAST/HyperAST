@@ -253,7 +253,7 @@ where
         for x in self.dst_arena.iter_bf() {
             let w;
             let y = self.dst_arena.parent(&x);
-            let z = y.and_then(|y| Some(self.cpy_mappings.get_src(&y)));
+            let z = y.and_then(|y| Some(self.cpy_mappings.get_src_unchecked(&y)));
             if !self.cpy_mappings.is_dst(&x) {
                 // insertion
                 let k = if let Some(y) = y {
@@ -270,7 +270,7 @@ where
                 self.apply_insert(&action, &z, &w, &x);
                 self.actions.push(action);
             } else {
-                w = self.cpy_mappings.get_src(&x);
+                w = self.cpy_mappings.get_src_unchecked(&x);
                 let v = {
                     let v = self.mid_arena[cast::<_, usize>(w).unwrap()].parent;
                     if v == w {
@@ -414,7 +414,7 @@ where
         let mut s1 = vec![];
         for c in w_c {
             if self.cpy_mappings.is_src(c) {
-                if x_c.contains(&self.cpy_mappings.get_dst(c)) {
+                if x_c.contains(&self.cpy_mappings.get_dst_unchecked(c)) {
                     s1.push(*c);
                 }
             }
@@ -422,7 +422,7 @@ where
         let mut s2 = vec![];
         for c in &x_c {
             if self.cpy_mappings.is_dst(c) {
-                if w_c.contains(&self.cpy_mappings.get_src(c)) {
+                if w_c.contains(&self.cpy_mappings.get_src_unchecked(c)) {
                     s2.push(*c);
                 }
             }
@@ -480,7 +480,7 @@ where
             return num_traits::zero();
         }
 
-        let u = self.cpy_mappings.get_src(&v.unwrap());
+        let u = self.cpy_mappings.get_src_unchecked(&v.unwrap());
         // // let upos = self.src_arena.position_in_parent(self.store, &u);
         let upos: T::ChildIdx = {
             let p = self.mid_arena[cast::<_, usize>(u).unwrap()].parent;
@@ -538,7 +538,7 @@ where
         x: &IdD,
     ) {
         self.cpy_mappings.topit(
-            self.cpy_mappings.src_to_dst.len() + 1,
+            self.cpy_mappings.src_to_dst.len(),
             self.cpy_mappings.dst_to_src.len(),
         );
         if *w > num_traits::zero() {

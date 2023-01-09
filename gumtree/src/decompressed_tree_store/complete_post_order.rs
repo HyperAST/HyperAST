@@ -10,7 +10,6 @@ use std::{
 use bitvec::slice::BitSlice;
 use num_traits::{cast, PrimInt, ToPrimitive, Zero};
 
-use crate::tree::tree_path::{CompressedTreePath, self, SimpleTreePath};
 use hyper_ast::{
     position::Position,
     types::{self, LabelStore, NodeStore, Stored, Tree, Type, WithChildren, WithSerialization},
@@ -20,7 +19,7 @@ use super::{
     pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
     simple_post_order::{SimplePOSlice, SimplePostOrder},
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings,
-    Initializable, Iter, IterKr, POBorrowSlice, PostOrder, PostOrderIterable, PostOrderKeyRoots,
+    Iter, IterKr, POBorrowSlice, PostOrder, PostOrderIterable, PostOrderKeyRoots,
     ShallowDecompressedTreeStore,
 };
 
@@ -255,16 +254,16 @@ where
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> Initializable<'a, T> for CompletePostOrder<T, IdD>
+impl<'a, T: WithChildren, IdD: PrimInt> super::DecompressedSubtree<'a, T> for CompletePostOrder<T, IdD>
 where
     T::TreeId: Clone,
     <T as WithChildren>::ChildIdx: PrimInt,
 {
-    fn new<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
+    fn decompress<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
     where
         S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,
     {
-        SimplePostOrder::new(store, root).into()
+        SimplePostOrder::decompress(store, root).into()
     }
 }
 

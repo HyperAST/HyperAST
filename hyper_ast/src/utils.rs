@@ -45,6 +45,11 @@ impl Into<isize> for MemoryUsage {
         self.allocated.bytes()
     }
 }
+impl Into<isize> for &MemoryUsage {
+    fn into(self) -> isize {
+        self.allocated.bytes()
+    }
+}
 
 impl std::ops::Sub for MemoryUsage {
     type Output = MemoryUsage;
@@ -152,6 +157,12 @@ impl fmt::Display for Bytes {
             }
         }
         f.pad(&format!("{}{}", value, suffix))
+    }
+}
+
+impl Into<isize> for &Bytes {
+    fn into(self) -> isize {
+        self.0
     }
 }
 

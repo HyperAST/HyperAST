@@ -85,8 +85,8 @@ fn test_sim_and_size_threshold() {
     let src = &src;
     let dst = &dst;
 
-    let src_arena = CompletePostOrder::<_, u16>::new(&node_store, src);
-    let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, dst);
+    let src_arena = CompletePostOrder::<_, u16>::make(&node_store, src);
+    let dst_arena = CompletePostOrder::<_, u16>::make(&node_store, dst);
     let src = &(src_arena.root());
     let dst = &(dst_arena.root());
     let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
@@ -315,6 +315,6 @@ fn test_post2pre_order() {
     let mut ms: DefaultMappingStore<u16> = DefaultMappingStore::default();
     let src = &src;
 
-    let src_arena = CompletePostOrder::<_, u16>::new(&node_store, src);
+    let src_arena = CompletePostOrder::<_, u16>::make(&node_store, src);
     println!("{}",DisplayCompletePostOrder{ inner: &src_arena, node_store: &node_store, label_store: &label_store })
 }

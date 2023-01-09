@@ -130,7 +130,7 @@ pub fn number_of_common_descendants<
 
     for t in src {
         if mappings.is_src(t) {
-            let m = mappings.get_dst(t).to_usize().unwrap();
+            let m = mappings.get_dst_unchecked(t).to_usize().unwrap();
             if dst_descendants.len() != 0
                 && min <= m
                 && m - min < dst_descendants.len()
@@ -172,7 +172,7 @@ pub fn number_of_common_descendants_ranges<
     (src.start.to_usize().unwrap()..src.end.to_usize().unwrap())
         .into_iter()
         .filter(|t| mappings.is_src(&cast(*t).unwrap()))
-        .filter(|t| dst.contains(&mappings.get_dst(&cast(*t).unwrap())))
+        .filter(|t| dst.contains(&mappings.get_dst_unchecked(&cast(*t).unwrap())))
         .count()
         .try_into()
         .unwrap()
@@ -188,7 +188,7 @@ pub fn number_of_common_descendants_ranges_par(
     (src.start.to_usize().unwrap()..src.end.to_usize().unwrap())
         .into_par_iter()
         .filter(|t| mappings.is_src(&(*t).try_into().unwrap()))
-        .filter(|t| dst.contains(&mappings.get_dst(&(*t).try_into().unwrap())))
+        .filter(|t| dst.contains(&mappings.get_dst_unchecked(&(*t).try_into().unwrap())))
         .count()
         .try_into()
         .unwrap()

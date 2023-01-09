@@ -5,7 +5,7 @@ use num_traits::{cast, one, zero, PrimInt, ToPrimitive};
 use hyper_ast::types::{self, Children, IterableChildren, NodeStore, Stored, WithChildren};
 
 use super::{
-    ContiguousDescendants, DecompressedTreeStore, Initializable, Iter, PostOrder,
+    ContiguousDescendants, DecompressedTreeStore, Iter, PostOrder,
     PostOrderIterable, ShallowDecompressedTreeStore,
 };
 
@@ -87,17 +87,17 @@ impl<'d, T: WithChildren, IdD: PrimInt> BasicPostOrder<T, IdD> {
     }
 }
 
-impl<'a, T, IdD: PrimInt> Initializable<'a, T> for BasicPostOrder<T, IdD>
+impl<'a, T, IdD: PrimInt> super::DecompressedSubtree<'a, T> for BasicPostOrder<T, IdD>
 where
     T: WithChildren,
     T::TreeId: Clone,
     <T as WithChildren>::ChildIdx: PrimInt,
 {
-    fn new<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
+    fn decompress<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
     where
         S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,
     {
-        let simple = BasicPostOrder::new(store, root);
+        let simple = BasicPostOrder::make(store, root);
         let BasicPostOrder::<T, IdD> {
             id_compressed,
             llds,
@@ -179,7 +179,7 @@ where
     T::TreeId: Clone,
     <T as WithChildren>::ChildIdx: PrimInt,
 {
-    fn new<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
+    fn make<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
     where
         S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,
     {

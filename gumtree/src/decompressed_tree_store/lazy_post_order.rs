@@ -7,10 +7,9 @@ use super::{
     complete_post_order::CompletePOSlice,
     simple_post_order::{SimplePOSlice, SimplePostOrder},
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings,
-    Initializable, Iter, LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrder,
+    Iter, LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrder,
     PostOrderIterable, Shallow, ShallowDecompressedTreeStore,
 };
-use crate::tree::tree_path::CompressedTreePath;
 use hyper_ast::{
     position::Position,
     types::{
@@ -379,13 +378,13 @@ where
     }
 }
 
-impl<'a, T, IdD: PrimInt + Debug> Initializable<'a, T> for LazyPostOrder<T, IdD>
+impl<'a, T, IdD: PrimInt + Debug> super::DecompressedSubtree<'a, T> for LazyPostOrder<T, IdD>
 where
     T: WithChildren + WithStats,
     T::TreeId: Clone + Debug,
     <T as WithChildren>::ChildIdx: PrimInt,
 {
-    fn new<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
+    fn decompress<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
     where
         S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,
     {

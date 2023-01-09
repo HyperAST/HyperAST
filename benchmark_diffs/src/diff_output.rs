@@ -10,7 +10,7 @@ use serde::Deserialize;
 pub struct F<T> {
     pub times: Vec<usize>,
     pub matches: Vec<Match<T>>,
-    pub actions: Vec<Act<T>>,
+    pub actions: Option<Vec<Act<T>>>,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Hash, Debug, Clone)]

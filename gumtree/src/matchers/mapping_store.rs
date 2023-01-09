@@ -24,8 +24,10 @@ pub trait MonoMappingStore: MappingStore {
     type Iter<'a>: Iterator<Item = (Self::Src, Self::Dst)>
     where
         Self: 'a;
-    fn get_src(&self, dst: &Self::Dst) -> Self::Src;
-    fn get_dst(&self, src: &Self::Src) -> Self::Dst;
+    fn get_src_unchecked(&self, dst: &Self::Dst) -> Self::Src;
+    fn get_dst_unchecked(&self, src: &Self::Src) -> Self::Dst;
+    fn get_src(&self, dst: &Self::Dst) -> Option<Self::Src>;
+    fn get_dst(&self, src: &Self::Src) -> Option<Self::Dst>;
     fn link_if_both_unmapped(&mut self, t1: Self::Src, t2: Self::Dst) -> bool;
     fn iter(&self) -> Self::Iter<'_>;
 }
@@ -136,8 +138,8 @@ impl<T: PrimInt + Debug> MappingStore for VecStore<T> {
 
     fn topit(&mut self, left: usize, right: usize) {
         // let m = left.max(right);
-        self.src_to_dst.resize(left, zero());
-        self.dst_to_src.resize(right, zero());
+        self.src_to_dst.resize(left + 1, zero());
+        self.dst_to_src.resize(right + 1, zero());
     }
 
     fn has(&self, src: &Self::Src, dst: &Self::Src) -> bool {
@@ -147,12 +149,24 @@ impl<T: PrimInt + Debug> MappingStore for VecStore<T> {
 }
 
 impl<T: PrimInt + Debug> MonoMappingStore for VecStore<T> {
-    fn get_src(&self, dst: &T) -> T {
+    fn get_src_unchecked(&self, dst: &T) -> T {
         self.dst_to_src[dst.to_usize().unwrap()] - one()
     }
 
-    fn get_dst(&self, src: &T) -> T {
+    fn get_dst_unchecked(&self, src: &T) -> T {
         self.src_to_dst[src.to_usize().unwrap()] - one()
+    }
+
+    fn get_src(&self, dst: &T) -> Option<T> {
+        self.dst_to_src
+            .get(dst.to_usize().unwrap())
+            .map(|x| *x - one())
+    }
+
+    fn get_dst(&self, src: &T) -> Option<T> {
+        self.src_to_dst
+            .get(src.to_usize().unwrap())
+            .map(|x| *x - one())
     }
 
     fn link_if_both_unmapped(&mut self, t1: T, t2: T) -> bool {
@@ -533,12 +547,20 @@ impl<T: PrimInt + Debug + Hash> MappingStore for HashStore<T> {
 }
 
 impl<T: PrimInt + Debug + Hash> MonoMappingStore for HashStore<T> {
-    fn get_src(&self, dst: &T) -> T {
+    fn get_src_unchecked(&self, dst: &T) -> T {
         *self.dst_to_src.get(dst).unwrap()
     }
 
-    fn get_dst(&self, src: &T) -> T {
+    fn get_dst_unchecked(&self, src: &T) -> T {
         *self.src_to_dst.get(src).unwrap()
+    }
+
+    fn get_src(&self, dst: &T) -> Option<T> {
+        self.dst_to_src.get(dst).cloned()
+    }
+
+    fn get_dst(&self, src: &T) -> Option<T> {
+        self.src_to_dst.get(src).cloned()
     }
 
     fn link_if_both_unmapped(&mut self, t1: T, t2: T) -> bool {

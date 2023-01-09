@@ -1,4 +1,4 @@
-use crate::types::Type;
+use crate::types::{HyperAST, SimpleHyperAST, Type};
 
 use crate::nodes::TypeIdentifier;
 
@@ -21,7 +21,7 @@ impl TypeStore {
     }
 }
 
-pub struct SimpleStores<NS=nodes::DefaultNodeStore> {
+pub struct SimpleStores<NS = nodes::DefaultNodeStore> {
     pub label_store: labels::LabelStore,
     pub type_store: TypeStore,
     pub node_store: NS,
@@ -41,4 +41,41 @@ pub mod defaults {
     pub type LabelIdentifier = super::labels::DefaultLabelIdentifier;
     pub type LabelValue = super::labels::DefaultLabelValue;
     pub type NodeIdentifier = super::nodes::DefaultNodeIdentifier;
+}
+
+impl<'store> From<&'store SimpleStores<nodes::DefaultNodeStore>>
+    for SimpleHyperAST<
+        'store,
+        self::nodes::legion::HashedNodeRef<'store>,
+        nodes::DefaultNodeStore,
+        labels::LabelStore,
+    >
+{
+    fn from(value: &'store SimpleStores<nodes::DefaultNodeStore>) -> Self {
+        Self {
+            node_store: &value.node_store,
+            label_store: &value.label_store,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<'store> HyperAST<'store> for SimpleStores<nodes::DefaultNodeStore> {
+    type IdN = nodes::DefaultNodeIdentifier;
+
+    type Label = labels::DefaultLabelIdentifier;
+
+    type T = self::nodes::legion::HashedNodeRef<'store>;
+
+    type NS = nodes::DefaultNodeStore;
+
+    fn node_store(&self) -> &Self::NS {
+        &self.node_store
+    }
+
+    type LS = labels::LabelStore;
+
+    fn label_store(&self) -> &Self::LS {
+        &self.label_store
+    }
 }

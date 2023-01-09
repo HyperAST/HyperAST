@@ -1053,7 +1053,6 @@ impl<T> Children<u8, T> for MySlice<T> {
         self.get(c)
     }
 
-
     fn after(&self, i: u8) -> &Self {
         (&self.0[i.into()..]).into()
     }
@@ -1138,7 +1137,7 @@ mod owned {
     }
 }
 
-// pub trait WithChildrenAndStore<T:Stored,S: NodeStore<T>> : WithChildren {
+// pub trait WithChildrenAndStore<IdN,S: NodeStore<T>> : WithChildren {
 //     fn size(&self, store: &S) -> usize;
 //     fn height(&self, store: &S) -> usize;
 // }
@@ -1275,6 +1274,34 @@ pub trait NodeStore<IdN> {
     fn resolve(&self, id: &IdN) -> Self::R<'_>;
 }
 
+pub trait DecompressedSubtree<'a, T: Stored> {
+    fn decompress<S>(store: &'a S, id: &T::TreeId) -> Self
+    where
+        S: NodeStore<T::TreeId, R<'a> = T>;
+}
+
+pub trait DecompressibleNodeStore<IdN>: NodeStore<IdN> {
+    fn decompress<'a, D: DecompressedSubtree<'a, Self::R<'a>>>(&'a self, id: &IdN) -> (&'a Self, D)
+    where
+        Self: Sized,
+        Self::R<'a>: Stored<TreeId = IdN>,
+    {
+        (self, D::decompress(self, id))
+    }
+
+    fn decompress_pair<'a, D1, D2>(&'a self, id1: &IdN, id2: &IdN) -> (&'a Self, (D1, D2))
+    where
+        Self: Sized,
+        Self::R<'a>: Stored<TreeId = IdN>,
+        D1: DecompressedSubtree<'a, Self::R<'a>>,
+        D2: DecompressedSubtree<'a, Self::R<'a>>,
+    {
+        (self, (D1::decompress(self, id1), D2::decompress(self, id2)))
+    }
+}
+
+impl<IdN, S> DecompressibleNodeStore<IdN> for S where S: NodeStore<IdN> {}
+
 // pub trait NodeStoreMut<'a, T: Stored, D: 'a>: NodeStore<'a, T::TreeId, D> {
 //     fn get_or_insert(&mut self, node: T) -> T::TreeId;
 // }
@@ -1330,6 +1357,75 @@ pub trait LabelStore<L: ?Sized> {
     fn get<T: Borrow<L>>(&self, node: T) -> Option<Self::I>;
 
     fn resolve(&self, id: &Self::I) -> &L;
+}
+
+pub trait HyperAST<'store> {
+    type IdN;
+    type Label;
+    type T: Tree<TreeId = Self::IdN, Label = Self::Label>;
+    type NS: 'store + NodeStore<Self::IdN, R<'store> = Self::T>;
+    fn node_store(&self) -> &Self::NS;
+
+    type LS: LabelStore<str, I = Self::Label>;
+    fn label_store(&self) -> &Self::LS;
+
+    fn decompress<D: DecompressedSubtree<'store, Self::T>>(
+        &'store self,
+        id: &Self::IdN,
+    ) -> (&'store Self, D)
+    where
+        Self: Sized,
+    {
+        {
+            (self, D::decompress(self.node_store(), id))
+        }
+    }
+
+    fn decompress_pair<D1, D2>(
+        &'store self,
+        id1: &Self::IdN,
+        id2: &Self::IdN,
+    ) -> (&'store Self, (D1, D2))
+    where
+        Self: Sized,
+        D1: DecompressedSubtree<'store, Self::T>,
+        D2: DecompressedSubtree<'store, Self::T>,
+    {
+        {
+            (self, (D1::decompress(self.node_store(), id1), D2::decompress(self.node_store(), id2)))
+        }
+    }
+}
+
+pub struct SimpleHyperAST<'store, T, NS, LS> {
+    pub node_store: &'store NS,
+    pub label_store: &'store LS,
+    pub _phantom: std::marker::PhantomData<&'store T>,
+}
+
+impl<'store, T, NS, LS> HyperAST<'store> for SimpleHyperAST<'store, T, NS, LS>
+where
+    T: Tree,
+    NS: NodeStore<T::TreeId, R<'store> = T>,
+    LS: LabelStore<str, I = T::Label>,
+{
+    type IdN = T::TreeId;
+
+    type Label = T::Label;
+
+    type T = T;
+
+    type NS = NS;
+
+    fn node_store(&self) -> &Self::NS {
+        &self.node_store
+    }
+
+    type LS = LS;
+
+    fn label_store(&self) -> &Self::LS {
+        &self.label_store
+    }
 }
 
 impl Type {

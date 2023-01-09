@@ -9,11 +9,11 @@ use crate::{
         BreadthFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
         PostOrderIterable,
     },
-    matchers::mapping_store::MonoMappingStore,
-    tree::tree_path::{CompressedTreePath, TreePath},
+    matchers::{mapping_store::MonoMappingStore, Mapping},
+    tree::tree_path::{TreePath},
     utils::sequence_algorithms::longest_common_subsequence,
 };
-use hyper_ast::types::{Labeled, NodeStore, Stored, Tree, WithChildren};
+use hyper_ast::types::{Labeled, NodeStore, Stored, Tree, WithChildren, HyperAST};
 
 use super::action_vec::ActionsVec;
 
@@ -113,21 +113,14 @@ impl<IdC: Debug, IdD: Debug> Debug for MidNode<IdC, IdD> {
     }
 }
 
-pub struct ScriptGenerator<
-    'store: 'a1 + 'a2 + 'm,
-    'a1: 'm,
-    'a2: 'm,
-    'm,
+pub struct ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M, P>
+where
+    T::Label: Debug,
+    T::TreeId: Debug,
     IdD: PrimInt + Debug + Hash + PartialEq + Eq,
     T: 'store + Stored + Labeled + WithChildren,
     SS: DecompressedWithParent<'a1, T, IdD>,
-    SD,
-    S,
     M: MonoMappingStore<Src = IdD, Dst = IdD>,
-    P,
-> where
-    T::Label: Debug,
-    T::TreeId: Debug,
 {
     pub store: &'store S,
     src_arena_dont_use: &'a1 SS,
@@ -174,11 +167,25 @@ where
     T::TreeId: Debug,
     P: From<Vec<T::ChildIdx>> + Debug,
 {
-    pub fn compute_actions(
+    pub fn compute_actions<'a: 'a1 + 'a2, HAST: HyperAST<'store, NS = S>>(
+        hyperast: &'store HAST,
+        mapping: &'a Mapping<SS, SD, M>,
+    ) -> ActionsVec<SimpleAction<T::Label, P, T::TreeId>>
+    where
+        S: 'store,
+    {
+        let store = hyperast.node_store();
+        ScriptGenerator::new(store, &mapping.src_arena, &mapping.dst_arena)
+            .init_cpy(&mapping.mappings)
+            .generate()
+            .actions
+    }
+
+    pub fn _compute_actions(
         store: &'store S,
         src_arena: &'a1 SS,
         dst_arena: &'a2 SD,
-        ms: &'store M,
+        ms: &'m M,
     ) -> ActionsVec<SimpleAction<T::Label, P, T::TreeId>> {
         ScriptGenerator::<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M, P>::new(
             store, src_arena, dst_arena,
@@ -194,10 +201,7 @@ where
         dst_arena: &'a2 SD,
         ms: &'m M,
     ) -> Self {
-        Self::new(
-            store, src_arena, dst_arena,
-        )
-        .init_cpy(ms)
+        Self::new(store, src_arena, dst_arena).init_cpy(ms)
     }
 
     fn new(store: &'store S, src_arena: &'a1 SS, dst_arena: &'a2 SD) -> Self {
@@ -277,7 +281,7 @@ where
             log::trace!("{:?}", self.actions);
             let w;
             let y = self.dst_arena.parent(&x);
-            let z = y.map(|y| self.cpy_mappings.get_src(&y));
+            let z = y.map(|y| self.cpy_mappings.get_src_unchecked(&y));
             if !self.cpy_mappings.is_dst(&x) {
                 // insertion
                 let k = if let Some(y) = y {
@@ -349,7 +353,7 @@ where
                 // );
             } else {
                 // dbg!(&self.mid_arena);
-                w = self.cpy_mappings.get_src(&x);
+                w = self.cpy_mappings.get_src_unchecked(&x);
                 let v = {
                     let v = self.mid_arena[w.to_usize().unwrap()].parent;
                     if v == w {
@@ -593,7 +597,7 @@ where
         let mut s1 = vec![];
         for c in w_c {
             if self.cpy_mappings.is_src(c) {
-                if x_c.contains(&self.cpy_mappings.get_dst(c)) {
+                if x_c.contains(&self.cpy_mappings.get_dst_unchecked(c)) {
                     s1.push(*c);
                 }
             }
@@ -601,7 +605,7 @@ where
         let mut s2 = vec![];
         for c in &x_c {
             if self.cpy_mappings.is_dst(c) {
-                if w_c.contains(&self.cpy_mappings.get_src(c)) {
+                if w_c.contains(&self.cpy_mappings.get_src_unchecked(c)) {
                     s2.push(*c);
                 }
             }
@@ -695,7 +699,7 @@ where
             return num_traits::zero();
         }
 
-        let u = self.cpy_mappings.get_src(&v.unwrap());
+        let u = self.cpy_mappings.get_src_unchecked(&v.unwrap());
         // // let upos = self.src_arena.position_in_parent(self.store, &u);
         let upos: T::ChildIdx = {
             let p = self.mid_arena[u.to_usize().unwrap()].parent;
@@ -744,7 +748,7 @@ where
         });
         // self.moved.push(false);
         let (src_to_dst_l, dst_to_src_l) = self.cpy_mappings.capacity();
-        self.cpy_mappings.topit(src_to_dst_l + 1, dst_to_src_l);
+        self.cpy_mappings.topit(src_to_dst_l, dst_to_src_l);
         self.cpy_mappings.link(w, *x);
         w
     }
@@ -759,7 +763,8 @@ where
 
     fn orig_src(&self, v: IdD) -> P {
         self.src_arena_dont_use
-            .path(&self.src_arena_dont_use.root(), &self.copy_to_orig(v)).into()
+            .path(&self.src_arena_dont_use.root(), &self.copy_to_orig(v))
+            .into()
     }
 
     fn path_dst(&self, root: &IdD, x: &IdD) -> P {

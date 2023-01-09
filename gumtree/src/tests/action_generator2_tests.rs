@@ -9,13 +9,13 @@ use crate::{
         script_generator2::{Act, ApplicablePath, ScriptGenerator, SimpleAction},
         Actions,
     },
-    decompressed_tree_store::{CompletePostOrder, Initializable, ShallowDecompressedTreeStore},
+    decompressed_tree_store::{CompletePostOrder, ShallowDecompressedTreeStore},
     matchers::mapping_store::{DefaultMappingStore, MappingStore},
     tests::examples::{example_action, example_action2, example_gt_java_code},
     tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
 };
 use hyper_ast::types::{
-    LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Tree as _, Typed, WithChildren,
+    LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Tree as _, Typed, WithChildren, DecompressedSubtree,
 };
 use std::fmt;
 
@@ -46,13 +46,13 @@ fn test_with_action_example() {
         DisplayTree::new(&label_store, &node_store, dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &src);
-    let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &dst);
+    let src_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &dst);
     let dst_arena2 = SimpleBfsMapper::from(&node_store, &dst_arena);
     let actions = {
         let src = &(src_arena.root());
         let dst = &(dst_arena.root());
-        ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
+        ms.topit(src_arena.len(), dst_arena.len());
         let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
         let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
         ms.link(from_src(&[]), from_dst(&[]));
@@ -100,7 +100,7 @@ fn test_with_action_example() {
                 NS<Tree>,
                 _,
                 _,
-            >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
+            >::_compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
 
         log::debug!("{:?}", actions);
 
@@ -448,14 +448,14 @@ fn test_with_action_example2() {
         DisplayTree::new(&label_store, &node_store, dst)
     );
     let mut ms = DefaultMappingStore::default();
-    let src_arena = CompletePostOrder::<_, u16>::new(&node_store, &src);
-    let dst_arena = CompletePostOrder::<_, u16>::new(&node_store, &dst);
+    let src_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &src);
+    let dst_arena = CompletePostOrder::<_, u16>::decompress(&node_store, &dst);
     let dst_arena2 = SimpleBfsMapper::from(&node_store, &dst_arena);
 
     let actions = {
         let src = &(src_arena.root());
         let dst = &(dst_arena.root());
-        ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
+        ms.topit(src_arena.len(), dst_arena.len());
         let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
         let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
         ms.link(from_src(&[]), from_dst(&[]));
@@ -503,7 +503,7 @@ fn test_with_action_example2() {
             NS<Tree>,
             _,
             _,
-        >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
+        >::_compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
 
         log::debug!("{:?}", actions);
 
@@ -703,14 +703,14 @@ fn test_with_zs_custom_example() {
         "dst tree:\n{:?}",
         DisplayTree::new(&label_store, &node_store, dst)
     );
-    let src_arena = CompletePostOrder::<_, IdD>::new(&node_store, &src);
-    let dst_arena = CompletePostOrder::<_, IdD>::new(&node_store, &dst);
+    let src_arena = CompletePostOrder::<_, IdD>::decompress(&node_store, &src);
+    let dst_arena = CompletePostOrder::<_, IdD>::decompress(&node_store, &dst);
     let dst_arena2 = SimpleBfsMapper::from(&node_store, &dst_arena);
     let mut ms = DefaultMappingStore::default();
     let actions = {
         let src = &(src_arena.root());
         let dst = &(dst_arena.root());
-        ms.topit(src_arena.len() + 1, dst_arena.len() + 1);
+        ms.topit(src_arena.len(), dst_arena.len());
         let from_src = |path: &[u8]| src_arena.child(&node_store, src, path);
         let from_dst = |path: &[u8]| dst_arena.child(&node_store, dst, path);
         // ms.addMapping(src, dst.getChild(0));
@@ -734,7 +734,7 @@ fn test_with_zs_custom_example() {
             NS<Tree>,
             _,
             _,
-        >::compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
+        >::_compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
 
         log::debug!("{:?}", actions);
         macro_rules! test_action {

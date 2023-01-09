@@ -1,12 +1,17 @@
+// Zhang and Shasha edit distance algorithm for labeled trees, 1989
+//
+// implementation originally inspired by Gumtree
+
 use std::{fmt::Debug, marker::PhantomData};
 
 use num_traits::{cast, one, zero, PrimInt, ToPrimitive};
 use str_distance::DistanceMetric;
 
-use crate::decompressed_tree_store::{DecompressedTreeStore, Initializable, PostOrderKeyRoots};
+use crate::decompressed_tree_store::{DecompressedTreeStore, PostOrderKeyRoots};
 use crate::matchers::mapping_store::MonoMappingStore;
-use hyper_ast::types::{LabelStore, NodeStore, SlicedLabel, Stored, Tree};
+use hyper_ast::types::{LabelStore, NodeStore, SlicedLabel, Stored, Tree, DecompressedSubtree};
 
+// TODO use the Mapping struct
 pub struct ZsMatcher<M, SD, DD = SD> {
     pub mappings: M,
     pub src_arena: SD,
@@ -25,20 +30,20 @@ impl<SD, DD, M: MonoMappingStore> ZsMatcher<M, SD, DD> {
         T: Tree<Label = LS::I>,
         M::Src: PrimInt + std::ops::SubAssign + Debug,
         M::Dst: PrimInt + std::ops::SubAssign + Debug,
-        SD: 'b + PostOrderKeyRoots<'b, T, M::Src> + Initializable<'store, T>,
-        DD: 'b + PostOrderKeyRoots<'b, T, M::Dst> + Initializable<'store, T>,
+        SD: 'b + PostOrderKeyRoots<'b, T, M::Src> + DecompressedSubtree<'store, T>,
+        DD: 'b + PostOrderKeyRoots<'b, T, M::Dst> + DecompressedSubtree<'store, T>,
         T: 'store + Tree,
         S: 'store + NodeStore<T::TreeId, R<'store> = T>,
         LS: 'store + LabelStore<SlicedLabel>,
     {
-        let src_arena = SD::new(node_store, &src);
-        let dst_arena = DD::new(node_store, &dst);
+        let src_arena = SD::decompress(node_store, &src);
+        let dst_arena = DD::decompress(node_store, &dst);
         // let mappings = ZsMatcher::<M, SD, DD>::match_with(node_store, label_store, &src_arena, &dst_arena);
         let mappings = {
             let mut mappings = M::default();
             mappings.topit(
-                (&src_arena).len().to_usize().unwrap() + 1,
-                (&dst_arena).len().to_usize().unwrap() + 1,
+                (&src_arena).len().to_usize().unwrap(),
+                (&dst_arena).len().to_usize().unwrap(),
             );
             let base = MatcherImpl::<'store, 'b, '_, SD, DD, S::R<'store>, S, LS, M> {
                 node_store,
@@ -93,6 +98,7 @@ impl<SD, DD, M: MonoMappingStore> ZsMatcher<M, SD, DD> {
     }
 }
 
+// TODO use the Mapper struct
 pub struct MatcherImpl<'store, 'b, 'c, SD: 'b, DD: 'b, T: 'store + Stored, S, LS, M>
 where
     S: NodeStore<T::TreeId, R<'store> = T>,
@@ -815,8 +821,7 @@ mod tests {
     use crate::decompressed_tree_store::{ShallowDecompressedTreeStore, SimpleZsTree as ZsTree};
 
     use crate::matchers::mapping_store::DefaultMappingStore;
-    use crate::{
-        decompressed_tree_store::Initializable, tests::examples::example_zs_paper,
+    use crate::{ tests::examples::example_zs_paper,
         tree::simple_tree::vpair_to_stores,
     };
 
@@ -825,7 +830,7 @@ mod tests {
         let (label_store, compressed_node_store, src, dst) = vpair_to_stores(example_zs_paper());
         // assert_eq!(label_store.resolve(&0).to_owned(), b"");
         let src_arena = {
-            let a: ZsTree<_, u16> = ZsTree::<_, _>::new(&compressed_node_store, &src);
+            let a: ZsTree<_, u16> = ZsTree::<_, _>::decompress(&compressed_node_store, &src);
             // // assert_eq!(a.id_compressed, vec![0, 1, 2, 3, 4, 5]);
             // // // assert_eq!(a.id_parent, vec![0, 0, 0, 1, 1, 4]);
             // // // assert_eq!(a.id_first_child, vec![1, 3, 0, 0, 5, 0]);
@@ -837,7 +842,7 @@ mod tests {
             a
         };
         let dst_arena = {
-            let a = ZsTree::<_, u16>::new(&compressed_node_store, &dst);
+            let a = ZsTree::<_, u16>::decompress(&compressed_node_store, &dst);
             // // assert_eq!(a.id_compressed, vec![6, 7, 2, 8, 3, 5]);
             // // // assert_eq!(a.id_parent, vec![0, 0, 0, 1, 3, 3]);
             // // // assert_eq!(a.id_first_child, vec![1, 3, 0, 4, 0, 0]);

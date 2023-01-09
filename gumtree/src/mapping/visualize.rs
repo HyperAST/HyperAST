@@ -48,7 +48,7 @@ pub fn print_mappings_no_ranges<
         .iter()
         .map(|x| {
             if mappings.is_src(x) {
-                let dst = mappings.get_dst(x);
+                let dst = mappings.get_dst_unchecked(x);
                 if mapped[dst.to_usize().unwrap()] {
                     assert!(false, "GreedySubtreeMatcher {}", dst.to_usize().unwrap())
                 }
@@ -127,7 +127,7 @@ pub fn print_mappings_no_ranges_label<
         .iter()
         .map(|x| {
             if mappings.is_src(x) {
-                let dst = mappings.get_dst(x);
+                let dst = mappings.get_dst_unchecked(x);
                 if mapped[dst.to_usize().unwrap()] {
                     assert!(false, "GreedySubtreeMatcher {}", dst.to_usize().unwrap())
                 }

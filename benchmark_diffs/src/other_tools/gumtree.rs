@@ -14,9 +14,11 @@ pub fn subprocess<'a, IdN, NS, LS>(
     label_store: &'a LS,
     src_root: IdN,
     dst_root: IdN,
-    algorithm: &str,
+    mapping_algo: &str,
+    diff_algo: &str,
+    timeout: u64,
     out_format: &str,
-) -> PathBuf
+) -> Option<PathBuf>
 where
     IdN: Clone,
     NS: 'a + types::NodeStore<IdN>,
@@ -47,21 +49,58 @@ where
     dbg!(&gt_out);
     let now = Instant::now();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    std::process::Command::new("/usr/bin/bash")
+    let mut child = std::process::Command::new("/usr/bin/bash")
         .arg(root.join("gt_script.sh").to_str().unwrap())
         .arg(&src)
         .arg(&dst)
-        .arg(algorithm)
+        .arg(mapping_algo)
         .arg(&out_format)
+        .arg(diff_algo)
         .arg(&gt_out)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit())
-        .output()
-        .expect("failed to execute process");
+        .spawn()
+        .expect("failed to spawn gumtree process");
+    // .output()
+    // .expect("failed to execute process");
+    let wait = 1;
+    let mut timeout = timeout;
+    let waitd = std::time::Duration::from_secs(wait);
+    let status;
+    loop {
+        std::thread::sleep(waitd);
+        match child.try_wait() {
+            Ok(Some(s)) => {
+                status = Some(s);
+                break;
+            }
+            Ok(None) => (),
+            Err(e) => println!("Error waiting: {}", e),
+        }
+        if timeout == 0 {
+            child.kill().unwrap();
+            status = None;
+            break;
+        }
+        timeout = timeout - wait;
+    }
     let gt_processing_time = now.elapsed().as_secs_f64();
     dbg!(&gt_processing_time);
-    fs::remove_file(&src).unwrap();
-    fs::remove_file(&dst).unwrap();
-    gt_out
+    if let Some(status) = status {
+        fs::remove_file(&src).unwrap();
+        fs::remove_file(&dst).unwrap();
+        if !status.success() {
+            eprintln!("gumtree process terminated with exit code {}", status);
+            None
+        } else {
+
+            Some(gt_out)
+        }
+    } else {
+        fs::remove_file(&src).unwrap();
+        fs::remove_file(&dst).unwrap();
+        eprintln!("gumtree process timedout");
+        None
+    }
 }

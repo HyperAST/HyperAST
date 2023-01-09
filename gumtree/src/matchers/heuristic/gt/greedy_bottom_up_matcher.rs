@@ -3,12 +3,14 @@ use std::{fmt::Debug, marker::PhantomData};
 use num_traits::{cast, one, PrimInt};
 
 use crate::decompressed_tree_store::{
-    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, Initializable,
-    POBorrowSlice, PostOrder, PostOrderIterable, PostOrderKeyRoots,
+    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, POBorrowSlice, PostOrder,
+    PostOrderIterable, PostOrderKeyRoots,
 };
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
-use hyper_ast::types::{LabelStore, NodeStore, SlicedLabel, Tree, WithHashs};
+use hyper_ast::types::{
+    DecompressedSubtree, HyperAST, LabelStore, NodeStore, SlicedLabel, Tree, WithHashs,
+};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 use crate::decompressed_tree_store::SimpleZsTree as ZsTree;
@@ -80,7 +82,7 @@ impl<
             + DecompressedWithParent<'a, T, M::Src>
             + PostOrder<'a, T, M::Src>
             + PostOrderIterable<'a, T, M::Src>
-            + Initializable<'a, T>
+            + DecompressedSubtree<'a, T>
             + ContiguousDescendants<'a, T, M::Src>
             + POBorrowSlice<'a, T, M::Src>,
         Ddst: 'a
@@ -88,10 +90,10 @@ impl<
             + DecompressedWithParent<'a, T, M::Dst>
             + PostOrder<'a, T, M::Dst>
             + PostOrderIterable<'a, T, M::Dst>
-            + Initializable<'a, T>
+            + DecompressedSubtree<'a, T>
             + ContiguousDescendants<'a, T, M::Dst>
             + POBorrowSlice<'a, T, M::Dst>,
-        T: Tree + WithHashs,
+        T: 'a + Tree + WithHashs,
         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
         LS: 'a + LabelStore<SlicedLabel, I = T::Label>,
         M: MonoMappingStore,
@@ -131,34 +133,60 @@ where
                 src_arena,
                 dst_arena,
                 mappings,
-                phantom: PhantomData,
+                _phantom: PhantomData,
             },
         }
     }
 
-    pub fn matchh<'b>(
+    pub fn match_it<HAST>(
+        mapping: crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>,
+    ) -> crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
+    where
+        HAST: HyperAST<'a, NS = S, LS = LS>,
+    {
+        let mut matcher = Self {
+            internal: BottomUpMatcher {
+                node_store: mapping.hyperast.node_store(),
+                src_arena: mapping.mapping.src_arena,
+                dst_arena: mapping.mapping.dst_arena,
+                mappings: mapping.mapping.mappings,
+                _phantom: PhantomData,
+            },
+            label_store: mapping.hyperast.label_store(),
+        };
+        matcher.internal.mappings.topit(
+            matcher.internal.src_arena.len(),
+            matcher.internal.dst_arena.len(),
+        );
+        Self::execute(&mut matcher);
+        crate::matchers::Mapper {
+            hyperast: mapping.hyperast,
+            mapping: crate::matchers::Mapping {
+                src_arena: matcher.internal.src_arena,
+                dst_arena: matcher.internal.dst_arena,
+                mappings: matcher.internal.mappings,
+            },
+        }
+    }
+
+    pub fn matchh(
         compressed_node_store: &'a S,
         label_store: &'a LS,
         src: &'a T::TreeId,
         dst: &'a T::TreeId,
         mappings: M,
     ) -> Self
-// where
-    // for<'x> <Dsrc as ContiguousDescendants<'a, T, M::Src>>::Slice<'x>:
-    //     PostOrderKeyRoots<'x, T, M::Src>,
-    // for<'x> <Ddst as ContiguousDescendants<'a, T, M::Dst>>::Slice<'x>:
-    //     PostOrderKeyRoots<'x, T, M::Dst>,
     {
         let mut matcher = Self::new(
             compressed_node_store,
             label_store,
-            Dsrc::new(compressed_node_store, src),
-            Ddst::new(compressed_node_store, dst),
+            Dsrc::decompress(compressed_node_store, src),
+            Ddst::decompress(compressed_node_store, dst),
             mappings,
         );
         matcher.internal.mappings.topit(
-            matcher.internal.src_arena.len() + 1,
-            matcher.internal.dst_arena.len() + 1,
+            matcher.internal.src_arena.len(),
+            matcher.internal.dst_arena.len(),
         );
         Self::execute(&mut matcher);
         matcher
@@ -257,7 +285,7 @@ where
         } else {
             let o_src = self.internal.src_arena.original(&src);
             let o_dst = self.internal.dst_arena.original(&dst);
-            let src_arena = ZsTree::<T, M::Src>::new(node_store, &o_src);
+            let src_arena = ZsTree::<T, M::Src>::decompress(node_store, &o_src);
             src_offset = src - src_arena.root();
             if cfg!(debug_assertions) {
                 let src_arena_z = self.internal.src_arena.slice_po(&src);
@@ -274,7 +302,7 @@ where
                 assert!(src_arena.kr[src_arena.kr.len() - 1]);
                 dbg!(last == src_arena_z.root());
             }
-            let dst_arena = ZsTree::<T, M::Dst>::new(node_store, &o_dst);
+            let dst_arena = ZsTree::<T, M::Dst>::decompress(node_store, &o_dst);
             if cfg!(debug_assertions) {
                 let dst_arena_z = self.internal.dst_arena.slice_po(&dst);
                 for i in dst_arena.iter_df_post::<true>() {

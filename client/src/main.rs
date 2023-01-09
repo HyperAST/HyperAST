@@ -9,7 +9,7 @@ use hyper_gumtree::{
             bottom_up_matcher::BottomUpMatcher, greedy_bottom_up_matcher::GreedyBottomUpMatcher,
             greedy_subtree_matcher::SubtreeMatcher,
         },
-        mapping_store::{DefaultMappingStore, VecStore},
+        mapping_store::{DefaultMappingStore, VecStore, DefaultMultiMappingStore},
         optimal::zs::ZsMatcher,
     },
     tree::tree_path::{CompressedTreePath, TreePath},
@@ -272,11 +272,16 @@ fn main() {
             CompletePostOrder<_, u16>,
             CompletePostOrder<_, u16>,
             _,
-            HashedNodeRef,
-            _,
+            
+            _,// HashedNodeRef,
             _,
             // 2,
-        >::matchh(&java_tree_gen.stores.node_store, &src, &dst, mappings);
+        >::matchh::<DefaultMultiMappingStore<_>>(
+            &java_tree_gen.stores.node_store,
+            &src,
+            &dst,
+            mappings,
+        );
         let SubtreeMatcher {
             src_arena,
             dst_arena,

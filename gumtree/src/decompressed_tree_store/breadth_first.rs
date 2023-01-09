@@ -2,11 +2,10 @@ use std::marker::PhantomData;
 
 use num_traits::{cast, zero, PrimInt};
 
-use crate::tree::tree_path::CompressedTreePath;
 use hyper_ast::types::IterableChildren;
 use hyper_ast::types::{NodeStore, Stored, WithChildren};
 
-use super::{DecompressedTreeStore, Initializable, Iter, ShallowDecompressedTreeStore};
+use super::{DecompressedTreeStore, Iter, ShallowDecompressedTreeStore};
 
 use super::{BreadthFirstIterable, BreathFirstContiguousSiblings, DecompressedWithParent};
 
@@ -111,11 +110,11 @@ impl<'a, IdD: PrimInt> Iterator for IterParents<'a, IdD> {
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> Initializable<'a, T> for BreathFirst<T, IdD>
+impl<'a, T: WithChildren, IdD: PrimInt> super::DecompressedSubtree<'a, T> for BreathFirst<T, IdD>
 where
     T::TreeId: Clone,
 {
-    fn new<S>(store: &'a S, root: &T::TreeId) -> Self
+    fn decompress<S>(store: &'a S, root: &T::TreeId) -> Self
     where
         S: NodeStore<T::TreeId, R<'a> = T>,
     {

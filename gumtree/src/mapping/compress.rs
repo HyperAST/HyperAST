@@ -59,7 +59,7 @@ where
     fn should_wait(&mut self, src_parent: &IdD, dst: &IdD) -> bool {
         self.mappings
             .is_src(src_parent)
-            .then(|| self.mappings.get_dst(src_parent))
+            .then(|| self.mappings.get_dst_unchecked(src_parent))
             .map_or(false, |d_p| self.ddst.is_descendant(dst, &d_p))
     }
 
@@ -312,7 +312,7 @@ where
         });
         if self.helper.ctx.mappings.is_dst(&dst) {
             // is mapped
-            let src = self.helper.ctx.mappings.get_src(&dst);
+            let src = self.helper.ctx.mappings.get_src_unchecked(&dst);
             let src_parent = self.helper.ctx.dsrc.parent(&src);
             let pos = self.helper.ctx.dsrc.position_in_parent(&src).unwrap();
             dbg!(src, dst);
@@ -432,7 +432,7 @@ where
                 .ctx
                 .mappings
                 .is_dst(&dst)
-                .then(|| self.helper.ctx.mappings.get_src(&dst));
+                .then(|| self.helper.ctx.mappings.get_src_unchecked(&dst));
 
             self.helper.ctx.process_direct_children(
                 curr_waiting.direct,
@@ -475,9 +475,11 @@ where
 mod test {
     use std::marker::PhantomData;
 
+    use hyper_ast::types::DecompressedSubtree;
+
     use crate::{
         decompressed_tree_store::{
-            CompletePostOrder, DecompressedWithParent, Initializable, PostOrderIterable,
+            CompletePostOrder, DecompressedWithParent, PostOrderIterable,
         },
         mapping::{
             compress::{Compressor, CompressorHelper, MappedHelper},
@@ -505,8 +507,8 @@ mod test {
         let (label_store, node_store, src, dst) =
             vpair_to_stores((examples::example_move1().0, examples::example_move().1));
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = D::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = D::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = D::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = D::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
@@ -612,8 +614,8 @@ mod test {
         let (label_store, node_store, src, dst) =
             vpair_to_stores(examples::example_gumtree_ambiguous());
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
@@ -742,11 +744,11 @@ mod test {
     }
 
     mod integration {
-        use crate::matchers::heuristic::gt::{
+        use crate::matchers::{heuristic::gt::{
             bottom_up_matcher::BottomUpMatcher,
             greedy_bottom_up_matcher::GreedyBottomUpMatcher,
             greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
-        };
+        }, mapping_store::DefaultMultiMappingStore};
 
         use super::*;
 
@@ -755,8 +757,8 @@ mod test {
             let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_action2());
             // let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_action2());
             let mut mappings = DefaultMappingStore::default();
-            let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-            let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+            let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+            let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
             mappings.topit(src_arena.len(), dst_arena.len());
             print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
             println!();
@@ -768,8 +770,7 @@ mod test {
                 _,
                 _,
                 _,
-                _,
-            >::matchh(&node_store, &src, &dst, mappings);
+            >::matchh::<DefaultMultiMappingStore<_>>(&node_store, &src, &dst, mappings);
             let SubtreeMatcher { mappings, .. } = mapper.into();
             let mapper = GreedyBottomUpMatcher::<
                 CompletePostOrder<_, u16>,
@@ -825,8 +826,8 @@ mod test {
     fn test_action2() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_action2());
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
@@ -888,8 +889,8 @@ mod test {
         let (label_store, node_store, src, dst) =
             vpair_to_stores(examples::example_gumtree_ambiguous());
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
@@ -945,8 +946,8 @@ mod test {
     fn test_gt_java_code() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_gt_java_code());
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
@@ -999,8 +1000,8 @@ mod test {
     fn test_move2() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move2());
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
@@ -1095,8 +1096,8 @@ mod test {
     fn test_move3() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move3());
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
@@ -1193,8 +1194,8 @@ mod test {
         let (label_store, node_store, src, dst) =
             vpair_to_stores((examples::example_move1().0, examples::example_move().1));
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
@@ -1290,8 +1291,8 @@ mod test {
         let (label_store, node_store, src, dst) =
             vpair_to_stores((examples::example_move().0, examples::example_move1().1));
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
         println!();
@@ -1388,8 +1389,8 @@ mod test {
     fn test_move1b() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move1());
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         mappings.link(0, 1);
         mappings.link(1, 2);
@@ -1477,8 +1478,8 @@ mod test {
     fn test_move1() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move1());
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         mappings.link(0, 1);
         mappings.link(1, 2);
@@ -1566,8 +1567,8 @@ mod test {
     fn test_move() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move());
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         mappings.link(0, 1);
         mappings.link(1, 2);
@@ -1651,8 +1652,8 @@ mod test {
     fn test_simple1a() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_simple1());
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         mappings.link(0, 0);
         mappings.link(1, 1);
@@ -1705,8 +1706,8 @@ mod test {
     fn test_simple1() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_simple1());
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         mappings.link(0, 0);
         mappings.link(1, 1);
@@ -1755,8 +1756,8 @@ mod test {
     fn test_simple() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_simple());
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         mappings.link(0, 0);
         mappings.link(1, 1);
@@ -1807,8 +1808,8 @@ mod test {
     fn test_single() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_single());
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::new(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         mappings.link(0, 0);
         print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);

@@ -2,7 +2,6 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Deref};
 
 use num_traits::{cast, one, zero, PrimInt, ToPrimitive, Zero};
 
-use crate::tree::tree_path::CompressedTreePath;
 use hyper_ast::{
     position::Position,
     types::{
@@ -14,7 +13,7 @@ use hyper_ast::{
 use super::{
     basic_post_order::{BasicPOSlice, BasicPostOrder},
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings,
-    Initializable, PostOrder, ShallowDecompressedTreeStore,
+    PostOrder, ShallowDecompressedTreeStore,
 };
 
 pub struct SimplePostOrder<T: Stored, IdD> {
@@ -204,17 +203,17 @@ where
 //     }
 // }
 
-impl<'a, T, IdD: PrimInt> Initializable<'a, T> for SimplePostOrder<T, IdD>
+impl<'a, T, IdD: PrimInt> super::DecompressedSubtree<'a, T> for SimplePostOrder<T, IdD>
 where
     T: WithChildren,
     T::TreeId: Clone,
     <T as WithChildren>::ChildIdx: PrimInt,
 {
-    fn new<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
+    fn decompress<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
     where
         S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,
     {
-        let simple = SimplePostOrder::new(store, root);
+        let simple = SimplePostOrder::make(store, root);
         Self {
             basic: simple.basic,
             id_parent: simple.id_parent,
@@ -227,7 +226,7 @@ where
     T::TreeId: Clone,
     <T as WithChildren>::ChildIdx: PrimInt,
 {
-    fn new<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
+    fn make<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
     where
         S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,
     {

@@ -4,10 +4,9 @@ use num_traits::{cast, zero, PrimInt};
 
 use crate::{
     decompressed_tree_store::{
-        BreadthFirstIterable, DecompressedTreeStore, DecompressedWithParent, Initializable,
+        BreadthFirstIterable, DecompressedTreeStore, DecompressedWithParent,
         PostOrder, ShallowDecompressedTreeStore,
     },
-    tree::tree_path::CompressedTreePath,
 };
 use hyper_ast::types::{NodeStore, WithChildren};
 
@@ -79,16 +78,16 @@ impl<'a, T: 'a + WithChildren, IdD: PrimInt, DTS: PostOrder<'a, T, IdD>, D: Borr
     }
 }
 
-impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: Borrow<DTS>>
-    Initializable<'a, T> for SimpleBfsMapper<'a, T, IdD, DTS, D>
-{
-    fn new<S>(_store: &'a S, _root: &T::TreeId) -> Self
-    where
-        S: NodeStore<T::TreeId, R<'a> = T>,
-    {
-        panic!()
-    }
-}
+// impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: Borrow<DTS>>
+//     Initializable<'a, T> for SimpleBfsMapper<'a, T, IdD, DTS, D>
+// {
+//     fn make<S>(_store: &'a S, _root: &T::TreeId) -> Self
+//     where
+//         S: NodeStore<T::TreeId, R<'a> = T>,
+//     {
+//         panic!()
+//     }
+// }
 
 impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: Borrow<DTS>>
     ShallowDecompressedTreeStore<'a, T, IdD> for SimpleBfsMapper<'a, T, IdD, DTS, D>

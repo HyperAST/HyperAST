@@ -7,7 +7,9 @@ use std::{
 
 use hyper_ast::{
     position::Position,
-    types::{self, LabelStore, NodeStore, Stored, Tree, Type, WithChildren, WithSerialization},
+    types::{
+        self, HyperAST, LabelStore, NodeStore, Stored, Tree, Type, WithChildren, WithSerialization,
+    },
 };
 use hyper_gumtree::{
     decompressed_tree_store::{
@@ -15,7 +17,7 @@ use hyper_gumtree::{
         pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
         DecompressedWithSiblings, PostOrder, ShallowDecompressedTreeStore,
     },
-    matchers::mapping_store::MonoMappingStore,
+    matchers::{mapping_store::MonoMappingStore, Mapper},
     tree::tree_path::CompressedTreePath,
 };
 use hyper_gumtree::{matchers::mapping_store::VecStore, tree::tree_path::TreePath};
@@ -513,7 +515,8 @@ impl CompressedBfPostProcess {
 }
 
 pub mod compressed_bf_post_process {
-    use hyper_ast::types;
+    use hyper_ast::types::{self, HyperAST};
+    use hyper_gumtree::matchers::Mapper;
 
     use super::*;
     pub struct PP0 {
@@ -525,7 +528,19 @@ pub mod compressed_bf_post_process {
             use byteorder::{BigEndian, ReadBytesExt};
             let actions = self
                 .file
-                .read_u32::<BigEndian>()
+                .read_i32::<BigEndian>()
+                .unwrap()
+                .to_isize()
+                .unwrap();
+            let src_heap = self
+                .file
+                .read_u64::<BigEndian>()
+                .unwrap()
+                .to_usize()
+                .unwrap();
+            let dst_heap = self
+                .file
+                .read_u64::<BigEndian>()
                 .unwrap()
                 .to_usize()
                 .unwrap();
@@ -537,7 +552,7 @@ pub mod compressed_bf_post_process {
                 .unwrap();
             (
                 compressed_bf_post_process::PP1 { file: self.file },
-                Counts { mappings, actions },
+                Counts { mappings, actions, src_heap, dst_heap },
             )
         }
     }
@@ -562,13 +577,44 @@ pub mod compressed_bf_post_process {
     }
 
     impl PP2 {
-        pub fn validity_mappings<'store: 'a, 'a, IdN, NS, LS, SD, DD>(
+        pub fn validity_mappings<'store: 'a, 'a, HAST, SD, DD>(
+            mut self,
+            mapper: &'a Mapper<'store, HAST, DD, SD, VecStore<u32>>,
+        ) -> ValidityRes<usize>
+        where
+            HAST: HyperAST<'store>,
+            HAST::IdN: Clone + Debug + Eq,
+            HAST::T: types::Tree<Type = types::Type>,
+            SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
+                + PostOrder<'a, HAST::T, u32>
+                + DecompressedWithSiblings<'a, HAST::T, u32>,
+            DD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
+                + PostOrder<'a, HAST::T, u32>
+                + DecompressedWithSiblings<'a, HAST::T, u32>,
+        {
+            let hyperast = mapper.hyperast;
+            let mapping = &mapper.mapping;
+            let src_arena = &mapping.src_arena;
+            let dst_arena = &mapping.dst_arena;
+            let src_tr = src_arena.original(&src_arena.root());
+            let dst_tr = dst_arena.original(&dst_arena.root());
+            self._validity_mappings(
+                hyperast.node_store(),
+                hyperast.label_store(),
+                src_arena,
+                src_tr,
+                dst_arena,
+                dst_tr,
+                &mapping.mappings,
+            )
+        }
+        pub(crate) fn _validity_mappings<'store: 'a, 'a, IdN, NS, LS, SD, DD>(
             mut self,
             node_store: &'store NS,
             _label_store: &'store LS,
-            src_arena: &'a SD, //CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
+            src_arena: &'a SD,
             src_tr: IdN,
-            dst_arena: &'a DD, //CompletePostOrder<<NS as types::NodeStore<IdN>>::R<'store>, u32>,
+            dst_arena: &'a DD,
             dst_tr: IdN,
             mappings: &VecStore<u32>,
         ) -> ValidityRes<usize>
@@ -803,8 +849,10 @@ pub mod compressed_bf_post_process {
     }
 }
 pub struct Counts {
+    pub src_heap: usize,
+    pub dst_heap: usize,
     pub mappings: usize,
-    pub actions: usize,
+    pub actions: isize,
 }
 pub struct ValidityRes<T> {
     pub missing_mappings: T,
@@ -854,10 +902,42 @@ impl SimpleJsonPostProcess {
     }
     pub fn counts(&self) -> Counts {
         let mappings = self.file.matches.len();
-        let actions = self.file.actions.len();
-        Counts { mappings, actions }
+        let actions = self.file.actions.as_ref().map_or(-1,|x|x.len() as isize);
+        // TODO first need some work on the java side, but anyway not used for eval
+        Counts { mappings, actions, src_heap: 42, dst_heap: 42 }
     }
-    pub fn validity_mappings<'store: 'a, 'a, IdN, NS, LS, SD, DD>(
+    pub fn validity_mappings<'store: 'a, 'a, HAST, SD, DD>(
+        mut self,
+        mapper: &'a Mapper<'store, HAST, DD, SD, VecStore<u32>>,
+    ) -> ValidityRes<Vec<diff_output::Match<diff_output::Tree>>>
+    where
+        HAST: HyperAST<'store>,
+        HAST::IdN: Clone + Debug + Eq,
+        HAST::T: types::Tree<Type = types::Type> + WithSerialization,
+        SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
+            + PostOrder<'a, HAST::T, u32>
+            + DecompressedWithSiblings<'a, HAST::T, u32>,
+        DD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
+            + PostOrder<'a, HAST::T, u32>
+            + DecompressedWithSiblings<'a, HAST::T, u32>,
+    {
+        let hyperast = mapper.hyperast;
+        let mapping = &mapper.mapping;
+        let src_arena = &mapping.src_arena;
+        let dst_arena = &mapping.dst_arena;
+        let src_tr = src_arena.original(&src_arena.root());
+        let dst_tr = dst_arena.original(&dst_arena.root());
+        self._validity_mappings(
+            hyperast.node_store(),
+            hyperast.label_store(),
+            src_arena,
+            src_tr,
+            dst_arena,
+            dst_tr,
+            &mapping.mappings,
+        )
+    }
+    pub fn _validity_mappings<'store: 'a, 'a, IdN, NS, LS, SD, DD>(
         self,
         node_store: &'store NS,
         label_store: &'store LS,
@@ -957,10 +1037,43 @@ impl PathJsonPostProcess {
     }
     pub fn counts(&self) -> Counts {
         let mappings = self.file.matches.len();
-        let actions = self.file.actions.len();
-        Counts { mappings, actions }
+        let actions = self.file.actions.as_ref().map_or(-1,|x|x.len() as isize);
+        // TODO first need some work on the java side, but anyway not used for eval
+        Counts { mappings, actions, src_heap: 42, dst_heap: 42 }
     }
-    pub fn validity_mappings<'store: 'a, 'a, IdN, NS, LS, SD, DD>(
+    pub fn validity_mappings<'store: 'a, 'a, HAST, SD, DD>(
+        mut self,
+        mapper: &'a Mapper<'store, HAST, DD, SD, VecStore<u32>>,
+    ) -> ValidityRes<Vec<diff_output::Match<diff_output::Path>>>
+    where
+        HAST: HyperAST<'store>,
+        HAST::IdN: Clone + Debug + Eq,
+        HAST::T: types::Tree<Type = types::Type>,
+        SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
+            + PostOrder<'a, HAST::T, u32>
+            + DecompressedWithSiblings<'a, HAST::T, u32>,
+        DD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
+            + PostOrder<'a, HAST::T, u32>
+            + DecompressedWithSiblings<'a, HAST::T, u32>,
+    {
+        let hyperast = mapper.hyperast;
+        let mapping = &mapper.mapping;
+        let src_arena = &mapping.src_arena;
+        let dst_arena = &mapping.dst_arena;
+        let src_tr = src_arena.original(&src_arena.root());
+        let dst_tr = dst_arena.original(&dst_arena.root());
+        self._validity_mappings(
+            hyperast.node_store(),
+            hyperast.label_store(),
+            src_arena,
+            src_tr,
+            dst_arena,
+            dst_tr,
+            &mapping.mappings,
+        )
+    }
+
+    pub(crate) fn _validity_mappings<'store: 'a, 'a, IdN, NS, LS, SD, DD>(
         self,
         _node_store: &'store NS,
         _label_store: &'store LS,
@@ -1152,7 +1265,7 @@ pub fn print_mappings<
         .iter()
         .map(|x| {
             if mappings.is_src(x) {
-                let dst = mappings.get_dst(x);
+                let dst = mappings.get_dst_unchecked(x);
                 if mapped[dst.to_usize().unwrap()] {
                     assert!(false, "GreedySubtreeMatcher {}", dst.to_usize().unwrap())
                 }
@@ -1229,7 +1342,7 @@ pub fn print_mappings_no_ranges<
         .iter()
         .map(|x| {
             if mappings.is_src(x) {
-                let dst = mappings.get_dst(x);
+                let dst = mappings.get_dst_unchecked(x);
                 if mapped[dst.to_usize().unwrap()] {
                     assert!(false, "GreedySubtreeMatcher {}", dst.to_usize().unwrap())
                 }
@@ -1283,7 +1396,7 @@ pub fn print_mappings_no_ranges<
 mod tests {
     use super::*;
     use crate::{
-        algorithms::{self, DiffResult},
+        algorithms::{self, DiffResult, MappingDurations},
         other_tools,
         preprocess::{parse_dir_pair, JavaPreprocessFileSys},
     };
@@ -1326,22 +1439,28 @@ mod tests {
             src_tr.compressed_node,
             dst_tr.compressed_node,
             "gumtree",
+            "Chawathe",
+            60*5,
             gt_out_format,
-        );
+        ).unwrap();
 
         let DiffResult {
-            mapping_durations: [subtree_matcher_t, bottomup_matcher_t],
-            src_arena,
-            dst_arena,
-            mappings,
+            mapping_durations,
+            mapper: mapping,
             actions,
+            prepare_gen_t,
             gen_t,
         } = algorithms::gumtree::diff(
-            &java_gen.main_stores.node_store,
-            &java_gen.main_stores.label_store,
+            &java_gen.main_stores,
             &src_tr.compressed_node,
             &dst_tr.compressed_node,
         );
+        // let Mapping {
+        //     src_arena,
+        //     dst_arena,
+        //     mappings,
+        // } = mapping;
+        let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
 
         let hast_timings = vec![subtree_matcher_t, bottomup_matcher_t, gen_t];
 
@@ -1349,15 +1468,7 @@ mod tests {
         let pp = CompressedBfPostProcess::create(&gt_out);
         let (pp, counts) = pp.counts();
         let (pp, gt_timings) = pp.performances();
-        let valid = pp.validity_mappings(
-            &java_gen.main_stores.node_store,
-            &java_gen.main_stores.label_store,
-            &src_arena,
-            src_tr.compressed_node,
-            &dst_arena,
-            dst_tr.compressed_node,
-            &mappings,
-        );
+        let valid = pp.validity_mappings(&mapping);
         use hyper_gumtree::actions::Actions as _;
         if valid.additional_mappings > 0 || valid.missing_mappings > 0 {
             dbg!(
@@ -1367,7 +1478,9 @@ mod tests {
                 counts.actions
             );
             panic!()
-        } else if counts.actions != actions.len() {
+        } else if counts.actions < 0 {
+            panic!("no actions computed")
+        } else if counts.actions as usize != actions.len() {
             dbg!(actions.len(), counts.actions);
             panic!()
         } else {
