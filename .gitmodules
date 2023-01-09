@@ -9,3 +9,7 @@
 [submodule "gen/tree-sitter/javascript/tree-sitter-javascript"]
 	path = gen/tree-sitter/javascript/tree-sitter-javascript
 	url = git@github.com:quentinLeDilavrec/tree-sitter-javascript.git
+
+[submodule "gen/tree-sitter/xml/tree-sitter-xml"]
+	path = gen/tree-sitter/xml/tree-sitter-xml
+	url = git@github.com:quentinLeDilavrec/tree-sitter-xml.git
