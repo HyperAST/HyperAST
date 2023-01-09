@@ -7,7 +7,7 @@ use super::element::{Arguments, ExplorableRef, Nodes, RefPtr, RefsEnum, RawLabel
 use hyper_ast::types::LabelStore;
 
 pub struct Iter<'a> {
-    pub(crate) refs: bitvec::slice::IterOnes<'a, Lsb0, usize>,
+    pub(crate) refs: bitvec::slice::IterOnes<'a, usize, Lsb0>,
     pub(crate) nodes: &'a Nodes,
 }
 
