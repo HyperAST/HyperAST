@@ -185,6 +185,8 @@ pub fn windowed_commits_compare(
                 mapping_durations.into();
 
             log::warn!("ed+mappings size: {}", memusage_linux() - mu);
+            let total_lazy_t: f64 = subtree_matcher_t + bottomup_matcher_t + prepare_gen_t + gen_t + mapping_preparation_duration.iter().sum::<f64>();
+            dbg!(&total_lazy_t);
 
             let gt_out_format = "COMPRESSED"; //"COMPRESSED"; // JSON
             let gt_out = other_tools::gumtree::subprocess(
@@ -194,7 +196,7 @@ pub fn windowed_commits_compare(
                 dst_tr,
                 "gumtree",
                 diff_algorithm,
-                60*5,
+                (total_lazy_t*10.).ceil().to_u64().unwrap(),
                 gt_out_format,
             );
 
