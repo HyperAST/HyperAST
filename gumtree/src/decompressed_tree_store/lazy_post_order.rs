@@ -277,20 +277,7 @@ where
                 break;
             }
             let Some((p,z)) = next else {
-                let ran = self.first_descendant(x).to_usize().unwrap()..=x.to_usize().unwrap();
-                if self.len() < 100 {
-                    println!(
-                        "{}",
-                        ran.clone()
-                            .collect::<Vec<_>>()
-                            .iter()
-                            .zip(self.id_parent[ran.clone()].iter())
-                            .zip(self.llds[ran.clone()].iter())
-                            .map(|((x1, x2), x3)| (x1, x2, x3))
-                            .fold(" i, p, l".to_string(), |s, x| format!("{s}\n{:?}", x))
-                    );
-                }
-                assert!(self._size(x) == zero() || self.tree(&c) != self.tree(x));
+                assert!(self._size(x) <= one() || self.tree(&(c + one())) != self.tree(x), "{:?} {:?}", self.tree(&(c + one())), self.tree(x));
                 assert!(c == self.lld(x) || c + one() == self.lld(x));
                 break;
             };
