@@ -348,8 +348,8 @@ pub fn windowed_commits_compare(
                     subtree_matcher_t, 
                     mapping_preparation_duration[1],
                     bottomup_matcher_t, 
-                    gen_t, 
                     prepare_gen_t,
+                    gen_t,
                 )
                 .unwrap();
                 writeln!(
