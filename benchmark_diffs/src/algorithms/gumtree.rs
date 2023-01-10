@@ -66,7 +66,7 @@ where
     );
     let prepare_gen_t = now.elapsed().as_secs_f64();
     let now = Instant::now();
-    let actions = ScriptGenerator::compute_actions(mapper.hyperast, &mapper.mapping);
+    let actions = ScriptGenerator::compute_actions(mapper.hyperast, &mapper.mapping).ok();
     let gen_t = now.elapsed().as_secs_f64();
     dbg!(gen_t);
     let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);

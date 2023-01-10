@@ -39,7 +39,7 @@ fn test_simple_1() {
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node
         )
-        .actions
+        .actions.unwrap()
         .len()
     )
 }
@@ -74,7 +74,7 @@ fn test_crash1() {
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     )
-    .actions
+    .actions.unwrap()
     .len();
     println!("{}", len);
 }
@@ -112,7 +112,7 @@ mod examples {
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
         )
-        .actions
+        .actions.unwrap()
         .len();
         println!("{}", len);
     }
@@ -162,7 +162,7 @@ mod examples {
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
         )
-        .actions
+        .actions.unwrap()
         .len();
         println!("{}", len);
     }
@@ -251,7 +251,7 @@ mod examples {
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
         )
-        .actions
+        .actions.unwrap()
         .len();
         let processing_time = now.elapsed().as_secs_f64();
         println!("tt={} evos={}", processing_time, len);
@@ -1230,7 +1230,7 @@ fn compare_perfs() {
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     )
-    .actions
+    .actions.unwrap()
     .len();
     let processing_time = now.elapsed().as_secs_f64();
     println!("tt={} evos={}", processing_time, len);
@@ -1312,7 +1312,7 @@ pub fn bad_perfs() {
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     )
-    .actions
+    .actions.unwrap()
     .len();
     let processing_time = now.elapsed().as_secs_f64();
     println!("tt={} evos={}", processing_time, len);
@@ -1373,7 +1373,7 @@ pub fn bad_perfs2() {
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     )
-    .actions
+    .actions.unwrap()
     .len();
     let processing_time = now.elapsed().as_secs_f64();
     println!("tt={} evos={}", processing_time, len);
@@ -1538,6 +1538,7 @@ fn bad_perfs_helper(buggy_path: std::path::PathBuf, fixed_path: std::path::PathB
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     );
+    let actions = actions.unwrap();
     let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
     match guard.report().build() {
         Ok(report) => {
@@ -1642,7 +1643,7 @@ fn test_all() {
                 &src_tr.local.compressed_node,
                 &dst_tr.local.compressed_node,
             )
-            .actions
+            .actions.unwrap()
             .len();
             let processing_time = now.elapsed().as_secs_f64();
             println!("tt={} evos={}", processing_time, len);
@@ -1794,7 +1795,7 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
 
     let timings = vec![subtree_matcher_t, bottomup_matcher_t, gen_t + prepare_gen_t];
 
-    let hast_actions = actions.len();
+    let hast_actions = actions.unwrap().len();
     dbg!(&timings);
     let res = if gt_out_format == "COMPRESSED" {
         let pp = CompressedBfPostProcess::create(&gt_out);
@@ -1909,7 +1910,7 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
             src.to_string_lossy(),
             buggy_s,
             fixed_s,
-            hast_actions.len(),
+            hast_actions.unwrap().len(),
             gt_counts.actions,
             valid.missing_mappings,
             valid.additional_mappings,

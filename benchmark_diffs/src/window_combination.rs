@@ -10,6 +10,7 @@ use hyper_ast::{
     utils::memusage_linux,
 };
 use hyper_ast_cvs_git::{git::fetch_github_repository, preprocessed::PreProcessedRepository};
+use num_traits::ToPrimitive;
 
 use crate::{
     algorithms::{self, DiffResult, MappingDurations},
@@ -118,7 +119,7 @@ pub fn windowed_commits_compare(
             struct ResultsShort<MD> {
                 pub mapping_durations: MD,
                 pub mappings: usize,
-                pub actions: usize,
+                pub actions: Option<usize>,
                 pub prepare_gen_t: f64,
                 pub gen_t: f64,
             }
@@ -137,7 +138,7 @@ pub fn windowed_commits_compare(
             let not_lazy = ResultsShort {
                 mapping_durations: not_lazy.mapping_durations,
                 mappings: not_lazy.mapper.mapping.mappings.len(),
-                actions: not_lazy.actions.len(),
+                actions: not_lazy.actions.map(|x|x.len()),
                 prepare_gen_t: not_lazy.prepare_gen_t,
                 gen_t: not_lazy.gen_t,
             };
@@ -150,7 +151,7 @@ pub fn windowed_commits_compare(
             let partial_lazy = ResultsShort {
                 mapping_durations: partial_lazy.mapping_durations,
                 mappings: partial_lazy.mapper.mapping.mappings.len(),
-                actions: partial_lazy.actions.len(),
+                actions: partial_lazy.actions.map(|x|x.len()),
                 prepare_gen_t: partial_lazy.prepare_gen_t,
                 gen_t: partial_lazy.gen_t,
             };
@@ -168,7 +169,7 @@ pub fn windowed_commits_compare(
             } = algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr);
             dbg!(&mapping_durations, &prepare_gen_t, &gen_t);
             let mappings_len = mapper.mapping.mappings.len();
-            let actions_len = actions.len();
+            let actions_len = actions.map(|x|x.len());
             // assert_eq!(not_lazy.mappings, mappings_len);
             // assert_eq!(not_lazy.actions, actions_len);
             // assert_eq!(partial_lazy.mappings, mappings_len);
@@ -181,6 +182,7 @@ pub fn windowed_commits_compare(
             }
             // } = algorithms::gumtree::diff(node_store, label_store, &src_tr, &dst_tr);
             let mapping_preparation_duration = mapping_durations.preparation;
+            
             let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) =
                 mapping_durations.into();
 
@@ -290,13 +292,13 @@ pub fn windowed_commits_compare(
                         valid.missing_mappings,
                         valid.additional_mappings,
                         gt_counts.actions,
-                        actions_len,
+                        actions_len.map_or(-1,|x|x as isize),
                         &gt_counts.src_heap,
                         &gt_counts.dst_heap,
                         Into::<isize>::into(&commit_src.1.memory_used()),
                         Into::<isize>::into(&commit_dst.1.memory_used()),
-                        not_lazy.mappings, not_lazy.actions, 
-                        partial_lazy.mappings, partial_lazy.actions, 
+                        not_lazy.mappings, not_lazy.actions.map_or(-1,|x|x as isize), 
+                        partial_lazy.mappings, partial_lazy.actions.map_or(-1,|x|x as isize), 
                     )
                     .unwrap();
                     writeln!(
@@ -327,14 +329,14 @@ pub fn windowed_commits_compare(
                         mappings_len,
                         -1,//valid.missing_mappings,
                         -1,//valid.additional_mappings,
-                        actions_len,
+                        actions_len.map_or(-1,|x|x as isize),
                         -1,//gt_counts.actions,
                         -1,//&gt_counts.src_heap,
                         -1,//&gt_counts.dst_heap,
                         Into::<isize>::into(&commit_src.1.memory_used()),
                         Into::<isize>::into(&commit_dst.1.memory_used()),
-                        not_lazy.mappings, not_lazy.actions, 
-                        partial_lazy.mappings, partial_lazy.actions, 
+                        not_lazy.mappings, not_lazy.actions.map_or(-1,|x|x as isize), 
+                        partial_lazy.mappings, partial_lazy.actions.map_or(-1,|x|x as isize), 
                     )
                     .unwrap();
                 }
@@ -345,7 +347,7 @@ pub fn windowed_commits_compare(
                     src_s,
                     dst_s,
                     mappings_len,
-                    actions_len,
+                    actions_len.map_or(-1,|x|x as isize),
                     mapping_preparation_duration[0],
                     subtree_matcher_t, 
                     mapping_preparation_duration[1],
@@ -361,7 +363,7 @@ pub fn windowed_commits_compare(
                     src_s,
                     dst_s,
                     not_lazy.mappings,
-                    not_lazy.actions,
+                    not_lazy.actions.map_or(-1,|x|x as isize),
                     not_lazy.mapping_durations.preparation[0],
                     not_lazy.mapping_durations.mappings.0[0],
                     not_lazy.mapping_durations.preparation[1],
@@ -377,7 +379,7 @@ pub fn windowed_commits_compare(
                     src_s,
                     dst_s,
                     partial_lazy.mappings,
-                    partial_lazy.actions,
+                    partial_lazy.actions.map_or(-1,|x|x as isize),
                     partial_lazy.mapping_durations.preparation[0],
                     partial_lazy.mapping_durations.mappings.0[0],
                     partial_lazy.mapping_durations.preparation[1],
@@ -397,7 +399,7 @@ pub fn windowed_commits_compare(
                         dst_s,
                         Into::<isize>::into(&commit_src.1.memory_used()),
                         Into::<isize>::into(&commit_dst.1.memory_used()),
-                        actions_len,
+                        actions_len.map_or(-1,|x|x as isize),
                         gt_counts.actions,
                         valid.missing_mappings,
                         valid.additional_mappings,
@@ -443,7 +445,7 @@ mod test {
     use hyper_gumtree::{
         decompressed_tree_store::CompletePostOrder,
         matchers::{
-            heuristic::gt::greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
+            heuristic::gt::{greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher}},
             mapping_store::{DefaultMultiMappingStore, VecStore},
         },
     };
@@ -705,6 +707,155 @@ mod test {
         );
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
+    
+    #[test]
+    fn issue_lazy_spark() {
+        // cargo build --release && time target/release/window_combination apache/spark 14211a19f53bd0f413396582c8970e3e0a74281d 885f4733c413bdbb110946361247fbbd19f6bba9 "" validity_spark.csv perfs_spark.csv 2 Chawathe &> spark.log
+        // thread 'main' panicked at 'Entity(63568) Entity(63568)', /home/quentin/rusted_gumtree3/gumtree/src/decompressed_tree_store/lazy_post_order.rs:293:17
+        let preprocessed = PreProcessedRepository::new("apache/spark");
+        let window_size = 2;
+        let mut preprocessed = preprocessed;
+        let (before, after) = (
+            "a7f0adb2dd8449af6f9e9b5a25f11b5dcf5868f1", "29b9537e00d857c92378648ca7163ba0dc63da39"
+        );
+        // before 29b9537e00d857c92378648ca7163ba0dc63da39
+        // after a7f0adb2dd8449af6f9e9b5a25f11b5dcf5868f1
+        assert!(window_size > 1);
+
+        preprocessed.pre_process_with_limit(
+            &mut fetch_github_repository(&preprocessed.name),
+            before,
+            after,
+            "",
+            3,
+        );
+        preprocessed.purge_caches();
+        let c_len = preprocessed.processing_ordered_commits.len();
+        assert!(c_len> 0);
+        dbg!(&preprocessed.processing_ordered_commits);
+        let c = (0..c_len - 1)
+            .map(|c| &preprocessed.processing_ordered_commits[c..(c + window_size).min(c_len)])
+            .next()
+            .unwrap();
+        let oid_src = &c[0];
+        let oid_dst = &c[1];
+        dbg!(oid_src, oid_dst);
+        let stores = &preprocessed.main_stores;
+
+        let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
+        let src_tr = commit_src.1.ast_root;
+        // let src_tr = preprocessed.child_by_name(src_tr, "spoon-pom").unwrap();
+        // let src_tr = preprocessed.child_by_name(src_tr, "pom.xml").unwrap();
+        // let src_tr = stores.node_store.resolve(src_tr).get_child(&0);
+        dbg!(stores.node_store.resolve(src_tr).child_count());
+
+        let commit_dst = preprocessed.commits.get_key_value(&oid_dst).unwrap();
+        let dst_tr = commit_dst.1.ast_root;
+        // let dst_tr = preprocessed.child_by_name(dst_tr, "spoon-pom").unwrap();
+        // let dst_tr = preprocessed.child_by_name(dst_tr, "pom.xml").unwrap();
+        // let dst_tr = stores.node_store.resolve(dst_tr).get_child(&0);
+
+        let label_store = &stores.label_store;
+        let node_store = &stores.node_store;
+        let node_store = &NoSpaceNodeStoreWrapper { s: node_store };
+
+        let hyperast = SimpleHyperAST {
+            node_store,
+            label_store,
+            _phantom: std::marker::PhantomData,
+        };
+        struct ResultsShort<MD> {
+            pub mapping_durations: MD,
+            pub mappings: usize,
+            pub actions: usize,
+            pub prepare_gen_t: f64,
+            pub gen_t: f64,
+        }
+
+        // impl<IdN, IdL, P, M:MonoMappingStore, MD>  From<DiffResult<IdN, IdL, P, Mapper<>, MD>> for ResultsShort<MD> {
+        //     fn from(value: DiffResult<IdN, IdL, P, M, MD>) -> Self {
+        //         Self {
+        //             mapping_durations: value.mapping_durations,
+        //             mapper: value.mapper.mapping.mappings.len(),
+        //             actions: value.actions.len(),
+        //             gen_t: value.gen_t }
+        //     }
+        // }
+        use hyper_gumtree::matchers::mapping_store::MappingStore;
+        // let not_lazy = algorithms::gumtree::diff(&hyperast, &src_tr, &dst_tr);
+        // let not_lazy = ResultsShort {
+        //     mapping_durations: not_lazy.mapping_durations,
+        //     mappings: not_lazy.mapper.mapping.mappings.len(),
+        //     actions: not_lazy.actions.unwrap().len(),
+        //     prepare_gen_t: not_lazy.prepare_gen_t,
+        //     gen_t: not_lazy.gen_t,
+        // };
+        // dbg!(
+        //     &not_lazy.mapping_durations,
+        //     not_lazy.prepare_gen_t,
+        //     not_lazy.gen_t
+        // );
+        let partial_lazy = algorithms::gumtree_partial_lazy::diff(&hyperast, &src_tr, &dst_tr);
+        let partial_lazy = ResultsShort {
+            mapping_durations: partial_lazy.mapping_durations,
+            mappings: partial_lazy.mapper.mapping.mappings.len(),
+            actions: partial_lazy.actions.unwrap().len(),
+            prepare_gen_t: partial_lazy.prepare_gen_t,
+            gen_t: partial_lazy.gen_t,
+        };
+        dbg!(
+            &partial_lazy.mapping_durations,
+            partial_lazy.prepare_gen_t,
+            partial_lazy.gen_t
+        );
+        // let gt_out_format = "COMPRESSED"; //"COMPRESSED"; // JSON
+        // let gt_out = other_tools::gumtree::subprocess(
+        //     &preprocessed.main_stores.node_store,
+        //     &preprocessed.main_stores.label_store,
+        //     src_tr,
+        //     dst_tr,
+        //     "gumtree-subtree",
+        //     "Chawathe",
+        //     60*5,
+        //     gt_out_format,
+        // ).unwrap();
+
+        // let pp = SimpleJsonPostProcess::new(&gt_out);
+        // let gt_timings = pp.performances();
+        // let counts = pp.counts();
+        // dbg!(gt_timings, counts.mappings, counts.actions);
+        // let valid = pp._validity_mappings(
+        //     &preprocessed.main_stores.node_store,
+        //     &preprocessed.main_stores.label_store,
+        //     &src_arena,
+        //     src_tr,
+        //     &dst_arena,
+        //     dst_tr,
+        //     &mappings,
+        // );
+        // dbg!(valid.additional_mappings, valid.missing_mappings);
+    }
+    #[test]
+    fn issue_logging_log4j2_pom() {
+        // cargo build --release && time target/release/window_combination apache/logging-log4j2 7e745b42bda9bf6f8ea681d38992d18036fc021e ebfc8945a5dd77b617f4667647ed4b740323acc8 "" batch2/validity_logging-log4j2.csv batch2/perfs_logging-log4j2.csv 2 Chawathe &> batch2/logging-log4j2.log
+        // thread 'main' panicked at '114 55318 "reporting"', hyper_ast/src/tree_gen/mod.rs:414:13
+        let preprocessed = PreProcessedRepository::new("apache/logging-log4j2");
+        let window_size = 2;
+        let mut preprocessed = preprocessed;
+        let (before, after) = (
+            "7e745b42bda9bf6f8ea681d38992d18036fc021e", "ebfc8945a5dd77b617f4667647ed4b740323acc8"
+        );
+        assert!(window_size > 1);
+
+        preprocessed.pre_process_with_limit(
+            &mut fetch_github_repository(&preprocessed.name),
+            before,
+            after,
+            "log4j-osgi",
+            3,
+        );
+    }
+
 }
 
 pub(crate) struct NoSpaceNodeStoreWrapper<'a> {

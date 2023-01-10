@@ -1455,6 +1455,7 @@ mod tests {
             &src_tr.compressed_node,
             &dst_tr.compressed_node,
         );
+        let actions = actions.unwrap();
         // let Mapping {
         //     src_arena,
         //     dst_arena,

@@ -364,7 +364,7 @@ fn main() {
             &dst_arena,
             &mappings,
         )
-        .generate();
+        .generate().unwrap();
 
         let ScriptGenerator {
             store: _, actions, ..

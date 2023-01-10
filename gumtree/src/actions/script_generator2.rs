@@ -10,10 +10,10 @@ use crate::{
         PostOrderIterable,
     },
     matchers::{mapping_store::MonoMappingStore, Mapping},
-    tree::tree_path::{TreePath},
+    tree::tree_path::TreePath,
     utils::sequence_algorithms::longest_common_subsequence,
 };
-use hyper_ast::types::{Labeled, NodeStore, Stored, Tree, WithChildren, HyperAST};
+use hyper_ast::types::{HyperAST, Labeled, NodeStore, Stored, Tree, WithChildren};
 
 use super::action_vec::ActionsVec;
 
@@ -170,15 +170,17 @@ where
     pub fn compute_actions<'a: 'a1 + 'a2, HAST: HyperAST<'store, NS = S>>(
         hyperast: &'store HAST,
         mapping: &'a Mapping<SS, SD, M>,
-    ) -> ActionsVec<SimpleAction<T::Label, P, T::TreeId>>
+    ) -> Result<ActionsVec<SimpleAction<T::Label, P, T::TreeId>>, String>
     where
         S: 'store,
     {
         let store = hyperast.node_store();
-        ScriptGenerator::new(store, &mapping.src_arena, &mapping.dst_arena)
-            .init_cpy(&mapping.mappings)
-            .generate()
-            .actions
+        Ok(
+            ScriptGenerator::new(store, &mapping.src_arena, &mapping.dst_arena)
+                .init_cpy(&mapping.mappings)
+                .generate()?
+                .actions,
+        )
     }
 
     pub fn _compute_actions(
@@ -186,13 +188,15 @@ where
         src_arena: &'a1 SS,
         dst_arena: &'a2 SD,
         ms: &'m M,
-    ) -> ActionsVec<SimpleAction<T::Label, P, T::TreeId>> {
-        ScriptGenerator::<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M, P>::new(
-            store, src_arena, dst_arena,
+    ) -> Result<ActionsVec<SimpleAction<T::Label, P, T::TreeId>>, String> {
+        Ok(
+            ScriptGenerator::<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M, P>::new(
+                store, src_arena, dst_arena,
+            )
+            .init_cpy(ms)
+            .generate()?
+            .actions,
         )
-        .init_cpy(ms)
-        .generate()
-        .actions
     }
 
     pub fn precompute_actions(
@@ -255,28 +259,28 @@ where
         self
     }
 
-    pub fn generate(mut self) -> Self {
+    pub fn generate(mut self) -> Result<Self, String> {
         // fake root ?
         // fake root link ?
         // let now = Instant::now();
-        self.ins_mov_upd();
+        self.ins_mov_upd()?;
         // let t = now.elapsed().as_secs_f64();
         // dbg!(t);
         // let now = Instant::now();
         self.del();
         // let t = now.elapsed().as_secs_f64();
         // dbg!(t);
-        self
+        Ok(self)
     }
 
-    fn ins_mov_upd(&mut self) {
+    fn ins_mov_upd(&mut self) -> Result<(), String> {
         if COMPRESSION {
             todo!()
         }
-        self.auxilary_ins_mov_upd();
+        self.auxilary_ins_mov_upd()
     }
 
-    fn auxilary_ins_mov_upd(&mut self) {
+    fn auxilary_ins_mov_upd(&mut self) -> Result<(), String> {
         for x in self.dst_arena.iter_bf() {
             log::trace!("{:?}", self.actions);
             let w;
@@ -386,6 +390,11 @@ where
                                 if p == z {
                                     break;
                                 } else {
+                                    if w == z {
+                                        return Err(format!(
+                                            "w is a child of z and v, thus w and z cannot be equal, but w={:?} z={:?} v={:?}",
+                                            w,z,v));
+                                    }
                                     assert_ne!(w, z, "{v:?}");
                                     z = p;
                                 }
@@ -507,6 +516,7 @@ where
             self.dst_in_order.push(x);
             self.align_children(&w, &x);
         }
+        Ok(())
     }
 
     fn del(&mut self) {

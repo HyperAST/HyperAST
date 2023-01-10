@@ -100,7 +100,7 @@ fn test_with_action_example() {
                 NS<Tree>,
                 _,
                 _,
-            >::_compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
+            >::_compute_actions(&node_store, &src_arena, &dst_arena2, &ms).unwrap();
 
         log::debug!("{:?}", actions);
 
@@ -503,7 +503,7 @@ fn test_with_action_example2() {
             NS<Tree>,
             _,
             _,
-        >::_compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
+        >::_compute_actions(&node_store, &src_arena, &dst_arena2, &ms).unwrap();
 
         log::debug!("{:?}", actions);
 
@@ -734,7 +734,7 @@ fn test_with_zs_custom_example() {
             NS<Tree>,
             _,
             _,
-        >::_compute_actions(&node_store, &src_arena, &dst_arena2, &ms);
+        >::_compute_actions(&node_store, &src_arena, &dst_arena2, &ms).unwrap();
 
         log::debug!("{:?}", actions);
         macro_rules! test_action {

@@ -36,7 +36,7 @@ impl<const N: usize> From<[f64;N]> for MappingDurations<N> {
 pub struct DiffResult<IdN, IdL, P, M, MD> {
     pub mapping_durations: MD,
     pub mapper: M,
-    pub actions: ActionsVec<SimpleAction<IdL, P, IdN>>,
+    pub actions: Option<ActionsVec<SimpleAction<IdL, P, IdN>>>,
     pub prepare_gen_t: f64,
     pub gen_t: f64,
 }
