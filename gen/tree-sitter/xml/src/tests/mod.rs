@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use hyper_ast::store::{SimpleStores, labels::LabelStore, TypeStore};
 use tree_sitter::{Parser};
 
 use crate::legion::XmlTreeGen;
@@ -81,3 +82,30 @@ fn hyperAST_on_pom() {
     println!("{:#?}", tree.root_node().to_sexp());
 }
 
+
+#[test]
+fn xml_issue_cdata() {
+    let text = {
+        let source_code1 = r#"<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<configuration>
+    <bottom><![CDATA[<p align="center">Copyright &#169; {inceptionYear}-{currentYear} {organizationName}. All Rights Reserved.<br />
+    .</p>]]></bottom>
+</configuration>
+</project>"#;
+        source_code1.as_bytes()
+    };
+    let tree = match XmlTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
+    println!("{:#?}", tree.root_node().to_sexp());
+    let mut stores = SimpleStores {
+        label_store: LabelStore::new(),
+        type_store: TypeStore {},
+        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
+    };
+    let mut tree_gen = XmlTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+    };
+    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
+    // println!("{}", tree.root_node().to_sexp());
+}
