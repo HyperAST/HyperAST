@@ -2,7 +2,7 @@ use std::{fmt::Debug, time::Instant};
 
 use hyper_ast::types::{self, HyperAST};
 use hyper_gumtree::{
-    actions::script_generator2::ScriptGenerator,
+    actions::script_generator2::{ScriptGenerator, SimpleAction},
     decompressed_tree_store::{bfs_wrapper::SimpleBfsMapper, CompletePostOrder},
     matchers::{
         heuristic::gt::{
@@ -26,10 +26,11 @@ pub fn diff<'store, HAST: HyperAST<'store>>(
     src: &HAST::IdN,
     dst: &HAST::IdN,
 ) -> DiffResult<
-    HAST::IdN,
-    HAST::Label,
-    CompressedTreePath<<HAST::T as types::WithChildren>::ChildIdx>,
-    // Mapping<CDS<HAST::T>,CDS<HAST::T>,VecStore<u32>>,
+    SimpleAction<
+        HAST::Label,
+        CompressedTreePath<<HAST::T as types::WithChildren>::ChildIdx>,
+        HAST::IdN,
+    >,
     Mapper<'store, HAST, CDS<HAST::T>, CDS<HAST::T>, VecStore<u32>>,
     PreparedMappingDurations<2>,
 >

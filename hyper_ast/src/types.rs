@@ -1401,16 +1401,16 @@ pub trait HyperAST<'store> {
     }
 }
 
-pub struct SimpleHyperAST<'store, T, NS, LS> {
-    pub node_store: &'store NS,
-    pub label_store: &'store LS,
-    pub _phantom: std::marker::PhantomData<&'store T>,
+pub struct SimpleHyperAST<T, NS, LS> {
+    pub node_store: NS,
+    pub label_store: LS,
+    pub _phantom: std::marker::PhantomData<T>,
 }
 
-impl<'store, T, NS, LS> HyperAST<'store> for SimpleHyperAST<'store, T, NS, LS>
+impl<'store, T, NS, LS> HyperAST<'store> for SimpleHyperAST<T, NS, LS>
 where
     T: Tree,
-    NS: NodeStore<T::TreeId, R<'store> = T>,
+    NS: 'store + NodeStore<T::TreeId, R<'store> = T>,
     LS: LabelStore<str, I = T::Label>,
 {
     type IdN = T::TreeId;

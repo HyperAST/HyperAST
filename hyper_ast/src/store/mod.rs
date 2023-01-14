@@ -45,10 +45,9 @@ pub mod defaults {
 
 impl<'store> From<&'store SimpleStores<nodes::DefaultNodeStore>>
     for SimpleHyperAST<
-        'store,
         self::nodes::legion::HashedNodeRef<'store>,
-        nodes::DefaultNodeStore,
-        labels::LabelStore,
+        &'store nodes::DefaultNodeStore,
+        &'store labels::LabelStore,
     >
 {
     fn from(value: &'store SimpleStores<nodes::DefaultNodeStore>) -> Self {

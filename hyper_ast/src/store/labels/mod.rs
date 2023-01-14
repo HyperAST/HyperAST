@@ -46,6 +46,20 @@ impl crate::types::LabelStore<DefaultLabelValue> for LabelStore {
     }
 }
 
+impl crate::types::LabelStore<DefaultLabelValue> for &LabelStore {
+    type I = DefaultLabelIdentifier;
+    fn get_or_insert<T: Borrow<DefaultLabelValue>>(&mut self, node: T) -> Self::I {
+        unimplemented!()
+    }
+    fn get<T: Borrow<DefaultLabelValue>>(&self, node: T) -> Option<Self::I> {
+        self.internal.get(node.borrow())
+    }
+
+    fn resolve(&self, id: &Self::I) -> &DefaultLabelValue {
+        self.internal.resolve(*id).unwrap()
+    }
+}
+
 impl LabelStore {
     pub fn new() -> Self {
         let mut r = Self {

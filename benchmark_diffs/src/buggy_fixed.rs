@@ -6,12 +6,9 @@ use crate::{
     postprocess::{CompressedBfPostProcess, PathJsonPostProcess, SimpleJsonPostProcess},
     preprocess::{iter_dirs, parse_dir_pair, parse_string_pair, JavaPreprocessFileSys},
     tempfile,
-    window_combination::NoSpaceNodeStoreWrapper,
+    window_combination::as_nospaces,
 };
-use hyper_ast::{
-    store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores, TypeStore},
-    types,
-};
+use hyper_ast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores, TypeStore};
 use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
 use hyper_gumtree::actions::Actions;
 
@@ -39,7 +36,8 @@ fn test_simple_1() {
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node
         )
-        .actions.unwrap()
+        .actions
+        .unwrap()
         .len()
     )
 }
@@ -74,7 +72,8 @@ fn test_crash1() {
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     )
-    .actions.unwrap()
+    .actions
+    .unwrap()
     .len();
     println!("{}", len);
 }
@@ -112,7 +111,8 @@ mod examples {
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
         )
-        .actions.unwrap()
+        .actions
+        .unwrap()
         .len();
         println!("{}", len);
     }
@@ -162,7 +162,8 @@ mod examples {
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
         )
-        .actions.unwrap()
+        .actions
+        .unwrap()
         .len();
         println!("{}", len);
     }
@@ -251,7 +252,8 @@ mod examples {
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
         )
-        .actions.unwrap()
+        .actions
+        .unwrap()
         .len();
         let processing_time = now.elapsed().as_secs_f64();
         println!("tt={} evos={}", processing_time, len);
@@ -1230,7 +1232,8 @@ fn compare_perfs() {
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     )
-    .actions.unwrap()
+    .actions
+    .unwrap()
     .len();
     let processing_time = now.elapsed().as_secs_f64();
     println!("tt={} evos={}", processing_time, len);
@@ -1312,7 +1315,8 @@ pub fn bad_perfs() {
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     )
-    .actions.unwrap()
+    .actions
+    .unwrap()
     .len();
     let processing_time = now.elapsed().as_secs_f64();
     println!("tt={} evos={}", processing_time, len);
@@ -1373,7 +1377,8 @@ pub fn bad_perfs2() {
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     )
-    .actions.unwrap()
+    .actions
+    .unwrap()
     .len();
     let processing_time = now.elapsed().as_secs_f64();
     println!("tt={} evos={}", processing_time, len);
@@ -1643,7 +1648,8 @@ fn test_all() {
                 &src_tr.local.compressed_node,
                 &dst_tr.local.compressed_node,
             )
-            .actions.unwrap()
+            .actions
+            .unwrap()
             .len();
             let processing_time = now.elapsed().as_secs_f64();
             println!("tt={} evos={}", processing_time, len);
@@ -1847,15 +1853,7 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     let (src_tr, dst_tr) = parse_dir_pair(&mut java_gen, &src, &dst);
     let parse_t = now.elapsed().as_secs_f64();
 
-    let label_store = &java_gen.main_stores.label_store;
-    let node_store = &java_gen.main_stores.node_store;
-    let node_store = &NoSpaceNodeStoreWrapper { s: node_store };
-
-    let stores = types::SimpleHyperAST {
-        node_store,
-        label_store,
-        _phantom: std::marker::PhantomData,
-    };
+    let stores = as_nospaces(&java_gen.main_stores);
 
     dbg!(&parse_t);
     dbg!(&src_tr.metrics.size);
@@ -1875,8 +1873,8 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
 
     let gt_out = other_tools::gumtree::subprocess(
-        node_store,
-        label_store,
+        &stores.node_store,
+        &stores.label_store,
         src_tr.compressed_node,
         dst_tr.compressed_node,
         "gumtree",

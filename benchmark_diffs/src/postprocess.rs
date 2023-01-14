@@ -848,12 +848,16 @@ pub mod compressed_bf_post_process {
         }
     }
 }
+
+#[derive(Debug)]
 pub struct Counts {
     pub src_heap: usize,
     pub dst_heap: usize,
     pub mappings: usize,
     pub actions: isize,
 }
+
+#[derive(Debug)]
 pub struct ValidityRes<T> {
     pub missing_mappings: T,
     pub additional_mappings: T,
