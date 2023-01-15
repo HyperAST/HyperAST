@@ -172,6 +172,12 @@ impl std::ops::AddAssign<usize> for Bytes {
     }
 }
 
+impl std::ops::AddAssign<Bytes> for Bytes {
+    fn add_assign(&mut self, x: Bytes) {
+        self.0 += x.0;
+    }
+}
+
 impl std::ops::Sub for Bytes {
     type Output = Bytes;
     fn sub(self, rhs: Bytes) -> Bytes {

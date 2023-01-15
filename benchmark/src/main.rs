@@ -101,7 +101,7 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
 ) {
     let batch_id = format!("{}:({},{})", repo_name, before, after);
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
-    preprocessed.pre_process_with_limit(
+    let processing_ordered_commits = preprocessed.pre_process_with_limit(
         &mut fetch_github_repository(&repo_name),
         before,
         after,
@@ -116,11 +116,11 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
     log::warn!(
         "commits to search ({}): {:?}",
         preprocessed.commits.len(),
-        preprocessed.processing_ordered_commits
+        processing_ordered_commits
     );
     let mu = memusage_linux();
     let mut i = 0;
-    for c in &preprocessed.processing_ordered_commits {
+    for c in &processing_ordered_commits {
         log::warn!("search of commit {:?}", c.to_string());
         let c = preprocessed.commits.get_key_value(c).unwrap();
         let root = c.1.ast_root;
@@ -161,7 +161,7 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
 
             let now = Instant::now();
 
-            write_referencial_relations(&preprocessed, root, &mut buf);
+            write_referencial_relations(&preprocessed.processor.main_stores, root, &mut buf);
 
             let search_time = now.elapsed().as_nanos();
 
@@ -188,7 +188,7 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
             buf.flush().unwrap();
         } else {
             let mut out = io::stdout();
-            write_referencial_relations(&preprocessed, root, &mut out);
+            write_referencial_relations(&preprocessed.processor.main_stores, root, &mut out);
             out.flush().unwrap();
         }
         log::warn!("done searching refs");
@@ -221,11 +221,11 @@ pub fn single_commit_ref_ana(
         .ast_root;
     if let Some(out) = out {
         let mut out = BufWriter::with_capacity(BUFF_WRITER_CAPACITY, File::create(out).unwrap());
-        write_referencial_relations(&preprocessed, root, &mut out);
+        write_referencial_relations(&preprocessed.processor.main_stores, root, &mut out);
         out.flush().unwrap();
     } else {
         let mut out = io::stdout();
-        write_referencial_relations(&preprocessed, root, &mut out);
+        write_referencial_relations(&preprocessed.processor.main_stores, root, &mut out);
         out.flush().unwrap();
     }
     log::warn!("done searching refs");

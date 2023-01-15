@@ -6,7 +6,7 @@ use hyper_ast::{
         defaults::{LabelIdentifier, NodeIdentifier},
         nodes::legion::HashedNodeRef,
     },
-    types::{LabelStore, Labeled, Type, Typed, WithChildren, IterableChildren},
+    types::{IterableChildren, LabelStore, Labeled, Type, Typed, WithChildren},
 };
 use hyper_ast_gen_ts_java::{
     impact::{
@@ -18,7 +18,7 @@ use hyper_ast_gen_ts_java::{
     usage::declarations::IterDeclarations,
 };
 
-use crate::{maven::IterMavenModules, preprocessed::PreProcessedRepository};
+use crate::{maven::IterMavenModules, preprocessed::child_by_name_with_idx, SimpleStores};
 
 const REFERENCES_SERIALIZATION_SUMMARY: bool = false;
 
@@ -27,12 +27,12 @@ const SEARCH_MEMBERS: bool = false;
 
 /// Write in [`out`], the JSON formated reprentation of the reference relations at [`root`] in [`prepro`].
 pub fn write_referencial_relations<W: Write>(
-    prepro: &PreProcessedRepository,
+    stores: &SimpleStores,
     root: NodeIdentifier,
     out: &mut W,
 ) {
-    let modules = IterMavenModules::new(&prepro.main_stores, StructuralPosition::new(root), root);
-    // let declarations = iter_declarations(prepro, modules);
+    let modules = IterMavenModules::new(stores, StructuralPosition::new(root), root);
+    // let declarations = iter_declarations(stores, modules);
 
     let mut first = true;
 
@@ -46,22 +46,18 @@ pub fn write_referencial_relations<W: Write>(
         write!(
             out,
             "\"{}\"",
-            module
-                .make_position(&prepro.main_stores)
-                .file()
-                .to_str()
-                .unwrap()
+            module.make_position(stores).file().to_str().unwrap()
         )
         .unwrap();
         writeln!(out, r#","content": ["#).unwrap();
         let mut writer = Writer::new(out);
-        let declarations = iter_declarations(prepro, module);
+        let declarations = iter_declarations(stores, module);
         for (decl, root_folder, of) in declarations {
             let now = Instant::now();
             let references =
-                find_declaration_references_position(root, prepro, &decl, root_folder, of);
+                find_declaration_references_position(root, stores, &decl, root_folder, of);
             if let Some((sk, references)) = references {
-                let decl = decl.make_position(&prepro.main_stores);
+                let decl = decl.make_position(stores);
                 let time = now.elapsed().as_nanos();
                 log::info!("time taken for refs search of {} :\t{}", decl, time);
                 if REFERENCES_SERIALIZATION_SUMMARY {
@@ -91,45 +87,41 @@ impl Display for SearchKinds {
 
 pub fn find_declaration_references_position(
     root: NodeIdentifier,
-    prepro: &PreProcessedRepository,
+    stores: &SimpleStores,
     declaration: &StructuralPosition,
     root_folder: StructuralPosition,
     other_folders: Vec<StructuralPosition>,
 ) -> Option<(SearchKinds, Vec<Position>)> {
     let mut structural_positions = StructuralPosition::new(root).into();
     let (rk, references) = find_declaration_references(
-        prepro,
+        stores,
         &mut structural_positions,
         declaration,
         root_folder,
         other_folders,
     )?;
-    let references = structural_positions.ends_positions(&prepro.main_stores, &references);
+    let references = structural_positions.ends_positions(stores, &references);
     Some((rk, references))
 }
 
 fn find_declaration_references(
-    prepro: &PreProcessedRepository,
+    stores: &SimpleStores,
     structural_positions: &mut StructuralPositionStore,
     declaration: &StructuralPosition,
     root_folder: StructuralPosition,
     other_folders: Vec<StructuralPosition>,
 ) -> Option<(SearchKinds, Vec<SpHandle>)> {
-    let b = prepro
-        .main_stores
+    let b = stores
         .node_store
         .resolve(declaration.node().unwrap().to_owned());
     let t = b.get_type();
-    let of = other_folders.iter().map(|x| {
-        (
-            x.make_position(&prepro.main_stores).file().to_owned(),
-            x.clone(),
-        )
-    });
+    let of = other_folders
+        .iter()
+        .map(|x| (x.make_position(stores).file().to_owned(), x.clone()));
     let p_in_of = find_package_in_other_folders(
-        prepro,
-        declaration.make_position(&prepro.main_stores).file(),
-        declaration.make_position(&prepro.main_stores).file(),
+        stores,
+        declaration.make_position(stores).file(),
+        declaration.make_position(stores).file(),
         of,
     );
     let p_in_of: Vec<Scout> = p_in_of.into_iter().map(|x| (x, 0).into()).collect();
@@ -139,7 +131,7 @@ fn find_declaration_references(
         || t == Type::InterfaceDeclaration
         || t == Type::AnnotationTypeDeclaration
     {
-        let rs = RefsFinder::new(prepro, structural_positions)
+        let rs = RefsFinder::new(stores, structural_positions)
             .find_type_declaration_references_unchecked(
                 (declaration.clone(), 0).into(),
                 root_folder.node().unwrap(),
@@ -150,7 +142,7 @@ fn find_declaration_references(
     } else if SEARCH_MEMBERS && t == Type::FieldDeclaration
     // || t == Type::ConstantDeclaration
     {
-        let rs = RefsFinder::new(prepro, structural_positions)
+        let rs = RefsFinder::new(stores, structural_positions)
             .find_field_declaration_references_unchecked(
                 (declaration.clone(), 0).into(),
                 root_folder.node().unwrap(),
@@ -158,7 +150,7 @@ fn find_declaration_references(
             );
         Some((SearchKinds::TypeDecl, rs))
     } else if t == Type::ClassBody {
-        let rs = RefsFinder::new(prepro, structural_positions)
+        let rs = RefsFinder::new(stores, structural_positions)
             .find_this_unchecked((declaration.clone(), 0).into());
         Some((SearchKinds::LocalDecl, rs))
     } else if t == Type::LocalVariableDeclaration
@@ -170,7 +162,7 @@ fn find_declaration_references(
         || t == Type::Identifier
         || t == Type::TypeParameter
     {
-        let rs = RefsFinder::new(prepro, structural_positions)
+        let rs = RefsFinder::new(stores, structural_positions)
             .find_localvar_declaration_references_unchecked((declaration.clone(), 0).into());
         Some((SearchKinds::LocalDecl, rs))
     } else {
@@ -245,49 +237,48 @@ type ExtendedDeclaration = (
 );
 
 pub fn modules_iter_declarations<'a>(
-    prepro: &'a PreProcessedRepository,
+    stores: &'a SimpleStores,
     modules: IterMavenModules<'a, StructuralPosition>,
 ) -> impl Iterator<Item = ExtendedDeclaration> + 'a {
     modules
-        .flat_map(|maven_module| maven_module_folders(prepro, maven_module))
-        .flat_map(|(f, _m, of)| make_decl_iter(prepro, f, of))
+        .flat_map(|maven_module| maven_module_folders(stores, maven_module))
+        .flat_map(|(f, _m, of)| make_decl_iter(stores, f, of))
 }
 
 pub fn iter_declarations<'a>(
-    prepro: &'a PreProcessedRepository,
+    stores: &'a SimpleStores,
     maven_module: StructuralPosition,
 ) -> impl Iterator<Item = ExtendedDeclaration> + 'a {
-    maven_module_folders(prepro, maven_module)
+    maven_module_folders(stores, maven_module)
         .into_iter()
-        .flat_map(|(f, _m, of)| make_decl_iter(prepro, f, of))
+        .flat_map(|(f, _m, of)| make_decl_iter(stores, f, of))
 }
 
 fn make_decl_iter(
-    prepro: &PreProcessedRepository,
+    stores: &SimpleStores,
     f: StructuralPosition,
     of: Vec<StructuralPosition>,
 ) -> impl Iterator<Item = ExtendedDeclaration> + '_ {
     let n = *f.node().unwrap();
-    IterDeclarations::new(&prepro.main_stores, f.clone(), n)
-        .map(move |x| (x, f.clone(), of.clone()))
+    IterDeclarations::new(stores, f.clone(), n).map(move |x| (x, f.clone(), of.clone()))
 }
 
 fn maven_module_folders(
-    prepro: &PreProcessedRepository,
+    stores: &SimpleStores,
     maven_module: StructuralPosition,
 ) -> Vec<(
     StructuralPosition,
     StructuralPosition,
     Vec<StructuralPosition>,
 )> {
-    let src = goto_by_name(prepro, maven_module.clone(), "src");
+    let src = goto_by_name(stores, maven_module.clone(), "src");
     let source_tests = src
         .clone()
-        .and_then(|x| goto_by_name(prepro, x, "test"))
-        .and_then(|x| goto_by_name(prepro, x, "java"));
+        .and_then(|x| goto_by_name(stores, x, "test"))
+        .and_then(|x| goto_by_name(stores, x, "java"));
     let source = src
-        .and_then(|x| goto_by_name(prepro, x, "main"))
-        .and_then(|x| goto_by_name(prepro, x, "java"));
+        .and_then(|x| goto_by_name(stores, x, "main"))
+        .and_then(|x| goto_by_name(stores, x, "java"));
     let mut r = vec![];
     let mut test_folders = vec![];
     if let Some(source_tests) = source_tests {
@@ -301,7 +292,7 @@ fn maven_module_folders(
 }
 
 pub struct RefsFinder<'a> {
-    prepro: &'a PreProcessedRepository,
+    stores: &'a SimpleStores,
     ana: PartialAnalysis,
     structural_positions: &'a mut StructuralPositionStore,
 }
@@ -320,11 +311,11 @@ enum SearchStopEvent {
 
 impl<'a> RefsFinder<'a> {
     pub fn new(
-        prepro: &'a PreProcessedRepository,
+        stores: &'a SimpleStores,
         structural_positions: &'a mut StructuralPositionStore,
     ) -> Self {
         Self {
-            prepro,
+            stores: stores,
             ana: PartialAnalysis::default(),
             structural_positions,
         }
@@ -338,7 +329,7 @@ impl<'a> RefsFinder<'a> {
         mirror_packages: &[Scout],
     ) -> Vec<SpHandle> {
         let mut r = vec![];
-        // let p = decl.make_position(&self.structural_positions, &self.prepro.main_stores);
+        // let p = decl.make_position(&self.structural_positions, &self.stores);
         let res = self.find_type_declaration_references(
             &mut r,
             &decl,
@@ -408,7 +399,7 @@ impl<'a> RefsFinder<'a> {
         mirror_packages: &[Scout],
     ) -> Vec<SpHandle> {
         let mut r = vec![];
-        let p = decl.make_position(&self.structural_positions, &self.prepro.main_stores);
+        let p = decl.make_position(&self.structural_positions, &self.stores);
         let res = self.find_field_declaration_references(&mut r, &decl, limit, mirror_packages);
         if let Err(err) = res {
             log::error!("search of {} ended with {:?}", p, err);
@@ -443,27 +434,26 @@ impl<'a> RefsFinder<'a> {
 
     fn init_field_decl<'b>(&mut self, _r: &mut Vec<SpHandle>, decl: &Scout) -> RefPtr {
         let b = self
-            .prepro
-            .main_stores
+            .stores
             .node_store
             .resolve(decl.node_always(&self.structural_positions));
         let t = b.get_type();
         log::info!(
             "now search for {:?} at {:?}",
             &t,
-            decl.make_position(&self.structural_positions, &self.prepro.main_stores)
+            decl.make_position(&self.structural_positions, &self.stores)
         );
         let name = {
             let mut i = None;
             for xx in b.children().unwrap().iter_children() {
-                let bb = self.prepro.main_stores.node_store.resolve(*xx);
+                let bb = self.stores.node_store.resolve(*xx);
                 if bb.get_type() == Type::VariableDeclarator {
                     i = self.extract_identifier(&bb);
                     break;
                 }
             }
             let i = i.unwrap();
-            let name = self.prepro.main_stores.label_store.resolve(&i);
+            let name = self.stores.label_store.resolve(&i);
             log::info!("search uses of {:?}", name);
             LabelPtr::new(i, IdentifierFormat::from(name))
         };
@@ -474,7 +464,7 @@ impl<'a> RefsFinder<'a> {
 
     fn find_localvar_declaration_references_unchecked(self, decl: Scout) -> Vec<SpHandle> {
         let mut r = vec![];
-        let p = decl.make_position(&self.structural_positions, &self.prepro.main_stores);
+        let p = decl.make_position(&self.structural_positions, &self.stores);
         let res = self.find_localvar_declaration_references(&mut r, &decl);
         if let Err(err) = res {
             log::error!("search of {} ended with {:?}", p, err);
@@ -501,15 +491,14 @@ impl<'a> RefsFinder<'a> {
 
     fn init_localvar_decl<'b>(&mut self, _r: &mut Vec<SpHandle>, decl: &Scout) -> RefPtr {
         let b = self
-            .prepro
-            .main_stores
+            .stores
             .node_store
             .resolve(decl.node_always(&self.structural_positions));
         let t = b.get_type();
         log::info!(
             "now search for {:?} at {:?}",
             &t,
-            decl.make_position(&self.structural_positions, &self.prepro.main_stores)
+            decl.make_position(&self.structural_positions, &self.stores)
         );
         let name = {
             let mut i = None;
@@ -518,7 +507,7 @@ impl<'a> RefsFinder<'a> {
                 i = Some(*b.get_label());
             } else if t == Type::LocalVariableDeclaration || t == Type::SpreadParameter {
                 for xx in b.children().unwrap().iter_children() {
-                    let bb = self.prepro.main_stores.node_store.resolve(*xx);
+                    let bb = self.stores.node_store.resolve(*xx);
                     if bb.get_type() == Type::VariableDeclarator {
                         i = self.extract_identifier(&bb);
                         break;
@@ -528,7 +517,7 @@ impl<'a> RefsFinder<'a> {
                 i = self.extract_identifier(&b);
             }
             let i = i.unwrap();
-            let name = self.prepro.main_stores.label_store.resolve(&i);
+            let name = self.stores.label_store.resolve(&i);
             log::info!("search uses of {:?}", name);
             LabelPtr::new(i, IdentifierFormat::from(name))
         };
@@ -545,7 +534,7 @@ impl<'a> RefsFinder<'a> {
     ) -> Result<(), SearchStopEvent> {
         let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
         let xx = cursor.curr.ok_or(SearchStopEvent::NoMore)?;
-        let bb = self.prepro.main_stores.node_store.resolve(xx);
+        let bb = self.stores.node_store.resolve(xx);
         let t = bb.get_type();
 
         if t == Type::FormalParameters || t == Type::InferredParameters {
@@ -560,19 +549,19 @@ impl<'a> RefsFinder<'a> {
                     "search {} in block children {:?} {:?}",
                     DisplayRef::from((
                         self.ana.solver.nodes.with(*&qual_ref),
-                        &self.prepro.main_stores.label_store
+                        &self.stores.label_store
                     )),
                     cursor.curr,
                     cursor
                         .scout
-                        .make_position(&self.structural_positions, &self.prepro.main_stores)
+                        .make_position(&self.structural_positions, &self.stores)
                 );
                 r.extend({
                     let p = &mm;
                     let i = &qual_ref;
                     let s = &cursor.scout;
                     usage::RefsFinder::new(
-                        &self.prepro.main_stores,
+                        &self.stores,
                         &mut self.ana,
                         &mut self.structural_positions,
                     )
@@ -595,8 +584,7 @@ impl<'a> RefsFinder<'a> {
 
     fn find_this<'b>(&mut self, r: &mut Vec<SpHandle>, decl: &Scout) {
         let b = self
-            .prepro
-            .main_stores
+            .stores
             .node_store
             .resolve(decl.node_always(&self.structural_positions));
         let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
@@ -606,12 +594,8 @@ impl<'a> RefsFinder<'a> {
 
             log::debug!("try search this");
             r.extend(
-                usage::RefsFinder::new(
-                    &self.prepro.main_stores,
-                    &mut self.ana,
-                    &mut self.structural_positions,
-                )
-                .find_all_is_this(mm, scout.clone()),
+                usage::RefsFinder::new(&self.stores, &mut self.ana, &mut self.structural_positions)
+                    .find_all_is_this(mm, scout.clone()),
             );
             scout.up(&self.structural_positions);
         }
@@ -619,19 +603,18 @@ impl<'a> RefsFinder<'a> {
 
     fn init_type_decl<'b>(&mut self, r: &mut Vec<SpHandle>, decl: &Scout) -> RefPtr {
         let b = self
-            .prepro
-            .main_stores
+            .stores
             .node_store
             .resolve(decl.node_always(&self.structural_positions));
         let t = b.get_type();
         log::info!(
             "now search for {:?} at {:?}",
             &t,
-            decl.make_position(&self.structural_positions, &self.prepro.main_stores)
+            decl.make_position(&self.structural_positions, &self.stores)
         );
         let name = {
             let i = self.extract_identifier(&b).unwrap();
-            let name = self.prepro.main_stores.label_store.resolve(&i);
+            let name = self.stores.label_store.resolve(&i);
             log::info!("search uses of {:?}", name);
             LabelPtr::new(i, IdentifierFormat::from(name))
         };
@@ -647,19 +630,15 @@ impl<'a> RefsFinder<'a> {
             log::debug!("try search this");
             // r.extend(self.search(&mm, &thiss, &decl)); for now use something more explicit
             r.extend(
-                usage::RefsFinder::new(
-                    &self.prepro.main_stores,
-                    &mut self.ana,
-                    &mut self.structural_positions,
-                )
-                .find_all_is_this(mm, scout.clone()),
+                usage::RefsFinder::new(&self.stores, &mut self.ana, &mut self.structural_positions)
+                    .find_all_is_this(mm, scout.clone()),
             );
 
             log::debug!(
                 "try search {}",
                 DisplayRef::from((
                     self.ana.solver.nodes.with(qual_ref),
-                    &self.prepro.main_stores.label_store
+                    &self.stores.label_store
                 ))
             );
             r.extend(self.search(&mm, &qual_ref, &scout));
@@ -668,7 +647,7 @@ impl<'a> RefsFinder<'a> {
                 "try search {}",
                 DisplayRef::from((
                     self.ana.solver.nodes.with(qual_thiss),
-                    &self.prepro.main_stores.label_store
+                    &self.stores.label_store
                 ))
             );
             r.extend(self.search(&mm, &qual_thiss, &scout));
@@ -692,14 +671,14 @@ impl<'a> RefsFinder<'a> {
         // go through classes if inner, stops at blocks and object creation expr
         loop {
             let x = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-            let b = self.prepro.main_stores.node_store.resolve(x);
+            let b = self.stores.node_store.resolve(x);
             let t = b.get_type();
             if t.is_type_body() {
                 log::debug!(
                     "try search {}",
                     DisplayRef::from((
                         self.ana.solver.nodes.with(fq_decl_ref),
-                        &self.prepro.main_stores.label_store
+                        &self.stores.label_store
                     ))
                 );
                 for (i, xx) in b.children().unwrap().iter_children().enumerate() {
@@ -714,7 +693,7 @@ impl<'a> RefsFinder<'a> {
                 // should loop through siblings
                 self.up(cursor);
                 let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-                let bb = self.prepro.main_stores.node_store.resolve(xx);
+                let bb = self.stores.node_store.resolve(xx);
                 let tt = bb.get_type();
                 if tt == Type::ObjectCreationExpression {
                     return Err(SearchStopEvent::Blocked);
@@ -731,7 +710,7 @@ impl<'a> RefsFinder<'a> {
                     // should loop through siblings
                     self.up(cursor);
                     let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-                    let bb = self.prepro.main_stores.node_store.resolve(xx);
+                    let bb = self.stores.node_store.resolve(xx);
                     let tt = bb.get_type();
 
                     if !tt.is_type_declaration() {
@@ -745,7 +724,7 @@ impl<'a> RefsFinder<'a> {
                     "try search {}",
                     DisplayRef::from((
                         self.ana.solver.nodes.with(fq_decl_ref),
-                        &self.prepro.main_stores.label_store
+                        &self.stores.label_store
                     ))
                 );
                 r.extend(self.search(&mm, &fq_decl_ref, &cursor.scout));
@@ -774,14 +753,14 @@ impl<'a> RefsFinder<'a> {
         // go through classes if inner, stops at blocks and object creation expr
         loop {
             let x = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-            let b = self.prepro.main_stores.node_store.resolve(x);
+            let b = self.stores.node_store.resolve(x);
             let t = b.get_type();
             if t.is_type_body() {
                 log::debug!(
                     "try search {}",
                     DisplayRef::from((
                         self.ana.solver.nodes.with(qual_ref),
-                        &self.prepro.main_stores.label_store
+                        &self.stores.label_store
                     ))
                 );
                 for (i, xx) in b.children().unwrap().iter_children().enumerate() {
@@ -795,11 +774,11 @@ impl<'a> RefsFinder<'a> {
                 }
                 // TODO do things to find type of field at the same level than type decl
                 // should loop through siblings
-                // self.structural_positions.check_with(&self.prepro.main_stores, &cursor.scout).expect("before");
+                // self.structural_positions.check_with(&self.stores, &cursor.scout).expect("before");
                 self.up(cursor);
-                // self.structural_positions.check_with(&self.prepro.main_stores, &cursor.scout).expect("after");
+                // self.structural_positions.check_with(&self.stores, &cursor.scout).expect("after");
                 let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-                let bb = self.prepro.main_stores.node_store.resolve(xx);
+                let bb = self.stores.node_store.resolve(xx);
                 let tt = bb.get_type();
                 let (_, bb, _) = if tt == Type::ObjectCreationExpression {
                     return Err(SearchStopEvent::Blocked);
@@ -817,7 +796,7 @@ impl<'a> RefsFinder<'a> {
                     // should loop through siblings
                     self.up(cursor);
                     let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-                    let bb = self.prepro.main_stores.node_store.resolve(xx);
+                    let bb = self.stores.node_store.resolve(xx);
                     let tt = bb.get_type();
 
                     if !tt.is_type_declaration() {
@@ -831,7 +810,7 @@ impl<'a> RefsFinder<'a> {
                 };
                 let name = {
                     let i = self.extract_identifier(&bb).unwrap();
-                    let name = self.prepro.main_stores.label_store.resolve(&i);
+                    let name = self.stores.label_store.resolve(&i);
                     log::info!("search uses of {:?}", name);
                     LabelPtr::new(i, IdentifierFormat::from(name))
                 };
@@ -846,7 +825,7 @@ impl<'a> RefsFinder<'a> {
                     "try search {}",
                     DisplayRef::from((
                         self.ana.solver.nodes.with(qual_ref),
-                        &self.prepro.main_stores.label_store
+                        &self.stores.label_store
                     ))
                 );
                 log::trace!("go_through_type_declarations s3");
@@ -863,7 +842,13 @@ impl<'a> RefsFinder<'a> {
                 return Err(SearchStopEvent::Blocked);
             } else if t == Type::ConstructorBody {
                 let mut scout = cursor.scout.clone();
-                for (i, xx) in b.children().unwrap().iter_children().skip(prev_offset).enumerate() {
+                for (i, xx) in b
+                    .children()
+                    .unwrap()
+                    .iter_children()
+                    .skip(prev_offset)
+                    .enumerate()
+                {
                     scout.goto(*xx, i);
                     log::trace!("go_through_type_declarations s4");
                     r.extend(self.search(&mm, &qual_ref, &cursor.scout));
@@ -872,7 +857,13 @@ impl<'a> RefsFinder<'a> {
                 return Err(SearchStopEvent::Blocked);
             } else if t == Type::Block {
                 let mut scout = cursor.scout.clone();
-                for (i, xx) in b.children().unwrap().iter_children().skip(prev_offset).enumerate() {
+                for (i, xx) in b
+                    .children()
+                    .unwrap()
+                    .iter_children()
+                    .skip(prev_offset)
+                    .enumerate()
+                {
                     scout.goto(*xx, i);
                     log::trace!("go_through_type_declarations s5");
                     r.extend(self.search(&mm, &qual_ref, &cursor.scout));
@@ -900,14 +891,14 @@ impl<'a> RefsFinder<'a> {
         // go through classes if inner, stops at blocks and object creation expr
         loop {
             let x = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-            let b = self.prepro.main_stores.node_store.resolve(x);
+            let b = self.stores.node_store.resolve(x);
             let t = b.get_type();
             if t.is_type_body() {
                 log::debug!(
                     "try search {}",
                     DisplayRef::from((
                         self.ana.solver.nodes.with(qual_ref),
-                        &self.prepro.main_stores.label_store
+                        &self.stores.label_store
                     ))
                 );
                 for (i, xx) in b.children().unwrap().iter_children().enumerate() {
@@ -923,12 +914,12 @@ impl<'a> RefsFinder<'a> {
                 // should loop through siblings
                 self.up(cursor);
                 let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-                let bb = self.prepro.main_stores.node_store.resolve(xx);
+                let bb = self.stores.node_store.resolve(xx);
                 let tt = bb.get_type();
                 let (bb, tt) = if tt == Type::EnumBody {
                     self.up(cursor);
                     let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-                    let bb = self.prepro.main_stores.node_store.resolve(xx);
+                    let bb = self.stores.node_store.resolve(xx);
                     let tt = bb.get_type();
                     (bb, tt)
                 } else {
@@ -941,7 +932,7 @@ impl<'a> RefsFinder<'a> {
                 }
                 let name = {
                     let i = self.extract_identifier(&bb).unwrap();
-                    let name = self.prepro.main_stores.label_store.resolve(&i);
+                    let name = self.stores.label_store.resolve(&i);
                     log::info!("search uses of {:?}", name);
                     LabelPtr::new(i, IdentifierFormat::from(name))
                 };
@@ -956,7 +947,7 @@ impl<'a> RefsFinder<'a> {
                     "try search {}",
                     DisplayRef::from((
                         self.ana.solver.nodes.with(qual_ref),
-                        &self.prepro.main_stores.label_store
+                        &self.stores.label_store
                     ))
                 );
                 r.extend(self.search(&mm, &qual_ref, &cursor.scout));
@@ -988,7 +979,7 @@ impl<'a> RefsFinder<'a> {
         let mut package_ref = self.ana.solver.intern(RefsEnum::MaybeMissing);
         // go through classes if inner
         let x = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-        let b = self.prepro.main_stores.node_store.resolve(x);
+        let b = self.stores.node_store.resolve(x);
         let t = b.get_type();
         assert_eq!(t, Type::Program);
         log::debug!(
@@ -996,18 +987,18 @@ impl<'a> RefsFinder<'a> {
             cursor.curr,
             cursor
                 .scout
-                .make_position(&self.structural_positions, &self.prepro.main_stores),
+                .make_position(&self.structural_positions, &self.stores),
             b.child_count()
         );
         // go through program i.e. package declaration
         before_p_ref = max_qual_ref;
         for (i, xx) in b.children().unwrap().iter_children().enumerate() {
             cursor.scout.goto(*xx, i);
-            let bb = self.prepro.main_stores.node_store.resolve(*xx);
+            let bb = self.stores.node_store.resolve(*xx);
             let tt = bb.get_type();
             log::debug!("in program {:?}", tt);
             if tt == Type::PackageDeclaration {
-                package_ref = remake_pkg_ref(&self.prepro.main_stores, &mut self.ana, *xx)
+                package_ref = remake_pkg_ref(&self.stores, &mut self.ana, *xx)
                     .ok_or(SearchStopEvent::Blocked)?;
                 max_qual_ref = self
                     .ana
@@ -1018,11 +1009,11 @@ impl<'a> RefsFinder<'a> {
                     "now have fully qual ref {} with package decl {}",
                     DisplayRef::from((
                         self.ana.solver.nodes.with(max_qual_ref),
-                        &self.prepro.main_stores.label_store
+                        &self.stores.label_store
                     )),
                     DisplayRef::from((
                         self.ana.solver.nodes.with(package_ref),
-                        &self.prepro.main_stores.label_store
+                        &self.stores.label_store
                     ))
                 );
             } else if tt.is_type_declaration() {
@@ -1030,7 +1021,7 @@ impl<'a> RefsFinder<'a> {
                     "try search {}",
                     DisplayRef::from((
                         self.ana.solver.nodes.with(max_qual_ref),
-                        &self.prepro.main_stores.label_store
+                        &self.stores.label_store
                     ))
                 );
                 if Some(*xx) != cursor.prev.clone() && max_qual_ref != before_p_ref {
@@ -1058,7 +1049,7 @@ impl<'a> RefsFinder<'a> {
         max_qual_ref: &RefPtr,
     ) -> Result<(), SearchStopEvent> {
         let xx = cursor.curr.ok_or(SearchStopEvent::NoMore)?;
-        let bb = self.prepro.main_stores.node_store.resolve(xx);
+        let bb = self.stores.node_store.resolve(xx);
         let t = bb.get_type();
         log::info!(
             "search in package {:?} {:?} {:?}",
@@ -1066,7 +1057,7 @@ impl<'a> RefsFinder<'a> {
             t,
             cursor
                 .scout
-                .make_position(&self.structural_positions, &self.prepro.main_stores)
+                .make_position(&self.structural_positions, &self.stores)
         );
 
         for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
@@ -1076,12 +1067,12 @@ impl<'a> RefsFinder<'a> {
                     "search {} in package children {:?} {:?}",
                     DisplayRef::from((
                         self.ana.solver.nodes.with(*max_qual_ref),
-                        &self.prepro.main_stores.label_store
+                        &self.stores.label_store
                     )),
                     cursor.curr,
                     cursor
                         .scout
-                        .make_position(&self.structural_positions, &self.prepro.main_stores)
+                        .make_position(&self.structural_positions, &self.stores)
                 );
                 r.extend(self.search(package_ref, max_qual_ref, &cursor.scout));
             }
@@ -1092,12 +1083,11 @@ impl<'a> RefsFinder<'a> {
         for pack in mirror_packages {
             let mut pack = pack.clone();
             let bb = self
-                .prepro
-                .main_stores
+                .stores
                 .node_store
                 .resolve(pack.node_always(&self.structural_positions));
             for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
-                let bb = self.prepro.main_stores.node_store.resolve(*xx);
+                let bb = self.stores.node_store.resolve(*xx);
                 let t = bb.get_type();
                 pack.goto(*xx, i);
                 if t == Type::Program {
@@ -1105,9 +1095,9 @@ impl<'a> RefsFinder<'a> {
                         "search {} in other package children {:?}",
                         DisplayRef::from((
                             self.ana.solver.nodes.with(*max_qual_ref),
-                            &self.prepro.main_stores.label_store
+                            &self.stores.label_store
                         )),
-                        pack.make_position(&self.structural_positions, &self.prepro.main_stores),
+                        pack.make_position(&self.structural_positions, &self.stores),
                     );
                     r.extend(self.search(package_ref, max_qual_ref, &pack));
                 }
@@ -1132,10 +1122,10 @@ impl<'a> RefsFinder<'a> {
                 cursor.curr,
                 cursor
                     .scout
-                    .make_position(&self.structural_positions, &self.prepro.main_stores)
+                    .make_position(&self.structural_positions, &self.stores)
             );
             let xx = cursor.curr.ok_or(SearchStopEvent::NoMore)?;
-            let bb = self.prepro.main_stores.node_store.resolve(xx);
+            let bb = self.stores.node_store.resolve(xx);
             // log::debug!("search in package {:?} {:?}", cursor.curr, t);
             for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
                 cursor.scout.goto(*xx, i);
@@ -1163,12 +1153,12 @@ impl<'a> RefsFinder<'a> {
             cursor.curr,
             cursor
                 .scout
-                .make_position(&self.structural_positions, &self.prepro.main_stores)
+                .make_position(&self.structural_positions, &self.stores)
         );
         for x in other_folders {
             let scout = x.clone();
             let xx = x.node_always(&self.structural_positions);
-            let bb = self.prepro.main_stores.node_store.resolve(xx);
+            let bb = self.stores.node_store.resolve(xx);
             for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
                 cursor.scout.goto(*xx, i);
                 if Some(*xx) != cursor.prev {
@@ -1182,7 +1172,7 @@ impl<'a> RefsFinder<'a> {
 
     fn extract_identifier(&mut self, b: &HashedNodeRef) -> Option<LabelIdentifier> {
         for xx in b.children().unwrap().iter_children() {
-            let bb = self.prepro.main_stores.node_store.resolve(*xx);
+            let bb = self.stores.node_store.resolve(*xx);
             if bb.get_type() == Type::Identifier {
                 let i = bb.get_label();
                 return Some(*i);
@@ -1194,24 +1184,20 @@ impl<'a> RefsFinder<'a> {
     /// top down search of references matching [`p`][`i`]
     fn search(&mut self, p: &RefPtr, i: &RefPtr, s: &Scout) -> Vec<SpHandle> {
         // self.structural_positions
-        //     .check_with(&self.prepro.main_stores, s)
+        //     .check_with(&self.stores, s)
         //     .expect("search");
-        usage::RefsFinder::new(
-            &self.prepro.main_stores,
-            &mut self.ana,
-            &mut self.structural_positions,
-        )
-        .find_all(*p, *i, s.clone())
+        usage::RefsFinder::new(&self.stores, &mut self.ana, &mut self.structural_positions)
+            .find_all(*p, *i, s.clone())
     }
 }
 
 pub fn goto_by_name<T: TreePath<NodeIdentifier>>(
-    prepro: &PreProcessedRepository,
+    stores: &SimpleStores,
     mut p: T,
     name: &str,
 ) -> Option<T> {
     p.node()
-        .and_then(|x| prepro.child_by_name_with_idx(*x, name))
+        .and_then(|x| child_by_name_with_idx(stores, *x, name))
         .and_then(|(n, i)| {
             p.goto(n, i);
             Some(p)
@@ -1224,7 +1210,7 @@ pub fn find_package_in_other_folders<
     U: Borrow<Path>,
     V: Iterator<Item = (U, T)>,
 >(
-    prepro: &PreProcessedRepository,
+    stores: &SimpleStores,
     package: &Path,
     root_package_file_path: &Path,
     other_folders: V,
@@ -1240,7 +1226,7 @@ pub fn find_package_in_other_folders<
                 let x = *r.node().unwrap();
                 let n = std::os::unix::prelude::OsStrExt::as_bytes(n.as_os_str());
                 let n = std::str::from_utf8(n).unwrap();
-                let aaa = prepro.child_by_name_with_idx(x, n);
+                let aaa = child_by_name_with_idx(stores, x, n);
                 if let Some((x, i)) = aaa {
                     r.goto(x, i);
                 } else {

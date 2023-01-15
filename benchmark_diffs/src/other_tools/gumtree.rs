@@ -49,6 +49,7 @@ where
     dbg!(&gt_out);
     let now = Instant::now();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    dbg!(root.join("gt_script.sh").to_str().unwrap());
     let mut child = std::process::Command::new("/usr/bin/bash")
         .arg(root.join("gt_script.sh").to_str().unwrap())
         .arg(&src)

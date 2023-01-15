@@ -1,4 +1,4 @@
-use std::{fs::File, io::BufWriter, io::Write, path::PathBuf};
+use std::{fs::File, io::BufWriter, io::Write, path::PathBuf, fmt::Display};
 
 use hyper_ast::{
     store::{
@@ -30,7 +30,7 @@ pub fn windowed_commits_compare(
 
     let batch_id = format!("{}:({},{})", &preprocessed.name, before, after);
     let mu = memusage_linux();
-    preprocessed.pre_process_with_limit(
+    let processing_ordered_commits = preprocessed.pre_process_with_limit(
         &mut fetch_github_repository(&preprocessed.name),
         before,
         after,
@@ -48,10 +48,10 @@ pub fn windowed_commits_compare(
     log::warn!(
         "commits ({}): {:?}",
         preprocessed.commits.len(),
-        preprocessed.processing_ordered_commits
+        processing_ordered_commits
     );
     let mut i = 0;
-    let c_len = preprocessed.processing_ordered_commits.len();
+    let c_len = processing_ordered_commits.len();
 
     let mut buf = out
     .map(|out| (File::create(out.0).unwrap(),File::create(out.1).unwrap()))
@@ -69,13 +69,13 @@ pub fn windowed_commits_compare(
         .unwrap();
     }
     for c in (0..c_len - 1)
-        .map(|c| &preprocessed.processing_ordered_commits[c..(c + window_size).min(c_len)])
+        .map(|c| &processing_ordered_commits[c..(c + window_size).min(c_len)])
     {
         let oid_src = c[0];
         for oid_dst in &c[1..] {
             log::warn!("diff of {oid_src} and {oid_dst}");
 
-            let stores = &preprocessed.main_stores;
+            let stores = &preprocessed.processor.main_stores;
 
             let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
             let src_tr = commit_src.1.ast_root;
@@ -221,9 +221,9 @@ pub fn windowed_commits_compare(
                     .unwrap();
                 }
 
-                write_perfs(buf_perfs,"gumtree_lazy", oid_src, oid_dst, src_s, dst_s,summarized_lazy).unwrap();
-                write_perfs(buf_perfs,"gumtree_not_lazy", oid_src, oid_dst, src_s, dst_s,&not_lazy).unwrap();
-                write_perfs(buf_perfs,"gumtree_partial_lazy", oid_src, oid_dst, src_s, dst_s,&partial_lazy).unwrap();
+                write_perfs(buf_perfs,"gumtree_lazy", &oid_src, oid_dst, src_s, dst_s,summarized_lazy).unwrap();
+                write_perfs(buf_perfs,"gumtree_not_lazy", &oid_src, oid_dst, src_s, dst_s,&not_lazy).unwrap();
+                write_perfs(buf_perfs,"gumtree_partial_lazy", &oid_src, oid_dst, src_s, dst_s,&partial_lazy).unwrap();
                 buf_validity.flush().unwrap();
                 buf_perfs.flush().unwrap();
             } else {
@@ -272,10 +272,10 @@ pub fn windowed_commits_compare(
     log::warn!("hyperAST size: {}", mu - memusage_linux());
 }
 
-fn write_perfs(
+pub(crate) fn write_perfs<Id:Display>(
     buf_perfs:&mut BufWriter<File>,
     kind: &str,
-    oid_src: hyper_ast_cvs_git::git::Oid, oid_dst: &hyper_ast_cvs_git::git::Oid, src_s: usize, dst_s: usize,
+    oid_src: &Id, oid_dst: &Id, src_s: usize, dst_s: usize,
     summarized_lazy:&crate::algorithms::ResultsSummary<crate::algorithms::PreparedMappingDurations<2>>) -> Result<(), std::io::Error> {
     writeln!(
         buf_perfs,
@@ -323,17 +323,17 @@ mod test {
         );
         assert!(window_size > 1);
 
-        preprocessed.pre_process_with_limit(
+        let processing_ordered_commits = preprocessed.pre_process_with_limit(
             &mut fetch_github_repository(&preprocessed.name),
             before,
             after,
             "spoon-pom",
             1000,
         );
-        preprocessed.purge_caches();
-        let c_len = preprocessed.processing_ordered_commits.len();
+        preprocessed.processor.purge_caches();
+        let c_len = processing_ordered_commits.len();
         let c = (0..c_len - 1)
-            .map(|c| &preprocessed.processing_ordered_commits[c..(c + window_size).min(c_len)])
+            .map(|c| &processing_ordered_commits[c..(c + window_size).min(c_len)])
             .next()
             .unwrap();
         let oid_src = &c[0];
@@ -346,7 +346,7 @@ mod test {
         let commit_dst = preprocessed.commits.get_key_value(&oid_dst).unwrap();
         let dst_tr = commit_dst.1.ast_root;
         // let dst_tr = preprocessed.child_by_name(dst_tr, "hadoop-common-project").unwrap();
-        let stores = &preprocessed.main_stores;
+        let stores = &preprocessed.processor.main_stores;
         let src = &src_tr;
         let dst = &dst_tr;
         let mappings = VecStore::default();
@@ -387,7 +387,7 @@ mod test {
         );
         assert!(window_size > 1);
 
-        preprocessed.pre_process_with_limit(
+        let processing_ordered_commits = preprocessed.pre_process_with_limit(
             &mut fetch_github_repository(&preprocessed.name),
             before,
             after,
@@ -395,14 +395,14 @@ mod test {
             1000,
         );
         preprocessed.purge_caches();
-        let c_len = preprocessed.processing_ordered_commits.len();
+        let c_len = processing_ordered_commits.len();
         let c = (0..c_len - 1)
-            .map(|c| &preprocessed.processing_ordered_commits[c..(c + window_size).min(c_len)])
+            .map(|c| &processing_ordered_commits[c..(c + window_size).min(c_len)])
             .next()
             .unwrap();
         let oid_src = &c[0];
         let oid_dst = &c[1];
-        let stores = &preprocessed.main_stores;
+        let stores = &preprocessed.processor.main_stores;
 
         let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
         let src_tr = commit_src.1.ast_root;
@@ -443,8 +443,8 @@ mod test {
 
         let gt_out_format = "JSON";
         let gt_out = other_tools::gumtree::subprocess(
-            &preprocessed.main_stores.node_store,
-            &preprocessed.main_stores.label_store,
+            &preprocessed.processor.main_stores.node_store,
+            &preprocessed.processor.main_stores.label_store,
             src_tr,
             dst_tr,
             "gumtree-subtree",
@@ -458,8 +458,8 @@ mod test {
         let counts = pp.counts();
         dbg!(gt_timings, counts.mappings, counts.actions);
         let valid = pp._validity_mappings(
-            &preprocessed.main_stores.node_store,
-            &preprocessed.main_stores.label_store,
+            &preprocessed.processor.main_stores.node_store,
+            &preprocessed.processor.main_stores.label_store,
             &src_arena,
             src_tr,
             &dst_arena,
@@ -483,7 +483,7 @@ mod test {
         // after a7f0adb2dd8449af6f9e9b5a25f11b5dcf5868f1
         assert!(window_size > 1);
 
-        preprocessed.pre_process_with_limit(
+        let processing_ordered_commits = preprocessed.pre_process_with_limit(
             &mut fetch_github_repository(&preprocessed.name),
             before,
             after,
@@ -491,17 +491,17 @@ mod test {
             3,
         );
         preprocessed.purge_caches();
-        let c_len = preprocessed.processing_ordered_commits.len();
+        let c_len = processing_ordered_commits.len();
         assert!(c_len> 0);
-        dbg!(&preprocessed.processing_ordered_commits);
+        dbg!(&processing_ordered_commits);
         let c = (0..c_len - 1)
-            .map(|c| &preprocessed.processing_ordered_commits[c..(c + window_size).min(c_len)])
+            .map(|c| &processing_ordered_commits[c..(c + window_size).min(c_len)])
             .next()
             .unwrap();
         let oid_src = &c[0];
         let oid_dst = &c[1];
         dbg!(oid_src, oid_dst);
-        let stores = &preprocessed.main_stores;
+        let stores = &preprocessed.processor.main_stores;
 
         let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
         let src_tr = commit_src.1.ast_root;

@@ -31,6 +31,7 @@ pub mod postprocess;
 pub mod preprocess;
 pub mod other_tools;
 pub mod algorithms;
+pub mod cross_repo;
 
 use std::{io, fs, path, env, time};
 

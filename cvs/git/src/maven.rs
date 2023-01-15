@@ -273,7 +273,7 @@ impl MavenModuleAcc {
         // TODO
         // full_node.2.acc(&Type::Directory, &mut self.ana);
     }
-    pub(crate) fn push_submodule(
+    pub fn push_submodule(
         &mut self,
         name: LabelIdentifier,
         full_node: (NodeIdentifier, MD),

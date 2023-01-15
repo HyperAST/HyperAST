@@ -49,7 +49,7 @@ pub fn find_refs_from_canonical_type(
                 let o = $o;
                 let i = $i;
                 let f = IdentifierFormat::from(i);
-                let i = preprocessed.get_or_insert_label(i);
+                let i = preprocessed.processor.get_or_insert_label(i);
                 let i = LabelPtr::new(i, f);
                 ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
             }};
@@ -72,7 +72,7 @@ pub fn find_refs_from_canonical_type(
         );
         let _ = i;
         // let i = scoped!(scoped!(scoped!(scoped!(i,"java"),"nio"),"file"),"Path");
-        preprocessed.print_refs(&ana);
+        preprocessed.processor.print_refs(&ana);
 
         // println!("{}", java_tree_gen.stores.label_store);
 

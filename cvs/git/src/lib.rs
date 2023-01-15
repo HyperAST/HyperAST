@@ -9,6 +9,7 @@ pub mod java_processor;
 pub mod maven_processor;
 /// for now only tested on maven repositories with a pom in root.
 pub mod preprocessed;
+pub mod multi_preprocessed;
 #[cfg(test)]
 pub mod tests;
 

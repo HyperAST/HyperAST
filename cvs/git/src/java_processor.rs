@@ -21,7 +21,7 @@ use tuples::CombinConcat;
 use crate::{
     git::BasicGitObject,
     java::JavaAcc,
-    preprocessed::{IsSkippedAna, PreProcessedRepository},
+    preprocessed::{IsSkippedAna, RepositoryProcessor},
     Processor, SimpleStores, MAX_REFS,
 };
 
@@ -35,7 +35,7 @@ pub(crate) fn prepare_dir_exploration(tree: git2::Tree) -> Vec<BasicGitObject> {
 
 pub struct JavaProcessor<'repo, 'prepro, 'd, 'c, Acc> {
     repository: &'repo Repository,
-    prepro: &'prepro mut PreProcessedRepository,
+    prepro: &'prepro mut RepositoryProcessor,
     stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
     pub dir_path: &'d mut Peekable<Components<'c>>,
 }
@@ -43,7 +43,7 @@ pub struct JavaProcessor<'repo, 'prepro, 'd, 'c, Acc> {
 impl<'repo, 'b, 'd, 'c, Acc: From<String>> JavaProcessor<'repo, 'b, 'd, 'c, Acc> {
     pub(crate) fn new(
         repository: &'repo Repository,
-        prepro: &'b mut PreProcessedRepository,
+        prepro: &'b mut RepositoryProcessor,
         dir_path: &'d mut Peekable<Components<'c>>,
         name: &[u8],
         oid: git2::Oid,
@@ -332,7 +332,7 @@ mod experiments {
 
     pub(crate) struct GitProcessorMiddleWare<'repo, 'prepro, 'd, 'c> {
         repository: &'repo Repository,
-        prepro: &'prepro mut PreProcessedRepository,
+        prepro: &'prepro mut RepositoryProcessor,
         dir_path: &'d mut Peekable<Components<'c>>,
     }
 

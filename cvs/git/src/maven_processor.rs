@@ -19,12 +19,12 @@ use hyper_ast_gen_ts_java::legion_with_refs::{eq_node, hash32};
 use crate::{
     git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
     maven::{MavenModuleAcc, MD},
-    preprocessed::PreProcessedRepository,
+    preprocessed::RepositoryProcessor,
     Processor, SimpleStores,
 };
 
 pub struct MavenProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
-    prepro: &'b mut PreProcessedRepository,
+    prepro: &'b mut RepositoryProcessor,
     repository: &'a Repository,
     stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
     dir_path: &'c mut Peekable<Components<'c>>,
@@ -35,7 +35,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
 {
     pub fn new(
         repository: &'a Repository,
-        prepro: &'b mut PreProcessedRepository,
+        prepro: &'b mut RepositoryProcessor,
         mut dir_path: &'c mut Peekable<Components<'c>>,
         name: &[u8],
         oid: git2::Oid,
@@ -195,68 +195,72 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
 impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
     MavenProcessor<'a, 'b, 'c, RMS, FFWD, MavenModuleAcc>
 {
-    fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
-        let dir_hash: u32 = hash32(&Type::Directory);
-        let hashs = acc.metrics.hashs;
-        let size = acc.metrics.size + 1;
-        let height = acc.metrics.height + 1;
-        let size_no_spaces = acc.metrics.size_no_spaces + 1;
-        let hbuilder = hashed::Builder::new(hashs, &dir_hash, &acc.name, size_no_spaces);
-        let hashable = hbuilder.most_discriminating();
-        let label = stores.label_store.get_or_insert(acc.name.clone());
-
-        let eq = eq_node(&Type::MavenDirectory, Some(&label), &acc.children);
-        let ana = {
-            let new_sub_modules = drain_filter_strip(&mut acc.sub_modules, b"..");
-            let new_main_dirs = drain_filter_strip(&mut acc.main_dirs, b"..");
-            let new_test_dirs = drain_filter_strip(&mut acc.test_dirs, b"..");
-            let ana = acc.ana;
-            if !new_sub_modules.is_empty() || !new_main_dirs.is_empty() || !new_test_dirs.is_empty()
-            {
-                log::error!(
-                    "{:?} {:?} {:?}",
-                    new_sub_modules,
-                    new_main_dirs,
-                    new_test_dirs
-                );
-                todo!("also prepare search for modules and sources in parent, should also tell from which module it is required");
-            }
-            ana.resolve()
-        };
-        let insertion = stores.node_store.prepare_insertion(&hashable, eq);
-        let hashs = hbuilder.build();
-        let node_id = if let Some(id) = insertion.occupied_id() {
-            id
-        } else {
-            log::info!("make mm {} {}", &acc.name, acc.children.len());
-            let vacant = insertion.vacant();
-            assert_eq!(acc.children_names.len(), acc.children.len());
-            NodeStore::insert_after_prepare(
-                vacant,
-                (
-                    Type::MavenDirectory,
-                    label,
-                    hashs,
-                    compo::Size(size),
-                    compo::Height(height),
-                    compo::SizeNoSpaces(size_no_spaces),
-                    CS(acc.children_names.into_boxed_slice()), // TODO extract dir names
-                    CS(acc.children.into_boxed_slice()),
-                    BloomSize::Much,
-                ),
-            )
-        };
-
-        let metrics = SubTreeMetrics {
-            size,
-            height,
-            hashs,
-            size_no_spaces,
-        };
-
-        let full_node = (node_id.clone(), MD { metrics, ana });
-        full_node
+    fn make(acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
+        make(acc, stores)
     }
+}
+
+pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
+    let dir_hash: u32 = hash32(&Type::Directory); // FIXME should be MavenDirectory ?
+    let hashs = acc.metrics.hashs;
+    let size = acc.metrics.size + 1;
+    let height = acc.metrics.height + 1;
+    let size_no_spaces = acc.metrics.size_no_spaces + 1;
+    let hbuilder = hashed::Builder::new(hashs, &dir_hash, &acc.name, size_no_spaces);
+    let hashable = hbuilder.most_discriminating();
+    let label = stores.label_store.get_or_insert(acc.name.clone());
+
+    let eq = eq_node(&Type::MavenDirectory, Some(&label), &acc.children);
+    let ana = {
+        let new_sub_modules = drain_filter_strip(&mut acc.sub_modules, b"..");
+        let new_main_dirs = drain_filter_strip(&mut acc.main_dirs, b"..");
+        let new_test_dirs = drain_filter_strip(&mut acc.test_dirs, b"..");
+        let ana = acc.ana;
+        if !new_sub_modules.is_empty() || !new_main_dirs.is_empty() || !new_test_dirs.is_empty()
+        {
+            log::error!(
+                "{:?} {:?} {:?}",
+                new_sub_modules,
+                new_main_dirs,
+                new_test_dirs
+            );
+            todo!("also prepare search for modules and sources in parent, should also tell from which module it is required");
+        }
+        ana.resolve()
+    };
+    let insertion = stores.node_store.prepare_insertion(&hashable, eq);
+    let hashs = hbuilder.build();
+    let node_id = if let Some(id) = insertion.occupied_id() {
+        id
+    } else {
+        log::info!("make mm {} {}", &acc.name, acc.children.len());
+        let vacant = insertion.vacant();
+        assert_eq!(acc.children_names.len(), acc.children.len());
+        NodeStore::insert_after_prepare(
+            vacant,
+            (
+                Type::MavenDirectory,
+                label,
+                hashs,
+                compo::Size(size),
+                compo::Height(height),
+                compo::SizeNoSpaces(size_no_spaces),
+                CS(acc.children_names.into_boxed_slice()), // TODO extract dir names
+                CS(acc.children.into_boxed_slice()),
+                BloomSize::Much,
+            ),
+        )
+    };
+
+    let metrics = SubTreeMetrics {
+        size,
+        height,
+        hashs,
+        size_no_spaces,
+    };
+
+    let full_node = (node_id.clone(), MD { metrics, ana });
+    full_node
 }
 
 struct MavenModuleHelper {

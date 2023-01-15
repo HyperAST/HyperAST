@@ -8,11 +8,11 @@ use std::{
 use git2::{Oid, Repository};
 use hyper_ast::{
     store::{defaults::LabelIdentifier, nodes::DefaultNodeIdentifier as NodeIdentifier},
-    types::{LabelStore as _, Type, Typed, WithChildren, IterableChildren},
+    types::{IterableChildren, LabelStore as _, Type, Typed, WithChildren},
     utils::memusage_linux,
 };
-use log::info;
 use hyper_ast_gen_ts_java::impact::partial_analysis::PartialAnalysis;
+use log::info;
 
 use crate::{
     git::{all_commits_between, retrieve_commit},
@@ -29,22 +29,33 @@ use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
 /// using the hyperAST and caching git object transformations
 /// for now only work with java & maven
 /// Its only function should be to persist caches accoss processings
-/// and exposing apis to hyperAST users
+/// and exposing apis to hyperAST users/maker
 pub struct PreProcessedRepository {
     pub name: String,
+    pub commits: HashMap<git2::Oid, Commit>,
+
+    pub processor: RepositoryProcessor,
+    // pub main_stores: SimpleStores,
+
+    // pub object_map: BTreeMap<git2::Oid, (hyper_ast::store::nodes::DefaultNodeIdentifier, MD)>,
+    // pub object_map_pom: BTreeMap<git2::Oid, POM>,
+    // pub(super) java_md_cache: java_tree_gen::MDCache,
+    // pub object_map_java: BTreeMap<(git2::Oid, Vec<u8>), (java_tree_gen::Local, IsSkippedAna)>,
+}
+
+#[derive(Default)]
+pub struct RepositoryProcessor {
     pub main_stores: SimpleStores,
 
     pub object_map: BTreeMap<git2::Oid, (hyper_ast::store::nodes::DefaultNodeIdentifier, MD)>,
     pub object_map_pom: BTreeMap<git2::Oid, POM>,
-    java_md_cache: java_tree_gen::MDCache,
+    pub(super) java_md_cache: java_tree_gen::MDCache,
     pub object_map_java: BTreeMap<(git2::Oid, Vec<u8>), (java_tree_gen::Local, IsSkippedAna)>,
-    pub commits: HashMap<git2::Oid, Commit>,
-    pub processing_ordered_commits: Vec<git2::Oid>,
 }
 
 pub(crate) type IsSkippedAna = bool;
 
-impl PreProcessedRepository {
+impl RepositoryProcessor {
     pub fn main_stores_mut(&mut self) -> &mut SimpleStores {
         &mut self.main_stores
     }
@@ -88,7 +99,10 @@ impl PreProcessedRepository {
     }
 
     pub fn purge_caches(&mut self) {
-        self.java_md_cache.clear()
+        self.object_map.clear();
+        self.object_map_java.clear();
+        self.object_map_pom.clear();
+        self.java_md_cache.clear();
     }
 }
 
@@ -100,37 +114,54 @@ impl PreProcessedRepository {
         let name = name.to_owned();
         PreProcessedRepository {
             name,
-            main_stores: SimpleStores::default(),
-            java_md_cache: Default::default(),
-            object_map: BTreeMap::default(),
-            object_map_pom: BTreeMap::default(),
-            object_map_java: BTreeMap::default(),
             commits: Default::default(),
-            processing_ordered_commits: Default::default(),
+            processor: Default::default(),
         }
     }
 
+    pub fn purge_caches(&mut self) {
+        self.processor.purge_caches()
+    }
+
+    pub fn child_by_name(&self, d: NodeIdentifier, name: &str) -> Option<NodeIdentifier> {
+        self.processor.child_by_name(d, name)
+    }
+
+    pub fn child_by_name_with_idx(
+        &self,
+        d: NodeIdentifier,
+        name: &str,
+    ) -> Option<(NodeIdentifier, usize)> {
+        self.processor.child_by_name_with_idx(d, name)
+    }
+    pub fn child_by_type(&self, d: NodeIdentifier, t: &Type) -> Option<(NodeIdentifier, usize)> {
+        self.processor.child_by_type(d, t)
+    }
     pub fn pre_process(
         &mut self,
         repository: &mut Repository,
         before: &str,
         after: &str,
         dir_path: &str,
-    ) {
+    ) -> Vec<git2::Oid> {
         log::info!(
             "commits to process: {}",
             all_commits_between(&repository, before, after).count()
         );
+        let mut processing_ordered_commits = vec![];
         let rw = all_commits_between(&repository, before, after);
         rw
             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
             // .take(40) // TODO make a variable
             .for_each(|oid| {
                 let oid = oid.unwrap();
-                let c = self.handle_maven_commit::<true>(&repository, dir_path, oid);
-                self.processing_ordered_commits.push(oid.clone());
+                let c = self
+                    .processor
+                    .handle_maven_commit::<true>(&repository, dir_path, oid);
+                processing_ordered_commits.push(oid.clone());
                 self.commits.insert(oid.clone(), c);
             });
+        processing_ordered_commits
     }
 
     pub fn check_random_files_reserialization(
@@ -182,13 +213,15 @@ impl PreProcessedRepository {
             if let Ok(_) = std::str::from_utf8(blob.content()) {
                 // log::debug!("content: {}", z);
                 let text = blob.content();
-                if let Ok(full_node) = handle_java_file(&mut self.java_generator(text), b"", text) {
+                if let Ok(full_node) =
+                    handle_java_file(&mut self.processor.java_generator(text), b"", text)
+                {
                     let mut out = BuffOut {
                         buff: "".to_owned(),
                     };
                     hyper_ast_gen_ts_java::legion_with_refs::serialize(
-                        &self.main_stores.node_store,
-                        &self.main_stores.label_store,
+                        &self.processor.main_stores.node_store,
+                        &self.processor.main_stores.label_store,
                         &full_node.local.compressed_node,
                         &mut out,
                         &std::str::from_utf8(&"\n".as_bytes().to_vec()).unwrap(),
@@ -222,21 +255,25 @@ impl PreProcessedRepository {
         after: &str,
         dir_path: &str,
         limit: usize,
-    ) {
+    ) -> Vec<git2::Oid> {
         log::info!(
             "commits to process: {}",
             all_commits_between(&repository, before, after).count()
         );
+        let mut processing_ordered_commits = vec![];
         let rw = all_commits_between(&repository, before, after);
         rw
             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
             .take(limit) // TODO make a variable
             .for_each(|oid| {
                 let oid = oid.unwrap();
-                let c = self.handle_maven_commit::<true>(&repository, dir_path, oid);
-                self.processing_ordered_commits.push(oid.clone());
+                let c = self
+                    .processor
+                    .handle_maven_commit::<true>(&repository, dir_path, oid);
+                processing_ordered_commits.push(oid.clone());
                 self.commits.insert(oid.clone(), c);
             });
+        processing_ordered_commits
     }
 
     pub fn pre_process_single(
@@ -244,11 +281,13 @@ impl PreProcessedRepository {
         repository: &mut Repository,
         ref_or_commit: &str,
         dir_path: &str,
-    ) {
+    ) -> git2::Oid {
         let oid = retrieve_commit(repository, ref_or_commit).unwrap().id();
-        let c = self.handle_maven_commit::<false>(&repository, dir_path, oid);
-        self.processing_ordered_commits.push(oid.clone());
+        let c = self
+            .processor
+            .handle_maven_commit::<false>(&repository, dir_path, oid);
         self.commits.insert(oid.clone(), c);
+        oid
     }
 
     pub fn pre_process_no_maven(
@@ -257,21 +296,25 @@ impl PreProcessedRepository {
         before: &str,
         after: &str,
         dir_path: &str,
-    ) {
+    ) -> Vec<git2::Oid> {
         log::info!(
             "commits to process: {}",
             all_commits_between(&repository, before, after).count()
         );
+        let mut processing_ordered_commits = vec![];
         let rw = all_commits_between(&repository, before, after);
         rw
             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
             // .take(2)
             .for_each(|oid| {
                 let oid = oid.unwrap();
-                let c = self.handle_java_commit(&repository, dir_path, oid);
-                self.processing_ordered_commits.push(oid.clone());
+                let c = self
+                    .processor
+                    .handle_java_commit(&repository, dir_path, oid);
+                processing_ordered_commits.push(oid.clone());
                 self.commits.insert(oid.clone(), c);
             });
+        processing_ordered_commits
     }
 
     // pub fn first(before: &str, after: &str) -> Diffs {
@@ -293,9 +336,11 @@ impl PreProcessedRepository {
     // pub fn find_references(decl: ExplorableDecl) {
     //     todo!()
     // }
+}
 
+impl RepositoryProcessor {
     /// module_path: path to wanted root module else ""
-    fn handle_maven_commit<const RMS: bool>(
+    pub(crate) fn handle_maven_commit<const RMS: bool>(
         &mut self,
         repository: &Repository,
         module_path: &str,
@@ -314,6 +359,8 @@ impl PreProcessedRepository {
         let root_full_node =
             self.handle_maven_module::<RMS, false>(repository, &mut dir_path, b"", tree.id());
         // let root_full_node = self.fast_fwd(repository, &mut dir_path, b"", tree.id()); // used to directly access specific java sources
+
+        self.object_map.insert(commit_oid, root_full_node.clone());
 
         let processing_time = now.elapsed().as_nanos();
         let memory_used = memusage_linux() - memory_used;
@@ -473,8 +520,7 @@ impl PreProcessedRepository {
     }
 
     pub fn child_by_name(&self, d: NodeIdentifier, name: &str) -> Option<NodeIdentifier> {
-        let n = self.main_stores.node_store.resolve(d);
-        n.get_child_by_name(&self.main_stores.label_store.get(name)?)
+        child_by_name(&self.main_stores, d, name)
     }
 
     pub fn child_by_name_with_idx(
@@ -482,25 +528,49 @@ impl PreProcessedRepository {
         d: NodeIdentifier,
         name: &str,
     ) -> Option<(NodeIdentifier, usize)> {
-        let n = self.main_stores.node_store.resolve(d);
-        log::info!("{}", name);
-        let i = n.get_child_idx_by_name(&self.main_stores.label_store.get(name)?);
-        i.map(|i| (n.child(&i).unwrap(), i as usize))
+        child_by_name_with_idx(&self.main_stores, d, name)
     }
     pub fn child_by_type(&self, d: NodeIdentifier, t: &Type) -> Option<(NodeIdentifier, usize)> {
-        let n = self.main_stores.node_store.resolve(d);
-        let s = n
-            .children()
-            .unwrap()
-            .iter_children()
-            .enumerate()
-            .find(|(_, x)| {
-                let n = self.main_stores.node_store.resolve(**x);
-                n.get_type().eq(t)
-            })
-            .map(|(i, x)| (*x, i));
-        s
+        child_by_type(&self.main_stores, d, t)
     }
+}
+
+pub fn child_by_name(
+    stores: &SimpleStores,
+    d: NodeIdentifier,
+    name: &str,
+) -> Option<NodeIdentifier> {
+    let n = stores.node_store.resolve(d);
+    n.get_child_by_name(&stores.label_store.get(name)?)
+}
+
+pub fn child_by_name_with_idx(
+    stores: &SimpleStores,
+    d: NodeIdentifier,
+    name: &str,
+) -> Option<(NodeIdentifier, usize)> {
+    let n = stores.node_store.resolve(d);
+    log::info!("{}", name);
+    let i = n.get_child_idx_by_name(&stores.label_store.get(name)?);
+    i.map(|i| (n.child(&i).unwrap(), i as usize))
+}
+pub fn child_by_type(
+    stores: &SimpleStores,
+    d: NodeIdentifier,
+    t: &Type,
+) -> Option<(NodeIdentifier, usize)> {
+    let n = stores.node_store.resolve(d);
+    let s = n
+        .children()
+        .unwrap()
+        .iter_children()
+        .enumerate()
+        .find(|(_, x)| {
+            let n = stores.node_store.resolve(**x);
+            n.get_type().eq(t)
+        })
+        .map(|(i, x)| (*x, i));
+    s
 }
 
 // TODO try to separate processing from caching from git
