@@ -265,6 +265,7 @@ where
     }
 
     pub(crate) fn last_chance_match_zs(&mut self, src: Dsrc::IdD, dst: Ddst::IdD) {
+        // allow using another internal mapping store
         // WIP https://blog.rust-lang.org/2022/10/28/gats-stabilization.html#implied-static-requirement-from-higher-ranked-trait-bounds
         let node_store = self.internal.hyperast.node_store();
         let mapping = &mut self.internal.mapping;

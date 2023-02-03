@@ -189,13 +189,11 @@ where
                 let adsts = multi_mappings.get_dsts(&src);
                 let asrcs = multi_mappings.get_srcs(&multi_mappings.get_dsts(&src)[0]);
                 for asrc in asrcs {
+                    ignored.set(asrc.shallow().to_usize().unwrap(), true);
                     for adst in adsts {
                         ambiguous_list.push((*asrc, *adst));
                     }
                 }
-                asrcs
-                    .iter()
-                    .for_each(|x| ignored.set(x.shallow().to_usize().unwrap(), true))
             }
         }
 
@@ -689,10 +687,8 @@ where
     fn add_tree_aux(&mut self, tree: D::IdD, h: usize) {
         if h >= MIN_HEIGHT {
             let idx = self.idx(h);
-            if self.trees[idx].is_none() {
-                self.trees[idx] = Some(vec![]);
-            };
-            self.trees[idx].as_mut().unwrap().push(tree);
+            let t = self.trees[idx].get_or_insert_with(Vec::new);
+            t.push(tree);
         }
     }
 
