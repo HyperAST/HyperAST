@@ -4,7 +4,7 @@ use hyper_ast::{
     position::{compute_position, Position},
     types::{self, Tree as _, Typed},
 };
-use hyper_gumtree::tree::tree_path::{CompressedTreePath, TreePath};
+use hyper_diff::tree::tree_path::{CompressedTreePath, TreePath};
 use serde::Deserialize;
 #[derive(Deserialize)]
 pub struct F<T> {

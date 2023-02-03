@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput, black_box};
-use hyper_gumtree::tree::tree_path::{self, CompressedTreePath};
+use hyper_diff::tree::tree_path::{self, CompressedTreePath};
 
 fn compare_compressed_path_iter(c: &mut Criterion) {
     let mut group = c.benchmark_group("CompressedPathIter");

@@ -1,4 +1,4 @@
-use hyper_gumtree::{
+use hyper_diff::{
     actions::{
         action_vec::apply_action,
         script_generator2::{Act, ScriptGenerator, SimpleAction},
@@ -155,7 +155,7 @@ use hyper_ast_gen_ts_java::legion_with_refs::{
 
 // static CASE_1: &'static str = "class A{enum C{}} interface B{}";
 // static CASE_2: &'static str = "class A{} interface B{enum C{}}";
-use hyper_gumtree::matchers::heuristic::gt::greedy_subtree_matcher::GreedySubtreeMatcher;
+use hyper_diff::matchers::heuristic::gt::greedy_subtree_matcher::GreedySubtreeMatcher;
 
 // struct JTG<'stores, 'cache>(JavaTreeGen<'stores, 'cache>);
 

@@ -1,4 +1,4 @@
-use hyper_gumtree::{
+use hyper_diff::{
     actions::{action_vec::ActionsVec},
     matchers::{mapping_store::VecStore, Mapper},
 };
@@ -53,8 +53,8 @@ pub struct ResultsSummary<MD> {
 
 impl<'a, A, MD: Clone, HAST, DS, DD> DiffResult<A, Mapper<'a, HAST, DS, DD, VecStore<u32>>, MD> {
     pub fn summarize(&self) -> ResultsSummary<MD> {
-        use hyper_gumtree::actions::Actions;
-        use hyper_gumtree::matchers::mapping_store::MappingStore;
+        use hyper_diff::actions::Actions;
+        use hyper_diff::matchers::mapping_store::MappingStore;
         ResultsSummary {
             mapping_durations: self.mapping_durations.clone(),
             mappings: self.mapper.mapping.mappings.len(),

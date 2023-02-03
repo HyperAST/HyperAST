@@ -301,7 +301,7 @@ mod test {
     use super::*;
 
     use hyper_ast::{store::nodes::legion::HashedNodeRef, types::WithChildren};
-    use hyper_gumtree::{
+    use hyper_diff::{
         decompressed_tree_store::CompletePostOrder,
         matchers::{
             heuristic::gt::{greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher}},

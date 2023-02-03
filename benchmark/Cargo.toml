@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 tree-sitter = "0.20.0"
-hyper_gumtree = { path = "../gumtree" }
+hyper_diff = { path = "../hyper_diff" }
 hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
 hyper_ast_cvs_git = { path = "../cvs/git" }
 env_logger = "0.9.0"

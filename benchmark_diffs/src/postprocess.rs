@@ -11,7 +11,7 @@ use hyper_ast::{
         self, HyperAST, LabelStore, NodeStore, Stored, Tree, Type, WithChildren, WithSerialization,
     },
 };
-use hyper_gumtree::{
+use hyper_diff::{
     decompressed_tree_store::{
         complete_post_order::{DisplayCompletePostOrder, RecCachedProcessor},
         pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
@@ -20,7 +20,7 @@ use hyper_gumtree::{
     matchers::{mapping_store::MonoMappingStore, Mapper},
     tree::tree_path::CompressedTreePath,
 };
-use hyper_gumtree::{matchers::mapping_store::VecStore, tree::tree_path::TreePath};
+use hyper_diff::{matchers::mapping_store::VecStore, tree::tree_path::TreePath};
 use num_traits::{PrimInt, ToPrimitive};
 use rayon::prelude::ParallelIterator;
 
@@ -63,7 +63,7 @@ impl CompressedBfPostProcess {
 
 pub mod compressed_bf_post_process {
     use hyper_ast::types::{self, HyperAST};
-    use hyper_gumtree::matchers::Mapper;
+    use hyper_diff::matchers::Mapper;
 
     use super::*;
     pub struct PP0 {
@@ -1021,7 +1021,7 @@ mod tests {
         let (pp, counts) = pp.counts();
         let (pp, gt_timings) = pp.performances();
         let valid = pp.validity_mappings(&mapping);
-        use hyper_gumtree::actions::Actions as _;
+        use hyper_diff::actions::Actions as _;
         if valid.additional_mappings > 0 || valid.missing_mappings > 0 {
             dbg!(
                 valid.additional_mappings,

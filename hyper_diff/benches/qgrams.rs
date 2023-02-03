@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use hyper_gumtree::matchers::optimal::zs::{self, str_distance_patched};
+use hyper_diff::matchers::optimal::zs::{self, str_distance_patched};
 use str_distance::{DistanceMetric};
 
 fn compare_qgrams_group(c: &mut Criterion) {

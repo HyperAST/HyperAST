@@ -10,7 +10,7 @@ use crate::{
 };
 use hyper_ast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores, TypeStore};
 use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
-use hyper_gumtree::actions::Actions;
+use hyper_diff::actions::Actions;
 
 #[test]
 fn test_simple_1() {
@@ -348,7 +348,7 @@ mod test {
         types::{DecompressedSubtree, Typed},
     };
     use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
-    use hyper_gumtree::{
+    use hyper_diff::{
         decompressed_tree_store::lazy_post_order::LazyPostOrder,
         matchers::{
             heuristic::gt::lazy_greedy_subtree_matcher::{

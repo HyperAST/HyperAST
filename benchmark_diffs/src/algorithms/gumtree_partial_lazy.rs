@@ -1,7 +1,7 @@
 use std::{fmt::Debug, time::Instant};
 
 use hyper_ast::types::{self, HyperAST};
-use hyper_gumtree::{
+use hyper_diff::{
     actions::script_generator2::{ScriptGenerator, SimpleAction},
     decompressed_tree_store::{
         bfs_wrapper::SimpleBfsMapper, lazy_post_order::LazyPostOrder, CompletePostOrder,

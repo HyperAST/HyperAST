@@ -11,7 +11,7 @@ autobins = true
 [dependencies]
 tree-sitter = "0.20.0"
 hyper_ast = { path = "../hyper_ast" }
-hyper_gumtree = { path = "../gumtree" }
+hyper_diff = { path = "../hyper_diff" }
 hyper_ast_cvs_git = { path = "../cvs/git" }
 hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
 hyper_ast_gen_ts_xml = { path = "../gen/tree-sitter/xml" }

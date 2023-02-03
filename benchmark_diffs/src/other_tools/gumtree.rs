@@ -80,6 +80,8 @@ where
             Err(e) => println!("Error waiting: {}", e),
         }
         if timeout == 0 {
+            std::io::stderr().flush().unwrap();
+            std::io::stdout().flush().unwrap();
             child.kill().unwrap();
             status = None;
             break;
