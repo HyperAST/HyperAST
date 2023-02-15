@@ -13,7 +13,7 @@ use hyper_ast::{
 use super::{
     basic_post_order::{BasicPOSlice, BasicPostOrder},
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings,
-    PostOrder, ShallowDecompressedTreeStore,
+    PostOrder, ShallowDecompressedTreeStore, FullyDecompressedTreeStore,
 };
 
 pub struct SimplePostOrder<T: Stored, IdD> {
@@ -369,6 +369,13 @@ where
         );
         r
     }
+}
+
+impl<'a, T: WithChildren, IdD: PrimInt> FullyDecompressedTreeStore<'a, T, IdD>
+    for SimplePostOrder<T, IdD>
+where
+    <T as Stored>::TreeId: Clone + Debug,
+{
 }
 
 impl<'d, T: WithChildren, IdD: PrimInt> DecompressedTreeStore<'d, T, IdD>

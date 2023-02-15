@@ -66,27 +66,39 @@ where
     // .output()
     // .expect("failed to execute process");
     let wait = 1;
-    let mut timeout = timeout;
-    let waitd = std::time::Duration::from_secs(wait);
     let status;
-    loop {
-        std::thread::sleep(waitd);
-        match child.try_wait() {
-            Ok(Some(s)) => {
+    if timeout == 0 {
+        match child.wait() {
+            Ok(s) => {
                 status = Some(s);
+            }
+            Err(e) => {
+                println!("Error waiting: {}", e);
+                status = None
+            }
+        }
+    } else {
+        let mut timeout = timeout;
+        let waitd = std::time::Duration::from_secs(wait);
+        loop {
+            std::thread::sleep(waitd);
+            match child.try_wait() {
+                Ok(Some(s)) => {
+                    status = Some(s);
+                    break;
+                }
+                Ok(None) => (),
+                Err(e) => println!("Error waiting: {}", e),
+            }
+            if timeout == 0 {
+                std::io::stderr().flush().unwrap();
+                std::io::stdout().flush().unwrap();
+                child.kill().unwrap();
+                status = None;
                 break;
             }
-            Ok(None) => (),
-            Err(e) => println!("Error waiting: {}", e),
+            timeout = timeout - wait;
         }
-        if timeout == 0 {
-            std::io::stderr().flush().unwrap();
-            std::io::stdout().flush().unwrap();
-            child.kill().unwrap();
-            status = None;
-            break;
-        }
-        timeout = timeout - wait;
     }
     let gt_processing_time = now.elapsed().as_secs_f64();
     dbg!(&gt_processing_time);
@@ -97,7 +109,6 @@ where
             eprintln!("gumtree process terminated with exit code {}", status);
             None
         } else {
-
             Some(gt_out)
         }
     } else {

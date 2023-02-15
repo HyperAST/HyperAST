@@ -160,13 +160,13 @@ impl<T: PrimInt + Debug> MonoMappingStore for VecStore<T> {
     fn get_src(&self, dst: &T) -> Option<T> {
         self.dst_to_src
             .get(dst.to_usize().unwrap())
-            .map(|x| *x - one())
+            .and_then(|x| (!x.is_zero()).then(||*x - one()))
     }
 
     fn get_dst(&self, src: &T) -> Option<T> {
         self.src_to_dst
             .get(src.to_usize().unwrap())
-            .map(|x| *x - one())
+            .and_then(|x| (!x.is_zero()).then(||*x - one()))
     }
 
     fn link_if_both_unmapped(&mut self, t1: T, t2: T) -> bool {

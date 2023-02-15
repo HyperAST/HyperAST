@@ -54,6 +54,10 @@ pub trait LazyInitializable<'a, T: Stored + WithStats> {
         S: NodeStore<T::TreeId, R<'a> = T>;
 }
 
+pub trait FullyDecompressedTreeStore<'a, T: WithChildren, IdD>:
+ShallowDecompressedTreeStore<'a, T, IdD> {
+}
+
 pub trait ShallowDecompressedTreeStore<'a, T: WithChildren, IdD, IdS = IdD> {
     fn len(&self) -> usize;
     fn original(&self, id: &IdD) -> T::TreeId;

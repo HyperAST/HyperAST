@@ -15,7 +15,7 @@ use hyper_diff::{
     decompressed_tree_store::{
         complete_post_order::{DisplayCompletePostOrder, RecCachedProcessor},
         pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
-        DecompressedWithSiblings, PostOrder, ShallowDecompressedTreeStore,
+        DecompressedWithSiblings, PostOrder, ShallowDecompressedTreeStore, FullyDecompressedTreeStore,
     },
     matchers::{mapping_store::MonoMappingStore, Mapper},
     tree::tree_path::CompressedTreePath,
@@ -788,7 +788,7 @@ pub fn print_mappings<
     'store: 'a,
     'a,
     IdD: 'a + PrimInt + Debug,
-    M: MonoMappingStore<Src = IdD, Dst = IdD>,
+    M: MonoMappingStore<Src = IdD, Dst = IdD> + Debug,
     IdN: Clone + Eq + Debug,
     NS: NodeStore<IdN>,
     LS: LabelStore<str>,
@@ -804,8 +804,8 @@ pub fn print_mappings<
     <NS as types::NodeStore<IdN>>::R<'store>:
         'store + Tree<TreeId = IdN, Label = LS::I> + types::WithSerialization,
     <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug,
-    SD: ShallowDecompressedTreeStore<'a, NS::R<'store>, IdD> + PostOrder<'a, NS::R<'store>, IdD>, // + DecompressedWithParent<'a, NS::R<'store>, IdD>,
-    DD: ShallowDecompressedTreeStore<'a, NS::R<'store>, IdD> + PostOrder<'a, NS::R<'store>, IdD>, //+ DecompressedWithParent<'a, NS::R<'store>, IdD>,
+    SD: FullyDecompressedTreeStore<'a, NS::R<'store>, IdD> + PostOrder<'a, NS::R<'store>, IdD>, // + DecompressedWithParent<'a, NS::R<'store>, IdD>,
+    DD: FullyDecompressedTreeStore<'a, NS::R<'store>, IdD> + PostOrder<'a, NS::R<'store>, IdD>, //+ DecompressedWithParent<'a, NS::R<'store>, IdD>,
 {
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);
@@ -815,8 +815,7 @@ pub fn print_mappings<
         .map
         .iter()
         .map(|x| {
-            if mappings.is_src(x) {
-                let dst = mappings.get_dst_unchecked(x);
+            if let Some(dst) =  mappings.get_dst(x) {
                 if mapped[dst.to_usize().unwrap()] {
                     assert!(false, "GreedySubtreeMatcher {}", dst.to_usize().unwrap())
                 }
@@ -872,8 +871,8 @@ pub fn print_mappings_no_ranges<
     IdN: Clone + Eq + Debug,
     NS: NodeStore<IdN>,
     LS: LabelStore<str>,
-    DD: PostOrder<'a, NS::R<'store>, IdD>,
-    SD: PostOrder<'a, NS::R<'store>, IdD>,
+    DD: PostOrder<'a, NS::R<'store>, IdD> + FullyDecompressedTreeStore<'a, NS::R<'store>, IdD>,
+    SD: PostOrder<'a, NS::R<'store>, IdD> + FullyDecompressedTreeStore<'a, NS::R<'store>, IdD>,
 >(
     dst_arena: &'a DD,
     src_arena: &'a SD,
@@ -892,8 +891,7 @@ pub fn print_mappings_no_ranges<
         .map
         .iter()
         .map(|x| {
-            if mappings.is_src(x) {
-                let dst = mappings.get_dst_unchecked(x);
+            if let Some(dst) = mappings.get_dst(x) {
                 if mapped[dst.to_usize().unwrap()] {
                     assert!(false, "GreedySubtreeMatcher {}", dst.to_usize().unwrap())
                 }

@@ -223,14 +223,14 @@ mod examples {
         let fixed = CASE6;
 
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-        let guard = pprof::ProfilerGuardBuilder::default()
-            .frequency(1000)
-            .blocklist(&[
-                // "libc",
-                "libgcc", "pthread", "vdso",
-            ])
-            .build()
-            .unwrap();
+        // let guard = pprof::ProfilerGuardBuilder::default()
+        //     .frequency(1000)
+        //     .blocklist(&[
+        //         // "libc",
+        //         "libgcc", "pthread", "vdso",
+        //     ])
+        //     .build()
+        //     .unwrap();
 
         let mut stores = SimpleStores {
             label_store: LabelStore::new(),
@@ -257,19 +257,19 @@ mod examples {
         .len();
         let processing_time = now.elapsed().as_secs_f64();
         println!("tt={} evos={}", processing_time, len);
-        match guard.report().build() {
-            Ok(report) => {
-                let file = File::create("flamegraph.svg").unwrap();
-                report.flamegraph(file).unwrap();
-                // let mut file = File::create("profile.pb").unwrap();
-                // let profile = report.pprof().unwrap();
-                // use pprof::protos::Message;
-                // let mut content = Vec::new();
-                // profile.encode(&mut content).unwrap();
-                // file.write_all(&content).unwrap();
-            }
-            Err(_) => {}
-        };
+        // match guard.report().build() {
+        //     Ok(report) => {
+        //         let file = File::create("flamegraph.svg").unwrap();
+        //         report.flamegraph(file).unwrap();
+        //         // let mut file = File::create("profile.pb").unwrap();
+        //         // let profile = report.pprof().unwrap();
+        //         // use pprof::protos::Message;
+        //         // let mut content = Vec::new();
+        //         // profile.encode(&mut content).unwrap();
+        //         // file.write_all(&content).unwrap();
+        //     }
+        //     Err(_) => {}
+        // };
         let (src, mut src_f) = tempfile().unwrap();
         // dbg!(&src);
 
@@ -930,6 +930,8 @@ mod test {
             mappings,
             ..
         } = mapper.into();
+        let src_arena = src_arena.complete(&stores.node_store);
+        let dst_arena = dst_arena.complete(&stores.node_store);
         print_mappings(
             &dst_arena,
             &src_arena,
@@ -1601,14 +1603,14 @@ fn bad_perfs_helper(buggy_path: std::path::PathBuf, fixed_path: std::path::PathB
 fn test_all() {
     // https://github.com/GumTreeDiff/datasets/tree/2bd8397f5939233a7d6205063bac9340d59f5165/defects4j/{buggy,fixed}/*/[0-9]+/*
     println!("{:?}", std::env::current_dir());
-    let guard = pprof::ProfilerGuardBuilder::default()
-        .frequency(1000)
-        .blocklist(&[
-            // "libc",
-            "libgcc", "pthread", "vdso",
-        ])
-        .build()
-        .unwrap();
+    // let guard = pprof::ProfilerGuardBuilder::default()
+    //     .frequency(1000)
+    //     .blocklist(&[
+    //         // "libc",
+    //         "libgcc", "pthread", "vdso",
+    //     ])
+    //     .build()
+    //     .unwrap();
     let root = Path::new("../../gt_datasets/defects4j");
     std::fs::read_dir(root).expect("should be a dir");
     let root_buggy = root.join("buggy");
@@ -1657,17 +1659,17 @@ fn test_all() {
         }
         break;
     }
-    match guard.report().build() {
-        Ok(report) => {
-            let mut file = File::create("profile.pb").unwrap();
-            let profile = report.pprof().unwrap();
-            use pprof::protos::Message;
-            let mut content = Vec::new();
-            profile.encode(&mut content).unwrap();
-            file.write_all(&content).unwrap();
-        }
-        Err(_) => {}
-    };
+    // match guard.report().build() {
+    //     Ok(report) => {
+    //         let mut file = File::create("profile.pb").unwrap();
+    //         let profile = report.pprof().unwrap();
+    //         use pprof::protos::Message;
+    //         let mut content = Vec::new();
+    //         profile.encode(&mut content).unwrap();
+    //         file.write_all(&content).unwrap();
+    //     }
+    //     Err(_) => {}
+    // };
 }
 
 /// TODO add to CLI

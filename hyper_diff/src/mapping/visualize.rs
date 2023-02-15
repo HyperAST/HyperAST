@@ -14,7 +14,7 @@ use crate::{
     decompressed_tree_store::{
         complete_post_order::DisplayCompletePostOrder,
         pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
-        PostOrder,
+        FullyDecompressedTreeStore, PostOrder,
     },
     matchers::mapping_store::MonoMappingStore,
 };
@@ -27,8 +27,8 @@ pub fn print_mappings_no_ranges<
     IdN: Clone + Eq + Debug,
     NS: NodeStore<IdN>,
     LS: LabelStore<str>,
-    DD: PostOrder<'a, NS::R<'store>, IdD>,
-    SD: PostOrder<'a, NS::R<'store>, IdD>,
+    DD: PostOrder<'a, NS::R<'store>, IdD> + FullyDecompressedTreeStore<'a, NS::R<'store>, IdD>,
+    SD: PostOrder<'a, NS::R<'store>, IdD> + FullyDecompressedTreeStore<'a, NS::R<'store>, IdD>,
 >(
     dst_arena: &'a DD,
     src_arena: &'a SD,
@@ -106,8 +106,8 @@ pub fn print_mappings_no_ranges_label<
     IdN: Clone + Eq + Debug,
     NS: NodeStore<IdN>,
     LS: LabelStore<str>,
-    DD: PostOrder<'a, NS::R<'store>, IdD>,
-    SD: PostOrder<'a, NS::R<'store>, IdD>,
+    DD: PostOrder<'a, NS::R<'store>, IdD> + FullyDecompressedTreeStore<'a, NS::R<'store>, IdD>,
+    SD: PostOrder<'a, NS::R<'store>, IdD> + FullyDecompressedTreeStore<'a, NS::R<'store>, IdD>,
 >(
     dst_arena: &'a DD,
     src_arena: &'a SD,

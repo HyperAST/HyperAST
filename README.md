@@ -26,3 +26,9 @@ If you use the HyperAST is an academic purpose, please cite the following paper:
 }
 ```
 
+## TODO shores
+
+- [] handle error nodes from tree-sitter
+  should make hyperAST bijective even for bad code
+  - missing `Node::is_missing`
+  - error `Node::is_error`

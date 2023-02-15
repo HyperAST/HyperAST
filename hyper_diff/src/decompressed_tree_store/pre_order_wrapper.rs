@@ -8,6 +8,8 @@ use num_traits::{cast, zero, PrimInt, ToPrimitive, Zero};
 use crate::decompressed_tree_store::{DecompressedTreeStore, PostOrder};
 use hyper_ast::types::{LabelStore, NodeStore, Tree, WithChildren, WithSerialization};
 
+use super::FullyDecompressedTreeStore;
+
 pub struct SimplePreOrderMapper<'a, T: WithChildren, IdD, D: DecompressedTreeStore<'a, T, IdD>> {
     pub map: Vec<IdD>,
     // fc: Vec<IdD>,
@@ -32,6 +34,8 @@ impl<'a, T: WithChildren, IdD: Debug, D: Debug + DecompressedTreeStore<'a, T, Id
 
 impl<'a, T: 'a + WithChildren, IdD: PrimInt, D: PostOrder<'a, T, IdD>> From<&'a D>
     for SimplePreOrderMapper<'a, T, IdD, D>
+where
+    D: FullyDecompressedTreeStore<'a, T, IdD>,
 {
     fn from(x: &'a D) -> Self {
         let mut map: Vec<IdD> = vec![zero(); x.len()];
@@ -161,7 +165,7 @@ where
                     s.escape_debug()
                 )?;
             }
-            return Ok(())
+            return Ok(());
         }
         for i in 0..self.inner.map.len() {
             let o = self.inner.map[i];

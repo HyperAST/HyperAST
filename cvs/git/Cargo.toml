@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 git2 = { version = "0.16.1", features = ["vendored-libgit2"]}
-tree-sitter = "0.20.0"
+tree-sitter = "0.20.9"
 hyper_ast_gen_ts_java = { path = "../../gen/tree-sitter/java" }
 hyper_ast_gen_ts_xml = { path = "../../gen/tree-sitter/xml" }
 hyper_ast = { path = "../../hyper_ast" }

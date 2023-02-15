@@ -9,7 +9,7 @@ autobins = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tree-sitter = "0.20.0"
+tree-sitter = "0.20.9"
 hyper_ast = { path = "../hyper_ast" }
 hyper_diff = { path = "../hyper_diff" }
 hyper_ast_cvs_git = { path = "../cvs/git" }

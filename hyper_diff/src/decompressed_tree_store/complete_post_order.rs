@@ -19,8 +19,8 @@ use super::{
     pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
     simple_post_order::{SimplePOSlice, SimplePostOrder},
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings,
-    Iter, IterKr, POBorrowSlice, PostOrder, PostOrderIterable, PostOrderKeyRoots,
-    ShallowDecompressedTreeStore,
+    FullyDecompressedTreeStore, Iter, IterKr, POBorrowSlice, PostOrder, PostOrderIterable,
+    PostOrderKeyRoots, ShallowDecompressedTreeStore,
 };
 
 use logging_timer::time;
@@ -118,7 +118,9 @@ where
     T: Tree + WithSerialization,
     T::Type: Debug,
     LS: LabelStore<str, I = T::Label>,
-    D: DecompressedTreeStore<'a, T, IdD> + PostOrder<'a, T, IdD>,
+    D: DecompressedTreeStore<'a, T, IdD>
+        + PostOrder<'a, T, IdD>
+        + FullyDecompressedTreeStore<'a, T, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let m = SimplePreOrderMapper::from(self.inner);
@@ -141,7 +143,9 @@ where
     T: Tree,
     T::Type: Debug,
     LS: LabelStore<str, I = T::Label>,
-    D: DecompressedTreeStore<'a, T, IdD> + PostOrder<'a, T, IdD>,
+    D: DecompressedTreeStore<'a, T, IdD>
+        + PostOrder<'a, T, IdD>
+        + FullyDecompressedTreeStore<'a, T, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let m = SimplePreOrderMapper::from(self.inner);
@@ -254,7 +258,8 @@ where
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> super::DecompressedSubtree<'a, T> for CompletePostOrder<T, IdD>
+impl<'a, T: WithChildren, IdD: PrimInt> super::DecompressedSubtree<'a, T>
+    for CompletePostOrder<T, IdD>
 where
     T::TreeId: Clone,
     <T as WithChildren>::ChildIdx: PrimInt,
@@ -329,6 +334,13 @@ where
     fn is_descendant(&self, desc: &IdD, of: &IdD) -> bool {
         self.simple.is_descendant(desc, of)
     }
+}
+
+impl<'a, T: WithChildren, IdD: PrimInt> FullyDecompressedTreeStore<'a, T, IdD>
+    for CompletePostOrder<T, IdD>
+where
+    <T as Stored>::TreeId: Clone + Debug,
+{
 }
 
 impl<'a, T: WithChildren, IdD: PrimInt> ContiguousDescendants<'a, T, IdD>
