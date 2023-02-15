@@ -1,0 +1,43 @@
+[package]
+name = "polyglote"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+enums = { git = "https://github.com/mozilla/rust-code-analysis", branch = "master", package = "enums", version = "0.0.1" }
+tree-sitter = "0.20.9"
+tree-sitter-loader = "0.20"
+tree-sitter-query = { git="https://github.com/nvim-treesitter/tree-sitter-query.git", version = "0.0.1" }
+# tree-sitter-tsq = "0.19.0"
+tree-sitter-graph = "0.7.0" # { path = "../tree-sitter-graph" } 
+tree-sitter-typescript = "=0.20.1"
+tree-sitter-java = "=0.20.0"
+tree-sitter-python = "=0.20.2"
+tree-sitter-rust = "=0.20.3"
+tree-sitter-mozcpp = "0.20.2"
+tree-sitter-cpp = "0.20.0"
+tree-sitter-kotlin = "0.2.11"
+
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.79"
+
+hecs = "0.9.1"
+# hecs-hierarchy = "0.11.7"
+
+layout-rs = "0.1.1"
+
+fdg-sim = "0.8.0"
+fdg-img = "0.4.1"
+fdg-macroquad = "0.4.0"
+
+# fdg-sim = { path = "../fdg/fdg-sim"}
+# fdg-img = { path = "../fdg/fdg-img"}
+# fdg-macroquad = { path = "../fdg/fdg-macroquad"}
+
+plotters = "0.3"
+
+macroquad = "0.3"
+
+derive_deref = "1.1.1"
