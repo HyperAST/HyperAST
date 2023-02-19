@@ -1,0 +1,180 @@
+GET http://localhost:8080
+
+###
+
+GET http://localhost:8080/whatever
+
+###
+
+GET http://localhost:8080/demo.html
+
+###
+
+GET http://localhost:8080/hello.html
+
+###
+
+GET http://localhost:8080/demo-status
+
+###
+
+GET http://localhost:8080/demo-uri
+
+###
+
+GET http://localhost:8080/demo.png
+
+###
+
+GET http://localhost:8080/foo
+
+###
+
+PUT http://localhost:8080/foo
+
+###
+
+PUT http://localhost:8080/foo
+
+###
+
+PATCH http://localhost:8080/foo
+
+###
+
+POST http://localhost:8080/foo
+
+###
+
+DELETE http://localhost:8080/foo
+
+###
+
+GET http://localhost:8080/items/21
+
+###
+
+GET http://localhost:8080/items?a=b
+
+###
+
+GET http://localhost:8080/demo.json
+Accept: application/json
+
+###
+
+PUT http://localhost:8080/demo.json
+Content-Type: application/json
+
+{
+  "a": "c"
+}
+
+###
+
+GET http://localhost:8080/books
+
+###
+
+GET http://localhost:8080/books/10
+
+###
+
+PUT http://localhost:8080/books
+Content-Type: application/json
+
+{
+    "id": 1,
+    "title": "Decameron",
+    "author": "Giovanni Boccaccio"
+}
+
+###
+
+GET http://localhost:8080/books/2/form
+
+###
+
+POST http://localhost:8080/books/1/form
+Content-Type: application/x-www-form-urlencoded
+
+id=1&title=Another%20Title&author=Someone%20Else
+
+###
+
+DELETE http://localhost:8080/books/1
+
+###
+
+GET http://localhost:8080/users/1
+
+###
+
+POST http://localhost:8080/script/github/INRIA/spoon/78d88752a9f4b5bc490f5e6fb0e31dc9c2cf4bcd
+Content-Type: application/json
+
+{ "script": "return 10;" }
+
+
+###
+
+POST http://localhost:8080/script/github/INRIA/spoon/7c7f094bb22a350fa64289a94880cc3e7231468f
+Content-Type: application/json
+
+{ "script": "return 10;" }
+
+
+###
+
+POST http://localhost:8080/script/github/INRIA/spoon/4acedc53a13a727be3640fe234f7e261d2609d58
+Content-Type: application/json
+
+{ 
+  "init": "#{depth:0, files: 0}",
+  "filter": "if is_directory() { children().map(|x| {[x, #{depth: s.depth + 1}]}) } else {[]}",
+  "accumulate": 
+  "if is_directory() { p.files += s.files; } else if is_file() { p.files += s.files + 1; } else { p.files += s.files; }"
+}
+
+###
+
+POST http://localhost:8080/script/github/INRIA/spoon/4acedc53a13a727be3640fe234f7e261d2609d58
+Content-Type: application/json
+
+{ 
+  "init": "#{depth:0, files: 0}",
+  "filter": "if is_directory() { children().map(|x| {[x, #{depth: s.depth + 1, files: s.files}]}) } else {[]}",
+  "accumulate": 
+  "if is_directory() { p.files += s.files; } else if is_file() { p.files += 1; } else { p.files += 0; }"
+}
+
+###
+
+POST http://localhost:8080/script/github/INRIA/spoon/4acedc53a13a727be3640fe234f7e261d2609d58
+Content-Type: application/json
+
+{ 
+  "init": "#{depth:0, files: 0, type_decl: 0}",
+  "filter": "if is_directory() { children().map(|x| {[x, #{depth: s.depth + 1, files: s.files, type_decl: s.type_decl}]}) } else if is_file() { children().map(|x| {[x, #{depth: s.depth + 1, type_decl: s.type_decl}]}) } else {[]}",
+  "accumulate":
+  "if is_directory() { p.files += s.files; p.type_decl += s.type_decl; } else if is_file() { p.files += 1; p.type_decl += s.type_decl; } else if is_type_decl() { p.type_decl += 1; }"
+}
+
+###
+
+GET http://localhost:8080/keys
+
+###
+
+GET http://localhost:8080/3
+
+###
+
+POST http://localhost:8080/3
+
+aaaa42
+
+###
+
+DELETE http://localhost:8080/admin/key/3
+Authorization: Bearer secret-token
