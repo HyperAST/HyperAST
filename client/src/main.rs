@@ -1,16 +1,12 @@
 #![feature(array_chunks)]
 use std::{
     collections::HashMap,
-    fmt::Display,
     net::SocketAddr,
-    sync::{atomic::AtomicI64, Arc, RwLock},
-    thread,
+    sync::{Arc, RwLock},
     time::Duration,
 };
 
-use hyper_ast_cvs_git::{
-    git::fetch_github_repository, multi_preprocessed::PreProcessedRepositories,
-};
+use hyper_ast_cvs_git::multi_preprocessed::PreProcessedRepositories;
 use hyper_diff::{
     actions::{
         action_vec::apply_action,
@@ -28,6 +24,11 @@ use hyper_diff::{
     tree::tree_path::{CompressedTreePath, TreePath},
 };
 
+use crate::{
+    app::scripting_app,
+    examples::{example_app, kv_store_app},
+};
+use axum::{body::Bytes, Router};
 use hyper_ast::{
     cyclomatic::{Mcc, MetaData},
     hashed::HashedNode,
@@ -45,365 +46,18 @@ use hyper_ast_gen_ts_java::legion_with_refs::{
     print_tree_ids, print_tree_syntax, print_tree_syntax_with_ids, JavaTreeGen,
 };
 use hyper_diff::matchers::heuristic::gt::greedy_subtree_matcher::GreedySubtreeMatcher;
-use rhai::{Array, Dynamic, Engine, Map, Scope};
-use serde::Deserialize;
+use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
-#[derive(Debug)]
-enum ScriptingError {
-    Compiling(String),
-    Evaluation(String),
-}
-impl Display for ScriptingError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ScriptingError::Compiling(x) => writeln!(f, "script compile: {}", x),
-            ScriptingError::Evaluation(x) => writeln!(f, "script evaluation: {}", x),
-        }
-    }
-}
-
-impl IntoResponse for ScriptingError {
-    fn into_response(self) -> Response {
-        self.to_string().into_response()
-    }
-}
-
+mod app;
+mod examples;
+mod scripting;
 #[derive(Default)]
-struct AppState {
+pub struct AppState {
     db: HashMap<String, Bytes>,
     repositories: PreProcessedRepositories,
 }
 
-#[derive(Deserialize, Clone)]
-struct ScriptingParam {
-    user: String,
-    name: String,
-    commit: String,
-}
-
-#[derive(Deserialize)]
-struct ScriptContent {
-    init: String,
-    accumulate: String,
-    filter: String,
-}
-
-// #[axum_macros::debug_handler]
-async fn scripting(
-    axum::extract::Path(path): axum::extract::Path<ScriptingParam>,
-    axum::extract::State(state): axum::extract::State<SharedState>,
-    axum::extract::Json(script): axum::extract::Json<ScriptContent>,
-) -> axum::response::Result<String> {
-    let ScriptingParam { user, name, commit } = path.clone();
-
-    let mut engine = Engine::new();
-    engine.disable_symbol("/");
-
-    let init_script = engine
-        .compile(script.init.clone())
-        .map_err(|x| ScriptingError::Compiling(format!("{}, {}", x, script.init.clone())))?;
-
-    let accumulate_script = engine
-        .compile(script.accumulate.clone())
-        .map_err(|x| ScriptingError::Compiling(format!("{}, {}", x, script.accumulate.clone())))?;
-
-    let filter_script = engine
-        .compile(script.filter.clone())
-        .map_err(|x| ScriptingError::Compiling(format!("{}, {}", x, script.filter.clone())))?;
-
-    let mut repo = fetch_github_repository(&format!("{}/{}", user, name));
-    log::info!("done cloning {user}/{name}");
-    let mut get_mut = state.write().unwrap();
-    let commits = get_mut
-        .repositories
-        .pre_process_with_limit(&mut repo, "", &commit, "", 2);
-    log::info!("done construction of {commits:?} in {user}/{name}");
-
-    let commit_src = get_mut
-        .repositories
-        .commits
-        .get_key_value(&commits[0])
-        .unwrap();
-    let src_tr = commit_src.1.ast_root;
-    use hyper_ast::types::WithStats;
-    let node_store = &get_mut.repositories.processor.main_stores.node_store;
-    let size = node_store.resolve(src_tr).size();
-
-    drop(get_mut);
-
-    macro_rules! ns {
-        ($s:expr) => {
-            $s.write()
-                .unwrap()
-                .repositories
-                .processor
-                .main_stores
-                .node_store
-        };
-    }
-
-    #[derive(Debug)]
-    struct Acc {
-        sid: NodeIdentifier,
-        value: Option<Dynamic>,
-        parent: usize,
-        pending_cs: isize,
-    }
-
-    let init: Dynamic = engine
-        .eval_ast(&init_script)
-        .map_err(|x| ScriptingError::Evaluation(x.to_string()))?;
-    let mut stack: Vec<Acc> = vec![];
-    stack.push(Acc {
-        sid: src_tr,
-        value: Some(init),
-        parent: 0,
-        pending_cs: -1,
-    });
-    let result: Dynamic = loop {
-        let Some(mut acc) = stack.pop() else {
-            unreachable!()
-        };
-        let stack_len = stack.len();
-        // dbg!(&acc);
-        if acc.pending_cs < 0 {
-            let mut engine = Engine::new();
-            let mut scope = Scope::new();
-            scope.push(
-                "s",
-                acc.value.clone().unwrap(), //_or(Default::default()),
-            );
-            engine.disable_symbol("/");
-            let current = acc.sid;
-            let s = state.clone();
-            engine.register_fn("is_directory", move || {
-                let node_store = &&ns!(s);
-                node_store.resolve(current).get_type().is_directory()
-            });
-            let s = state.clone();
-            engine.register_fn("is_type_decl", move || {
-                let node_store = &&ns!(s);
-                node_store.resolve(current).get_type().is_type_declaration()
-            });
-            let s = state.clone();
-            engine.register_fn("is_file", move || {
-                let node_store = &&ns!(s);
-                node_store.resolve(current).get_type().is_file()
-            });
-            let s = state.clone();
-            engine.register_fn("children", move || {
-                let node_store = &ns!(s);
-                node_store
-                    .resolve(current)
-                    .children()
-                    .map_or(Default::default(), |v| {
-                        v.0.iter().map(|x| Dynamic::from(*x)).collect::<Array>()
-                    })
-            });
-            let prepared: Dynamic = engine
-                .eval_ast_with_scope(&mut scope, &filter_script)
-                .map_err(|x| ScriptingError::Evaluation(x.to_string()))?;
-            if let Some(prepared) = prepared.try_cast::<Vec<Dynamic>>() {
-                stack.push(Acc {
-                    pending_cs: prepared.len() as isize,
-                    ..acc
-                });
-                stack.extend(prepared.into_iter().map(|x| x.cast()).map(|x: Array| {
-                    let mut it = x.into_iter();
-                    Acc {
-                        sid: it.next().unwrap().cast(),
-                        value: Some(it.next().unwrap()),
-                        parent: stack_len,
-                        pending_cs: -1,
-                    }
-                }));
-            }
-            continue;
-        }
-        if stack.is_empty() {
-            assert_eq!(acc.parent, 0);
-            break acc.value.unwrap();
-        }
-        let mut engine = Engine::new();
-        let mut scope = Scope::new();
-        scope.push("s", acc.value.take().unwrap()); //_or(Default::default()));
-        scope.push(
-            "p",
-            stack[acc.parent].value.take().unwrap(), //_or(Default::default()),
-        );
-        engine.disable_symbol("/");
-        let current = acc.sid;
-        let s = state.clone();
-        engine.register_fn("size", move || {
-            let node_store = &ns!(s);
-            node_store.resolve(current).size() as i64
-        });
-        let s = state.clone();
-        engine.register_fn("type", move || {
-            let node_store = &ns!(s);
-            node_store.resolve(current).get_type().to_string()
-        });
-        let s = state.clone();
-        engine.register_fn("is_type_decl", move || {
-            let node_store = &&ns!(s);
-            node_store.resolve(current).get_type().is_type_declaration()
-        });
-        let s = state.clone();
-        engine.register_fn("is_directory", move || {
-            let node_store = &&ns!(s);
-            node_store.resolve(current).get_type().is_directory()
-        });
-        let s = state.clone();
-        engine.register_fn("is_file", move || {
-            let node_store = &&ns!(s);
-            node_store.resolve(current).get_type().is_file()
-        });
-        engine
-            .eval_ast_with_scope(&mut scope, &accumulate_script)
-            .map_err(|x| ScriptingError::Evaluation(x.to_string()))?;
-        stack[acc.parent].value = Some(scope.get_value("p").unwrap());
-    };
-    let r = format!(
-        "Computed {result} in commit {} of size {size} at github.com/{user}/{name}",
-        &commit[..8.min(commit.len())]
-    );
-    Ok(r)
-}
-
-use axum::{
-    body::Bytes,
-    error_handling::HandleErrorLayer,
-    extract::DefaultBodyLimit,
-    handler::Handler,
-    response::{IntoResponse, Response},
-    routing::{get, post},
-    Router,
-};
-use tower::{limit::ConcurrencyLimitLayer, BoxError, ServiceBuilder};
-use tower_http::{
-    compression::CompressionLayer, limit::RequestBodyLimitLayer, trace::TraceLayer,
-    ServiceBuilderExt,
-};
-use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
-
-/// axum handler for "GET /" which returns a string and causes axum to
-/// immediately respond with status code `200 OK` and with the string.
-pub async fn hello() -> String {
-    "Hello, World!".into()
-}
-
-/// axum handler for any request that fails to match the router routes.
-/// This implementation returns HTTP status code Not Found (404).
-pub async fn fallback(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
-    (
-        axum::http::StatusCode::NOT_FOUND,
-        format!("No route {}", uri),
-    )
-}
-
-/// Tokio signal handler that will wait for a user to press CTRL+C.
-/// We use this in our hyper `Server` method `with_graceful_shutdown`.
-async fn shutdown_signal() {
-    tokio::signal::ctrl_c()
-        .await
-        .expect("expect tokio signal ctrl-c");
-    println!("signal shutdown");
-}
-
 type SharedState = Arc<RwLock<AppState>>;
-
-async fn kv_get(
-    axum::extract::Path(key): axum::extract::Path<String>,
-    axum::extract::State(state): axum::extract::State<SharedState>,
-) -> Result<Bytes, hyper::StatusCode> {
-    let db = &state.read().unwrap().db;
-
-    if let Some(value) = db.get(&key) {
-        Ok(value.clone())
-    } else {
-        Err(hyper::StatusCode::NOT_FOUND)
-    }
-}
-
-async fn kv_set(
-    axum::extract::Path(key): axum::extract::Path<String>,
-    axum::extract::State(state): axum::extract::State<SharedState>,
-    bytes: Bytes,
-) {
-    state.write().unwrap().db.insert(key, bytes);
-}
-
-async fn list_keys(axum::extract::State(state): axum::extract::State<SharedState>) -> String {
-    let db = &state.read().unwrap().db;
-
-    db.keys()
-        .map(|key| key.to_string())
-        .collect::<Vec<String>>()
-        .join("\n")
-}
-
-fn example_app() -> Router<SharedState> {
-    Router::new().route("/", get(hello))
-    // .route("/demo.html", get(get_demo_html))
-    // .route("/hello.html", get(hello_html))
-    // .route("/demo-status", get(demo_status))
-    // .route("/demo-uri", get(demo_uri))
-    // .route("/demo.png", get(get_demo_png))
-    // .route(
-    //     "/foo",
-    //     get(get_foo)
-    //         .put(put_foo)
-    //         .patch(patch_foo)
-    //         .post(post_foo)
-    //         .delete(delete_foo),
-    // )
-    // .route("/items/:id", get(get_items_id))
-    // .route("/items", get(get_items))
-    // .route("/demo.json", get(get_demo_json).put(put_demo_json))
-}
-
-fn kv_store_app(st: SharedState) -> Router<SharedState> {
-    Router::new()
-        .route(
-            "/:key",
-            // Add compression to `kv_get`
-            get(kv_get.layer(CompressionLayer::new()))
-                // But don't compress `kv_set`
-                .post_service(
-                    kv_set
-                        .layer((
-                            DefaultBodyLimit::disable(),
-                            RequestBodyLimitLayer::new(1024 * 5_000 /* ~5mb */),
-                            ConcurrencyLimitLayer::new(1),
-                        ))
-                        .with_state(st),
-                ),
-        )
-        .route("/keys", get(list_keys))
-}
-
-fn scripting_app(_st: SharedState) -> Router<SharedState> {
-    let scripting_service_config = ServiceBuilder::new()
-        .layer(HandleErrorLayer::new(|e: BoxError| async move {
-            dbg!(e);
-        }))
-        .load_shed()
-        .concurrency_limit(16)
-        .buffer(200)
-        .rate_limit(10, Duration::from_secs(5))
-        .request_body_limit(1024 * 5_000 /* ~5mb */)
-        .timeout(Duration::from_secs(10))
-        .layer(TraceLayer::new_for_http());
-    Router::new()
-        .route(
-            "/script/github/:user/:name/:commit",
-            post(scripting).layer(scripting_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
-        )
-        .route(
-            "/script/gitlab/:user/:name/:commit",
-            post(scripting).layer(scripting_service_config), // .with_state(Arc::clone(&shared_state)),
-        )
-}
 
 #[tokio::main]
 async fn main() {
@@ -455,47 +109,23 @@ fn test_scripting() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// #[actix_web::main]
-// async fn main() -> std::io::Result<()> {
-//     HttpServer::new(move || App::new().service(scripting))
-//         .bind(("127.0.0.1", 8080))
-//         .unwrap()
-//         .run()
-//         .await
-// }
+/// axum handler for any request that fails to match the router routes.
+/// This implementation returns HTTP status code Not Found (404).
+pub async fn fallback(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
+    (
+        axum::http::StatusCode::NOT_FOUND,
+        format!("No route {}", uri),
+    )
+}
 
-// mod identity;
-
-// async fn main3() -> std::io::Result<()> {
-//     // let secret_key = cookie::Key::generate();
-//     // let redis_store = actix_session::storage::RedisSessionStore::new("redis://127.0.0.1:6379")
-//     //     .await
-//     //     .unwrap();
-//     HttpServer::new(move || {
-//         // let auth = HttpAuthentication::basic(|req, _credentials| async { dbg!();Ok(req) });
-//         App::new()
-//             // .wrap(middleware::Logger::default())
-//             // .wrap(auth)
-//             // .wrap(
-//             //     IdentityMiddleware::builder()
-//             //         .login_deadline(Some(Duration::from_secs(60 * 60)))
-//             //         .visit_deadline(Some(Duration::from_secs(10 * 60)))
-//             //         .build(),
-//             // )
-//             // .wrap(SessionMiddleware::new(
-//             //     redis_store.clone(),
-//             //     secret_key.clone(),
-//             // ))
-//             // .service(identity::index)
-//             // .service(identity::login)
-//             // .service(identity::logout)
-//             .service(scripting)
-//     })
-//     .bind(("127.0.0.1", 8080))
-//     .unwrap()
-//     .run()
-//     .await
-// }
+/// Tokio signal handler that will wait for a user to press CTRL+C.
+/// We use this in our hyper `Server` method `with_graceful_shutdown`.
+async fn shutdown_signal() {
+    tokio::signal::ctrl_c()
+        .await
+        .expect("expect tokio signal ctrl-c");
+    println!("signal shutdown");
+}
 
 fn main2() {
     // TODO fix stores and cache should not be leaked to make them static
