@@ -6,7 +6,7 @@ use hyper_ast::{
 };
 use hyper_ast_cvs_git::git::fetch_github_repository;
 use rhai::{Array, Dynamic, Engine, Scope, packages::{CorePackage, Package, BasicArrayPackage}};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::SharedState;
 
@@ -17,11 +17,11 @@ pub struct ScriptingParam {
     commit: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct ScriptContent {
-    init: String,
-    accumulate: String,
-    filter: String,
+    pub init: String,
+    pub accumulate: String,
+    pub filter: String,
 }
 
 #[derive(Debug)]

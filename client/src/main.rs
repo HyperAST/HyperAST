@@ -27,6 +27,7 @@ use hyper_diff::{
 use crate::{
     app::scripting_app,
     examples::{example_app, kv_store_app},
+    scripting::ScriptContent,
 };
 use axum::{body::Bytes, Router};
 use hyper_ast::{
@@ -96,14 +97,36 @@ fn test_scripting() -> Result<(), Box<dyn std::error::Error>> {
     let req_build = client.post(
         "http://localhost:8080/script/github/INRIA/spoon/4acedc53a13a727be3640fe234f7e261d2609d58",
     );
+
+    let script = ScriptContent {
+        init: r##"#{depth:0, files: 0, type_decl: 0}"##.to_string(),
+        filter: r##"
+if is_directory() {
+    children().map(|x| {[x, #{depth: s.depth + 1, files: s.files, type_decl: s.type_decl}]})
+} else if is_file() {
+    children().map(|x| {[x, #{depth: s.depth + 1, type_decl: s.type_decl}]})
+} else {
+    []
+}"##
+        .to_string(),
+        accumulate: r##"
+if is_directory() {
+    p.files += s.files;
+    p.type_decl += s.type_decl;
+} else if is_file() {
+    p.files += 1;
+    p.type_decl += s.type_decl;
+} else if is_type_decl() {
+    p.type_decl += 1; 
+}"##
+        .to_string(),
+    };
+
     let req = req_build
-    .timeout(Duration::from_secs(60*60))
-    .header("content-type", "application/json")
-    .body(r##"{
-"init": "#{depth:0, files: 0, type_decl: 0}",
-"filter": "if is_directory() { children().map(|x| {[x, #{depth: s.depth + 1, files: s.files, type_decl: s.type_decl}]}) } else if is_file() { children().map(|x| {[x, #{depth: s.depth + 1, type_decl: s.type_decl}]}) } else {[]}",
-"accumulate":"if is_directory() { p.files += s.files; p.type_decl += s.type_decl; } else if is_file() { p.files += 1; p.type_decl += s.type_decl; } else if is_type_decl() { p.type_decl += 1; }"
-}"##).build()?;
+        .timeout(Duration::from_secs(60 * 60))
+        .header("content-type", "application/json")
+        .body(serde_json::to_string(&script).unwrap())
+        .build()?;
     let resp = client.execute(req)?;
     println!("{:#?}", resp.text()?);
     Ok(())
