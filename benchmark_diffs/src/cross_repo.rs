@@ -10,8 +10,8 @@ use hyper_ast_cvs_git::{
 };
 use num_traits::ToPrimitive;
 
+use hyper_diff::algorithms::{self, ComputeTime};
 use crate::{
-    algorithms::{self, ComputeTime},
     window_combination::{as_nospaces, write_perfs}, other_tools, postprocess::{CompressedBfPostProcess, PathJsonPostProcess},
 };
 
@@ -46,7 +46,7 @@ pub fn windowed_commits_compare(
                 x.after,
                 x.dir_path,
                 limit,
-            )
+            ).unwrap()
         })
         .collect();
     let hyperast_size = memusage_linux() - mu;

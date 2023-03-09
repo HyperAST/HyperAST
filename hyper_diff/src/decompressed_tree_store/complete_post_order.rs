@@ -12,6 +12,7 @@ use num_traits::{cast, PrimInt, ToPrimitive, Zero};
 
 use hyper_ast::{
     position::Position,
+    store::nodes::legion::HashedNodeRef,
     types::{self, LabelStore, NodeStore, Stored, Tree, Type, WithChildren, WithSerialization},
 };
 
@@ -760,3 +761,24 @@ where
         IterKr(self.kr.borrow().iter_ones(), PhantomData)
     }
 }
+
+
+// impl<'a, IdD> super::Persistable for CompletePostOrder<HashedNodeRef<'a>, IdD> {
+//     type Persisted = CompletePostOrder<
+//         super::PersistedNode<<HashedNodeRef<'a> as types::Stored>::TreeId>,
+//         IdD,
+//     >;
+
+//     fn persist(self) -> Self::Persisted {
+//         CompletePostOrder {
+//             simple: self.simple.persist(),
+//             kr: self.kr,
+//         }
+//     }
+//     unsafe fn unpersist(this: Self::Persisted) -> Self {
+//         Self {
+//             simple: <SimplePostOrder<hyper_ast::store::nodes::legion::HashedNodeRef<'a>,IdD> as super::Persistable>::unpersist(this.simple),
+//             kr: this.kr,
+//         }
+//     }
+// }

@@ -11,9 +11,8 @@ use hyper_ast::{
 };
 use hyper_ast_cvs_git::{git::fetch_github_repository, preprocessed::PreProcessedRepository};
 use num_traits::ToPrimitive;
-
+use hyper_diff::algorithms::{self, ComputeTime};
 use crate::{
-    algorithms::{self, ComputeTime},
     other_tools,
     postprocess::{CompressedBfPostProcess, PathJsonPostProcess},
 };
@@ -276,7 +275,7 @@ pub(crate) fn write_perfs<Id:Display>(
     buf_perfs:&mut BufWriter<File>,
     kind: &str,
     oid_src: &Id, oid_dst: &Id, src_s: usize, dst_s: usize,
-    summarized_lazy:&crate::algorithms::ResultsSummary<crate::algorithms::PreparedMappingDurations<2>>) -> Result<(), std::io::Error> {
+    summarized_lazy:&hyper_diff::algorithms::ResultsSummary<hyper_diff::algorithms::PreparedMappingDurations<2>>) -> Result<(), std::io::Error> {
     writeln!(
         buf_perfs,
         "{}/{},{},{},{},{},{},{},{},{},{},{},{}",

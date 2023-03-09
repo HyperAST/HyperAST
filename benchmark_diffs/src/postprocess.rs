@@ -944,8 +944,8 @@ pub fn print_mappings_no_ranges<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
     use crate::{
-        algorithms::{self, DiffResult, MappingDurations},
         other_tools,
         preprocess::{parse_dir_pair, JavaPreprocessFileSys},
     };

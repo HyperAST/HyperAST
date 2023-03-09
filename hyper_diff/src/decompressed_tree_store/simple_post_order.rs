@@ -13,13 +13,38 @@ use hyper_ast::{
 use super::{
     basic_post_order::{BasicPOSlice, BasicPostOrder},
     ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings,
-    PostOrder, ShallowDecompressedTreeStore, FullyDecompressedTreeStore,
+    FullyDecompressedTreeStore, PostOrder, ShallowDecompressedTreeStore,
 };
 
 pub struct SimplePostOrder<T: Stored, IdD> {
     pub(super) basic: BasicPostOrder<T, IdD>,
     pub(super) id_parent: Box<[IdD]>,
 }
+
+// impl<'a, IdD> super::Persistable
+//     for SimplePostOrder<hyper_ast::store::nodes::legion::HashedNodeRef<'a>, IdD>
+// {
+//     type Persisted = SimplePostOrder<
+//         super::PersistedNode<
+//             <hyper_ast::store::nodes::legion::HashedNodeRef<'a> as types::Stored>::TreeId,
+//         >,
+//         IdD,
+//     >;
+
+//     fn persist(self) -> Self::Persisted {
+//         SimplePostOrder {
+//             basic: self.basic.persist(),
+//             id_parent: self.id_parent,
+//         }
+//     }
+
+//     unsafe fn unpersist(this: Self::Persisted) -> Self {
+//         Self {
+//             basic: <BasicPostOrder<hyper_ast::store::nodes::legion::HashedNodeRef<'a>,IdD> as super::Persistable>::unpersist(this.basic),
+//             id_parent: this.id_parent,
+//         }
+//     }
+// }
 
 impl<T: Stored, IdD> Deref for SimplePostOrder<T, IdD> {
     type Target = BasicPostOrder<T, IdD>;
@@ -114,7 +139,9 @@ where
         let mut idxs: Vec<T::ChildIdx> = vec![];
         let mut curr = *descendant;
         while &curr != parent {
-            let p = this.parent(&curr).expect("reached root before given parent");
+            let p = this
+                .parent(&curr)
+                .expect("reached root before given parent");
             let idx = this._position_in_parent(&curr, &p);
             idxs.push(idx);
             curr = p;

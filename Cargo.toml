@@ -9,7 +9,7 @@ members = [
     "tree-sitter_types",
     "ref-mining-evaluation",
     "benchmark_diffs",
-    "polyglote",
+    "hyper_app",
 ]
 exclude = ["gen/tree-sitter/java/tree-sitter-java"]
 default-members = [

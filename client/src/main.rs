@@ -3,9 +3,10 @@ use std::{
     collections::HashMap,
     net::SocketAddr,
     sync::{Arc, RwLock},
-    time::Duration,
+    time::Duration, io,
 };
 
+use http::StatusCode;
 use hyper_ast_cvs_git::multi_preprocessed::PreProcessedRepositories;
 use hyper_diff::{
     actions::{
@@ -21,15 +22,16 @@ use hyper_diff::{
         mapping_store::{DefaultMappingStore, DefaultMultiMappingStore, VecStore},
         optimal::zs::ZsMatcher,
     },
-    tree::tree_path::{CompressedTreePath, TreePath},
+    tree::tree_path::{CompressedTreePath, TreePath}, algorithms::gumtree_lazy,
 };
+use tower_http::{services::ServeDir, cors::CorsLayer};
 
 use crate::{
-    app::scripting_app,
+    app::{scripting_app, fetch_git_file, track_code_route, view_code_route, commit_metadata_route},
     examples::{example_app, kv_store_app},
     scripting::ScriptContent,
 };
-use axum::{body::Bytes, Router};
+use axum::{body::{Bytes}, Router, routing::get_service, response::IntoResponse};
 use hyper_ast::{
     cyclomatic::{Mcc, MetaData},
     hashed::HashedNode,
@@ -52,10 +54,15 @@ use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::Subs
 mod app;
 mod examples;
 mod scripting;
+mod file;
+mod track;
+mod view;
+mod commit;
 #[derive(Default)]
 pub struct AppState {
     db: HashMap<String, Bytes>,
     repositories: PreProcessedRepositories,
+    mappings: HashMap<(NodeIdentifier,NodeIdentifier), gumtree_lazy::PersistableMappings<NodeIdentifier>>,
 }
 
 type SharedState = Arc<RwLock<AppState>>;
@@ -65,7 +72,7 @@ async fn main() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "client=debug,tower_http=debug".into()),
+                .unwrap_or_else(|_| "client=debug,client::file=debug,tower_http=debug".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -74,7 +81,12 @@ async fn main() {
         .fallback(fallback)
         .merge(kv_store_app(Arc::clone(&shared_state)))
         .merge(scripting_app(Arc::clone(&shared_state)))
+        .merge(fetch_git_file(Arc::clone(&shared_state)))
+        .merge(track_code_route(Arc::clone(&shared_state)))
+        .merge(view_code_route(Arc::clone(&shared_state)))
+        .merge(commit_metadata_route(Arc::clone(&shared_state)))
         .merge(example_app())
+        .layer(CorsLayer::permissive())
         .with_state(Arc::clone(&shared_state));
     // TODOs auth admin to list pending constructions,
     // all repositories are blacklised by default
@@ -82,7 +94,11 @@ async fn main() {
     // to whitelist repositories either for all past commits or also all future commits
     // manage users and quota
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+    
+    let local = [127, 0, 0, 1];
+    let global = [0, 0, 0, 0];
+    
+    let addr = SocketAddr::from((global, 8080));
     tracing::debug!("listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())

@@ -1,7 +1,7 @@
 use std::{env, fs::File, io::Write, path::Path, time::Instant};
 
+use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
 use crate::{
-    algorithms::{self, DiffResult, MappingDurations},
     other_tools,
     postprocess::{CompressedBfPostProcess, PathJsonPostProcess, SimpleJsonPostProcess},
     preprocess::{iter_dirs, parse_dir_pair, parse_string_pair, JavaPreprocessFileSys},

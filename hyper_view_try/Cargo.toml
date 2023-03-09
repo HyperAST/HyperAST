@@ -1,0 +1,87 @@
+[package]
+name = "egui_frontend"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# tree-sitter = "0.20.9"
+# tree-sitter-cli = "0.20.7"
+# hyper_ast = { path = "../hyper_ast" }
+# hyper_diff = { path = "../hyper_diff" }
+# hyper_ast_cvs_git = { path = "../cvs/git" }
+# hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
+# env_logger = "0.9.0"
+# log = { version = "0.4.6", features = [
+#     "max_level_debug",
+#     "release_max_level_warn",
+# ] }
+
+# rhai = { version = "1.12.0", features = ["sync"] }
+
+ahash = "0.8"
+# anyhow.workspace = true
+bytemuck = { version = "1.11", features = ["extern_crate_alloc"] }
+chrono = "0.4"
+eframe = { version = "0.20.1", default-features = false, features = [
+  "default_fonts",
+  "persistence",
+  "puffin",
+  "wgpu",
+] }
+egui = { version = "0.21.0", features = ["extra_debug_asserts", "tracing"] }
+# egui_dock = { version = "0.20.1", features = ["serde"] }
+egui_extras = { version = "0.21.0", features = ["tracing"] }
+# egui-notify = "0.6"
+# egui-wgpu.version = "0.20.1"
+# enumset = "1.0.12"
+image = { version = "0.24.5", default-features = false, features = [
+  "jpeg",
+  "png",
+] }
+# instant = { version = "0.1", features = ["wasm-bindgen"] }
+# itertools = "0.10"
+# lazy_static.workspace = true
+# macaw = { workspace = true, features = ["with_serde"] }
+# mint = "0.5"
+# ndarray = "0.15"
+# nohash-hasher = "0.2"
+# ordered-float = { version = "3.2", features = ["serde"] }
+# poll-promise = "0.2"
+# rand = { version = "0.8", features = ["small_rng"] }
+# rfd = "0.11"
+serde = { version = "1", features = ["derive"] }
+slotmap = { version = "1.0.6", features = ["serde"] }
+smallvec = { version = "1.10", features = ["serde"] }
+uuid = { version = "1.1", features = ["serde", "v4", "js"] }
+# vec1 = "1.8"
+# wgpu.workspace = true
+
+# # native dependencies:
+# [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# arboard = { version = "3.2", default-features = false, features = [
+#   "image-data",
+# ] }
+# ctrlc = { version = "3.0", features = ["termination"] }
+# puffin_http = "0.11"
+# puffin.workspace = true
+
+# [target.'cfg(any(target_os = "macos"))'.dependencies]
+# cocoa = "0.24.1"
+# objc = "0.2.7"
+
+# [target.'cfg(any(target_os = "windows"))'.dependencies]
+# winapi = "0.3.9"
+
+# # web dependencies:
+# [target.'cfg(target_arch = "wasm32")'.dependencies]
+# console_error_panic_hook = "0.1.6"
+# tracing = "0.1"
+# wasm-bindgen-futures = "0.4"
+
+[dev-dependencies]
+reqwest = { version = "0.11", features = ["blocking"] }
+
+[build-dependencies]
+cargo_metadata = "0.15"

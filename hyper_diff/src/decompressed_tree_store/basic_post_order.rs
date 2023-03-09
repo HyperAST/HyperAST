@@ -5,8 +5,8 @@ use num_traits::{cast, one, zero, PrimInt, ToPrimitive};
 use hyper_ast::types::{self, Children, IterableChildren, NodeStore, Stored, WithChildren};
 
 use super::{
-    ContiguousDescendants, DecompressedTreeStore, Iter, PostOrder,
-    PostOrderIterable, ShallowDecompressedTreeStore,
+    ContiguousDescendants, DecompressedTreeStore, Iter, PostOrder, PostOrderIterable,
+    ShallowDecompressedTreeStore,
 };
 
 pub struct BasicPostOrder<T: Stored, IdD> {
@@ -17,7 +17,7 @@ pub struct BasicPostOrder<T: Stored, IdD> {
     ///
     /// it is so powerful even the basic layout should keep it
     pub(crate) llds: Box<[IdD]>,
-    pub(super) _phantom: std::marker::PhantomData<*const T>,
+    pub(super) _phantom: std::marker::PhantomData<T>,
 }
 
 impl<T: Stored, IdD> BasicPostOrder<T, IdD> {
@@ -334,8 +334,8 @@ where
     {
         (*x - self.first_descendant(x) + one()).to_usize().unwrap()
     }
-    
-    fn is_descendant(&self, desc: &IdD,of: &IdD) -> bool {
+
+    fn is_descendant(&self, desc: &IdD, of: &IdD) -> bool {
         desc < of && &self.first_descendant(of) <= desc
     }
 }
@@ -535,8 +535,34 @@ where
     {
         (*x - self.first_descendant(x) + one()).to_usize().unwrap()
     }
-    
-    fn is_descendant(&self, desc: &IdD,of: &IdD) -> bool {
+
+    fn is_descendant(&self, desc: &IdD, of: &IdD) -> bool {
         desc < of && &self.first_descendant(of) <= desc
     }
 }
+
+// impl<'a, IdD> super::Persistable
+//     for BasicPostOrder<hyper_ast::store::nodes::legion::HashedNodeRef<'a>, IdD>
+// {
+//     type Persisted = BasicPostOrder<
+//         super::PersistedNode<
+//             <hyper_ast::store::nodes::legion::HashedNodeRef<'a> as types::Stored>::TreeId,
+//         >,
+//         IdD,
+//     >;
+
+//     fn persist(self) -> Self::Persisted {
+//         BasicPostOrder {
+//             id_compressed: self.id_compressed,
+//             llds: self.llds,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
+//     unsafe fn unpersist(this: Self::Persisted) -> Self {
+//         Self {
+//             id_compressed: this.id_compressed,
+//             llds: this.llds,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
+// }

@@ -300,3 +300,22 @@ pub trait WrapDecompressed<
     where
         S: NodeStore<T::TreeId, R<'a> = T>;
 }
+
+
+
+// /// Used as a workaround to cache stuff that uses phantom types ie. HashedNodeRef in HyperAST
+// /// TODO provide a cache wrapping this concern.
+// pub trait Persistable {
+//     type Persisted;
+//     fn persist(self) -> Self::Persisted;
+//     unsafe fn unpersist(this: Self::Persisted) -> Self;
+// }
+
+pub struct PersistedNode<I>(I);
+
+impl<I> hyper_ast::types::Node for PersistedNode<I> {
+}
+
+impl<I:Eq> hyper_ast::types::Stored for PersistedNode<I> {
+    type TreeId=I;
+}

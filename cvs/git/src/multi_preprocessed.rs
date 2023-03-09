@@ -48,13 +48,13 @@ impl PreProcessedRepositories {
         after: &str,
         dir_path: &str,
         limit: usize,
-    ) -> Vec<git2::Oid> {
+    ) -> Result<Vec<git2::Oid>, git2::Error> {
         log::info!(
-            "commits to process: {}",
-            all_commits_between(&repository, before, after).count()
+            "commits to process: {:?}",
+            all_commits_between(&repository, before, after).map(|x|x.count())
         );
         let mut processing_ordered_commits = vec![];
-        let rw = all_commits_between(&repository, before, after);
+        let rw = all_commits_between(&repository, before, after)?;
         rw
             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
             .take(limit) // TODO make a variable
@@ -66,7 +66,7 @@ impl PreProcessedRepositories {
                 processing_ordered_commits.push(oid.clone());
                 self.commits.insert(oid.clone(), c);
             });
-        processing_ordered_commits
+        Ok(processing_ordered_commits)
     }
 
     pub fn make(acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {

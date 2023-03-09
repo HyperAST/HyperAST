@@ -145,11 +145,15 @@ impl PreProcessedRepository {
         dir_path: &str,
     ) -> Vec<git2::Oid> {
         log::info!(
-            "commits to process: {}",
-            all_commits_between(&repository, before, after).count()
+            "commits to process: {:?}",
+            all_commits_between(&repository, before, after).map(|x| x.count())
         );
         let mut processing_ordered_commits = vec![];
         let rw = all_commits_between(&repository, before, after);
+        let Ok(rw) = rw else {
+            dbg!(rw.err());
+            return vec![]
+        };
         rw
             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
             // .take(40) // TODO make a variable
@@ -182,7 +186,7 @@ impl PreProcessedRepository {
         }
         // log::info!(
         //     "commits to process: {}",
-        //     all_commits_between(&repository, before, after).count()
+        //     all_commits_between(&repository, before, after).map(|x|x.count())
         // );
         // let rw = all_commits_between(&repository, before, after);
         let mut oids = HashSet::<_>::default();
@@ -257,11 +261,15 @@ impl PreProcessedRepository {
         limit: usize,
     ) -> Vec<git2::Oid> {
         log::info!(
-            "commits to process: {}",
-            all_commits_between(&repository, before, after).count()
+            "commits to process: {:?}",
+            all_commits_between(&repository, before, after).map(|x| x.count())
         );
         let mut processing_ordered_commits = vec![];
         let rw = all_commits_between(&repository, before, after);
+        let Ok(rw) = rw else {
+            dbg!(rw.err());
+            return vec![]
+        };
         rw
             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
             .take(limit) // TODO make a variable
@@ -298,11 +306,15 @@ impl PreProcessedRepository {
         dir_path: &str,
     ) -> Vec<git2::Oid> {
         log::info!(
-            "commits to process: {}",
-            all_commits_between(&repository, before, after).count()
+            "commits to process: {:?}",
+            all_commits_between(&repository, before, after).map(|x| x.count())
         );
         let mut processing_ordered_commits = vec![];
         let rw = all_commits_between(&repository, before, after);
+        let Ok(rw) = rw else {
+            dbg!(rw.err());
+            return vec![]
+        };
         rw
             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
             // .take(2)
@@ -571,6 +583,33 @@ pub fn child_by_type(
         })
         .map(|(i, x)| (*x, i));
     s
+}
+
+pub fn child_at_path<'a>(
+    stores: &SimpleStores,
+    mut d: NodeIdentifier,
+    path: impl Iterator<Item = &'a str>,
+) -> Option<NodeIdentifier> {
+    for name in path {
+        let n = stores.node_store.resolve(d);
+        d = n.get_child_by_name(&stores.label_store.get(name)?)?
+    }
+    Some(d)
+}
+
+pub fn child_at_path_tracked<'a>(
+    stores: &SimpleStores,
+    mut d: NodeIdentifier,
+    path: impl Iterator<Item = &'a str>,
+) -> Option<(NodeIdentifier, Vec<usize>)> {
+    let mut offsets = vec![];
+    for name in path {
+        let n = stores.node_store.resolve(d);
+        let idx = n.get_child_idx_by_name(&stores.label_store.get(name)?)?;
+        d = n.child(&idx).unwrap();
+        offsets.push(idx as usize);
+    }
+    Some((d, offsets))
 }
 
 // TODO try to separate processing from caching from git

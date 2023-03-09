@@ -1,11 +1,12 @@
 use std::{fmt::Display, rc::Rc};
 
+use axum::{body::HttpBody, Json};
 use hyper_ast::{
     store::defaults::NodeIdentifier,
     types::{Typed, WithChildren, WithStats},
 };
 use hyper_ast_cvs_git::git::fetch_github_repository;
-use rhai::{Array, Dynamic, Engine, Scope, packages::{CorePackage, Package, BasicArrayPackage}};
+use rhai::{Array, Dynamic, Engine, Scope, packages::{CorePackage, Package, BasicArrayPackage}, Instant};
 use serde::{Deserialize, Serialize};
 
 use crate::SharedState;
@@ -24,44 +25,58 @@ pub struct ScriptContent {
     pub filter: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub enum ScriptingError {
-    Compiling(String),
-    Evaluation(String),
+    AtCompilation(String),
+    AtEvaluation(String),
 }
 
-impl Display for ScriptingError {
+// impl Display for ScriptingError {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             ScriptingError::Compiling(x) => writeln!(f, "script is ill-formed: {}", x),
+//             ScriptingError::Evaluation(x) => writeln!(f, "script execution failed: {}", x),
+//         }
+//     }
+// }
+
+#[derive(Deserialize, Serialize)]
+pub struct ComputeResult {
+    pub compute_time: f64,
+    pub result: Dynamic,
+}
+
+impl Display for ComputeResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ScriptingError::Compiling(x) => writeln!(f, "script compile: {}", x),
-            ScriptingError::Evaluation(x) => writeln!(f, "script evaluation: {}", x),
-        }
+        todo!()
     }
 }
+
 
 pub fn simple(
     script: ScriptContent,
     state: SharedState,
     path: ScriptingParam,
-) -> Result<String, ScriptingError> {
+) -> Result<Json<ComputeResult>, ScriptingError> {
+    let now = Instant::now();
     let ScriptingParam { user, name, commit } = path.clone();
     let mut engine = Engine::new();
     engine.disable_symbol("/");
     let init_script = engine
         .compile(script.init.clone())
-        .map_err(|x| ScriptingError::Compiling(format!("{}, {}", x, script.init.clone())))?;
+        .map_err(|x| ScriptingError::AtCompilation(format!("{}, {}", x, script.init.clone())))?;
     let accumulate_script = engine
         .compile(script.accumulate.clone())
-        .map_err(|x| ScriptingError::Compiling(format!("{}, {}", x, script.accumulate.clone())))?;
+        .map_err(|x| ScriptingError::AtCompilation(format!("{}, {}", x, script.accumulate.clone())))?;
     let filter_script = engine
         .compile(script.filter.clone())
-        .map_err(|x| ScriptingError::Compiling(format!("{}, {}", x, script.filter.clone())))?;
+        .map_err(|x| ScriptingError::AtCompilation(format!("{}, {}", x, script.filter.clone())))?;
     let mut repo = fetch_github_repository(&format!("{}/{}", user, name));
     log::info!("done cloning {user}/{name}");
     let mut get_mut = state.write().unwrap();
     let commits = get_mut
         .repositories
-        .pre_process_with_limit(&mut repo, "", &commit, "", 2);
+        .pre_process_with_limit(&mut repo, "", &commit, "", 2).unwrap();
     log::info!("done construction of {commits:?} in {user}/{name}");
     let commit_src = get_mut
         .repositories
@@ -91,7 +106,7 @@ pub fn simple(
     }
     let init: Dynamic = engine
         .eval_ast(&init_script)
-        .map_err(|x| ScriptingError::Evaluation(x.to_string()))?;
+        .map_err(|x| ScriptingError::AtEvaluation(x.to_string()))?;
     let mut stack: Vec<Acc> = vec![];
     stack.push(Acc {
         sid: src_tr,
@@ -153,7 +168,7 @@ pub fn simple(
             });
             let prepared: Dynamic = filter_engine
                 .eval_ast_with_scope(&mut scope, &filter_script)
-                .map_err(|x| ScriptingError::Evaluation(x.to_string()))?;
+                .map_err(|x| ScriptingError::AtEvaluation(x.to_string()))?;
             if let Some(prepared) = prepared.try_cast::<Vec<Dynamic>>() {
                 stack.push(Acc {
                     pending_cs: prepared.len() as isize,
@@ -193,12 +208,12 @@ pub fn simple(
         });
         let s = state.clone();
         acc_engine.register_fn("is_type_decl", move || {
-            let node_store = &&ns!(s);
+            let node_store = &ns!(s);
             node_store.resolve(current).get_type().is_type_declaration()
         });
         let s = state.clone();
         acc_engine.register_fn("is_directory", move || {
-            let node_store = &&ns!(s);
+            let node_store = &ns!(s);
             node_store.resolve(current).get_type().is_directory()
         });
         let s = state.clone();
@@ -208,12 +223,14 @@ pub fn simple(
         });
         acc_engine
             .eval_ast_with_scope(&mut scope, &accumulate_script)
-            .map_err(|x| ScriptingError::Evaluation(x.to_string()))?;
+            .map_err(|x| ScriptingError::AtEvaluation(x.to_string()))?;
         stack[acc.parent].value = Some(scope.get_value("p").unwrap());
     };
-    let r = format!(
-        "Computed {result} in commit {} of size {size} at github.com/{user}/{name}",
-        &commit[..8.min(commit.len())]
-    );
-    Ok(r)
+    // let r = format!(
+    //     "Computed {result} in commit {} of size {size} at github.com/{user}/{name}",
+    //     &commit[..8.min(commit.len())]
+    // );
+    let compute_time = now.elapsed().as_secs_f64();
+    let r = ComputeResult { compute_time, result };
+    Ok(Json(r))
 }

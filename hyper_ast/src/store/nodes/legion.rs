@@ -330,6 +330,15 @@ impl<'a> HashedNodeRef<'a> {
             .position(|x| x == name)
             .map(|x| x.to_u16().unwrap())
     }
+
+    pub fn try_get_children_name(
+        &self,
+    ) -> Option<&[<HashedNodeRef<'a> as crate::types::Labeled>::Label]> {
+        self.0
+            .get_component::<CS<<HashedNodeRef<'a> as crate::types::Labeled>::Label>>()
+            .ok()
+            .map(|x| &*x.0)
+    }
 }
 
 impl<'a> AsRef<HashedNodeRef<'a>> for HashedNodeRef<'a> {

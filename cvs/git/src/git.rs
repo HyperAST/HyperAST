@@ -11,41 +11,44 @@ pub fn all_commits_between<'a>(
     repository: &'a Repository,
     before: &'a str,
     after: &'a str,
-) -> Revwalk<'a> {
+) -> Result<Revwalk<'a>, git2::Error> {
     use git2::*;
-    let mut rw = repository.revwalk().unwrap();
+    let mut rw = repository.revwalk()?;
     if !before.is_empty() {
-        // rw.hide_ref(before).unwrap();
+        // rw.hide_ref(before)?;
         // log::debug!("{}", before);
-        let c = retrieve_commit(repository, before).unwrap();
+        let c = retrieve_commit(repository, before)?;
         // log::debug!("{:?}", c);
         for c in c.parents() {
-            rw.hide(c.id()).unwrap();
+            rw.hide(c.id())?;
         }
     }
     if after.is_empty() {
-        rw.push_head().unwrap();
+        rw.push_head()?;
     } else {
-        let c = retrieve_commit(repository, after).unwrap();
-        rw.push(c.id()).unwrap();
+        let c = retrieve_commit(repository, after)?;
+        rw.push(c.id())?;
     }
-    rw.set_sorting(Sort::TOPOLOGICAL).unwrap();
-    rw
+    rw.set_sorting(Sort::TOPOLOGICAL)?;
+    Ok(rw)
 }
 
 pub fn retrieve_commit<'a>(
     repository: &'a Repository,
     s: &str,
 ) -> Result<git2::Commit<'a>, git2::Error> {
-    if let Ok(c) = repository.find_reference(s) {
-        if let Ok(c) = c.peel_to_commit() {
-            Ok(c)
-        } else {
-            repository.find_commit(Oid::from_str(s)?)
+    // TODO make a more advanced search with helpful error msgs
+    match repository.find_reference(&format!("refs/tags/{}",s)) {
+        Ok(c) => match c.peel_to_commit() {
+            Ok(c) => Ok(c),
+            Err(err) => {
+                repository.find_commit(Oid::from_str(s)?)
+            }
+        },
+        Err(err) => {
+            let oid = Oid::from_str(s).map_err(|_| err)?;
+            repository.find_commit(oid)
         }
-    } else {
-        let oid = Oid::from_str(s)?;
-        repository.find_commit(oid)
     }
 }
 

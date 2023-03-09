@@ -14,11 +14,11 @@ hyper_ast_cvs_git = { path = "../cvs/git" }
 hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
 env_logger = "0.9.0"
 log = { version = "0.4.6", features = [
-    "max_level_debug",
-    "release_max_level_warn",
+    # "max_level_debug",
+    # "release_max_level_warn",
 ] }
 
-rhai = { version = "1.12.0", features = ["sync"] }
+rhai = { version = "1.12.0", features = ["sync", "serde"] }
 
 
 axum = "0.6.7" # Web framework that focuses on ergonomics and modularity.
@@ -50,9 +50,14 @@ tower-http = { version = "0.3.0", features = [
     "compression-full",
     "limit",
     "trace",
+    "fs",
+    "cors",
 ] }
 tower-layer = "0.3.2"
 axum-macros = "0.3.4"
+
+self_cell = "0.10.2"
+nohash-hasher = "0.2.0"
 
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["blocking"] }

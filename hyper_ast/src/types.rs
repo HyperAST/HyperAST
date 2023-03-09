@@ -5,16 +5,24 @@ use std::str::FromStr;
 
 use num::PrimInt;
 use num::ToPrimitive;
+use strum::IntoEnumIterator;
 use strum_macros::Display;
 use strum_macros::EnumString;
+use strum_macros::EnumIter;
 
 pub trait HashKind {
     fn structural() -> Self;
     fn label() -> Self;
 }
 
+impl Type {
+    pub fn it() -> impl Iterator<Item=Type> {
+        Type::iter()
+    }
+}
+
 /// for now the types are shared between all languages
-#[derive(Debug, EnumString, Display)]
+#[derive(Debug, EnumString, EnumIter, Display)]
 #[strum(serialize_all = "snake_case")]
 #[allow(non_camel_case_types)]
 #[derive(Hash, Clone, Copy, PartialEq, Eq)]
