@@ -299,9 +299,9 @@ mod test {
 
     use super::*;
 
-    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::WithChildren};
+    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::{WithChildren, HyperAST}};
     use hyper_diff::{
-        decompressed_tree_store::CompletePostOrder,
+        decompressed_tree_store::{CompletePostOrder, lazy_post_order::LazyPostOrder},
         matchers::{
             heuristic::gt::{greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher}},
             mapping_store::{DefaultMultiMappingStore, VecStore},
@@ -516,6 +516,8 @@ mod test {
         // let dst_tr = stores.node_store.resolve(dst_tr).get_child(&0);
 
         let hyperast = as_nospaces(stores);
+        let mapper: hyper_diff::matchers::Mapper<_, LazyPostOrder<_,u32>, LazyPostOrder<_,u32>, VecStore<u32>> =
+            hyperast.decompress_pair(&src_tr, &dst_tr).into();
         let partial_lazy = algorithms::gumtree_partial_lazy::diff(&hyperast, &src_tr, &dst_tr);
         dbg!(
             &partial_lazy.mapping_durations,
@@ -543,6 +545,148 @@ mod test {
             3,
         );
     }
+
+    #[test]
+    fn issue_mappings_pomxml() {
+        // INRIA/spoon 76ffd3353a535b0ce6edf0bf961a05236a40d3a1 74ee133f4fe25d8606e0775ade577cd8e8b5cbfd "spoon-pom" "" 2
+        // hast, gt evolutions: 517,517,
+        // missing, additional mappings: 43,10,
+        // 1.089578603,2.667414915,1.76489064,1.59514709,2.984131976,35.289540009
+        let preprocessed = PreProcessedRepository::new("INRIA/spoon");
+        let window_size = 2;
+        let mut preprocessed = preprocessed;
+        let (before, after) = (
+            "b5806e1f42e105c223e1c6659256a4a3a4538b6c",
+            "568b4526d7af83de99c65bc64a55ddcb6b6d3488",
+        );
+        assert!(window_size > 1);
+
+        let processing_ordered_commits = preprocessed.pre_process_with_limit(
+            &mut fetch_github_repository(&preprocessed.name),
+            before,
+            after,
+            "",
+            2,
+        );
+        preprocessed.purge_caches();
+        let c_len = processing_ordered_commits.len();
+        let c = (0..c_len - 1)
+            .map(|c| &processing_ordered_commits[c..(c + window_size).min(c_len)])
+            .next()
+            .unwrap();
+        let oid_src = &c[0];
+        let oid_dst = &c[1];
+        let stores = &preprocessed.processor.main_stores;
+
+        let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
+        let src_tr = commit_src.1.ast_root;
+        let src_tr = preprocessed.child_by_name(src_tr, "pom.xml").unwrap();
+        // let src_tr = stores.node_store.resolve(src_tr).get_child(&0);
+        dbg!(stores.node_store.resolve(src_tr).child_count());
+
+        let commit_dst = preprocessed.commits.get_key_value(&oid_dst).unwrap();
+        let dst_tr = commit_dst.1.ast_root;
+        let dst_tr = preprocessed.child_by_name(dst_tr, "pom.xml").unwrap();
+        // let dst_tr = stores.node_store.resolve(dst_tr).get_child(&0);
+
+        let src = &src_tr;
+        let dst = &dst_tr;
+        let mappings = VecStore::default();
+        use hyper_diff::decompressed_tree_store::DecompressedSubtree;
+        let src_arena= LazyPostOrder::<_, u32>::decompress(&stores.node_store, src);
+        let dst_arena= LazyPostOrder::<_, u32>::decompress(&stores.node_store, dst);
+
+        let mut mapper = hyper_diff::matchers::Mapper {
+            hyperast: stores,
+            mapping: hyper_diff::matchers::Mapping {
+                src_arena,
+                dst_arena,
+                mappings,
+            },
+        };
+        dbg!();
+        use hyper_diff::matchers::mapping_store::MappingStore;
+        use hyper_diff::decompressed_tree_store::ShallowDecompressedTreeStore;
+        mapper.mapping.mappings.topit(
+            mapper.mapping.src_arena.len(),
+            mapper.mapping.dst_arena.len(),
+        );
+        dbg!();
+        let mm = LazyGreedySubtreeMatcher::<
+            _,
+            _,
+            _,
+            VecStore<_>,
+        >::compute_multi_mapping::<DefaultMultiMappingStore<_>>(
+            &mut mapper
+        );
+        dbg!();
+        use hyper_diff::matchers::heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
+        LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>,10>::filter_mappings(
+            &mut mapper,
+            &mm,
+        );
+        // TODO do something with the multi mappings
+        // modify filter_mappings to extract redundant mappings
+        // the store it alongside other mappings
+        dbg!();
+        use hyper_diff::matchers::heuristic::gt::lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher;
+        GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 1000, 1, 2>::execute(
+            &mut mapper,
+            &stores.label_store,
+        );
+        // This one matches everingthing as it should but it is much slower
+        // GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 10_000, 1, 2>::execute(
+        //     &mut mapper,
+        //     &stores.label_store,
+        // );
+        dbg!();
+
+        // type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
+        // let mapper = GreedySubtreeMatcher::<DS, DS, _, _, _>::matchh::<DefaultMultiMappingStore<_>>(
+        //     &stores.node_store,
+        //     &src,
+        //     &dst,
+        //     mappings,
+        // );
+        let dst_arena = mapper.mapping.dst_arena.complete(&stores.node_store,);
+        let src_arena = mapper.mapping.src_arena.complete(&stores.node_store,);
+        print_mappings(
+            &dst_arena,
+            &src_arena,
+            &stores.node_store,
+            &stores.label_store,
+            &mapper.mapping.mappings,
+        );
+
+        let gt_out_format = "JSON";
+        let gt_out = other_tools::gumtree::subprocess(
+            &preprocessed.processor.main_stores.node_store,
+            &preprocessed.processor.main_stores.label_store,
+            src_tr,
+            dst_tr,
+            "gumtree-subtree",
+            "Chawathe",
+            60*5,
+            gt_out_format,
+        ).unwrap();
+
+        let pp = SimpleJsonPostProcess::new(&gt_out);
+        let gt_timings = pp.performances();
+        let counts = pp.counts();
+        dbg!(gt_timings, counts.mappings, counts.actions);
+        let valid = pp._validity_mappings(
+            &preprocessed.processor.main_stores.node_store,
+            &preprocessed.processor.main_stores.label_store,
+            &src_arena,
+            src_tr,
+            &dst_arena,
+            dst_tr,
+            &mapper.mapping.mappings,
+        );
+        dbg!(valid.additional_mappings, valid.missing_mappings);
+    }
+    
 }
 
 pub(crate) fn as_nospaces<'a>(

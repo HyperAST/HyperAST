@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 tree-sitter = "0.20.9"
-tree-sitter-xml = {path="tree-sitter-xml", version="0.20.0"}
+tree-sitter-xml = { path = "tree-sitter-xml", version = "0.20.0" }
 hyper_ast = { path = "../../../hyper_ast" }
 
 

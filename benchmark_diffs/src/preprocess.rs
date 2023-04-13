@@ -7,7 +7,7 @@ use hyper_ast::{
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
-        nodes::legion::{compo, EntryRef, NodeStore, PendingInsert, CS},
+        nodes::legion::{compo, EntryRef, NodeStore, PendingInsert, compo::CS},
         SimpleStores,
     },
     tree_gen::{BasicGlobalData, SubTreeMetrics},

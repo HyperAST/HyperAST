@@ -12,11 +12,11 @@ use hyper_ast::{
     nodes::{self, IoOut, Space},
     store::{
         labels::LabelStore,
-        nodes::legion::{NoSpacesCS, PendingInsert},
+        nodes::legion::{compo::NoSpacesCS, PendingInsert},
         SimpleStores,
     },
     store::{
-        nodes::legion::{compo, NodeIdentifier, CS},
+        nodes::legion::{compo, NodeIdentifier, compo::CS},
         nodes::DefaultNodeStore as NodeStore,
     },
     tree_gen::{

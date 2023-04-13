@@ -14,7 +14,7 @@ use hyper_ast::{
     nodes::IoOut,
     store::{
         labels::LabelStore,
-        nodes::legion::{HashedNodeRef, NoSpacesCS, PendingInsert},
+        nodes::legion::{HashedNodeRef, compo::NoSpacesCS, PendingInsert},
     },
     tree_gen::{
         BasicGlobalData, GlobalData, SpacedGlobalData, SubTreeMetrics, TextedGlobalData, TreeGen,
@@ -33,7 +33,7 @@ use hyper_ast::{
     hashed::{self, SyntaxNodeHashs, SyntaxNodeHashsKinds},
     nodes::{self, Space},
     store::{
-        nodes::legion::{compo, CS},
+        nodes::legion::{compo, compo::CS},
         nodes::DefaultNodeStore as NodeStore,
         SimpleStores,
     },
@@ -73,6 +73,7 @@ pub type LabelIdentifier = DefaultSymbol;
 // TODO try to use a const generic for space less generation ?
 // SPC: consider spaces ie. add them to the HyperAST,
 // NOTE there is a big issue with the byteLen of subtree then.
+// just provide a view abstracting spaces (see attempt in hyper_diff)
 pub struct JavaTreeGen<'stores, 'cache> {
     pub line_break: Vec<u8>,
     pub stores: &'stores mut SimpleStores,
@@ -81,7 +82,7 @@ pub struct JavaTreeGen<'stores, 'cache> {
 
 pub type MDCache = HashMap<NodeIdentifier, MD>;
 
-// TODO only keep compute intensive metadata (where space/time tradeoff is worth storing)
+// NOTE only keep compute intensive metadata (where space/time tradeoff is worth storing)
 // eg. decls refs, maybe hashes but not size and height
 // * metadata: computation results from concrete code of node and its children
 // they can be qualitative metadata .eg a hash or they can be quantitative .eg lines of code
@@ -633,6 +634,8 @@ fn compress(
         }};
     }
     // NOTE needed as macro because I only implemented BulkHasher and Bloom for u8 and u16
+    // TODO use, compare and bench alternatives to macro here,
+    // ie. try an entity builder (see `hyper_ast::**::legion::dyn_builder`) or legion's `CommandBuffer`
     macro_rules! bloom {
         ( $t:ty ) => {{
             type B = $t;
