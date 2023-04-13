@@ -1,21 +1,66 @@
 use egui::TextFormat;
 use epaint::text::LayoutSection;
-pub use hyper_ast::{types::Type, store::nodes::fetched::{NodeStore, FetchedLabels, NodeIdentifier}};
+use hyper_ast::{
+    store::nodes::fetched::LabelIdentifier,
+    types::{Tree, Typed, WithChildren, WithStats},
+};
+pub use hyper_ast::{
+    store::nodes::fetched::{FetchedLabels, NodeIdentifier, NodeStore},
+    types::Type,
+};
 use lazy_static::__Deref;
 use std::{
+    collections::{HashSet, VecDeque},
     fmt::Debug,
-    ops::Mul,
+    hash::Hash,
+    num::NonZeroU32,
+    ops::{ControlFlow, Mul},
     sync::{
         atomic::{AtomicBool, AtomicUsize},
         Arc,
     },
-    time::Duration,
+    time::{Duration, Instant}, str::FromStr,
 };
 
 use crate::app::{
     syntax_highlighting_async::{self, async_exec},
     syntax_highlighting_ts::{self, CodeTheme},
 };
+
+use super::{
+    code_aspects::{remote_fetch_labels, remote_fetch_nodes_by_ids, HightLightHandle},
+    long_tracking::TARGET_COLOR,
+};
+
+#[derive(Default)]
+pub struct FetchedHyperAST {
+    pub(crate) label_store: std::sync::RwLock<FetchedLabels>,
+    pub(crate) node_store: std::sync::RwLock<NodeStore>,
+    // /// each set is fetched sequentially, non blocking
+    // /// pushed ids are tested against all pending sets because they might not have entered the store
+    // /// new set every 100 elements, due to id serialized size in url
+    // /// TODO split by arch
+    // /// TODO maybe use a crossbeam queue while putting a dummy value in nodestore or use dashmap
+    // nodes_waiting: std::sync::Mutex<VecDeque<HashSet<NodeIdentifier>>>,
+    // /// each set is fetched sequentially, non blocking
+    // /// pushed ids are tested against all pending sets because they might not have entered the store
+    // /// new set every 200 elements, due to id serialized size in url
+    // labels_waiting: std::sync::Mutex<VecDeque<HashSet<LabelIdentifier>>>,
+    /// pending ie. nodes in flight
+    pub(crate) nodes_pending: std::sync::Mutex<VecDeque<HashSet<NodeIdentifier>>>,
+    pub(crate) nodes_waiting: std::sync::Mutex<Option<HashSet<NodeIdentifier>>>,
+    pub(crate) labels_pending: std::sync::Mutex<VecDeque<HashSet<LabelIdentifier>>>,
+    pub(crate) labels_waiting: std::sync::Mutex<Option<HashSet<LabelIdentifier>>>,
+    /// timer to avoid flooding
+    pub(crate) timer: std::sync::Mutex<Option<f32>>,
+}
+
+impl Hash for FetchedHyperAST {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.label_store.read().unwrap().len().hash(state);
+        self.node_store.read().unwrap().len().hash(state);
+    }
+}
 
 // mod store;
 // pub use self::store::{FetchedHyperAST, NodeId};
@@ -25,6 +70,7 @@ mod cache;
 pub struct PrefillCache {
     head: f32,
     children: Vec<f32>,
+    children_sizes: Vec<Option<NonZeroU32>>,
     next: Option<Box<PrefillCache>>,
 }
 
@@ -38,20 +84,24 @@ impl PrefillCache {
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 pub(crate) enum Action {
     Keep,
+    PartialFocused(f32),
     Focused(f32),
     Clicked(Vec<usize>),
     Delete,
 }
 pub(crate) struct FetchedViewImpl<'a> {
-    store: Arc<NodeStore>,
+    store: Arc<FetchedHyperAST>,
     aspects: &'a super::types::ComputeConfigAspectViews,
     pub(super) prefill_cache: Option<PrefillCache>,
     min_before_count: usize,
     draw_count: usize,
-    hightlights: Vec<(&'a [usize], &'a egui::Color32, &'a mut Option<egui::Pos2>)>,
-    focus: Option<&'a [usize]>,
+    hightlights: Vec<HightLightHandle<'a>>,
+    focus: Option<(&'a [usize], &'a [NodeIdentifier])>,
     path: Vec<usize>,
     root_ui_id: egui::Id,
+    additions: Option<&'a [u32]>,
+    deletions: Option<&'a [u32]>,
+    global_pos: Option<u32>,
 }
 
 impl<'a> Debug for FetchedViewImpl<'a> {
@@ -103,10 +153,12 @@ impl<'a> FetchedViewImpl<'a> {
         store: Arc<FetchedHyperAST>,
         aspects: &'a super::types::ComputeConfigAspectViews,
         take: Option<PrefillCache>,
-        hightlights: Vec<(&'a [usize], &'a epaint::Color32, &'a mut Option<egui::Pos2>)>,
-        focus: Option<&'a [usize]>,
+        hightlights: Vec<(HightLightHandle<'a>)>,
+        focus: Option<(&'a [usize], &'a [NodeIdentifier])>,
         path: Vec<usize>,
         root_ui_id: egui::Id,
+        additions: Option<&'a [u32]>,
+        deletions: Option<&'a [u32]>,
     ) -> Self {
         Self {
             store,
@@ -118,6 +170,9 @@ impl<'a> FetchedViewImpl<'a> {
             focus,
             path,
             root_ui_id,
+            additions,
+            deletions,
+            global_pos: None,
         }
     }
 
@@ -125,25 +180,150 @@ impl<'a> FetchedViewImpl<'a> {
         ui.style_mut().spacing.button_padding.y = 0.0;
         ui.style_mut().spacing.item_spacing.y = 0.0;
 
-        todo!()
-        // let r = if let Some(c) = self.store.both.ids.iter().position(|x| x == root) {
-        //     self.ui_both_impl(ui, 0, c)
-        // } else if let Some(c) = self.store.labeled.ids.iter().position(|x| x == root) {
-        //     self.ui_labeled_impl(ui, 0, c)
-        // } else if let Some(c) = self.store.children.ids.iter().position(|x| x == root) {
-        //     self.ui_children_impl(ui, 0, c)
-        // } else if let Some(c) = self.store.typed.ids.iter().position(|x| x == root) {
-        //     self.ui_typed_impl(ui, 0, c)
-        // } else {
-        //     panic!();
-        // };
-        // r
+        let node_store = self.store.node_store.read().unwrap();
+        let action = if let Some(r) = node_store.try_resolve(*root) {
+            let kind = r.get_type();
+            let l = r.try_get_label().copied();
+            let cs = r.children();
+            let size = r.size();
+            self.global_pos = Some(size as u32);
+            if let (Some(label), Some(cs)) = (l, cs) {
+                let cs = cs.0.to_vec();
+                drop(node_store);
+                self.ui_both_impl2(ui, kind, size as u32, label, cs.as_ref())
+            } else if let Some(cs) = cs {
+                let cs = cs.0.to_vec();
+                drop(node_store);
+                self.ui_children_impl2(ui, kind, size as u32, *root, cs.as_ref())
+            } else if let Some(label) = l {
+                drop(node_store);
+                self.ui_labeled_impl2(ui, kind, size as u32, label)
+            } else {
+                drop(node_store);
+                self.ui_typed_impl2(ui, kind, size as u32)
+            }
+        } else {
+            if !self
+                .store
+                .nodes_pending
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|x| x.contains(root))
+            {
+                self.store
+                    .nodes_waiting
+                    .lock()
+                    .unwrap()
+                    .get_or_insert(Default::default())
+                    .insert(*root);
+            }
+            Action::Keep
+        };
+
+        let mut lock = self.store.timer.lock().unwrap();
+        if let Some(mut timer) = lock.take() {
+            let dt = ui.input(|mem| mem.unstable_dt);
+            timer += dt;
+            // wasm_rs_dbg::dbg!(dt, timer, Duration::from_secs(2).as_secs_f32());
+            if timer < Duration::from_secs(1).as_secs_f32() {
+                *lock = Some(timer);
+                return action;
+            } else {
+                *lock = Some(0.0);
+            }
+        } else {
+            *lock = Some(0.0);
+            return action;
+        }
+        drop(lock);
+
+        if let Some(waiting) = self.store.nodes_waiting.lock().unwrap().take() {
+            self.store
+                .nodes_pending
+                .lock()
+                .unwrap()
+                .push_back(waiting.clone());
+            remote_fetch_nodes_by_ids(
+                ui.ctx(),
+                self.store.clone(),
+                &self.aspects.commit.repo,
+                waiting,
+            )
+            .ready();
+            // TODO need to use promise ?
+        };
+        if let Some(waiting) = self.store.labels_waiting.lock().unwrap().take() {
+            self.store
+                .labels_pending
+                .lock()
+                .unwrap()
+                .push_back(waiting.clone());
+            remote_fetch_labels(
+                ui.ctx(),
+                self.store.clone(),
+                &self.aspects.commit.repo,
+                waiting,
+            )
+            .ready();
+            // TODO need to use promise ?
+        };
+        action
     }
 
-    pub(crate) fn ui_both_impl(&mut self, ui: &mut egui::Ui, depth: usize, nid: usize) -> Action {
-        let kind = &self.store.type_sys.0[self.store.both.kinds[nid] as usize];
-        let label = self.store.both.labels[nid];
-        let label = &self.store.label_list[label as usize];
+    // pub(crate) fn ui_both_impl(&mut self, ui: &mut egui::Ui, depth: usize, nid: usize) -> Action {
+    //     let kind = &self.store.type_sys.0[self.store.both.kinds[nid] as usize];
+    //     let label = self.store.both.labels[nid];
+    //     let label = &self.store.label_list[label as usize];
+    //     let o = self.store.both.cs_ofs[nid] as usize;
+    //     let cs = &self.store.both.children[o..o + self.store.both.cs_lens[nid] as usize]
+    //         .to_vec();
+    //     self.ui_both_impl2(ui, depth, cs)
+    // }
+    // pub(crate) fn ui_children_impl(
+    //     &mut self,
+    //     ui: &mut egui::Ui,
+    //     depth: usize,
+    //     nid: usize,
+    // ) -> Action {
+    //     let kind = &self.store.type_sys.0[self.store.children.kinds[nid] as usize];
+    //     let o = self.store.children.cs_ofs[nid] as usize;
+    //     let cs = &self.store.children.children
+    //         [o..o + self.store.children.cs_lens[nid] as usize]
+    //         .to_vec();
+    //     match self.ui_children_impl2(ui, kind, nid, depth, cs) {
+    //         Ok(value) => value,
+    //         Err(value) => return value,
+    //     }
+    // }
+    // pub(crate) fn ui_labeled_impl(
+    //     &mut self,
+    //     ui: &mut egui::Ui,
+    //     _depth: usize,
+    //     nid: usize,
+    // ) -> Action {
+    //     let min = ui.available_rect_before_wrap().min;
+    //     let kind = &self.store.type_sys.0[self.store.labeled.kinds[nid] as usize];
+    //     let label = self.store.labeled.labels[nid];
+    //     let label = &self.store.label_list[label as usize];
+    //     self.ui_labeled_impl2(label, ui, kind, min)
+    // }
+    // pub(crate) fn ui_typed_impl(&mut self, ui: &mut egui::Ui, _depth: usize, nid: usize) -> Action {
+    //     let min = ui.available_rect_before_wrap().min;
+    //     let kind = &self.store.type_sys.0[self.store.typed.kinds[nid] as usize];
+    //     // ui.label(format!("k {}\t{}", kind, nid));
+    //     self.ui_typed_impl2(ui, kind, min)
+    // }
+
+    fn ui_both_impl2(
+        &mut self,
+        ui: &mut egui::Ui,
+        kind: Type,
+        size: u32,
+        label: LabelIdentifier,
+        // depth: usize,
+        cs: &[NodeIdentifier],
+    ) -> Action {
         let min = ui.available_rect_before_wrap().min;
         if min.y < 0.0 {
             self.min_before_count += 1;
@@ -160,30 +340,160 @@ impl<'a> FetchedViewImpl<'a> {
         let id = ui.id().with(&self.path);
         // let id = ui.make_persistent_id("my_collapsing_header");
         let mut load_with_default_open =
-            egui::collapsing_header::CollapsingState::load_with_default_open(
-                ui.ctx(),
-                id,
-                depth < 1,
-            );
+            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
         if self.focus.is_some() {
-            wasm_rs_dbg::dbg!(self.focus);
+            // wasm_rs_dbg::dbg!(&self.focus, &self.path, &cs);
             load_with_default_open.set_open(true)
         }
+
+        self.additions = if let (Some(add), Some(gp)) = (self.additions, self.global_pos) {
+            let lld = gp - size;
+            // ldd <=    <= pos
+            let start: usize;
+            let end: usize;
+            let mut i = 0;
+            loop {
+                if i >= add.len() {
+                    start = i;
+                    break;
+                }
+                if lld <= add[i] {
+                    start = i;
+                    break;
+                }
+                i += 1;
+            }
+            loop {
+                if i >= add.len() {
+                    end = i;
+                    break;
+                }
+                if add[i] == gp {
+                    end = i + 1;
+                    break;
+                }
+                if add[i] > gp {
+                    end = i;
+                    break;
+                }
+                i += 1;
+            }
+            Some(&add[start..end])
+        } else {
+            None
+        };
+
+        self.deletions = if let (Some(del), Some(gp)) = (self.deletions, self.global_pos) {
+            let lld = gp - size;
+            // ldd <=    <= pos
+            let start: usize;
+            let end: usize;
+            let mut i = 0;
+            loop {
+                if i >= del.len() {
+                    start = i;
+                    break;
+                }
+                if lld <= del[i] {
+                    start = i;
+                    break;
+                }
+                i += 1;
+            }
+            loop {
+                if i >= del.len() {
+                    end = i;
+                    break;
+                }
+                if del[i] == gp {
+                    end = i + 1;
+                    break;
+                }
+                if del[i] > gp {
+                    end = i;
+                    break;
+                }
+                i += 1;
+            }
+            Some(&del[start..end])
+        } else {
+            None
+        };
+
         let show: FoldRet<_, _> = load_with_default_open
             .show_header(ui, |ui| {
                 // ui.label(format!("{}: {}", kind, label));
-                let ret = ui.monospace(format!("{}: ", kind)).context_menu(|ui| {
+                let ret = {
+                    let text = format!("{}: ", kind);
+                    let mut rt = egui::RichText::new(text).monospace();
+                    // wasm_rs_dbg::dbg!(&self.global_pos);
+                    if let Some(gp) = &self.global_pos {
+                        if self.additions.is_some() || self.deletions.is_some() {
+                            let add = self.additions.unwrap_or_default();
+                            let del = self.deletions.unwrap_or_default();
+                            // wasm_rs_dbg::dbg!(add, del);
+                            if add.is_empty() && del.is_empty() {
+                                rt = rt.color(egui::Color32::GRAY);
+                            } else if add.last() == Some(gp) {
+                                if del.last() == Some(gp) {
+                                    rt = rt.color(egui::Color32::DARK_BLUE);
+                                } else {
+                                    rt = rt.color(egui::Color32::DARK_GREEN);
+                                }
+                            } else if del.last() == Some(gp) {
+                                // wasm_rs_dbg::dbg!(del, gp);
+                                // rt = rt.strikethrough();
+                                rt = rt.color(egui::Color32::DARK_RED);
+                            }
+                        }
+                    }
+                    // if self
+                    //     .additions
+                    //     .map_or(false, |x| x.contains(&self.global_pos))
+                    // {
+                    //     if self
+                    //         .deletions
+                    //         .map_or(false, |x| x.contains(&self.global_pos))
+                    //     {
+                    //         rt = rt.color(egui::Color32::BLUE);
+                    //     } else {
+                    //         rt = rt.color(egui::Color32::GREEN);
+                    //     }
+                    // } else if self
+                    //     .deletions
+                    //     .map_or(false, |x| x.contains(&self.global_pos))
+                    // {
+                    //     rt = rt.color(egui::Color32::RED);
+                    // }
+                    ui.label(rt)
+                }
+                .context_menu(|ui| {
                     ui.label(format!("{:?}", self.path));
                 });
-                ui.label(format!("{}", label));
+                let label_store = self.store.label_store.read().unwrap();
+                if let Some(label) = label_store.get(&label) {
+                    ui.label(format!("{}", label));
+                } else {
+                    ui.label("...");
+                    if !self
+                        .store
+                        .labels_pending
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .any(|x| x.contains(&label))
+                    {
+                        self.store
+                            .labels_waiting
+                            .lock()
+                            .unwrap()
+                            .get_or_insert(Default::default())
+                            .insert(label);
+                    }
+                };
                 ret
             })
-            .body(|ui| {
-                let o = self.store.both.cs_ofs[nid] as usize;
-                let cs = &self.store.both.children[o..o + self.store.both.cs_lens[nid] as usize]
-                    .to_vec();
-                self.children_ui(ui, depth, cs)
-            })
+            .body(|ui| self.children_ui(ui, cs, self.global_pos.map(|x| x - size)))
             .into();
         // let show = egui::CollapsingHeader::new(format!("{}: {}", kind, label))
         //     .id_source(id)
@@ -205,6 +515,7 @@ impl<'a> FetchedViewImpl<'a> {
             PrefillCache {
                 head: 0.0,
                 children: vec![],
+                children_sizes: vec![],
                 next: None,
             }
         };
@@ -229,8 +540,8 @@ impl<'a> FetchedViewImpl<'a> {
         );
         rect.max.x += 10.0;
 
-        for (p, c, ret_pos) in &mut self.hightlights {
-            selection_highlight(ui, *p, *c, min, rect, self.root_ui_id, *ret_pos);
+        for handle in &mut self.hightlights {
+            selection_highlight(ui, handle, min, rect, self.root_ui_id);
         }
         // ui.label(format!("{:?}", show.body_response.map(|x| x.rect)));
         self.prefill_cache = Some(prefill);
@@ -241,17 +552,20 @@ impl<'a> FetchedViewImpl<'a> {
             .clicked()
         {
             Action::Clicked(self.path.to_vec())
-        } else if let Some(&[]) = self.focus {
+        } else if let Some((&[], _)) = self.focus {
             Action::Focused(min.y)
         } else {
             show.body_returned.unwrap_or(Action::Keep)
         }
     }
-    pub(crate) fn ui_children_impl(
+
+    fn ui_children_impl2(
         &mut self,
         ui: &mut egui::Ui,
-        depth: usize,
-        nid: usize,
+        kind: Type,
+        size: u32,
+        nid: NodeIdentifier,
+        cs: &[NodeIdentifier],
     ) -> Action {
         // egui::CollapsingHeader::new(format!("{}\t{}", kind, nid))
         let min = ui.available_rect_before_wrap().min;
@@ -263,15 +577,88 @@ impl<'a> FetchedViewImpl<'a> {
         //     egui::Color32::GREEN,
         //     format!("{:?}", ""),
         // );
-        let kind = &self.store.type_sys.0[self.store.children.kinds[nid] as usize];
         self.draw_count += 1;
         let id = ui.id().with(&self.path);
         // let id = ui.make_persistent_id("my_collapsing_header");
 
-        if kind == "import_declaration"
-            || kind == "expression"
-            || kind == "formal_parameters"
-            || kind == "expression_statement"
+        self.additions = if let (Some(add), Some(gp)) = (self.additions, self.global_pos) {
+            let lld = gp - size;
+            // ldd <=    <= pos
+            let start: usize;
+            let end: usize;
+            let mut i = 0;
+            loop {
+                if i >= add.len() {
+                    start = i;
+                    break;
+                }
+                if lld <= add[i] {
+                    start = i;
+                    break;
+                }
+                i += 1;
+            }
+            loop {
+                if i >= add.len() {
+                    end = i;
+                    break;
+                }
+                if add[i] == gp {
+                    end = i + 1;
+                    break;
+                }
+                if add[i] > gp {
+                    end = i;
+                    break;
+                }
+                i += 1;
+            }
+            Some(&add[start..end])
+        } else {
+            None
+        };
+        self.deletions = if let (Some(del), Some(gp)) = (self.deletions, self.global_pos) {
+            let lld = gp - size;
+            // ldd <=    <= pos
+            let start: usize;
+            let end: usize;
+            let mut i = 0;
+            loop {
+                if i >= del.len() {
+                    start = i;
+                    break;
+                }
+                if lld <= del[i] {
+                    start = i;
+                    break;
+                }
+                i += 1;
+            }
+            loop {
+                if i >= del.len() {
+                    end = i;
+                    break;
+                }
+                if del[i] == gp {
+                    end = i + 1;
+                    break;
+                }
+                if del[i] > gp {
+                    end = i;
+                    break;
+                }
+                i += 1;
+            }
+            Some(&del[start..end])
+        } else {
+            None
+        };
+        if self.aspects.ser_opt.contains(&kind)
+        // kind == Type::ImportDeclaration//"import_declaration"
+        //     || kind.is_expression()//"expression"
+        //     || kind == Type::FormalParameters//"formal_parameters"
+        //     || kind == Type::ExpressionStatement
+        //"expression_statement"
         {
             let mut prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
                 prefill_cache
@@ -279,11 +666,13 @@ impl<'a> FetchedViewImpl<'a> {
                 PrefillCache {
                     head: 0.0,
                     children: vec![],
+                    children_sizes: vec![],
                     next: None,
                 }
             };
             let min = ui.available_rect_before_wrap().min;
             let theme = syntax_highlighting_ts::CodeTheme::from_memory(ui.ctx());
+            // TODO fetch entire subtree, line breaks would also be useful
             let layout_job = make_pp_code(self.store.clone(), ui.ctx(), nid, theme);
             let galley = ui.fonts(|f| f.layout_job(layout_job));
 
@@ -291,21 +680,37 @@ impl<'a> FetchedViewImpl<'a> {
             let resp = ui.allocate_exact_size(size, egui::Sense::click());
 
             let rect = egui::Rect::from_min_size(min, size);
-            let rect = rect;//.expand(3.0);
+            if self.additions.is_some() || self.deletions.is_some() {
+                let add = self.additions.unwrap_or_default();
+                let del = self.deletions.unwrap_or_default();
+                if add.is_empty() && del.is_empty() {
+                    ui.painter().debug_rect(rect, egui::Color32::GRAY, "");
+                } else if !add.is_empty() {
+                    if !del.is_empty() {
+                        ui.painter().debug_rect(rect, egui::Color32::BLUE, "");
+                    } else {
+                        // wasm_rs_dbg::dbg!(self.global_pos, size, add);
+                        ui.painter().debug_rect(rect, egui::Color32::GREEN, "");
+                    }
+                } else if !del.is_empty() {
+                    ui.painter().debug_rect(rect, egui::Color32::RED, "");
+                }
+            }
+            let rect = rect; //.expand(3.0);
             ui.painter_at(rect.expand(1.0)).galley(min, galley);
             // rect.max.x += 10.0;
 
             prefill.head = ui.available_rect_before_wrap().min.y - min.y;
 
-            for (p, c, ret_pos) in &mut self.hightlights {
+            for handle in &mut self.hightlights {
                 // egui::Rect::from_min_size(min, (ui.available_width(), height).into()),
-                selection_highlight(ui, *p, *c, min, rect, self.root_ui_id, *ret_pos);
+                selection_highlight(ui, handle, min, rect, self.root_ui_id);
             }
             self.prefill_cache = Some(prefill);
 
             return if resp.1.clicked() {
                 Action::Clicked(self.path.to_vec())
-            } else if let Some(&[]) = self.focus {
+            } else if let Some((&[], _)) = self.focus {
                 Action::Focused(min.y)
             } else {
                 Action::Keep
@@ -313,28 +718,70 @@ impl<'a> FetchedViewImpl<'a> {
         }
 
         let mut load_with_default_open =
-            egui::collapsing_header::CollapsingState::load_with_default_open(
-                ui.ctx(),
-                id,
-                depth < 1,
-            );
+            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
         if self.focus.is_some() {
             load_with_default_open.set_open(true)
         }
         let show: FoldRet<_, _> = load_with_default_open
             .show_header(ui, |ui| {
                 // ui.label(format!("{}: {}", kind, label));
-                ui.monospace(format!("{}", kind)).context_menu(|ui| {
+                {
+                    let text = format!("{}: ", kind);
+                    let mut rt = egui::RichText::new(text).monospace();
+                    if let Some(gp) = &self.global_pos {
+                        if self.additions.is_some() || self.deletions.is_some() {
+                            let add = self.additions.unwrap_or_default();
+                            let del = self.deletions.unwrap_or_default();
+                            // wasm_rs_dbg::dbg!(add, del);
+                            if add.is_empty() && del.is_empty() {
+                                rt = rt.color(egui::Color32::GRAY);
+                            } else if add.last() == Some(gp) {
+                                if del.last() == Some(gp) {
+                                    rt = rt.color(egui::Color32::DARK_BLUE);
+                                } else {
+                                    rt = rt.color(egui::Color32::DARK_GREEN);
+                                }
+                            } else if del.last() == Some(gp) {
+                                // rt = rt.underline();
+                                rt = rt.color(egui::Color32::DARK_RED);
+                            }
+                        }
+                    }
+                    // if self
+                    //     .additions
+                    //     .map_or(false, |x| x.contains(&self.global_pos))
+                    // {
+                    //     if self
+                    //         .deletions
+                    //         .map_or(false, |x| x.contains(&self.global_pos))
+                    //     {
+                    //         rt = rt.color(egui::Color32::BLUE);
+                    //     } else {
+                    //         rt = rt.color(egui::Color32::GREEN);
+                    //     }
+                    // } else if self
+                    //     .deletions
+                    //     .map_or(false, |x| x.contains(&self.global_pos))
+                    // {
+                    //     rt = rt.color(egui::Color32::RED);
+                    // }
+                    ui.label(rt)
+                }
+                .context_menu(|ui| {
                     ui.label(format!("{:?}", self.path));
+
+                    if let Some(gp) = &self.global_pos {
+                        if self.additions.is_some() || self.deletions.is_some() {
+                            let add = self.additions.unwrap_or_default();
+                            let del = self.deletions.unwrap_or_default();
+                            // wasm_rs_dbg::dbg!(add, del);
+                            ui.label(format!("{:?}", add));
+                            ui.label(format!("{:?}", del));
+                        }
+                    }
                 })
             })
-            .body(|ui| {
-                let o = self.store.children.cs_ofs[nid] as usize;
-                let cs = &self.store.children.children
-                    [o..o + self.store.children.cs_lens[nid] as usize]
-                    .to_vec();
-                self.children_ui(ui, depth, cs)
-            })
+            .body(|ui| self.children_ui(ui, cs, self.global_pos.map(|x| x - size)))
             .into();
         // let show = egui::CollapsingHeader::new(format!("{}", kind))
         //     .id_source(id)
@@ -359,6 +806,7 @@ impl<'a> FetchedViewImpl<'a> {
             PrefillCache {
                 head: 0.0,
                 children: vec![],
+                children_sizes: vec![],
                 next: None,
             }
         };
@@ -378,8 +826,8 @@ impl<'a> FetchedViewImpl<'a> {
             );
         }
 
-        for (p, c, ret_pos) in &mut self.hightlights {
-            selection_highlight(ui, *p, *c, min, rect, self.root_ui_id, *ret_pos);
+        for handle in &mut self.hightlights {
+            selection_highlight(ui, handle, min, rect, self.root_ui_id);
         }
 
         // ui.label(format!("{:?}", show.body_response.map(|x| x.rect)));
@@ -390,32 +838,171 @@ impl<'a> FetchedViewImpl<'a> {
             .clicked()
         {
             Action::Clicked(self.path.to_vec())
-        } else if let Some(&[]) = self.focus {
+        } else if let Some((&[], _)) = self.focus {
             Action::Focused(min.y)
         } else {
             show.body_returned.unwrap_or(Action::Keep)
         }
     }
 
-    pub(crate) fn ui_labeled_impl(
+    fn ui_non_loaded(
         &mut self,
         ui: &mut egui::Ui,
-        _depth: usize,
-        nid: usize,
+        nid: NodeIdentifier,
+        offset: usize,
+        child: NodeIdentifier,
+    ) -> Action {
+        // wasm_rs_dbg::dbg!();
+        let min = ui.available_rect_before_wrap().min;
+        if min.y < 0.0 {
+            self.min_before_count += 1;
+        }
+        self.draw_count += 1;
+        let id = ui.id().with(&self.path);
+        let mut load_with_default_open =
+            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
+        if self.focus.is_some() {
+            // wasm_rs_dbg::dbg!();
+            load_with_default_open.set_open(true)
+        }
+        // wasm_rs_dbg::dbg!();
+        let show: FoldRet<_, _> = load_with_default_open
+            .show_header(ui, |ui| {
+                // ui.label(format!("{}: {}", kind, label));
+                // wasm_rs_dbg::dbg!();
+                ui.monospace(format!("waiting: {}", nid))
+                    .context_menu(|ui| {
+                        ui.label(format!("{:?}", self.path));
+                    })
+            })
+            .body(|ui| {
+                // wasm_rs_dbg::dbg!();
+                let mut act = Action::Keep;
+                let mut prefill_old = if let Some(prefill_cache) = self.prefill_cache.take() {
+                    prefill_cache
+                } else {
+                    PrefillCache {
+                        head: 0.0,
+                        children: vec![],
+                        children_sizes: vec![],
+                        next: None,
+                    }
+                };
+                let mut prefill = PrefillCache {
+                    head: prefill_old.head,
+                    children: vec![],
+                    children_sizes: vec![],
+                    next: None,
+                };
+                let mut path = self.path.clone();
+                path.push(offset);
+                // wasm_rs_dbg::dbg!(offset, &self.focus, &path);
+                // let mut path_bis = self.path.clone();
+                // for o in self.focus.unwrap().0 {
+                //     wasm_rs_dbg::dbg!(offset, &self.path, &self.focus, o, &path_bis);
+                //     path_bis.push(*o);
+                //     let id = ui.id().with(&path_bis);
+                //     let mut load_with_default_open =
+                //         egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true);
+                //     load_with_default_open.set_open(true);
+                //     load_with_default_open.store(ui.ctx());
+                // }
+                self.children_ui_aux(
+                    ui,
+                    offset,
+                    &child,
+                    &mut act,
+                    &mut prefill_old,
+                    &mut prefill,
+                    None,
+                    None,
+                    &mut self.global_pos.clone(),
+                    path,
+                );
+                act
+            })
+            .into();
+
+        let mut prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
+            prefill_cache
+        } else {
+            PrefillCache {
+                head: 0.0,
+                children: vec![],
+                children_sizes: vec![],
+                next: None,
+            }
+        };
+        let mut rect = show.header_response.rect.union(
+            show.body_response
+                .as_ref()
+                .map(|x| x.rect)
+                .unwrap_or(egui::Rect::NOTHING),
+        );
+        rect.max.x += 10.0;
+        prefill.head = show.header_response.rect.height();
+        if DEBUG_LAYOUT {
+            ui.painter().debug_rect(
+                rect,
+                egui::Color32::BLUE,
+                format!("\t\t\t\t\t\t\t\t{:?}", show.header_response.rect),
+            );
+        }
+
+        for handle in &mut self.hightlights {
+            selection_highlight(ui, handle, min, rect, self.root_ui_id);
+        }
+
+        // ui.label(format!("{:?}", show.body_response.map(|x| x.rect)));
+        self.prefill_cache = Some(prefill);
+        if show
+            .header_returned
+            .interact(egui::Sense::click())
+            .clicked()
+        {
+            Action::Clicked(self.path.to_vec())
+        } else if let Some((&[], _)) = self.focus {
+            Action::Focused(min.y)
+        } else {
+            show.body_returned.unwrap_or(Action::Keep)
+        }
+    }
+
+    fn ui_labeled_impl2(
+        &mut self,
+        ui: &mut egui::Ui,
+        kind: Type,
+        size: u32,
+        label: LabelIdentifier,
     ) -> Action {
         let min = ui.available_rect_before_wrap().min;
-        let kind = &self.store.type_sys.0[self.store.labeled.kinds[nid] as usize];
-        let label = self.store.labeled.labels[nid];
-        let label = &self.store.label_list[label as usize];
-        let label = label
-            .replace("\n", "\\n")
-            .replace("\t", "\\t")
-            .replace(" ", "·");
+        let label = if let Some(get) = self.store.label_store.read().unwrap().get(&label) {
+            get.replace("\n", "\\n")
+                .replace("\t", "\\t")
+                .replace(" ", "·")
+        } else {
+            if !self
+                .store
+                .labels_pending
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|x| x.contains(&label))
+            {
+                self.store
+                    .labels_waiting
+                    .lock()
+                    .unwrap()
+                    .get_or_insert(Default::default())
+                    .insert(label);
+            }
+            "...".to_string()
+        };
         self.draw_count += 1;
         let id = ui.id().with(&self.path);
         let action;
         let rect = if label.len() > 50 {
-            if kind == "spaces" {
+            if kind == Type::Spaces {
                 let monospace = ui.monospace(format!("{}: ", kind)).context_menu(|ui| {
                     ui.label(format!("{:?}", self.path));
                 });
@@ -428,7 +1015,31 @@ impl<'a> FetchedViewImpl<'a> {
                 let rect2 = ui.label(format!("{}", label)).rect;
                 rect1.union(rect2)
             } else {
-                let monospace = ui.monospace(format!("{}: ", kind)).context_menu(|ui| {
+                let monospace = {
+                    let text = format!("{}: ", kind);
+                    let mut rt = egui::RichText::new(text).monospace();
+                    if let Some(gp) = &self.global_pos {
+                        if self.additions.is_some() || self.deletions.is_some() {
+                            let add = self.additions.unwrap_or_default();
+                            let del = self.deletions.unwrap_or_default();
+                            // wasm_rs_dbg::dbg!(add, del);
+                            if add.is_empty() && del.is_empty() {
+                                rt = rt.color(egui::Color32::GRAY);
+                            } else if add.last() == Some(gp) {
+                                if del.last() == Some(gp) {
+                                    rt = rt.color(egui::Color32::BLUE);
+                                } else {
+                                    rt = rt.color(egui::Color32::GREEN);
+                                }
+                            } else if del.last() == Some(gp) {
+                                rt = rt.underline();
+                                rt = rt.color(egui::Color32::RED);
+                            }
+                        }
+                    }
+                    ui.label(rt)
+                }
+                .context_menu(|ui| {
                     ui.label(format!("{:?}", self.path));
                 });
                 let rect1 = monospace.rect;
@@ -449,22 +1060,53 @@ impl<'a> FetchedViewImpl<'a> {
                 rect1.union(rect2)
             }
         } else {
-            action = Action::Keep;
             let add_contents = |ui: &mut egui::Ui| {
-                ui.monospace(format!("{}: ", kind));
+                let action = {
+                    let text = format!("{}: ", kind);
+                    let mut rt = egui::RichText::new(text).monospace();
+                    if let Some(gp) = &self.global_pos {
+                        if self.additions.is_some() || self.deletions.is_some() {
+                            let add = self.additions.unwrap_or_default();
+                            let del = self.deletions.unwrap_or_default();
+                            // wasm_rs_dbg::dbg!(add, del);
+                            if add.is_empty() && del.is_empty() {
+                                rt = rt.color(egui::Color32::GRAY);
+                            } else if add.last() == Some(gp) {
+                                if del.last() == Some(gp) {
+                                    rt = rt.color(egui::Color32::BLUE);
+                                } else {
+                                    rt = rt.color(egui::Color32::GREEN);
+                                }
+                            } else if del.last() == Some(gp) {
+                                rt = rt.underline();
+                                rt = rt.color(egui::Color32::RED);
+                            }
+                        }
+                    }
+                    if ui
+                        .add(egui::Label::new(rt).sense(egui::Sense::click()))
+                        .clicked()
+                    {
+                        Action::Clicked(self.path.to_vec())
+                    } else {
+                        Action::Keep
+                    }
+                };
                 ui.label(format!("{}", label));
+                action
             };
-            if kind == "spaces" {
+            if kind == Type::Spaces {
+                action = Action::Keep;
                 if self.aspects.syntax {
                     ui.horizontal(add_contents).response.rect
                 } else {
                     egui::Rect::from_min_max(min, min)
                 }
             } else {
-                ui.horizontal(add_contents).response.rect
+                let h = ui.horizontal(add_contents);
+                action = h.inner;
+                h.response.rect
             }
-            
-            
         };
         let mut prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
             prefill_cache
@@ -472,24 +1114,24 @@ impl<'a> FetchedViewImpl<'a> {
             PrefillCache {
                 head: 0.0,
                 children: vec![],
+                children_sizes: vec![],
                 next: None,
             }
         };
         prefill.head = ui.available_rect_before_wrap().min.y - min.y;
 
-        for (p, c, ret_pos) in &mut self.hightlights {
-            if p.is_empty() {
-                selection_highlight(ui, *p, *c, min, rect, self.root_ui_id, *ret_pos);
+        for handle in &mut self.hightlights {
+            if handle.path.is_empty() {
+                selection_highlight(ui, handle, min, rect, self.root_ui_id);
                 // ui.painter().debug_rect(rect, **c, "");
             }
         }
         self.prefill_cache = Some(prefill);
         action
     }
-    pub(crate) fn ui_typed_impl(&mut self, ui: &mut egui::Ui, _depth: usize, nid: usize) -> Action {
+
+    fn ui_typed_impl2(&mut self, ui: &mut egui::Ui, kind: Type, size: u32) -> Action {
         let min = ui.available_rect_before_wrap().min;
-        let kind = &self.store.type_sys.0[self.store.typed.kinds[nid] as usize];
-        // ui.label(format!("k {}\t{}", kind, nid));
         self.draw_count += 1;
         ui.monospace(format!("{}", kind));
         let mut prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
@@ -498,15 +1140,26 @@ impl<'a> FetchedViewImpl<'a> {
             PrefillCache {
                 head: 0.0,
                 children: vec![],
+                children_sizes: vec![],
                 next: None,
             }
         };
         prefill.head = ui.available_rect_before_wrap().min.y - min.y;
         self.prefill_cache = Some(prefill);
-        Action::Keep
+        if let Some((&[], _)) = self.focus {
+            Action::Focused(min.y)
+        } else {
+            Action::Keep
+        }
     }
 
-    pub(crate) fn children_ui(&mut self, ui: &mut egui::Ui, depth: usize, cs: &[u64]) -> Action {
+    pub(crate) fn children_ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        // depth: usize,
+        cs: &[NodeIdentifier],
+        mut global_pos: Option<u32>,
+    ) -> Action {
         let mut action = Action::Keep;
         // if depth > 5 {
         //     for c in cs {
@@ -514,7 +1167,8 @@ impl<'a> FetchedViewImpl<'a> {
         //     }
         //     return Action::Keep;
         // }
-
+        let additions = self.additions.as_ref().map(|x| &x[..]);
+        let deletions = self.deletions.as_ref().map(|x| &x[..]);
         let mut prefill_old = if let Some(prefill_cache) = self.prefill_cache.take() {
             // wasm_rs_dbg::dbg!(
             //     &prefill_cache.head,
@@ -526,6 +1180,7 @@ impl<'a> FetchedViewImpl<'a> {
             PrefillCache {
                 head: 0.0,
                 children: vec![],
+                children_sizes: vec![],
                 next: None,
             }
         };
@@ -533,110 +1188,126 @@ impl<'a> FetchedViewImpl<'a> {
         let mut prefill = PrefillCache {
             head: prefill_old.head,
             children: vec![],
+            children_sizes: vec![],
             next: None,
         };
         for (i, c) in cs.iter().enumerate() {
             let mut path = self.path.clone();
             path.push(i);
-            let rect = ui.available_rect_before_wrap();
-            let focus = self.focus.as_ref().and_then(|x| {
-                if x.is_empty() {
-                    None
-                } else if x[0] == i {
-                    Some(&x[1..])
-                } else {
-                    None
-                }
-            });
-            if self.focus.is_none()
-                && rect.min.y > 0.0
-                && ui.ctx().screen_rect().height() - CLIP_LEN < rect.min.y
-            {
-                break;
+            match self.children_ui_aux(
+                ui,
+                i,
+                c,
+                &mut action,
+                &mut prefill_old,
+                &mut prefill,
+                additions,
+                deletions,
+                &mut global_pos,
+                path,
+            ) {
+                ControlFlow::Continue(_) => continue,
+                ControlFlow::Break(_) => break,
             }
-            let hightlights: Vec<_> = self
-                .hightlights
-                .drain_filter(|(x, c, p)| {
-                    !x.is_empty() && x[0] == i
-                    // if x.is_empty() {
-                    //     None
-                    // } else if x[0] == i {
-                    //     Some((&x[1..], *c, *p))
-                    // } else {
-                    //     None
-                    // }
-                })
-                .map(|(x, c, p)| (&x[1..], c, p))
-                .collect();
-            let mut ignore = None;
-            let mut imp = if let Some(child) = prefill_old.children.get(i) {
-                let exact_max_y = rect.min.y + *child;
-                if focus.is_none() && exact_max_y < CLIP_LEN {
-                    ignore = Some(exact_max_y);
-                    // FetchedViewImpl {
-                    //     store: self.store,
-                    //     prefill_cache: None,
-                    //     min_before_count: 0,
-                    //     draw_count: 0,
-                    // }
-                    prefill.children.push(*child);
-                    if DEBUG_LAYOUT {
-                        ui.painter().debug_rect(
-                            egui::Rect::from_min_max(rect.min, (rect.max.x, exact_max_y).into()),
-                            egui::Color32::RED,
-                            format!(
-                                "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t{:?}\t{:?}\t{:?}",
-                                exact_max_y, i, child
-                            ),
-                        );
-                    }
-                    ui.allocate_space((ui.min_size().x, *child).into());
-                    continue;
+        }
+        self.prefill_cache = Some(prefill);
+        action
+    }
+
+    fn children_ui_aux(
+        &mut self,
+        ui: &mut egui::Ui,
+        i: usize,
+        c: &NodeIdentifier,
+        action: &mut Action,
+        prefill_old: &mut PrefillCache,
+        prefill: &mut PrefillCache,
+        additions: Option<&[u32]>,
+        deletions: Option<&[u32]>,
+        mut global_pos: &mut Option<u32>,
+        path: Vec<usize>,
+    ) -> ControlFlow<()> {
+        let rect = ui.available_rect_before_wrap();
+        let focus = self.focus.as_ref().and_then(|x| {
+            if x.0.is_empty() {
+                None
+            } else if x.0[0] == i {
+                Some((&x.0[1..], &x.1[1..]))
+            } else {
+                None
+            }
+        });
+        if self.focus.is_none()
+            && rect.min.y > 0.0
+            && ui.ctx().screen_rect().height() - CLIP_LEN < rect.min.y
+        {
+            // wasm_rs_dbg::dbg!(self.focus);
+            return ControlFlow::Break(());
+        }
+        let hightlights: Vec<_> = self
+            .hightlights
+            .drain_filter(|handle| {
+                !handle.path.is_empty() && handle.path[0] == i
+                // if x.is_empty() {
+                //     None
+                // } else if x[0] == i {
+                //     Some((&x[1..], *c, *p))
+                // } else {
+                //     None
+                // }
+            })
+            .map(|handle| HightLightHandle {
+                path: &handle.path[1..],
+                color: handle.color,
+                screen_pos: handle.screen_pos,
+                id: handle.id,
+            })
+            .collect();
+        let mut ignore = None;
+        let mut imp = if let Some(child) = prefill_old.children.get(i) {
+            let child_size = prefill_old.children_sizes.get(i).unwrap(); // children and children_sizes should be the same sizes
+            let exact_max_y = rect.min.y + *child;
+            if focus.is_none() && exact_max_y < CLIP_LEN {
+                ignore = Some(exact_max_y);
+                // FetchedViewImpl {
+                //     store: self.store,
+                //     prefill_cache: None,
+                //     min_before_count: 0,
+                //     draw_count: 0,
+                // }
+                prefill.children.push(*child);
+                prefill.children_sizes.push(*child_size);
+                if let (Some(child_size), Some(gp)) = (child_size, &mut global_pos) {
+                    *gp += child_size.get();
                 } else {
-                    if DEBUG_LAYOUT {
-                        ui.painter().debug_rect(
-                            egui::Rect::from_min_max(rect.min, (rect.max.x, exact_max_y).into()),
-                            egui::Color32::BLUE,
-                            format!(
-                                "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t{:?}\t{:?}\t{:?}",
-                                exact_max_y, i, child
-                            ),
-                        );
-                    }
-                    FetchedViewImpl {
-                        store: self.store.clone(), // TODO perfs, might be better to pass cloned store between children
-                        aspects: self.aspects,
-                        prefill_cache: None,
-                        min_before_count: 0,
-                        draw_count: 0,
-                        hightlights,
-                        focus,
-                        path,
-                        root_ui_id: self.root_ui_id,
-                    }
+                    *global_pos = None;
                 }
-            } else if i == prefill_old.children.len() {
                 if DEBUG_LAYOUT {
                     ui.painter().debug_rect(
-                        egui::Rect::from_min_max(rect.min, (rect.max.x, 200.0).into()),
-                        egui::Color32::LIGHT_RED,
-                        format!("\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t{:?}", i),
+                        egui::Rect::from_min_max(rect.min, (rect.max.x, exact_max_y).into()),
+                        egui::Color32::RED,
+                        format!(
+                            "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t{:?}\t{:?}\t{:?}",
+                            exact_max_y, i, child
+                        ),
+                    );
+                }
+                ui.allocate_space((ui.min_size().x, *child).into());
+                // wasm_rs_dbg::dbg!(self.focus);
+                return ControlFlow::Continue(());
+            } else {
+                if DEBUG_LAYOUT {
+                    ui.painter().debug_rect(
+                        egui::Rect::from_min_max(rect.min, (rect.max.x, exact_max_y).into()),
+                        egui::Color32::BLUE,
+                        format!(
+                            "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t{:?}\t{:?}\t{:?}",
+                            exact_max_y, i, child
+                        ),
                     );
                 }
                 FetchedViewImpl {
-                    store: self.store.clone(),
-                    aspects: self.aspects,
-                    prefill_cache: prefill_old.next.take().map(|b| *b),
-                    min_before_count: 0,
-                    draw_count: 0,
-                    hightlights,
-                    focus,
-                    path,
-                    root_ui_id: self.root_ui_id,
-                }
-            } else {
-                FetchedViewImpl {
-                    store: self.store.clone(),
+                    store: self.store.clone(), // TODO perfs, might be better to pass cloned store between children
                     aspects: self.aspects,
                     prefill_cache: None,
                     min_before_count: 0,
@@ -645,41 +1316,172 @@ impl<'a> FetchedViewImpl<'a> {
                     focus,
                     path,
                     root_ui_id: self.root_ui_id,
+                    additions,
+                    deletions,
+                    global_pos: None,
                 }
-            };
-            let ret = if let Some(c) = self.store.both.ids.iter().position(|x| x == c) {
-                imp.ui_both_impl(ui, depth + 1, c)
-            } else if let Some(c) = self.store.labeled.ids.iter().position(|x| x == c) {
-                imp.ui_labeled_impl(ui, depth + 1, c)
-            } else if let Some(c) = self.store.children.ids.iter().position(|x| x == c) {
-                imp.ui_children_impl(ui, depth + 1, c)
-            } else if let Some(c) = self.store.typed.ids.iter().position(|x| x == c) {
-                imp.ui_typed_impl(ui, depth + 1, c)
+            }
+        } else if i == prefill_old.children.len() {
+            if DEBUG_LAYOUT {
+                ui.painter().debug_rect(
+                    egui::Rect::from_min_max(rect.min, (rect.max.x, 200.0).into()),
+                    egui::Color32::LIGHT_RED,
+                    format!("\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t{:?}", i),
+                );
+            }
+            FetchedViewImpl {
+                store: self.store.clone(),
+                aspects: self.aspects,
+                prefill_cache: prefill_old.next.take().map(|b| *b),
+                min_before_count: 0,
+                draw_count: 0,
+                hightlights,
+                focus,
+                path,
+                root_ui_id: self.root_ui_id,
+                additions,
+                deletions,
+                global_pos: None,
+            }
+        } else {
+            FetchedViewImpl {
+                store: self.store.clone(),
+                aspects: self.aspects,
+                prefill_cache: None,
+                min_before_count: 0,
+                draw_count: 0,
+                hightlights,
+                focus,
+                path,
+                root_ui_id: self.root_ui_id,
+                additions,
+                deletions,
+                global_pos: None,
+            }
+        };
+        let _size;
+        let ret = if let Some(r) = self.store.node_store.read().unwrap().try_resolve(*c) {
+            let kind = r.get_type();
+            let l = r.try_get_label().copied();
+            let cs = r.children();
+            let size = r.size();
+
+            if let Some(gp) = global_pos {
+                *gp += size as u32;
+            }
+            _size = Some(size as u32);
+            imp.global_pos = *global_pos;
+
+            if let (Some(label), Some(cs)) = (l, cs) {
+                imp.ui_both_impl2(ui, kind, size as u32, label, cs.0.to_vec().as_ref())
+            } else if let Some(cs) = cs {
+                imp.ui_children_impl2(ui, kind, size as u32, *c, cs.0.to_vec().as_ref())
+            } else if let Some(label) = l {
+                imp.ui_labeled_impl2(ui, kind, size as u32, label)
+            } else {
+                imp.ui_typed_impl2(ui, kind, size as u32)
+            }
+        // let ret = if let Some(c) = self.store.both.ids.iter().position(|x| x == c) {
+        //     imp.ui_both_impl(ui, depth + 1, c)
+        // } else if let Some(c) = self.store.labeled.ids.iter().position(|x| x == c) {
+        //     imp.ui_labeled_impl(ui, depth + 1, c)
+        // } else if let Some(c) = self.store.children.ids.iter().position(|x| x == c) {
+        //     imp.ui_children_impl(ui, depth + 1, c)
+        // } else if let Some(c) = self.store.typed.ids.iter().position(|x| x == c) {
+        //     imp.ui_typed_impl(ui, depth + 1, c)
+        } else {
+            let min = ui.available_rect_before_wrap().min;
+            let head = ui.available_rect_before_wrap().min.y - min.y;
+            imp.prefill_cache = Some(PrefillCache {
+                head: head,
+                children: vec![],
+                children_sizes: vec![],
+                next: None,
+            });
+            _size = None;
+            if !self
+                .store
+                .nodes_pending
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|x| x.contains(c))
+            {
+                self.store
+                    .nodes_waiting
+                    .lock()
+                    .unwrap()
+                    .get_or_insert(Default::default())
+                    .insert(*c);
+            }
+            if let Some(focus) = &imp.focus {
+                wasm_rs_dbg::dbg!(&focus);
+                if let Some(x) = self.focus.as_ref().unwrap().1.first() {
+                    imp.additions = None;
+                    imp.deletions = None;
+                    let a = imp.ui_non_loaded(ui, *c, *focus.0.first().unwrap_or(&0), *x);
+                    match a {
+                        Action::PartialFocused(x) => Action::PartialFocused(x),
+                        Action::Focused(x) => Action::PartialFocused(x),
+                        Action::Keep => {
+                            Action::PartialFocused(ui.available_rect_before_wrap().min.y)
+                        } // TODO find why it is not focused
+                        x => panic!("{:?}", x),
+                        // x => x,
+                    }
+                } else {
+                    let kind = Type::Error;
+                    imp.additions = None;
+                    imp.deletions = None;
+                    let a = imp.ui_typed_impl2(ui, kind, 0);
+                    match a {
+                        Action::PartialFocused(x) => Action::PartialFocused(x),
+                        Action::Focused(x) => Action::PartialFocused(x),
+                        x => panic!("{:?}", x),
+                        // x => x,
+                    }
+                }
             } else {
                 let min = ui.available_rect_before_wrap().min;
-                ui.label(format!("f {c}"));
-                let head = ui.available_rect_before_wrap().min.y - min.y;
-                imp.prefill_cache = Some(PrefillCache {
-                    head: head,
-                    children: vec![],
-                    next: None,
+                imp.draw_count += 1;
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(c.to_string());
                 });
-                Action::Keep
-            };
-            if let Action::Clicked(_) = ret {
-                action = ret;
-            } else if let Action::Focused(_) = ret {
-                action = ret;
-            };
-            let c_cache = imp.prefill_cache.unwrap();
-            let h = c_cache.height();
-            if let Some(e_m_y) = ignore {
-                prefill.children.push(h);
-                if prefill_old.children.len() == i {
-                    prefill.next = Some(Box::new(c_cache));
-                }
-                if DEBUG_LAYOUT {
-                    ui.painter().debug_rect(
+                let mut prefill = if let Some(prefill_cache) = imp.prefill_cache.take() {
+                    prefill_cache
+                } else {
+                    PrefillCache {
+                        head: 0.0,
+                        children: vec![],
+                        children_sizes: vec![],
+                        next: None,
+                    }
+                };
+                prefill.head = ui.available_rect_before_wrap().min.y - min.y;
+                imp.prefill_cache = Some(prefill);
+                Action::PartialFocused(ui.available_rect_before_wrap().min.y)
+            }
+        };
+        if let Action::Clicked(_) = ret {
+            *action = ret;
+        } else if let Action::Focused(_) = ret {
+            *action = ret;
+        } else if let Action::PartialFocused(_) = ret {
+            *action = ret;
+        };
+        let c_cache = imp.prefill_cache.unwrap();
+        let h = c_cache.height();
+        if let Some(e_m_y) = ignore {
+            prefill.children.push(h);
+            prefill
+                .children_sizes
+                .push(_size.map(|x| x.try_into().unwrap()));
+            if prefill_old.children.len() == i {
+                prefill.next = Some(Box::new(c_cache));
+            }
+            if DEBUG_LAYOUT {
+                ui.painter().debug_rect(
                 egui::Rect::from_min_size(rect.min, (500.0-i as f32 * 3.0, e_m_y-rect.min.y).into()),
                 egui::Color32::RED,
                 format!(
@@ -687,29 +1489,35 @@ impl<'a> FetchedViewImpl<'a> {
                     h,rect.min.y, rect.min.y + h, e_m_y
                 ),
             );
-                }
-                continue;
             }
+            return ControlFlow::Continue(());
+        }
 
-            self.min_before_count += imp.min_before_count;
-            self.draw_count += imp.draw_count;
-            let mut color = egui::Color32::GOLD;
-            if rect.min.y < CLIP_LEN && rect.min.y + h > CLIP_LEN {
-                if c_cache.next.is_some() || !c_cache.children.is_empty() {
-                    color = egui::Color32::BROWN;
-                    prefill.next = Some(Box::new(c_cache))
-                } else {
-                    color = egui::Color32::DARK_RED;
-                    prefill.children.push(h);
-                }
-            } else if prefill.next.is_none() {
-                if rect.min.y > CLIP_LEN {
-                    color = egui::Color32::LIGHT_GREEN;
-                }
+        self.min_before_count += imp.min_before_count;
+        self.draw_count += imp.draw_count;
+        let mut color = egui::Color32::GOLD;
+        if rect.min.y < CLIP_LEN && rect.min.y + h > CLIP_LEN {
+            if c_cache.next.is_some() || !c_cache.children.is_empty() {
+                color = egui::Color32::BROWN;
+                prefill.next = Some(Box::new(c_cache))
+            } else {
+                color = egui::Color32::DARK_RED;
                 prefill.children.push(h);
+                prefill
+                    .children_sizes
+                    .push(_size.map(|x| x.try_into().unwrap()));
             }
-            if DEBUG_LAYOUT {
-                ui.painter().debug_rect(
+        } else if prefill.next.is_none() {
+            if rect.min.y > CLIP_LEN {
+                color = egui::Color32::LIGHT_GREEN;
+            }
+            prefill.children.push(h);
+            prefill
+                .children_sizes
+                .push(_size.map(|x| x.try_into().unwrap()));
+        }
+        if DEBUG_LAYOUT {
+            ui.painter().debug_rect(
                 egui::Rect::from_min_size(rect.min, (500.0-i as f32 * 3.0, h).into()),
                 color,
                 format!(
@@ -717,10 +1525,8 @@ impl<'a> FetchedViewImpl<'a> {
                     h,rect.min.y, rect.min.y + h
                 ),
             );
-            }
         }
-        self.prefill_cache = Some(prefill);
-        action
+        return ControlFlow::Continue(());
     }
 }
 
@@ -731,7 +1537,7 @@ fn show_port(ui: &mut egui::Ui, id: egui::Id, pos: epaint::Pos2) {
         .fixed_pos(pos)
         .interactable(false);
     area.show(ui.ctx(), |ui| {
-        ui.add(egui_cable::prelude::Port::new(id));
+        ui.add(egui_cable::prelude::Port::new(id))
     });
 }
 
@@ -742,7 +1548,7 @@ const CLIP_LEN: f32 = 0.0; //250.0;
 fn subtree_to_layout(
     store: &FetchedHyperAST,
     theme: &syntax_highlighting_ts::CodeTheme,
-    nid: u64,
+    nid: NodeIdentifier,
 ) -> (usize, Vec<LayoutSection>) {
     use hyper_ast::nodes::CompressedNode;
     use std::borrow::Borrow;
@@ -819,47 +1625,99 @@ fn subtree_to_layout(
     let len = compute_layout_sections(
         |id| -> _ {
             use hyper_ast::nodes::CompressedNode;
-            let c = &(*id as u64);
-            if let Some(c) = store.both.ids.iter().position(|x| x == c) {
-                // imp.ui_both_impl(ui, depth + 1, c);
-                panic!()
-            } else if let Some(c) = store.labeled.ids.iter().position(|x| x == c) {
-                // imp.ui_labeled_impl(ui, depth + 1, c);
-                let s = &store.type_sys.0[store.labeled.kinds[c] as usize];
-                let kind = if s.starts_with("xml") {
-                    Type::parse_xml(s)
+            // let c = &(*id as u64);
+            if let Some(r) = store.node_store.read().unwrap().try_resolve(*id) {
+                let kind = r.get_type();
+                let l = r.try_get_label().copied();
+                let cs = r.children();
+                if let Some(cs) = cs {
+                    CompressedNode::Children {
+                        children: cs.0.to_vec().into_boxed_slice(),
+                        kind,
+                    }
+                } else if let Some(label) = l {
+                    CompressedNode::Label { label, kind }
+                } else if let (Some(label), Some(cs)) = (l, cs) {
+                    unreachable!()
                 } else {
-                    Type::parse(s).unwrap()
-                };
-                let l = store.labeled.labels[c] as usize;
-                CompressedNode::Label { label: l, kind }
-            } else if let Some(c) = store.children.ids.iter().position(|x| x == c) {
-                // imp.ui_children_impl(ui, depth + 1, c);
-                let s = &store.type_sys.0[store.children.kinds[c] as usize];
-                let kind = if s.starts_with("xml") {
-                    Type::parse_xml(s)
-                } else {
-                    Type::parse(s).unwrap()
-                };
-                let o = store.children.cs_ofs[c] as usize;
-                let children = &store.children.children[o..o + store.children.cs_lens[c] as usize];
-                CompressedNode::Children {
-                    children: children.iter().map(|x| *x as u64).collect(),
-                    kind,
+                    CompressedNode::Type(kind)
                 }
-            } else if let Some(c) = store.typed.ids.iter().position(|x| x == c) {
-                // imp.ui_typed_impl(ui, depth + 1, c);
-                let s = &store.type_sys.0[store.typed.kinds[c] as usize];
-                if s.starts_with("xml") {
-                    CompressedNode::Type(Type::parse_xml(s))
-                } else {
-                    CompressedNode::Type(Type::parse(s).unwrap())
-                }
+                // if let Some(c) = store.both.ids.iter().position(|x| x == c) {
+                //     // imp.ui_both_impl(ui, depth + 1, c);
+                //     panic!()
+                // } else if let Some(c) = store.labeled.ids.iter().position(|x| x == c) {
+                //     // imp.ui_labeled_impl(ui, depth + 1, c);
+                //     let s = &store.type_sys.0[store.labeled.kinds[c] as usize];
+                //     let kind = if s.starts_with("xml") {
+                //         Type::parse_xml(s)
+                //     } else {
+                //         Type::parse(s).unwrap()
+                //     };
+                //     let l = store.labeled.labels[c] as usize;
+                //     CompressedNode::Label { label: l, kind }
+                // } else if let Some(c) = store.children.ids.iter().position(|x| x == c) {
+                //     // imp.ui_children_impl(ui, depth + 1, c);
+                //     let s = &store.type_sys.0[store.children.kinds[c] as usize];
+                //     let kind = if s.starts_with("xml") {
+                //         Type::parse_xml(s)
+                //     } else {
+                //         Type::parse(s).unwrap()
+                //     };
+                //     let o = store.children.cs_ofs[c] as usize;
+                //     let children = &store.children.children[o..o + store.children.cs_lens[c] as usize];
+                //     CompressedNode::Children {
+                //         children: children.iter().map(|x| *x as u64).collect(),
+                //         kind,
+                //     }
+                // } else if let Some(c) = store.typed.ids.iter().position(|x| x == c) {
+                //     // imp.ui_typed_impl(ui, depth + 1, c);
+                //     let s = &store.type_sys.0[store.typed.kinds[c] as usize];
+                //     if s.starts_with("xml") {
+                //         CompressedNode::Type(Type::parse_xml(s))
+                //     } else {
+                //         CompressedNode::Type(Type::parse(s).unwrap())
+                //     }
             } else {
+                // might not be needed if always called after serializer
+                if !store
+                    .nodes_pending
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|x| x.contains(id))
+                {
+                    store
+                        .nodes_waiting
+                        .lock()
+                        .unwrap()
+                        .get_or_insert(Default::default())
+                        .insert(*id);
+                }
                 CompressedNode::Type(Type::Error)
             }
         },
-        |id| -> _ { store.label_list[*id].len() },
+        |id| -> _ {
+            if let Some(get) = store.label_store.read().unwrap().get(id) {
+                get.len()
+            } else {
+                // TODO might not be needed is we have the
+                if !store
+                    .labels_pending
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|x| x.contains(id))
+                {
+                    store
+                        .labels_waiting
+                        .lock()
+                        .unwrap()
+                        .get_or_insert(Default::default())
+                        .insert(*id);
+                }
+                Type::Error.to_string().len()
+            }
+        },
         theme,
         &nid,
         &mut layout,
@@ -868,7 +1726,7 @@ fn subtree_to_layout(
     (len, layout)
 }
 
-fn subtree_to_string(store: &FetchedHyperAST, nid: u64) -> String {
+fn subtree_to_string(store: &FetchedHyperAST, nid: NodeIdentifier) -> String {
     let mut out = BuffOut::default();
 
     #[derive(Default)]
@@ -891,43 +1749,76 @@ fn subtree_to_string(store: &FetchedHyperAST, nid: u64) -> String {
     hyper_ast::nodes::serialize(
         |id| -> _ {
             use hyper_ast::nodes::CompressedNode;
-            let c = &(*id as u64);
-            if let Some(c) = store.both.ids.iter().position(|x| x == c) {
-                // imp.ui_both_impl(ui, depth + 1, c, pid.with(i));
-                panic!()
-            } else if let Some(c) = store.labeled.ids.iter().position(|x| x == c) {
-                // imp.ui_labeled_impl(ui, depth + 1, c, pid.with(i));
-                let s = &store.type_sys.0[store.labeled.kinds[c] as usize];
-                let kind = if s.starts_with("xml") {
-                    Type::parse_xml(s)
+            // let c = &(*id as u64);
+            if let Some(r) = store.node_store.read().unwrap().try_resolve(*id) {
+                let kind = r.get_type();
+                let l = r.try_get_label().copied();
+                let cs = r.children();
+                if let Some(cs) = cs {
+                    CompressedNode::Children {
+                        children: cs.0.to_vec().into_boxed_slice(),
+                        kind,
+                    }
+                } else if let Some(label) = l {
+                    CompressedNode::Label { label, kind }
+                } else if let (Some(label), Some(cs)) = (l, cs) {
+                    unreachable!()
                 } else {
-                    Type::parse(s).unwrap()
-                };
-                let l = store.labeled.labels[c] as usize;
-                CompressedNode::Label { label: l, kind }
-            } else if let Some(c) = store.children.ids.iter().position(|x| x == c) {
-                // imp.ui_children_impl(ui, depth + 1, c, pid.with(i));
-                let s = &store.type_sys.0[store.children.kinds[c] as usize];
-                let kind = if s.starts_with("xml") {
-                    Type::parse_xml(s)
-                } else {
-                    Type::parse(s).unwrap()
-                };
-                let o = store.children.cs_ofs[c] as usize;
-                let children = &store.children.children[o..o + store.children.cs_lens[c] as usize];
-                CompressedNode::Children {
-                    children: children.iter().map(|x| *x as u64).collect(),
-                    kind,
+                    CompressedNode::Type(kind)
                 }
-            } else if let Some(c) = store.typed.ids.iter().position(|x| x == c) {
-                // imp.ui_typed_impl(ui, depth + 1, c);
-                let s = &store.type_sys.0[store.typed.kinds[c] as usize];
-                if s.starts_with("xml") {
-                    CompressedNode::Type(Type::parse_xml(s))
-                } else {
-                    CompressedNode::Type(Type::parse(s).unwrap())
-                }
+            // if let Some(c) = store.both.ids.iter().position(|x| x == c) {
+            //     // imp.ui_both_impl(ui, depth + 1, c, pid.with(i));
+            //     panic!()
+            // } else if let Some(c) = store.labeled.ids.iter().position(|x| x == c) {
+            //     // imp.ui_labeled_impl(ui, depth + 1, c, pid.with(i));
+            //     let s = &store.type_sys.0[store.labeled.kinds[c] as usize];
+            //     let kind = if s.starts_with("xml") {
+            //         Type::parse_xml(s)
+            //     } else {
+            //         Type::parse(s).unwrap()
+            //     };
+            //     let l = store.labeled.labels[c] as usize;
+            //     CompressedNode::Label { label: l, kind }
+            // } else if let Some(c) = store.children.ids.iter().position(|x| x == c) {
+            //     // imp.ui_children_impl(ui, depth + 1, c, pid.with(i));
+            //     let s = &store.type_sys.0[store.children.kinds[c] as usize];
+            //     let kind = if s.starts_with("xml") {
+            //         Type::parse_xml(s)
+            //     } else {
+            //         Type::parse(s).unwrap()
+            //     };
+            //     let o = store.children.cs_ofs[c] as usize;
+            //     let children = &store.children.children[o..o + store.children.cs_lens[c] as usize];
+            //     CompressedNode::Children {
+            //         children: children.iter().map(|x| *x as u64).collect(),
+            //         kind,
+            //     }
+            // } else if let Some(c) = store.typed.ids.iter().position(|x| x == c) {
+            //     // imp.ui_typed_impl(ui, depth + 1, c);
+            //     let s = &store.type_sys.0[store.typed.kinds[c] as usize];
+            //     if s.starts_with("xml") {
+            //         CompressedNode::Type(Type::parse_xml(s))
+            //     } else {
+            //         CompressedNode::Type(Type::parse(s).unwrap())
+            //     }
             } else {
+                // TODO use a recursive fetch
+                // TODO need an additional queue for such recursive fetch
+                // TODO use additional nodes that are not fetched but where fetched to avoid transfering more than necessary
+                if !store
+                    .nodes_pending
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|x| x.contains(id))
+                {
+                    store
+                        .nodes_waiting
+                        .lock()
+                        .unwrap()
+                        .get_or_insert(Default::default())
+                        .insert(*id);
+                }
                 CompressedNode::Type(Type::Error)
             }
             // node_store
@@ -935,7 +1826,27 @@ fn subtree_to_string(store: &FetchedHyperAST, nid: u64) -> String {
             //     .into_compressed_node()
             //     .unwrap()
         },
-        |id| -> _ { store.label_list[*id].clone() },
+        |id| -> _ {
+            if let Some(get) = store.label_store.read().unwrap().get(id) {
+                get.to_string()
+            } else {
+                if !store
+                    .labels_pending
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|x| x.contains(id))
+                {
+                    store
+                        .labels_waiting
+                        .lock()
+                        .unwrap()
+                        .get_or_insert(Default::default())
+                        .insert(*id);
+                }
+                Type::Error.to_string()
+            }
+        },
         &nid,
         &mut out,
         "\n",
@@ -946,24 +1857,20 @@ fn subtree_to_string(store: &FetchedHyperAST, nid: u64) -> String {
 fn make_pp_code(
     store: Arc<FetchedHyperAST>,
     ctx: &egui::Context,
-    nid: usize,
+    nid: NodeIdentifier,
     theme: syntax_highlighting_ts::CodeTheme,
 ) -> epaint::text::LayoutJob {
     #[derive(Default)]
     struct PrettyPrinter {}
-    impl cache::ComputerMut<(&FetchedHyperAST, u64), String> for PrettyPrinter {
-        fn compute(&mut self, (store, id): (&FetchedHyperAST, u64)) -> String {
+    impl cache::ComputerMut<(&FetchedHyperAST, NodeIdentifier), String> for PrettyPrinter {
+        fn compute(&mut self, (store, id): (&FetchedHyperAST, NodeIdentifier)) -> String {
             subtree_to_string(store, id)
         }
     }
 
     type PPCache = cache::FrameCache<String, PrettyPrinter>;
 
-    let code = ctx.memory_mut(|mem| {
-        mem.caches
-            .cache::<PPCache>()
-            .get((store.as_ref(), store.children.ids[nid]))
-    });
+    let code = ctx.memory_mut(|mem| mem.caches.cache::<PPCache>().get((store.as_ref(), nid)));
     #[derive(Default)]
     struct Spawner {}
     impl
@@ -971,7 +1878,7 @@ fn make_pp_code(
             (
                 Arc<FetchedHyperAST>,
                 &syntax_highlighting_ts::CodeTheme,
-                u64,
+                NodeIdentifier,
                 usize,
             ),
             Layouter,
@@ -983,7 +1890,7 @@ fn make_pp_code(
             (store, theme, id, len): (
                 Arc<FetchedHyperAST>,
                 &syntax_highlighting_ts::CodeTheme,
-                u64,
+                NodeIdentifier,
                 usize,
             ),
         ) -> Layouter {
@@ -1012,7 +1919,7 @@ fn make_pp_code(
             (
                 Arc<FetchedHyperAST>,
                 &syntax_highlighting_ts::CodeTheme,
-                u64,
+                NodeIdentifier,
                 usize,
             ),
             Vec<LayoutSection>,
@@ -1024,7 +1931,7 @@ fn make_pp_code(
             (store, theme, id, len): (
                 Arc<FetchedHyperAST>,
                 &syntax_highlighting_ts::CodeTheme,
-                u64,
+                NodeIdentifier,
                 usize,
             ),
         ) -> Vec<LayoutSection> {
@@ -1083,10 +1990,9 @@ fn make_pp_code(
     type HCache = syntax_highlighting_async::cache::IncrementalCache<Layouter, Spawner>;
 
     let sections = ctx.memory_mut(|mem| {
-        mem.caches.cache::<HCache>().get(
-            ctx,
-            (store.clone(), &theme, store.children.ids[nid], code.len()),
-        )
+        mem.caches
+            .cache::<HCache>()
+            .get(ctx, (store.clone(), &theme, nid, code.len()))
     });
 
     let layout_job = epaint::text::LayoutJob {
@@ -1097,20 +2003,29 @@ fn make_pp_code(
     layout_job
 }
 
+// impl HightLightHandle {
+//     fn selection_hightlight(&mut self, ui: &mut egui::Ui,) {
+
+//     }
+// }
 fn selection_highlight(
     ui: &mut egui::Ui,
-    path: &[usize],
-    color: &epaint::Color32,
+    handle: &mut HightLightHandle,
     min: epaint::Pos2,
     rect: epaint::Rect,
     root_ui_id: egui::Id,
-    ret_pos: &mut Option<egui::Pos2>,
 ) {
+    let HightLightHandle {
+        path,
+        color,
+        id,
+        screen_pos: ret_pos,
+    } = handle;
     if path.is_empty() {
         let clip = ui.clip_rect();
         let min_elem = clip.size().min_elem();
         if clip.intersects(rect) {
-            ui.painter().debug_rect(rect, *color, "");
+            ui.painter().debug_rect(rect, **color, "");
         }
         let clip = if min_elem < 1.0 {
             clip
@@ -1121,26 +2036,26 @@ fn selection_highlight(
         };
 
         if clip.intersects(rect) {
-            if color == &egui::Color32::BLUE {
-                let id = root_ui_id.with("blue_highlight");
-                wasm_rs_dbg::dbg!("green", id);
+            if *color == &egui::Color32::BLUE {
+                let id = root_ui_id.with("blue_highlight").with(id);
+                // wasm_rs_dbg::dbg!("green", id);
                 let pos = egui::pos2(min.x - 15.0, min.y - 10.0);
                 let pos = clip.clamp(pos);
                 if ui.clip_rect().contains(pos) {
-                    show_port(ui, id, pos);
-                    *ret_pos = Some(pos);
+                    // show_port(ui, id, pos);
+                    **ret_pos = Some(rect);
                 }
-            } else if color == &egui::Color32::GREEN {
-                let id = root_ui_id.with("green_highlight");
+            } else if *color == &TARGET_COLOR {
+                let id = root_ui_id.with("green_highlight").with(id);
                 let pos = egui::pos2(rect.max.x - 10.0, rect.min.y - 10.0);
                 let pos = clip.clamp(pos);
                 if ui.clip_rect().contains(pos) {
-                    show_port(ui, id, pos);
-                    *ret_pos = Some(pos);
+                    // show_port(ui, id, pos);
+                    **ret_pos = Some(rect);
                 }
             }
 
-            ui.painter().debug_rect(rect, *color, "");
+            ui.painter().debug_rect(rect, **color, "");
         }
     }
 }

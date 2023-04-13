@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use self::{editor_content::EditAwareString, generic_text_buffer::TextBuffer};
 
-use super::{syntax_highlighting, Lang};
+use super::{syntax_highlighting_ts, Lang};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct CodeEditor {
@@ -152,7 +152,7 @@ impl CodeEditor {
         //     });
         // }
 
-        let mut theme = syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+        let mut theme = syntax_highlighting_ts::CodeTheme::from_memory(ui.ctx());
         // ui.collapsing("Theme", |ui| {
         //     ui.group(|ui| {
         //         theme.ui(ui);
@@ -190,7 +190,7 @@ impl CodeEditor {
                 if TREE_SITTER {
                     let mut layouter = |ui: &egui::Ui, code: &EditAwareString, wrap_width: f32| {
                         // dbg!(&lang);
-                        let mut layout_job = syntax_highlighting::highlight(
+                        let mut layout_job = syntax_highlighting_ts::highlight(
                             ui.ctx(),
                             &theme,
                             code,

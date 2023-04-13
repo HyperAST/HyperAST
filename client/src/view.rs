@@ -1,20 +1,16 @@
-use std::{
-    fmt::Display,
-    hash::{Hash, Hasher},
-    rc::Rc,
-};
+use std::hash::{Hash, Hasher};
 
-use axum::{body::HttpBody, Json};
+use axum::Json;
 use hyper_ast::{
     compat::HashMap,
     store::defaults::{LabelIdentifier, NodeIdentifier},
     types::{self, LabelStore, Tree, WithChildren},
 };
-use hyper_ast_cvs_git::{git::fetch_github_repository, preprocessed::child_at_path};
+use hyper_ast_cvs_git::git::fetch_github_repository;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
-use crate::SharedState;
+use crate::{RepoConfig, SharedState};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct Parameters {
@@ -87,23 +83,30 @@ pub fn view(state: SharedState, path: Parameters) -> Result<Json<ViewRes>, Strin
         path,
     } = path;
     dbg!(&path);
-    let mut repo = fetch_github_repository(&format!("{}/{}", user, name));
-    log::warn!("done cloning {user}/{name}");
-    let mut get_mut = state.write().unwrap();
-    let commits = get_mut
+    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let configs = state.configs.read().unwrap();
+    let config = configs
+        .get(&repo_spec)
+        .ok_or_else(|| "missing config for repository".to_string())?;
+    let mut repo = repo_spec.fetch();
+    log::warn!("done cloning {}/{}", repo_spec.user, repo_spec.name);
+    let commits = state
         .repositories
-        .pre_process_with_limit(&mut repo, "", &commit, "", 2)
+        .write()
+        .unwrap()
+        .pre_process_with_config(&mut repo, "", &commit, config.into())
         .map_err(|e| e.to_string())?;
-    log::warn!("done construction of {commits:?} in {user}/{name}");
-    let commit_src = get_mut
-        .repositories
-        .commits
-        .get_key_value(&commits[0])
-        .unwrap();
+    log::warn!(
+        "done construction of {commits:?} in {}/{}",
+        repo_spec.user,
+        repo_spec.name
+    );
+    let repositories = state.repositories.read().unwrap();
+    let commit_src = repositories.commits.get_key_value(&commits[0]).unwrap();
     let src_tr = commit_src.1.ast_root;
     dbg!(src_tr);
-    let node_store = &get_mut.repositories.processor.main_stores.node_store;
-    let label_store = &get_mut.repositories.processor.main_stores.label_store;
+    let node_store = &repositories.processor.main_stores.node_store;
+    let label_store = &repositories.processor.main_stores.label_store;
 
     log::error!("searching for {path:?}");
     let curr = resolve_path(src_tr, path, node_store);
@@ -122,16 +125,17 @@ pub fn view_with_node_id(state: SharedState, id: u64) -> Result<Json<ViewRes>, S
     dbg!(&id);
     let id: NodeIdentifier = unsafe { std::mem::transmute(id) };
     dbg!(&id);
-    let mut get_mut = state.write().unwrap();
-    let node_store = &get_mut.repositories.processor.main_stores.node_store;
-    let label_store = &get_mut.repositories.processor.main_stores.label_store;
+    let mut get_mut = state;
+    let repositories = get_mut.repositories.read().unwrap();
+    let node_store = &repositories.processor.main_stores.node_store;
+    let label_store = &repositories.processor.main_stores.label_store;
 
     let type_sys = TypeSys(types::Type::it().map(|x| x.to_string()).collect());
 
     if node_store.try_resolve(id).is_none() {
         return Err(format!("{id:?} is absent from the HyperAST"));
     }
-    let view = make_view(vec![(id, 5)], node_store, label_store);
+    let view = make_view(vec![(id, 8)], node_store, label_store);
     let view_res = ViewRes { type_sys, view };
     Ok(view_res.into())
 }

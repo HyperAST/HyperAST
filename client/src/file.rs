@@ -1,12 +1,9 @@
-use std::{fmt::Display, rc::Rc};
-
-use axum::{body::HttpBody, Json};
 use hyper_ast::types::LabelStore;
 use hyper_ast_cvs_git::{git::fetch_github_repository, preprocessed::child_at_path};
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
-use crate::SharedState;
+use crate::{RepoConfig, SharedState};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct FetchFileParam {
@@ -24,29 +21,35 @@ pub fn from_hyper_ast(state: SharedState, path: FetchFileParam) -> Result<String
         commit,
         file,
     } = path.clone();
-    let mut repo = fetch_github_repository(&format!("{}/{}", user, name));
-    log::warn!("done cloning {user}/{name}");
-    let mut get_mut = state.write().unwrap();
-    let commits = get_mut
-        .repositories
-        .pre_process_with_limit(&mut repo, "", &commit, "", 2)
-        .map_err(|e| e.to_string())?;
-    log::warn!("done construction of {commits:?} in {user}/{name}");
-    let commit_src = get_mut
-        .repositories
-        .commits
-        .get_key_value(&commits[0])
+    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let configs = state
+        .configs
+        .read()
         .unwrap();
+    let config = configs
+        .get(&repo_spec)
+        .ok_or_else(|| "missing config for repository".to_string())?;
+    let mut repo = repo_spec.fetch();
+    log::warn!("done cloning {}/{}", repo_spec.user, repo_spec.name);
+    let commits = state
+        .repositories
+        .write()
+        .unwrap()
+        .pre_process_with_config(&mut repo, "", &commit, config.into())
+        .map_err(|e| e.to_string())?;
+    log::warn!(
+        "done construction of {commits:?} in {}/{}",
+        repo_spec.user,
+        repo_spec.name
+    );
+    let repositories = state.repositories.read().unwrap();
+    let commit_src = repositories.commits.get_key_value(&commits[0]).unwrap();
     let src_tr = commit_src.1.ast_root;
-    let node_store = &get_mut.repositories.processor.main_stores.node_store;
+    let node_store = &repositories.processor.main_stores.node_store;
 
     // let size = node_store.resolve(src_tr).size();
     log::error!("searching for {file}");
-    let file = child_at_path(
-        &get_mut.repositories.processor.main_stores,
-        src_tr,
-        file.split("/"),
-    );
+    let file = child_at_path(&repositories.processor.main_stores, src_tr, file.split("/"));
 
     let Some(file) = file else {
         return Err("not found".to_string());
@@ -62,8 +65,7 @@ pub fn from_hyper_ast(state: SharedState, path: FetchFileParam) -> Result<String
                 .unwrap()
         },
         |id| -> _ {
-            get_mut
-                .repositories
+            repositories
                 .processor
                 .main_stores
                 .label_store

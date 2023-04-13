@@ -8,7 +8,7 @@ rust-version = "1.65"
 [dependencies]
 egui = "0.21.0"
 eframe = { version = "0.21.0", default-features = false, features = [
-    "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
+    # "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
     "glow",          # Use the glow rendering backend. Alternative: "wgpu".
     # "persistence",   # Enable restoring app state when restarting the app.
@@ -31,17 +31,27 @@ ehttp = { version = "0.2.0" }
 #   "jpeg",
 #   "png",
 # ] }
-poll-promise = { version = "0.2", default-features = false }
-serde_json = "1.0.79"                                        # Serde serializion/deserialization of JSON data.
+serde_json = "1.0.79" # Serde serializion/deserialization of JSON data.
 
 wasm-rs-dbg = "0.1.2"
 
 chrono = "0.4.23"
 
+serde_qs = "0.12.0"
+crossbeam-queue = "0.3.8"
 # hyper_ast_client = {path = "../client", package="client"}
+
+hyper_ast = { path = "../hyper_ast", default-features = false, features = ["serialize","fetched_par"] }
+
+nohash-hasher = "0.2.0"
+
+egui_cable = "0.5.0"
+
+enumset = "1.0.12"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+poll-promise = { version = "0.2", default-features = false }
 tracing-subscriber = "0.3"
 tree-sitter-javascript = "0.20.0"
 tree-sitter = { version = "0.9.1", package = "tree-sitter-facade-sg" }
@@ -50,6 +60,8 @@ tree-sitter-native = { version = "0.20.9", package = "tree-sitter" }
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-timers = "0.2.6"
+poll-promise = { version = "0.2", default-features = false, features = ["web"] }
 console_error_panic_hook = "0.1.6"
 tracing-wasm = "0.2"
 tree-sitter = { version = "0.9.1", package = "tree-sitter-facade-sg" }
@@ -59,6 +71,12 @@ wasm-bindgen-futures = "0.4.34"
 serde-wasm-bindgen = "0.4"
 js-sys = "0.3"
 # wasm-bindgen-futures = "0.4"
+
+
+[dependencies.syntect]
+version = "5"
+features = ["default-fancy"]
+default-features = false
 
 [features]
 default = ["serde"]

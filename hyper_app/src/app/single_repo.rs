@@ -6,7 +6,7 @@ use crate::app::{utils::{file_save, self}, API_URL};
 use super::{
     code_editor::{CodeEditor, EditorInfo},
     egui_utils::{radio_collapsing, show_wip},
-    types::{CodeEditors, CommitId, Repo, Resource, SelectedConfig, Commit}, show_repo,
+    types::{CodeEditors, CommitId, Repo, Resource, SelectedConfig, Commit}, show_repo_menu,
 };
 
 const INFO_INIT: EditorInfo<&'static str> = EditorInfo {
@@ -200,7 +200,7 @@ pub(super) fn show_single_repo_menu(
     let wanted = SelectedConfig::Single;
     let id = ui.make_persistent_id(title);
     let add_body = |ui: &mut egui::Ui| {
-        show_repo(ui, &mut single.commit.repo);
+        show_repo_menu(ui, &mut single.commit.repo);
         ui.push_id(ui.id().with("commit"), |ui| {
             egui::TextEdit::singleline(&mut single.commit.id)
                 .clip_text(true)

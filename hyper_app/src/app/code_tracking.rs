@@ -13,15 +13,16 @@ use crate::app::{
 
 use super::{
     egui_utils::{radio_collapsing, show_wip},
-    show_repo,
+    show_repo_menu,
     types::CodeRange,
     types::{self, Commit, Resource},
-    Buffered,
+    Accumulable, Buffered,
 };
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct FetchedFile {
     pub content: String,
+    pub line_breaks: Vec<usize>,
 }
 
 impl Resource<FetchedFile> {
@@ -36,8 +37,17 @@ impl Resource<FetchedFile> {
 
         let text = response.text();
         // let colored_text = text.and_then(|text| syntax_highlighting(ctx, &response, text));
-        let text = text.map(|x| FetchedFile {
-            content: x.to_string(),
+        let text = text.map(|x| {
+            let content = x.to_string();
+            let line_breaks = content
+                .bytes()
+                .enumerate()
+                .filter_map(|(i, b)| if b == b'\n' { Some(i) } else { None })
+                .collect();
+            FetchedFile {
+                content,
+                line_breaks,
+            }
         });
 
         Self {
@@ -81,8 +91,85 @@ pub(super) fn remote_fetch_file(
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct TrackingResult {
     pub compute_time: f64,
+    pub commits_processed: usize,
     pub src: CodeRange,
+    pub intermediary: Option<CodeRange>,
+    pub fallback: Option<CodeRange>,
     pub matched: Vec<CodeRange>,
+}
+
+impl PartialEq for TrackingResult {
+    fn eq(&self, other: &Self) -> bool {
+        self.src == other.src
+            && self.intermediary == other.intermediary
+            && self.fallback == other.fallback
+            && self.matched == other.matched
+    }
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct TrackingResultWithChanges {
+    pub track: TrackingResult,
+    pub(crate) src_changes: Option<SrcChanges>,
+    pub(crate) dst_changes: Option<DstChanges>,
+}
+
+impl From<TrackingResult> for TrackingResultWithChanges {
+    fn from(value: TrackingResult) -> Self {
+        Self {
+            track: value,
+            src_changes: Default::default(),
+            dst_changes: Default::default(),
+        }
+    }
+}
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+pub struct TrackingResults {
+    pub results: Vec<TrackingResult>,
+}
+
+impl Accumulable<TrackingResult> for TrackingResults {
+    fn acc(&mut self, other: TrackingResult) -> bool {
+        if self.results.contains(&other) {
+            return false;
+        }
+        self.results.push(other);
+        true
+    }
+}
+
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+pub struct TrackingResultsWithChanges {
+    pub track: TrackingResults,
+    pub(crate) src_changes: Option<SrcChanges>,
+    pub(crate) dst_changes: Option<DstChanges>,
+}
+
+impl Accumulable<TrackingResultWithChanges> for TrackingResultsWithChanges {
+    fn acc(&mut self, other: TrackingResultWithChanges) -> bool {
+        if self.src_changes.is_none() {
+            self.src_changes = other.src_changes;
+        }
+        if self.dst_changes.is_none() {
+            self.dst_changes = other.dst_changes;
+        }
+        self.track.acc(other.track)
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct SrcChanges {
+    #[serde(flatten)]
+    pub(crate) commit: Commit,
+    /// Global position of deleted elements
+    pub(crate) deletions: Vec<u32>, // TODO diff encode
+}
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct DstChanges {
+    #[serde(flatten)]
+    pub(crate) commit: Commit,
+    /// Global position of added elements
+    pub(crate) additions: Vec<u32>, // TODO diff encode
 }
 
 pub(super) type ComputeResult = Resource<TrackingResult>;
@@ -131,14 +218,47 @@ pub(super) fn track(
 }
 
 impl Resource<TrackingResult> {
-    pub(super) fn from_response(ctx: &egui::Context, response: ehttp::Response) -> Result<Self, String> {
+    pub(super) fn from_response(
+        ctx: &egui::Context,
+        response: ehttp::Response,
+    ) -> Result<Self, String> {
         wasm_rs_dbg::dbg!(&response);
         // let content_type = response.content_type().unwrap_or_default();
 
         let text = response.text();
         let text = text.ok_or("")?;
-        let text = serde_json::from_str(text).map_err(|x| x.to_string())?;
-        wasm_rs_dbg::dbg!(&text);
+
+        let text = if response.status == 200 {
+            serde_json::from_str(text).map_err(|x| x.to_string())?
+        } else {
+            return Err(text.into());
+        };
+        // wasm_rs_dbg::dbg!(&text);
+
+        Ok(Self {
+            response,
+            content: text,
+        })
+    }
+}
+
+impl Resource<TrackingResultWithChanges> {
+    pub(super) fn from_response(
+        ctx: &egui::Context,
+        response: ehttp::Response,
+    ) -> Result<Self, String> {
+        wasm_rs_dbg::dbg!(&response);
+        // let content_type = response.content_type().unwrap_or_default();
+
+        let text = response.text();
+        let text = text.ok_or("")?;
+
+        let text = if response.status == 200 {
+            serde_json::from_str(text).map_err(|x| x.to_string())?
+        } else {
+            return Err(text.into());
+        };
+        // wasm_rs_dbg::dbg!(&text);
 
         Ok(Self {
             response,
@@ -151,24 +271,23 @@ pub(super) fn show_code_tracking_menu(
     ui: &mut egui::Ui,
     selected: &mut types::SelectedConfig,
     tracking: &mut types::ComputeConfigTracking,
-    tracking_result: &mut Buffered<Result<Resource<TrackingResult>, String>>,
+    mut tracking_result: &mut Buffered<Result<Resource<TrackingResult>, String>>,
 ) {
     let title = "Code Tracking";
     let wanted = types::SelectedConfig::Tracking;
     let id = ui.make_persistent_id(title);
 
     let add_body = |ui: &mut egui::Ui| {
-        let repo_changed = show_repo(ui, &mut tracking.target.file.commit.repo);
+        let repo_changed = show_repo_menu(ui, &mut tracking.target.file.commit.repo);
         let old = tracking.target.file.commit.id.clone();
-        let commit_te = 
-            egui::TextEdit::singleline(&mut tracking.target.file.commit.id)
-                .clip_text(true)
-                .desired_width(150.0)
-                .desired_rows(1)
-                .hint_text("commit")
-                .id(ui.id().with("commit"))
-                .interactive(true)
-                .show(ui);
+        let commit_te = egui::TextEdit::singleline(&mut tracking.target.file.commit.id)
+            .clip_text(true)
+            .desired_width(150.0)
+            .desired_rows(1)
+            .hint_text("commit")
+            .id(ui.id().with("commit"))
+            .interactive(true)
+            .show(ui);
         if repo_changed || commit_te.response.changed() {
             tracking_result.take();
             *tracking_result = Default::default();
@@ -232,7 +351,7 @@ pub(super) fn show_code_tracking_results(
                 // }
                 if let Some(selected_node) = &selected_node {
                     let color = egui::Color32::GREEN.linear_multiply(0.1);
-                    let rect = highlight_byte_range(ui, &aa, selected_node, color);
+                    let rect = highlight_byte_range(ui, &aa.inner, selected_node, color);
                     // aa.inner.response.context_menu(|ui| {
                     //     if ui.button("Close the menu").clicked() {
                     //         ui.close_menu();
@@ -308,7 +427,8 @@ pub(super) fn show_code_tracking_results(
                             {
                                 if let Some(selected_node) = &matched.range {
                                     let color = egui::Color32::GREEN.linear_multiply(0.1);
-                                    let rect = highlight_byte_range(ui, &aa, selected_node, color);
+                                    let rect =
+                                        highlight_byte_range(ui, &aa.inner, selected_node, color);
                                     aa.inner.response.context_menu(|ui| {
                                         if ui.button("Close the menu").clicked() {
                                             ui.close_menu();

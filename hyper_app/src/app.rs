@@ -1,6 +1,7 @@
 use std::{
-    collections::{hash_map, HashMap},
+    collections::{hash_map, HashMap, VecDeque},
     fmt::Debug,
+    ops::Range,
     sync::Arc,
 };
 
@@ -9,21 +10,25 @@ use serde::{Deserialize, Serialize};
 use self::{
     egui_utils::{radio_collapsing, show_wip},
     single_repo::ComputeConfigSingle,
-    types::{Lang, Languages, Repo},
+    tree_view::FetchedHyperAST,
+    types::{Commit, Lang, Languages, Repo}, code_editor::generic_text_buffer::byte_index_from_char_index,
 };
 
 mod code_editor;
 mod code_tracking;
 mod single_repo;
-mod syntax_highlighting;
+mod syntax_highlighting_async;
+mod syntax_highlighting_ts;
 mod ts_highlight;
 pub(crate) mod types;
 // mod split_from_side_panel;
+mod commit;
 mod egui_utils;
 mod interactive_split;
 mod long_tracking;
 mod multi_split;
 mod split;
+mod tree_view;
 mod utils;
 
 // const API_URL: &str = "http://131.254.13.72:8080";
@@ -57,6 +62,8 @@ pub struct HyperApp {
     tracking_result: Buffered<code_tracking::RemoteResult>,
     #[serde(skip)]
     aspects_result: Option<code_aspects::RemoteView>,
+    #[serde(skip)]
+    store: Arc<FetchedHyperAST>,
 
     long_tracking: long_tracking::LongTacking,
 }
@@ -154,6 +161,87 @@ impl<T: std::marker::Send + 'static> Buffered<T> {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct MultiBuffered<T, U: std::marker::Send + 'static> {
+    content: Option<T>,
+    #[serde(skip)]
+    waiting: VecDeque<poll_promise::Promise<U>>,
+}
+impl<T, U: std::marker::Send + 'static> Default for MultiBuffered<T, U> {
+    fn default() -> Self {
+        Self {
+            content: Default::default(),
+            waiting: Default::default(),
+        }
+    }
+}
+pub trait Accumulable<Rhs = Self> {
+    fn acc(&mut self, rhs: Rhs) -> bool;
+}
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct AccumulableResult<T, E> {
+    content: T,
+    errors: E,
+}
+impl<T: Accumulable<U>, U, E: Accumulable<F>, F> Accumulable<Result<U, F>>
+    for AccumulableResult<T, E>
+{
+    fn acc(&mut self, rhs: Result<U, F>) -> bool {
+        match rhs {
+            Ok(rhs) => self.content.acc(rhs),
+            Err(err) => self.errors.acc(err),
+        }
+    }
+}
+impl Accumulable<String> for Vec<String> {
+    fn acc(&mut self, rhs: String) -> bool {
+        self.push(rhs);
+        true
+    }
+}
+impl<T: Default, U: std::marker::Send + 'static> MultiBuffered<T, U> {
+    pub fn try_poll(&mut self) -> bool
+    where
+        T: Accumulable<U>,
+    {
+        if let Some(front) = self.waiting.pop_front() {
+            match front.try_take() {
+                Ok(content) => {
+                    if self.content.is_none() {
+                        self.content = Some(Default::default())
+                    }
+                    let Some(c) = &mut self.content  else {
+                        unreachable!()
+                    };
+                    c.acc(content)
+                }
+                Err(front) => {
+                    self.waiting.push_front(front);
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    }
+
+    pub fn get_mut(&mut self) -> Option<&mut T> {
+        self.content.as_mut()
+    }
+
+    pub fn is_waiting(&self) -> bool {
+        !self.waiting.is_empty()
+    }
+
+    pub fn buffer(&mut self, waiting: poll_promise::Promise<U>) {
+        self.waiting.push_back(waiting)
+    }
+
+    pub fn take(&mut self) -> Option<T> {
+        self.content.take()
+    }
+}
+
 impl Default for HyperApp {
     fn default() -> Self {
         Self {
@@ -172,6 +260,7 @@ impl Default for HyperApp {
             aspects: Default::default(),
             aspects_result: Default::default(),
             long_tracking: Default::default(),
+            store: Default::default(),
         }
     }
 }
@@ -241,6 +330,7 @@ impl eframe::App for HyperApp {
             tracking_result,
             aspects_result,
             long_tracking,
+            store,
         } = self;
         let mut trigger_compute = false;
 
@@ -290,7 +380,13 @@ impl eframe::App for HyperApp {
                     ui.separator();
                     long_tracking::show_menu(ui, selected, long_tracking);
                     ui.separator();
-                    code_aspects::show_aspects_views_menu(ui, selected, aspects, aspects_result);
+                    code_aspects::show_aspects_views_menu(
+                        ui,
+                        selected,
+                        aspects,
+                        store.clone(),
+                        aspects_result,
+                    );
                 });
 
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
@@ -358,37 +454,30 @@ impl eframe::App for HyperApp {
                 );
             });
         } else if *selected == types::SelectedConfig::LongTracking {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                long_tracking::show_results(ui, long_tracking, fetched_files);
-            });
+            egui::CentralPanel::default()
+                .frame(egui::Frame::central_panel(&ctx.style()).inner_margin(2.0))
+                .show(ctx, |ui| {
+                    long_tracking::show_results(
+                        ui,
+                        &aspects,
+                        store.clone(),
+                        long_tracking,
+                        fetched_files,
+                    );
+                });
         } else if *selected == types::SelectedConfig::Aspects {
             egui::CentralPanel::default().show(ctx, |ui| {
                 if let Some(aspects_result) = aspects_result {
-                    if let Some(aspects_result) = aspects_result.ready() {
-                        match aspects_result {
-                            Ok(aspects_result) => {
-                                egui::ScrollArea::both().show(ui, |ui| {
-                                    if let Some(content) = &aspects_result.content {
-                                        content.show(ui);
-                                    }
-                                });
-                                // egui::CollapsingHeader::new("Tree")
-                                //     .default_open(false)
-                                //     .show(ui, |ui| {
-                                //         // aspects_result.ui(ui)
-                                //         if let Some(content) = &aspects_result.content {
-                                //             content.show(ui);
-                                //         }
-                                //     });
-                            }
-                            Err(err) => {
-                                wasm_rs_dbg::dbg!(err);
-                            }
-                        }
-                    }
+                    code_aspects::show(aspects_result, ui, aspects);
                 } else {
-                    *aspects_result = Some(code_aspects::remote_fetch_tree(
+                    // *aspects_result = Some(code_aspects::remote_fetch_tree(
+                    //     ctx,
+                    //     &aspects.commit,
+                    //     &aspects.path,
+                    // ));
+                    *aspects_result = Some(code_aspects::remote_fetch_node(
                         ctx,
+                        store.clone(),
                         &aspects.commit,
                         &aspects.path,
                     ));
@@ -432,15 +521,15 @@ fn show_remote_code(
 ) {
     egui::ScrollArea::horizontal()
         .show(ui, |ui| {
-            show_remote_code2(ui, commit, file_path, file_result, f32::INFINITY, false)
+            show_remote_code1(ui, commit, file_path, file_result, f32::INFINITY, false)
         })
         .inner
 }
 
-fn show_remote_code2(
+fn show_remote_code1(
     ui: &mut egui::Ui,
     commit: &mut types::Commit,
-    file_path: &mut String,
+    mut file_path: &mut String,
     file_result: hash_map::Entry<'_, types::FileIdentifier, code_tracking::RemoteFile>,
     desired_width: f32,
     wrap: bool,
@@ -456,7 +545,7 @@ fn show_remote_code2(
     let mut upd_src = false;
     egui::collapsing_header::CollapsingState::load_with_default_open(
         ui.ctx(),
-        ui.next_auto_id(),
+        ui.id().with("file view"),
         true,
     )
     .show_header(ui, |ui| {
@@ -478,34 +567,8 @@ fn show_remote_code2(
                         if let Some(text) = &resource.content {
                             let code: &str = &text.content;
                             let language = "java";
-                            let theme = egui_demo_lib::syntax_highlighting::CodeTheme::from_memory(
-                                ui.ctx(),
-                            );
-
-                            let mut layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
-                                let mut layout_job = egui_demo_lib::syntax_highlighting::highlight(
-                                    ui.ctx(),
-                                    &theme,
-                                    string,
-                                    language,
-                                );
-                                if wrap {
-                                    layout_job.wrap.max_width = wrap_width;
-                                }
-                                ui.fonts(|f| f.layout_job(layout_job))
-                            };
-                            Some(egui::ScrollArea::both().show(ui, |ui| {
-                                egui::TextEdit::multiline(&mut code.to_string())
-                                    .font(egui::FontId::new(10.0, egui::FontFamily::Monospace)) // for cursor height
-                                    .code_editor()
-                                    .desired_rows(10)
-                                    // .desired_width(100.0)
-                                    .desired_width(desired_width)
-                                    .clip_text(true)
-                                    .lock_focus(true)
-                                    .layouter(&mut layouter)
-                                    .show(ui)
-                            }))
+                            // show_code_scrolled(ui, language, wrap, code, desired_width)
+                            show_code_scrolled(ui, language, wrap, code, desired_width)
                         } else {
                             None
                         }
@@ -542,6 +605,200 @@ fn show_remote_code2(
     })
 }
 
+fn show_code_scrolled(
+    ui: &mut egui::Ui,
+    language: &str,
+    wrap: bool,
+    code: &str,
+    desired_width: f32,
+) -> Option<egui::scroll_area::ScrollAreaOutput<egui::text_edit::TextEditOutput>> {
+    // use egui_demo_lib::syntax_highlighting;
+    use syntax_highlighting_async as syntax_highlighting;
+    let theme = syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+
+    let mut layouter = |ui: &egui::Ui, code: &str, wrap_width: f32| {
+        let mut layout_job =
+            // egui_demo_lib::syntax_highlighting::highlight(ui.ctx(), &theme, code, language);
+            syntax_highlighting_async::highlight(ui.ctx(), &theme, code, language);
+        if wrap {
+            layout_job.wrap.max_width = wrap_width;
+        }
+        ui.fonts(|f| f.layout_job(layout_job))
+    };
+    Some(egui::ScrollArea::both().show(ui, |ui| {
+        egui::TextEdit::multiline(&mut code.to_string())
+            .font(egui::FontId::new(10.0, egui::FontFamily::Monospace)) // for cursor height
+            .code_editor()
+            .desired_rows(10)
+            // .desired_width(100.0)
+            .desired_width(desired_width)
+            .clip_text(true)
+            .lock_focus(true)
+            .layouter(&mut layouter)
+            .show(ui)
+    }))
+}
+
+type SkipedBytes = usize;
+
+fn show_remote_code2(
+    ui: &mut egui::Ui,
+    commit: &mut types::Commit,
+    mut file_path: &mut String,
+    file_result: hash_map::Entry<'_, types::FileIdentifier, code_tracking::RemoteFile>,
+    desired_width: f32,
+    wrap: bool,
+) -> (
+    egui::Response,
+    egui::InnerResponse<()>,
+    std::option::Option<
+        egui::InnerResponse<
+            Option<
+                egui::scroll_area::ScrollAreaOutput<(SkipedBytes, egui::text_edit::TextEditOutput)>,
+            >,
+        >,
+    >,
+) {
+    let mut upd_src = false;
+    egui::collapsing_header::CollapsingState::load_with_default_open(
+        ui.ctx(),
+        ui.id().with("file view"),
+        true,
+    )
+    .show_header(ui, |ui| {
+        upd_src = ui.text_edit_singleline(file_path).lost_focus();
+        let url = format!(
+            "{}/{}/{}/blob/{}/{}",
+            "https://github.com", &commit.repo.user, &commit.repo.name, &commit.id, &file_path,
+        );
+        ui.hyperlink_to("see in github", url);
+    })
+    .body_unindented(|ui| {
+        ui.add_space(4.0);
+        if let hash_map::Entry::Occupied(promise) = &file_result {
+            let promise = promise.get();
+            let resp = if let Some(result) = promise.ready() {
+                match result {
+                    Ok(resource) => {
+                        // ui_resource(ui, resource);
+                        if let Some(text) = &resource.content {
+                            let code: &str = &text.content;
+                            let language = "java";
+                            // show_code_scrolled(ui, language, wrap, code, desired_width)
+                            show_code_scrolled2(
+                                ui,
+                                language,
+                                wrap,
+                                code,
+                                &text.line_breaks,
+                                desired_width,
+                            )
+                        } else {
+                            None
+                        }
+                    }
+                    Err(error) => {
+                        // This should only happen if the fetch API isn't available or something similar.
+                        ui.colored_label(
+                            ui.visuals().error_fg_color,
+                            if error.is_empty() { "Error" } else { error },
+                        );
+                        None
+                    }
+                }
+            } else {
+                ui.spinner();
+                None
+            };
+            if upd_src {
+                file_result.insert_entry(code_tracking::remote_fetch_file(
+                    ui.ctx(),
+                    commit,
+                    file_path,
+                ));
+            }
+            resp
+        } else {
+            file_result.insert_entry(code_tracking::remote_fetch_file(
+                ui.ctx(),
+                commit,
+                file_path,
+            ));
+            None
+        }
+    })
+}
+
+fn show_code_scrolled2(
+    ui: &mut egui::Ui,
+    language: &str,
+    wrap: bool,
+    code: &str,
+    line_breaks: &[usize],
+    desired_width: f32,
+) -> Option<egui::scroll_area::ScrollAreaOutput<(SkipedBytes, egui::text_edit::TextEditOutput)>> {
+    let theme = egui_demo_lib::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+    let mut layouter = |ui: &egui::Ui, code: &str, wrap_width: f32| {
+        let mut layout_job =
+            egui_demo_lib::syntax_highlighting::highlight(ui.ctx(), &theme, code, language);
+        if wrap {
+            panic!();
+            layout_job.wrap.max_width = wrap_width;
+        }
+        ui.fonts(|f| f.layout_job(layout_job))
+    };
+    let font_id = egui::FontId::new(10.0, egui::FontFamily::Monospace);
+
+    let total_rows = line_breaks.len();
+    Some(if false {
+        // by rows highlight
+        let row_height_sans_spacing = ui.fonts(|f| f.row_height(&font_id)) - 0.9; //text_style_height(&text_style);
+        egui::ScrollArea::vertical().show_rows(
+            ui,
+            row_height_sans_spacing,
+            total_rows,
+            |ui, rows| {
+                let start = if rows.start == 0 {
+                    0
+                } else {
+                    line_breaks[rows.start - 1]
+                };
+                ui.painter()
+                    .debug_rect(ui.max_rect(), egui::Color32::RED, "text");
+                let desired_height_rows = ui.available_height() / row_height_sans_spacing
+                    * (rows.end - rows.start) as f32;
+                let mut te = egui::TextEdit::multiline(
+                    &mut code[start..line_breaks[(rows.end).min(total_rows - 1)]].to_string(),
+                )
+                .font(font_id) // for cursor height
+                .code_editor()
+                // .desired_rows(desired_height_rows as usize)
+                // .desired_width(100.0)
+                .desired_width(desired_width)
+                .clip_text(true)
+                .lock_focus(true)
+                .layouter(&mut layouter)
+                .show(ui);
+                (start, te)
+            },
+        )
+    } else {
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            let mut te = egui::TextEdit::multiline(&mut code.to_string())
+                .font(font_id) // for cursor height
+                .code_editor()
+                // .desired_rows(desired_height_rows as usize)
+                // .desired_width(100.0)
+                .desired_width(desired_width)
+                .clip_text(true)
+                .lock_focus(true)
+                .layouter(&mut layouter)
+                .show(ui);
+            (0, te)
+        })
+    })
+}
+
 fn show_multi_repo(
     ui: &mut egui::Ui,
     selected: &mut types::SelectedConfig,
@@ -574,7 +831,268 @@ fn show_diff(
 
 mod code_aspects;
 
-pub(crate) fn show_repo(ui: &mut egui::Ui, repo: &mut Repo) -> bool {
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref COMMIT_STRS: Arc<std::sync::Mutex<BorrowFrameCache<String, ComputeCommitStr>>> = {
+        // let mut map = HashMap::new();
+        // map.insert("James", vec!["user", "admin"]);
+        // map.insert("Jim", vec!["user"]);
+        // map
+        Default::default()
+    };
+}
+pub struct BorrowFrameCache<Value, Computer> {
+    generation: u32,
+    computer: Computer,
+    cache: nohash_hasher::IntMap<u64, (u32, Value)>,
+}
+
+impl<Value, Computer> Default for BorrowFrameCache<Value, Computer>
+where
+    Computer: Default,
+{
+    fn default() -> Self {
+        Self::new(Computer::default())
+    }
+}
+
+impl<Value, Computer> BorrowFrameCache<Value, Computer> {
+    pub fn new(computer: Computer) -> Self {
+        Self {
+            generation: 0,
+            computer,
+            cache: Default::default(),
+        }
+    }
+
+    /// Must be called once per frame to clear the cache.
+    pub fn evice_cache(&mut self) {
+        let current_generation = self.generation;
+        self.cache.retain(|_key, cached| {
+            cached.0 == current_generation // only keep those that were used this frame
+        });
+        self.generation = self.generation.wrapping_add(1);
+    }
+}
+
+impl<Value: 'static + Send + Sync, Computer: 'static + Send + Sync> egui::util::cache::CacheTrait
+    for BorrowFrameCache<Value, Computer>
+{
+    fn update(&mut self) {
+        self.evice_cache();
+    }
+
+    fn len(&self) -> usize {
+        self.cache.len()
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl<Value, Computer> BorrowFrameCache<Value, Computer> {
+    /// Get from cache (if the same key was used last frame)
+    /// or recompute and store in the cache.
+    pub fn get<Key>(&mut self, key: Key) -> &Value
+    where
+        Key: Copy + std::hash::Hash,
+        Computer: egui::util::cache::ComputerMut<Key, Value>,
+    {
+        let hash = egui::util::hash(key);
+
+        match self.cache.entry(hash) {
+            std::collections::hash_map::Entry::Occupied(entry) => {
+                let cached = entry.into_mut();
+                cached.0 = self.generation;
+                &cached.1
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                let value = self.computer.compute(key);
+                &entry.insert((self.generation, value)).1
+            }
+        }
+    }
+    /// WARN panic if absent value
+    pub fn access<Key>(&self, key: Key) -> &Value
+    where
+        Key: std::hash::Hash,
+        Computer: egui::util::cache::ComputerMut<Key, Value>,
+    {
+        let hash = egui::util::hash(&key);
+        &self.cache.get(&hash).unwrap().1
+    }
+}
+
+#[derive(Default)]
+struct ComputeCommitStr {
+    // map:
+}
+
+impl egui::util::cache::ComputerMut<(&str, &Commit), String> for ComputeCommitStr {
+    fn compute(&mut self, (forge, commit): (&str, &Commit)) -> String {
+        format!(
+            "{}/{}/{}/{}",
+            forge, commit.repo.user, commit.repo.name, commit.id
+        )
+    }
+}
+
+struct CommitTextBuffer<'a, 'b, 'c> {
+    commit: &'a mut Commit,
+    forge: String,
+    str: &'b mut std::sync::MutexGuard<'c, BorrowFrameCache<String, ComputeCommitStr>>,
+}
+
+impl<'a, 'b, 'c>  CommitTextBuffer<'a, 'b, 'c> {
+    fn new(
+        commit: &'a mut Commit,
+        forge: String,
+        str: &'b mut std::sync::MutexGuard<'c, BorrowFrameCache<String, ComputeCommitStr>>,
+    ) -> Self {
+        str.get((&forge,commit));
+        Self { commit, forge, str }
+    }
+}
+
+impl<'a, 'b, 'c> code_editor::generic_text_buffer::TextBuffer for CommitTextBuffer<'a, 'b, 'c> {
+    type Ref = String;
+    fn is_mutable(&self) -> bool {
+        true
+    }
+    fn as_reference(&self) -> &Self::Ref {
+        self.str.access((&self.forge, &self.commit))
+    }
+
+    fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
+        // Get the byte index from the character index
+        let byte_idx = self.byte_index_from_char_index(char_index);
+        if text.starts_with("https://") {
+            let text = &text["https://".len()..];
+            let split: Vec<_> = text.split("/").collect();
+            if split[0] != "github.com" {
+                // TODO launch an alert
+                wasm_rs_dbg::dbg!("only github.com is allowed");
+                return 0;
+            }
+            if split.len() == 5 {
+                self.commit.repo.user = split[1].to_string();
+                self.commit.repo.name = split[2].to_string();
+                assert_eq!("commit", split[3].to_string());
+                self.commit.id = split[4].to_string();
+            }
+            wasm_rs_dbg::dbg!(&self.commit);
+            self.str.get((&self.forge, &self.commit));
+            return text.chars().count();
+        }
+
+        let mut t = self.str.get((&self.forge, &self.commit)).to_string();
+
+        t.insert_str(byte_idx, text);
+        let split: Vec<_> = t.split("/").collect();
+        if split[0] != "github.com" {
+            // TODO launch an alert
+            wasm_rs_dbg::dbg!("only github.com is allowed");
+            return 0;
+        }
+        self.commit.repo.user = split[1].to_string();
+        self.commit.repo.name = split[2].to_string();
+        self.commit.id = split[3].to_string();
+
+        self.str.get((&self.forge, &self.commit));
+
+        text.chars().count()
+    }
+
+    fn delete_char_range(&mut self, char_range: Range<usize>) {
+        // assert!(char_range.start <= char_range.end);
+
+        // // Get both byte indices
+        // let byte_start = self.byte_index_from_char_index(char_range.start);
+        // let byte_end = self.byte_index_from_char_index(char_range.end);
+
+        // // Then drain all characters within this range
+        // self.drain(byte_start..byte_end);
+        // todo!()
+        // WARN could produce unexpected functional results for the user
+    }
+
+    fn replace_range(&mut self, text: &str, char_range: Range<usize>) -> usize {
+        // Get the byte index from the character index
+        let byte_idx = self.byte_index_from_char_index(char_range.start);
+        if text.starts_with("https://") {
+            let text = &text["https://".len()..];
+            let split: Vec<_> = text.split("/").collect();
+            if split[0] != "github.com" {
+                // TODO launch an alert
+                wasm_rs_dbg::dbg!(&split[0]);
+                wasm_rs_dbg::dbg!("only github.com is allowed");
+                return 0;
+            }
+            if split.len() == 5 {
+                self.commit.repo.user = split[1].to_string();
+                self.commit.repo.name = split[2].to_string();
+                assert_eq!("commit", split[3].to_string());
+                self.commit.id = split[4].to_string();
+            }
+            wasm_rs_dbg::dbg!(&split, &self.commit);
+            self.str.get((&self.forge, &self.commit));
+            return text.chars().count();
+        }
+
+        let mut t = self.str.get((&self.forge, &self.commit)).to_string();
+        {
+            let byte_start = byte_index_from_char_index(&t, char_range.start);
+            let byte_end = byte_index_from_char_index(&t, char_range.end);
+            t.drain(byte_start..byte_end);
+        }
+        t.insert_str(byte_idx, text);
+        let split: Vec<_> = text.split("/").collect();
+        if split[0] != "github.com" {
+            // TODO launch an alert
+            wasm_rs_dbg::dbg!("only github.com is allowed");
+            return 0;
+        }
+        self.commit.repo.user = split[1].to_string();
+        self.commit.repo.name = split[2].to_string();
+        self.commit.id = split[3].to_string();
+
+        self.str.get((&self.forge, &self.commit));
+
+        text.chars().count()
+    }
+
+    fn clear(&mut self) {
+        // self.clear()
+    }
+
+    fn replace(&mut self, text: &str) {
+        // *self = text.to_owned();
+    }
+
+    fn take(&mut self) -> String {
+        self.str.get((&self.forge, &self.commit)).to_string()
+    }
+}
+
+pub(crate) fn show_commit_menu(ui: &mut egui::Ui, commit: &mut Commit) -> bool {
+    let mut mutex_guard = COMMIT_STRS.lock().unwrap();
+    let mut c = CommitTextBuffer::new(
+        commit,
+        "github.com".to_string(),
+        &mut mutex_guard,
+    );
+    let ml = code_editor::generic_text_edit::TextEdit::multiline(&mut c)
+        // .margin(egui::Vec2::new(0.0, 0.0))
+        // .desired_width(40.0)
+        .id(ui.id().with("commit entry"))
+        .show(ui);
+
+    ml.response.changed()
+}
+
+pub(crate) fn show_repo_menu(ui: &mut egui::Ui, repo: &mut Repo) -> bool {
     let mut changed = false;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
@@ -582,6 +1100,19 @@ pub(crate) fn show_repo(ui: &mut egui::Ui, repo: &mut Repo) -> bool {
         let name_id = ui.next_auto_id().with("name");
         ui.push_id("user", |ui| {
             ui.label("github.com/"); // efwserfwefwe/fewefwse
+            let events = ui.input(|i| i.events.clone()); // avoid dead-lock by cloning. TODO(emilk): optimize
+            for event in &events {
+                match event {
+                    egui::Event::Paste(text_to_insert) => {
+                        if !text_to_insert.is_empty() {
+                            // let mut ccursor = delete_selected(text, &cursor_range);
+                            // insert_text(&mut ccursor, text, text_to_insert);
+                            // Some(CCursorRange::one(ccursor))
+                        }
+                    }
+                    _ => (),
+                };
+            }
             if egui::TextEdit::singleline(&mut repo.user)
                 .margin(egui::Vec2::new(0.0, 0.0))
                 .desired_width(40.0)

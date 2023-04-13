@@ -1061,8 +1061,9 @@ fn events<TB: TextBuffer>(
             }
             Event::Paste(text_to_insert) => {
                 if !text_to_insert.is_empty() {
-                    let mut ccursor = delete_selected(text, &cursor_range);
-                    insert_text(&mut ccursor, text, text_to_insert);
+                    // let mut ccursor = delete_selected(text, &cursor_range);
+                    // insert_text(&mut ccursor, text, text_to_insert);
+                    let mut ccursor = replace_selected(text, &cursor_range, text_to_insert);
                     Some(CCursorRange::one(ccursor))
                 } else {
                     None
@@ -1314,6 +1315,23 @@ fn insert_text<TB: TextBuffer>(ccursor: &mut CCursor, text: &mut TB, text_to_ins
 }
 
 // ----------------------------------------------------------------------------
+
+fn replace_selected<TB: TextBuffer>(text: &mut TB, cursor_range: &CursorRange, text_to_insert: &str) -> CCursor {
+    let [min, max] = cursor_range.sorted_cursors();
+    replace_selected_ccursor_range(text, [min.ccursor, max.ccursor], text_to_insert)
+}
+fn replace_selected_ccursor_range<TB: TextBuffer>(
+    text: &mut TB,
+    [min, max]: [CCursor; 2],
+    text_to_insert: &str
+) -> CCursor {
+    CCursor {
+        index: min.index + text.replace_range(text_to_insert, min.index..max.index),
+        prefer_next_row: true,
+    }
+}
+// ----------------------------------------------------------------------------
+
 
 fn delete_selected<TB: TextBuffer>(text: &mut TB, cursor_range: &CursorRange) -> CCursor {
     let [min, max] = cursor_range.sorted_cursors();

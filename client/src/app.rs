@@ -6,15 +6,34 @@ use axum::{
     routing::{get, post},
     BoxError, Json, Router,
 };
-use http::StatusCode;
+use http::{header, HeaderValue, StatusCode};
 use tower::ServiceBuilder;
 use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
 
 use crate::{
-    file,
+    commit, fetch, file,
     scripting::{self, ComputeResult, ScriptContent, ScriptingError, ScriptingParam},
-    SharedState, track, view, commit,
+    track, view, SharedState, RepoConfig,
 };
+impl From<&RepoConfig> for hyper_ast_cvs_git::multi_preprocessed::ProcessingConfig<&'static str> {
+    fn from(value: &RepoConfig) -> Self {
+        match value {
+            RepoConfig::CppMake => Self::CppMake {
+                limit: 3,
+                dir_path: "src",
+            },
+            RepoConfig::JavaMaven => Self::JavaMaven {
+                limit: 3,
+                dir_path: "",
+            },
+        }
+    }
+}
+impl From<RepoConfig> for hyper_ast_cvs_git::multi_preprocessed::ProcessingConfig<&'static str> {
+    fn from(value: RepoConfig) -> Self {
+        (&value).into()
+    }
+}
 
 impl IntoResponse for ScriptingError {
     fn into_response(self) -> Response {
@@ -64,7 +83,7 @@ pub fn fetch_git_file(_st: SharedState) -> Router<SharedState> {
         .load_shed()
         .concurrency_limit(8)
         .buffer(20)
-        .rate_limit(2, Duration::from_secs(5))
+        .rate_limit(5, Duration::from_secs(1))
         // .request_body_limit(1024 * 5_000 /* ~5mb */)
         .timeout(Duration::from_secs(10))
         .layer(TraceLayer::new_for_http());
@@ -91,14 +110,23 @@ pub fn track_code_route(_st: SharedState) -> Router<SharedState> {
         .load_shed()
         .concurrency_limit(8)
         .buffer(20)
-        .rate_limit(2, Duration::from_secs(5))
+        .rate_limit(2, Duration::from_secs(2))
         // .request_body_limit(1024 * 5_000 /* ~5mb */)
         .timeout(Duration::from_secs(10))
         .layer(TraceLayer::new_for_http());
-    Router::new().route(
-        "/track/github/:user/:name/:commit/*file",
-        get(track_code).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
-    )
+    Router::new()
+        .route(
+            "/track/github/:user/:name/:commit/*file",
+            get(track_code).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/track_at_path/github/:user/:name/:commit/*path",
+            get(track_code_at_path).layer(service_config.clone()),
+        )
+        .route(
+            "/track_at_path_with_changes/github/:user/:name/:commit/*path",
+            get(track_code_at_path_with_changes).layer(service_config.clone()),
+        )
 }
 
 // #[axum_macros::debug_handler]
@@ -106,12 +134,29 @@ async fn track_code(
     axum::extract::Path(path): axum::extract::Path<track::TrackingParam>,
     axum::extract::Query(query): axum::extract::Query<track::TrackingQuery>,
     axum::extract::State(state): axum::extract::State<SharedState>,
-) -> axum::response::Result<Json<track::TrackingResult>> {
+) -> impl IntoResponse {
     dbg!(&path);
     dbg!(&query);
-    track::track_code(state, path, query).map_err(|err| err.into())
+    track::track_code(state, path, query)
 }
-
+async fn track_code_at_path(
+    axum::extract::Path(path): axum::extract::Path<track::TrackingAtPathParam>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+    axum::extract::Query(query): axum::extract::Query<track::TrackingQuery>,
+) -> impl IntoResponse {
+    dbg!(&path);
+    dbg!(&query);
+    track::track_code_at_path(state, path, query)
+}
+async fn track_code_at_path_with_changes(
+    axum::extract::Path(path): axum::extract::Path<track::TrackingAtPathParam>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+    axum::extract::Query(query): axum::extract::Query<track::TrackingQuery>,
+) -> impl IntoResponse {
+    dbg!(&path);
+    dbg!(&query);
+    track::track_code_at_path_with_changes(state, path, query)
+}
 
 pub fn view_code_route(_st: SharedState) -> Router<SharedState> {
     let service_config = ServiceBuilder::new()
@@ -125,16 +170,19 @@ pub fn view_code_route(_st: SharedState) -> Router<SharedState> {
         // .request_body_limit(1024 * 5_000 /* ~5mb */)
         .timeout(Duration::from_secs(10))
         .layer(TraceLayer::new_for_http());
-    Router::new().route(
-        "/view/github/:user/:name/:commit/*path",
-        get(view_code).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
-    ).route(
-        "/view/github/:user/:name/:commit/",
-        get(view_code).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
-    ).route(
-        "/view/:id",
-        get(view_code_with_node_id).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
-    )
+    Router::new()
+        .route(
+            "/view/github/:user/:name/:commit/*path",
+            get(view_code).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/view/github/:user/:name/:commit/",
+            get(view_code).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/view/:id",
+            get(view_code_with_node_id).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
 }
 
 // #[axum_macros::debug_handler]
@@ -152,7 +200,79 @@ async fn view_code_with_node_id(
     view::view_with_node_id(state, id).map_err(|err| err.into())
 }
 
+pub fn fetch_code_route(_st: SharedState) -> Router<SharedState> {
+    let service_config = ServiceBuilder::new()
+        .layer(HandleErrorLayer::new(|e: BoxError| async move {
+            dbg!(e);
+        }))
+        .load_shed()
+        .concurrency_limit(8)
+        .buffer(20)
+        .rate_limit(2, Duration::from_secs(5))
+        // .request_body_limit(1024 * 5_000 /* ~5mb */)
+        .timeout(Duration::from_secs(10))
+        .layer(TraceLayer::new_for_http());
+    Router::new()
+        .route(
+            "/fetch/github/:user/:name/:commit/*path",
+            get(fetch_code).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/fetch/github/:user/:name/:commit/",
+            get(fetch_code).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/fetch-ids/*ids",
+            get(fetch_code_with_node_ids).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/fetch-labels/*ids",
+            get(fetch_labels).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+}
+// #[axum_macros::debug_handler]
+async fn fetch_code(
+    axum::extract::Path(path): axum::extract::Path<fetch::Parameters>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+) -> axum::response::Result<fetch::FetchedNodes> {
+    dbg!(&path);
+    fetch::fetch(state, path).map_err(|err| err.into())
+}
+async fn fetch_code_with_node_ids(
+    axum::extract::Path(ids): axum::extract::Path<String>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+) -> axum::response::Result<Timed<fetch::FetchedNodes>> {
+    dbg!(&ids);
+    fetch::fetch_with_node_ids(state, ids.split("/")).map_err(|err| err.into())
+}
+async fn fetch_labels(
+    axum::extract::Path(ids): axum::extract::Path<String>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+) -> axum::response::Result<Timed<fetch::FetchedLabels>> {
+    dbg!(&ids);
+    fetch::fetch_labels(state, ids.split("/")).map_err(|err| err.into())
+}
 
+impl IntoResponse for fetch::FetchedLabels {
+    fn into_response(self) -> Response {
+        let resp = Json(self).into_response();
+        resp
+    }
+}
+
+impl IntoResponse for fetch::FetchedNodes {
+    fn into_response(self) -> Response {
+        dbg!();
+        let to_string = serde_json::to_string(&self);
+        dbg!();
+        let var_name = to_string.unwrap();
+        dbg!();
+        let resp = var_name.into_response();
+        // let resp = Json(self).into_response();
+        dbg!();
+        resp
+    }
+}
 
 pub fn commit_metadata_route(_st: SharedState) -> Router<SharedState> {
     let service_config = ServiceBuilder::new()
@@ -179,4 +299,24 @@ async fn commit_metadata(
 ) -> axum::response::Result<Json<commit::Metadata>> {
     dbg!(&path);
     commit::commit_metadata(state, path).map_err(|err| err.into())
+}
+
+pub struct Timed<T> {
+    pub(crate) time: f64,
+    pub(crate) content: T,
+}
+
+impl<T: IntoResponse> IntoResponse for Timed<T> {
+    fn into_response(self) -> Response {
+        let mut resp = self.content.into_response();
+        let headers = resp.headers_mut();
+        // eg. Server-Timing: cache;desc="Cache Read";dur=23.2
+        headers.insert(
+            "Server-Timing",
+            format!("db;desc=\"DB Read\";dur={}", self.time)
+                .parse()
+                .unwrap(),
+        );
+        resp
+    }
 }

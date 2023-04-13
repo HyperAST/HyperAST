@@ -1,12 +1,14 @@
-use std::{fmt::Display, rc::Rc};
+use std::fmt::Display;
 
-use axum::{body::HttpBody, Json};
+use axum::Json;
 use hyper_ast::{
     store::defaults::NodeIdentifier,
     types::{Typed, WithChildren, WithStats},
 };
-use hyper_ast_cvs_git::git::fetch_github_repository;
-use rhai::{Array, Dynamic, Engine, Scope, packages::{CorePackage, Package, BasicArrayPackage}, Instant};
+use rhai::{
+    packages::{BasicArrayPackage, CorePackage, Package},
+    Array, Dynamic, Engine, Instant, Scope,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::SharedState;
@@ -29,6 +31,7 @@ pub struct ScriptContent {
 pub enum ScriptingError {
     AtCompilation(String),
     AtEvaluation(String),
+    Other(String),
 }
 
 // impl Display for ScriptingError {
@@ -52,7 +55,6 @@ impl Display for ComputeResult {
     }
 }
 
-
 pub fn simple(
     script: ScriptContent,
     state: SharedState,
@@ -65,33 +67,41 @@ pub fn simple(
     let init_script = engine
         .compile(script.init.clone())
         .map_err(|x| ScriptingError::AtCompilation(format!("{}, {}", x, script.init.clone())))?;
-    let accumulate_script = engine
-        .compile(script.accumulate.clone())
-        .map_err(|x| ScriptingError::AtCompilation(format!("{}, {}", x, script.accumulate.clone())))?;
+    let accumulate_script = engine.compile(script.accumulate.clone()).map_err(|x| {
+        ScriptingError::AtCompilation(format!("{}, {}", x, script.accumulate.clone()))
+    })?;
     let filter_script = engine
         .compile(script.filter.clone())
         .map_err(|x| ScriptingError::AtCompilation(format!("{}, {}", x, script.filter.clone())))?;
-    let mut repo = fetch_github_repository(&format!("{}/{}", user, name));
-    log::info!("done cloning {user}/{name}");
-    let mut get_mut = state.write().unwrap();
-    let commits = get_mut
-        .repositories
-        .pre_process_with_limit(&mut repo, "", &commit, "", 2).unwrap();
-    log::info!("done construction of {commits:?} in {user}/{name}");
-    let commit_src = get_mut
-        .repositories
-        .commits
-        .get_key_value(&commits[0])
+    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let configs = state
+        .configs
+        .read()
         .unwrap();
+    let config = configs
+        .get(&repo_spec)
+        .ok_or_else(|| ScriptingError::Other("missing config for repository".to_string()))?;
+    let mut repo = repo_spec.fetch();
+    log::warn!("done cloning {}/{}", repo_spec.user, repo_spec.name);
+    let commits = state
+        .repositories
+        .write()
+        .unwrap()
+        .pre_process_with_config(&mut repo, "", &commit, config.into())
+        .unwrap();
+    log::info!("done construction of {commits:?} in  {}/{}", repo_spec.user, repo_spec.name);
+
+    let repositories = state.repositories.read().unwrap();
+    let commit_src = repositories.commits.get_key_value(&commits[0]).unwrap();
     let src_tr = commit_src.1.ast_root;
-    let node_store = &get_mut.repositories.processor.main_stores.node_store;
+    let node_store = &repositories.processor.main_stores.node_store;
     let size = node_store.resolve(src_tr).size();
-    drop(get_mut);
+    drop(repositories);
     macro_rules! ns {
         ($s:expr) => {
-            $s.read()
+            $s.repositories
+                .read()
                 .unwrap()
-                .repositories
                 .processor
                 .main_stores
                 .node_store
@@ -135,7 +145,6 @@ pub fn simple(
         let stack_len = stack.len();
         // dbg!(&acc);
         if acc.pending_cs < 0 {
-            
             // let mut engine = Engine::new();
             let mut scope = Scope::new();
             scope.push("s", acc.value.clone().unwrap());
@@ -231,6 +240,9 @@ pub fn simple(
     //     &commit[..8.min(commit.len())]
     // );
     let compute_time = now.elapsed().as_secs_f64();
-    let r = ComputeResult { compute_time, result };
+    let r = ComputeResult {
+        compute_time,
+        result,
+    };
     Ok(Json(r))
 }

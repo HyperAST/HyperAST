@@ -42,7 +42,7 @@ async fn kv_get(
     axum::extract::Path(key): axum::extract::Path<String>,
     axum::extract::State(state): axum::extract::State<SharedState>,
 ) -> Result<Bytes, hyper::StatusCode> {
-    let db = &state.read().unwrap().db;
+    let db = &state.db;
 
     if let Some(value) = db.get(&key) {
         Ok(value.clone())
@@ -56,14 +56,14 @@ async fn kv_set(
     axum::extract::State(state): axum::extract::State<SharedState>,
     bytes: Bytes,
 ) {
-    state.write().unwrap().db.insert(key, bytes);
+    state.db.insert(key, bytes);
 }
 
 async fn list_keys(axum::extract::State(state): axum::extract::State<SharedState>) -> String {
-    let db = &state.read().unwrap().db;
+    let db = &state.db;
 
-    db.keys()
-        .map(|key| key.to_string())
+    db.iter()
+        .map(|key| key.key().to_string())
         .collect::<Vec<String>>()
         .join("\n")
 }

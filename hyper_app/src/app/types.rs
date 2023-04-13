@@ -1,6 +1,13 @@
+use hyper_ast::{store::nodes::fetched::NodeIdentifier, types};
+
 use super::code_editor;
 
-use std::{collections::HashMap, hash::Hash, ops::Range};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+    ops::Range,
+    str::FromStr,
+};
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub(crate) struct Repo {
@@ -31,6 +38,9 @@ pub struct CodeRange {
     pub(crate) file: FileIdentifier,
     #[serde(flatten)]
     pub(crate) range: Option<Range<usize>>,
+    pub(crate) path: Vec<usize>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) path_ids: Vec<NodeIdentifier>,
 }
 
 impl Default for CodeRange {
@@ -38,6 +48,8 @@ impl Default for CodeRange {
         Self {
             file: Default::default(),
             range: Default::default(),
+            path: Default::default(),
+            path_ids: Default::default(),
         }
     }
 }
@@ -61,23 +73,60 @@ impl Default for ComputeConfigTracking {
 pub(crate) struct ComputeConfigAspectViews {
     pub(super) commit: Commit,
     pub(super) path: String,
+    pub(super) hightlight: String,
     pub(super) cst: bool,
+    pub(super) syntax: bool,
     pub(super) ast: bool,
     pub(super) type_decls: bool,
     pub(super) licence: bool,
     pub(super) doc: bool,
+    pub(super) ser_opt_cpp_text: String,
+    pub(super) ser_opt_java_text: String,
+    pub(super) ser_opt: HashSet<types::Type>,
+}
+
+pub(crate) fn parse_java_type_list(s: &str, out: &mut HashSet<types::Type>) {
+    s.split(",").for_each(|x| {
+        if !x.is_empty() {
+            let t = types::Type::from_str(x);
+            if let Ok(t) = t {
+                out.insert(t);
+            }
+        }
+    });
+}
+
+pub(crate) fn parse_cpp_type_list(s: &str, out: &mut HashSet<types::Type>) {
+    s.split(",").for_each(|x| {
+        if !x.is_empty() {
+            let t = types::Type::try_parse_cpp(x);
+            if let Some(t) = t {
+                out.insert(t);
+            }
+        }
+    });
 }
 
 impl Default for ComputeConfigAspectViews {
     fn default() -> Self {
+        let ser_opt_cpp_text = "function_declarator".to_string();
+        let ser_opt_java_text = String::default();
+        let mut ser_opt = Default::default();
+        parse_java_type_list(&ser_opt_java_text, &mut ser_opt);
+        parse_cpp_type_list(&ser_opt_cpp_text, &mut ser_opt);
         Self {
             commit: Default::default(),
-            path: "11/2/1".into(),
+            path: "".into(),
+            hightlight: "0".into(),
             cst: true,
+            syntax: false,
             ast: false,
             type_decls: false,
             licence: false,
             doc: false,
+            ser_opt_cpp_text,
+            ser_opt_java_text,
+            ser_opt,
             // commit: "4acedc53a13a727be3640fe234f7e261d2609d58".into(),
         }
     }
@@ -114,7 +163,12 @@ impl Default for Commit {
     fn default() -> Self {
         Self {
             repo: Default::default(),
-            id: "4acedc53a13a727be3640fe234f7e261d2609d58".into(), //"61074989324d20e7d9cd387cee830a31a7e68aca".into(),
+            // id: "cd339e2c5f0e5c1e42c66b890f02bc282c3a0ea1".into(), // 61074989324d20e7d9cd387cee830a31a7e68aca // 4acedc53a13a727be3640fe234f7e261d2609d58
+            id: "7f2eb10e93879bc569c7ddf6fb51d6f812cc477c".into(),
+            // # stockfish
+            // * long 7f2eb10e93879bc569c7ddf6fb51d6f812cc477c
+            // * more in past "587bc647d7d14b53d8625c4446006e23a4acd82a".into()
+            // * close to first b8e487ff9caffb5061f680b1919ab2fe442bc0a1
         }
     }
 }
@@ -133,8 +187,10 @@ pub(crate) enum SelectedConfig {
 impl Default for Repo {
     fn default() -> Self {
         Self {
-            user: "INRIA".to_string(),
-            name: "spoon".to_string(),
+            // user: "INRIA".to_string(),
+            // name: "spoon".to_string(),
+            user: "official-stockfish".to_string(),
+            name: "Stockfish".to_string(),
         }
     }
 }
@@ -161,6 +217,15 @@ pub(crate) struct Resource<T> {
     pub(crate) content: Option<T>,
     // /// If set, the response was an image.
     // image: Option<RetainedImage>,
+}
+
+impl<T> Resource<T> {
+    pub fn map<U, F: Fn(T) -> U>(self, f: F) -> Resource<U> {
+        Resource {
+            response: self.response,
+            content: self.content.map(f),
+        }
+    }
 }
 
 pub type Languages = HashMap<String, Lang>;

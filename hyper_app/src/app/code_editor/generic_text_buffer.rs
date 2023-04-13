@@ -30,7 +30,9 @@ pub trait TextBuffer {
     fn as_reference(&self) -> &Self::Ref;
 
     /// Returns this buffer as a `str`.
-    fn as_str(&self) -> &str;
+    fn as_str(&self) -> &str {
+        self.as_reference().text()
+    }
     //  {
     //     self.as_reference().into()
     // }
@@ -73,6 +75,14 @@ pub trait TextBuffer {
         self.insert_text(text, 0);
     }
 
+    /// replace a range of chars
+    /// default to insert_text(text,char_range.start());delete_char_range(char_range)
+    fn replace_range(&mut self, text: &str, char_range: Range<usize>) -> usize {
+        let char_index = char_range.start;
+        self.delete_char_range(char_range);
+        self.insert_text(text, char_index)
+    }
+
     /// Clears all characters in this buffer and returns a string of the contents.
     fn take(&mut self) -> String {
         let s = self.as_str().to_owned();
@@ -90,9 +100,6 @@ impl TextBuffer for String {
 
     fn as_reference(&self) -> &String {
         &self
-    }
-    fn as_str(&self) -> &str {
-        self.as_reference()
     }
     fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
         // Get the byte index from the character index
@@ -138,10 +145,6 @@ impl<'a> TextBuffer for &'a str {
     }
 
     fn as_reference(&self) -> &str {
-        self
-    }
-
-    fn as_str(&self) -> &str {
         self
     }
 

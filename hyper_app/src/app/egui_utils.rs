@@ -146,11 +146,10 @@ pub(crate) fn radio_collapsing<R>(
 
 pub(crate) fn highlight_byte_range(
     ui: &mut egui::Ui,
-    aa: &egui::scroll_area::ScrollAreaOutput<egui::text_edit::TextEditOutput>,
+    te: &egui::text_edit::TextEditOutput,
     selected_node: &Range<usize>,
     color: egui::Color32,
 ) -> egui::Rect {
-    let te = &aa.inner;
     let cursor_range = {
         let (a, b) =
             char_index_from_byte_index2(te.galley.text(), selected_node.start, selected_node.end);
