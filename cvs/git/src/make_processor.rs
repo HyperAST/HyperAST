@@ -9,7 +9,7 @@ use hyper_ast::{
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder},
     store::{
         defaults::NodeIdentifier,
-        nodes::legion::{compo, NodeStore, compo::CS},
+        nodes::legion::{compo, compo::CS, NodeStore},
     },
     tree_gen::SubTreeMetrics,
     types::{LabelStore, Type},
@@ -17,13 +17,15 @@ use hyper_ast::{
 use hyper_ast_gen_ts_java::legion_with_refs::{eq_node, hash32};
 
 use crate::{
+    cpp::CppAcc,
+    cpp_processor::CppProcessor,
     git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
-    maven::{MavenModuleAcc, MD},
+    make::{MakeModuleAcc, MD},
     preprocessed::RepositoryProcessor,
     Processor, SimpleStores,
 };
 
-pub struct MavenProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
+pub struct MakeProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
     prepro: &'b mut RepositoryProcessor,
     repository: &'a Repository,
     stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
@@ -31,7 +33,7 @@ pub struct MavenProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
 }
 
 impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
-    MavenProcessor<'a, 'b, 'c, RMS, FFWD, Acc>
+    MakeProcessor<'a, 'b, 'c, RMS, FFWD, Acc>
 {
     pub fn new(
         repository: &'a Repository,
@@ -53,8 +55,8 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
     }
 }
 
-impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
-    for MavenProcessor<'a, 'b, 'c, RMS, FFWD, MavenModuleAcc>
+impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
+    for MakeProcessor<'a, 'b, 'c, RMS, FFWD, MakeModuleAcc>
 {
     fn pre(&mut self, current_dir: BasicGitObject) {
         match current_dir {
@@ -68,7 +70,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                         self.stack.push((
                             oid,
                             prepared,
-                            MavenModuleAcc::new(std::str::from_utf8(&name).unwrap().to_string()),
+                            MakeModuleAcc::new(std::str::from_utf8(&name).unwrap().to_string()),
                         ));
                         return;
                     } else {
@@ -76,7 +78,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                     }
                 }
                 // check if module or src/main/java or src/test/java
-                if let Some(already) = self.prepro.object_map.get(&oid) {
+                if let Some(already) = self.prepro.object_map_make.get(&oid) {
                     // reinit already computed node for post order
                     let full_node = already.clone();
 
@@ -95,8 +97,9 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                 log::debug!("mm tree {:?}", std::str::from_utf8(&name));
 
                 let parent_acc = &mut self.stack.last_mut().unwrap().2;
-                if FFWD {
-                    let (name, (full_node, _)) = self.prepro.help_handle_java_folder(
+                if true {
+                    // TODO also try to handle nested Makefiles
+                    let (name, (full_node, _)) = self.prepro.help_handle_cpp_folder(
                         &self.repository,
                         &mut self.dir_path,
                         oid,
@@ -107,10 +110,10 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                     return;
                 }
 
-                let helper = MavenModuleHelper::from((parent_acc, name.as_ref()));
+                let helper = MakeModuleHelper::from((parent_acc, name.as_ref()));
                 if helper.source_directories.0 || helper.test_source_directories.0 {
                     // handle as source dir
-                    let (name, (full_node, _)) = self.prepro.help_handle_java_folder(
+                    let (name, (full_node, _)) = self.prepro.help_handle_cpp_folder(
                         &self.repository,
                         self.dir_path,
                         oid,
@@ -155,21 +158,37 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                 if self.dir_path.peek().is_some() {
                     return;
                 }
-                if name.eq(b"pom.xml") {
-                    self.prepro.help_handle_pom(
+                if name.eq(b"Makefile") {
+                    self.prepro.help_handle_makefile(
                         oid,
                         &mut self.stack.last_mut().unwrap().2,
                         name,
                         &self.repository,
                     )
+                } else if name.ends_with(b".cpp") || name.ends_with(b".cxx") {
+                    self.prepro.help_handle_cpp_file2(
+                        oid,
+                        &mut self.stack.last_mut().unwrap().2,
+                        name,
+                        self.repository,
+                    )
+                } else if name.ends_with(b".h") || name.ends_with(b".hpp") {
+                    self.prepro.help_handle_cpp_file2(
+                        oid,
+                        &mut self.stack.last_mut().unwrap().2,
+                        name,
+                        self.repository,
+                    )
+                } else {
+                    log::debug!("not cpp source file {:?}", std::str::from_utf8(&name));
                 }
             }
         }
     }
-    fn post(&mut self, oid: Oid, acc: MavenModuleAcc) -> Option<(NodeIdentifier, MD)> {
+    fn post(&mut self, oid: Oid, acc: MakeModuleAcc) -> Option<(NodeIdentifier, MD)> {
         let name = acc.name.clone();
         let full_node = Self::make(acc, self.prepro.main_stores_mut());
-        self.prepro.object_map.insert(oid, full_node.clone());
+        self.prepro.object_map_make.insert(oid, full_node.clone());
 
         let name = self.prepro.main_stores.label_store.get_or_insert(name);
         if self.stack.is_empty() {
@@ -187,21 +206,21 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
         }
     }
 
-    fn stack(&mut self) -> &mut Vec<(Oid, Vec<BasicGitObject>, MavenModuleAcc)> {
+    fn stack(&mut self) -> &mut Vec<(Oid, Vec<BasicGitObject>, MakeModuleAcc)> {
         &mut self.stack
     }
 }
 
 impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
-    MavenProcessor<'a, 'b, 'c, RMS, FFWD, MavenModuleAcc>
+    MakeProcessor<'a, 'b, 'c, RMS, FFWD, MakeModuleAcc>
 {
-    fn make(acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
+    fn make(acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
         make(acc, stores)
     }
 }
 
-pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
-    let dir_hash: u32 = hash32(&Type::Directory); // FIXME should be MavenDirectory ?
+pub(crate) fn make(mut acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
+    let dir_hash: u32 = hash32(&Type::Directory); // FIXME should be MakeDirectory ?
     let hashs = acc.metrics.hashs;
     let size = acc.metrics.size + 1;
     let height = acc.metrics.height + 1;
@@ -210,22 +229,27 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
     let hashable = hbuilder.most_discriminating();
     let label = stores.label_store.get_or_insert(acc.name.clone());
 
-    let eq = eq_node(&Type::MavenDirectory, Some(&label), &acc.children);
+    let eq = eq_node(&Type::MakeDirectory, Some(&label), &acc.children);
     let ana = {
-        let new_sub_modules = drain_filter_strip(&mut acc.sub_modules, b"..");
-        let new_main_dirs = drain_filter_strip(&mut acc.main_dirs, b"..");
-        let new_test_dirs = drain_filter_strip(&mut acc.test_dirs, b"..");
+        // let new_sub_modules = drain_filter_strip(&mut acc.sub_modules, b"..");
+        // let new_main_dirs = drain_filter_strip(&mut acc.main_dirs, b"..");
+        // let new_test_dirs = drain_filter_strip(&mut acc.test_dirs, b"..");
         let ana = acc.ana;
-        if !new_sub_modules.is_empty() || !new_main_dirs.is_empty() || !new_test_dirs.is_empty()
-        {
-            log::error!(
-                "{:?} {:?} {:?}",
-                new_sub_modules,
-                new_main_dirs,
-                new_test_dirs
-            );
-            todo!("also prepare search for modules and sources in parent, should also tell from which module it is required");
-        }
+        // if !new_sub_modules.is_empty() || !new_main_dirs.is_empty() || !new_test_dirs.is_empty()
+        // {
+        //     log::error!(
+        //         "'{:?} {:?} {:?}'",
+        //         new_sub_modules,
+        //         new_main_dirs,
+        //         new_test_dirs
+        //     );
+        //     dbg!(
+        //         new_sub_modules,
+        //         new_main_dirs,
+        //         new_test_dirs
+        //     );
+        //     todo!("also prepare search for modules and sources in parent, should also tell from which module it is required");
+        // }
         ana.resolve()
     };
     let insertion = stores.node_store.prepare_insertion(&hashable, eq);
@@ -239,7 +263,7 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
         NodeStore::insert_after_prepare(
             vacant,
             (
-                Type::MavenDirectory,
+                Type::MakeDirectory,
                 label,
                 hashs,
                 compo::Size(size),
@@ -263,15 +287,15 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
     full_node
 }
 
-struct MavenModuleHelper {
+struct MakeModuleHelper {
     name: String,
     submodules: (bool, Vec<PathBuf>),
     source_directories: (bool, Vec<PathBuf>),
     test_source_directories: (bool, Vec<PathBuf>),
 }
 
-impl From<(&mut MavenModuleAcc, &[u8])> for MavenModuleHelper {
-    fn from((parent_acc, name): (&mut MavenModuleAcc, &[u8])) -> Self {
+impl From<(&mut MakeModuleAcc, &[u8])> for MakeModuleHelper {
+    fn from((parent_acc, name): (&mut MakeModuleAcc, &[u8])) -> Self {
         let process = |mut v: &mut Option<Vec<PathBuf>>| {
             let mut v = drain_filter_strip(&mut v, name);
             let c = v.drain_filter(|x| x.components().next().is_none()).count();
@@ -286,9 +310,9 @@ impl From<(&mut MavenModuleAcc, &[u8])> for MavenModuleHelper {
     }
 }
 
-impl From<MavenModuleHelper> for MavenModuleAcc {
-    fn from(helper: MavenModuleHelper) -> Self {
-        MavenModuleAcc::with_content(
+impl From<MakeModuleHelper> for MakeModuleAcc {
+    fn from(helper: MakeModuleHelper) -> Self {
+        MakeModuleAcc::with_content(
             helper.name,
             helper.submodules.1,
             helper.source_directories.1,
@@ -312,7 +336,7 @@ fn drain_filter_strip(v: &mut Option<Vec<PathBuf>>, name: &[u8]) -> Vec<PathBuf>
 }
 
 impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
-    MavenProcessor<'a, 'b, 'c, RMS, FFWD, MavenModuleAcc>
+    MakeProcessor<'a, 'b, 'c, RMS, FFWD, MakeModuleAcc>
 {
     pub fn prepare_dir_exploration<It>(tree: It) -> Vec<It::Item>
     where
@@ -321,11 +345,11 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
     {
         let mut children_objects: Vec<_> = tree.collect();
         let p = children_objects.iter().position(|x| match x.r#type() {
-            ObjectType::File => x.name().eq(b"pom.xml"),
+            ObjectType::File => x.name().eq(b"Makefile"),
             ObjectType::Dir => false,
         });
         if let Some(p) = p {
-            children_objects.swap(0, p); // priority to pom.xml processing
+            children_objects.swap(0, p); // priority to config file processing
             children_objects.reverse(); // we use it like a stack
         }
         children_objects
@@ -345,11 +369,11 @@ pub(crate) fn prepare_dir_exploration(
         .collect();
     if dir_path.peek().is_none() {
         let p = children_objects.iter().position(|x| match x {
-            BasicGitObject::Blob(_, n) => n.eq(b"pom.xml"),
+            BasicGitObject::Blob(_, n) => n.eq(b"Makefile"),
             _ => false,
         });
         if let Some(p) = p {
-            children_objects.swap(0, p); // priority to pom.xml processing
+            children_objects.swap(0, p); // priority to config file processing
             children_objects.reverse(); // we use it like a stack
         }
     }

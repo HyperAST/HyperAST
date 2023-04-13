@@ -38,12 +38,10 @@ pub fn retrieve_commit<'a>(
     s: &str,
 ) -> Result<git2::Commit<'a>, git2::Error> {
     // TODO make a more advanced search with helpful error msgs
-    match repository.find_reference(&format!("refs/tags/{}",s)) {
+    match repository.find_reference(&format!("refs/tags/{}", s)) {
         Ok(c) => match c.peel_to_commit() {
             Ok(c) => Ok(c),
-            Err(err) => {
-                repository.find_commit(Oid::from_str(s)?)
-            }
+            Err(err) => repository.find_commit(Oid::from_str(s)?),
         },
         Err(err) => {
             let oid = Oid::from_str(s).map_err(|_| err)?;
@@ -133,6 +131,46 @@ where
 
     let repository = up_to_date_repo(&path, fo, url);
     repository
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
+pub enum Forge {
+    Github,
+    Gitlab,
+}
+impl Forge {
+    fn url(&self) -> &str {
+        match self {
+            Forge::Github => "https://github.com/",
+            Forge::Gitlab => "https://gitlab.com/",
+        }
+    }
+    pub fn repo(self, user: impl Into<String>, name: impl Into<String>) -> Repo {
+        let user = user.into();
+        let name = name.into();
+        Repo {
+            forge: self,
+            user,
+            name,
+        }
+    }
+}
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+pub struct Repo {
+    pub forge: Forge,
+    pub user: String,
+    pub name: String,
+}
+
+impl Repo {
+    pub fn url(&self) -> String {
+        format!("{}{}/{}", self.forge.url(), self.user, self.name)
+    }
+    pub fn fetch(&self) -> Repository {
+        let url = self.url();
+        let path = format!("{}", "/tmp/hyperastgitresources/repo/");
+        fetch_repository(url, path)
+    }
 }
 
 pub fn fetch_github_repository(repo_name: &str) -> Repository {

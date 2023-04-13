@@ -93,3 +93,36 @@ pub fn find_refs_from_canonical_type(
     let mu = mu - memusage_linux();
     println!("memory used {}", mu);
 }
+
+
+#[test]
+fn example_process_make_cpp_project() {
+    use std::io::Write;
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug"))
+        .format(|buf, record| {
+            if record.level().to_level_filter() > log::LevelFilter::Debug {
+                writeln!(buf, "{}", record.args())
+            } else {
+                writeln!(
+                    buf,
+                    "[{} {}] {}",
+                    buf.timestamp_millis(),
+                    record.level(),
+                    record.args()
+                )
+            }
+        })
+        .init();
+    let name = &"official-stockfish/Stockfish";
+    let mut preprocessed = PreProcessedRepository::new(name);
+    let a = preprocessed.pre_process_make_project_with_limit(
+        &mut fetch_github_repository(name),
+        "",
+        // "587bc647d7d14b53d8625c4446006e23a4acd82a",
+        "f97c5b6909d22277f28e3dea2f146e9314d634dc",// issue with operator[]('K') = KB;
+        "src",
+        2
+    );
+    // let id = preprocessed.processor.object_map_make.get(&a).unwrap();
+    // hyper_ast_gen_ts_cpp::legion::print_tree_syntax(&preprocessed.processor.main_stores.node_store, &preprocessed.processor.main_stores.label_store, &id.0);
+}

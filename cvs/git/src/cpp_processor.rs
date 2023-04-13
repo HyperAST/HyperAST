@@ -7,20 +7,17 @@ use hyper_ast::{
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
-        nodes::legion::{compo, NodeStore, PendingInsert, compo::CS},
+        nodes::legion::{compo, compo::CS, NodeStore, PendingInsert},
     },
     tree_gen::SubTreeMetrics,
     types::{LabelStore, Type},
 };
-use hyper_ast_gen_ts_java::{
-    impact::partial_analysis::PartialAnalysis,
-    legion_with_refs::{self, eq_node, BulkHasher},
-};
+use hyper_ast_gen_ts_cpp::legion::{self, eq_node};
 use tuples::CombinConcat;
 
 use crate::{
+    cpp::CppAcc,
     git::BasicGitObject,
-    java::JavaAcc,
     preprocessed::{IsSkippedAna, RepositoryProcessor},
     Processor, SimpleStores, MAX_REFS,
 };
@@ -33,14 +30,14 @@ pub(crate) fn prepare_dir_exploration(tree: git2::Tree) -> Vec<BasicGitObject> {
         .collect()
 }
 
-pub struct JavaProcessor<'repo, 'prepro, 'd, 'c, Acc> {
+pub struct CppProcessor<'repo, 'prepro, 'd, 'c, Acc> {
     repository: &'repo Repository,
     prepro: &'prepro mut RepositoryProcessor,
     stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
     pub dir_path: &'d mut Peekable<Components<'c>>,
 }
 
-impl<'repo, 'b, 'd, 'c, Acc: From<String>> JavaProcessor<'repo, 'b, 'd, 'c, Acc> {
+impl<'repo, 'b, 'd, 'c, Acc: From<String>> CppProcessor<'repo, 'b, 'd, 'c, Acc> {
     pub(crate) fn new(
         repository: &'repo Repository,
         prepro: &'b mut RepositoryProcessor,
@@ -61,14 +58,14 @@ impl<'repo, 'b, 'd, 'c, Acc: From<String>> JavaProcessor<'repo, 'b, 'd, 'c, Acc>
     }
 }
 
-impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, JavaAcc> {
+impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, CppAcc> {
     fn pre(&mut self, current_object: BasicGitObject) {
         match current_object {
             BasicGitObject::Tree(oid, name) => {
                 if let Some(
                     // (already, skiped_ana)
                     already,
-                ) = self.prepro.object_map_java.get(&(oid, name.clone()))
+                ) = self.prepro.object_map_cpp.get(&(oid, name.clone()))
                 {
                     // reinit already computed node for post order
                     let full_node = already.clone();
@@ -88,30 +85,37 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
                 self.stack.push((
                     oid,
                     prepared,
-                    JavaAcc::new(std::str::from_utf8(&name).unwrap().to_string()),
+                    CppAcc::new(std::str::from_utf8(&name).unwrap().to_string()),
                 ));
             }
             BasicGitObject::Blob(oid, name) => {
-                if name.ends_with(b".java") {
-                    self.prepro.help_handle_java_file(
+                if name.ends_with(b".cpp") {
+                    self.prepro.help_handle_cpp_file(
+                        oid,
+                        &mut self.stack.last_mut().unwrap().2,
+                        name,
+                        self.repository,
+                    )
+                } else if name.ends_with(b".h") || name.ends_with(b".hpp") {
+                    self.prepro.help_handle_cpp_file(
                         oid,
                         &mut self.stack.last_mut().unwrap().2,
                         name,
                         self.repository,
                     )
                 } else {
-                    log::debug!("not java source file {:?}", std::str::from_utf8(&name));
+                    log::debug!("not cpp source file {:?}", std::str::from_utf8(&name));
                 }
             }
         }
     }
-    fn post(&mut self, oid: Oid, acc: JavaAcc) -> Option<(legion_with_refs::Local, IsSkippedAna)> {
-        let skiped_ana = acc.skiped_ana;
+    fn post(&mut self, oid: Oid, acc: CppAcc) -> Option<(legion::Local, IsSkippedAna)> {
+        let skiped_ana = true;
         let name = acc.name.clone();
         let key = (oid, name.as_bytes().to_vec());
         let full_node = make(acc, self.prepro.main_stores_mut());
         self.prepro
-            .object_map_java
+            .object_map_cpp
             .insert(key, (full_node.clone(), skiped_ana));
         let name = self.prepro.main_stores.label_store.get_or_insert(name);
         if self.stack.is_empty() {
@@ -129,12 +133,12 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
         }
     }
 
-    fn stack(&mut self) -> &mut Vec<(Oid, Vec<BasicGitObject>, JavaAcc)> {
+    fn stack(&mut self) -> &mut Vec<(Oid, Vec<BasicGitObject>, CppAcc)> {
         &mut self.stack
     }
 }
 
-fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legion_with_refs::Local {
+fn make(acc: CppAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_cpp::legion::Local {
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
 
@@ -151,45 +155,6 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
     let insertion = node_store.prepare_insertion(&hashable, eq);
 
     let compute_md = || {
-        let ana = {
-            let ana = acc.ana;
-            let ana = if acc.skiped_ana {
-                log::info!(
-                    "shop ana with at least {} refs",
-                    ana.lower_estimate_refs_count()
-                );
-                ana
-            } else {
-                log::info!(
-                    "ref count lower estimate in dir {}",
-                    ana.lower_estimate_refs_count()
-                );
-                log::debug!("refs in directory");
-                for x in ana.display_refs(label_store) {
-                    log::debug!("    {}", x);
-                }
-                log::debug!("decls in directory");
-                for x in ana.display_decls(label_store) {
-                    log::debug!("    {}", x);
-                }
-                let c = ana.estimated_refs_count();
-                if c < MAX_REFS {
-                    ana.resolve()
-                } else {
-                    ana
-                }
-            };
-            log::info!(
-                "ref count in dir after resolver {}",
-                ana.lower_estimate_refs_count()
-            );
-            log::debug!("refs in directory after resolve: ");
-            for x in ana.display_refs(label_store) {
-                log::debug!("    {}", x);
-            }
-            ana
-        };
-
         let hashs = hbuilder.build();
 
         let metrics = SubTreeMetrics {
@@ -199,16 +164,15 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
             hashs,
         };
 
-        (ana, metrics)
+        (None, metrics)
     };
 
     if let Some(id) = insertion.occupied_id() {
         let (ana, metrics) = compute_md();
-        return legion_with_refs::Local {
+        return legion::Local {
             compressed_node: id,
             metrics,
-            ana: Some(ana),
-            mcc: Mcc::new(&Type::Directory),
+            ana
         };
     }
 
@@ -223,15 +187,14 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
         height,
         size_no_spaces,
         hashs,
-        acc.skiped_ana,
-        &ana,
+        true,
+        &Default::default(),
     );
 
-    let full_node = legion_with_refs::Local {
+    let full_node = legion::Local {
         compressed_node: node_id.clone(),
         metrics,
-        ana: Some(ana.clone()),
-        mcc: Mcc::new(&Type::Directory),
+        ana: Some(Default::default()),
     };
     full_node
 }
@@ -246,7 +209,7 @@ fn compress(
     size_no_spaces: u32,
     hashs: SyntaxNodeHashs<u32>,
     skiped_ana: bool,
-    ana: &PartialAnalysis,
+    ana: &legion::PartialAnalysis,
 ) -> NodeIdentifier {
     let vacant = insertion.vacant();
     macro_rules! insert {
@@ -256,16 +219,6 @@ fn compress(
                 let c = c.concat($c);
             )*
             NodeStore::insert_after_prepare(vacant, c)
-        }};
-    }
-    // NOTE needed as macro because I only implemented BulkHasher and Bloom for u8 and u16
-    macro_rules! bloom {
-        ( $t:ty ) => {{
-            type B = $t;
-            let it = ana.solver.iter_refs();
-            let it = BulkHasher::<_, <B as BF<[u8]>>::S, <B as BF<[u8]>>::H>::from(it);
-            let bloom = B::from(it);
-            (B::SIZE, bloom)
         }};
     }
     match children.len() {
@@ -282,39 +235,7 @@ fn compress(
                 CS(children_names.into_boxed_slice()),
                 CS(children.into_boxed_slice()),
             );
-            match ana.estimated_refs_count() {
-                x if x > 2048 || skiped_ana => {
-                    insert!(c, (BloomSize::Much,))
-                }
-                x if x > 1024 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], [u64; 64]>))
-                }
-                x if x > 512 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], [u64; 32]>))
-                }
-                x if x > 256 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], [u64; 16]>))
-                }
-                x if x > 150 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], [u64; 8]>))
-                }
-                x if x > 100 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], [u64; 4]>))
-                }
-                x if x > 30 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], [u64; 2]>))
-                }
-                x if x > 15 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], u64>))
-                }
-                x if x > 8 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], u32>))
-                }
-                x if x > 0 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], u16>))
-                }
-                _ => insert!(c, (BloomSize::None,)),
-            }
+            insert!(c, (BloomSize::Much,))
         }
     }
 }
@@ -351,7 +272,7 @@ mod experiments {
         }
     }
 
-    impl<'repo, 'b, 'd, 'c> JavaProcessor<'repo, 'b, 'd, 'c, JavaAcc> {
+    impl<'repo, 'b, 'd, 'c> CppProcessor<'repo, 'b, 'd, 'c, CppAcc> {
         pub(crate) fn prepare_dir_exploration<T>(&self, current_object: &T) -> Vec<T>
         where
             T: NamedObject + UniqueObject<Id = git2::Oid>,
@@ -363,13 +284,13 @@ mod experiments {
             &mut self,
             current_object: BasicGitObject,
             prepared: Vec<BasicGitObject>,
-            acc: JavaAcc,
+            acc: CppAcc,
         ) {
             let tree = self.repository.find_tree(*current_object.id()).unwrap();
             self.stack.push((*current_object.id(), prepared, acc));
         }
         pub(crate) fn help_handle_java_file(&mut self, current_object: BasicGitObject) {
-            self.prepro.help_handle_java_file(
+            self.prepro.help_handle_cpp_file(
                 *current_object.id(),
                 &mut self.stack.last_mut().unwrap().2,
                 current_object.name().to_vec(),
@@ -379,8 +300,8 @@ mod experiments {
         fn pre(
             &mut self,
             current_object: BasicGitObject,
-            already: Option<<JavaAcc as Accumulator>::Unlabeled>,
-        ) -> Option<<JavaAcc as Accumulator>::Unlabeled> {
+            already: Option<<CppAcc as Accumulator>::Unlabeled>,
+        ) -> Option<<CppAcc as Accumulator>::Unlabeled> {
             match current_object.r#type() {
                 ObjectType::Dir => {
                     if let Some(already) = already {
@@ -390,7 +311,7 @@ mod experiments {
                     log::info!("tree {:?}", std::str::from_utf8(current_object.name()));
                     let prepared: Vec<BasicGitObject> =
                         self.prepare_dir_exploration(&current_object);
-                    let acc = JavaAcc::new(
+                    let acc = CppAcc::new(
                         std::str::from_utf8(current_object.name())
                             .unwrap()
                             .to_string(),
@@ -414,14 +335,14 @@ mod experiments {
         fn post(
             &mut self,
             oid: Oid,
-            acc: JavaAcc,
-        ) -> Option<(legion_with_refs::Local, IsSkippedAna)> {
-            let skiped_ana = acc.skiped_ana;
+            acc: CppAcc,
+        ) -> Option<(legion::Local, IsSkippedAna)> {
+            let skiped_ana = true;
             let name = acc.name.clone();
             let key = (oid, name.as_bytes().to_vec());
             let full_node = make(acc, self.prepro.main_stores_mut());
             let full_node = (full_node, skiped_ana);
-            self.prepro.object_map_java.insert(key, full_node.clone());
+            self.prepro.object_map_cpp.insert(key, full_node.clone());
             let name = self.prepro.intern_label(&name);
             if self.stack.is_empty() {
                 Some(full_node)

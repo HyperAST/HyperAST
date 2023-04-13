@@ -15,13 +15,18 @@ use hyper_ast_gen_ts_java::impact::partial_analysis::PartialAnalysis;
 use log::info;
 
 use crate::{
+    cpp::{handle_cpp_file, CppAcc},
+    cpp_processor::CppProcessor,
     git::{all_commits_between, retrieve_commit},
     java::{handle_java_file, JavaAcc},
     java_processor::JavaProcessor,
-    maven::{handle_pom_file, MavenModuleAcc, POM},
+    make::{MakeModuleAcc, handle_makefile_file, MakeFile},
+    make_processor::MakeProcessor,
+    maven::{handle_pom_file, MavenModuleAcc, MavenPartialAnalysis, POM},
     maven_processor::MavenProcessor,
     Commit, Processor, SimpleStores, MD,
 };
+use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
 use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
 
@@ -47,10 +52,26 @@ pub struct PreProcessedRepository {
 pub struct RepositoryProcessor {
     pub main_stores: SimpleStores,
 
-    pub object_map: BTreeMap<git2::Oid, (hyper_ast::store::nodes::DefaultNodeIdentifier, MD)>,
+    pub object_map: BTreeMap<
+        git2::Oid,
+        (
+            hyper_ast::store::nodes::DefaultNodeIdentifier,
+            crate::maven::MD,
+        ),
+    >,
+    pub object_map_make: BTreeMap<
+        git2::Oid,
+        (
+            hyper_ast::store::nodes::DefaultNodeIdentifier,
+            crate::make::MD,
+        ),
+    >,
     pub object_map_pom: BTreeMap<git2::Oid, POM>,
+    pub object_map_makefile: BTreeMap<git2::Oid, MakeFile>,
     pub(super) java_md_cache: java_tree_gen::MDCache,
     pub object_map_java: BTreeMap<(git2::Oid, Vec<u8>), (java_tree_gen::Local, IsSkippedAna)>,
+    pub(super) cpp_md_cache: cpp_tree_gen::MDCache,
+    pub object_map_cpp: BTreeMap<(git2::Oid, Vec<u8>), (cpp_tree_gen::Local, IsSkippedAna)>,
 }
 
 pub(crate) type IsSkippedAna = bool;
@@ -95,6 +116,19 @@ impl RepositoryProcessor {
             line_break,
             stores: &mut self.main_stores,
             md_cache: &mut self.java_md_cache,
+        }
+    }
+
+    fn cpp_generator(&mut self, text: &[u8]) -> cpp_tree_gen::CppTreeGen {
+        let line_break = if text.contains(&b'\r') {
+            "\r\n".as_bytes().to_vec()
+        } else {
+            "\n".as_bytes().to_vec()
+        };
+        cpp_tree_gen::CppTreeGen {
+            line_break,
+            stores: &mut self.main_stores,
+            md_cache: &mut self.cpp_md_cache,
         }
     }
 
@@ -283,6 +317,37 @@ impl PreProcessedRepository {
             });
         processing_ordered_commits
     }
+    pub fn pre_process_make_project_with_limit(
+        &mut self,
+        repository: &mut Repository,
+        before: &str,
+        after: &str,
+        dir_path: &str,
+        limit: usize,
+    ) -> Vec<git2::Oid> {
+        log::info!(
+            "commits to process: {:?}",
+            all_commits_between(&repository, before, after).map(|x| x.count())
+        );
+        let mut processing_ordered_commits = vec![];
+        let rw = all_commits_between(&repository, before, after);
+        let Ok(rw) = rw else {
+            dbg!(rw.err());
+            return vec![]
+        };
+        rw
+            // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
+            .take(limit) // TODO make a variable
+            .for_each(|oid| {
+                let oid = oid.unwrap();
+                let c = self
+                    .processor
+                    .handle_make_commit::<true>(&repository, dir_path, oid);
+                processing_ordered_commits.push(oid.clone());
+                self.commits.insert(oid.clone(), c);
+            });
+        processing_ordered_commits
+    }
 
     pub fn pre_process_single(
         &mut self,
@@ -327,6 +392,22 @@ impl PreProcessedRepository {
                 self.commits.insert(oid.clone(), c);
             });
         processing_ordered_commits
+    }
+
+    // TODO auto detect and selectect processor,
+    // TODO pass processor as dyn param
+    pub fn pre_process_make_project(
+        &mut self,
+        repository: &mut Repository,
+        ref_or_commit: &str,
+        dir_path: &str,
+    ) -> git2::Oid {
+        let oid = retrieve_commit(repository, ref_or_commit).unwrap().id();
+        let c = self
+            .processor
+            .handle_make_commit::<false>(&repository, dir_path, oid);
+        self.commits.insert(oid.clone(), c);
+        oid
     }
 
     // pub fn first(before: &str, after: &str) -> Diffs {
@@ -386,6 +467,46 @@ impl RepositoryProcessor {
             memory_used,
         }
     }
+    /// for now only works with cpp
+    pub(crate) fn handle_make_commit<const RMS: bool>(
+        &mut self,
+        repository: &Repository,
+        module_path: &str,
+        commit_oid: git2::Oid,
+    ) -> Commit {
+        let dir_path = PathBuf::from(module_path);
+        let mut dir_path = dir_path.components().peekable();
+        let commit = repository.find_commit(commit_oid).unwrap();
+        let tree = commit.tree().unwrap();
+
+        info!("handle commit: {}", commit_oid);
+
+        let memory_used = memusage_linux();
+        let now = Instant::now();
+
+        let root_full_node =
+            self.handle_make_module::<RMS, false>(repository, &mut dir_path, b"", tree.id());
+        // let root_full_node = self.fast_fwd(repository, &mut dir_path, b"", tree.id()); // used to directly access specific java sources
+
+        self.object_map_make
+            .insert(commit_oid, root_full_node.clone());
+
+        let processing_time = now.elapsed().as_nanos();
+        let memory_used = memusage_linux() - memory_used;
+        let memory_used = memory_used.into();
+
+        let meta_data = MD {
+            metrics: Default::default(),
+            ana: MavenPartialAnalysis::new(),
+        };
+        Commit {
+            meta_data, // TODO  use dyn Box ?
+            parents: commit.parents().into_iter().map(|x| x.id()).collect(),
+            ast_root: root_full_node.0,
+            processing_time,
+            memory_used,
+        }
+    }
 
     fn handle_java_commit(
         &mut self,
@@ -431,6 +552,16 @@ impl RepositoryProcessor {
         MavenProcessor::<RMS, FFWD, MavenModuleAcc>::new(repository, self, dir_path, name, oid)
             .process()
     }
+    fn handle_make_module<'a, 'b, const RMS: bool, const FFWD: bool>(
+        &mut self,
+        repository: &'a Repository,
+        dir_path: &'b mut Peekable<Components<'b>>,
+        name: &[u8],
+        oid: git2::Oid,
+    ) -> (NodeIdentifier, crate::make::MD) {
+        MakeProcessor::<RMS, FFWD, MakeModuleAcc>::new(repository, self, dir_path, name, oid)
+            .process()
+    }
 
     pub(crate) fn help_handle_java_folder<'a, 'b, 'c, 'd: 'c>(
         &'a mut self,
@@ -440,6 +571,21 @@ impl RepositoryProcessor {
         name: &Vec<u8>,
     ) -> <JavaAcc as hyper_ast::tree_gen::Accumulator>::Node {
         let full_node = self.handle_java_directory(repository, dir_path, name, oid);
+        let name = self
+            .main_stores_mut()
+            .label_store
+            .get_or_insert(std::str::from_utf8(name).unwrap());
+        (name, full_node)
+    }
+
+    pub(crate) fn help_handle_cpp_folder<'a, 'b, 'c, 'd: 'c>(
+        &'a mut self,
+        repository: &'b Repository,
+        dir_path: &'c mut Peekable<Components<'d>>,
+        oid: Oid,
+        name: &Vec<u8>,
+    ) -> <CppAcc as hyper_ast::tree_gen::Accumulator>::Node {
+        let full_node = self.handle_cpp_directory(repository, dir_path, name, oid);
         let name = self
             .main_stores_mut()
             .label_store
@@ -480,6 +626,41 @@ impl RepositoryProcessor {
             .get_or_insert(std::str::from_utf8(&name).unwrap());
         assert!(!parent_acc.children_names.contains(&name));
         parent_acc.push_pom(name, x);
+    }
+
+    pub(crate) fn help_handle_makefile(
+        &mut self,
+        oid: Oid,
+        parent_acc: &mut MakeModuleAcc,
+        name: Vec<u8>,
+        repository: &Repository,
+    ) {
+        if let Some(already) = self.object_map_makefile.get(&oid) {
+            // TODO reinit already computed node for post order
+            let full_node = already.clone();
+            let name = self
+                .main_stores_mut()
+                .label_store
+                .get_or_insert(std::str::from_utf8(&name).unwrap());
+            assert!(!parent_acc.children_names.contains(&name));
+            parent_acc.push_makefile(name, full_node);
+            return;
+        }
+        log::info!("blob {:?}", std::str::from_utf8(&name));
+        let blob = repository.find_blob(oid).unwrap();
+        if std::str::from_utf8(blob.content()).is_err() {
+            return;
+        }
+        let text = blob.content();
+        let full_node = handle_makefile_file(&mut self.xml_generator(), &name, text);
+        let x = full_node.unwrap();
+        self.object_map_makefile.insert(blob.id(), x.clone());
+        let name = self
+            .main_stores_mut()
+            .label_store
+            .get_or_insert(std::str::from_utf8(&name).unwrap());
+        assert!(!parent_acc.children_names.contains(&name));
+        parent_acc.push_makefile(name, x);
     }
 
     pub(crate) fn help_handle_java_file(
@@ -529,6 +710,91 @@ impl RepositoryProcessor {
         oid: git2::Oid,
     ) -> (java_tree_gen::Local, IsSkippedAna) {
         JavaProcessor::<JavaAcc>::new(repository, self, dir_path, name, oid).process()
+    }
+
+    pub(crate) fn help_handle_cpp_file(
+        &mut self,
+        oid: Oid,
+        w: &mut CppAcc,
+        name: Vec<u8>,
+        repository: &Repository,
+    ) {
+        if let Some((already, skiped_ana)) = self.object_map_cpp.get(&(oid, name.clone())) {
+            let full_node = already.clone();
+            let skiped_ana = *skiped_ana;
+            let name = self
+                .main_stores_mut()
+                .label_store
+                .get_or_insert(std::str::from_utf8(&name).unwrap());
+            assert!(!w.children_names.contains(&name));
+            w.push(name, full_node, skiped_ana);
+            return;
+        }
+        log::info!("blob {:?}", std::str::from_utf8(&name));
+        let blob = repository.find_blob(oid).unwrap();
+        if std::str::from_utf8(blob.content()).is_err() {
+            return;
+        }
+        let text = blob.content();
+        if let Ok(full_node) = handle_cpp_file(&mut self.cpp_generator(text), &name, text) {
+            let full_node = full_node.local;
+            let skiped_ana = false; // TODO ez upgrade to handle skipping in files
+            self.object_map_cpp
+                .insert((blob.id(), name.clone()), (full_node.clone(), skiped_ana));
+            let name = self
+                .main_stores_mut()
+                .label_store
+                .get_or_insert(std::str::from_utf8(&name).unwrap());
+            assert!(!w.children_names.contains(&name));
+            w.push(name, full_node, skiped_ana);
+        }
+    }
+    pub(crate) fn help_handle_cpp_file2(
+        &mut self,
+        oid: Oid,
+        w: &mut MakeModuleAcc,
+        name: Vec<u8>,
+        repository: &Repository,
+    ) {
+        if let Some((already, skiped_ana)) = self.object_map_cpp.get(&(oid, name.clone())) {
+            let full_node = already.clone();
+            let skiped_ana = *skiped_ana;
+            let name = self
+                .main_stores_mut()
+                .label_store
+                .get_or_insert(std::str::from_utf8(&name).unwrap());
+            assert!(!w.children_names.contains(&name));
+            w.push_source_file(name, full_node, skiped_ana);
+            return;
+        }
+        log::info!("blob {:?}", std::str::from_utf8(&name));
+        let blob = repository.find_blob(oid).unwrap();
+        if std::str::from_utf8(blob.content()).is_err() {
+            return;
+        }
+        let text = blob.content();
+        if let Ok(full_node) = handle_cpp_file(&mut self.cpp_generator(text), &name, text) {
+            let full_node = full_node.local;
+            let skiped_ana = false; // TODO ez upgrade to handle skipping in files
+            self.object_map_cpp
+                .insert((blob.id(), name.clone()), (full_node.clone(), skiped_ana));
+            let name = self
+                .main_stores_mut()
+                .label_store
+                .get_or_insert(std::str::from_utf8(&name).unwrap());
+            assert!(!w.children_names.contains(&name));
+            w.push_source_file(name, full_node, skiped_ana);
+        }
+    }
+
+    pub(crate) fn handle_cpp_directory<'b, 'd: 'b>(
+        &mut self,
+        repository: &Repository,
+        dir_path: &'b mut Peekable<Components<'d>>,
+        name: &[u8],
+        oid: git2::Oid,
+    ) -> (cpp_tree_gen::Local, IsSkippedAna) {
+        CppProcessor::<CppAcc>::new(repository, self, dir_path, name, oid).process()
     }
 
     pub fn child_by_name(&self, d: NodeIdentifier, name: &str) -> Option<NodeIdentifier> {

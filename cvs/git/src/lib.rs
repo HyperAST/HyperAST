@@ -3,10 +3,14 @@
 pub mod allrefs;
 pub mod git;
 pub mod java;
+pub mod cpp;
 pub mod maven;
+pub mod make;
 
+pub mod cpp_processor;
 pub mod java_processor;
 pub mod maven_processor;
+pub mod make_processor;
 /// for now only tested on maven repositories with a pom in root.
 pub mod preprocessed;
 pub mod multi_preprocessed;

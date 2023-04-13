@@ -51,7 +51,7 @@ impl PreProcessedRepositories {
     ) -> Result<Vec<git2::Oid>, git2::Error> {
         log::info!(
             "commits to process: {:?}",
-            all_commits_between(&repository, before, after).map(|x|x.count())
+            all_commits_between(&repository, before, after).map(|x| x.count())
         );
         let mut processing_ordered_commits = vec![];
         let rw = all_commits_between(&repository, before, after)?;
@@ -62,14 +62,72 @@ impl PreProcessedRepositories {
                 let oid = oid.unwrap();
                 let c = self
                     .processor
-                    .handle_maven_commit::<true>(&repository, dir_path, oid);
+                    .handle_make_commit::<true>(&repository, dir_path, oid);
                 processing_ordered_commits.push(oid.clone());
                 self.commits.insert(oid.clone(), c);
             });
         Ok(processing_ordered_commits)
     }
 
+    pub fn pre_process_with_config(
+        &mut self,
+        repository: &mut Repository,
+        before: &str,
+        after: &str,
+        config: ProcessingConfig<&'static str>,
+    ) -> Result<Vec<git2::Oid>, git2::Error> {
+        log::info!(
+            "commits to process: {:?}",
+            all_commits_between(&repository, before, after).map(|x| x.count())
+        );
+        let mut processing_ordered_commits = vec![];
+        let rw = all_commits_between(&repository, before, after)?;
+        match config {
+            ProcessingConfig::JavaMaven { limit, dir_path } => {
+                rw
+                    // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
+                    .take(limit) // TODO make a variable
+                    .for_each(|oid| {
+                        let oid = oid.unwrap();
+                        let c =
+                            self.processor
+                                .handle_maven_commit::<true>(&repository, dir_path, oid);
+                        processing_ordered_commits.push(oid.clone());
+                        self.commits.insert(oid.clone(), c);
+                    });
+            }
+            ProcessingConfig::CppMake { limit, dir_path } => {
+                rw
+                    // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
+                    .take(limit) // TODO make a variable
+                    .for_each(|oid| {
+                        let oid = oid.unwrap();
+                        let c =
+                            self.processor
+                                .handle_make_commit::<true>(&repository, dir_path, oid);
+                        processing_ordered_commits.push(oid.clone());
+                        self.commits.insert(oid.clone(), c);
+                    });
+            }
+        }
+        Ok(processing_ordered_commits)
+    }
+
     pub fn make(acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
         make(acc, stores)
+    }
+}
+
+pub enum ProcessingConfig<P> {
+    JavaMaven { limit: usize, dir_path: P },
+    CppMake { limit: usize, dir_path: P },
+}
+
+impl ProcessingConfig<&'static str> {
+    pub fn java_maven(limit: usize) -> Self {
+        Self::JavaMaven { limit, dir_path: "" }
+    }
+    pub fn cpp_make(limit: usize) -> Self {
+        Self::CppMake { limit, dir_path: "src" }
     }
 }
