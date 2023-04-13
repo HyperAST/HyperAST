@@ -150,6 +150,7 @@ impl BF<[u8]> for Bloom<&'static [u8], u32> {
     }
 }
 
+#[cfg(target_pointer_width="64")]
 impl BF<[u8]> for Bloom<&'static [u8], u64> {
     type Result = BloomResult;
     type S = u8;
@@ -170,6 +171,7 @@ impl BF<[u8]> for Bloom<&'static [u8], u64> {
     }
 }
 
+#[cfg(target_pointer_width="64")]
 impl BF<[u8]> for Bloom<&'static [u8], [u64; 2]> {
     type Result = BloomResult;
     type S = u8;
@@ -190,6 +192,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 2]> {
     }
 }
 
+#[cfg(target_pointer_width="64")]
 impl BF<[u8]> for Bloom<&'static [u8], [u64; 4]> {
     type Result = BloomResult;
     type S = u8;
@@ -211,6 +214,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 4]> {
 }
 
 //TODO
+#[cfg(target_pointer_width="64")]
 impl BF<[u8]> for Bloom<&'static [u8], [u64; 8]> {
     type Result = BloomResult;
     type S = u16;
@@ -231,6 +235,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 8]> {
     }
 }
 
+#[cfg(target_pointer_width="64")]
 impl BF<[u8]> for Bloom<&'static [u8], [u64; 16]> {
     type Result = BloomResult;
     type S = u16;
@@ -251,6 +256,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 16]> {
     }
 }
 
+#[cfg(target_pointer_width="64")]
 impl BF<[u8]> for Bloom<&'static [u8], [u64; 32]> {
     type Result = BloomResult;
     type S = u16;
@@ -271,6 +277,7 @@ impl BF<[u8]> for Bloom<&'static [u8], [u64; 32]> {
     }
 }
 
+#[cfg(target_pointer_width="64")]
 impl BF<[u8]> for Bloom<&'static [u8], [u64; 64]> {
     type Result = BloomResult;
     type S = u16;

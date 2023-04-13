@@ -4,6 +4,7 @@ use string_interner::{StringInterner, DefaultSymbol, Symbol};
 
 use crate::types::LabelStore as _;
 
+#[derive(Default)]
 pub struct LabelStore {
     count: usize,
     internal: StringInterner, //VecMapStore<OwnedLabel, LabelIdentifier>,
@@ -30,6 +31,10 @@ impl Display for LabelStore {
 
 pub type DefaultLabelValue = str;
 pub type DefaultLabelIdentifier = DefaultSymbol;
+
+pub fn label_id_from_usize(x: usize) -> Option<DefaultLabelIdentifier> {
+    DefaultLabelIdentifier::try_from_usize(x)
+}
 
 impl crate::types::LabelStore<DefaultLabelValue> for LabelStore {
     type I = DefaultLabelIdentifier;

@@ -1,10 +1,8 @@
-use std::{fmt::Debug, hash::Hash, ops::Deref};
+use std::{fmt::Debug, hash::Hash, ops::Deref, num::NonZeroU64};
 
-use hashbrown::hash_map::DefaultHashBuilder;
 use legion::{
-    storage::{Archetype, Component, IntoComponentSource},
+    storage::{Archetype, Component},
     world::{ComponentError, EntityLocation},
-    EntityStore,
 };
 use num::ToPrimitive;
 
@@ -13,58 +11,23 @@ use crate::{
     hashed::{NodeHashs, SyntaxNodeHashs, SyntaxNodeHashsKinds},
     impact::serialize::{CachedHasher, Keyed, MySerialize},
     nodes::{CompressedNode, HashSize, RefContainer},
-    store::labels::DefaultLabelIdentifier,
+    store::defaults::LabelIdentifier,
     types::{Children, IterableChildren, MySlice, Type, Typed, WithChildren},
-    utils::make_hash,
 };
+
+use super::compo::{self, NoSpacesCS, CS};
 
 pub type NodeIdentifier = legion::Entity;
 pub type EntryRef<'a> = legion::world::EntryRef<'a>;
-pub struct HashedNodeRef<'a>(EntryRef<'a>);
+pub struct HashedNodeRef<'a>(pub(super) EntryRef<'a>);
+
 
 pub struct HashedNode {
-    node: CompressedNode<legion::Entity, DefaultLabelIdentifier>,
+    node: CompressedNode<legion::Entity, LabelIdentifier>,
     hashs: SyntaxNodeHashs<u32>,
 }
 
-pub struct NodeStore {
-    count: usize,
-    errors: usize,
-    // roots: HashMap<(u8, u8, u8), NodeIdentifier>,
-    dedup: hashbrown::HashMap<NodeIdentifier, (), ()>,
-    internal: legion::World,
-    hasher: DefaultHashBuilder, //fasthash::city::Hash64,//fasthash::RandomState<fasthash::>,
-                                // internal: VecMapStore<HashedNode, NodeIdentifier, legion::World>,
-}
-
-pub mod compo {
-    pub struct More<T>(pub T);
-    pub struct Size(pub u32);
-    pub struct SizeNoSpaces(pub u32);
-    pub struct Height(pub u32);
-    pub struct BytesLen(pub u32);
-
-    pub struct HStruct(pub u32);
-    pub struct HLabel(pub u32);
-}
-
-#[derive(PartialEq, Eq)]
-pub struct CSStaticCount(pub u8);
-pub struct CS0<T: Eq, const N: usize>(pub [T; N]);
-pub struct CSE<const N: usize>([legion::Entity; N]);
-#[derive(PartialEq, Eq, Debug)]
-pub struct CS<T: Eq>(pub Box<[T]>);
-pub struct NoSpacesCS<T: Eq>(pub Box<[T]>);
-impl<'a, T: Eq> From<&'a CS<T>> for &'a [T] {
-    fn from(cs: &'a CS<T>) -> Self {
-        &cs.0
-    }
-}
-impl<'a, T: Eq, const N: usize> From<&'a CS0<T, N>> for &'a [T] {
-    fn from(cs: &'a CS0<T, N>) -> Self {
-        &cs.0
-    }
-}
+// impl<'a> Symbol<HashedNodeRef<'a>> for legion::Entity {}
 
 // * hashed node impl
 
@@ -90,9 +53,9 @@ impl<'a> crate::types::Typed for HashedNode {
 }
 
 impl<'a> crate::types::Labeled for HashedNode {
-    type Label = DefaultLabelIdentifier;
+    type Label = LabelIdentifier;
 
-    fn get_label(&self) -> &DefaultLabelIdentifier {
+    fn get_label(&self) -> &LabelIdentifier {
         panic!()
     }
 }
@@ -217,17 +180,17 @@ impl<'a> HashedNodeRef<'a> {
 
     pub fn into_compressed_node(
         &self,
-    ) -> Result<CompressedNode<legion::Entity, DefaultLabelIdentifier>, ComponentError> {
+    ) -> Result<CompressedNode<legion::Entity, LabelIdentifier>, ComponentError> {
         // if let Ok(spaces) = self.0.get_component::<Box<[Space]>>() {
         //     return Ok(CompressedNode::Spaces(spaces.clone()));
         // }
         let kind = self.0.get_component::<Type>()?;
         if *kind == Type::Spaces {
-            let spaces = self.0.get_component::<DefaultLabelIdentifier>().unwrap();
+            let spaces = self.0.get_component::<LabelIdentifier>().unwrap();
             return Ok(CompressedNode::Spaces(spaces.clone()));
         }
-        let a = self.0.get_component::<DefaultLabelIdentifier>();
-        let label: Option<DefaultLabelIdentifier> = a.ok().map(|x| x.clone());
+        let a = self.0.get_component::<LabelIdentifier>();
+        let label: Option<LabelIdentifier> = a.ok().map(|x| x.clone());
         let children = self.children().map(|x| {
             let it = x.iter_children();
             it.map(|x| x.clone()).collect()
@@ -393,11 +356,11 @@ impl<'a> crate::types::WithSerialization for HashedNodeRef<'a> {
 }
 
 impl<'a> crate::types::Labeled for HashedNodeRef<'a> {
-    type Label = DefaultLabelIdentifier;
+    type Label = LabelIdentifier;
 
-    fn get_label(&self) -> &DefaultLabelIdentifier {
+    fn get_label(&self) -> &LabelIdentifier {
         self.0
-            .get_component::<DefaultLabelIdentifier>()
+            .get_component::<LabelIdentifier>()
             .expect("check with self.has_label()")
     }
 }
@@ -533,11 +496,11 @@ impl<'a> crate::types::Tree for HashedNodeRef<'a> {
     }
 
     fn has_label(&self) -> bool {
-        self.0.get_component::<DefaultLabelIdentifier>().is_ok()
+        self.0.get_component::<LabelIdentifier>().is_ok()
     }
 
     fn try_get_label(&self) -> Option<&Self::Label> {
-        self.0.get_component::<DefaultLabelIdentifier>().ok()
+        self.0.get_component::<LabelIdentifier>().ok()
         // .or_else(|| {
         //     let a = self.0.get_component::<Box<[Space]>>();
         //     let mut b = String::new();
@@ -557,29 +520,28 @@ impl<'a> RefContainer for HashedNodeRef<'a> {
         use crate::filter::BF as _;
 
         let e = self.0.get_component::<BloomSize>().unwrap();
-
         macro_rules! check {
-            ( $($t:ty),* ) => {
-                match *e {
-                    BloomSize::Much => {
-                        log::trace!("[Too Much]");
-                        BloomResult::MaybeContain
-                    },
-                    BloomSize::None => BloomResult::DoNotContain,
-                    $( <$t>::SIZE => {
-                        let x = CachedHasher::<usize,<$t as BF<[u8]>>::S, <$t as BF<[u8]>>::H>::once(rf);
-                        let x = x.into_iter().map(|x|<$t>::check_raw(self.0.get_component::<$t>().unwrap(), x));
+        ( $($t:ty),* ) => {
+            match *e {
+                BloomSize::Much => {
+                    log::trace!("[Too Much]");
+                    BloomResult::MaybeContain
+                },
+                BloomSize::None => BloomResult::DoNotContain,
+                $( <$t>::SIZE => {
+                    let x = CachedHasher::<usize,<$t as BF<[u8]>>::S, <$t as BF<[u8]>>::H>::once(rf);
+                    let x = x.into_iter().map(|x|<$t>::check_raw(self.0.get_component::<$t>().unwrap(), x));
 
-                        for x in x {
-                            if let BloomResult::MaybeContain = x {
-                                return BloomResult::MaybeContain
-                            }
+                    for x in x {
+                        if let BloomResult::MaybeContain = x {
+                            return BloomResult::MaybeContain
                         }
-                        BloomResult::DoNotContain
-                    }),*
-                }
-            };
-        }
+                    }
+                    BloomResult::DoNotContain
+                }),*
+            }
+        };
+    }
         check![
             Bloom<&'static [u8], u16>,
             Bloom<&'static [u8], u32>,
@@ -593,238 +555,3 @@ impl<'a> RefContainer for HashedNodeRef<'a> {
         ]
     }
 }
-
-// impl<'a> Symbol<HashedNodeRef<'a>> for legion::Entity {}
-
-// * Node store impl
-
-pub struct PendingInsert<'a>(
-    crate::compat::hash_map::RawEntryMut<'a, legion::Entity, (), ()>,
-    (u64, &'a mut legion::World, &'a DefaultHashBuilder),
-);
-
-impl<'a> PendingInsert<'a> {
-    pub fn occupied_id(&self) -> Option<NodeIdentifier> {
-        match &self.0 {
-            hashbrown::hash_map::RawEntryMut::Occupied(occupied) => Some(occupied.key().clone()),
-            _ => None,
-        }
-    }
-    pub fn resolve(&self, id: NodeIdentifier) -> HashedNodeRef {
-        self.1 .1.entry_ref(id).map(|x| HashedNodeRef(x)).unwrap()
-    }
-    pub fn occupied(
-        &'a self,
-    ) -> Option<(
-        NodeIdentifier,
-        (u64, &'a legion::World, &'a DefaultHashBuilder),
-    )> {
-        match &self.0 {
-            hashbrown::hash_map::RawEntryMut::Occupied(occupied) => {
-                Some((occupied.key().clone(), (self.1 .0, self.1 .1, self.1 .2)))
-            }
-            _ => None,
-        }
-    }
-
-    pub fn vacant(
-        self,
-    ) -> (
-        crate::compat::hash_map::RawVacantEntryMut<'a, legion::Entity, (), ()>,
-        (u64, &'a mut legion::World, &'a DefaultHashBuilder),
-    ) {
-        match self.0 {
-            hashbrown::hash_map::RawEntryMut::Vacant(occupied) => (occupied, self.1),
-            _ => panic!(),
-        }
-    }
-    // pub fn occupied(&self) -> Option<(
-    //     crate::compat::hash_map::RawVacantEntryMut<legion::Entity, (), ()>,
-    //     (u64, &mut legion::World, &DefaultHashBuilder),
-    // )> {
-    //     match self.0 {
-    //         hashbrown::hash_map::RawEntryMut::Occupied(occupied) => {
-    //             Some(occupied.into_key_value().0.clone())
-    //         }
-    //         _ => None
-    //     }
-    // }
-}
-
-impl NodeStore {
-    pub fn prepare_insertion<'a, Eq: Fn(EntryRef) -> bool, V: Hash>(
-        &'a mut self,
-        hashable: &'a V,
-        eq: Eq,
-    ) -> PendingInsert {
-        let Self {
-            dedup,
-            internal: backend,
-            ..
-        } = self;
-        let hash = make_hash(&self.hasher, hashable);
-        let entry = dedup.raw_entry_mut().from_hash(hash, |symbol| {
-            let r = eq(backend.entry_ref(*symbol).unwrap());
-            r
-        });
-        PendingInsert(entry, (hash, &mut self.internal, &self.hasher))
-    }
-
-    pub fn insert_after_prepare<T>(
-        (vacant, (hash, internal, hasher)): (
-            crate::compat::hash_map::RawVacantEntryMut<legion::Entity, (), ()>,
-            (u64, &mut legion::World, &DefaultHashBuilder),
-        ),
-        components: T,
-    ) -> legion::Entity
-    where
-        Option<T>: IntoComponentSource,
-    {
-        let (&mut symbol, &mut ()) = {
-            let symbol = internal.push(components);
-            vacant.insert_with_hasher(hash, symbol, (), |id| {
-                let node = internal.entry_ref(*id).map(|x| HashedNodeRef(x)).unwrap();
-                make_hash(hasher, &node)
-            })
-        };
-        symbol
-    }
-
-    pub fn resolve(&self, id: NodeIdentifier) -> HashedNodeRef {
-        self.internal
-            .entry_ref(id)
-            .map(|x| HashedNodeRef(x))
-            .unwrap()
-    }
-
-    pub fn try_resolve(&self, id: NodeIdentifier) -> Option<HashedNodeRef> {
-        self.internal.entry_ref(id).map(|x| HashedNodeRef(x)).ok()
-    }
-}
-
-impl Debug for NodeStore {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NodeStore")
-            .field("count", &self.count)
-            .field("errors", &self.errors)
-            .field("internal_len", &self.internal.len())
-            // .field("internal", &self.internal)
-            .finish()
-    }
-}
-
-impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
-    type R<'a> = HashedNodeRef<'a>;
-    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
-        self.internal
-            .entry_ref(id.clone())
-            .map(|x| HashedNodeRef(x))
-            .unwrap()
-    }
-}
-
-impl NodeStore {
-    pub fn len(&self) -> usize {
-        self.internal.len()
-    }
-}
-
-impl NodeStore {
-    pub fn new() -> Self {
-        Self {
-            count: 0,
-            errors: 0,
-            // roots: Default::default(),
-            internal: Default::default(),
-            dedup: hashbrown::HashMap::<_, (), ()>::with_capacity_and_hasher(
-                1 << 10,
-                Default::default(),
-            ),
-            hasher: Default::default(),
-        }
-    }
-}
-
-// // impl<'a> crate::types::NodeStore<'a, NodeIdentifier, HashedNodeRef<'a>> for NodeStore {
-// //     fn resolve(&'a self, id: &NodeIdentifier) -> HashedNodeRef<'a> {
-// //         self.internal
-// //             .entry_ref(id.clone())
-// //             .map(|x| HashedNodeRef(x))
-// //             .unwrap()
-// //     }
-// // }
-
-// // impl crate::types::NodeStore3<NodeIdentifier> for NodeStore {
-// //     type R = dyn for<'any> GenericItem<'any, Item = HashedNodeRef<'any>>;
-// //     fn resolve(&self, id: &NodeIdentifier) -> HashedNodeRef<'_> {
-// //         self.internal
-// //             .entry_ref(id.clone())
-// //             .map(|x| HashedNodeRef(x))
-// //             .unwrap()
-// //     }
-// // }
-
-// // impl crate::types::NodeStore4<NodeIdentifier> for NodeStore {
-// //     type R<'a> = HashedNodeRef<'a>;
-// //     fn resolve(&self, id: &NodeIdentifier) -> HashedNodeRef<'_> {
-// //         self.internal
-// //             .entry_ref(id.clone())
-// //             .map(|x| HashedNodeRef(x))
-// //             .unwrap()
-// //     }
-// // }
-
-// // impl crate::types::NodeStore2<NodeIdentifier> for NodeStore{
-// //     type R<'a> = HashedNodeRef<'a>;
-// //     fn resolve(&self, id: &NodeIdentifier) -> HashedNodeRef<'_> {
-// //         self.internal
-// //             .entry_ref(id.clone())
-// //             .map(|x| HashedNodeRef(x))
-// //             .unwrap()
-// //     }
-// // }
-
-// // impl<'a> crate::types::NodeStoreMut<'a, HashedNode, HashedNodeRef<'a>> for NodeStore {
-// //     fn get_or_insert(
-// //         &mut self,
-// //         node: HashedNode,
-// //     ) -> <HashedNodeRef<'a> as crate::types::Stored>::TreeId {
-// //         todo!()
-// //     }
-// // }
-// impl<'a> crate::types::NodeStoreMut<HashedNode> for NodeStore {
-//     fn get_or_insert(
-//         &mut self,
-//         node: HashedNode,
-//     ) -> <HashedNodeRef<'a> as crate::types::Stored>::TreeId {
-//         todo!()
-//     }
-// }
-
-// // impl<'a> crate::types::NodeStoreExt<'a, HashedNode, HashedNodeRef<'a>> for NodeStore {
-// //     fn build_then_insert(
-// //         &mut self,
-// //         t: <HashedNodeRef<'a> as crate::types::Typed>::Type,
-// //         l: <HashedNodeRef<'a> as crate::types::Labeled>::Label,
-// //         cs: Vec<<HashedNodeRef<'a> as crate::types::Stored>::TreeId>,
-// //     ) -> <HashedNodeRef<'a> as crate::types::Stored>::TreeId {
-// //         todo!()
-// //     }
-// // }
-
-// /// WARN this is polyglote related
-// /// for now I only implemented for java.
-// /// In the future you should use the Type of the node
-// /// and maybe an additional context might be necessary depending on choices to materialize polyglot nodes
-// impl crate::types::NodeStoreExt<HashedNode> for NodeStore {
-//     fn build_then_insert(
-//         &mut self,
-//         i: <HashedNode as crate::types::Stored>::TreeId,
-//         t: <HashedNode as crate::types::Typed>::Type,
-//         l: Option<<HashedNode as crate::types::Labeled>::Label>,
-//         cs: Vec<<HashedNode as crate::types::Stored>::TreeId>,
-//     ) -> <HashedNode as crate::types::Stored>::TreeId {
-//         // self.internal.
-//         todo!()
-//     }
-// }

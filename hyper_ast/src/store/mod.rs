@@ -19,6 +19,12 @@ impl TypeStore {
     pub fn get_xml(&mut self, kind: &str) -> TypeIdentifier {
         Type::parse_xml(kind)
     }
+    pub fn get_cpp(&mut self, kind: &str) -> TypeIdentifier {
+        Type::parse_cpp(kind)
+    }
+    pub fn get_typescript(&mut self, kind: &str) -> TypeIdentifier {
+        todo!()
+    }
 }
 
 pub struct SimpleStores<NS = nodes::DefaultNodeStore> {
@@ -45,7 +51,7 @@ pub mod defaults {
 
 impl<'store> From<&'store SimpleStores<nodes::DefaultNodeStore>>
     for SimpleHyperAST<
-        self::nodes::legion::HashedNodeRef<'store>,
+        self::nodes::HashedNodeRef<'store>,
         &'store nodes::DefaultNodeStore,
         &'store labels::LabelStore,
     >
@@ -64,7 +70,7 @@ impl<'store> HyperAST<'store> for SimpleStores<nodes::DefaultNodeStore> {
 
     type Label = labels::DefaultLabelIdentifier;
 
-    type T = self::nodes::legion::HashedNodeRef<'store>;
+    type T = self::nodes::HashedNodeRef<'store>;
 
     type NS = nodes::DefaultNodeStore;
 

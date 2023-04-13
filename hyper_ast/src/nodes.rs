@@ -371,8 +371,9 @@ impl Space {
                 x => {
                     log::debug!("{:?}", x);
                     log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-                    println!("{:?}", std::str::from_utf8(spaces));
-                    panic!("{:?}", spaces)
+                    dbg!(std::str::from_utf8(spaces));
+                    // panic!("{:?}", spaces)
+                    Space::Space
                 }
             })
             .collect()
