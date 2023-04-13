@@ -222,6 +222,18 @@ where
 
     fn init_val(&mut self, text: &Self::Text, node: &Self::Node<'_>) -> Self::Acc;
 
+    fn pre_skippable(
+        &mut self,
+        text: &Self::Text,
+        node: &Self::Node<'_>,
+        stack: &Vec<Self::Acc>,
+        global: &mut Self::Global,
+        skip: &mut bool,
+    ) -> <Self as TreeGen>::Acc {
+        let _ = skip;
+        self.pre(text, node, stack, global)
+    }
+
     fn pre(
         &mut self,
         text: &Self::Text,
@@ -254,8 +266,11 @@ where
                 global.set_sum_byte_length(sbl);
                 has = Has::Down;
                 global.down();
-
-                let n = self.pre(text, &cursor.node(), &stack, global);
+                let mut skip = false;
+                let n = self.pre_skippable(text, &cursor.node(), &stack, global, &mut skip);
+                if skip {
+                    has = Has::Up;
+                }
 
                 stack.push(n);
             } else {
@@ -276,7 +291,11 @@ where
                     let parent = stack.last_mut().unwrap();
                     parent.push(full_node.unwrap());
                     global.down();
-                    let n = self.pre(text, &cursor.node(), &stack, global);
+                    let mut skip = false;
+                    let n = self.pre_skippable(text, &cursor.node(), &stack, global, &mut skip);
+                    if skip {
+                        has = Has::Up;
+                    }
                     stack.push(n);
                 } else {
                     has = Has::Up;
@@ -410,15 +429,24 @@ pub fn get_spacing(
     if padding_start != pos {
         let spaces = &text[padding_start..pos];
         // let spaces = Space::format_indentation(spaces);
+        let mut bslash = false;
         spaces.iter().for_each(|x| {
-            assert!(
-                *x == b' ' || *x == b'\n' || *x == b'\t' || *x == b'\r',
-                "{} {} {:?}",
-                x,
-                padding_start,
-                std::str::from_utf8(&spaces).unwrap()
-            )
+            if bslash && (*x == b'\n' || *x == b'\r') {
+                bslash = false
+            } else if *x == b'\\' {
+                assert!(!bslash);
+                bslash = true
+            } else {
+                assert!(
+                    *x == b' ' || *x == b'\n' || *x == b'\t' || *x == b'\r',
+                    "{} {} {:?}",
+                    x,
+                    padding_start,
+                    std::str::from_utf8(&spaces).unwrap()
+                )
+            }
         });
+        assert!(!bslash, "{}", std::str::from_utf8(&&text[padding_start.saturating_sub(100)..pos+50]).unwrap());
         let spaces = spaces.to_vec();
         // let spaces = Space::replace_indentation(parent_indentation, &spaces);
         // TODO put back the relativisation later, can pose issues when computing len of a subtree (contextually if we make the optimisation)
