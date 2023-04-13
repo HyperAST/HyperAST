@@ -98,6 +98,8 @@ impl<'a, T: WithChildren, IdD: PrimInt + Debug> super::DecompressedSubtree<'a, T
 where
     T::TreeId: Clone,
 {
+    type Out = Self;
+
     #[time("warn")]
     fn decompress<S>(store: &'a S, root: &T::TreeId) -> SimpleZsTree<T, IdD>
     where

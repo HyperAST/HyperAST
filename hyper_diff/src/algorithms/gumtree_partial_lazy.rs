@@ -1,6 +1,5 @@
 use std::{fmt::Debug, time::Instant};
 
-use hyper_ast::types::{self, HyperAST};
 use crate::{
     actions::script_generator2::{ScriptGenerator, SimpleAction},
     decompressed_tree_store::{
@@ -16,6 +15,7 @@ use crate::{
     },
     tree::tree_path::CompressedTreePath,
 };
+use hyper_ast::types::{self, HyperAST};
 
 type DS<T> = LazyPostOrder<T, u32>;
 type CDS<T> = CompletePostOrder<T, u32>;
@@ -49,8 +49,19 @@ where
         hyperast.decompress_pair(src, dst).into();
     let subtree_prepare_t = now.elapsed().as_secs_f64();
     let now = Instant::now();
-    let mapper =
+    let mut mapper =
         LazyGreedySubtreeMatcher::<_, _, _, _>::match_it::<DefaultMultiMappingStore<_>>(mapper);
+    // {
+    //     use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
+    //     let src_arena = &mut mapper.mapping.src_arena;
+    //     let dst_arena = &mut mapper.mapping.dst_arena;
+    //     let mut mm: DefaultMultiMappingStore<_> = Default::default();
+    //     mm.topit(src_arena.len(), dst_arena.len());
+    //     dbg!();
+    //     Mapper::<_, _, _, VecStore<u32>>::compute_multimapping::<_, 1>(
+    //         hyperast, src_arena, dst_arena, &mut mm,
+    //     );
+    // }
     let subtree_matcher_t = now.elapsed().as_secs_f64();
     let subtree_mappings_s = mapper.mappings().len();
     dbg!(&subtree_matcher_t, &subtree_mappings_s);

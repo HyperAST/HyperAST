@@ -42,7 +42,7 @@ pub struct Mapping<Dsrc, Ddst, M> {
     pub mappings: M,
 }
 
-impl<'store, HAST, Dsrc, Ddst, M: MappingStore> From<(&'store HAST, (Dsrc, Ddst))>
+impl<'store, HAST, Dsrc, Ddst, M: MappingStore + Default> From<(&'store HAST, (Dsrc, Ddst))>
     for Mapper<'store, HAST, Dsrc, Ddst, M>
 {
     fn from((hyperast, (src_arena, dst_arena)): (&'store HAST, (Dsrc, Ddst))) -> Self {
@@ -179,6 +179,40 @@ where
             M,
         >,
     ) -> &'a Mapping<CompletePostOrder<HAST::T, u32>, CompletePostOrder<HAST::T, u32>, M> {
+        unsafe { std::mem::transmute(p)}
+    }
+}
+
+use crate::decompressed_tree_store::{lazy_post_order::LazyPostOrder};
+impl<'store, HAST: HyperAST<'store>, M>
+    Mapper<'store, HAST, LazyPostOrder<HAST::T, u32>, LazyPostOrder<HAST::T, u32>, M>
+where
+    HAST::IdN: Eq,
+{
+    pub fn persist(
+        self,
+    ) -> Mapping<
+        LazyPostOrder<PersistedNode<HAST::IdN>, u32>,
+        LazyPostOrder<PersistedNode<HAST::IdN>, u32>,
+        M,
+    > {
+        let mapping = self.mapping;
+        Mapping {
+            src_arena: unsafe { std::mem::transmute(mapping.src_arena) },
+            dst_arena: unsafe { std::mem::transmute(mapping.dst_arena) },
+            mappings: mapping.mappings,
+        }
+    }
+    /// used to enable easy caching of mappings
+    /// safety: be sure to unpersist on the same HyperAST
+    pub unsafe fn unpersist<'a>(
+        _hyperast: &'store HAST,
+        p: &'a mut Mapping<
+            LazyPostOrder<PersistedNode<HAST::IdN>, u32>,
+            LazyPostOrder<PersistedNode<HAST::IdN>, u32>,
+            M,
+        >,
+    ) -> &'a mut Mapping<LazyPostOrder<HAST::T, u32>, LazyPostOrder<HAST::T, u32>, M> {
         unsafe { std::mem::transmute(p)}
     }
 }

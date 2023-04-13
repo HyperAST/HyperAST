@@ -114,6 +114,8 @@ impl<'a, T: WithChildren, IdD: PrimInt> super::DecompressedSubtree<'a, T> for Br
 where
     T::TreeId: Clone,
 {
+    type Out = Self;
+
     fn decompress<S>(store: &'a S, root: &T::TreeId) -> Self
     where
         S: NodeStore<T::TreeId, R<'a> = T>,

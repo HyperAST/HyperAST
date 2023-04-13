@@ -265,6 +265,8 @@ where
     T::TreeId: Clone,
     <T as WithChildren>::ChildIdx: PrimInt,
 {
+    type Out = Self;
+    
     fn decompress<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
     where
         S: NodeStore<<T as types::Stored>::TreeId, R<'a> = T>,

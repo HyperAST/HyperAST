@@ -6,7 +6,7 @@ use std::{
 use hyper_ast::compat::HashMap;
 use num_traits::{cast, one, zero, PrimInt};
 
-pub trait MappingStore: Clone + Default {
+pub trait MappingStore {
     type Src;
     type Dst;
     fn topit(&mut self, left: usize, right: usize);
@@ -142,7 +142,7 @@ impl<T: PrimInt + Debug> MappingStore for VecStore<T> {
         self.dst_to_src.resize(right + 1, zero());
     }
 
-    fn has(&self, src: &Self::Src, dst: &Self::Src) -> bool {
+    fn has(&self, src: &Self::Src, dst: &Self::Dst) -> bool {
         self.src_to_dst[src.to_usize().unwrap()] == *dst + one()
             && self.dst_to_src[dst.to_usize().unwrap()] == *src + one()
     }

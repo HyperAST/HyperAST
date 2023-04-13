@@ -80,12 +80,10 @@ use hyper_ast::types::HyperAST;
 impl<
         'a,
         HAST: HyperAST<'a>,
-        Dsrc: 'a
-            + DecompressedTreeStore<'a, HAST::T, Dsrc::IdD, M::Src>
+        Dsrc: DecompressedTreeStore<'a, HAST::T, Dsrc::IdD, M::Src>
             + DecompressedWithParent<'a, HAST::T, Dsrc::IdD>
             + LazyDecompressedTreeStore<'a, HAST::T, M::Src>,
-        Ddst: 'a
-            + DecompressedTreeStore<'a, HAST::T, Ddst::IdD, M::Dst>
+        Ddst: DecompressedTreeStore<'a, HAST::T, Ddst::IdD, M::Dst>
             + DecompressedWithParent<'a, HAST::T, Ddst::IdD>
             + LazyDecompressedTreeStore<'a, HAST::T, M::Dst>,
         M: MonoMappingStore,

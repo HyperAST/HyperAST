@@ -18,7 +18,7 @@ pub struct ZsMatcher<M, SD, DD = SD> {
     pub dst_arena: DD,
 }
 
-impl<SD, DD, M: MonoMappingStore> ZsMatcher<M, SD, DD> {
+impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
     pub fn matchh<'store: 'b, 'b: 'c, 'c, T, S, LS>(
         node_store: &'store S,
         label_store: &'store LS,
@@ -30,8 +30,8 @@ impl<SD, DD, M: MonoMappingStore> ZsMatcher<M, SD, DD> {
         T: Tree<Label = LS::I>,
         M::Src: PrimInt + std::ops::SubAssign + Debug,
         M::Dst: PrimInt + std::ops::SubAssign + Debug,
-        SD: 'b + PostOrderKeyRoots<'b, T, M::Src> + DecompressedSubtree<'store, T>,
-        DD: 'b + PostOrderKeyRoots<'b, T, M::Dst> + DecompressedSubtree<'store, T>,
+        SD: 'b + PostOrderKeyRoots<'b, T, M::Src> + DecompressedSubtree<'store, T, Out = SD>,
+        DD: 'b + PostOrderKeyRoots<'b, T, M::Dst> + DecompressedSubtree<'store, T, Out = DD>,
         T: 'store + Tree,
         S: 'store + NodeStore<T::TreeId, R<'store> = T>,
         LS: 'store + LabelStore<SlicedLabel>,

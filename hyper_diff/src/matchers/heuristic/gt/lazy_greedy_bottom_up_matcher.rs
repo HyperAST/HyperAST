@@ -149,7 +149,7 @@ impl<
         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
         LS: 'a + LabelStore<SlicedLabel, I = T::Label>,
         M: MonoMappingStore,
-        MZs: MonoMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>,
+        MZs: MonoMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD> + Default,
         const SIZE_THRESHOLD: usize,
         const SIM_THRESHOLD_NUM: u64,
         const SIM_THRESHOLD_DEN: u64,
@@ -203,6 +203,7 @@ where
     ) -> crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
     where
         HAST: HyperAST<'a, NS = S, LS = LS>,
+        M: Default
     {
         let mut matcher = Self {
             internal: BottomUpMatcher {
@@ -230,7 +231,7 @@ where
         }
     }
 
-    pub fn execute<'b>(&mut self) {
+    pub fn execute<'b>(&mut self) where M: Default {
         assert_eq!(
             // TODO move it inside the arena ...
             self.internal.src_arena.root(),
@@ -301,7 +302,7 @@ where
         r
     }
 
-    pub(crate) fn last_chance_match_zs(&mut self, src: Dsrc::IdD, dst: Ddst::IdD) {
+    pub(crate) fn last_chance_match_zs(&mut self, src: Dsrc::IdD, dst: Ddst::IdD) where M: Default {
         // WIP https://blog.rust-lang.org/2022/10/28/gats-stabilization.html#implied-static-requirement-from-higher-ranked-trait-bounds
         let src_s = self
             .internal

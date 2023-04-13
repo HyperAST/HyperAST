@@ -23,12 +23,12 @@ impl<
         Dsrc: 'a
             + DecompressedTreeStore<'a, T, M::Src>
             + DecompressedWithParent<'a, T, M::Src>
-            + DecompressedSubtree<'a, T>
+            + DecompressedSubtree<'a, T, Out = Dsrc>
             + ContiguousDescendants<'a, T, M::Src>,
         Ddst: 'a
             + DecompressedTreeStore<'a, T, M::Dst>
             + DecompressedWithParent<'a, T, M::Dst>
-            + DecompressedSubtree<'a, T>
+            + DecompressedSubtree<'a, T, Out = Ddst>
             + ContiguousDescendants<'a, T, M::Dst>,
         T: Tree + WithHashs,
         S,
@@ -48,7 +48,7 @@ where
     where
         Self: 'a,
         HAST: HyperAST<'a, NS = S>,
-        MM: MultiMappingStore<Src = M::Src, Dst = M::Dst>,
+        MM: MultiMappingStore<Src = M::Src, Dst = M::Dst> + Default,
     {
         let mut matcher = Self {
             internal: SubtreeMatcher {
@@ -74,7 +74,7 @@ where
         }
     }
 
-    pub fn matchh<MM: MultiMappingStore<Src = M::Src, Dst = M::Dst>>(
+    pub fn matchh<MM: MultiMappingStore<Src = M::Src, Dst = M::Dst> + Default>(
         node_store: &'a S,
         src: &'a T::TreeId,
         dst: &'a T::TreeId,
@@ -100,7 +100,7 @@ where
         matcher
     }
 
-    pub(crate) fn execute<MM: MultiMappingStore<Src = M::Src, Dst = M::Dst>>(&mut self) {
+    pub(crate) fn execute<MM: MultiMappingStore<Src = M::Src, Dst = M::Dst> + Default>(&mut self) {
         let mut mm: MM = Default::default();
         mm.topit(self.internal.src_arena.len(), self.internal.dst_arena.len());
         self.internal.matchh_to_be_filtered(&mut mm);

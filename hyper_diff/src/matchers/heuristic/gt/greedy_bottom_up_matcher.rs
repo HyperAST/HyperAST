@@ -82,7 +82,7 @@ impl<
             + DecompressedWithParent<'a, T, M::Src>
             + PostOrder<'a, T, M::Src>
             + PostOrderIterable<'a, T, M::Src>
-            + DecompressedSubtree<'a, T>
+            + DecompressedSubtree<'a, T, Out = Dsrc>
             + ContiguousDescendants<'a, T, M::Src>
             + POBorrowSlice<'a, T, M::Src>,
         Ddst: 'a
@@ -90,13 +90,13 @@ impl<
             + DecompressedWithParent<'a, T, M::Dst>
             + PostOrder<'a, T, M::Dst>
             + PostOrderIterable<'a, T, M::Dst>
-            + DecompressedSubtree<'a, T>
+            + DecompressedSubtree<'a, T, Out = Ddst>
             + ContiguousDescendants<'a, T, M::Dst>
             + POBorrowSlice<'a, T, M::Dst>,
         T: 'a + Tree + WithHashs,
         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
         LS: 'a + LabelStore<SlicedLabel, I = T::Label>,
-        M: MonoMappingStore,
+        M: MonoMappingStore + Default,
         const SIZE_THRESHOLD: usize,
         const SIM_THRESHOLD_NUM: u64,
         const SIM_THRESHOLD_DEN: u64,

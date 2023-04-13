@@ -16,6 +16,7 @@ pub mod complete_post_order;
 pub mod lazy_post_order;
 pub mod pre_order_wrapper;
 pub mod simple_post_order;
+pub mod hidding_wrapper;
 pub use breadth_first::BreathFirst;
 pub mod simple_zs_tree;
 pub use complete_post_order::CompletePostOrder;

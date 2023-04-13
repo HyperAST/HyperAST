@@ -23,12 +23,12 @@ impl<
         Dsrc: 'a
             + DecompressedWithParent<'a, T, Dsrc::IdD>
             + ContiguousDescendants<'a, T, Dsrc::IdD, M::Src>
-            + DecompressedSubtree<'a, T>
+            + DecompressedSubtree<'a, T, Out = Dsrc>
             + LazyDecompressedTreeStore<'a, T, M::Src>,
         Ddst: 'a
             + DecompressedWithParent<'a, T, Ddst::IdD>
             + ContiguousDescendants<'a, T, Ddst::IdD, M::Dst>
-            + DecompressedSubtree<'a, T>
+            + DecompressedSubtree<'a, T, Out = Ddst>
             + LazyDecompressedTreeStore<'a, T, M::Dst>,
         T: Tree + WithHashs + WithStats,
         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
@@ -49,7 +49,7 @@ where
     where
         Self: 'a,
         HAST: HyperAST<'a, NS = S>,
-        MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>,
+        MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD> + Default,
     {
         let mut matcher = Self {
             internal: SubtreeMatcher {
@@ -75,7 +75,7 @@ where
         }
     }
     
-    pub fn matchh<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>>(
+    pub fn matchh<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD> + Default>(
         node_store: &'a S,
         src: &'a T::TreeId,
         dst: &'a T::TreeId,
@@ -99,12 +99,12 @@ where
     // with WithStats to get height through metadata
     // [2022-12-19T17:11:48.121Z WARN] matchh_to_be_filtered(), Elapsed=16.639973ms
 
-    pub fn execute<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>>(&mut self) {
+    pub fn execute<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD> + Default>(&mut self) {
         let mm: MM = self.compute_multi_mapping();
         self.filter_mappings(&mm);
     }
 
-    pub fn compute_multi_mapping<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>>(&mut self) -> MM {
+    pub fn compute_multi_mapping<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD> + Default>(&mut self) -> MM {
         let mut mm: MM = Default::default();
         mm.topit(self.internal.src_arena.len(), self.internal.dst_arena.len());
         self.internal.matchh_to_be_filtered(&mut mm);

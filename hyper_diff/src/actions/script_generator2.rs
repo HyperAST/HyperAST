@@ -158,7 +158,7 @@ impl<
             + DecompressedWithParent<'a2, T, IdD>
             + BreadthFirstIterable<'a2, T, IdD>,
         S,
-        M: MonoMappingStore<Src = IdD, Dst = IdD>,
+        M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
         P: TreePath<Item = T::ChildIdx>,
     > ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M, P>
 where
