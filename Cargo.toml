@@ -15,6 +15,7 @@ exclude = ["gen/tree-sitter/java/tree-sitter-java"]
 default-members = [
     "hyper_diff",
     "gen/tree-sitter/java",
+    "gen/tree-sitter/cpp",
     "gen/tree-sitter/xml",
     "cvs/git",
     "benchmark",

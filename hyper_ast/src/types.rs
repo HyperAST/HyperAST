@@ -7,8 +7,8 @@ use num::PrimInt;
 use num::ToPrimitive;
 use strum::IntoEnumIterator;
 use strum_macros::Display;
-use strum_macros::EnumString;
 use strum_macros::EnumIter;
+use strum_macros::EnumString;
 
 pub trait HashKind {
     fn structural() -> Self;
@@ -16,8 +16,11 @@ pub trait HashKind {
 }
 
 impl Type {
-    pub fn it() -> impl Iterator<Item=Type> {
+    pub fn it() -> impl Iterator<Item = Type> {
         Type::iter()
+    }
+    pub fn parse(s: &str) -> Result<Type, strum::ParseError> {
+        Type::from_str(s)
     }
 }
 
@@ -26,7 +29,9 @@ impl Type {
 #[strum(serialize_all = "snake_case")]
 #[allow(non_camel_case_types)]
 #[derive(Hash, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub enum Type {
+    MakeDirectory,
     MavenDirectory,
     Directory,
     // FileName,
@@ -564,6 +569,651 @@ pub enum Type {
     xml_TS55,
     #[strum(serialize = "|")]
     xml_TS56,
+    // cpp types
+    #[strum(serialize = "\n")]
+    cpp_TS0,
+    #[strum(serialize = "!")]
+    cpp_TS1,
+    #[strum(serialize = "!=")]
+    cpp_TS2,
+    #[strum(serialize = "\"")]
+    cpp_TS3,
+    #[strum(serialize = "\"\"")]
+    cpp_TS4,
+    #[strum(serialize = "#define")]
+    cpp_TS5,
+    #[strum(serialize = "#elif")]
+    cpp_TS6,
+    #[strum(serialize = "#else")]
+    cpp_TS7,
+    #[strum(serialize = "#endif")]
+    cpp_TS8,
+    #[strum(serialize = "#if")]
+    cpp_TS9,
+    #[strum(serialize = "#ifdef")]
+    cpp_TS10,
+    #[strum(serialize = "#ifndef")]
+    cpp_TS11,
+    #[strum(serialize = "#include")]
+    cpp_TS12,
+    #[strum(serialize = "%")]
+    cpp_TS13,
+    #[strum(serialize = "%=")]
+    cpp_TS14,
+    #[strum(serialize = "&")]
+    cpp_TS15,
+    #[strum(serialize = "&&")]
+    cpp_TS16,
+    #[strum(serialize = "&=")]
+    cpp_TS17,
+    #[strum(serialize = "'")]
+    cpp_TS18,
+    #[strum(serialize = "(")]
+    cpp_TS19,
+    #[strum(serialize = "()")]
+    cpp_TS20,
+    #[strum(serialize = ")")]
+    cpp_TS21,
+    #[strum(serialize = "*")]
+    cpp_TS22,
+    #[strum(serialize = "*=")]
+    cpp_TS23,
+    #[strum(serialize = "+")]
+    cpp_TS24,
+    #[strum(serialize = "++")]
+    cpp_TS25,
+    #[strum(serialize = "+=")]
+    cpp_TS26,
+    #[strum(serialize = ",")]
+    cpp_TS27,
+    #[strum(serialize = "-")]
+    cpp_TS28,
+    #[strum(serialize = "--")]
+    cpp_TS29,
+    #[strum(serialize = "-=")]
+    cpp_TS30,
+    #[strum(serialize = "->")]
+    cpp_TS31,
+    #[strum(serialize = "->*")]
+    cpp_TS32,
+    #[strum(serialize = ".")]
+    cpp_TS33,
+    #[strum(serialize = "...")]
+    cpp_TS34,
+    #[strum(serialize = "/")]
+    cpp_TS35,
+    #[strum(serialize = "/=")]
+    cpp_TS36,
+    #[strum(serialize = ":")]
+    cpp_TS37,
+    #[strum(serialize = "::")]
+    cpp_TS38,
+    #[strum(serialize = ";")]
+    cpp_TS39,
+    #[strum(serialize = "<")]
+    cpp_TS40,
+    #[strum(serialize = "<<")]
+    cpp_TS41,
+    #[strum(serialize = "<<=")]
+    cpp_TS42,
+    #[strum(serialize = "<=")]
+    cpp_TS43,
+    #[strum(serialize = "=")]
+    cpp_TS44,
+    #[strum(serialize = "==")]
+    cpp_TS45,
+    #[strum(serialize = ">")]
+    cpp_TS46,
+    #[strum(serialize = ">=")]
+    cpp_TS47,
+    #[strum(serialize = ">>")]
+    cpp_TS48,
+    #[strum(serialize = ">>=")]
+    cpp_TS49,
+    #[strum(serialize = "?")]
+    cpp_TS50,
+    #[strum(serialize = "L\"")]
+    cpp_TS51,
+    #[strum(serialize = "L'")]
+    cpp_TS52,
+    #[strum(serialize = "U\"")]
+    cpp_TS53,
+    #[strum(serialize = "U'")]
+    cpp_TS54,
+    #[strum(serialize = "[")]
+    cpp_TS55,
+    #[strum(serialize = "[[")]
+    cpp_TS56,
+    #[strum(serialize = "[]")]
+    cpp_TS57,
+    #[strum(serialize = "]")]
+    cpp_TS58,
+    #[strum(serialize = "]]")]
+    cpp_TS59,
+    #[strum(serialize = "^")]
+    cpp_TS60,
+    #[strum(serialize = "^=")]
+    cpp_TS61,
+    #[strum(serialize = "_Atomic")]
+    cpp_TS62,
+    #[strum(serialize = "__attribute__")]
+    cpp_TS63,
+    #[strum(serialize = "__based")]
+    cpp_TS64,
+    #[strum(serialize = "__cdecl")]
+    cpp_TS65,
+    #[strum(serialize = "__clrcall")]
+    cpp_TS66,
+    #[strum(serialize = "__declspec")]
+    cpp_TS67,
+    #[strum(serialize = "__fastcall")]
+    cpp_TS68,
+    #[strum(serialize = "__stdcall")]
+    cpp_TS69,
+    #[strum(serialize = "__thiscall")]
+    cpp_TS70,
+    #[strum(serialize = "__unaligned")]
+    cpp_TS71,
+    #[strum(serialize = "__vectorcall")]
+    cpp_TS72,
+    #[strum(serialize = "_abstract_declarator")]
+    cpp_AbstractDeclarator,
+    #[strum(serialize = "_declarator")]
+    cpp_Declarator,
+    #[strum(serialize = "_expression")]
+    cpp_Expression,
+    #[strum(serialize = "_field_declarator")]
+    cpp_FieldDeclarator,
+    #[strum(serialize = "_statement")]
+    cpp_Statement,
+    #[strum(serialize = "_type_declarator")]
+    cpp_TypeDeclarator,
+    #[strum(serialize = "_type_specifier")]
+    cpp_TypeSpecifier,
+    #[strum(serialize = "_unaligned")]
+    cpp_TS73,
+    #[strum(serialize = "abstract_array_declarator")]
+    cpp_AbstractArrayDeclarator,
+    #[strum(serialize = "abstract_function_declarator")]
+    cpp_AbstractFunctionDeclarator,
+    #[strum(serialize = "abstract_parenthesized_declarator")]
+    cpp_AbstractParenthesizedDeclarator,
+    #[strum(serialize = "abstract_pointer_declarator")]
+    cpp_AbstractPointerDeclarator,
+    #[strum(serialize = "abstract_reference_declarator")]
+    cpp_AbstractReferenceDeclarator,
+    #[strum(serialize = "access_specifier")]
+    cpp_AccessSpecifier,
+    #[strum(serialize = "alias_declaration")]
+    cpp_AliasDeclaration,
+    #[strum(serialize = "argument_list")]
+    cpp_ArgumentList,
+    #[strum(serialize = "array_declarator")]
+    cpp_ArrayDeclarator,
+    #[strum(serialize = "assignment_expression")]
+    cpp_AssignmentExpression,
+    #[strum(serialize = "attribute")]
+    cpp_Attribute,
+    #[strum(serialize = "attribute_declaration")]
+    cpp_AttributeDeclaration,
+    #[strum(serialize = "attribute_specifier")]
+    cpp_AttributeSpecifier,
+    #[strum(serialize = "attributed_declarator")]
+    cpp_AttributedDeclarator,
+    #[strum(serialize = "attributed_statement")]
+    cpp_AttributedStatement,
+    #[strum(serialize = "auto")]
+    cpp_Auto,
+    #[strum(serialize = "base_class_clause")]
+    cpp_BaseClassClause,
+    #[strum(serialize = "binary_expression")]
+    cpp_BinaryExpression,
+    #[strum(serialize = "bitfield_clause")]
+    cpp_BitfieldClause,
+    #[strum(serialize = "break")]
+    cpp_TS74,
+    #[strum(serialize = "break_statement")]
+    cpp_BreakStatement,
+    #[strum(serialize = "call_expression")]
+    cpp_CallExpression,
+    #[strum(serialize = "case")]
+    cpp_TS75,
+    #[strum(serialize = "case_statement")]
+    cpp_CaseStatement,
+    #[strum(serialize = "cast_expression")]
+    cpp_CastExpression,
+    #[strum(serialize = "catch")]
+    cpp_TS76,
+    #[strum(serialize = "catch_clause")]
+    cpp_CatchClause,
+    #[strum(serialize = "char_literal")]
+    cpp_CharLiteral,
+    #[strum(serialize = "class")]
+    cpp_TS77,
+    #[strum(serialize = "class_specifier")]
+    cpp_ClassSpecifier,
+    #[strum(serialize = "co_await")]
+    cpp_TS78,
+    #[strum(serialize = "co_await_expression")]
+    cpp_CoAwaitExpression,
+    #[strum(serialize = "co_return")]
+    cpp_TS79,
+    #[strum(serialize = "co_return_statement")]
+    cpp_CoReturnStatement,
+    #[strum(serialize = "co_yield")]
+    cpp_TS80,
+    #[strum(serialize = "co_yield_statement")]
+    cpp_CoYieldStatement,
+    #[strum(serialize = "comma_expression")]
+    cpp_CommaExpression,
+    #[strum(serialize = "comment")]
+    cpp_Comment,
+    #[strum(serialize = "compound_literal_expression")]
+    cpp_CompoundLiteralExpression,
+    #[strum(serialize = "compound_statement")]
+    cpp_CompoundStatement,
+    #[strum(serialize = "concatenated_string")]
+    cpp_ConcatenatedString,
+    #[strum(serialize = "condition_clause")]
+    cpp_ConditionClause,
+    #[strum(serialize = "conditional_expression")]
+    cpp_ConditionalExpression,
+    #[strum(serialize = "const")]
+    cpp_TS81,
+    #[strum(serialize = "constexpr")]
+    cpp_TS82,
+    #[strum(serialize = "continue")]
+    cpp_TS83,
+    #[strum(serialize = "continue_statement")]
+    cpp_ContinueStatement,
+    #[strum(serialize = "declaration")]
+    cpp_Declaration,
+    #[strum(serialize = "declaration_list")]
+    cpp_DeclarationList,
+    #[strum(serialize = "decltype")]
+    cpp_TS84,
+    #[strum(serialize = "default")]
+    cpp_TS85,
+    #[strum(serialize = "default_method_clause")]
+    cpp_DefaultMethodClause,
+    #[strum(serialize = "defined")]
+    cpp_TS86,
+    #[strum(serialize = "delete")]
+    cpp_TS87,
+    #[strum(serialize = "delete_expression")]
+    cpp_DeleteExpression,
+    #[strum(serialize = "delete_method_clause")]
+    cpp_DeleteMethodClause,
+    #[strum(serialize = "dependent_name")]
+    cpp_DependentName,
+    #[strum(serialize = "dependent_type")]
+    cpp_DependentType,
+    #[strum(serialize = "destructor_name")]
+    cpp_DestructorName,
+    #[strum(serialize = "do")]
+    cpp_TS88,
+    #[strum(serialize = "do_statement")]
+    cpp_DoStatement,
+    #[strum(serialize = "else")]
+    cpp_TS89,
+    #[strum(serialize = "enum")]
+    cpp_TS90,
+    #[strum(serialize = "enum_specifier")]
+    cpp_EnumSpecifier,
+    #[strum(serialize = "enumerator")]
+    cpp_Enumerator,
+    #[strum(serialize = "enumerator_list")]
+    cpp_EnumeratorList,
+    #[strum(serialize = "escape_sequence")]
+    cpp_EscapeSequence,
+    #[strum(serialize = "explicit")]
+    cpp_TS91,
+    #[strum(serialize = "explicit_function_specifier")]
+    cpp_ExplicitFunctionSpecifier,
+    #[strum(serialize = "expression_statement")]
+    cpp_ExpressionStatement,
+    #[strum(serialize = "extern")]
+    cpp_TS92,
+    #[strum(serialize = "false")]
+    cpp_False,
+    #[strum(serialize = "field_declaration")]
+    cpp_FieldDeclaration,
+    #[strum(serialize = "field_declaration_list")]
+    cpp_FieldDeclarationList,
+    #[strum(serialize = "field_designator")]
+    cpp_FieldDesignator,
+    #[strum(serialize = "field_expression")]
+    cpp_FieldExpression,
+    #[strum(serialize = "field_identifier")]
+    cpp_FieldIdentifier,
+    #[strum(serialize = "field_initializer")]
+    cpp_FieldInitializer,
+    #[strum(serialize = "field_initializer_list")]
+    cpp_FieldInitializerList,
+    #[strum(serialize = "final")]
+    cpp_TS93,
+    #[strum(serialize = "for")]
+    cpp_TS94,
+    #[strum(serialize = "for_range_loop")]
+    cpp_ForRangeLoop,
+    #[strum(serialize = "for_statement")]
+    cpp_ForStatement,
+    #[strum(serialize = "friend")]
+    cpp_TS95,
+    #[strum(serialize = "friend_declaration")]
+    cpp_FriendDeclaration,
+    #[strum(serialize = "function_declarator")]
+    cpp_FunctionDeclarator,
+    #[strum(serialize = "function_definition")]
+    cpp_FunctionDefinition,
+    #[strum(serialize = "goto")]
+    cpp_TS96,
+    #[strum(serialize = "goto_statement")]
+    cpp_GotoStatement,
+    #[strum(serialize = "identifier")]
+    cpp_Identifier,
+    #[strum(serialize = "if")]
+    cpp_TS97,
+    #[strum(serialize = "if_statement")]
+    cpp_IfStatement,
+    #[strum(serialize = "init_declarator")]
+    cpp_InitDeclarator,
+    #[strum(serialize = "initializer_list")]
+    cpp_InitializerList,
+    #[strum(serialize = "initializer_pair")]
+    cpp_InitializerPair,
+    #[strum(serialize = "inline")]
+    cpp_TS98,
+    #[strum(serialize = "labeled_statement")]
+    cpp_LabeledStatement,
+    #[strum(serialize = "lambda_capture_specifier")]
+    cpp_LambdaCaptureSpecifier,
+    #[strum(serialize = "lambda_default_capture")]
+    cpp_LambdaDefaultCapture,
+    #[strum(serialize = "lambda_expression")]
+    cpp_LambdaExpression,
+    #[strum(serialize = "linkage_specification")]
+    cpp_LinkageSpecification,
+    #[strum(serialize = "literal_suffix")]
+    cpp_LiteralSuffix,
+    #[strum(serialize = "long")]
+    cpp_TS99,
+    #[strum(serialize = "ms_based_modifier")]
+    cpp_MsBasedModifier,
+    #[strum(serialize = "ms_call_modifier")]
+    cpp_MsCallModifier,
+    #[strum(serialize = "ms_declspec_modifier")]
+    cpp_MsDeclspecModifier,
+    #[strum(serialize = "ms_pointer_modifier")]
+    cpp_MsPointerModifier,
+    #[strum(serialize = "ms_restrict_modifier")]
+    cpp_MsRestrictModifier,
+    #[strum(serialize = "ms_signed_ptr_modifier")]
+    cpp_MsSignedPtrModifier,
+    #[strum(serialize = "ms_unaligned_ptr_modifier")]
+    cpp_MsUnalignedPtrModifier,
+    #[strum(serialize = "ms_unsigned_ptr_modifier")]
+    cpp_MsUnsignedPtrModifier,
+    #[strum(serialize = "mutable")]
+    cpp_TS100,
+    #[strum(serialize = "namespace")]
+    cpp_TS101,
+    #[strum(serialize = "namespace_definition")]
+    cpp_NamespaceDefinition,
+    #[strum(serialize = "namespace_definition_name")]
+    cpp_NamespaceDefinitionName,
+    #[strum(serialize = "namespace_identifier")]
+    cpp_NamespaceIdentifier,
+    #[strum(serialize = "new")]
+    cpp_TS102,
+    #[strum(serialize = "new_declarator")]
+    cpp_NewDeclarator,
+    #[strum(serialize = "new_expression")]
+    cpp_NewExpression,
+    #[strum(serialize = "noexcept")]
+    cpp_TS103,
+    #[strum(serialize = "null")]
+    cpp_Null,
+    #[strum(serialize = "nullptr")]
+    cpp_Nullptr,
+    #[strum(serialize = "number_literal")]
+    cpp_NumberLiteral,
+    #[strum(serialize = "operator")]
+    cpp_TS104,
+    #[strum(serialize = "operator_cast")]
+    cpp_OperatorCast,
+    #[strum(serialize = "operator_name")]
+    cpp_OperatorName,
+    #[strum(serialize = "optional_parameter_declaration")]
+    cpp_OptionalParameterDeclaration,
+    #[strum(serialize = "optional_type_parameter_declaration")]
+    cpp_OptionalTypeParameterDeclaration,
+    #[strum(serialize = "override")]
+    cpp_TS105,
+    #[strum(serialize = "parameter_declaration")]
+    cpp_ParameterDeclaration,
+    #[strum(serialize = "parameter_list")]
+    cpp_ParameterList,
+    #[strum(serialize = "parameter_pack_expansion")]
+    cpp_ParameterPackExpansion,
+    #[strum(serialize = "parenthesized_declarator")]
+    cpp_ParenthesizedDeclarator,
+    #[strum(serialize = "parenthesized_expression")]
+    cpp_ParenthesizedExpression,
+    #[strum(serialize = "pointer_declarator")]
+    cpp_PointerDeclarator,
+    #[strum(serialize = "pointer_expression")]
+    cpp_PointerExpression,
+    #[strum(serialize = "preproc_arg")]
+    cpp_PreprocArg,
+    #[strum(serialize = "nested_namespace_specifier")]
+    cpp_Nested_Namespace_Specifier,
+    #[strum(serialize = "placeholder_type_specifier")]
+    cpp_PlaceholderTypeSpecifier,
+    #[strum(serialize = "namespace_alias_definition")]
+    cpp_NamespaceAliasDefinition,
+    #[strum(serialize = "raw_string_delimiter")]
+    cpp_RawStringDelimiter,
+    #[strum(serialize = "init_statement")]
+    cpp_InitStatement,
+    #[strum(serialize = "asm")]
+    cpp_Asm,
+    #[strum(serialize = "preproc_call")]
+    cpp_PreprocCall,
+    #[strum(serialize = "preproc_def")]
+    cpp_PreprocDef,
+    #[strum(serialize = "preproc_defined")]
+    cpp_PreprocDefined,
+    #[strum(serialize = "preproc_directive")]
+    cpp_PreprocDirective,
+    #[strum(serialize = "preproc_elif")]
+    cpp_PreprocElif,
+    #[strum(serialize = "preproc_else")]
+    cpp_PreprocElse,
+    #[strum(serialize = "preproc_function_def")]
+    cpp_PreprocFunctionDef,
+    #[strum(serialize = "preproc_if")]
+    cpp_PreprocIf,
+    #[strum(serialize = "preproc_ifdef")]
+    cpp_PreprocIfdef,
+    #[strum(serialize = "preproc_include")]
+    cpp_PreprocInclude,
+    #[strum(serialize = "preproc_params")]
+    cpp_PreprocParams,
+    #[strum(serialize = "primitive_type")]
+    cpp_PrimitiveType,
+    #[strum(serialize = "private")]
+    cpp_TS106,
+    #[strum(serialize = "protected")]
+    cpp_TS107,
+    #[strum(serialize = "public")]
+    cpp_TS108,
+    #[strum(serialize = "qualified_identifier")]
+    cpp_QualifiedIdentifier,
+    #[strum(serialize = "raw_string_literal")]
+    cpp_RawStringLiteral,
+    #[strum(serialize = "ref_qualifier")]
+    cpp_RefQualifier,
+    #[strum(serialize = "reference_declarator")]
+    cpp_ReferenceDeclarator,
+    #[strum(serialize = "register")]
+    cpp_TS109,
+    #[strum(serialize = "restrict")]
+    cpp_TS110,
+    #[strum(serialize = "return")]
+    cpp_TS111,
+    #[strum(serialize = "return_statement")]
+    cpp_ReturnStatement,
+    #[strum(serialize = "short")]
+    cpp_TS112,
+    #[strum(serialize = "signed")]
+    cpp_TS113,
+    #[strum(serialize = "sized_type_specifier")]
+    cpp_SizedTypeSpecifier,
+    #[strum(serialize = "sizeof")]
+    cpp_TS114,
+    #[strum(serialize = "sizeof_expression")]
+    cpp_SizeofExpression,
+    #[strum(serialize = "statement_identifier")]
+    cpp_StatementIdentifier,
+    #[strum(serialize = "static")]
+    cpp_TS115,
+    #[strum(serialize = "static_assert")]
+    cpp_TS116,
+    #[strum(serialize = "static_assert_declaration")]
+    cpp_StaticAssertDeclaration,
+    #[strum(serialize = "storage_class_specifier")]
+    cpp_StorageClassSpecifier,
+    #[strum(serialize = "string_literal")]
+    cpp_StringLiteral,
+    #[strum(serialize = "struct")]
+    cpp_TS117,
+    #[strum(serialize = "struct_specifier")]
+    cpp_StructSpecifier,
+    #[strum(serialize = "structured_binding_declarator")]
+    cpp_StructuredBindingDeclarator,
+    #[strum(serialize = "subscript_designator")]
+    cpp_SubscriptDesignator,
+    #[strum(serialize = "subscript_expression")]
+    cpp_SubscriptExpression,
+    #[strum(serialize = "switch")]
+    cpp_TS118,
+    #[strum(serialize = "switch_statement")]
+    cpp_SwitchStatement,
+    #[strum(serialize = "system_lib_string")]
+    cpp_SystemLibString,
+    #[strum(serialize = "template")]
+    cpp_TS119,
+    #[strum(serialize = "template_argument_list")]
+    cpp_TemplateArgumentList,
+    #[strum(serialize = "template_declaration")]
+    cpp_TemplateDeclaration,
+    #[strum(serialize = "template_function")]
+    cpp_TemplateFunction,
+    #[strum(serialize = "template_instantiation")]
+    cpp_TemplateInstantiation,
+    #[strum(serialize = "template_method")]
+    cpp_TemplateMethod,
+    #[strum(serialize = "template_parameter_list")]
+    cpp_TemplateParameterList,
+    #[strum(serialize = "template_template_parameter_declaration")]
+    cpp_TemplateTemplateParameterDeclaration,
+    #[strum(serialize = "template_type")]
+    cpp_TemplateType,
+    #[strum(serialize = "this")]
+    cpp_This,
+    #[strum(serialize = "thread_local")]
+    cpp_TS120,
+    #[strum(serialize = "throw")]
+    cpp_TS121,
+    #[strum(serialize = "throw_specifier")]
+    cpp_ThrowSpecifier,
+    #[strum(serialize = "throw_statement")]
+    cpp_ThrowStatement,
+    #[strum(serialize = "trailing_return_type")]
+    cpp_TrailingReturnType,
+    #[strum(serialize = "translation_unit")]
+    cpp_TranslationUnit,
+    #[strum(serialize = "true")]
+    cpp_True,
+    #[strum(serialize = "try")]
+    cpp_TS122,
+    #[strum(serialize = "try_statement")]
+    cpp_TryStatement,
+    #[strum(serialize = "type_definition")]
+    cpp_TypeDefinition,
+    #[strum(serialize = "type_descriptor")]
+    cpp_TypeDescriptor,
+    #[strum(serialize = "type_identifier")]
+    cpp_TypeIdentifier,
+    #[strum(serialize = "type_parameter_declaration")]
+    cpp_TypeParameterDeclaration,
+    #[strum(serialize = "type_qualifier")]
+    cpp_TypeQualifier,
+    #[strum(serialize = "typedef")]
+    cpp_TS123,
+    #[strum(serialize = "typename")]
+    cpp_TS124,
+    #[strum(serialize = "u\"")]
+    cpp_TS125,
+    #[strum(serialize = "u'")]
+    cpp_TS126,
+    #[strum(serialize = "u8\"")]
+    cpp_TS127,
+    #[strum(serialize = "u8'")]
+    cpp_TS128,
+    #[strum(serialize = "unary_expression")]
+    cpp_UnaryExpression,
+    #[strum(serialize = "union")]
+    cpp_TS129,
+    #[strum(serialize = "union_specifier")]
+    cpp_UnionSpecifier,
+    #[strum(serialize = "unsigned")]
+    cpp_TS130,
+    #[strum(serialize = "update_expression")]
+    cpp_UpdateExpression,
+    #[strum(serialize = "user_defined_literal")]
+    cpp_UserDefinedLiteral,
+    #[strum(serialize = "using")]
+    cpp_TS131,
+    #[strum(serialize = "using_declaration")]
+    cpp_UsingDeclaration,
+    #[strum(serialize = "variadic_declarator")]
+    cpp_VariadicDeclarator,
+    #[strum(serialize = "variadic_parameter_declaration")]
+    cpp_VariadicParameterDeclaration,
+    #[strum(serialize = "variadic_type_parameter_declaration")]
+    cpp_VariadicTypeParameterDeclaration,
+    #[strum(serialize = "virtual")]
+    cpp_TS132,
+    #[strum(serialize = "virtual_function_specifier")]
+    cpp_VirtualFunctionSpecifier,
+    #[strum(serialize = "virtual_specifier")]
+    cpp_VirtualSpecifier,
+    #[strum(serialize = "volatile")]
+    cpp_TS133,
+    #[strum(serialize = "while")]
+    cpp_TS134,
+    #[strum(serialize = "while_statement")]
+    cpp_WhileStatement,
+    #[strum(serialize = "{")]
+    cpp_TS135,
+    #[strum(serialize = "|")]
+    cpp_TS136,
+    #[strum(serialize = "|=")]
+    cpp_TS137,
+    #[strum(serialize = "||")]
+    cpp_TS138,
+    #[strum(serialize = "}")]
+    cpp_TS139,
+    #[strum(serialize = "~")]
+    cpp_TS140,
+    #[strum(serialize = ".*")]
+    cpp_TS141,
+    #[strum(serialize = "inline_asm_expression")]
+    cpp_InlineAsmExpression,
+    #[strum(serialize = "inline_asm_operand")]
+    cpp_InlineAsmOperand,
 }
 
 impl Type {
@@ -666,11 +1316,13 @@ impl Type {
     }
 
     pub fn is_directory(&self) -> bool {
-        self == &Type::Directory || self == &Type::MavenDirectory
+        self == &Type::Directory || self == &Type::MavenDirectory || self == &Type::MakeDirectory
     }
 
     pub fn is_file(&self) -> bool {
-        self == &Type::Program || self == &Type::xml_SourceFile
+        self == &Type::Program
+            || self == &Type::xml_SourceFile
+            || self == &Type::cpp_TranslationUnit
     }
 
     pub fn is_type_body(&self) -> bool {
@@ -1185,11 +1837,7 @@ pub trait Tree: Typed + Labeled + WithChildren
         self.has_label().then(|| self.get_label())
     }
 }
-pub trait DeCompressedTree<T: PrimInt>: Tree
-// where
-//     <Self::Children as std::ops::Deref>::Target: std::ops::Index<<Self as WithChildren>::ChildIdx, Output = <Self as Stored>::TreeId>
-//         + Sized,
-{
+pub trait DeCompressedTree<T: PrimInt>: Tree {
     fn get_parent(&self) -> T;
     // fn has_parent(&self) -> bool;
 }
@@ -1287,13 +1935,17 @@ pub trait NodeStore<IdN> {
 }
 
 pub trait DecompressedSubtree<'a, T: Stored> {
-    fn decompress<S>(store: &'a S, id: &T::TreeId) -> Self
+    type Out: DecompressedSubtree<'a, T>;
+    fn decompress<S>(store: &'a S, id: &T::TreeId) -> Self::Out
     where
         S: NodeStore<T::TreeId, R<'a> = T>;
 }
 
 pub trait DecompressibleNodeStore<IdN>: NodeStore<IdN> {
-    fn decompress<'a, D: DecompressedSubtree<'a, Self::R<'a>>>(&'a self, id: &IdN) -> (&'a Self, D)
+    fn decompress<'a, D: DecompressedSubtree<'a, Self::R<'a>>>(
+        &'a self,
+        id: &IdN,
+    ) -> (&'a Self, D::Out)
     where
         Self: Sized,
         Self::R<'a>: Stored<TreeId = IdN>,
@@ -1301,7 +1953,7 @@ pub trait DecompressibleNodeStore<IdN>: NodeStore<IdN> {
         (self, D::decompress(self, id))
     }
 
-    fn decompress_pair<'a, D1, D2>(&'a self, id1: &IdN, id2: &IdN) -> (&'a Self, (D1, D2))
+    fn decompress_pair<'a, D1, D2>(&'a self, id1: &IdN, id2: &IdN) -> (&'a Self, (D1::Out, D2::Out))
     where
         Self: Sized,
         Self::R<'a>: Stored<TreeId = IdN>,
@@ -1326,11 +1978,7 @@ impl<IdN, S> DecompressibleNodeStore<IdN> for S where S: NodeStore<IdN> {}
 pub trait NodeStoreMut<T: Stored> {
     fn get_or_insert(&mut self, node: T) -> T::TreeId;
 }
-pub trait NodeStoreExt<T: Tree>
-// where
-//     <T::Children as std::ops::Deref>::Target:
-//         std::ops::Index<<T as WithChildren>::ChildIdx, Output = <T as Stored>::TreeId> + Sized,
-{
+pub trait NodeStoreExt<T: Tree> {
     fn build_then_insert(
         &mut self,
         i: T::TreeId,
@@ -1381,7 +2029,7 @@ pub trait HyperAST<'store> {
     type LS: LabelStore<str, I = Self::Label>;
     fn label_store(&self) -> &Self::LS;
 
-    fn decompress<D: DecompressedSubtree<'store, Self::T>>(
+    fn decompress<D: DecompressedSubtree<'store, Self::T, Out = D>>(
         &'store self,
         id: &Self::IdN,
     ) -> (&'store Self, D)
@@ -1400,11 +2048,17 @@ pub trait HyperAST<'store> {
     ) -> (&'store Self, (D1, D2))
     where
         Self: Sized,
-        D1: DecompressedSubtree<'store, Self::T>,
-        D2: DecompressedSubtree<'store, Self::T>,
+        D1: DecompressedSubtree<'store, Self::T, Out = D1>,
+        D2: DecompressedSubtree<'store, Self::T, Out = D2>,
     {
         {
-            (self, (D1::decompress(self.node_store(), id1), D2::decompress(self.node_store(), id2)))
+            (
+                self,
+                (
+                    D1::decompress(self.node_store(), id1),
+                    D2::decompress(self.node_store(), id2),
+                ),
+            )
         }
     }
 }
@@ -1677,5 +2331,342 @@ impl Type {
             Self::Error => "ERROR",
             x => panic!("{:?}", x),
         }
+    }
+}
+
+impl Type {
+    pub fn parse_cpp(t: &str) -> Self {
+        Self::try_parse_cpp(t).expect(t)
+    }
+    pub fn try_parse_cpp(t: &str) -> Option<Self> {
+        let t = match t {
+            "\n" => Self::cpp_TS0,
+            "!" => Self::cpp_TS1,
+            "!=" => Self::cpp_TS2,
+            "\"" => Self::cpp_TS3,
+            "\"\"" => Self::cpp_TS4,
+            "#define" => Self::cpp_TS5,
+            "#elif" => Self::cpp_TS6,
+            "#else" => Self::cpp_TS7,
+            "#endif" => Self::cpp_TS8,
+            "#if" => Self::cpp_TS9,
+            "#ifdef" => Self::cpp_TS10,
+            "#ifndef" => Self::cpp_TS11,
+            "#include" => Self::cpp_TS12,
+            "%" => Self::cpp_TS13,
+            "%=" => Self::cpp_TS14,
+            "&" => Self::cpp_TS15,
+            "&&" => Self::cpp_TS16,
+            "&=" => Self::cpp_TS17,
+            "'" => Self::cpp_TS18,
+            "(" => Self::cpp_TS19,
+            "()" => Self::cpp_TS20,
+            ")" => Self::cpp_TS21,
+            "*" => Self::cpp_TS22,
+            "*=" => Self::cpp_TS23,
+            "+" => Self::cpp_TS24,
+            "++" => Self::cpp_TS25,
+            "+=" => Self::cpp_TS26,
+            "," => Self::cpp_TS27,
+            "-" => Self::cpp_TS28,
+            "--" => Self::cpp_TS29,
+            "-=" => Self::cpp_TS30,
+            "->" => Self::cpp_TS31,
+            "->*" => Self::cpp_TS32,
+            "." => Self::cpp_TS33,
+            "..." => Self::cpp_TS34,
+            "/" => Self::cpp_TS35,
+            "/=" => Self::cpp_TS36,
+            ":" => Self::cpp_TS37,
+            "::" => Self::cpp_TS38,
+            ";" => Self::cpp_TS39,
+            "<" => Self::cpp_TS40,
+            "<<" => Self::cpp_TS41,
+            "<<=" => Self::cpp_TS42,
+            "<=" => Self::cpp_TS43,
+            "=" => Self::cpp_TS44,
+            "==" => Self::cpp_TS45,
+            ">" => Self::cpp_TS46,
+            ">=" => Self::cpp_TS47,
+            ">>" => Self::cpp_TS48,
+            ">>=" => Self::cpp_TS49,
+            "?" => Self::cpp_TS50,
+            "L\"" => Self::cpp_TS51,
+            "L'" => Self::cpp_TS52,
+            "U\"" => Self::cpp_TS53,
+            "U'" => Self::cpp_TS54,
+            "[" => Self::cpp_TS55,
+            "[[" => Self::cpp_TS56,
+            "[]" => Self::cpp_TS57,
+            "]" => Self::cpp_TS58,
+            "]]" => Self::cpp_TS59,
+            "^" => Self::cpp_TS60,
+            "^=" => Self::cpp_TS61,
+            "_Atomic" => Self::cpp_TS62,
+            "__attribute__" => Self::cpp_TS63,
+            "__based" => Self::cpp_TS64,
+            "__cdecl" => Self::cpp_TS65,
+            "__clrcall" => Self::cpp_TS66,
+            "__declspec" => Self::cpp_TS67,
+            "__fastcall" => Self::cpp_TS68,
+            "__stdcall" => Self::cpp_TS69,
+            "__thiscall" => Self::cpp_TS70,
+            "__unaligned" => Self::cpp_TS71,
+            "__vectorcall" => Self::cpp_TS72,
+            "_abstract_declarator" => Self::cpp_AbstractDeclarator,
+            "_declarator" => Self::cpp_Declarator,
+            "_expression" => Self::cpp_Expression,
+            "_field_declarator" => Self::cpp_FieldDeclarator,
+            "_statement" => Self::cpp_Statement,
+            "_type_declarator" => Self::cpp_TypeDeclarator,
+            "_type_specifier" => Self::cpp_TypeSpecifier,
+            "_unaligned" => Self::cpp_TS73,
+            "abstract_array_declarator" => Self::cpp_AbstractArrayDeclarator,
+            "abstract_function_declarator" => Self::cpp_AbstractFunctionDeclarator,
+            "abstract_parenthesized_declarator" => Self::cpp_AbstractParenthesizedDeclarator,
+            "abstract_pointer_declarator" => Self::cpp_AbstractPointerDeclarator,
+            "abstract_reference_declarator" => Self::cpp_AbstractReferenceDeclarator,
+            "access_specifier" => Self::cpp_AccessSpecifier,
+            "alias_declaration" => Self::cpp_AliasDeclaration,
+            "argument_list" => Self::cpp_ArgumentList,
+            "array_declarator" => Self::cpp_ArrayDeclarator,
+            "assignment_expression" => Self::cpp_AssignmentExpression,
+            "attribute" => Self::cpp_Attribute,
+            "attribute_declaration" => Self::cpp_AttributeDeclaration,
+            "attribute_specifier" => Self::cpp_AttributeSpecifier,
+            "attributed_declarator" => Self::cpp_AttributedDeclarator,
+            "attributed_statement" => Self::cpp_AttributedStatement,
+            "auto" => Self::cpp_Auto,
+            "base_class_clause" => Self::cpp_BaseClassClause,
+            "binary_expression" => Self::cpp_BinaryExpression,
+            "bitfield_clause" => Self::cpp_BitfieldClause,
+            "break" => Self::cpp_TS74,
+            "break_statement" => Self::cpp_BreakStatement,
+            "call_expression" => Self::cpp_CallExpression,
+            "case" => Self::cpp_TS75,
+            "case_statement" => Self::cpp_CaseStatement,
+            "cast_expression" => Self::cpp_CastExpression,
+            "catch" => Self::cpp_TS76,
+            "catch_clause" => Self::cpp_CatchClause,
+            "char_literal" => Self::cpp_CharLiteral,
+            "class" => Self::cpp_TS77,
+            "class_specifier" => Self::cpp_ClassSpecifier,
+            "co_await" => Self::cpp_TS78,
+            "co_await_expression" => Self::cpp_CoAwaitExpression,
+            "co_return" => Self::cpp_TS79,
+            "co_return_statement" => Self::cpp_CoReturnStatement,
+            "co_yield" => Self::cpp_TS80,
+            "co_yield_statement" => Self::cpp_CoYieldStatement,
+            "comma_expression" => Self::cpp_CommaExpression,
+            "comment" => Self::cpp_Comment,
+            "compound_literal_expression" => Self::cpp_CompoundLiteralExpression,
+            "compound_statement" => Self::cpp_CompoundStatement,
+            "concatenated_string" => Self::cpp_ConcatenatedString,
+            "condition_clause" => Self::cpp_ConditionClause,
+            "conditional_expression" => Self::cpp_ConditionalExpression,
+            "const" => Self::cpp_TS81,
+            "constexpr" => Self::cpp_TS82,
+            "continue" => Self::cpp_TS83,
+            "continue_statement" => Self::cpp_ContinueStatement,
+            "declaration" => Self::cpp_Declaration,
+            "declaration_list" => Self::cpp_DeclarationList,
+            "decltype" => Self::cpp_TS84,
+            "default" => Self::cpp_TS85,
+            "default_method_clause" => Self::cpp_DefaultMethodClause,
+            "defined" => Self::cpp_TS86,
+            "delete" => Self::cpp_TS87,
+            "delete_expression" => Self::cpp_DeleteExpression,
+            "delete_method_clause" => Self::cpp_DeleteMethodClause,
+            "dependent_name" => Self::cpp_DependentName,
+            "dependent_type" => Self::cpp_DependentType,
+            "destructor_name" => Self::cpp_DestructorName,
+            "do" => Self::cpp_TS88,
+            "do_statement" => Self::cpp_DoStatement,
+            "else" => Self::cpp_TS89,
+            "enum" => Self::cpp_TS90,
+            "enum_specifier" => Self::cpp_EnumSpecifier,
+            "enumerator" => Self::cpp_Enumerator,
+            "enumerator_list" => Self::cpp_EnumeratorList,
+            "escape_sequence" => Self::cpp_EscapeSequence,
+            "explicit" => Self::cpp_TS91,
+            "explicit_function_specifier" => Self::cpp_ExplicitFunctionSpecifier,
+            "expression_statement" => Self::cpp_ExpressionStatement,
+            "extern" => Self::cpp_TS92,
+            "false" => Self::cpp_False,
+            "field_declaration" => Self::cpp_FieldDeclaration,
+            "field_declaration_list" => Self::cpp_FieldDeclarationList,
+            "field_designator" => Self::cpp_FieldDesignator,
+            "field_expression" => Self::cpp_FieldExpression,
+            "field_identifier" => Self::cpp_FieldIdentifier,
+            "field_initializer" => Self::cpp_FieldInitializer,
+            "field_initializer_list" => Self::cpp_FieldInitializerList,
+            "final" => Self::cpp_TS93,
+            "for" => Self::cpp_TS94,
+            "for_range_loop" => Self::cpp_ForRangeLoop,
+            "for_statement" => Self::cpp_ForStatement,
+            "friend" => Self::cpp_TS95,
+            "friend_declaration" => Self::cpp_FriendDeclaration,
+            "function_declarator" => Self::cpp_FunctionDeclarator,
+            "function_definition" => Self::cpp_FunctionDefinition,
+            "goto" => Self::cpp_TS96,
+            "goto_statement" => Self::cpp_GotoStatement,
+            "identifier" => Self::cpp_Identifier,
+            "if" => Self::cpp_TS97,
+            "if_statement" => Self::cpp_IfStatement,
+            "init_declarator" => Self::cpp_InitDeclarator,
+            "initializer_list" => Self::cpp_InitializerList,
+            "initializer_pair" => Self::cpp_InitializerPair,
+            "inline" => Self::cpp_TS98,
+            "labeled_statement" => Self::cpp_LabeledStatement,
+            "lambda_capture_specifier" => Self::cpp_LambdaCaptureSpecifier,
+            "lambda_default_capture" => Self::cpp_LambdaDefaultCapture,
+            "lambda_expression" => Self::cpp_LambdaExpression,
+            "linkage_specification" => Self::cpp_LinkageSpecification,
+            "literal_suffix" => Self::cpp_LiteralSuffix,
+            "long" => Self::cpp_TS99,
+            "ms_based_modifier" => Self::cpp_MsBasedModifier,
+            "ms_call_modifier" => Self::cpp_MsCallModifier,
+            "ms_declspec_modifier" => Self::cpp_MsDeclspecModifier,
+            "ms_pointer_modifier" => Self::cpp_MsPointerModifier,
+            "ms_restrict_modifier" => Self::cpp_MsRestrictModifier,
+            "ms_signed_ptr_modifier" => Self::cpp_MsSignedPtrModifier,
+            "ms_unaligned_ptr_modifier" => Self::cpp_MsUnalignedPtrModifier,
+            "ms_unsigned_ptr_modifier" => Self::cpp_MsUnsignedPtrModifier,
+            "mutable" => Self::cpp_TS100,
+            "namespace" => Self::cpp_TS101,
+            "namespace_definition" => Self::cpp_NamespaceDefinition,
+            "namespace_definition_name" => Self::cpp_NamespaceDefinitionName,
+            "namespace_identifier" => Self::cpp_NamespaceIdentifier,
+            "new" => Self::cpp_TS102,
+            "new_declarator" => Self::cpp_NewDeclarator,
+            "new_expression" => Self::cpp_NewExpression,
+            "noexcept" => Self::cpp_TS103,
+            "null" => Self::cpp_Null,
+            "nullptr" => Self::cpp_Nullptr,
+            "number_literal" => Self::cpp_NumberLiteral,
+            "operator" => Self::cpp_TS104,
+            "operator_cast" => Self::cpp_OperatorCast,
+            "operator_name" => Self::cpp_OperatorName,
+            "optional_parameter_declaration" => Self::cpp_OptionalParameterDeclaration,
+            "optional_type_parameter_declaration" => Self::cpp_OptionalTypeParameterDeclaration,
+            "override" => Self::cpp_TS105,
+            "parameter_declaration" => Self::cpp_ParameterDeclaration,
+            "parameter_list" => Self::cpp_ParameterList,
+            "parameter_pack_expansion" => Self::cpp_ParameterPackExpansion,
+            "parenthesized_declarator" => Self::cpp_ParenthesizedDeclarator,
+            "parenthesized_expression" => Self::cpp_ParenthesizedExpression,
+            "pointer_declarator" => Self::cpp_PointerDeclarator,
+            "pointer_expression" => Self::cpp_PointerExpression,
+            "preproc_arg" => Self::cpp_PreprocArg,
+            "nested_namespace_specifier" => Self::cpp_Nested_Namespace_Specifier,
+            "placeholder_type_specifier" => Self::cpp_PlaceholderTypeSpecifier,
+            "namespace_alias_definition" => Self::cpp_NamespaceAliasDefinition,
+            "raw_string_delimiter" => Self::cpp_RawStringDelimiter,
+            "preproc_call" => Self::cpp_PreprocCall,
+            "preproc_def" => Self::cpp_PreprocDef,
+            "preproc_defined" => Self::cpp_PreprocDefined,
+            "preproc_directive" => Self::cpp_PreprocDirective,
+            "preproc_elif" => Self::cpp_PreprocElif,
+            "preproc_else" => Self::cpp_PreprocElse,
+            "preproc_function_def" => Self::cpp_PreprocFunctionDef,
+            "preproc_if" => Self::cpp_PreprocIf,
+            "preproc_ifdef" => Self::cpp_PreprocIfdef,
+            "preproc_include" => Self::cpp_PreprocInclude,
+            "preproc_params" => Self::cpp_PreprocParams,
+            "primitive_type" => Self::cpp_PrimitiveType,
+            "private" => Self::cpp_TS106,
+            "protected" => Self::cpp_TS107,
+            "public" => Self::cpp_TS108,
+            "qualified_identifier" => Self::cpp_QualifiedIdentifier,
+            "raw_string_literal" => Self::cpp_RawStringLiteral,
+            "ref_qualifier" => Self::cpp_RefQualifier,
+            "reference_declarator" => Self::cpp_ReferenceDeclarator,
+            "register" => Self::cpp_TS109,
+            "restrict" => Self::cpp_TS110,
+            "return" => Self::cpp_TS111,
+            "return_statement" => Self::cpp_ReturnStatement,
+            "short" => Self::cpp_TS112,
+            "signed" => Self::cpp_TS113,
+            "sized_type_specifier" => Self::cpp_SizedTypeSpecifier,
+            "sizeof" => Self::cpp_TS114,
+            "sizeof_expression" => Self::cpp_SizeofExpression,
+            "statement_identifier" => Self::cpp_StatementIdentifier,
+            "static" => Self::cpp_TS115,
+            "static_assert" => Self::cpp_TS116,
+            "static_assert_declaration" => Self::cpp_StaticAssertDeclaration,
+            "storage_class_specifier" => Self::cpp_StorageClassSpecifier,
+            "string_literal" => Self::cpp_StringLiteral,
+            "struct" => Self::cpp_TS117,
+            "struct_specifier" => Self::cpp_StructSpecifier,
+            "structured_binding_declarator" => Self::cpp_StructuredBindingDeclarator,
+            "subscript_designator" => Self::cpp_SubscriptDesignator,
+            "subscript_expression" => Self::cpp_SubscriptExpression,
+            "switch" => Self::cpp_TS118,
+            "switch_statement" => Self::cpp_SwitchStatement,
+            "system_lib_string" => Self::cpp_SystemLibString,
+            "template" => Self::cpp_TS119,
+            "template_argument_list" => Self::cpp_TemplateArgumentList,
+            "template_declaration" => Self::cpp_TemplateDeclaration,
+            "template_function" => Self::cpp_TemplateFunction,
+            "template_instantiation" => Self::cpp_TemplateInstantiation,
+            "template_method" => Self::cpp_TemplateMethod,
+            "template_parameter_list" => Self::cpp_TemplateParameterList,
+            "template_template_parameter_declaration" => {
+                Self::cpp_TemplateTemplateParameterDeclaration
+            }
+            "template_type" => Self::cpp_TemplateType,
+            "this" => Self::cpp_This,
+            "thread_local" => Self::cpp_TS120,
+            "throw" => Self::cpp_TS121,
+            "throw_specifier" => Self::cpp_ThrowSpecifier,
+            "throw_statement" => Self::cpp_ThrowStatement,
+            "trailing_return_type" => Self::cpp_TrailingReturnType,
+            "translation_unit" => Self::cpp_TranslationUnit,
+            "true" => Self::cpp_True,
+            "try" => Self::cpp_TS122,
+            "try_statement" => Self::cpp_TryStatement,
+            "type_definition" => Self::cpp_TypeDefinition,
+            "type_descriptor" => Self::cpp_TypeDescriptor,
+            "type_identifier" => Self::cpp_TypeIdentifier,
+            "type_parameter_declaration" => Self::cpp_TypeParameterDeclaration,
+            "type_qualifier" => Self::cpp_TypeQualifier,
+            "typedef" => Self::cpp_TS123,
+            "typename" => Self::cpp_TS124,
+            "u\"" => Self::cpp_TS125,
+            "u'" => Self::cpp_TS126,
+            "u8\"" => Self::cpp_TS127,
+            "u8'" => Self::cpp_TS128,
+            "unary_expression" => Self::cpp_UnaryExpression,
+            "union" => Self::cpp_TS129,
+            "union_specifier" => Self::cpp_UnionSpecifier,
+            "unsigned" => Self::cpp_TS130,
+            "update_expression" => Self::cpp_UpdateExpression,
+            "user_defined_literal" => Self::cpp_UserDefinedLiteral,
+            "using" => Self::cpp_TS131,
+            "using_declaration" => Self::cpp_UsingDeclaration,
+            "variadic_declarator" => Self::cpp_VariadicDeclarator,
+            "variadic_parameter_declaration" => Self::cpp_VariadicParameterDeclaration,
+            "variadic_type_parameter_declaration" => Self::cpp_VariadicTypeParameterDeclaration,
+            "virtual" => Self::cpp_TS132,
+            "virtual_function_specifier" => Self::cpp_VirtualFunctionSpecifier,
+            "virtual_specifier" => Self::cpp_VirtualSpecifier,
+            "volatile" => Self::cpp_TS133,
+            "while" => Self::cpp_TS134,
+            "while_statement" => Self::cpp_WhileStatement,
+            "{" => Self::cpp_TS135,
+            "|" => Self::cpp_TS136,
+            "|=" => Self::cpp_TS137,
+            "||" => Self::cpp_TS138,
+            "}" => Self::cpp_TS139,
+            "~" => Self::cpp_TS140,
+            "ERROR" => Self::Error,
+            ".*" => Self::cpp_TS141,
+            "asm" => Self::cpp_Asm,
+            "init_statement" => Self::cpp_InitStatement,
+            "inline_asm_expression" => Self::cpp_InlineAsmExpression,
+            "inline_asm_operand" => Self::cpp_InlineAsmOperand,
+            _ => return None,
+        };
+        Some(t)
     }
 }
