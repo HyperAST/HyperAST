@@ -685,7 +685,6 @@ mod test {
 }
 
 
-pub(crate) use hyper_ast::store::nodes::no_space;
 // pub(crate) fn as_nospaces<'a>(
 //     stores: &'a hyper_ast::store::SimpleStores<TStore>,
 // ) -> SimpleHyperAST<
