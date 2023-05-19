@@ -4,12 +4,12 @@ use hyper_ast::{
     store::{
         defaults::NodeIdentifier,
         labels::DefaultLabelIdentifier,
-        nodes::legion::{HashedNodeRef, NodeStore},
+        nodes::{legion::{HashedNodeRef, NodeStore}},
     },
     types::{self, Children, MySlice, SimpleHyperAST, WithStats},
     utils::memusage_linux,
 };
-use hyper_ast_cvs_git::{git::fetch_github_repository, preprocessed::PreProcessedRepository};
+use hyper_ast_cvs_git::{git::fetch_github_repository, preprocessed::PreProcessedRepository, TStore, no_space::as_nospaces};
 use num_traits::ToPrimitive;
 use hyper_diff::algorithms::{self, ComputeTime};
 use crate::{
@@ -108,8 +108,7 @@ pub fn windowed_commits_compare(
 
             let gt_out_format = "COMPRESSED"; // JSON
             let gt_out = other_tools::gumtree::subprocess(
-                &hyperast.node_store,
-                &hyperast.label_store,
+                &hyperast,
                 src_tr,
                 dst_tr,
                 "gumtree",
@@ -299,7 +298,7 @@ mod test {
 
     use super::*;
 
-    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::{WithChildren, HyperAST}};
+    use hyper_ast::{store::nodes::{legion::HashedNodeRef}, types::{WithChildren, HyperAST}};
     use hyper_diff::{
         decompressed_tree_store::{CompletePostOrder, lazy_post_order::LazyPostOrder},
         matchers::{
@@ -442,8 +441,7 @@ mod test {
 
         let gt_out_format = "JSON";
         let gt_out = other_tools::gumtree::subprocess(
-            &preprocessed.processor.main_stores.node_store,
-            &preprocessed.processor.main_stores.label_store,
+            &preprocessed.processor.main_stores,
             src_tr,
             dst_tr,
             "gumtree-subtree",
@@ -457,8 +455,7 @@ mod test {
         let counts = pp.counts();
         dbg!(gt_timings, counts.mappings, counts.actions);
         let valid = pp._validity_mappings(
-            &preprocessed.processor.main_stores.node_store,
-            &preprocessed.processor.main_stores.label_store,
+            &preprocessed.processor.main_stores,
             &src_arena,
             src_tr,
             &dst_arena,
@@ -661,8 +658,7 @@ mod test {
 
         let gt_out_format = "JSON";
         let gt_out = other_tools::gumtree::subprocess(
-            &preprocessed.processor.main_stores.node_store,
-            &preprocessed.processor.main_stores.label_store,
+            &preprocessed.processor.main_stores,
             src_tr,
             dst_tr,
             "gumtree-subtree",
@@ -676,8 +672,7 @@ mod test {
         let counts = pp.counts();
         dbg!(gt_timings, counts.mappings, counts.actions);
         let valid = pp._validity_mappings(
-            &preprocessed.processor.main_stores.node_store,
-            &preprocessed.processor.main_stores.label_store,
+            &preprocessed.processor.main_stores,
             &src_arena,
             src_tr,
             &dst_arena,
@@ -689,134 +684,132 @@ mod test {
     
 }
 
-pub(crate) fn as_nospaces<'a>(
-    stores: &'a hyper_ast::store::SimpleStores,
-) -> SimpleHyperAST<
-    NoSpaceWrapper<'a>,
-    NoSpaceNodeStoreWrapper<'a>,
-    &'a hyper_ast::store::labels::LabelStore,
-> {
-    let label_store = &stores.label_store;
-    let node_store = &stores.node_store;
-    let node_store = NoSpaceNodeStoreWrapper { s: node_store };
-    SimpleHyperAST {
-        node_store,
-        label_store,
-        _phantom: std::marker::PhantomData,
-    }
-}
 
-pub(crate) struct NoSpaceNodeStoreWrapper<'a> {
-    pub(crate) s: &'a NodeStore,
-}
-
-pub(crate) struct NoSpaceWrapper<'a> {
-    inner: HashedNodeRef<'a>,
-}
-
-impl<'a> types::Typed for NoSpaceWrapper<'a> {
-    type Type = types::Type;
-
-    fn get_type(&self) -> types::Type {
-        self.inner.get_type()
-    }
-}
-
-impl<'a> types::WithStats for NoSpaceWrapper<'a> {
-    fn size(&self) -> usize {
-        self.inner.size_no_spaces()
-    }
-
-    fn height(&self) -> usize {
-        self.inner.height()
-    }
-}
-
-// impl<'a> types::WithSerialization for NoSpaceWrapper<'a> {
-//     /// WARN return the len with spaces ?
-//     fn try_bytes_len(&self) -> Option<usize> {
-//         self.inner.try_bytes_len()
+pub(crate) use hyper_ast::store::nodes::no_space;
+// pub(crate) fn as_nospaces<'a>(
+//     stores: &'a hyper_ast::store::SimpleStores<TStore>,
+// ) -> SimpleHyperAST<
+//     NoSpaceWrapper<'a>,TStore
+//     NoSpaceNodeStoreWrapper<'a>,
+//     &'a hyper_ast::store::labels::LabelStore,
+// > {
+//     let label_store = &stores.label_store;
+//     let node_store = &stores.node_store;
+//     let node_store = NoSpaceNodeStoreWrapper { s: node_store };
+//     SimpleHyperAST {
+//         node_store,
+//         label_store,
+//         _phantom: std::marker::PhantomData,
 //     }
 // }
 
-impl<'a> types::Labeled for NoSpaceWrapper<'a> {
-    type Label = DefaultLabelIdentifier;
+// pub(crate) struct NoSpaceNodeStoreWrapper<'a> {
+//     pub(crate) s: &'a NodeStore,
+// }
 
-    fn get_label(&self) -> &DefaultLabelIdentifier {
-        self.inner.get_label()
-    }
-}
+// pub(crate) struct NoSpaceWrapper<'a> {
+//     inner: HashedNodeRef<'a>,
+// }
 
-impl<'a> types::Node for NoSpaceWrapper<'a> {}
+// impl<'a> types::Typed for NoSpaceWrapper<'a> {
+//     type Type = types::Type;
 
-impl<'a> types::Stored for NoSpaceWrapper<'a> {
-    type TreeId = NodeIdentifier;
-}
-
-// impl<'a> NoSpaceWrapper<'a> {
-//     fn cs(&self) -> Option<&NoSpaceSlice<<Self as types::Stored>::TreeId>> {
-//         self.inner.cs().map(|x|x.into()).ok()
+//     fn get_type(&self) -> types::Type {
+//         self.inner.get_type()
 //     }
 // }
 
-impl<'a> types::WithChildren for NoSpaceWrapper<'a> {
-    type ChildIdx = u16;
-    type Children<'b> = MySlice<Self::TreeId> where Self: 'b;
+// impl<'a> types::WithStats for NoSpaceWrapper<'a> {
+//     fn size(&self) -> usize {
+//         self.inner.size_no_spaces()
+//     }
 
-    fn child_count(&self) -> u16 {
-        self.inner.no_spaces().map_or(0, |x| x.child_count())
-    }
+//     fn height(&self) -> usize {
+//         self.inner.height()
+//     }
+// }
 
-    fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
-        self.inner
-            .no_spaces()
-            .ok()
-            .and_then(|x| x.get(*idx).copied())
-    }
+// // impl<'a> types::WithSerialization for NoSpaceWrapper<'a> {
+// //     /// WARN return the len with spaces ?
+// //     fn try_bytes_len(&self) -> Option<usize> {
+// //         self.inner.try_bytes_len()
+// //     }
+// // }
 
-    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
-        self.inner
-            .no_spaces()
-            .ok()
-            .and_then(|x| x.rev(*idx).copied())
-    }
+// impl<'a> types::Labeled for NoSpaceWrapper<'a> {
+//     type Label = DefaultLabelIdentifier;
 
-    fn children(&self) -> Option<&Self::Children<'_>> {
-        self.inner.no_spaces().ok()
-    }
-}
+//     fn get_label_unchecked(&self) -> &DefaultLabelIdentifier {
+//         self.inner.get_label_unchecked()
+//     }
+// }
 
-impl<'a> types::WithHashs for NoSpaceWrapper<'a> {
-    type HK = hyper_ast::hashed::SyntaxNodeHashsKinds;
-    type HP = hyper_ast::nodes::HashSize;
+// impl<'a> types::Node for NoSpaceWrapper<'a> {}
 
-    fn hash(&self, kind: &Self::HK) -> Self::HP {
-        self.inner.hash(kind)
-    }
-}
+// impl<'a> types::Stored for NoSpaceWrapper<'a> {
+//     type TreeId = NodeIdentifier;
+// }
 
-impl<'a> types::Tree for NoSpaceWrapper<'a> {
-    fn has_children(&self) -> bool {
-        self.inner.has_children()
-    }
+// // impl<'a> NoSpaceWrapper<'a> {
+// //     fn cs(&self) -> Option<&NoSpaceSlice<<Self as types::Stored>::TreeId>> {
+// //         self.inner.cs().map(|x|x.into()).ok()
+// //     }
+// // }
 
-    fn has_label(&self) -> bool {
-        self.inner.has_label()
-    }
+// impl<'a> types::WithChildren for NoSpaceWrapper<'a> {
+//     type ChildIdx = u16;
+//     type Children<'b> = MySlice<Self::TreeId> where Self: 'b;
 
-    fn try_get_label(&self) -> Option<&Self::Label> {
-        self.inner.try_get_label()
-    }
-}
+//     fn child_count(&self) -> u16 {
+//         self.inner.no_spaces().map_or(0, |x| x.child_count())
+//     }
 
-impl<'store> types::NodeStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'store> {
-    type R<'a> = NoSpaceWrapper<'a> where Self: 'a;
-    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
-        NoSpaceWrapper {
-            inner: types::NodeStore::resolve(self.s, id),
-        }
-    }
-}
+//     fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+//         self.inner
+//             .no_spaces()
+//             .ok()
+//             .and_then(|x| x.get(*idx).copied())
+//     }
+
+//     fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+//         self.inner
+//             .no_spaces()
+//             .ok()
+//             .and_then(|x| x.rev(*idx).copied())
+//     }
+
+//     fn children(&self) -> Option<&Self::Children<'_>> {
+//         self.inner.no_spaces().ok()
+//     }
+// }
+
+// impl<'a> types::WithHashs for NoSpaceWrapper<'a> {
+//     type HK = hyper_ast::hashed::SyntaxNodeHashsKinds;
+//     type HP = hyper_ast::nodes::HashSize;
+
+//     fn hash(&self, kind: &Self::HK) -> Self::HP {
+//         self.inner.hash(kind)
+//     }
+// }
+
+// impl<'a> types::Tree for NoSpaceWrapper<'a> {
+//     fn has_children(&self) -> bool {
+//         self.inner.has_children()
+//     }
+
+//     fn has_label(&self) -> bool {
+//         self.inner.has_label()
+//     }
+// }
+
+// impl<'store> types::NodeStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'store> {
+//     type R<'a> = NoSpaceWrapper<'a> where Self: 'a;
+//     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+//         NoSpaceWrapper {
+//             inner: types::NodeStore::resolve(self.s, id),
+//         }
+//     }
+// }
 
 // TODO materialize nodes type in the handle ie. NodeIdentier,
 // to allow filtering spaces in a slice,

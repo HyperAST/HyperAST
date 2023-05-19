@@ -5,13 +5,12 @@ use std::{
     time::Instant,
 };
 
-use hyper_ast::{nodes::TreeJsonSerializer, types};
+use hyper_ast::{nodes::JsonSerializer, types};
 
 use crate::tempfile;
 
-pub fn subprocess<'a, IdN, NS, LS>(
-    node_store: &'a NS,
-    label_store: &'a LS,
+pub fn subprocess<'a, IdN, HAST>(
+    stores: &'a HAST,
     src_root: IdN,
     dst_root: IdN,
     mapping_algo: &str,
@@ -20,17 +19,19 @@ pub fn subprocess<'a, IdN, NS, LS>(
     out_format: &str,
 ) -> Option<PathBuf>
 where
-    IdN: Clone,
-    NS: 'a + types::NodeStore<IdN>,
-    <NS as types::NodeStore<IdN>>::R<'a>:
-        types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I>,
-    LS: types::LabelStore<str>,
+    HAST: types::LabelStore<str>,
+    IdN: types::NodeId<IdN = IdN>,
+    HAST: types::NodeStore<IdN>,
+    HAST: types::LabelStore<str>,
+    HAST: types::TypeStore<HAST::R<'a>>,
+    HAST::R<'a>: types::Labeled<Label = HAST::I>
+        + types::WithChildren<TreeId = IdN>,
 {
     let (src, mut src_f) = tempfile().unwrap();
     dbg!(&src);
     src_f
         .write_all(
-            TreeJsonSerializer::<_, _, _, true>::new(node_store, label_store, src_root.clone())
+            JsonSerializer::<_, _, true>::new(stores, src_root)
                 .to_string()
                 .as_bytes(),
         )
@@ -39,7 +40,7 @@ where
     dbg!(&dst);
     dst_f
         .write_all(
-            TreeJsonSerializer::<_, _, _, true>::new(node_store, label_store, dst_root.clone())
+            JsonSerializer::<_, _, true>::new(stores, dst_root)
                 .to_string()
                 .as_bytes(),
         )

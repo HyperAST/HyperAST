@@ -2,7 +2,7 @@
 use std::fmt::Debug;
 
 use bitvec::order::Lsb0;
-use hyper_ast::types::{Labeled, NodeStore, Stored, WithChildren};
+use hyper_ast::types::{Labeled, NodeStore, Stored, WithChildren, Typed};
 use num_traits::{cast, PrimInt};
 
 use crate::{
@@ -149,7 +149,7 @@ pub struct ScriptGenerator<
 impl<
         'a,
         IdD: PrimInt + Debug,
-        T: 'a + Stored + Labeled + WithChildren,
+        T: 'a + Stored + Typed + Labeled + WithChildren,
         SS: DecompressedTreeStore<'a, T, IdD>
             + DecompressedWithParent<'a, T, IdD>
             + PostOrderIterable<'a, T, IdD>
@@ -281,11 +281,11 @@ where
                 };
                 let w_l = {
                     let c = &self.mid_arena[cast::<_, usize>(w).unwrap()].compressed;
-                    *self.store.resolve(c).get_label()
+                    *self.store.resolve(c).get_label_unchecked()
                 };
                 let x_l = {
                     let c = &self.dst_arena.original(&x);
-                    *self.store.resolve(c).get_label()
+                    *self.store.resolve(c).get_label_unchecked()
                 };
 
                 if w_l != x_l && z != v {

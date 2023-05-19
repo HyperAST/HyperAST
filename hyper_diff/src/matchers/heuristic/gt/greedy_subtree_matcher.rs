@@ -10,7 +10,7 @@ use crate::matchers::{mapping_store::MultiMappingStore, similarity_metrics};
 use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyper_ast::compat::HashMap;
 use hyper_ast::types::{
-    DecompressedSubtree, HashKind, HyperAST, IterableChildren, NodeStore, Tree, WithHashs,
+    DecompressedSubtree, HashKind, HyperAST, IterableChildren, NodeId, NodeStore, Tree, WithHashs,
 };
 use num_traits::{one, zero, PrimInt, ToPrimitive};
 
@@ -37,8 +37,9 @@ impl<
     > GreedySubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>
 where
     S: 'a + NodeStore<T::TreeId, R<'a> = T>,
-    T::TreeId: Clone,
+    T::TreeId: Clone + NodeId<IdN=T::TreeId>,
     T::Label: Clone,
+    T::Type: Copy + Eq + Send + Sync,
     M::Src: 'a + PrimInt + Debug + Hash,
     M::Dst: 'a + PrimInt + Debug + Hash,
 {
@@ -466,7 +467,8 @@ where
     S: 'a + NodeStore<T::TreeId, R<'a> = T>,
     M::Src: PrimInt + Debug,
     M::Dst: PrimInt + Debug,
-    T::TreeId: Clone,
+    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+    T::Type: Copy + Eq + Send + Sync,
 {
     pub(crate) fn add_mapping_recursively(&mut self, src: &M::Src, dst: &M::Dst) {
         self.mappings.link(*src, *dst);
@@ -635,7 +637,7 @@ where
         };
         let src_t = src.get_type();
         let src_l = if src.has_label() {
-            Some(src.get_label())
+            Some(src.get_label_unchecked())
         } else {
             None
         };
@@ -654,7 +656,7 @@ where
             return false;
         }
         if dst.has_label() {
-            if src_l.is_none() || src_l.unwrap() != dst.get_label() {
+            if src_l.is_none() || src_l.unwrap() != dst.get_label_unchecked() {
                 return false;
             }
         };
@@ -703,7 +705,7 @@ impl<
         const MIN_HEIGHT: usize,
     > PriorityTreeList<'a, 'b, D, IdD, T, S, MIN_HEIGHT>
 where
-    T::TreeId: Clone,
+    T::TreeId: Clone + NodeId<IdN=T::TreeId>,
 {
     pub(super) fn new(store: &'a S, arena: &'b D, tree: IdD) -> Self {
         let h = height(store, &arena.original(&tree)); // TODO subtree opti, use metadata

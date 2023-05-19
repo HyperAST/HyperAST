@@ -26,18 +26,18 @@ fn test() {
     //
 }
 
-#[cfg(test)]
-#[allow(unused)]
-mod try_typed_store {
-    use hyper_ast::types::Type;
+// #[cfg(test)]
+// #[allow(unused)]
+// mod try_typed_store {
+//     use hyper_ast::types::Type;
 
-    pub enum Element {
-        Block(Box<Block>),
-        Statement {},
-    }
+//     pub enum Element {
+//         Block(Box<Block>),
+//         Statement {},
+//     }
 
-    pub struct Block {
-        kind: Type,
-        elements: [Element],
-    }
-}
+//     pub struct Block {
+//         kind: Type,
+//         elements: [Element],
+//     }
+// }

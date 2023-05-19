@@ -11,11 +11,12 @@ use hyper_ast::{
         SimpleStores,
     },
     tree_gen::{BasicGlobalData, SubTreeMetrics},
-    types::{LabelStore as _, Type},
+    types::{LabelStore as _},
 };
+use hyper_ast_cvs_git::TStore;
 use hyper_ast_gen_ts_java::{
     impact::partial_analysis::PartialAnalysis,
-    legion_with_refs::{BulkHasher, JavaTreeGen, Local, MDCache, MD},
+    legion_with_refs::{BulkHasher, JavaTreeGen, Local, MDCache, MD}, types::Type,
 };
 
 pub fn iter_dirs(root_buggy: &std::path::Path) -> impl Iterator<Item = std::fs::DirEntry> {
@@ -27,7 +28,7 @@ pub fn iter_dirs(root_buggy: &std::path::Path) -> impl Iterator<Item = std::fs::
 }
 
 pub fn parse_string_pair<'a>(
-    java_tree_gen: &mut JavaTreeGen<'a, '_>,
+    java_tree_gen: &mut JavaTreeGen<'a, '_, TStore>,
     buggy: &'a str,
     fixed: &'a str,
 ) -> (
@@ -42,9 +43,9 @@ pub fn parse_string_pair<'a>(
 fn parse_unchecked<'b: 'stores, 'stores>(
     content: &'b str,
     name: &str,
-    java_tree_gen: &mut JavaTreeGen<'stores, '_>,
+    java_tree_gen: &mut JavaTreeGen<'stores, '_, TStore>,
 ) -> FullNode<BasicGlobalData, Local> {
-    let tree = match JavaTreeGen::tree_sitter_parse(content.as_bytes()) {
+    let tree = match JavaTreeGen::<TStore>::tree_sitter_parse(content.as_bytes()) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -54,9 +55,9 @@ fn parse_unchecked<'b: 'stores, 'stores>(
 fn parse<'b: 'stores, 'stores>(
     content: &'b str,
     name: &str,
-    java_tree_gen: &mut JavaTreeGen<'stores, '_>,
+    java_tree_gen: &mut JavaTreeGen<'stores, '_, TStore>,
 ) -> Result<FullNode<BasicGlobalData, Local>, FullNode<BasicGlobalData, Local>> {
-    match JavaTreeGen::tree_sitter_parse(content.as_bytes()) {
+    match JavaTreeGen::<TStore>::tree_sitter_parse(content.as_bytes()) {
         Ok(tree) => {
             Ok(java_tree_gen.generate_file(name.as_bytes(), content.as_bytes(), tree.walk()))
         }
@@ -67,12 +68,12 @@ fn parse<'b: 'stores, 'stores>(
 }
 
 pub struct JavaPreprocessFileSys {
-    pub main_stores: SimpleStores,
+    pub main_stores: SimpleStores<TStore>,
     pub java_md_cache: MDCache,
 }
 
 impl JavaPreprocessFileSys {
-    fn java_generator(&mut self, text: &[u8]) -> JavaTreeGen {
+    fn java_generator(&mut self, text: &[u8]) -> JavaTreeGen<TStore> {
         let line_break = if text.contains(&b'\r') {
             "\r\n".as_bytes().to_vec()
         } else {
@@ -199,7 +200,7 @@ pub fn parse_filesys(java_gen: &mut JavaPreprocessFileSys, path: &Path) -> Local
                     let name = name.to_string_lossy();
                     {
                         let name: &str = &name;
-                        let tree = match JavaTreeGen::tree_sitter_parse(file.as_bytes()) {
+                        let tree = match JavaTreeGen::<TStore>::tree_sitter_parse(file.as_bytes()) {
                             Ok(t) => t,
                             Err(t) => t,
                         };
@@ -378,7 +379,7 @@ impl<'fs, 'prepro> Processor<JavaAcc> for JavaProcessor<'fs, 'prepro, JavaAcc> {
     }
 }
 
-fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legion_with_refs::Local {
+fn make(acc: JavaAcc, stores: &mut SimpleStores<TStore>) -> hyper_ast_gen_ts_java::legion_with_refs::Local {
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
 

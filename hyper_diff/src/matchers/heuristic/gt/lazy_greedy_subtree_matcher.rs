@@ -9,7 +9,7 @@ use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{mapping_store::MultiMappingStore, similarity_metrics};
 use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyper_ast::compat::HashMap;
-use hyper_ast::types::{HashKind, IterableChildren, NodeStore, Tree, WithHashs, WithStats, DecompressedSubtree, HyperAST};
+use hyper_ast::types::{HashKind, IterableChildren, NodeStore, Tree, WithHashs, WithStats, DecompressedSubtree, HyperAST, NodeId};
 use logging_timer::time;
 use num_traits::{PrimInt, ToPrimitive};
 
@@ -36,8 +36,9 @@ impl<
         const MIN_HEIGHT: usize, // = 2
     > LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>
 where
-    T::TreeId: Clone,
+    T::TreeId: Clone + NodeId<IdN=T::TreeId>,
     T::Label: Clone,
+    T::Type: Copy + Eq + Send + Sync,
     Dsrc::IdD: Debug + Hash + Eq + PrimInt,
     Ddst::IdD: Debug + Hash + Eq + PrimInt,
     M::Src: 'a + PrimInt + Debug + Hash,
@@ -130,8 +131,9 @@ impl<
         const MIN_HEIGHT: usize, // = 2
     > LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>
 where
-    T::TreeId: Clone,
+    T::TreeId: Clone + NodeId<IdN=T::TreeId>,
     T::Label: Clone,
+    T::Type: Copy + Eq + Send + Sync,
     Dsrc::IdD: Debug + Hash + Eq + Copy,
     Ddst::IdD: Debug + Hash + Eq + Copy,
     M::Src: 'a + PrimInt + Debug + Hash,
@@ -424,7 +426,8 @@ impl<
         const MIN_HEIGHT: usize,
     > SubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>
 where
-    T::TreeId: Clone,
+    T::TreeId: Clone + NodeId<IdN=T::TreeId>,
+    T::Type: Copy + Eq + Send + Sync,
     Dsrc::IdD: Clone,
     Ddst::IdD: Clone,
     M::Src: Debug + Copy,
@@ -551,7 +554,7 @@ where
         };
         let src_t = src.get_type();
         let src_l = if src.has_label() {
-            Some(src.get_label())
+            Some(src.get_label_unchecked())
         } else {
             None
         };
@@ -570,7 +573,7 @@ where
             return false;
         }
         if dst.has_label() {
-            if src_l.is_none() || src_l.unwrap() != dst.get_label() {
+            if src_l.is_none() || src_l.unwrap() != dst.get_label_unchecked() {
                 return false;
             }
         };

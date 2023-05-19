@@ -6,10 +6,11 @@ use hyper_ast::{
     position::compute_range,
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
-        SimpleStores,
+        nodes::HashedNodeRef,
     },
     types::{
-        Children, IterableChildren, LabelStore, NodeStore, NodeStoreExt, Tree, Typed, WithChildren,
+        AnyType, Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeId, NodeStore,
+        NodeStoreExt, Tree, Typed, WithChildren, TypeStore,
     },
 };
 
@@ -33,19 +34,27 @@ impl<A> Default for ActionsVec<A> {
     }
 }
 
-pub fn actions_vec_f<P: TreePath<Item = u16>>(
+pub fn actions_vec_f<'store, P: TreePath<Item = u16>, HAST>(
     v: &ActionsVec<SimpleAction<LabelIdentifier, P, NodeIdentifier>>,
-    stores: &SimpleStores,
+    stores: &'store HAST,
     ori: NodeIdentifier,
-) {
+) where
+    HAST:
+        HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
+    HAST::TS: TypeStore<HAST::T, Ty = AnyType>,
+{
     v.iter().for_each(|a| print_action(ori, stores, a));
 }
 
-fn format_action_pos<P: TreePath<Item = u16>>(
+fn format_action_pos<'store, P: TreePath<Item = u16>, HAST>(
     ori: NodeIdentifier,
-    stores: &SimpleStores,
+    stores: &'store HAST,
     a: &SimpleAction<LabelIdentifier, P, NodeIdentifier>,
-) -> String {
+) -> String
+where
+    HAST:
+        HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
+{
     // TODO make whole thing more specific to a path in a tree
     let mut end = None;
     // struct ItLast<T, It: Iterator<Item = T>> {
@@ -100,11 +109,16 @@ fn format_action_pos<P: TreePath<Item = u16>>(
     )
 }
 
-fn print_action<P: TreePath<Item = u16>>(
+fn print_action<'store, P: TreePath<Item = u16>, HAST>(
     ori: NodeIdentifier,
-    stores: &SimpleStores,
+    stores: &'store HAST,
     a: &SimpleAction<LabelIdentifier, P, NodeIdentifier>,
-) {
+) where
+    HAST:
+        HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
+    // <HAST::TS as TypeStore<AnyType>>::Ty: Eq,
+    HAST::TS: TypeStore<HAST::T, Ty = AnyType>,
+{
     match &a.action {
         Act::Delete {} => println!(
             "Del {:?}",
@@ -112,26 +126,27 @@ fn print_action<P: TreePath<Item = u16>>(
         ),
         Act::Update { new } => println!(
             "Upd {:?} {:?}",
-            stores.label_store.resolve(new),
+            stores.label_store().resolve(new),
             compute_range(ori, &mut a.path.ori.iter(), stores)
         ),
         Act::Insert { sub } => println!(
             "Ins {:?} {}",
             {
-                let node = stores.node_store.resolve(*sub);
-                node.get_type()
+                let node = stores.node_store().resolve(sub);
+                // hyper_ast::store::TypeStore::resolve_type(stores.type_store(), &node)
+                stores.type_store().resolve_type(&node).to_string()
             },
             format_action_pos(ori, stores, a)
         ),
         Act::Move { from } => println!(
             "Mov {:?} {:?} {}",
             {
-                let mut node = stores.node_store.resolve(ori);
+                let mut node = stores.node_store().resolve(&ori);
                 for x in from.ori.iter() {
                     let e = node.child(&x).unwrap();
-                    node = stores.node_store.resolve(e);
+                    node = stores.node_store().resolve(&e);
                 }
-                node.get_type()
+                stores.type_store().resolve_type(&node)
             },
             compute_range(ori, &mut from.ori.iter(), stores),
             format_action_pos(ori, stores, a)
@@ -139,14 +154,14 @@ fn print_action<P: TreePath<Item = u16>>(
         Act::MovUpd { from, new } => println!(
             "MovUpd {:?} {:?} {:?} {}",
             {
-                let mut node = stores.node_store.resolve(ori);
+                let mut node = stores.node_store().resolve(&ori);
                 for x in from.ori.iter() {
                     let e = node.child(&x).unwrap();
-                    node = stores.node_store.resolve(e);
+                    node = stores.node_store().resolve(&e);
                 }
-                node.get_type()
+                stores.type_store().resolve_type(&node)
             },
-            stores.label_store.resolve(new),
+            stores.label_store().resolve(new),
             compute_range(ori, &mut from.ori.iter(), stores),
             format_action_pos(ori, stores, a)
         ),
@@ -203,9 +218,9 @@ pub fn apply_actions<T, S, P>(
 ) where
     P: TreePath<Item = T::ChildIdx> + Debug,
     T: hyper_ast::types::Tree,
-    T::Type: Debug + Copy,
+    T::Type: Debug + Copy + Send + Sync,
     T::Label: Debug + Copy,
-    T::TreeId: Debug + Copy,
+    T::TreeId: Debug + Copy + NodeId<IdN = T::TreeId>,
     T::ChildIdx: Debug + Copy,
     S: NodeStoreExt<T> + NodeStore<T::TreeId>, //NodeStoreExt<'a, T, R>,
     for<'d> S::R<'d>: hyper_ast::types::Tree<
@@ -231,9 +246,9 @@ pub fn apply_action<T, S, P>(
 ) where
     P: TreePath<Item = T::ChildIdx> + Debug,
     T: hyper_ast::types::Tree,
-    T::Type: Debug + Copy,
+    T::Type: Debug + Copy + Send + Sync,
     T::Label: Debug + Copy,
-    T::TreeId: Debug + Copy,
+    T::TreeId: Debug + Copy + NodeId<IdN = T::TreeId>,
     T::ChildIdx: Debug + Copy,
     S: NodeStoreExt<T> + NodeStore<T::TreeId>, //NodeStoreExt<'a, T, R>,
     for<'d> S::R<'d>: hyper_ast::types::Tree<

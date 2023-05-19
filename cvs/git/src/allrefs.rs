@@ -1,12 +1,18 @@
 use std::{borrow::Borrow, fmt::Display, io::Write, path::Path, time::Instant};
 
 use hyper_ast::{
-    position::{Position, Scout, SpHandle, StructuralPosition, StructuralPositionStore, TreePath},
+    position::{
+        Position, SpHandle, StructuralPosition, StructuralPositionStore, TreePath, TreePathMut,
+        TypedTreePath,
+    },
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
         nodes::legion::HashedNodeRef,
     },
-    types::{IterableChildren, LabelStore, Labeled, Type, Typed, WithChildren},
+    types::{
+        IterableChildren, LabelStore, Labeled, NodeId, TypeTrait, Typed, TypedNodeStore,
+        WithChildren,
+    },
 };
 use hyper_ast_gen_ts_java::{
     impact::{
@@ -15,15 +21,23 @@ use hyper_ast_gen_ts_java::{
         reference::DisplayRef,
         usage::{self, remake_pkg_ref},
     },
+    types::Type,
     usage::declarations::IterDeclarations,
 };
+use num::ToPrimitive;
 
 use crate::{maven::IterMavenModules, preprocessed::child_by_name_with_idx, SimpleStores};
 
 const REFERENCES_SERIALIZATION_SUMMARY: bool = false;
 
-/// TODO before enabling, make sure the recusive reference search works, it is often needed for members eg. chained calls
+/// TODO before enabling, make sure the recusive reference search works, it is often needed for members eg. chained calls.
+/// By recusive search on for example methods, I mean searching for refs to members with type (including ret type) of containing class of prev member.
 const SEARCH_MEMBERS: bool = false;
+
+type JavaIdN = hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>;
+
+type Scout = hyper_ast::position::Scout<NodeIdentifier, u16>;
+type TypedScout = hyper_ast::position::TypedScout<JavaIdN, u16>;
 
 /// Write in [`out`], the JSON formated reprentation of the reference relations at [`root`] in [`prepro`].
 pub fn write_referencial_relations<W: Write>(
@@ -113,7 +127,8 @@ fn find_declaration_references(
 ) -> Option<(SearchKinds, Vec<SpHandle>)> {
     let b = stores
         .node_store
-        .resolve(declaration.node().unwrap().to_owned());
+        .try_resolve_typed::<JavaIdN>(declaration.node().unwrap())?
+        .0;
     let t = b.get_type();
     let of = other_folders
         .iter()
@@ -124,16 +139,34 @@ fn find_declaration_references(
         declaration.make_position(stores).file(),
         of,
     );
-    let p_in_of: Vec<Scout> = p_in_of.into_iter().map(|x| (x, 0).into()).collect();
-    let other_folders: Vec<Scout> = other_folders.into_iter().map(|x| (x, 0).into()).collect();
+    let p_in_of: Vec<TypedScout> = p_in_of
+        .into_iter()
+        .map(|x| {
+            structural_positions.type_scout(&mut Into::<Scout>::into((x.clone(), 0)), unsafe {
+                JavaIdN::from_ref_id(x.node().unwrap())
+            })
+        })
+        .collect();
+    let other_folders: Vec<TypedScout> = other_folders
+        .into_iter()
+        .map(|x| {
+            structural_positions.type_scout(&mut Into::<Scout>::into((x.clone(), 0)), unsafe {
+                JavaIdN::from_ref_id(x.node().unwrap())
+            })
+        })
+        .collect();
 
+    let decl = structural_positions
+        .type_scout(&mut Into::<Scout>::into((declaration.clone(), 0)), unsafe {
+            JavaIdN::from_ref_id(declaration.node().unwrap())
+        });
     if t == Type::ClassDeclaration
         || t == Type::InterfaceDeclaration
         || t == Type::AnnotationTypeDeclaration
     {
         let rs = RefsFinder::new(stores, structural_positions)
             .find_type_declaration_references_unchecked(
-                (declaration.clone(), 0).into(),
+                decl,
                 root_folder.node().unwrap(),
                 &other_folders,
                 &p_in_of,
@@ -144,14 +177,13 @@ fn find_declaration_references(
     {
         let rs = RefsFinder::new(stores, structural_positions)
             .find_field_declaration_references_unchecked(
-                (declaration.clone(), 0).into(),
+                decl,
                 root_folder.node().unwrap(),
                 &p_in_of,
             );
         Some((SearchKinds::TypeDecl, rs))
     } else if t == Type::ClassBody {
-        let rs = RefsFinder::new(stores, structural_positions)
-            .find_this_unchecked((declaration.clone(), 0).into());
+        let rs = RefsFinder::new(stores, structural_positions).find_this_unchecked(decl);
         Some((SearchKinds::LocalDecl, rs))
     } else if t == Type::LocalVariableDeclaration
         || t == Type::Resource
@@ -163,7 +195,7 @@ fn find_declaration_references(
         || t == Type::TypeParameter
     {
         let rs = RefsFinder::new(stores, structural_positions)
-            .find_localvar_declaration_references_unchecked((declaration.clone(), 0).into());
+            .find_localvar_declaration_references_unchecked(decl);
         Some((SearchKinds::LocalDecl, rs))
     } else {
         None
@@ -260,6 +292,9 @@ fn make_decl_iter(
     of: Vec<StructuralPosition>,
 ) -> impl Iterator<Item = ExtendedDeclaration> + '_ {
     let n = *f.node().unwrap();
+    // let n = unsafe {
+    //     JavaIdN::from_id(n)
+    // };
     IterDeclarations::new(stores, f.clone(), n).map(move |x| (x, f.clone(), of.clone()))
 }
 
@@ -303,6 +338,12 @@ struct Cursor {
     curr: Option<NodeIdentifier>,
 }
 
+struct TypedCursor {
+    scout: TypedScout,
+    prev: Option<JavaIdN>,
+    curr: Option<JavaIdN>,
+}
+
 #[derive(Debug)]
 enum SearchStopEvent {
     NoMore,
@@ -323,13 +364,13 @@ impl<'a> RefsFinder<'a> {
 
     fn find_type_declaration_references_unchecked(
         self,
-        decl: Scout,
+        decl: TypedScout,
         limit: &NodeIdentifier,
-        other_folders: &[Scout],
-        mirror_packages: &[Scout],
+        other_folders: &[TypedScout],
+        mirror_packages: &[TypedScout],
     ) -> Vec<SpHandle> {
         let mut r = vec![];
-        // let p = decl.make_position(&self.structural_positions, &self.stores);
+        // let p = decl.make_position(&self.structural_positions, self.stores);
         let res = self.find_type_declaration_references(
             &mut r,
             &decl,
@@ -347,20 +388,20 @@ impl<'a> RefsFinder<'a> {
     fn find_type_declaration_references(
         mut self,
         r: &mut Vec<SpHandle>,
-        decl: &Scout,
+        decl: &TypedScout,
         limit: &NodeIdentifier,
-        other_folders: &[Scout],
-        mirror_packages: &[Scout],
+        other_folders: &[TypedScout],
+        mirror_packages: &[TypedScout],
     ) -> Result<(), SearchStopEvent> {
         let mut scout = decl.clone();
-        self.structural_positions.push(&mut scout); // memory footprint ?
+        self.structural_positions.push_typed(&mut scout); // memory footprint ?
         let qual_ref = self.init_type_decl(r, &decl);
 
         let prev_offset = scout.offset_always(&self.structural_positions) - 1;
-        let prev = Some(scout.node_always(&self.structural_positions));
-        let curr = scout.up(&self.structural_positions);
+        let prev = Some(scout.node_always(&self.structural_positions).unwrap());
+        let curr = scout.up(&self.structural_positions).map(|x| x.unwrap());
 
-        let mut cursor = Cursor { scout, prev, curr };
+        let mut cursor = TypedCursor { scout, prev, curr };
 
         log::trace!("go_through_type_declarations");
         let qual_ref = self.go_through_type_declarations(r, prev_offset, &mut cursor, qual_ref)?;
@@ -368,10 +409,10 @@ impl<'a> RefsFinder<'a> {
         let (package_ref, fq_decl_ref) = self.go_through_program(r, &mut cursor, qual_ref)?;
         {
             let mut scout = decl.clone();
-            let prev = Some(scout.node_always(&self.structural_positions));
-            let curr = scout.up(&self.structural_positions);
+            let prev = Some(scout.node_always(&self.structural_positions).unwrap());
+            let curr = scout.up(&self.structural_positions).map(|x| x.unwrap());
 
-            let mut cursor = Cursor { scout, prev, curr };
+            let mut cursor = TypedCursor { scout, prev, curr };
             log::trace!("go_through_type_declarations_with_fully_qual_ref");
             self.go_through_type_declarations_with_fully_qual_ref(r, &mut cursor, fq_decl_ref)
                 .unwrap_or(());
@@ -386,7 +427,7 @@ impl<'a> RefsFinder<'a> {
         Ok(())
     }
 
-    fn find_this_unchecked(mut self, decl: Scout) -> Vec<SpHandle> {
+    fn find_this_unchecked(mut self, decl: TypedScout) -> Vec<SpHandle> {
         let mut r = vec![];
         self.find_this(&mut r, &decl);
         r
@@ -394,12 +435,12 @@ impl<'a> RefsFinder<'a> {
 
     fn find_field_declaration_references_unchecked(
         self,
-        decl: Scout,
+        decl: TypedScout,
         limit: &NodeIdentifier,
-        mirror_packages: &[Scout],
+        mirror_packages: &[TypedScout],
     ) -> Vec<SpHandle> {
         let mut r = vec![];
-        let p = decl.make_position(&self.structural_positions, &self.stores);
+        let p = decl.make_position(&self.structural_positions, self.stores);
         let res = self.find_field_declaration_references(&mut r, &decl, limit, mirror_packages);
         if let Err(err) = res {
             log::error!("search of {} ended with {:?}", p, err);
@@ -410,18 +451,18 @@ impl<'a> RefsFinder<'a> {
     fn find_field_declaration_references(
         mut self,
         r: &mut Vec<SpHandle>,
-        decl: &Scout,
+        decl: &TypedScout,
         limit: &NodeIdentifier,
-        mirror_packages: &[Scout],
+        mirror_packages: &[TypedScout],
     ) -> Result<(), SearchStopEvent> {
         let mut scout = decl.clone();
-        self.structural_positions.push(&mut scout); // memory footprint ?
+        self.structural_positions.push_typed(&mut scout); // memory footprint ?
         let qual_ref = self.init_field_decl(r, &decl);
 
-        let prev = Some(scout.node_always(&self.structural_positions));
-        let curr = scout.up(&self.structural_positions);
+        let prev = Some(scout.node_always(&self.structural_positions).unwrap());
+        let curr = scout.up(&self.structural_positions).map(|x| x.unwrap());
 
-        let mut cursor = Cursor { scout, prev, curr };
+        let mut cursor = TypedCursor { scout, prev, curr };
 
         let qual_ref = self.go_through_type_declarations_for_field(r, &mut cursor, qual_ref)?;
         // TODO make sure it does not need special handling
@@ -432,21 +473,21 @@ impl<'a> RefsFinder<'a> {
         Ok(())
     }
 
-    fn init_field_decl<'b>(&mut self, _r: &mut Vec<SpHandle>, decl: &Scout) -> RefPtr {
+    fn init_field_decl<'b>(&mut self, _r: &mut Vec<SpHandle>, decl: &TypedScout) -> RefPtr {
         let b = self
             .stores
             .node_store
-            .resolve(decl.node_always(&self.structural_positions));
+            .resolve_typed(&decl.node_always(&self.structural_positions).unwrap());
         let t = b.get_type();
         log::info!(
             "now search for {:?} at {:?}",
             &t,
-            decl.make_position(&self.structural_positions, &self.stores)
+            decl.make_position(&self.structural_positions, self.stores)
         );
         let name = {
             let mut i = None;
             for xx in b.children().unwrap().iter_children() {
-                let bb = self.stores.node_store.resolve(*xx);
+                let bb = self.stores.node_store.try_resolve_typed(xx).unwrap().0;
                 if bb.get_type() == Type::VariableDeclarator {
                     i = self.extract_identifier(&bb);
                     break;
@@ -462,9 +503,9 @@ impl<'a> RefsFinder<'a> {
         self.ana.solver.intern(RefsEnum::ScopedIdentifier(mm, name))
     }
 
-    fn find_localvar_declaration_references_unchecked(self, decl: Scout) -> Vec<SpHandle> {
+    fn find_localvar_declaration_references_unchecked(self, decl: TypedScout) -> Vec<SpHandle> {
         let mut r = vec![];
-        let p = decl.make_position(&self.structural_positions, &self.stores);
+        let p = decl.make_position(&self.structural_positions, self.stores);
         let res = self.find_localvar_declaration_references(&mut r, &decl);
         if let Err(err) = res {
             log::error!("search of {} ended with {:?}", p, err);
@@ -475,39 +516,39 @@ impl<'a> RefsFinder<'a> {
     fn find_localvar_declaration_references(
         mut self,
         r: &mut Vec<SpHandle>,
-        decl: &Scout,
+        decl: &TypedScout,
     ) -> Result<(), SearchStopEvent> {
         let mut scout = decl.clone();
-        self.structural_positions.push(&mut scout); // memory footprint ?
+        self.structural_positions.push_typed(&mut scout); // memory footprint ?
         let qual_ref = self.init_localvar_decl(r, &decl);
 
-        let prev = Some(scout.node_always(&self.structural_positions));
-        let curr = scout.up(&self.structural_positions);
+        let prev = Some(scout.node_always(&self.structural_positions).unwrap());
+        let curr = scout.up(&self.structural_positions).map(|x| x.unwrap());
 
-        let mut cursor = Cursor { scout, prev, curr };
+        let mut cursor = TypedCursor { scout, prev, curr };
 
         self.go_through_block(r, &mut cursor, qual_ref)
     }
 
-    fn init_localvar_decl<'b>(&mut self, _r: &mut Vec<SpHandle>, decl: &Scout) -> RefPtr {
+    fn init_localvar_decl<'b>(&mut self, _r: &mut Vec<SpHandle>, decl: &TypedScout) -> RefPtr {
         let b = self
             .stores
             .node_store
-            .resolve(decl.node_always(&self.structural_positions));
+            .resolve_typed(&decl.node_always(&self.structural_positions).unwrap());
         let t = b.get_type();
         log::info!(
             "now search for {:?} at {:?}",
             &t,
-            decl.make_position(&self.structural_positions, &self.stores)
+            decl.make_position(&self.structural_positions, self.stores)
         );
         let name = {
             let mut i = None;
 
             if t == Type::Identifier {
-                i = Some(*b.get_label());
+                i = Some(*b.get_label_unchecked());
             } else if t == Type::LocalVariableDeclaration || t == Type::SpreadParameter {
                 for xx in b.children().unwrap().iter_children() {
-                    let bb = self.stores.node_store.resolve(*xx);
+                    let bb = self.stores.node_store.try_resolve_typed(xx).unwrap().0;
                     if bb.get_type() == Type::VariableDeclarator {
                         i = self.extract_identifier(&bb);
                         break;
@@ -529,22 +570,23 @@ impl<'a> RefsFinder<'a> {
     fn go_through_block(
         &mut self,
         r: &mut Vec<SpHandle>,
-        cursor: &mut Cursor,
+        cursor: &mut TypedCursor,
         qual_ref: RefPtr,
     ) -> Result<(), SearchStopEvent> {
         let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
         let xx = cursor.curr.ok_or(SearchStopEvent::NoMore)?;
-        let bb = self.stores.node_store.resolve(xx);
+        let bb = self.stores.node_store.resolve_typed(&xx);
         let t = bb.get_type();
 
         if t == Type::FormalParameters || t == Type::InferredParameters {
-            self.up(cursor);
+            self.up_typed(cursor);
             return self.go_through_block(r, cursor, qual_ref);
         }
 
         for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
-            cursor.scout.goto(*xx, i);
-            if Some(*xx) != cursor.prev {
+            let xx = self.stores.node_store.try_typed(xx).unwrap();
+            cursor.scout.goto_typed(xx, num::cast(i).unwrap());
+            if Some(xx) != cursor.prev {
                 log::debug!(
                     "search {} in block children {:?} {:?}",
                     DisplayRef::from((
@@ -554,14 +596,14 @@ impl<'a> RefsFinder<'a> {
                     cursor.curr,
                     cursor
                         .scout
-                        .make_position(&self.structural_positions, &self.stores)
+                        .make_position(&self.structural_positions, self.stores)
                 );
                 r.extend({
                     let p = &mm;
                     let i = &qual_ref;
                     let s = &cursor.scout;
                     usage::RefsFinder::new(
-                        &self.stores,
+                        self.stores,
                         &mut self.ana,
                         &mut self.structural_positions,
                     )
@@ -575,42 +617,43 @@ impl<'a> RefsFinder<'a> {
             || t == Type::EnhancedForStatement
             || t == Type::TypeParameters
         {
-            self.up(cursor);
+            self.up_typed(cursor);
             self.go_through_block(r, cursor, qual_ref)?;
         }
 
         Ok(())
     }
 
-    fn find_this<'b>(&mut self, r: &mut Vec<SpHandle>, decl: &Scout) {
+    fn find_this<'b>(&mut self, r: &mut Vec<SpHandle>, decl: &TypedScout) {
         let b = self
             .stores
             .node_store
-            .resolve(decl.node_always(&self.structural_positions));
+            .resolve_typed(&decl.node_always(&self.structural_positions).unwrap());
         let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
         let mut scout = decl.clone();
         for (i, xx) in b.children().unwrap().iter_children().enumerate() {
-            scout.goto(*xx, i);
+            let xx = self.stores.node_store.try_typed(xx).unwrap();
+            let mut s = scout.clone();
+            s.goto_typed(xx, num::cast(i).unwrap());
 
             log::debug!("try search this");
             r.extend(
-                usage::RefsFinder::new(&self.stores, &mut self.ana, &mut self.structural_positions)
-                    .find_all_is_this(mm, scout.clone()),
+                usage::RefsFinder::new(self.stores, &mut self.ana, &mut self.structural_positions)
+                    .find_all_is_this(mm, s),
             );
-            scout.up(&self.structural_positions);
         }
     }
 
-    fn init_type_decl<'b>(&mut self, r: &mut Vec<SpHandle>, decl: &Scout) -> RefPtr {
+    fn init_type_decl<'b>(&mut self, r: &mut Vec<SpHandle>, decl: &TypedScout) -> RefPtr {
         let b = self
             .stores
             .node_store
-            .resolve(decl.node_always(&self.structural_positions));
+            .resolve_typed(&decl.node_always(&self.structural_positions).unwrap());
         let t = b.get_type();
         log::info!(
             "now search for {:?} at {:?}",
             &t,
-            decl.make_position(&self.structural_positions, &self.stores)
+            decl.make_position(&self.structural_positions, self.stores)
         );
         let name = {
             let i = self.extract_identifier(&b).unwrap();
@@ -625,13 +668,14 @@ impl<'a> RefsFinder<'a> {
 
         let mut scout = decl.clone();
         for (i, xx) in b.children().unwrap().iter_children().enumerate() {
-            scout.goto(*xx, i);
+            let xx = self.stores.node_store.try_typed(xx).unwrap();
+            scout.goto_typed(xx, num::cast(i).unwrap());
 
             log::debug!("try search this");
             // r.extend(self.search(&mm, &thiss, &decl)); for now use something more explicit
             r.extend(
-                usage::RefsFinder::new(&self.stores, &mut self.ana, &mut self.structural_positions)
-                    .find_all_is_this(mm, scout.clone()),
+                usage::RefsFinder::new(self.stores, &mut self.ana, &mut self.structural_positions)
+                    .find_all_is_this(mm, scout.to_owned()),
             );
 
             log::debug!(
@@ -661,17 +705,25 @@ impl<'a> RefsFinder<'a> {
         cursor.curr = cursor.scout.up(&self.structural_positions);
     }
 
+    fn up_typed(&self, mut cursor: &mut TypedCursor) {
+        cursor.prev = cursor.curr.clone();
+        cursor.curr = cursor
+            .scout
+            .up(&self.structural_positions)
+            .map(|x| x.unwrap());
+    }
+
     fn go_through_type_declarations_with_fully_qual_ref(
         &mut self,
         r: &mut Vec<SpHandle>,
-        cursor: &mut Cursor,
+        cursor: &mut TypedCursor,
         fq_decl_ref: RefPtr,
     ) -> Result<(), SearchStopEvent> {
         let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
         // go through classes if inner, stops at blocks and object creation expr
         loop {
             let x = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-            let b = self.stores.node_store.resolve(x);
+            let b = self.stores.node_store.resolve_typed(&x);
             let t = b.get_type();
             if t.is_type_body() {
                 log::debug!(
@@ -682,8 +734,9 @@ impl<'a> RefsFinder<'a> {
                     ))
                 );
                 for (i, xx) in b.children().unwrap().iter_children().enumerate() {
-                    cursor.scout.goto(*xx, i);
-                    if Some(*xx) != cursor.prev.clone() {
+                    let xx = self.stores.node_store.try_typed(xx).unwrap();
+                    cursor.scout.goto_typed(xx, num::cast(i).unwrap());
+                    if Some(xx) != cursor.prev.clone() {
                         // search ?.A or ?.B.A or ...
                         r.extend(self.search(&mm, &fq_decl_ref, &cursor.scout));
                     }
@@ -691,16 +744,17 @@ impl<'a> RefsFinder<'a> {
                 }
                 // TODO do things to find type of field at the same level than type decl
                 // should loop through siblings
-                self.up(cursor);
+                self.up_typed(cursor);
                 let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-                let bb = self.stores.node_store.resolve(xx);
+                let bb = self.stores.node_store.resolve_typed(&xx);
                 let tt = bb.get_type();
                 if tt == Type::ObjectCreationExpression {
                     return Err(SearchStopEvent::Blocked);
                 } else if tt == Type::EnumBody {
                     for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
-                        cursor.scout.goto(*xx, i);
-                        if Some(*xx) != cursor.prev.clone() {
+                        let xx = self.stores.node_store.try_typed(xx).unwrap();
+                        cursor.scout.goto_typed(xx, num::cast(i).unwrap());
+                        if Some(xx) != cursor.prev.clone() {
                             // search ?.A or ?.B.A or ...
                             r.extend(self.search(&mm, &fq_decl_ref, &cursor.scout));
                         }
@@ -708,9 +762,9 @@ impl<'a> RefsFinder<'a> {
                     }
                     // TODO do things to find type of field at the same level than type decl
                     // should loop through siblings
-                    self.up(cursor);
+                    self.up_typed(cursor);
                     let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-                    let bb = self.stores.node_store.resolve(xx);
+                    let bb = self.stores.node_store.resolve_typed(&xx);
                     let tt = bb.get_type();
 
                     if !tt.is_type_declaration() {
@@ -730,7 +784,7 @@ impl<'a> RefsFinder<'a> {
                 r.extend(self.search(&mm, &fq_decl_ref, &cursor.scout));
                 // TODO do things to find type of field at the same level than type decl
                 // should loop through members searching for parent qualified
-                self.up(cursor);
+                self.up_typed(cursor);
             } else if t == Type::Program {
                 return Ok(());
             } else if t == Type::ObjectCreationExpression {
@@ -745,15 +799,15 @@ impl<'a> RefsFinder<'a> {
     fn go_through_type_declarations(
         &mut self,
         r: &mut Vec<SpHandle>,
-        prev_offset: usize,
-        cursor: &mut Cursor,
+        prev_offset: u16,
+        cursor: &mut TypedCursor,
         mut qual_ref: RefPtr,
     ) -> Result<RefPtr, SearchStopEvent> {
         let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
         // go through classes if inner, stops at blocks and object creation expr
         loop {
             let x = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-            let b = self.stores.node_store.resolve(x);
+            let b = self.stores.node_store.resolve_typed(&x);
             let t = b.get_type();
             if t.is_type_body() {
                 log::debug!(
@@ -764,8 +818,9 @@ impl<'a> RefsFinder<'a> {
                     ))
                 );
                 for (i, xx) in b.children().unwrap().iter_children().enumerate() {
-                    cursor.scout.goto(*xx, i);
-                    if Some(*xx) != cursor.prev.clone() {
+                    let xx = self.stores.node_store.try_typed(xx).unwrap();
+                    cursor.scout.goto_typed(xx, num::cast(i).unwrap());
+                    if Some(xx) != cursor.prev.clone() {
                         // search ?.A or ?.B.A or ...
                         log::trace!("go_through_type_declarations s1");
                         r.extend(self.search(&mm, &qual_ref, &cursor.scout));
@@ -775,17 +830,18 @@ impl<'a> RefsFinder<'a> {
                 // TODO do things to find type of field at the same level than type decl
                 // should loop through siblings
                 // self.structural_positions.check_with(&self.stores, &cursor.scout).expect("before");
-                self.up(cursor);
+                self.up_typed(cursor);
                 // self.structural_positions.check_with(&self.stores, &cursor.scout).expect("after");
                 let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-                let bb = self.stores.node_store.resolve(xx);
+                let bb = self.stores.node_store.resolve_typed(&xx);
                 let tt = bb.get_type();
                 let (_, bb, _) = if tt == Type::ObjectCreationExpression {
                     return Err(SearchStopEvent::Blocked);
                 } else if tt == Type::EnumBody {
                     for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
-                        cursor.scout.goto(*xx, i);
-                        if Some(*xx) != cursor.prev.clone() {
+                        let xx = self.stores.node_store.try_typed(xx).unwrap();
+                        cursor.scout.goto_typed(xx, num::cast(i).unwrap());
+                        if Some(xx) != cursor.prev.clone() {
                             // search ?.A or ?.B.A or ...
                             log::trace!("go_through_type_declarations s2");
                             r.extend(self.search(&mm, &qual_ref, &cursor.scout));
@@ -794,9 +850,9 @@ impl<'a> RefsFinder<'a> {
                     }
                     // TODO do things to find type of field at the same level than type decl
                     // should loop through siblings
-                    self.up(cursor);
+                    self.up_typed(cursor);
                     let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-                    let bb = self.stores.node_store.resolve(xx);
+                    let bb = self.stores.node_store.resolve_typed(&xx);
                     let tt = bb.get_type();
 
                     if !tt.is_type_declaration() {
@@ -832,7 +888,7 @@ impl<'a> RefsFinder<'a> {
                 r.extend(self.search(&mm, &qual_ref, &cursor.scout));
                 // TODO do things to find type of field at the same level than type decl
                 // should loop through members searching for parent qualified
-                self.up(cursor);
+                self.up_typed(cursor);
             } else if t == Type::Program {
                 return cursor
                     .curr
@@ -846,10 +902,11 @@ impl<'a> RefsFinder<'a> {
                     .children()
                     .unwrap()
                     .iter_children()
-                    .skip(prev_offset)
+                    .skip(prev_offset.to_usize().unwrap())
                     .enumerate()
                 {
-                    scout.goto(*xx, i);
+                    let xx = self.stores.node_store.try_typed(xx).unwrap();
+                    scout.goto_typed(xx, num::cast(i).unwrap());
                     log::trace!("go_through_type_declarations s4");
                     r.extend(self.search(&mm, &qual_ref, &cursor.scout));
                     scout.up(&self.structural_positions);
@@ -861,10 +918,11 @@ impl<'a> RefsFinder<'a> {
                     .children()
                     .unwrap()
                     .iter_children()
-                    .skip(prev_offset)
+                    .skip(prev_offset.to_usize().unwrap())
                     .enumerate()
                 {
-                    scout.goto(*xx, i);
+                    let xx = self.stores.node_store.try_typed(xx).unwrap();
+                    scout.goto_typed(xx, num::cast(i).unwrap());
                     log::trace!("go_through_type_declarations s5");
                     r.extend(self.search(&mm, &qual_ref, &cursor.scout));
                     scout.up(&self.structural_positions);
@@ -878,7 +936,7 @@ impl<'a> RefsFinder<'a> {
     fn go_through_type_declarations_for_field(
         &mut self,
         r: &mut Vec<SpHandle>,
-        cursor: &mut Cursor,
+        cursor: &mut TypedCursor,
         mut qual_ref: RefPtr,
     ) -> Result<RefPtr, SearchStopEvent> {
         let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
@@ -891,7 +949,7 @@ impl<'a> RefsFinder<'a> {
         // go through classes if inner, stops at blocks and object creation expr
         loop {
             let x = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-            let b = self.stores.node_store.resolve(x);
+            let b = self.stores.node_store.resolve_typed(&x);
             let t = b.get_type();
             if t.is_type_body() {
                 log::debug!(
@@ -902,8 +960,9 @@ impl<'a> RefsFinder<'a> {
                     ))
                 );
                 for (i, xx) in b.children().unwrap().iter_children().enumerate() {
-                    cursor.scout.goto(*xx, i);
-                    if Some(*xx) != cursor.prev.clone() {
+                    let xx = self.stores.node_store.try_typed(xx).unwrap();
+                    cursor.scout.goto_typed(xx, num::cast(i).unwrap());
+                    if Some(xx) != cursor.prev.clone() {
                         // search ?.A or ?.B.A or ...
                         r.extend(self.search(&mm, &qual_ref, &cursor.scout));
                         r.extend(self.search(&mm, &thiss_qual_ref, &cursor.scout));
@@ -912,14 +971,14 @@ impl<'a> RefsFinder<'a> {
                 }
                 // TODO do things to find type of field at the same level than type decl
                 // should loop through siblings
-                self.up(cursor);
+                self.up_typed(cursor);
                 let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-                let bb = self.stores.node_store.resolve(xx);
+                let bb = self.stores.node_store.resolve_typed(&xx);
                 let tt = bb.get_type();
                 let (bb, tt) = if tt == Type::EnumBody {
-                    self.up(cursor);
+                    self.up_typed(cursor);
                     let xx = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-                    let bb = self.stores.node_store.resolve(xx);
+                    let bb = self.stores.node_store.resolve_typed(&xx);
                     let tt = bb.get_type();
                     (bb, tt)
                 } else {
@@ -953,7 +1012,7 @@ impl<'a> RefsFinder<'a> {
                 r.extend(self.search(&mm, &qual_ref, &cursor.scout));
                 // TODO do things to find type of field at the same level than type decl
                 // should loop through members searching for parent qualified
-                self.up(cursor);
+                self.up_typed(cursor);
             } else if t == Type::Program {
                 return cursor
                     .curr
@@ -971,7 +1030,7 @@ impl<'a> RefsFinder<'a> {
     fn go_through_program(
         &mut self,
         r: &mut Vec<SpHandle>,
-        cursor: &mut Cursor,
+        cursor: &mut TypedCursor,
         qual_ref: RefPtr,
     ) -> Result<(RefPtr, RefPtr), SearchStopEvent> {
         let before_p_ref;
@@ -979,7 +1038,7 @@ impl<'a> RefsFinder<'a> {
         let mut package_ref = self.ana.solver.intern(RefsEnum::MaybeMissing);
         // go through classes if inner
         let x = cursor.curr.clone().ok_or(SearchStopEvent::NoMore)?;
-        let b = self.stores.node_store.resolve(x);
+        let b = hyper_ast::types::TypedNodeStore::resolve(&self.stores.node_store, &x);
         let t = b.get_type();
         assert_eq!(t, Type::Program);
         log::debug!(
@@ -987,18 +1046,19 @@ impl<'a> RefsFinder<'a> {
             cursor.curr,
             cursor
                 .scout
-                .make_position(&self.structural_positions, &self.stores),
+                .make_position(&self.structural_positions, self.stores),
             b.child_count()
         );
         // go through program i.e. package declaration
         before_p_ref = max_qual_ref;
         for (i, xx) in b.children().unwrap().iter_children().enumerate() {
-            cursor.scout.goto(*xx, i);
-            let bb = self.stores.node_store.resolve(*xx);
+            let (bb, xx) =
+                hyper_ast::types::TypedNodeStore::try_resolve(&self.stores.node_store, xx).unwrap();
+            cursor.scout.goto_typed(xx, num::cast(i).unwrap());
             let tt = bb.get_type();
             log::debug!("in program {:?}", tt);
             if tt == Type::PackageDeclaration {
-                package_ref = remake_pkg_ref(&self.stores, &mut self.ana, *xx)
+                package_ref = remake_pkg_ref(self.stores, &mut self.ana, xx)
                     .ok_or(SearchStopEvent::Blocked)?;
                 max_qual_ref = self
                     .ana
@@ -1024,7 +1084,7 @@ impl<'a> RefsFinder<'a> {
                         &self.stores.label_store
                     ))
                 );
-                if Some(*xx) != cursor.prev.clone() && max_qual_ref != before_p_ref {
+                if Some(xx) != cursor.prev.clone() && max_qual_ref != before_p_ref {
                     // search ?.A in file ie. other top level classes
                     r.extend(self.search(&package_ref, &before_p_ref, &cursor.scout));
                 }
@@ -1033,7 +1093,7 @@ impl<'a> RefsFinder<'a> {
             }
             cursor.scout.up(&self.structural_positions);
         }
-        self.up(cursor);
+        self.up_typed(cursor);
         cursor
             .curr
             .and(Some((package_ref, max_qual_ref)))
@@ -1043,13 +1103,13 @@ impl<'a> RefsFinder<'a> {
     fn go_through_package<'b>(
         &mut self,
         r: &mut Vec<SpHandle>,
-        cursor: &mut Cursor,
-        mirror_packages: &[Scout],
+        cursor: &mut TypedCursor,
+        mirror_packages: &[TypedScout],
         package_ref: &RefPtr,
         max_qual_ref: &RefPtr,
     ) -> Result<(), SearchStopEvent> {
         let xx = cursor.curr.ok_or(SearchStopEvent::NoMore)?;
-        let bb = self.stores.node_store.resolve(xx);
+        let bb = self.stores.node_store.resolve_typed(&xx);
         let t = bb.get_type();
         log::info!(
             "search in package {:?} {:?} {:?}",
@@ -1057,12 +1117,13 @@ impl<'a> RefsFinder<'a> {
             t,
             cursor
                 .scout
-                .make_position(&self.structural_positions, &self.stores)
+                .make_position(&self.structural_positions, self.stores)
         );
 
         for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
-            cursor.scout.goto(*xx, i);
-            if Some(*xx) != cursor.prev {
+            let xx = self.stores.node_store.try_typed(xx).unwrap();
+            cursor.scout.goto_typed(xx, num::cast(i).unwrap());
+            if Some(xx) != cursor.prev {
                 log::debug!(
                     "search {} in package children {:?} {:?}",
                     DisplayRef::from((
@@ -1072,7 +1133,7 @@ impl<'a> RefsFinder<'a> {
                     cursor.curr,
                     cursor
                         .scout
-                        .make_position(&self.structural_positions, &self.stores)
+                        .make_position(&self.structural_positions, self.stores)
                 );
                 r.extend(self.search(package_ref, max_qual_ref, &cursor.scout));
             }
@@ -1085,11 +1146,11 @@ impl<'a> RefsFinder<'a> {
             let bb = self
                 .stores
                 .node_store
-                .resolve(pack.node_always(&self.structural_positions));
+                .resolve_typed(&pack.node_always(&self.structural_positions).unwrap());
             for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
-                let bb = self.stores.node_store.resolve(*xx);
+                let xx = self.stores.node_store.try_typed(xx).unwrap();
                 let t = bb.get_type();
-                pack.goto(*xx, i);
+                pack.goto_typed(xx, num::cast(i).unwrap());
                 if t == Type::Program {
                     log::debug!(
                         "search {} in other package children {:?}",
@@ -1097,21 +1158,21 @@ impl<'a> RefsFinder<'a> {
                             self.ana.solver.nodes.with(*max_qual_ref),
                             &self.stores.label_store
                         )),
-                        pack.make_position(&self.structural_positions, &self.stores),
+                        pack.make_position(&self.structural_positions, self.stores),
                     );
                     r.extend(self.search(package_ref, max_qual_ref, &pack));
                 }
                 pack.up(&self.structural_positions);
             }
         }
-        self.up(cursor);
+        self.up_typed(cursor);
         Ok(())
     }
 
     fn go_through_directories(
         &mut self,
         r: &mut Vec<SpHandle>,
-        cursor: &mut Cursor,
+        cursor: &mut TypedCursor,
         package_ref: &RefPtr,
         fq_decl_ref: &RefPtr,
         limit: &NodeIdentifier,
@@ -1122,46 +1183,48 @@ impl<'a> RefsFinder<'a> {
                 cursor.curr,
                 cursor
                     .scout
-                    .make_position(&self.structural_positions, &self.stores)
+                    .make_position(&self.structural_positions, self.stores)
             );
             let xx = cursor.curr.ok_or(SearchStopEvent::NoMore)?;
-            let bb = self.stores.node_store.resolve(xx);
+            let bb = self.stores.node_store.resolve_typed(&xx);
             // log::debug!("search in package {:?} {:?}", cursor.curr, t);
             for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
-                cursor.scout.goto(*xx, i);
-                if Some(*xx) != cursor.prev {
+                let (_, xx) = self.stores.node_store.try_resolve_typed(xx).unwrap();
+                cursor.scout.goto_typed(xx, num::cast(i).unwrap());
+                if Some(xx) != cursor.prev {
                     r.extend(self.search(package_ref, fq_decl_ref, &cursor.scout));
                 }
                 cursor.scout.up(&self.structural_positions);
             }
-            if &xx == limit {
+            if xx.as_id() == limit {
                 return Ok(());
             }
-            self.up(cursor);
+            self.up_typed(cursor);
         }
     }
     fn go_through_folders(
         &mut self,
         r: &mut Vec<SpHandle>,
-        cursor: &mut Cursor,
+        cursor: &mut TypedCursor,
         package_ref: &RefPtr,
         fq_decl_ref: &RefPtr,
-        other_folders: &[Scout],
+        other_folders: &[TypedScout],
     ) -> Result<(), SearchStopEvent> {
         log::debug!(
             "search in folder {:?} {:?}",
             cursor.curr,
             cursor
                 .scout
-                .make_position(&self.structural_positions, &self.stores)
+                .make_position(&self.structural_positions, self.stores)
         );
         for x in other_folders {
             let scout = x.clone();
-            let xx = x.node_always(&self.structural_positions);
-            let bb = self.stores.node_store.resolve(xx);
+            let xx = x.node_always(&self.structural_positions).unwrap();
+            let bb = self.stores.node_store.resolve_typed(&xx);
             for (i, xx) in bb.children().unwrap().iter_children().enumerate() {
-                cursor.scout.goto(*xx, i);
-                if Some(*xx) != cursor.prev {
+                let (_, xx) = self.stores.node_store.try_resolve_typed(xx).unwrap();
+                cursor.scout.goto_typed(xx, num::cast(i).unwrap());
+                if Some(xx) != cursor.prev {
                     r.extend(self.search(package_ref, fq_decl_ref, &scout));
                 }
                 cursor.scout.up(&self.structural_positions);
@@ -1170,11 +1233,16 @@ impl<'a> RefsFinder<'a> {
         Ok(())
     }
 
-    fn extract_identifier(&mut self, b: &HashedNodeRef) -> Option<LabelIdentifier> {
+    fn extract_identifier(&mut self, b: &HashedNodeRef<'a, JavaIdN>) -> Option<LabelIdentifier> {
         for xx in b.children().unwrap().iter_children() {
-            let bb = self.stores.node_store.resolve(*xx);
+            let bb = self
+                .stores
+                .node_store
+                .try_resolve_typed::<JavaIdN>(xx)
+                .unwrap()
+                .0;
             if bb.get_type() == Type::Identifier {
-                let i = bb.get_label();
+                let i = bb.get_label_unchecked();
                 return Some(*i);
             }
         }
@@ -1182,16 +1250,19 @@ impl<'a> RefsFinder<'a> {
     }
 
     /// top down search of references matching [`p`][`i`]
-    fn search(&mut self, p: &RefPtr, i: &RefPtr, s: &Scout) -> Vec<SpHandle> {
+    fn search(&mut self, p: &RefPtr, i: &RefPtr, s: &TypedScout) -> Vec<SpHandle> {
         // self.structural_positions
         //     .check_with(&self.stores, s)
         //     .expect("search");
-        usage::RefsFinder::new(&self.stores, &mut self.ana, &mut self.structural_positions)
-            .find_all(*p, *i, s.clone())
+        usage::RefsFinder::new(self.stores, &mut self.ana, &mut self.structural_positions).find_all(
+            *p,
+            *i,
+            s.clone(),
+        )
     }
 }
 
-pub fn goto_by_name<T: TreePath<NodeIdentifier>>(
+pub fn goto_by_name<T: TreePathMut<NodeIdentifier, u16>>(
     stores: &SimpleStores,
     mut p: T,
     name: &str,
@@ -1206,7 +1277,7 @@ pub fn goto_by_name<T: TreePath<NodeIdentifier>>(
 
 pub fn find_package_in_other_folders<
     'a,
-    T: TreePath<NodeIdentifier> + Clone,
+    T: TreePathMut<NodeIdentifier, u16> + Clone,
     U: Borrow<Path>,
     V: Iterator<Item = (U, T)>,
 >(

@@ -17,7 +17,7 @@ use crate::{
     },
     matchers::mapping_store::{MappingStore, MonoMappingStore},
 };
-use hyper_ast::types::{self, NodeStore, Stored, WithChildren, WithStats};
+use hyper_ast::types::{self, NodeId, NodeStore, Stored, WithChildren, WithStats};
 
 use super::{
     basic_post_order::BasicPOSlice,
@@ -95,7 +95,7 @@ pub fn hiding_map<
 ) -> (Vec<IdD>, BTreeMap<IdD, IdD>)
 where
     M::Output: PrimInt,
-    <T as types::Stored>::TreeId: Clone + std::fmt::Debug,
+    <T as types::Stored>::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
 {
     let x: &LazyPostOrder<T, IdD> = back.borrow();
     let mut map = Vec::with_capacity(x.len());
@@ -420,9 +420,9 @@ impl<
 
 impl<
         'a,
-        T: WithChildren,                             // + WithStats,
-        IdD: PrimInt+Debug,                                // + Shallow<IdD> + Debug,
-        DTS: DecompressedTreeStore<'a, T, IdD, IdD> + PostOrder<'a,T,IdD>, // + LazyDecompressedTreeStore<'a, T, IdD>,
+        T: WithChildren,      // + WithStats,
+        IdD: PrimInt + Debug, // + Shallow<IdD> + Debug,
+        DTS: DecompressedTreeStore<'a, T, IdD, IdD> + PostOrder<'a, T, IdD>, // + LazyDecompressedTreeStore<'a, T, IdD>,
         M: Borrow<Vec<IdD>>,
         R: Borrow<BTreeMap<IdD, IdD>>,
         D: BorrowMut<DTS>,
@@ -555,7 +555,7 @@ where
 impl<
         'a,
         T: WithChildren,
-        IdD: PrimInt+Debug,
+        IdD: PrimInt + Debug,
         DTS: PostOrder<'a, T, IdD>,
         M: Borrow<Vec<IdD>>,
         R: Borrow<BTreeMap<IdD, IdD>>,
@@ -565,13 +565,13 @@ where
     T::TreeId: Clone + Eq + Debug,
 {
     fn lld(&self, i: &IdD) -> IdD {
-        todo!()
+        // todo!()
         // // TODO not sure
-        // let c = self
-        //     .back
-        //     .borrow()
-        //     .lld(&self.map.borrow()[self.len() - i.to_usize().unwrap() - 1]);
-        // *self.rev.borrow().get(&c).unwrap()
+        let c = self
+            .back
+            .borrow()
+            .lld(&self.map.borrow()[self.len() - i.to_usize().unwrap() - 1]);
+        *self.rev.borrow().get(&c).unwrap()
     }
 
     fn tree(&self, id: &IdD) -> T::TreeId {
@@ -583,8 +583,10 @@ where
 impl<
         'd,
         T: WithChildren + 'd,
-        IdD: PrimInt+Debug,
-        DTS: DecompressedTreeStore<'d, T, IdD> + DecompressedWithParent<'d, T, IdD> + PostOrder<'d,T,IdD>,
+        IdD: PrimInt + Debug,
+        DTS: DecompressedTreeStore<'d, T, IdD>
+            + DecompressedWithParent<'d, T, IdD>
+            + PostOrder<'d, T, IdD>,
         M: Borrow<Vec<IdD>>,
         R: Borrow<BTreeMap<IdD, IdD>>,
         D: BorrowMut<DTS>,
@@ -850,7 +852,7 @@ impl<
     > SimpleHiddingMapper<'a, T, IdD, LazyPostOrder<T, IdD>, M, R, D>
 where
     <T as Stored>::TreeId: Clone,
-    <T as Stored>::TreeId: Debug,
+    <T as Stored>::TreeId: Debug + NodeId<IdN = T::TreeId>,
 {
     fn decompress_visible_descendants<'b, S>(&mut self, store: &'b S, x: &IdD)
     where
@@ -886,7 +888,7 @@ impl<
     for SimpleHiddingMapper<'d, T, IdD, LazyPostOrder<T, IdD>, M, R, D>
 where
     T: WithStats,
-    T::TreeId: Clone + Eq + Debug,
+    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
     IdD: Shallow<IdD> + Debug,
 {
     type SlicePo<'b> = CompleteWHPO<'b,T,IdD, bitvec::boxed::BitBox>
@@ -929,7 +931,7 @@ where
         let mut curr = map_lld.clone();
         dbg!();
         while curr <= *x {
-            let conv = self.map.borrow()[self.map.borrow().len()-1-curr.to_usize().unwrap()];
+            let conv = self.map.borrow()[self.map.borrow().len() - 1 - curr.to_usize().unwrap()];
             // dbg!(conv);
             let parent = self
                 .back
@@ -956,7 +958,12 @@ where
                 visited.set(llds[i].to_usize().unwrap(), true);
             }
         }
-        dbg!(id_compressed.len(),id_parent.len(), llds.len(), self.map.borrow().len());
+        dbg!(
+            id_compressed.len(),
+            id_parent.len(),
+            llds.len(),
+            self.map.borrow().len()
+        );
         CompleteWHPO {
             map: self.map.borrow(),
             id_compressed,

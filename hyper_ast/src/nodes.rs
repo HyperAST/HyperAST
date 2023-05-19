@@ -1,16 +1,20 @@
 use std::{
     borrow::Borrow,
     fmt::{Debug, Display, Write},
+    hash::Hash,
+    marker::PhantomData,
 };
 
-use num::{ToPrimitive};
+use num::ToPrimitive;
 
 use crate::{
     impact::serialize::{Keyed, MySerialize},
-    types::{Type, MySlice, IterableChildren},
+    types::{
+        HyperType, IterableChildren, MySlice, NodeId,
+    },
 };
 
-pub type TypeIdentifier = Type;
+// pub type TypeIdentifier = Type;
 
 pub trait RefContainer {
     type Result;
@@ -39,7 +43,7 @@ pub enum Space {
 }
 
 #[derive(Debug, Clone)]
-pub enum CompressedNode<NodeId, LabelId> {
+pub enum CompressedNode<NodeId, LabelId, Type> {
     Type(Type),
     Label { label: LabelId, kind: Type },
     Children2 { children: [NodeId; 2], kind: Type },
@@ -75,7 +79,7 @@ pub enum CompressedNode<NodeId, LabelId> {
 //     label: std::mem::ManuallyDrop<LabelId>,
 // }
 
-impl<N: PartialEq, L: PartialEq> PartialEq for CompressedNode<N, L> {
+impl<N: PartialEq, L: PartialEq, T: PartialEq> PartialEq for CompressedNode<N, L, T> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Type(l0), Self::Type(r0)) => l0 == r0,
@@ -115,10 +119,10 @@ impl<N: PartialEq, L: PartialEq> PartialEq for CompressedNode<N, L> {
     }
 }
 
-impl<N: Eq, L: Eq> Eq for CompressedNode<N, L> {}
+impl<N: Eq, L: Eq, T: Eq> Eq for CompressedNode<N, L, T> {}
 
-impl<N, L> CompressedNode<N, L> {
-    pub fn new(kind: TypeIdentifier, label: Option<L>, children: Vec<N>) -> Self {
+impl<N, L, T> CompressedNode<N, L, T> {
+    pub fn new(kind: T, label: Option<L>, children: Vec<N>) -> Self {
         if children.len() > 2 {
             Self::Children {
                 kind,
@@ -146,32 +150,38 @@ impl<N, L> CompressedNode<N, L> {
 
 // CompressedNode
 
-impl<N, L> crate::types::Typed for CompressedNode<N, L> {
-    type Type = Type;
+impl<N, L, T: HyperType + Copy + Hash + Eq + Send + Sync> crate::types::Typed
+    for CompressedNode<N, L, T>
+{
+    type Type = T;
 
-    fn get_type(&self) -> Type {
+    fn get_type(&self) -> T {
         match self {
             CompressedNode::Type(kind) => *kind,
             CompressedNode::Label { label: _, kind } => *kind,
             CompressedNode::Children2 { children: _, kind } => *kind,
             CompressedNode::Children { children: _, kind } => *kind,
-            CompressedNode::Spaces(_) => Type::Spaces,
+            CompressedNode::Spaces(_) => todo!("what is the generic version of Type::Spaces ?"),
         }
     }
 }
 
-impl<N, L: Eq> crate::types::Labeled for CompressedNode<N, L> {
+impl<N, L: Eq, T> crate::types::Labeled for CompressedNode<N, L, T> {
     type Label = L;
 
-    fn get_label(&self) -> &L {
+    fn get_label_unchecked(&self) -> &L {
         match self {
             CompressedNode::Label { label, kind: _ } => label,
             _ => panic!(),
         }
     }
+
+    fn try_get_label<'a>(&'a self) -> Option<&'a L> {
+        todo!()
+    }
 }
 
-impl<N: Eq + Clone, L> crate::types::WithChildren for CompressedNode<N, L> {
+impl<N: Eq + Clone + NodeId<IdN = N>, L, T> crate::types::WithChildren for CompressedNode<N, L, T> {
     type ChildIdx = u16;
     type Children<'a> = MySlice<N> where Self: 'a;
     // type Children<'a> = [N] where Self:'a;
@@ -187,35 +197,39 @@ impl<N: Eq + Clone, L> crate::types::WithChildren for CompressedNode<N, L> {
         }
     }
 
-    fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+    fn child(&self, idx: &Self::ChildIdx) -> Option<N> {
         match self {
             CompressedNode::Children2 { children, kind: _ } if *idx == 0 => {
-                Some(children[0].clone())
+                Some(children[0].as_id().clone())
             }
             CompressedNode::Children2 { children, kind: _ } if *idx == 1 => {
-                Some(children[1].clone())
-            }
-            CompressedNode::Children { children, kind: _ } => Some(children[*idx as usize].clone()),
-            _ => None,
-        }
-    }
-
-    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
-        match self {
-            CompressedNode::Children2 { children, kind: _ } if *idx == 1 => {
-                Some(children[0].clone())
-            }
-            CompressedNode::Children2 { children, kind: _ } if *idx == 0 => {
-                Some(children[1].clone())
+                Some(children[1].as_id().clone())
             }
             CompressedNode::Children { children, kind: _ } => {
-                Some(children[children.len() - 1 - (*idx as usize)].clone())
+                Some(children[*idx as usize].as_id().clone())
             }
             _ => None,
         }
     }
 
-    // fn children_unchecked<'a>(&'a self) -> &[Self::TreeId] {
+    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<N> {
+        match self {
+            CompressedNode::Children2 { children, kind: _ } if *idx == 1 => {
+                Some(children[0].as_id().clone())
+            }
+            CompressedNode::Children2 { children, kind: _ } if *idx == 0 => {
+                Some(children[1].as_id().clone())
+            }
+            CompressedNode::Children { children, kind: _ } => Some(
+                children[children.len() - 1 - (*idx as usize)]
+                    .as_id()
+                    .clone(),
+            ),
+            _ => None,
+        }
+    }
+
+    // fn children_unchecked<'a>(&'a self) -> &[N] {
     //     match self {
     //         CompressedNode::Children2 { children, kind: _ } => &*children,
     //         CompressedNode::Children { children, kind: _ } => &*children,
@@ -223,7 +237,7 @@ impl<N: Eq + Clone, L> crate::types::WithChildren for CompressedNode<N, L> {
     //     }
     // }
 
-    // fn get_children_cpy<'a>(&'a self) -> Vec<Self::TreeId> {
+    // fn get_children_cpy<'a>(&'a self) -> Vec<N> {
     //     match self {
     //         CompressedNode::Children2 { children, kind: _ } => children.to_vec(),
     //         CompressedNode::Children { children, kind: _ } => children.to_vec(),
@@ -232,17 +246,11 @@ impl<N: Eq + Clone, L> crate::types::WithChildren for CompressedNode<N, L> {
     // }
 
     fn children<'a>(&'a self) -> Option<&'a <Self as crate::types::WithChildren>::Children<'a>> {
-        fn f<'a, N,L>(x: &'a CompressedNode<N,L>) -> &'a [N] {
+        fn f<'a, N, L, T>(x: &'a CompressedNode<N, L, T>) -> &'a [N] {
             match x {
-                CompressedNode::Children2 { children, kind: _ } => {
-                    &*children
-                }
-                CompressedNode::Children { children, kind: _ } => {
-                    &**children
-                },
-                _ => {
-                    &[]
-                }
+                CompressedNode::Children2 { children, kind: _ } => &*children,
+                CompressedNode::Children { children, kind: _ } => &**children,
+                _ => &[],
             }
         }
         // TODO check if it work, not sure
@@ -250,12 +258,16 @@ impl<N: Eq + Clone, L> crate::types::WithChildren for CompressedNode<N, L> {
     }
 }
 
-impl<N, L> crate::types::Node for CompressedNode<N, L> {}
-impl<N: Eq, L> crate::types::Stored for CompressedNode<N, L> {
+impl<N, L, T> crate::types::Node for CompressedNode<N, L, T> {}
+impl<N: NodeId + Eq, L, T> crate::types::Stored for CompressedNode<N, L, T> {
     type TreeId = N;
 }
 
-impl<N: Eq + Clone, L: Eq> crate::types::Tree for CompressedNode<N, L> {
+impl<N: NodeId<IdN = N> + Eq + Clone, L: Eq, T: Copy + Hash + Eq + HyperType + Send + Sync>
+    crate::types::Tree for CompressedNode<N, L, T>
+where
+    N::IdN: Copy,
+{
     fn has_children(&self) -> bool {
         match self {
             CompressedNode::Children2 {
@@ -459,158 +471,6 @@ impl Space {
     // }
 }
 
-// trait DisplayTreeStruct<IdN: Clone, IdL>: Display {
-//     fn node(&self, id: &IdN) -> CompressedNode<IdN, IdL>;
-
-//     fn print_tree_structure(&self, id: &IdN) {
-//         match self.node(id) {
-//             CompressedNode::Type(kind) => {
-//                 print!("{}", kind.to_string());
-//                 // None
-//             }
-//             CompressedNode::Label { kind, label: _ } => {
-//                 print!("({})", kind.to_string());
-//                 // None
-//             }
-//             CompressedNode::Children2 { kind, children } => {
-//                 print!("({} ", kind.to_string());
-//                 for id in children.iter() {
-//                     self.print_tree_structure(id);
-//                 }
-//                 print!(")");
-//             }
-//             CompressedNode::Children { kind, children } => {
-//                 print!("({} ", kind.to_string());
-//                 let children = children.clone();
-//                 for id in children.iter() {
-//                     self.print_tree_structure(id);
-//                 }
-//                 print!(")");
-//             }
-//             CompressedNode::Spaces(_) => (),
-//         };
-//     }
-//     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-//         if f.alternate() {
-//             write!(f, "[{}]", todo!())
-//         } else {
-//             write!(f, "[{} drop scopes]", todo!())
-//         }
-//     }
-// }
-pub fn print_tree_ids<
-    IdN: Debug,
-    IdL,
-    T: Borrow<CompressedNode<IdN, IdL>>,
-    F: Copy + Fn(&IdN) -> T,
->(
-    f: F,
-    id: &IdN,
-) {
-    match f(id).borrow() {
-        CompressedNode::Type(_) => {
-            print!("[{:?}]", id);
-            // None
-        }
-        CompressedNode::Label { label: _, .. } => {
-            print!("{{{:?}}}", id);
-            // None
-        }
-        CompressedNode::Children2 { children, .. } => {
-            print!("({:?} ", id);
-            for id in children {
-                print_tree_ids(f, &id);
-            }
-            print!(")");
-        }
-        CompressedNode::Children { children, .. } => {
-            print!("({:?} ", id);
-            for id in children.iter() {
-                print_tree_ids(f, &id);
-            }
-            print!(")");
-        }
-        CompressedNode::Spaces(_) => print!("{{{:?}}}", id),
-    };
-}
-pub fn print_tree_structure<
-    IdN,
-    IdL,
-    T: Borrow<CompressedNode<IdN, IdL>>,
-    F: Copy + Fn(&IdN) -> T,
->(
-    f: F,
-    id: &IdN,
-) {
-    match f(id).borrow() {
-        CompressedNode::Type(kind) => {
-            print!("{}", kind.to_string());
-            // None
-        }
-        CompressedNode::Label { kind, label: _ } => {
-            print!("({})", kind.to_string());
-            // None
-        }
-        CompressedNode::Children2 { kind, children } => {
-            print!("({} ", kind.to_string());
-            for id in children {
-                print_tree_structure(f, &id);
-            }
-            print!(")");
-        }
-        CompressedNode::Children { kind, children } => {
-            print!("({} ", kind.to_string());
-            for id in children.iter() {
-                print_tree_structure(f, &id);
-            }
-            print!(")");
-        }
-        CompressedNode::Spaces(_) => (),
-    };
-}
-
-pub fn print_tree_labels<
-    IdN,
-    IdL,
-    T: Borrow<CompressedNode<IdN, IdL>>,
-    F: Copy + Fn(&IdN) -> T,
-    G: Copy + Fn(&IdL) -> String,
->(
-    f: F,
-    g: G,
-    id: &IdN,
-) {
-    match f(id).borrow() {
-        CompressedNode::Type(kind) => {
-            print!("{}", kind.to_string());
-            // None
-        }
-        CompressedNode::Label { kind, label } => {
-            let s = g(label);
-            if s.len() > 20 {
-                print!("({}='{}...')", kind.to_string(), &s[..20]);
-            } else {
-                print!("({}='{}')", kind.to_string(), s);
-            }
-            // None
-        }
-        CompressedNode::Children2 { kind, children } => {
-            print!("({} ", kind.to_string());
-            for id in children {
-                print_tree_labels(f, g, &id);
-            }
-            print!(")");
-        }
-        CompressedNode::Children { kind, children } => {
-            print!("({} ", kind.to_string());
-            for id in children.iter() {
-                print_tree_labels(f, g, &id);
-            }
-            print!(")");
-        }
-        CompressedNode::Spaces(_) => (),
-    };
-}
 
 pub struct IoOut<W: std::io::Write> {
     stream: W,
@@ -630,168 +490,154 @@ impl<W: std::io::Write> std::fmt::Write for IoOut<W> {
     }
 }
 
-pub fn print_tree_syntax<
+pub type StructureSerializer<'a, 'b, IdN, HAST> =
+    SimpleSerializer<'a, IdN, HAST, true, false, false, false>;
+pub type LabelSerializer<'a, 'b, IdN, HAST> =
+    SimpleSerializer<'a, IdN, HAST, true, true, false, false>;
+pub type IdsSerializer<'a, 'b, IdN, HAST> =
+    SimpleSerializer<'a, IdN, HAST, false, false, true, false>;
+pub type SyntaxSerializer<'a, 'b, IdN, HAST, const SPC: bool = false> =
+    SimpleSerializer<'a, IdN, HAST, true, true, false, true>;
+pub type SyntaxWithIdsSerializer<'a, 'b, IdN, HAST, const SPC: bool = false> =
+    SimpleSerializer<'a, IdN, HAST, true, true, true, SPC>;
+
+pub struct SimpleSerializer<
+    'a,
     IdN,
-    IdL,
-    T: Borrow<CompressedNode<IdN, IdL>>,
-    F: Copy + Fn(&IdN) -> T,
-    G: Copy + Fn(&IdL) -> String,
-    W: std::fmt::Write,
->(
-    f: F,
-    g: G,
-    id: &IdN,
-    out: &mut W,
-) {
-    match f(id).borrow() {
-        CompressedNode::Type(kind) => {
-            print!("{}", kind.to_string());
-            // None
-        }
-        CompressedNode::Label { kind, label } => {
-            let s = &g(label);
-            if s.len() > 20 {
-                print!("({}='{}...')", kind.to_string(), &s[..20]);
-            } else {
-                print!("({}='{}')", kind.to_string(), s);
-            }
-            // None
-        }
-        CompressedNode::Children2 { kind, children } => {
-            print!("({} ", kind.to_string());
-            for id in children {
-                print_tree_syntax(f, g, &id, out);
-            }
-            print!(")");
-        }
-        CompressedNode::Children { kind, children } => {
-            print!("({} ", kind.to_string());
-            for id in children.iter() {
-                print_tree_syntax(f, g, &id, out);
-            }
-            print!(")");
-        }
-        CompressedNode::Spaces(s) => {
-            let s = &g(s);
-            print!("(_ ");
-            // print!("{}",s);
-            print!("{:?}", Space::format_indentation(s.as_bytes()));
-            // a.iter().for_each(|a| print!("{:?}", a));
-            print!(")");
-        }
-    };
+    HAST,
+    const TY: bool = true,
+    const LABELS: bool = false,
+    const IDS: bool = false,
+    const SPC: bool = false,
+> {
+    stores: &'a HAST,
+    root: IdN,
 }
 
-pub fn print_tree_syntax_with_ids<
-    IdN: Debug,
-    IdL,
-    T: Borrow<CompressedNode<IdN, IdL>>,
-    F: Copy + Fn(&IdN) -> T,
-    G: Copy + Fn(&IdL) -> String,
-    W: std::fmt::Write,
->(
-    f: F,
-    g: G,
-    id: &IdN,
-    out: &mut W,
-) {
-    match f(id).borrow() {
-        CompressedNode::Type(kind) => {
-            print!("{:?}{}", id, kind.to_string());
-            // None
+impl<'store, IdN, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool>
+    SimpleSerializer<'store, IdN, HAST, TY, LABELS, IDS, SPC>
+{
+    pub fn new(stores: &'store HAST, root: IdN) -> Self {
+        Self {
+            stores,
+            root,
         }
-        CompressedNode::Label { kind, label } => {
-            let s = &g(label);
-            if s.len() > 20 {
-                print!("({:?}{}='{}...')", id, kind.to_string(), &s[..20]);
-            } else {
-                print!("({:?}{}='{}')", id, kind.to_string(), s);
-            }
-            // None
-        }
-        CompressedNode::Children2 { kind, children } => {
-            print!("({:?}{} ", id, kind.to_string());
-            for id in children {
-                print_tree_syntax_with_ids(f, g, &id, out);
-            }
-            print!(")");
-        }
-        CompressedNode::Children { kind, children } => {
-            print!("({:?}{} ", id, kind.to_string());
-            for id in children.iter() {
-                print_tree_syntax_with_ids(f, g, &id, out);
-            }
-            print!(")");
-        }
-        CompressedNode::Spaces(s) => {
-            let s = &g(s);
-            print!("({:?}_ ", id);
-            // let a = &*s;
-            // print!("{}",s);
-            print!("{:?}", Space::format_indentation(s.as_bytes()));
-            // a.iter().for_each(|a| print!("{:?}", a));
-            print!(")");
-        }
-    };
+    }
 }
 
-pub fn serialize<
-    IdN,
-    IdL,
-    T: Borrow<CompressedNode<IdN, IdL>>,
-    F: Copy + Fn(&IdN) -> T,
-    G: Copy + Fn(&IdL) -> String,
-    W: std::fmt::Write,
->(
-    f: F,
-    g: G,
-    id: &IdN,
-    out: &mut W,
-    parent_indent: &str,
-) -> Option<String> {
-    match f(id).borrow() {
-        CompressedNode::Type(kind) => {
-            out.write_str(&kind.to_string()).unwrap();
-            None
-        }
-        CompressedNode::Label { kind: _, label } => {
-            let s = g(label);
-            out.write_str(&s).unwrap();
-            None
-        }
-        CompressedNode::Children2 { kind: _, children } => {
-            let ind = serialize(f, g, &children[0], out, parent_indent)
-                .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
-            serialize(f, g, &children[1], out, &ind);
-            None
-        }
-        CompressedNode::Children { kind: _, children } => {
-            let mut it = children.iter();
-            let mut ind = serialize(f, g, &it.next().unwrap(), out, parent_indent)
-                .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
-            for id in it {
-                ind = serialize(f, g, &id, out, &ind)
-                    .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
+impl<'store, IdN, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool>
+    Display for SimpleSerializer<'store, IdN, HAST, TY, LABELS, IDS, SPC>
+where
+    IdN: NodeId<IdN = IdN> + Debug,
+    HAST: crate::types::NodeStore<IdN>,
+    HAST: crate::types::LabelStore<str>,
+    HAST: crate::types::TypeStore<HAST::R<'store>>,
+    HAST::R<'store>: crate::types::Typed
+        + crate::types::Labeled<Label = HAST::I>
+        + crate::types::WithChildren<TreeId = IdN>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.serialize(&self.root, f)
+    }
+}
+
+impl<'store, IdN, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool>
+    SimpleSerializer<'store, IdN, HAST, TY, LABELS, IDS, SPC>
+where
+    IdN: NodeId<IdN = IdN> + Debug,
+    HAST: crate::types::NodeStore<IdN>,
+    HAST: crate::types::LabelStore<str>,
+    HAST: crate::types::TypeStore<HAST::R<'store>>,
+    HAST::R<'store>: crate::types::Typed
+        + crate::types::Labeled<Label = HAST::I>
+        + crate::types::WithChildren<TreeId = IdN>,
+{
+    // pub fn tree_syntax_with_ids(
+    fn serialize(
+        &self,
+        id: &IdN,
+        out: &mut std::fmt::Formatter<'_>,
+    ) -> Result<(), std::fmt::Error> {
+        use crate::types::LabelStore;
+        use crate::types::Labeled;
+        use crate::types::NodeStore;
+        use crate::types::Typed;
+        use crate::types::WithChildren;
+        let b = NodeStore::resolve(self.stores, id);
+        // let kind = (self.stores.type_store(), b);
+        let kind = self.stores.resolve_type(&b);
+        let label = b.try_get_label();
+        let children = b.children();
+
+        if kind.is_spaces() {
+            if SPC {
+                let s = LabelStore::resolve(self.stores, &label.unwrap());
+                let b: String = Space::format_indentation(s.as_bytes())
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect();
+                write!(out, "(")?;
+                if IDS { write!(out, "{:?}", id) } else { Ok(()) }.and_then(|x| {
+                    if TY {
+                        write!(out, "_",)
+                    } else {
+                        Ok(x)
+                    }
+                })?;
+                if LABELS {
+                    write!(out, " {:?}", Space::format_indentation(b.as_bytes()))?;
+                }
+                write!(out, ")")?;
             }
-            None
+            return Ok(());
         }
-        CompressedNode::Spaces(s) => {
-            let s = g(s);
-            // let a = &*s;
-            let b:String = //s; //String::new();
-            Space::format_indentation(s.as_bytes())
-                .iter()
-                .map(|x| x.to_string())
-                .collect();
-            // a.iter()
-            //     .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
-            out.write_str(&b).unwrap();
-            Some(if b.contains("\n") {
-                b
-            } else {
-                parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
+
+        let w_kind = |out: &mut std::fmt::Formatter<'_>| {
+            if IDS { write!(out, "{:?}", id) } else { Ok(()) }.and_then(|x| {
+                if TY {
+                    write!(out, "{}", kind.to_string())
+                } else {
+                    Ok(x)
+                }
             })
+        };
+
+        match (label, children) {
+            (None, None) => {
+                w_kind(out)?;
+            }
+            (label, Some(children)) => {
+                if let Some(label) = label {
+                    let s = LabelStore::resolve(self.stores, label);
+                    if LABELS {
+                        write!(out, " {:?}", Space::format_indentation(s.as_bytes()))?;
+                    }
+                }
+                if !children.is_empty() {
+                    let it = children.iter_children();
+                    write!(out, "(")?;
+                    w_kind(out)?;
+                    for id in it {
+                        self.serialize(&id, out)?;
+                    }
+                    write!(out, ")")?;
+                }
+            }
+            (Some(label), None) => {
+                write!(out, "(")?;
+                w_kind(out)?;
+                if LABELS {
+                    let s = LabelStore::resolve(self.stores, label);
+                    if s.len() > 20 {
+                        write!(out, "='{}...'", &s[..20])?;
+                    } else {
+                        write!(out, "='{}'", s)?;
+                    }
+                }
+                write!(out, ")")?;
+            }
         }
+        return Ok(());
     }
 }
 
@@ -820,133 +666,254 @@ fn escape(src: &str) -> String {
     escaped
 }
 
+pub struct Json;
+pub struct Text;
 
-pub struct TreeJsonSerializer<'a, IdN, NS, LS, const SPC: bool = true> {
-    node_store: &'a NS,
-    label_store: &'a LS,
-    id: IdN,
+pub trait Format {}
+impl Format for Json {}
+impl Format for Text {}
+
+pub type JsonSerializer<'a, 'b, IdN, HAST, const SPC: bool> =
+    IndentedSerializer<'a, 'b, IdN, HAST, Json, SPC>;
+pub type TextSerializer<'a, 'b, IdN, HAST> =
+    IndentedSerializer<'a, 'b, IdN, HAST, Text, true>;
+
+pub struct IndentedSerializer<'a, 'b, IdN, HAST, Fmt: Format = Text, const SPC: bool = false> {
+    stores: &'a HAST,
+    root: IdN,
+    root_indent: &'b str,
+    phantom: PhantomData<Fmt>,
 }
 
-impl<'a, IdN, NS, LS, const SPC: bool> TreeJsonSerializer<'a, IdN, NS, LS, SPC> {
-    pub fn new(node_store: &'a NS, label_store: &'a LS, id: IdN) -> Self {
+impl<'store, 'b, IdN, HAST, Fmt: Format, const SPC: bool> IndentedSerializer<'store, 'b, IdN, HAST, Fmt, SPC> {
+    pub fn new(stores: &'store HAST, root: IdN) -> Self {
         Self {
-            node_store,
-            label_store,
-            id,
+            stores,
+            root,
+            root_indent: "\n",
+            phantom: PhantomData,
         }
     }
 }
 
-impl<'a, IdN, NS, LS, const SPC: bool> Display for TreeJsonSerializer<'a, IdN, NS, LS, SPC>
+impl<'store, 'b, IdN, HAST, const SPC: bool> Display
+    for IndentedSerializer<'store, 'b, IdN, HAST, Text, SPC>
 where
-    NS: crate::types::NodeStore<IdN>,
-    <NS as crate::types::NodeStore<IdN>>::R<'a>: crate::types::Tree<TreeId=IdN, Type = Type,Label = LS::I>,
-    LS: crate::types::LabelStore<str>,
+    IdN: NodeId<IdN = IdN>,
+    HAST: crate::types::NodeStore<IdN>,
+    HAST: crate::types::LabelStore<str>,
+    HAST: crate::types::TypeStore<HAST::R<'store>>,
+    HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
+        + crate::types::WithChildren<TreeId = IdN>,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let id = &self.id;
-        json_serialize::<_, _, _, _, _, _, SPC>(
-            |id| -> _ { self.node_store.resolve(id.clone()) },
-            |id| -> _ { self.label_store.resolve(id).to_owned() },
-            id,
-            f,
-            "\n",
-        );
-        Ok(())
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.serialize(&self.root, &self.root_indent, f) {
+            Err(IndentedAlt::FmtError) => Err(std::fmt::Error),
+            _ => Ok(()),
+        }
     }
 }
 
-pub fn json_serialize<
-    IdN,
-    IdL,
-    T: crate::types::Tree<TreeId = IdN, Type = Type, Label = IdL>,
-    F: Copy + Fn(&IdN) -> T,
-    G: Copy + Fn(&IdL) -> String,
-    W: std::fmt::Write,
-    const SPC: bool,
->(
-    f: F,
-    g: G,
-    id: &IdN,
-    out: &mut W,
-    parent_indent: &str,
-) -> Option<String> {
-    let b = f(id);
-    let kind = b.get_type();
-    let label = b.try_get_label();
-    let children = b.children();
+impl<'store, 'b, IdN, HAST, const SPC: bool> Display
+    for IndentedSerializer<'store, 'b, IdN, HAST, Json, SPC>
+where
+    IdN: NodeId<IdN = IdN>,
+    HAST: crate::types::NodeStore<IdN>,
+    HAST: crate::types::LabelStore<str>,
+    HAST: crate::types::TypeStore<HAST::R<'store>>,
+    HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
+        + crate::types::WithChildren<TreeId = IdN>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.serialize(&self.root, &self.root_indent, f) {
+            Err(IndentedAlt::FmtError) => Err(std::fmt::Error),
+            _ => Ok(()),
+        }
+    }
+}
 
-    if kind == Type::Spaces {
-        let s = g(label.unwrap());
-        let b:String = //s; //String::new();
+impl<'store, 'b, IdN, HAST, const SPC: bool> IndentedSerializer<'store, 'b, IdN, HAST, Text, SPC>
+where
+    IdN: NodeId<IdN = IdN>,
+    HAST: crate::types::NodeStore<IdN>,
+    HAST: crate::types::LabelStore<str>,
+    HAST: crate::types::TypeStore<HAST::R<'store>>,
+    HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
+        + crate::types::WithChildren<TreeId = IdN>,
+{
+    fn serialize(
+        &self,
+        id: &IdN,
+        parent_indent: &str,
+        out: &mut std::fmt::Formatter<'_>,
+    ) -> Result<String, IndentedAlt> {
+        use crate::types::LabelStore;
+        use crate::types::Labeled;
+        use crate::types::NodeStore;
+        use crate::types::Typed;
+        use crate::types::WithChildren;
+        let b = NodeStore::resolve(self.stores, id);
+        // let kind = (self.stores.type_store(), b);
+        let kind = self.stores.resolve_type(&b);
+        let label = b.try_get_label();
+        let children = b.children();
+
+        if kind.is_spaces() {
+            let s = LabelStore::resolve(self.stores, &label.unwrap());
+            let b: String = Space::format_indentation(s.as_bytes())
+                .iter()
+                .map(|x| x.to_string())
+                .collect();
+            out.write_str(&b).unwrap();
+            return Ok(if b.contains("\n") {
+                b
+            } else {
+                parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
+            });
+        }
+
+        match (label, children) {
+            (None, None) => {
+                out.write_str(&kind.to_string()).unwrap();
+                Err(IndentedAlt::NoIndent)
+            }
+            (label, Some(children)) => {
+                if let Some(label) = label {
+                    let s = LabelStore::resolve(self.stores, label);
+                    dbg!(s);
+                }
+                if !children.is_empty() {
+                    let mut it = children.iter_children();
+                    let op = |alt| {
+                        if alt == IndentedAlt::NoIndent {
+                            Ok(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned())
+                        } else {
+                            Err(alt)
+                        }
+                    };
+                    let mut ind = self
+                        .serialize(&it.next().unwrap(), parent_indent, out)
+                        .or_else(op)?;
+                    for id in it {
+                        ind = self.serialize(&id, &ind, out).or_else(op)?;
+                    }
+                }
+                Err(IndentedAlt::NoIndent)
+            }
+            (Some(label), None) => {
+                let s = LabelStore::resolve(self.stores, label);
+                out.write_str(&s).unwrap();
+                Err(IndentedAlt::NoIndent)
+            }
+        }
+    }
+}
+impl<'store, 'b, IdN, HAST, const SPC: bool> IndentedSerializer<'store, 'b, IdN, HAST, Json, SPC>
+where
+    IdN: NodeId<IdN = IdN>,
+    HAST: crate::types::NodeStore<IdN>,
+    HAST: crate::types::LabelStore<str>,
+    HAST: crate::types::TypeStore<HAST::R<'store>>,
+    HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
+        + crate::types::WithChildren<TreeId = IdN>,
+{
+    fn serialize(
+        &self,
+        id: &IdN,
+        parent_indent: &str,
+        out: &mut std::fmt::Formatter<'_>,
+    ) -> Result<String, IndentedAlt> {
+        use crate::types::LabelStore;
+        use crate::types::Labeled;
+        use crate::types::NodeStore;
+        use crate::types::Typed;
+        use crate::types::WithChildren;
+        let b = NodeStore::resolve(self.stores, id);
+        // let kind = (self.stores.type_store(), b);
+        let kind = self.stores.resolve_type(&b);
+        let label = b.try_get_label();
+        let children = b.children();
+
+        if kind.is_spaces() {
+            let s = LabelStore::resolve(self.stores, &label.unwrap());
+            let b:String = //s; //String::new();
         Space::format_indentation(s.as_bytes())
             .iter()
             .map(|x| x.to_string())
             .collect();
-        if SPC {
-            // let a = &*s;
-            // a.iter()
-            //     .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
-            out.write_str("{\"kind\":\"").unwrap();
-            // out.write_str(&kind.to_string()).unwrap();
-            out.write_str(&"spaces").unwrap();
-            out.write_str("\",\"label\":\"").unwrap();
-            out.write_str(&escape(&b)).unwrap();
-            out.write_str("\"}").unwrap();
-        }
-        return Some(if b.contains("\n") {
-            b
-        } else {
-            parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
-        });
-    }
-
-    match (label, children) {
-        (None, None) => {
-            out.write_str("\"").unwrap();
-            out.write_str(&escape(&kind.to_string())).unwrap();
-            out.write_str("\"").unwrap();
-            None
-        }
-        (label, Some(children)) => {
-            out.write_str("{\"kind\":\"").unwrap();
-            out.write_str(&escape(&kind.to_string())).unwrap();
-            if let Some(label) = label {
-                out.write_str("\",\"label\":\"").unwrap();
-                let s = g(label);
-                out.write_str(&escape(&s)).unwrap();
+            if SPC {
+                // let a = &*s;
+                // a.iter()
+                //     .for_each(|a| Space::fmt(a, &mut b, parent_indent).unwrap());
+                out.write_str("{\"kind\":\"")?;
+                // out.write_str(&kind.to_string())?;
+                out.write_str(&"spaces")?;
+                out.write_str("\",\"label\":\"")?;
+                out.write_str(&escape(&b))?;
+                out.write_str("\"}")?;
             }
-            if !children.is_empty() {
-                out.write_str("\",\"children\":[").unwrap();
-                let mut it = children.iter_children();
-                let mut ind = json_serialize::<_, _, _, _, _, _, SPC>(
-                    f,
-                    g,
-                    &it.next().unwrap(),
-                    out,
-                    parent_indent,
-                )
-                .unwrap_or(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned());
-                for id in it {
-                    out.write_str(",").unwrap();
-                    ind = json_serialize::<_, _, _, _, _, _, SPC>(f, g, &id, out, &ind).unwrap_or(
-                        parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned(),
-                    );
-                }
-                out.write_str("]}").unwrap();
+            return Ok(if b.contains("\n") {
+                b
             } else {
-                out.write_str("\"}").unwrap();
+                parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
+            });
+        }
+
+        match (label, children) {
+            (None, None) => {
+                out.write_str("\"")?;
+                out.write_str(&escape(&kind.to_string()))?;
+                out.write_str("\"")?;
+                Err(IndentedAlt::NoIndent)
             }
-            None
+            (label, Some(children)) => {
+                out.write_str("{\"kind\":\"")?;
+                out.write_str(&escape(&kind.to_string()))?;
+                if let Some(label) = label {
+                    out.write_str("\",\"label\":\"")?;
+                    let s = LabelStore::resolve(self.stores, label);
+                    out.write_str(&escape(&s))?;
+                }
+                if !children.is_empty() {
+                    out.write_str("\",\"children\":[").unwrap();
+                    let mut it = children.iter_children();
+                    let mut ind = self
+                        .serialize(&it.next().unwrap(), parent_indent, out)
+                        .unwrap_or(
+                            parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned(),
+                        );
+                    for id in it {
+                        out.write_str(",").unwrap();
+                        ind = self.serialize(&id, &ind, out).unwrap_or(
+                            parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned(),
+                        );
+                    }
+                    out.write_str("]}").unwrap();
+                } else {
+                    out.write_str("\"}").unwrap();
+                }
+                Err(IndentedAlt::NoIndent)
+            }
+            (Some(label), None) => {
+                out.write_str("{\"kind\":\"").unwrap();
+                out.write_str(&escape(&kind.to_string())).unwrap();
+                out.write_str("\",\"label\":\"").unwrap();
+                let s = LabelStore::resolve(self.stores, label);
+                out.write_str(&escape(&s)).unwrap();
+                out.write_str("\"}").unwrap();
+                Err(IndentedAlt::NoIndent)
+            }
         }
-        (Some(label), None) => {
-            out.write_str("{\"kind\":\"").unwrap();
-            out.write_str(&escape(&kind.to_string())).unwrap();
-            out.write_str("\",\"label\":\"").unwrap();
-            let s = g(label);
-            out.write_str(&escape(&s)).unwrap();
-            out.write_str("\"}").unwrap();
-            None
-        }
+    }
+}
+
+#[derive(PartialEq, Eq)]
+pub enum IndentedAlt {
+    FmtError,
+    NoIndent,
+}
+impl From<std::fmt::Error> for IndentedAlt {
+    fn from(_: std::fmt::Error) -> Self {
+        IndentedAlt::FmtError
     }
 }

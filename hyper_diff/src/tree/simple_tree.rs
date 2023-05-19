@@ -8,7 +8,7 @@ use num_traits::{cast, NumCast, PrimInt, ToPrimitive};
 
 use hyper_ast::types::{
     HashKind, LabelStore, Labeled, MySlice, NodeStore, NodeStoreMut, Stored, Typed, WithChildren,
-    WithStats,
+    WithStats, NodeId,
 };
 
 #[allow(dead_code)]
@@ -108,7 +108,7 @@ where
             "{}|-{}:{} \ts{}\th{}",
             " ".repeat(self.depth),
             cs.get_type(),
-            self.ls.resolve(cs.get_label()),
+            self.ls.resolve(cs.get_label_unchecked()),
             cs.size(),
             cs.height(),
         )?;
@@ -138,7 +138,7 @@ impl<'a, 'b> Debug for DisplayTree<'a, 'b, u16, Tree> {
             "{}|-{}:{}    \t({})\ts{}\th{}",
             " ".repeat(self.depth),
             cs.get_type(),
-            self.ls.resolve(cs.get_label()),
+            self.ls.resolve(cs.get_label_unchecked()),
             self.node,
             cs.size(),
             cs.height(),
@@ -264,15 +264,23 @@ impl<T: hyper_ast::types::Typed> hyper_ast::types::Typed for TreeRef<'_, T> {
 impl hyper_ast::types::Labeled for Tree {
     type Label = u16;
 
-    fn get_label(&self) -> &Self::Label {
+    fn get_label_unchecked(&self) -> &Self::Label {
         &self.label
+    }
+
+    fn try_get_label<'a>(&'a self) -> Option<&'a Self::Label> {
+        Some(self.get_label_unchecked())
     }
 }
 impl<T: hyper_ast::types::Labeled> hyper_ast::types::Labeled for TreeRef<'_, T> {
     type Label = T::Label;
 
-    fn get_label(&self) -> &Self::Label {
-        self.0.get_label()
+    fn get_label_unchecked(&self) -> &Self::Label {
+        self.0.get_label_unchecked()
+    }
+
+    fn try_get_label<'a>(&'a self) -> Option<&'a Self::Label> {
+        Some(self.get_label_unchecked())
     }
 }
 impl hyper_ast::types::Node for Tree {}
@@ -289,7 +297,7 @@ impl hyper_ast::types::Tree for Tree {
 
 impl<T: hyper_ast::types::Tree> hyper_ast::types::Tree for TreeRef<'_, T>
 where
-    T::TreeId: Clone,
+    T::TreeId: Clone + NodeId<IdN=T::TreeId>,
 {
     fn has_children(&self) -> bool {
         self.0.has_children()
@@ -332,7 +340,7 @@ impl WithChildren for Tree {
 
 impl<T: WithChildren> WithChildren for TreeRef<'_, T>
 where
-    T::TreeId: Clone,
+    T::TreeId: Clone + NodeId<IdN=T::TreeId>,
 {
     type ChildIdx = T::ChildIdx;
 

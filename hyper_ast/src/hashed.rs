@@ -3,7 +3,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use crate::types::{HashKind, MySlice};
+use crate::types::{AnyType, HashKind, HyperType, MySlice, NodeId};
 use crate::{
     store::labels::DefaultLabelIdentifier, store::nodes::DefaultNodeIdentifier, types::Type,
 };
@@ -11,8 +11,12 @@ use num::{traits::WrappingAdd, PrimInt};
 
 use crate::nodes::{CompressedNode, HashSize};
 
-pub type HashedNode =
-    HashedCompressedNode<SyntaxNodeHashs<HashSize>, DefaultNodeIdentifier, DefaultLabelIdentifier>;
+pub type HashedNode = HashedCompressedNode<
+    SyntaxNodeHashs<HashSize>,
+    DefaultNodeIdentifier,
+    DefaultLabelIdentifier,
+    AnyType,
+>;
 
 pub trait NodeHashs {
     type Hash: PrimInt;
@@ -185,67 +189,81 @@ impl MetaDataHashsBuilder<SyntaxNodeHashs<u32>> for Builder<SyntaxNodeHashs<u32>
 }
 
 #[derive(Debug)]
-pub struct HashedCompressedNode<U: NodeHashs, N, L> {
+pub struct HashedCompressedNode<U: NodeHashs, N, L, T> {
     pub(crate) hashs: U,
-    pub(crate) node: CompressedNode<N, L>,
+    pub(crate) node: CompressedNode<N, L, T>,
 }
 
-impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L> crate::types::Node
-    for HashedCompressedNode<U, N, L>
+impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N, L, T> crate::types::Node
+    for HashedCompressedNode<U, N, L, T>
 {
 }
 
-impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq, L> crate::types::Stored
-    for HashedCompressedNode<U, N, L>
+impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N: NodeId, L, T> crate::types::Stored
+    for HashedCompressedNode<U, N, L, T>
 {
     type TreeId = N;
 }
 
-impl<U: NodeHashs + PartialEq, N: PartialEq, L: PartialEq> PartialEq
-    for HashedCompressedNode<U, N, L>
+impl<U: NodeHashs + PartialEq, N: PartialEq, L: PartialEq, T: PartialEq> PartialEq
+    for HashedCompressedNode<U, N, L, T>
 {
     fn eq(&self, other: &Self) -> bool {
         self.hashs.eq(&other.hashs) && self.node.eq(&other.node)
     }
 }
 
-impl<U: NodeHashs + PartialEq, N: Eq, L: Eq> Eq for HashedCompressedNode<U, N, L> {}
+impl<U: NodeHashs + PartialEq, N: Eq, L: Eq, T: Eq> Eq for HashedCompressedNode<U, N, L, T> {}
 
-impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L> crate::types::Typed
-    for HashedCompressedNode<U, N, L>
+impl<
+        H: Hash + PrimInt,
+        U: NodeHashs<Hash = H>,
+        N,
+        L,
+        T: HyperType + Copy + Hash + Eq + Sync + Send,
+    > crate::types::Typed for HashedCompressedNode<U, N, L, T>
 {
-    type Type = Type;
+    type Type = T;
 
-    fn get_type(&self) -> Type {
+    fn get_type(&self) -> T
+    where
+        T: Send + Sync,
+    {
         self.node.get_type()
     }
 }
 
-impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L: Eq> crate::types::Labeled
-    for HashedCompressedNode<U, N, L>
+impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N, L: Eq, T> crate::types::Labeled
+    for HashedCompressedNode<U, N, L, T>
 {
     type Label = L;
 
-    fn get_label(&self) -> &L {
-        self.node.get_label()
+    fn get_label_unchecked(&self) -> &L {
+        self.node.get_label_unchecked()
+    }
+
+    fn try_get_label<'a>(&'a self) -> Option<&'a Self::Label> {
+        self.node.try_get_label()
     }
 }
 
-impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L> crate::types::WithChildren
-    for HashedCompressedNode<U, N, L>
+impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N: NodeId<IdN = N> + Copy + Eq, L, T>
+    crate::types::WithChildren for HashedCompressedNode<U, N, L, T>
+where
+    N::IdN: Copy + Eq,
 {
     type ChildIdx = u16;
-    type Children<'a> = MySlice<Self::TreeId> where Self: 'a;
+    type Children<'a> = MySlice<N::IdN> where Self: 'a;
 
     fn child_count(&self) -> u16 {
         self.node.child_count()
     }
 
-    fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+    fn child(&self, idx: &Self::ChildIdx) -> Option<N::IdN> {
         self.node.child(idx)
     }
 
-    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<N::IdN> {
         self.node.child_rev(idx)
     }
 
@@ -266,8 +284,15 @@ impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L> crate::types::
     }
 }
 
-impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L: Eq> crate::types::Tree
-    for HashedCompressedNode<U, N, L>
+impl<
+        H: Hash + PrimInt,
+        U: NodeHashs<Hash = H>,
+        N: NodeId<IdN = N> + Copy + Eq,
+        L: Eq,
+        T: Copy + Hash + Eq + Sync + Send + HyperType,
+    > crate::types::Tree for HashedCompressedNode<U, N, L, T>
+where
+    N::IdN: Copy + Eq,
 {
     fn has_children(&self) -> bool {
         self.node.has_children()
@@ -278,7 +303,7 @@ impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N: Eq + Clone, L: Eq> crate::typ
     }
 }
 
-impl<U: NodeHashs, N, L> Hash for HashedCompressedNode<U, N, L>
+impl<U: NodeHashs, N, L, T> Hash for HashedCompressedNode<U, N, L, T>
 where
     U::Hash: Hash,
 {
@@ -287,18 +312,18 @@ where
     }
 }
 
-impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L> crate::types::WithHashs
-    for HashedCompressedNode<U, N, L>
+impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N, L, T> crate::types::WithHashs
+    for HashedCompressedNode<U, N, L, T>
 {
     type HK = U::Kind;
-    type HP = T;
+    type HP = H;
 
-    fn hash(&self, kind: &Self::HK) -> T {
+    fn hash(&self, kind: &Self::HK) -> H {
         self.hashs.hash(kind)
     }
 }
 
-// impl<T: Hash + PrimInt, U: NodeHashs<Hash = T>, N, L> HashedCompressedNode<U, N, L> {
+// impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N, L> HashedCompressedNode<U, N, L,T> {
 //     pub(crate) fn new(hashs: U, node: CompressedNode<N, L>) -> Self {
 //         Self { hashs, node }
 //     }

@@ -18,6 +18,6 @@ pub type DefaultNodeIdentifier = simple::NodeIdentifier;
 
 
 #[cfg(feature="legion")]
-pub type HashedNodeRef<'store> = legion::HashedNodeRef<'store>;
+pub type HashedNodeRef<'store> = legion::HashedNodeRef<'store, DefaultNodeIdentifier>;
 #[cfg(not(feature="legion"))]
-pub type HashedNodeRef<'store> = simple::HashedNodeRef<'store>;
+pub type HashedNodeRef<'store> = simple::HashedNodeRef<'store, DefaultNodeIdentifier>;

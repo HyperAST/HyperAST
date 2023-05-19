@@ -13,7 +13,8 @@ use crate::decompressed_tree_store::{
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
 use hyper_ast::types::{
-    DecompressedSubtree, HyperAST, LabelStore, NodeStore, SlicedLabel, Tree, WithHashs, WithStats,
+    DecompressedSubtree, HyperAST, LabelStore, NodeId, NodeStore, SlicedLabel, Tree, WithHashs,
+    WithStats,
 };
 
 use super::lazy_bottom_up_matcher::BottomUpMatcher;
@@ -168,8 +169,8 @@ impl<
         SIM_THRESHOLD_DEN,
     >
 where
-    T::TreeId: 'a + Clone + Debug,
-    T::Type: Debug,
+    T::TreeId: 'a + Clone + Debug + NodeId<IdN = T::TreeId>,
+    T::Type: Debug + Eq + Copy + Send + Sync,
     Dsrc::IdD: 'a + PrimInt + std::ops::SubAssign + Debug,
     Ddst::IdD: 'a + PrimInt + std::ops::SubAssign + Debug,
     M::Src: 'a + PrimInt + std::ops::SubAssign + Debug,
@@ -203,7 +204,7 @@ where
     ) -> crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
     where
         HAST: HyperAST<'a, NS = S, LS = LS>,
-        M: Default
+        M: Default,
     {
         let mut matcher = Self {
             internal: BottomUpMatcher {
@@ -231,7 +232,10 @@ where
         }
     }
 
-    pub fn execute<'b>(&mut self) where M: Default {
+    pub fn execute<'b>(&mut self)
+    where
+        M: Default,
+    {
         assert_eq!(
             // TODO move it inside the arena ...
             self.internal.src_arena.root(),
@@ -302,7 +306,10 @@ where
         r
     }
 
-    pub(crate) fn last_chance_match_zs(&mut self, src: Dsrc::IdD, dst: Ddst::IdD) where M: Default {
+    pub(crate) fn last_chance_match_zs(&mut self, src: Dsrc::IdD, dst: Ddst::IdD)
+    where
+        M: Default,
+    {
         // WIP https://blog.rust-lang.org/2022/10/28/gats-stabilization.html#implied-static-requirement-from-higher-ranked-trait-bounds
         let src_s = self
             .internal

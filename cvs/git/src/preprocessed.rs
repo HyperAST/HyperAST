@@ -8,7 +8,7 @@ use std::{
 use git2::{Oid, Repository};
 use hyper_ast::{
     store::{defaults::LabelIdentifier, nodes::DefaultNodeIdentifier as NodeIdentifier},
-    types::{IterableChildren, LabelStore as _, Type, Typed, WithChildren},
+    types::{IterableChildren, LabelStore as _, WithChildren, AnyType},
     utils::memusage_linux,
 };
 use hyper_ast_gen_ts_java::impact::partial_analysis::PartialAnalysis;
@@ -20,11 +20,11 @@ use crate::{
     git::{all_commits_between, retrieve_commit},
     java::{handle_java_file, JavaAcc},
     java_processor::JavaProcessor,
-    make::{MakeModuleAcc, handle_makefile_file, MakeFile},
+    make::{handle_makefile_file, MakeFile, MakeModuleAcc},
     make_processor::MakeProcessor,
     maven::{handle_pom_file, MavenModuleAcc, MavenPartialAnalysis, POM},
     maven_processor::MavenProcessor,
-    Commit, Processor, SimpleStores, MD,
+    Commit, Processor, SimpleStores, MD, TStore,
 };
 use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
@@ -99,14 +99,14 @@ impl RepositoryProcessor {
         ana.print_refs(&self.main_stores.label_store);
     }
 
-    fn xml_generator(&mut self) -> XmlTreeGen {
+    fn xml_generator(&mut self) -> XmlTreeGen<TStore> {
         XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores: &mut self.main_stores,
         }
     }
 
-    fn java_generator(&mut self, text: &[u8]) -> java_tree_gen::JavaTreeGen {
+    fn java_generator(&mut self, text: &[u8]) -> java_tree_gen::JavaTreeGen<TStore> {
         let line_break = if text.contains(&b'\r') {
             "\r\n".as_bytes().to_vec()
         } else {
@@ -119,7 +119,7 @@ impl RepositoryProcessor {
         }
     }
 
-    fn cpp_generator(&mut self, text: &[u8]) -> cpp_tree_gen::CppTreeGen {
+    fn cpp_generator(&mut self, text: &[u8]) -> cpp_tree_gen::CppTreeGen<TStore> {
         let line_break = if text.contains(&b'\r') {
             "\r\n".as_bytes().to_vec()
         } else {
@@ -165,10 +165,10 @@ impl PreProcessedRepository {
         &self,
         d: NodeIdentifier,
         name: &str,
-    ) -> Option<(NodeIdentifier, usize)> {
+    ) -> Option<(NodeIdentifier, u16)> {
         self.processor.child_by_name_with_idx(d, name)
     }
-    pub fn child_by_type(&self, d: NodeIdentifier, t: &Type) -> Option<(NodeIdentifier, usize)> {
+    pub fn child_by_type(&self, d: NodeIdentifier, t: &AnyType) -> Option<(NodeIdentifier, u16)> {
         self.processor.child_by_type(d, t)
     }
     pub fn pre_process(
@@ -257,13 +257,14 @@ impl PreProcessedRepository {
                     let mut out = BuffOut {
                         buff: "".to_owned(),
                     };
-                    hyper_ast_gen_ts_java::legion_with_refs::serialize(
-                        &self.processor.main_stores.node_store,
-                        &self.processor.main_stores.label_store,
-                        &full_node.local.compressed_node,
-                        &mut out,
-                        &std::str::from_utf8(&"\n".as_bytes().to_vec()).unwrap(),
-                    );
+                    println!("{}", hyper_ast::nodes::TextSerializer::new(&self.processor.main_stores, full_node.local.compressed_node));
+                    // hyper_ast_gen_ts_java::legion_with_refs::serialize(
+                    //     &self.processor.main_stores.node_store,
+                    //     &self.processor.main_stores.label_store,
+                    //     &full_node.local.compressed_node,
+                    //     &mut out,
+                    //     &std::str::from_utf8(&"\n".as_bytes().to_vec()).unwrap(),
+                    // );
                     if std::str::from_utf8(text).unwrap() == out.buff {
                         eq += 1;
                     } else {
@@ -805,10 +806,10 @@ impl RepositoryProcessor {
         &self,
         d: NodeIdentifier,
         name: &str,
-    ) -> Option<(NodeIdentifier, usize)> {
+    ) -> Option<(NodeIdentifier, u16)> {
         child_by_name_with_idx(&self.main_stores, d, name)
     }
-    pub fn child_by_type(&self, d: NodeIdentifier, t: &Type) -> Option<(NodeIdentifier, usize)> {
+    pub fn child_by_type(&self, d: NodeIdentifier, t: &AnyType) -> Option<(NodeIdentifier, u16)> {
         child_by_type(&self.main_stores, d, t)
     }
 }
@@ -826,17 +827,17 @@ pub fn child_by_name_with_idx(
     stores: &SimpleStores,
     d: NodeIdentifier,
     name: &str,
-) -> Option<(NodeIdentifier, usize)> {
+) -> Option<(NodeIdentifier, u16)> {
     let n = stores.node_store.resolve(d);
     log::info!("{}", name);
     let i = n.get_child_idx_by_name(&stores.label_store.get(name)?);
-    i.map(|i| (n.child(&i).unwrap(), i as usize))
+    i.map(|i| (n.child(&i).unwrap(), i))
 }
 pub fn child_by_type(
     stores: &SimpleStores,
     d: NodeIdentifier,
-    t: &Type,
-) -> Option<(NodeIdentifier, usize)> {
+    t: &AnyType,
+) -> Option<(NodeIdentifier, u16)> {
     let n = stores.node_store.resolve(d);
     let s = n
         .children()
@@ -845,9 +846,10 @@ pub fn child_by_type(
         .enumerate()
         .find(|(_, x)| {
             let n = stores.node_store.resolve(**x);
-            n.get_type().eq(t)
+            use hyper_ast::types::TypeStore;
+            stores.type_store.resolve_type(&n).eq(t)
         })
-        .map(|(i, x)| (*x, i));
+        .map(|(i, x)| (*x, i as u16));
     s
 }
 

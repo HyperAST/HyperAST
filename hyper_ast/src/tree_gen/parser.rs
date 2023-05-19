@@ -30,6 +30,10 @@ pub trait Node<'a> {
         }
     }
 }
+
+pub trait NodeWithU16TypeId<'a>: Node<'a> {
+    fn kind_id(&self) -> u16;
+}
 pub trait TreeCursor<'a,N:Node<'a>> {
     fn node(&self) -> N;
     fn goto_first_child(&mut self) -> bool;

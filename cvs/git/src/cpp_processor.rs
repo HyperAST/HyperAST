@@ -2,17 +2,19 @@ use std::{iter::Peekable, path::Components};
 
 use git2::{Oid, Repository};
 use hyper_ast::{
-    cyclomatic::Mcc,
-    filter::{Bloom, BloomSize, BF},
+    filter::{BloomSize},
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
         nodes::legion::{compo, compo::CS, NodeStore, PendingInsert},
     },
     tree_gen::SubTreeMetrics,
-    types::{LabelStore, Type},
+    types::LabelStore,
 };
-use hyper_ast_gen_ts_cpp::legion::{self, eq_node};
+use hyper_ast_gen_ts_cpp::{
+    legion::{self, eq_node},
+    types::Type,
+};
 use tuples::CombinConcat;
 
 use crate::{
@@ -172,7 +174,7 @@ fn make(acc: CppAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_cpp::legion:
         return legion::Local {
             compressed_node: id,
             metrics,
-            ana
+            ana,
         };
     }
 
@@ -332,11 +334,7 @@ mod experiments {
                 }
             }
         }
-        fn post(
-            &mut self,
-            oid: Oid,
-            acc: CppAcc,
-        ) -> Option<(legion::Local, IsSkippedAna)> {
+        fn post(&mut self, oid: Oid, acc: CppAcc) -> Option<(legion::Local, IsSkippedAna)> {
             let skiped_ana = true;
             let name = acc.name.clone();
             let key = (oid, name.as_bytes().to_vec());

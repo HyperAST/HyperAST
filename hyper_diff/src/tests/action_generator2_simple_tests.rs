@@ -50,7 +50,7 @@ fn test_no_actions() {
 
     let g = |x: &u16| -> String {
         let n = node_store.resolve(x);
-        let x = n.get_label();
+        let x = n.get_label_unchecked();
         label_store.resolve(x).to_string()
     };
     println!(
@@ -126,7 +126,7 @@ fn test_delete_actions_1() {
 
     let g = |x: &u16| -> String {
         let n = node_store.resolve(x);
-        let x = n.get_label();
+        let x = n.get_label_unchecked();
         label_store.resolve(x).to_string()
     };
     println!(
@@ -211,7 +211,7 @@ fn test_insert_actions_1() {
 
     let g = |x: &u16| -> String {
         let n = node_store.resolve(x);
-        let x = n.get_label();
+        let x = n.get_label_unchecked();
         label_store.resolve(x).to_string()
     };
     println!(
@@ -299,7 +299,7 @@ fn test_rename_actions_1() {
 
     let g = |x: &u16| -> String {
         let n = node_store.resolve(x);
-        let x = n.get_label();
+        let x = n.get_label_unchecked();
         label_store.resolve(x).to_string()
     };
     println!(
@@ -341,7 +341,7 @@ fn test_rename_actions_1() {
     let a = make_update::<Tree, CompressedTreePath<_>>(
         *node_store
             .resolve(&dst_arena.original(&from_dst(&[0, 0])))
-            .get_label(),
+            .get_label_unchecked(),
         (&[0, 0], &[0, 0]),
     );
     println!("{:?}", a);
@@ -390,7 +390,7 @@ fn test_move_actions_1() {
 
     let g = |x: &u16| -> String {
         let n = node_store.resolve(x);
-        let x = n.get_label();
+        let x = n.get_label_unchecked();
         label_store.resolve(x).to_string()
     };
     println!(

@@ -6,22 +6,23 @@ use std::{
 
 use hyper_ast::{
     hashed::SyntaxNodeHashs,
-    position::{StructuralPosition, TreePath},
+    position::{StructuralPosition, TreePath, TreePathMut},
     store::defaults::{LabelIdentifier, NodeIdentifier},
     tree_gen::SubTreeMetrics,
-    types::{IterableChildren, LabelStore as _, Labeled, Tree, Type, Typed, WithChildren},
+    types::{IterableChildren, LabelStore as _, Labeled, Tree, Typed, WithChildren},
 };
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
-use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
+use hyper_ast_gen_ts_xml::{legion::XmlTreeGen, types::Type};
+use num::ToPrimitive;
 
-use crate::{Accumulator, SimpleStores, PROPAGATE_ERROR_ON_BAD_CST_NODE};
+use crate::{Accumulator, SimpleStores, PROPAGATE_ERROR_ON_BAD_CST_NODE, TStore};
 
 pub(crate) fn handle_pom_file<'a>(
-    tree_gen: &mut XmlTreeGen<'a>,
+    tree_gen: &mut XmlTreeGen<'a, TStore>,
     name: &[u8],
     text: &'a [u8],
 ) -> Result<POM, ()> {
-    let tree = match XmlTreeGen::tree_sitter_parse(text) {
+    let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(text) {
         Ok(tree) => tree,
         Err(tree) => {
             log::warn!("bad CST");
@@ -58,7 +59,7 @@ pub struct POM {
 pub struct IterMavenModules2<'a> {
     stores: &'a SimpleStores,
     parents: Vec<NodeIdentifier>,
-    offsets: Vec<usize>,
+    offsets: Vec<u16>,
     /// to tell that we need to pop a parent, we could also use a bitvec instead of Option::None
     remaining: Vec<Option<NodeIdentifier>>,
 }
@@ -78,7 +79,7 @@ impl<'a> Iterator for IterMavenModules2<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next_node().map(|x| {
-            StructuralPosition::from((self.parents().to_vec(), self.offsets().to_vec(), x))
+            (self.parents().to_vec(), self.offsets().to_vec(), x).into()
         })
     }
 }
@@ -95,7 +96,7 @@ impl<'a> IterMavenModules2<'a> {
     pub fn parents(&self) -> &[NodeIdentifier] {
         &self.parents[..self.parents.len() - 1]
     }
-    pub fn offsets(&self) -> &[usize] {
+    pub fn offsets(&self) -> &[u16] {
         &self.offsets[..self.offsets.len() - 1]
     }
 
@@ -112,11 +113,11 @@ impl<'a> IterMavenModules2<'a> {
             }
         }
 
-        let b = self.stores.node_store.resolve(x);
+        let b = self.stores.node_store.try_resolve_typed::<XmlIdN>(&x).unwrap().0;
         let t = b.get_type();
 
         let is_src = if b.has_label() {
-            self.stores.label_store.resolve(b.get_label()).eq("src")
+            self.stores.label_store.resolve(b.get_label_unchecked()).eq("src")
         } else {
             false
         };
@@ -145,15 +146,16 @@ impl<'a> IterMavenModules2<'a> {
             .unwrap_or_default()
             .iter_children()
             .find(|x| {
-                if let Some(n) = self.stores.node_store.try_resolve(**x) {
+                if let Some(n) = self.stores.node_store.try_resolve_typed::<XmlIdN>(x) {
+                    let n = n.0;
                     log::debug!("f {:?}", n.get_type());
-                    n.get_type().eq(&Type::xml_SourceFile)
+                    n.get_type().eq(&Type::SourceFile)
                         && if n.has_label() {
                             log::debug!(
                                 "f name: {:?}",
-                                self.stores.label_store.resolve(n.get_label())
+                                self.stores.label_store.resolve(n.get_label_unchecked())
                             );
-                            self.stores.label_store.resolve(n.get_label()).eq("pom.xml")
+                            self.stores.label_store.resolve(n.get_label_unchecked()).eq("pom.xml")
                         } else {
                             false
                         }
@@ -346,7 +348,7 @@ impl MavenPartialAnalysis {
 pub struct IterMavenModules<'a, T: TreePath<NodeIdentifier>> {
     stores: &'a SimpleStores,
     path: T,
-    stack: Vec<(NodeIdentifier, usize, Option<Vec<NodeIdentifier>>)>,
+    stack: Vec<(NodeIdentifier, u16, Option<Vec<NodeIdentifier>>)>,
 }
 
 // impl<'a, T: TreePath<NodeIdentifier>> Debug for IterMavenModules<'a, T> {
@@ -355,24 +357,24 @@ pub struct IterMavenModules<'a, T: TreePath<NodeIdentifier>> {
 //     }
 // }
 
-impl<'a, T: TreePath<NodeIdentifier> + Debug + Clone> Iterator for IterMavenModules<'a, T> {
+impl<'a, T: TreePathMut<NodeIdentifier, u16> + Debug + Clone> Iterator for IterMavenModules<'a, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let (node, offset, children) = self.stack.pop()?;
             if let Some(children) = children {
-                if offset < children.len() {
-                    let child = children[offset];
-                    self.path.check(&self.stores).unwrap();
+                if offset.to_usize().unwrap() < children.len() {
+                    let child = children[offset.to_usize().unwrap()];
+                    self.path.check(self.stores).unwrap();
                     {
-                        let b = self.stores.node_store.resolve(node);
+                        let b = self.stores.node_store.try_resolve_typed::<XmlIdN>(&node).unwrap().0;
                         if b.has_children() {
                             let len = b.child_count();
                             let cs = b.children().unwrap();
                             // println!("children: {:?} {} {:?}", node,cs.len(),cs);
-                            assert!(offset < len as usize);
-                            assert_eq!(child, cs[offset as u16]);
+                            assert!(offset < len);
+                            assert_eq!(child, cs[offset]);
                         } else {
                             panic!()
                         }
@@ -383,15 +385,15 @@ impl<'a, T: TreePath<NodeIdentifier> + Debug + Clone> Iterator for IterMavenModu
                             None => {}
                         }
                         self.path.goto(child, offset);
-                        self.path.check(&self.stores).unwrap();
+                        self.path.check(self.stores).unwrap();
                     } else {
                         match self.path.node() {
-                            Some(x) => assert_eq!(*x, children[offset - 1]),
+                            Some(x) => assert_eq!(*x, children[offset.to_usize().unwrap() - 1]),
                             None => {}
                         }
                         self.path.inc(child);
                         assert_eq!(*self.path.offset().unwrap(), offset + 1);
-                        self.path.check(&self.stores).expect(&format!(
+                        self.path.check(self.stores).expect(&format!(
                             "{:?} {} {:?} {:?} {:?}",
                             node, offset, child, children, self.path
                         ));
@@ -400,13 +402,13 @@ impl<'a, T: TreePath<NodeIdentifier> + Debug + Clone> Iterator for IterMavenModu
                     self.stack.push((child, 0, None));
                     continue;
                 } else {
-                    self.path.check(&self.stores).unwrap();
+                    self.path.check(self.stores).unwrap();
                     self.path.pop().expect("should not go higher than root");
-                    self.path.check(&self.stores).unwrap();
+                    self.path.check(self.stores).unwrap();
                     continue;
                 }
             } else {
-                let b = self.stores.node_store.resolve(node);
+                let b = self.stores.node_store.try_resolve_typed::<XmlIdN>(&node).unwrap().0;
 
                 if self.is_dead_end(&b) {
                     continue;
@@ -422,13 +424,16 @@ impl<'a, T: TreePath<NodeIdentifier> + Debug + Clone> Iterator for IterMavenModu
                 }
 
                 if self.is_matching(&b) {
-                    self.path.check(&self.stores).unwrap();
+                    self.path.check(self.stores).unwrap();
                     return Some(self.path.clone());
                 }
             }
         }
     }
 }
+
+type XmlIdN = hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>;
+type XmlNode<'a> = hyper_ast::store::nodes::legion::HashedNodeRef<'a, XmlIdN>;
 
 impl<'a, T: TreePath<NodeIdentifier>> IterMavenModules<'a, T> {
     pub fn new(stores: &'a SimpleStores, path: T, root: NodeIdentifier) -> Self {
@@ -440,31 +445,32 @@ impl<'a, T: TreePath<NodeIdentifier>> IterMavenModules<'a, T> {
         }
     }
 
-    fn is_dead_end(&self, b: &hyper_ast::store::nodes::legion::HashedNodeRef) -> bool {
+    fn is_dead_end(&self, b: &XmlNode<'a>) -> bool {
         let t = b.get_type();
         let is_src = if b.has_label() {
-            self.stores.label_store.resolve(b.get_label()).eq("src")
+            self.stores.label_store.resolve(b.get_label_unchecked()).eq("src")
         } else {
             false
         };
 
         is_src || t != Type::MavenDirectory
     }
-    fn is_matching(&self, b: &hyper_ast::store::nodes::legion::HashedNodeRef) -> bool {
+    fn is_matching(&self, b: &XmlNode<'a>) -> bool {
         let contains_pom = b
             .children()
             .unwrap()
             .iter_children()
             .find(|x| {
-                if let Some(n) = self.stores.node_store.try_resolve(**x) {
+                if let Some(n) = self.stores.node_store.try_resolve_typed::<XmlIdN>(x) {
+                    let n = n.0;
                     log::debug!("f {:?}", n.get_type());
-                    n.get_type().eq(&Type::xml_SourceFile)
+                    n.get_type().eq(&Type::SourceFile)
                         && if n.has_label() {
                             log::debug!(
                                 "f name: {:?}",
-                                self.stores.label_store.resolve(n.get_label())
+                                self.stores.label_store.resolve(n.get_label_unchecked())
                             );
-                            self.stores.label_store.resolve(n.get_label()).eq("pom.xml")
+                            self.stores.label_store.resolve(n.get_label_unchecked()).eq("pom.xml")
                         } else {
                             false
                         }

@@ -1,13 +1,11 @@
+use hyper_ast_cvs_git::SimpleStores;
 use serde::{Deserialize, Serialize};
 
 use std::fmt::Debug;
 
 use hyper_ast::{
-    store::{
-        defaults::NodeIdentifier,
-        nodes::legion,
-    },
-    types::{IterableChildren, Type, Typed, WithChildren, WithStats},
+    store::defaults::NodeIdentifier,
+    types::{HyperAST, HyperType, IterableChildren, TypeStore, WithChildren, WithStats},
 };
 use hyper_diff::{decompressed_tree_store::ShallowDecompressedTreeStore, matchers::Mapper};
 
@@ -144,14 +142,14 @@ pub(crate) fn added_deleted(
         root: NodeIdentifier,
         // increasing order
         mut no_spaces: It,
-        node_store: &'store legion::NodeStore,
+        stores: &'store SimpleStores,
     ) -> Vec<It::Item> {
         let mut offset_with_spaces: u32 = 0;
         let mut offset_without_spaces: u32 = 0;
         // let mut x = root;
         let mut res = vec![];
         let (children, pos_no_s, pos_w_s) = {
-            let b = node_store.resolve(root);
+            let b = stores.node_store().resolve(root);
             let cs = b.children();
             (
                 cs.unwrap().iter_children().map(|x| *x).collect::<Vec<_>>(),
@@ -190,8 +188,8 @@ pub(crate) fn added_deleted(
                 } else if curr_no_space < ele.pos_no_s {
                     // need to go down
                     let id = ele.children[ele.idx];
-                    let b = node_store.resolve(id);
-                    if b.get_type() == Type::Spaces {
+                    let b = stores.node_store().resolve(id);
+                    if stores.type_store().resolve_type(&b).is_spaces() {
                         ele.idx += 1;
                         stack.push(ele);
                         offset_with_spaces += 1;
@@ -204,8 +202,8 @@ pub(crate) fn added_deleted(
                         Ele {
                             id,
                             children: cs.iter_children().map(|x| *x).collect::<Vec<_>>(),
-                            pos_no_s: offset_without_spaces - 1 + b.size_no_spaces() as u32,
-                            pos_w_s: offset_with_spaces - 1 + b.size() as u32,
+                            pos_no_s: offset_without_spaces + b.size_no_spaces() as u32 - 1,
+                            pos_w_s: offset_with_spaces + b.size() as u32 - 1,
                             idx: 0,
                         }
                     // } else if curr_no_space == offset_without_spaces {
@@ -269,7 +267,7 @@ pub(crate) fn added_deleted(
                 None
             }
         }),
-        &repositories.processor.main_stores.node_store,
+        &repositories.processor.main_stores,
     );
     let unmapped_src: Vec<_> = global_pos_with_spaces(
         src_tr,
@@ -280,7 +278,7 @@ pub(crate) fn added_deleted(
                 None
             }
         }),
-        &repositories.processor.main_stores.node_store,
+        &repositories.processor.main_stores,
     );
     // let unmapped_src: Vec<_> = mapped
     //     .1

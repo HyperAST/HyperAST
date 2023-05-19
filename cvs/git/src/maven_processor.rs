@@ -12,9 +12,10 @@ use hyper_ast::{
         nodes::legion::{compo, NodeStore, compo::CS},
     },
     tree_gen::SubTreeMetrics,
-    types::{LabelStore, Type},
+    types::{LabelStore},
 };
 use hyper_ast_gen_ts_java::legion_with_refs::{eq_node, hash32};
+use hyper_ast_gen_ts_xml::types::Type;
 
 use crate::{
     git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
@@ -201,7 +202,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
 }
 
 pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
-    let dir_hash: u32 = hash32(&Type::Directory); // FIXME should be MavenDirectory ?
+    let dir_hash: u32 = hash32(&Type::MavenDirectory); // FIXME should be MavenDirectory ?
     let hashs = acc.metrics.hashs;
     let size = acc.metrics.size + 1;
     let height = acc.metrics.height + 1;

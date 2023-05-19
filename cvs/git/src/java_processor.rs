@@ -7,15 +7,16 @@ use hyper_ast::{
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
-        nodes::legion::{compo, NodeStore, PendingInsert, compo::CS},
+        nodes::legion::{compo, compo::CS, NodeStore, PendingInsert},
     },
     tree_gen::SubTreeMetrics,
-    types::{LabelStore, Type},
+    types::LabelStore,
 };
 use hyper_ast_gen_ts_java::{
     impact::partial_analysis::PartialAnalysis,
     legion_with_refs::{self, eq_node, BulkHasher},
 };
+use hyper_ast_gen_ts_java::types::Type;
 use tuples::CombinConcat;
 
 use crate::{

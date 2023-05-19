@@ -1,12 +1,15 @@
 use std::borrow::Borrow;
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::hash::Hash;
 use std::str::FromStr;
 
 use num::PrimInt;
 use num::ToPrimitive;
 use strum::IntoEnumIterator;
+use strum_macros::AsRefStr;
 use strum_macros::Display;
+use strum_macros::EnumCount;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
 
@@ -24,13 +27,378 @@ impl Type {
     }
 }
 
+#[repr(transparent)]
+pub struct T(u16);
+
+#[repr(u16)]
+pub enum T2 {
+    Java(u16),
+    Cpp(u16),
+}
+
+// pub trait Lang {
+//     type Factory;
+//     type Type;
+// }
+
+trait TypeFactory {
+    fn new() -> Self
+    where
+        Self: Sized;
+}
+
+macro_rules! make_type_store {
+    ($kw:ty, $sh:ty, $($a:ident($l:ty)),* $(,)?) => {
+
+        #[repr(u16)]
+        pub enum CustomTypeStore {$(
+            $a(u16),
+        )*}
+
+        impl CustomTypeStore {
+            // fn lang<L: Lang>(&self) -> Option<L> {
+            //     todo!()
+            // }
+            fn eq_keyword(kw: &$kw) -> bool {
+                todo!()
+            }
+            fn eq_shared(kw: &$sh) -> bool {
+                todo!()
+            }
+        }
+    };
+}
+
+make_type_store!(Keyword, Shared, Java(java::Language), Cpp(cpp::Language),);
+
+#[derive(Debug, Hash, Eq, PartialEq, EnumString, AsRefStr, EnumIter, EnumCount, Display)]
+#[strum(serialize_all = "snake_case")]
+enum Abstract {
+    Expression,
+    Statement,
+    Executable,
+    Declaration,
+    Literal,
+}
+
+// only keywords (leafs with a specific unique serialized form)
+// and concrete types (concrete rules) are stored.
+// abtract types are found by looking at the actual node ie. metadata
+// due to possibilities of concrete rules of being part of multiple abtract rules
+
+// lang + type // no abstract stuff
+
+mod abst {
+    use std::hash::Hash;
+
+    trait T: Hash + PartialEq + Eq {}
+}
+
+trait KeywordProvider: Sized {
+    fn parse(&self, s: &str) -> Option<Self>;
+    fn as_str(&'static self) -> &'static str;
+    fn len(&self) -> usize;
+}
+
+/// only contains keywords such as
+#[derive(Debug, EnumString, AsRefStr, EnumIter, EnumCount, Display)]
+#[strum(serialize_all = "snake_case")]
+#[derive(Hash, Clone, Copy, PartialEq, Eq)]
+pub enum Keyword {
+    // While,
+    // For,
+    // #[strum(serialize = ";")]
+    // SemiColon,
+    // #[strum(serialize = ".")]
+    // Dot,
+    // #[strum(serialize = "{")]
+    // LeftCurly,
+    // #[strum(serialize = "}")]
+    // RightCurly,
+}
+
+impl KeywordProvider for Keyword {
+    fn parse(&self, s: &str) -> Option<Self> {
+        Keyword::from_str(s).ok()
+    }
+
+    fn as_str(&'static self) -> &'static str {
+        Keyword::as_ref(&self)
+    }
+
+    fn len(&self) -> usize {
+        <Keyword as strum::EnumCount>::COUNT
+    }
+}
+
+#[derive(Debug, EnumString, AsRefStr, EnumIter, EnumCount, Display)]
+#[strum(serialize_all = "snake_case")]
+#[derive(Hash, Clone, Copy, PartialEq, Eq)]
+pub enum Shared {
+    Comment,
+    // ExpressionStatement,
+    // ReturnStatement,
+    // TryStatement,
+    Identifier,
+    TypeDeclaration,
+    Other,
+    // WARN do not include Abtract type/rules (should go in Abstract) ie.
+    // Expression,
+    // Statement,
+}
+
+mod polyglote {
+    /// has statements
+    struct Block;
+    /// has a name
+    struct Member;
+}
+
+// WARN order of fields matter in java for instantiation
+// stuff where order does not matter should be sorted before erasing anything
+
+pub enum TypeMapElement<Concrete, Abstract> {
+    Keyword(Keyword),
+    Concrete(Concrete),
+    Abstract(Abstract),
+}
+
+pub enum ConvertResult<Concrete, Abstract> {
+    Keyword(Keyword),
+    Concrete(Concrete),
+    Abstract(Abstract),
+    Missing,
+}
+
+mod macro_test {
+    macro_rules! parse_unitary_variants {
+        (@as_expr $e:expr) => {$e};
+        (@as_item $($i:item)+) => {$($i)+};
+
+        // Exit rules.
+        (
+            @collect_unitary_variants ($callback:ident ( $($args:tt)* )),
+            ($(,)*) -> ($($var_names:ident,)*)
+        ) => {
+            parse_unitary_variants! {
+                @as_expr
+                $callback!{ $($args)* ($($var_names),*) }
+            }
+        };
+
+        (
+            @collect_unitary_variants ($callback:ident { $($args:tt)* }),
+            ($(,)*) -> ($($var_names:ident,)*)
+        ) => {
+            parse_unitary_variants! {
+                @as_item
+                $callback!{ $($args)* ($($var_names),*) }
+            }
+        };
+
+        // Consume an attribute.
+        (
+            @collect_unitary_variants $fixed:tt,
+            (#[$_attr:meta] $($tail:tt)*) -> ($($var_names:tt)*)
+        ) => {
+            parse_unitary_variants! {
+                @collect_unitary_variants $fixed,
+                ($($tail)*) -> ($($var_names)*)
+            }
+        };
+
+        // Handle a variant, optionally with an with initialiser.
+        (
+            @collect_unitary_variants $fixed:tt,
+            ($var:ident $(= $_val:expr)*, $($tail:tt)*) -> ($($var_names:tt)*)
+        ) => {
+            parse_unitary_variants! {
+                @collect_unitary_variants $fixed,
+                ($($tail)*) -> ($($var_names)* $var,)
+            }
+        };
+
+        // Abort on variant with a payload.
+        (
+            @collect_unitary_variants $fixed:tt,
+            ($var:ident $_struct:tt, $($tail:tt)*) -> ($($var_names:tt)*)
+        ) => {
+            const _error: () = "cannot parse unitary variants from enum with non-unitary variants";
+        };
+
+        // Entry rule.
+        (enum $name:ident {$($body:tt)*} => $callback:ident $arg:tt) => {
+            parse_unitary_variants! {
+                @collect_unitary_variants
+                ($callback $arg), ($($body)*,) -> ()
+            }
+        };
+    }
+
+    macro_rules! coucou {
+        ( f(C, D)) => {
+            struct B {}
+        };
+    }
+    parse_unitary_variants! {
+        enum A {
+            C,D,
+        } => coucou{ f}
+    }
+}
+
+macro_rules! make_type {
+    (
+        Keyword {$(
+            $(#[$km:meta])*
+            $ka:ident
+        ),* $(,)?}
+        Concrete {$(
+            $(#[$cm:meta])*
+            $ca:ident$({$($cl:expr),+ $(,)*})?$(($($co:ident),+ $(,)*))?$([$($cx:ident),+ $(,)*])?
+        ),* $(,)?}
+        WithFields {$(
+            $(#[$wm:meta])*
+            $wa:ident{$($wb:tt)*}
+        ),* $(,)?}
+        Abstract {$(
+            $(#[$am:meta])*
+            $aa:ident($($ab:ident),* $(,)?)
+        ),* $(,)?}
+    ) => {
+
+        #[derive(Debug, EnumString, AsRefStr, EnumIter, EnumCount, Display)]
+        #[strum(serialize_all = "snake_case")]
+        #[derive(Hash, Clone, Copy, PartialEq, Eq)]
+        pub enum Type {
+            // Keywords
+        $(
+            $( #[$km] )*
+            $ka,
+        )*
+            // Concrete
+        $(
+            $ca,
+        )*
+            // WithFields
+        $(
+            $( #[$wm] )*
+            $wa,
+        )*
+        }
+        enum Abstract {
+            $(
+                $aa,
+            )*
+        }
+
+        // #[strum(props(Teacher="Ms.Frizzle", Room="201"))]
+        // pub enum WithFields {}
+
+        pub struct Factory {
+            map: Box<[u16]>,
+        }
+
+        pub struct Language;
+        // impl super::Lang for Language {
+        //     type Factory = Factory;
+        //     type Type = Type;
+        // }
+    };
+}
+
+pub mod java {
+    use super::*;
+    // pub struct TypeMap(Vec<TypeMapElement<ConcreteType, AbstractType>>);
+    // impl TypeMap {
+    //     pub fn is(&self, t: &T) -> bool {
+    //         !matches!(self.convert(t), ConvertResult::Missing)
+    //     }
+    //     pub fn convert(&self, t: &T) -> ConvertResult<ConcreteType, AbstractType> {
+    //         todo!()
+    //     }
+    // }
+    // pub fn parse(t: &str) -> ConvertResult<ConcreteType, AbstractType> {
+    //     todo!()
+    // }
+    pub enum Field {
+        Name,
+        Body,
+        Expression,
+        Condition,
+        Then,
+        Else,
+        Block,
+        Type,
+    }
+
+    make_type! {
+        Keyword{
+            While,
+            For,
+            Public,
+            Private,
+            Protected,
+            #[strum(serialize = ";")]
+            SemiColon,
+            #[strum(serialize = ".")]
+            Dot,
+            #[strum(serialize = "{")]
+            LeftCurly,
+            #[strum(serialize = "}")]
+            RightCurly,
+            #[strum(serialize = "(")]
+            LeftParen,
+            #[strum(serialize = ")")]
+            RightParen,
+            #[strum(serialize = "[")]
+            LeftBracket,
+            #[strum(serialize = "]")]
+            RightBracket,
+        }
+        Concrete {
+            Comment{r"//.\*$",r"/\*.*\*/"},
+            Identifier{r"[a-zA-Z].*"},
+            ExpressionStatement(Statement, Semicolon),
+            ReturnStatement(Return, Expression, Semicolon),
+            TryStatement(Try, Paren, Block),
+        }
+        WithFields {
+            Class {
+                name(Identifier),
+                body(ClassBody),
+            },
+            Interface {
+                name(Identifier),
+                body(InterfaceBody),
+            },
+        }
+        Abstract {
+            Statement(
+                StatementExpression,
+                TryStatement,
+            ),
+            Expression(
+                BinaryExpression,
+                UnaryExpression,
+            ),
+        }
+    }
+}
+
+mod cpp {
+    pub struct Factory {}
+}
+
+mod ts {}
+
 /// for now the types are shared between all languages
 #[derive(Debug, EnumString, EnumIter, Display)]
 #[strum(serialize_all = "snake_case")]
 #[allow(non_camel_case_types)]
 #[derive(Hash, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-pub enum Type {
+pub(crate) enum Type {
     MakeDirectory,
     MavenDirectory,
     Directory,
@@ -1214,43 +1582,133 @@ pub enum Type {
     cpp_InlineAsmExpression,
     #[strum(serialize = "inline_asm_operand")]
     cpp_InlineAsmOperand,
+    #[strum(serialize = "translation_unit_repeat1")]
+    cpp_TranslationUnitRepeat1,
+    #[strum(serialize = "_declaration_specifiers")]
+    cpp_DeclarationSpecifiers,
+    #[strum(serialize = "_declaration_specifiers_repeat1")]
+    cpp_DeclarationSpecifiers_repeat1,
+}
+pub trait Lang<T>: LangRef<T> {
+    fn make(t: u16) -> &'static T;
+    fn to_u16(t: T) -> u16;
+}
+
+pub trait LangRef<T> {
+    fn name(&self) -> &'static str;
+    fn make(&self, t: u16) -> &'static T;
+    fn to_u16(&self, t: T) -> u16;
+}
+pub struct LangWrapper<T: 'static>(&'static dyn LangRef<T>);
+
+impl<T> From<&'static (dyn LangRef<T> + 'static)> for LangWrapper<T> {
+    fn from(value: &'static (dyn LangRef<T> + 'static)) -> Self {
+        LangWrapper(value)
+    }
+}
+
+impl<T> LangRef<T> for LangWrapper<T> {
+    fn make(&self, t: u16) -> &'static T {
+        self.0.make(t)
+    }
+
+    fn to_u16(&self, t: T) -> u16 {
+        self.0.to_u16(t)
+    }
+
+    fn name(&self) -> &'static str {
+        self.0.name()
+    }
+}
+
+pub trait HyperType: Display + Debug {
+    fn as_shared(&self) -> Shared;
+    fn as_any(&self) -> &dyn std::any::Any;
+    fn generic_eq(&self, other: &dyn HyperType) -> bool
+    where
+        Self: 'static + PartialEq + Sized,
+    {
+        // Do a type-safe casting. If the types are different,
+        // return false, otherwise test the values for equality.
+        other
+            .as_any()
+            .downcast_ref::<Self>()
+            .map_or(false, |a| self == a)
+    }
+    fn is_file(&self) -> bool;
+    fn is_directory(&self) -> bool;
+    fn is_spaces(&self) -> bool;
+    fn get_lang(&self) -> LangWrapper<Self>
+    where
+        Self: Sized;
+}
+impl HyperType for u8 {
+    fn as_shared(&self) -> Shared {
+        todo!()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        todo!()
+    }
+
+    fn is_file(&self) -> bool {
+        todo!()
+    }
+
+    fn is_directory(&self) -> bool {
+        todo!()
+    }
+
+    fn is_spaces(&self) -> bool {
+        todo!()
+    }
+
+    fn get_lang(&self) -> LangWrapper<Self>
+    where
+        Self: Sized,
+    {
+        todo!()
+    }
+}
+pub trait TypeTrait: HyperType + Hash + Copy + Eq + Send + Sync {
+    type Lang: Lang<Self>;
+    fn is_fork(&self) -> bool;
+
+    fn is_literal(&self) -> bool;
+    fn is_primitive(&self) -> bool;
+    fn is_type_declaration(&self) -> bool;
+    fn is_identifier(&self) -> bool;
+    fn is_instance_ref(&self) -> bool;
+
+    fn is_type_body(&self) -> bool;
+
+    fn is_value_member(&self) -> bool;
+
+    fn is_executable_member(&self) -> bool;
+
+    fn is_statement(&self) -> bool;
+
+    fn is_declarative_statement(&self) -> bool;
+
+    fn is_structural_statement(&self) -> bool;
+
+    fn is_block_related(&self) -> bool;
+
+    fn is_simple_statement(&self) -> bool;
+
+    fn is_local_declare(&self) -> bool;
+
+    fn is_parameter(&self) -> bool;
+
+    fn is_parameter_list(&self) -> bool;
+
+    fn is_argument_list(&self) -> bool;
+
+    fn is_expression(&self) -> bool;
+    fn is_comment(&self) -> bool;
 }
 
 impl Type {
-    pub fn is_fork(&self) -> bool {
-        match self {
-            Self::TernaryExpression => true,
-            Self::IfStatement => true,
-            Self::ForStatement => true,
-            Self::EnhancedForStatement => true,
-            Self::WhileStatement => true,
-            Self::CatchClause => true,
-            Self::SwitchLabel => true,
-            Self::TryStatement => true,
-            Self::TryWithResourcesStatement => true,
-            Self::DoStatement => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_literal(&self) -> bool {
-        match self {
-            Self::Literal => true,
-            Self::True => true,
-            Self::False => true,
-            Self::OctalIntegerLiteral => true,
-            Self::BinaryIntegerLiteral => true,
-            Self::DecimalIntegerLiteral => true,
-            Self::HexFloatingPointLiteral => true,
-            Self::DecimalFloatingPointLiteral => true,
-            Self::ClassLiteral => true,
-            Self::StringLiteral => true,
-            Self::CharacterLiteral => true,
-            Self::HexIntegerLiteral => true,
-            Self::NullLiteral => true,
-            _ => false,
-        }
-    }
     pub fn literal_type(&self) -> &str {
         // TODO make the difference btw int/long and float/double
         match self {
@@ -1270,7 +1728,102 @@ impl Type {
             _ => panic!(),
         }
     }
-    pub fn is_primitive(&self) -> bool {
+}
+
+// TODO remove
+pub struct Old;
+
+impl Lang<Type> for Old {
+    fn make(t: u16) -> &'static Type {
+        Old.make(t)
+    }
+    fn to_u16(t: Type) -> u16 {
+        Old.to_u16(t)
+    }
+}
+
+impl LangRef<Type> for Old {
+    fn make(&self, t: u16) -> &'static Type {
+        let t: Type = unsafe { std::mem::transmute(t) };
+        todo!()
+    }
+    fn to_u16(&self, t: Type) -> u16 {
+        t as u16
+    }
+
+    fn name(&self) -> &'static str {
+        todo!()
+    }
+}
+
+impl HyperType for Type {
+    fn is_directory(&self) -> bool {
+        self == &Type::Directory || self == &Type::MavenDirectory || self == &Type::MakeDirectory
+    }
+
+    fn is_file(&self) -> bool {
+        self == &Type::Program
+            || self == &Type::xml_SourceFile
+            || self == &Type::cpp_TranslationUnit
+    }
+
+    fn is_spaces(&self) -> bool {
+        self == &Type::Spaces
+    }
+
+    fn as_shared(&self) -> Shared {
+        panic!()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        todo!()
+    }
+
+    fn get_lang(&self) -> LangWrapper<Self>
+    where
+        Self: Sized,
+    {
+        todo!()
+    }
+}
+// TODO remove, and also Type
+impl TypeTrait for Type {
+    type Lang = Old;
+    fn is_fork(&self) -> bool {
+        match self {
+            Self::TernaryExpression => true,
+            Self::IfStatement => true,
+            Self::ForStatement => true,
+            Self::EnhancedForStatement => true,
+            Self::WhileStatement => true,
+            Self::CatchClause => true,
+            Self::SwitchLabel => true,
+            Self::TryStatement => true,
+            Self::TryWithResourcesStatement => true,
+            Self::DoStatement => true,
+            _ => false,
+        }
+    }
+
+    fn is_literal(&self) -> bool {
+        match self {
+            Self::Literal => true,
+            Self::True => true,
+            Self::False => true,
+            Self::OctalIntegerLiteral => true,
+            Self::BinaryIntegerLiteral => true,
+            Self::DecimalIntegerLiteral => true,
+            Self::HexFloatingPointLiteral => true,
+            Self::DecimalFloatingPointLiteral => true,
+            Self::ClassLiteral => true,
+            Self::StringLiteral => true,
+            Self::CharacterLiteral => true,
+            Self::HexIntegerLiteral => true,
+            Self::NullLiteral => true,
+            _ => false,
+        }
+    }
+    fn is_primitive(&self) -> bool {
         match self {
             Self::BooleanType => true,
             Self::VoidType => true,
@@ -1279,7 +1832,7 @@ impl Type {
             _ => false,
         }
     }
-    pub fn is_type_declaration(&self) -> bool {
+    fn is_type_declaration(&self) -> bool {
         match self {
             Self::ClassDeclaration => true,
             Self::EnumDeclaration => true,
@@ -1289,7 +1842,7 @@ impl Type {
             _ => false,
         }
     }
-    // pub fn primitive_to_str(&self) -> &str {
+    // fn primitive_to_str(&self) -> &str {
     //     match self {
     //         Self::BooleanType => "boolean",
     //         Self::VoidType => "void",
@@ -1298,7 +1851,7 @@ impl Type {
     //         _ => panic!(),
     //     }
     // }
-    pub fn is_identifier(&self) -> bool {
+    fn is_identifier(&self) -> bool {
         match self {
             Self::Identifier => true,
             Self::TypeIdentifier => true,
@@ -1307,7 +1860,7 @@ impl Type {
             _ => false,
         }
     }
-    pub fn is_instance_ref(&self) -> bool {
+    fn is_instance_ref(&self) -> bool {
         match self {
             Self::This => true,
             Self::Super => true,
@@ -1315,17 +1868,7 @@ impl Type {
         }
     }
 
-    pub fn is_directory(&self) -> bool {
-        self == &Type::Directory || self == &Type::MavenDirectory || self == &Type::MakeDirectory
-    }
-
-    pub fn is_file(&self) -> bool {
-        self == &Type::Program
-            || self == &Type::xml_SourceFile
-            || self == &Type::cpp_TranslationUnit
-    }
-
-    pub fn is_type_body(&self) -> bool {
+    fn is_type_body(&self) -> bool {
         self == &Type::ClassBody
             || self == &Type::InterfaceBody
             || self == &Type::AnnotationTypeBody
@@ -1333,25 +1876,25 @@ impl Type {
             || self == &Type::EnumBodyDeclarations
     }
 
-    pub fn is_value_member(&self) -> bool {
+    fn is_value_member(&self) -> bool {
         self == &Type::FieldDeclaration
         || self == &Type::ConstantDeclaration
         // || self == &Type::EnumConstant
         || self == &Type::AnnotationTypeElementDeclaration
     }
 
-    pub fn is_executable_member(&self) -> bool {
+    fn is_executable_member(&self) -> bool {
         self == &Type::MethodDeclaration || self == &Type::ConstructorDeclaration
     }
 
-    pub fn is_statement(&self) -> bool {
+    fn is_statement(&self) -> bool {
         self.is_declarative_statement()
             || self.is_structural_statement()
             || self.is_simple_statement()
             || self.is_block_related()
     }
 
-    pub fn is_declarative_statement(&self) -> bool {
+    fn is_declarative_statement(&self) -> bool {
         self == &Type::LocalVariableDeclaration
             || self == &Type::TryWithResourcesStatement
             || self == &Type::CatchClause
@@ -1359,7 +1902,7 @@ impl Type {
             || self == &Type::EnhancedForStatement
     }
 
-    pub fn is_structural_statement(&self) -> bool {
+    fn is_structural_statement(&self) -> bool {
         self == &Type::SwitchStatement
             || self == &Type::WhileStatement
             || self == &Type::DoStatement
@@ -1369,7 +1912,7 @@ impl Type {
             || self == &Type::TryWithResourcesExtendedStatement
     }
 
-    pub fn is_block_related(&self) -> bool {
+    fn is_block_related(&self) -> bool {
         self == &Type::StaticInitializer
             || self == &Type::ConstructorBody
             || self == &Type::Block
@@ -1377,7 +1920,7 @@ impl Type {
             || self == &Type::SwitchBlockStatementGroup
     }
 
-    pub fn is_simple_statement(&self) -> bool {
+    fn is_simple_statement(&self) -> bool {
         self == &Type::ExpressionStatement
             || self == &Type::AssertStatement
             || self == &Type::ThrowStatement
@@ -1389,13 +1932,13 @@ impl Type {
             || self == &Type::SynchronizedStatement
     }
 
-    pub fn is_local_declare(&self) -> bool {
+    fn is_local_declare(&self) -> bool {
         self == &Type::LocalVariableDeclaration
             || self == &Type::EnhancedForVariable
             || self == &Type::Resource
     }
 
-    pub fn is_parameter(&self) -> bool {
+    fn is_parameter(&self) -> bool {
         self == &Type::Resource
             || self == &Type::FormalParameter
             || self == &Type::SpreadParameter
@@ -1403,19 +1946,19 @@ impl Type {
             || self == &Type::TypeParameter
     }
 
-    pub fn is_parameter_list(&self) -> bool {
+    fn is_parameter_list(&self) -> bool {
         self == &Type::ResourceSpecification
             || self == &Type::FormalParameters
             || self == &Type::TypeParameters
     }
 
-    pub fn is_argument_list(&self) -> bool {
+    fn is_argument_list(&self) -> bool {
         self == &Type::ArgumentList
             || self == &Type::TypeArguments
             || self == &Type::AnnotationArgumentList
     }
 
-    pub fn is_expression(&self) -> bool {
+    fn is_expression(&self) -> bool {
         self == &Type::TernaryExpression
         || self == &Type::BinaryExpression
         || self == &Type::UnaryExpression
@@ -1435,7 +1978,11 @@ impl Type {
         || self == &Type::FieldAccess
         || self == &Type::ArrayAccess
     }
-    // pub fn is_type_propagating_expression(&self) -> bool {
+
+    fn is_comment(&self) -> bool {
+        self == &Type::Comment || self == &Type::cpp_Comment || self == &Type::xml_Comment
+    }
+    // fn is_type_propagating_expression(&self) -> bool {
     //     self == &Type::TernaryExpression
     //     || self == &Type::BinaryExpression
     //     || self == &Type::UnaryExpression
@@ -1470,12 +2017,12 @@ pub trait AsTreeRef<T> {
 }
 
 pub trait Stored: Node {
-    type TreeId: Eq;
+    type TreeId: NodeId;
 }
 
 pub trait Typed {
-    type Type: Eq + Hash + Copy; // todo try remove Hash and copy
-    fn get_type(&self) -> Self::Type;
+    type Type: HyperType + Eq + Copy + Send + Sync; // todo try remove Hash and copy
+    fn get_type(&self) -> Self::Type; // TODO add TypeTrait bound on Self::Type to forbid AnyType from being given
 }
 
 // impl<T, A: Allocator> ops::Deref for Vec<T, A> {
@@ -1492,7 +2039,30 @@ pub trait WithChildren: Node + Stored
 //         + Sized,
 {
     type ChildIdx: PrimInt;
-    type Children<'a>: Children<Self::ChildIdx, Self::TreeId> + ?Sized
+    type Children<'a>: Children<Self::ChildIdx, <Self::TreeId as NodeId>::IdN> + ?Sized
+    where
+        Self: 'a;
+    // type Children<'a>: std::ops::Index<Self::ChildIdx, Output = Self::TreeId> + IntoIterator<Item = Self::TreeId>
+    // where
+    //     Self: 'a;
+
+    fn child_count(&self) -> Self::ChildIdx;
+    fn child(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN>;
+    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN>;
+    fn children(&self) -> Option<&Self::Children<'_>>;
+    // unsafe fn children_unchecked(&self) -> <Self::Children as std::ops::Deref>::Target
+    // where
+    //     <Self::Children as std::ops::Deref>::Target: std::ops::Index<<Self as WithChildren>::ChildIdx, Output = <Self as Stored>::TreeId>
+    //         + Sized;
+    // fn get_children_cpy(&self) -> Self::Children;
+}
+
+pub trait WithChildrenSameLang: WithChildren
+// where
+//     <Self::Children as std::ops::Deref>::Target: std::ops::Index<<Self as WithChildren>::ChildIdx, Output = <Self as Stored>::TreeId>
+//         + Sized,
+{
+    type TChildren<'a>: Children<Self::ChildIdx, Self::TreeId> + ?Sized
     where
         Self: 'a;
     // type Children<'a>: std::ops::Index<Self::ChildIdx, Output = Self::TreeId> + IntoIterator<Item = Self::TreeId>
@@ -1509,6 +2079,7 @@ pub trait WithChildren: Node + Stored
     //         + Sized;
     // fn get_children_cpy(&self) -> Self::Children;
 }
+
 pub trait IterableChildren<T> {
     type ChildrenIter<'a>: Iterator<Item = &'a T>
     where
@@ -1810,6 +2381,9 @@ pub trait WithStats {
     fn size(&self) -> usize;
     fn height(&self) -> usize;
 }
+pub trait WithMetaData<C> {
+    fn get_metadata(&self) -> Option<&C>;
+}
 
 pub trait WithSerialization {
     fn try_bytes_len(&self) -> Option<usize>;
@@ -1823,7 +2397,8 @@ pub trait WithHashs {
 
 pub trait Labeled {
     type Label: Eq;
-    fn get_label<'a>(&'a self) -> &'a Self::Label;
+    fn get_label_unchecked<'a>(&'a self) -> &'a Self::Label;
+    fn try_get_label<'a>(&'a self) -> Option<&'a Self::Label>;
 }
 
 pub trait Tree: Typed + Labeled + WithChildren
@@ -1833,9 +2408,6 @@ pub trait Tree: Typed + Labeled + WithChildren
 {
     fn has_children(&self) -> bool;
     fn has_label(&self) -> bool;
-    fn try_get_label<'a>(&'a self) -> Option<&'a Self::Label> {
-        self.has_label().then(|| self.get_label())
-    }
 }
 pub trait DeCompressedTree<T: PrimInt>: Tree {
     fn get_parent(&self) -> T;
@@ -1927,10 +2499,48 @@ pub trait GenericItem<'a> {
 //     type R:'a;
 //     fn resolve(&'a self, id: &IdN) -> Self::R;
 // }
+
 pub trait NodeStore<IdN> {
     type R<'a>
     where
         Self: 'a;
+    fn resolve(&self, id: &IdN) -> Self::R<'_>;
+}
+
+pub trait NodeId: Eq + Clone {
+    type IdN: Eq + NodeId;
+    fn as_id(&self) -> &Self::IdN;
+    // fn as_ty(&self) -> &Self::Ty;
+    unsafe fn from_id(id: Self::IdN) -> Self;
+    unsafe fn from_ref_id(id: &Self::IdN) -> &Self;
+}
+
+impl NodeId for u16 {
+    type IdN = u16;
+    fn as_id(&self) -> &Self::IdN {
+        self
+    }
+    unsafe fn from_id(id: Self::IdN) -> Self {
+        id
+    }
+
+    unsafe fn from_ref_id(id: &Self::IdN) -> &Self {
+        id
+    }
+}
+
+pub trait TypedNodeId: NodeId {
+    type Ty: HyperType + Hash + Copy + Eq + Send + Sync;
+}
+
+pub trait TypedNodeStore<IdN: TypedNodeId> {
+    type R<'a>: Typed<Type = IdN::Ty>
+    where
+        Self: 'a;
+    fn try_typed(&self, id: &IdN::IdN) -> Option<IdN>;
+    fn try_resolve(&self, id: &IdN::IdN) -> Option<(Self::R<'_>, IdN)> {
+        self.try_typed(id).map(|x| (self.resolve(&x), x))
+    }
     fn resolve(&self, id: &IdN) -> Self::R<'_>;
 }
 
@@ -2019,15 +2629,37 @@ pub trait LabelStore<L: ?Sized> {
     fn resolve(&self, id: &Self::I) -> &L;
 }
 
+type TypeInternalSize = u16;
+pub trait TypeStore<T> {
+    type Ty: 'static
+        + HyperType
+        + Eq
+        + std::hash::Hash
+        + Copy
+        + std::marker::Send
+        + std::marker::Sync;
+    const MASK: TypeInternalSize;
+    fn resolve_type(&self, n: &T) -> Self::Ty;
+    fn resolve_lang(&self, n: &T) -> LangWrapper<Self::Ty>;
+    type Marshaled;
+    fn marshal_type(&self, n: &T) -> Self::Marshaled;
+}
+
+pub trait SpecializedTypeStore<T: Typed>: TypeStore<T> {}
+
 pub trait HyperAST<'store> {
-    type IdN;
+    type IdN: NodeId<IdN = Self::IdN>;
+    type Idx: PrimInt;
     type Label;
-    type T: Tree<TreeId = Self::IdN, Label = Self::Label>;
+    type T: Tree<TreeId = Self::IdN, Label = Self::Label, ChildIdx = Self::Idx>;
     type NS: 'store + NodeStore<Self::IdN, R<'store> = Self::T>;
     fn node_store(&self) -> &Self::NS;
 
     type LS: LabelStore<str, I = Self::Label>;
     fn label_store(&self) -> &Self::LS;
+
+    type TS: TypeStore<Self::T, Ty = <Self::T as Typed>::Type>;
+    fn type_store(&self) -> &Self::TS;
 
     fn decompress<D: DecompressedSubtree<'store, Self::T, Out = D>>(
         &'store self,
@@ -2062,20 +2694,112 @@ pub trait HyperAST<'store> {
         }
     }
 }
+pub trait TypedHyperAST<'store, TIdN: TypedNodeId<IdN = Self::IdN>>: HyperAST<'store> {
+    type T: Tree<Type = TIdN::Ty, TreeId = Self::IdN, Label = Self::Label>;
+    type NS: 'store + TypedNodeStore<TIdN, R<'store> = <Self as TypedHyperAST<'store, TIdN>>::T>;
+    fn typed_node_store(&self) -> &<Self as TypedHyperAST<'store, TIdN>>::NS;
+}
 
-pub struct SimpleHyperAST<T, NS, LS> {
+pub struct SimpleHyperAST<T, TS, NS, LS> {
+    pub type_store: TS,
     pub node_store: NS,
     pub label_store: LS,
     pub _phantom: std::marker::PhantomData<T>,
 }
 
-impl<'store, T, NS, LS> HyperAST<'store> for SimpleHyperAST<T, NS, LS>
+impl<T, TS: Default, NS: Default, LS: Default> Default for SimpleHyperAST<T, TS, NS, LS> {
+    fn default() -> Self {
+        Self {
+            type_store: Default::default(),
+            node_store: Default::default(),
+            label_store: Default::default(),
+            _phantom: Default::default(),
+        }
+    }
+}
+
+impl<T, TS, NS, LS> NodeStore<T::TreeId> for SimpleHyperAST<T, TS, NS, LS>
 where
     T: Tree,
+    T::TreeId: NodeId<IdN = T::TreeId>,
+    T::Type: 'static,
+    NS: NodeStore<T::TreeId>,
+{
+    type R<'a> = NS::R<'a>
+    where
+        Self: 'a;
+
+    fn resolve(&self, id: &T::TreeId) -> Self::R<'_> {
+        self.node_store.resolve(id)
+    }
+}
+
+impl<'store, T, TS, NS, LS> LabelStore<str> for SimpleHyperAST<T, TS, NS, LS>
+where
+    T: Tree,
+    T::TreeId: NodeId<IdN = T::TreeId>,
+    T::Type: 'static,
+    LS: LabelStore<str, I = T::Label>,
+    <T as Labeled>::Label: Copy,
+{
+    type I = LS::I;
+
+    fn get_or_insert<U: Borrow<str>>(&mut self, node: U) -> Self::I {
+        self.label_store.get_or_insert(node)
+    }
+
+    fn get<U: Borrow<str>>(&self, node: U) -> Option<Self::I> {
+        self.label_store.get(node)
+    }
+
+    fn resolve(&self, id: &Self::I) -> &str {
+        self.label_store.resolve(id)
+    }
+}
+
+impl<'store, T, TS, NS, LS> TypeStore<T> for SimpleHyperAST<T, TS, NS, LS>
+where
+    T: Tree,
+    T::TreeId: NodeId<IdN = T::TreeId>,
+    T::Type: 'static + std::hash::Hash,
+    TS: TypeStore<T, Ty = T::Type>,
+{
+    type Ty = TS::Ty;
+
+    const MASK: u16 = TS::MASK;
+
+    fn resolve_type(&self, n: &T) -> Self::Ty {
+        self.type_store.resolve_type(n)
+    }
+
+    fn resolve_lang(&self, n: &T) -> LangWrapper<Self::Ty> {
+        self.type_store.resolve_lang(n)
+    }
+
+    type Marshaled = TS::Marshaled;
+
+    fn marshal_type(&self, n: &T) -> Self::Marshaled {
+        self.type_store.marshal_type(n)
+    }
+}
+
+pub struct TypeIndex {
+    pub lang: &'static str,
+    pub ty: u16,
+}
+
+impl<'store, T, TS, NS, LS> HyperAST<'store> for SimpleHyperAST<T, TS, NS, LS>
+where
+    T: Tree,
+    T::TreeId: NodeId<IdN = T::TreeId>,
+    T::Type: 'static,
+    TS: TypeStore<T, Ty = T::Type>,
     NS: 'store + NodeStore<T::TreeId, R<'store> = T>,
     LS: LabelStore<str, I = T::Label>,
 {
     type IdN = T::TreeId;
+
+    type Idx = T::ChildIdx;
 
     type Label = T::Label;
 
@@ -2091,6 +2815,12 @@ where
 
     fn label_store(&self) -> &Self::LS {
         &self.label_store
+    }
+
+    type TS = TS;
+
+    fn type_store(&self) -> &Self::TS {
+        &self.type_store
     }
 }
 
@@ -2665,8 +3395,161 @@ impl Type {
             "init_statement" => Self::cpp_InitStatement,
             "inline_asm_expression" => Self::cpp_InlineAsmExpression,
             "inline_asm_operand" => Self::cpp_InlineAsmOperand,
+            "translation_unit_repeat1" => Self::cpp_TranslationUnitRepeat1,
+            "_declaration_specifiers" => Self::cpp_DeclarationSpecifiers,
+            "_declaration_specifiers_repeat1" => Self::cpp_DeclarationSpecifiers_repeat1,
             _ => return None,
         };
         Some(t)
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct AnyType(&'static dyn HyperType);
+
+unsafe impl Send for AnyType {}
+unsafe impl Sync for AnyType {}
+impl PartialEq for AnyType {
+    fn eq(&self, other: &Self) -> bool {
+        self.generic_eq(other.0)
+    }
+}
+impl Eq for AnyType {}
+impl Hash for AnyType {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.as_shared().hash(state);
+    }
+}
+impl Display for AnyType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.0, f)
+    }
+}
+impl From<&'static dyn HyperType> for AnyType {
+    fn from(value: &'static dyn HyperType) -> Self {
+        Self(value)
+    }
+}
+
+impl HyperType for AnyType {
+    fn is_file(&self) -> bool {
+        self.0.is_file()
+    }
+
+    fn is_directory(&self) -> bool {
+        self.0.is_directory()
+    }
+
+    fn is_spaces(&self) -> bool {
+        self.0.is_spaces()
+    }
+
+    fn as_shared(&self) -> Shared {
+        self.0.as_shared()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self.0.as_any()
+    }
+
+    fn get_lang(&self) -> LangWrapper<Self>
+    where
+        Self: Sized,
+    {
+        // self.0.get_lang()
+        panic!()
+    }
+}
+
+// impl Lang<AnyType> for AnyType {
+//     fn make(t: u16) -> AnyType {
+//         todo!()
+//     }
+
+//     fn to_u16(t: AnyType) -> u16 {
+//         todo!()
+//     }
+// }
+// impl TypeTrait for AnyType {
+//     type Lang = AnyType;
+
+//     fn is_fork(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_literal(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_primitive(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_type_declaration(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_identifier(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_instance_ref(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_type_body(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_value_member(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_executable_member(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_statement(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_declarative_statement(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_structural_statement(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_block_related(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_simple_statement(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_local_declare(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_parameter(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_parameter_list(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_argument_list(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_expression(&self) -> bool {
+//         todo!()
+//     }
+
+//     fn is_comment(&self) -> bool {
+//         todo!()
+//     }
+// }

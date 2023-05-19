@@ -1,7 +1,9 @@
-use hyper_ast::store::{labels::LabelStore, SimpleStores, TypeStore};
 use tree_sitter::Parser;
 
-use crate::legion::{print_tree_syntax, CppTreeGen};
+use crate::types::TStore;
+
+type CppTreeGen<'store, 'cache> = crate::legion::CppTreeGen<'store, 'cache, TStore>;
+type SimpleStores = hyper_ast::store::SimpleStores<TStore>;
 
 #[test]
 fn xml_tree_sitter_simple() {
@@ -74,11 +76,7 @@ int main(int argl, int* argv) {
         Err(t) => t,
     };
     println!("{:#?}", tree.root_node().to_sexp());
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TypeStore {},
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
     let mut tree_gen = CppTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -86,8 +84,12 @@ int main(int argl, int* argv) {
         md_cache: &mut md_cache,
     };
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
-    print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
+    // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
     // println!("{}", tree.root_node().to_sexp());
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+    );
 }
 #[test]
 fn cpp_def_bl_test() {
@@ -100,11 +102,7 @@ fn cpp_def_bl_test() {
         Err(t) => t,
     };
     println!("{:#?}", tree.root_node().to_sexp());
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TypeStore {},
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
     let mut tree_gen = CppTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -112,7 +110,10 @@ fn cpp_def_bl_test() {
         md_cache: &mut md_cache,
     };
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
-    print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+    );
     // println!("{}", tree.root_node().to_sexp());
 }
 
@@ -133,11 +134,7 @@ fn cpp_char_literal_test() {
         Err(t) => t,
     };
     println!("{:#?}", tree.root_node().to_sexp());
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TypeStore {},
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
     let mut tree_gen = CppTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -145,7 +142,11 @@ fn cpp_char_literal_test() {
         md_cache: &mut md_cache,
     };
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
-    print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
+    let entity = x.compressed_node;
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, entity)
+    );
     // println!("{}", tree.root_node().to_sexp());
 }
 
@@ -182,11 +183,7 @@ fn cpp_asm_test() {
         Err(t) => t,
     };
     println!("{:#?}", tree.root_node().to_sexp());
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TypeStore {},
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
     let mut tree_gen = CppTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -194,7 +191,10 @@ fn cpp_asm_test() {
         md_cache: &mut md_cache,
     };
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
-    print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+    );
     // println!("{}", tree.root_node().to_sexp());
 }
 
@@ -222,11 +222,7 @@ fn cpp_op_test() {
         Err(t) => t,
     };
     println!("{:#?}", tree.root_node().to_sexp());
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TypeStore {},
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
     let mut tree_gen = CppTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -234,10 +230,12 @@ fn cpp_op_test() {
         md_cache: &mut md_cache,
     };
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
-    print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+    );
     // println!("{}", tree.root_node().to_sexp());
 }
-
 
 // https://github.com/official-stockfish/Stockfish/blob/d55a5a4d81b613e5a82e428770347b06fbd2d9a8/src/position.cpp
 const CODE_OP: &str = r#"
@@ -276,11 +274,7 @@ fn cpp_3_test() {
         Err(t) => t,
     };
     println!("{:#?}", tree.root_node().to_sexp());
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TypeStore {},
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
     let mut tree_gen = CppTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -288,7 +282,10 @@ fn cpp_3_test() {
         md_cache: &mut md_cache,
     };
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
-    print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+    );
     // println!("{}", tree.root_node().to_sexp());
 }
 // https://github.com/official-stockfish/Stockfish/blob/95212222c7444538b84326208e433ac12f15e9fb/src/piece.h

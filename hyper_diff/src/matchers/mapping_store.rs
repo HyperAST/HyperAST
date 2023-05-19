@@ -532,17 +532,17 @@ impl<T: PrimInt + Debug + Hash> MappingStore for HashStore<T> {
     }
 
     fn is_src(&self, src: &T) -> bool {
-        self.src_to_dst.contains_key(&src)
+        self.src_to_dst.contains_key(src)
     }
 
     fn is_dst(&self, dst: &T) -> bool {
-        self.dst_to_src.contains_key(&dst)
+        self.dst_to_src.contains_key(dst)
     }
 
     fn topit(&mut self, _left: usize, _right: usize) {}
 
     fn has(&self, src: &Self::Src, dst: &Self::Src) -> bool {
-        self.src_to_dst.contains_key(&src) && self.dst_to_src.contains_key(&dst)
+        self.src_to_dst.contains_key(src) && self.dst_to_src.contains_key(dst)
     }
 }
 

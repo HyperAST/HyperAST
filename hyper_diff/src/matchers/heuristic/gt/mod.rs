@@ -1,4 +1,4 @@
-use hyper_ast::types::{NodeStore, WithChildren, IterableChildren};
+use hyper_ast::types::{NodeStore, WithChildren, IterableChildren, NodeId};
 
 pub mod bottom_up_matcher;
 pub mod greedy_bottom_up_matcher;
@@ -14,7 +14,7 @@ pub mod lazy2_greedy_bottom_up_matcher;
 // pub mod simple_bottom_up_matcher2;
 
 
-pub fn size<'a, IdC: Clone, S>(store: &'a S, x: &IdC) -> usize
+pub fn size<'a, IdC: Clone + NodeId<IdN=IdC>, S>(store: &'a S, x: &IdC) -> usize
 where
     S: 'a + NodeStore<IdC>,
     S::R<'a>: WithChildren<TreeId = IdC>,
@@ -29,7 +29,7 @@ where
 }
 
 /// todo specilize if T impl [WithStats]
-pub fn height<'a, IdC: Clone, S>(store: &'a S, x: &IdC) -> usize
+pub fn height<'a, IdC: Clone + NodeId<IdN=IdC>, S>(store: &'a S, x: &IdC) -> usize
 where
     S: 'a + NodeStore<IdC>,
     S::R<'a>: WithChildren<TreeId = IdC>,

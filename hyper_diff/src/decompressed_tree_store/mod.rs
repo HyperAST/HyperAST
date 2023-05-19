@@ -6,7 +6,7 @@
 //! We need both post-order traversal and breadth-first.
 use num_traits::PrimInt;
 
-use hyper_ast::types::{NodeStore, Stored, WithChildren, WithStats};
+use hyper_ast::types::{NodeStore, Stored, WithChildren, WithStats, NodeId};
 
 // pub mod breath_first;
 pub mod basic_post_order;
@@ -317,6 +317,6 @@ pub struct PersistedNode<I>(I);
 impl<I> hyper_ast::types::Node for PersistedNode<I> {
 }
 
-impl<I:Eq> hyper_ast::types::Stored for PersistedNode<I> {
+impl<I:Eq + NodeId> hyper_ast::types::Stored for PersistedNode<I> {
     type TreeId=I;
 }

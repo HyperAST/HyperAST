@@ -37,7 +37,7 @@ pub fn print_mappings_no_ranges<
     mappings: &M,
 ) where
     <NS as types::NodeStore<IdN>>::R<'store>: 'store + Tree<TreeId = IdN, Label = LS::I>,
-    <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug,
+    <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug + Copy + Send + Sync,
 {
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);
@@ -116,7 +116,7 @@ pub fn print_mappings_no_ranges_label<
     mappings: &M,
 ) where
     <NS as types::NodeStore<IdN>>::R<'store>: 'store + Tree<TreeId = IdN, Label = LS::I>,
-    <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug,
+    <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug + Copy + Send + Sync,
 {
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);

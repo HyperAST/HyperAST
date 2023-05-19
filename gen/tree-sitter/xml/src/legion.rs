@@ -12,26 +12,28 @@ use hyper_ast::{
     nodes::{self, IoOut, Space},
     store::{
         labels::LabelStore,
-        nodes::legion::{compo::NoSpacesCS, PendingInsert},
+        nodes::legion::{compo::NoSpacesCS, PendingInsert, HashedNodeRef},
         SimpleStores,
     },
     store::{
-        nodes::legion::{compo, NodeIdentifier, compo::CS},
+        nodes::legion::{compo, compo::CS, NodeIdentifier},
         nodes::DefaultNodeStore as NodeStore,
     },
     tree_gen::{
         compute_indentation, get_spacing, has_final_space, parser::Node as _, AccIndentation,
-        Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, SpacedGlobalData, Spaces,
-        SubTreeMetrics, TextedGlobalData, TreeGen, ZippedTreeGen,
+        Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, SpacedGlobalData,
+        Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, ZippedTreeGen,
     },
-    types::{LabelStore as _, Type},
+    types::LabelStore as _,
 };
+
+use crate::{types::{XmlEnabledTypeStore, Type, TIdN}, TNode};
 
 pub type LabelIdentifier = hyper_ast::store::labels::DefaultLabelIdentifier;
 
-pub struct XmlTreeGen<'a> {
+pub struct XmlTreeGen<'stores, TS> {
     pub line_break: Vec<u8>,
-    pub stores: &'a mut SimpleStores,
+    pub stores: &'stores mut SimpleStores<TS>,
 }
 
 pub type Global<'a> = SpacedGlobalData<'a>;
@@ -84,38 +86,16 @@ impl AccIndentation for Acc {
         &self.indentation
     }
 }
-
-#[repr(transparent)]
-pub struct TNode<'a>(tree_sitter::Node<'a>);
-
-impl<'a> hyper_ast::tree_gen::parser::Node<'a> for TNode<'a> {
-    fn kind(&self) -> &str {
-        self.0.kind()
-    }
-
-    fn start_byte(&self) -> usize {
-        self.0.start_byte()
-    }
-
-    fn end_byte(&self) -> usize {
-        self.0.end_byte()
-    }
-
-    fn child_count(&self) -> usize {
-        self.0.child_count()
-    }
-
-    fn child(&self, i: usize) -> Option<Self> {
-        self.0.child(i).map(TNode)
-    }
-
-    fn is_named(&self) -> bool {
-        self.0.is_named()
-    }
-}
 #[repr(transparent)]
 pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
 
+impl<'a> Debug for TTreeCursor<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("TTreeCursor")
+            .field(&self.0.node().kind())
+            .finish()
+    }
+}
 impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<'a> {
     fn node(&self) -> TNode<'a> {
         TNode(self.0.node())
@@ -134,9 +114,9 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 }
 
-impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
+impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> ZippedTreeGen for XmlTreeGen<'stores, TS> {
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
-    type Stores = SimpleStores;
+    type Stores = SimpleStores<TS>;
     type Text = [u8];
     type Node<'b> = TNode<'b>;
     type TreeCursor<'b> = TTreeCursor<'b>;
@@ -147,7 +127,7 @@ impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
         let type_store = &mut self.stores().type_store;
-        let kind = type_store.get_xml(node.kind());
+        let kind = node.obtain_type(type_store);
         let parent_indentation = Space::try_format_indentation(&self.line_break)
             .unwrap_or_else(|| vec![Space::Space; self.line_break.len()]);
         let indent = compute_indentation(
@@ -179,13 +159,12 @@ impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
         &mut self,
         text: &[u8],
         node: &Self::Node<'_>,
-        stack: &Vec<Self::Acc>,
+        stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc {
         let type_store = &mut self.stores().type_store;
-        let parent_indentation = &stack.last().unwrap().indentation();
-        let kind = node.kind();
-        let kind = type_store.get_xml(kind);
+        let parent_indentation = &stack.parent().unwrap().indentation();
+        let kind = node.obtain_type(type_store);
         let indent = compute_indentation(
             &self.line_break,
             text,
@@ -242,7 +221,19 @@ impl<'a> ZippedTreeGen for XmlTreeGen<'a> {
     }
 }
 
-impl<'a> XmlTreeGen<'a> {
+pub fn tree_sitter_parse_xml(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
+    let mut parser = tree_sitter::Parser::new();
+    let language = tree_sitter_xml::language();
+    parser.set_language(language).unwrap();
+    let tree = parser.parse(text, None).unwrap();
+    if tree.root_node().has_error() {
+        Err(tree)
+    } else {
+        Ok(tree)
+    }
+}
+
+impl<'a, TS: XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>>> XmlTreeGen<'a, TS> {
     fn make_spacing(
         &mut self,
         spacing: Vec<u8>, //Space>,
@@ -295,7 +286,7 @@ impl<'a> XmlTreeGen<'a> {
         }
     }
 
-    pub fn new(stores: &mut SimpleStores) -> XmlTreeGen {
+    pub fn new(stores: &mut SimpleStores<TS>) -> XmlTreeGen<TS> {
         XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores,
@@ -339,11 +330,11 @@ impl<'a> XmlTreeGen<'a> {
             });
             global.right();
         }
-        let mut stack = vec![init];
+        let mut stack = init.into();
 
         self.gen(text, &mut stack, &mut xx, &mut global);
 
-        let mut acc = stack.pop().unwrap();
+        let mut acc = stack.finalize();
 
         if has_final_space(&0, global.sum_byte_length(), text) {
             let spacing = get_spacing(
@@ -366,18 +357,7 @@ impl<'a> XmlTreeGen<'a> {
     }
 
     fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {
-        if kind == &Type::ClassBody
-            || kind == &Type::PackageDeclaration
-            || kind == &Type::ClassDeclaration
-            || kind == &Type::EnumDeclaration
-            || kind == &Type::InterfaceDeclaration
-            || kind == &Type::AnnotationTypeDeclaration
-            || kind == &Type::Program
-        {
-            Some(PartialAnalysis {})
-        } else {
-            None
-        }
+        None
     }
 }
 
@@ -408,7 +388,7 @@ pub fn eq_node<'a>(
     }
 }
 
-impl<'stores> TreeGen for XmlTreeGen<'stores> {
+impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> TreeGen for XmlTreeGen<'stores, TS> {
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;
     fn make(
@@ -551,95 +531,95 @@ fn compress(
     }
 }
 
-pub fn print_tree_ids(node_store: &NodeStore, id: &NodeIdentifier) {
-    nodes::print_tree_ids(
-        |id| -> _ {
-            node_store
-                .resolve(id.clone())
-                .into_compressed_node()
-                .unwrap()
-        },
-        id,
-    )
-}
+// pub fn print_tree_ids(node_store: &NodeStore, id: &NodeIdentifier) {
+//     nodes::print_tree_ids(
+//         |id| -> _ {
+//             node_store
+//                 .resolve(id.clone())
+//                 .into_compressed_node()
+//                 .unwrap()
+//         },
+//         id,
+//     )
+// }
 
-pub fn print_tree_structure(node_store: &NodeStore, id: &NodeIdentifier) {
-    nodes::print_tree_structure(
-        |id| -> _ {
-            node_store
-                .resolve(id.clone())
-                .into_compressed_node()
-                .unwrap()
-        },
-        id,
-    )
-}
+// pub fn print_tree_structure(node_store: &NodeStore, id: &NodeIdentifier) {
+//     nodes::print_tree_structure(
+//         |id| -> _ {
+//             node_store
+//                 .resolve(id.clone())
+//                 .into_compressed_node()
+//                 .unwrap()
+//         },
+//         id,
+//     )
+// }
 
-pub fn print_tree_labels(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
-    nodes::print_tree_labels(
-        |id| -> _ {
-            node_store
-                .resolve(id.clone())
-                .into_compressed_node()
-                .unwrap()
-        },
-        |id| -> _ { label_store.resolve(id).to_owned() },
-        id,
-    )
-}
+// pub fn print_tree_labels(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
+//     nodes::print_tree_labels(
+//         |id| -> _ {
+//             node_store
+//                 .resolve(id.clone())
+//                 .into_compressed_node()
+//                 .unwrap()
+//         },
+//         |id| -> _ { label_store.resolve(id).to_owned() },
+//         id,
+//     )
+// }
 
-pub fn print_tree_syntax(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
-    nodes::print_tree_syntax(
-        |id| -> _ {
-            node_store
-                .resolve(id.clone())
-                .into_compressed_node()
-                .unwrap()
-        },
-        |id| -> _ { label_store.resolve(id).to_owned() },
-        id,
-        &mut Into::<IoOut<_>>::into(stdout()),
-    )
-}
+// pub fn print_tree_syntax(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
+//     nodes::print_tree_syntax(
+//         |id| -> _ {
+//             node_store
+//                 .resolve(id.clone())
+//                 .into_compressed_node()
+//                 .unwrap()
+//         },
+//         |id| -> _ { label_store.resolve(id).to_owned() },
+//         id,
+//         &mut Into::<IoOut<_>>::into(stdout()),
+//     )
+// }
 
-pub fn print_tree_syntax_with_ids(
-    node_store: &NodeStore,
-    label_store: &LabelStore,
-    id: &NodeIdentifier,
-) {
-    nodes::print_tree_syntax_with_ids(
-        |id| -> _ {
-            node_store
-                .resolve(id.clone())
-                .into_compressed_node()
-                .unwrap()
-        },
-        |id| -> _ { label_store.resolve(id).to_owned() },
-        id,
-        &mut Into::<IoOut<_>>::into(stdout()),
-    )
-}
+// pub fn print_tree_syntax_with_ids(
+//     node_store: &NodeStore,
+//     label_store: &LabelStore,
+//     id: &NodeIdentifier,
+// ) {
+//     nodes::print_tree_syntax_with_ids(
+//         |id| -> _ {
+//             node_store
+//                 .resolve(id.clone())
+//                 .into_compressed_node()
+//                 .unwrap()
+//         },
+//         |id| -> _ { label_store.resolve(id).to_owned() },
+//         id,
+//         &mut Into::<IoOut<_>>::into(stdout()),
+//     )
+// }
 
-pub fn serialize<W: std::fmt::Write>(
-    node_store: &NodeStore,
-    label_store: &LabelStore,
-    id: &NodeIdentifier,
-    out: &mut W,
-    parent_indent: &str,
-) -> Option<String> {
-    nodes::serialize(
-        |id| -> _ {
-            node_store
-                .resolve(id.clone())
-                .into_compressed_node()
-                .unwrap()
-        },
-        |id| -> _ { label_store.resolve(id).to_owned() },
-        id,
-        out,
-        parent_indent,
-    )
-}
+// pub fn serialize<W: std::fmt::Write>(
+//     node_store: &NodeStore,
+//     label_store: &LabelStore,
+//     id: &NodeIdentifier,
+//     out: &mut W,
+//     parent_indent: &str,
+// ) -> Option<String> {
+//     nodes::serialize(
+//         |id| -> _ {
+//             node_store
+//                 .resolve(id.clone())
+//                 .into_compressed_node()
+//                 .unwrap()
+//         },
+//         |id| -> _ { label_store.resolve(id).to_owned() },
+//         id,
+//         out,
+//         parent_indent,
+//     )
+// }
 /// TODO partialana
 impl PartialAnalysis {
     pub(crate) fn refs_count(&self) -> usize {

@@ -1,21 +1,20 @@
-use crate::{preprocessed::IsSkippedAna, Accumulator, MAX_REFS, PROPAGATE_ERROR_ON_BAD_CST_NODE};
+use crate::{preprocessed::IsSkippedAna, Accumulator, MAX_REFS, PROPAGATE_ERROR_ON_BAD_CST_NODE, TStore};
 
 use hyper_ast::{
     hashed::SyntaxNodeHashs,
     store::defaults::{LabelIdentifier, NodeIdentifier},
     tree_gen::SubTreeMetrics,
-    types::Type,
 };
-use hyper_ast_gen_ts_java::impact::partial_analysis::PartialAnalysis;
+use hyper_ast_gen_ts_java::{impact::partial_analysis::PartialAnalysis, types::Type};
 
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
 
 pub(crate) fn handle_java_file<'stores, 'cache, 'b: 'stores>(
-    tree_gen: &mut java_tree_gen::JavaTreeGen<'stores, 'cache>,
+    tree_gen: &mut java_tree_gen::JavaTreeGen<'stores, 'cache, TStore>,
     name: &[u8],
     text: &'b [u8],
 ) -> Result<java_tree_gen::FNode, ()> {
-    let tree = match java_tree_gen::JavaTreeGen::tree_sitter_parse(text) {
+    let tree = match java_tree_gen::JavaTreeGen::<TStore>::tree_sitter_parse(text) {
         Ok(tree) => tree,
         Err(tree) => {
             log::warn!("bad CST");

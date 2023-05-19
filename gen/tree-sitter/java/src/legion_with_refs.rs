@@ -1,29 +1,26 @@
-///! fully compress all subtrees from a Java CST
-use std::{
-    collections::HashMap,
-    fmt::{Debug, Display},
-    hash::Hash,
-    io::stdout,
-    vec,
+use crate::{
+    types::{TIdN, TStore},
+    TNode,
 };
-
 use hyper_ast::{
     cyclomatic::Mcc,
     full::FullNode,
     hashed::{HashedNode, IndexingHashBuilder, MetaDataHashsBuilder},
-    nodes::IoOut,
     store::{
         labels::LabelStore,
-        nodes::legion::{HashedNodeRef, compo::NoSpacesCS, PendingInsert},
+        nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert},
     },
     tree_gen::{
-        BasicGlobalData, GlobalData, SpacedGlobalData, SubTreeMetrics, TextedGlobalData, TreeGen,
+        BasicGlobalData, GlobalData, Parents, SpacedGlobalData, SubTreeMetrics, TextedGlobalData,
+        TreeGen,
     },
-    types::{self, NodeStoreExt, WithHashs, WithStats},
+    types::{self, AnyType, NodeStoreExt, TypeStore, TypeTrait, WithHashs, WithStats},
     utils::{self},
 };
 use legion::world::EntryRef;
 use num::ToPrimitive;
+///! fully compress all subtrees from a Java CST
+use std::{collections::HashMap, fmt::Debug, hash::Hash, vec};
 use string_interner::DefaultSymbol;
 use tuples::CombinConcat;
 
@@ -46,13 +43,15 @@ use hyper_ast::{
         LabelStore as LabelStoreTrait,
         Tree,
         // NodeStore as NodeStoreTrait,
-        Type,
         Typed,
     },
 };
 // use hyper_ast::nodes::SimpleNode1;
 
-use crate::impact::partial_analysis::PartialAnalysis;
+use crate::{
+    impact::partial_analysis::PartialAnalysis,
+    types::{JavaEnabledTypeStore, Type},
+};
 
 pub use crate::impact::element::BulkHasher;
 
@@ -74,9 +73,9 @@ pub type LabelIdentifier = DefaultSymbol;
 // SPC: consider spaces ie. add them to the HyperAST,
 // NOTE there is a big issue with the byteLen of subtree then.
 // just provide a view abstracting spaces (see attempt in hyper_diff)
-pub struct JavaTreeGen<'stores, 'cache> {
+pub struct JavaTreeGen<'stores, 'cache, TS> {
     pub line_break: Vec<u8>,
-    pub stores: &'stores mut SimpleStores,
+    pub stores: &'stores mut SimpleStores<TS>,
     pub md_cache: &'cache mut MDCache,
 }
 
@@ -162,37 +161,16 @@ impl AccIndentation for Acc {
         &self.indentation
     }
 }
-
-#[repr(transparent)]
-pub struct TNode<'a>(tree_sitter::Node<'a>);
-
-impl<'a> hyper_ast::tree_gen::parser::Node<'a> for TNode<'a> {
-    fn kind(&self) -> &str {
-        self.0.kind()
-    }
-
-    fn start_byte(&self) -> usize {
-        self.0.start_byte()
-    }
-
-    fn end_byte(&self) -> usize {
-        self.0.end_byte()
-    }
-
-    fn child_count(&self) -> usize {
-        self.0.child_count()
-    }
-
-    fn child(&self, i: usize) -> Option<Self> {
-        self.0.child(i).map(TNode)
-    }
-
-    fn is_named(&self) -> bool {
-        self.0.is_named()
-    }
-}
 #[repr(transparent)]
 pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
+
+impl<'a> Debug for TTreeCursor<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("TTreeCursor")
+            .field(&self.0.node().kind())
+            .finish()
+    }
+}
 
 impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<'a> {
     fn node(&self) -> TNode<'a> {
@@ -212,9 +190,11 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 }
 
-impl<'stores, 'cache> ZippedTreeGen for JavaTreeGen<'stores, 'cache> {
+impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>>
+    ZippedTreeGen for JavaTreeGen<'stores, 'cache, TS>
+{
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
-    type Stores = SimpleStores;
+    type Stores = SimpleStores<TS>;
     type Text = [u8];
     type Node<'b> = TNode<'b>;
     type TreeCursor<'b> = TTreeCursor<'b>;
@@ -225,7 +205,7 @@ impl<'stores, 'cache> ZippedTreeGen for JavaTreeGen<'stores, 'cache> {
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> <Self as TreeGen>::Acc {
         let type_store = &mut self.stores().type_store;
-        let kind = type_store.get(node.kind());
+        let kind = node.obtain_type(type_store);
         let parent_indentation = Space::try_format_indentation(&self.line_break)
             .unwrap_or_else(|| vec![Space::Space; self.line_break.len()]);
         let indent = compute_indentation(
@@ -259,13 +239,12 @@ impl<'stores, 'cache> ZippedTreeGen for JavaTreeGen<'stores, 'cache> {
         &mut self,
         text: &[u8],
         node: &Self::Node<'_>,
-        stack: &Vec<Self::Acc>,
+        stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc {
         let type_store = &mut self.stores().type_store;
-        let parent_indentation = &stack.last().unwrap().indentation();
-        let kind = node.kind();
-        let kind = type_store.get(kind);
+        let parent_indentation = &stack.parent().unwrap().indentation();
+        let kind = node.obtain_type(type_store);
         let indent = compute_indentation(
             &self.line_break,
             text,
@@ -319,7 +298,22 @@ impl<'stores, 'cache> ZippedTreeGen for JavaTreeGen<'stores, 'cache> {
         self.make(global, acc, label)
     }
 }
-impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
+
+pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
+    let mut parser = tree_sitter::Parser::new();
+    let language = tree_sitter_java::language();
+    parser.set_language(language).unwrap();
+    let tree = parser.parse(text, None).unwrap();
+    if tree.root_node().has_error() {
+        Err(tree)
+    } else {
+        Ok(tree)
+    }
+}
+
+impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>>
+    JavaTreeGen<'stores, 'cache, TS>
+{
     fn make_spacing(
         &mut self,
         spacing: Vec<u8>, //Space>,
@@ -374,9 +368,9 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
     }
 
     pub fn new<'a, 'b>(
-        stores: &'a mut SimpleStores,
+        stores: &'a mut SimpleStores<TS>,
         md_cache: &'b mut MDCache,
-    ) -> JavaTreeGen<'a, 'b> {
+    ) -> JavaTreeGen<'a, 'b, TS> {
         JavaTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores,
@@ -421,11 +415,11 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
             });
             global.right();
         }
-        let mut stack = vec![init];
+        let mut stack = init.into();
 
         self.gen(text, &mut stack, &mut xx, &mut global);
 
-        let mut acc = stack.pop().unwrap();
+        let mut acc = stack.finalize();
 
         if has_final_space(&0, global.sum_byte_length(), text) {
             let spacing = get_spacing(
@@ -485,13 +479,16 @@ impl<'stores, 'cache> JavaTreeGen<'stores, 'cache> {
     }
 }
 
-pub fn eq_node<'a>(
-    kind: &'a Type,
+pub fn eq_node<'a, K>(
+    kind: &'a K,
     label_id: Option<&'a LabelIdentifier>,
     children: &'a [NodeIdentifier],
-) -> impl Fn(EntryRef) -> bool + 'a {
+) -> impl Fn(EntryRef) -> bool + 'a
+where
+    K: 'static + Eq + std::hash::Hash + Copy + std::marker::Send + std::marker::Sync,
+{
     move |x: EntryRef| {
-        let t = x.get_component::<Type>();
+        let t = x.get_component::<K>();
         if t != Ok(kind) {
             return false;
         }
@@ -512,7 +509,9 @@ pub fn eq_node<'a>(
     }
 }
 
-impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
+impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>>
+    TreeGen for JavaTreeGen<'stores, 'cache, TS>
+{
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;
     fn make(
@@ -523,11 +522,13 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
+        let interned_kind = acc.simple.kind;
+        // let interned_kind = JavaEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
         let size_no_spaces = acc.metrics.size_no_spaces + 1;
-        let hbuilder = hashed::Builder::new(hashs, &acc.simple.kind, &label, size_no_spaces);
+        let hbuilder = hashed::Builder::new(hashs, &interned_kind, &label, size_no_spaces);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
@@ -537,7 +538,7 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
             // eg. acc.simple.kind == Type::Comment and acc.simple.kind.is_literal()
             label_store.get_or_insert(label.as_str())
         });
-        let eq = eq_node(&acc.simple.kind, label_id.as_ref(), &acc.simple.children);
+        let eq = eq_node(&interned_kind, label_id.as_ref(), &acc.simple.children);
 
         let insertion = node_store.prepare_insertion(&hashable, eq);
 
@@ -564,18 +565,18 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
             let hashs = hbuilder.build();
             let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte).try_into().unwrap());
             let mcc = acc.mcc;
+            let base = (interned_kind, hashs, bytes_len);
             let compressed_node = compress(
                 label_id,
                 &ana,
                 acc.simple,
                 acc.no_space,
-                bytes_len,
                 size,
                 height,
                 size_no_spaces,
                 insertion,
-                hashs,
                 mcc.clone(),
+                base,
             );
 
             let metrics = SubTreeMetrics {
@@ -610,18 +611,19 @@ impl<'stores, 'cache> TreeGen for JavaTreeGen<'stores, 'cache> {
     }
 }
 
-fn compress(
+fn compress<T: 'static + std::marker::Send + std::marker::Sync>(
     label_id: Option<LabelIdentifier>,
     ana: &Option<PartialAnalysis>,
     simple: BasicAccumulator<Type, NodeIdentifier>,
     no_space: Vec<NodeIdentifier>,
-    bytes_len: compo::BytesLen,
+    // bytes_len: compo::BytesLen,
     size: u32,
     height: u32,
     size_no_spaces: u32,
     insertion: PendingInsert,
-    hashs: SyntaxNodeHashs<u32>,
+    // hashs: SyntaxNodeHashs<u32>,
     mcc: Mcc,
+    base: (T, SyntaxNodeHashs<u32>, compo::BytesLen),
 ) -> legion::Entity {
     let vacant = insertion.vacant();
     macro_rules! insert {
@@ -736,7 +738,7 @@ fn compress(
             }}
         };
     }
-    let base = (simple.kind.clone(), hashs, bytes_len);
+    // let base = (interned_kind, hashs, bytes_len);
     match (label_id, mcc) {
         (None, mcc) if Mcc::persist(&simple.kind) => children_dipatch!(base, (mcc,),),
         (None, _) => children_dipatch!(base,),
@@ -828,7 +830,7 @@ fn partial_ana_extraction(
             || kind == Type::ReturnStatement
             || kind == Type::ForStatement
             || kind == Type::RequiresModifier
-            || kind == Type::Error
+            || kind == Type::ERROR
     };
     let mut make = |label| {
         Some(PartialAnalysis::init(&kind, label, |x| {
@@ -847,11 +849,12 @@ fn partial_ana_extraction(
         };
         make(Some(label))
     } else if kind.is_primitive() {
-        let node = insertion.resolve(children[0]);
-        let label = node.get_type().to_string();
-        make(Some(label.as_str()))
-    } else if kind == Type::TS86
-        || kind == Type::TS81
+        let node = insertion.resolve::<TIdN<NodeIdentifier>>(children[0]);
+        let ty = node.get_type();
+        let label = ty.to_str();
+        make(Some(label))
+    } else if kind == Type::Static
+        || kind == Type::Public
         || kind == Type::Asterisk
         || kind == Type::Dimensions
         || kind == Type::Block
@@ -867,7 +870,7 @@ fn partial_ana_extraction(
         {
             if !children
                 .iter()
-                .all(|x| !insertion.resolve(*x).has_children())
+                .all(|x| !insertion.resolve::<TIdN<NodeIdentifier>>(*x).has_children())
             {
                 // eg. an empty body/block/paramlist/...
                 log::error!("{:?} should only contains leafs", &kind);
@@ -883,7 +886,7 @@ fn partial_ana_extraction(
         if !children.is_empty()
             && children
                 .iter()
-                .all(|x| !insertion.resolve(*x).has_children())
+                .all(|x| !insertion.resolve::<TIdN<NodeIdentifier>>(*x).has_children())
         {
             // eg. an empty body/block/paramlist/...
             log::error!("{:?} should only contains leafs", kind);
@@ -892,44 +895,52 @@ fn partial_ana_extraction(
     }
 }
 
-impl<'stores, 'cache> hyper_ast::types::NodeStore<NodeIdentifier> for JavaTreeGen<'stores, 'cache> {
-    type R<'a> = HashedNodeRef<'a> where Self: 'a, 'stores:'a;
+impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, AnyType>>>
+    hyper_ast::types::NodeStore<NodeIdentifier> for JavaTreeGen<'stores, 'cache, TS>
+{
+    type R<'a> = HashedNodeRef<'a,NodeIdentifier> where Self: 'a, 'stores:'a;
 
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
         self.stores.node_store.resolve(*id)
     }
 }
 
-impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> {
+impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, AnyType>>>
+    NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache, TS>
+where
+    <TS as TypeStore<HashedNodeRef<'stores, AnyType>>>::Ty: TypeTrait,
+{
     fn build_then_insert(
         &mut self,
         i: <HashedNode as hyper_ast::types::Stored>::TreeId,
-        t: <HashedNode as types::Typed>::Type,
+        t: AnyType, //<HashedNode as types::Typed>::Type,
         l: Option<<HashedNode as types::Labeled>::Label>,
         cs: Vec<<HashedNode as types::Stored>::TreeId>,
     ) -> <HashedNode as types::Stored>::TreeId {
-        if t == Type::Spaces {
-            //     // TODO improve ergonomics
-            //     // should ge spaces as label then reconstruct spaces and insert as done with every other nodes
-            //     // WARN it wont work for new spaces (l parameter is not used, and label do not return spacing)
-            let spacing = self
-                .stores
-                .label_store
-                .resolve(&l.unwrap())
-                .as_bytes()
-                .to_vec();
-            self.make_spacing(spacing);
-            return i;
-        }
+        todo!();
+        // if t.is_spaces() {
+        //     //     // TODO improve ergonomics
+        //     //     // should ge spaces as label then reconstruct spaces and insert as done with every other nodes
+        //     //     // WARN it wont work for new spaces (l parameter is not used, and label do not return spacing)
+        //     let spacing = self
+        //         .stores
+        //         .label_store
+        //         .resolve(&l.unwrap())
+        //         .as_bytes()
+        //         .to_vec();
+        //     self.make_spacing(spacing);
+        //     return i;
+        // }
         let mut acc: Acc = {
             let kind = t;
+            let kind = todo!();
             Acc {
                 labeled: l.is_some(),
                 start_byte: 0,
                 end_byte: 0,
                 metrics: Default::default(),
                 ana: None,
-                mcc: Mcc::new(&t),
+                mcc: Mcc::new(&kind),
                 padding_start: 0,
                 indentation: vec![],
                 simple: BasicAccumulator {
@@ -950,13 +961,13 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
                     let mcc = md.mcc.clone();
                     (ana, metrics, mcc)
                 } else {
-                    let node = self.stores.node_store.resolve(c);
+                    let node: HashedNodeRef<_> = self.stores.node_store.resolve(c);
                     let hashs = SyntaxNodeHashs {
                         structt: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Struct),
                         label: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Label),
                         syntax: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Syntax),
                     };
-                    let kind = node.get_type();
+                    let kind: TS::Ty = todo!(); //node.get_type();
                     let metrics = SubTreeMetrics {
                         size: node.size().to_u32().unwrap(),
                         height: node.height().to_u32().unwrap(),
@@ -982,18 +993,20 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
         let post = {
             let node_store = &mut self.stores.node_store;
             let label_store = &mut self.stores.label_store;
+            let interned_kind = acc.simple.kind;
+            // JavaEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
 
             let hashs = acc.metrics.hashs;
             let size = acc.metrics.size + 1;
             let height = acc.metrics.height + 1;
             let size_no_spaces = acc.metrics.size_no_spaces + 1;
             let label = l.map(|l| label_store.resolve(&l));
-            let hbuilder = hashed::Builder::new(hashs, &acc.simple.kind, &label, size_no_spaces);
+            let hbuilder = hashed::Builder::new(hashs, &interned_kind, &label, size_no_spaces);
             let hsyntax = hbuilder.most_discriminating();
             let hashable = &hsyntax;
 
             let label_id = l;
-            let eq = eq_node(&acc.simple.kind, label_id.as_ref(), &acc.simple.children);
+            let eq = eq_node(&interned_kind, label_id.as_ref(), &acc.simple.children);
 
             let insertion = node_store.prepare_insertion(&hashable, eq);
 
@@ -1012,6 +1025,7 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
                 let ana = None;
                 let hashs = hbuilder.build();
                 let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte) as u32);
+                let base = (interned_kind, hashs, bytes_len);
 
                 let mcc = Mcc::new(&acc.simple.kind);
 
@@ -1020,13 +1034,12 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
                     &ana,
                     acc.simple,
                     acc.no_space,
-                    bytes_len,
                     size,
                     height,
                     size_no_spaces,
                     insertion,
-                    hashs,
                     mcc.clone(),
+                    base,
                 );
 
                 let metrics = SubTreeMetrics {
@@ -1058,195 +1071,216 @@ impl<'stores, 'cache> NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache> 
     }
 }
 
-pub fn print_tree_ids(node_store: &NodeStore, id: &NodeIdentifier) {
-    nodes::print_tree_ids(
-        |id| -> _ {
-            node_store
-                .resolve(id.clone())
-                .into_compressed_node()
-                .unwrap()
-        },
-        id,
-    )
-}
+// pub fn print_tree_ids(node_store: &NodeStore, id: &NodeIdentifier) {
+//     nodes::print_tree_ids(
+//         |id| -> _ {
+//             node_store
+//                 .resolve::<Type>(id.clone())
+//                 .into_compressed_node()
+//                 .unwrap()
+//         },
+//         id,
+//     )
+// }
 
-pub fn print_tree_structure(node_store: &NodeStore, id: &NodeIdentifier) {
-    nodes::print_tree_structure(
-        |id| -> _ {
-            node_store
-                .resolve(id.clone())
-                .into_compressed_node()
-                .unwrap()
-        },
-        id,
-    )
-}
+// pub fn print_tree_structure(node_store: &NodeStore, id: &NodeIdentifier) {
+//     nodes::print_tree_structure(
+//         |id| -> _ {
+//             node_store
+//                 .resolve::<Type>(id.clone())
+//                 .into_compressed_node()
+//                 .unwrap()
+//         },
+//         id,
+//     )
+// }
 
-pub fn print_tree_labels(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
-    nodes::print_tree_labels(
-        |id| -> _ {
-            node_store
-                .resolve(id.clone())
-                .into_compressed_node()
-                .unwrap()
-        },
-        |id| -> _ { label_store.resolve(id).to_owned() },
-        id,
-    )
-}
+// pub fn print_tree_labels(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
+//     nodes::print_tree_labels(
+//         |id| -> _ {
+//             node_store
+//                 .resolve::<Type>(id.clone())
+//                 .into_compressed_node()
+//                 .unwrap()
+//         },
+//         |id| -> _ { label_store.resolve(id).to_owned() },
+//         id,
+//     )
+// }
 
-pub fn print_tree_syntax(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
-    nodes::print_tree_syntax(
-        |id| -> _ {
-            node_store
-                .resolve(id.clone())
-                .into_compressed_node()
-                .unwrap()
-        },
-        |id| -> _ { label_store.resolve(id).to_owned() },
-        id,
-        &mut Into::<IoOut<_>>::into(stdout()),
-    )
-}
+// pub fn print_tree_syntax(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
+//     nodes::print_tree_syntax(
+//         |id| -> _ {
+//             node_store
+//                 .resolve::<Type>(id.clone())
+//                 .into_compressed_node()
+//                 .unwrap()
+//         },
+//         |id| -> _ { label_store.resolve(id).to_owned() },
+//         id,
+//         &mut Into::<IoOut<_>>::into(stdout()),
+//     )
+// }
 
-pub fn print_tree_syntax_with_ids(
-    node_store: &NodeStore,
-    label_store: &LabelStore,
-    id: &NodeIdentifier,
-) {
-    nodes::print_tree_syntax_with_ids(
-        |id| -> _ {
-            node_store
-                .resolve(id.clone())
-                .into_compressed_node()
-                .unwrap()
-        },
-        |id| -> _ { label_store.resolve(id).to_owned() },
-        id,
-        &mut Into::<IoOut<_>>::into(stdout()),
-    )
-}
+// pub fn print_tree_syntax_with_ids(
+//     node_store: &NodeStore,
+//     label_store: &LabelStore,
+//     id: &NodeIdentifier,
+// ) {
+//     nodes::print_tree_syntax_with_ids(
+//         |id| -> _ {
+//             node_store
+//                 .resolve::<Type>(id.clone())
+//                 .into_compressed_node()
+//                 .unwrap()
+//         },
+//         |id| -> _ { label_store.resolve(id).to_owned() },
+//         id,
+//         &mut Into::<IoOut<_>>::into(stdout()),
+//     )
+// }
 
-pub fn serialize<W: std::fmt::Write>(
-    node_store: &NodeStore,
-    label_store: &LabelStore,
-    id: &NodeIdentifier,
-    out: &mut W,
-    parent_indent: &str,
-) -> Option<String> {
-    nodes::serialize(
-        |id| -> _ {
-            node_store
-                .resolve(id.clone())
-                .into_compressed_node()
-                .unwrap()
-        },
-        |id| -> _ { label_store.resolve(id).to_owned() },
-        id,
-        out,
-        parent_indent,
-    )
-}
+// pub fn serialize<W: std::fmt::Write>(
+//     node_store: &NodeStore,
+//     label_store: &LabelStore,
+//     id: &NodeIdentifier,
+//     out: &mut W,
+//     parent_indent: &str,
+// ) -> Option<String> {
+//     todo!()
+//     // nodes::serialize(
+//     //     |id| -> _ {
+//     //         node_store
+//     //             .resolve::<Type>(id.clone())
+//     //             .into_compressed_node()
+//     //             .unwrap()
+//     //     },
+//     //     |id| -> _ { label_store.resolve(id).to_owned() },
+//     //     id,
+//     //     out,
+//     //     parent_indent,
+//     // )
+// }
 
-pub fn json_serialize<W: std::fmt::Write, const SPC: bool>(
-    node_store: &NodeStore,
-    label_store: &LabelStore,
-    id: &NodeIdentifier,
-    out: &mut W,
-    parent_indent: &str,
-) -> Option<String> {
-    nodes::json_serialize::<_, _, _, _, _, _, SPC>(
-        |id| -> _ { node_store.resolve(id.clone()) },
-        |id| -> _ { label_store.resolve(id).to_owned() },
-        id,
-        out,
-        parent_indent,
-    )
-}
+// pub fn json_serialize<'a, W: std::fmt::Write, HAST, const SPC: bool>(
+//     stores: &'a HAST,
+//     id: &HAST::IdN,
+//     out: &mut W,
+//     parent_indent: &str,
+// ) -> Option<String>
+// where
+//     HAST: HyperAST<'a>,
+// {
+//     hyper_ast::nodes::Serializer::serialize(stores, id, out, parent_indent)
+//     // nodes::json_serialize::<_, _, _, _, _, _, SPC>(
+//     //     |id| -> _ { node_store.resolve::<Type>(id.clone()) },
+//     //     |id| -> _ { label_store.resolve(id).to_owned() },
+//     //     id,
+//     //     out,
+//     //     parent_indent,
+//     // )
+// }
 
-pub struct TreeSerializer<'a> {
-    node_store: &'a NodeStore,
-    label_store: &'a LabelStore,
-    id: NodeIdentifier,
-}
-impl<'a> TreeSerializer<'a> {
-    pub fn new(node_store: &'a NodeStore, label_store: &'a LabelStore, id: NodeIdentifier) -> Self {
-        Self {
-            node_store,
-            label_store,
-            id,
-        }
-    }
-}
-impl<'a> Display for TreeSerializer<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        serialize(self.node_store, self.label_store, &self.id, f, "\n");
-        Ok(())
-    }
-}
+// pub struct TreeSerializer<'a> {
+//     node_store: &'a NodeStore,
+//     label_store: &'a LabelStore,
+//     id: NodeIdentifier,
+// }
+// impl<'a> TreeSerializer<'a> {
+//     pub fn new(node_store: &'a NodeStore, label_store: &'a LabelStore, id: NodeIdentifier) -> Self {
+//         Self {
+//             node_store,
+//             label_store,
+//             id,
+//         }
+//     }
+// }
+// impl<'a> Display for TreeSerializer<'a> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+//         serialize(self.node_store, self.label_store, &self.id, f, "\n");
+//         Ok(())
+//     }
+// }
 
-pub struct TreeJsonSerializer<'a, IdN, NS, LS, const SPC: bool = true> {
-    node_store: &'a NS,
-    label_store: &'a LS,
-    id: IdN,
-}
-impl<'a, IdN, NS, LS, const SPC: bool> TreeJsonSerializer<'a, IdN, NS, LS, SPC> {
-    pub fn new(node_store: &'a NS, label_store: &'a LS, id: IdN) -> Self {
-        Self {
-            node_store,
-            label_store,
-            id,
-        }
-    }
-}
-impl<'a, IdN, NS, LS, const SPC: bool> Display for TreeJsonSerializer<'a, IdN, NS, LS, SPC>
-where
-    NS: hyper_ast::types::NodeStore<IdN>,
-    <NS as hyper_ast::types::NodeStore<IdN>>::R<'a>:
-        hyper_ast::types::Tree<TreeId = IdN, Type = Type, Label = LS::I>,
-    LS: hyper_ast::types::LabelStore<String>,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let id = &self.id;
-        nodes::json_serialize::<_, _, _, _, _, _, SPC>(
-            |id| -> _ { self.node_store.resolve(id.clone()) },
-            |id| -> _ { self.label_store.resolve(id).to_owned() },
-            id,
-            f,
-            "\n",
-        );
-        Ok(())
-    }
-}
+// pub struct TreeJsonSerializer<'a, IdN, NS, LS, const SPC: bool = true> {
+//     node_store: &'a NS,
+//     label_store: &'a LS,
+//     id: IdN,
+// }
+// impl<'a, IdN, NS, LS, const SPC: bool> TreeJsonSerializer<'a, IdN, NS, LS, SPC> {
+//     pub fn new(node_store: &'a NS, label_store: &'a LS, id: IdN) -> Self {
+//         Self {
+//             node_store,
+//             label_store,
+//             id,
+//         }
+//     }
+// }
+// impl<'a, IdN, NS, LS, const SPC: bool> Display for TreeJsonSerializer<'a, IdN, NS, LS, SPC>
+// where
+//     NS: hyper_ast::types::NodeStore<IdN>,
+//     <NS as hyper_ast::types::NodeStore<IdN>>::R<'a>:
+//         hyper_ast::types::Tree<TreeId = IdN, Label = LS::I>,
+//     LS: hyper_ast::types::LabelStore<String>,
+//     <<NS as hyper_ast::types::NodeStore<IdN>>::R<'a> as hyper_ast::types::Typed>::Type:
+//         TypeTrait + Display,
+// {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+//         let id = &self.id;
+//         nodes::json_serialize::<_, _, _, _, _, _, SPC>(
+//             |id| -> _ { self.node_store.resolve(id.clone()) },
+//             |id| -> _ { self.label_store.resolve(id).to_owned() },
+//             id,
+//             f,
+//             "\n",
+//         );
+//         Ok(())
+//     }
+// }
 
-pub struct TreeSyntax<'a> {
-    node_store: &'a NodeStore,
-    label_store: &'a LabelStore,
-    id: NodeIdentifier,
-}
-impl<'a> TreeSyntax<'a> {
-    pub fn new(node_store: &'a NodeStore, label_store: &'a LabelStore, id: NodeIdentifier) -> Self {
-        Self {
-            node_store,
-            label_store,
-            id,
-        }
-    }
-}
+// pub struct TreeSyntax<'a, IdN, NS, LS> {
+//     node_store: &'a NS,
+//     label_store: &'a LS,
+//     id: IdN,
+// }
+// impl<'a, IdN, NS, LS> TreeSyntax<'a, IdN, NS, LS> {
+//     pub fn new(node_store: &'a NS, label_store: &'a LS, id: IdN) -> Self {
+//         Self {
+//             node_store,
+//             label_store,
+//             id,
+//         }
+//     }
+// }
 
-impl<'a> Display for TreeSyntax<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        nodes::print_tree_syntax(
-            |id| -> _ {
-                self.node_store
-                    .resolve(id.clone())
-                    .into_compressed_node()
-                    .unwrap()
-            },
-            |id| -> _ { self.label_store.resolve(id).to_owned() },
-            &self.id,
-            f,
-        );
-        Ok(())
-    }
-}
+// impl<'a, IdN: TypedNodeId<Ty = Type>, NS, LS> Display for TreeSyntax<'a, IdN, NS, LS>
+// where
+//     LS: hyper_ast::types::LabelStore<DefaultLabelValue, I = LabelIdentifier>,
+//     NS: hyper_ast::types::TypedNodeStore<IdN>,
+//     NS::R<'a>: Tree<TreeId = IdN::IdN, Label = LabelIdentifier>,
+// {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+//         nodes::print_tree_syntax(
+//             |id| -> _ {
+//                 let b = self.node_store.resolve(id);
+//                 use hyper_ast::types::{IterableChildren, WithChildren};
+//                 let r = CompressedNode::<IdN, _, _>::new(
+//                     b.get_type(),
+//                     b.try_get_label().copied(),
+//                     b.children()
+//                         .map(|x| {
+//                             x.iter_children()
+//                                 .map(|id| unsafe { IdN::from_id(*id) })
+//                                 .collect()
+//                         })
+//                         .unwrap_or_default(),
+//                 );
+//                 r
+//             },
+//             |id| -> _ { self.label_store.resolve(id).to_owned() },
+//             &self.id,
+//             f,
+//         );
+//         Ok(())
+//     }
+// }

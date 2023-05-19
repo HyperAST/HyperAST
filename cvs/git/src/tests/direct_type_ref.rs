@@ -1,10 +1,10 @@
 use hyper_ast::{
     position::{Scout, StructuralPosition, StructuralPositionStore},
-    store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores, TypeStore},
-    types::LabelStore as _,
+    store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores},
+    types::{LabelStore as _, NodeId},
 };
 
-use crate::java::handle_java_file;
+use crate::{java::handle_java_file, TStore};
 
 use hyper_ast_gen_ts_java::impact::{
     element::{IdentifierFormat, LabelPtr},
@@ -18,7 +18,7 @@ use hyper_ast_gen_ts_java::{
 fn run(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -51,7 +51,10 @@ fn run(text: &[u8]) {
         // "InvalidPathException"
     );
     let mut sp_store = StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+	let x = sp_store.type_scout(&mut x, unsafe {
+		hyper_ast_gen_ts_java::types::TIdN::from_ref_id(&a.local.compressed_node)
+	});
     usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref,i, x);
 }
 

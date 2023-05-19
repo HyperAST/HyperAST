@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use hyper_ast::{
     position::{compute_position, Position},
-    types::{self, Tree as _, Typed},
+    types::{self, LabelStore, Labeled, NodeStore, TypeStore, WithSerialization},
 };
 use hyper_diff::tree::tree_path::{CompressedTreePath, TreePath};
 use serde::Deserialize;
@@ -52,45 +52,31 @@ pub enum Kind {
     Del,
 }
 
-impl<'a, IdN: Clone, NS: types::NodeStore<IdN>, LS: types::LabelStore<str>>
-    From<(
-        (&'a NS, &'a LS),
-        IdN,
-        &CompressedTreePath<<NS::R<'a> as types::WithChildren>::ChildIdx>,
-    )> for Tree
+impl<'a, HAST> From<(&'a HAST, HAST::IdN, &CompressedTreePath<HAST::Idx>)> for Tree
 where
-    NS::R<'a>:
-        types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I> + types::WithSerialization,
+    HAST: types::HyperAST<'a>,
+    HAST::T: types::Tree + WithSerialization,
 {
-    fn from(
-        ((node_store, label_store), ori, p): (
-            (&'a NS, &'a LS),
-            IdN,
-            &CompressedTreePath<<NS::R<'a> as types::WithChildren>::ChildIdx>,
-        ),
-    ) -> Self {
-        (
-            (node_store, label_store),
-            compute_position(ori, &mut p.iter(), node_store, label_store),
-        )
-            .into()
+    fn from((stores, ori, p): (&'a HAST, HAST::IdN, &CompressedTreePath<HAST::Idx>)) -> Self {
+        (stores, compute_position(ori, &mut p.iter(), stores)).into()
     }
 }
 
-impl<'a, IdN, NS: 'a + types::NodeStore<IdN>, LS: types::LabelStore<str>>
-    From<((&'a NS, &'a LS), (Position, IdN))> for Tree
+impl<'a, HAST> From<(&'a HAST, (Position, HAST::IdN))> for Tree
 where
-    NS::R<'a>: types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I>,
+    HAST: types::HyperAST<'a>,
+    HAST::T: types::Tree,
 {
-    fn from(((node_store, label_store), (pos, x)): ((&'a NS, &'a LS), (Position, IdN))) -> Self {
+    fn from((stores, (pos, x)): (&'a HAST, (Position, HAST::IdN))) -> Self {
         let Range { start, end } = pos.range();
         let file = pos.file().to_string_lossy().to_string();
-        let r = node_store.resolve(&x);
+        let r = stores.node_store().resolve(&x);
+        let t = stores.type_store().resolve_type(&r);
         Tree {
-            r#type: r.get_type().to_string(),
+            r#type: t.to_string(),
             label: r
                 .try_get_label()
-                .map(|x| label_store.resolve(x).to_string())
+                .map(|x| stores.label_store().resolve(&x).to_string())
                 .filter(|x| !x.is_empty()),
             file,
             start,

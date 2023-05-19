@@ -1,11 +1,11 @@
 use std::{
     fmt::{Debug, Display},
-    hash::Hash,
+    hash::{Hash, Hasher},
+    marker::PhantomData,
     num::{NonZeroU32, NonZeroU64},
 };
 
-use hashbrown::{HashMap, HashSet};
-use string_interner::Symbol;
+use string_interner::{DefaultHashBuilder, Symbol};
 
 use crate::{
     filter::BloomResult,
@@ -13,10 +13,21 @@ use crate::{
     impact::serialize::{Keyed, MySerialize},
     nodes::{CompressedNode, HashSize, RefContainer},
     store::{defaults, labels::LabelStore},
-    types::{self, IterableChildren, LabelStore as _, MySlice, Type, Typed},
+    types::{
+        AnyType, IterableChildren, LabelStore as _, MySlice, NodeId,
+        TypeIndex, TypeStore, TypeTrait, Typed, TypedNodeId,
+    },
 };
 
 use strum_macros::*;
+#[cfg(feature = "native")]
+type HashMap<K, V> = hashbrown::HashMap<K, V, DefaultHashBuilder>;
+#[cfg(feature = "native")]
+type HashSet<K> = hashbrown::HashSet<K, DefaultHashBuilder>;
+#[cfg(not(feature = "native"))]
+type HashMap<K, V> = hashbrown::HashMap<K, V, std::collections::hash_map::RandomState>;
+#[cfg(not(feature = "native"))]
+type HashSet<K> = hashbrown::HashSet<K, std::collections::hash_map::RandomState>;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 #[repr(transparent)]
@@ -99,6 +110,25 @@ impl From<LabelIdentifier> for u32 {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
 pub struct NodeIdentifier(NonZeroU32);
+
+impl NodeId for NodeIdentifier {
+    type IdN = Self;
+    fn as_id(&self) -> &Self::IdN {
+        self
+    }
+    unsafe fn from_id(id: Self::IdN) -> Self {
+        id
+    }
+
+    unsafe fn from_ref_id(id: &Self::IdN) -> &Self {
+        id
+    }
+}
+
+impl TypedNodeId for NodeIdentifier {
+    type Ty = crate::types::AnyType;
+}
+
 // struct Location {
 //     arch: u32,
 //     offset: u32,
@@ -152,30 +182,87 @@ impl Hash for NodeIdentifier {
 }
 
 // #[cfg(not(feature = "fetched_par"))]
-pub type FetchedLabels = HashMap<LabelIdentifier, String>;
+
+pub struct FetchedLabels(HashMap<LabelIdentifier, String>);
 // #[cfg(feature = "fetched_par")]
 // pub type FetchedLabels = HashMap<LabelIdentifier, String>;
 
-pub struct HashedNodeRef<'a> {
-    index: u32,
-    s_ref: VariantRef<'a>,
+impl crate::types::LabelStore<str> for FetchedLabels {
+    type I = LabelIdentifier;
+
+    fn get_or_insert<T: std::borrow::Borrow<str>>(&mut self, node: T) -> Self::I {
+        todo!()
+    }
+
+    fn get<T: std::borrow::Borrow<str>>(&self, node: T) -> Option<Self::I> {
+        todo!()
+    }
+
+    fn resolve(&self, id: &Self::I) -> &str {
+        self.0.get(id).unwrap()
+    }
 }
 
-// impl<'a> PartialEq for HashedNodeRef<'a> {
+impl FetchedLabels {
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    pub fn try_resolve(&self, id: &<Self as crate::types::LabelStore<str>>::I) -> Option<&str> {
+        self.0.get(id).map(|x| x.as_str())
+    }
+    pub fn insert(&mut self, k: LabelIdentifier, v: String) -> Option<String> {
+        self.0.insert(k, v)
+    }
+}
+
+#[cfg(feature = "native")]
+impl Default for FetchedLabels {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
+#[cfg(not(feature = "native"))]
+impl Default for FetchedLabels {
+    fn default() -> Self {
+        use std::collections::hash_map::RandomState;
+        let inner = HashMap::with_hasher(RandomState::default()); //generate_with(42, 142, 542, 9342));
+        Self(inner)
+    }
+}
+
+pub struct HashedNodeRef<'a, T> {
+    index: u32,
+    s_ref: VariantRef<'a>,
+    phantom: PhantomData<T>,
+}
+
+impl<'a, T> HashedNodeRef<'a, T> {
+    #[doc(hidden)]
+    pub fn cast_type<U>(self) -> HashedNodeRef<'a, U> {
+        HashedNodeRef {
+            index: self.index,
+            s_ref: self.s_ref,
+            phantom: PhantomData,
+        }
+    }
+}
+
+// impl<'a,T> PartialEq for HashedNodeRef<'a,T> {
 //     fn eq(&self, other: &Self) -> bool {
 //         self.id == other.id
 //     }
 // }
 
-// impl<'a> Eq for HashedNodeRef<'a> {}
+// impl<'a,T> Eq for HashedNodeRef<'a,T> {}
 
-// impl<'a> Hash for HashedNodeRef<'a> {
+// impl<'a,T> Hash for HashedNodeRef<'a,T> {
 //     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 //         todo!()
 //     }
 // }
 
-impl<'a> Debug for HashedNodeRef<'a> {
+impl<'a, T> Debug for HashedNodeRef<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("HashedNodeRef")
             // .field("id", &self.id)
@@ -185,31 +272,31 @@ impl<'a> Debug for HashedNodeRef<'a> {
             .finish()
     }
 }
-impl<'a> crate::types::WithSerialization for HashedNodeRef<'a> {
+impl<'a, T> crate::types::WithSerialization for HashedNodeRef<'a, T> {
     fn try_bytes_len(&self) -> Option<usize> {
         todo!()
     }
 }
 
-impl<'a> crate::types::Node for HashedNodeRef<'a> {}
+impl<'a, T> crate::types::Node for HashedNodeRef<'a, T> {}
 
-impl<'a> crate::types::Stored for HashedNodeRef<'a> {
+impl<'a, T> crate::types::Stored for HashedNodeRef<'a, T> {
     type TreeId = NodeIdentifier;
 }
 
-impl<'a> crate::types::WithChildren for HashedNodeRef<'a> {
+impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     type ChildIdx = u16;
-    type Children<'b> = MySlice<Self::TreeId> where Self: 'b;
+    type Children<'b> = MySlice<<Self::TreeId as NodeId>::IdN> where Self: 'b;
 
     fn child_count(&self) -> Self::ChildIdx {
         todo!()
     }
 
-    fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+    fn child(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN> {
         todo!()
     }
 
-    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN> {
         todo!()
     }
 
@@ -227,7 +314,7 @@ impl<'a> crate::types::WithChildren for HashedNodeRef<'a> {
     }
 }
 
-impl<'a> crate::types::WithHashs for HashedNodeRef<'a> {
+impl<'a, T> crate::types::WithHashs for HashedNodeRef<'a, T> {
     type HK = SyntaxNodeHashsKinds;
     type HP = HashSize;
 
@@ -236,7 +323,10 @@ impl<'a> crate::types::WithHashs for HashedNodeRef<'a> {
     }
 }
 
-impl<'a> crate::types::Tree for HashedNodeRef<'a> {
+impl<'a, T: TypedNodeId> crate::types::Tree for HashedNodeRef<'a, T>
+where
+    T::Ty: TypeTrait,
+{
     fn has_children(&self) -> bool {
         match self.s_ref {
             VariantRef::Typed { .. } => false,
@@ -255,10 +345,10 @@ impl<'a> crate::types::Tree for HashedNodeRef<'a> {
         }
     }
 }
-impl<'a> crate::types::Labeled for HashedNodeRef<'a> {
+impl<'a, T> crate::types::Labeled for HashedNodeRef<'a, T> {
     type Label = LabelIdentifier;
 
-    fn get_label(&self) -> &LabelIdentifier {
+    fn get_label_unchecked(&self) -> &LabelIdentifier {
         match self.s_ref {
             VariantRef::Typed { .. } => panic!(),
             VariantRef::Labeled { entities, .. } => &entities.label[self.index as usize],
@@ -266,8 +356,6 @@ impl<'a> crate::types::Labeled for HashedNodeRef<'a> {
             VariantRef::Both { entities, .. } => &entities.label[self.index as usize],
         }
     }
-}
-impl<'a> HashedNodeRef<'a> {
     fn try_get_label(&self) -> Option<&LabelIdentifier> {
         match self.s_ref {
             VariantRef::Typed { .. } => None,
@@ -277,7 +365,7 @@ impl<'a> HashedNodeRef<'a> {
         }
     }
 }
-impl<'a> RefContainer for HashedNodeRef<'a> {
+impl<'a, T> RefContainer for HashedNodeRef<'a, T> {
     type Result = BloomResult;
 
     fn check<U: MySerialize + Keyed<usize>>(&self, rf: U) -> Self::Result {
@@ -285,7 +373,7 @@ impl<'a> RefContainer for HashedNodeRef<'a> {
     }
 }
 
-impl<'a> HashedNodeRef<'a> {
+impl<'a, T> HashedNodeRef<'a, T> {
     // // pub(crate) fn new(entry: EntryRef<'a>) -> Self {
     // //     Self(entry)
     // // }
@@ -317,7 +405,7 @@ impl<'a> HashedNodeRef<'a> {
     // }
 
     /// Returns a reference to one of the entity's components.
-    pub fn get_component<T>(&self) -> Result<&T, String> {
+    pub fn get_component<C>(&self) -> Result<&C, String> {
         todo!()
     }
 
@@ -332,7 +420,7 @@ impl<'a> HashedNodeRef<'a> {
 
     pub fn into_compressed_node(
         &self,
-    ) -> Result<CompressedNode<NodeIdentifier, LabelIdentifier>, String> {
+    ) -> Result<CompressedNode<NodeIdentifier, LabelIdentifier, T>, String> {
         todo!()
     }
 
@@ -346,45 +434,77 @@ impl<'a> HashedNodeRef<'a> {
         todo!()
     }
 
-    pub fn is_directory(&self) -> bool {
+    pub fn is_directory(&self) -> bool
+    where
+        T: TypedNodeId,
+        T::Ty: TypeTrait,
+    {
+        use crate::types::HyperType;
         self.get_type().is_directory()
     }
 
     pub fn get_child_by_name(
         &self,
-        name: &<HashedNodeRef<'a> as crate::types::Labeled>::Label,
-    ) -> Option<<HashedNodeRef<'a> as crate::types::Stored>::TreeId> {
+        name: &<HashedNodeRef<'a, T> as crate::types::Labeled>::Label,
+    ) -> Option<<HashedNodeRef<'a, T> as crate::types::Stored>::TreeId> {
         todo!()
     }
 
     pub fn get_child_idx_by_name(
         &self,
-        name: &<HashedNodeRef<'a> as crate::types::Labeled>::Label,
-    ) -> Option<<HashedNodeRef<'a> as crate::types::WithChildren>::ChildIdx> {
+        name: &<HashedNodeRef<'a, T> as crate::types::Labeled>::Label,
+    ) -> Option<<HashedNodeRef<'a, T> as crate::types::WithChildren>::ChildIdx> {
         todo!()
     }
 
     pub fn try_get_children_name(
         &self,
-    ) -> Option<&[<HashedNodeRef<'a> as crate::types::Labeled>::Label]> {
+    ) -> Option<&[<HashedNodeRef<'a, T> as crate::types::Labeled>::Label]> {
         todo!()
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct NodeStore {
     // #[cfg(not(feature = "fetched_par"))]
-    stockages: HashMap<u32, Variant>,
+    // stockages: HashMap<u32, Variant>,
+    index: HashMap<NodeIdentifier, (u32, u32)>,
+    vindex: HashMap<Arch<String>, u32>,
+    variants: Vec<Variant>,
     // #[cfg(feature = "fetched_par")]
     // stockages: dashmap::DashMap<u32, Variant>,
 }
 impl Hash for NodeStore {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        for r in &self.stockages {
-            r.0.hash(state);
-            r.1.rev().len().hash(state);
-        }
+        // for r in &self.stockages {
+        //     r.0.hash(state);
+        //     r.1.rev().len().hash(state);
+        // }
+        self.index.keys().for_each(|x| x.hash(state))
     }
+}
+type StaticStr = &'static str;
+lazy_static::lazy_static! {
+    static ref LANGS: std::sync::Mutex<Vec<StaticStr>> = {
+        Default::default()
+    };
+}
+fn deserialize_static_str<'de, D>(deserializer: D) -> Result<StaticStr, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    <&str>::deserialize(deserializer).map(move |d| {
+        let mut langs = LANGS.lock().unwrap();
+        for x in langs.iter() {
+            if *x == d {
+                return *x;
+            }
+        }
+        let d: &'static str = Box::leak(d.into());
+        langs.push(d);
+        d
+    })
 }
 
 macro_rules! variant_store {
@@ -394,24 +514,39 @@ macro_rules! variant_store {
 
             $(
             $( #[$doc] )*
-            #[derive(Clone, Debug, Default)]
+            #[derive(Clone, Debug)]
             #[cfg_attr(feature = "serialize", derive(serde::Serialize,serde::Deserialize))]
-              pub struct $c{
+            pub struct $c{
+                #[serde(deserialize_with = "deserialize_static_str")]
+                pub(super) lang: StaticStr,
                 pub(super) rev: Vec<$rev>,
                 $(pub(super) $d: Vec<$e>,)*
-            })*
+            }
+            impl $c{
+                pub(super) fn lang(lang: &'static str) -> Self {
+                    Self {
+                        lang,
+                        rev: Default::default(),
+                        $($d: Default::default(),)*
+
+                    }
+                }
+            }
+            )*
         }
         #[derive(Clone, Debug)]
         #[derive(EnumDiscriminants)]
         #[cfg_attr(feature = "serialize", derive(serde::Serialize,serde::Deserialize))]
+        #[cfg_attr(feature = "serialize", strum_discriminants(derive(serde::Serialize,serde::Deserialize)))]
         pub enum RawVariant {
             $($c{
                 entities: variants::$c,
             },)*
         }
+        #[derive(Debug)]
         pub enum Variant {
             $($c{
-                index: HashMap<$rev, u32>,
+                // index: HashMap<$rev, u32>,
                 entities: variants::$c,
             },)*
         }
@@ -421,63 +556,84 @@ macro_rules! variant_store {
             },)*
         }
         impl Variant {
-            pub fn try_resolve(&self, offset: $rev) -> Option<HashedNodeRef<'_>> {
-                Some(match self {$(
-                    Variant::$c{entities, index} => HashedNodeRef {
-                        index: *index.get(&offset)?,
-                        s_ref: VariantRef::$c{entities},
-                    },
-                )*})
-            }
-            pub fn index_and_rev_mut(&mut self) -> (&mut HashMap<$rev, u32>, &Vec<$rev>) {
+            // pub fn try_resolve<T>(&self, offset: $rev) -> Option<HashedNodeRef<'_, T>> {
+            //     Some(match self {$(
+            //         Variant::$c{entities, index} => HashedNodeRef {
+            //             index: *index.get(&offset)?,
+            //             s_ref: VariantRef::$c{entities},
+            //             phantom: PhantomData,
+            //         },
+            //     )*})
+            // }
+            pub fn get<T>(&self, index: u32) -> HashedNodeRef<'_, T> {
                 match self {$(
-                    Variant::$c{ index, entities: variants::$c{rev, ..} } => (&mut *index, &*rev),
+                    Variant::$c{entities} => HashedNodeRef {
+                        index,
+                        s_ref: VariantRef::$c{entities},
+                        phantom: PhantomData,
+                    },
                 )*}
             }
+            // pub fn index_and_rev_mut(&mut self) -> (&mut HashMap<$rev, u32>, &Vec<$rev>) {
+            //     match self {$(
+            //         Variant::$c{ index, entities: variants::$c{rev, ..} } => (&mut *index, &*rev),
+            //     )*}
+            // }
             pub fn rev(&self) -> &Vec<$rev> {
                 match self {$(
                     Variant::$c{ entities: variants::$c{rev, ..}, ..} => &rev,
                 )*}
             }
-            fn extend(&mut self, other: Self) {
-                match (self, other) {$(
-                    (Variant::$c{ index, entities }, Variant::$c{ entities: other, ..}) => {
-                        $(
-                            assert_eq!(other.rev.len(), other.$d.len());
-                            let mut $d = other.$d.into_iter();
-                        )*
-                        for k in other.rev.into_iter() {
-                            if !index.contains_key(&k) {
-                                let i = entities.rev.len();
-                                entities.rev.push(k);
-                                index.insert(k, i as u32);
-                                $(
-                                    entities.$d.push($d.next().unwrap());
-                                )*
-                            }
-                        }
-                    },
-                    )*
-                    _=> unreachable!()
-                }
-            }
+            // fn extend(&mut self, other: Self) {
+            //     match (self, other) {$(
+            //         (Variant::$c{ index, entities }, Variant::$c{ entities: other, ..}) => {
+            //             $(
+            //                 assert_eq!(other.rev.len(), other.$d.len());
+            //                 let mut $d = other.$d.into_iter();
+            //             )*
+            //             for k in other.rev.into_iter() {
+            //                 if !index.contains_key(&k) {
+            //                     let i = entities.rev.len();
+            //                     entities.rev.push(k);
+            //                     index.insert(k, i as u32);
+            //                     $(
+            //                         entities.$d.push($d.next().unwrap());
+            //                     )*
+            //                 }
+            //             }
+            //         },
+            //         )*
+            //         _=> unreachable!()
+            //     }
+            // }
             fn extend_raw(&mut self, other: RawVariant) {
                 match (self, other) {$(
-                    (Variant::$c{ index, entities }, RawVariant::$c{ entities: other, ..}) => {
+                    // (Variant::$c{ index, entities }, RawVariant::$c{ entities: other, ..}) => {
+                    //     $(
+                    //         assert_eq!(other.rev.len(), other.$d.len());
+                    //         let mut $d = other.$d.into_iter();
+                    //     )*
+                    //     for k in other.rev.into_iter() {
+                    //         if !index.contains_key(&k) {
+                    //             let i = entities.rev.len();
+                    //             entities.rev.push(k);
+                    //             index.insert(k, i as u32);
+                    //             $(
+                    //                 entities.$d.push($d.next().unwrap());
+                    //             )*
+                    //         }
+                    //     }
+                    // },
+                    // )*
+                    (Variant::$c{ entities }, RawVariant::$c{ entities: other, ..}) => {
+                        // $(
+                        //     assert_eq!(other.rev.len(), other.$d.len());
+                        //     let mut $d = other.$d.into_iter();
+                        // )*
+                        entities.rev.extend(other.rev);
                         $(
-                            assert_eq!(other.rev.len(), other.$d.len());
-                            let mut $d = other.$d.into_iter();
+                            entities.$d.extend(other.$d);
                         )*
-                        for k in other.rev.into_iter() {
-                            if !index.contains_key(&k) {
-                                let i = entities.rev.len();
-                                entities.rev.push(k);
-                                index.insert(k, i as u32);
-                                $(
-                                    entities.$d.push($d.next().unwrap());
-                                )*
-                            }
-                        }
                     },
                     )*
                     _=> unreachable!()
@@ -496,16 +652,37 @@ macro_rules! variant_store {
                 )*}
             }
         }
-        impl<'a> crate::types::Typed for HashedNodeRef<'a> {
-            type Type = Type;
+        impl<'a,T: TypedNodeId> crate::types::Typed for HashedNodeRef<'a,T> where T::Ty: TypeTrait {
+            type Type = T::Ty;
 
-            fn get_type(&self) -> Type {
+            fn get_type(&self) -> T::Ty {
                 match self.s_ref {$(
-                    VariantRef::$c{ entities: variants::$c{kind,..}, ..} => kind[self.index as usize],
+                    VariantRef::$c{ entities: variants::$c{lang, kind,..}, ..} => {
+                        // assert_eq!(&std::any::type_name::<<T::Ty as TypeTrait>::Lang>(), lang);
+                        // use crate::types::Lang;
+                        // <T::Ty as TypeTrait>::Lang::make(kind[self.index as usize])
+                        todo!()
+                    },
                 )*}
             }
         }
-        impl<'a> crate::types::WithStats for HashedNodeRef<'a> {
+        impl<'a,T> HashedNodeRef<'a,T> {
+            pub fn get_lang(&self) -> &'static str {
+                match self.s_ref {$(
+                    VariantRef::$c{ entities: variants::$c{lang,..}, ..} => {
+                        lang
+                    },
+                )*}
+            }
+            pub fn get_raw_type(&self) -> u16 {
+                match self.s_ref {$(
+                    VariantRef::$c{ entities: variants::$c{lang, kind,..}, ..} => {
+                        kind[self.index as usize]
+                    },
+                )*}
+            }
+        }
+        impl<'a,T> crate::types::WithStats for HashedNodeRef<'a,T> {
             fn size(&self) -> usize {
                 match self.s_ref {$(
                     VariantRef::$c{ entities: variants::$c{size,..}, ..} => size[self.index as usize],
@@ -520,11 +697,12 @@ macro_rules! variant_store {
             fn from(value: RawVariant) -> Self {
                 match value {$(
                     RawVariant::$c{ entities } => {
-                        let mut index = HashMap::default();
-                        entities.rev.iter().enumerate().for_each(|(i, x)| {
-                            index.insert(*x, i as u32);
-                        });
-                        Variant::$c{ index, entities }
+                        // let mut index = HashMap::default();
+                        // entities.rev.iter().enumerate().for_each(|(i, x)| {
+                        //     index.insert(*x, i as u32);
+                        // });
+                        // Variant::$c{ index, entities }
+                        Variant::$c{ entities }
                     },
                 )*}
             }
@@ -535,21 +713,21 @@ macro_rules! variant_store {
 variant_store!(NodeIdentifier, NodeIdentifier;
     /// Just a leaf with a type
     Typed => {
-        kind: Type,
+        kind: u16,
         size: usize,
     },
     Labeled => {
-        kind: Type,
+        kind: u16,
         label: LabelIdentifier,
         size: usize,
     },
     Children => {
-        kind: Type,
+        kind: u16,
         children: Vec<NodeIdentifier>,
         size: usize,
     },
     Both => {
-        kind: Type,
+        kind: u16,
         children: Vec<NodeIdentifier>,
         label: LabelIdentifier,
         size: usize,
@@ -601,116 +779,168 @@ impl serde::Serialize for &mut DedupPacked {
 
 // #[derive(Default)]
 pub struct SimplePackedBuilder {
-    // label_ids: Vec<LabelIdentifier>,
-    stockages: HashMap<u32, RawVariant>,
+    langs: Vec<&'static str>,
+    // // label_ids: Vec<LabelIdentifier>,
+    stockages: HashMap<Arch<&'static str>, RawVariant>,
+}
+
+#[derive(PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+struct Arch<S>(S, RawVariantDiscriminants);
+
+impl<S: Hash> Hash for Arch<S> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+        (self.1 as u32).hash(state);
+    }
 }
 
 impl Default for SimplePackedBuilder {
     fn default() -> Self {
         let mut r = Self {
+            langs: Default::default(),
             stockages: Default::default(),
         };
-        let arch = RawVariantDiscriminants::Typed as u32;
-        r.stockages.insert(
-            arch,
-            RawVariant::Typed {
-                entities: variants::Typed::default(),
-            },
-        );
-        let arch = RawVariantDiscriminants::Labeled as u32;
-        r.stockages.insert(
-            arch,
-            RawVariant::Labeled {
-                entities: variants::Labeled::default(),
-            },
-        );
-        let arch = RawVariantDiscriminants::Children as u32;
-        r.stockages.insert(
-            arch,
-            RawVariant::Children {
-                entities: variants::Children::default(),
-            },
-        );
-        let arch = RawVariantDiscriminants::Both as u32;
-        r.stockages.insert(
-            arch,
-            RawVariant::Both {
-                entities: variants::Both::default(),
-            },
-        );
+        // let arch = RawVariantDiscriminants::Typed as u32;
+        // r.stockages.insert(
+        //     arch,
+        //     RawVariant::Typed {
+        //         entities: variants::Typed::default(),
+        //     },
+        // );
+        // let arch = RawVariantDiscriminants::Labeled as u32;
+        // r.stockages.insert(
+        //     arch,
+        //     RawVariant::Labeled {
+        //         entities: variants::Labeled::default(),
+        //     },
+        // );
+        // let arch = RawVariantDiscriminants::Children as u32;
+        // r.stockages.insert(
+        //     arch,
+        //     RawVariant::Children {
+        //         entities: variants::Children::default(),
+        //     },
+        // );
+        // let arch = RawVariantDiscriminants::Both as u32;
+        // r.stockages.insert(
+        //     arch,
+        //     RawVariant::Both {
+        //         entities: variants::Both::default(),
+        //     },
+        // );
         r
     }
 }
 
 impl SimplePackedBuilder {
-    pub fn add<T>(&mut self, id: NodeIdentifier, node: T)
+    pub fn add<TS, T>(&mut self, type_store: &TS, id: NodeIdentifier, node: T)
     where
-        T: crate::types::Tree<Type = crate::types::Type, Label = defaults::LabelIdentifier>
-            + crate::types::WithStats,
-        T::TreeId: Copy + Into<NodeIdentifier>,
+        TS: TypeStore<T, Marshaled = TypeIndex>,
+        T::Type: 'static,
+        T: crate::types::Tree<Label = defaults::LabelIdentifier> + crate::types::WithStats,
+        <T::TreeId as NodeId>::IdN: Copy + Into<NodeIdentifier>,
     {
-        let kind = node.get_type();
+        // use crate::types::Lang;
+        // let kind = type_store.resolve_type(&node);
+        let TypeIndex {
+            lang: lang_name,
+            ty: type_id,
+        } = type_store.marshal_type(&node);
+        // let l_id = self
+        //     .langs
+        //     .iter()
+        //     .position(|x| x == &lang_name)
+        //     .unwrap_or_else(|| {
+        //         let l = self.langs.len();
+        //         assert!(l < 8); // NOTE: limit for now
+        //         self.langs.push(lang_name);
+        //         l
+        //     }) as u32;
+        // if true {
+        //     panic!("{}", lang_name);
+        // }
         if let Some(children) = node.children() {
             let children = children.iter_children().map(|x| (*x).into()).collect();
             if node.has_label() {
-                let arch = RawVariantDiscriminants::Both as u32;
-                match self.stockages.get_mut(&arch).unwrap() {
+                // let arch = l_id.rotate_right(3) | RawVariantDiscriminants::Both as u32;
+                match self
+                    .stockages
+                    .entry(Arch(lang_name, RawVariantDiscriminants::Both))
+                    .or_insert_with(|| RawVariant::Both {
+                        entities: variants::Both::lang(lang_name),
+                    }) {
                     RawVariant::Both {
                         entities: a @ variants::Both { .. },
                     } => {
                         a.rev.push(id);
-                        a.kind.push(kind);
+                        a.kind.push(type_id);
 
                         a.children.push(children);
-                        a.label.push(node.get_label().into());
+                        a.label.push(node.get_label_unchecked().into());
 
                         a.size.push(node.size());
                     }
-                    _ => unreachable!(),
+                    _ => unreachable!("SimplePackedBuilder::add variant Both"),
                 }
             } else {
-                let arch = RawVariantDiscriminants::Children as u32;
-                match self.stockages.get_mut(&arch).unwrap() {
+                // let arch = l_id.rotate_right(3) |  RawVariantDiscriminants::Children as u32;
+                match self
+                    .stockages
+                    .entry(Arch(lang_name, RawVariantDiscriminants::Children))
+                    .or_insert_with(|| RawVariant::Children {
+                        entities: variants::Children::lang(lang_name),
+                    }) {
                     RawVariant::Children {
                         entities: a @ variants::Children { .. },
                     } => {
                         a.rev.push(id);
-                        a.kind.push(kind);
+                        a.kind.push(type_id);
 
                         a.children.push(children);
 
                         a.size.push(node.size());
                     }
-                    _ => unreachable!(),
+                    _ => unreachable!("SimplePackedBuilder::add variant Children"),
                 }
             }
         } else if node.has_label() {
-            let arch = RawVariantDiscriminants::Labeled as u32;
-            match self.stockages.get_mut(&arch).unwrap() {
+            // let arch = l_id.rotate_right(3) |  RawVariantDiscriminants::Labeled as u32;
+            match self
+                .stockages
+                .entry(Arch(lang_name, RawVariantDiscriminants::Labeled))
+                .or_insert_with(|| RawVariant::Labeled {
+                    entities: variants::Labeled::lang(lang_name),
+                }) {
                 RawVariant::Labeled {
                     entities: a @ variants::Labeled { .. },
                 } => {
                     a.rev.push(id);
-                    a.kind.push(kind);
+                    a.kind.push(type_id);
 
-                    a.label.push(node.get_label().into());
+                    a.label.push(node.get_label_unchecked().into());
 
                     a.size.push(node.size());
                 }
-                _ => unreachable!(),
+                _ => unreachable!("SimplePackedBuilder::add variant Labeled"),
             }
         } else {
-            let arch = RawVariantDiscriminants::Typed as u32;
-            match self.stockages.get_mut(&arch).unwrap() {
+            // let arch = l_id.rotate_right(3) |  RawVariantDiscriminants::Typed as u32;
+            match self
+                .stockages
+                .entry(Arch(lang_name, RawVariantDiscriminants::Typed))
+                .or_insert_with(|| RawVariant::Typed {
+                    entities: variants::Typed::lang(lang_name),
+                }) {
                 RawVariant::Typed {
                     entities: a @ variants::Typed { .. },
                 } => {
                     a.rev.push(id);
-                    a.kind.push(kind);
+                    a.kind.push(type_id);
 
                     a.size.push(node.size());
                 }
-                _ => unreachable!(),
+                _ => unreachable!("SimplePackedBuilder::add variant Typed"),
             }
         };
     }
@@ -800,7 +1030,7 @@ impl SimplePackedBuilder {
     }
 
     pub fn build(self, // ls: &crate::store::labels::LabelStore
-    ) -> SimplePacked {
+    ) -> SimplePacked<&'static str> {
         let mut res = SimplePacked::default();
         // res.labels = self
         //     .label_ids
@@ -820,42 +1050,50 @@ impl SimplePackedBuilder {
 
 #[derive(Default)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-pub struct SimplePacked {
+pub struct SimplePacked<S> {
     // label_ids: Vec<LabelIdentifier>,
     // labels: Vec<String>,
-    storages_arch: Vec<u32>,
+    storages_arch: Vec<Arch<S>>,
     storages_variants: Vec<RawVariant>,
 }
 
 impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
-    type R<'a> = HashedNodeRef<'a>;
+    type R<'a> = HashedNodeRef<'a, AnyType>;
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+        todo!()
+    }
+}
+impl<TIdN: TypedNodeId> crate::types::TypedNodeStore<TIdN> for NodeStore
+where
+    TIdN::Ty: TypeTrait,
+{
+    type R<'a> = HashedNodeRef<'a, TIdN>;
+    fn resolve(&self, id: &TIdN) -> Self::R<'_> {
+        todo!()
+    }
+
+    fn try_typed(&self, id: &<TIdN as NodeId>::IdN) -> Option<TIdN> {
         todo!()
     }
 }
 
 impl NodeStore {
-    pub fn resolve(
-        &self,
-        id: NodeIdentifier,
-    ) -> <Self as crate::types::NodeStore<NodeIdentifier>>::R<'_> {
+    pub fn resolve(&self, id: NodeIdentifier) -> HashedNodeRef<'_, AnyType> {
         todo!()
     }
-    pub fn try_resolve(
-        &self,
-        id: NodeIdentifier,
-    ) -> Option<<Self as crate::types::NodeStore<NodeIdentifier>>::R<'_>> {
-        // let loc: Location = id.into();
-        // self.stockages
-        //     .get(&loc.arch)
-        //     .and_then(|s| s.try_resolve(loc.offset))
-        for v in self.stockages.values() {
-            let r = v.try_resolve(id);
-            if r.is_some() {
-                return r;
-            }
-        }
-        None
+    pub fn try_resolve<T>(&self, id: NodeIdentifier) -> Option<HashedNodeRef<'_, T>> {
+        // // let loc: Location = id.into();
+        // // self.stockages
+        // //     .get(&loc.arch)
+        // //     .and_then(|s| s.try_resolve(loc.offset))
+        // for v in self.stockages.values() {
+        //     let r = v.try_resolve(id);
+        //     if r.is_some() {
+        //         return r;
+        //     }
+        // }
+        let (variant, offset) = self.index.get(&id)?;
+        Some(self.variants[*variant as usize].get(*offset))
     }
 }
 
@@ -870,8 +1108,8 @@ fn i64_to_i32x2(n: u64) -> [u32; 2] {
 impl NodeStore {
     pub fn len(&self) -> usize {
         let mut total = 0;
-        for a in &self.stockages {
-            total += a.1.rev().len()
+        for a in &self.variants {
+            total += a.rev().len()
         }
         total
     }
@@ -880,11 +1118,14 @@ impl NodeStore {
 impl NodeStore {
     pub fn new() -> Self {
         Self {
-            stockages: Default::default(),
+            // stockages: Default::default(),
+            index: Default::default(),
+            vindex: Default::default(),
+            variants: Default::default(),
         }
     }
 
-    pub fn extend(&mut self, raw: SimplePacked) //-> (Vec<LabelIdentifier>, Vec<String>)
+    pub fn extend(&mut self, raw: SimplePacked<String>) //-> (Vec<LabelIdentifier>, Vec<String>)
     {
         for (arch, entities) in raw.storages_arch.into_iter().zip(raw.storages_variants) {
             self._extend_from_raw(arch, entities)
@@ -892,30 +1133,48 @@ impl NodeStore {
         // (raw.label_ids, raw.labels)
     }
 
-    fn _extend(&mut self, arch: u32, mut entities: Variant) {
-        match self.stockages.entry(arch) {
-            hashbrown::hash_map::Entry::Occupied(mut occ) => {
-                occ.get_mut().extend(entities);
-            }
-            hashbrown::hash_map::Entry::Vacant(vac) => {
-                let (index, rev) = entities.index_and_rev_mut();
-                if index.is_empty() {
-                    rev.iter().enumerate().for_each(|(i, x)| {
-                        index.insert(*x, i as u32);
-                    })
-                }
-                vac.insert(entities);
-            }
-        }
-    }
+    // fn _extend(&mut self, arch: u32, mut entities: Variant) {
+    //     match self.stockages.entry(arch) {
+    //         hashbrown::hash_map::Entry::Occupied(mut occ) => {
+    //             occ.get_mut().extend(entities);
+    //         }
+    //         hashbrown::hash_map::Entry::Vacant(vac) => {
+    //             let (index, rev) = entities.index_and_rev_mut();
+    //             if index.is_empty() {
+    //                 rev.iter().enumerate().for_each(|(i, x)| {
+    //                     index.insert(*x, i as u32);
+    //                 })
+    //             }
+    //             vac.insert(entities);
+    //         }
+    //     }
+    // }
 
-    fn _extend_from_raw(&mut self, arch: u32, entities: RawVariant) {
-        match self.stockages.entry(arch) {
-            hashbrown::hash_map::Entry::Occupied(mut occ) => {
-                occ.get_mut().extend_raw(entities);
+    fn _extend_from_raw(&mut self, arch: Arch<String>, entities: RawVariant) {
+        // let var_index = self.variants.len() as u32;
+        // let new =  ();
+        // for ent in entities.rev() {
+
+        // }
+        match self.vindex.entry(arch) {
+            hashbrown::hash_map::Entry::Occupied(occ) => {
+                let var = &mut self.variants[*occ.get() as usize];
+                let mut offset = var.rev().len() as u32;
+                for ent in entities.rev() {
+                    self.index.insert(*ent, (*occ.get() as u32, offset));
+                    offset += 1;
+                }
+                var.extend_raw(entities);
             }
             hashbrown::hash_map::Entry::Vacant(vac) => {
-                vac.insert(entities.into());
+                let len = self.variants.len();
+                vac.insert(len as u32);
+                let mut offset = 0;
+                for ent in entities.rev() {
+                    self.index.insert(*ent, (len as u32, offset));
+                    offset += 1;
+                }
+                self.variants.push(entities.into());
             }
         }
     }

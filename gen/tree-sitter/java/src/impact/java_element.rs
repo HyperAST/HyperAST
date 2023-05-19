@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use hyper_ast::types::Type;
+use crate::types::Type;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum Primitive {

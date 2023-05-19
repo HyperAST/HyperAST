@@ -10,6 +10,7 @@ use hyper_ast::{
     },
     types::WithChildren,
 };
+use hyper_ast_cvs_git::TStore;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
@@ -47,7 +48,7 @@ pub struct FetchedLabels {
 pub struct FetchedNodes {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     root: Vec<NodeIdentifier>,
-    node_store: fetched::SimplePacked,
+    node_store: fetched::SimplePacked<&'static str>,
 }
 
 pub fn fetch(mut state: SharedState, path: Parameters) -> Result<FetchedNodes, String> {
@@ -89,7 +90,8 @@ pub fn fetch(mut state: SharedState, path: Parameters) -> Result<FetchedNodes, S
     dbg!(curr);
     let ids = vec![curr];
     let node_store = extract_nodes(
-        &ids, node_store, //label_store
+        &ids,
+        &repositories.processor.main_stores, //label_store
     );
     dbg!(&ids);
     let ids = ids.into_iter().map(|x| x.into()).collect();
@@ -117,11 +119,10 @@ pub fn fetch_with_node_ids<'a>(
         .collect();
     let mut get_mut = state;
     let repositories = get_mut.repositories.read().unwrap();
-    let node_store = &repositories.processor.main_stores.node_store;
-    let label_store = &repositories.processor.main_stores.label_store;
 
     let node_store = extract_nodes(
-        &ids, node_store, //label_store
+        &ids,
+        &repositories.processor.main_stores, //label_store
     );
     Ok(Timed {
         time: now.elapsed().as_secs_f64(),
@@ -187,13 +188,13 @@ fn resolve_path(
 /// ids would better be deduplicated
 fn extract_nodes(
     ids: &[defaults::NodeIdentifier],
-    node_store: &hyper_ast::store::nodes::legion::NodeStore,
+    store: &hyper_ast::store::SimpleStores<TStore>,
     // label_store: &hyper_ast::store::labels::LabelStore,
-) -> fetched::SimplePacked {
+) -> fetched::SimplePacked<&'static str> {
     let mut builder = fetched::SimplePackedBuilder::default();
     for id in ids {
-        let node = node_store.resolve(*id);
-        builder.add(id.clone().into(), node);
+        let node = store.node_store.resolve(*id);
+        builder.add(&store.type_store, id.clone().into(), node);
     }
     // dbg!(&ids);
 

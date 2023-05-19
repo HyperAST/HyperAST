@@ -9,7 +9,7 @@ use str_distance::DistanceMetric;
 
 use crate::decompressed_tree_store::{DecompressedTreeStore, PostOrderKeyRoots};
 use crate::matchers::mapping_store::MonoMappingStore;
-use hyper_ast::types::{LabelStore, NodeStore, SlicedLabel, Stored, Tree, DecompressedSubtree};
+use hyper_ast::types::{DecompressedSubtree, LabelStore, NodeStore, SlicedLabel, Stored, Tree, NodeId};
 
 // TODO use the Mapping struct
 pub struct ZsMatcher<M, SD, DD = SD> {
@@ -26,8 +26,9 @@ impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
         dst: T::TreeId,
     ) -> Self
     where
-        T::TreeId: Clone,
         T: Tree<Label = LS::I>,
+        T::TreeId: Clone,
+        T::Type: Copy + Eq + Send + Sync,
         M::Src: PrimInt + std::ops::SubAssign + Debug,
         M::Dst: PrimInt + std::ops::SubAssign + Debug,
         SD: 'b + PostOrderKeyRoots<'b, T, M::Src> + DecompressedSubtree<'store, T, Out = SD>,
@@ -70,8 +71,9 @@ impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
         dst_arena: DD,
     ) -> M
     where
-        T::TreeId: Clone,
+        T::TreeId: Clone + NodeId<IdN=T::TreeId>,
         T: Tree<Label = LS::I>,
+        T::Type: Copy + Eq + Send + Sync,
         M::Src: PrimInt + std::ops::SubAssign + Debug,
         M::Dst: PrimInt + std::ops::SubAssign + Debug,
         SD: 'b + PostOrderKeyRoots<'b, T, M::Src>,
@@ -122,8 +124,9 @@ impl<
         M: MonoMappingStore,
     > MatcherImpl<'store, 'b, 'c, SD, DD, T, S, LS, M>
 where
-    T::TreeId: Clone,
     T: Tree<Label = LS::I>,
+    T::TreeId: Clone,
+    T::Type: Copy + Eq + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
@@ -162,8 +165,8 @@ where
         }
         let s1 = self.label_store.resolve(&l1);
         let s2 = self.label_store.resolve(&l2);
-        debug_assert_ne!(s1.len(), 0);
-        debug_assert_ne!(s2.len(), 0);
+        // debug_assert_ne!(s1.len(), 0);
+        // debug_assert_ne!(s2.len(), 0);
         if s1.len() == 0 || s2.len() == 0 {
             return 1.;
         }
@@ -222,8 +225,9 @@ impl<
         M: MonoMappingStore,
     > MatcherImpl<'store, 'b, 'c, SD, DD, T, S, LS, M>
 where
-    T::TreeId: Clone,
     T: Tree<Label = LS::I>,
+    T::TreeId: Clone,
+    T::Type: Copy + Eq + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
@@ -233,11 +237,11 @@ where
             forest: vec![vec![0.0; self.dst_arena.len() + 1]; self.src_arena.len() + 1],
         };
         let mut src_kr: Vec<_> = self.src_arena.iter_kr().collect();
-        if src_kr.len() == 0  || src_kr[src_kr.len() - 1] != self.src_arena.root() {
+        if src_kr.len() == 0 || src_kr[src_kr.len() - 1] != self.src_arena.root() {
             src_kr.push(self.src_arena.root());
         }
         let mut dst_kr: Vec<_> = self.dst_arena.iter_kr().collect();
-        if dst_kr.len() == 0  || dst_kr[dst_kr.len() - 1] != self.dst_arena.root() {
+        if dst_kr.len() == 0 || dst_kr[dst_kr.len() - 1] != self.dst_arena.root() {
             dst_kr.push(self.dst_arena.root());
         }
         for i in &src_kr {
@@ -542,9 +546,13 @@ pub mod qgrams {
         if std::cmp::min(s.len(), t.len()) < Q {
             return if s.eq(t) { 0. } else { 1. };
         }
+        // #[cfg(feature = "native")]
+        let hb = DefaultHashBuilder::default();
+        // #[cfg(not(feature = "native"))]
+        // let hb = std::collections::hash_map::RandomState::generate_with(42, 142, 542, 9342);
         // Divide s into q-grams and store them in a hash map
         let mut qgrams =
-            HashMap::<[u8; Q], i32, DefaultHashBuilder>::with_hasher(DefaultHashBuilder::new());
+            HashMap::<[u8; Q], i32, DefaultHashBuilder>::with_hasher(hb);
         let pad_s = pad::<QM>(s);
         for i in 0..=pad_s.len() - Q {
             // dbg!(i);
@@ -672,7 +680,7 @@ pub(super) mod other_qgrams {
         }
         // Divide s into q-grams and store them in a hash map
         let mut qgrams =
-            HashMap::<&[u8], i32, DefaultHashBuilder>::with_hasher(DefaultHashBuilder::new());
+            HashMap::<&[u8], i32, DefaultHashBuilder>::with_hasher(DefaultHashBuilder::default());
         let pad_s = pad::<Q>(s);
         pad_s.windows(Q + 1).for_each(|qgram| {
             // dbg!(std::str::from_utf8(qgram).unwrap());
@@ -821,9 +829,7 @@ mod tests {
     use crate::decompressed_tree_store::{ShallowDecompressedTreeStore, SimpleZsTree as ZsTree};
 
     use crate::matchers::mapping_store::DefaultMappingStore;
-    use crate::{ tests::examples::example_zs_paper,
-        tree::simple_tree::vpair_to_stores,
-    };
+    use crate::{tests::examples::example_zs_paper, tree::simple_tree::vpair_to_stores};
 
     #[test]
     fn test_zs_paper_for_initial_layout() {

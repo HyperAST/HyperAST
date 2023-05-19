@@ -6,7 +6,10 @@ use legion::{
     EntityStore,
 };
 
-use crate::utils::make_hash;
+use crate::{
+    types::{NodeId, TypedNodeId},
+    utils::make_hash,
+};
 
 mod dyn_builder;
 
@@ -40,8 +43,12 @@ impl<'a> PendingInsert<'a> {
             _ => None,
         }
     }
-    pub fn resolve(&self, id: NodeIdentifier) -> HashedNodeRef {
-        self.1 .1.entry_ref(id).map(|x| HashedNodeRef(x)).unwrap()
+    pub fn resolve<T>(&self, id: NodeIdentifier) -> HashedNodeRef<T> {
+        self.1
+             .1
+            .entry_ref(id)
+            .map(|x| HashedNodeRef::new(x))
+            .unwrap()
     }
     pub fn occupied(
         &'a self,
@@ -113,22 +120,53 @@ impl NodeStore {
         let (&mut symbol, _) = {
             let symbol = internal.push(components);
             vacant.insert_with_hasher(hash, symbol, (), |id| {
-                let node = internal.entry_ref(*id).map(|x| HashedNodeRef(x)).unwrap();
+                let node: elem::HashedNodeRef<'_, NodeIdentifier> = internal
+                    .entry_ref(*id)
+                    .map(|x| HashedNodeRef::new(x))
+                    .unwrap();
+
                 make_hash(hasher, &node)
             })
         };
         symbol
     }
 
-    pub fn resolve(&self, id: NodeIdentifier) -> HashedNodeRef {
+    pub fn resolve(&self, id: NodeIdentifier) -> HashedNodeRef<NodeIdentifier> {
         self.internal
             .entry_ref(id)
-            .map(|x| HashedNodeRef(x))
+            .map(|x| HashedNodeRef::new(x))
             .unwrap()
     }
 
-    pub fn try_resolve(&self, id: NodeIdentifier) -> Option<HashedNodeRef> {
-        self.internal.entry_ref(id).map(|x| HashedNodeRef(x)).ok()
+    pub unsafe fn _resolve<T>(&self, id: &NodeIdentifier) -> HashedNodeRef<T> {
+        self.internal
+            .entry_ref(*id)
+            .map(|x| HashedNodeRef::new(x))
+            .unwrap()
+    }
+
+    pub fn try_resolve(&self, id: NodeIdentifier) -> Option<HashedNodeRef<NodeIdentifier>> {
+        self.internal
+            .entry_ref(id)
+            .map(|x| HashedNodeRef::new(x))
+            .ok()
+    }
+
+    pub fn resolve_typed<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>>(
+        &self,
+        id: &TIdN,
+    ) -> HashedNodeRef<TIdN> {
+        let x = self.internal.entry_ref(id.as_id().clone()).unwrap();
+        HashedNodeRef::new(x)
+    }
+
+    pub fn try_resolve_typed<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>>(
+        &self,
+        id: &TIdN::IdN,
+    ) -> Option<(HashedNodeRef<TIdN>, TIdN)> {
+        let x = self.internal.entry_ref(id.clone()).unwrap();
+        x.get_component::<TIdN::Ty>().ok()?;
+        Some((HashedNodeRef::new(x), unsafe { TIdN::from_id(id.clone()) }))
     }
 }
 
@@ -144,12 +182,29 @@ impl Debug for NodeStore {
 }
 
 impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
-    type R<'a> = HashedNodeRef<'a>;
+    type R<'a> = HashedNodeRef<'a, NodeIdentifier>;
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
         self.internal
             .entry_ref(id.clone())
-            .map(|x| HashedNodeRef(x))
+            .map(|x| HashedNodeRef::new(x))
             .unwrap()
+    }
+}
+
+impl<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::TypedNodeStore<TIdN>
+    for NodeStore
+{
+    type R<'a> = HashedNodeRef<'a, TIdN>;
+    fn resolve(&self, id: &TIdN) -> Self::R<'_> {
+        let x = self.internal.entry_ref(id.as_id().clone()).unwrap();
+        HashedNodeRef::new(x)
+    }
+
+    fn try_typed(&self, id: &<TIdN as NodeId>::IdN) -> Option<TIdN> {
+        let x = self.internal.entry_ref(id.clone()).unwrap();
+        x.get_component::<TIdN::Ty>()
+            .is_ok()
+            .then(|| unsafe { TIdN::from_id(id.clone()) })
     }
 }
 
@@ -172,6 +227,11 @@ impl NodeStore {
             ),
             hasher: Default::default(),
         }
+    }
+}
+impl Default for NodeStore {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -258,3 +318,62 @@ impl NodeStore {
 //         todo!()
 //     }
 // }
+
+mod stores_impl {
+    use crate::{
+        store::{labels, nodes, SimpleStores},
+        types::{AnyType, HyperAST, TypeStore, TypedHyperAST, TypedNodeId},
+    };
+
+    impl<'store, TS> HyperAST<'store> for SimpleStores<TS, nodes::DefaultNodeStore>
+    where
+        // <TS as TypeStore>::Ty: HyperType + Send + Sync,
+        TS: TypeStore<
+            self::nodes::legion::HashedNodeRef<'store, nodes::DefaultNodeIdentifier>,
+            Ty = AnyType,
+        >,
+    {
+        type IdN = nodes::DefaultNodeIdentifier;
+
+        type Idx = u16;
+        type Label = labels::DefaultLabelIdentifier;
+
+        type T = self::nodes::legion::HashedNodeRef<'store, Self::IdN>;
+
+        type NS = nodes::legion::NodeStore;
+
+        fn node_store(&self) -> &Self::NS {
+            &self.node_store
+        }
+
+        type LS = labels::LabelStore;
+
+        fn label_store(&self) -> &Self::LS {
+            &self.label_store
+        }
+
+        type TS = TS;
+
+        fn type_store(&self) -> &Self::TS {
+            &self.type_store
+        }
+    }
+
+    impl<'store, TIdN, TS> TypedHyperAST<'store, TIdN> for SimpleStores<TS, nodes::DefaultNodeStore>
+    where
+        TIdN: 'static + TypedNodeId<IdN = Self::IdN>,
+        // TIdN: TypeTrait,
+        // TS: SpecializedTypeStore<self::nodes::legion::HashedNodeRef<'store, TIdN>, Ty = TIdN::Ty>,
+        TS: TypeStore<
+            self::nodes::legion::HashedNodeRef<'store, nodes::DefaultNodeIdentifier>,
+            Ty = AnyType,
+        >,
+    {
+        type T = self::nodes::legion::HashedNodeRef<'store, TIdN>;
+        type NS = nodes::legion::NodeStore;
+
+        fn typed_node_store(&self) -> &<Self as TypedHyperAST<'store, TIdN>>::NS {
+            todo!()
+        }
+    }
+}

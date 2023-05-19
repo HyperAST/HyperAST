@@ -12,8 +12,9 @@ use hyper_ast::{
         nodes::legion::{compo, compo::CS, NodeStore},
     },
     tree_gen::SubTreeMetrics,
-    types::{LabelStore, Type},
+    types::LabelStore,
 };
+use hyper_ast_gen_ts_cpp::types::Type;
 use hyper_ast_gen_ts_java::legion_with_refs::{eq_node, hash32};
 
 use crate::{
@@ -229,7 +230,7 @@ pub(crate) fn make(mut acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeId
     let hashable = hbuilder.most_discriminating();
     let label = stores.label_store.get_or_insert(acc.name.clone());
 
-    let eq = eq_node(&Type::MakeDirectory, Some(&label), &acc.children);
+    let eq = eq_node(&Type::Directory, Some(&label), &acc.children);
     let ana = {
         // let new_sub_modules = drain_filter_strip(&mut acc.sub_modules, b"..");
         // let new_main_dirs = drain_filter_strip(&mut acc.main_dirs, b"..");
@@ -263,7 +264,7 @@ pub(crate) fn make(mut acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeId
         NodeStore::insert_after_prepare(
             vacant,
             (
-                Type::MakeDirectory,
+                Type::Directory,
                 label,
                 hashs,
                 compo::Size(size),

@@ -16,6 +16,7 @@ log = { version = "0.4.6", features = [
     "max_level_trace",
     "release_max_level_warn",
 ] }
+num = "0.4.0"
 tuples = "=1.4.1"
 
 

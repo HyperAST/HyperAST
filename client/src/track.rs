@@ -7,17 +7,12 @@ use hyper_ast::{
         compute_position, compute_position_and_nodes, compute_position_with_no_spaces,
         compute_range, path_with_spaces, resolve_range,
     },
-    store::{
-        defaults::NodeIdentifier,
-        nodes::legion::{self, HashedNodeRef},
-        SimpleStores,
-    },
+    store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef, SimpleStores},
     types::{
-        self, HyperAST, IterableChildren, NodeStore, Tree, Type, Typed, WithChildren, WithHashs,
-        WithStats,
+        self, HyperAST, IterableChildren, NodeStore, Typed, WithChildren, WithHashs, WithStats,
     },
 };
-use hyper_ast_cvs_git::{multi_preprocessed, preprocessed::child_at_path_tracked};
+use hyper_ast_cvs_git::{multi_preprocessed, preprocessed::child_at_path_tracked, TStore};
 use hyper_diff::{
     decompressed_tree_store::{
         DecompressedWithParent, LazyDecompressedTreeStore, PersistedNode,
@@ -34,7 +29,9 @@ use tokio::time::Instant;
 
 use crate::{
     changes::{self, DstChanges, SrcChanges},
-    no_space, MappingAloneCache, PartialDecompCache, SharedState, utils::get_pair_simp, matching,
+    matching, no_space,
+    utils::get_pair_simp,
+    MappingAloneCache, PartialDecompCache, SharedState,
 };
 
 #[derive(Deserialize, Clone, Debug)]
@@ -1042,7 +1039,8 @@ fn aux(
     let src_tr = commit_src.1.ast_root;
     let commit_dst = repositories.commits.get_key_value(&dst_oid).unwrap();
     let dst_tr = commit_dst.1.ast_root;
-    let node_store = &repositories.processor.main_stores.node_store;
+    let stores = &repositories.processor.main_stores;
+    let node_store = &stores.node_store;
 
     // let size = node_store.resolve(src_tr).size();
     log::error!("searching for {file}");
@@ -1054,8 +1052,6 @@ fn aux(
     };
 
     dbg!(&offsets_to_file);
-
-    let stores = &repositories.processor.main_stores;
     let mut path_to_target = vec![];
     let (node, offsets_in_file) = resolve_range(file_node, start.unwrap_or(0), end, stores);
     path_to_target.extend(offsets_to_file.iter().map(|x| *x as u16));
@@ -1070,12 +1066,8 @@ fn aux(
     dbg!(start, end);
     dbg!(&target_node);
 
-    let (_, _, no_spaces_path_to_target) = compute_position_with_no_spaces(
-        src_tr,
-        &mut path_to_target.iter().map(|x| *x),
-        node_store,
-        &stores.label_store,
-    );
+    let (_, _, no_spaces_path_to_target) =
+        compute_position_with_no_spaces(src_tr, &mut path_to_target.iter().map(|x| *x), stores);
 
     let dst_oid = commit_dst.0.clone();
     aux_aux(
@@ -1110,17 +1102,13 @@ fn aux2(
     let src_tr = commit_src.1.ast_root;
     let commit_dst = repositories.commits.get_key_value(&dst_oid).unwrap();
     let dst_tr = commit_dst.1.ast_root;
-    let node_store = &repositories.processor.main_stores.node_store;
-
     let stores = &repositories.processor.main_stores;
+    let node_store = &stores.node_store;
 
     let path_to_target: Vec<_> = path.iter().map(|x| *x as u16).collect();
-    let (pos, target_node, no_spaces_path_to_target) = compute_position_with_no_spaces(
-        src_tr,
-        &mut path_to_target.iter().map(|x| *x),
-        node_store,
-        &stores.label_store,
-    );
+    dbg!(&path_to_target);
+    let (pos, target_node, no_spaces_path_to_target) =
+        compute_position_with_no_spaces(src_tr, &mut path_to_target.iter().map(|x| *x), stores);
     dbg!(&path_to_target, &no_spaces_path_to_target);
     let range = pos.range();
     let dst_oid = commit_dst.0.clone();
@@ -1175,8 +1163,7 @@ fn aux_aux(
         let (pos, path_ids) = compute_position_and_nodes(
             dst_tr,
             &mut path_to_target.iter().copied(),
-            &with_spaces_stores.node_store,
-            &with_spaces_stores.label_store,
+            with_spaces_stores,
         );
         dbg!();
         let range = pos.range();
@@ -1209,6 +1196,7 @@ fn aux_aux(
     }
     // if !state.mappings_alone.contains_key(&(src_tr,dst_tr))
     dbg!();
+    // let stores: &SimpleHyperAST<NoSpaceWrapper<MIdN<NodeIdentifier>>, &TStore, NoSpaceNodeStoreWrapper<MIdN<NodeIdentifier>>, _> = stores;
     let mut pair = get_pair_simp(partial_decomps, stores, &src_tr, &dst_tr);
     dbg!();
     // let mut pair = get_pair_might_deadlock(
@@ -1299,8 +1287,7 @@ fn aux_aux(
                             let (pos, path_ids) = compute_position_and_nodes(
                                 src_tr,
                                 &mut path_to_target.iter().copied(),
-                                &with_spaces_stores.node_store,
-                                &with_spaces_stores.label_store,
+                                with_spaces_stores,
                             );
 
                             LocalPieceOfCode {
@@ -1318,14 +1305,12 @@ fn aux_aux(
                                 let (path_dst,) = path_with_spaces(
                                     dst_tr,
                                     &mut path_dst.iter().copied(),
-                                    &repositories.processor.main_stores.node_store,
-                                    &repositories.processor.main_stores.label_store,
+                                    &repositories.processor.main_stores,
                                 );
                                 let (pos, path_ids) = compute_position_and_nodes(
                                     dst_tr,
                                     &mut path_dst.iter().copied(),
-                                    &with_spaces_stores.node_store,
-                                    &with_spaces_stores.label_store,
+                                    with_spaces_stores,
                                 );
                                 let range = pos.range();
                                 PieceOfCode {
@@ -1359,8 +1344,7 @@ fn aux_aux(
                             let (pos, path_ids) = compute_position_and_nodes(
                                 src_tr,
                                 &mut path_to_target.iter().copied(),
-                                &with_spaces_stores.node_store,
-                                &with_spaces_stores.label_store,
+                                with_spaces_stores,
                             );
 
                             LocalPieceOfCode {
@@ -1380,14 +1364,12 @@ fn aux_aux(
                                 let (path_dst,) = path_with_spaces(
                                     dst_tr,
                                     &mut path_dst.iter().copied(),
-                                    &repositories.processor.main_stores.node_store,
-                                    &repositories.processor.main_stores.label_store,
+                                    &repositories.processor.main_stores,
                                 );
                                 let (pos, path_ids) = compute_position_and_nodes(
                                     dst_tr,
                                     &mut path_dst.iter().copied(),
-                                    &with_spaces_stores.node_store,
-                                    &with_spaces_stores.label_store,
+                                    with_spaces_stores,
                                 );
                                 let range = pos.range();
                                 PieceOfCode {
@@ -1421,8 +1403,7 @@ fn aux_aux(
                             let (pos, path_ids) = compute_position_and_nodes(
                                 src_tr,
                                 &mut path_to_target.iter().copied(),
-                                &with_spaces_stores.node_store,
-                                &with_spaces_stores.label_store,
+                                with_spaces_stores,
                             );
 
                             LocalPieceOfCode {
@@ -1442,14 +1423,12 @@ fn aux_aux(
                                 let (path_dst,) = path_with_spaces(
                                     dst_tr,
                                     &mut path_dst.iter().copied(),
-                                    &repositories.processor.main_stores.node_store,
-                                    &repositories.processor.main_stores.label_store,
+                                    &repositories.processor.main_stores,
                                 );
                                 let (pos, path_ids) = compute_position_and_nodes(
                                     dst_tr,
                                     &mut path_dst.iter().copied(),
-                                    &with_spaces_stores.node_store,
-                                    &with_spaces_stores.label_store,
+                                    with_spaces_stores,
                                 );
                                 let range = pos.range();
                                 PieceOfCode {
@@ -1583,15 +1562,10 @@ fn aux_aux(
         let (path,) = path_with_spaces(
             dst_tr,
             &mut path.iter().copied(),
-            &repositories.processor.main_stores.node_store,
-            &repositories.processor.main_stores.label_store,
+            &repositories.processor.main_stores,
         );
-        let (pos, mapped_node) = compute_position(
-            dst_tr,
-            &mut path.iter().copied(),
-            &with_spaces_stores.node_store,
-            &with_spaces_stores.label_store,
-        );
+        let (pos, mapped_node) =
+            compute_position(dst_tr, &mut path.iter().copied(), with_spaces_stores);
         dbg!(&pos);
         dbg!(&mapped_node);
         let mut flagged = false;
@@ -1618,16 +1592,16 @@ fn aux_aux(
         if flags.upd {
             flagged = true;
             dbg!();
-
-            let target_ident = child_by_type(stores, target_node, &Type::Identifier);
-            let mapped_ident = child_by_type(stores, mapped_node, &Type::Identifier);
-            if let (Some(target_ident), Some(mapped_ident)) = (target_ident, mapped_ident) {
-                let target_node = stores.node_store.resolve(target_ident.0);
-                let target_ident = target_node.try_get_label();
-                let mapped_node = stores.node_store.resolve(mapped_ident.0);
-                let mapped_ident = mapped_node.try_get_label();
-                triggered |= target_ident != mapped_ident;
-            }
+            // TODO need role name
+            // let target_ident = child_by_type(stores, target_node, &Type::Identifier);
+            // let mapped_ident = child_by_type(stores, mapped_node, &Type::Identifier);
+            // if let (Some(target_ident), Some(mapped_ident)) = (target_ident, mapped_ident) {
+            //     let target_node = stores.node_store.resolve(target_ident.0);
+            //     let target_ident = target_node.try_get_label();
+            //     let mapped_node = stores.node_store.resolve(mapped_ident.0);
+            //     let mapped_ident = mapped_node.try_get_label();
+            //     triggered |= target_ident != mapped_ident;
+            // }
         }
         if flags.parent {
             flagged = true;
@@ -1683,8 +1657,7 @@ fn aux_aux(
                     let (pos, path_ids) = compute_position_and_nodes(
                         src_tr,
                         &mut path_to_target.iter().copied(),
-                        &with_spaces_stores.node_store,
-                        &with_spaces_stores.label_store,
+                        with_spaces_stores,
                     );
 
                     LocalPieceOfCode {
@@ -1702,8 +1675,7 @@ fn aux_aux(
         let (target_pos, target_path_ids) = compute_position_and_nodes(
             src_tr,
             &mut path_to_target.iter().copied(),
-            &with_spaces_stores.node_store,
-            &with_spaces_stores.label_store,
+            with_spaces_stores,
         );
         return MappingResult::Direct {
             src: LocalPieceOfCode {
@@ -1731,15 +1703,10 @@ fn aux_aux(
             let (path,) = path_with_spaces(
                 dst_tr,
                 &mut path.iter().copied(),
-                &repositories.processor.main_stores.node_store,
-                &repositories.processor.main_stores.label_store,
+                &repositories.processor.main_stores,
             );
-            let (pos, mapped_node) = compute_position(
-                dst_tr,
-                &mut path.iter().copied(),
-                &with_spaces_stores.node_store,
-                &with_spaces_stores.label_store,
-            );
+            let (pos, mapped_node) =
+                compute_position(dst_tr, &mut path.iter().copied(), with_spaces_stores);
             dbg!(&pos);
             dbg!(&mapped_node);
             let range = pos.range();
@@ -1759,8 +1726,7 @@ fn aux_aux(
                 let (target_pos, target_path_ids) = compute_position_and_nodes(
                     src_tr,
                     &mut path_to_target.iter().copied(),
-                    &with_spaces_stores.node_store,
-                    &with_spaces_stores.label_store,
+                    with_spaces_stores,
                 );
                 LocalPieceOfCode {
                     file: target_pos.file().to_string_lossy().to_string(),
@@ -1777,8 +1743,7 @@ fn aux_aux(
     let (target_pos, target_path_ids) = compute_position_and_nodes(
         src_tr,
         &mut path_to_target.iter().copied(),
-        &with_spaces_stores.node_store,
-        &with_spaces_stores.label_store,
+        with_spaces_stores,
     );
     // TODO what should be done if there is no match ?
     MappingResult::Direct {
@@ -1833,11 +1798,11 @@ fn lazy_mapping<'a>(
     (NodeIdentifier, NodeIdentifier),
     hyper_diff::matchers::Mapping<
         hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a>,
+            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
             u32,
         >,
         hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a>,
+            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
             u32,
         >,
         hyper_diff::matchers::mapping_store::VecStore<u32>,
@@ -1895,7 +1860,7 @@ fn lazy_mapping<'a>(
         Mapper::<_, LazyPostOrder<_, _>, LazyPostOrder<_, _>, _>::persist(mapper)
     });
     pub unsafe fn unpersist<'a>(
-        _hyperast: &'a SimpleStores<hyper_ast::store::nodes::legion::NodeStore>,
+        _hyperast: &'a SimpleStores<TStore>,
         p: dashmap::mapref::one::RefMut<
             'a,
             (NodeIdentifier, NodeIdentifier),
@@ -1915,8 +1880,8 @@ fn lazy_mapping<'a>(
         'a,
         (NodeIdentifier, NodeIdentifier),
         hyper_diff::matchers::Mapping<
-            LazyPostOrder<HashedNodeRef<'a>, u32>,
-            LazyPostOrder<HashedNodeRef<'a>, u32>,
+            LazyPostOrder<HashedNodeRef<'a, NodeIdentifier>, u32>,
+            LazyPostOrder<HashedNodeRef<'a, NodeIdentifier>, u32>,
             VecStore<u32>,
         >,
     > {
@@ -1948,7 +1913,7 @@ fn lazy_mapping2<'a>(
         'a,
         NodeIdentifier,
         hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a>,
+            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
             u32,
         >,
     >,
@@ -1956,7 +1921,7 @@ fn lazy_mapping2<'a>(
         'a,
         NodeIdentifier,
         hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a>,
+            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
             u32,
         >,
     >,
@@ -2017,7 +1982,7 @@ fn lazy_mapping2<'a>(
                 );
                 let mm = LazyGreedySubtreeMatcher::<
                     'a,
-                    SimpleStores,
+                    SimpleStores<TStore>,
                     &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
                     &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
                     VecStore<_>,
@@ -2026,7 +1991,7 @@ fn lazy_mapping2<'a>(
                 );
                 LazyGreedySubtreeMatcher::<
                     'a,
-                    SimpleStores,
+                    SimpleStores<TStore>,
                     &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
                     &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
                     VecStore<_>,
@@ -2063,7 +2028,7 @@ fn lazy_mapping2<'a>(
 /// WARN might deadlock due to shard collision
 fn get_pair_might_deadlock<'a>(
     partial_comp_cache: &'a crate::PartialDecompCache,
-    hyperast: &SimpleStores,
+    hyperast: &SimpleStores<TStore>,
     src: &NodeIdentifier,
     dst: &NodeIdentifier,
 ) -> (
@@ -2071,7 +2036,7 @@ fn get_pair_might_deadlock<'a>(
         'a,
         NodeIdentifier,
         hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a>,
+            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
             u32,
         >,
     >,
@@ -2079,7 +2044,7 @@ fn get_pair_might_deadlock<'a>(
         'a,
         NodeIdentifier,
         hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a>,
+            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
             u32,
         >,
     >,
@@ -2115,14 +2080,14 @@ fn get_pair_might_deadlock<'a>(
 }
 fn get_pair<'a>(
     partial_comp_cache: &'a crate::PartialDecompCache,
-    hyperast: &SimpleStores,
+    hyperast: &SimpleStores<TStore>,
     src: &NodeIdentifier,
     dst: &NodeIdentifier,
 ) -> my_dash::RefMut<
     'a,
     NodeIdentifier,
     hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-        hyper_ast::store::nodes::legion::HashedNodeRef<'a>,
+        hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
         u32,
     >,
 > {
@@ -2220,8 +2185,6 @@ fn get_pair<'a>(
 
     res
 }
-
-
 
 mod my_dash {
     use std::{
@@ -2692,7 +2655,7 @@ fn lazy_subtree_mapping<'a, 'b>(
         'a,
         NodeIdentifier,
         hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a>,
+            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
             u32,
         >,
     >,
@@ -2700,7 +2663,7 @@ fn lazy_subtree_mapping<'a, 'b>(
         'a,
         NodeIdentifier,
         hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a>,
+            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
             u32,
         >,
     >,
@@ -2778,7 +2741,7 @@ fn lazy_subtree_mapping<'a, 'b>(
     dbg!();
     let mm = LazyGreedySubtreeMatcher::<
         'a,
-        SimpleStores,
+        SimpleStores<TStore>,
         &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
         &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
         VecStore<_>,

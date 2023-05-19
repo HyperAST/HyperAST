@@ -1,3 +1,4 @@
+use std::hash::Hash;
 use std::marker::PhantomData;
 
 use num_traits::ToPrimitive;
@@ -6,8 +7,8 @@ use crate::decompressed_tree_store::{
     BreathFirstContiguousSiblings, DecompressedTreeStore, DecompressedWithParent,
 };
 use crate::matchers::mapping_store::MonoMappingStore;
-use crate::matchers::{similarity_metrics};
-use hyper_ast::types::{NodeStore, Tree, WithHashs, DecompressedSubtree};
+use crate::matchers::similarity_metrics;
+use hyper_ast::types::{NodeStore, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
@@ -82,6 +83,8 @@ impl<
         S: 'a + NodeStore<T::TreeId, R<'a> = T>,
         M: MonoMappingStore<Src = IdD, Dst = IdD>,
     > SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
+where
+    T::Type: Hash + Copy + Eq + Send + Sync,
 {
     fn execute(&mut self) {
         for i in (0..self.internal.src_arena.len()).rev() {

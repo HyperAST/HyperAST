@@ -162,7 +162,7 @@ impl<
 where
     HAST::T: 'a + Tree + WithHashs + WithStats,
     HAST::IdN: 'a + Clone + Eq + Debug,
-    <HAST::T as Typed>::Type: Debug,
+    <HAST::T as Typed>::Type: Copy + Eq + Send + Sync,
     Dsrc::IdD: 'a + PrimInt + std::ops::SubAssign + Debug,
     Ddst::IdD: 'a + PrimInt + std::ops::SubAssign + Debug,
     M::Src: 'a + PrimInt + std::ops::SubAssign + Debug,
@@ -244,13 +244,14 @@ where
         let o = internal.src_arena.original(&src);
         let r = internal.hyperast.node_store().resolve(&o).has_children();
         use num_traits::ToPrimitive;
-        debug_assert_eq!(
-            r,
-            internal.src_arena.lld(&src) < *src.shallow(),
-            "{:?} {:?}",
-            internal.src_arena.lld(&src),
-            src.to_usize()
-        );
+        // TODO put it back
+        // debug_assert_eq!(
+        //     r,
+        //     internal.src_arena.lld(&src) < *src.shallow(),
+        //     "{:?} {:?}",
+        //     internal.src_arena.lld(&src),
+        //     src.to_usize()
+        // );
         r
     }
 

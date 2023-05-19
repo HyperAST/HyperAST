@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use hyper_ast::store::{SimpleStores, labels::LabelStore, TypeStore};
+use hyper_ast::store::{SimpleStores, labels::LabelStore};
 use tree_sitter::{Parser};
 
-use crate::legion::XmlTreeGen;
+use crate::{legion::{XmlTreeGen, tree_sitter_parse_xml}, types::TStore};
 
 
 
@@ -58,7 +58,7 @@ fn xml_tree_sitter_simple2() {
           ";
         source_code1.as_bytes()
     };
-    let tree = match XmlTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
+    let tree = match tree_sitter_parse_xml(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
 }
 
@@ -68,7 +68,7 @@ fn xml_tree_sitter_on_pom() {
     let path: PathBuf = Path::new("../../../benchmark/pom.xml").to_path_buf();
     
     let text = std::fs::read(path).unwrap();
-    let tree = match XmlTreeGen::tree_sitter_parse(&text) {Ok(t)=>t,Err(t)=>t};
+    let tree = match tree_sitter_parse_xml(&text) {Ok(t)=>t,Err(t)=>t};
     println!("{:#?}", tree.root_node().to_sexp());
 }
 
@@ -78,7 +78,7 @@ fn hyperAST_on_pom() {
     let path: PathBuf = Path::new("../../../benchmark/pom.xml").to_path_buf();
     
     let text = std::fs::read(path).unwrap();
-    let tree = match XmlTreeGen::tree_sitter_parse(&text) {Ok(t)=>t,Err(t)=>t};
+    let tree = match tree_sitter_parse_xml(&text) {Ok(t)=>t,Err(t)=>t};
     println!("{:#?}", tree.root_node().to_sexp());
 }
 
@@ -95,11 +95,11 @@ fn xml_issue_cdata() {
 </project>"#;
         source_code1.as_bytes()
     };
-    let tree = match XmlTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
+    let tree = match tree_sitter_parse_xml(text) {Ok(t)=>t,Err(t)=>t};
     println!("{:#?}", tree.root_node().to_sexp());
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
     };
     let mut tree_gen = XmlTreeGen {

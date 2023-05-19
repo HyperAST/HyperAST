@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 tree-sitter = "0.20.9"
 tree-sitter-cli = "0.20.7"
-hyper_ast = { path = "../hyper_ast", features = ["serialize"] }
+hyper_ast = { path = "../hyper_ast", default-features = false, features = ["serialize"] }
 hyper_diff = { path = "../hyper_diff" }
 hyper_ast_cvs_git = { path = "../cvs/git" }
 hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
@@ -64,6 +64,7 @@ serde-aux = "4.1.2"
 dashmap = { version = "5.4.0", features = ["raw-api"] }
 
 enumset = "1.0.12"
+num = "0.4.0"
 
 [dependencies.hashbrown]
 version = "0.12.3"

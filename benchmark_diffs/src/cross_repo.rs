@@ -6,13 +6,13 @@ use hyper_ast::{
 };
 use hyper_ast_cvs_git::{
     git::fetch_github_repository, maven::MavenModuleAcc,
-    multi_preprocessed::PreProcessedRepositories,
+    multi_preprocessed::PreProcessedRepositories, no_space::as_nospaces,
 };
 use num_traits::ToPrimitive;
 
 use hyper_diff::algorithms::{self, ComputeTime};
 use crate::{
-    window_combination::{as_nospaces, write_perfs}, other_tools, postprocess::{CompressedBfPostProcess, PathJsonPostProcess},
+    window_combination::{write_perfs}, other_tools, postprocess::{CompressedBfPostProcess, PathJsonPostProcess},
 };
 
 pub struct CommitCompareParameters<'a> {
@@ -178,8 +178,7 @@ pub fn windowed_commits_compare(
 
             let gt_out_format = "COMPRESSED"; // JSON
             let gt_out = other_tools::gumtree::subprocess(
-                &hyperast.node_store,
-                &hyperast.label_store,
+                &hyperast,
                 src_tr,
                 dst_tr,
                 "gumtree",

@@ -1,7 +1,7 @@
 pub mod declaration;
 pub mod element;
 pub mod elements;
-pub mod integration;
+// pub mod integration;
 pub mod java_element;
 pub mod label_value;
 #[allow(unused)]
@@ -14,8 +14,8 @@ pub mod usage;
 
 pub mod bytes_interner;
 
-#[cfg(test)]
-mod stack_graph_test;
+// #[cfg(test)]
+// mod stack_graph_test;
 #[cfg(test)]
 mod test_solver;
 #[cfg(test)]

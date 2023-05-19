@@ -111,6 +111,7 @@ impl<'store: 'a, 'a: 'b, 'b, T: Tree + WithSerialization, IdD: PrimInt, S, LS, D
     for DisplaySimplePreOrderMapper<'store, 'a, 'b, T, IdD, S, LS, D>
 where
     T::TreeId: Clone + Debug + Eq,
+    T::Type: Copy + Send + Sync,
     S: NodeStore<T::TreeId, R<'store> = T>,
     LS: LabelStore<str, I = T::Label>,
     T::Type: Debug,
@@ -143,6 +144,7 @@ impl<'store: 'a, 'a: 'b, 'b, T: Tree, IdD: PrimInt, S, LS, D> Debug
     for DisplaySimplePreOrderMapper<'store, 'a, 'b, T, IdD, S, LS, D>
 where
     T::TreeId: Clone + Debug + Eq,
+    T::Type: Copy + Send + Sync,
     S: NodeStore<T::TreeId, R<'store> = T>,
     LS: LabelStore<str, I = T::Label>,
     T::Type: Debug,
@@ -154,7 +156,7 @@ where
                 let o = self.inner.map[i];
                 let ori = self.inner.back.original(&o);
                 let node = self.node_store.resolve(&ori);
-                let mut s = self.label_store.resolve(&node.get_label()).to_owned();
+                let mut s = self.label_store.resolve(&node.get_label_unchecked()).to_owned();
                 s.truncate(5);
                 writeln!(
                     f,

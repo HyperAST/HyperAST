@@ -8,10 +8,9 @@ use crate::{
     },
     matchers::mapping_store::MonoMappingStore,
 };
-use hyper_ast::types::{NodeStore, Tree, WithStats};
+use hyper_ast::types::{NodeStore, Tree, Typed, WithStats, TypeStore};
 
-pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
-{
+pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, S, M> {
     pub(super) node_store: &'a S,
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,
@@ -34,6 +33,7 @@ impl<
         M: MonoMappingStore,
     > BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
 where
+    T::Type: Copy + Eq + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
     Dsrc::IdD: PrimInt + std::ops::SubAssign + Debug,
@@ -90,6 +90,7 @@ impl<
     > crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
 where
     HAST::T: 'a + Tree + WithStats,
+    <HAST::T as Typed>::Type: Eq + Copy + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
     Dsrc::IdD: PrimInt + std::ops::SubAssign + Debug,
@@ -98,6 +99,7 @@ where
     pub(super) fn get_dst_candidates_lazily(&mut self, src: &Dsrc::IdD) -> Vec<Ddst::IdD> {
         use hyper_ast::types::Typed;
         let node_store = self.hyperast.node_store();
+        let type_store = self.hyperast.type_store();
         let src_arena = &self.mapping.src_arena;
         let dst_arena = &mut self.mapping.dst_arena;
         let mappings = &self.mapping.mappings;
@@ -112,7 +114,7 @@ where
         }
         let mut candidates = vec![];
         let mut visited = bitvec::bitbox![0;dst_arena.len()];
-        let t = node_store.resolve(s).get_type();
+        let t = type_store.resolve_type(&node_store.resolve(s));
         for mut seed in seeds {
             loop {
                 let Some(parent) = dst_arena.parent(&seed) else {
@@ -123,7 +125,7 @@ where
                 }
                 visited.set(parent.to_usize().unwrap(), true);
                 let p = &dst_arena.original(&parent);
-                if node_store.resolve(p).get_type() == t
+                if type_store.resolve_type(&node_store.resolve(p)) == t
                     && !(mappings.is_dst(parent.shallow()) || parent.shallow() == &dst_arena.root())
                 {
                     candidates.push(parent);

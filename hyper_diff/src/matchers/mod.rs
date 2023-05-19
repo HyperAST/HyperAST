@@ -93,6 +93,8 @@ impl<'store, HAST: HyperAST<'store>, Dsrc, Ddst, M> HyperAST<'store>
 {
     type IdN = HAST::IdN;
 
+    type Idx = HAST::Idx;
+
     type Label = HAST::Label;
 
     type T = HAST::T;
@@ -107,6 +109,12 @@ impl<'store, HAST: HyperAST<'store>, Dsrc, Ddst, M> HyperAST<'store>
 
     fn label_store(&self) -> &Self::LS {
         self.hyperast.label_store()
+    }
+
+    type TS = HAST::TS;
+
+    fn type_store(&self) -> &Self::TS {
+        todo!()
     }
 }
 

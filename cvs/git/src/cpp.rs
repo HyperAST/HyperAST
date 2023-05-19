@@ -1,20 +1,21 @@
-use crate::{preprocessed::IsSkippedAna, Accumulator, MAX_REFS, PROPAGATE_ERROR_ON_BAD_CST_NODE};
+use crate::{
+    preprocessed::IsSkippedAna, Accumulator, TStore, MAX_REFS, PROPAGATE_ERROR_ON_BAD_CST_NODE,
+};
 
 use hyper_ast::{
     hashed::SyntaxNodeHashs,
     store::defaults::{LabelIdentifier, NodeIdentifier},
     tree_gen::SubTreeMetrics,
-    types::Type,
 };
 
 use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
 
 pub(crate) fn handle_cpp_file<'stores, 'cache, 'b: 'stores>(
-    tree_gen: &mut cpp_tree_gen::CppTreeGen<'stores, 'cache>,
+    tree_gen: &mut cpp_tree_gen::CppTreeGen<'stores, 'cache, TStore>,
     name: &[u8],
     text: &'b [u8],
 ) -> Result<cpp_tree_gen::FNode, ()> {
-    let tree = match cpp_tree_gen::CppTreeGen::tree_sitter_parse(text) {
+    let tree = match cpp_tree_gen::CppTreeGen::<TStore>::tree_sitter_parse(text) {
         Ok(tree) => tree,
         Err(tree) => {
             log::warn!("bad CST");

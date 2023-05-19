@@ -66,7 +66,7 @@ fn test_with_action_example() {
 
         let g = |x: &u16| -> String {
             let n = node_store.resolve(x);
-            let x = n.get_label();
+            let x = n.get_label_unchecked();
             label_store.resolve(x).to_string()
         };
 
@@ -469,7 +469,7 @@ fn test_with_action_example2() {
 
         let g = |x: &u16| -> String {
             let n = node_store.resolve(x);
-            let x = n.get_label();
+            let x = n.get_label_unchecked();
             label_store.resolve(x).to_string()
         };
 

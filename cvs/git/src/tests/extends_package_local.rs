@@ -1,19 +1,22 @@
 use hyper_ast::{
     filter::{Bloom, BloomResult, BF},
+    impact::serialize::CachedHasher,
     nodes::RefContainer,
-    position::{
-         Scout, StructuralPosition, StructuralPositionStore, TreePath,
+    position::{Scout, StructuralPosition, StructuralPositionStore, TreePath, TypedTreePath},
+    store::{
+        defaults::NodeIdentifier, labels::LabelStore, nodes::DefaultNodeStore as NodeStore,
+        SimpleStores,
     },
-    store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores, TypeStore},
-    types::WithChildren,
-    types::{LabelStore as _, Type, Typed}, impact::serialize::CachedHasher,
+    types::{LabelStore as _, Typed},
+    types::{NodeId, TypedNodeStore, WithChildren},
 };
 
-use hyper_ast_gen_ts_java::legion_with_refs::{
-    print_tree_syntax, BulkHasher,
+use hyper_ast_gen_ts_java::{
+    legion_with_refs::BulkHasher,
+    types::{TIdN, Type},
 };
 
-use crate::java::handle_java_file;
+use crate::{java::handle_java_file, TStore};
 
 use hyper_ast_gen_ts_java::impact::{
     element::{IdentifierFormat, LabelPtr},
@@ -24,11 +27,10 @@ use hyper_ast_gen_ts_java::{
     legion_with_refs as java_tree_gen,
 };
 
-
 fn run(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -43,7 +45,7 @@ fn run(text: &[u8]) {
 fn run1(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -81,60 +83,69 @@ fn run1(text: &[u8]) {
     let root = ana.solver.intern(RefsEnum::Root);
     let package_ref = scoped!(root, "spoon");
 
+    macro_rules! make_scout {
+        ( ) => {{
+            let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+            sp_store.type_scout(&mut x, unsafe {
+                TIdN::from_ref_id(&a.local.compressed_node)
+            })
+        }};
+    }
+
     println!("-------------1----------------");
     let i = scoped!(package_ref, "SpoonAPI");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 2);
     println!("-------------2----------------");
     let package_ref2 = scoped!(root, "org");
     let i = scoped!(package_ref2, "Klass");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(), 17);
     println!("-------------3----------------");
     let i = scoped!(package_ref, "SpoonModelBuilder");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 5);
     println!("-------------4----------------");
     let i = scoped!(package_ref, "SpoonException");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 4);
     println!("-------------5----------------");
     let i = scoped!(scoped!(package_ref, "SpoonModelBuilder"), "InputType");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 1);
     println!("-------------6----------------");
     let i = scoped!(package_ref, "SpoonException2");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 1);
     println!("-------------7----------------");
     let i = scoped!(package_ref, "MavenLauncher");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 3);
     println!("-------------8----------------");
     let i = scoped!(scoped!(package_ref, "SpoonModelBuilder"), "InputType2");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 3);
     println!("-------------9----------------");
     let i = scoped!(scoped!(package_ref, "SpoonModelBuilder"), "InputType3");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 1);
     println!("-------------10----------------");
     let i = scoped!(package_ref, "SpoonFile");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 2);
     println!("-------------11----------------");
     let i = scoped!(package_ref, "Z");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 1);
 }
@@ -230,7 +241,7 @@ interface I {
 fn run2(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -267,65 +278,74 @@ fn run2(text: &[u8]) {
     let root = ana.solver.intern(RefsEnum::Root);
     let package_ref = scoped!(root, "spoon");
 
+    macro_rules! make_scout {
+        ( ) => {{
+            let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+            sp_store.type_scout(&mut x, unsafe {
+                TIdN::from_ref_id(&a.local.compressed_node)
+            })
+        }};
+    }
+
     println!("-------------1----------------");
     let i = scoped!(package_ref, "SpoonModelBuilder");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 3);
     println!("-------------2----------------");
     let i = scoped!(package_ref, "Launcher");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 2);
     println!("-------------3----------------");
     let i = scoped!(scoped!(package_ref, "SpoonModelBuilder"), "InputType");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 6);
     println!("-------------4----------------");
     let package_ref2 = scoped!(scoped!(scoped!(package_ref, "support"), "compiler"), "jdt");
     let i = scoped!(package_ref2, "SpoonFolder");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(), 1);
     println!("-------------5----------------");
     let package_ref2 = scoped!(package_ref, "support");
     let i = scoped!(scoped!(package_ref2, "Envir"), "MultipleAlt");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(), 3);
     println!("-------------6----------------");
     let i = scoped!(scoped!(package_ref, "SpoonModelBuilder2"), "InputType2");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 1);
     println!("-------------7----------------");
     let package_ref2 = scoped!(package_ref, "pattern");
     let i = scoped!(package_ref2, "PatternBuilder");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(), 1);
     println!("-------------8----------------");
     let package_ref2 = scoped!(package_ref, "pattern");
     let i = scoped!(scoped!(package_ref2, "PatternBuilder"), "TARGET_TYPE");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(), 1);
     println!("-------------9----------------");
     let i = scoped!(scoped!(package_ref, "SpoonModelBuilder3"), "InputType");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 2);
     println!("-------------10---------------");
     let package_ref2 = scoped!(package_ref, "processor");
     let i = scoped!(package_ref2, "AbstractProcessor");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(), 3);
     println!("-------------11----------------");
     let package_ref2 = scoped!(scoped!(scoped!(package_ref, "support"), "compiler"), "jdt");
     let i = scoped!(scoped!(package_ref2, "JDTBasedSpoonCompiler"), "AAA");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(), 2);
 }
@@ -454,7 +474,7 @@ static AA: &'static str = r#"
 fn run3(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -464,6 +484,11 @@ fn run3(text: &[u8]) {
         md_cache: &mut md_cache,
     };
     let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let java_root: TIdN<_> = java_tree_gen
+        .stores
+        .node_store
+        .try_typed(&a.local.compressed_node)
+        .unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
     match a.local.ana.as_ref() {
@@ -491,62 +516,73 @@ fn run3(text: &[u8]) {
     let root = ana.solver.intern(RefsEnum::Root);
     let package_ref = scoped!(root, "spoon");
 
+    macro_rules! make_scout {
+        ( ) => {{
+            let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+            sp_store.type_scout(&mut x, &java_root)
+        }};
+    }
+
     println!("-------------1----------------");
     let package_ref2 = scoped!(package_ref, "compiler");
     let i = scoped!(package_ref2, "SpoonResource");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(), 2);
     println!("-------------2----------------");
     let i = scoped!(mm, "SpoonFile");
-    let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
-    let bb = stores.node_store.resolve(a.local.compressed_node);
+    let mut x = make_scout!();
+    let bb = stores.node_store.resolve_typed(&java_root);
     assert_eq!(bb.get_type(), Type::Program);
     let xx = bb.child(&18).unwrap();
-    x.goto(xx, 18);
-    let bb = stores.node_store.resolve(xx);
+    let xx = stores.node_store.try_typed(&xx).unwrap();
+    x.goto_typed(xx, 18);
+    let bb = stores.node_store.resolve_typed(&xx);
     assert_eq!(bb.get_type(), Type::ClassDeclaration);
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 4);
     println!("-------------3----------------");
     let i = scoped!(package_ref2, "AnnotationProcessingOptions");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(), 1);
     println!("-------------4----------------");
     let i = scoped!(package_ref, "NameFilter");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 2);
     println!("-------------5----------------");
     let i = scoped!(mm, "StringAttr");
-    let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
-    let bb = stores.node_store.resolve(a.local.compressed_node);
+    let mut x = make_scout!();
+    let bb = stores.node_store.resolve_typed(&java_root);
     assert_eq!(bb.get_type(), Type::Program);
     let xx = bb.child(&18).unwrap();
-    x.goto(xx, 18);
-    let bb = stores.node_store.resolve(xx);
+    let xx = stores.node_store.try_typed(&xx).unwrap();
+    x.goto_typed(xx, 18);
+    let bb = stores.node_store.resolve_typed(&xx);
     assert_eq!(bb.get_type(), Type::ClassDeclaration);
     let xx = bb.child(&9).unwrap();
-    x.goto(xx, 9);
-    let bb = stores.node_store.resolve(xx);
+    let xx = stores.node_store.try_typed(&xx).unwrap();
+    x.goto_typed(xx, 9);
+    let bb = stores.node_store.resolve_typed(&xx);
     assert_eq!(bb.get_type(), Type::ClassBody);
     let xx = bb.child(&2).unwrap();
-    x.goto(xx, 2);
-    let bb = stores.node_store.resolve(xx);
+    let xx = stores.node_store.try_typed(&xx).unwrap();
+    x.goto_typed(xx, 2);
+    let bb = stores.node_store.resolve_typed(&xx);
     assert_eq!(bb.get_type(), Type::ConstructorDeclaration);
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 2);
     println!("-------------6----------------");
     let package_ref2 = scoped!(package_ref, "reflect");
     let i = scoped!(scoped!(package_ref2, "CtModelImpl"), "CtRootPackage");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(), 1);
     println!("-------------7----------------");
     let package_ref2 = scoped!(package_ref, "compiler");
     let i = scoped!(package_ref2, "SpoonFile");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(), 5);
 }
@@ -611,7 +647,7 @@ public class SpoonFile<T extends SpoonFile<T>> implements SpoonResource {
 fn run3_1(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -621,6 +657,11 @@ fn run3_1(text: &[u8]) {
         md_cache: &mut md_cache,
     };
     let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let java_root: TIdN<_> = java_tree_gen
+        .stores
+        .node_store
+        .try_typed(&a.local.compressed_node)
+        .unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
     match a.local.ana.as_ref() {
@@ -664,12 +705,12 @@ fn run3_1(text: &[u8]) {
     println!("-------------3----------------");
     let i = scoped_type!(package_ref2, "AnnotationProcessingOptions");
     {
-        let uncertain = ana.solver.intern(RefsEnum::Or(
-            vec![package_ref2, root, package_lang].into(),
-        ));
+        let uncertain = ana
+            .solver
+            .intern(RefsEnum::Or(vec![package_ref2, root, package_lang].into()));
         let i = scoped_type!(uncertain, "AnnotationProcessingOptions");
         let d = ana.solver.nodes.with(i);
-        eprintln!("i: {:?}",d);
+        eprintln!("i: {:?}", d);
         type T = Bloom<&'static [u8], u16>;
         let r = CachedHasher::<usize, <T as BF<[u8]>>::S, <T as BF<[u8]>>::H>::once(d);
         eprintln!("CachedHasher or: {:?}", r)
@@ -680,7 +721,7 @@ fn run3_1(text: &[u8]) {
         let it = BulkHasher::<_, <T as BF<[u8]>>::S, <T as BF<[u8]>>::H>::from(it);
         // let it:Vec<_> = it.collect();
         eprintln!("search list: {:?}", it.collect::<Vec<_>>())
-    } 
+    }
     {
         let it = ana.solver.iter_refs();
         type T = Bloom<&'static [u8], u16>;
@@ -688,15 +729,16 @@ fn run3_1(text: &[u8]) {
         // let it:Vec<_> = it.collect();
         let bloom = T::from(it);
         eprintln!("search bloom: {:?}", bloom)
-    } 
+    }
     {
         let d = ana.solver.nodes.with(i);
-        eprintln!("i: {:?}",d);
+        eprintln!("i: {:?}", d);
         type T = Bloom<&'static [u8], u16>;
         let r = CachedHasher::<usize, <T as BF<[u8]>>::S, <T as BF<[u8]>>::H>::once(d);
         eprintln!("CachedHasher result: {:?}", r)
     }
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = sp_store.type_scout(&mut x, &java_root);
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(), 1);
 }
@@ -766,7 +808,7 @@ fn test_case5() {
 fn run6(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -776,6 +818,11 @@ fn run6(text: &[u8]) {
         md_cache: &mut md_cache,
     };
     let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let java_root: TIdN<_> = java_tree_gen
+        .stores
+        .node_store
+        .try_typed(&a.local.compressed_node)
+        .unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
     match a.local.ana.as_ref() {
@@ -803,14 +850,22 @@ fn run6(text: &[u8]) {
     let root = ana.solver.intern(RefsEnum::Root);
     let package_ref = scoped!(root, "spoon");
 
+    macro_rules! make_scout {
+        ( ) => {{
+            let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+            sp_store.type_scout(&mut x, &java_root)
+        }};
+    }
+
     println!("-------------1----------------");
     let i = scoped!(scoped!(mm, "PatternBuiler"), "PatternQuery");
-    let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
-    let bb = stores.node_store.resolve(a.local.compressed_node);
+    let mut x = make_scout!();
+    let bb = stores.node_store.resolve_typed(&java_root);
     assert_eq!(bb.get_type(), Type::Program);
     let xx = bb.child(&4).unwrap();
-    x.goto(xx, 4);
-    let bb = stores.node_store.resolve(xx);
+    let xx = stores.node_store.try_typed(&xx).unwrap();
+    x.goto_typed(xx, 4);
+    let bb = stores.node_store.resolve_typed(&xx);
     assert_eq!(bb.get_type(), Type::ClassDeclaration);
     // let xx = bb.get_child(&6);
     // x.goto(xx, 6);
@@ -829,7 +884,7 @@ fn run6(text: &[u8]) {
     println!("-------------2----------------");
     let package_ref2 = scoped!(package_ref, "compiler");
     let i = scoped!(package_ref2, "Environment");
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = make_scout!();
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(), 1);
 }
@@ -861,7 +916,7 @@ public class PatternBuiler {
 fn run7(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -871,6 +926,11 @@ fn run7(text: &[u8]) {
         md_cache: &mut md_cache,
     };
     let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let java_root: TIdN<_> = java_tree_gen
+        .stores
+        .node_store
+        .try_typed(&a.local.compressed_node)
+        .unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
     match a.local.ana.as_ref() {
@@ -908,6 +968,13 @@ fn run7(text: &[u8]) {
     let root = ana.solver.intern(RefsEnum::Root);
     let package_ref = scoped!(root, "spoon");
 
+    macro_rules! make_scout {
+        ( ) => {{
+            let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+            sp_store.type_scout(&mut x, &java_root)
+        }};
+    }
+
     println!("-------------1----------------");
     let package_ref2 = scoped!(scoped!(package_ref, "reflect"), "declaration");
     let i = scoped_ref!(package_ref2, "CtAnonymousExecutable");
@@ -918,7 +985,7 @@ fn run7(text: &[u8]) {
         // let it:Vec<_> = it.collect();
         let bloom = T::from(it);
         eprintln!("search bloom: {:?}", bloom)
-    } 
+    }
     {
         let d = ana.solver.nodes.with(i);
         type T = Bloom<&'static [u8], u16>;
@@ -926,11 +993,16 @@ fn run7(text: &[u8]) {
         eprintln!("CachedHasher result: {:?}", r)
     }
     let d = ana.solver.nodes.with(i);
-    if let BloomResult::MaybeContain = stores.node_store.resolve(a.local.compressed_node).check(d) {
+    if let BloomResult::MaybeContain = stores
+        .node_store
+        .try_resolve_typed::<TIdN<NodeIdentifier>>(&a.local.compressed_node)
+        .map_or(BloomResult::MaybeContain, |x| x.0.check(d))
+    {
     } else {
         assert!(false);
     }
-    let x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let x = sp_store.type_scout(&mut x, &java_root);
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref2, i, x);
     assert_eq!(r.len(), 1);
 }
@@ -960,7 +1032,7 @@ fn test_hashing() {
         .init();
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
@@ -1021,7 +1093,7 @@ fn test_hashing() {
 fn run8(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -1031,6 +1103,11 @@ fn run8(text: &[u8]) {
         md_cache: &mut md_cache,
     };
     let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let java_root: TIdN<_> = java_tree_gen
+        .stores
+        .node_store
+        .try_typed(&a.local.compressed_node)
+        .unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
     match a.local.ana.as_ref() {
@@ -1058,18 +1135,27 @@ fn run8(text: &[u8]) {
     let root = ana.solver.intern(RefsEnum::Root);
     let package_ref = scoped!(root, "spoon");
 
+    macro_rules! make_scout {
+        ( ) => {{
+            let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+            sp_store.type_scout(&mut x, &java_root)
+        }};
+    }
+
     println!("-------------1----------------");
     let i = scoped!(mm, "CtAnnotationImpl");
-    let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
-    let bb = stores.node_store.resolve(a.local.compressed_node);
+    let mut x = make_scout!();
+    let bb = stores.node_store.resolve_typed(&java_root);
     assert_eq!(bb.get_type(), Type::Program);
     let xx = bb.child(&4).unwrap();
-    x.goto(xx, 4);
-    let bb = stores.node_store.resolve(xx);
+    let xx = stores.node_store.try_typed(&xx).unwrap();
+    x.goto_typed(xx, 4);
+    let bb = stores.node_store.resolve_typed(&xx);
     assert_eq!(bb.get_type(), Type::ClassDeclaration);
     let xx = bb.child(&6).unwrap();
-    x.goto(xx, 6);
-    let bb = stores.node_store.resolve(xx);
+    let xx = stores.node_store.try_typed(&xx).unwrap();
+    x.goto_typed(xx, 6);
+    let bb = stores.node_store.resolve_typed(&xx);
     assert_eq!(bb.get_type(), Type::ClassBody);
     // let xx = bb.get_child(&2);
     // x.goto(xx, 2);
@@ -1087,7 +1173,7 @@ fn run8(text: &[u8]) {
         // let it:Vec<_> = it.collect();
         let bloom = T::from(it);
         eprintln!("search bloom: {:?}", bloom)
-    } 
+    }
     {
         let d = ana.solver.nodes.with(i);
         type T = Bloom<&'static [u8], u64>;
@@ -1145,7 +1231,7 @@ fn test_case9() {
 fn run10(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -1155,6 +1241,11 @@ fn run10(text: &[u8]) {
         md_cache: &mut md_cache,
     };
     let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let java_root: TIdN<_> = java_tree_gen
+        .stores
+        .node_store
+        .try_typed(&a.local.compressed_node)
+        .unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
     match a.local.ana.as_ref() {
@@ -1182,18 +1273,27 @@ fn run10(text: &[u8]) {
     let root = ana.solver.intern(RefsEnum::Root);
     let package_ref = scoped!(root, "spoon");
 
+    macro_rules! make_scout {
+        ( ) => {{
+            let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+            sp_store.type_scout(&mut x, &java_root)
+        }};
+    }
+
     println!("-------------1----------------");
     let i = scoped!(mm, "CtAnnotationImpl");
-    let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
-    let bb = stores.node_store.resolve(a.local.compressed_node);
+    let mut x = make_scout!();
+    let bb = stores.node_store.resolve_typed(&java_root);
     assert_eq!(bb.get_type(), Type::Program);
     let xx = bb.child(&8).unwrap();
-    x.goto(xx, 8);
-    let bb = stores.node_store.resolve(xx);
+    let xx = stores.node_store.try_typed(&xx).unwrap();
+    x.goto_typed(xx, 8);
+    let bb = stores.node_store.resolve_typed(&xx);
     assert_eq!(bb.get_type(), Type::ClassDeclaration);
     let xx = bb.child(&9).unwrap();
-    x.goto(xx, 9);
-    let bb = stores.node_store.resolve(xx);
+    let xx = stores.node_store.try_typed(&xx).unwrap();
+    x.goto_typed(xx, 9);
+    let bb = stores.node_store.resolve_typed(&xx);
     assert_eq!(bb.get_type(), Type::ClassBody);
     // let xx = bb.get_child(&2);
     // x.goto(xx, 2);
@@ -1207,33 +1307,39 @@ fn run10(text: &[u8]) {
     assert_eq!(r.len(), 0);
     println!("-------------2----------------");
     let i = scoped!(mm, "node");
-    let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
-    let bb = stores.node_store.resolve(a.local.compressed_node);
+    let mut x = make_scout!();
+    let bb = stores.node_store.resolve_typed(&java_root);
     assert_eq!(bb.get_type(), Type::Program);
     let xx = bb.child(&8).unwrap();
-    x.goto(xx, 8);
-    let bb = stores.node_store.resolve(xx);
+    let xx = stores.node_store.try_typed(&xx).unwrap();
+    x.goto_typed(xx, 8);
+    let bb = stores.node_store.resolve_typed(&xx);
     assert_eq!(bb.get_type(), Type::ClassDeclaration);
     let xx = bb.child(&9).unwrap();
-    x.goto(xx, 9);
-    let bb = stores.node_store.resolve(xx);
+    let xx = stores.node_store.try_typed(&xx).unwrap();
+    x.goto_typed(xx, 9);
+    let bb = stores.node_store.resolve_typed(&xx);
     assert_eq!(bb.get_type(), Type::ClassBody);
     let xx = bb.child(&6).unwrap();
-    x.goto(xx, 6);
-    let bb = stores.node_store.resolve(xx);
-    assert_eq!(bb.get_type(),Type::MethodDeclaration);
+    let xx = stores.node_store.try_typed(&xx).unwrap();
+    x.goto_typed(xx, 6);
+    let bb = stores.node_store.resolve_typed(&xx);
+    assert_eq!(bb.get_type(), Type::MethodDeclaration);
     let xx = bb.child(&7).unwrap();
-    x.goto(xx, 7);
-    let bb = stores.node_store.resolve(xx);
-    assert_eq!(bb.get_type(),Type::Block);
+    let xx = stores.node_store.try_typed(&xx).unwrap();
+    x.goto_typed(xx, 7);
+    let bb = stores.node_store.resolve_typed(&xx);
+    assert_eq!(bb.get_type(), Type::Block);
     let xx = bb.child(&2).unwrap();
-    x.goto(xx, 2);
-    let bb = stores.node_store.resolve(xx);
-    assert_eq!(bb.get_type(),Type::EnhancedForStatement);
+    let xx = stores.node_store.try_typed(&xx).unwrap();
+    x.goto_typed(xx, 2);
+    let bb = stores.node_store.resolve_typed(&xx);
+    assert_eq!(bb.get_type(), Type::EnhancedForStatement);
     let xx = bb.child(&10).unwrap();
-    x.goto(xx, 10);
-    let bb = stores.node_store.resolve(xx);
-    assert_eq!(bb.get_type(),Type::Block);
+    let xx = stores.node_store.try_typed(&xx).unwrap();
+    x.goto_typed(xx, 10);
+    let bb = stores.node_store.resolve_typed(&xx);
+    assert_eq!(bb.get_type(), Type::Block);
     let r = usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
     assert_eq!(r.len(), 1);
 }
@@ -1339,7 +1445,7 @@ public class Tacos<K, V extends String> implements ITacos<V> {
 fn run11(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -1349,6 +1455,11 @@ fn run11(text: &[u8]) {
         md_cache: &mut md_cache,
     };
     let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let java_root: TIdN<_> = java_tree_gen
+        .stores
+        .node_store
+        .try_typed(&a.local.compressed_node)
+        .unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
     match a.local.ana.as_ref() {
@@ -1377,11 +1488,12 @@ fn run11(text: &[u8]) {
     let package_ref = scoped!(root, "spoon");
     let _ = package_ref;
 
-    print_tree_syntax(
-        &java_tree_gen.stores.node_store,
-        &java_tree_gen.stores.label_store,
-        &a.local.compressed_node,
-    );
+    // print_tree_syntax(
+    //     &java_tree_gen.stores.node_store,
+    //     &java_tree_gen.stores.label_store,
+    //     &a.local.compressed_node,
+    // );
+    hyper_ast::nodes::SyntaxSerializer::new(&java_tree_gen.stores, a.local.compressed_node);
     println!();
 }
 
@@ -1726,12 +1838,10 @@ fn test_case_11_bis() {
     run(CASE_11_BIS.as_bytes())
 }
 
-
-
 fn run12(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -1768,11 +1878,7 @@ fn run12(text: &[u8]) {
     // let root = ana.solver.intern(RefsEnum::Root);
     // let package_ref = scoped!(root, "spoon");
 
-    print_tree_syntax(
-        &java_tree_gen.stores.node_store,
-        &java_tree_gen.stores.label_store,
-        &a.local.compressed_node,
-    );
+    hyper_ast::nodes::SyntaxSerializer::new(&java_tree_gen.stores, a.local.compressed_node);
     println!();
 }
 
@@ -1795,11 +1901,10 @@ public class A {
     public B getB() {}
 }"#;
 
-
 fn run13(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -1836,11 +1941,7 @@ fn run13(text: &[u8]) {
     // let root = ana.solver.intern(RefsEnum::Root);
     // let package_ref = scoped!(root, "spoon");
 
-    print_tree_syntax(
-        &java_tree_gen.stores.node_store,
-        &java_tree_gen.stores.label_store,
-        &a.local.compressed_node,
-    );
+    hyper_ast::nodes::SyntaxSerializer::new(&java_tree_gen.stores, a.local.compressed_node);
     println!();
 }
 

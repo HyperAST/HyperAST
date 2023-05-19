@@ -3,7 +3,7 @@ use std::fmt::Display;
 use axum::Json;
 use hyper_ast::{
     store::defaults::NodeIdentifier,
-    types::{Typed, WithChildren, WithStats},
+    types::{HyperType, TypeStore, WithChildren, WithStats},
 };
 use rhai::{
     packages::{BasicArrayPackage, CorePackage, Package},
@@ -74,10 +74,7 @@ pub fn simple(
         .compile(script.filter.clone())
         .map_err(|x| ScriptingError::AtCompilation(format!("{}, {}", x, script.filter.clone())))?;
     let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
-    let configs = state
-        .configs
-        .read()
-        .unwrap();
+    let configs = state.configs.read().unwrap();
     let config = configs
         .get(&repo_spec)
         .ok_or_else(|| ScriptingError::Other("missing config for repository".to_string()))?;
@@ -89,7 +86,11 @@ pub fn simple(
         .unwrap()
         .pre_process_with_config(&mut repo, "", &commit, config.into())
         .unwrap();
-    log::info!("done construction of {commits:?} in  {}/{}", repo_spec.user, repo_spec.name);
+    log::info!(
+        "done construction of {commits:?} in  {}/{}",
+        repo_spec.user,
+        repo_spec.name
+    );
 
     let repositories = state.repositories.read().unwrap();
     let commit_src = repositories.commits.get_key_value(&commits[0]).unwrap();
@@ -105,6 +106,11 @@ pub fn simple(
                 .processor
                 .main_stores
                 .node_store
+        };
+    }
+    macro_rules! stores {
+        ($s:expr) => {
+            $s.repositories.read().unwrap().processor.main_stores
         };
     }
     #[derive(Debug)]
@@ -151,19 +157,42 @@ pub fn simple(
             filter_engine.disable_symbol("/");
             let current = acc.sid;
             let s = state.clone();
+            filter_engine.register_fn("type", move || {
+                let stores = &stores!(s);
+                let node_store = &stores.node_store;
+                let type_store = &stores.type_store;
+                let n = node_store.resolve(current);
+                let t = type_store.resolve_type(&n);
+                t.to_string()
+            });
+            let s = state.clone();
             filter_engine.register_fn("is_directory", move || {
-                let node_store = &ns!(s);
-                node_store.resolve(current).get_type().is_directory()
+                let stores = &stores!(s);
+                let node_store = &stores.node_store;
+                let type_store = &stores.type_store;
+                let n = node_store.resolve(current);
+                let t = type_store.resolve_type(&n);
+                t.is_directory()
             });
             let s = state.clone();
             filter_engine.register_fn("is_type_decl", move || {
-                let node_store = &&ns!(s);
-                node_store.resolve(current).get_type().is_type_declaration()
+                let stores = &stores!(s);
+                let node_store = &stores.node_store;
+                let type_store = &stores.type_store;
+                let n = node_store.resolve(current);
+                let t = type_store.resolve_type(&n);
+                let s = t.as_shared();
+                s == hyper_ast::types::Shared::TypeDeclaration
+                // node_store.resolve(current).get_type().is_type_declaration()
             });
             let s = state.clone();
             filter_engine.register_fn("is_file", move || {
-                let node_store = &&ns!(s);
-                node_store.resolve(current).get_type().is_file()
+                let stores = &stores!(s);
+                let node_store = &stores.node_store;
+                let type_store = &stores.type_store;
+                let n = node_store.resolve(current);
+                let t = type_store.resolve_type(&n);
+                t.is_file()
             });
             let s = state.clone();
             filter_engine.register_fn("children", move || {
@@ -212,23 +241,41 @@ pub fn simple(
         });
         let s = state.clone();
         acc_engine.register_fn("type", move || {
-            let node_store = &ns!(s);
-            node_store.resolve(current).get_type().to_string()
+            let stores = &stores!(s);
+            let node_store = &stores.node_store;
+            let type_store = &stores.type_store;
+            let n = node_store.resolve(current);
+            let t = type_store.resolve_type(&n);
+            t.to_string()
         });
         let s = state.clone();
         acc_engine.register_fn("is_type_decl", move || {
-            let node_store = &ns!(s);
-            node_store.resolve(current).get_type().is_type_declaration()
+            let stores = &stores!(s);
+            let node_store = &stores.node_store;
+            let type_store = &stores.type_store;
+            let n = node_store.resolve(current);
+            let t = type_store.resolve_type(&n);
+            let s = t.as_shared();
+            s == hyper_ast::types::Shared::TypeDeclaration
+            // node_store.resolve(current).get_type().is_type_declaration()
         });
         let s = state.clone();
         acc_engine.register_fn("is_directory", move || {
-            let node_store = &ns!(s);
-            node_store.resolve(current).get_type().is_directory()
+            let stores = &stores!(s);
+            let node_store = &stores.node_store;
+            let type_store = &stores.type_store;
+            let n = node_store.resolve(current);
+            let t = type_store.resolve_type(&n);
+            t.is_directory()
         });
         let s = state.clone();
         acc_engine.register_fn("is_file", move || {
-            let node_store = &&ns!(s);
-            node_store.resolve(current).get_type().is_file()
+            let stores = &stores!(s);
+            let node_store = &stores.node_store;
+            let type_store = &stores.type_store;
+            let n = node_store.resolve(current);
+            let t = type_store.resolve_type(&n);
+            t.is_file()
         });
         acc_engine
             .eval_ast_with_scope(&mut scope, &accumulate_script)

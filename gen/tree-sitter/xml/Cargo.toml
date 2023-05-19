@@ -6,15 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tree-sitter = "0.20.9"
-tree-sitter-xml = { path = "tree-sitter-xml", version = "0.20.0" }
-hyper_ast = { path = "../../../hyper_ast" }
+tree-sitter = { version = "0.20.9", optional = true }
+tree-sitter-xml = { path = "tree-sitter-xml", version = "0.20.0", optional = true }
+hyper_ast = { path = "../../../hyper_ast", default-features = false }
 
 
 libc = "0.2"
 
 
-legion = "0.4.0"
+legion = { version = "0.4.0", optional = true }
 tuples = "=1.4.1"
 
 [build-dependencies]
@@ -22,3 +22,13 @@ cc = "*"
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"
+
+[features]
+default = ["impl"]
+legion = ["hyper_ast/legion", "dep:legion"]
+impl = [
+    "hyper_ast/jemalloc",
+    "legion",
+    "dep:tree-sitter",
+    "dep:tree-sitter-xml",
+]

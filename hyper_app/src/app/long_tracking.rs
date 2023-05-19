@@ -5,7 +5,10 @@ use std::{
 };
 
 use epaint::{ahash::HashSet, pos2, vec2, Pos2};
-use hyper_ast::store::nodes::fetched::NodeIdentifier;
+use hyper_ast::{
+    store::nodes::fetched::NodeIdentifier,
+    types::{HyperType, Labeled, TypeStore},
+};
 use poll_promise::Promise;
 
 use crate::app::{
@@ -24,10 +27,10 @@ use super::{
     code_tracking::{self, RemoteFile, TrackingResult},
     commit::CommitMetadata,
     egui_utils::{radio_collapsing, show_wip},
-    show_repo_menu,
+    show_commit_menu, show_repo_menu,
     tree_view::FetchedHyperAST,
     types::{self, CodeRange, Commit, ComputeConfigAspectViews},
-    AccumulableResult, Buffered, MultiBuffered, show_commit_menu,
+    AccumulableResult, Buffered, MultiBuffered,
 };
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -1735,14 +1738,14 @@ fn show_detached_element(
                 if let Some(r) = store.node_store.read().unwrap().try_resolve(*id) {
                     use hyper_ast::types::{Tree, Typed, WithStats};
                     if options.kind {
-                        let kind = r.get_type();
+                        let kind = store.type_store.resolve_type(&r);
                         cui.label(format!("{}", kind));
                     }
                     if options.label {
                         let l = r.try_get_label().copied();
                         if let Some(l) = l {
-                            if let Some(l) = store.label_store.read().unwrap().get(&l) {
-                                cui.label(format!("{}", l));
+                            if let Some(l) = store.label_store.read().unwrap().try_resolve(&l) {
+                                cui.label(format!("{:?}", l));
                             }
                         }
                     }
@@ -1764,11 +1767,14 @@ fn show_detached_element(
                                 break;
                             }
                             if let Some(r) = store.node_store.read().unwrap().try_resolve(r) {
-                                wasm_rs_dbg::dbg!(r.get_type());
-                                if r.get_type() == hyper_ast::types::Type::cpp_NumberLiteral {
+                                let t = store.type_store.resolve_type(&r);
+                                wasm_rs_dbg::dbg!(t);
+                                if t.generic_eq(&hyper_ast_gen_ts_cpp::types::Type::NumberLiteral) {
                                     if value.is_none() {
-                                        let l = r.get_label();
-                                        if let Some(l) = store.label_store.read().unwrap().get(&l) {
+                                        let l = r.get_label_unchecked();
+                                        if let Some(l) =
+                                            store.label_store.read().unwrap().try_resolve(&l)
+                                        {
                                             value = Some(l.to_owned());
                                         } else {
                                             if !store
@@ -1787,10 +1793,14 @@ fn show_detached_element(
                                             }
                                         }
                                     }
-                                } else if r.get_type() == hyper_ast::types::Type::cpp_Identifier {
+                                } else if t
+                                    .generic_eq(&hyper_ast_gen_ts_cpp::types::Type::Identifier)
+                                {
                                     if name.is_none() {
-                                        let l = r.get_label();
-                                        if let Some(l) = store.label_store.read().unwrap().get(&l) {
+                                        let l = r.get_label_unchecked();
+                                        if let Some(l) =
+                                            store.label_store.read().unwrap().try_resolve(&l)
+                                        {
                                             name = Some(l.to_owned());
                                         } else {
                                             if !store

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
+use std::{collections::HashMap, fmt::Debug, hash::Hash, marker::PhantomData};
 
 use num_traits::{PrimInt, ToPrimitive, Zero};
 
@@ -26,6 +26,7 @@ impl<
         M: MonoMappingStore,
     > BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
 where
+    T::Type: Eq + Copy + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
@@ -72,6 +73,7 @@ impl<
         M: MonoMappingStore,
     > BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
 where
+    T::Type: Copy + Send + Sync + Eq + Hash,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
@@ -228,6 +230,7 @@ impl<
     > crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
 where
     HAST::T: 'a + Tree,
+    <HAST::T as Typed>::Type: Eq + Copy + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
@@ -278,6 +281,8 @@ impl<
     > crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
 where
     HAST::T: 'a + Tree + WithHashs,
+    <HAST::T as Typed>::Type: Eq + Copy + Send + Sync,
+    <HAST::T as Typed>::Type: Eq + Hash + Copy + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
     M::Src: Shallow<M::Src>,
@@ -379,8 +384,7 @@ where
         })
     }
 
-    pub(super) fn lcs_equal_matching(&mut self, src: &M::Src, dst: &M::Dst)
-    {
+    pub(super) fn lcs_equal_matching(&mut self, src: &M::Src, dst: &M::Dst) {
         self.lcs_hash_matching(&HashKind::label(), src, dst)
     }
 

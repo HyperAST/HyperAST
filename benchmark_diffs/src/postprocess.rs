@@ -8,14 +8,16 @@ use std::{
 use hyper_ast::{
     position::Position,
     types::{
-        self, HyperAST, LabelStore, NodeStore, Stored, Tree, Type, WithChildren, WithSerialization,
+        self, HyperAST, HyperType, LabelStore, NodeStore, Stored, Tree, WithChildren,
+        WithSerialization,
     },
 };
 use hyper_diff::{
     decompressed_tree_store::{
         complete_post_order::{DisplayCompletePostOrder, RecCachedProcessor},
         pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
-        DecompressedWithSiblings, PostOrder, ShallowDecompressedTreeStore, FullyDecompressedTreeStore,
+        DecompressedWithSiblings, FullyDecompressedTreeStore, PostOrder,
+        ShallowDecompressedTreeStore,
     },
     matchers::{mapping_store::MonoMappingStore, Mapper},
     tree::tree_path::CompressedTreePath,
@@ -99,7 +101,12 @@ pub mod compressed_bf_post_process {
                 .unwrap();
             (
                 compressed_bf_post_process::PP1 { file: self.file },
-                Counts { mappings, actions, src_heap, dst_heap },
+                Counts {
+                    mappings,
+                    actions,
+                    src_heap,
+                    dst_heap,
+                },
             )
         }
     }
@@ -131,7 +138,7 @@ pub mod compressed_bf_post_process {
         where
             HAST: HyperAST<'store>,
             HAST::IdN: Clone + Debug + Eq,
-            HAST::T: types::Tree<Type = types::Type>,
+            HAST::T: types::Tree,
             SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
                 + PostOrder<'a, HAST::T, u32>
                 + DecompressedWithSiblings<'a, HAST::T, u32>,
@@ -168,8 +175,7 @@ pub mod compressed_bf_post_process {
         where
             IdN: Clone + Debug + Eq,
             NS: 'store + types::NodeStore<IdN>,
-            <NS as types::NodeStore<IdN>>::R<'store>:
-                types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I>,
+            <NS as types::NodeStore<IdN>>::R<'store>: types::Tree<TreeId = IdN, Label = LS::I>,
             LS: types::LabelStore<str>,
             SD: ShallowDecompressedTreeStore<'a, NS::R<'store>, u32>
                 + PostOrder<'a, NS::R<'store>, u32>
@@ -453,9 +459,14 @@ impl SimpleJsonPostProcess {
     }
     pub fn counts(&self) -> Counts {
         let mappings = self.file.matches.len();
-        let actions = self.file.actions.as_ref().map_or(-1,|x|x.len() as isize);
+        let actions = self.file.actions.as_ref().map_or(-1, |x| x.len() as isize);
         // TODO first need some work on the java side, but anyway not used for eval
-        Counts { mappings, actions, src_heap: 42, dst_heap: 42 }
+        Counts {
+            mappings,
+            actions,
+            src_heap: 42,
+            dst_heap: 42,
+        }
     }
     pub fn validity_mappings<'store: 'a, 'a, HAST, SD, DD>(
         mut self,
@@ -464,7 +475,7 @@ impl SimpleJsonPostProcess {
     where
         HAST: HyperAST<'store>,
         HAST::IdN: Clone + Debug + Eq,
-        HAST::T: types::Tree<Type = types::Type> + WithSerialization,
+        HAST::T: types::Tree + WithSerialization,
         SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
             + PostOrder<'a, HAST::T, u32>
             + DecompressedWithSiblings<'a, HAST::T, u32>,
@@ -479,8 +490,7 @@ impl SimpleJsonPostProcess {
         let src_tr = src_arena.original(&src_arena.root());
         let dst_tr = dst_arena.original(&dst_arena.root());
         self._validity_mappings(
-            hyperast.node_store(),
-            hyperast.label_store(),
+            hyperast,
             src_arena,
             src_tr,
             dst_arena,
@@ -488,53 +498,50 @@ impl SimpleJsonPostProcess {
             &mapping.mappings,
         )
     }
-    pub fn _validity_mappings<'store: 'a, 'a, IdN, NS, LS, SD, DD>(
+    pub fn _validity_mappings<'store: 'a, 'a, HAST, SD, DD>(
         self,
-        node_store: &'store NS,
-        label_store: &'store LS,
+        stores: &'store HAST,
         src_arena: &'a SD,
-        src_tr: IdN,
+        src_tr: HAST::IdN,
         dst_arena: &'a DD,
-        dst_tr: IdN,
+        dst_tr: HAST::IdN,
         mappings: &VecStore<u32>,
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Tree>>>
     where
-        IdN: Clone + Debug,
-        NS: 'store + types::NodeStore<IdN>,
-        <NS as types::NodeStore<IdN>>::R<'store>:
-            types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I> + WithSerialization,
-        LS: types::LabelStore<str>,
-        SD: ShallowDecompressedTreeStore<'a, NS::R<'store>, u32>
-            + PostOrder<'a, NS::R<'store>, u32>
-            + DecompressedWithSiblings<'a, NS::R<'store>, u32>,
-        DD: ShallowDecompressedTreeStore<'a, NS::R<'store>, u32>
-            + PostOrder<'a, NS::R<'store>, u32>
-            + DecompressedWithSiblings<'a, NS::R<'store>, u32>,
+        HAST: HyperAST<'store>,
+        HAST::IdN: Clone + Debug,
+        HAST::T: WithSerialization,
+        SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
+            + PostOrder<'a, HAST::T, u32>
+            + DecompressedWithSiblings<'a, HAST::T, u32>,
+        DD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
+            + PostOrder<'a, HAST::T, u32>
+            + DecompressedWithSiblings<'a, HAST::T, u32>,
     {
         use hyper_ast::types::Labeled;
         use hyper_ast::types::Typed;
         let with_p = |mut pos: Position, ori| {
-            let r = node_store.resolve(&ori);
+            let r = stores.node_store().resolve(&ori);
             let t = r.get_type();
             if t.is_directory() || t.is_file() {
-                pos.inc_path(label_store.resolve(&r.get_label()));
+                pos.inc_path(stores.label_store().resolve(&r.get_label_unchecked()));
             }
             pos.set_len(r.try_bytes_len().unwrap_or(0));
             pos
         };
         let with_lsib = |mut pos: Position, lsib| {
             pos.inc_offset(pos.range().end - pos.range().start);
-            let r = node_store.resolve(&lsib);
+            let r = stores.node_store().resolve(&lsib);
             pos.set_len(r.try_bytes_len().unwrap());
             pos
         };
         let mut formator_src =
-            FormatCached::from((node_store, src_arena, src_tr, with_p, with_lsib));
+            FormatCached::from((stores.node_store(), src_arena, src_tr, with_p, with_lsib));
         let mut formator_dst =
-            FormatCached::from((node_store, dst_arena, dst_tr, with_p, with_lsib));
+            FormatCached::from((stores.node_store(), dst_arena, dst_tr, with_p, with_lsib));
         let mut formator = |a, b| diff_output::Match {
-            src: ((node_store, label_store), formator_src.format(a)).into(),
-            dest: ((node_store, label_store), formator_dst.format(b)).into(),
+            src: (stores, formator_src.format(a)).into(),
+            dest: (stores, formator_dst.format(b)).into(),
         };
         use hashbrown::HashSet;
         let now = Instant::now();
@@ -588,9 +595,14 @@ impl PathJsonPostProcess {
     }
     pub fn counts(&self) -> Counts {
         let mappings = self.file.matches.len();
-        let actions = self.file.actions.as_ref().map_or(-1,|x|x.len() as isize);
+        let actions = self.file.actions.as_ref().map_or(-1, |x| x.len() as isize);
         // TODO first need some work on the java side, but anyway not used for eval
-        Counts { mappings, actions, src_heap: 42, dst_heap: 42 }
+        Counts {
+            mappings,
+            actions,
+            src_heap: 42,
+            dst_heap: 42,
+        }
     }
     pub fn validity_mappings<'store: 'a, 'a, HAST, SD, DD>(
         mut self,
@@ -599,7 +611,7 @@ impl PathJsonPostProcess {
     where
         HAST: HyperAST<'store>,
         HAST::IdN: Clone + Debug + Eq,
-        HAST::T: types::Tree<Type = types::Type>,
+        HAST::T: types::Tree,
         SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
             + PostOrder<'a, HAST::T, u32>
             + DecompressedWithSiblings<'a, HAST::T, u32>,
@@ -637,8 +649,7 @@ impl PathJsonPostProcess {
     where
         IdN: Clone + Debug,
         NS: 'store + types::NodeStore<IdN>,
-        <NS as types::NodeStore<IdN>>::R<'store>:
-            types::Tree<TreeId = IdN, Type = types::Type, Label = LS::I>,
+        <NS as types::NodeStore<IdN>>::R<'store>: types::Tree<TreeId = IdN, Label = LS::I>,
         LS: types::LabelStore<str>,
         SD: ShallowDecompressedTreeStore<'a, NS::R<'store>, u32>
             + PostOrder<'a, NS::R<'store>, u32>
@@ -736,7 +747,7 @@ impl<'store, 'a, S, T: WithChildren, D, U, F: Clone, G: Clone>
         }
     }
 }
-impl<'store: 'a, 'a, S, T: Tree<Type = Type> + WithSerialization, D, U: Clone + Default, F, G>
+impl<'store: 'a, 'a, S, T: Tree + WithSerialization, D, U: Clone + Default, F, G>
     FormatCached<'store, 'a, S, T, D, U, F, G>
 where
     S: 'store + NodeStore<T::TreeId, R<'store> = T>,
@@ -815,7 +826,7 @@ pub fn print_mappings<
         .map
         .iter()
         .map(|x| {
-            if let Some(dst) =  mappings.get_dst(x) {
+            if let Some(dst) = mappings.get_dst(x) {
                 if mapped[dst.to_usize().unwrap()] {
                     assert!(false, "GreedySubtreeMatcher {}", dst.to_usize().unwrap())
                 }
@@ -944,12 +955,13 @@ pub fn print_mappings_no_ranges<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
     use crate::{
         other_tools,
         preprocess::{parse_dir_pair, JavaPreprocessFileSys},
     };
-    use hyper_ast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores, TypeStore};
+    use hyper_ast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores};
+    use hyper_ast_cvs_git::TStore;
+    use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
 
     #[test]
     fn test() {
@@ -965,7 +977,7 @@ mod tests {
 
         let stores = SimpleStores {
             label_store: LabelStore::new(),
-            type_store: TypeStore {},
+            type_store: TStore::default(),
             node_store: NodeStore::new(),
         };
         let md_cache = Default::default();
@@ -983,15 +995,15 @@ mod tests {
 
         let gt_out_format = "COMPRESSED"; // JSON
         let gt_out = other_tools::gumtree::subprocess(
-            &java_gen.main_stores.node_store,
-            &java_gen.main_stores.label_store,
+            &java_gen.main_stores,
             src_tr.compressed_node,
             dst_tr.compressed_node,
             "gumtree",
             "Chawathe",
-            60*5,
+            60 * 5,
             gt_out_format,
-        ).unwrap();
+        )
+        .unwrap();
 
         let DiffResult {
             mapping_durations,

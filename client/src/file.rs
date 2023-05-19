@@ -55,29 +55,9 @@ pub fn from_hyper_ast(state: SharedState, path: FetchFileParam) -> Result<String
         return Err("not found".to_string());
     };
 
-    let mut out = BuffOut::default();
+    let file = hyper_ast::nodes::TextSerializer::new(&repositories.processor.main_stores,file);
 
-    let file = hyper_ast::nodes::serialize(
-        |id| -> _ {
-            node_store
-                .resolve(id.clone())
-                .into_compressed_node()
-                .unwrap()
-        },
-        |id| -> _ {
-            repositories
-                .processor
-                .main_stores
-                .label_store
-                .resolve(id)
-                .to_owned()
-        },
-        &file,
-        &mut out,
-        "\n",
-    );
-
-    Ok(out.into())
+    Ok(file.to_string())
 }
 
 #[derive(Default)]

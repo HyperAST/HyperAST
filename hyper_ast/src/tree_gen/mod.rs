@@ -2,6 +2,8 @@ pub mod parser;
 
 // use std::hash::Hash;
 
+use std::fmt::Debug;
+
 use crate::{
     hashed::NodeHashs,
     // hashed::{inner_node_hash, SyntaxNodeHashs},
@@ -208,6 +210,34 @@ pub trait TreeGen {
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node;
 }
 
+pub struct Parents<Acc>(Vec<Option<Acc>>);
+impl<Acc> From<Acc> for Parents<Acc> {
+    fn from(value: Acc) -> Self {
+        Self::new(value)
+    }
+}
+impl<Acc> Parents<Acc> {
+    pub fn new(value: Acc) -> Self {
+        Self(vec![Some(value)])
+    }
+    pub fn finalize(mut self) -> Acc {
+        assert_eq!(self.0.len(), 1);
+        self.0.pop().unwrap().unwrap()
+    }
+    fn push(&mut self, value: Option<Acc>) {
+        self.0.push(value)
+    }
+    fn pop(&mut self) -> Option<Option<Acc>> {
+        self.0.pop()
+    }
+    pub fn parent(&self) -> Option<&Acc> {
+        self.0.iter().rev().find_map(|x| x.as_ref())
+    }
+    fn parent_mut(&mut self) -> Option<&mut Acc> {
+        self.0.iter_mut().rev().find_map(|x| x.as_mut())
+    }
+}
+
 pub trait ZippedTreeGen: TreeGen
 where
     Self::Global: TotalBytesGlobalData,
@@ -218,7 +248,7 @@ where
     // # source
     type Text: ?Sized;
     type Node<'a>: parser::Node<'a>;
-    type TreeCursor<'a>: parser::TreeCursor<'a, Self::Node<'a>>;
+    type TreeCursor<'a>: parser::TreeCursor<'a, Self::Node<'a>> + Debug;
 
     fn init_val(&mut self, text: &Self::Text, node: &Self::Node<'_>) -> Self::Acc;
 
@@ -226,19 +256,20 @@ where
         &mut self,
         text: &Self::Text,
         node: &Self::Node<'_>,
-        stack: &Vec<Self::Acc>,
+        stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
         skip: &mut bool,
-    ) -> <Self as TreeGen>::Acc {
+    ) -> Option<<Self as TreeGen>::Acc> {
         let _ = skip;
-        self.pre(text, node, stack, global)
+        Some(self.pre(text, node, stack, global))
     }
 
     fn pre(
         &mut self,
         text: &Self::Text,
         node: &Self::Node<'_>,
-        stack: &Vec<Self::Acc>,
+        // TODO make a special wrapper for the Vec<Option<_>>
+        stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc;
 
@@ -255,12 +286,13 @@ where
     fn gen(
         &mut self,
         text: &Self::Text,
-        stack: &mut Vec<Self::Acc>,
+        stack: &mut Parents<Self::Acc>,
         cursor: &mut Self::TreeCursor<'_>,
         global: &mut Self::Global,
     ) {
         let mut has = Has::Down;
         loop {
+            // dbg!(&cursor, stack.0.len());
             let sbl = cursor.node().start_byte();
             if has != Has::Up && cursor.goto_first_child() {
                 global.set_sum_byte_length(sbl);
@@ -269,16 +301,19 @@ where
                 let mut skip = false;
                 let n = self.pre_skippable(text, &cursor.node(), &stack, global, &mut skip);
                 if skip {
+                    assert!(n.is_some());
                     has = Has::Up;
                 }
 
                 stack.push(n);
             } else {
                 let acc = stack.pop().unwrap();
-                global.up();
-
-                let full_node: Option<_> = if let Some(parent) = stack.last_mut() {
-                    Some(self.post(parent, global, text, acc))
+                let is_visible = acc.is_some();
+                if is_visible {
+                    global.up();
+                }
+                let full_node: Option<_> = if let Some(parent) = stack.parent_mut() {
+                    acc.map(|acc| self.post(parent, global, text, acc))
                 } else {
                     stack.push(acc);
                     None
@@ -288,8 +323,10 @@ where
                 if cursor.goto_next_sibling() {
                     global.set_sum_byte_length(sbl);
                     has = Has::Right;
-                    let parent = stack.last_mut().unwrap();
-                    parent.push(full_node.unwrap());
+                    let parent = stack.parent_mut().unwrap();
+                    if let Some(full_node) = full_node {
+                        parent.push(full_node);
+                    }
                     global.down();
                     let mut skip = false;
                     let n = self.pre_skippable(text, &cursor.node(), &stack, global, &mut skip);
@@ -302,8 +339,9 @@ where
                     if cursor.goto_parent() {
                         if let Some(full_node) = full_node {
                             global.set_sum_byte_length(sbl);
-                            stack.last_mut().unwrap().push(full_node);
-                        } else {
+                            let parent = stack.parent_mut().unwrap();
+                            parent.push(full_node);
+                        } else if is_visible {
                             if has == Has::Down {
                                 global.set_sum_byte_length(sbl);
                             }
@@ -446,7 +484,11 @@ pub fn get_spacing(
                 )
             }
         });
-        assert!(!bslash, "{}", std::str::from_utf8(&&text[padding_start.saturating_sub(100)..pos+50]).unwrap());
+        assert!(
+            !bslash,
+            "{}",
+            std::str::from_utf8(&&text[padding_start.saturating_sub(100)..pos + 50]).unwrap()
+        );
         let spaces = spaces.to_vec();
         // let spaces = Space::replace_indentation(parent_indentation, &spaces);
         // TODO put back the relativisation later, can pose issues when computing len of a subtree (contextually if we make the optimisation)

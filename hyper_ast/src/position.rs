@@ -1,19 +1,27 @@
 use core::fmt;
 use std::{
     fmt::{Debug, Display},
-    io::stdout,
+    marker::PhantomData,
     path::{Path, PathBuf},
 };
 
-use num::{PrimInt, ToPrimitive};
+use num::{one, traits::NumAssign, zero, ToPrimitive};
 
 use crate::{
-    nodes::{print_tree_syntax, IoOut},
-    store::{defaults::NodeIdentifier, SimpleStores},
+    store::{
+        defaults::{LabelIdentifier, NodeIdentifier},
+        nodes::HashedNodeRef,
+    },
     types::{
-        self, Children, IterableChildren, LabelStore, Labeled, Tree, Type, Typed, WithChildren,
+        self, AnyType, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled,
+        NodeId, NodeStore, Tree, TypeStore, Typed, TypedNodeId,
+        WithChildren, WithSerialization,
     },
 };
+
+pub trait PrimInt: num::PrimInt + NumAssign + Debug {}
+
+impl<T> PrimInt for T where T: num::PrimInt + NumAssign + Debug {}
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub struct Position {
@@ -71,17 +79,20 @@ impl Display for Position {
     }
 }
 
-pub fn extract_file_postion(stores: &SimpleStores, parents: &[NodeIdentifier]) -> Position {
+pub fn extract_file_postion<'store, HAST: HyperAST<'store>>(
+    stores: &'store HAST,
+    parents: &[HAST::IdN],
+) -> Position {
     if parents.is_empty() {
         Position::default()
     } else {
-        let p = parents[parents.len() - 1];
-        let b = stores.node_store.resolve(p);
+        let p = &parents[parents.len() - 1];
+        let b = stores.node_store().resolve(p);
         // println!("type {:?}", b.get_type());
         // if !b.has_label() {
         //     panic!("{:?} should have a label", b.get_type());
         // }
-        let l = stores.label_store.resolve(b.get_label());
+        let l = stores.label_store().resolve(b.get_label_unchecked());
 
         let mut r = extract_file_postion(stores, &parents[..parents.len() - 1]);
         r.inc_path(l);
@@ -89,29 +100,35 @@ pub fn extract_file_postion(stores: &SimpleStores, parents: &[NodeIdentifier]) -
     }
 }
 
-pub fn extract_position(
-    stores: &SimpleStores,
-    parents: &[NodeIdentifier],
+pub fn extract_position<'store, HAST>(
+    stores: &'store HAST,
+    parents: &[HAST::IdN],
     offsets: &[usize],
-) -> Position {
+) -> Position
+where
+    HAST: HyperAST<'store, IdN = NodeIdentifier, T = HashedNodeRef<'store>>,
+    HAST::TS: TypeStore<HashedNodeRef<'store>, Ty = AnyType>,
+{
     if parents.is_empty() {
         return Position::default();
     }
     let p = parents[parents.len() - 1];
     let o = offsets[offsets.len() - 1];
 
-    let b = stores.node_store.resolve(p);
+    let b = stores.node_store().resolve(&p);
+
     let c = {
         let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
         v.iter()
             .map(|x| {
-                let b = stores.node_store.resolve(*x);
+                let b = stores.node_store().resolve(x);
+
                 // println!("{:?}", b.get_type());
-                b.get_bytes_len(0) as usize
+                b.try_bytes_len().unwrap() as usize
             })
             .sum()
     };
-    if b.get_type() == Type::Program {
+    if stores.type_store().resolve_type(&b).is_file() {
         let mut r = extract_file_postion(stores, parents);
         r.inc_offset(c);
         r
@@ -126,54 +143,54 @@ pub fn extract_position(
     }
 }
 
-pub trait TreePath<IdN> {
+pub trait TreePath<IdN = NodeIdentifier, Idx = u16> {
     fn node(&self) -> Option<&IdN>;
-    fn offset(&self) -> Option<&usize>;
-    fn pop(&mut self) -> Option<(IdN, usize)>;
-    fn goto(&mut self, node: IdN, i: usize);
+    fn offset(&self) -> Option<&Idx>;
+    fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
+    where
+        HAST: HyperAST<'store, IdN = IdN::IdN>,
+        HAST::T: WithChildren<ChildIdx = Idx>,
+        HAST::IdN: Eq,
+        IdN: NodeId,
+        IdN::IdN: NodeId<IdN = IdN::IdN>;
+}
+
+pub trait TreePathMut<IdN, Idx>: TreePath<IdN, Idx> {
+    fn pop(&mut self) -> Option<(IdN, Idx)>;
+    fn goto(&mut self, node: IdN, i: Idx);
     fn inc(&mut self, node: IdN);
     fn dec(&mut self, node: IdN);
-    fn check(&self, stores: &SimpleStores) -> Result<(), ()>;
+}
+
+pub trait TypedTreePath<TIdN: TypedNodeId, Idx>: TreePath<TIdN::IdN, Idx> {
+    fn node_typed(&self) -> Option<&TIdN>;
+    fn pop_typed(&mut self) -> Option<(TIdN, Idx)>;
+    fn goto_typed(&mut self, node: TIdN, i: Idx);
 }
 
 #[derive(Clone, Debug)]
-pub struct StructuralPosition {
-    pub(crate) nodes: Vec<NodeIdentifier>,
-    pub(crate) offsets: Vec<usize>,
+pub struct StructuralPosition<IdN = NodeIdentifier, Idx = u16> {
+    pub(crate) nodes: Vec<IdN>,
+    pub(crate) offsets: Vec<Idx>,
 }
 
-impl TreePath<NodeIdentifier> for StructuralPosition {
-    fn node(&self) -> Option<&NodeIdentifier> {
+impl<IdN: Copy, Idx: PrimInt> TreePath<IdN, Idx> for StructuralPosition<IdN, Idx> {
+    fn node(&self) -> Option<&IdN> {
         self.nodes.last()
     }
 
-    fn offset(&self) -> Option<&usize> {
+    fn offset(&self) -> Option<&Idx> {
         self.offsets.last()
     }
 
-    fn pop(&mut self) -> Option<(NodeIdentifier, usize)> {
-        Some((self.nodes.pop()?, self.offsets.pop()?))
-    }
-
-    fn goto(&mut self, node: NodeIdentifier, i: usize) {
-        self.nodes.push(node);
-        self.offsets.push(i + 1);
-    }
-
-    fn inc(&mut self, node: NodeIdentifier) {
-        *self.nodes.last_mut().unwrap() = node;
-        *self.offsets.last_mut().unwrap() += 1;
-    }
-
-    fn dec(&mut self, node: NodeIdentifier) {
-        *self.nodes.last_mut().unwrap() = node;
-        if let Some(offsets) = self.offsets.last_mut() {
-            assert!(*offsets > 1);
-            *offsets -= 1;
-        }
-    }
-
-    fn check(&self, stores: &SimpleStores) -> Result<(), ()> {
+    fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
+    where
+        HAST: HyperAST<'store, IdN = IdN::IdN>,
+        HAST::T: WithChildren<ChildIdx = Idx>,
+        HAST::IdN: Eq,
+        IdN: NodeId,
+        IdN::IdN: NodeId<IdN = IdN::IdN>,
+    {
         assert_eq!(self.offsets.len(), self.nodes.len());
         if self.nodes.is_empty() {
             return Ok(());
@@ -182,10 +199,12 @@ impl TreePath<NodeIdentifier> for StructuralPosition {
 
         while i > 0 {
             let e = self.nodes[i];
-            let o = self.offsets[i] - 1;
+            let o = self.offsets[i] - one();
             let p = self.nodes[i - 1];
-            let b = stores.node_store.resolve(p);
-            if !b.has_children() || Some(e) != b.child(&o.to_u16().expect("too big")) {
+            let b = stores.node_store().resolve(&p.as_id());
+            if !b.has_children()
+                || Some(e.as_id()) != b.child(&num::cast(o).expect("too big")).as_ref()
+            {
                 return Err(());
             }
             i -= 1;
@@ -194,18 +213,90 @@ impl TreePath<NodeIdentifier> for StructuralPosition {
     }
 }
 
-impl StructuralPosition {
-    pub fn make_position(&self, stores: &SimpleStores) -> Position {
+impl<IdN: Copy, Idx: PrimInt + NumAssign> TreePathMut<IdN, Idx> for StructuralPosition<IdN, Idx> {
+    fn pop(&mut self) -> Option<(IdN, Idx)> {
+        Some((self.nodes.pop()?, self.offsets.pop()?))
+    }
+
+    fn goto(&mut self, node: IdN, i: Idx) {
+        self.nodes.push(node);
+        self.offsets.push(i + one());
+    }
+
+    fn inc(&mut self, node: IdN) {
+        *self.nodes.last_mut().unwrap() = node;
+        *self.offsets.last_mut().unwrap() += one();
+    }
+
+    fn dec(&mut self, node: IdN) {
+        *self.nodes.last_mut().unwrap() = node;
+        if let Some(offsets) = self.offsets.last_mut() {
+            assert!(*offsets > one());
+            *offsets -= one();
+        }
+    }
+}
+
+// impl<TIdN: TypedNodeId> StructuralPosition<TIdN> {
+//     fn check_typed<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
+//     where
+//         TIdN::IdN: Eq,
+//         HAST: HyperAST<'store, IdN = TIdN::IdN>,
+//         HAST: crate::types::TypedHyperAST<'store, TIdN>,
+//     {
+//         use crate::types::TypedNodeStore;
+//         assert_eq!(self.offsets.len(), self.nodes.len());
+//         if self.nodes.is_empty() {
+//             return Ok(());
+//         }
+//         let mut i = self.nodes.len() - 1;
+
+//         while i > 0 {
+//             let e = self.nodes[i];
+//             let o = self.offsets[i] - 1;
+//             let p = self.nodes[i - 1];
+//             let b = stores.typed_node_store().resolve(&p);
+//             if !b.has_children() || Some(e.as_id()) != b.child(&num::cast(o).expect("too big")).as_ref() {
+//                 return Err(());
+//             }
+//             i -= 1;
+//         }
+//         Ok(())
+//     }
+// }
+
+impl<IdN, Idx: num::Zero> StructuralPosition<IdN, Idx> {
+    pub fn new(node: IdN) -> Self {
+        Self {
+            nodes: vec![node],
+            offsets: vec![zero()],
+        }
+    }
+}
+
+impl StructuralPosition<NodeIdentifier, u16> {
+    pub fn make_position<'store, HAST>(&self, stores: &'store HAST) -> Position
+    where
+        HAST: HyperAST<
+            'store,
+            T = HashedNodeRef<'store>,
+            IdN = NodeIdentifier,
+            Label = LabelIdentifier,
+        >,
+        HAST::TS: TypeStore<HashedNodeRef<'store>, Ty = AnyType>,
+        // HAST::Types: 'static + TypeTrait + Debug,
+    {
         self.check(stores).unwrap();
         // let parents = self.parents.iter().peekable();
         let mut from_file = false;
         // let mut len = 0;
         let x = *self.node().unwrap();
-        let b = stores.node_store.resolve(x);
-        let t = b.get_type();
+        let b = stores.node_store().resolve(&x);
+
+        let t = stores.type_store().resolve_type(&b);
         // println!("t0:{:?}", t);
-        let len = if let Some(y) = b.try_get_bytes_len(0) {
-            if t != Type::Program {
+        let len = if let Some(y) = b.try_bytes_len() {
+            if !t.is_file() {
                 from_file = true;
             }
             y as usize
@@ -228,22 +319,24 @@ impl StructuralPosition {
         if from_file {
             while i > 0 {
                 let p = self.nodes[i - 1];
-                let b = stores.node_store.resolve(p);
-                let t = b.get_type();
+                let b = stores.node_store().resolve(&p);
+
+                let t = stores.type_store().resolve_type(&b);
                 // println!("t1:{:?}", t);
                 let o = self.offsets[i];
                 let c: usize = {
                     let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
                     v.iter()
                         .map(|x| {
-                            let b = stores.node_store.resolve(*x);
+                            let b = stores.node_store().resolve(x);
+
                             // println!("{:?}", b.get_type());
-                            b.get_bytes_len(0) as usize
+                            b.try_bytes_len().unwrap() as usize
                         })
                         .sum()
                 };
                 offset += c;
-                if t == Type::Program {
+                if t.is_file() {
                     from_file = false;
                     i -= 1;
                     break;
@@ -254,13 +347,13 @@ impl StructuralPosition {
         }
         if self.nodes.is_empty() {
         } else if !from_file
-        // || (i == 0 && stores.node_store.resolve(self.nodes[i]).get_type() == Type::Program)
+        // || (i == 0 && stores.node_store().resolve(self.nodes[i]).get_type() == Type::Program)
         {
             loop {
                 let n = self.nodes[i];
-                let b = stores.node_store.resolve(n);
+                let b = stores.node_store().resolve(&n);
                 // println!("t2:{:?}", b.get_type());
-                let l = stores.label_store.resolve(b.get_label());
+                let l = stores.label_store().resolve(b.get_label_unchecked());
                 path.push(l);
                 if i == 0 {
                     break;
@@ -270,15 +363,16 @@ impl StructuralPosition {
             }
         } else {
             let p = self.nodes[i - 1];
-            let b = stores.node_store.resolve(p);
+            let b = stores.node_store().resolve(&p);
             let o = self.offsets[i];
             let c: usize = {
                 let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
                 v.iter()
                     .map(|x| {
-                        let b = stores.node_store.resolve(*x);
+                        let b = stores.node_store().resolve(x);
+
                         // println!("{:?}", b.get_type());
-                        b.get_bytes_len(0) as usize
+                        b.try_bytes_len().unwrap() as usize
                     })
                     .sum()
             };
@@ -292,17 +386,10 @@ impl StructuralPosition {
             len,
         }
     }
-
-    pub fn new(node: NodeIdentifier) -> Self {
-        Self {
-            nodes: vec![node],
-            offsets: vec![0],
-        }
-    }
 }
 
-impl From<(Vec<NodeIdentifier>, Vec<usize>, NodeIdentifier)> for StructuralPosition {
-    fn from(mut x: (Vec<NodeIdentifier>, Vec<usize>, NodeIdentifier)) -> Self {
+impl<IdN, Idx> From<(Vec<IdN>, Vec<Idx>, IdN)> for StructuralPosition<IdN, Idx> {
+    fn from(mut x: (Vec<IdN>, Vec<Idx>, IdN)) -> Self {
         assert_eq!(x.0.len() + 1, x.1.len());
         x.0.push(x.2);
         Self {
@@ -311,8 +398,8 @@ impl From<(Vec<NodeIdentifier>, Vec<usize>, NodeIdentifier)> for StructuralPosit
         }
     }
 }
-impl From<(Vec<NodeIdentifier>, Vec<usize>)> for StructuralPosition {
-    fn from(x: (Vec<NodeIdentifier>, Vec<usize>)) -> Self {
+impl<IdN, Idx> From<(Vec<IdN>, Vec<Idx>)> for StructuralPosition<IdN, Idx> {
+    fn from(x: (Vec<IdN>, Vec<Idx>)) -> Self {
         assert_eq!(x.0.len(), x.1.len());
         Self {
             nodes: x.0,
@@ -320,8 +407,8 @@ impl From<(Vec<NodeIdentifier>, Vec<usize>)> for StructuralPosition {
         }
     }
 }
-impl From<NodeIdentifier> for StructuralPosition {
-    fn from(node: NodeIdentifier) -> Self {
+impl<IdN, Idx: num::Zero> From<IdN> for StructuralPosition<IdN, Idx> {
+    fn from(node: IdN) -> Self {
         Self::new(node)
     }
 }
@@ -333,10 +420,10 @@ impl From<NodeIdentifier> for StructuralPosition {
 //     pub(crate) indentations: Vec<Box<[Space]>>,
 // }
 
-pub struct StructuralPositionStore {
-    pub nodes: Vec<NodeIdentifier>,
+pub struct StructuralPositionStore<IdN = NodeIdentifier, Idx = u16> {
+    pub nodes: Vec<IdN>,
     parents: Vec<usize>,
-    offsets: Vec<usize>,
+    offsets: Vec<Idx>,
     // ends: Vec<usize>,
 }
 
@@ -360,79 +447,572 @@ pub struct SpHandle(usize);
 // }
 
 #[derive(Clone, Debug)]
-pub struct Scout {
-    root: usize,
-    path: StructuralPosition,
+pub struct Scout<IdN, Idx> {
+    path: StructuralPosition<IdN, Idx>,
+    ancestors: usize,
 }
 
-impl TreePath<NodeIdentifier> for Scout {
-    fn node(&self) -> Option<&NodeIdentifier> {
-        self.path.node()
-    }
+#[derive(Clone, Debug)]
+pub struct TypedScout<TIdN: TypedNodeId, Idx> {
+    path: StructuralPosition<TIdN::IdN, Idx>,
+    ancestors: usize,
+    tdepth: i16,
+    phantom: PhantomData<TIdN>,
+}
 
-    fn offset(&self) -> Option<&usize> {
-        self.path.offset()
-    }
-
-    fn pop(&mut self) -> Option<(NodeIdentifier, usize)> {
+impl<IdN: Eq + Copy, Idx: PrimInt + NumAssign> TreePathMut<IdN, Idx> for Scout<IdN, Idx> {
+    fn pop(&mut self) -> Option<(IdN, Idx)> {
         self.path.pop()
     }
 
-    fn goto(&mut self, node: NodeIdentifier, i: usize) {
+    fn goto(&mut self, node: IdN, i: Idx) {
         self.path.goto(node, i)
     }
 
-    fn inc(&mut self, node: NodeIdentifier) {
+    fn inc(&mut self, node: IdN) {
         self.path.inc(node)
     }
 
-    fn dec(&mut self, node: NodeIdentifier) {
+    fn dec(&mut self, node: IdN) {
         self.path.dec(node)
     }
+}
 
-    fn check(&self, stores: &SimpleStores) -> Result<(), ()> {
+impl<IdN: Eq + Copy, Idx: PrimInt> TreePath<IdN, Idx> for Scout<IdN, Idx> {
+    fn node(&self) -> Option<&IdN> {
+        self.path.node()
+    }
+
+    fn offset(&self) -> Option<&Idx> {
+        self.path.offset()
+    }
+    fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
+    where
+        HAST: HyperAST<'store, IdN = IdN::IdN>,
+        HAST::T: WithChildren<ChildIdx = Idx>,
+        HAST::IdN: Eq,
+        IdN: NodeId,
+        IdN::IdN: NodeId<IdN = IdN::IdN>,
+    {
         self.path.check(stores)
     }
 }
 
-impl Scout {
-    pub fn node_always(&self, x: &StructuralPositionStore) -> NodeIdentifier {
-        if let Some(y) = self.path.node() {
-            *y
+impl<TIdN: TypedNodeId, Idx: PrimInt> TreePath<TIdN::IdN, Idx> for TypedScout<TIdN, Idx>
+where
+    TIdN::IdN: Copy,
+{
+    fn node(&self) -> Option<&TIdN::IdN> {
+        self.path.node()
+    }
+
+    fn offset(&self) -> Option<&Idx> {
+        self.path.offset()
+    }
+
+    fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
+    where
+        HAST: HyperAST<'store, IdN = <TIdN::IdN as NodeId>::IdN>,
+        HAST::T: WithChildren<ChildIdx = Idx>,
+        HAST::IdN: Eq,
+        TIdN::IdN: NodeId,
+        <TIdN::IdN as NodeId>::IdN: NodeId<IdN = <TIdN::IdN as NodeId>::IdN>,
+    {
+        self.path.check(stores)
+    }
+}
+
+impl<TIdN: TypedNodeId, Idx: PrimInt> TypedTreePath<TIdN, Idx> for TypedScout<TIdN, Idx>
+where
+    TIdN::IdN: Copy,
+{
+    fn node_typed(&self) -> Option<&TIdN> {
+        let n = self.path.node()?;
+        if self.tdepth > 0 {
+            return None;
+        }
+        // VALIDITY: self.tdepth <= 0
+        let tdepth = -self.tdepth as usize;
+        // VALIDITY: condition for Some variant out of self.path.node()
+        let i = self.path.nodes.len() - 1;
+        if i == tdepth {
+            // VALIDITY: checked tdepth
+            Some(unsafe { TIdN::from_ref_id(n) })
         } else {
-            x.nodes[self.root]
+            None
         }
     }
-    pub fn offset_always(&self, x: &StructuralPositionStore) -> usize {
+
+    fn pop_typed(&mut self) -> Option<(TIdN, Idx)> {
+        todo!()
+    }
+
+    fn goto_typed(&mut self, node: TIdN, i: Idx) {
+        todo!()
+    }
+}
+
+impl<TIdN: TypedNodeId, Idx: PrimInt> TypedScout<TIdN, Idx>
+where
+    TIdN::IdN: Eq + Copy,
+{
+    fn _node(&self) -> Option<&TIdN> {
+        let n = self.path.node()?;
+        if self.tdepth > 0 {
+            return None;
+        }
+        let tdepth = -self.tdepth as usize;
+        // VALIDITY: condition for Some variant out of self.path.node()
+        let len = self.path.nodes.len() - 1;
+        if len < tdepth {
+            // VALIDITY: checked tdepth
+            Some(unsafe { TIdN::from_ref_id(n) })
+        } else {
+            None
+        }
+    }
+    // pub fn node(&self) -> Option<Result<TIdN, TIdN::IdN>> {
+    //     // [a] , 0 -> 1 > 0
+    //     // [a,b] , -1 -> 0 > 0
+    //     self.path.node().map(|x| if -self.path.len() < self.tdepth as isize {} else {})
+    // }
+    // pub fn node(&self) -> Option<Result<TIdN, TIdN::IdN>> {
+    //     // [a] , 0 -> 1 > 0
+    //     // [a,b] , -1 -> 0 > 0
+    //     self.path.node().map(|x| if -self.path.len() < self.tdepth as isize {} else {})
+    // }
+    // pub fn node_always(&self, x: &StructuralPositionStore<TIdN::IdN>) -> TIdN::IdN {
+    //     if let Some(y) = self.path.node() {
+    //         *y.as_id()
+    //     } else {
+    //         assert!(self.ancestors.0 > 0);
+    //         x.nodes[self.ancestors.1]
+    //     }
+    // }
+    pub fn offset_always(&self, x: &StructuralPositionStore<TIdN::IdN, Idx>) -> Idx {
         if let Some(y) = self.path.offset() {
             *y
         } else {
-            x.offsets[self.root]
+            x.offsets[self.ancestors]
         }
     }
-    // pub fn try_node(&self) -> Result<NodeIdentifier, usize> {
-    //     if let Some(y) = self.path.node() {
-    //         Ok(*y)
+    // pub fn has_parents(&self) -> bool {
+    //     if self.path.nodes.is_empty() {
+    //         self.ancestors.1 != 0
     //     } else {
-    //         Err(self.root)
+    //         true
     //     }
     // }
+
+    pub fn make_position<'store, HAST>(
+        &self,
+        sp: &StructuralPositionStore<HAST::IdN, Idx>,
+        stores: &'store HAST,
+    ) -> Position
+    where
+        HAST: HyperAST<'store, IdN = TIdN::IdN, Label = LabelIdentifier>,
+        HAST: crate::types::TypedHyperAST<'store, TIdN>,
+        <HAST as crate::types::TypedHyperAST<'store, TIdN>>::T:
+            Typed<Type = TIdN::Ty> + WithSerialization + WithChildren,
+        <HAST as crate::types::HyperAST<'store>>::T: WithSerialization + WithChildren,
+        <<HAST as crate::types::TypedHyperAST<'store, TIdN>>::T as types::WithChildren>::ChildIdx:
+            Debug,
+        HAST::IdN: Copy + Debug,
+        TIdN: Debug,
+        TIdN::IdN: NodeId<IdN = TIdN::IdN>,
+    {
+        todo!()
+        // // NOTE: this algorithm works in post order
+        // self.check(stores).unwrap();
+        // // let parents = self.parents.iter().peekable();
+        // let mut from_file = false;
+        // // let mut len = 0;
+        // if let Some(x) = self.path.node() {
+        //     use crate::types::TypedNodeStore;
+        //     let b = stores.typed_node_store().resolve(x);
+        //     let t = b.get_type();
+        //     let len = if let Some(y) = b.try_bytes_len() {
+        //         if !t.is_file() {
+        //             from_file = true;
+        //         }
+        //         y as usize
+        //         // Some(x)
+        //     } else {
+        //         0
+        //         // None
+        //     };
+        //     let mut offset = 0;
+        //     let mut path = vec![];
+        //     if self.path.nodes.is_empty() {
+        //         todo!();
+        //         // return ExploreStructuralPositions::new(sp, self.root)
+        //         //     .make_position_aux(stores, from_file, len, offset, path);
+        //     }
+        //     let mut i = self.path.nodes.len() - 1;
+        //     if from_file {
+        //         while i > 0 {
+        //             let p = self.path.nodes[i - 1];
+        //             let b = stores.typed_node_store().resolve(&p);
+        //             let t = b.get_type();
+        //             // println!("t1:{:?}", t);
+        //             let o = self.path.offsets[i];
+        //             let o: <<HAST as TypedHyperAST<'store, TIdN>>::T as WithChildren>::ChildIdx =
+        //                 num::cast(o).unwrap();
+        //             let c: usize = {
+        //                 let v: Vec<_> = b
+        //                     .children()
+        //                     .unwrap()
+        //                     .before(o - one())
+        //                     .iter_children()
+        //                     .collect();
+        //                 v.iter()
+        //                     .map(|x| {
+        //                         let b = stores.node_store().resolve(x);
+        //                         // println!("{:?}", b.get_type());
+        //                         b.try_bytes_len().unwrap() as usize
+        //                     })
+        //                     .sum()
+        //             };
+        //             offset += c;
+        //             if t.is_file() {
+        //                 from_file = false;
+        //                 i -= 1;
+        //                 break;
+        //             } else {
+        //                 i -= 1;
+        //             }
+        //         }
+        //     }
+        //     if self.path.nodes.is_empty() {
+        //     } else if !from_file
+        //     // || (i == 0 && stores.node_store().resolve(self.path.nodes[i]).get_type() == Type::Program)
+        //     {
+        //         loop {
+        //             from_file = false;
+        //             let n = &self.path.nodes[i];
+        //             let b = stores.typed_node_store().resolve(n);
+        //             // println!("t2:{:?}", b.get_type());
+        //             let l = stores.label_store().resolve(b.get_label_unchecked());
+        //             path.push(l);
+        //             if i == 0 {
+        //                 todo!("call aux make pos for Scout");
+        //                 break;
+        //             } else {
+        //                 i -= 1;
+        //             }
+        //         }
+        //     } else {
+        //         let p = if i == 0 {
+        //             todo!("call aux make pos for Scout");
+        //             // sp.nodes[self.root]
+        //         } else {
+        //             self.path.nodes[i - 1]
+        //         };
+        //         let b = stores.typed_node_store().resolve(&p);
+        //         let t = b.get_type();
+        //         // println!("t3:{:?}", t);
+        //         let o = self.path.offsets[i];
+        //         let o: <<HAST as TypedHyperAST<'store, TIdN>>::T as WithChildren>::ChildIdx =
+        //             num::cast(o).unwrap();
+        //         let c: usize = {
+        //             let v: Vec<_> = b
+        //                 .children()
+        //                 .unwrap()
+        //                 .before(o - one())
+        //                 .iter_children()
+        //                 .collect();
+        //             v.iter()
+        //                 .map(|x| {
+        //                     let b = stores.node_store().resolve(x);
+        //                     // println!("{:?}", b.get_type());
+        //                     b.try_bytes_len().unwrap() as usize
+        //                 })
+        //                 .sum()
+        //         };
+        //         offset += c;
+        //         if t.is_file() {
+        //             from_file = false;
+        //         } else {
+        //         }
+        //     }
+        //     todo!()
+        //     // ExploreStructuralPositions::new(sp, self.root)
+        //     //     .make_position_aux(stores, from_file, len, offset, path)
+        // } else {
+        //     todo!()
+        // }
+    }
+    // fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), ()>
+    // where
+    //     HAST: HyperAST<'store, IdN = TIdN::IdN, Label = LabelIdentifier>,
+    //     HAST: crate::types::TypedHyperAST<'store, TIdN>,
+    //     TIdN::IdN: NodeId<IdN = TIdN::IdN>,
+    // {
+    //     self.path.check(stores)
+    // }
+}
+
+impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
+    pub fn node_always(&self, x: &StructuralPositionStore<IdN, Idx>) -> IdN {
+        if let Some(y) = self.path.node() {
+            *y
+        } else {
+            x.nodes[self.ancestors]
+        }
+    }
+    pub fn offset_always(&self, x: &StructuralPositionStore<IdN, Idx>) -> Idx {
+        if let Some(y) = self.path.offset() {
+            *y
+        } else {
+            x.offsets[self.ancestors]
+        }
+    }
     pub fn has_parents(&self) -> bool {
         if self.path.nodes.is_empty() {
-            self.root != 0
+            self.ancestors != zero()
         } else {
             true
         }
     }
-    // pub fn try_up(&mut self) -> Result<(), ()> {
-    //     if self.path.nodes.is_empty() {
-    //         Err(())
-    //     } else {
-    //         self.path.pop();
-    //         Ok(())
-    //     }
-    // }
-    pub fn up(&mut self, x: &StructuralPositionStore) -> Option<NodeIdentifier> {
+
+    pub fn make_position<'store, HAST>(
+        &self,
+        sp: &StructuralPositionStore<HAST::IdN, Idx>,
+        stores: &'store HAST,
+    ) -> Position
+    where
+        HAST: HyperAST<'store, IdN = IdN, Label = LabelIdentifier>,
+        HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren<ChildIdx = Idx>,
+        // HAST::Types: Eq + TypeTrait,
+        <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
+        IdN: Copy + Debug + NodeId<IdN = IdN>,
+    {
+        self.check(stores).unwrap();
+        // let parents = self.parents.iter().peekable();
+        let mut from_file = false;
+        // let mut len = 0;
+        let x = self.node_always(sp);
+        let b = stores.node_store().resolve(&x);
+        let t = stores.type_store().resolve_type(&b);
+        // println!("t0:{:?}", t);
+        let len = if let Some(y) = b.try_bytes_len() {
+            if !t.is_file() {
+                from_file = true;
+            }
+            y as usize
+            // Some(x)
+        } else {
+            0
+            // None
+        };
+        let mut offset = 0;
+        let mut path = vec![];
+        if self.path.nodes.is_empty() {
+            return ExploreStructuralPositions::new(sp, self.ancestors)
+                .make_position_aux(stores, from_file, len, offset, path);
+        }
+        let mut i = self.path.nodes.len() - 1;
+        if from_file {
+            while i > 0 {
+                let p = self.path.nodes[i - 1];
+                let b = stores.node_store().resolve(&p);
+                let t = stores.type_store().resolve_type(&b);
+                // println!("t1:{:?}", t);
+                let o = self.path.offsets[i];
+                let o: <HAST::T as WithChildren>::ChildIdx = num::cast(o).unwrap();
+                let c: usize = {
+                    let v: Vec<_> = b
+                        .children()
+                        .unwrap()
+                        .before(o - one())
+                        .iter_children()
+                        .collect();
+                    v.iter()
+                        .map(|x| {
+                            let b = stores.node_store().resolve(x);
+                            // println!("{:?}", b.get_type());
+                            b.try_bytes_len().unwrap() as usize
+                        })
+                        .sum()
+                };
+                offset += c;
+                if t.is_file() {
+                    from_file = false;
+                    i -= 1;
+                    break;
+                } else {
+                    i -= 1;
+                }
+            }
+        }
+        if self.path.nodes.is_empty() {
+        } else if !from_file
+        // || (i == 0 && stores.node_store().resolve(self.path.nodes[i]).get_type() == Type::Program)
+        {
+            loop {
+                from_file = false;
+                let n = self.path.nodes[i];
+                let b = stores.node_store().resolve(&n);
+                // println!("t2:{:?}", b.get_type());
+                let l = stores.label_store().resolve(b.get_label_unchecked());
+                path.push(l);
+                if i == 0 {
+                    break;
+                } else {
+                    i -= 1;
+                }
+            }
+        } else {
+            let p = if i == 0 {
+                sp.nodes[self.ancestors]
+            } else {
+                self.path.nodes[i - 1]
+            };
+            let b = stores.node_store().resolve(&p);
+            let t = stores.type_store().resolve_type(&b);
+            // println!("t3:{:?}", t);
+            let o = self.path.offsets[i];
+            let o: <HAST::T as WithChildren>::ChildIdx = num::cast(o).unwrap();
+            let c: usize = {
+                let v: Vec<_> = b
+                    .children()
+                    .unwrap()
+                    .before(o - one())
+                    .iter_children()
+                    .collect();
+                v.iter()
+                    .map(|x| {
+                        let b = stores.node_store().resolve(x);
+                        // println!("{:?}", b.get_type());
+                        b.try_bytes_len().unwrap() as usize
+                    })
+                    .sum()
+            };
+            offset += c;
+            if t.is_file() {
+                from_file = false;
+            } else {
+            }
+        }
+        ExploreStructuralPositions::new(sp, self.ancestors)
+            .make_position_aux(stores, from_file, len, offset, path)
+    }
+}
+
+impl<TIdN: TypedNodeId, Idx> From<TypedScout<TIdN, Idx>> for Scout<TIdN::IdN, Idx> {
+    fn from(value: TypedScout<TIdN, Idx>) -> Self {
+        Self {
+            ancestors: value.ancestors,
+            path: value.path,
+        }
+    }
+}
+
+impl<TIdN: TypedNodeId + Eq + Copy, Idx: PrimInt> TypedScout<TIdN, Idx>
+where
+    TIdN::IdN: Eq + Copy,
+{
+    pub fn up(
+        &mut self,
+        x: &StructuralPositionStore<TIdN::IdN, Idx>,
+    ) -> Option<Result<TIdN, TIdN::IdN>> {
+        self.path.pop()?;
+        Some(self.node_always(x))
+    }
+    pub fn up0(
+        mut self,
+        x: &StructuralPositionStore<TIdN::IdN, Idx>,
+    ) -> Result<Self, Scout<TIdN::IdN, Idx>> {
+        if let Some(_) = self.path.pop() {
+            self.path = StructuralPosition {
+                nodes: vec![],
+                offsets: vec![],
+            };
+            self.ancestors = x.parents[self.ancestors];
+            let tdepth = -self.tdepth as usize;
+            let i = self.path.nodes.len();
+            if i == tdepth {
+                self.tdepth += 1;
+                Ok(self)
+            } else {
+                Err(self.into())
+            }
+        } else if self.ancestors == 0 {
+            let path = self.path;
+            let ancestors = self.ancestors;
+            Err(Scout { path, ancestors })
+        } else if self.tdepth > 1 {
+            self.tdepth -= 1;
+            self.path = StructuralPosition {
+                nodes: vec![],
+                offsets: vec![],
+            };
+            self.ancestors = x.parents[self.ancestors];
+            Ok(self)
+        } else {
+            let path = StructuralPosition {
+                nodes: vec![],
+                offsets: vec![],
+            };
+            let ancestors = x.parents[self.ancestors];
+            Err(Scout { path, ancestors })
+        }
+    }
+    pub fn _up(&mut self) {
+        self.tdepth -= 1;
+        self.path.pop();
+        assert_eq!(self.path.nodes.len(), self.path.offsets.len());
+    }
+    pub fn node_always(
+        &self,
+        x: &StructuralPositionStore<TIdN::IdN, Idx>,
+    ) -> Result<TIdN, TIdN::IdN> {
+        if let Some(n) = self.node_typed() {
+            Ok(n.clone())
+        } else if let Some(y) = self.path.node() {
+            Err(*y)
+        } else {
+            if self.tdepth > 0 {
+                Ok(unsafe { TIdN::from_id(x.nodes[self.ancestors]) })
+            } else {
+                Err(x.nodes[self.ancestors])
+            }
+        }
+    }
+    pub fn up2(
+        &mut self,
+        x: &StructuralPositionStore<TIdN::IdN, Idx>,
+    ) -> Option<Result<TIdN, TIdN::IdN>> {
+        if self.path.nodes.is_empty() {
+            self.path = StructuralPosition {
+                nodes: vec![],
+                offsets: vec![],
+            };
+            assert_eq!(self.path.nodes.len(), self.path.offsets.len());
+            if self.ancestors == 0 {
+                None
+            } else {
+                self.ancestors = x.parents[self.ancestors];
+                Some(self.node_always(x))
+            }
+        } else {
+            self._up();
+            Some(self.node_always(x))
+        }
+    }
+}
+
+impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
+    pub fn _up(&mut self) {
+        self.path.pop();
+        assert_eq!(self.path.nodes.len(), self.path.offsets.len());
+    }
+    pub fn make_child(&self, node: IdN, i: Idx) -> Self {
+        let mut s = self.clone();
+        s.path.goto(node, i);
+        s
+    }
+    pub fn up(&mut self, x: &StructuralPositionStore<IdN, Idx>) -> Option<IdN> {
         // println!("up {} {:?}", self.root, self.path);
         // if !self.path.offsets.is_empty() && self.path.offsets[0] == 0 {
         //     assert!(self.root == 0);
@@ -445,10 +1025,10 @@ impl Scout {
             };
             // self.path = StructuralPosition::with_offset(x.nodes[self.root], o);
             assert_eq!(self.path.nodes.len(), self.path.offsets.len());
-            if self.root == 0 {
+            if self.ancestors == 0 {
                 None
             } else {
-                self.root = x.parents[self.root];
+                self.ancestors = x.parents[self.ancestors];
                 Some(self.node_always(x))
             }
             // if o == 0 {
@@ -456,153 +1036,12 @@ impl Scout {
             //     assert!(self.root == 0);
             // }
         } else {
-            self.path.pop();
-            assert_eq!(self.path.nodes.len(), self.path.offsets.len());
+            self._up();
             Some(self.node_always(x))
         }
         // if !self.path.offsets.is_empty() && self.path.offsets[0] == 0 {
         //     assert!(self.root == 0);
         // }
-    }
-    // pub fn goto(&mut self, node: NodeIdentifier, i: usize) {
-    //     // println!("goto {} {:?}", self.root, self.path);
-    //     self.path.nodes.push(node);
-    //     self.path.offsets.push(i + 1);
-    //     assert_eq!(self.path.nodes.len(), self.path.offsets.len());
-    //     // if !self.path.offsets.is_empty() && self.path.offsets[0] == 0 {
-    //     //     assert!(self.root == 0);
-    //     // }
-    // }
-    // pub fn inc(&mut self, node: NodeIdentifier) -> usize {
-    //     assert_eq!(self.path.nodes.len(), self.path.offsets.len());
-    //     *self.path.nodes.last_mut().unwrap() = node;
-    //     self.path.offsets.last_mut().unwrap().add_assign(1);
-    //     // self.path.inc(node);
-    //     self.path.offsets.last().unwrap() - 1
-    // }
-    // pub fn check_size(&self, stores: &SimpleStores) -> Result<(), ()> {
-    //     assert_eq!(self.path.offsets.len(), self.path.nodes.len());
-    //     if self.path.nodes.is_empty() {
-    //         return Ok(());
-    //     }
-    //     let mut i = self.path.nodes.len() - 1;
-
-    //     while i > 0 {
-    //         let o = self.path.offsets[i] - 1;
-    //         let p = self.path.nodes[i - 1];
-    //         let b = stores.node_store.resolve(p);
-    //         if !b.has_children() || o >= (b.child_count() as usize) {
-    //             let s = b.child_count();
-    //             if b.has_children() {
-    //                 println!("error: {} {} {:?}", b.child_count(), o, p,);
-    //             } else {
-    //                 println!("error no children: {} {:?}", o, p,);
-    //             }
-    //             return Err(());
-    //         }
-    //         i -= 1;
-    //     }
-    //     Ok(())
-    // }
-
-    pub fn make_position(&self, sp: &StructuralPositionStore, stores: &SimpleStores) -> Position {
-        self.check(stores).unwrap();
-        // let parents = self.parents.iter().peekable();
-        let mut from_file = false;
-        // let mut len = 0;
-        let x = self.node_always(sp);
-        let b = stores.node_store.resolve(x);
-        let t = b.get_type();
-        // println!("t0:{:?}", t);
-        let len = if let Some(y) = b.try_get_bytes_len(0) {
-            if t != Type::Program {
-                from_file = true;
-            }
-            y as usize
-            // Some(x)
-        } else {
-            0
-            // None
-        };
-        let mut offset = 0;
-        let mut path = vec![];
-        if self.path.nodes.is_empty() {
-            return ExploreStructuralPositions::new(sp, self.root)
-                .make_position_aux(stores, from_file, len, offset, path);
-        }
-        let mut i = self.path.nodes.len() - 1;
-        if from_file {
-            while i > 0 {
-                let p = self.path.nodes[i - 1];
-                let b = stores.node_store.resolve(p);
-                let t = b.get_type();
-                // println!("t1:{:?}", t);
-                let o = self.path.offsets[i];
-                let c: usize = {
-                    let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
-                    v.iter()
-                        .map(|x| {
-                            let b = stores.node_store.resolve(*x);
-                            // println!("{:?}", b.get_type());
-                            b.get_bytes_len(0) as usize
-                        })
-                        .sum()
-                };
-                offset += c;
-                if t == Type::Program {
-                    from_file = false;
-                    i -= 1;
-                    break;
-                } else {
-                    i -= 1;
-                }
-            }
-        }
-        if self.path.nodes.is_empty() {
-        } else if !from_file
-        // || (i == 0 && stores.node_store.resolve(self.path.nodes[i]).get_type() == Type::Program)
-        {
-            loop {
-                from_file = false;
-                let n = self.path.nodes[i];
-                let b = stores.node_store.resolve(n);
-                // println!("t2:{:?}", b.get_type());
-                let l = stores.label_store.resolve(b.get_label());
-                path.push(l);
-                if i == 0 {
-                    break;
-                } else {
-                    i -= 1;
-                }
-            }
-        } else {
-            let p = if i == 0 {
-                sp.nodes[self.root]
-            } else {
-                self.path.nodes[i - 1]
-            };
-            let b = stores.node_store.resolve(p);
-            let t = b.get_type();
-            // println!("t3:{:?}", t);
-            let o = self.path.offsets[i];
-            let c: usize = {
-                let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
-                v.iter()
-                    .map(|x| {
-                        let b = stores.node_store.resolve(*x);
-                        // println!("{:?}", b.get_type());
-                        b.get_bytes_len(0) as usize
-                    })
-                    .sum()
-            };
-            offset += c;
-            if t == Type::Program {
-                from_file = false;
-            } else {
-            }
-        }
-        ExploreStructuralPositions::new(sp, self.root)
-            .make_position_aux(stores, from_file, len, offset, path)
     }
 }
 
@@ -612,10 +1051,10 @@ impl Scout {
 //     }
 // }
 
-impl From<(StructuralPosition, usize)> for Scout {
-    fn from((path, root): (StructuralPosition, usize)) -> Self {
-        let path = if !path.offsets.is_empty() && path.offsets[0] == 0 {
-            assert_eq!(root, 0);
+impl<IdN: Clone, Idx: PrimInt> From<(StructuralPosition<IdN, Idx>, usize)> for Scout<IdN, Idx> {
+    fn from((path, ancestors): (StructuralPosition<IdN, Idx>, usize)) -> Self {
+        let path = if !path.offsets.is_empty() && path.offsets[0].is_zero() {
+            assert_eq!(ancestors, 0);
             StructuralPosition {
                 nodes: path.nodes[1..].to_owned(),
                 offsets: path.offsets[1..].to_owned(),
@@ -623,36 +1062,40 @@ impl From<(StructuralPosition, usize)> for Scout {
         } else {
             path
         };
-        Self { path, root }
+        Self { path, ancestors }
     }
 }
 
-pub struct ExploreStructuralPositions<'a> {
-    sps: &'a StructuralPositionStore,
+pub struct ExploreStructuralPositions<'a, IdN, Idx = usize> {
+    sps: &'a StructuralPositionStore<IdN, Idx>,
     i: usize,
 }
 /// precondition: root node do not contain a File node
 /// TODO make whole thing more specific to a path in a tree
-pub fn compute_range<It: Iterator>(
-    root: NodeIdentifier,
+pub fn compute_range<'store, It, HAST>(
+    root: HAST::IdN,
     offsets: &mut It,
-    stores: &SimpleStores,
-) -> (usize, usize, NodeIdentifier)
+    stores: &'store HAST,
+) -> (usize, usize, HAST::IdN)
 where
     It::Item: ToPrimitive,
+    It: Iterator,
+    HAST:
+        HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
 {
     let mut offset = 0;
     let mut x = root;
     for o in offsets {
         // dbg!(offset);
-        let b = stores.node_store.resolve(x);
+        let b = stores.node_store().resolve(&x);
         // dbg!(b.get_type());
         // dbg!(o.to_usize().unwrap());
         if let Some(cs) = b.children() {
             let cs = cs.clone();
             for y in 0..o.to_usize().unwrap() {
-                let b = stores.node_store.resolve(cs[y]);
-                offset += b.try_get_bytes_len(0).unwrap_or(0).to_usize().unwrap();
+                let b = stores.node_store().resolve(&cs[y]);
+
+                offset += b.try_bytes_len().unwrap_or(0).to_usize().unwrap();
             }
             // if o.to_usize().unwrap() >= cs.len() {
             //     // dbg!("fail");
@@ -666,20 +1109,25 @@ where
             break;
         }
     }
-    let b = stores.node_store.resolve(x);
+    let b = stores.node_store().resolve(&x);
+
     (
         offset,
-        offset + b.try_get_bytes_len(0).unwrap_or(0).to_usize().unwrap(),
+        offset + b.try_bytes_len().unwrap_or(0).to_usize().unwrap(),
         x,
     )
 }
 /// must be in a file
-pub fn resolve_range(
-    root: NodeIdentifier,
+pub fn resolve_range<'store, HAST>(
+    root: HAST::IdN,
     start: usize,
     end: Option<usize>,
-    stores: &SimpleStores,
-) -> (NodeIdentifier, Vec<usize>) {
+    stores: &'store HAST,
+) -> (HAST::IdN, Vec<usize>)
+where
+    HAST:
+        HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
+{
     enum RangeStatus {
         Inside(usize),
         Outside(usize),
@@ -721,15 +1169,16 @@ pub fn resolve_range(
     let mut x = root;
     let mut offsets = vec![];
     'main: loop {
-        let b = stores.node_store.resolve(x);
+        let b = stores.node_store().resolve(&x);
         // dbg!(offset);
         // dbg!(b.get_type());
         // dbg!(o.to_usize().unwrap());
         if let Some(cs) = b.children() {
             let cs = cs.clone();
             for (y, child_id) in cs.iter_children().enumerate() {
-                let b = stores.node_store.resolve(*child_id);
-                let len = b.try_get_bytes_len(0).unwrap_or(0).to_usize().unwrap();
+                let b = stores.node_store().resolve(child_id);
+
+                let len = b.try_bytes_len().unwrap_or(0).to_usize().unwrap();
                 // let rs = range_status(start, offset, len, end);
                 // dbg!(b.get_type(), start, offset, len, end);
                 if offset + len < start {
@@ -750,33 +1199,31 @@ pub fn resolve_range(
     (x, offsets)
 }
 
-pub fn compute_position<'store, T, NS, LS, It: Iterator>(
-    root: T::TreeId,
+pub fn compute_position<'store, HAST, It>(
+    root: HAST::IdN,
     offsets: &mut It,
-    node_store: &'store NS,
-    label_store: &'store LS,
-) -> (Position, T::TreeId)
+    stores: &'store HAST,
+) -> (Position, HAST::IdN)
 where
     It::Item: Clone,
-    T::TreeId: Clone,
-    NS: 'store + types::NodeStore<T::TreeId, R<'store> = T>,
-    T: types::Tree<Type = types::Type, Label = LS::I, ChildIdx = It::Item>
-        + types::WithSerialization,
-    LS: types::LabelStore<str>,
+    HAST::IdN: Clone,
+    HAST: HyperAST<'store>,
+    HAST::T: WithSerialization + WithChildren,
+    It: Iterator<Item = HAST::Idx>,
 {
     let mut offset = 0;
     let mut x = root;
     let mut path = vec![];
     for o in &mut *offsets {
         // dbg!(offset);
-        let b = node_store.resolve(&x);
+        let b = stores.node_store().resolve(&x);
         // dbg!(b.get_type());
         // dbg!(o.to_usize().unwrap());
 
-        let t = b.get_type();
+        let t = stores.type_store().resolve_type(&b);
 
         if t.is_directory() || t.is_file() {
-            let l = label_store.resolve(b.get_label());
+            let l = stores.label_store().resolve(b.get_label_unchecked());
             path.push(l);
         }
 
@@ -784,12 +1231,12 @@ where
             let cs = cs.clone();
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
-                    let b = node_store.resolve(y);
+                    let b = stores.node_store().resolve(y);
                     offset += b.try_bytes_len().unwrap().to_usize().unwrap();
                 }
             } else {
                 // for y in 0..o.to_usize().unwrap() {
-                //     let b = node_store.resolve(cs[y]);
+                //     let b = stores.node_store().resolve(cs[y]);
                 //     println!("{:?}",b.get_type());
                 // }
             }
@@ -806,10 +1253,10 @@ where
         }
     }
     assert!(offsets.next().is_none());
-    let b = node_store.resolve(&x);
-    let t = b.get_type();
+    let b = stores.node_store().resolve(&x);
+    let t = stores.type_store().resolve_type(&b);
     if t.is_directory() || t.is_file() {
-        let l = label_store.resolve(b.get_label());
+        let l = stores.label_store().resolve(b.get_label_unchecked());
         path.push(l);
     }
 
@@ -828,19 +1275,16 @@ where
         x,
     )
 }
-pub fn compute_position_and_nodes<'store, T, NS, LS, It: Iterator>(
-    root: T::TreeId,
+pub fn compute_position_and_nodes<'store, HAST, It: Iterator>(
+    root: HAST::IdN,
     offsets: &mut It,
-    node_store: &'store NS,
-    label_store: &'store LS,
-) -> (Position, Vec<T::TreeId>)
+    stores: &'store HAST,
+) -> (Position, Vec<HAST::IdN>)
 where
     It::Item: Clone,
-    T::TreeId: Clone,
-    NS: 'store + types::NodeStore<T::TreeId, R<'store> = T>,
-    T: types::Tree<Type = types::Type, Label = LS::I, ChildIdx = It::Item>
-        + types::WithSerialization,
-    LS: types::LabelStore<str>,
+    HAST::IdN: Clone,
+    HAST: HyperAST<'store>,
+    HAST::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
 {
     let mut offset = 0;
     let mut x = root;
@@ -848,14 +1292,14 @@ where
     let mut path = vec![];
     for o in &mut *offsets {
         // dbg!(offset);
-        let b = node_store.resolve(&x);
+        let b = stores.node_store().resolve(&x);
         // dbg!(b.get_type());
         // dbg!(o.to_usize().unwrap());
 
-        let t = b.get_type();
+        let t = stores.type_store().resolve_type(&b);
 
         if t.is_directory() || t.is_file() {
-            let l = label_store.resolve(b.get_label());
+            let l = stores.label_store().resolve(b.get_label_unchecked());
             path.push(l);
         }
 
@@ -863,12 +1307,12 @@ where
             let cs = cs.clone();
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
-                    let b = node_store.resolve(y);
+                    let b = stores.node_store().resolve(y);
                     offset += b.try_bytes_len().unwrap().to_usize().unwrap();
                 }
             } else {
                 // for y in 0..o.to_usize().unwrap() {
-                //     let b = node_store.resolve(cs[y]);
+                //     let b = stores.node_store().resolve(cs[y]);
                 //     println!("{:?}",b.get_type());
                 // }
             }
@@ -886,10 +1330,10 @@ where
         }
     }
     assert!(offsets.next().is_none());
-    let b = node_store.resolve(&x);
-    let t = b.get_type();
+    let b = stores.node_store().resolve(&x);
+    let t = stores.type_store().resolve_type(&b);
     if t.is_directory() || t.is_file() {
-        let l = label_store.resolve(b.get_label());
+        let l = stores.label_store().resolve(b.get_label_unchecked());
         path.push(l);
     }
 
@@ -909,38 +1353,32 @@ where
         path_ids,
     )
 }
-pub fn compute_position_with_no_spaces<'store, T, NS, LS, It: Iterator>(
-    root: T::TreeId,
+pub fn compute_position_with_no_spaces<'store, HAST, It: Iterator>(
+    root: HAST::IdN,
     offsets: &mut It,
-    node_store: &'store NS,
-    label_store: &'store LS,
-) -> (Position, T::TreeId, Vec<It::Item>)
+    stores: &'store HAST,
+) -> (Position, HAST::IdN, Vec<It::Item>)
 where
     It::Item: Clone + PrimInt,
-    T::TreeId: Clone,
-    NS: 'store + types::NodeStore<T::TreeId, R<'store> = T>,
-    T: types::Tree<Type = types::Type, Label = LS::I, ChildIdx = It::Item>
-        + types::WithSerialization,
-    LS: types::LabelStore<str>,
+    HAST::IdN: Clone,
+    HAST: HyperAST<'store>,
+    HAST::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
 {
     let (pos, mut path_ids, no_spaces) =
-        compute_position_and_nodes_with_no_spaces(root, offsets, node_store, label_store);
+        compute_position_and_nodes_with_no_spaces(root, offsets, stores);
     (pos, path_ids.remove(path_ids.len() - 1), no_spaces)
 }
 
-pub fn path_with_spaces<'store, T, NS, LS, It: Iterator>(
-    root: T::TreeId,
+pub fn path_with_spaces<'store, HAST, It: Iterator>(
+    root: HAST::IdN,
     no_spaces: &mut It,
-    node_store: &'store NS,
-    label_store: &'store LS,
+    stores: &'store HAST,
 ) -> (Vec<It::Item>,)
 where
     It::Item: Clone + PrimInt,
-    T::TreeId: Clone,
-    NS: 'store + types::NodeStore<T::TreeId, R<'store> = T>,
-    T: types::Tree<Type = types::Type, Label = LS::I, ChildIdx = It::Item>
-        + types::WithSerialization,
-    LS: types::LabelStore<str>,
+    HAST::IdN: Clone,
+    HAST: HyperAST<'store>,
+    HAST::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
 {
     let mut offset = 0;
     let mut x = root;
@@ -949,35 +1387,35 @@ where
     let mut path = vec![];
     for mut o in &mut *no_spaces {
         // dbg!(offset);
-        let b = node_store.resolve(&x);
+        let b = stores.node_store().resolve(&x);
         // dbg!(b.get_type());
         // dbg!(o.to_usize().unwrap());
 
-        let t = b.get_type();
+        let t = stores.type_store().resolve_type(&b);
 
         if t.is_directory() || t.is_file() {
-            let l = label_store.resolve(b.get_label());
+            let l = stores.label_store().resolve(b.get_label_unchecked());
             path.push(l);
         }
-        let mut with_s_idx = num::zero();
+        let mut with_s_idx = zero();
         if let Some(cs) = b.children() {
             let cs = cs.clone();
             if !t.is_directory() {
                 for y in cs.iter_children() {
-                    let b = node_store.resolve(y);
-                    if b.get_type() != Type::Spaces {
-                        if o == num::zero() {
+                    let b = stores.node_store().resolve(y);
+                    if !stores.type_store().resolve_type(&b).is_spaces() {
+                        if o == zero() {
                             break;
                         }
-                        o = o - num::one();
+                        o = o - one();
                     }
-                    with_s_idx = with_s_idx + num::one();
+                    with_s_idx = with_s_idx + one();
                     offset += b.try_bytes_len().unwrap().to_usize().unwrap();
                 }
             } else {
                 with_s_idx = o;
                 // for y in 0..o.to_usize().unwrap() {
-                //     let b = node_store.resolve(cs[y]);
+                //     let b = stores.node_store().resolve(cs[y]);
                 //     println!("{:?}",b.get_type());
                 // }
             }
@@ -996,10 +1434,10 @@ where
         }
     }
     assert!(no_spaces.next().is_none());
-    let b = node_store.resolve(&x);
-    let t = b.get_type();
+    let b = stores.node_store().resolve(&x);
+    let t = stores.type_store().resolve_type(&b);
     if t.is_directory() || t.is_file() {
-        let l = label_store.resolve(b.get_label());
+        let l = stores.label_store().resolve(b.get_label_unchecked());
         path.push(l);
     }
 
@@ -1010,9 +1448,7 @@ where
     };
     let path = PathBuf::from_iter(path.iter());
     path_ids.reverse();
-    (
-        with_spaces,
-    )
+    (with_spaces,)
 }
 
 pub fn global_pos_with_spaces<'store, T, NS, It: Iterator>(
@@ -1025,22 +1461,20 @@ where
     It::Item: Clone + PrimInt,
     T::TreeId: Clone,
     NS: 'store + types::NodeStore<T::TreeId, R<'store> = T>,
-    T: types::Tree<Type = types::Type, ChildIdx = It::Item>
-        + types::WithStats,
+    T: types::Tree<ChildIdx = It::Item> + types::WithStats,
 {
     todo!()
-    // let mut offset_with_spaces = num::zero();
-    // let mut offset_without_spaces = num::zero();
+    // let mut offset_with_spaces = zero();
+    // let mut offset_without_spaces = zero();
     // // let mut x = root;
     // let mut res = vec![];
     // let (cs, size_no_s) = {
-    //     let b = node_store.resolve(&root);
+    //     let b = stores.node_store().resolve(&root);
     //     (b.children().unwrap().iter_children().collect::<Vec<_>>(),b.get_size())
     // };
     // let mut stack = vec![(root, size_no_s, 0, cs)];
     // while let Some(curr_no_space) = no_spaces.next() {
     //     loop {
-
 
     //         if curr_no_space == offset_without_spaces {
     //             res.push(offset_with_spaces);
@@ -1054,19 +1488,16 @@ where
     // )
 }
 
-pub fn compute_position_and_nodes_with_no_spaces<'store, T, NS, LS, It: Iterator>(
-    root: T::TreeId,
+pub fn compute_position_and_nodes_with_no_spaces<'store, HAST, It: Iterator>(
+    root: HAST::IdN,
     offsets: &mut It,
-    node_store: &'store NS,
-    label_store: &'store LS,
-) -> (Position, Vec<T::TreeId>, Vec<It::Item>)
+    stores: &'store HAST,
+) -> (Position, Vec<HAST::IdN>, Vec<It::Item>)
 where
     It::Item: Clone + PrimInt,
-    T::TreeId: Clone,
-    NS: 'store + types::NodeStore<T::TreeId, R<'store> = T>,
-    T: types::Tree<Type = types::Type, Label = LS::I, ChildIdx = It::Item>
-        + types::WithSerialization,
-    LS: types::LabelStore<str>,
+    HAST::IdN: Clone,
+    HAST: HyperAST<'store>,
+    HAST::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
 {
     let mut offset = 0;
     let mut x = root;
@@ -1075,31 +1506,31 @@ where
     let mut path = vec![];
     for o in &mut *offsets {
         // dbg!(offset);
-        let b = node_store.resolve(&x);
+        let b = stores.node_store().resolve(&x);
         // dbg!(b.get_type());
         // dbg!(o.to_usize().unwrap());
 
-        let t = b.get_type();
+        let t = stores.type_store().resolve_type(&b);
 
         if t.is_directory() || t.is_file() {
-            let l = label_store.resolve(b.get_label());
+            let l = stores.label_store().resolve(b.get_label_unchecked());
             path.push(l);
         }
-        let mut no_s_idx = num::zero();
+        let mut no_s_idx = zero();
         if let Some(cs) = b.children() {
             let cs = cs.clone();
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
-                    let b = node_store.resolve(y);
-                    if b.get_type() != Type::Spaces {
-                        no_s_idx = no_s_idx + num::one();
+                    let b = stores.node_store().resolve(y);
+                    if !stores.type_store().resolve_type(&b).is_spaces() {
+                        no_s_idx = no_s_idx + one();
                     }
                     offset += b.try_bytes_len().unwrap().to_usize().unwrap();
                 }
             } else {
                 no_s_idx = o;
                 // for y in 0..o.to_usize().unwrap() {
-                //     let b = node_store.resolve(cs[y]);
+                //     let b = stores.node_store().resolve(cs[y]);
                 //     println!("{:?}",b.get_type());
                 // }
             }
@@ -1111,17 +1542,19 @@ where
                 no_spaces.push(no_s_idx);
                 path_ids.push(x.clone());
             } else {
+                dbg!();
                 break;
             }
         } else {
+            dbg!();
             break;
         }
     }
     assert!(offsets.next().is_none());
-    let b = node_store.resolve(&x);
-    let t = b.get_type();
+    let b = stores.node_store().resolve(&x);
+    let t = stores.type_store().resolve_type(&b);
     if t.is_directory() || t.is_file() {
-        let l = label_store.resolve(b.get_label());
+        let l = stores.label_store().resolve(b.get_label_unchecked());
         path.push(l);
     }
 
@@ -1143,17 +1576,29 @@ where
     )
 }
 
-impl<'a> ExploreStructuralPositions<'a> {
-    pub fn make_position(self, stores: &SimpleStores) -> Position {
+impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, IdN, Idx> {
+    pub fn make_position<'store, HAST>(self, stores: &'store HAST) -> Position
+    where
+        'a: 'store,
+        HAST: HyperAST<
+            'store,
+            IdN = IdN::IdN,
+            Label = LabelIdentifier,
+        >,
+        HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren,
+        <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
+        IdN: Debug + NodeId,
+        IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
+    {
         self.sps.check(stores).unwrap();
         // let parents = self.parents.iter().peekable();
         let mut from_file = false;
         // let mut len = 0;
         let len = if let Some(x) = self.peek_node() {
-            let b = stores.node_store.resolve(x);
-            let t = b.get_type();
-            if let Some(y) = b.try_get_bytes_len(0) {
-                if t != Type::Program {
+            let b = stores.node_store().resolve(x.as_id());
+            let t = stores.type_store().resolve_type(&b);
+            if let Some(y) = b.try_bytes_len() {
+                if t.is_file() {
                     from_file = true;
                 }
                 y as usize
@@ -1171,14 +1616,20 @@ impl<'a> ExploreStructuralPositions<'a> {
         self.make_position_aux(stores, from_file, len, offset, path)
     }
 
-    fn make_position_aux(
+    fn make_position_aux<'store: 'a, HAST>(
         mut self,
-        stores: &'a SimpleStores,
+        stores: &'store HAST,
         from_file: bool,
         len: usize,
         mut offset: usize,
         mut path: Vec<&'a str>,
-    ) -> Position {
+    ) -> Position
+    where
+        HAST: HyperAST<'store, IdN = IdN::IdN, Label = LabelIdentifier>,
+        HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren,
+        IdN: Copy + Debug + NodeId,
+        IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
+    {
         // println!(
         //     "it: {:?},{:?},{:?}",
         //     &it.sps.nodes, &it.sps.offsets, &it.sps.parents
@@ -1190,8 +1641,8 @@ impl<'a> ExploreStructuralPositions<'a> {
                 assert_eq!(p, self.sps.nodes[self.sps.parents[self.i - 1]]);
                 assert_eq!(self.peek_node().unwrap(), self.sps.nodes[self.i - 1]);
                 // println!("nodes: {}, parents:{}, offsets:{}",it.sps.nodes.len(),it.sps.parents.len(),it.sps.offsets.len());
-                let b = stores.node_store.resolve(p);
-                let t = b.get_type();
+                let b = stores.node_store().resolve(p.as_id());
+                let t = stores.type_store().resolve_type(&b);
                 // println!("T0:{:?}", t);
                 // let o = it.sps.offsets[it]
                 // println!("nodes: ({})", it.sps.nodes.len());
@@ -1203,46 +1654,40 @@ impl<'a> ExploreStructuralPositions<'a> {
                 //     it.sps.offsets[it.sps.parents[it.i - 1]]
                 // );
                 let o = self.peek_offset().unwrap();
-                if self.peek_node().unwrap() != b.children().unwrap()[o - 1] {
-                    print_tree_syntax(
-                        |x| {
-                            stores
-                                .node_store
-                                .resolve(*x)
-                                .into_compressed_node()
-                                .unwrap()
-                        },
-                        |x| stores.label_store.resolve(x).to_string(),
-                        &p,
-                        &mut Into::<IoOut<_>>::into(stdout()),
-                    );
-                    if self.peek_node().unwrap() != b.children().unwrap()[o - 1] {
+                let o: <HAST::T as WithChildren>::ChildIdx = num::cast(o).unwrap();
+                if self.peek_node().unwrap().as_id() != &b.children().unwrap()[o - one()] {
+                    if self.peek_node().unwrap().as_id() != &b.children().unwrap()[o - one()] {
                         log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
                     }
                     assert_eq!(
-                        self.peek_node().unwrap(),
-                        b.children().unwrap()[o - 1],
-                        "p:{:?} b.cs:{:?} o:{} o p:{} i p:{}",
+                        self.peek_node().unwrap().as_id(),
+                        &b.children().unwrap()[o - one()],
+                        "p:{:?} b.cs:{:?} o:{:?} o p:{:?} i p:{}",
                         p,
-                        b.children().unwrap(),
+                        b.children().unwrap().iter_children().collect::<Vec<_>>(),
                         self.peek_offset().unwrap(),
                         self.sps.offsets[self.sps.parents[self.i - 1]],
                         self.sps.parents[self.i - 1],
                     );
                 }
                 let c: usize = {
-                    let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
+                    let v: Vec<_> = b
+                        .children()
+                        .unwrap()
+                        .before(o - one())
+                        .iter_children()
+                        .collect();
                     v.iter()
                         .map(|x| {
-                            let b = stores.node_store.resolve(*x);
+                            let b = stores.node_store().resolve(x);
                             // println!("{:?}", b.get_type());
                             // println!("T1:{:?}", b.get_type());
-                            b.get_bytes_len(0) as usize
+                            b.try_bytes_len().unwrap() as usize
                         })
                         .sum()
                 };
                 offset += c;
-                if t == Type::Program {
+                if t.is_file() {
                     self.next();
                     break;
                 } else {
@@ -1251,12 +1696,12 @@ impl<'a> ExploreStructuralPositions<'a> {
             }
         }
         for p in self {
-            let b = stores.node_store.resolve(p);
+            let b = stores.node_store().resolve(p.as_id());
             // println!("type {:?}", b.get_type());
             // if !b.has_label() {
             //     panic!("{:?} should have a label", b.get_type());
             // }
-            let l = stores.label_store.resolve(b.get_label());
+            let l = stores.label_store().resolve(b.get_label_unchecked());
             // println!("value: {}",l);
             // path = path.join(path)
             path.push(l)
@@ -1269,7 +1714,7 @@ impl<'a> ExploreStructuralPositions<'a> {
         }
     }
 
-    fn peek_parent_node(&self) -> Option<NodeIdentifier> {
+    fn peek_parent_node(&self) -> Option<IdN> {
         if self.i == 0 {
             return None;
         }
@@ -1277,7 +1722,7 @@ impl<'a> ExploreStructuralPositions<'a> {
         let r = self.sps.nodes[self.sps.parents[i]];
         Some(r)
     }
-    fn peek_offset(&self) -> Option<usize> {
+    fn peek_offset(&self) -> Option<Idx> {
         if self.i == 0 {
             return None;
         }
@@ -1285,7 +1730,7 @@ impl<'a> ExploreStructuralPositions<'a> {
         let r = self.sps.offsets[i];
         Some(r)
     }
-    fn peek_node(&self) -> Option<NodeIdentifier> {
+    fn peek_node(&self) -> Option<IdN> {
         if self.i == 0 {
             return None;
         }
@@ -1293,14 +1738,15 @@ impl<'a> ExploreStructuralPositions<'a> {
         let r = self.sps.nodes[i];
         Some(r)
     }
-
-    fn new(sps: &'a StructuralPositionStore, x: usize) -> Self {
+}
+impl<'a, IdN, Idx> ExploreStructuralPositions<'a, IdN, Idx> {
+    fn new(sps: &'a StructuralPositionStore<IdN, Idx>, x: usize) -> Self {
         Self { sps, i: x + 1 }
     }
 }
 
-impl<'a> Iterator for ExploreStructuralPositions<'a> {
-    type Item = NodeIdentifier;
+impl<'a, IdN: Copy, Idx> Iterator for ExploreStructuralPositions<'a, IdN, Idx> {
+    type Item = IdN;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.i == 0 {
@@ -1317,18 +1763,35 @@ impl<'a> Iterator for ExploreStructuralPositions<'a> {
     }
 }
 
-impl<'a> From<(&'a StructuralPositionStore, SpHandle)> for ExploreStructuralPositions<'a> {
-    fn from((sps, x): (&'a StructuralPositionStore, SpHandle)) -> Self {
+impl<'a, IdN, Idx> From<(&'a StructuralPositionStore<IdN, Idx>, SpHandle)>
+    for ExploreStructuralPositions<'a, IdN, Idx>
+{
+    fn from((sps, x): (&'a StructuralPositionStore<IdN, Idx>, SpHandle)) -> Self {
         Self::new(sps, x.0)
     }
 }
 
-impl StructuralPositionStore {
-    pub fn push_up_scout(&self, s: &mut Scout) -> Option<NodeIdentifier> {
+impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
+    pub fn push_up_scout(&self, s: &mut Scout<IdN, Idx>) -> Option<IdN>
+    where
+        IdN: Copy + Eq + Debug,
+    {
         s.up(self)
     }
 
-    pub fn ends_positions(&self, stores: &SimpleStores, ends: &[SpHandle]) -> Vec<Position> {
+    pub fn ends_positions<'store, HAST>(
+        &'store self,
+        stores: &'store HAST,
+        ends: &[SpHandle],
+    ) -> Vec<Position>
+    where
+        HAST: HyperAST<'store, IdN = IdN::IdN, Label = LabelIdentifier>,
+        HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren,
+        // HAST::Types: Eq + TypeTrait,
+        <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
+        IdN: Copy + Eq + Debug + NodeId,
+        IdN::IdN: NodeId<IdN = IdN::IdN> + Debug,
+    {
         let mut r = vec![];
         for x in ends.iter() {
             let x = x.0;
@@ -1342,47 +1805,65 @@ impl StructuralPositionStore {
     /// would ease approximate comparisons with other ASTs eg. spoon
     /// the basic idea would be to take the position of the parent.
     /// would be better to directly use a relaxed comparison.
-    pub fn to_relaxed_positions(&self, _stores: &SimpleStores) -> Vec<Position> {
+    pub fn to_relaxed_positions<'store, HAST: HyperAST<'store>>(
+        &self,
+        _stores: &HAST,
+    ) -> Vec<Position> {
         todo!()
     }
 
-    pub fn check_with(&self, stores: &SimpleStores, scout: &Scout) -> Result<(), String> {
+    pub fn check_with<'store, HAST>(
+        &self,
+        stores: &'store HAST,
+        scout: &Scout<IdN, Idx>,
+    ) -> Result<(), String>
+    where
+        HAST: HyperAST<
+            'store,
+            // T = HashedNodeRef<'store>,
+            IdN = IdN,
+            Label = LabelIdentifier,
+        >,
+        HAST::T: WithChildren<ChildIdx = Idx>,
+        <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
+        IdN: Copy + Eq + Debug + NodeId<IdN = IdN>,
+    {
         scout.path.check(stores).map_err(|_| "bad path")?;
         if self.nodes.is_empty() {
             return Ok(());
         }
-        let mut i = scout.root;
+        let mut i = scout.ancestors;
         if !scout.path.nodes.is_empty() {
             let e = scout.path.nodes[0];
             let p = self.nodes[i];
             let o = scout.path.offsets[0];
-            if o == 0 {
+            if o.is_zero() {
                 if i != 0 {
                     return Err(format!("bad offset"));
                 }
                 return Ok(());
             }
-            let o = o - 1;
-            let b = stores.node_store.resolve(p);
-            if !b.has_children() || Some(e) != b.child(&o.to_u16().expect("too big")) {
+            let o = o - one();
+            let b = stores.node_store().resolve(&p);
+            if !b.has_children() || Some(e) != b.child(&num::cast(o).unwrap()) {
                 return Err(if b.has_children() {
-                    format!("error on link: {} {} {:?}", b.child_count(), o, p,)
+                    format!("error on link: {:?} {:?} {:?}", b.child_count(), o, p,)
                 } else {
-                    format!("error no children on link: {} {:?}", o, p,)
+                    format!("error no children on link: {:?} {:?}", o, p,)
                 });
             }
         }
 
         while i > 0 {
             let e = self.nodes[i];
-            let o = self.offsets[i] - 1;
+            let o = self.offsets[i] - one();
             let p = self.nodes[self.parents[i]];
-            let b = stores.node_store.resolve(p);
-            if !b.has_children() || Some(e) != b.child(&o.to_u16().expect("too big")) {
+            let b = stores.node_store().resolve(&p);
+            if !b.has_children() || Some(e) != b.child(&num::cast(o).unwrap()) {
                 return Err(if b.has_children() {
-                    format!("error: {} {} {:?}", b.child_count(), o, p,)
+                    format!("error: {:?} {:?} {:?}", b.child_count(), o, p,)
                 } else {
-                    format!("error no children: {} {:?}", o, p,)
+                    format!("error no children: {:?} {:?}", o, p,)
                 });
             }
             i -= 1;
@@ -1390,7 +1871,18 @@ impl StructuralPositionStore {
         Ok(())
     }
 
-    pub fn check(&self, stores: &SimpleStores) -> Result<(), String> {
+    pub fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), String>
+    where
+        HAST: HyperAST<
+            'store,
+            IdN = IdN::IdN,
+            Label = LabelIdentifier,
+        >,
+        HAST::T: WithChildren,
+        <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
+        IdN: Copy + Eq + Debug + NodeId,
+        IdN::IdN: NodeId<IdN = IdN::IdN>,
+    {
         assert_eq!(self.offsets.len(), self.parents.len());
         assert_eq!(self.nodes.len(), self.parents.len());
         if self.nodes.is_empty() {
@@ -1400,14 +1892,15 @@ impl StructuralPositionStore {
 
         while i > 0 {
             let e = self.nodes[i];
-            let o = self.offsets[i] - 1;
+            let o = self.offsets[i] - one();
+            let o: <HAST::T as WithChildren>::ChildIdx = num::cast(o).unwrap();
             let p = self.nodes[self.parents[i]];
-            let b = stores.node_store.resolve(p);
-            if !b.has_children() || Some(e) != b.child(&o.to_u16().expect("too big")) {
+            let b = stores.node_store().resolve(p.as_id());
+            if !b.has_children() || Some(e.as_id()) != b.child(&o).as_ref() {
                 return Err(if b.has_children() {
-                    format!("error: {} {} {:?}", b.child_count(), o, p,)
+                    format!("error: {:?} {:?} {:?}", b.child_count(), o, p,)
                 } else {
-                    format!("error no children: {} {:?}", o, p,)
+                    format!("error no children: {:?} {:?}", o, p,)
                 });
             }
             i -= 1;
@@ -1416,15 +1909,19 @@ impl StructuralPositionStore {
     }
 }
 
-impl StructuralPositionStore {
-    pub fn push(&mut self, x: &mut Scout) -> SpHandle {
+impl<IdN: Copy, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
+    pub fn push(&mut self, x: &mut Scout<IdN, Idx>) -> SpHandle {
         assert_eq!(x.path.nodes.len(), x.path.offsets.len());
         if x.path.offsets.is_empty() {
-            return SpHandle(x.root);
+            return SpHandle(x.ancestors);
         }
-        assert!(!x.path.offsets[1..].contains(&0), "{:?}", &x.path.offsets);
-        if x.path.offsets[0] == 0 {
-            assert!(x.root == 0, "{:?} {}", &x.path.offsets, &x.root);
+        assert!(
+            !x.path.offsets[1..].contains(&zero()),
+            "{:?}",
+            &x.path.offsets
+        );
+        if x.path.offsets[0].is_zero() {
+            assert!(x.ancestors == 0, "{:?} {}", &x.path.offsets, &x.ancestors);
             if x.path.offsets.len() == 1 {
                 return SpHandle(0);
             }
@@ -1432,12 +1929,12 @@ impl StructuralPositionStore {
             let o = self.parents.len();
             self.nodes.extend(&x.path.nodes[1..]);
 
-            self.parents.push(x.root);
+            self.parents.push(x.ancestors);
             self.parents
                 .extend((o..o + l).into_iter().collect::<Vec<_>>());
 
             self.offsets.extend(&x.path.offsets[1..]);
-            x.root = self.nodes.len() - 1;
+            x.ancestors = self.nodes.len() - 1;
             x.path = StructuralPosition {
                 nodes: vec![],
                 offsets: vec![],
@@ -1446,12 +1943,12 @@ impl StructuralPositionStore {
             let l = x.path.nodes.len() - 1;
             let o = self.parents.len();
             self.nodes.extend(x.path.nodes.clone());
-            self.parents.push(x.root);
+            self.parents.push(x.ancestors);
             self.parents
                 .extend((o..o + l).into_iter().collect::<Vec<_>>());
             self.offsets.extend(&x.path.offsets);
             // self.ends.push(self.nodes.len() - 1);
-            x.root = self.nodes.len() - 1;
+            x.ancestors = self.nodes.len() - 1;
             x.path = StructuralPosition {
                 nodes: vec![],
                 offsets: vec![],
@@ -1464,7 +1961,69 @@ impl StructuralPositionStore {
         // }
 
         assert!(
-            self.offsets.is_empty() || !self.offsets[1..].contains(&0),
+            self.offsets.is_empty() || !self.offsets[1..].contains(&zero()),
+            "{:?}",
+            &self.offsets
+        );
+        assert_eq!(self.offsets.len(), self.parents.len());
+        assert_eq!(self.nodes.len(), self.parents.len());
+        SpHandle(self.nodes.len() - 1)
+    }
+    pub fn push_typed<TIdN: TypedNodeId<IdN = IdN>>(
+        &mut self,
+        x: &mut TypedScout<TIdN, Idx>,
+    ) -> SpHandle {
+        assert_eq!(x.path.nodes.len(), x.path.offsets.len());
+        if x.path.offsets.is_empty() {
+            return SpHandle(x.ancestors);
+        }
+        assert!(
+            !x.path.offsets[1..].contains(&zero()),
+            "{:?}",
+            &x.path.offsets
+        );
+        if x.path.offsets[0].is_zero() {
+            assert!(x.ancestors == 0, "{:?} {}", &x.path.offsets, &x.ancestors);
+            if x.path.offsets.len() == 1 {
+                return SpHandle(0);
+            }
+            let l = x.path.nodes.len() - 2;
+            let o = self.parents.len();
+            self.nodes.extend(&x.path.nodes[1..]);
+
+            self.parents.push(x.ancestors);
+            self.parents
+                .extend((o..o + l).into_iter().collect::<Vec<_>>());
+
+            self.offsets.extend(&x.path.offsets[1..]);
+            x.ancestors = self.nodes.len() - 1;
+            x.path = StructuralPosition {
+                nodes: vec![],
+                offsets: vec![],
+            }
+        } else {
+            let l = x.path.nodes.len() - 1;
+            let o = self.parents.len();
+            self.nodes.extend(x.path.nodes.clone());
+            self.parents.push(x.ancestors);
+            self.parents
+                .extend((o..o + l).into_iter().collect::<Vec<_>>());
+            self.offsets.extend(&x.path.offsets);
+            // self.ends.push(self.nodes.len() - 1);
+            x.ancestors = self.nodes.len() - 1;
+            x.path = StructuralPosition {
+                nodes: vec![],
+                offsets: vec![],
+            }
+            // x.path = StructuralPosition::with_offset(x.path.current_node(), x.path.current_offset());
+        }
+
+        // if !x.path.offsets.is_empty() && x.path.offsets[0] == 0 {
+        //     assert!(x.root == 0, "{:?} {}", &x.path.offsets, &x.root);
+        // }
+
+        assert!(
+            self.offsets.is_empty() || !self.offsets[1..].contains(&zero()),
             "{:?}",
             &self.offsets
         );
@@ -1474,10 +2033,10 @@ impl StructuralPositionStore {
     }
 }
 
-impl From<StructuralPosition> for StructuralPositionStore {
-    fn from(x: StructuralPosition) -> Self {
+impl<IdN, Idx: PrimInt> From<StructuralPosition<IdN, Idx>> for StructuralPositionStore<IdN, Idx> {
+    fn from(x: StructuralPosition<IdN, Idx>) -> Self {
         let l = x.nodes.len();
-        assert!(!x.offsets[1..].contains(&0));
+        assert!(!x.offsets[1..].contains(&zero()));
         let nodes = x.nodes;
         Self {
             nodes,
@@ -1488,13 +2047,34 @@ impl From<StructuralPosition> for StructuralPositionStore {
     }
 }
 
-impl Default for StructuralPositionStore {
+impl<IdN, Idx> Default for StructuralPositionStore<IdN, Idx> {
     fn default() -> Self {
         Self {
             nodes: Default::default(),
             parents: Default::default(),
             offsets: Default::default(),
             // ends: Default::default(),
+        }
+    }
+}
+
+impl<IdN: Copy + Eq, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
+    pub fn type_scout<TIdN: TypedNodeId<IdN = IdN>>(
+        &mut self,
+        s: &mut Scout<IdN, Idx>,
+        i: &TIdN,
+    ) -> TypedScout<TIdN, Idx> {
+        assert!(&s.node_always(self) == i.as_id());
+        self.push(s);
+        assert_eq!(s.path.nodes.len(), 0);
+        TypedScout {
+            path: StructuralPosition {
+                nodes: vec![],
+                offsets: vec![],
+            },
+            ancestors: s.ancestors,
+            tdepth: 1,
+            phantom: PhantomData,
         }
     }
 }

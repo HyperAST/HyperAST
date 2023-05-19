@@ -1,18 +1,18 @@
-use legion::world::ComponentError;
-
 use crate::{
-    store::nodes::legion::HashedNodeRef,
-    types::{Type, Typed},
+    types::{Type, Typed, TypeTrait, WithMetaData},
 };
 
-pub fn is_cyclomatic_persisted(t: &Type) -> bool {
-    t == &Type::ClassDeclaration
-        || t == &Type::InterfaceDeclaration
-        || t == &Type::EnumDeclaration
-        || t == &Type::AnnotationTypeDeclaration
-        || t == &Type::MethodDeclaration
-        || t == &Type::ConstructorDeclaration
-        || t == &Type::Program
+pub fn is_cyclomatic_persisted<K:TypeTrait>(t: &K) -> bool {
+    t.is_type_declaration() // TODO EnumConstant might not be appropriate here
+    || t.is_executable_member()
+    || t.is_file()
+        // || t == &Type::ClassDeclaration
+        // || t == &Type::InterfaceDeclaration
+        // || t == &Type::EnumDeclaration
+        // || t == &Type::AnnotationTypeDeclaration
+        // || t == &Type::MethodDeclaration
+        // || t == &Type::ConstructorDeclaration
+        // || t == &Type::Program
 }
 
 // TODO look at https://crates.io/crates/complexity
@@ -33,7 +33,7 @@ pub struct Mcc {
 }
 
 impl Mcc {
-    pub fn new(kind: &Type) -> Self {
+    pub fn new<K:TypeTrait>(kind: &K) -> Self {
         // TODO also consider || and && as forks
         // we would need to check the operand ie. the children
         Self {
@@ -46,7 +46,7 @@ impl Mcc {
         acc.value += self.value
     }
 
-    pub fn persist(kind: &Type) -> bool {
+    pub fn persist<K:TypeTrait>(kind: &K) -> bool {
         is_cyclomatic_persisted(kind)
     }
 
@@ -61,22 +61,22 @@ impl Mcc {
     // }
 }
 
-impl MetaData for Mcc {
-    type R = Result<u32, ComponentError>;
+impl<T:Typed+WithMetaData<Mcc>> MetaData<T> for Mcc where T::Type: TypeTrait {
+    type R = u32;
 
-    fn retrieve(node: &HashedNodeRef) -> Self::R {
+    fn retrieve(node: &T) -> Self::R {
         let kind = node.get_type();
         if Mcc::persist(&kind) {
-            node.get_component::<Mcc>().map(|x| x.value + 1)
+            node.get_metadata().map(|x| x.value + 1).expect("missing mcc")
         } else {
-            Ok(0)
+            0
         }
     }
 }
 
-pub trait MetaData {
+pub trait MetaData<T> {
     type R;
-    fn retrieve(node: &HashedNodeRef) -> Self::R;
+    fn retrieve(node: &T) -> Self::R;
 }
 
 /// considering https://github.com/jacoco/jacoco/blob/b68fe1a0a7fb86f12cda689ec473fd6633699b55/org.jacoco.doc/docroot/doc/counters.html#L102

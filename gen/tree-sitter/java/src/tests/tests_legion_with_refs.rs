@@ -4,22 +4,22 @@ use std::{
 };
 
 use hyper_ast::{
-    store::{TypeStore, SimpleStores, labels::LabelStore, nodes::DefaultNodeStore as NodeStore}, 
+    store::{SimpleStores, labels::LabelStore, nodes::DefaultNodeStore as NodeStore}, 
     tree_gen::ZippedTreeGen,
-    position::{ExploreStructuralPositions, StructuralPositionStore, StructuralPosition, Scout, TreePath}, 
-    types::WithChildren, utils::memusage_linux, nodes::RefContainer, filter::BloomResult};
+    position::{ExploreStructuralPositions, StructuralPositionStore, StructuralPosition, Scout, TreePath, TypedScout, TypedTreePath}, 
+    types::{WithChildren, NodeId}, utils::memusage_linux, nodes::RefContainer, filter::BloomResult};
 use pretty_assertions::assert_eq;
 
 use crate::{
     legion_with_refs::{
-         print_tree_syntax, serialize, JavaTreeGen,
-    }, impact::element::{RefsEnum, LabelPtr, IdentifierFormat},
+         JavaTreeGen, self, NodeIdentifier,
+    }, impact::element::{RefsEnum, LabelPtr, IdentifierFormat}, types::{TStore, TIdN},
 };
 
 fn run(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -29,27 +29,23 @@ fn run(text: &[u8]) {
         md_cache: &mut md_cache,
     };
     
-    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
+    let tree = match legion_with_refs::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
     println!();
-    print_tree_syntax(
-        &java_tree_gen.stores.node_store,
-        &java_tree_gen.stores.label_store,
-        &full_node.local.compressed_node,
-    );
-    println!();
+    println!("{}", hyper_ast::nodes::SyntaxSerializer::new(&*java_tree_gen.stores, full_node.local.compressed_node));
     stdout().flush().unwrap();
 
-    let mut out = IoOut { stream: stdout() };
-    serialize(
-        &java_tree_gen.stores.node_store,
-        &java_tree_gen.stores.label_store,
-        &full_node.local.compressed_node,
-        &mut out,
-        &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
-    );
+    // let mut out = IoOut { stream: stdout() };
+    // serialize(
+    //     &java_tree_gen.stores.node_store,
+    //     &java_tree_gen.stores.label_store,
+    //     &full_node.local.compressed_node,
+    //     &mut out,
+    //     &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
+    // );
+    println!("{}", hyper_ast::nodes::TextSerializer::new(&*java_tree_gen.stores, full_node.local.compressed_node))
 }
 #[test]
 fn test_cases() {
@@ -73,7 +69,7 @@ fn test_equals() {
     let text = CASE_33.as_bytes();
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -82,28 +78,16 @@ fn test_equals() {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
+    let tree = match legion_with_refs::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
     println!();
-    print_tree_syntax(
-        &java_tree_gen.stores.node_store,
-        &java_tree_gen.stores.label_store,
-        &full_node.local.compressed_node,
-    );
+    println!("{}", hyper_ast::nodes::SyntaxSerializer::new(&*java_tree_gen.stores, full_node.local.compressed_node));
     println!();
     stdout().flush().unwrap();
 
-    let mut out = IoOut { stream: stdout() };
-    serialize(
-        &java_tree_gen.stores.node_store,
-        &java_tree_gen.stores.label_store,
-        &full_node.local.compressed_node,
-        &mut out,
-        &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
-    );
-    println!();
+    println!("{}", hyper_ast::nodes::TextSerializer::new(&*java_tree_gen.stores, full_node.local.compressed_node));
 
     {
         let stores = java_tree_gen.stores;
@@ -148,7 +132,7 @@ fn test_special() {
     // let mut parser: Parser, old_tree: Option<&Tree>
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
 
@@ -200,7 +184,7 @@ public class A {
         // ";
         source_code1.as_bytes()
     };
-    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
+    let tree = match legion_with_refs::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
 
     let _full_node = java_tree_gen.generate_file(b"", text, tree.walk());
@@ -297,42 +281,24 @@ public class A {
         // ";
         source_code1.as_bytes()
     };
-    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
+    let tree = match legion_with_refs::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
     println!("debug full node: {:?}", &full_node);
     // let mut out = String::new();
-    let mut out = IoOut { stream: stdout() };
-    serialize(
-        &java_tree_gen.stores.node_store,
-        &java_tree_gen.stores.label_store,
-        &full_node.local.compressed_node,
-        &mut out,
-        &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
-    );
-    println!();
-    print_tree_syntax(
-        &java_tree_gen.stores.node_store,
-        &java_tree_gen.stores.label_store,
-        &full_node.local.compressed_node,
-    );
-    println!();
+
+    println!("{}", hyper_ast::nodes::SyntaxSerializer::new(&*java_tree_gen.stores, full_node.local.compressed_node));
     stdout().flush().unwrap();
 
     let mut out = BuffOut {
         buff: "".to_owned(),
     };
-    serialize(
-        &java_tree_gen.stores.node_store,
-        &java_tree_gen.stores.label_store,
-        &full_node.local.compressed_node,
-        &mut out,
-        &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
-    );
+    use std::fmt::Write;
+    write!(out, "{}", hyper_ast::nodes::TextSerializer::new(&*java_tree_gen.stores, full_node.local.compressed_node));
     assert_eq!(std::str::from_utf8(text).unwrap(), out.buff);
 
-    println!("{:?}", java_tree_gen.stores().node_store);
+    println!("{:?}", java_tree_gen.stores.node_store);
     println!("{}", java_tree_gen.stores.label_store);
 
     let mu = memusage_linux();
@@ -369,7 +335,7 @@ fn test_offset_computation() {
     let text = CASE_29.as_bytes();
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -378,30 +344,33 @@ fn test_offset_computation() {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
+    let tree = match legion_with_refs::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     let mut s = StructuralPositionStore::from(StructuralPosition::new(full_node.local.compressed_node));
     let mut scout = Scout::from((StructuralPosition::from((vec![],vec![])),0));
+    let mut scout:TypedScout<TIdN<NodeIdentifier>,u16> = s.type_scout(&mut scout,unsafe { &TIdN::from_id(full_node.local.compressed_node) });
     {
         let mut f = |x,i:u16| {
             let b = stores.node_store.resolve(x);
             let x = b.child(&i).unwrap();
-            scout.goto(x,i as usize);
+            use hyper_ast::types::TypedNodeStore;
+            let x = stores.node_store.try_typed(&x).unwrap();
+            scout.goto_typed(x, i);
             scout.up(&s);
-            scout.goto(x,i as usize);
+            scout.goto_typed(x, i);
             x
         };
         let x = full_node.local.compressed_node;
         let x = f(x,30);
-        let x = f(x,6);
-        let x = f(x,2);
-        let x = f(x,7);
-        let x = f(x,24);
+        let x = f(*x.as_id(),6);
+        let x = f(*x.as_id(),2);
+        let x = f(*x.as_id(),7);
+        let x = f(*x.as_id(),24);
         let _ = x;
     }
     s.check(&stores).unwrap();
-    let x = s.push(&mut scout);
+    let x = s.push_typed(&mut scout);
     let z = ExploreStructuralPositions::from((&s,x));
     let p = z.make_position(&stores);
     println!("{}",p);
@@ -415,7 +384,7 @@ fn test_offset_computation2() {
     let text = CASE_30.as_bytes();
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -424,24 +393,23 @@ fn test_offset_computation2() {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let tree = match JavaTreeGen::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
+    let tree = match legion_with_refs::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     let mut s = StructuralPositionStore::from(StructuralPosition::new(full_node.local.compressed_node));
     let mut scout = Scout::from((StructuralPosition::from((vec![],vec![])),0));
-    print_tree_syntax(
-        &java_tree_gen.stores.node_store,
-        &java_tree_gen.stores.label_store,
-        &full_node.local.compressed_node,
-    );
-    println!();
+    let mut scout:TypedScout<TIdN<NodeIdentifier>,u16> = s.type_scout(&mut scout,unsafe { &TIdN::from_id(full_node.local.compressed_node) });
+    
+    println!("{}", hyper_ast::nodes::SyntaxSerializer::new(&*java_tree_gen.stores, full_node.local.compressed_node));
     {
         let mut f = |x,i:u16| {
             let b = stores.node_store.resolve(x);
             let x = b.child(&i).unwrap();
-            scout.goto(x,i as usize);
+            use hyper_ast::types::TypedNodeStore;
+            let x = stores.node_store.try_typed(&x).unwrap();
+            scout.goto_typed(x, i);
             scout.up(&s);
-            scout.goto(x,i as usize);
+            scout.goto_typed(x, i);
             x
         };
         let x = full_node.local.compressed_node;
@@ -449,7 +417,7 @@ fn test_offset_computation2() {
         let _ = x;
     }
     s.check(&stores).unwrap();
-    let x = s.push(&mut scout);
+    let x = s.push_typed(&mut scout);
     let z = ExploreStructuralPositions::from((&s,x));
     let p = z.make_position(&stores);
     println!("{}",p);

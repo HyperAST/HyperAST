@@ -1,15 +1,16 @@
 use egui::TextFormat;
 use epaint::text::LayoutSection;
+pub use hyper_ast::store::nodes::fetched::{FetchedLabels, NodeIdentifier, NodeStore};
 use hyper_ast::{
-    store::nodes::fetched::LabelIdentifier,
-    types::{Tree, Typed, WithChildren, WithStats},
-};
-pub use hyper_ast::{
-    store::nodes::fetched::{FetchedLabels, NodeIdentifier, NodeStore},
-    types::Type,
+    store::nodes::fetched::{HashedNodeRef, LabelIdentifier},
+    types::{
+        AnyType, HyperType, Labeled, Lang, LangRef, TypeIndex, TypeStore as _, WithChildren,
+        WithStats,
+    },
 };
 use lazy_static::__Deref;
 use std::{
+    borrow::Borrow,
     collections::{HashSet, VecDeque},
     fmt::Debug,
     hash::Hash,
@@ -19,7 +20,7 @@ use std::{
         atomic::{AtomicBool, AtomicUsize},
         Arc,
     },
-    time::{Duration, Instant}, str::FromStr,
+    time::{Duration, Instant},
 };
 
 use crate::app::{
@@ -33,9 +34,71 @@ use super::{
 };
 
 #[derive(Default)]
+pub(crate) struct TStore;
+
+impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
+    type Ty = AnyType;
+
+    const MASK: u16 = 42;
+
+    fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
+        let lang = n.get_lang();
+        let raw = n.get_raw_type();
+        let t: &'static (dyn HyperType + 'static) = match lang {
+            "hyper_ast_gen_ts_cpp::types::Cpp" => {
+                let t: &'static (dyn HyperType + 'static) =
+                    <hyper_ast_gen_ts_cpp::types::Cpp as Lang<_>>::make(raw);
+                t
+            }
+            "hyper_ast_gen_ts_java::types::Java" => {
+                let t: &'static (dyn HyperType + 'static) =
+                    <hyper_ast_gen_ts_java::types::Java as Lang<_>>::make(raw);
+                t
+            }
+            "hyper_ast_gen_ts_xml::types::Xml" => {
+                let t: &'static (dyn HyperType + 'static) =
+                    <hyper_ast_gen_ts_xml::types::Xml as Lang<_>>::make(raw);
+                t
+            }
+            // "xml" => LangRef::<AnyType>::make(&hyper_ast_gen_ts_xml::types::Xml, raw),
+            x => panic!("{}", x),
+        };
+        t.into()
+    }
+
+    fn resolve_lang(
+        &self,
+        n: &HashedNodeRef<'a, NodeIdentifier>,
+    ) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        let lang = n.get_lang();
+        let t = match lang {
+            "hyper_ast_gen_ts_cpp::types::Cpp" => {
+                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_cpp::types::Cpp)
+            }
+            "hyper_ast_gen_ts_java::types::Java" => {
+                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_java::types::Java)
+            }
+            "hyper_ast_gen_ts_xml::types::Xml" => {
+                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_xml::types::Xml)
+            }
+            // "xml" => From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_xml::types::Xml),
+            x => panic!("{}", x),
+        };
+        t
+    }
+
+    type Marshaled = TypeIndex;
+
+    fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
+        todo!()
+    }
+}
+
+#[derive(Default)]
 pub struct FetchedHyperAST {
     pub(crate) label_store: std::sync::RwLock<FetchedLabels>,
     pub(crate) node_store: std::sync::RwLock<NodeStore>,
+    pub(crate) type_store: TStore,
     // /// each set is fetched sequentially, non blocking
     // /// pushed ids are tested against all pending sets because they might not have entered the store
     // /// new set every 100 elements, due to id serialized size in url
@@ -53,6 +116,112 @@ pub struct FetchedHyperAST {
     pub(crate) labels_waiting: std::sync::Mutex<Option<HashSet<LabelIdentifier>>>,
     /// timer to avoid flooding
     pub(crate) timer: std::sync::Mutex<Option<f32>>,
+}
+
+struct Fetchable<'a, I, S> {
+    pub(crate) store: &'a std::sync::RwLock<S>,
+    pub(crate) pending: &'a std::sync::Mutex<VecDeque<HashSet<I>>>,
+    pub(crate) waiting: &'a std::sync::Mutex<Option<HashSet<I>>>,
+}
+
+impl FetchedHyperAST {
+    fn read(&self) -> AcessibleFetchedHyperAST<'_> {
+        AcessibleFetchedHyperAST {
+            label_store: self.label_store.read().unwrap(),
+            node_store: self.node_store.read().unwrap(),
+            type_store: &self.type_store,
+            nodes_pending: self.nodes_pending.lock().unwrap(),
+            nodes_waiting: std::cell::RefCell::new(self.nodes_waiting.lock().unwrap()),
+            labels_pending: self.labels_pending.lock().unwrap(),
+            labels_waiting: std::cell::RefCell::new(self.labels_waiting.lock().unwrap()),
+        }
+    }
+}
+
+struct AcessibleFetchedHyperAST<'a> {
+    pub(crate) label_store: std::sync::RwLockReadGuard<'a, FetchedLabels>,
+    pub(crate) node_store: std::sync::RwLockReadGuard<'a, NodeStore>,
+    pub(crate) type_store: &'a TStore,
+    pub(crate) nodes_pending: std::sync::MutexGuard<'a, VecDeque<HashSet<NodeIdentifier>>>,
+    pub(crate) nodes_waiting:
+        std::cell::RefCell<std::sync::MutexGuard<'a, Option<HashSet<NodeIdentifier>>>>,
+    pub(crate) labels_pending: std::sync::MutexGuard<'a, VecDeque<HashSet<LabelIdentifier>>>,
+    pub(crate) labels_waiting:
+        std::cell::RefCell<std::sync::MutexGuard<'a, Option<HashSet<LabelIdentifier>>>>,
+}
+
+impl<'b> hyper_ast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
+    type R<'a> = HashedNodeRef<'a, NodeIdentifier>
+    where
+        Self: 'a;
+
+    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+        if let Some(r) = self.node_store.try_resolve(*id) {
+            r
+        } else {
+            // TODO use a recursive fetch
+            // TODO need an additional queue for such recursive fetch
+            // TODO use additional nodes that are not fetched but where fetched to avoid transfering more than necessary
+            if !self.nodes_pending.iter().any(|x| x.contains(id)) {
+                self.nodes_waiting
+                    .borrow_mut()
+                    .get_or_insert(Default::default())
+                    .insert(*id);
+            }
+            unimplemented!()
+        }
+    }
+}
+
+impl<'b> hyper_ast::types::LabelStore<str> for AcessibleFetchedHyperAST<'b> {
+    type I = LabelIdentifier;
+
+    fn get_or_insert<U: Borrow<str>>(&mut self, node: U) -> Self::I {
+        todo!()
+    }
+
+    fn get<U: Borrow<str>>(&self, node: U) -> Option<Self::I> {
+        todo!()
+    }
+
+    fn resolve(&self, id: &Self::I) -> &str {
+        if let Some(get) = self.label_store.try_resolve(id) {
+            get
+        } else {
+            if !self.labels_pending.iter().any(|x| x.contains(id)) {
+                self.labels_waiting
+                    .borrow_mut()
+                    .get_or_insert(Default::default())
+                    .insert(*id);
+            }
+            "o"
+        }
+    }
+}
+
+impl<'a, 'b> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>>
+    for AcessibleFetchedHyperAST<'b>
+{
+    type Ty = AnyType;
+
+    const MASK: u16 = 42;
+
+    fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
+        self.type_store.resolve_type(n)
+    }
+
+    fn resolve_lang(
+        &self,
+        n: &HashedNodeRef<'a, NodeIdentifier>,
+    ) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        self.type_store.resolve_lang(n)
+    }
+
+    type Marshaled = TypeIndex;
+
+    fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
+        self.type_store.marshal_type(n)
+    }
 }
 
 impl Hash for FetchedHyperAST {
@@ -181,14 +350,21 @@ impl<'a> FetchedViewImpl<'a> {
         ui.style_mut().spacing.item_spacing.y = 0.0;
 
         let node_store = self.store.node_store.read().unwrap();
-        let action = if let Some(r) = node_store.try_resolve(*root) {
-            let kind = r.get_type();
+        wasm_rs_dbg::dbg!(root);
+        let action = if let Some(r) = node_store.try_resolve::<NodeIdentifier>(*root) {
+            // let lang = r.get_lang();
+            // gen::types::Type::Lang;
+            let kind = self.store.type_store.resolve_type(&r);
             let l = r.try_get_label().copied();
             let cs = r.children();
             let size = r.size();
             self.global_pos = Some(size as u32);
             if let (Some(label), Some(cs)) = (l, cs) {
                 let cs = cs.0.to_vec();
+                wasm_rs_dbg::dbg!(&cs);
+                if let Some(label) = self.store.label_store.read().unwrap().try_resolve(&label) {
+                    assert_eq!("", label, "{:?} {:?} {:?}", root, cs.len(), node_store);
+                }
                 drop(node_store);
                 self.ui_both_impl2(ui, kind, size as u32, label, cs.as_ref())
             } else if let Some(cs) = cs {
@@ -318,7 +494,7 @@ impl<'a> FetchedViewImpl<'a> {
     fn ui_both_impl2(
         &mut self,
         ui: &mut egui::Ui,
-        kind: Type,
+        kind: AnyType,
         size: u32,
         label: LabelIdentifier,
         // depth: usize,
@@ -468,10 +644,11 @@ impl<'a> FetchedViewImpl<'a> {
                     ui.label(rt)
                 }
                 .context_menu(|ui| {
+                    ui.label(format!("{:?}", cs));
                     ui.label(format!("{:?}", self.path));
                 });
                 let label_store = self.store.label_store.read().unwrap();
-                if let Some(label) = label_store.get(&label) {
+                if let Some(label) = label_store.try_resolve(&label) {
                     ui.label(format!("{}", label));
                 } else {
                     ui.label("...");
@@ -562,7 +739,7 @@ impl<'a> FetchedViewImpl<'a> {
     fn ui_children_impl2(
         &mut self,
         ui: &mut egui::Ui,
-        kind: Type,
+        kind: AnyType,
         size: u32,
         nid: NodeIdentifier,
         cs: &[NodeIdentifier],
@@ -653,7 +830,13 @@ impl<'a> FetchedViewImpl<'a> {
         } else {
             None
         };
-        if self.aspects.ser_opt.contains(&kind)
+        if false
+        // TODO use a regex
+        // self
+        //     .aspects
+        //     .ser_opt
+        //     .contains(&kind.to_string().parse().unwrap())
+
         // kind == Type::ImportDeclaration//"import_declaration"
         //     || kind.is_expression()//"expression"
         //     || kind == Type::FormalParameters//"formal_parameters"
@@ -971,12 +1154,12 @@ impl<'a> FetchedViewImpl<'a> {
     fn ui_labeled_impl2(
         &mut self,
         ui: &mut egui::Ui,
-        kind: Type,
+        kind: AnyType,
         size: u32,
         label: LabelIdentifier,
     ) -> Action {
         let min = ui.available_rect_before_wrap().min;
-        let label = if let Some(get) = self.store.label_store.read().unwrap().get(&label) {
+        let label = if let Some(get) = self.store.label_store.read().unwrap().try_resolve(&label) {
             get.replace("\n", "\\n")
                 .replace("\t", "\\t")
                 .replace(" ", "·")
@@ -1002,7 +1185,7 @@ impl<'a> FetchedViewImpl<'a> {
         let id = ui.id().with(&self.path);
         let action;
         let rect = if label.len() > 50 {
-            if kind == Type::Spaces {
+            if kind.is_spaces() {
                 let monospace = ui.monospace(format!("{}: ", kind)).context_menu(|ui| {
                     ui.label(format!("{:?}", self.path));
                 });
@@ -1095,7 +1278,7 @@ impl<'a> FetchedViewImpl<'a> {
                 ui.label(format!("{}", label));
                 action
             };
-            if kind == Type::Spaces {
+            if kind.is_spaces() {
                 action = Action::Keep;
                 if self.aspects.syntax {
                     ui.horizontal(add_contents).response.rect
@@ -1130,7 +1313,7 @@ impl<'a> FetchedViewImpl<'a> {
         action
     }
 
-    fn ui_typed_impl2(&mut self, ui: &mut egui::Ui, kind: Type, size: u32) -> Action {
+    fn ui_typed_impl2(&mut self, ui: &mut egui::Ui, kind: AnyType, size: u32) -> Action {
         let min = ui.available_rect_before_wrap().min;
         self.draw_count += 1;
         ui.monospace(format!("{}", kind));
@@ -1360,8 +1543,14 @@ impl<'a> FetchedViewImpl<'a> {
             }
         };
         let _size;
-        let ret = if let Some(r) = self.store.node_store.read().unwrap().try_resolve(*c) {
-            let kind = r.get_type();
+        let ret = if let Some(r) = self
+            .store
+            .node_store
+            .read()
+            .unwrap()
+            .try_resolve::<NodeIdentifier>(*c)
+        {
+            let kind = self.store.type_store.resolve_type(&r); //r.get_type();
             let l = r.try_get_label().copied();
             let cs = r.children();
             let size = r.size();
@@ -1430,10 +1619,10 @@ impl<'a> FetchedViewImpl<'a> {
                         // x => x,
                     }
                 } else {
-                    let kind = Type::Error;
+                    let kind: &'static dyn HyperType = &hyper_ast_gen_ts_cpp::types::Type::ERROR;
                     imp.additions = None;
                     imp.deletions = None;
-                    let a = imp.ui_typed_impl2(ui, kind, 0);
+                    let a = imp.ui_typed_impl2(ui, AnyType::from(kind), 0);
                     match a {
                         Action::PartialFocused(x) => Action::PartialFocused(x),
                         Action::Focused(x) => Action::PartialFocused(x),
@@ -1536,9 +1725,7 @@ fn show_port(ui: &mut egui::Ui, id: egui::Id, pos: epaint::Pos2) {
         .constrain(true)
         .fixed_pos(pos)
         .interactable(false);
-    area.show(ui.ctx(), |ui| {
-        ui.add(egui_cable::prelude::Port::new(id))
-    });
+    area.show(ui.ctx(), |ui| ui.add(egui_cable::prelude::Port::new(id)));
 }
 
 const DEBUG_LAYOUT: bool = false;
@@ -1550,180 +1737,182 @@ fn subtree_to_layout(
     theme: &syntax_highlighting_ts::CodeTheme,
     nid: NodeIdentifier,
 ) -> (usize, Vec<LayoutSection>) {
-    use hyper_ast::nodes::CompressedNode;
-    use std::borrow::Borrow;
-    pub fn compute_layout_sections<
-        IdN,
-        IdL,
-        T: Borrow<CompressedNode<IdN, IdL>>,
-        F: Copy + Fn(&IdN) -> T,
-        G: Copy + Fn(&IdL) -> usize,
-    >(
-        f: F,
-        g: G,
-        theme: &syntax_highlighting_ts::CodeTheme,
-        id: &IdN,
-        out: &mut Vec<LayoutSection>,
-        offset: usize,
-    ) -> usize {
-        match f(id).borrow() {
-            CompressedNode::Type(kind) => {
-                let len = kind.to_string().len();
-                let end = offset + len;
-                let format = syntax_highlighting_ts::TokenType::Keyword;
-                let mut format = theme.formats[format].clone();
-                format.font_id = egui::FontId::monospace(12.0);
-                out.push(LayoutSection {
-                    leading_space: 0.0,
-                    byte_range: offset..end.clone(),
-                    format,
-                });
-                end
-            }
-            CompressedNode::Label { kind: _, label } => {
-                let len = g(label);
-                let end = offset + len;
-                let format = syntax_highlighting_ts::TokenType::Punctuation;
-                let mut format = theme.formats[format].clone();
-                format.font_id = egui::FontId::monospace(12.0);
-                out.push(LayoutSection {
-                    leading_space: 0.0,
-                    byte_range: offset..end.clone(),
-                    format,
-                });
-                end
-            }
-            CompressedNode::Children2 { kind: _, children } => {
-                unreachable!()
-            }
-            CompressedNode::Children { kind: _, children } => {
-                let it = children.iter();
-                let mut offset = offset;
-                for id in it {
-                    offset = compute_layout_sections(f, g, theme, &id, out, offset);
-                }
-                offset
-            }
-            CompressedNode::Spaces(s) => {
-                let len = g(s);
-                let end = offset + len;
-                let format = syntax_highlighting_ts::TokenType::Punctuation;
-                let mut format = theme.formats[format].clone();
-                format.font_id = egui::FontId::monospace(12.0);
-                out.push(LayoutSection {
-                    leading_space: 0.0,
-                    byte_range: offset..end.clone(),
-                    format,
-                });
-                end
-            }
-        }
-    }
+    // use hyper_ast::nodes::CompressedNode;
+    // use std::borrow::Borrow;
+    // pub fn compute_layout_sections<
+    //     IdN,
+    //     IdL,
+    //     Ty: ToString,
+    //     T: Borrow<CompressedNode<IdN, IdL, Ty>>,
+    //     F: Copy + Fn(&IdN) -> T,
+    //     G: Copy + Fn(&IdL) -> usize,
+    // >(
+    //     f: F,
+    //     g: G,
+    //     theme: &syntax_highlighting_ts::CodeTheme,
+    //     id: &IdN,
+    //     out: &mut Vec<LayoutSection>,
+    //     offset: usize,
+    // ) -> usize {
+    //     match f(id).borrow() {
+    //         CompressedNode::Type(kind) => {
+    //             let len = kind.to_string().len();
+    //             let end = offset + len;
+    //             let format = syntax_highlighting_ts::TokenType::Keyword;
+    //             let mut format = theme.formats[format].clone();
+    //             format.font_id = egui::FontId::monospace(12.0);
+    //             out.push(LayoutSection {
+    //                 leading_space: 0.0,
+    //                 byte_range: offset..end.clone(),
+    //                 format,
+    //             });
+    //             end
+    //         }
+    //         CompressedNode::Label { kind: _, label } => {
+    //             let len = g(label);
+    //             let end = offset + len;
+    //             let format = syntax_highlighting_ts::TokenType::Punctuation;
+    //             let mut format = theme.formats[format].clone();
+    //             format.font_id = egui::FontId::monospace(12.0);
+    //             out.push(LayoutSection {
+    //                 leading_space: 0.0,
+    //                 byte_range: offset..end.clone(),
+    //                 format,
+    //             });
+    //             end
+    //         }
+    //         CompressedNode::Children2 { kind: _, children } => {
+    //             unreachable!()
+    //         }
+    //         CompressedNode::Children { kind: _, children } => {
+    //             let it = children.iter();
+    //             let mut offset = offset;
+    //             for id in it {
+    //                 offset = compute_layout_sections(f, g, theme, &id, out, offset);
+    //             }
+    //             offset
+    //         }
+    //         CompressedNode::Spaces(s) => {
+    //             let len = g(s);
+    //             let end = offset + len;
+    //             let format = syntax_highlighting_ts::TokenType::Punctuation;
+    //             let mut format = theme.formats[format].clone();
+    //             format.font_id = egui::FontId::monospace(12.0);
+    //             out.push(LayoutSection {
+    //                 leading_space: 0.0,
+    //                 byte_range: offset..end.clone(),
+    //                 format,
+    //             });
+    //             end
+    //         }
+    //     }
+    // }
 
-    let mut layout = vec![];
+    // let mut layout = vec![];
 
-    let len = compute_layout_sections(
-        |id| -> _ {
-            use hyper_ast::nodes::CompressedNode;
-            // let c = &(*id as u64);
-            if let Some(r) = store.node_store.read().unwrap().try_resolve(*id) {
-                let kind = r.get_type();
-                let l = r.try_get_label().copied();
-                let cs = r.children();
-                if let Some(cs) = cs {
-                    CompressedNode::Children {
-                        children: cs.0.to_vec().into_boxed_slice(),
-                        kind,
-                    }
-                } else if let Some(label) = l {
-                    CompressedNode::Label { label, kind }
-                } else if let (Some(label), Some(cs)) = (l, cs) {
-                    unreachable!()
-                } else {
-                    CompressedNode::Type(kind)
-                }
-                // if let Some(c) = store.both.ids.iter().position(|x| x == c) {
-                //     // imp.ui_both_impl(ui, depth + 1, c);
-                //     panic!()
-                // } else if let Some(c) = store.labeled.ids.iter().position(|x| x == c) {
-                //     // imp.ui_labeled_impl(ui, depth + 1, c);
-                //     let s = &store.type_sys.0[store.labeled.kinds[c] as usize];
-                //     let kind = if s.starts_with("xml") {
-                //         Type::parse_xml(s)
-                //     } else {
-                //         Type::parse(s).unwrap()
-                //     };
-                //     let l = store.labeled.labels[c] as usize;
-                //     CompressedNode::Label { label: l, kind }
-                // } else if let Some(c) = store.children.ids.iter().position(|x| x == c) {
-                //     // imp.ui_children_impl(ui, depth + 1, c);
-                //     let s = &store.type_sys.0[store.children.kinds[c] as usize];
-                //     let kind = if s.starts_with("xml") {
-                //         Type::parse_xml(s)
-                //     } else {
-                //         Type::parse(s).unwrap()
-                //     };
-                //     let o = store.children.cs_ofs[c] as usize;
-                //     let children = &store.children.children[o..o + store.children.cs_lens[c] as usize];
-                //     CompressedNode::Children {
-                //         children: children.iter().map(|x| *x as u64).collect(),
-                //         kind,
-                //     }
-                // } else if let Some(c) = store.typed.ids.iter().position(|x| x == c) {
-                //     // imp.ui_typed_impl(ui, depth + 1, c);
-                //     let s = &store.type_sys.0[store.typed.kinds[c] as usize];
-                //     if s.starts_with("xml") {
-                //         CompressedNode::Type(Type::parse_xml(s))
-                //     } else {
-                //         CompressedNode::Type(Type::parse(s).unwrap())
-                //     }
-            } else {
-                // might not be needed if always called after serializer
-                if !store
-                    .nodes_pending
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .any(|x| x.contains(id))
-                {
-                    store
-                        .nodes_waiting
-                        .lock()
-                        .unwrap()
-                        .get_or_insert(Default::default())
-                        .insert(*id);
-                }
-                CompressedNode::Type(Type::Error)
-            }
-        },
-        |id| -> _ {
-            if let Some(get) = store.label_store.read().unwrap().get(id) {
-                get.len()
-            } else {
-                // TODO might not be needed is we have the
-                if !store
-                    .labels_pending
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .any(|x| x.contains(id))
-                {
-                    store
-                        .labels_waiting
-                        .lock()
-                        .unwrap()
-                        .get_or_insert(Default::default())
-                        .insert(*id);
-                }
-                Type::Error.to_string().len()
-            }
-        },
-        theme,
-        &nid,
-        &mut layout,
-        0,
-    );
-    (len, layout)
+    // let len = compute_layout_sections(
+    //     |id| -> _ {
+    //         use hyper_ast::nodes::CompressedNode;
+    //         // let c = &(*id as u64);
+    //         if let Some(r) = store.node_store.read().unwrap().try_resolve(*id) {
+    //             let kind = r.get_type();
+    //             let l = r.try_get_label().copied();
+    //             let cs = r.children();
+    //             if let Some(cs) = cs {
+    //                 CompressedNode::Children {
+    //                     children: cs.0.to_vec().into_boxed_slice(),
+    //                     kind,
+    //                 }
+    //             } else if let Some(label) = l {
+    //                 CompressedNode::Label { label, kind }
+    //             } else if let (Some(label), Some(cs)) = (l, cs) {
+    //                 unreachable!()
+    //             } else {
+    //                 CompressedNode::Type(kind)
+    //             }
+    //             // if let Some(c) = store.both.ids.iter().position(|x| x == c) {
+    //             //     // imp.ui_both_impl(ui, depth + 1, c);
+    //             //     panic!()
+    //             // } else if let Some(c) = store.labeled.ids.iter().position(|x| x == c) {
+    //             //     // imp.ui_labeled_impl(ui, depth + 1, c);
+    //             //     let s = &store.type_sys.0[store.labeled.kinds[c] as usize];
+    //             //     let kind = if s.starts_with("xml") {
+    //             //         Type::parse_xml(s)
+    //             //     } else {
+    //             //         Type::parse(s).unwrap()
+    //             //     };
+    //             //     let l = store.labeled.labels[c] as usize;
+    //             //     CompressedNode::Label { label: l, kind }
+    //             // } else if let Some(c) = store.children.ids.iter().position(|x| x == c) {
+    //             //     // imp.ui_children_impl(ui, depth + 1, c);
+    //             //     let s = &store.type_sys.0[store.children.kinds[c] as usize];
+    //             //     let kind = if s.starts_with("xml") {
+    //             //         Type::parse_xml(s)
+    //             //     } else {
+    //             //         Type::parse(s).unwrap()
+    //             //     };
+    //             //     let o = store.children.cs_ofs[c] as usize;
+    //             //     let children = &store.children.children[o..o + store.children.cs_lens[c] as usize];
+    //             //     CompressedNode::Children {
+    //             //         children: children.iter().map(|x| *x as u64).collect(),
+    //             //         kind,
+    //             //     }
+    //             // } else if let Some(c) = store.typed.ids.iter().position(|x| x == c) {
+    //             //     // imp.ui_typed_impl(ui, depth + 1, c);
+    //             //     let s = &store.type_sys.0[store.typed.kinds[c] as usize];
+    //             //     if s.starts_with("xml") {
+    //             //         CompressedNode::Type(Type::parse_xml(s))
+    //             //     } else {
+    //             //         CompressedNode::Type(Type::parse(s).unwrap())
+    //             //     }
+    //         } else {
+    //             // might not be needed if always called after serializer
+    //             if !store
+    //                 .nodes_pending
+    //                 .lock()
+    //                 .unwrap()
+    //                 .iter()
+    //                 .any(|x| x.contains(id))
+    //             {
+    //                 store
+    //                     .nodes_waiting
+    //                     .lock()
+    //                     .unwrap()
+    //                     .get_or_insert(Default::default())
+    //                     .insert(*id);
+    //             }
+    //             CompressedNode::Type(Type::Error)
+    //         }
+    //     },
+    //     |id| -> _ {
+    //         if let Some(get) = store.label_store.read().unwrap().try_resolve(id) {
+    //             get.len()
+    //         } else {
+    //             // TODO might not be needed is we have the
+    //             if !store
+    //                 .labels_pending
+    //                 .lock()
+    //                 .unwrap()
+    //                 .iter()
+    //                 .any(|x| x.contains(id))
+    //             {
+    //                 store
+    //                     .labels_waiting
+    //                     .lock()
+    //                     .unwrap()
+    //                     .get_or_insert(Default::default())
+    //                     .insert(*id);
+    //             }
+    //             Type::Error.to_string().len()
+    //         }
+    //     },
+    //     theme,
+    //     &nid,
+    //     &mut layout,
+    //     0,
+    // );
+    // (len, layout)
+    todo!()
 }
 
 fn subtree_to_string(store: &FetchedHyperAST, nid: NodeIdentifier) -> String {
@@ -1746,112 +1935,10 @@ fn subtree_to_string(store: &FetchedHyperAST, nid: NodeIdentifier) -> String {
         }
     }
 
-    hyper_ast::nodes::serialize(
-        |id| -> _ {
-            use hyper_ast::nodes::CompressedNode;
-            // let c = &(*id as u64);
-            if let Some(r) = store.node_store.read().unwrap().try_resolve(*id) {
-                let kind = r.get_type();
-                let l = r.try_get_label().copied();
-                let cs = r.children();
-                if let Some(cs) = cs {
-                    CompressedNode::Children {
-                        children: cs.0.to_vec().into_boxed_slice(),
-                        kind,
-                    }
-                } else if let Some(label) = l {
-                    CompressedNode::Label { label, kind }
-                } else if let (Some(label), Some(cs)) = (l, cs) {
-                    unreachable!()
-                } else {
-                    CompressedNode::Type(kind)
-                }
-            // if let Some(c) = store.both.ids.iter().position(|x| x == c) {
-            //     // imp.ui_both_impl(ui, depth + 1, c, pid.with(i));
-            //     panic!()
-            // } else if let Some(c) = store.labeled.ids.iter().position(|x| x == c) {
-            //     // imp.ui_labeled_impl(ui, depth + 1, c, pid.with(i));
-            //     let s = &store.type_sys.0[store.labeled.kinds[c] as usize];
-            //     let kind = if s.starts_with("xml") {
-            //         Type::parse_xml(s)
-            //     } else {
-            //         Type::parse(s).unwrap()
-            //     };
-            //     let l = store.labeled.labels[c] as usize;
-            //     CompressedNode::Label { label: l, kind }
-            // } else if let Some(c) = store.children.ids.iter().position(|x| x == c) {
-            //     // imp.ui_children_impl(ui, depth + 1, c, pid.with(i));
-            //     let s = &store.type_sys.0[store.children.kinds[c] as usize];
-            //     let kind = if s.starts_with("xml") {
-            //         Type::parse_xml(s)
-            //     } else {
-            //         Type::parse(s).unwrap()
-            //     };
-            //     let o = store.children.cs_ofs[c] as usize;
-            //     let children = &store.children.children[o..o + store.children.cs_lens[c] as usize];
-            //     CompressedNode::Children {
-            //         children: children.iter().map(|x| *x as u64).collect(),
-            //         kind,
-            //     }
-            // } else if let Some(c) = store.typed.ids.iter().position(|x| x == c) {
-            //     // imp.ui_typed_impl(ui, depth + 1, c);
-            //     let s = &store.type_sys.0[store.typed.kinds[c] as usize];
-            //     if s.starts_with("xml") {
-            //         CompressedNode::Type(Type::parse_xml(s))
-            //     } else {
-            //         CompressedNode::Type(Type::parse(s).unwrap())
-            //     }
-            } else {
-                // TODO use a recursive fetch
-                // TODO need an additional queue for such recursive fetch
-                // TODO use additional nodes that are not fetched but where fetched to avoid transfering more than necessary
-                if !store
-                    .nodes_pending
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .any(|x| x.contains(id))
-                {
-                    store
-                        .nodes_waiting
-                        .lock()
-                        .unwrap()
-                        .get_or_insert(Default::default())
-                        .insert(*id);
-                }
-                CompressedNode::Type(Type::Error)
-            }
-            // node_store
-            //     .resolve(id.clone())
-            //     .into_compressed_node()
-            //     .unwrap()
-        },
-        |id| -> _ {
-            if let Some(get) = store.label_store.read().unwrap().get(id) {
-                get.to_string()
-            } else {
-                if !store
-                    .labels_pending
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .any(|x| x.contains(id))
-                {
-                    store
-                        .labels_waiting
-                        .lock()
-                        .unwrap()
-                        .get_or_insert(Default::default())
-                        .insert(*id);
-                }
-                Type::Error.to_string()
-            }
-        },
-        &nid,
-        &mut out,
-        "\n",
-    );
-    out.buff
+    ToString::to_string(&hyper_ast::nodes::TextSerializer::<_, _>::new(
+        &store.read(),
+        nid,
+    ))
 }
 
 fn make_pp_code(

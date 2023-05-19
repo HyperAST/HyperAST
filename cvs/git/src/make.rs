@@ -9,19 +9,18 @@ use hyper_ast::{
     position::{StructuralPosition, TreePath},
     store::defaults::{LabelIdentifier, NodeIdentifier},
     tree_gen::SubTreeMetrics,
-    types::{IterableChildren, LabelStore as _, Labeled, Tree, Type, Typed, WithChildren},
 };
 use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
 use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
 
-use crate::{Accumulator, SimpleStores, PROPAGATE_ERROR_ON_BAD_CST_NODE};
+use crate::{Accumulator, SimpleStores, PROPAGATE_ERROR_ON_BAD_CST_NODE, TStore};
 
 pub(crate) fn handle_makefile_file<'a>(
-    tree_gen: &mut XmlTreeGen<'a>,
+    tree_gen: &mut XmlTreeGen<'a, TStore>,
     name: &[u8],
     text: &'a [u8],
 ) -> Result<MakeFile, ()> {
-    let tree = match XmlTreeGen::tree_sitter_parse(b"<proj></proj>") {
+    let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(b"<proj></proj>") {
         Ok(tree) => tree,
         Err(tree) => {
             log::warn!("bad CST");

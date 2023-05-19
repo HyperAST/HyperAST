@@ -55,7 +55,7 @@ fn test_with_action_example() {
 
     let g = |x: &u16| -> String {
         let n = node_store.resolve(x);
-        let x = n.get_label();
+        let x = n.get_label_unchecked();
         label_store.resolve(x).to_string()
     };
     println!(
@@ -104,7 +104,7 @@ fn test_with_action_example() {
 
     let lab = |x: &IdD| {
         label_store
-            .resolve(&node_store.resolve(x).get_label())
+            .resolve(&node_store.resolve(x).get_label_unchecked())
             .to_string()
     };
 
@@ -115,10 +115,10 @@ fn test_with_action_example() {
         dst: from_dst(&[]),
         old: *node_store
             .resolve(&src_arena.original(&from_src(&[])))
-            .get_label(),
+            .get_label_unchecked(),
         new: *node_store
             .resolve(&dst_arena.original(&from_dst(&[])))
-            .get_label(),
+            .get_label_unchecked(),
     };
 
     assert!(actions.has_actions(&[a,]));
@@ -189,10 +189,10 @@ fn test_with_action_example() {
         dst: from_dst(&[1, 0, 0]),
         old: *node_store
             .resolve(&src_arena.original(&from_src(&[0, 0])))
-            .get_label(),
+            .get_label_unchecked(),
         new: *node_store
             .resolve(&dst_arena.original(&from_dst(&[1, 0, 0])))
-            .get_label(),
+            .get_label_unchecked(),
     };
     assert!(actions.has_actions(&[a,]));
 
@@ -340,10 +340,10 @@ fn test_with_zs_custom_example() {
             dst: from_dst(&[0, 1, 3]),
             old: *node_store
                 .resolve(&src_arena.original(&from_src(&[1, 3])))
-                .get_label(),
+                .get_label_unchecked(),
             new: *node_store
                 .resolve(&dst_arena.original(&from_dst(&[0, 1, 3])))
-                .get_label(),
+                .get_label_unchecked(),
         }, // label: "r2".to_owned()},
     ]));
     assert!(actions.has_actions(&[

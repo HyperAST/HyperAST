@@ -1,16 +1,16 @@
 use std::{env, fs::File, io::Write, path::Path, time::Instant};
 
-use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
 use crate::{
     other_tools,
     postprocess::{CompressedBfPostProcess, PathJsonPostProcess, SimpleJsonPostProcess},
     preprocess::{iter_dirs, parse_dir_pair, parse_string_pair, JavaPreprocessFileSys},
     tempfile,
-    window_combination::as_nospaces,
 };
-use hyper_ast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores, TypeStore};
+use hyper_ast::store::{labels::LabelStore, nodes::{legion::NodeStore}, SimpleStores};
+use hyper_ast_cvs_git::{TStore, no_space::as_nospaces};
 use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
 use hyper_diff::actions::Actions;
+use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
 
 #[test]
 fn test_simple_1() {
@@ -18,7 +18,7 @@ fn test_simple_1() {
     let fixed = r#"class A{class C{}}class B{{while(1){if(1){}else{}};}}class D{class E{}}class F{{while(2){if(2){}else{}};}}"#;
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -56,7 +56,7 @@ fn test_crash1() {
     let fixed = std::fs::read_to_string(fixed_path).expect("the fixed code");
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -81,7 +81,7 @@ fn test_crash1() {
 #[cfg(test)]
 mod examples {
 
-    use hyper_ast::nodes::TreeJsonSerializer;
+    use hyper_ast::nodes::JsonSerializer;
 
     use crate::diff_output;
 
@@ -95,7 +95,7 @@ mod examples {
         let fixed = CASE2;
         let mut stores = SimpleStores {
             label_store: LabelStore::new(),
-            type_store: TypeStore {},
+            type_store: TStore::default(),
             node_store: NodeStore::new(),
         };
         let mut md_cache = Default::default();
@@ -146,7 +146,7 @@ mod examples {
         let fixed = CASE4;
         let mut stores = SimpleStores {
             label_store: LabelStore::new(),
-            type_store: TypeStore {},
+            type_store: TStore::default(),
             node_store: NodeStore::new(),
         };
         let mut md_cache = Default::default();
@@ -234,7 +234,7 @@ mod examples {
 
         let mut stores = SimpleStores {
             label_store: LabelStore::new(),
-            type_store: TypeStore {},
+            type_store: TStore::default(),
             node_store: NodeStore::new(),
         };
         let mut md_cache = Default::default();
@@ -275,9 +275,8 @@ mod examples {
 
         src_f
             .write_all(
-                (TreeJsonSerializer::<_, _, _, true>::new(
-                    &java_tree_gen.stores.node_store,
-                    &java_tree_gen.stores.label_store,
+                (JsonSerializer::<_, _, true>::new(
+                    java_tree_gen.stores,
                     src_tr.local.compressed_node.clone(),
                 )
                 .to_string())
@@ -289,9 +288,8 @@ mod examples {
         // dbg!(&dst);
         dst_f
             .write_all(
-                (TreeJsonSerializer::<_, _, _, true>::new(
-                    &java_tree_gen.stores.node_store,
-                    &java_tree_gen.stores.label_store,
+                (JsonSerializer::<_, _, true>::new(
+                    java_tree_gen.stores,
                     dst_tr.local.compressed_node.clone(),
                 )
                 .to_string())
@@ -343,10 +341,11 @@ mod test {
 
     use super::*;
     use hyper_ast::{
-        nodes::{print_tree_syntax_with_ids, IoOut},
-        store::defaults::NodeIdentifier,
+        nodes::{IoOut, SyntaxSerializer, SyntaxWithIdsSerializer},
+        store::{defaults::NodeIdentifier},
         types::{DecompressedSubtree, Typed},
     };
+    use hyper_ast_cvs_git::no_space::NoSpaceNodeStoreWrapper;
     use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
     use hyper_diff::{
         decompressed_tree_store::lazy_post_order::LazyPostOrder,
@@ -419,7 +418,7 @@ mod test {
         let fixed = CASE8;
         let mut stores = SimpleStores {
             label_store: LabelStore::new(),
-            type_store: TypeStore {},
+            type_store: TStore::default(),
             node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
         };
         let mut tree_gen = XmlTreeGen {
@@ -430,7 +429,7 @@ mod test {
         let (src_tr, dst_tr) = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
-                let tree = match XmlTreeGen::tree_sitter_parse(buggy.as_bytes()) {
+                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(buggy.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -439,7 +438,7 @@ mod test {
                 full_node1
             };
             let full_node2 = {
-                let tree = match XmlTreeGen::tree_sitter_parse(fixed.as_bytes()) {
+                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(fixed.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -456,9 +455,7 @@ mod test {
 
         let label_store = &tree_gen.stores.label_store;
         // let node_store = &tree_gen.stores.node_store;
-        let node_store = &crate::window_combination::NoSpaceNodeStoreWrapper {
-            s: &tree_gen.stores.node_store,
-        };
+        let node_store = &NoSpaceNodeStoreWrapper::from(&tree_gen.stores.node_store);
 
         // print_tree_syntax_with_ids(
         //     |id: &NodeIdentifier| -> _ {
@@ -500,8 +497,7 @@ mod test {
         // print_mappings(&dst_arena, &src_arena, node_store, label_store, &mappings);
 
         let gt_out = subprocess(
-            node_store,
-            label_store,
+            tree_gen.stores,
             src,
             dst,
             "gumtree-subtree",
@@ -537,7 +533,7 @@ mod test {
         let fixed = CASE_SIMPLE;
         let mut stores = SimpleStores {
             label_store: LabelStore::new(),
-            type_store: TypeStore {},
+            type_store: TStore::default(),
             node_store: NodeStore::new(),
         };
         let mut tree_gen = XmlTreeGen {
@@ -548,7 +544,7 @@ mod test {
         let (src_tr, dst_tr) = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
-                let tree = match XmlTreeGen::tree_sitter_parse(buggy.as_bytes()) {
+                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(buggy.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -557,7 +553,7 @@ mod test {
                 full_node1
             };
             let full_node2 = {
-                let tree = match XmlTreeGen::tree_sitter_parse(fixed.as_bytes()) {
+                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(fixed.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -574,7 +570,7 @@ mod test {
 
         let label_store = &tree_gen.stores.label_store;
         let node_store = &tree_gen.stores.node_store;
-        // let node_store = &crate::window_combination::AAA {
+        // let node_store = &AAA {
         //     s: &tree_gen.stores.node_store,
         // };
 
@@ -627,8 +623,7 @@ mod test {
         // );
 
         let gt_out = subprocess(
-            node_store,
-            label_store,
+            tree_gen.stores,
             src,
             dst,
             "gumtree-subtree",
@@ -662,7 +657,7 @@ mod test {
         let fixed = CASE_SIMPLE;
         let mut stores = SimpleStores {
             label_store: LabelStore::new(),
-            type_store: TypeStore {},
+            type_store: TStore::default(),
             node_store: NodeStore::new(),
         };
         let mut tree_gen = XmlTreeGen {
@@ -673,7 +668,7 @@ mod test {
         let (src_tr, dst_tr) = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
-                let tree = match XmlTreeGen::tree_sitter_parse(buggy.as_bytes()) {
+                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(buggy.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -682,7 +677,7 @@ mod test {
                 full_node1
             };
             let full_node2 = {
-                let tree = match XmlTreeGen::tree_sitter_parse(fixed.as_bytes()) {
+                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(fixed.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -698,7 +693,7 @@ mod test {
 
         let label_store = &tree_gen.stores.label_store;
         let node_store = &tree_gen.stores.node_store;
-        let node_store = &crate::window_combination::NoSpaceNodeStoreWrapper { s: node_store };
+        let node_store = &NoSpaceNodeStoreWrapper::from(node_store);
         let mappings = VecStore::default();
         type DS<T> = LazyPostOrder<T, u32>;
         let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh::<
@@ -722,8 +717,7 @@ mod test {
         let dst_arena = dst_arena.complete(node_store);
 
         let gt_out = subprocess(
-            node_store,
-            label_store,
+            tree_gen.stores,
             src,
             dst,
             "gumtree-subtree",
@@ -859,7 +853,7 @@ mod test {
         let fixed = CASE9;
         let mut stores = SimpleStores {
             label_store: LabelStore::new(),
-            type_store: TypeStore {},
+            type_store: TStore::default(),
             node_store: NodeStore::new(),
         };
         let mut tree_gen = XmlTreeGen {
@@ -869,14 +863,14 @@ mod test {
         println!("len={}: ", buggy.len());
         let (src_tr, dst_tr) = {
             let full_node1 = {
-                let tree = match XmlTreeGen::tree_sitter_parse(buggy.as_bytes()) {
+                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(buggy.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
                 tree_gen.generate_file("pom.xml".as_bytes(), buggy.as_bytes(), tree.walk())
             };
             let full_node2 = {
-                let tree = match XmlTreeGen::tree_sitter_parse(fixed.as_bytes()) {
+                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(fixed.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -890,35 +884,9 @@ mod test {
         // let dst = tree_gen.stores.node_store.resolve(dst).get_child(&0);
 
         use hyper_ast::types::LabelStore as _;
-        print_tree_syntax_with_ids(
-            |id: &NodeIdentifier| -> _ {
-                tree_gen
-                    .stores
-                    .node_store
-                    .resolve(id.clone())
-                    .into_compressed_node()
-                    .unwrap()
-            },
-            |id| -> _ { tree_gen.stores.label_store.resolve(id).to_owned() },
-            &src,
-            &mut Into::<IoOut<_>>::into(stdout()),
-        );
-        println!();
-        print_tree_syntax_with_ids(
-            |id: &NodeIdentifier| -> _ {
-                tree_gen
-                    .stores
-                    .node_store
-                    .resolve(id.clone())
-                    .into_compressed_node()
-                    .unwrap()
-            },
-            |id| -> _ { tree_gen.stores.label_store.resolve(id).to_owned() },
-            &dst,
-            &mut Into::<IoOut<_>>::into(stdout()),
-        );
-        println!();
-        let stores = &tree_gen.stores;
+        println!("{}", SyntaxWithIdsSerializer::<_,_, true>::new(tree_gen.stores, src));
+        println!("{}", SyntaxWithIdsSerializer::<_,_, true>::new(tree_gen.stores, dst));
+        let stores = tree_gen.stores;
         let mappings = VecStore::default();
         type DS<T> = LazyPostOrder<T, u32>;
         let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh::<
@@ -941,8 +909,7 @@ mod test {
         );
 
         let gt_out = subprocess(
-            &stores.node_store,
-            &stores.label_store,
+            stores,
             src,
             dst,
             "gumtree-subtree",
@@ -957,8 +924,7 @@ mod test {
         let gt_timings = pp.performances();
         dbg!(gt_timings, counts.mappings, counts.actions);
         let valid = pp._validity_mappings(
-            &stores.node_store,
-            &stores.label_store,
+            stores,
             &src_arena,
             src,
             &dst_arena,
@@ -998,7 +964,7 @@ mod test {
         let fixed = CASE11;
         let mut stores = SimpleStores {
             label_store: LabelStore::new(),
-            type_store: TypeStore {},
+            type_store: TStore::default(),
             node_store: NodeStore::new(),
         };
         let mut tree_gen = XmlTreeGen {
@@ -1009,7 +975,7 @@ mod test {
         let (src_tr, dst_tr) = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
-                let tree = match XmlTreeGen::tree_sitter_parse(buggy.as_bytes()) {
+                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(buggy.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -1018,7 +984,7 @@ mod test {
                 full_node1
             };
             let full_node2 = {
-                let tree = match XmlTreeGen::tree_sitter_parse(fixed.as_bytes()) {
+                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(fixed.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -1040,7 +1006,7 @@ mod test {
 
         let label_store = &tree_gen.stores.label_store;
         let node_store = &tree_gen.stores.node_store;
-        let node_store = &crate::window_combination::NoSpaceNodeStoreWrapper { s: node_store };
+        let node_store = &NoSpaceNodeStoreWrapper::from(node_store);
         let mappings = VecStore::default();
         type DS<T> = LazyPostOrder<T, u32>;
         let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh::<
@@ -1059,8 +1025,7 @@ mod test {
         print_mappings_no_ranges(&dst_arena, &src_arena, node_store, label_store, &mappings);
 
         let gt_out = subprocess(
-            node_store,
-            label_store,
+            tree_gen.stores,
             src,
             dst,
             "gumtree-subtree",
@@ -1094,7 +1059,7 @@ mod test {
         let fixed = CASE9;
         let mut stores = SimpleStores {
             label_store: LabelStore::new(),
-            type_store: TypeStore {},
+            type_store: TStore::default(),
             node_store: NodeStore::new(),
         };
         let mut tree_gen = XmlTreeGen {
@@ -1105,7 +1070,7 @@ mod test {
         let (src_tr, dst_tr) = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
-                let tree = match XmlTreeGen::tree_sitter_parse(buggy.as_bytes()) {
+                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(buggy.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -1114,7 +1079,7 @@ mod test {
                 full_node1
             };
             let full_node2 = {
-                let tree = match XmlTreeGen::tree_sitter_parse(fixed.as_bytes()) {
+                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(fixed.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -1136,7 +1101,7 @@ mod test {
 
         let label_store = &tree_gen.stores.label_store;
         let node_store = &tree_gen.stores.node_store;
-        let node_store = &crate::window_combination::NoSpaceNodeStoreWrapper { s: node_store };
+        let node_store = &NoSpaceNodeStoreWrapper::from(node_store);
         let mappings = VecStore::default();
         type DS<T> = LazyPostOrder<T, u32>;
         // let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
@@ -1172,8 +1137,7 @@ mod test {
         print_mappings_no_ranges(&dst_arena, &src_arena, node_store, label_store, &mappings);
 
         let gt_out = subprocess(
-            node_store,
-            label_store,
+            tree_gen.stores,
             src,
             dst,
             "gumtree-subtree",
@@ -1216,7 +1180,7 @@ fn compare_perfs() {
     let fixed = std::fs::read_to_string(fixed_path).expect("the fixed code");
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -1299,7 +1263,7 @@ pub fn bad_perfs() {
     let fixed = std::fs::read_to_string(fixed_path).expect("the fixed code");
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -1361,7 +1325,7 @@ pub fn bad_perfs2() {
     let fixed = std::fs::read_to_string(fixed_path).expect("the fixed code");
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -1513,7 +1477,7 @@ fn bad_perfs_helper(buggy_path: std::path::PathBuf, fixed_path: std::path::PathB
     let fixed = std::fs::read_to_string(fixed_path).expect("the fixed code");
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -1562,8 +1526,7 @@ fn bad_perfs_helper(buggy_path: std::path::PathBuf, fixed_path: std::path::PathB
     };
     let hast_timings = [subtree_matcher_t, bottomup_matcher_t, gen_t + prepare_gen_t];
     let gt_out = other_tools::gumtree::subprocess(
-        &java_tree_gen.stores.node_store,
-        &java_tree_gen.stores.label_store,
+        java_tree_gen.stores,
         src_tr.local.compressed_node,
         dst_tr.local.compressed_node,
         "gumtree",
@@ -1630,7 +1593,7 @@ fn test_all() {
             let fixed = std::fs::read_to_string(fixed_path).expect("the fixed code");
             let mut stores = SimpleStores {
                 label_store: LabelStore::new(),
-                type_store: TypeStore {},
+                type_store: TStore::default(),
                 node_store: NodeStore::new(),
             };
             let mut md_cache = Default::default();
@@ -1762,7 +1725,7 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
     let fixed = std::fs::read_to_string(fixed_path).expect("the fixed code");
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -1777,8 +1740,7 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
     let fixed_s = dst_tr.local.metrics.size;
     let gt_out_format = "COMPRESSED"; // JSON
     let gt_out = other_tools::gumtree::subprocess(
-        &java_tree_gen.stores.node_store,
-        &java_tree_gen.stores.label_store,
+        java_tree_gen.stores,
         src_tr.local.compressed_node,
         dst_tr.local.compressed_node,
         "gumtree",
@@ -1843,7 +1805,7 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
 pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     let stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TypeStore {},
+        type_store: TStore::default(),
         node_store: NodeStore::new(),
     };
     let md_cache = Default::default();
@@ -1875,8 +1837,7 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
 
     let gt_out = other_tools::gumtree::subprocess(
-        &stores.node_store,
-        &stores.label_store,
+        &stores,
         src_tr.compressed_node,
         dst_tr.compressed_node,
         "gumtree",

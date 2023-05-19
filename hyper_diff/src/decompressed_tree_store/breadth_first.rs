@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use num_traits::{cast, zero, PrimInt};
 
-use hyper_ast::types::IterableChildren;
+use hyper_ast::types::{IterableChildren, NodeId};
 use hyper_ast::types::{NodeStore, Stored, WithChildren};
 
 use super::{DecompressedTreeStore, Iter, ShallowDecompressedTreeStore};
@@ -80,16 +80,13 @@ where
         }
     }
 
-
-
     fn path(&self, _parent: &IdD, _descendant: &IdD) -> Vec<T::ChildIdx> {
-            todo!()
+        todo!()
     }
 
     fn lca(&self, a: &IdD, b: &IdD) -> IdD {
         todo!()
     }
-    
 }
 
 pub struct IterParents<'a, IdD> {
@@ -112,7 +109,7 @@ impl<'a, IdD: PrimInt> Iterator for IterParents<'a, IdD> {
 
 impl<'a, T: WithChildren, IdD: PrimInt> super::DecompressedSubtree<'a, T> for BreathFirst<T, IdD>
 where
-    T::TreeId: Clone,
+    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
     type Out = Self;
 
@@ -251,8 +248,8 @@ where
     fn first_descendant(&self, _i: &IdD) -> IdD {
         todo!()
     }
-    
-    fn is_descendant(&self, desc: &IdD,of: &IdD) -> bool {
+
+    fn is_descendant(&self, desc: &IdD, of: &IdD) -> bool {
         todo!()
     }
 }

@@ -1,10 +1,10 @@
 use std::{collections::HashMap, fmt::Display, hash::Hash, ops::Deref};
 
 use enumset::{enum_set, EnumSet, EnumSetType};
-use hyper_ast::types::{LabelStore, Type};
+use hyper_ast::types::{LabelStore, TypeTrait};
 use num::ToPrimitive;
 
-use crate::impact::{element::{Arguments, ListSet}, solver::{SolvingAssocTable, SolvingResult}};
+use crate::{impact::{element::{Arguments, ListSet}, solver::{SolvingAssocTable, SolvingResult}}, types::Type};
 
 use super::{
     declaration::{DeclType, Declarator, DisplayDecl},
@@ -20,7 +20,7 @@ pub fn leaf_state(
     label: Option<LabelPtr>,
     id_format: Option<IdentifierFormat>,
 ) -> State<RefPtr, LabelPtr> {
-    let r = if t == &Type::Comment {
+    let r = if t.is_comment() {
         State::None
     } else if t.is_primitive() {
         // State::SimpleTypeIdentifier(label.unwrap())
@@ -59,15 +59,14 @@ pub fn leaf_state(
         State::None
     } else if t == &Type::Dimensions {
         State::Dimensions
-    } else if t == &Type::TS86 {
+    } else if t == &Type::Static {
         State::Modifiers(Visibility::None, enum_set!(NonVisibility::Static))
-    } else if t == &Type::TS81 {
+    } else if t == &Type::Public {
         State::Modifiers(Visibility::Public, enum_set!())
-    } else if t == &Type::Error {
+    } else if t == &Type::ERROR {
         // TODO do more clever debug things here
         State::None
     } else {
-        assert_eq!(t, &Type::Comment);
         State::Todo
     };
     // println!("init: {:?} {:?}", t, r);
@@ -647,7 +646,7 @@ impl PartialAnalysis {
             T: std::cmp::Eq + std::hash::Hash + Clone;
 
         //main organization top down, through type kind
-        acc.current_node = if kind == &Type::Error {
+        acc.current_node = if kind == &Type::ERROR {
             if FAIL_ON_BAD_CST_NODE {
                 panic!("{:?} {:?} {:?}", kind, acc.current_node, current_node)
             } else {

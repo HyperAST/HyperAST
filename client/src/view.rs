@@ -4,7 +4,7 @@ use axum::Json;
 use hyper_ast::{
     compat::HashMap,
     store::defaults::{LabelIdentifier, NodeIdentifier},
-    types::{self, LabelStore, Tree, WithChildren},
+    types::{self, LabelStore, Labeled, NodeStore, Tree, WithChildren, HyperAST, IterableChildren, Children, TypeStore},
 };
 use hyper_ast_cvs_git::git::fetch_github_repository;
 use serde::{Deserialize, Serialize};
@@ -110,11 +110,12 @@ pub fn view(state: SharedState, path: Parameters) -> Result<Json<ViewRes>, Strin
 
     log::error!("searching for {path:?}");
     let curr = resolve_path(src_tr, path, node_store);
-    let type_sys = TypeSys(types::Type::it().map(|x| x.to_string()).collect());
-
-    let view = make_view(vec![(curr, 20)], node_store, label_store);
-    let view_res = ViewRes { type_sys, view };
-    Ok(view_res.into())
+    todo!("should deprecate or accomodate changes in type repr ie. lang + type btw. could allow paking as u16 like before");
+    // let type_sys = TypeSys(types::Type::it().map(|x| x.to_string()).collect());
+    
+    // let view = make_view(vec![(curr, 20)], &repositories.processor.main_stores);
+    // let view_res = ViewRes { type_sys, view };
+    // Ok(view_res.into())
 }
 
 pub fn view_with_node_id(state: SharedState, id: u64) -> Result<Json<ViewRes>, String> {
@@ -130,14 +131,15 @@ pub fn view_with_node_id(state: SharedState, id: u64) -> Result<Json<ViewRes>, S
     let node_store = &repositories.processor.main_stores.node_store;
     let label_store = &repositories.processor.main_stores.label_store;
 
-    let type_sys = TypeSys(types::Type::it().map(|x| x.to_string()).collect());
+    todo!("should deprecate or accomodate changes in type repr ie. lang + type btw. could allow paking as u16 like before");
+    // let type_sys = TypeSys(types::Type::it().map(|x| x.to_string()).collect());
 
-    if node_store.try_resolve(id).is_none() {
-        return Err(format!("{id:?} is absent from the HyperAST"));
-    }
-    let view = make_view(vec![(id, 8)], node_store, label_store);
-    let view_res = ViewRes { type_sys, view };
-    Ok(view_res.into())
+    // if node_store.try_resolve(id).is_none() {
+    //     return Err(format!("{id:?} is absent from the HyperAST"));
+    // }
+    // let view = make_view(vec![(id, 8)], &repositories.processor.main_stores);
+    // let view_res = ViewRes { type_sys, view };
+    // Ok(view_res.into())
 }
 
 fn resolve_path(
@@ -160,11 +162,19 @@ fn resolve_path(
     curr
 }
 
-fn make_view(
-    mut queue: Vec<(NodeIdentifier, usize)>,
-    node_store: &hyper_ast::store::nodes::legion::NodeStore,
-    label_store: &hyper_ast::store::labels::LabelStore,
-) -> View {
+fn make_view<'a, HAST>(
+    mut queue: Vec<(HAST::IdN, usize)>,
+    stores: &'a HAST,
+    // node_store: &hyper_ast::store::nodes::legion::NodeStore,
+    // label_store: &hyper_ast::store::labels::LabelStore,
+) -> View
+where
+    HAST::IdN: Hash,
+    <HAST::TS as types::TypeStore<HAST::T>>::Ty: Into<u16>,
+    HAST: NodeStore<HAST::IdN, R<'a> = HAST::T> + LabelStore<str, I = HAST::Label>,
+    HAST: 'a + HyperAST<'a, Label = LabelIdentifier>
+{
+    use num::cast::ToPrimitive;
     let mut label_list = vec![];
     let mut labeled = ViewLabeled::default();
     let mut with_children = ViewChildren::default();
@@ -203,7 +213,8 @@ fn make_view(
         let mut id = EntityHasher::default();
         curr.hash(&mut id);
         let nid = id.finish();
-        let n = node_store.resolve(curr);
+        let n = stores.node_store().resolve(&curr);//hyper_ast::types::NodeStore::resolve(stores, &curr);
+        let k = stores.type_store().resolve_type(&n);
         let k = n.get_type();
         if let Some(l) = n.try_get_label() {
             let l = label_map.entry(*l).or_insert_with(|| {
@@ -212,14 +223,13 @@ fn make_view(
                 i
             });
             if let Some(cs) = n.children() {
-                let cs = &cs.0;
                 with_both.ids.push(nid);
-                with_both.kinds.push(k as u16);
+                with_both.kinds.push(k.into());
                 with_both.cs_ofs.push(with_both.children.len() as u32);
-                with_both.cs_lens.push(cs.len() as u32);
-                with_both.children.extend(cs.iter().map(|curr| {
+                with_both.cs_lens.push(cs.child_count().to_u32().unwrap());
+                with_both.children.extend(cs.iter_children().map(|curr| {
                     if advance > 0 {
-                        queue.push((*curr, advance - 1));
+                        queue.push((curr.clone(), advance - 1));
                     }
                     let mut id = EntityHasher::default();
                     curr.hash(&mut id);
@@ -229,20 +239,19 @@ fn make_view(
                 with_both.labels.push(*l);
             } else {
                 labeled.ids.push(nid);
-                labeled.kinds.push(k as u16);
+                labeled.kinds.push(k.into());
                 labeled.labels.push(*l);
             }
         } else if let Some(cs) = n.children() {
-            let cs = &cs.0;
             with_children.ids.push(nid);
-            with_children.kinds.push(k as u16);
+            with_children.kinds.push(k.into());
             with_children
                 .cs_ofs
                 .push(with_children.children.len() as u32);
-            with_children.cs_lens.push(cs.len() as u32);
-            with_children.children.extend(cs.iter().map(|curr| {
+            with_children.cs_lens.push(cs.child_count().to_u32().unwrap());
+            with_children.children.extend(cs.iter_children().map(|curr| {
                 if advance > 0 {
-                    queue.push((*curr, advance - 1));
+                    queue.push((curr.clone(), advance - 1));
                 }
                 let mut id = EntityHasher::default();
                 curr.hash(&mut id);
@@ -251,7 +260,7 @@ fn make_view(
             }));
         } else {
             only_typed.ids.push(nid);
-            only_typed.kinds.push(k as u16);
+            only_typed.kinds.push(k.into());
         }
     }
     dbg!(&labeled.ids.len());
@@ -260,7 +269,7 @@ fn make_view(
     dbg!(&only_typed.ids.len());
     let label_list = label_list
         .into_iter()
-        .map(|l| label_store.resolve(&l).to_string())
+        .map(|l| hyper_ast::types::LabelStore::resolve(stores, &l).to_string())
         .collect();
     let view = View {
         label_list,

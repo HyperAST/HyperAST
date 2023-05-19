@@ -5,8 +5,8 @@ use num_traits::{cast, one, zero, PrimInt, ToPrimitive, Zero};
 use hyper_ast::{
     position::Position,
     types::{
-        self, Children, IterableChildren, LabelStore, NodeStore, Stored, Tree, Type, WithChildren,
-        WithSerialization,
+        self, Children, HyperType, IterableChildren, LabelStore, NodeId, NodeStore, Stored, Tree,
+        WithChildren, WithSerialization,
     },
 };
 
@@ -85,7 +85,7 @@ impl<'a, T: Stored, IdD> Deref for SimplePOSlice<'a, T, IdD> {
 
 impl<'d, T: WithChildren, IdD: PrimInt> SimplePostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + Debug,
+    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
     fn _position_in_parent(&self, c: &IdD, p: &IdD) -> T::ChildIdx {
         let mut r = 0;
@@ -106,7 +106,7 @@ where
 impl<'d, T: WithChildren, IdD: PrimInt> DecompressedWithParent<'d, T, IdD>
     for SimplePostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + Debug,
+    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
     fn parent(&self, id: &IdD) -> Option<IdD> {
         if id == &self.root() {
@@ -171,7 +171,7 @@ where
 impl<'d, T: WithChildren, IdD: PrimInt> DecompressedWithSiblings<'d, T, IdD>
     for SimplePostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + Debug,
+    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
     fn lsib(&self, x: &IdD) -> Option<IdD> {
         let p = self.parent(x)?;
@@ -200,7 +200,7 @@ impl<'a, IdD: PrimInt> Iterator for IterParents<'a, IdD> {
 
 impl<'a, T: WithChildren, IdD: PrimInt> PostOrder<'a, T, IdD> for SimplePostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + Debug,
+    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
     fn lld(&self, i: &IdD) -> IdD {
         self.basic.lld(i)
@@ -233,7 +233,7 @@ where
 impl<'a, T, IdD: PrimInt> super::DecompressedSubtree<'a, T> for SimplePostOrder<T, IdD>
 where
     T: WithChildren,
-    T::TreeId: Clone,
+    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
     <T as WithChildren>::ChildIdx: PrimInt,
 {
     type Out = Self;
@@ -252,7 +252,7 @@ where
 
 impl<'a, T: WithChildren, IdD: PrimInt> SimplePostOrder<T, IdD>
 where
-    T::TreeId: Clone,
+    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
     <T as WithChildren>::ChildIdx: PrimInt,
 {
     fn make<S>(store: &'a S, root: &<T as types::Stored>::TreeId) -> Self
@@ -335,7 +335,7 @@ struct Element<IdC, Idx, IdD> {
 impl<'a, T: WithChildren, IdD: PrimInt> ShallowDecompressedTreeStore<'a, T, IdD>
     for SimplePostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + Debug,
+    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
     fn len(&self) -> usize {
         self.id_compressed.len()
@@ -403,14 +403,14 @@ where
 impl<'a, T: WithChildren, IdD: PrimInt> FullyDecompressedTreeStore<'a, T, IdD>
     for SimplePostOrder<T, IdD>
 where
-    <T as Stored>::TreeId: Clone + Debug,
+    <T as Stored>::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
 {
 }
 
 impl<'d, T: WithChildren, IdD: PrimInt> DecompressedTreeStore<'d, T, IdD>
     for SimplePostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + Debug,
+    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
     fn descendants<'b, S>(&self, _store: &'b S, x: &IdD) -> Vec<IdD>
     where
@@ -440,7 +440,7 @@ where
 impl<'d, T: 'd + WithChildren, IdD: PrimInt> ContiguousDescendants<'d, T, IdD>
     for SimplePostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + Debug,
+    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
     fn descendants_range(&self, x: &IdD) -> std::ops::Range<IdD> {
         self.first_descendant(x)..*x
@@ -463,7 +463,7 @@ where
 
 impl<'a, T: WithChildren, IdD: PrimInt + Eq> SimplePostOrder<T, IdD>
 where
-    T::TreeId: Clone + Debug,
+    T::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
 {
     pub fn lsib(&self, c: &IdD, p_lld: &IdD) -> Option<IdD> {
         assert!(p_lld <= c, "{:?}<={:?}", p_lld.to_usize(), c.to_usize());
@@ -483,7 +483,7 @@ where
 
 impl<'a, T: WithChildren, IdD: PrimInt> SimplePostOrder<T, IdD>
 where
-    T::TreeId: Clone + Debug,
+    T::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
 {
     fn size2<'b, S>(store: &'b S, x: &T::TreeId) -> usize
     where
@@ -504,7 +504,7 @@ where
 
 impl<T: Stored, IdD: PrimInt + Debug> Debug for SimplePostOrder<T, IdD>
 where
-    T::TreeId: Debug,
+    T::TreeId: Debug + NodeId<IdN = T::TreeId>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SimplePostOrder")
@@ -537,9 +537,10 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
     pub fn position<'b, S, LS>(&mut self, store: &'b S, lstore: &'b LS, c: &IdD) -> &Position
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
-        T::TreeId: Clone + Debug,
+        T::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
+        T::Type: Copy + Send + Sync,
         LS: LabelStore<str>,
-        T: Tree<Type = Type, Label = LS::I> + WithSerialization,
+        T: Tree<Label = LS::I> + WithSerialization,
     {
         if self.cache.contains_key(&c) {
             return self.cache.get(&c).unwrap();
@@ -551,7 +552,7 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
                 if self.root == ori {
                     let r = store.resolve(&ori);
                     return self.cache.entry(*c).or_insert(Position::new(
-                        lstore.resolve(&r.get_label()).into(),
+                        lstore.resolve(&r.get_label_unchecked()).into(),
                         0,
                         r.try_bytes_len().unwrap_or(0),
                     ));
@@ -562,7 +563,7 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
                     .cloned()
                     .unwrap_or_else(|| self.position(store, lstore, &p).clone());
                 let r = store.resolve(&ori);
-                pos.inc_path(lstore.resolve(&r.get_label()));
+                pos.inc_path(lstore.resolve(&r.get_label_unchecked()));
                 pos.set_len(r.try_bytes_len().unwrap_or(0));
                 return self.cache.entry(*c).or_insert(pos);
             }
@@ -612,7 +613,7 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
             let r = store.resolve(&ori);
             let t = r.get_type();
             let pos = if t.is_directory() || t.is_file() {
-                let file = lstore.resolve(&r.get_label()).into();
+                let file = lstore.resolve(&r.get_label_unchecked()).into();
                 let offset = 0;
                 let len = r.try_bytes_len().unwrap_or(0);
                 Position::new(file, offset, len)
@@ -658,8 +659,8 @@ where
     pub fn position<'b, S>(&mut self, store: &'b S, c: &IdD) -> &U
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
-        T::TreeId: Clone + Debug,
-        T: Tree<Type = Type> + WithSerialization,
+        T::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
+        T: Tree + WithSerialization,
     {
         if self.cache.contains_key(&c) {
             return self.cache.get(&c).unwrap();

@@ -12,7 +12,7 @@ use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyper_ast::compat::HashMap;
 use hyper_ast::types::{
     DecompressedSubtree, HashKind, HyperAST, IterableChildren, Labeled, NodeStore, Stored, Tree,
-    Typed, WithChildren, WithHashs, WithStats,
+    Typed, WithChildren, WithHashs, WithStats, TypeStore,
 };
 use logging_timer::time;
 use num_traits::{PrimInt, ToPrimitive};
@@ -41,6 +41,7 @@ where
     HAST::T: Tree + WithHashs + WithStats,
     HAST::IdN: Clone + Eq,
     HAST::Label: Clone + Eq,
+    <HAST::T as Typed>::Type: Copy + Eq + Send + Sync,
     Dsrc::IdD: Debug + Hash + Eq + PrimInt,
     Ddst::IdD: Debug + Hash + Eq + PrimInt,
     M::Src: 'a + PrimInt + Debug + Hash,
@@ -126,6 +127,7 @@ where
     HAST::T: Tree + WithHashs + WithStats,
     HAST::IdN: Clone,
     HAST::Label: Clone + Eq,
+    <HAST::T as Typed>::Type: Copy + Eq + Send + Sync,
     Dsrc::IdD: Debug + Hash + Eq + PrimInt,
     Ddst::IdD: Debug + Hash + Eq + PrimInt,
     M::Src: 'a + PrimInt + Debug + Hash,
@@ -309,11 +311,13 @@ where
             let (t, l) = {
                 let o = mapper.src_arena.original(a);
                 let n = mapper.hyperast.node_store().resolve(&o);
-                (n.get_type(), n.try_get_label().cloned())
+                let t = mapper.hyperast.type_store().resolve_type(&n);
+                (t, n.try_get_label().cloned())
             };
             let o = mapper.dst_arena.original(b);
             let n = mapper.hyperast.node_store().resolve(&o);
-            t == n.get_type() && l.as_ref() == n.try_get_label()
+            let t2 = mapper.hyperast.type_store().resolve_type(&n);
+            t == t2 && l.as_ref() == n.try_get_label()
         });
         (2 * common.len()).to_f64().unwrap() / (s1.len() + s2.len()).to_f64().unwrap()
     }
@@ -474,6 +478,7 @@ where
     HAST::T: 'a + Tree + WithHashs + WithStats,
     HAST::IdN: Clone + Eq,
     HAST::Label: Eq,
+    <HAST::T as Typed>::Type: Copy + Eq + Send + Sync,
     Dsrc::IdD: Clone,
     Ddst::IdD: Clone,
     M::Src: Debug + Copy,
@@ -544,7 +549,7 @@ where
                     let is_iso = {
                         let src = src_trees.arena.original(&src);
                         let dst = dst_trees.arena.original(&dst);
-                        Self::isomorphic_aux::<true>(hyperast.node_store(), &src, &dst)
+                        Self::isomorphic_aux::<true>(hyperast, &src, &dst)
                     };
                     if is_iso {
                         multi_mappings.link(src, dst);
@@ -572,28 +577,28 @@ where
     /// if H then test the hash otherwise do not test it,
     /// considering hash colisions testing it should only be useful once.
     pub(crate) fn isomorphic_aux<const H: bool>(
-        node_store: &'a HAST::NS,
+        stores: &'a HAST,
         src: &<HAST::T as Stored>::TreeId,
         dst: &<HAST::T as Stored>::TreeId,
     ) -> bool {
         if src == dst {
             return true;
         }
-        let src = node_store.resolve(src);
+        let src = stores.node_store().resolve(src);
         let src_h = if H {
             Some(src.hash(&mut &<HAST::T as WithHashs>::HK::label()))
         } else {
             None
         };
-        let src_t = src.get_type();
+        let src_t = stores.type_store().resolve_type(&src);
         let src_l = if src.has_label() {
-            Some(src.get_label())
+            Some(src.get_label_unchecked())
         } else {
             None
         };
         let src_c: Option<Vec<_>> = src.children().map(|x| x.iter_children().collect());
 
-        let dst = node_store.resolve(dst);
+        let dst = stores.node_store().resolve(dst);
 
         if let Some(src_h) = src_h {
             let dst_h = dst.hash(&mut &<HAST::T as WithHashs>::HK::label());
@@ -601,12 +606,12 @@ where
                 return false;
             }
         }
-        let dst_t = dst.get_type();
+        let dst_t = stores.type_store().resolve_type(&dst);
         if src_t != dst_t {
             return false;
         }
         if dst.has_label() {
-            if src_l.is_none() || src_l.unwrap() != dst.get_label() {
+            if src_l.is_none() || src_l.unwrap() != dst.get_label_unchecked() {
                 return false;
             }
         };
@@ -620,7 +625,7 @@ where
                     false
                 } else {
                     for (src, dst) in src_c.iter().zip(dst_c.iter()) {
-                        if !Self::isomorphic_aux::<false>(node_store, src, dst) {
+                        if !Self::isomorphic_aux::<false>(stores, src, dst) {
                             return false;
                         }
                     }

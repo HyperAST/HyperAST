@@ -21,8 +21,8 @@ use super::tree_view::FetchedViewImpl;
 use super::tree_view::{Action, FetchedHyperAST, NodeIdentifier, PrefillCache};
 use super::types;
 use super::types::Resource;
-use super::types::parse_cpp_type_list;
-use super::types::parse_java_type_list;
+// use super::types::parse_cpp_type_list;
+// use super::types::parse_java_type_list;
 
 pub(crate) fn show_aspects_views_menu(
     ui: &mut egui::Ui,
@@ -104,10 +104,11 @@ pub(crate) fn show_aspects_views_menu(
             .response;
         let tr = jtr.union(ctr);
         if tr.changed() {
-            let mut ser_opt = Default::default();
-            parse_java_type_list(&aspects.ser_opt_java_text, &mut ser_opt);
-            parse_cpp_type_list(&aspects.ser_opt_cpp_text, &mut ser_opt);
-            aspects.ser_opt = ser_opt;
+            // TODO just use regexes
+            // let mut ser_opt = Default::default();
+            // parse_java_type_list(&aspects.ser_opt_java_text, &mut ser_opt);
+            // parse_cpp_type_list(&aspects.ser_opt_cpp_text, &mut ser_opt);
+            // aspects.ser_opt = ser_opt;
         }
 
         // ui.text_edit_singleline(&mut "github.com/INRIA/spoon");
@@ -495,12 +496,12 @@ pub(super) fn remote_fetch_labels(
 
 #[derive(serde::Deserialize)]
 pub struct FetchedNodes {
-    node_store: fetched::SimplePacked,
+    node_store: fetched::SimplePacked<String>,
 }
 #[derive(serde::Deserialize)]
 pub struct FetchedNode {
     root: Vec<NodeIdentifier>,
-    node_store: fetched::SimplePacked,
+    node_store: fetched::SimplePacked<String>,
 }
 
 #[derive(serde::Deserialize, Clone, Debug)]
