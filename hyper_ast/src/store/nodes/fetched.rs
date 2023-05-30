@@ -489,6 +489,8 @@ lazy_static::lazy_static! {
         Default::default()
     };
 }
+
+#[cfg(feature = "serialize")]
 fn deserialize_static_str<'de, D>(deserializer: D) -> Result<StaticStr, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -517,7 +519,7 @@ macro_rules! variant_store {
             #[derive(Clone, Debug)]
             #[cfg_attr(feature = "serialize", derive(serde::Serialize,serde::Deserialize))]
             pub struct $c{
-                #[serde(deserialize_with = "deserialize_static_str")]
+                #[cfg_attr(feature = "serialize",serde(deserialize_with = "deserialize_static_str"))]
                 pub(super) lang: StaticStr,
                 pub(super) rev: Vec<$rev>,
                 $(pub(super) $d: Vec<$e>,)*
