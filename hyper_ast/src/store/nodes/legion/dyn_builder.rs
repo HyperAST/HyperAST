@@ -14,12 +14,82 @@
 //! 
 //! ```
 
+// WIP
+// TODO try to use it in generators to facilitate adding new metadata
+//! # Possible build facilities
+//! ```
+//! struct Builder<T, S> {
+//!     inner: BuiltEntity,
+//!     phantom: PhantomData<T,S>
+//! }
+//! fn new<T:TypeTrait, H:NodeHashs>(t:T, h:H) -> Builder<T,Typed> {
+//!     let mut inner = BuiltEntity::default();
+//!     inner.add(t);
+//!     inner.add(h);
+//!     Builder {
+//!         inner,
+//!         phantom: PhantomData
+//!     }
+//! }
+//! 
+//! trait Final {}
+//! struct Typed;
+//! struct Keyword;
+//! impl Final for Keyword {}
+//! struct Labeled;
+//! impl Final for Labeled {}
+//! struct WithChildren;
+//! impl Final for WithChildren {}
+//! 
+//! // use a bound on T to know if it can have a label ?
+//! impl<T> Builder<T,Typed> {
+//!     pub fn label(self, l: LabelIdentifier) -> Builder<T, Labeled> {
+//!         let mut inner = self.inner;
+//!         inner.add(l);
+//!         Builder {
+//!             inner,
+//!             phantom: PhantomData
+//!         }
+//!     }
+//!     pub fn children(self, cs: Children) -> Builder<T, WithChildren> {
+//!         let mut inner = self.inner;
+//!         inner.add(cs);
+//!         Builder {
+//!             inner,
+//!             phantom: PhantomData
+//!         }
+//!     }
+//!     pub fn add_metadata(self, md: MD) -> Builder<T, Keyword> {
+//!         let mut inner = self.inner;
+//!         inner.add(md);
+//!         Builder {
+//!             inner,
+//!             phantom: PhantomData
+//!         }
+//!     }
+//! }
+//! 
+//! impl<T, S:Final> Builder<T,S> {
+//!     pub fn add_metadata(self, md: MD) -> Builder<T, S> {
+//!         let mut inner = self.inner;
+//!         inner.add(md);
+//!         Builder {
+//!             inner,
+//!             phantom: PhantomData
+//!         }
+//!     }
+//!     pub fn build(self) -> BuiltEntity {
+//!         self.inner.build()
+//!     }
+//! }
+//! 
+//! ```
+
 use std::{
     alloc::{alloc, dealloc, Layout},
     any::TypeId,
     collections::HashMap,
     hash::{BuildHasher, BuildHasherDefault, Hasher},
-    marker::PhantomData,
     ptr::NonNull,
 };
 
@@ -34,23 +104,11 @@ use legion::{
 
 use super::*;
 
-/// A wrapper for an Array of Structures used for entity insertions.
+/// A builder of entities for a archetypal store, here legion.
 pub struct BuiltEntity {
-    i: usize,
     inner: Common<fn() -> Box<dyn UnknownComponentStorage>>,
 }
 
-// impl DynBuiltEntity
-// where
-//     Iter: Iterator<Item = ()>,
-// {
-//     /// Constructs a new DynBuiltEntity.
-//     fn new(iter: Iter) -> Self {
-//         Self {
-//             iter,
-//         }
-//     }
-// }
 #[derive(Default)]
 pub struct EntityBuilder {
     pub inner: Common<fn() -> Box<dyn UnknownComponentStorage>>,
@@ -62,7 +120,6 @@ impl EntityBuilder {
     }
     pub fn build(self) -> BuiltEntity {
         BuiltEntity {
-            i: 0,
             inner: self.inner,
         }
     }
@@ -526,10 +583,11 @@ fn simple() {
     let mut world = legion::World::new(Default::default());
     let mut components = EntityBuilder::new();
     let mut comp0: (Box<[u32]>,) = (vec![0,0,0,0,0,1,4100177920].into_boxed_slice(),);//0, 14, 43, 10, 876, 7, 1065, 35
-    let comp0_saved = comp0.clone();
+    let mut comp0_saved = comp0.clone();
     let comp0_ptr  = (&mut comp0) as *mut (Box<[u32]>,);
     components.add(comp0);
     unsafe{(*comp0_ptr).0[4] = 42};
+    comp0_saved.0[4] = 42;
     let comp1: i32 = 0;
     components.add(comp1);
     let comp2: bool = true;
@@ -550,6 +608,7 @@ fn simple() {
 
     if let Some(entry) = world.entry(entity) {
         unsafe{(*comp0_ptr).0[5] += 1};
+        comp0_saved.0[5] += 1;
         dbg!(unsafe{comp0_ptr.as_ref()});
         assert_eq!(Ok(&comp0_saved), entry.get_component::<(Box<[u32]>,)>());
         assert_eq!(Ok(&comp1), entry.get_component::<i32>());

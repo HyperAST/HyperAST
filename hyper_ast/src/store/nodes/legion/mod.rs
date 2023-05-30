@@ -11,7 +11,7 @@ use crate::{
     utils::make_hash,
 };
 
-mod dyn_builder;
+pub mod dyn_builder;
 
 pub mod compo;
 
@@ -119,6 +119,29 @@ impl NodeStore {
     {
         let (&mut symbol, _) = {
             let symbol = internal.push(components);
+            vacant.insert_with_hasher(hash, symbol, (), |id| {
+                let node: elem::HashedNodeRef<'_, NodeIdentifier> = internal
+                    .entry_ref(*id)
+                    .map(|x| HashedNodeRef::new(x))
+                    .unwrap();
+
+                make_hash(hasher, &node)
+            })
+        };
+        symbol
+    }
+
+    /// uses the dyn builder see dyn_builder::EntityBuilder
+    pub fn insert_built_after_prepare(
+        (vacant, (hash, internal, hasher)): (
+            crate::compat::hash_map::RawVacantEntryMut<legion::Entity, (), ()>,
+            (u64, &mut legion::World, &DefaultHashBuilder),
+        ),
+        components: dyn_builder::BuiltEntity,
+    ) -> legion::Entity
+    {
+        let (&mut symbol, _) = {
+            let symbol = internal.extend(components)[0];
             vacant.insert_with_hasher(hash, symbol, (), |id| {
                 let node: elem::HashedNodeRef<'_, NodeIdentifier> = internal
                     .entry_ref(*id)
