@@ -2,9 +2,9 @@
 
 ## Setup Rust
 
-How to install [Rust doc here](https://www.rust-lang.org/tools/install)
+> [How to install Rust](https://www.rust-lang.org/tools/install)
 
-We use the nightly toolchain of the Rust compiler in this project. It is pretty much stable and offers more features for now.
+We use the [**nightly toolchain**](https://doc.rust-lang.org/book/appendix-07-nightly-rust.html) of the Rust compiler in this project. It is pretty much stable and offers more features for now.
 
 Those commmands will install the nightly toolchain and set it as default.
 
@@ -17,7 +17,7 @@ Those commmands will install the nightly toolchain and set it as default.
 ```
 
 
-To go back to the stable toolchain, run:
+To go back to the stable toolchain after you are done with the project, run:
 
 ```bash
 > rustup default stable
