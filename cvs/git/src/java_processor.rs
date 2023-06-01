@@ -23,7 +23,10 @@ use crate::{
     git::BasicGitObject,
     java::JavaAcc,
     preprocessed::{IsSkippedAna, RepositoryProcessor},
-    processing::{InFiles, ObjectName},
+    processing::{
+        erased::{CommitProcExt, Parametrized, ParametrizedCommitProc2},
+        CacheHolding, InFiles, ObjectName,
+    },
     Processor, SimpleStores,
 };
 
@@ -40,6 +43,7 @@ pub struct JavaProcessor<'repo, 'prepro, 'd, 'c, Acc> {
     prepro: &'prepro mut RepositoryProcessor,
     stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
     pub dir_path: &'d mut Peekable<Components<'c>>,
+    handle: &'d crate::processing::erased::ParametrizedCommitProcessor2Handle<JavaProc>,
 }
 
 impl<'repo, 'b, 'd, 'c, Acc: From<String>> JavaProcessor<'repo, 'b, 'd, 'c, Acc> {
@@ -49,6 +53,7 @@ impl<'repo, 'b, 'd, 'c, Acc: From<String>> JavaProcessor<'repo, 'b, 'd, 'c, Acc>
         dir_path: &'d mut Peekable<Components<'c>>,
         name: &ObjectName,
         oid: git2::Oid,
+        handle: &'d crate::processing::erased::ParametrizedCommitProcessor2Handle<JavaProc>,
     ) -> Self {
         let tree = repository.find_tree(oid).unwrap();
         let prepared = prepare_dir_exploration(tree);
@@ -59,10 +64,11 @@ impl<'repo, 'b, 'd, 'c, Acc: From<String>> JavaProcessor<'repo, 'b, 'd, 'c, Acc>
             repository,
             prepro,
             dir_path,
+            handle,
         }
     }
 }
-type Caches = <crate::processing::file_sys::Java as crate::processing::CachesHolder>::Caches;
+type Caches = <crate::processing::file_sys::Java as crate::processing::CachesHolding>::Caches;
 
 impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, JavaAcc> {
     fn pre(&mut self, current_object: BasicGitObject) {
@@ -74,8 +80,10 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
                 ) = self
                     .prepro
                     .processing_systems
-                    .get::<Caches>()
-                    .and_then(|c| c.object_map.get(&(oid, name.clone())))
+                    .mut_or_default::<JavaProcessorHolder>()
+                    .get_caches_mut() //.with_parameters(self.parameters.0)
+                    .object_map
+                    .get(&(oid, name.clone()))
                 {
                     // reinit already computed node for post order
                     let full_node = already.clone();
@@ -101,6 +109,7 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
                             &mut self.stack.last_mut().unwrap().2,
                             &name,
                             self.repository,
+                            *self.handle,
                         )
                         .unwrap();
                 } else {
@@ -117,7 +126,8 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
         let full_node = make(acc, self.prepro.main_stores_mut());
         self.prepro
             .processing_systems
-            .mut_or_default::<Caches>()
+            .mut_or_default::<JavaProcessorHolder>()
+            .get_caches_mut()
             .object_map
             .insert(key, (full_node.clone(), skiped_ana));
         if self.stack.is_empty() {
@@ -329,6 +339,107 @@ fn compress(
 
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
 
+#[derive(Clone, PartialEq, Eq)]
+pub struct Parameter;
+#[derive(Default)]
+pub(crate) struct JavaProcessorHolder(Option<JavaProc>);
+pub(crate) struct JavaProc {
+    parameter: Parameter,
+    cache: crate::processing::caches::Java,
+    commits: std::collections::HashMap<git2::Oid, crate::Commit>,
+}
+impl crate::processing::erased::Parametrized for JavaProcessorHolder {
+    type T = Parameter;
+    fn register_param(
+        &mut self,
+        t: Self::T,
+    ) -> crate::processing::erased::ParametrizedCommitProcessorHandle {
+        let l = self
+            .0
+            .iter()
+            .position(|x| &x.parameter == &t)
+            .unwrap_or_else(|| {
+                let l = 0; //self.0.len();
+                           // self.0.push(JavaProc(t));
+                self.0 = Some(JavaProc {
+                    parameter: t,
+                    cache: Default::default(),
+                    commits: Default::default(),
+                });
+                l
+            });
+        use crate::processing::erased::ConfigParametersHandle;
+        use crate::processing::erased::ParametrizedCommitProc;
+        use crate::processing::erased::ParametrizedCommitProcessorHandle;
+        ParametrizedCommitProcessorHandle(self.erased_handle(), ConfigParametersHandle(l))
+    }
+}
+
+impl crate::processing::erased::CommitProc for JavaProc {
+    fn process_root_tree(
+        &mut self,
+        repository: &git2::Repository,
+        tree_oid: &git2::Oid,
+    ) -> hyper_ast::store::defaults::NodeIdentifier {
+        // let root_full_node =
+        //     MavenProcessor::<RMS, true, MavenModuleAcc>::new(repository, self, dir_path, name, oid)
+        //         .process();
+        // root_full_node.0
+        unimplemented!()
+    }
+
+    fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
+        self.commits.get(&commit_oid)
+    }
+
+    fn prepare_processing<'repo>(
+        &self,
+        repository: &'repo git2::Repository,
+        commit_builder: crate::preprocessed::CommitBuilder,
+    ) -> Box<dyn crate::processing::erased::PreparedCommitProc + 'repo> {
+        todo!()
+    }
+}
+
+impl crate::processing::erased::CommitProcExt for JavaProc {
+    type Holder = JavaProcessorHolder;
+}
+impl crate::processing::erased::ParametrizedCommitProc2 for JavaProcessorHolder {
+    type Proc = JavaProc;
+
+    fn with_parameters_mut(
+        &mut self,
+        parameters: crate::processing::erased::ConfigParametersHandle,
+    ) -> &mut Self::Proc {
+        assert_eq!(0, parameters.0);
+        self.0.as_mut().unwrap()
+    }
+
+    fn with_parameters(
+        & self,
+        parameters: crate::processing::erased::ConfigParametersHandle,
+    ) -> & Self::Proc {
+        assert_eq!(0, parameters.0);
+        self.0.as_ref().unwrap()
+    }
+}
+impl CacheHolding<crate::processing::caches::Java> for JavaProc {
+    fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Java {
+        &mut self.cache
+    }
+    fn get_caches(&self) -> &crate::processing::caches::Java {
+        &self.cache
+    }
+}
+impl CacheHolding<crate::processing::caches::Java> for JavaProcessorHolder {
+    fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Java {
+        &mut self.0.as_mut().unwrap().cache
+    }
+    fn get_caches(&self) -> &crate::processing::caches::Java {
+        &self.0.as_ref().unwrap().cache
+    }
+}
+
 impl RepositoryProcessor {
     pub(crate) fn handle_java_file(
         &mut self,
@@ -347,7 +458,11 @@ impl RepositoryProcessor {
         java_tree_gen::JavaTreeGen {
             line_break,
             stores: &mut self.main_stores,
-            md_cache: &mut self.processing_systems.mut_or_default::<Caches>().md_cache, //java_md_cache,
+            md_cache: &mut self
+                .processing_systems
+                .mut_or_default::<JavaProcessorHolder>()
+                .get_caches_mut()
+                .md_cache, //java_md_cache,
         }
     }
 
@@ -368,10 +483,11 @@ impl RepositoryProcessor {
         oid: Oid,
         name: &ObjectName,
         repository: &Repository,
+        parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<JavaProc>,
     ) -> Result<(java_tree_gen::Local, IsSkippedAna), crate::ParseErr> {
         self.processing_systems
             .caching_blob_handler::<crate::processing::file_sys::Java>()
-            .handle2(oid, repository, name, |c, n, t| {
+            .handle2(oid, repository, name, parameters, |c, n, t| {
                 let line_break = if t.contains(&b'\r') {
                     "\r\n".as_bytes().to_vec()
                 } else {
@@ -381,7 +497,10 @@ impl RepositoryProcessor {
                     &mut java_tree_gen::JavaTreeGen {
                         line_break,
                         stores: &mut self.main_stores,
-                        md_cache: &mut c.mut_or_default::<Caches>().md_cache, //java_md_cache,
+                        md_cache: &mut c
+                            .mut_or_default::<JavaProcessorHolder>()
+                            .get_caches_mut()
+                            .md_cache, //java_md_cache,
                     },
                     n,
                     t,
@@ -397,8 +516,9 @@ impl RepositoryProcessor {
         w: &mut JavaAcc,
         name: &ObjectName,
         repository: &Repository,
+        parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<JavaProc>,
     ) -> Result<(), crate::ParseErr> {
-        let (full_node, skiped_ana) = self.handle_java_blob(oid, name, repository)?;
+        let (full_node, skiped_ana) = self.handle_java_blob(oid, name, repository, parameters)?;
         let name = self.intern_object_name(name);
         // assert!(!parent_acc.children_names.contains(&name));
         // parent_acc.push_pom(name, x);
@@ -446,7 +566,11 @@ impl RepositoryProcessor {
         name: &ObjectName,
         oid: git2::Oid,
     ) -> (java_tree_gen::Local, IsSkippedAna) {
-        JavaProcessor::<JavaAcc>::new(repository, self, dir_path, name, oid).process()
+        let h = self
+            .processing_systems
+            .mut_or_default::<JavaProcessorHolder>();
+        let handle = JavaProc::register_param(h, Parameter);
+        JavaProcessor::<JavaAcc>::new(repository, self, dir_path, name, oid, &handle).process()
     }
 }
 
@@ -534,6 +658,7 @@ mod experiments {
                                 &mut self.stack.last_mut().unwrap().2,
                                 current_object.name(),
                                 self.repository,
+                                *self.handle,
                             )
                             .unwrap();
                     } else {
@@ -556,7 +681,8 @@ mod experiments {
             let full_node = (full_node, skiped_ana);
             self.prepro
                 .processing_systems
-                .mut_or_default::<Caches>()
+                .mut_or_default::<JavaProcessorHolder>()
+                .get_caches_mut()
                 .object_map
                 .insert(key, full_node.clone());
             if self.stack.is_empty() {

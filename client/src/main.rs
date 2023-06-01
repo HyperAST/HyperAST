@@ -10,7 +10,7 @@ use std::{
 };
 
 use dashmap::DashMap;
-use hyper_ast_cvs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories};
+use hyper_ast_cvs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories, processing::ConfiguredRepoHandle};
 use hyper_diff::{decompressed_tree_store::PersistedNode, matchers::mapping_store::VecStore};
 use tower_http::cors::CorsLayer;
 
@@ -26,32 +26,39 @@ use hyper_ast::store::nodes::legion::NodeIdentifier;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 mod app;
+mod changes;
 mod commit;
 mod examples;
 mod fetch;
 mod file;
+mod matching;
 mod scripting;
 mod track;
-mod view;
-mod changes;
-mod matching;
 mod utils;
-
-#[derive(serde::Deserialize, Clone, Copy, Debug)]
-pub enum RepoConfig {
-    CppMake,
-    JavaMaven,
-}
+mod view;
 
 #[derive(Default)]
 pub struct AppState {
     db: DashMap<String, Bytes>,
     repositories: RwLock<PreProcessedRepositories>,
-    configs: RwLock<HashMap<hyper_ast_cvs_git::git::Repo, RepoConfig>>,
+    // configs: RwLock<RepoConfigs>,
     mappings: MappingCache,
     mappings_alone: MappingAloneCache,
     partial_decomps: PartialDecompCache,
 }
+
+// #[derive(Default)]
+// struct RepoConfigs(HashMap<hyper_ast_cvs_git::git::Repo, hyper_ast_cvs_git::processing::RepoConfig2>);
+// impl RepoConfigs {
+//     pub(crate) fn resolve(&self, specifier: hyper_ast_cvs_git::git::Repo) -> Option<ConfiguredRepoHandle> {
+//         let config = self.0
+//             .get(&specifier)?;
+//         Some(ConfiguredRepoHandle {
+//             spec: specifier,
+//             config: *config,
+//         })
+//     }
+// }
 
 pub(crate) type PartialDecompCache = DashMap<NodeIdentifier, DS<PersistedNode<NodeIdentifier>>>;
 pub(crate) type MappingAloneCache =
@@ -79,12 +86,16 @@ async fn main() {
         .init();
     let shared_state = SharedState::default();
     {
-        let mut hmap = shared_state.configs.write().unwrap();
-        hmap.insert(Forge::Github.repo("INRIA", "spoon"), RepoConfig::JavaMaven);
-        hmap.insert(
-            Forge::Github.repo("official-stockfish", "Stockfish"),
-            RepoConfig::CppMake,
-        );
+        use hyper_ast_cvs_git::processing::RepoConfig;
+        shared_state.repositories.write().unwrap().register_config(Forge::Github.repo("INRIA", "spoon"), RepoConfig::JavaMaven);
+        shared_state.repositories.write().unwrap().register_config(Forge::Github.repo("official-stockfish", "Stockfish"),
+        RepoConfig::CppMake);
+        // let mut hmap = shared_state.configs.write().unwrap();
+        // hmap.0.insert(Forge::Github.repo("INRIA", "spoon"), RepoConfig::JavaMaven);
+        // hmap.0.insert(
+        //     Forge::Github.repo("official-stockfish", "Stockfish"),
+        //     RepoConfig::CppMake,
+        // );
     }
     let app = Router::new()
         .fallback(fallback)

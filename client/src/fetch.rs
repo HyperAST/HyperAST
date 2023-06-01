@@ -61,29 +61,26 @@ pub fn fetch(mut state: SharedState, path: Parameters) -> Result<FetchedNodes, S
     } = path;
     dbg!(&path);
     let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
-    let configs = state.configs.read().unwrap();
-    let config = configs
-        .get(&repo_spec)
+    let repo = state
+        .repositories
+        .write()
+        .unwrap()
+        .get_config(repo_spec)
         .ok_or_else(|| "missing config for repository".to_string())?;
-    let mut repo = repo_spec.fetch();
-    log::warn!("done cloning {}/{}", repo_spec.user, repo_spec.name);
+    let mut repo = repo.fetch();
+    log::warn!("done cloning {}", repo.spec);
     let commits = state
         .repositories
         .write()
         .unwrap()
-        .pre_process_with_config(&mut repo, "", &commit, config.into())
+        .pre_process_with_config2(&mut repo, "", &commit)
         .map_err(|e| e.to_string())?;
-    log::warn!(
-        "done construction of {commits:?} in {}/{}",
-        repo_spec.user,
-        repo_spec.name
-    );
+    log::warn!("done construction of {commits:?} in {}", repo.spec);
     let repositories = state.repositories.read().unwrap();
-    let commit_src = repositories.commits.get_key_value(&commits[0]).unwrap();
-    let src_tr = commit_src.1.ast_root;
+    let commit_src = repositories.get_commit(&repo.config, &commits[0]).unwrap();
+    let src_tr = commit_src.ast_root;
     dbg!(src_tr);
     let node_store = &repositories.processor.main_stores.node_store;
-    let label_store = &repositories.processor.main_stores.label_store;
 
     log::error!("searching for {path:?}");
     let curr = resolve_path(src_tr, path, node_store);

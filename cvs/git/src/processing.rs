@@ -1,9 +1,8 @@
-use std::fmt::Display;
-
 use git2::Repository;
-use hyper_ast::types::LangRef;
 
 use crate::git::Repo;
+
+pub use erased::ParametrizedCommitProcessorHandle;
 
 pub enum BuildSystem {
     Maven,
@@ -59,7 +58,8 @@ impl From<RepoConfig> for ProcessingConfig<&'static str> {
 
 pub trait ConfiguredRepoTrait {
     fn spec(&self) -> &Repo;
-    fn config(&self) -> &RepoConfig;
+    type Config;
+    fn config(&self) -> &Self::Config;
 }
 
 pub struct ConfiguredRepoHandle {
@@ -71,8 +71,8 @@ impl ConfiguredRepoTrait for ConfiguredRepoHandle {
     fn spec(&self) -> &Repo {
         &self.spec
     }
-
-    fn config(&self) -> &RepoConfig {
+    type Config = RepoConfig;
+    fn config(&self) -> &Self::Config {
         &self.config
     }
 }
@@ -80,6 +80,33 @@ impl ConfiguredRepoTrait for ConfiguredRepoHandle {
 impl ConfiguredRepoHandle {
     pub fn fetch(self) -> ConfiguredRepo {
         ConfiguredRepo {
+            repo: self.spec.fetch(),
+            spec: self.spec,
+            config: self.config,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConfiguredRepoHandle2 {
+    pub spec: Repo,
+    pub config: ParametrizedCommitProcessorHandle,
+}
+
+// NOTE could have impl deref bug it is a bad idea (see book), related to ownership
+impl ConfiguredRepoTrait for ConfiguredRepoHandle2 {
+    fn spec(&self) -> &Repo {
+        &self.spec
+    }
+    type Config = ParametrizedCommitProcessorHandle;
+
+    fn config(&self) -> &Self::Config {
+        &self.config
+    }
+}
+impl ConfiguredRepoHandle2 {
+    pub fn fetch(self) -> ConfiguredRepo2 {
+        ConfiguredRepo2 {
             repo: self.spec.fetch(),
             spec: self.spec,
             config: self.config,
@@ -97,18 +124,43 @@ impl ConfiguredRepoTrait for ConfiguredRepo {
     fn spec(&self) -> &Repo {
         &self.spec
     }
-
-    fn config(&self) -> &RepoConfig {
+    type Config = RepoConfig;
+    fn config(&self) -> &Self::Config {
         &self.config
     }
 }
 
-pub trait CachesHolder {
+pub struct ConfiguredRepo2 {
+    pub spec: Repo,
+    pub repo: Repository,
+    pub config: ParametrizedCommitProcessorHandle,
+}
+
+impl ConfiguredRepoTrait for ConfiguredRepo2 {
+    fn spec(&self) -> &Repo {
+        &self.spec
+    }
+    type Config = ParametrizedCommitProcessorHandle;
+    fn config(&self) -> &Self::Config {
+        &self.config
+    }
+}
+
+pub trait CachesHolding {
     /// WARN if you use the same cache type in multiple holders it mean that they are effectively shared caches
     /// TIPs use a wrapping type to protect againts inadvertent sharing
     type Caches;
 
     // fn mut_or_default(&mut self) -> &mut Self::Caches;
+}
+pub trait CacheHolding<Caches> {
+    fn get_caches_mut(&mut self) -> &mut Caches;
+    fn get_caches(&self) -> &Caches;
+}
+pub trait HoldedCache {
+    type Holder: CacheHolding<Self>
+    where
+        Self: Sized;
 }
 pub trait InFiles {
     fn matches(name: &ObjectName) -> bool;
@@ -251,11 +303,11 @@ pub(crate) mod caches {
     }
 
     #[derive(Default)]
-    pub struct MakeFile {
+    pub struct Makefile {
         pub object_map: OidMap<crate::make::MakeFile>,
     }
 
-    impl super::ObjectMapper for MakeFile {
+    impl super::ObjectMapper for Makefile {
         type K = git2::Oid;
 
         type V = crate::make::MakeFile;
@@ -305,7 +357,7 @@ pub(crate) mod caches {
 pub mod file_sys {
 
     // TODO move these things to their respective modules
-    use super::{CachesHolder, ObjectName};
+    use super::{CachesHolding, ObjectName};
 
     /// The default file system, directories and files
     pub struct Any;
@@ -320,7 +372,7 @@ pub mod file_sys {
     #[cfg(feature = "maven")]
     pub struct Maven;
 
-    impl CachesHolder for Maven {
+    impl CachesHolding for Maven {
         type Caches = super::caches::Maven;
     }
 
@@ -328,7 +380,7 @@ pub mod file_sys {
     pub struct Pom;
 
     #[cfg(feature = "maven")]
-    impl CachesHolder for Pom {
+    impl CachesHolding for Pom {
         type Caches = super::caches::Pom;
     }
 
@@ -343,7 +395,7 @@ pub mod file_sys {
     #[cfg(feature = "maven")]
     pub struct Java;
 
-    impl CachesHolder for Java {
+    impl CachesHolding for Java {
         type Caches = super::caches::Java;
     }
 
@@ -359,15 +411,15 @@ pub mod file_sys {
     #[cfg(feature = "make")]
     pub struct Make;
 
-    impl CachesHolder for Make {
+    impl CachesHolding for Make {
         type Caches = super::caches::Make;
     }
 
     #[cfg(feature = "make")]
     pub struct MakeFile;
 
-    impl CachesHolder for MakeFile {
-        type Caches = super::caches::MakeFile;
+    impl CachesHolding for MakeFile {
+        type Caches = super::caches::Makefile;
     }
 
     impl super::InFiles for MakeFile {
@@ -379,7 +431,7 @@ pub mod file_sys {
     #[cfg(feature = "cpp")]
     pub struct Cpp;
 
-    impl CachesHolder for Cpp {
+    impl CachesHolding for Cpp {
         type Caches = super::caches::Cpp;
     }
 
@@ -412,253 +464,7 @@ impl crate::preprocessed::RepositoryProcessor {
     }
 }
 
-pub(crate) mod erased_processor_collection {
-    use std::any::Any;
-
-    #[derive(Clone)]
-    pub struct ConfigParameters(std::rc::Rc<dyn std::any::Any>);
-    pub trait Parametrized: ParametrizedCommitProc {
-        type T: 'static;
-        // Register a parameter to later be used by the processor,
-        // each identical (structurally) parameter should identify exactly one processor
-        fn register_param(&mut self, t: Self::T) -> ParametrizedCommitProcessorHandle;
-    }
-    pub struct ConfigParametersHandle(usize);
-    pub struct ParametrizedCommitProcessorHandle(CommitProcessorHandle, ConfigParametersHandle);
-    pub struct CommitProcessorHandle(std::any::TypeId);
-    pub trait CommitProc {
-        fn p(&mut self);
-
-        fn process_commit(
-            &mut self,
-            repository: &git2::Repository,
-            commit_oid: git2::Oid,
-        ) -> crate::Commit {
-            let builder =
-                crate::preprocessed::CommitMonitoringBuilder::start(repository, commit_oid);
-            let id = self.process_root_tree(repository, builder.tree_oid());
-            builder.finish(id)
-        }
-
-        fn process_root_tree(
-            &mut self,
-            repository: &git2::Repository,
-            tree_oid: git2::Oid,
-        ) -> hyper_ast::store::defaults::NodeIdentifier;
-    }
-    pub trait ParametrizedCommitProc: std::any::Any {
-        fn erased_handle(&self) -> CommitProcessorHandle
-        where
-            Self: 'static,
-        {
-            CommitProcessorHandle(std::any::TypeId::of::<Self>())
-        }
-
-        fn get(&mut self, parameters: ConfigParametersHandle) -> &mut dyn CommitProc;
-    }
-
-    #[test]
-    fn t() {
-        #[derive(Clone, PartialEq, Eq)]
-        struct S(u8);
-        #[derive(Clone, PartialEq, Eq)]
-        struct S0(u8);
-        #[derive(Default)]
-        struct P0(Vec<P>);
-        struct P(S);
-        impl Parametrized for P0 {
-            type T = S;
-            fn register_param(&mut self, t: Self::T) -> ParametrizedCommitProcessorHandle {
-                let l = self.0.iter().position(|x| &x.0 == &t).unwrap_or_else(|| {
-                    let l = self.0.len();
-                    self.0.push(P(t));
-                    l
-                });
-                ParametrizedCommitProcessorHandle(self.erased_handle(), ConfigParametersHandle(l))
-            }
-        }
-        impl CommitProc for P {
-            fn process_root_tree(
-                &mut self,
-                repository: &git2::Repository,
-                tree_oid: git2::Oid,
-            ) -> hyper_ast::store::defaults::NodeIdentifier {
-                todo!()
-            }
-
-            fn p(&mut self) {
-                dbg!()
-            }
-        }
-        impl ParametrizedCommitProc for P0 {
-            fn get(&mut self, parameters: ConfigParametersHandle) -> &mut dyn CommitProc {
-                &mut self.0[parameters.0]
-            }
-        }
-
-        pub struct ProcessorMap<V>(std::collections::HashMap<std::any::TypeId, V>);
-        impl<V> Default for ProcessorMap<V> {
-            fn default() -> Self {
-                Self(Default::default())
-            }
-        }
-
-        unsafe impl<V: Send> Send for ProcessorMap<V> {}
-        unsafe impl<V: Sync> Sync for ProcessorMap<V> {}
-
-        // Should not need to be public
-        pub trait ErasableProcessor: Any + ToErasedProc + ParametrizedCommitProc {}
-        pub trait ToErasedProc {
-            fn to_erasable_processor(self: Box<Self>) -> Box<dyn ErasableProcessor>;
-        }
-
-        impl<T: ErasableProcessor> ToErasedProc for T {
-            fn to_erasable_processor(self: Box<Self>) -> Box<dyn ErasableProcessor> {
-                self
-            }
-        }
-        impl<T> ErasableProcessor for T where T: Any + ParametrizedCommitProc {}
-
-        // NOTE crazy good stuff
-        impl ProcessorMap<Box<dyn ErasableProcessor>> {
-            pub fn by_id(
-                &mut self,
-                id: &std::any::TypeId,
-            ) -> Option<&mut (dyn ErasableProcessor + 'static)> {
-                self.0.get_mut(id).map(|x| x.as_mut())
-            }
-            pub fn mut_or_default<T: 'static + ToErasedProc + Default + Send + Sync>(
-                &mut self,
-            ) -> &mut T {
-                let r = self
-                    .0
-                    .entry(std::any::TypeId::of::<T>())
-                    .or_insert_with(|| Box::new(T::default()).to_erasable_processor());
-                let r = r.as_mut();
-                let r = <dyn Any>::downcast_mut(r);
-                r.unwrap()
-            }
-        }
-
-        let mut h = ProcessorMap::<Box<dyn ErasableProcessor>>::default();
-        // The registered parameter is type checked
-        let hh = h.mut_or_default::<P0>().register_param(S(42));
-        // You can easily store hh in any collection.
-        // You can easily add a method to CommitProc.
-        h.by_id(&hh.0 .0).unwrap().get(hh.1).p();
-    }
-
-    pub type ProcessorMap = spreaded::ProcessorMap<Box<dyn spreaded::ErasableProcessor>>;
-
-    mod spreaded {
-        use super::*;
-
-        pub struct ProcessorMap<V>(std::collections::HashMap<std::any::TypeId, V>);
-        impl<V> Default for ProcessorMap<V> {
-            fn default() -> Self {
-                Self(Default::default())
-            }
-        }
-        impl<V> ProcessorMap<V> {
-            pub(crate) fn clear(&mut self) {
-                self.clear()
-            }
-        }
-
-        unsafe impl<V: Send> Send for ProcessorMap<V> {}
-        unsafe impl<V: Sync> Sync for ProcessorMap<V> {}
-
-        // Should not need to be public
-        pub trait ErasableProcessor: Any + ToErasedProc + ParametrizedCommitProc {}
-        pub trait ToErasedProc {
-            fn to_erasable_processor(self: Box<Self>) -> Box<dyn ErasableProcessor>;
-            fn as_mut_any(&mut self) -> &mut dyn Any;
-            fn as_any(&self) -> &dyn Any;
-        }
-
-        impl<T: ErasableProcessor> ToErasedProc for T {
-            fn to_erasable_processor(self: Box<Self>) -> Box<dyn ErasableProcessor> {
-                self
-            }
-            fn as_mut_any(&mut self) -> &mut dyn Any {
-                self
-            }
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
-        }
-        impl<T> ErasableProcessor for T where T: Any + ParametrizedCommitProc {}
-        // NOTE crazy good stuff
-        impl ProcessorMap<Box<dyn ErasableProcessor>> {
-            pub fn by_id(
-                &mut self,
-                id: &std::any::TypeId,
-            ) -> Option<&mut (dyn ErasableProcessor + 'static)> {
-                self.0.get_mut(id).map(|x| x.as_mut())
-            }
-            pub fn mut_or_default<T: 'static + ToErasedProc + Default + Send + Sync>(
-                &mut self,
-            ) -> &mut T {
-                let r = self
-                    .0
-                    .entry(std::any::TypeId::of::<T>())
-                    .or_insert_with(|| Box::new(T::default()).to_erasable_processor());
-                let r = r.as_mut();
-                let r = <dyn Any>::downcast_mut(r.as_mut_any());
-                r.unwrap()
-            }
-        }
-        #[test]
-        fn a() {
-            #[derive(Clone, PartialEq, Eq)]
-            struct S(u8);
-            #[derive(Clone, PartialEq, Eq)]
-            struct S0(u8);
-            #[derive(Default)]
-            struct P0(Vec<P>);
-            struct P(S);
-            impl Parametrized for P0 {
-                type T = S;
-                fn register_param(&mut self, t: Self::T) -> ParametrizedCommitProcessorHandle {
-                    let l = self.0.iter().position(|x| &x.0 == &t).unwrap_or_else(|| {
-                        let l = self.0.len();
-                        self.0.push(P(t));
-                        l
-                    });
-                    ParametrizedCommitProcessorHandle(
-                        self.erased_handle(),
-                        ConfigParametersHandle(l),
-                    )
-                }
-            }
-            impl CommitProc for P {
-                fn process_root_tree(
-                    &mut self,
-                    repository: &git2::Repository,
-                    tree_oid: git2::Oid,
-                ) -> hyper_ast::store::defaults::NodeIdentifier {
-                    todo!()
-                }
-
-                fn p(&mut self) {
-                    dbg!()
-                }
-            }
-            impl ParametrizedCommitProc for P0 {
-                fn get(&mut self, parameters: ConfigParametersHandle) -> &mut dyn CommitProc {
-                    &mut self.0[parameters.0]
-                }
-            }
-
-            let mut h = ProcessorMap::<Box<dyn ErasableProcessor>>::default();
-            // The registered parameter is type checked
-            let hh = h.mut_or_default::<P0>().register_param(S(42));
-            // You can easily store hh in any collection.
-            // You can easily add a method to CommitProc.
-            h.by_id(&hh.0 .0).unwrap().get(hh.1).p();
-        }
-    }
-}
+pub(crate) mod erased;
 
 macro_rules! make_multi {
     ($($wb:tt)*) => {};

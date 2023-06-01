@@ -1,6 +1,6 @@
 // window of one is just consecutive commits
 
-use hyper_ast_cvs_git::multi_preprocessed::PreProcessedRepositories;
+use hyper_ast_cvs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories};
 use std::{io::Write, path::PathBuf, str::FromStr};
 
 use hyper_ast_benchmark_diffs::cross_repo::{windowed_commits_compare, CommitCompareParameters};
@@ -69,27 +69,34 @@ fn main() {
     });
     let out = out_validity.zip(out_perfs);
 
-    let diff_algorithm = args.get(3).expect("the diff algo for java gumtree eg. Chawathe or None if it takes too long");
+    let diff_algorithm = args
+        .get(3)
+        .expect("the diff algo for java gumtree eg. Chawathe or None if it takes too long");
 
     let wanted = &args[4..];
 
+    let mut preprocessed = PreProcessedRepositories::default();
     let params = DATASET
         .iter()
         .filter_map(|(short, name, after)| {
             if !wanted.iter().any(|x| x == short) {
-                return None
+                return None;
             }
+            let (user, name) = name.split_once("/").unwrap();
+            let repo = Forge::Github.repo(user, name);
+            let config = hyper_ast_cvs_git::processing::RepoConfig::JavaMaven;
+            let configured_repo = preprocessed.register_config(repo, config);
             Some(CommitCompareParameters {
-                name,
+                // name,
+                configured_repo,
                 before: "",
                 after,
-                dir_path: "",
+                // dir_path: "", // TODO reallow to specify dir_path
             })
         })
         .collect();
 
     let limit = 1000;
-    let preprocessed = PreProcessedRepositories::default();
     windowed_commits_compare(2, preprocessed, params, diff_algorithm, limit, out);
 }
 

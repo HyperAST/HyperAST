@@ -21,7 +21,10 @@ use crate::{
     make_processor::MakeProcessor,
     maven::MavenModuleAcc,
     maven_processor::MavenProcessor,
-    processing::{file_sys, CachesHolder},
+    processing::{
+        erased::ParametrizedCommitProcessorHandle, file_sys, CacheHolding, ConfiguredRepo,
+        ConfiguredRepo2,
+    },
     utils::TypeMap,
     Commit, DefaultMetrics, Processor, SimpleStores, TStore,
 };
@@ -71,10 +74,9 @@ pub struct RepositoryProcessor {
     // pub(super) cpp_md_cache: cpp_tree_gen::MDCache,
     // #[cfg(feature = "cpp")]
     // pub object_map_cpp: NamedMap<(cpp_tree_gen::Local, IsSkippedAna)>,
-    pub processing_systems: TypeMap,
-    // pub processing_systems: crate::processing::erased_processor_collection::ProcessorMap,
+    // pub processing_systems: TypeMap,
+    pub processing_systems: crate::processing::erased::ProcessorMap,
 }
-
 // NOTE what about making a constraints between sys processors
 // it should be a 1..n relation so it must be impl on the target
 // Examples:
@@ -175,7 +177,69 @@ impl PreProcessedRepository {
         self.processor.child_by_type(d, t)
     }
 }
+impl RepositoryProcessor {
+    pub(crate) fn pre_process(
+        &mut self,
+        repository: &mut ConfiguredRepo2,
+        before: &str,
+        after: &str,
+    ) -> Result<Vec<git2::Oid>, git2::Error> {
+        log::info!(
+            "commits to process: {:?}",
+            all_commits_between(&repository.repo, before, after).map(|x| x.count())
+        );
+        let rw = all_commits_between(&repository.repo, before, after)?;
+        let r = rw
+            .map(|oid| {
+                let oid = oid.unwrap();
+                let builder =
+                    crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
+                let get = &self
+                    .processing_systems
+                    .by_id_mut(&repository.config.0)
+                    .unwrap()
+                    .get_mut(repository.config.1);
+                let _id = get
+                    .prepare_processing(&repository.repo, builder)
+                    .process(self);
+                oid
+            })
+            .collect();
+        Ok(r)
+    }
 
+    pub fn pre_process_with_limit(
+        &mut self,
+        repository: &mut ConfiguredRepo2,
+        before: &str,
+        after: &str,
+        limit: usize,
+    ) -> Result<Vec<git2::Oid>, git2::Error> {
+        log::info!(
+            "commits to process: {:?}",
+            all_commits_between(&repository.repo, before, after).map(|x| x.count())
+        );
+        let rw = all_commits_between(&repository.repo, before, after)?;
+        let r = rw
+            .take(limit)
+            .map(|oid| {
+                let oid = oid.unwrap();
+                let builder =
+                    crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
+                let commit_processor = self
+                    .processing_systems
+                    .by_id_mut(&repository.config.0)
+                    .unwrap()
+                    .get_mut(repository.config.1);
+                let id = commit_processor
+                    .prepare_processing(&repository.repo, builder)
+                    .process(self);
+                oid
+            })
+            .collect();
+        Ok(r)
+    }
+}
 #[cfg(feature = "maven_java")]
 impl PreProcessedRepository {
     pub fn pre_process(
@@ -479,7 +543,7 @@ pub(crate) trait CommitProcessor<Sys> {
     ) -> Commit {
         let dir_path = PathBuf::from(module_path);
         let mut dir_path = dir_path.components().peekable();
-        let builder = CommitMonitoringBuilder::start(repository, commit_oid);
+        let builder = CommitBuilder::start(repository, commit_oid);
         let module = self.handle_module::<RMS>(repository, &mut dir_path, b"", builder.tree_oid());
         builder.finish(module.id())
     }
@@ -490,14 +554,19 @@ pub trait IdHolder {
     fn id(&self) -> Self::Id;
 }
 
-pub(crate) struct CommitMonitoringBuilder {
+/// Help building a commit, also measure time and memory usage
+/// 
+/// WARN the memory usage is actually the diference of heap size between the start and end of processing,
+/// and it would be biased by concurent building (not possible at the time of writing this warning)
+pub struct CommitBuilder {
+    commit_oid: git2::Oid,
     tree_oid: git2::Oid,
     parents: Vec<git2::Oid>,
     memory_used: hyper_ast_gen_ts_java::utils::MemoryUsage,
     time: Instant,
 }
 
-impl CommitMonitoringBuilder {
+impl CommitBuilder {
     #[must_use]
     pub(crate) fn start(repository: &Repository, commit_oid: git2::Oid) -> Self {
         let commit = repository.find_commit(commit_oid).unwrap();
@@ -510,6 +579,7 @@ impl CommitMonitoringBuilder {
         let memory_used = memusage_linux();
         let time = Instant::now();
         Self {
+            commit_oid,
             tree_oid,
             parents,
             time,
@@ -519,6 +589,10 @@ impl CommitMonitoringBuilder {
 
     pub(crate) fn tree_oid(&self) -> git2::Oid {
         self.tree_oid
+    }
+
+    pub(crate) fn commit_oid(&self) -> git2::Oid {
+        self.commit_oid
     }
 
     pub(crate) fn finish(self, ast_root: NodeIdentifier) -> Commit {
@@ -772,7 +846,7 @@ impl TypeMap {
     }
 }
 
-impl<'cache, C: crate::processing::CachesHolder> CachingBlobWrapper<'cache, C> {
+impl<'cache, C: crate::processing::CachesHolding> CachingBlobWrapper<'cache, C> {
     pub fn handle<
         N,
         E: From<std::str::Utf8Error>,
@@ -859,6 +933,150 @@ impl<'cache, C: crate::processing::CachesHolder> CachingBlobWrapper<'cache, C> {
         if let Ok(x) = &full_node {
             self.caches
                 .mut_or_default::<C::Caches>()
+                .insert((oid, name.clone()), x.clone());
+        }
+        full_node
+    }
+}
+pub(crate) struct CachingBlobWrapper2<'cache, C> {
+    processors: &'cache mut crate::processing::erased::ProcessorMap,
+    phantom: std::marker::PhantomData<C>,
+}
+
+impl crate::processing::erased::ProcessorMap {
+    pub(crate) fn caching_blob_handler<C>(&mut self) -> CachingBlobWrapper2<'_, C> {
+        CachingBlobWrapper2 {
+            processors: self,
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
+impl<'cache, Sys> CachingBlobWrapper2<'cache, Sys> {
+    pub fn handle<
+        T: crate::processing::erased::CommitProcExt,
+        N,
+        E: From<std::str::Utf8Error>,
+        F: FnOnce(
+            &mut crate::processing::erased::ProcessorMap,
+            &N,
+            &[u8],
+        ) -> Result<<Sys::Caches as crate::processing::ObjectMapper>::V, E>,
+    >(
+        &mut self,
+        oid: Oid,
+        repository: &Repository,
+        name: &N,
+        parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<T>,
+        wrapped: F,
+    ) -> Result<<Sys::Caches as crate::processing::ObjectMapper>::V, E>
+    where
+        for<'a> &'a N: TryInto<&'a str>,
+        // T: crate::processing::erased_processor_collection::CommitProcExt,
+        // T::Holder: 'static + crate::processing::erased_processor_collection::ErasableProcessor + Default + Send + Sync,
+        // T: crate::processing::CachesHolder,
+        // T::Caches: 'static + crate::processing::ObjectMapper<K = Oid> + Send + Sync + Default,
+
+        // Sys::Holder: 'static + crate::processing::erased::ErasableProcessor + Default + Send + Sync,
+        // Sys::Holder: crate::processing::CacheHolding<Sys::Caches>,
+        // Sys: crate::processing::CachesHolding,
+        // Sys::Caches: 'static + crate::processing::ObjectMapper<K = Oid> + Send + Sync + Default,
+        // <Sys::Caches as crate::processing::ObjectMapper>::V: Clone,
+        Sys: crate::processing::CachesHolding,
+        Sys::Caches: 'static + crate::processing::ObjectMapper<K = Oid> + Send + Sync + Default,
+        <Sys::Caches as crate::processing::ObjectMapper>::V: Clone,
+        T::Holder: 'static + crate::processing::erased::ErasableProcessor + Default + Send + Sync,
+        T::Holder: crate::processing::erased::ParametrizedCommitProc2,
+        <T::Holder as crate::processing::erased::ParametrizedCommitProc2>::Proc:
+            crate::processing::CacheHolding<Sys::Caches>,
+    {
+        use crate::processing::erased::ParametrizedCommitProc2;
+        // let caches = self.processors.mut_or_default::<Sys::Holder>().get_caches_mut();
+        let caches = self.processors.mut_or_default::<T::Holder>();
+        let caches = caches.with_parameters_mut(parameters.0);
+        let caches = caches.get_caches_mut();
+        use crate::processing::ObjectMapper;
+        if let Some(already) = caches.get(&oid) {
+            //.object_map_pom.get(&oid) {
+            // TODO reinit already computed node for post order
+            let full_node = already.clone();
+            return Ok(full_node);
+        }
+        log::info!(
+            "blob {:?} {:?}",
+            name.try_into().unwrap_or("'non utf8 name'"),
+            oid
+        );
+        let blob = repository.find_blob(oid).unwrap();
+        std::str::from_utf8(blob.content())?;
+        let text = blob.content();
+        let full_node = wrapped(self.processors, &name, text);
+        if let Ok(x) = &full_node {
+            self.processors
+                // .mut_or_default::<Sys::Holder>().get_caches_mut()
+                .mut_or_default::<T::Holder>()
+                .with_parameters_mut(parameters.0)
+                .get_caches_mut()
+                .insert(oid, x.clone());
+        }
+        full_node
+    }
+    pub fn handle2<
+        T: crate::processing::erased::CommitProcExt,
+        N: Clone,
+        E: From<std::str::Utf8Error>,
+        F: FnOnce(
+            &mut crate::processing::erased::ProcessorMap,
+            &N,
+            &[u8],
+        ) -> Result<<Sys::Caches as crate::processing::ObjectMapper>::V, E>,
+    >(
+        &mut self,
+        oid: Oid,
+        repository: &Repository,
+        name: &N,
+        parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<T>,
+        wrapped: F,
+    ) -> Result<<Sys::Caches as crate::processing::ObjectMapper>::V, E>
+    where
+        for<'a> &'a N: TryInto<&'a str>,
+        // Sys::Holder: 'static + crate::processing::erased_processor_collection::ErasableProcessor + Default + Send + Sync,
+        // Sys::Holder: crate::processing::erased_processor_collection::ParametrizedCommitProc2,
+        // <Sys::Holder as crate::processing::erased_processor_collection::ParametrizedCommitProc2>::Proc: crate::processing::CacheHolding<Sys::Caches>,
+        Sys: crate::processing::CachesHolding,
+        Sys::Caches:
+            'static + crate::processing::ObjectMapper<K = (Oid, N)> + Send + Sync + Default,
+        <Sys::Caches as crate::processing::ObjectMapper>::V: Clone,
+        T::Holder: 'static + crate::processing::erased::ErasableProcessor + Default + Send + Sync,
+        T::Holder: crate::processing::erased::ParametrizedCommitProc2,
+        <T::Holder as crate::processing::erased::ParametrizedCommitProc2>::Proc:
+            crate::processing::CacheHolding<Sys::Caches>,
+    {
+        use crate::processing::erased::ParametrizedCommitProc2;
+        // let caches = self.processors.mut_or_default::<Sys::Holder>();
+        let caches = self.processors.mut_or_default::<T::Holder>();
+        let caches = caches.with_parameters_mut(parameters.0);
+        let caches = caches.get_caches_mut();
+        use crate::processing::ObjectMapper;
+        if let Some(already) = caches.get(&(oid, name.clone())) {
+            //.object_map_pom.get(&oid) {
+            // TODO reinit already computed node for post order
+            let full_node = already.clone();
+            return Ok(full_node);
+        }
+        log::info!(
+            "blob {:?} {:?}",
+            name.try_into().unwrap_or("'non utf8 name'"),
+            oid
+        );
+        let blob = repository.find_blob(oid).unwrap();
+        std::str::from_utf8(blob.content())?;
+        let text = blob.content();
+        let full_node = wrapped(self.processors, &name, text);
+        if let Ok(x) = &full_node {
+            self.processors
+                .mut_or_default::<T::Holder>()
+                .with_parameters_mut(parameters.0)
+                .get_caches_mut()
                 .insert((oid, name.clone()), x.clone());
         }
         full_node

@@ -1,5 +1,6 @@
 use std::{
     iter::Peekable,
+    marker::PhantomData,
     path::{Components, PathBuf},
 };
 
@@ -11,7 +12,7 @@ use crate::{
     git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
     maven::{MavenModuleAcc, MD},
     preprocessed::RepositoryProcessor,
-    processing::{InFiles, ObjectName},
+    processing::{erased::ParametrizedCommitProc2, CacheHolding, InFiles, ObjectName},
     Processor, SimpleStores,
 };
 
@@ -22,6 +23,7 @@ pub struct MavenProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
     repository: &'a Repository,
     stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
     dir_path: &'c mut Peekable<Components<'c>>,
+    handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<MavenProc>,
 }
 
 impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
@@ -34,6 +36,11 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
         name: &[u8],
         oid: git2::Oid,
     ) -> Self {
+        let h = prepro
+            .processing_systems
+            .mut_or_default::<MavenProcessorHolder>();
+        let handle =
+            <MavenProc as crate::processing::erased::CommitProcExt>::register_param(h, Parameter);
         let tree = repository.find_tree(oid).unwrap();
         let prepared = prepare_dir_exploration(tree, &mut dir_path);
         let name = std::str::from_utf8(&name).unwrap().to_string();
@@ -43,11 +50,12 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
             repository,
             prepro,
             dir_path,
+            handle,
         }
     }
 }
 
-type Caches = <crate::processing::file_sys::Maven as crate::processing::CachesHolder>::Caches;
+type Caches = <crate::processing::file_sys::Maven as crate::processing::CachesHolding>::Caches;
 
 impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
     for MavenProcessor<'a, 'b, 'c, RMS, FFWD, MavenModuleAcc>
@@ -71,6 +79,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                             &mut self.stack.last_mut().unwrap().2,
                             name,
                             &self.repository,
+                            self.handle.into(),
                         )
                         .unwrap()
                 }
@@ -82,7 +91,8 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
         let full_node = Self::make(acc, self.prepro.main_stores_mut());
         self.prepro
             .processing_systems
-            .mut_or_default::<Caches>()
+            .mut_or_default::<MavenProcessorHolder>()
+            .get_caches_mut()
             .object_map
             .insert(oid, full_node.clone());
 
@@ -134,8 +144,10 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
         if let Some(already) = self
             .prepro
             .processing_systems
-            .get::<Caches>()
-            .and_then(|c| c.object_map.get(&oid))
+            .mut_or_default::<MavenProcessorHolder>()
+            .get_caches_mut()
+            .object_map
+            .get(&oid)
         {
             // reinit already computed node for post order
             let full_node = already.clone();
@@ -279,11 +291,12 @@ impl RepositoryProcessor {
         parent_acc: &mut MavenModuleAcc,
         name: ObjectName,
         repository: &Repository,
+        parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<PomProc>,
     ) -> Result<(), crate::ParseErr> {
         let x = self
             .processing_systems
             .caching_blob_handler::<crate::processing::file_sys::Pom>()
-            .handle(oid, repository, &name, |c, n, t| {
+            .handle(oid, repository, &name, parameters, |c, n, t| {
                 crate::maven::handle_pom_file(
                     &mut XmlTreeGen {
                         line_break: "\n".as_bytes().to_vec(),
@@ -432,4 +445,257 @@ pub(crate) fn prepare_dir_exploration(
         }
     }
     children_objects
+}
+
+// # Pom
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct Parameter;
+impl From<crate::processing::erased::ParametrizedCommitProcessor2Handle<MavenProc>>
+    for crate::processing::erased::ParametrizedCommitProcessor2Handle<PomProc>
+{
+    fn from(
+        value: crate::processing::erased::ParametrizedCommitProcessor2Handle<MavenProc>,
+    ) -> Self {
+        crate::processing::erased::ParametrizedCommitProcessor2Handle(value.0, PhantomData)
+    }
+}
+#[derive(Default)]
+struct PomProcessorHolder(Option<PomProc>);
+struct PomProc {
+    parameter: Parameter,
+    cache: crate::processing::caches::Pom,
+}
+impl crate::processing::erased::Parametrized for PomProcessorHolder {
+    type T = Parameter;
+    fn register_param(
+        &mut self,
+        t: Self::T,
+    ) -> crate::processing::erased::ParametrizedCommitProcessorHandle {
+        let l = self
+            .0
+            .iter()
+            .position(|x| &x.parameter == &t)
+            .unwrap_or_else(|| {
+                let l = 0; //self.0.len();
+                           // self.0.push(PomProc(t));
+                self.0 = Some(PomProc {
+                    parameter: t,
+                    cache: Default::default(),
+                });
+                l
+            });
+        use crate::processing::erased::ConfigParametersHandle;
+        use crate::processing::erased::ParametrizedCommitProc;
+        use crate::processing::erased::ParametrizedCommitProcessorHandle;
+        ParametrizedCommitProcessorHandle(self.erased_handle(), ConfigParametersHandle(l))
+    }
+}
+impl crate::processing::erased::CommitProc for PomProc {
+    fn process_root_tree(
+        &mut self,
+        repository: &git2::Repository,
+        tree_oid: &git2::Oid,
+    ) -> hyper_ast::store::defaults::NodeIdentifier {
+        unimplemented!()
+    }
+
+    fn prepare_processing(
+        &self,
+        repository: &git2::Repository,
+        commit_builder: crate::preprocessed::CommitBuilder,
+    ) -> Box<dyn crate::processing::erased::PreparedCommitProc> {
+        unimplemented!()
+    }
+
+    fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
+        unimplemented!()
+    }
+}
+
+impl crate::processing::erased::CommitProcExt for PomProc {
+    type Holder = PomProcessorHolder;
+}
+impl crate::processing::erased::ParametrizedCommitProc2 for PomProcessorHolder {
+    type Proc = PomProc;
+
+    fn with_parameters_mut(
+        &mut self,
+        parameters: crate::processing::erased::ConfigParametersHandle,
+    ) -> &mut Self::Proc {
+        assert_eq!(0, parameters.0);
+        self.0.as_mut().unwrap()
+    }
+
+    fn with_parameters(
+        & self,
+        parameters: crate::processing::erased::ConfigParametersHandle,
+    ) -> & Self::Proc {
+        assert_eq!(0, parameters.0);
+        self.0.as_ref().unwrap()
+    }
+}
+impl CacheHolding<crate::processing::caches::Pom> for PomProc {
+    fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Pom {
+        &mut self.cache
+    }
+
+    fn get_caches(&self) -> &crate::processing::caches::Pom {
+        &self.cache
+    }
+}
+impl CacheHolding<crate::processing::caches::Pom> for PomProcessorHolder {
+    fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Pom {
+        &mut self.0.as_mut().unwrap().cache
+    }
+
+    fn get_caches(&self) -> &crate::processing::caches::Pom {
+        &self.0.as_ref().unwrap().cache
+    }
+}
+
+// # Maven
+#[derive(Default)]
+pub struct MavenProcessorHolder(Option<MavenProc>);
+pub struct MavenProc {
+    parameter: Parameter,
+    cache: crate::processing::caches::Maven,
+    commits: std::collections::HashMap<git2::Oid, crate::Commit>,
+}
+impl crate::processing::erased::Parametrized for MavenProcessorHolder {
+    type T = Parameter;
+    fn register_param(
+        &mut self,
+        t: Self::T,
+    ) -> crate::processing::erased::ParametrizedCommitProcessorHandle {
+        let l = self
+            .0
+            .iter()
+            .position(|x| &x.parameter == &t)
+            .unwrap_or_else(|| {
+                let l = 0; //self.0.len();
+                           // self.0.push(MavenProc(t));
+                self.0 = Some(MavenProc {
+                    parameter: t,
+                    cache: Default::default(),
+                    commits: Default::default(),
+                });
+                l
+            });
+        use crate::processing::erased::ConfigParametersHandle;
+        use crate::processing::erased::ParametrizedCommitProc;
+        use crate::processing::erased::ParametrizedCommitProcessorHandle;
+        ParametrizedCommitProcessorHandle(self.erased_handle(), ConfigParametersHandle(l))
+    }
+}
+
+struct PreparedMavenCommitProc<'repo> {
+    repository: &'repo git2::Repository,
+    commit_builder: crate::preprocessed::CommitBuilder,
+}
+impl<'repo> crate::processing::erased::PreparedCommitProc for PreparedMavenCommitProc<'repo> {
+    fn process(
+        self: Box<PreparedMavenCommitProc<'repo>>,
+        prepro: &mut RepositoryProcessor,
+    ) -> hyper_ast::store::defaults::NodeIdentifier {
+        let dir_path = PathBuf::from("");
+        let mut dir_path = dir_path.components().peekable();
+        let name = b"";
+        // TODO check parameter in self to know it is a recusive module search
+        let root_full_node = MavenProcessor::<true, false, MavenModuleAcc>::new(
+            self.repository,
+            prepro,
+            &mut dir_path,
+            name,
+            self.commit_builder.tree_oid(),
+        )
+        .process();
+        let h = prepro
+            .processing_systems
+            .mut_or_default::<MavenProcessorHolder>();
+        let handle =
+            <MavenProc as crate::processing::erased::CommitProcExt>::register_param(h, Parameter);
+        let commit_oid = self.commit_builder.commit_oid();
+        let commit = self.commit_builder.finish(root_full_node.0);
+        h.with_parameters_mut(handle.0)
+            .commits
+            .insert(commit_oid, commit);
+        root_full_node.0
+    }
+}
+impl crate::processing::erased::CommitProc for MavenProc {
+    fn process_root_tree(
+        &mut self,
+        repository: &git2::Repository,
+        tree_oid: &git2::Oid,
+    ) -> hyper_ast::store::defaults::NodeIdentifier {
+        let dir_path = PathBuf::from("");
+        let mut dir_path = dir_path.components().peekable();
+        let name = b"";
+        // TODO check parameter in self to know it is a recusive module search
+        // let root_full_node = MavenProcessor::<true, false, MavenModuleAcc>::new(
+        //     repository,
+        //     self.prepro,
+        //     &mut dir_path,
+        //     name,
+        //     tree_oid,
+        // )
+        // .process();
+        // root_full_node.0
+        unimplemented!("cannot access retrieve RepositoryProcessor as a CommitProc is likely part of it, double mutable borrow RIP")
+    }
+
+    fn prepare_processing<'repo>(
+        &self,
+        repository: &'repo git2::Repository,
+        oids: crate::preprocessed::CommitBuilder,
+    ) -> Box<dyn crate::processing::erased::PreparedCommitProc + 'repo> {
+        Box::new(PreparedMavenCommitProc {
+            repository,
+            commit_builder: oids,
+        })
+    }
+
+    fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
+        todo!()
+    }
+}
+
+impl crate::processing::erased::CommitProcExt for MavenProc {
+    type Holder = MavenProcessorHolder;
+}
+impl crate::processing::erased::ParametrizedCommitProc2 for MavenProcessorHolder {
+    type Proc = MavenProc;
+
+    fn with_parameters_mut(
+        &mut self,
+        parameters: crate::processing::erased::ConfigParametersHandle,
+    ) -> &mut Self::Proc {
+        assert_eq!(0, parameters.0);
+        self.0.as_mut().unwrap()
+    }
+
+    fn with_parameters(
+        & self,
+        parameters: crate::processing::erased::ConfigParametersHandle,
+    ) -> & Self::Proc {
+        assert_eq!(0, parameters.0);
+        self.0.as_ref().unwrap()
+    }
+}
+impl CacheHolding<crate::processing::caches::Maven> for MavenProc {
+    fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Maven {
+        &mut self.cache
+    }
+    fn get_caches(&self) -> &crate::processing::caches::Maven {
+        &self.cache
+    }
+}
+impl CacheHolding<crate::processing::caches::Maven> for MavenProcessorHolder {
+    fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Maven {
+        &mut self.0.as_mut().unwrap().cache
+    }
+    fn get_caches(&self) -> &crate::processing::caches::Maven {
+        &self.0.as_ref().unwrap().cache
+    }
 }

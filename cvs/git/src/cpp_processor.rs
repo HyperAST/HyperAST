@@ -20,7 +20,7 @@ use crate::{
     git::BasicGitObject,
     make::MakeModuleAcc,
     preprocessed::{IsSkippedAna, RepositoryProcessor},
-    processing::{InFiles, ObjectName},
+    processing::{erased::CommitProcExt, CacheHolding, InFiles, ObjectName},
     Processor, SimpleStores,
 };
 
@@ -37,6 +37,7 @@ pub struct CppProcessor<'repo, 'prepro, 'd, 'c, Acc> {
     prepro: &'prepro mut RepositoryProcessor,
     stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
     pub dir_path: &'d mut Peekable<Components<'c>>,
+    parameters: &'d crate::processing::erased::ParametrizedCommitProcessor2Handle<CppProc>,
 }
 
 impl<'repo, 'b, 'd, 'c, Acc: From<String>> CppProcessor<'repo, 'b, 'd, 'c, Acc> {
@@ -46,6 +47,7 @@ impl<'repo, 'b, 'd, 'c, Acc: From<String>> CppProcessor<'repo, 'b, 'd, 'c, Acc> 
         dir_path: &'d mut Peekable<Components<'c>>,
         name: &ObjectName,
         oid: git2::Oid,
+        parameters: &'d crate::processing::erased::ParametrizedCommitProcessor2Handle<CppProc>,
     ) -> Self {
         let tree = repository.find_tree(oid).unwrap();
         let prepared = prepare_dir_exploration(tree);
@@ -56,11 +58,12 @@ impl<'repo, 'b, 'd, 'c, Acc: From<String>> CppProcessor<'repo, 'b, 'd, 'c, Acc> 
             repository,
             prepro,
             dir_path,
+            parameters,
         }
     }
 }
 
-type Caches = <crate::processing::file_sys::Cpp as crate::processing::CachesHolder>::Caches;
+type Caches = <crate::processing::file_sys::Cpp as crate::processing::CachesHolding>::Caches;
 
 impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, CppAcc> {
     fn pre(&mut self, current_object: BasicGitObject) {
@@ -76,6 +79,7 @@ impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, Cp
                             &mut self.stack.last_mut().unwrap().2,
                             &name,
                             self.repository,
+                            *self.parameters,
                         )
                         .unwrap();
                 } else {
@@ -91,7 +95,8 @@ impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, Cp
         let full_node = make(acc, self.prepro.main_stores_mut());
         self.prepro
             .processing_systems
-            .mut_or_default::<Caches>()
+            .mut_or_default::<CppProcessorHolder>()
+            .get_caches_mut()
             .object_map
             .insert(key, (full_node.clone(), skiped_ana));
         let name = self.prepro.main_stores.label_store.get_or_insert(name);
@@ -123,8 +128,10 @@ impl<'repo, 'prepro, 'd, 'c> CppProcessor<'repo, 'prepro, 'd, 'c, CppAcc> {
         ) = self
             .prepro
             .processing_systems
-            .get::<Caches>()
-            .and_then(|c| c.object_map.get(&(oid, name.clone())))
+            .mut_or_default::<CppProcessorHolder>()
+            .get_caches_mut()
+            .object_map
+            .get(&(oid, name.clone()))
         {
             // reinit already computed node for post order
             let full_node = already.clone();
@@ -144,6 +151,102 @@ impl<'repo, 'prepro, 'd, 'c> CppProcessor<'repo, 'prepro, 'd, 'c, CppAcc> {
     }
 }
 
+#[derive(Clone, PartialEq, Eq)]
+pub struct Parameter;
+#[derive(Default)]
+pub(crate) struct CppProcessorHolder(Option<CppProc>);
+pub(crate) struct CppProc {
+    parameter: Parameter,
+    cache: crate::processing::caches::Cpp,
+    commits: std::collections::HashMap<git2::Oid, crate::Commit>,
+}
+impl crate::processing::erased::Parametrized for CppProcessorHolder {
+    type T = Parameter;
+    fn register_param(
+        &mut self,
+        t: Self::T,
+    ) -> crate::processing::erased::ParametrizedCommitProcessorHandle {
+        let l = self
+            .0
+            .iter()
+            .position(|x| &x.parameter == &t)
+            .unwrap_or_else(|| {
+                let l = 0; //self.0.len();
+                           // self.0.push(CppProc(t));
+                self.0 = Some(CppProc {
+                    parameter: t,
+                    cache: Default::default(),
+                    commits: Default::default(),
+                });
+                l
+            });
+        use crate::processing::erased::ConfigParametersHandle;
+        use crate::processing::erased::ParametrizedCommitProc;
+        use crate::processing::erased::ParametrizedCommitProcessorHandle;
+        ParametrizedCommitProcessorHandle(self.erased_handle(), ConfigParametersHandle(l))
+    }
+}
+impl crate::processing::erased::CommitProc for CppProc {
+    fn process_root_tree(
+        &mut self,
+        repository: &git2::Repository,
+        tree_oid: &git2::Oid,
+    ) -> hyper_ast::store::defaults::NodeIdentifier {
+        todo!()
+    }
+
+    fn prepare_processing(
+        &self,
+        repository: &git2::Repository,
+        tree_oid: crate::preprocessed::CommitBuilder,
+    ) -> Box<dyn crate::processing::erased::PreparedCommitProc> {
+        todo!()
+    }
+
+    fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
+        self.commits.get(&commit_oid)
+    }
+}
+
+impl crate::processing::erased::CommitProcExt for CppProc {
+    type Holder = CppProcessorHolder;
+}
+impl crate::processing::erased::ParametrizedCommitProc2 for CppProcessorHolder {
+    type Proc = CppProc;
+
+    fn with_parameters_mut(
+        &mut self,
+        parameters: crate::processing::erased::ConfigParametersHandle,
+    ) -> &mut Self::Proc {
+        assert_eq!(0, parameters.0);
+        self.0.as_mut().unwrap()
+    }
+
+    fn with_parameters(
+        & self,
+        parameters: crate::processing::erased::ConfigParametersHandle,
+    ) -> & Self::Proc {
+        assert_eq!(0, parameters.0);
+        self.0.as_ref().unwrap()
+    }
+}
+impl CacheHolding<crate::processing::caches::Cpp> for CppProc {
+    fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Cpp {
+        &mut self.cache
+    }
+    fn get_caches(&self) -> &crate::processing::caches::Cpp {
+        &self.cache
+    }
+}
+impl CacheHolding<crate::processing::caches::Cpp> for CppProcessorHolder {
+    fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Cpp {
+        &mut self.0.as_mut().unwrap().cache
+    }
+    fn get_caches(&self) -> &crate::processing::caches::Cpp {
+        &self.0.as_ref().unwrap().cache
+    }
+}
+
 #[cfg(feature = "cpp")]
 impl RepositoryProcessor {
     fn handle_cpp_blob(
@@ -151,10 +254,11 @@ impl RepositoryProcessor {
         oid: Oid,
         name: &ObjectName,
         repository: &Repository,
+        parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<CppProc>,
     ) -> Result<(cpp_gen::Local, IsSkippedAna), crate::ParseErr> {
         self.processing_systems
             .caching_blob_handler::<crate::processing::file_sys::Cpp>()
-            .handle2(oid, repository, &name, |c, n, t| {
+            .handle2(oid, repository, &name, parameters, |c, n, t| {
                 let line_break = if t.contains(&b'\r') {
                     "\r\n".as_bytes().to_vec()
                 } else {
@@ -164,7 +268,10 @@ impl RepositoryProcessor {
                     &mut cpp_gen::CppTreeGen {
                         line_break,
                         stores: &mut self.main_stores,
-                        md_cache: &mut c.mut_or_default::<Caches>().md_cache, //cpp_md_cache,
+                        md_cache: &mut c
+                            .mut_or_default::<CppProcessorHolder>()
+                            .get_caches_mut()
+                            .md_cache, //cpp_md_cache,
                     },
                     n,
                     t,
@@ -180,8 +287,9 @@ impl RepositoryProcessor {
         parent: &mut CppAcc,
         name: &ObjectName,
         repository: &Repository,
+        parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<CppProc>,
     ) -> Result<(), crate::ParseErr> {
-        let (full_node, skiped_ana) = self.handle_cpp_blob(oid, name, repository)?;
+        let (full_node, skiped_ana) = self.handle_cpp_blob(oid, name, repository, parameters)?;
         let name = self.intern_object_name(name);
         assert!(!parent.children_names.contains(&name));
 
@@ -194,8 +302,9 @@ impl RepositoryProcessor {
         parent: &mut MakeModuleAcc,
         name: &ObjectName,
         repository: &Repository,
+        parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<CppProc>,
     ) -> Result<(), crate::ParseErr> {
-        let (full_node, skiped_ana) = self.handle_cpp_blob(oid, name, repository)?;
+        let (full_node, skiped_ana) = self.handle_cpp_blob(oid, name, repository, parameters)?;
         let name = self.intern_object_name(name);
         // assert!(!parent_acc.children_names.contains(&name));
         // parent_acc.push_pom(name, x);
@@ -212,7 +321,12 @@ impl RepositoryProcessor {
         name: &ObjectName,
         oid: git2::Oid,
     ) -> (cpp_gen::Local, IsSkippedAna) {
-        CppProcessor::<CppAcc>::new(repository, self, dir_path, name, oid).process()
+        let h = self
+            .processing_systems
+            .mut_or_default::<CppProcessorHolder>();
+
+        let handle = CppProc::register_param(h, Parameter);
+        CppProcessor::<CppAcc>::new(repository, self, dir_path, name, oid, &handle).process()
     }
 
     pub(crate) fn help_handle_cpp_folder<'a, 'b, 'c, 'd: 'c>(
@@ -395,6 +509,7 @@ mod experiments {
                     &mut self.stack.last_mut().unwrap().2,
                     current_object.name(),
                     self.repository,
+                    *self.parameters,
                 )
                 .unwrap();
         }
@@ -420,7 +535,7 @@ mod experiments {
                     if crate::processing::file_sys::Cpp::matches(current_object.name()) {
                         self.help_handle_cpp_file(current_object)
                     } else {
-                        log::debug!("not java source file {:?}", current_object.name().try_str());
+                        log::debug!("not cpp source file {:?}", current_object.name().try_str());
                     }
                     None
                 }
@@ -435,7 +550,8 @@ mod experiments {
             let full_node = (full_node, skiped_ana);
             self.prepro
                 .processing_systems
-                .mut_or_default::<Caches>()
+                .mut_or_default::<CppProcessorHolder>()
+                .get_caches_mut()
                 .object_map
                 .insert(key, full_node.clone());
             if self.stack.is_empty() {

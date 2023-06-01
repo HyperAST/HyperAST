@@ -12,7 +12,9 @@ use hyper_ast::{
         self, HyperAST, IterableChildren, NodeStore, Typed, WithChildren, WithHashs, WithStats,
     },
 };
-use hyper_ast_cvs_git::{multi_preprocessed, preprocessed::child_at_path_tracked, TStore};
+use hyper_ast_cvs_git::{
+    git::Repo, multi_preprocessed, preprocessed::child_at_path_tracked, TStore, processing::ConfiguredRepoTrait,
+};
 use hyper_diff::{
     decompressed_tree_store::{
         DecompressedWithParent, LazyDecompressedTreeStore, PersistedNode,
@@ -31,7 +33,7 @@ use crate::{
     changes::{self, DstChanges, SrcChanges},
     matching, no_space,
     utils::get_pair_simp,
-    MappingAloneCache, PartialDecompCache, SharedState,
+    ConfiguredRepoHandle, MappingAloneCache, PartialDecompCache, SharedState,
 };
 
 #[derive(Deserialize, Clone, Debug)]
@@ -216,6 +218,19 @@ impl IntoResponse for TrackingResult {
     }
 }
 
+impl TrackingResult {
+    pub(crate) fn with_changes(
+        self,
+        (src_changes, dst_changes): (SrcChanges, DstChanges),
+    ) -> TrackingResultWithChanges {
+        TrackingResultWithChanges {
+            track: self,
+            src_changes,
+            dst_changes,
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct TrackingResultWithChanges {
     pub track: TrackingResult,
@@ -315,16 +330,20 @@ pub fn track_code(
         before,
         flags,
     } = query;
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
-    let configs = state.configs.read().unwrap();
-    let config = configs.get(&repo_spec).ok_or_else(|| TrackingError {
-        compute_time: now.elapsed().as_secs_f64(),
-        commits_processed: 0,
-        node_processed: 0,
-        message: "missing config for repository".to_string(),
-    })?;
-    let mut repo = repo_spec.fetch();
-    log::warn!("done cloning {}/{}", repo_spec.user, repo_spec.name);
+    let repo_specifier = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repo_handle = state
+        .repositories
+        .write()
+        .unwrap()
+        .get_config(repo_specifier)
+        .ok_or_else(|| TrackingError {
+            compute_time: now.elapsed().as_secs_f64(),
+            commits_processed: 0,
+            node_processed: 0,
+            message: "missing config for repository".to_string(),
+        })?;
+    let mut repository = repo_handle.fetch();
+    log::warn!("done cloning {}", repository.spec);
     // let mut get_mut = state.write().unwrap();
     // let state = get_mut.deref_mut();
     let mut commit = commit.clone();
@@ -340,52 +359,28 @@ pub fn track_code(
             .repositories
             .write()
             .unwrap()
-            .pre_process_with_config(&mut repo, "", &commit, config.into())
+            .pre_process_with_config2(&mut repository, "", &commit)
             .map_err(|e| TrackingError {
                 compute_time: now.elapsed().as_secs_f64(),
                 commits_processed: 0,
                 node_processed: 0,
                 message: e.to_string(),
             })?;
-        log::warn!(
-            "done construction of {commits:?} in {}/{}",
-            repo_spec.user,
-            repo_spec.name
-        );
+        log::warn!("done construction of {commits:?} in {}", repository.spec);
         let src_oid = commits[0];
         let dst_oid = commits[1];
         match aux(
             state.clone(),
+            &repository,
             src_oid,
             dst_oid,
             &file,
             start,
             end,
-            &repo_spec.user,
-            &repo_spec.name,
             &flags,
         ) {
-            MappingResult::Direct {
-                src:
-                    LocalPieceOfCode {
-                        file,
-                        start,
-                        end,
-                        path,
-                        path_ids,
-                    },
-                matches,
-            } => {
-                let aaa = PieceOfCode {
-                    user: repo_spec.user,
-                    name: repo_spec.name,
-                    commit,
-                    path,
-                    path_ids,
-                    file,
-                    start,
-                    end,
-                };
+            MappingResult::Direct { src: aaa, matches } => {
+                let aaa = aaa.globalize(repository.spec, commit);
                 let (src, intermediary) = if let Some(src) = source {
                     (src, Some(aaa))
                 } else {
@@ -401,27 +396,8 @@ pub fn track_code(
                 }
                 .into());
             }
-            MappingResult::Missing {
-                src:
-                    LocalPieceOfCode {
-                        file,
-                        start,
-                        end,
-                        path,
-                        path_ids,
-                    },
-                fallback,
-            } => {
-                let aaa = PieceOfCode {
-                    user: repo_spec.user,
-                    name: repo_spec.name,
-                    commit,
-                    path,
-                    path_ids,
-                    file,
-                    start,
-                    end,
-                };
+            MappingResult::Missing { src: aaa, fallback } => {
+                let aaa = aaa.globalize(repository.spec, commit);
                 let (src, intermediary) = if let Some(src) = source {
                     (src, Some(aaa))
                 } else {
@@ -447,16 +423,7 @@ pub fn track_code(
                 node_processed += nodes;
                 dbg!(src_oid, dst_oid);
                 if source.is_none() {
-                    source = Some(PieceOfCode {
-                        user: repo_spec.user.clone(),
-                        name: repo_spec.name.clone(),
-                        commit,
-                        path: src.path,
-                        path_ids: src.path_ids,
-                        file: src.file,
-                        start: src.start,
-                        end: src.end,
-                    });
+                    source = Some(src.globalize(repository.spec.clone(), commit));
                 }
                 commit = dst_oid.to_string();
                 if next.len() > 1 {
@@ -500,16 +467,20 @@ pub(crate) fn track_code_at_path(
         commit,
         path,
     } = path;
-    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
-    let configs = state.configs.read().unwrap();
-    let config = configs.get(&repo_spec).ok_or_else(|| TrackingError {
-        compute_time: now.elapsed().as_secs_f64(),
-        commits_processed: 0,
-        node_processed: 0,
-        message: "missing config for repository".to_string(),
-    })?;
-    let mut repo = repo_spec.fetch();
-    log::warn!("done cloning {}/{}", repo_spec.user, repo_spec.name);
+    let repo_specifier = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
+    let repository = state
+        .repositories
+        .write()
+        .unwrap()
+        .get_config(repo_specifier)
+        .ok_or_else(|| TrackingError {
+            compute_time: now.elapsed().as_secs_f64(),
+            commits_processed: 0,
+            node_processed: 0,
+            message: "missing config for repository".to_string(),
+        })?;
+    let mut repository = repository.fetch();
+    log::warn!("done cloning {}", repository.spec);
     // let mut get_mut = state.write().unwrap();
     // let state = get_mut.deref_mut();
     let mut commit = commit.clone();
@@ -523,25 +494,21 @@ pub(crate) fn track_code_at_path(
             .repositories
             .write()
             .unwrap()
-            .pre_process_with_config(&mut repo, "", &commit, config.into())
+            .pre_process_with_config2(&mut repository, "", &commit)
             .map_err(|e| TrackingError {
                 compute_time: now.elapsed().as_secs_f64(),
                 commits_processed: 0,
                 node_processed: 0,
                 message: e.to_string(),
             })?;
-        log::warn!(
-            "done construction of {commits:?} in {}/{}",
-            repo_spec.user,
-            repo_spec.name
-        );
+        log::warn!("done construction of {commits:?} in {}", repository.spec);
         let src_oid = commits[0];
         let dst_oid = if let Some(before) = &before {
             let commits = state
                 .repositories
                 .write()
                 .unwrap()
-                .pre_process_with_config(&mut repo, "", before, config.into())
+                .pre_process_with_config2(&mut repository, "", before)
                 .map_err(|e| TrackingError {
                     compute_time: now.elapsed().as_secs_f64(),
                     commits_processed: 0,
@@ -552,36 +519,9 @@ pub(crate) fn track_code_at_path(
         } else {
             commits[1]
         };
-        match aux2(
-            state.clone(),
-            src_oid,
-            dst_oid,
-            &path,
-            &repo_spec.user,
-            &repo_spec.name,
-            &flags,
-        ) {
-            MappingResult::Direct {
-                src:
-                    LocalPieceOfCode {
-                        file,
-                        start,
-                        end,
-                        path,
-                        path_ids,
-                    },
-                matches,
-            } => {
-                let aaa = PieceOfCode {
-                    user: repo_spec.user,
-                    name: repo_spec.name,
-                    commit,
-                    path,
-                    path_ids,
-                    file,
-                    start,
-                    end,
-                };
+        match aux2(state.clone(), &repository, src_oid, dst_oid, &path, &flags) {
+            MappingResult::Direct { src: aaa, matches } => {
+                let aaa = aaa.globalize(repository.spec, commit);
                 let (src, intermediary) = if let Some(src) = source {
                     (src, Some(aaa))
                 } else {
@@ -596,27 +536,8 @@ pub(crate) fn track_code_at_path(
                     matched: matches,
                 });
             }
-            MappingResult::Missing {
-                src:
-                    LocalPieceOfCode {
-                        file,
-                        start,
-                        end,
-                        path,
-                        path_ids,
-                    },
-                fallback,
-            } => {
-                let aaa = PieceOfCode {
-                    user: repo_spec.user,
-                    name: repo_spec.name,
-                    commit,
-                    path,
-                    path_ids,
-                    file,
-                    start,
-                    end,
-                };
+            MappingResult::Missing { src: aaa, fallback } => {
+                let aaa = aaa.globalize(repository.spec, commit);
                 let (src, intermediary) = if let Some(src) = source {
                     (src, Some(aaa))
                 } else {
@@ -640,16 +561,7 @@ pub(crate) fn track_code_at_path(
             MappingResult::Skipped { nodes, src, next } => {
                 // TODO handle cases where there is no more commits
                 if before.is_some() {
-                    let aaa = PieceOfCode {
-                        user: repo_spec.user.clone(),
-                        name: repo_spec.name.clone(),
-                        commit,
-                        path: src.path,
-                        path_ids: src.path_ids,
-                        file: src.file,
-                        start: src.start,
-                        end: src.end,
-                    };
+                    let aaa = src.globalize(repository.spec, commit);
                     let (src, intermediary) = if let Some(src) = source {
                         (src, Some(aaa))
                     } else {
@@ -667,16 +579,7 @@ pub(crate) fn track_code_at_path(
                 node_processed += nodes;
                 dbg!(src_oid, dst_oid);
                 if source.is_none() {
-                    source = Some(PieceOfCode {
-                        user: repo_spec.user.clone(),
-                        name: repo_spec.name.clone(),
-                        commit,
-                        path: src.path,
-                        path_ids: src.path_ids,
-                        file: src.file,
-                        start: src.start,
-                        end: src.end,
-                    });
+                    source = Some(src.globalize(repository.spec.clone(), commit));
                 }
                 // commit = dst_oid.to_string();
 
@@ -723,21 +626,18 @@ pub(crate) fn track_code_at_path_with_changes(
     } = path;
     let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
     let configs = state.clone();
-    let configs = configs.configs.read().unwrap();
-    let config = configs
-        .get(&repo_spec)
-        .ok_or_else(|| TrackingError {
-            compute_time: now.elapsed().as_secs_f64(),
-            commits_processed: 0,
-            node_processed: 0,
-            message: "missing config for repository".to_string(),
-        })?
-        .clone();
-    let config = &config;
-    let mut repo = repo_spec.fetch();
-    log::warn!("done cloning {}/{}", repo_spec.user, repo_spec.name);
-    // let mut get_mut = state.write().unwrap();
-    // let state = get_mut.deref_mut();
+    let repo_handle = state
+        .repositories
+        .write()
+        .unwrap()
+        .get_config(repo_spec).ok_or_else(|| TrackingError {
+        compute_time: now.elapsed().as_secs_f64(),
+        commits_processed: 0,
+        node_processed: 0,
+        message: "missing config for repository".to_string(),
+    })?;
+    let mut repository = repo_handle.fetch();
+    log::warn!("done cloning {}", repository.spec);
     let mut ori_oid = None;
     let mut commit = commit.clone();
     let mut node_processed = 0;
@@ -750,7 +650,7 @@ pub(crate) fn track_code_at_path_with_changes(
             .repositories
             .write()
             .unwrap()
-            .pre_process_with_config(&mut repo, "", &commit, config.into())
+            .pre_process_with_config2(&mut repository, "", &commit)
             .map_err(|e| TrackingError {
                 compute_time: now.elapsed().as_secs_f64(),
                 commits_processed: 0,
@@ -758,9 +658,8 @@ pub(crate) fn track_code_at_path_with_changes(
                 message: e.to_string(),
             })?;
         log::warn!(
-            "done construction of {commits:?} in {}/{}",
-            repo_spec.user,
-            repo_spec.name
+            "done construction of {commits:?} in {}",
+            repository.spec.user
         );
         let src_oid = commits[0];
         if ori_oid.is_none() {
@@ -774,49 +673,17 @@ pub(crate) fn track_code_at_path_with_changes(
                 message: "this commit has no parent".into(),
             });
         };
-        match aux2(
-            state.clone(),
-            src_oid,
-            dst_oid,
-            &path,
-            &repo_spec.user,
-            &repo_spec.name,
-            &flags,
-        ) {
-            MappingResult::Direct {
-                src:
-                    LocalPieceOfCode {
-                        file,
-                        start,
-                        end,
-                        path,
-                        path_ids,
-                    },
-                matches,
-            } => {
-                let (src_changes, dst_changes) = changes::added_deleted(
-                    state,
-                    dst_oid,
-                    ori_oid.unwrap(),
-                    &repo_spec.user,
-                    &repo_spec.name,
-                )
-                .map_err(|err| TrackingError {
-                    compute_time: now.elapsed().as_secs_f64(),
-                    commits_processed,
-                    node_processed,
-                    message: err,
-                })?;
-                let aaa = PieceOfCode {
-                    user: repo_spec.user,
-                    name: repo_spec.name,
-                    commit,
-                    path,
-                    path_ids,
-                    file,
-                    start,
-                    end,
-                };
+        match aux2(state.clone(), &repository, src_oid, dst_oid, &path, &flags) {
+            MappingResult::Direct { src: aaa, matches } => {
+                let changes =
+                    changes::added_deleted(state, &repository, dst_oid, ori_oid.unwrap())
+                        .map_err(|err| TrackingError {
+                            compute_time: now.elapsed().as_secs_f64(),
+                            commits_processed,
+                            node_processed,
+                            message: err,
+                        })?;
+                let aaa = aaa.globalize(repository.spec, commit);
                 let (src, intermediary) = if let Some(src) = source {
                     (src, Some(aaa))
                 } else {
@@ -830,46 +697,18 @@ pub(crate) fn track_code_at_path_with_changes(
                     fallback: None,
                     matched: matches,
                 };
-                return Ok(TrackingResultWithChanges {
-                    track: tracking_result,
-                    src_changes,
-                    dst_changes,
-                });
+                return Ok(tracking_result.with_changes(changes));
             }
-            MappingResult::Missing {
-                src:
-                    LocalPieceOfCode {
-                        file,
-                        start,
-                        end,
-                        path,
-                        path_ids,
-                    },
-                fallback,
-            } => {
-                let (src_changes, dst_changes) = changes::added_deleted(
-                    state,
-                    dst_oid,
-                    ori_oid.unwrap(),
-                    &repo_spec.user,
-                    &repo_spec.name,
-                )
-                .map_err(|err| TrackingError {
-                    compute_time: now.elapsed().as_secs_f64(),
-                    commits_processed,
-                    node_processed,
-                    message: err,
-                })?;
-                let aaa = PieceOfCode {
-                    user: repo_spec.user,
-                    name: repo_spec.name,
-                    commit,
-                    path,
-                    path_ids,
-                    file,
-                    start,
-                    end,
-                };
+            MappingResult::Missing { src, fallback } => {
+                let changes =
+                    changes::added_deleted(state, &repository, dst_oid, ori_oid.unwrap())
+                        .map_err(|err| TrackingError {
+                            compute_time: now.elapsed().as_secs_f64(),
+                            commits_processed,
+                            node_processed,
+                            message: err,
+                        })?;
+                let aaa = src.globalize(repository.spec, commit);
                 let (src, intermediary) = if let Some(src) = source {
                     (src, Some(aaa))
                 } else {
@@ -883,11 +722,7 @@ pub(crate) fn track_code_at_path_with_changes(
                     fallback: Some(fallback),
                     matched: vec![],
                 };
-                return Ok(TrackingResultWithChanges {
-                    track: tracking_result,
-                    src_changes,
-                    dst_changes,
-                });
+                return Ok(tracking_result.with_changes(changes));
             }
             MappingResult::Error(err) => Err(TrackingError {
                 compute_time: now.elapsed().as_secs_f64(),
@@ -901,29 +736,15 @@ pub(crate) fn track_code_at_path_with_changes(
                 dbg!(src_oid, dst_oid);
                 if commits.len() < 3 {
                     // NOTE there is no parent commit to dst_commit, thus we should stop now
-                    let (src_changes, dst_changes) = changes::added_deleted(
-                        state,
-                        dst_oid,
-                        ori_oid.unwrap(),
-                        &repo_spec.user,
-                        &repo_spec.name,
-                    )
-                    .map_err(|err| TrackingError {
-                        compute_time: now.elapsed().as_secs_f64(),
-                        commits_processed,
-                        node_processed,
-                        message: err,
-                    })?;
-                    let aaa = PieceOfCode {
-                        user: repo_spec.user,
-                        name: repo_spec.name,
-                        commit,
-                        path: src.path,
-                        path_ids: src.path_ids,
-                        file: src.file,
-                        start: src.start,
-                        end: src.end,
-                    };
+                    let changes =
+                        changes::added_deleted(state, &repository, dst_oid, ori_oid.unwrap())
+                            .map_err(|err| TrackingError {
+                                compute_time: now.elapsed().as_secs_f64(),
+                                commits_processed,
+                                node_processed,
+                                message: err,
+                            })?;
+                    let aaa = src.globalize(repository.spec, commit);
                     let (src, intermediary) = if let Some(src) = source {
                         (src, Some(aaa))
                     } else {
@@ -937,23 +758,10 @@ pub(crate) fn track_code_at_path_with_changes(
                         fallback: None,
                         matched: next,
                     };
-                    return Ok(TrackingResultWithChanges {
-                        track: tracking_result,
-                        src_changes,
-                        dst_changes,
-                    });
+                    return Ok(tracking_result.with_changes(changes));
                 }
                 if source.is_none() {
-                    source = Some(PieceOfCode {
-                        user: repo_spec.user.clone(),
-                        name: repo_spec.name.clone(),
-                        commit,
-                        path: src.path,
-                        path_ids: src.path_ids,
-                        file: src.file,
-                        start: src.start,
-                        end: src.end,
-                    });
+                    source = Some(src.globalize(repository.spec.clone(), commit));
                 }
                 // commit = dst_oid.to_string();
 
@@ -996,25 +804,6 @@ enum MappingResult {
     },
 }
 
-impl LocalPieceOfCode {
-    fn direct(self, matches: Vec<PieceOfCode>) -> MappingResult {
-        MappingResult::Direct { src: self, matches }
-    }
-    fn missing(self, fallback: PieceOfCode) -> MappingResult {
-        MappingResult::Missing {
-            src: self,
-            fallback,
-        }
-    }
-    fn skipped(self, nodes: usize, next: Vec<PieceOfCode>) -> MappingResult {
-        MappingResult::Skipped {
-            src: self,
-            nodes,
-            next,
-        }
-    }
-}
-
 struct LocalPieceOfCode {
     file: String,
     start: usize,
@@ -1023,22 +812,48 @@ struct LocalPieceOfCode {
     path_ids: Vec<NodeIdentifier>,
 }
 
+impl LocalPieceOfCode {
+    pub(crate) fn globalize(self, spec: Repo, commit: impl ToString) -> PieceOfCode {
+        let LocalPieceOfCode {
+            file,
+            start,
+            end,
+            path,
+            path_ids,
+        } = self;
+        let commit = commit.to_string();
+        PieceOfCode {
+            user: spec.user,
+            name: spec.name,
+            commit,
+            path,
+            path_ids,
+            file,
+            start,
+            end,
+        }
+    }
+}
+
 fn aux(
     state: std::sync::Arc<crate::AppState>,
+    repo_handle: &impl ConfiguredRepoTrait<Config = hyper_ast_cvs_git::processing::ParametrizedCommitProcessorHandle>,
     src_oid: hyper_ast_cvs_git::git::Oid,
     dst_oid: hyper_ast_cvs_git::git::Oid,
     file: &String,
     start: Option<usize>,
     end: Option<usize>,
-    user: &String,
-    name: &String,
     flags: &Flags,
 ) -> MappingResult {
     let repositories = state.repositories.read().unwrap();
-    let commit_src = repositories.commits.get_key_value(&src_oid).unwrap();
-    let src_tr = commit_src.1.ast_root;
-    let commit_dst = repositories.commits.get_key_value(&dst_oid).unwrap();
-    let dst_tr = commit_dst.1.ast_root;
+    let commit_src = repositories
+        .get_commit(repo_handle.config(),&src_oid)
+        .unwrap();
+    let src_tr = commit_src.ast_root;
+    let commit_dst = repositories
+    .get_commit(&repo_handle.config(),&dst_oid)
+        .unwrap();
+    let dst_tr = commit_dst.ast_root;
     let stores = &repositories.processor.main_stores;
     let node_store = &stores.node_store;
 
@@ -1069,8 +884,9 @@ fn aux(
     let (_, _, no_spaces_path_to_target) =
         compute_position_with_no_spaces(src_tr, &mut path_to_target.iter().map(|x| *x), stores);
 
-    let dst_oid = commit_dst.0.clone();
+    let dst_oid = dst_oid; // WARN not sure what I was doing there commit_dst.clone();
     aux_aux(
+        repo_handle,
         src_tr,
         dst_tr,
         path_to_target,
@@ -1081,8 +897,6 @@ fn aux(
         &state.partial_decomps,
         &state.mappings_alone,
         repositories,
-        user,
-        name,
         dst_oid,
         target_node,
     )
@@ -1090,18 +904,21 @@ fn aux(
 
 fn aux2(
     state: std::sync::Arc<crate::AppState>,
+    repo_handle: &impl ConfiguredRepoTrait<Config = hyper_ast_cvs_git::processing::ParametrizedCommitProcessorHandle>,
     src_oid: hyper_ast_cvs_git::git::Oid,
     dst_oid: hyper_ast_cvs_git::git::Oid,
     path: &[usize],
-    user: &String,
-    name: &String,
     flags: &Flags,
 ) -> MappingResult {
     let repositories = state.repositories.read().unwrap();
-    let commit_src = repositories.commits.get_key_value(&src_oid).unwrap();
-    let src_tr = commit_src.1.ast_root;
-    let commit_dst = repositories.commits.get_key_value(&dst_oid).unwrap();
-    let dst_tr = commit_dst.1.ast_root;
+    let commit_src = repositories
+        .get_commit(repo_handle.config(),&src_oid)
+        .unwrap();
+    let src_tr = commit_src.ast_root;
+    let commit_dst = repositories
+        .get_commit(repo_handle.config(),&dst_oid)
+        .unwrap();
+    let dst_tr = commit_dst.ast_root;
     let stores = &repositories.processor.main_stores;
     let node_store = &stores.node_store;
 
@@ -1111,8 +928,9 @@ fn aux2(
         compute_position_with_no_spaces(src_tr, &mut path_to_target.iter().map(|x| *x), stores);
     dbg!(&path_to_target, &no_spaces_path_to_target);
     let range = pos.range();
-    let dst_oid = commit_dst.0.clone();
+    let dst_oid = dst_oid; // WARN not sure what I was doing there commit_dst.clone();
     aux_aux(
+        repo_handle,
         src_tr,
         dst_tr,
         path_to_target,
@@ -1123,14 +941,13 @@ fn aux2(
         &state.partial_decomps,
         &state.mappings_alone,
         repositories,
-        user,
-        name,
         dst_oid,
         target_node,
     )
 }
 
 fn aux_aux(
+    repo_handle: &impl ConfiguredRepoTrait,
     src_tr: NodeIdentifier,
     dst_tr: NodeIdentifier,
     path_to_target: Vec<u16>,
@@ -1141,15 +958,13 @@ fn aux_aux(
     partial_decomps: &PartialDecompCache,
     mappings_alone: &MappingAloneCache,
     repositories: std::sync::RwLockReadGuard<multi_preprocessed::PreProcessedRepositories>,
-    user: &String,
-    name: &String,
     dst_oid: hyper_ast_cvs_git::git::Oid,
     target_node: NodeIdentifier,
 ) -> MappingResult {
     let with_spaces_stores = &repositories.processor.main_stores;
     let stores = &no_space::as_nospaces(with_spaces_stores);
     let node_store = &stores.node_store;
-    // persists mappings, could also easily persist diffs,
+    // NOTE: persists mappings, could also easily persist diffs,
     // but some compression on mappins could help
     // such as, not storing the decompression arenas
     // or encoding mappings more efficiently considering that most slices could simply by represented as ranges (ie. mapped identical subtrees)
@@ -1168,8 +983,8 @@ fn aux_aux(
         dbg!();
         let range = pos.range();
         let matches = vec![PieceOfCode {
-            user: user.clone(),
-            name: name.clone(),
+            user: repo_handle.spec().user.clone(),
+            name: repo_handle.spec().name.clone(),
             commit: dst_oid.to_string(),
             file: pos.file().to_str().unwrap().to_string(),
             start: range.start,
@@ -1194,71 +1009,20 @@ fn aux_aux(
             return MappingResult::Direct { src, matches };
         }
     }
-    // if !state.mappings_alone.contains_key(&(src_tr,dst_tr))
-    dbg!();
-    // let stores: &SimpleHyperAST<NoSpaceWrapper<MIdN<NodeIdentifier>>, &TStore, NoSpaceNodeStoreWrapper<MIdN<NodeIdentifier>>, _> = stores;
-    let mut pair = get_pair_simp(partial_decomps, stores, &src_tr, &dst_tr);
-    dbg!();
-    // let mut pair = get_pair_might_deadlock(
-    //     &state.partial_decomps,
-    //     &repositories.processor.main_stores,
-    //     &src_tr,
-    //     &dst_tr,
-    // );
+    let pair = get_pair_simp(partial_decomps, stores, &src_tr, &dst_tr);
 
     if flags.some() {
         dbg!();
 
         let mapped = {
             let mappings_cache = mappings_alone;
-            use hyper_ast::types::HyperAST;
-            use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
-            use hyper_diff::matchers::heuristic::gt::{
-                lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher,
-                lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher,
-            };
-            use hyper_diff::matchers::mapping_store::DefaultMultiMappingStore;
-            use hyper_diff::matchers::mapping_store::MappingStore;
-            use hyper_diff::matchers::mapping_store::VecStore;
             let hyperast = stores;
             let src = &src_tr;
             let dst = &dst_tr;
-            use hyper_diff::matchers::Mapping;
-
-            // let (src_arena, dst_arena) = (pair.0.value_mut(), pair.1.value_mut());
             let (src_arena, dst_arena) = (pair.0.get_mut(), pair.1.get_mut());
-            // let (src_arena, dst_arena) = pair.value_mut();
-            // let src_arena = decompress_src.value_mut();
-            // let dst_arena = decompress_dst.value_mut();
-
-            // let mut mm: DefaultMultiMappingStore<_> = Default::default();
-            // mm.topit(src_arena.len(), dst_arena.len());
-            // dbg!();
-            // hyperast
-            //     .node_store
-            //     .resolve(src_arena.original(&src_arena.root()));
-            // hyperast
-            //     .node_store
-            //     .resolve(src_arena.original(&src_arena.starter()));
-            // hyperast
-            //     .node_store
-            //     .resolve(dst_arena.original(&dst_arena.root()));
-            // hyperast
-            //     .node_store
-            //     .resolve(dst_arena.original(&dst_arena.starter()));
-            // dbg!();
-            // Mapper::<_, _, _, VecStore<u32>>::compute_multimapping::<_, 1>(
-            //     hyperast, src_arena, dst_arena, &mut mm,
-            // );
-            // mm
             matching::top_down(hyperast, src_arena, dst_arena)
         };
-        // let mut mapper =
-        //     lazy_subtree_mapping(&repositories, &state.partial_decomps, src_tr, dst_tr);
-
-        // let (mapper_src_arena, mapper_dst_arena) = (pair.0.value_mut(), pair.1.value_mut());
         let (mapper_src_arena, mapper_dst_arena) = (pair.0.get_mut(), pair.1.get_mut());
-        // let (mapper_src_arena, mapper_dst_arena) = pair.value_mut();
         let mapper_mappings = &mapped;
         let mut curr = mapper_src_arena.root();
         let mut path = &no_spaces_path_to_target[..];
@@ -1314,8 +1078,8 @@ fn aux_aux(
                                 );
                                 let range = pos.range();
                                 PieceOfCode {
-                                    user: user.clone(),
-                                    name: name.clone(),
+                                    user: repo_handle.spec().user.clone(),
+                                    name: repo_handle.spec().name.clone(),
                                     commit: dst_oid.to_string(),
                                     file: pos.file().to_str().unwrap().to_string(),
                                     start: range.start,
@@ -1373,8 +1137,8 @@ fn aux_aux(
                                 );
                                 let range = pos.range();
                                 PieceOfCode {
-                                    user: user.clone(),
-                                    name: name.clone(),
+                                    user: repo_handle.spec().user.clone(),
+                                    name: repo_handle.spec().name.clone(),
                                     commit: dst_oid.to_string(),
                                     file: pos.file().to_str().unwrap().to_string(),
                                     start: range.start,
@@ -1432,8 +1196,8 @@ fn aux_aux(
                                 );
                                 let range = pos.range();
                                 PieceOfCode {
-                                    user: user.clone(),
-                                    name: name.clone(),
+                                    user: repo_handle.spec().user.clone(),
+                                    name: repo_handle.spec().name.clone(),
                                     commit: dst_oid.to_string(),
                                     file: pos.file().to_str().unwrap().to_string(),
                                     start: range.start,
@@ -1471,23 +1235,11 @@ fn aux_aux(
         dbg!();
         match mappings_cache.entry((src_tr, dst_tr)) {
             dashmap::mapref::entry::Entry::Occupied(entry) => {
-                // std::collections::hash_map::Entry::Occupied(entry) => {
-                // src_arena = decompress_src;
-                // dst_arena = decompress_dst;
-
-                // entry.into_mut()
                 entry.into_ref().downgrade()
             }
             dashmap::mapref::entry::Entry::Vacant(entry) => {
-                // std::collections::hash_map::Entry::Vacant(entry) => {
                 let mappings = VecStore::default();
-                dbg!();
-                // let (src_arena, dst_arena) = pair.value_mut();
-                dbg!();
-                // let (src_arena, dst_arena) = (pair.0.value_mut(), pair.1.value_mut());
                 let (src_arena, dst_arena) = (pair.0.get_mut(), pair.1.get_mut());
-                // let src_arena = decompress_src.value_mut();
-                // let dst_arena = decompress_dst.value_mut();
                 dbg!(src_arena.len());
                 dbg!(dst_arena.len());
                 let src_size = stores.node_store.resolve(src_tr).size();
@@ -1512,13 +1264,6 @@ fn aux_aux(
                 dbg!();
 
                 let vec_store = matching::full2(hyperast, mapper);
-                // matching::full(hyperast, &mut mapper);
-
-                // // src_arena = mapper.mapping.src_arena;
-                // // dst_arena = mapper.mapping.dst_arena;
-                // let vec_store = mapper.mapping.mappings;
-                // drop(mapper.mapping.dst_arena);
-                // drop(mapper.mapping.src_arena);
 
                 dbg!();
                 entry
@@ -1527,21 +1272,6 @@ fn aux_aux(
             }
         }
     };
-
-    // let mapper = lazy_mapping(repos, &mut state.mappings, src_tr, dst_tr);
-    // let mut mapper = lazy_mapping2(
-    //     &repositories,
-    //     &state.mappings_alone,
-    //     &state.partial_decomps,
-    //     src_tr,
-    //     dst_tr,
-    // );
-    // let mapping_target =
-    //     mapper
-    //         .src_arena
-    //         .child(node_store, &mapper.src_arena.root(), &path_to_target);
-    // let (mapper_src_arena, mapper_dst_arena) = pair.value_mut();
-    // let (mapper_src_arena, mapper_dst_arena) = (pair.0.value_mut(), pair.1.value_mut());
     let (mapper_src_arena, mapper_dst_arena) = (pair.0.get_mut(), pair.1.get_mut());
     let mapper_mappings = &mapped.1;
     let root = mapper_src_arena.root();
@@ -1637,8 +1367,8 @@ fn aux_aux(
         // TODO add flags for similarity comps
         let range = pos.range();
         matches.push(PieceOfCode {
-            user: user.clone(),
-            name: name.clone(),
+            user: repo_handle.spec().user.clone(),
+            name: repo_handle.spec().name.clone(),
             commit: dst_oid.to_string(),
             file: pos.file().to_str().unwrap().to_string(),
             start: range.start,
@@ -1711,8 +1441,8 @@ fn aux_aux(
             dbg!(&mapped_node);
             let range = pos.range();
             let fallback = PieceOfCode {
-                user: user.clone(),
-                name: name.clone(),
+                user: repo_handle.spec().user.clone(),
+                name: repo_handle.spec().name.clone(),
                 commit: dst_oid.to_string(),
                 file: pos.file().to_str().unwrap().to_string(),
                 start: range.start,
@@ -1817,7 +1547,7 @@ fn lazy_mapping<'a>(
     use hyper_diff::matchers::mapping_store::DefaultMultiMappingStore;
     use hyper_diff::matchers::mapping_store::MappingStore;
     use hyper_diff::matchers::mapping_store::VecStore;
-    let mut mapped = mappings.entry((src_tr, dst_tr)).or_insert_with(|| {
+    let mapped = mappings.entry((src_tr, dst_tr)).or_insert_with(|| {
         let hyperast = &repositories.processor.main_stores;
         let src = &src_tr;
         let dst = &dst_tr;
@@ -1900,291 +1630,6 @@ struct RRR<'a>(
         ),
     >,
 );
-
-// WARN lazy subtrees are not complete
-fn lazy_mapping2<'a>(
-    repositories: &'a multi_preprocessed::PreProcessedRepositories,
-    mappings_cache: &'a crate::MappingAloneCache,
-    partial_comp_cache: &'a crate::PartialDecompCache,
-    src_tr: NodeIdentifier,
-    dst_tr: NodeIdentifier,
-) -> hyper_diff::matchers::Mapping<
-    dashmap::mapref::one::RefMut<
-        'a,
-        NodeIdentifier,
-        hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
-            u32,
-        >,
-    >,
-    dashmap::mapref::one::RefMut<
-        'a,
-        NodeIdentifier,
-        hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
-            u32,
-        >,
-    >,
-    RRR<'a>,
-> {
-    use hyper_ast::types::HyperAST;
-    use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
-    use hyper_diff::matchers::heuristic::gt::{
-        lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher,
-        lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher,
-    };
-    use hyper_diff::matchers::mapping_store::DefaultMultiMappingStore;
-    use hyper_diff::matchers::mapping_store::MappingStore;
-    use hyper_diff::matchers::mapping_store::VecStore;
-    use hyper_diff::matchers::Mapping;
-
-    let hyperast = &repositories.processor.main_stores;
-    let src = &src_tr;
-    let dst = &dst_tr;
-    let now = Instant::now();
-    assert_ne!(src, dst);
-    let (mut decompress_src, mut decompress_dst) =
-        get_pair_might_deadlock(partial_comp_cache, hyperast, src, dst);
-    hyperast
-        .node_store
-        .resolve(decompress_src.original(&decompress_src.root()));
-    hyperast
-        .node_store
-        .resolve(decompress_dst.original(&decompress_dst.root()));
-
-    // let src_arena;
-    // let dst_arena;
-    dbg!();
-    let mapped = {
-        match mappings_cache.entry((src_tr, dst_tr)) {
-            dashmap::mapref::entry::Entry::Occupied(entry) => {
-                // std::collections::hash_map::Entry::Occupied(entry) => {
-                // src_arena = decompress_src;
-                // dst_arena = decompress_dst;
-
-                // entry.into_mut()
-                entry.into_ref().downgrade()
-            }
-            dashmap::mapref::entry::Entry::Vacant(entry) => {
-                // std::collections::hash_map::Entry::Vacant(entry) => {
-                let mappings = VecStore::default();
-                let mut mapper = Mapper {
-                    hyperast,
-                    mapping: Mapping {
-                        src_arena: decompress_src.value_mut(),
-                        dst_arena: decompress_dst.value_mut(),
-                        mappings,
-                    },
-                };
-                mapper.mapping.mappings.topit(
-                    mapper.mapping.src_arena.len(),
-                    mapper.mapping.dst_arena.len(),
-                );
-                let mm = LazyGreedySubtreeMatcher::<
-                    'a,
-                    SimpleStores<TStore>,
-                    &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
-                    &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
-                    VecStore<_>,
-                >::compute_multi_mapping::<DefaultMultiMappingStore<_>>(
-                    &mut mapper
-                );
-                LazyGreedySubtreeMatcher::<
-                    'a,
-                    SimpleStores<TStore>,
-                    &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
-                    &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
-                    VecStore<_>,
-                >::filter_mappings(&mut mapper, &mm);
-                // TODO do something with the multi mappings
-                // modify filter_mappings to extract redundant mappings
-                // the store it alongside other mappings
-
-                GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(
-                    &mut mapper,
-                    hyperast.label_store(),
-                );
-
-                // src_arena = mapper.mapping.src_arena;
-                // dst_arena = mapper.mapping.dst_arena;
-                let vec_store = mapper.mapping.mappings;
-                drop(mapper.mapping.dst_arena);
-                drop(mapper.mapping.src_arena);
-                entry
-                    .insert((crate::MappingStage::Bottomup, vec_store))
-                    .downgrade()
-            }
-        }
-    };
-    dbg!();
-
-    hyper_diff::matchers::Mapping {
-        src_arena: decompress_src,
-        dst_arena: decompress_dst,
-        mappings: RRR(mapped),
-    }
-}
-
-/// WARN might deadlock due to shard collision
-fn get_pair_might_deadlock<'a>(
-    partial_comp_cache: &'a crate::PartialDecompCache,
-    hyperast: &SimpleStores<TStore>,
-    src: &NodeIdentifier,
-    dst: &NodeIdentifier,
-) -> (
-    dashmap::mapref::one::RefMut<
-        'a,
-        NodeIdentifier,
-        hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
-            u32,
-        >,
-    >,
-    dashmap::mapref::one::RefMut<
-        'a,
-        NodeIdentifier,
-        hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
-            u32,
-        >,
-    >,
-) {
-    use hyper_ast::types::HyperAST;
-    use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
-    let (decompress_src, decompress_dst) = {
-        use hyper_ast::types::DecompressedSubtree;
-        let cached_decomp = |id: &NodeIdentifier| -> Option<
-            dashmap::mapref::one::RefMut<NodeIdentifier, LazyPostOrder<HashedNodeRef<'a>, u32>>,
-        > {
-            let decompress = partial_comp_cache
-                .try_entry(*id)?
-                .or_insert_with(|| unsafe {
-                    std::mem::transmute(LazyPostOrder::<_, u32>::decompress(
-                        hyperast.node_store(),
-                        id,
-                    ))
-                });
-            Some(unsafe { std::mem::transmute(decompress) })
-        };
-
-        loop {
-            dbg!();
-            if let (Some(decompress_src), Some(decompress_dst)) =
-                (cached_decomp(src), cached_decomp(dst))
-            {
-                break (decompress_src, decompress_dst);
-            }
-        }
-    };
-    (decompress_src, decompress_dst)
-}
-fn get_pair<'a>(
-    partial_comp_cache: &'a crate::PartialDecompCache,
-    hyperast: &SimpleStores<TStore>,
-    src: &NodeIdentifier,
-    dst: &NodeIdentifier,
-) -> my_dash::RefMut<
-    'a,
-    NodeIdentifier,
-    hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-        hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
-        u32,
-    >,
-> {
-    use hyper_ast::types::DecompressedSubtree;
-    use hyper_ast::types::HyperAST;
-    use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
-    dbg!(src);
-    dbg!(partial_comp_cache.hash_usize(src));
-    dbg!(partial_comp_cache.hasher().hash_one(src));
-    dbg!(dst);
-    dbg!(partial_comp_cache.hash_usize(dst));
-    dbg!(partial_comp_cache.hasher().hash_one(dst));
-    let mut s_check = (None, None);
-    let mut res: my_dash::RefMut<
-        NodeIdentifier,
-        LazyPostOrder<PersistedNode<NodeIdentifier>, u32>,
-    > = my_dash::entries(partial_comp_cache, *src, *dst).or_insert_with(|(a, b)| {
-        let src = if a.is_none() {
-            let src = LazyPostOrder::<_, u32>::decompress(hyperast.node_store(), src);
-            dbg!(&src);
-            dbg!(src.len());
-            s_check.0 = Some(src.len());
-            let src_size = hyperast
-                .node_store
-                .resolve(src.original(&src.root()))
-                .size();
-            dbg!(src_size);
-            // unsafe {
-            //     let v = &mut *my_dash::shard_as_ptr(&SharedValue::new(src));
-            //     let v = &mut *v;
-            //     dbg!(v.len());
-            //     panic!()
-            // }
-
-            let src: LazyPostOrder<PersistedNode<NodeIdentifier>, u32> =
-                unsafe { std::mem::transmute(src) };
-            Some(src)
-        } else {
-            None
-        };
-        let dst = if b.is_none() {
-            let dst = LazyPostOrder::<_, u32>::decompress(hyperast.node_store(), dst);
-            dbg!(&dst);
-            dbg!(dst.len());
-            s_check.1 = Some(dst.len());
-            let dst_size = hyperast
-                .node_store
-                .resolve(dst.original(&dst.root()))
-                .size();
-            dbg!(dst_size);
-            let dst: LazyPostOrder<PersistedNode<NodeIdentifier>, u32> =
-                unsafe { std::mem::transmute(dst) };
-            Some(dst)
-        } else {
-            None
-        };
-        // todo!()
-        (src, dst)
-    });
-    // let (src_arena, dst_arena) = res.value_mut();
-    // dbg!(src_arena.len());
-    // dbg!(dst_arena.len());
-    // let src_size = hyperast.node_store.resolve(src_tr).size();
-    // let dst_size = hyperast.node_store.resolve(dst_tr).size();
-    // dbg!(src_size);
-    // dbg!(dst_size);
-    let (src, dst) = res.value_mut();
-    dbg!(src.id_parent.len());
-    dbg!(dst.id_parent.len());
-
-    // SAFETY: should be the same hyperast TODO check if it is the case, store identifier along map ?
-    let mut res: my_dash::RefMut<
-        NodeIdentifier,
-        hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a>,
-            u32,
-        >,
-    > = unsafe { std::mem::transmute(res) };
-
-    let (src, dst) = res.value_mut();
-    dbg!(src.len());
-    dbg!(dst.len());
-    dbg!(&src);
-    if let Some(l) = s_check.0 {
-        assert_eq!(l, src.len())
-    }
-    if let Some(l) = s_check.1 {
-        assert_eq!(l, dst.len())
-    }
-    let src_size = hyperast
-        .node_store
-        .resolve(src.original(&src.root()))
-        .size();
-    dbg!(src_size);
-
-    res
-}
 
 mod my_dash {
     use std::{

@@ -6,34 +6,15 @@ use axum::{
     routing::{get, post},
     BoxError, Json, Router,
 };
-use http::{header, HeaderValue, StatusCode};
+use http::StatusCode;
 use tower::ServiceBuilder;
-use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
+use tower_http::trace::TraceLayer;
 
 use crate::{
     commit, fetch, file,
     scripting::{self, ComputeResult, ScriptContent, ScriptingError, ScriptingParam},
-    track, view, SharedState, RepoConfig,
+    track, view, SharedState,
 };
-impl From<&RepoConfig> for hyper_ast_cvs_git::multi_preprocessed::ProcessingConfig<&'static str> {
-    fn from(value: &RepoConfig) -> Self {
-        match value {
-            RepoConfig::CppMake => Self::CppMake {
-                limit: 3,
-                dir_path: "src",
-            },
-            RepoConfig::JavaMaven => Self::JavaMaven {
-                limit: 3,
-                dir_path: "",
-            },
-        }
-    }
-}
-impl From<RepoConfig> for hyper_ast_cvs_git::multi_preprocessed::ProcessingConfig<&'static str> {
-    fn from(value: RepoConfig) -> Self {
-        (&value).into()
-    }
-}
 
 impl IntoResponse for ScriptingError {
     fn into_response(self) -> Response {
@@ -42,6 +23,10 @@ impl IntoResponse for ScriptingError {
         resp
     }
 }
+
+// TODO try to use the extractor pattern more, specifically for the shared state,
+// I think it would help inadvertently holding resources longer than necessary,
+// and maybe do more preparation stuff here, + measurments ? can it be done by a layer ?
 
 // #[axum_macros::debug_handler]
 async fn scripting(

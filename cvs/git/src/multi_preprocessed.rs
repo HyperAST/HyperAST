@@ -11,7 +11,7 @@ use crate::{
     maven::MavenModuleAcc,
     maven_processor::make,
     preprocessed::{CommitProcessor, RepositoryProcessor},
-    processing::{file_sys, BuildSystem, ConfiguredRepo, ProcessingConfig, RepoConfig},
+    processing::{file_sys, BuildSystem, ConfiguredRepo, ProcessingConfig, RepoConfig, ConfiguredRepo2, erased::ParametrizedCommitProcessorHandle, ConfiguredRepoHandle2},
     Commit, DefaultMetrics, SimpleStores,
 };
 
@@ -20,7 +20,7 @@ use crate::{
 
 #[derive(Default)]
 pub struct PreProcessedRepositories {
-    pub commits: HashMap<RepoConfig, HashMap<git2::Oid, Commit>>,
+    // pub commits: HashMap<RepoConfig, HashMap<git2::Oid, Commit>>,
     pub processor: RepositoryProcessor,
     // pub processing_ordered_commits: HashMap<String,Vec<git2::Oid>>,
 }
@@ -30,6 +30,7 @@ pub struct RepositoryInfo {
     /// map repository names to some objects they contain (branches, references, commit).
     /// At least keeps roots
     pub commits: HashSet<git2::Oid>,
+    pub handle: crate::processing::ConfiguredRepoHandle2,
 }
 
 #[derive(Default)]
@@ -125,46 +126,69 @@ impl PreProcessedRepositories {
         self.processor.purge_caches()
     }
 
-    pub fn pre_process_with_limit(
-        &mut self,
-        repository: &mut Repository,
-        before: &str,
-        after: &str,
-        dir_path: &str,
-        limit: usize,
-    ) -> Result<Vec<git2::Oid>, git2::Error> {
-        log::info!(
-            "commits to process: {:?}",
-            all_commits_between(&repository, before, after).map(|x| x.count())
-        );
-        let mut processing_ordered_commits = vec![];
-        let rw = all_commits_between(&repository, before, after)?;
-        let commits = self.commits.entry(RepoConfig::JavaMaven).or_default();
-        rw
-            // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
-            .take(limit) // TODO make a variable
-            .for_each(|oid| {
-                let oid = oid.unwrap();
-                let c = CommitProcessor::<file_sys::Maven>::handle_commit::<true>(
-                    &mut self.processor,
-                    &repository,
-                    dir_path,
-                    oid,
-                );
-                processing_ordered_commits.push(oid.clone());
-                commits.insert(oid.clone(), c);
-            });
-        Ok(processing_ordered_commits)
+    pub fn get_commit(
+        &self,
+        config: &ParametrizedCommitProcessorHandle,
+        commit_oid: &git2::Oid,
+    ) -> std::option::Option<&Commit> {
+        let proc = self
+            .processor.processing_systems
+            .by_id(&config.0)
+            .unwrap()
+            .get(config.1);
+        proc.get_commit(*commit_oid)
     }
 
-    pub fn pre_process_with_config(
+    pub fn register_config(&mut self, repo: Repo, config: RepoConfig) -> ConfiguredRepoHandle2 {
+        // let proc = self
+        //     .processor.processing_systems
+        //     .by_id(&repository.config.0)
+        //     .unwrap()
+        //     .get(repository.config.1);
+        // proc.get_commit(*commit_oid)
+        // self
+        todo!()
+    }
+
+    pub fn get_config(&mut self, repo: Repo) -> Option<ConfiguredRepoHandle2> {
+        // let proc = self
+        //     .processor.processing_systems
+        //     .by_id(&repository.config.0)
+        //     .unwrap()
+        //     .get(repository.config.1);
+        // proc.get_commit(*commit_oid)
+        // self
+        todo!()
+    }
+
+    pub fn pre_process_with_limit(
+        &mut self,
+        repository: &mut ConfiguredRepo2,
+        before: &str,
+        after: &str,
+        // dir_path: &str,
+        limit: usize,
+    ) -> Result<Vec<git2::Oid>, git2::Error> {
+        self.processor.pre_process_with_limit(repository, before, after, limit)
+    }
+
+    pub fn pre_process_with_config2(
+        &mut self,
+        repository: &mut ConfiguredRepo2,
+        before: &str,
+        after: &str,
+    ) -> Result<Vec<git2::Oid>, git2::Error> {
+        assert!(!before.is_empty());
+        self.processor.pre_process(repository, before, after)
+    }
+
+    fn pre_process_with_config(
         &mut self,
         repository: &mut ConfiguredRepo,
         before: &str,
         after: &str,
     ) -> Result<Vec<git2::Oid>, git2::Error> {
         let config = &repository.config;
-        let config = config.into();
         let repository = &mut repository.repo;
         log::info!(
             "commits to process: {:?}",
@@ -172,76 +196,78 @@ impl PreProcessedRepositories {
         );
         let mut processing_ordered_commits = vec![];
         let rw = all_commits_between(&repository, before, after)?;
-        match config {
-            ProcessingConfig::JavaMaven { limit, dir_path } => {
-                let commits = self.commits.entry(RepoConfig::JavaMaven).or_default();
-                rw
-                    // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
-                    .take(limit) // TODO make a variable
-                    .for_each(|oid| {
-                        let oid = oid.unwrap();
-                        let c = CommitProcessor::<file_sys::Maven>::handle_commit::<true>(
-                            &mut self.processor,
-                            &repository,
-                            dir_path,
-                            oid,
-                        );
-                        processing_ordered_commits.push(oid.clone());
-                        commits.insert(oid.clone(), c);
-                    });
-            }
-            ProcessingConfig::CppMake { limit, dir_path } => {
-                let commits = self.commits.entry(RepoConfig::CppMake).or_default();
-                rw
-                    // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
-                    .take(limit) // TODO make a variable
-                    .for_each(|oid| {
-                        let oid = oid.unwrap();
-                        let c = CommitProcessor::<file_sys::Make>::handle_commit::<true>(
-                            &mut self.processor,
-                            &repository,
-                            dir_path,
-                            oid,
-                        );
-                        processing_ordered_commits.push(oid.clone());
-                        commits.insert(oid.clone(), c);
-                    });
-            }
-            ProcessingConfig::TsNpm { limit, dir_path } => {
-                let commits = self.commits.entry(RepoConfig::TsNpm).or_default();
-                rw
-                    // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
-                    .take(limit) // TODO make a variable
-                    .for_each(|oid| {
-                        let oid = oid.unwrap();
-                        let c = CommitProcessor::<file_sys::Npm>::handle_commit::<true>(
-                            &mut self.processor,
-                            &repository,
-                            dir_path,
-                            oid,
-                        );
-                        processing_ordered_commits.push(oid.clone());
-                        commits.insert(oid.clone(), c);
-                    });
-            }
-            ProcessingConfig::Any { limit, dir_path } => {
-                let commits = self.commits.entry(RepoConfig::Any).or_default();
-                rw
-                    // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
-                    .take(limit) // TODO make a variable
-                    .for_each(|oid| {
-                        let oid = oid.unwrap();
-                        let c = CommitProcessor::<file_sys::Any>::handle_commit::<true>(
-                            &mut self.processor,
-                            &repository,
-                            dir_path,
-                            oid,
-                        );
-                        processing_ordered_commits.push(oid.clone());
-                        commits.insert(oid.clone(), c);
-                    });
-            }
-        }
+        todo!();
+        // let config = config.into();
+        // match config {
+        //     ProcessingConfig::JavaMaven { limit, dir_path } => {
+        //         let commits = self.commits.entry(RepoConfig::JavaMaven).or_default();
+        //         rw
+        //             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
+        //             .take(limit) // TODO make a variable
+        //             .for_each(|oid| {
+        //                 let oid = oid.unwrap();
+        //                 let c = CommitProcessor::<file_sys::Maven>::handle_commit::<true>(
+        //                     &mut self.processor,
+        //                     &repository,
+        //                     dir_path,
+        //                     oid,
+        //                 );
+        //                 processing_ordered_commits.push(oid.clone());
+        //                 commits.insert(oid.clone(), c);
+        //             });
+        //     }
+        //     ProcessingConfig::CppMake { limit, dir_path } => {
+        //         let commits = self.commits.entry(RepoConfig::CppMake).or_default();
+        //         rw
+        //             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
+        //             .take(limit) // TODO make a variable
+        //             .for_each(|oid| {
+        //                 let oid = oid.unwrap();
+        //                 let c = CommitProcessor::<file_sys::Make>::handle_commit::<true>(
+        //                     &mut self.processor,
+        //                     &repository,
+        //                     dir_path,
+        //                     oid,
+        //                 );
+        //                 processing_ordered_commits.push(oid.clone());
+        //                 commits.insert(oid.clone(), c);
+        //             });
+        //     }
+        //     ProcessingConfig::TsNpm { limit, dir_path } => {
+        //         let commits = self.commits.entry(RepoConfig::TsNpm).or_default();
+        //         rw
+        //             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
+        //             .take(limit) // TODO make a variable
+        //             .for_each(|oid| {
+        //                 let oid = oid.unwrap();
+        //                 let c = CommitProcessor::<file_sys::Npm>::handle_commit::<true>(
+        //                     &mut self.processor,
+        //                     &repository,
+        //                     dir_path,
+        //                     oid,
+        //                 );
+        //                 processing_ordered_commits.push(oid.clone());
+        //                 commits.insert(oid.clone(), c);
+        //             });
+        //     }
+        //     ProcessingConfig::Any { limit, dir_path } => {
+        //         let commits = self.commits.entry(RepoConfig::Any).or_default();
+        //         rw
+        //             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
+        //             .take(limit) // TODO make a variable
+        //             .for_each(|oid| {
+        //                 let oid = oid.unwrap();
+        //                 let c = CommitProcessor::<file_sys::Any>::handle_commit::<true>(
+        //                     &mut self.processor,
+        //                     &repository,
+        //                     dir_path,
+        //                     oid,
+        //                 );
+        //                 processing_ordered_commits.push(oid.clone());
+        //                 commits.insert(oid.clone(), c);
+        //             });
+        //     }
+        // }
         Ok(processing_ordered_commits)
     }
 
