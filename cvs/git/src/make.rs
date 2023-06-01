@@ -13,18 +13,21 @@ use hyper_ast::{
 use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
 use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
 
-use crate::{Accumulator, SimpleStores, PROPAGATE_ERROR_ON_BAD_CST_NODE, TStore};
+use crate::{
+    processing::ObjectName, Accumulator, DefaultMetrics, SimpleStores, TStore,
+    PROPAGATE_ERROR_ON_BAD_CST_NODE,
+};
 
 pub(crate) fn handle_makefile_file<'a>(
     tree_gen: &mut XmlTreeGen<'a, TStore>,
-    name: &[u8],
+    name: &ObjectName,
     text: &'a [u8],
 ) -> Result<MakeFile, ()> {
     let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(b"<proj></proj>") {
         Ok(tree) => tree,
         Err(tree) => {
             log::warn!("bad CST");
-            log::debug!("{:?}", std::str::from_utf8(name));
+            log::debug!("{:?}", name.try_str());
             log::debug!("{}", tree.root_node().to_sexp());
             if PROPAGATE_ERROR_ON_BAD_CST_NODE {
                 return Err(());
@@ -34,7 +37,7 @@ pub(crate) fn handle_makefile_file<'a>(
         }
     };
     let x = tree_gen
-        .generate_file(&name, b"<proj></proj>", tree.walk())
+        .generate_file(name.as_bytes(), b"<proj></proj>", tree.walk())
         .local;
     // TODO extract submodules, dependencies and directories. maybe even more ie. artefact id, ...
     let x = MakeFile {
@@ -50,7 +53,7 @@ pub(crate) fn handle_makefile_file<'a>(
 #[derive(Debug, Clone)]
 pub struct MakeFile {
     pub compressed_node: NodeIdentifier,
-    pub metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
+    pub metrics: DefaultMetrics,
     submodules: Vec<String>,
     source_dirs: Vec<String>,
     test_source_dirs: Vec<String>,
@@ -58,7 +61,7 @@ pub struct MakeFile {
 
 #[derive(Debug, Clone)]
 pub struct MD {
-    pub(crate) metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
+    pub(crate) metrics: DefaultMetrics,
     #[allow(unused)] // TODO needed for scalable module level reference analysis
     pub(crate) ana: MakePartialAnalysis,
 }
@@ -67,7 +70,7 @@ pub struct MakeModuleAcc {
     pub(crate) name: String,
     pub(crate) children_names: Vec<LabelIdentifier>,
     pub(crate) children: Vec<NodeIdentifier>,
-    pub(crate) metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
+    pub(crate) metrics: DefaultMetrics,
     pub(crate) ana: MakePartialAnalysis,
     pub(crate) sub_modules: Option<Vec<PathBuf>>,
     pub(crate) main_dirs: Option<Vec<PathBuf>>,

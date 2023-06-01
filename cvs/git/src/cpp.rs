@@ -1,5 +1,6 @@
 use crate::{
-    preprocessed::IsSkippedAna, Accumulator, TStore, MAX_REFS, PROPAGATE_ERROR_ON_BAD_CST_NODE,
+    preprocessed::IsSkippedAna, processing::ObjectName, Accumulator, TStore, MAX_REFS,
+    PROPAGATE_ERROR_ON_BAD_CST_NODE,
 };
 
 use hyper_ast::{
@@ -12,7 +13,7 @@ use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
 
 pub(crate) fn handle_cpp_file<'stores, 'cache, 'b: 'stores>(
     tree_gen: &mut cpp_tree_gen::CppTreeGen<'stores, 'cache, TStore>,
-    name: &[u8],
+    name: &ObjectName,
     text: &'b [u8],
 ) -> Result<cpp_tree_gen::FNode, ()> {
     let tree = match cpp_tree_gen::CppTreeGen::<TStore>::tree_sitter_parse(text) {
@@ -28,7 +29,7 @@ pub(crate) fn handle_cpp_file<'stores, 'cache, 'b: 'stores>(
             }
         }
     };
-    Ok(tree_gen.generate_file(&name, text, tree.walk()))
+    Ok(tree_gen.generate_file(name.as_bytes(), text, tree.walk()))
 }
 
 pub struct CppAcc {

@@ -18,11 +18,10 @@ use hyper_ast_gen_ts_cpp::types::Type;
 use hyper_ast_gen_ts_java::legion_with_refs::{eq_node, hash32};
 
 use crate::{
-    cpp::CppAcc,
-    cpp_processor::CppProcessor,
     git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
     make::{MakeModuleAcc, MD},
     preprocessed::RepositoryProcessor,
+    processing::{InFiles, ObjectName},
     Processor, SimpleStores,
 };
 
@@ -55,6 +54,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
         }
     }
 }
+type Caches = <crate::processing::file_sys::Make as crate::processing::CachesHolder>::Caches;
 
 impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
     for MakeProcessor<'a, 'b, 'c, RMS, FFWD, MakeModuleAcc>
@@ -63,7 +63,10 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
         match current_dir {
             BasicGitObject::Tree(oid, name) => {
                 if let Some(s) = self.dir_path.peek() {
-                    if name.eq(std::os::unix::prelude::OsStrExt::as_bytes(s.as_os_str())) {
+                    if name
+                        .as_bytes()
+                        .eq(std::os::unix::prelude::OsStrExt::as_bytes(s.as_os_str()))
+                    {
                         self.dir_path.next();
                         self.stack.last_mut().expect("never empty").1.clear();
                         let tree = self.repository.find_tree(oid).unwrap();
@@ -71,7 +74,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                         self.stack.push((
                             oid,
                             prepared,
-                            MakeModuleAcc::new(std::str::from_utf8(&name).unwrap().to_string()),
+                            MakeModuleAcc::new(name.try_into().unwrap()),
                         ));
                         return;
                     } else {
@@ -79,23 +82,24 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                     }
                 }
                 // check if module or src/main/java or src/test/java
-                if let Some(already) = self.prepro.object_map_make.get(&oid) {
+                if let Some(already) = self
+                    .prepro
+                    .processing_systems
+                    .get::<Caches>()
+                    .and_then(|c| c.object_map.get(&oid))
+                {
                     // reinit already computed node for post order
                     let full_node = already.clone();
 
                     let w = &mut self.stack.last_mut().unwrap().2;
-                    let name = self
-                        .prepro
-                        .main_stores_mut()
-                        .label_store
-                        .get_or_insert(std::str::from_utf8(&name).unwrap());
+                    let name = self.prepro.intern_object_name(name);
                     assert!(!w.children_names.contains(&name));
                     w.push_submodule(name, full_node);
                     return;
                 }
                 // TODO use maven pom.xml to find source_dir  and tests_dir ie. ignore resources, maybe also tests
                 // TODO maybe at some point try to handle maven modules and source dirs that reference parent directory in their path
-                log::debug!("mm tree {:?}", std::str::from_utf8(&name));
+                log::debug!("mm tree {:?}", name.try_str());
 
                 let parent_acc = &mut self.stack.last_mut().unwrap().2;
                 if true {
@@ -111,7 +115,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                     return;
                 }
 
-                let helper = MakeModuleHelper::from((parent_acc, name.as_ref()));
+                let helper = MakeModuleHelper::from((parent_acc, &name));
                 if helper.source_directories.0 || helper.test_source_directories.0 {
                     // handle as source dir
                     let (name, (full_node, _)) = self.prepro.help_handle_cpp_folder(
@@ -159,29 +163,29 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                 if self.dir_path.peek().is_some() {
                     return;
                 }
-                if name.eq(b"Makefile") {
+                if crate::processing::file_sys::MakeFile::matches(&name) {
                     self.prepro.help_handle_makefile(
                         oid,
                         &mut self.stack.last_mut().unwrap().2,
                         name,
                         &self.repository,
-                    )
-                } else if name.ends_with(b".cpp") || name.ends_with(b".cxx") {
+                    ).unwrap();
+                } else if crate::processing::file_sys::Cpp::matches(&name) {
                     self.prepro.help_handle_cpp_file2(
                         oid,
                         &mut self.stack.last_mut().unwrap().2,
-                        name,
+                        &name,
                         self.repository,
-                    )
-                } else if name.ends_with(b".h") || name.ends_with(b".hpp") {
-                    self.prepro.help_handle_cpp_file2(
-                        oid,
-                        &mut self.stack.last_mut().unwrap().2,
-                        name,
-                        self.repository,
-                    )
+                    ).unwrap();
+                // } else if name.ends_with(b".h") || name.ends_with(b".hpp") {
+                //     self.prepro.help_handle_cpp_file2(
+                //         oid,
+                //         &mut self.stack.last_mut().unwrap().2,
+                //         name,
+                //         self.repository,
+                //     )
                 } else {
-                    log::debug!("not cpp source file {:?}", std::str::from_utf8(&name));
+                    log::debug!("not cpp source file {:?}", name.try_str());
                 }
             }
         }
@@ -189,7 +193,11 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
     fn post(&mut self, oid: Oid, acc: MakeModuleAcc) -> Option<(NodeIdentifier, MD)> {
         let name = acc.name.clone();
         let full_node = Self::make(acc, self.prepro.main_stores_mut());
-        self.prepro.object_map_make.insert(oid, full_node.clone());
+        self.prepro
+            .processing_systems
+            .mut_or_default::<Caches>()
+            .object_map
+            .insert(oid, full_node.clone());
 
         let name = self.prepro.main_stores.label_store.get_or_insert(name);
         if self.stack.is_empty() {
@@ -288,6 +296,36 @@ pub(crate) fn make(mut acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeId
     full_node
 }
 
+use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
+impl RepositoryProcessor {
+    pub(crate) fn help_handle_makefile(
+        &mut self,
+        oid: Oid,
+        parent_acc: &mut MakeModuleAcc,
+        name: ObjectName,
+        repository: &Repository,
+    ) -> Result<(), crate::ParseErr> {
+        let x = self
+            .processing_systems
+            .caching_blob_handler::<crate::processing::file_sys::MakeFile>()
+            .handle(oid, repository, &name, |c, n, t| {
+                crate::make::handle_makefile_file(
+                    &mut XmlTreeGen {
+                        line_break: "\n".as_bytes().to_vec(),
+                        stores: &mut self.main_stores,
+                    },
+                    n,
+                    t,
+                )
+                .map_err(|_| crate::ParseErr::IllFormed)
+            })?;
+        let name = self.intern_object_name(&name);
+        assert!(!parent_acc.children_names.contains(&name));
+        parent_acc.push_makefile(name, x);
+        Ok(())
+    }
+}
+
 struct MakeModuleHelper {
     name: String,
     submodules: (bool, Vec<PathBuf>),
@@ -295,15 +333,15 @@ struct MakeModuleHelper {
     test_source_directories: (bool, Vec<PathBuf>),
 }
 
-impl From<(&mut MakeModuleAcc, &[u8])> for MakeModuleHelper {
-    fn from((parent_acc, name): (&mut MakeModuleAcc, &[u8])) -> Self {
+impl From<(&mut MakeModuleAcc, &ObjectName)> for MakeModuleHelper {
+    fn from((parent_acc, name): (&mut MakeModuleAcc, &ObjectName)) -> Self {
         let process = |mut v: &mut Option<Vec<PathBuf>>| {
-            let mut v = drain_filter_strip(&mut v, name);
+            let mut v = drain_filter_strip(&mut v, name.as_bytes());
             let c = v.drain_filter(|x| x.components().next().is_none()).count();
             (c > 0, v)
         };
         Self {
-            name: std::str::from_utf8(name).unwrap().to_string(),
+            name: name.try_into().unwrap(),
             submodules: process(&mut parent_acc.sub_modules),
             source_directories: process(&mut parent_acc.main_dirs),
             test_source_directories: process(&mut parent_acc.test_dirs),
@@ -346,7 +384,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
     {
         let mut children_objects: Vec<_> = tree.collect();
         let p = children_objects.iter().position(|x| match x.r#type() {
-            ObjectType::File => x.name().eq(b"Makefile"),
+            ObjectType::File => crate::processing::file_sys::MakeFile::matches(x.name()),
             ObjectType::Dir => false,
         });
         if let Some(p) = p {
@@ -370,7 +408,7 @@ pub(crate) fn prepare_dir_exploration(
         .collect();
     if dir_path.peek().is_none() {
         let p = children_objects.iter().position(|x| match x {
-            BasicGitObject::Blob(_, n) => n.eq(b"Makefile"),
+            BasicGitObject::Blob(_, n) => crate::processing::file_sys::MakeFile::matches(n),
             _ => false,
         });
         if let Some(p) = p {

@@ -1,4 +1,7 @@
-use crate::{preprocessed::IsSkippedAna, Accumulator, MAX_REFS, PROPAGATE_ERROR_ON_BAD_CST_NODE, TStore};
+use crate::{
+    preprocessed::IsSkippedAna, processing::ObjectName, Accumulator, TStore, MAX_REFS,
+    PROPAGATE_ERROR_ON_BAD_CST_NODE,
+};
 
 use hyper_ast::{
     hashed::SyntaxNodeHashs,
@@ -11,7 +14,7 @@ use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
 
 pub(crate) fn handle_java_file<'stores, 'cache, 'b: 'stores>(
     tree_gen: &mut java_tree_gen::JavaTreeGen<'stores, 'cache, TStore>,
-    name: &[u8],
+    name: &ObjectName,
     text: &'b [u8],
 ) -> Result<java_tree_gen::FNode, ()> {
     let tree = match java_tree_gen::JavaTreeGen::<TStore>::tree_sitter_parse(text) {
@@ -27,7 +30,7 @@ pub(crate) fn handle_java_file<'stores, 'cache, 'b: 'stores>(
             }
         }
     };
-    Ok(tree_gen.generate_file(&name, text, tree.walk()))
+    Ok(tree_gen.generate_file(&name.as_bytes(), text, tree.walk()))
 }
 
 pub struct JavaAcc {

@@ -2,17 +2,15 @@ use std::{iter::Peekable, path::Components};
 
 use git2::{Oid, Repository};
 use hyper_ast::{
-    filter::{BloomSize},
-    hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
+    hashed::SyntaxNodeHashs,
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
-        nodes::legion::{compo, compo::CS, NodeStore, PendingInsert},
+        nodes::legion::PendingInsert,
     },
-    tree_gen::SubTreeMetrics,
     types::LabelStore,
 };
 use hyper_ast_gen_ts_cpp::{
-    legion::{self, eq_node},
+    legion::{self as cpp_gen, eq_node},
     types::Type,
 };
 use tuples::CombinConcat;
@@ -20,8 +18,10 @@ use tuples::CombinConcat;
 use crate::{
     cpp::CppAcc,
     git::BasicGitObject,
+    make::MakeModuleAcc,
     preprocessed::{IsSkippedAna, RepositoryProcessor},
-    Processor, SimpleStores, MAX_REFS,
+    processing::{InFiles, ObjectName},
+    Processor, SimpleStores,
 };
 
 pub(crate) fn prepare_dir_exploration(tree: git2::Tree) -> Vec<BasicGitObject> {
@@ -44,12 +44,12 @@ impl<'repo, 'b, 'd, 'c, Acc: From<String>> CppProcessor<'repo, 'b, 'd, 'c, Acc> 
         repository: &'repo Repository,
         prepro: &'b mut RepositoryProcessor,
         dir_path: &'d mut Peekable<Components<'c>>,
-        name: &[u8],
+        name: &ObjectName,
         oid: git2::Oid,
     ) -> Self {
         let tree = repository.find_tree(oid).unwrap();
         let prepared = prepare_dir_exploration(tree);
-        let name = std::str::from_utf8(&name).unwrap().to_string();
+        let name = name.try_into().unwrap();
         let stack = vec![(oid, prepared, Acc::from(name))];
         Self {
             stack,
@@ -60,64 +60,39 @@ impl<'repo, 'b, 'd, 'c, Acc: From<String>> CppProcessor<'repo, 'b, 'd, 'c, Acc> 
     }
 }
 
+type Caches = <crate::processing::file_sys::Cpp as crate::processing::CachesHolder>::Caches;
+
 impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, CppAcc> {
     fn pre(&mut self, current_object: BasicGitObject) {
         match current_object {
             BasicGitObject::Tree(oid, name) => {
-                if let Some(
-                    // (already, skiped_ana)
-                    already,
-                ) = self.prepro.object_map_cpp.get(&(oid, name.clone()))
-                {
-                    // reinit already computed node for post order
-                    let full_node = already.clone();
-                    // let skiped_ana = *skiped_ana;
-                    let w = &mut self.stack.last_mut().unwrap().2;
-                    let name = self
-                        .prepro
-                        .intern_label(std::str::from_utf8(&name).unwrap());
-                    assert!(!w.children_names.contains(&name));
-                    hyper_ast::tree_gen::Accumulator::push(w, (name, full_node));
-                    // w.push(name, full_node, skiped_ana);
-                    return;
-                }
-                log::info!("tree {:?}", std::str::from_utf8(&name));
-                let tree = self.repository.find_tree(oid).unwrap();
-                let prepared: Vec<BasicGitObject> = prepare_dir_exploration(tree);
-                self.stack.push((
-                    oid,
-                    prepared,
-                    CppAcc::new(std::str::from_utf8(&name).unwrap().to_string()),
-                ));
+                self.handle_tree_cached(oid, name);
             }
             BasicGitObject::Blob(oid, name) => {
-                if name.ends_with(b".cpp") {
-                    self.prepro.help_handle_cpp_file(
-                        oid,
-                        &mut self.stack.last_mut().unwrap().2,
-                        name,
-                        self.repository,
-                    )
-                } else if name.ends_with(b".h") || name.ends_with(b".hpp") {
-                    self.prepro.help_handle_cpp_file(
-                        oid,
-                        &mut self.stack.last_mut().unwrap().2,
-                        name,
-                        self.repository,
-                    )
+                if crate::processing::file_sys::Cpp::matches(&name) {
+                    self.prepro
+                        .help_handle_cpp_file(
+                            oid,
+                            &mut self.stack.last_mut().unwrap().2,
+                            &name,
+                            self.repository,
+                        )
+                        .unwrap();
                 } else {
-                    log::debug!("not cpp source file {:?}", std::str::from_utf8(&name));
+                    log::debug!("not cpp source file {:?}", name.try_str());
                 }
             }
         }
     }
-    fn post(&mut self, oid: Oid, acc: CppAcc) -> Option<(legion::Local, IsSkippedAna)> {
+    fn post(&mut self, oid: Oid, acc: CppAcc) -> Option<(cpp_gen::Local, IsSkippedAna)> {
         let skiped_ana = true;
         let name = acc.name.clone();
-        let key = (oid, name.as_bytes().to_vec());
+        let key = (oid, name.as_bytes().into());
         let full_node = make(acc, self.prepro.main_stores_mut());
         self.prepro
-            .object_map_cpp
+            .processing_systems
+            .mut_or_default::<Caches>()
+            .object_map
             .insert(key, (full_node.clone(), skiped_ana));
         let name = self.prepro.main_stores.label_store.get_or_insert(name);
         if self.stack.is_empty() {
@@ -140,7 +115,124 @@ impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, Cp
     }
 }
 
-fn make(acc: CppAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_cpp::legion::Local {
+impl<'repo, 'prepro, 'd, 'c> CppProcessor<'repo, 'prepro, 'd, 'c, CppAcc> {
+    fn handle_tree_cached(&mut self, oid: Oid, name: ObjectName) {
+        if let Some(
+            // (already, skiped_ana)
+            already,
+        ) = self
+            .prepro
+            .processing_systems
+            .get::<Caches>()
+            .and_then(|c| c.object_map.get(&(oid, name.clone())))
+        {
+            // reinit already computed node for post order
+            let full_node = already.clone();
+            // let skiped_ana = *skiped_ana;
+            let w = &mut self.stack.last_mut().unwrap().2;
+            let name = self.prepro.intern_object_name(&name);
+            assert!(!w.children_names.contains(&name));
+            hyper_ast::tree_gen::Accumulator::push(w, (name, full_node));
+            // w.push(name, full_node, skiped_ana);
+        } else {
+            log::info!("tree {:?}", name.try_str());
+            let tree = self.repository.find_tree(oid).unwrap();
+            let prepared: Vec<BasicGitObject> = prepare_dir_exploration(tree);
+            self.stack
+                .push((oid, prepared, CppAcc::new(name.try_into().unwrap())));
+        }
+    }
+}
+
+#[cfg(feature = "cpp")]
+impl RepositoryProcessor {
+    fn handle_cpp_blob(
+        &mut self,
+        oid: Oid,
+        name: &ObjectName,
+        repository: &Repository,
+    ) -> Result<(cpp_gen::Local, IsSkippedAna), crate::ParseErr> {
+        self.processing_systems
+            .caching_blob_handler::<crate::processing::file_sys::Cpp>()
+            .handle2(oid, repository, &name, |c, n, t| {
+                let line_break = if t.contains(&b'\r') {
+                    "\r\n".as_bytes().to_vec()
+                } else {
+                    "\n".as_bytes().to_vec()
+                };
+                crate::cpp::handle_cpp_file(
+                    &mut cpp_gen::CppTreeGen {
+                        line_break,
+                        stores: &mut self.main_stores,
+                        md_cache: &mut c.mut_or_default::<Caches>().md_cache, //cpp_md_cache,
+                    },
+                    n,
+                    t,
+                )
+                .map_err(|_| crate::ParseErr::IllFormed)
+                .map(|x| (x.local.clone(), false))
+            })
+    }
+
+    pub(crate) fn help_handle_cpp_file(
+        &mut self,
+        oid: Oid,
+        parent: &mut CppAcc,
+        name: &ObjectName,
+        repository: &Repository,
+    ) -> Result<(), crate::ParseErr> {
+        let (full_node, skiped_ana) = self.handle_cpp_blob(oid, name, repository)?;
+        let name = self.intern_object_name(name);
+        assert!(!parent.children_names.contains(&name));
+
+        parent.push(name, full_node, skiped_ana);
+        Ok(())
+    }
+    pub(crate) fn help_handle_cpp_file2(
+        &mut self,
+        oid: Oid,
+        parent: &mut MakeModuleAcc,
+        name: &ObjectName,
+        repository: &Repository,
+    ) -> Result<(), crate::ParseErr> {
+        let (full_node, skiped_ana) = self.handle_cpp_blob(oid, name, repository)?;
+        let name = self.intern_object_name(name);
+        // assert!(!parent_acc.children_names.contains(&name));
+        // parent_acc.push_pom(name, x);
+        assert!(!parent.children_names.contains(&name));
+
+        parent.push_source_file(name, full_node, skiped_ana);
+        Ok(())
+    }
+
+    pub(crate) fn handle_cpp_directory<'b, 'd: 'b>(
+        &mut self,
+        repository: &Repository,
+        dir_path: &'b mut Peekable<Components<'d>>,
+        name: &ObjectName,
+        oid: git2::Oid,
+    ) -> (cpp_gen::Local, IsSkippedAna) {
+        CppProcessor::<CppAcc>::new(repository, self, dir_path, name, oid).process()
+    }
+
+    pub(crate) fn help_handle_cpp_folder<'a, 'b, 'c, 'd: 'c>(
+        &'a mut self,
+        repository: &'b Repository,
+        dir_path: &'c mut Peekable<Components<'d>>,
+        oid: Oid,
+        name: &ObjectName,
+    ) -> <CppAcc as hyper_ast::tree_gen::Accumulator>::Node {
+        let full_node = self.handle_cpp_directory(repository, dir_path, name, oid);
+        let name = self.intern_object_name(name);
+        (name, full_node)
+    }
+}
+
+fn make(acc: CppAcc, stores: &mut SimpleStores) -> cpp_gen::Local {
+    use hyper_ast::{
+        hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder},
+        tree_gen::SubTreeMetrics,
+    };
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
 
@@ -171,7 +263,7 @@ fn make(acc: CppAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_cpp::legion:
 
     if let Some(id) = insertion.occupied_id() {
         let (ana, metrics) = compute_md();
-        return legion::Local {
+        return cpp_gen::Local {
             compressed_node: id,
             metrics,
             ana,
@@ -193,10 +285,10 @@ fn make(acc: CppAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_cpp::legion:
         &Default::default(),
     );
 
-    let full_node = legion::Local {
+    let full_node = cpp_gen::Local {
         compressed_node: node_id.clone(),
         metrics,
-        ana: Some(Default::default()),
+        ana,
     };
     full_node
 }
@@ -211,8 +303,12 @@ fn compress(
     size_no_spaces: u32,
     hashs: SyntaxNodeHashs<u32>,
     skiped_ana: bool,
-    ana: &legion::PartialAnalysis,
+    ana: &cpp_gen::PartialAnalysis,
 ) -> NodeIdentifier {
+    use hyper_ast::{
+        filter::BloomSize,
+        store::nodes::legion::{compo, compo::CS, NodeStore},
+    };
     let vacant = insertion.vacant();
     macro_rules! insert {
         ( $c0:expr, $($c:expr),* $(,)? ) => {{
@@ -248,6 +344,7 @@ fn compress(
 mod experiments {
     use crate::{
         git::{NamedObject, ObjectType, TypedObject, UniqueObject},
+        processing::InFiles,
         Accumulator,
     };
 
@@ -291,13 +388,15 @@ mod experiments {
             let tree = self.repository.find_tree(*current_object.id()).unwrap();
             self.stack.push((*current_object.id(), prepared, acc));
         }
-        pub(crate) fn help_handle_java_file(&mut self, current_object: BasicGitObject) {
-            self.prepro.help_handle_cpp_file(
-                *current_object.id(),
-                &mut self.stack.last_mut().unwrap().2,
-                current_object.name().to_vec(),
-                self.repository,
-            )
+        pub(crate) fn help_handle_cpp_file(&mut self, current_object: BasicGitObject) {
+            self.prepro
+                .help_handle_cpp_file(
+                    *current_object.id(),
+                    &mut self.stack.last_mut().unwrap().2,
+                    current_object.name(),
+                    self.repository,
+                )
+                .unwrap();
         }
         fn pre(
             &mut self,
@@ -310,38 +409,35 @@ mod experiments {
                         let full_node = already.clone();
                         return Some(full_node);
                     }
-                    log::info!("tree {:?}", std::str::from_utf8(current_object.name()));
+                    log::info!("tree {:?}", current_object.name().try_str());
                     let prepared: Vec<BasicGitObject> =
                         self.prepare_dir_exploration(&current_object);
-                    let acc = CppAcc::new(
-                        std::str::from_utf8(current_object.name())
-                            .unwrap()
-                            .to_string(),
-                    );
+                    let acc = CppAcc::new(current_object.name().try_into().unwrap());
                     self.stack(current_object, prepared, acc);
                     None
                 }
                 ObjectType::File => {
-                    if current_object.name().ends_with(b".java") {
-                        self.help_handle_java_file(current_object)
+                    if crate::processing::file_sys::Cpp::matches(current_object.name()) {
+                        self.help_handle_cpp_file(current_object)
                     } else {
-                        log::debug!(
-                            "not java source file {:?}",
-                            std::str::from_utf8(current_object.name())
-                        );
+                        log::debug!("not java source file {:?}", current_object.name().try_str());
                     }
                     None
                 }
             }
         }
-        fn post(&mut self, oid: Oid, acc: CppAcc) -> Option<(legion::Local, IsSkippedAna)> {
+        fn post(&mut self, oid: Oid, acc: CppAcc) -> Option<(cpp_gen::Local, IsSkippedAna)> {
             let skiped_ana = true;
-            let name = acc.name.clone();
-            let key = (oid, name.as_bytes().to_vec());
+            let name = &acc.name;
+            let key = (oid, name.as_bytes().into());
+            let name = self.prepro.intern_label(name);
             let full_node = make(acc, self.prepro.main_stores_mut());
             let full_node = (full_node, skiped_ana);
-            self.prepro.object_map_cpp.insert(key, full_node.clone());
-            let name = self.prepro.intern_label(&name);
+            self.prepro
+                .processing_systems
+                .mut_or_default::<Caches>()
+                .object_map
+                .insert(key, full_node.clone());
             if self.stack.is_empty() {
                 Some(full_node)
             } else {

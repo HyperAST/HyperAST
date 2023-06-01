@@ -1,5 +1,6 @@
 #![feature(test)]
 #![feature(drain_filter)]
+#![feature(trait_upcasting)]
 pub mod allrefs;
 pub mod cpp;
 pub mod git;
@@ -7,14 +8,20 @@ pub mod java;
 pub mod make;
 pub mod maven;
 
+#[cfg(feature = "cpp")]
 pub mod cpp_processor;
+#[cfg(feature = "java")]
 pub mod java_processor;
+#[cfg(feature = "make")]
 pub mod make_processor;
+#[cfg(feature = "maven")]
 pub mod maven_processor;
 pub mod multi_preprocessed;
 /// for now only tested on maven repositories with a pom in root.
 pub mod preprocessed;
 pub mod no_space;
+pub mod processing;
+mod utils;
 
 #[cfg(test)]
 pub mod tests;
@@ -22,7 +29,6 @@ pub mod tests;
 use git::BasicGitObject;
 use git2::Oid;
 use hyper_ast::{store::defaults::LabelIdentifier, utils::Bytes};
-use maven::MD;
 extern crate test;
 
 // use hyper_ast_gen_ts_java::java_tree_gen_full_compress_legion_ref as java_tree_gen;
@@ -35,16 +41,18 @@ pub(crate) const PROPAGATE_ERROR_ON_BAD_CST_NODE: bool = false;
 
 pub(crate) const MAX_REFS: u32 = 10000; //4096;
 
+pub(crate) type DefaultMetrics = hyper_ast::tree_gen::SubTreeMetrics<hyper_ast::hashed::SyntaxNodeHashs<u32>>;
+
 pub struct Diffs();
 pub struct Impacts();
 
 #[derive(Clone)]
 pub struct Commit {
-    pub meta_data: MD,
     pub parents: Vec<git2::Oid>,
     processing_time: u128,
     memory_used: Bytes,
     pub ast_root: hyper_ast::store::nodes::DefaultNodeIdentifier,
+    pub tree_oid: git2::Oid,
 }
 
 impl Commit {
@@ -55,7 +63,6 @@ impl Commit {
         self.memory_used
     }
 }
-
 trait Accumulator: hyper_ast::tree_gen::Accumulator<Node = (LabelIdentifier, Self::Unlabeled)> {
     type Unlabeled;
     // fn push(&mut self, name: LabelIdentifier, full_node: Self::Node);
@@ -81,6 +88,19 @@ trait Processor<Acc: Accumulator> {
     fn post(&mut self, oid: Oid, acc: Acc) -> Option<Acc::Unlabeled>;
 }
 
+
+#[derive(Debug)]
+pub(crate) enum ParseErr {
+    NotUtf8,
+    IllFormed,
+}
+
+impl From<std::str::Utf8Error> for ParseErr {
+    fn from(value: std::str::Utf8Error) -> Self {
+        ParseErr::NotUtf8
+    }
+}
+
 mod type_store {
     use core::panic;
     use std::{fmt::Display, hash::Hash, ops::Deref};
@@ -95,8 +115,11 @@ mod type_store {
             TypedNodeId, T, Typed,
         },
     };
+    #[cfg(feature = "cpp")]
     use hyper_ast_gen_ts_cpp::types::CppEnabledTypeStore;
+    #[cfg(feature = "java")]
     use hyper_ast_gen_ts_java::types::JavaEnabledTypeStore;
+    #[cfg(feature = "maven")]
     use hyper_ast_gen_ts_xml::types::XmlEnabledTypeStore;
 
     use crate::no_space::{MIdN, NoSpaceWrapper};

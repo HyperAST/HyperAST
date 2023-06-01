@@ -8,9 +8,9 @@ edition = "2021"
 [dependencies]
 git2 = { version = "0.16.1", features = ["vendored-libgit2"]}
 tree-sitter = "0.20.9"
-hyper_ast_gen_ts_cpp = { path = "../../gen/tree-sitter/cpp" }
-hyper_ast_gen_ts_java = { path = "../../gen/tree-sitter/java" }
-hyper_ast_gen_ts_xml = { path = "../../gen/tree-sitter/xml" }
+hyper_ast_gen_ts_cpp = { path = "../../gen/tree-sitter/cpp", optional = true }
+hyper_ast_gen_ts_java = { path = "../../gen/tree-sitter/java", optional = true }
+hyper_ast_gen_ts_xml = { path = "../../gen/tree-sitter/xml", optional = true }
 hyper_ast = { path = "../../hyper_ast" }
 log = { version = "0.4.6", features = [
     "max_level_trace",
@@ -34,3 +34,26 @@ env_logger = "0.9.0"
 
 # [profile.release]
 # debug = 1
+
+[features]
+default = ["maven_java", "make_cpp", "npm_ts"]
+maven_java = ["maven", "java"]
+maven = ["dep:hyper_ast_gen_ts_xml"]
+# gradle = []
+java = ["dep:hyper_ast_gen_ts_java"]
+# kotlin = []
+# scala = []
+make_cpp = ["make", "cpp"]
+make = []
+# cmake = []
+# ninja = []
+cpp = ["dep:hyper_ast_gen_ts_cpp"]
+# c = []
+npm_ts = ["npm", "ts"]
+npm = []
+ts = []
+# js = []
+# tsx = []
+# cargo_rust = []
+# cargo = []
+# rust = []
