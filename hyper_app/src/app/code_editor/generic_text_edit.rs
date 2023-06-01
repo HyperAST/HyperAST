@@ -4,7 +4,7 @@ use epaint::text::{cursor::*, Galley, LayoutJob};
 
 use egui::{output::OutputEvent, *};
 
-use crate::app::code_editor::generic_text_buffer::AAA;
+use super::generic_text_buffer::AAA;
 use egui::text_edit::{CCursorRange, CursorRange};
 
 use self::output::TextEditOutput;

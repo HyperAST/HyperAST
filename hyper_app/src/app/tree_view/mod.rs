@@ -2,31 +2,25 @@ use egui::TextFormat;
 use epaint::text::LayoutSection;
 pub use hyper_ast::store::nodes::fetched::{FetchedLabels, NodeIdentifier, NodeStore};
 use hyper_ast::{
+    nodes::IndentedAlt,
     store::nodes::fetched::{HashedNodeRef, LabelIdentifier},
     types::{
         AnyType, HyperType, Labeled, Lang, LangRef, TypeIndex, TypeStore as _, WithChildren,
         WithStats,
     },
 };
-use lazy_static::__Deref;
 use std::{
     borrow::Borrow,
     collections::{HashSet, VecDeque},
     fmt::Debug,
     hash::Hash,
     num::NonZeroU32,
-    ops::{ControlFlow, Mul},
-    sync::{
-        atomic::{AtomicBool, AtomicUsize},
-        Arc,
-    },
-    time::{Duration, Instant},
+    ops::ControlFlow,
+    sync::{atomic::AtomicUsize, Arc},
+    time::Duration,
 };
 
-use crate::app::{
-    syntax_highlighting_async::{self, async_exec},
-    syntax_highlighting_ts::{self, CodeTheme},
-};
+use crate::app::syntax_highlighting::{self as syntax_highlighter, syntax_highlighting_async::{self, async_exec}};
 
 use super::{
     code_aspects::{remote_fetch_labels, remote_fetch_nodes_by_ids, HightLightHandle},
@@ -854,7 +848,7 @@ impl<'a> FetchedViewImpl<'a> {
                 }
             };
             let min = ui.available_rect_before_wrap().min;
-            let theme = syntax_highlighting_ts::CodeTheme::from_memory(ui.ctx());
+            let theme = syntax_highlighter::simple::CodeTheme::from_memory(ui.ctx());
             // TODO fetch entire subtree, line breaks would also be useful
             let layout_job = make_pp_code(self.store.clone(), ui.ctx(), nid, theme);
             let galley = ui.fonts(|f| f.layout_job(layout_job));
@@ -1734,207 +1728,160 @@ const CLIP_LEN: f32 = 0.0; //250.0;
 
 fn subtree_to_layout(
     store: &FetchedHyperAST,
-    theme: &syntax_highlighting_ts::CodeTheme,
+    theme: &syntax_highlighter::simple::CodeTheme,
     nid: NodeIdentifier,
 ) -> (usize, Vec<LayoutSection>) {
-    // use hyper_ast::nodes::CompressedNode;
-    // use std::borrow::Borrow;
-    // pub fn compute_layout_sections<
-    //     IdN,
-    //     IdL,
-    //     Ty: ToString,
-    //     T: Borrow<CompressedNode<IdN, IdL, Ty>>,
-    //     F: Copy + Fn(&IdN) -> T,
-    //     G: Copy + Fn(&IdL) -> usize,
-    // >(
-    //     f: F,
-    //     g: G,
-    //     theme: &syntax_highlighting_ts::CodeTheme,
-    //     id: &IdN,
-    //     out: &mut Vec<LayoutSection>,
-    //     offset: usize,
-    // ) -> usize {
-    //     match f(id).borrow() {
-    //         CompressedNode::Type(kind) => {
-    //             let len = kind.to_string().len();
-    //             let end = offset + len;
-    //             let format = syntax_highlighting_ts::TokenType::Keyword;
-    //             let mut format = theme.formats[format].clone();
-    //             format.font_id = egui::FontId::monospace(12.0);
-    //             out.push(LayoutSection {
-    //                 leading_space: 0.0,
-    //                 byte_range: offset..end.clone(),
-    //                 format,
-    //             });
-    //             end
-    //         }
-    //         CompressedNode::Label { kind: _, label } => {
-    //             let len = g(label);
-    //             let end = offset + len;
-    //             let format = syntax_highlighting_ts::TokenType::Punctuation;
-    //             let mut format = theme.formats[format].clone();
-    //             format.font_id = egui::FontId::monospace(12.0);
-    //             out.push(LayoutSection {
-    //                 leading_space: 0.0,
-    //                 byte_range: offset..end.clone(),
-    //                 format,
-    //             });
-    //             end
-    //         }
-    //         CompressedNode::Children2 { kind: _, children } => {
-    //             unreachable!()
-    //         }
-    //         CompressedNode::Children { kind: _, children } => {
-    //             let it = children.iter();
-    //             let mut offset = offset;
-    //             for id in it {
-    //                 offset = compute_layout_sections(f, g, theme, &id, out, offset);
-    //             }
-    //             offset
-    //         }
-    //         CompressedNode::Spaces(s) => {
-    //             let len = g(s);
-    //             let end = offset + len;
-    //             let format = syntax_highlighting_ts::TokenType::Punctuation;
-    //             let mut format = theme.formats[format].clone();
-    //             format.font_id = egui::FontId::monospace(12.0);
-    //             out.push(LayoutSection {
-    //                 leading_space: 0.0,
-    //                 byte_range: offset..end.clone(),
-    //                 format,
-    //             });
-    //             end
-    //         }
-    //     }
-    // }
+    match hyper_ast_layouter::Layouter::<_, _>::new(&store.read(), nid, theme).compute() {
+        Err(IndentedAlt::FmtError) => panic!(),
+        Err(IndentedAlt::NoIndent) => panic!(),
+        Ok(x) => x,
+    }
+}
 
-    // let mut layout = vec![];
+mod hyper_ast_layouter {
+    use super::syntax_highlighter;
+    use epaint::text::LayoutSection;
+    use hyper_ast::nodes::Space;
+    use hyper_ast::{nodes::IndentedAlt, types::NodeId};
 
-    // let len = compute_layout_sections(
-    //     |id| -> _ {
-    //         use hyper_ast::nodes::CompressedNode;
-    //         // let c = &(*id as u64);
-    //         if let Some(r) = store.node_store.read().unwrap().try_resolve(*id) {
-    //             let kind = r.get_type();
-    //             let l = r.try_get_label().copied();
-    //             let cs = r.children();
-    //             if let Some(cs) = cs {
-    //                 CompressedNode::Children {
-    //                     children: cs.0.to_vec().into_boxed_slice(),
-    //                     kind,
-    //                 }
-    //             } else if let Some(label) = l {
-    //                 CompressedNode::Label { label, kind }
-    //             } else if let (Some(label), Some(cs)) = (l, cs) {
-    //                 unreachable!()
-    //             } else {
-    //                 CompressedNode::Type(kind)
-    //             }
-    //             // if let Some(c) = store.both.ids.iter().position(|x| x == c) {
-    //             //     // imp.ui_both_impl(ui, depth + 1, c);
-    //             //     panic!()
-    //             // } else if let Some(c) = store.labeled.ids.iter().position(|x| x == c) {
-    //             //     // imp.ui_labeled_impl(ui, depth + 1, c);
-    //             //     let s = &store.type_sys.0[store.labeled.kinds[c] as usize];
-    //             //     let kind = if s.starts_with("xml") {
-    //             //         Type::parse_xml(s)
-    //             //     } else {
-    //             //         Type::parse(s).unwrap()
-    //             //     };
-    //             //     let l = store.labeled.labels[c] as usize;
-    //             //     CompressedNode::Label { label: l, kind }
-    //             // } else if let Some(c) = store.children.ids.iter().position(|x| x == c) {
-    //             //     // imp.ui_children_impl(ui, depth + 1, c);
-    //             //     let s = &store.type_sys.0[store.children.kinds[c] as usize];
-    //             //     let kind = if s.starts_with("xml") {
-    //             //         Type::parse_xml(s)
-    //             //     } else {
-    //             //         Type::parse(s).unwrap()
-    //             //     };
-    //             //     let o = store.children.cs_ofs[c] as usize;
-    //             //     let children = &store.children.children[o..o + store.children.cs_lens[c] as usize];
-    //             //     CompressedNode::Children {
-    //             //         children: children.iter().map(|x| *x as u64).collect(),
-    //             //         kind,
-    //             //     }
-    //             // } else if let Some(c) = store.typed.ids.iter().position(|x| x == c) {
-    //             //     // imp.ui_typed_impl(ui, depth + 1, c);
-    //             //     let s = &store.type_sys.0[store.typed.kinds[c] as usize];
-    //             //     if s.starts_with("xml") {
-    //             //         CompressedNode::Type(Type::parse_xml(s))
-    //             //     } else {
-    //             //         CompressedNode::Type(Type::parse(s).unwrap())
-    //             //     }
-    //         } else {
-    //             // might not be needed if always called after serializer
-    //             if !store
-    //                 .nodes_pending
-    //                 .lock()
-    //                 .unwrap()
-    //                 .iter()
-    //                 .any(|x| x.contains(id))
-    //             {
-    //                 store
-    //                     .nodes_waiting
-    //                     .lock()
-    //                     .unwrap()
-    //                     .get_or_insert(Default::default())
-    //                     .insert(*id);
-    //             }
-    //             CompressedNode::Type(Type::Error)
-    //         }
-    //     },
-    //     |id| -> _ {
-    //         if let Some(get) = store.label_store.read().unwrap().try_resolve(id) {
-    //             get.len()
-    //         } else {
-    //             // TODO might not be needed is we have the
-    //             if !store
-    //                 .labels_pending
-    //                 .lock()
-    //                 .unwrap()
-    //                 .iter()
-    //                 .any(|x| x.contains(id))
-    //             {
-    //                 store
-    //                     .labels_waiting
-    //                     .lock()
-    //                     .unwrap()
-    //                     .get_or_insert(Default::default())
-    //                     .insert(*id);
-    //             }
-    //             Type::Error.to_string().len()
-    //         }
-    //     },
-    //     theme,
-    //     &nid,
-    //     &mut layout,
-    //     0,
-    // );
-    // (len, layout)
-    todo!()
+    pub struct Layouter<'a, 'b, IdN, HAST, const SPC: bool = false> {
+        stores: &'a HAST,
+        root: IdN,
+        root_indent: &'static str,
+        theme: &'b syntax_highlighter::simple::CodeTheme,
+    }
+    impl<'store, 'b, IdN, HAST, const SPC: bool> Layouter<'store, 'b, IdN, HAST, SPC> {
+        pub fn new(
+            stores: &'store HAST,
+            root: IdN,
+            theme: &'b syntax_highlighter::simple::CodeTheme,
+        ) -> Self {
+            Self {
+                stores,
+                root,
+                root_indent: "\n",
+                theme,
+            }
+        }
+    }
+
+    fn make_section(
+        theme: &syntax_highlighter::simple::CodeTheme,
+        out: &mut Vec<LayoutSection>,
+        format: syntax_highlighter::TokenType,
+        offset: usize,
+        end: usize,
+    ) {
+        let mut format = theme.formats[format].clone();
+        format.font_id = egui::FontId::monospace(12.0);
+        out.push(LayoutSection {
+            leading_space: 0.0,
+            byte_range: offset..end.clone(),
+            format,
+        });
+    }
+
+    use hyper_ast::types::{self, HyperType, IterableChildren};
+    impl<'store, 'b, IdN, HAST, const SPC: bool> Layouter<'store, 'b, IdN, HAST, SPC>
+    where
+        IdN: NodeId<IdN = IdN>,
+        HAST: types::NodeStore<IdN>,
+        HAST: types::LabelStore<str>,
+        HAST: types::TypeStore<HAST::R<'store>>,
+        HAST::R<'store>: types::Labeled<Label = HAST::I> + types::WithChildren<TreeId = IdN>,
+    {
+        pub fn compute(&self) -> Result<(usize, Vec<LayoutSection>), IndentedAlt> {
+            let mut layout = vec![];
+            let mut offset = 0;
+            self._compute(&self.root, self.root_indent, &mut layout, &mut offset)
+                .map(|_| (offset, layout))
+        }
+        fn _compute(
+            &self,
+            id: &IdN,
+            parent_indent: &str,
+            out: &mut Vec<LayoutSection>,
+            offset: &mut usize,
+        ) -> Result<String, IndentedAlt> {
+            use types::LabelStore;
+            use types::Labeled;
+            use types::NodeStore;
+            use types::WithChildren;
+            let b = NodeStore::resolve(self.stores, id);
+            // let kind = (self.stores.type_store(), b);
+            let kind = self.stores.resolve_type(&b);
+            let label = b.try_get_label();
+            let children = b.children();
+
+            if kind.is_spaces() {
+                let s = LabelStore::resolve(self.stores, &label.unwrap());
+                let b: String = Space::format_indentation(s.as_bytes())
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect();
+                // out.write_str(&b).unwrap();
+                let len = s.len();
+                let end = *offset + len;
+                let format = syntax_highlighter::TokenType::Punctuation;
+                make_section(self.theme, out, format, *offset, end);
+                *offset = end;
+                return Ok(if b.contains("\n") {
+                    b
+                } else {
+                    parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
+                });
+            }
+
+            match (label, children) {
+                (None, None) => {
+                    // out.write_str(&kind.to_string()).unwrap();
+                    let len = kind.to_string().len();
+                    let end = *offset + len;
+                    let format = syntax_highlighter::TokenType::Keyword;
+                    make_section(self.theme, out, format, *offset, end);
+                    *offset = end;
+                    Err(IndentedAlt::NoIndent)
+                }
+                (label, Some(children)) => {
+                    if let Some(label) = label {
+                        let s = LabelStore::resolve(self.stores, label);
+                        dbg!(s);
+                    }
+                    if !children.is_empty() {
+                        let mut it = children.iter_children();
+                        let op = |alt| {
+                            if alt == IndentedAlt::NoIndent {
+                                Ok(parent_indent[parent_indent.rfind('\n').unwrap_or(0)..]
+                                    .to_owned())
+                            } else {
+                                Err(alt)
+                            }
+                        };
+                        let mut ind = self
+                            ._compute(&it.next().unwrap(), parent_indent, out, offset)
+                            .or_else(op)?;
+                        for id in it {
+                            ind = self._compute(&id, &ind, out, offset).or_else(op)?;
+                        }
+                    }
+                    Err(IndentedAlt::NoIndent)
+                }
+                (Some(label), None) => {
+                    let s = LabelStore::resolve(self.stores, label);
+                    // out.write_str(&s).unwrap();
+                    let len = s.len();
+                    let end = *offset + len;
+                    let format = syntax_highlighter::TokenType::Punctuation;
+                    make_section(self.theme, out, format, *offset, end);
+                    *offset = end;
+                    Err(IndentedAlt::NoIndent)
+                }
+            }
+        }
+    }
 }
 
 fn subtree_to_string(store: &FetchedHyperAST, nid: NodeIdentifier) -> String {
-    let mut out = BuffOut::default();
-
-    #[derive(Default)]
-    struct BuffOut {
-        buff: String,
-    }
-
-    impl std::fmt::Write for BuffOut {
-        fn write_str(&mut self, s: &str) -> std::fmt::Result {
-            Ok(self.buff.extend(s.chars()))
-        }
-    }
-
-    impl From<BuffOut> for String {
-        fn from(value: BuffOut) -> Self {
-            value.buff
-        }
-    }
-
     ToString::to_string(&hyper_ast::nodes::TextSerializer::<_, _>::new(
         &store.read(),
         nid,
@@ -1945,7 +1892,7 @@ fn make_pp_code(
     store: Arc<FetchedHyperAST>,
     ctx: &egui::Context,
     nid: NodeIdentifier,
-    theme: syntax_highlighting_ts::CodeTheme,
+    theme: syntax_highlighter::simple::CodeTheme,
 ) -> epaint::text::LayoutJob {
     #[derive(Default)]
     struct PrettyPrinter {}
@@ -1964,7 +1911,7 @@ fn make_pp_code(
         syntax_highlighting_async::cache::Spawner<
             (
                 Arc<FetchedHyperAST>,
-                &syntax_highlighting_ts::CodeTheme,
+                &syntax_highlighter::simple::CodeTheme,
                 NodeIdentifier,
                 usize,
             ),
@@ -1974,9 +1921,9 @@ fn make_pp_code(
         fn spawn(
             &self,
             ctx: &egui::Context,
-            (store, theme, id, len): (
+            (_store, _theme, _id, len): (
                 Arc<FetchedHyperAST>,
-                &syntax_highlighting_ts::CodeTheme,
+                &syntax_highlighter::simple::CodeTheme,
                 NodeIdentifier,
                 usize,
             ),
@@ -2005,7 +1952,7 @@ fn make_pp_code(
             Spawner,
             (
                 Arc<FetchedHyperAST>,
-                &syntax_highlighting_ts::CodeTheme,
+                &syntax_highlighter::simple::CodeTheme,
                 NodeIdentifier,
                 usize,
             ),
@@ -2014,10 +1961,10 @@ fn make_pp_code(
     {
         fn increment(
             &mut self,
-            spawner: &Spawner,
+            _spawner: &Spawner,
             (store, theme, id, len): (
                 Arc<FetchedHyperAST>,
-                &syntax_highlighting_ts::CodeTheme,
+                &syntax_highlighter::simple::CodeTheme,
                 NodeIdentifier,
                 usize,
             ),
@@ -2090,14 +2037,9 @@ fn make_pp_code(
     layout_job
 }
 
-// impl HightLightHandle {
-//     fn selection_hightlight(&mut self, ui: &mut egui::Ui,) {
-
-//     }
-// }
 fn selection_highlight(
     ui: &mut egui::Ui,
-    handle: &mut HightLightHandle,
+    handle: &mut HightLightHandle<'_>,
     min: epaint::Pos2,
     rect: epaint::Rect,
     root_ui_id: egui::Id,

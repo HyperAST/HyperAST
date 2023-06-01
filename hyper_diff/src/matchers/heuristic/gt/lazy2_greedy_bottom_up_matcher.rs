@@ -270,7 +270,7 @@ where
         let src_s = src_arena.descendants_count(node_store, &src);
         let dst_s = dst_arena.descendants_count(node_store, &dst);
         if !(src_s < cast(SIZE_THRESHOLD).unwrap() || dst_s < cast(SIZE_THRESHOLD).unwrap()) {
-            dbg!(src_s, dst_s);
+            // dbg!(src_s, dst_s);
             return;
         }
         // let label_store = self.label_store;

@@ -86,6 +86,7 @@ default = ["serde"]
 
 # Allow serialization using [`serde`](https://docs.rs/serde).
 serde = ["egui/serde", "dep:serde"]
+syntect = []
 
 [profile.release]
 opt-level = 2 # fast and small wasm

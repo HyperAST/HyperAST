@@ -17,8 +17,8 @@ use self::{
 mod code_editor;
 mod code_tracking;
 mod single_repo;
-mod syntax_highlighting_async;
-mod syntax_highlighting_ts;
+mod syntax_highlighting;
+// mod syntax_highlighting_ts;
 mod ts_highlight;
 pub(crate) mod types;
 // mod split_from_side_panel;
@@ -613,13 +613,13 @@ fn show_code_scrolled(
     desired_width: f32,
 ) -> Option<egui::scroll_area::ScrollAreaOutput<egui::text_edit::TextEditOutput>> {
     // use egui_demo_lib::syntax_highlighting;
-    use syntax_highlighting_async as syntax_highlighting;
-    let theme = syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+    use syntax_highlighting::syntax_highlighting_async as syntax_highlighter;
+    let theme = syntax_highlighting::syntect::CodeTheme::from_memory(ui.ctx());
 
     let mut layouter = |ui: &egui::Ui, code: &str, wrap_width: f32| {
         let mut layout_job =
             // egui_demo_lib::syntax_highlighting::highlight(ui.ctx(), &theme, code, language);
-            syntax_highlighting_async::highlight(ui.ctx(), &theme, code, language);
+            syntax_highlighter::highlight(ui.ctx(), &theme, code, language);
         if wrap {
             layout_job.wrap.max_width = wrap_width;
         }

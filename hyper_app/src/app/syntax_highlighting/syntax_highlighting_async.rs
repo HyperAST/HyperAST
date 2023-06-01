@@ -374,79 +374,6 @@ impl SyntectTheme {
     }
 }
 
-#[derive(Clone, Hash, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(default))]
-pub struct CodeTheme {
-    dark_mode: bool,
-
-    syntect_theme: SyntectTheme,
-}
-
-impl Default for CodeTheme {
-    fn default() -> Self {
-        Self::dark()
-    }
-}
-
-impl CodeTheme {
-    pub fn from_style(style: &egui::Style) -> Self {
-        if style.visuals.dark_mode {
-            Self::dark()
-        } else {
-            Self::light()
-        }
-    }
-
-    pub fn from_memory(ctx: &egui::Context) -> Self {
-        if ctx.style().visuals.dark_mode {
-            ctx.data_mut(|d| {
-                d.get_persisted(egui::Id::new("dark"))
-                    .unwrap_or_else(CodeTheme::dark)
-            })
-        } else {
-            ctx.data_mut(|d| {
-                d.get_persisted(egui::Id::new("light"))
-                    .unwrap_or_else(CodeTheme::light)
-            })
-        }
-    }
-
-    pub fn store_in_memory(self, ctx: &egui::Context) {
-        if self.dark_mode {
-            ctx.data_mut(|d| d.insert_persisted(egui::Id::new("dark"), self));
-        } else {
-            ctx.data_mut(|d| d.insert_persisted(egui::Id::new("light"), self));
-        }
-    }
-}
-
-impl CodeTheme {
-    pub fn dark() -> Self {
-        Self {
-            dark_mode: true,
-            syntect_theme: SyntectTheme::Base16MochaDark,
-        }
-    }
-
-    pub fn light() -> Self {
-        Self {
-            dark_mode: false,
-            syntect_theme: SyntectTheme::SolarizedLight,
-        }
-    }
-
-    pub fn ui(&mut self, ui: &mut egui::Ui) {
-        egui::widgets::global_dark_light_mode_buttons(ui);
-
-        for theme in SyntectTheme::all() {
-            if theme.is_dark() == self.dark_mode {
-                ui.radio_value(&mut self.syntect_theme, theme, theme.name());
-            }
-        }
-    }
-}
-
 struct Highlighter {
     ps: syntect::parsing::SyntaxSet,
     ts: syntect::highlighting::ThemeSet,
@@ -840,7 +767,7 @@ impl IncrementalHighlightLayout2 {
 
 use egui::text::{LayoutSection, TextFormat};
 
-use crate::app::syntax_highlighting_async::async_exec::TimeoutHandle;
+use super::syntect::CodeTheme;
 
 fn convert_syntect_style(style: syntect::highlighting::Style) -> TextFormat {
     let fg = style.foreground;
@@ -1066,3 +993,5 @@ pub(crate) mod async_exec {
         todo!()
     }
 }
+
+pub use async_exec::TimeoutHandle;
