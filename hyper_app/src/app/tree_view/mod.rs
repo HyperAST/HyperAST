@@ -1,4 +1,5 @@
 use egui::TextFormat;
+use egui_addon::syntax_highlighting::{syntax_highlighting_ts, self};
 use epaint::text::LayoutSection;
 pub use hyper_ast::store::nodes::fetched::{FetchedLabels, NodeIdentifier, NodeStore};
 use hyper_ast::{
@@ -23,10 +24,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::app::{
-    syntax_highlighting_async::{self, async_exec},
-    syntax_highlighting_ts::{self, CodeTheme},
-};
+use crate::app::syntax_highlighting_async::{self, async_exec};
 
 use super::{
     code_aspects::{remote_fetch_labels, remote_fetch_nodes_by_ids, HightLightHandle},
@@ -854,7 +852,7 @@ impl<'a> FetchedViewImpl<'a> {
                 }
             };
             let min = ui.available_rect_before_wrap().min;
-            let theme = syntax_highlighting_ts::CodeTheme::from_memory(ui.ctx());
+            let theme = syntax_highlighting::syntect::CodeTheme::from_memory(ui.ctx());
             // TODO fetch entire subtree, line breaks would also be useful
             let layout_job = make_pp_code(self.store.clone(), ui.ctx(), nid, theme);
             let galley = ui.fonts(|f| f.layout_job(layout_job));
@@ -1734,7 +1732,7 @@ const CLIP_LEN: f32 = 0.0; //250.0;
 
 fn subtree_to_layout(
     store: &FetchedHyperAST,
-    theme: &syntax_highlighting_ts::CodeTheme,
+    theme: &syntax_highlighting::syntect::CodeTheme,
     nid: NodeIdentifier,
 ) -> (usize, Vec<LayoutSection>) {
     // use hyper_ast::nodes::CompressedNode;
@@ -1945,7 +1943,7 @@ fn make_pp_code(
     store: Arc<FetchedHyperAST>,
     ctx: &egui::Context,
     nid: NodeIdentifier,
-    theme: syntax_highlighting_ts::CodeTheme,
+    theme: syntax_highlighting::syntect::CodeTheme,
 ) -> epaint::text::LayoutJob {
     #[derive(Default)]
     struct PrettyPrinter {}
@@ -1964,7 +1962,7 @@ fn make_pp_code(
         syntax_highlighting_async::cache::Spawner<
             (
                 Arc<FetchedHyperAST>,
-                &syntax_highlighting_ts::CodeTheme,
+                &syntax_highlighting::syntect::CodeTheme,
                 NodeIdentifier,
                 usize,
             ),
@@ -1976,7 +1974,7 @@ fn make_pp_code(
             ctx: &egui::Context,
             (store, theme, id, len): (
                 Arc<FetchedHyperAST>,
-                &syntax_highlighting_ts::CodeTheme,
+                &syntax_highlighting::syntect::CodeTheme,
                 NodeIdentifier,
                 usize,
             ),
@@ -2005,7 +2003,7 @@ fn make_pp_code(
             Spawner,
             (
                 Arc<FetchedHyperAST>,
-                &syntax_highlighting_ts::CodeTheme,
+                &syntax_highlighting::syntect::CodeTheme,
                 NodeIdentifier,
                 usize,
             ),
@@ -2017,7 +2015,7 @@ fn make_pp_code(
             spawner: &Spawner,
             (store, theme, id, len): (
                 Arc<FetchedHyperAST>,
-                &syntax_highlighting_ts::CodeTheme,
+                &syntax_highlighting::syntect::CodeTheme,
                 NodeIdentifier,
                 usize,
             ),

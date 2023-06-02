@@ -5,20 +5,19 @@ use std::{
     sync::Arc,
 };
 
+use egui_addon::{Lang, syntax_highlighting::{self, syntax_highlighting_async}, code_editor::{self, generic_text_buffer::byte_index_from_char_index}};
 use serde::{Deserialize, Serialize};
 
 use self::{
     egui_utils::{radio_collapsing, show_wip},
     single_repo::ComputeConfigSingle,
     tree_view::FetchedHyperAST,
-    types::{Commit, Lang, Languages, Repo}, code_editor::generic_text_buffer::byte_index_from_char_index,
+    types::{Commit, Languages, Repo},
 };
 
-mod code_editor;
+
 mod code_tracking;
 mod single_repo;
-mod syntax_highlighting_async;
-mod syntax_highlighting_ts;
 mod ts_highlight;
 pub(crate) mod types;
 // mod split_from_side_panel;
@@ -613,8 +612,8 @@ fn show_code_scrolled(
     desired_width: f32,
 ) -> Option<egui::scroll_area::ScrollAreaOutput<egui::text_edit::TextEditOutput>> {
     // use egui_demo_lib::syntax_highlighting;
-    use syntax_highlighting_async as syntax_highlighting;
-    let theme = syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+    
+    let theme = syntax_highlighting::syntect::CodeTheme::from_memory(ui.ctx());
 
     let mut layouter = |ui: &egui::Ui, code: &str, wrap_width: f32| {
         let mut layout_job =

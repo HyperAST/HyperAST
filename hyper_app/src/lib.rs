@@ -5,7 +5,4 @@
 
 mod app;
 
-pub use app::{
-    types::{Lang, Languages},
-    HyperApp,
-};
+pub use app::{types::Languages, HyperApp};

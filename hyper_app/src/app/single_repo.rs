@@ -1,12 +1,16 @@
-use egui::Id;
 use poll_promise::Promise;
 
-use crate::app::{utils::{file_save, self}, API_URL};
+use crate::app::{
+    utils::{self},
+    API_URL,
+};
+
+use egui_addon::code_editor::{CodeEditor, EditorInfo};
 
 use super::{
-    code_editor::{CodeEditor, EditorInfo},
     egui_utils::{radio_collapsing, show_wip},
-    types::{CodeEditors, CommitId, Repo, Resource, SelectedConfig, Commit}, show_repo_menu,
+    show_repo_menu,
+    types::{CodeEditors, Commit, Resource, SelectedConfig},
 };
 
 const INFO_INIT: EditorInfo<&'static str> = EditorInfo {

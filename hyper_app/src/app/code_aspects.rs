@@ -1,12 +1,8 @@
-use egui::Widget;
-use epaint::Pos2;
 use hyper_ast::store::nodes::fetched;
 use hyper_ast::store::nodes::fetched::LabelIdentifier;
 use poll_promise::Promise;
 use std::collections::HashSet;
-use std::collections::VecDeque;
 use std::fmt::Debug;
-use std::hash::Hash;
 use std::sync::Arc;
 
 use crate::app::API_URL;

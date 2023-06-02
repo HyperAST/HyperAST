@@ -4,7 +4,8 @@ use std::{
     sync::Arc,
 };
 
-use epaint::{ahash::HashSet, pos2, vec2, Pos2};
+use egui_addon::code_editor::generic_text_buffer::byte_index_from_char_index;
+use epaint::{ahash::HashSet, Pos2};
 use hyper_ast::{
     store::nodes::fetched::NodeIdentifier,
     types::{HyperType, Labeled, TypeStore},
@@ -13,7 +14,6 @@ use poll_promise::Promise;
 
 use crate::app::{
     code_aspects::{self, HightLightHandle},
-    code_editor::generic_text_buffer::byte_index_from_char_index,
     code_tracking::TrackingResultWithChanges,
     commit::fetch_commit,
     egui_utils::highlight_byte_range,
@@ -1293,7 +1293,7 @@ pub(crate) fn show_results(
                                 ui,
                                 &store,
                                 &long_tracking.detatched_view_options,
-                                m,
+                                &m,
                                 id,
                                 default_pos,
                             );

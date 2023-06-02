@@ -2,7 +2,7 @@
 
 use epaint::{
     emath::{lerp, Align},
-    pos2, vec2, Pos2, Rect, Vec2,
+    Pos2, Rect, Vec2,
 };
 
 use egui::{egui_assert, Layout, Response, Sense, Ui};

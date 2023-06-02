@@ -5,12 +5,14 @@
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result<()> {
     // Log to stdout (if you run with `RUST_LOG=debug`).
+
+    use egui_addon::Lang;
     tracing_subscriber::fmt::init();
 
     let lang = tree_sitter_javascript::language().into();
     let name = "JavaScript".to_string();
     let mut languages: hyper_app::Languages = Default::default();
-    languages.insert(name.clone(), hyper_app::Lang { name, lang});
+    languages.insert(name.clone(), Lang { name, lang});
     // let mut parser = tree_sitter::Parser::new().unwrap();
     // parser.set_language(&lang.into()).expect("Error loading Java grammar");
     // let parsed = parser.parse("function f() {}", None).unwrap().unwrap();

@@ -1,12 +1,9 @@
 use epaint::{
     emath::{lerp, Align},
-    pos2, vec2, Pos2, Rect, Stroke, Vec2,
+    Pos2, Rect, Stroke, Vec2,
 };
 
-use egui::{
-    egui_assert, panel::Side, Context, CursorIcon, Frame, Id, Layout, Response, Sense, SidePanel,
-    Ui,
-};
+use egui::{egui_assert, Context, CursorIcon, Frame, Id, Layout, Response, Sense, Ui};
 
 /// State regarding panels.
 #[derive(Clone, Copy, Debug)]

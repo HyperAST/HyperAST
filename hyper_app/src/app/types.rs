@@ -1,13 +1,7 @@
-use hyper_ast::{store::nodes::fetched::NodeIdentifier, types};
+use egui_addon::{code_editor, Lang};
+use hyper_ast::store::nodes::fetched::NodeIdentifier;
 
-use super::code_editor;
-
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-    ops::Range,
-    str::FromStr,
-};
+use std::{collections::HashMap, hash::Hash, ops::Range};
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub(crate) struct Repo {
@@ -230,15 +224,3 @@ impl<T> Resource<T> {
 }
 
 pub type Languages = HashMap<String, Lang>;
-
-#[derive(Debug, Clone)]
-pub struct Lang {
-    pub name: String,
-    pub lang: tree_sitter::Language,
-}
-
-impl Hash for Lang {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-    }
-}
