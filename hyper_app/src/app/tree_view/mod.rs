@@ -20,7 +20,10 @@ use std::{
     time::Duration,
 };
 
-use crate::app::syntax_highlighting::{self as syntax_highlighter, syntax_highlighting_async::{self, async_exec}};
+use crate::app::syntax_highlighting::{
+    self as syntax_highlighter,
+    syntax_highlighting_async::{self, async_exec},
+};
 
 use super::{
     code_aspects::{remote_fetch_labels, remote_fetch_nodes_by_ids, HightLightHandle},
@@ -37,21 +40,30 @@ impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
 
     fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
         let lang = n.get_lang();
-        let raw = n.get_raw_type();
         let t: &'static (dyn HyperType + 'static) = match lang {
             "hyper_ast_gen_ts_cpp::types::Cpp" => {
+                let raw = n.get_raw_type();
                 let t: &'static (dyn HyperType + 'static) =
                     <hyper_ast_gen_ts_cpp::types::Cpp as Lang<_>>::make(raw);
                 t
             }
             "hyper_ast_gen_ts_java::types::Java" => {
+                let raw = n.get_raw_type();
                 let t: &'static (dyn HyperType + 'static) =
                     <hyper_ast_gen_ts_java::types::Java as Lang<_>>::make(raw);
                 t
             }
             "hyper_ast_gen_ts_xml::types::Xml" => {
+                let raw = n.get_raw_type();
                 let t: &'static (dyn HyperType + 'static) =
                     <hyper_ast_gen_ts_xml::types::Xml as Lang<_>>::make(raw);
+                t
+            }
+            "" => {
+                let t: &'static (dyn HyperType + 'static) =
+                    <hyper_ast_gen_ts_java::types::Java as Lang<_>>::make(
+                        hyper_ast_gen_ts_java::types::Type::Dot as u16,
+                    );
                 t
             }
             // "xml" => LangRef::<AnyType>::make(&hyper_ast_gen_ts_xml::types::Xml, raw),
@@ -74,6 +86,9 @@ impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
             }
             "hyper_ast_gen_ts_xml::types::Xml" => {
                 From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_xml::types::Xml)
+            }
+            "" => {
+                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_java::types::Java)
             }
             // "xml" => From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_xml::types::Xml),
             x => panic!("{}", x),
@@ -162,7 +177,8 @@ impl<'b> hyper_ast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAS
                     .get_or_insert(Default::default())
                     .insert(*id);
             }
-            unimplemented!()
+            // unimplemented!()
+            self.node_store.unavailable_node()
         }
     }
 }
@@ -188,7 +204,7 @@ impl<'b> hyper_ast::types::LabelStore<str> for AcessibleFetchedHyperAST<'b> {
                     .get_or_insert(Default::default())
                     .insert(*id);
             }
-            "o"
+            "."
         }
     }
 }
@@ -824,7 +840,14 @@ impl<'a> FetchedViewImpl<'a> {
         } else {
             None
         };
-        if false
+        if kind
+            .as_any()
+            .downcast_ref()
+            .map_or(false, |x| self.aspects.ser_opt_cpp.contains(x))
+            || kind
+                .as_any()
+                .downcast_ref()
+                .map_or(false, |x| self.aspects.ser_opt_java.contains(x))
         // TODO use a regex
         // self
         //     .aspects
@@ -1793,8 +1816,10 @@ mod hyper_ast_layouter {
         pub fn compute(&self) -> Result<(usize, Vec<LayoutSection>), IndentedAlt> {
             let mut layout = vec![];
             let mut offset = 0;
-            self._compute(&self.root, self.root_indent, &mut layout, &mut offset)
-                .map(|_| (offset, layout))
+            match self._compute(&self.root, self.root_indent, &mut layout, &mut offset) {
+                Err(IndentedAlt::FmtError) => Err(IndentedAlt::FmtError),
+                _ => Ok((offset, layout))
+            }
         }
         fn _compute(
             &self,

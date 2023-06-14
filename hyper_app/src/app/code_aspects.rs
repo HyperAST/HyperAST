@@ -104,11 +104,13 @@ pub(crate) fn show_aspects_views_menu(
             .response;
         let tr = jtr.union(ctr);
         if tr.changed() {
-            // TODO just use regexes
-            // let mut ser_opt = Default::default();
-            // parse_java_type_list(&aspects.ser_opt_java_text, &mut ser_opt);
-            // parse_cpp_type_list(&aspects.ser_opt_cpp_text, &mut ser_opt);
-            // aspects.ser_opt = ser_opt;
+            let mut ser_opt_cpp = Default::default();
+            let mut ser_opt_java = Default::default();
+            // TODO use regexes
+            types::parse_java_type_list(&aspects.ser_opt_java_text, &mut ser_opt_java);
+            types::parse_cpp_type_list(&aspects.ser_opt_cpp_text, &mut ser_opt_cpp);
+            aspects.ser_opt_cpp = ser_opt_cpp;
+            aspects.ser_opt_java = ser_opt_java;
         }
 
         // ui.text_edit_singleline(&mut "github.com/INRIA/spoon");
