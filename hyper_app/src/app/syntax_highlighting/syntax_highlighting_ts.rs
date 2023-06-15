@@ -359,7 +359,7 @@ impl Highlighter {
 
     #[cfg(target_arch = "wasm32")]
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
-    fn highlight2(&self, theme: &CodeTheme, mut text: &str) -> LayoutJob {
+    fn highlight2(&self, theme: &super::simple::CodeTheme, mut text: &str) -> LayoutJob {
         let mut job = LayoutJob::default();
         eframe::web_sys::console::log_1(&text.into());
 
