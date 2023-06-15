@@ -73,7 +73,7 @@ pub fn fetch(mut state: SharedState, path: Parameters) -> Result<FetchedNodes, S
         .repositories
         .write()
         .unwrap()
-        .pre_process_with_config2(&mut repo, "", &commit)
+        .pre_process_with_limit(&mut repo, "", &commit, 2)
         .map_err(|e| e.to_string())?;
     log::warn!("done construction of {commits:?} in {}", repo.spec);
     let repositories = state.repositories.read().unwrap();
@@ -137,9 +137,9 @@ pub fn fetch_labels<'a>(
     let now = Instant::now();
     let ids = ids.into_iter().map(|id| {
         let id: usize = id.parse().unwrap();
-        if id == 0 {
-            panic!()
-        }
+        // if id == 0 {
+        //     panic!()
+        // }
         let id = label_id_from_usize(id).unwrap();
         id
     });

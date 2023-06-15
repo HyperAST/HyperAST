@@ -12,7 +12,9 @@ use tower_http::trace::TraceLayer;
 
 use crate::{
     commit, fetch, file,
-    scripting::{self, ComputeResult, ScriptContent, ScriptingError, ScriptingParam},
+    scripting::{
+        self, ScriptContent, ScriptContentDepth, ScriptingError, ScriptingParam,
+    },
     track, view, SharedState,
 };
 
@@ -33,8 +35,16 @@ async fn scripting(
     axum::extract::Path(path): axum::extract::Path<ScriptingParam>,
     axum::extract::State(state): axum::extract::State<SharedState>,
     axum::extract::Json(script): axum::extract::Json<ScriptContent>,
-) -> axum::response::Result<Json<ComputeResult>> {
+) -> axum::response::Result<Json<scripting::ComputeResult>> {
     let r = scripting::simple(script, state, path)?;
+    Ok(r)
+}
+async fn scripting_depth(
+    axum::extract::Path(path): axum::extract::Path<ScriptingParam>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+    axum::extract::Json(script): axum::extract::Json<ScriptContentDepth>,
+) -> axum::response::Result<Json<scripting::ComputeResults>> {
+    let r = scripting::simple_depth(script, state, path)?;
     Ok(r)
 }
 
@@ -50,10 +60,15 @@ pub fn scripting_app(_st: SharedState) -> Router<SharedState> {
         // .request_body_limit(1024 * 5_000 /* ~5mb */)
         .timeout(Duration::from_secs(10))
         .layer(TraceLayer::new_for_http());
-    Router::new().route(
-        "/script/github/:user/:name/:commit",
-        post(scripting).layer(scripting_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
-    )
+    Router::new()
+        .route(
+            "/script/github/:user/:name/:commit",
+            post(scripting).layer(scripting_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/script-depth/github/:user/:name/:commit",
+            post(scripting_depth).layer(scripting_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
     // .route(
     //     "/script/gitlab/:user/:name/:commit",
     //     post(scripting).layer(scripting_service_config), // .with_state(Arc::clone(&shared_state)),

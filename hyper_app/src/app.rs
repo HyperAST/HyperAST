@@ -407,41 +407,13 @@ impl eframe::App for HyperApp {
         // ui.ctx().screen_rect()
         if *selected == types::SelectedConfig::Single {
             egui::CentralPanel::default().show(ctx, |ui| {
-                let is_portrait = ui.available_rect_before_wrap().aspect_ratio() < 1.0;
-                if is_portrait {
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        egui::warn_if_debug_build(ui);
-                        code_editors.init.ui(ui);
-                        code_editors.filter.ui(ui);
-                        code_editors.accumulate.ui(ui);
-                        ui.horizontal(|ui| {
-                            if ui.add(egui::Button::new("Compute")).clicked() {
-                                trigger_compute |= true;
-                            };
-                            single_repo::show_short_result(&*compute_single_result, ui);
-                        });
-                        single_repo::show_long_result(&*compute_single_result, ui);
-                    });
-                } else {
-                    interactive_split::Splitter::vertical()
-                        .ratio(0.7)
-                        .show(ui, |ui1, ui2| {
-                            ui1.push_id(ui1.id().with("input"), |ui| {
-                                egui::warn_if_debug_build(ui);
-                                code_editors.init.ui(ui);
-                                code_editors.filter.ui(ui);
-                                code_editors.accumulate.ui(ui);
-                            });
-                            let ui = ui2;
-                            ui.horizontal(|ui| {
-                                if ui.add(egui::Button::new("Compute")).clicked() {
-                                    trigger_compute |= true;
-                                };
-                                single_repo::show_short_result(&*compute_single_result, ui);
-                            });
-                            single_repo::show_long_result(&*compute_single_result, ui);
-                        });
-                }
+                single_repo::show_single_repo(
+                    ui,
+                    single,
+                    code_editors,
+                    &mut trigger_compute,
+                    compute_single_result,
+                );
             });
         } else if *selected == types::SelectedConfig::Tracking {
             egui::CentralPanel::default().show(ctx, |ui| {
