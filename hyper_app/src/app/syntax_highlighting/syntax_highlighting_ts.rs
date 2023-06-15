@@ -2,23 +2,32 @@ use std::sync::{Arc, Mutex};
 
 use egui::text::LayoutJob;
 
+<<<<<<<< HEAD:egui_addon/src/syntax_highlighting/syntax_highlighting_ts.rs
 use crate::Lang;
 
 use crate::code_editor::default_parser;
 use crate::code_editor::editor_content::EditAwareString;
+========
+use crate::{app::code_editor::generic_text_buffer::TextBuffer, Lang};
+
+use super::{
+    super::code_editor::{default_parser, editor_content::EditAwareString},
+};
+>>>>>>>> quentin/front:hyper_app/src/app/syntax_highlighting/syntax_highlighting_ts.rs
 
 #[cfg(feature = "syntect")]
 pub(crate) use super::syntect::CodeTheme;
 
+<<<<<<<< HEAD:egui_addon/src/syntax_highlighting/syntax_highlighting_ts.rs
 // #[cfg(not(feature = "syntect"))]
 // pub(crate) use super::syntect::CodeTheme;
 
-
+========
 #[cfg(not(feature = "syntect"))]
 pub(crate) use super::syntect::CodeTheme;
 
 
-
+>>>>>>>> quentin/front:hyper_app/src/app/syntax_highlighting/syntax_highlighting_ts.rs
 use super::TokenType;
 
 // /// View some code with syntax highlighting and selection.
@@ -77,6 +86,7 @@ pub fn highlight(
     code: &EditAwareString,
     language: &Lang,
 ) -> LayoutJob {
+<<<<<<<< HEAD:egui_addon/src/syntax_highlighting/syntax_highlighting_ts.rs
     use crate::code_editor::generic_text_buffer::TextBuffer;
 
     impl
@@ -84,6 +94,10 @@ pub fn highlight(
             (&super::simple::CodeTheme, &EditAwareString, &Lang),
             LayoutJob,
         > for Highlighter
+========
+    impl egui::util::cache::ComputerMut<(&super::simple::CodeTheme, &EditAwareString, &Lang), LayoutJob>
+        for Highlighter
+>>>>>>>> quentin/front:hyper_app/src/app/syntax_highlighting/syntax_highlighting_ts.rs
     {
         fn compute(
             &mut self,
@@ -247,7 +261,11 @@ impl Default for Highlighter {
 impl Highlighter {
     #[cfg(not(target_arch = "wasm32"))]
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
+<<<<<<<< HEAD:egui_addon/src/syntax_highlighting/syntax_highlighting_ts.rs
     fn highlight2(&self, theme: &super::simple::CodeTheme, text: &str) -> LayoutJob {
+========
+    fn highlight2(&self, theme: &super::simple::CodeTheme, mut text: &str) -> LayoutJob {
+>>>>>>>> quentin/front:hyper_app/src/app/syntax_highlighting/syntax_highlighting_ts.rs
         let mut job = LayoutJob::default();
 
         const HIGHLIGHT_NAMES: &[&str; 19] = &[
@@ -579,12 +597,16 @@ impl Highlighter {
 #[cfg(not(feature = "syntect"))]
 impl Highlighter {
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
+<<<<<<<< HEAD:egui_addon/src/syntax_highlighting/syntax_highlighting_ts.rs
     fn highlight(
         &self,
         theme: &super::simple::CodeTheme,
         mut text: &str,
         _language: &str,
     ) -> LayoutJob {
+========
+    fn highlight(&self, theme: &super::simple::CodeTheme, mut text: &str, _language: &str) -> LayoutJob {
+>>>>>>>> quentin/front:hyper_app/src/app/syntax_highlighting/syntax_highlighting_ts.rs
         // Extremely simple syntax highlighter for when we compile without syntect
 
         let mut job = LayoutJob::default();

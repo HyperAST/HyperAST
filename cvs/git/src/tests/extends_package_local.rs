@@ -39,7 +39,7 @@ fn run(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 }
 
 fn run1(text: &[u8]) {
@@ -54,7 +54,7 @@ fn run1(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
     match a.local.ana.as_ref() {
@@ -250,7 +250,7 @@ fn run2(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
     match a.local.ana.as_ref() {
@@ -483,7 +483,7 @@ fn run3(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
         .node_store
@@ -656,7 +656,7 @@ fn run3_1(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
         .node_store
@@ -817,7 +817,7 @@ fn run6(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
         .node_store
@@ -925,7 +925,7 @@ fn run7(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
         .node_store
@@ -1102,7 +1102,7 @@ fn run8(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
         .node_store
@@ -1240,7 +1240,7 @@ fn run10(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
         .node_store
@@ -1454,7 +1454,7 @@ fn run11(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
         .node_store
@@ -1850,7 +1850,7 @@ fn run12(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
     match a.local.ana.as_ref() {
@@ -1913,7 +1913,7 @@ fn run13(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
     match a.local.ana.as_ref() {

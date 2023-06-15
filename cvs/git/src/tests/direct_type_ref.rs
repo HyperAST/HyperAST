@@ -27,7 +27,7 @@ fn run(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let a = handle_java_file(&mut java_tree_gen, "A.java".as_bytes(), text).unwrap();
+    let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 
     let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
 

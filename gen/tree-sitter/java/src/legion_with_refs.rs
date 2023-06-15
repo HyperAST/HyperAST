@@ -565,19 +565,114 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
             let hashs = hbuilder.build();
             let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte).try_into().unwrap());
             let mcc = acc.mcc;
-            let base = (interned_kind, hashs, bytes_len);
-            let compressed_node = compress(
-                label_id,
-                &ana,
-                acc.simple,
-                acc.no_space,
-                size,
-                height,
-                size_no_spaces,
-                insertion,
-                mcc.clone(),
-                base,
-            );
+            let compressed_node = if true {
+                let base = (interned_kind, hashs, bytes_len);
+                compress(
+                    label_id,
+                    &ana,
+                    acc.simple,
+                    acc.no_space,
+                    size,
+                    height,
+                    size_no_spaces,
+                    insertion,
+                    mcc.clone(),
+                    base,
+                )
+            } else {
+                // NOTE use of dyn_builder
+                // TODO make it available through cargo feature or runtime config
+                // - should most likely not change the behavior of the HyperAST, need tests
+                // TODO make an even better API
+                // - wrapping the builder,
+                // - modularising computation and storage of metadata,
+                // - checking some invariants when adding metadata,
+                // - checking some invariants for indentifying data on debug builds
+                // - tying up parts of accumulator (hyper_ast::tree_genBasicAccumulator) and builder (EntityBuilder).
+                let mut dyn_builder =
+                    hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+                dyn_builder.add(interned_kind);
+                dyn_builder.add(hashs.clone());
+                dyn_builder.add(compo::BytesLen(
+                    (acc.end_byte - acc.start_byte).try_into().unwrap(),
+                ));
+
+                if Mcc::persist(&acc.simple.kind) {
+                    dyn_builder.add(mcc.clone());
+                }
+                if let Some(label_id) = label_id {
+                    dyn_builder.add(label_id);
+                }
+                if !acc.simple.children.is_empty() {
+                    macro_rules! bloom_aux {
+                        ( $t:ty ) => {{
+                            type B = $t;
+                            let it = ana.as_ref().unwrap().solver.iter_refs();
+                            let it =
+                                BulkHasher::<_, <B as BF<[u8]>>::S, <B as BF<[u8]>>::H>::from(it);
+                            let bloom = B::from(it);
+                            dyn_builder.add(B::SIZE);
+                            dyn_builder.add(bloom);
+                        }};
+                    }
+                    macro_rules! bloom {
+                        ( $t:ty ) => {{
+                            bloom_aux!(Bloom::<&'static [u8], $t>);
+                        }};
+                    }
+                    match ana.as_ref().map(|x| x.estimated_refs_count()).unwrap_or(0) {
+                        x if x > 2048 => {
+                            dyn_builder.add(BloomSize::Much);
+                        }
+                        x if x > 1024 => bloom!([u64; 64]),
+                        x if x > 512 => bloom!([u64; 32]),
+                        x if x > 256 => bloom!([u64; 16]),
+                        x if x > 150 => bloom!([u64; 8]),
+                        x if x > 100 => bloom!([u64; 4]),
+                        x if x > 30 => bloom!([u64; 2]),
+                        x if x > 15 => bloom!(u64),
+                        x if x > 8 => bloom!(u32),
+                        x if x > 0 => bloom!(u16),
+                        _ => {
+                            dyn_builder.add(BloomSize::None);
+                        }
+                        // TODO use the following after having tested the previous, already enough changes for now
+                        // 2048.. => {
+                        //     dyn_builder.add(BloomSize::Much);
+                        // }
+                        // 1024.. => bloom!([u64; 64]),
+                        // 512.. => bloom!([u64; 32]),
+                        // 256.. => bloom!([u64; 16]),
+                        // 150.. => bloom!([u64; 8]),
+                        // 100.. => bloom!([u64; 4]),
+                        // 32.. => bloom!([u64; 2]),
+                        // 16.. => bloom!(u64),
+                        // 8.. => bloom!(u32),
+                        // 1.. => bloom!(u16),
+                        // 0 => {
+                        //     dyn_builder.add(BloomSize::None);
+                        // }
+                    }
+                }
+
+                match acc.simple.children.len() {
+                    0 => {
+                        dyn_builder.add(BloomSize::None);
+                    }
+                    x => {
+                        let a = acc.simple.children.into_boxed_slice();
+                        dyn_builder.add(compo::Size(size));
+                        dyn_builder.add(compo::SizeNoSpaces(size_no_spaces));
+                        dyn_builder.add(compo::Height(height));
+                        dyn_builder.add(CS(a));
+                        if x != acc.no_space.len() {
+                            dyn_builder.add(NoSpacesCS(acc.no_space.into_boxed_slice()));
+                        }
+                    }
+                }
+
+                NodeStore::insert_built_after_prepare(insertion.vacant(), dyn_builder.build())
+            };
 
             let metrics = SubTreeMetrics {
                 size,

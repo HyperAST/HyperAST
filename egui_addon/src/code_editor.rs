@@ -6,6 +6,7 @@ use egui_demo_lib::easy_mark::easy_mark;
 use serde::Deserialize;
 use std::sync::Arc;
 
+
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct CodeEditor {
     #[serde(default = "default_info")]

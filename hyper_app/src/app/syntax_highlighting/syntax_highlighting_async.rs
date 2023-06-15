@@ -766,8 +766,12 @@ impl IncrementalHighlightLayout2 {
 }
 
 use egui::text::{LayoutSection, TextFormat};
+
+<<<<<<<< HEAD:egui_addon/src/syntax_highlighting_async.rs
 use crate::syntax_highlighting_async::async_exec::TimeoutHandle;
+========
 use super::syntect::CodeTheme;
+>>>>>>>> quentin/front:hyper_app/src/app/syntax_highlighting/syntax_highlighting_async.rs
 
 fn convert_syntect_style(style: syntect::highlighting::Style) -> TextFormat {
     let fg = style.foreground;

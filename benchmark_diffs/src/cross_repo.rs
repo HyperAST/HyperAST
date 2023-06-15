@@ -5,8 +5,8 @@ use hyper_ast::{
     utils::memusage_linux,
 };
 use hyper_ast_cvs_git::{
-    git::fetch_github_repository, maven::MavenModuleAcc,
-    multi_preprocessed::PreProcessedRepositories, no_space::as_nospaces,
+    git::{fetch_github_repository, Repo, Forge}, maven::MavenModuleAcc,
+    multi_preprocessed::PreProcessedRepositories, no_space::as_nospaces, processing::{ConfiguredRepoHandle2, ConfiguredRepoTrait, CacheHolding},
 };
 use num_traits::ToPrimitive;
 
@@ -18,12 +18,13 @@ use crate::{
 use hyper_diff::algorithms::{self, ComputeTime};
 
 pub struct CommitCompareParameters<'a> {
-    pub name: &'a str,
+    pub configured_repo: ConfiguredRepoHandle2,
     pub before: &'a str,
     pub after: &'a str,
-    pub dir_path: &'a str,
+    // pub dir_path: &'a str,
 }
 
+// WARN for now only works with Maven and Java
 pub fn windowed_commits_compare(
     window_size: usize,
     mut preprocessed: PreProcessedRepositories,
@@ -40,17 +41,15 @@ pub fn windowed_commits_compare(
     let processing_ordered_commits: Vec<_> = params
         .into_iter()
         .map(|x| {
-            println!("{}:({},{})", &x.name, &x.before, &x.after);
-            repo_names.push(x.name.to_string());
-            preprocessed
-                .pre_process_with_limit(
-                    &mut fetch_github_repository(&x.name),
-                    x.before,
-                    x.after,
-                    x.dir_path,
-                    limit,
-                )
-                .unwrap()
+            println!("{}:({},{})", x.configured_repo.spec(), &x.before, &x.after);
+            repo_names.push(x.configured_repo.spec().to_string());
+            (preprocessed.pre_process_with_limit(
+                &mut x.configured_repo.clone().fetch(),
+                x.before,
+                x.before,
+                // x.dir_path,
+                limit,
+            ).unwrap(), x.configured_repo)
         })
         .collect();
     let hyperast_size = memusage_linux() - mu;
@@ -92,41 +91,47 @@ pub fn windowed_commits_compare(
     dbg!(&r_len);
     let min_len = processing_ordered_commits
         .iter()
-        .map(|x| x.len())
+        .map(|x| x.0.len())
         .min()
         .unwrap();
     dbg!(&min_len, 0..=min_len - window_size);
     for c in (0..min_len - window_size).map(|c| {
         processing_ordered_commits
             .iter()
-            .map(|x| &x[c..(c + window_size)])
+            .map(|x| (&x.0[c..(c + window_size)],&x.1))
             .collect::<Vec<_>>()
     }) {
-        dbg!(&c, 1..min_len - window_size);
-        let oid_src: Vec<_> = c.iter().map(|x| x[0]).collect();
-        for oid_dst in (1..window_size).map(|i| c.iter().map(|c| c[i]).collect::<Vec<_>>()) {
+        // dbg!(&c, 1..min_len - window_size);
+        let oid_src: Vec<_> = c.iter().map(|x| (x.0[0], x.1)).collect();
+        for oid_dst in (1..window_size).map(|i| c.iter().map(|c|(c.0[i],c.1)).collect::<Vec<_>>()) {
             log::warn!("diff of {oid_src:?} and {oid_dst:?}");
-            assert_eq!(oid_src.len(), oid_dst.len());
-
-            let node_store = &preprocessed.processor.main_stores.node_store;
-            let label_store = &mut preprocessed.processor.main_stores.label_store;
+            assert_eq!(oid_src.len(),oid_dst.len());
+            
+            type Caches = <hyper_ast_cvs_git::processing::file_sys::Maven as hyper_ast_cvs_git::processing::CachesHolding>::Caches;
 
             let mut src_acc = MavenModuleAcc::from("".to_string());
             let mut src_mem = hyper_ast::utils::Bytes::default(); // NOTE it does not consider the size of the root, but it is an implementation detail
             let mut src_s = 0;
-            for (i, oid_src) in oid_src.iter().enumerate() {
-                let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
-                let src_tr = commit_src.1.ast_root;
+            for (i, (oid_src, repo)) in oid_src.iter().enumerate() {
+                let commit_src = preprocessed.get_commit(repo.config(),&oid_src).unwrap();
+                let node_store = &preprocessed.processor.main_stores.node_store;
+                let src_tr = commit_src.ast_root;
                 let s = node_store.resolve(src_tr).size();
                 src_s += s;
                 dbg!(s, node_store.resolve(src_tr).size_no_spaces());
-                src_mem += commit_src.1.memory_used();
+                src_mem += commit_src.memory_used();
+                let oid = commit_src.tree_oid;
+                let label_store = &mut preprocessed.processor.main_stores.label_store;
                 src_acc.push_submodule(
                     label_store.get_or_insert(&*repo_names[i]),
                     preprocessed
                         .processor
-                        .object_map
-                        .get(commit_src.0)
+                        .processing_systems
+                        .get::<hyper_ast_cvs_git::maven_processor::MavenProcessorHolder>()
+                        .unwrap()
+                        .get_caches().object_map
+                        //.get::<Caches>().unwrap().object_map//object_map_maven
+                        .get(&oid)
                         .unwrap()
                         .clone(),
                 )
@@ -135,19 +140,26 @@ pub fn windowed_commits_compare(
             let mut dst_acc = MavenModuleAcc::from("".to_string());
             let mut dst_mem = hyper_ast::utils::Bytes::default();
             let mut dst_s = 0;
-            for (i, oid_dst) in oid_dst.iter().enumerate() {
-                let commit_dst = preprocessed.commits.get_key_value(&oid_dst).unwrap();
-                let dst_tr = commit_dst.1.ast_root;
+            for (i, (oid_dst,repo)) in oid_dst.iter().enumerate() {
+                let commit_dst = preprocessed.get_commit(repo.config(),&oid_dst).unwrap();
+                let node_store = &preprocessed.processor.main_stores.node_store;
+                let dst_tr = commit_dst.ast_root;
                 let s = node_store.resolve(dst_tr).size();
                 dst_s += s;
                 dbg!(s, node_store.resolve(dst_tr).size_no_spaces());
-                dst_mem += commit_dst.1.memory_used();
+                dst_mem += commit_dst.memory_used();
+                let oid = commit_dst.tree_oid;
+                let label_store = &mut preprocessed.processor.main_stores.label_store;
                 dst_acc.push_submodule(
                     label_store.get_or_insert(&*repo_names[i]),
                     preprocessed
                         .processor
-                        .object_map
-                        .get(commit_dst.0)
+                        .processing_systems
+                        .get::<hyper_ast_cvs_git::maven_processor::MavenProcessorHolder>()
+                        .unwrap()
+                        .get_caches().object_map
+                        // .get::<Caches>().unwrap().object_map//object_map_maven
+                        .get(&oid)
                         .unwrap()
                         .clone(),
                 )
@@ -213,16 +225,8 @@ pub fn windowed_commits_compare(
             } else {
                 unimplemented!("gt_out_format {} is not implemented", gt_out_format)
             };
-            let oid_src = oid_src
-                .iter()
-                .map(|x| x.to_string())
-                .collect::<Vec<String>>()
-                .join("+");
-            let oid_dst = oid_dst
-                .iter()
-                .map(|x| x.to_string())
-                .collect::<Vec<String>>()
-                .join("+");
+            let oid_src = oid_src.iter().map(|x|x.0.to_string()).collect::<Vec<String>>().join("+");
+            let oid_dst = oid_dst.iter().map(|x|x.0.to_string()).collect::<Vec<String>>().join("+");
 
             if let Some((buf_validity, buf_perfs)) = &mut buf {
                 dbg!(

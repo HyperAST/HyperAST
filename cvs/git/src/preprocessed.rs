@@ -1,8 +1,9 @@
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     iter::Peekable,
     path::{Components, PathBuf},
     time::Instant,
+    todo,
 };
 
 use git2::{Oid, Repository};
@@ -15,20 +16,19 @@ use hyper_ast_gen_ts_java::impact::partial_analysis::PartialAnalysis;
 use log::info;
 
 use crate::{
-    cpp::{handle_cpp_file, CppAcc},
-    cpp_processor::CppProcessor,
     git::{all_commits_between, retrieve_commit},
-    java::{handle_java_file, JavaAcc},
-    java_processor::JavaProcessor,
-    make::{handle_makefile_file, MakeFile, MakeModuleAcc},
+    make::MakeModuleAcc,
     make_processor::MakeProcessor,
-    maven::{handle_pom_file, MavenModuleAcc, MavenPartialAnalysis, POM},
+    maven::MavenModuleAcc,
     maven_processor::MavenProcessor,
-    Commit, Processor, SimpleStores, TStore, MD,
+    processing::{
+        erased::ParametrizedCommitProcessorHandle, file_sys, CacheHolding, ConfiguredRepo,
+        ConfiguredRepo2,
+    },
+    utils::TypeMap,
+    Commit, DefaultMetrics, Processor, SimpleStores, TStore,
 };
-use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
-use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
-use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
+// use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
 
 /// Preprocess a git repository
 /// using the hyperAST and caching git object transformations
@@ -40,49 +40,66 @@ pub struct PreProcessedRepository {
     pub commits: HashMap<git2::Oid, Commit>,
 
     pub processor: RepositoryProcessor,
-    // pub main_stores: SimpleStores,
-
-    // pub object_map: BTreeMap<git2::Oid, (hyper_ast::store::nodes::DefaultNodeIdentifier, MD)>,
-    // pub object_map_pom: BTreeMap<git2::Oid, POM>,
-    // pub(super) java_md_cache: java_tree_gen::MDCache,
-    // pub object_map_java: BTreeMap<(git2::Oid, Vec<u8>), (java_tree_gen::Local, IsSkippedAna)>,
 }
 
 #[derive(Default)]
 pub struct RepositoryProcessor {
     pub main_stores: SimpleStores,
 
-    pub object_map: BTreeMap<
-        git2::Oid,
-        (
-            hyper_ast::store::nodes::DefaultNodeIdentifier,
-            crate::maven::MD,
-        ),
-    >,
-    pub object_map_make: BTreeMap<
-        git2::Oid,
-        (
-            hyper_ast::store::nodes::DefaultNodeIdentifier,
-            crate::make::MD,
-        ),
-    >,
-    pub object_map_pom: BTreeMap<git2::Oid, POM>,
-    pub object_map_makefile: BTreeMap<git2::Oid, MakeFile>,
-    pub(super) java_md_cache: java_tree_gen::MDCache,
-    pub object_map_java: BTreeMap<(git2::Oid, Vec<u8>), (java_tree_gen::Local, IsSkippedAna)>,
-    pub(super) cpp_md_cache: cpp_tree_gen::MDCache,
-    pub object_map_cpp: BTreeMap<(git2::Oid, Vec<u8>), (cpp_tree_gen::Local, IsSkippedAna)>,
+    // // any
+    // pub object_map_any: OidMap<(NodeIdentifier, DefaultMetrics)>,
+    // // maven
+    // #[cfg(feature = "maven")]
+    // pub object_map_maven: OidMap<(NodeIdentifier, crate::maven::MD)>,
+    // // make
+    // #[cfg(feature = "make")]
+    // pub object_map_make: OidMap<(NodeIdentifier, crate::make::MD)>,
+    // // npm
+    // #[cfg(feature = "npm")]
+    // pub object_map_npm: OidMap<(NodeIdentifier, DefaultMetrics)>,
+
+    // // pom.xml
+    // #[cfg(feature = "maven")]
+    // pub object_map_pom: OidMap<POM>,
+    // // MakeFile
+    // #[cfg(feature = "make")]
+    // pub object_map_makefile: OidMap<MakeFile>,
+    // // Java
+    // #[cfg(feature = "java")]
+    // pub(super) java_md_cache: java_tree_gen::MDCache,
+    // #[cfg(feature = "java")]
+    // pub object_map_java: NamedMap<(java_tree_gen::Local, IsSkippedAna)>,
+    // // Cpp
+    // #[cfg(feature = "cpp")]
+    // pub(super) cpp_md_cache: cpp_tree_gen::MDCache,
+    // #[cfg(feature = "cpp")]
+    // pub object_map_cpp: NamedMap<(cpp_tree_gen::Local, IsSkippedAna)>,
+    // pub processing_systems: TypeMap,
+    pub processing_systems: crate::processing::erased::ProcessorMap,
 }
+// NOTE what about making a constraints between sys processors
+// it should be a 1..n relation so it must be impl on the target
+// Examples:
+// Any -> Java
+// Any -> Maven when detecting a pom.xml
+// Maven -> Java on source/ and test/ directories (also look at relevant fields in pom.xml)
+// Any -> Make when detecting a Makefile
+// Make -> Cpp on src/
 
 pub(crate) type IsSkippedAna = bool;
+
+trait GeneratorProvider<Generator> {
+    fn generator(&mut self, text: &[u8]) -> Generator;
+}
 
 impl RepositoryProcessor {
     pub fn main_stores_mut(&mut self) -> &mut SimpleStores {
         &mut self.main_stores
     }
-    pub fn main_stores(&mut self) -> &SimpleStores {
+    pub fn main_stores(&self) -> &SimpleStores {
         &self.main_stores
     }
+
     pub fn intern_label(&mut self, name: &str) -> LabelIdentifier {
         self.main_stores.label_store.get(name).unwrap()
     }
@@ -99,44 +116,13 @@ impl RepositoryProcessor {
         ana.print_refs(&self.main_stores.label_store);
     }
 
-    fn xml_generator(&mut self) -> XmlTreeGen<TStore> {
-        XmlTreeGen {
-            line_break: "\n".as_bytes().to_vec(),
-            stores: &mut self.main_stores,
-        }
-    }
-
-    fn java_generator(&mut self, text: &[u8]) -> java_tree_gen::JavaTreeGen<TStore> {
-        let line_break = if text.contains(&b'\r') {
-            "\r\n".as_bytes().to_vec()
-        } else {
-            "\n".as_bytes().to_vec()
-        };
-        java_tree_gen::JavaTreeGen {
-            line_break,
-            stores: &mut self.main_stores,
-            md_cache: &mut self.java_md_cache,
-        }
-    }
-
-    fn cpp_generator(&mut self, text: &[u8]) -> cpp_tree_gen::CppTreeGen<TStore> {
-        let line_break = if text.contains(&b'\r') {
-            "\r\n".as_bytes().to_vec()
-        } else {
-            "\n".as_bytes().to_vec()
-        };
-        cpp_tree_gen::CppTreeGen {
-            line_break,
-            stores: &mut self.main_stores,
-            md_cache: &mut self.cpp_md_cache,
-        }
-    }
-
     pub fn purge_caches(&mut self) {
-        self.object_map.clear();
-        self.object_map_java.clear();
-        self.object_map_pom.clear();
-        self.java_md_cache.clear();
+        self.processing_systems.clear();
+        // self.object_map_maven.clear();
+        // self.object_map_java.clear();
+        // self.object_map_pom.clear();
+        // self.java_md_cache.clear();
+        // self.cpp_md_cache.clear();
     }
 }
 
@@ -144,9 +130,9 @@ impl PreProcessedRepository {
     pub fn name(&self) -> &str {
         &self.name
     }
-    pub fn new(name: &str) -> PreProcessedRepository {
+    pub fn new(name: &str) -> Self {
         let name = name.to_owned();
-        PreProcessedRepository {
+        Self {
             name,
             commits: Default::default(),
             processor: Default::default(),
@@ -161,6 +147,25 @@ impl PreProcessedRepository {
         self.processor.child_by_name(d, name)
     }
 
+    // pub fn first(before: &str, after: &str) -> Diffs {
+    //     todo!()
+    // }
+
+    // pub fn compute_diff(before: &str, after: &str) -> Diffs {
+    //     todo!()
+    // }
+
+    // pub fn compute_impacts(diff: &Diffs) -> Impacts {
+    //     todo!()
+    // }
+
+    // pub fn find_declaration(reff: ExplorableRef) {
+    //     todo!()
+    // }
+
+    // pub fn find_references(decl: ExplorableDecl) {
+    //     todo!()
+    // }
     pub fn child_by_name_with_idx(
         &self,
         d: NodeIdentifier,
@@ -171,6 +176,72 @@ impl PreProcessedRepository {
     pub fn child_by_type(&self, d: NodeIdentifier, t: &AnyType) -> Option<(NodeIdentifier, u16)> {
         self.processor.child_by_type(d, t)
     }
+}
+impl RepositoryProcessor {
+    pub(crate) fn pre_process(
+        &mut self,
+        repository: &mut ConfiguredRepo2,
+        before: &str,
+        after: &str,
+    ) -> Result<Vec<git2::Oid>, git2::Error> {
+        log::info!(
+            "commits to process: {:?}",
+            all_commits_between(&repository.repo, before, after).map(|x| x.count())
+        );
+        let rw = all_commits_between(&repository.repo, before, after)?;
+        let r = rw
+            .map(|oid| {
+                let oid = oid.unwrap();
+                let builder =
+                    crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
+                let get = &self
+                    .processing_systems
+                    .by_id_mut(&repository.config.0)
+                    .unwrap()
+                    .get_mut(repository.config.1);
+                let _id = get
+                    .prepare_processing(&repository.repo, builder)
+                    .process(self);
+                oid
+            })
+            .collect();
+        Ok(r)
+    }
+
+    pub fn pre_process_with_limit(
+        &mut self,
+        repository: &mut ConfiguredRepo2,
+        before: &str,
+        after: &str,
+        limit: usize,
+    ) -> Result<Vec<git2::Oid>, git2::Error> {
+        log::info!(
+            "commits to process: {:?}",
+            all_commits_between(&repository.repo, before, after).map(|x| x.count())
+        );
+        let rw = all_commits_between(&repository.repo, before, after)?;
+        let r = rw
+            .take(limit)
+            .map(|oid| {
+                let oid = oid.unwrap();
+                let builder =
+                    crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
+                let commit_processor = self
+                    .processing_systems
+                    .by_id_mut(&repository.config.0)
+                    .unwrap()
+                    .get_mut(repository.config.1);
+                let id = commit_processor
+                    .prepare_processing(&repository.repo, builder)
+                    .process(self);
+                oid
+            })
+            .collect();
+        Ok(r)
+    }
+}
+#[cfg(feature = "maven_java")]
+impl PreProcessedRepository {
     pub fn pre_process(
         &mut self,
         repository: &mut Repository,
@@ -193,9 +264,12 @@ impl PreProcessedRepository {
             // .take(40) // TODO make a variable
             .for_each(|oid| {
                 let oid = oid.unwrap();
-                let c = self
-                    .processor
-                    .handle_maven_commit::<true>(&repository, dir_path, oid);
+                let c = CommitProcessor::<file_sys::Maven>::handle_commit::<true>(
+                    &mut self.processor,
+                    &repository,
+                    dir_path,
+                    oid,
+                );
                 processing_ordered_commits.push(oid.clone());
                 self.commits.insert(oid.clone(), c);
             });
@@ -251,8 +325,8 @@ impl PreProcessedRepository {
             if let Ok(_) = std::str::from_utf8(blob.content()) {
                 // log::debug!("content: {}", z);
                 let text = blob.content();
-                if let Ok(full_node) =
-                    handle_java_file(&mut self.processor.java_generator(text), b"", text)
+                if let Ok(full_node) = self.processor.handle_java_file(&b"".into(), text)
+                // handle_java_file(&mut self.processor.java_generator(text), b"", text)
                 {
                     let mut out = BuffOut {
                         buff: "".to_owned(),
@@ -316,14 +390,75 @@ impl PreProcessedRepository {
             .take(limit) // TODO make a variable
             .for_each(|oid| {
                 let oid = oid.unwrap();
-                let c = self
-                    .processor
-                    .handle_maven_commit::<true>(&repository, dir_path, oid);
+                let c = CommitProcessor::<file_sys::Maven>::handle_commit::<true>(
+                    &mut self.processor,
+                    &repository,
+                    dir_path,
+                    oid,
+                );
                 processing_ordered_commits.push(oid.clone());
                 self.commits.insert(oid.clone(), c);
             });
         processing_ordered_commits
     }
+
+    pub fn pre_process_single(
+        &mut self,
+        repository: &mut Repository,
+        ref_or_commit: &str,
+        dir_path: &str,
+    ) -> git2::Oid {
+        let oid = retrieve_commit(repository, ref_or_commit).unwrap().id();
+        let c = CommitProcessor::<file_sys::Maven>::handle_commit::<false>(
+            &mut self.processor,
+            &repository,
+            dir_path,
+            oid,
+        );
+        self.commits.insert(oid.clone(), c);
+        oid
+    }
+}
+
+#[cfg(feature = "java")]
+impl PreProcessedRepository {
+    pub fn pre_process_no_maven(
+        &mut self,
+        repository: &mut Repository,
+        before: &str,
+        after: &str,
+        dir_path: &str,
+    ) -> Vec<git2::Oid> {
+        log::info!(
+            "commits to process: {:?}",
+            all_commits_between(&repository, before, after).map(|x| x.count())
+        );
+        let mut processing_ordered_commits = vec![];
+        let rw = all_commits_between(&repository, before, after);
+        let Ok(rw) = rw else {
+            dbg!(rw.err());
+            return vec![]
+        };
+        rw
+            // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
+            // .take(2)
+            .for_each(|oid| {
+                let oid = oid.unwrap();
+                let c = CommitProcessor::<file_sys::Java>::handle_commit::<false>(
+                    &mut self.processor,
+                    &repository,
+                    dir_path,
+                    oid,
+                );
+                processing_ordered_commits.push(oid.clone());
+                self.commits.insert(oid.clone(), c);
+            });
+        processing_ordered_commits
+    }
+}
+
+#[cfg(feature = "make_cpp")]
+impl PreProcessedRepository {
     pub fn pre_process_make_project_with_limit(
         &mut self,
         repository: &mut Repository,
@@ -347,54 +482,12 @@ impl PreProcessedRepository {
             .take(limit) // TODO make a variable
             .for_each(|oid| {
                 let oid = oid.unwrap();
-                let c = self
-                    .processor
-                    .handle_make_commit::<true>(&repository, dir_path, oid);
-                processing_ordered_commits.push(oid.clone());
-                self.commits.insert(oid.clone(), c);
-            });
-        processing_ordered_commits
-    }
-
-    pub fn pre_process_single(
-        &mut self,
-        repository: &mut Repository,
-        ref_or_commit: &str,
-        dir_path: &str,
-    ) -> git2::Oid {
-        let oid = retrieve_commit(repository, ref_or_commit).unwrap().id();
-        let c = self
-            .processor
-            .handle_maven_commit::<false>(&repository, dir_path, oid);
-        self.commits.insert(oid.clone(), c);
-        oid
-    }
-
-    pub fn pre_process_no_maven(
-        &mut self,
-        repository: &mut Repository,
-        before: &str,
-        after: &str,
-        dir_path: &str,
-    ) -> Vec<git2::Oid> {
-        log::info!(
-            "commits to process: {:?}",
-            all_commits_between(&repository, before, after).map(|x| x.count())
-        );
-        let mut processing_ordered_commits = vec![];
-        let rw = all_commits_between(&repository, before, after);
-        let Ok(rw) = rw else {
-            dbg!(rw.err());
-            return vec![]
-        };
-        rw
-            // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
-            // .take(2)
-            .for_each(|oid| {
-                let oid = oid.unwrap();
-                let c = self
-                    .processor
-                    .handle_java_commit(&repository, dir_path, oid);
+                let c = CommitProcessor::<file_sys::Make>::handle_commit::<false>(
+                    &mut self.processor,
+                    &repository,
+                    dir_path,
+                    oid,
+                );
                 processing_ordered_commits.push(oid.clone());
                 self.commits.insert(oid.clone(), c);
             });
@@ -410,398 +503,251 @@ impl PreProcessedRepository {
         dir_path: &str,
     ) -> git2::Oid {
         let oid = retrieve_commit(repository, ref_or_commit).unwrap().id();
-        let c = self
-            .processor
-            .handle_make_commit::<false>(&repository, dir_path, oid);
+        let c = CommitProcessor::<file_sys::Make>::handle_commit::<false>(
+            &mut self.processor,
+            &repository,
+            dir_path,
+            oid,
+        );
         self.commits.insert(oid.clone(), c);
         oid
     }
+}
 
-    // pub fn first(before: &str, after: &str) -> Diffs {
-    //     todo!()
-    // }
+pub(crate) trait CommitProcessor<Sys> {
+    type Module: IdHolder<Id = NodeIdentifier>;
+    /// How to handle a module in a commit eg. maven modules, cargo crate.
+    ///
+    /// In a codebase such module system can help with compile time.
+    /// In rust to avoid loosing performances you might have to enable link time optimizations (lto).
+    ///
+    /// RMS: Resursive Module Search
+    fn handle_module<'a, 'b, const RMS: bool>(
+        &mut self,
+        repository: &'a Repository,
+        dir_path: &'b mut Peekable<Components<'b>>,
+        name: &[u8],
+        oid: git2::Oid,
+    ) -> Self::Module;
 
-    // pub fn compute_diff(before: &str, after: &str) -> Diffs {
-    //     todo!()
-    // }
+    /// How to handle a commit eg.
+    ///
+    /// * Maven: the structure of modules might need to be considered
+    /// * Java: at the filesystem level there are 3 kinds of directories: main, tests, resources
+    ///     where most of the time you do not compile resources and might not compile tests (while still needing to compile source to compile tests)
+    fn handle_commit<const RMS: bool>(
+        &mut self,
+        repository: &Repository,
+        module_path: &str,
+        commit_oid: git2::Oid,
+    ) -> Commit {
+        let dir_path = PathBuf::from(module_path);
+        let mut dir_path = dir_path.components().peekable();
+        let builder = CommitBuilder::start(repository, commit_oid);
+        let module = self.handle_module::<RMS>(repository, &mut dir_path, b"", builder.tree_oid());
+        builder.finish(module.id())
+    }
+}
 
-    // pub fn compute_impacts(diff: &Diffs) -> Impacts {
-    //     todo!()
-    // }
+pub trait IdHolder {
+    type Id;
+    fn id(&self) -> Self::Id;
+}
 
-    // pub fn find_declaration(reff: ExplorableRef) {
-    //     todo!()
-    // }
+/// Help building a commit, also measure time and memory usage
+/// 
+/// WARN the memory usage is actually the diference of heap size between the start and end of processing,
+/// and it would be biased by concurent building (not possible at the time of writing this warning)
+pub struct CommitBuilder {
+    commit_oid: git2::Oid,
+    tree_oid: git2::Oid,
+    parents: Vec<git2::Oid>,
+    memory_used: hyper_ast_gen_ts_java::utils::MemoryUsage,
+    time: Instant,
+}
 
-    // pub fn find_references(decl: ExplorableDecl) {
-    //     todo!()
-    // }
+impl CommitBuilder {
+    #[must_use]
+    pub(crate) fn start(repository: &Repository, commit_oid: git2::Oid) -> Self {
+        let commit = repository.find_commit(commit_oid).unwrap();
+        let tree_oid = commit.tree().unwrap().id();
+
+        let parents = commit.parents().into_iter().map(|x| x.id()).collect();
+
+        info!("handle commit: {}", commit_oid);
+
+        let memory_used = memusage_linux();
+        let time = Instant::now();
+        Self {
+            commit_oid,
+            tree_oid,
+            parents,
+            time,
+            memory_used,
+        }
+    }
+
+    pub(crate) fn tree_oid(&self) -> git2::Oid {
+        self.tree_oid
+    }
+
+    pub(crate) fn commit_oid(&self) -> git2::Oid {
+        self.commit_oid
+    }
+
+    pub(crate) fn finish(self, ast_root: NodeIdentifier) -> Commit {
+        let processing_time = self.time.elapsed().as_nanos();
+        let memory_used = memusage_linux() - self.memory_used;
+        let memory_used = memory_used.into();
+        let tree_oid = self.tree_oid;
+        let parents = self.parents;
+
+        Commit {
+            parents,
+            tree_oid,
+            ast_root,
+            processing_time,
+            memory_used,
+        }
+    }
+}
+
+#[cfg(feature = "any")]
+impl CommitProcessor<file_sys::Any> for RepositoryProcessor {
+    fn handle_module<'a, 'b, const RMS: bool>(
+        &mut self,
+        repository: &'a Repository,
+        dir_path: &'b mut Peekable<Components<'b>>,
+        name: &[u8],
+        oid: git2::Oid,
+    ) -> NodeIdentifier {
+        let root_full_node = MavenProcessor::<RMS, false, MavenModuleAcc>::new(
+            repository, self, dir_path, name, oid,
+        )
+        .process();
+        root_full_node.0
+    }
+}
+
+impl<H: IdHolder, T> IdHolder for (H, T) {
+    type Id = H::Id;
+    fn id(&self) -> Self::Id {
+        self.0.id()
+    }
+}
+
+impl IdHolder for NodeIdentifier {
+    type Id = NodeIdentifier;
+    fn id(&self) -> Self::Id {
+        self.clone()
+    }
+}
+
+#[cfg(feature = "maven")]
+impl CommitProcessor<file_sys::Maven> for RepositoryProcessor {
+    type Module = (NodeIdentifier, crate::maven::MD);
+    fn handle_module<'a, 'b, const RMS: bool>(
+        &mut self,
+        repository: &'a Repository,
+        dir_path: &'b mut Peekable<Components<'b>>,
+        name: &[u8],
+        oid: git2::Oid,
+    ) -> Self::Module {
+        let root_full_node = MavenProcessor::<RMS, false, MavenModuleAcc>::new(
+            repository, self, dir_path, name, oid,
+        )
+        .process();
+        // self.object_map_maven
+        //     .insert(commit_oid, root_full_node.clone());
+        root_full_node
+    }
+}
+#[cfg(feature = "java")]
+impl CommitProcessor<file_sys::Java> for RepositoryProcessor {
+    type Module = (NodeIdentifier, crate::maven::MD);
+    fn handle_module<'a, 'b, const RMS: bool>(
+        &mut self,
+        repository: &'a Repository,
+        dir_path: &'b mut Peekable<Components<'b>>,
+        name: &[u8],
+        oid: git2::Oid,
+    ) -> Self::Module {
+        let root_full_node =
+            MavenProcessor::<RMS, true, MavenModuleAcc>::new(repository, self, dir_path, name, oid)
+                .process();
+        root_full_node
+    }
+}
+
+#[cfg(feature = "make")]
+impl CommitProcessor<file_sys::Make> for RepositoryProcessor {
+    type Module = (NodeIdentifier, crate::make::MD);
+    fn handle_module<'a, 'b, const RMS: bool>(
+        &mut self,
+        repository: &'a Repository,
+        dir_path: &'b mut Peekable<Components<'b>>,
+        name: &[u8],
+        oid: git2::Oid,
+    ) -> Self::Module {
+        let root_full_node =
+            MakeProcessor::<RMS, false, MakeModuleAcc>::new(repository, self, dir_path, name, oid)
+                .process();
+        // self.object_map_make
+        //     .insert(commit_oid, root_full_node.clone());
+        root_full_node
+    }
+}
+
+impl CommitProcessor<file_sys::Any> for RepositoryProcessor {
+    type Module = (NodeIdentifier, DefaultMetrics);
+    fn handle_module<'a, 'b, const RMS: bool>(
+        &mut self,
+        repository: &'a Repository,
+        dir_path: &'b mut Peekable<Components<'b>>,
+        name: &[u8],
+        oid: git2::Oid,
+    ) -> Self::Module {
+        todo!()
+    }
+}
+
+/// plan to work on all languges of the family of typesript ie. ts, js, tsx, jsx
+/// - [ ] ts
+/// - [ ] js
+/// - [ ] tsx
+/// - [ ] jsx
+/// - [ ] d.ts
+/// - [ ] various transpiler configs
+///   - [ ] babel
+///   - [ ] ts
+#[cfg(feature = "npm")]
+impl CommitProcessor<file_sys::Npm> for RepositoryProcessor {
+    type Module = (NodeIdentifier, DefaultMetrics);
+    fn handle_module<'a, 'b, const RMS: bool>(
+        &mut self,
+        repository: &'a Repository,
+        dir_path: &'b mut Peekable<Components<'b>>,
+        name: &[u8],
+        oid: git2::Oid,
+    ) -> Self::Module {
+        todo!()
+        // let root_full_node = NpmProcessor::<RMS, FFWD, NpmModuleAcc>::new(repository, self, dir_path, name, oid)
+        //     .process();
+        // // self.object_map_make
+        // //     .insert(commit_oid, root_full_node.clone());
+        // root_full_node.0
+    }
 }
 
 impl RepositoryProcessor {
-    /// module_path: path to wanted root module else ""
-    pub(crate) fn handle_maven_commit<const RMS: bool>(
-        &mut self,
-        repository: &Repository,
-        module_path: &str,
-        commit_oid: git2::Oid,
-    ) -> Commit {
-        let dir_path = PathBuf::from(module_path);
-        let mut dir_path = dir_path.components().peekable();
-        let commit = repository.find_commit(commit_oid).unwrap();
-        let tree = commit.tree().unwrap();
-
-        info!("handle commit: {}", commit_oid);
-
-        let memory_used = memusage_linux();
-        let now = Instant::now();
-
-        let root_full_node =
-            self.handle_maven_module::<RMS, false>(repository, &mut dir_path, b"", tree.id());
-        // let root_full_node = self.fast_fwd(repository, &mut dir_path, b"", tree.id()); // used to directly access specific java sources
-
-        self.object_map.insert(commit_oid, root_full_node.clone());
-
-        let processing_time = now.elapsed().as_nanos();
-        let memory_used = memusage_linux() - memory_used;
-        let memory_used = memory_used.into();
-
-        Commit {
-            meta_data: root_full_node.1,
-            parents: commit.parents().into_iter().map(|x| x.id()).collect(),
-            ast_root: root_full_node.0,
-            processing_time,
-            memory_used,
-        }
-    }
-    /// for now only works with cpp
-    pub(crate) fn handle_make_commit<const RMS: bool>(
-        &mut self,
-        repository: &Repository,
-        module_path: &str,
-        commit_oid: git2::Oid,
-    ) -> Commit {
-        let dir_path = PathBuf::from(module_path);
-        let mut dir_path = dir_path.components().peekable();
-        let commit = repository.find_commit(commit_oid).unwrap();
-        let tree = commit.tree().unwrap();
-
-        info!("handle commit: {}", commit_oid);
-
-        let memory_used = memusage_linux();
-        let now = Instant::now();
-
-        let root_full_node =
-            self.handle_make_module::<RMS, false>(repository, &mut dir_path, b"", tree.id());
-        // let root_full_node = self.fast_fwd(repository, &mut dir_path, b"", tree.id()); // used to directly access specific java sources
-
-        self.object_map_make
-            .insert(commit_oid, root_full_node.clone());
-
-        let processing_time = now.elapsed().as_nanos();
-        let memory_used = memusage_linux() - memory_used;
-        let memory_used = memory_used.into();
-
-        let meta_data = MD {
-            metrics: Default::default(),
-            ana: MavenPartialAnalysis::new(),
-        };
-        Commit {
-            meta_data, // TODO  use dyn Box ?
-            parents: commit.parents().into_iter().map(|x| x.id()).collect(),
-            ast_root: root_full_node.0,
-            processing_time,
-            memory_used,
-        }
-    }
-
-    fn handle_java_commit(
-        &mut self,
-        repository: &Repository,
-        module_path: &str,
-        commit_oid: git2::Oid,
-    ) -> Commit {
-        let dir_path = PathBuf::from(module_path);
-        let mut dir_path = dir_path.components().peekable();
-        let commit = repository.find_commit(commit_oid).unwrap();
-        let tree = commit.tree().unwrap();
-
-        info!("handle commit: {}", commit_oid);
-
-        let memory_used = memusage_linux();
-        let now = Instant::now();
-
-        let root_full_node =
-            self.handle_maven_module::<false, true>(repository, &mut dir_path, b"", tree.id()); // used to directly access specific java sources
-
-        let processing_time = now.elapsed().as_nanos();
-        let memory_used = memusage_linux() - memory_used;
-        let memory_used = memory_used.into();
-
-        Commit {
-            meta_data: root_full_node.1,
-            parents: commit.parents().into_iter().map(|x| x.id()).collect(),
-            ast_root: root_full_node.0,
-            processing_time,
-            memory_used,
-        }
-    }
-
-    /// RMS: Resursive Module Search
-    /// FFWD: Fast ForWarD to java directories without looking at maven stuff
-    fn handle_maven_module<'a, 'b, const RMS: bool, const FFWD: bool>(
+    fn handle_any_module<'a, 'b, const RMS: bool, const FFWD: bool>(
         &mut self,
         repository: &'a Repository,
         dir_path: &'b mut Peekable<Components<'b>>,
         name: &[u8],
         oid: git2::Oid,
-    ) -> (NodeIdentifier, MD) {
-        MavenProcessor::<RMS, FFWD, MavenModuleAcc>::new(repository, self, dir_path, name, oid)
-            .process()
-    }
-    fn handle_make_module<'a, 'b, const RMS: bool, const FFWD: bool>(
-        &mut self,
-        repository: &'a Repository,
-        dir_path: &'b mut Peekable<Components<'b>>,
-        name: &[u8],
-        oid: git2::Oid,
-    ) -> (NodeIdentifier, crate::make::MD) {
-        MakeProcessor::<RMS, FFWD, MakeModuleAcc>::new(repository, self, dir_path, name, oid)
-            .process()
-    }
-
-    pub(crate) fn help_handle_java_folder<'a, 'b, 'c, 'd: 'c>(
-        &'a mut self,
-        repository: &'b Repository,
-        dir_path: &'c mut Peekable<Components<'d>>,
-        oid: Oid,
-        name: &Vec<u8>,
-    ) -> <JavaAcc as hyper_ast::tree_gen::Accumulator>::Node {
-        let full_node = self.handle_java_directory(repository, dir_path, name, oid);
-        let name = self
-            .main_stores_mut()
-            .label_store
-            .get_or_insert(std::str::from_utf8(name).unwrap());
-        (name, full_node)
-    }
-
-    pub(crate) fn help_handle_cpp_folder<'a, 'b, 'c, 'd: 'c>(
-        &'a mut self,
-        repository: &'b Repository,
-        dir_path: &'c mut Peekable<Components<'d>>,
-        oid: Oid,
-        name: &Vec<u8>,
-    ) -> <CppAcc as hyper_ast::tree_gen::Accumulator>::Node {
-        let full_node = self.handle_cpp_directory(repository, dir_path, name, oid);
-        let name = self
-            .main_stores_mut()
-            .label_store
-            .get_or_insert(std::str::from_utf8(name).unwrap());
-        (name, full_node)
-    }
-
-    pub(crate) fn help_handle_pom(
-        &mut self,
-        oid: Oid,
-        parent_acc: &mut MavenModuleAcc,
-        name: Vec<u8>,
-        repository: &Repository,
-    ) {
-        if let Some(already) = self.object_map_pom.get(&oid) {
-            // TODO reinit already computed node for post order
-            let full_node = already.clone();
-            let name = self
-                .main_stores_mut()
-                .label_store
-                .get_or_insert(std::str::from_utf8(&name).unwrap());
-            assert!(!parent_acc.children_names.contains(&name));
-            parent_acc.push_pom(name, full_node);
-            return;
-        }
-        log::info!("blob {:?}", std::str::from_utf8(&name));
-        let blob = repository.find_blob(oid).unwrap();
-        if std::str::from_utf8(blob.content()).is_err() {
-            return;
-        }
-        let text = blob.content();
-        let full_node = handle_pom_file(&mut self.xml_generator(), &name, text);
-        let x = full_node.unwrap();
-        self.object_map_pom.insert(blob.id(), x.clone());
-        let name = self
-            .main_stores_mut()
-            .label_store
-            .get_or_insert(std::str::from_utf8(&name).unwrap());
-        assert!(!parent_acc.children_names.contains(&name));
-        parent_acc.push_pom(name, x);
-    }
-
-    pub(crate) fn help_handle_makefile(
-        &mut self,
-        oid: Oid,
-        parent_acc: &mut MakeModuleAcc,
-        name: Vec<u8>,
-        repository: &Repository,
-    ) {
-        if let Some(already) = self.object_map_makefile.get(&oid) {
-            // TODO reinit already computed node for post order
-            let full_node = already.clone();
-            let name = self
-                .main_stores_mut()
-                .label_store
-                .get_or_insert(std::str::from_utf8(&name).unwrap());
-            assert!(!parent_acc.children_names.contains(&name));
-            parent_acc.push_makefile(name, full_node);
-            return;
-        }
-        log::info!("blob {:?}", std::str::from_utf8(&name));
-        let blob = repository.find_blob(oid).unwrap();
-        if std::str::from_utf8(blob.content()).is_err() {
-            return;
-        }
-        let text = blob.content();
-        let full_node = handle_makefile_file(&mut self.xml_generator(), &name, text);
-        let x = full_node.unwrap();
-        self.object_map_makefile.insert(blob.id(), x.clone());
-        let name = self
-            .main_stores_mut()
-            .label_store
-            .get_or_insert(std::str::from_utf8(&name).unwrap());
-        assert!(!parent_acc.children_names.contains(&name));
-        parent_acc.push_makefile(name, x);
-    }
-
-    pub(crate) fn help_handle_java_file(
-        &mut self,
-        oid: Oid,
-        w: &mut JavaAcc,
-        name: Vec<u8>,
-        repository: &Repository,
-    ) {
-        if let Some((already, skiped_ana)) = self.object_map_java.get(&(oid, name.clone())) {
-            let full_node = already.clone();
-            let skiped_ana = *skiped_ana;
-            let name = self
-                .main_stores_mut()
-                .label_store
-                .get_or_insert(std::str::from_utf8(&name).unwrap());
-            assert!(!w.children_names.contains(&name));
-            w.push(name, full_node, skiped_ana);
-            return;
-        }
-        log::info!("blob {:?}", std::str::from_utf8(&name));
-        let blob = repository.find_blob(oid).unwrap();
-        if std::str::from_utf8(blob.content()).is_err() {
-            return;
-        }
-        let text = blob.content();
-        if let Ok(full_node) = handle_java_file(&mut self.java_generator(text), &name, text) {
-            let full_node = full_node.local;
-            let skiped_ana = false; // TODO ez upgrade to handle skipping in files
-            self.object_map_java
-                .insert((blob.id(), name.clone()), (full_node.clone(), skiped_ana));
-            let name = self
-                .main_stores_mut()
-                .label_store
-                .get_or_insert(std::str::from_utf8(&name).unwrap());
-            assert!(!w.children_names.contains(&name));
-            w.push(name, full_node, skiped_ana);
-        }
-    }
-
-    /// oid : Oid of a dir such that */src/main/java/ or */src/test/java/
-    fn handle_java_directory<'b, 'd: 'b>(
-        &mut self,
-        repository: &Repository,
-        dir_path: &'b mut Peekable<Components<'d>>,
-        name: &[u8],
-        oid: git2::Oid,
-    ) -> (java_tree_gen::Local, IsSkippedAna) {
-        JavaProcessor::<JavaAcc>::new(repository, self, dir_path, name, oid).process()
-    }
-
-    pub(crate) fn help_handle_cpp_file(
-        &mut self,
-        oid: Oid,
-        w: &mut CppAcc,
-        name: Vec<u8>,
-        repository: &Repository,
-    ) {
-        if let Some((already, skiped_ana)) = self.object_map_cpp.get(&(oid, name.clone())) {
-            let full_node = already.clone();
-            let skiped_ana = *skiped_ana;
-            let name = self
-                .main_stores_mut()
-                .label_store
-                .get_or_insert(std::str::from_utf8(&name).unwrap());
-            assert!(!w.children_names.contains(&name));
-            w.push(name, full_node, skiped_ana);
-            return;
-        }
-        log::info!("blob {:?}", std::str::from_utf8(&name));
-        let blob = repository.find_blob(oid).unwrap();
-        if std::str::from_utf8(blob.content()).is_err() {
-            return;
-        }
-        let text = blob.content();
-        if let Ok(full_node) = handle_cpp_file(&mut self.cpp_generator(text), &name, text) {
-            let full_node = full_node.local;
-            let skiped_ana = false; // TODO ez upgrade to handle skipping in files
-            self.object_map_cpp
-                .insert((blob.id(), name.clone()), (full_node.clone(), skiped_ana));
-            let name = self
-                .main_stores_mut()
-                .label_store
-                .get_or_insert(std::str::from_utf8(&name).unwrap());
-            assert!(!w.children_names.contains(&name));
-            w.push(name, full_node, skiped_ana);
-        }
-    }
-    pub(crate) fn help_handle_cpp_file2(
-        &mut self,
-        oid: Oid,
-        w: &mut MakeModuleAcc,
-        name: Vec<u8>,
-        repository: &Repository,
-    ) {
-        if let Some((already, skiped_ana)) = self.object_map_cpp.get(&(oid, name.clone())) {
-            let full_node = already.clone();
-            let skiped_ana = *skiped_ana;
-            let name = self
-                .main_stores_mut()
-                .label_store
-                .get_or_insert(std::str::from_utf8(&name).unwrap());
-            assert!(!w.children_names.contains(&name));
-            w.push_source_file(name, full_node, skiped_ana);
-            return;
-        }
-        log::info!("blob {:?}", std::str::from_utf8(&name));
-        let blob = repository.find_blob(oid).unwrap();
-        if std::str::from_utf8(blob.content()).is_err() {
-            return;
-        }
-        let text = blob.content();
-        if let Ok(full_node) = handle_cpp_file(&mut self.cpp_generator(text), &name, text) {
-            let full_node = full_node.local;
-            let skiped_ana = false; // TODO ez upgrade to handle skipping in files
-            self.object_map_cpp
-                .insert((blob.id(), name.clone()), (full_node.clone(), skiped_ana));
-            let name = self
-                .main_stores_mut()
-                .label_store
-                .get_or_insert(std::str::from_utf8(&name).unwrap());
-            assert!(!w.children_names.contains(&name));
-            w.push_source_file(name, full_node, skiped_ana);
-        }
-    }
-
-    pub(crate) fn handle_cpp_directory<'b, 'd: 'b>(
-        &mut self,
-        repository: &Repository,
-        dir_path: &'b mut Peekable<Components<'d>>,
-        name: &[u8],
-        oid: git2::Oid,
-    ) -> (cpp_tree_gen::Local, IsSkippedAna) {
-        CppProcessor::<CppAcc>::new(repository, self, dir_path, name, oid).process()
+    ) -> (NodeIdentifier, DefaultMetrics) {
+        todo!()
     }
 
     pub fn child_by_name(&self, d: NodeIdentifier, name: &str) -> Option<NodeIdentifier> {
@@ -886,6 +832,257 @@ pub fn child_at_path_tracked<'a>(
     Some((d, offsets))
 }
 
+pub(crate) struct CachingBlobWrapper<'cache, C> {
+    caches: &'cache mut TypeMap,
+    phantom: std::marker::PhantomData<C>,
+}
+
+impl TypeMap {
+    pub(crate) fn caching_blob_handler<C>(&mut self) -> CachingBlobWrapper<'_, C> {
+        CachingBlobWrapper {
+            caches: self,
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<'cache, C: crate::processing::CachesHolding> CachingBlobWrapper<'cache, C> {
+    pub fn handle<
+        N,
+        E: From<std::str::Utf8Error>,
+        F: FnOnce(
+            &mut TypeMap,
+            &N,
+            &[u8],
+        ) -> Result<<C::Caches as crate::processing::ObjectMapper>::V, E>,
+    >(
+        &mut self,
+        oid: Oid,
+        repository: &Repository,
+        name: &N,
+        wrapped: F,
+    ) -> Result<<C::Caches as crate::processing::ObjectMapper>::V, E>
+    where
+        for<'a> &'a N: TryInto<&'a str>,
+        C::Caches: 'static + crate::processing::ObjectMapper<K = Oid> + Send + Sync + Default,
+        <C::Caches as crate::processing::ObjectMapper>::V: Clone,
+        // for<'a> <&'a N as TryInto<&'a str>>::Error: std::fmt::Debug,
+    {
+        let caches = self.caches.mut_or_default::<C::Caches>();
+        use crate::processing::ObjectMapper;
+        if let Some(already) = caches.get(&oid) {
+            //.object_map_pom.get(&oid) {
+            // TODO reinit already computed node for post order
+            let full_node = already.clone();
+            return Ok(full_node);
+        }
+        log::info!(
+            "blob {:?} {:?}",
+            name.try_into().unwrap_or("'non utf8 name'"),
+            oid
+        );
+        let blob = repository.find_blob(oid).unwrap();
+        std::str::from_utf8(blob.content())?;
+        let text = blob.content();
+        let full_node = wrapped(self.caches, &name, text);
+        if let Ok(x) = &full_node {
+            self.caches
+                .mut_or_default::<C::Caches>()
+                .insert(oid, x.clone());
+        }
+        full_node
+    }
+    pub fn handle2<
+        N: Clone,
+        E: From<std::str::Utf8Error>,
+        F: FnOnce(
+            &mut TypeMap,
+            &N,
+            &[u8],
+        ) -> Result<<C::Caches as crate::processing::ObjectMapper>::V, E>,
+    >(
+        &mut self,
+        oid: Oid,
+        repository: &Repository,
+        name: &N,
+        wrapped: F,
+    ) -> Result<<C::Caches as crate::processing::ObjectMapper>::V, E>
+    where
+        for<'a> &'a N: TryInto<&'a str>,
+        C::Caches: 'static + crate::processing::ObjectMapper<K = (Oid, N)> + Send + Sync + Default,
+        <C::Caches as crate::processing::ObjectMapper>::V: Clone,
+        // for<'a> <&'a N as TryInto<&'a str>>::Error: std::fmt::Debug,
+    {
+        let caches = self.caches.mut_or_default::<C::Caches>();
+        use crate::processing::ObjectMapper;
+        if let Some(already) = caches.get(&(oid, name.clone())) {
+            //.object_map_pom.get(&oid) {
+            // TODO reinit already computed node for post order
+            let full_node = already.clone();
+            return Ok(full_node);
+        }
+        log::info!(
+            "blob {:?} {:?}",
+            name.try_into().unwrap_or("'non utf8 name'"),
+            oid
+        );
+        let blob = repository.find_blob(oid).unwrap();
+        std::str::from_utf8(blob.content())?;
+        let text = blob.content();
+        let full_node = wrapped(self.caches, &name, text);
+        if let Ok(x) = &full_node {
+            self.caches
+                .mut_or_default::<C::Caches>()
+                .insert((oid, name.clone()), x.clone());
+        }
+        full_node
+    }
+}
+pub(crate) struct CachingBlobWrapper2<'cache, C> {
+    processors: &'cache mut crate::processing::erased::ProcessorMap,
+    phantom: std::marker::PhantomData<C>,
+}
+
+impl crate::processing::erased::ProcessorMap {
+    pub(crate) fn caching_blob_handler<C>(&mut self) -> CachingBlobWrapper2<'_, C> {
+        CachingBlobWrapper2 {
+            processors: self,
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
+impl<'cache, Sys> CachingBlobWrapper2<'cache, Sys> {
+    pub fn handle<
+        T: crate::processing::erased::CommitProcExt,
+        N,
+        E: From<std::str::Utf8Error>,
+        F: FnOnce(
+            &mut crate::processing::erased::ProcessorMap,
+            &N,
+            &[u8],
+        ) -> Result<<Sys::Caches as crate::processing::ObjectMapper>::V, E>,
+    >(
+        &mut self,
+        oid: Oid,
+        repository: &Repository,
+        name: &N,
+        parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<T>,
+        wrapped: F,
+    ) -> Result<<Sys::Caches as crate::processing::ObjectMapper>::V, E>
+    where
+        for<'a> &'a N: TryInto<&'a str>,
+        // T: crate::processing::erased_processor_collection::CommitProcExt,
+        // T::Holder: 'static + crate::processing::erased_processor_collection::ErasableProcessor + Default + Send + Sync,
+        // T: crate::processing::CachesHolder,
+        // T::Caches: 'static + crate::processing::ObjectMapper<K = Oid> + Send + Sync + Default,
+
+        // Sys::Holder: 'static + crate::processing::erased::ErasableProcessor + Default + Send + Sync,
+        // Sys::Holder: crate::processing::CacheHolding<Sys::Caches>,
+        // Sys: crate::processing::CachesHolding,
+        // Sys::Caches: 'static + crate::processing::ObjectMapper<K = Oid> + Send + Sync + Default,
+        // <Sys::Caches as crate::processing::ObjectMapper>::V: Clone,
+        Sys: crate::processing::CachesHolding,
+        Sys::Caches: 'static + crate::processing::ObjectMapper<K = Oid> + Send + Sync + Default,
+        <Sys::Caches as crate::processing::ObjectMapper>::V: Clone,
+        T::Holder: 'static + crate::processing::erased::ErasableProcessor + Default + Send + Sync,
+        T::Holder: crate::processing::erased::ParametrizedCommitProc2,
+        <T::Holder as crate::processing::erased::ParametrizedCommitProc2>::Proc:
+            crate::processing::CacheHolding<Sys::Caches>,
+    {
+        use crate::processing::erased::ParametrizedCommitProc2;
+        // let caches = self.processors.mut_or_default::<Sys::Holder>().get_caches_mut();
+        let caches = self.processors.mut_or_default::<T::Holder>();
+        let caches = caches.with_parameters_mut(parameters.0);
+        let caches = caches.get_caches_mut();
+        use crate::processing::ObjectMapper;
+        if let Some(already) = caches.get(&oid) {
+            //.object_map_pom.get(&oid) {
+            // TODO reinit already computed node for post order
+            let full_node = already.clone();
+            return Ok(full_node);
+        }
+        log::info!(
+            "blob {:?} {:?}",
+            name.try_into().unwrap_or("'non utf8 name'"),
+            oid
+        );
+        let blob = repository.find_blob(oid).unwrap();
+        std::str::from_utf8(blob.content())?;
+        let text = blob.content();
+        let full_node = wrapped(self.processors, &name, text);
+        if let Ok(x) = &full_node {
+            self.processors
+                // .mut_or_default::<Sys::Holder>().get_caches_mut()
+                .mut_or_default::<T::Holder>()
+                .with_parameters_mut(parameters.0)
+                .get_caches_mut()
+                .insert(oid, x.clone());
+        }
+        full_node
+    }
+    pub fn handle2<
+        T: crate::processing::erased::CommitProcExt,
+        N: Clone,
+        E: From<std::str::Utf8Error>,
+        F: FnOnce(
+            &mut crate::processing::erased::ProcessorMap,
+            &N,
+            &[u8],
+        ) -> Result<<Sys::Caches as crate::processing::ObjectMapper>::V, E>,
+    >(
+        &mut self,
+        oid: Oid,
+        repository: &Repository,
+        name: &N,
+        parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<T>,
+        wrapped: F,
+    ) -> Result<<Sys::Caches as crate::processing::ObjectMapper>::V, E>
+    where
+        for<'a> &'a N: TryInto<&'a str>,
+        // Sys::Holder: 'static + crate::processing::erased_processor_collection::ErasableProcessor + Default + Send + Sync,
+        // Sys::Holder: crate::processing::erased_processor_collection::ParametrizedCommitProc2,
+        // <Sys::Holder as crate::processing::erased_processor_collection::ParametrizedCommitProc2>::Proc: crate::processing::CacheHolding<Sys::Caches>,
+        Sys: crate::processing::CachesHolding,
+        Sys::Caches:
+            'static + crate::processing::ObjectMapper<K = (Oid, N)> + Send + Sync + Default,
+        <Sys::Caches as crate::processing::ObjectMapper>::V: Clone,
+        T::Holder: 'static + crate::processing::erased::ErasableProcessor + Default + Send + Sync,
+        T::Holder: crate::processing::erased::ParametrizedCommitProc2,
+        <T::Holder as crate::processing::erased::ParametrizedCommitProc2>::Proc:
+            crate::processing::CacheHolding<Sys::Caches>,
+    {
+        use crate::processing::erased::ParametrizedCommitProc2;
+        // let caches = self.processors.mut_or_default::<Sys::Holder>();
+        let caches = self.processors.mut_or_default::<T::Holder>();
+        let caches = caches.with_parameters_mut(parameters.0);
+        let caches = caches.get_caches_mut();
+        use crate::processing::ObjectMapper;
+        if let Some(already) = caches.get(&(oid, name.clone())) {
+            //.object_map_pom.get(&oid) {
+            // TODO reinit already computed node for post order
+            let full_node = already.clone();
+            return Ok(full_node);
+        }
+        log::info!(
+            "blob {:?} {:?}",
+            name.try_into().unwrap_or("'non utf8 name'"),
+            oid
+        );
+        let blob = repository.find_blob(oid).unwrap();
+        std::str::from_utf8(blob.content())?;
+        let text = blob.content();
+        let full_node = wrapped(self.processors, &name, text);
+        if let Ok(x) = &full_node {
+            self.processors
+                .mut_or_default::<T::Holder>()
+                .with_parameters_mut(parameters.0)
+                .get_caches_mut()
+                .insert((oid, name.clone()), x.clone());
+        }
+        full_node
+    }
+}
+
 // TODO try to separate processing from caching from git
 #[cfg(test)]
 #[allow(unused)]
@@ -893,6 +1090,7 @@ mod experiments {
     use crate::Accumulator;
 
     use super::*;
+    use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
 
     pub struct PreProcessedRepository2 {
         name: String,
@@ -936,10 +1134,20 @@ mod experiments {
     }
 
     mod cache {
+        use std::collections::BTreeMap;
+
+        use crate::maven::POM;
+
         use super::*;
 
         pub struct Maven<Id> {
-            object_map: BTreeMap<Id, (hyper_ast::store::nodes::DefaultNodeIdentifier, MD)>,
+            object_map: BTreeMap<
+                Id,
+                (
+                    hyper_ast::store::nodes::DefaultNodeIdentifier,
+                    crate::maven::MD,
+                ),
+            >,
         }
         pub struct Pom<Id> {
             pub object_map_pom: BTreeMap<Id, POM>,

@@ -1,19 +1,20 @@
 use poll_promise::Promise;
 
-use crate::app::{
-    utils::{self},
-    API_URL,
-};
+use crate::app::{utils, API_URL};
+
+use self::example_scripts::EXAMPLES;
 
 use egui_addon::{
     code_editor::{CodeEditor, EditorInfo},
-    egui_utils::{radio_collapsing, show_wip},
+    egui_utils::{radio_collapsing, show_wip}, interactive_split::interactive_splitter::InteractiveSplitter,
 };
 
 use super::{
     show_repo_menu,
     types::{CodeEditors, Commit, Resource, SelectedConfig},
 };
+
+mod example_scripts;
 
 const INFO_INIT: EditorInfo<&'static str> = EditorInfo {
     title: "Init",
@@ -36,45 +37,28 @@ const INFO_ACCUMULATE: EditorInfo<&'static str> = EditorInfo {
     ),
 };
 
-impl Default for CodeEditors {
-    fn default() -> Self {
+impl From<&example_scripts::Scripts> for CodeEditors {
+    fn from(value: &example_scripts::Scripts) -> Self {
         Self {
             init: CodeEditor {
                 info: INFO_INIT.copied(),
-                ..r##"#{ depth:0, files: 0, type_decl: 0 }"##.into()
+                ..value.init.into()
             },
             filter: CodeEditor {
                 info: INFO_FILTER.copied(),
-                ..r##"if is_directory() {
-    children().map(|x| [x, #{
-        depth: s.depth + 1,
-        files: s.files,
-        type_decl: s.type_decl,
-    }])
-} else if is_file() {
-    children().map(|x| [x, #{
-        depth: s.depth + 1,
-        type_decl: s.type_decl,
-    }])
-} else {
-    []
-}"##
-                .into()
+                ..value.filter.into()
             },
             accumulate: CodeEditor {
                 info: INFO_ACCUMULATE.copied(),
-                ..r##"if is_directory() {
-    p.files += s.files;
-    p.type_decl += s.type_decl;
-} else if is_file() {
-    p.files += 1;
-    p.type_decl += s.type_decl;
-} else if is_type_decl() {
-    p.type_decl += 1; 
-}"##
-                .into()
+                ..value.accumulate.into()
             },
         }
+    }
+}
+
+impl Default for CodeEditors {
+    fn default() -> Self {
+        (&example_scripts::EXAMPLES[0].scripts).into()
     }
 }
 
@@ -88,25 +72,29 @@ pub(super) struct ComputeConfigSingle {
 impl Default for ComputeConfigSingle {
     fn default() -> Self {
         Self {
-            commit: Default::default(),
+            commit: From::from(&example_scripts::EXAMPLES[0].commit),
             // commit: "4acedc53a13a727be3640fe234f7e261d2609d58".into(),
-            len: 1,
+            len: example_scripts::EXAMPLES[0].commits,
         }
     }
 }
 
 pub(super) type RemoteResult =
-    Promise<ehttp::Result<Resource<Result<ComputeResult, ScriptingError>>>>;
+    Promise<ehttp::Result<Resource<Result<ComputeResults, ScriptingError>>>>;
 
 pub(super) fn remote_compute_single(
     ctx: &egui::Context,
     single: &mut ComputeConfigSingle,
     code_editors: &mut CodeEditors,
-) -> Promise<Result<Resource<Result<ComputeResult, ScriptingError>>, String>> {
+) -> Promise<Result<Resource<Result<ComputeResults, ScriptingError>>, String>> {
+    // TODO multi requests from client
+    // if single.len > 1 {
+    //     let parents = fetch_commit_parents(&ctx, &single.commit, single.len);
+    // }
     let ctx = ctx.clone();
     let (sender, promise) = Promise::new();
     let url = format!(
-        "{}/script/github/{}/{}/{}",
+        "{}/script-depth/github/{}/{}/{}",
         API_URL, &single.commit.repo.user, &single.commit.repo.name, &single.commit.id,
     );
     #[derive(serde::Serialize)]
@@ -114,12 +102,14 @@ pub(super) fn remote_compute_single(
         init: String,
         filter: String,
         accumulate: String,
+        commits: usize,
     }
 
     let script = ScriptContent {
         init: code_editors.init.code().to_string(),
         filter: code_editors.filter.code().to_string(),
         accumulate: code_editors.accumulate.code().to_string(),
+        commits: single.len,
     };
 
     let mut request = ehttp::Request::post(&url, serde_json::to_vec(&script).unwrap());
@@ -131,11 +121,24 @@ pub(super) fn remote_compute_single(
     ehttp::fetch(request, move |response| {
         ctx.request_repaint(); // wake up UI thread
         let resource = response.and_then(|response| {
-            Resource::<Result<ComputeResult, ScriptingError>>::from_response(&ctx, response)
+            Resource::<Result<ComputeResults, ScriptingError>>::from_response(&ctx, response)
         });
         sender.send(resource);
     });
     promise
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct ComputeResults {
+    pub prepare_time: f64,
+    pub results: Vec<Result<ComputeResultIdentified, String>>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct ComputeResultIdentified {
+    pub commit: super::types::CommitId,
+    #[serde(flatten)]
+    pub inner: ComputeResult,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -148,9 +151,72 @@ pub struct ComputeResult {
 pub enum ScriptingError {
     AtCompilation(String),
     AtEvaluation(String),
+    Other(String),
 }
 
-impl Resource<Result<ComputeResult, ScriptingError>> {
+pub(super) fn show_single_repo(
+    ui: &mut egui::Ui,
+    single: &mut ComputeConfigSingle,
+    code_editors: &mut super::types::CodeEditors,
+    trigger_compute: &mut bool,
+    compute_single_result: &mut Option<
+        poll_promise::Promise<
+            Result<super::types::Resource<Result<ComputeResults, ScriptingError>>, String>,
+        >,
+    >,
+) {
+    let is_portrait = ui.available_rect_before_wrap().aspect_ratio() < 1.0;
+    if is_portrait {
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            egui::warn_if_debug_build(ui);
+            code_editors.init.ui(ui);
+            code_editors.filter.ui(ui);
+            code_editors.accumulate.ui(ui);
+            ui.horizontal(|ui| {
+                if ui.add(egui::Button::new("Compute")).clicked() {
+                    *trigger_compute |= true;
+                };
+                show_short_result(&*compute_single_result, ui);
+            });
+            show_long_result(&*compute_single_result, ui);
+        });
+    } else {
+        InteractiveSplitter::vertical()
+            .ratio(0.7)
+            .show(ui, |ui1, ui2| {
+                ui1.push_id(ui1.id().with("input"), |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        for ex in EXAMPLES {
+                            if ui.button(ex.name).clicked() {
+                                single.commit = (&ex.commit).into();
+                                single.len = ex.commits;
+                                *code_editors = (&ex.scripts).into();
+                            }
+                        }
+                    });
+                    egui::warn_if_debug_build(ui);
+                    code_editors.init.ui(ui);
+                    code_editors.filter.ui(ui);
+                    code_editors.accumulate.ui(ui);
+                });
+                let ui = ui2;
+                // ui.painter().debug_rect(ui.max_rect(), egui::Color32::RED, "text");
+                // ui.painter().debug_rect(ui.clip_rect(), egui::Color32::GREEN, "text");
+                // ui.painter().debug_rect(ui.available_rect_before_wrap(), egui::Color32::BLUE, "text");
+                // ui.set_clip_rect(ui.available_rect_before_wrap());
+                // ui.set_max_size(ui.available_size_before_wrap());
+                ui.horizontal(|ui| {
+                    if ui.add(egui::Button::new("Compute")).clicked() {
+                        *trigger_compute |= true;
+                    };
+                    show_short_result(&*compute_single_result, ui);
+                });
+                show_long_result(&*compute_single_result, ui);
+            });
+    }
+}
+
+impl Resource<Result<ComputeResults, ScriptingError>> {
     pub(super) fn from_response(
         ctx: &egui::Context,
         response: ehttp::Response,
@@ -217,15 +283,15 @@ pub(super) fn show_single_repo_menu(
                 .show(ui)
         });
 
-        ui.add_enabled_ui(false, |ui| {
+        ui.add_enabled_ui(true, |ui| {
             ui.add(
-                egui::Slider::new(&mut single.len, 0..=200)
+                egui::Slider::new(&mut single.len, 1..=200)
                     .text("commits")
                     .clamp_to_range(false)
                     .integer()
                     .logarithmic(true),
             );
-            show_wip(ui, Some("only process one commit"));
+            // show_wip(ui, Some("only process one commit"));
         });
     };
 
@@ -239,15 +305,35 @@ pub(super) fn show_short_result(promise: &Option<RemoteResult>, ui: &mut egui::U
                 Ok(resource) => {
                     // ui_resource(ui, resource);
                     dbg!(&resource.response);
-                    if let Some(text) = &resource.content {
-                        match text {
-                            Ok(text) => {
+                    if let Some(content) = &resource.content {
+                        match content {
+                            Ok(content) => {
                                 if ui.add(egui::Button::new("Export")).clicked() {
-                                    if let Ok(text) = serde_json::to_string_pretty(text) {
+                                    if let Ok(text) = serde_json::to_string_pretty(content) {
                                         utils::file_save(&text)
                                     }
                                 };
-                                ui.label(format!("compute time: {} seconds", text.compute_time));
+                                if content.results.len() == 1 {
+                                    if let Ok(res) = &content.results[0] {
+                                        ui.label(format!(
+                                            "compute time: {:.3}",
+                                            SecFmt(content.prepare_time + res.inner.compute_time)
+                                        ));
+                                    }
+                                } else {
+                                    ui.label(format!(
+                                        "compute time: {:.3} + {:.3}",
+                                        SecFmt(content.prepare_time),
+                                        SecFmt(
+                                            content
+                                                .results
+                                                .iter()
+                                                .filter_map(|x| x.as_ref().ok())
+                                                .map(|x| x.inner.compute_time)
+                                                .sum::<f64>()
+                                        )
+                                    ));
+                                }
                             }
                             Err(_) => {
                                 ui.label(format!("compute time: N/A"));
@@ -273,57 +359,13 @@ pub(super) fn show_long_result(promise: &Option<RemoteResult>, ui: &mut egui::Ui
                 Ok(resource) => {
                     // ui_resource(ui, resource);
                     dbg!(&resource.response);
-                    if let Some(text) = &resource.content {
-                        match text {
-                            Ok(text) => {
-                                egui::CollapsingHeader::new("Results (JSON)")
-                                    .default_open(true)
-                                    .show(ui, |ui| {
-                                        let mut code: &str =
-                                            &serde_json::to_string_pretty(&text.result).unwrap();
-                                        let language = "json";
-                                        let theme =
-                                    egui_demo_lib::syntax_highlighting::CodeTheme::from_memory(
-                                        ui.ctx(),
-                                    );
-                                        let mut layouter =
-                                            |ui: &egui::Ui, string: &str, _wrap_width: f32| {
-                                                let layout_job =
-                                                    egui_demo_lib::syntax_highlighting::highlight(
-                                                        ui.ctx(),
-                                                        &theme,
-                                                        string,
-                                                        language,
-                                                    );
-                                                // layout_job.wrap.max_width = wrap_width; // no wrapping
-                                                ui.fonts(|f| f.layout_job(layout_job))
-                                            };
-
-                                        ui.add(
-                                            egui::TextEdit::multiline(&mut code)
-                                                .font(egui::TextStyle::Monospace) // for cursor height
-                                                .code_editor()
-                                                .desired_rows(1)
-                                                .lock_focus(true)
-                                                .layouter(&mut layouter),
-                                        );
-                                    });
+                    if let Some(content) = &resource.content {
+                        match content {
+                            Ok(content) => {
+                                show_long_result_success(ui, content);
                             }
                             Err(error) => {
-                                let (h, c) = match error {
-                                    ScriptingError::AtCompilation(err) => {
-                                        ("Error at compilation:", err)
-                                    }
-                                    ScriptingError::AtEvaluation(err) => {
-                                        ("Error at evaluation:", err)
-                                    }
-                                };
-                                ui.label(
-                                    egui::RichText::new(h)
-                                        .heading()
-                                        .color(ui.visuals().error_fg_color),
-                                );
-                                ui.colored_label(ui.visuals().error_fg_color, c);
+                                show_long_result_compute_failure(error, ui);
                             }
                         }
                     }
@@ -342,4 +384,240 @@ pub(super) fn show_long_result(promise: &Option<RemoteResult>, ui: &mut egui::Ui
     } else {
         ui.label("click on Compute");
     }
+}
+
+fn show_long_result_compute_failure(error: &ScriptingError, ui: &mut egui::Ui) {
+    let (h, c) = match error {
+        ScriptingError::AtCompilation(err) => ("Error at compilation:", err),
+        ScriptingError::AtEvaluation(err) => ("Error at evaluation:", err),
+        ScriptingError::Other(err) => ("Error somewhere else:", err),
+    };
+    ui.label(
+        egui::RichText::new(h)
+            .heading()
+            .color(ui.visuals().error_fg_color),
+    );
+    ui.colored_label(ui.visuals().error_fg_color, c);
+}
+
+fn show_long_result_success(ui: &mut egui::Ui, content: &ComputeResults) {
+    if content.results.len() > 5 {
+        egui::ScrollArea::horizontal()
+            .always_show_scroll(true)
+            .auto_shrink([false, false])
+            .show(ui, |ui| show_long_result_table(content, ui));
+    } else {
+        egui::CollapsingHeader::new("Results (JSON)")
+            .default_open(true)
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical()
+                    .always_show_scroll(false)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| show_long_result_list(content, ui));
+            });
+    }
+}
+
+fn show_long_result_list(content: &ComputeResults, ui: &mut egui::Ui) {
+    for cont in &content.results {
+        match cont {
+            Ok(cont) => {
+                let mut code: &str = &serde_json::to_string_pretty(&cont.inner.result).unwrap();
+                let language = "json";
+                let theme = egui_demo_lib::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+                let mut layouter = |ui: &egui::Ui, string: &str, _wrap_width: f32| {
+                    let layout_job = egui_demo_lib::syntax_highlighting::highlight(
+                        ui.ctx(),
+                        &theme,
+                        string,
+                        language,
+                    );
+                    // layout_job.wrap.max_width = wrap_width; // no wrapping
+                    ui.fonts(|f| f.layout_job(layout_job))
+                };
+                if content.results.len() > 1 {
+                    ui.label(format!(
+                        "compute time: {:.3}",
+                        SecFmt(cont.inner.compute_time)
+                    ));
+                }
+                ui.add(
+                    egui::TextEdit::multiline(&mut code)
+                        .font(egui::TextStyle::Monospace) // for cursor height
+                        .code_editor()
+                        .desired_rows(1)
+                        .lock_focus(true)
+                        .layouter(&mut layouter),
+                );
+            }
+            Err(err) => {
+                ui.colored_label(ui.visuals().error_fg_color, err);
+            }
+        }
+    }
+}
+
+fn show_long_result_table(content: &ComputeResults, ui: &mut egui::Ui) {
+    // header
+    let header = content
+        .results
+        .iter()
+        .find(|x| x.is_ok())
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .unwrap();
+    use egui_extras::{Column, TableBuilder};
+    TableBuilder::new(ui)
+        .striped(true)
+        .resizable(true)
+        .auto_shrink([true, true])
+        .column(Column::auto().resizable(true).clip(false))
+        // .column(Column::remainder())
+        .columns(
+            Column::auto().resizable(true),
+            header.inner.result.as_object().unwrap().len(),
+        )
+        .column(Column::auto().resizable(true).clip(false))
+        .header(20.0, |mut head| {
+            let hf = |ui: &mut egui::Ui, name| {
+                ui.label(
+                    egui::RichText::new(name)
+                        .size(15.0)
+                        .text_style(egui::TextStyle::Monospace),
+                )
+            };
+            head.col(|ui| {
+                hf(ui, " commit");
+            });
+            for (name, _) in header.inner.result.as_object().unwrap().iter() {
+                head.col(|ui| {
+                    hf(ui, name);
+                });
+            }
+            head.col(|ui| {
+                hf(ui, "compute time");
+            });
+            // head.col(|ui| {
+            //     ui.heading("First column");
+            // });
+            // head.col(|ui| {
+            //     ui.heading("Second column");
+            // });
+        })
+        .body(|mut body| {
+            for cont in &content.results {
+                match cont {
+                    Ok(cont) => {
+                        body.row(30.0, |mut row| {
+                            row.col(|ui| {
+                                ui.label(&cont.commit[..8]);
+                            });
+                            for (_, v) in cont.inner.result.as_object().unwrap() {
+                                row.col(|ui| {
+                                    // ui.button(v.to_string());
+                                    ui.label(v.to_string());
+                                });
+                            }
+                            row.col(|ui| {
+                                ui.label(format!(
+                                    "{:.3}",
+                                    SecFmt(cont.inner.compute_time)
+                                ));
+                            });
+                        });
+                    }
+                    Err(err) => {
+                        body.row(30.0, |mut row| {
+                            row.col(|ui| {
+                                ui.colored_label(ui.visuals().error_fg_color, err);
+                            });
+                        });
+                    }
+                }
+            }
+        });
+}
+
+struct SecFmt(f64);
+
+impl From<f64> for SecFmt {
+    fn from(value: f64) -> Self {
+        Self(value)
+    }
+}
+
+impl std::fmt::Display for SecFmt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // f.precision()
+        let x = self.0;
+        let (t, n) = if x > 60.0 {
+            let n = if f.alternate() { "minutes" } else { "m" };
+            (x / 60.0, n)
+        } else if x == 0.0 {
+            let n = if f.alternate() { "seconds" } else { "s" };
+            (x, n)
+        } else if x < 0.00_000_000_001 {
+            let n = if f.alternate() { "pico seconds" } else { "ps" };
+            (x * 1_000_000_000_000., n)
+        } else if x < 0.00_000_001 {
+            let n = if f.alternate() { "nano seconds" } else { "ns" };
+            (x * 1_000_000_000., n)
+        } else if x < 0.00_001 {
+            let n = if f.alternate() { "micro seconds" } else { "us" };
+            (x * 1_000_000., n)
+        } else if x < 1.0 {
+            let n = if f.alternate() { "milli seconds" } else { "ms" };
+            (x * 1_000., n)
+        } else {
+            let n = if f.alternate() { "seconds" } else { "s" };
+            (x, n)
+        };
+        fn round_to_significant_digits3(number: f64, significant_digits: usize) -> String {
+            if number == 0.0 {
+                return format!("{:.*}", significant_digits, number);
+            }
+            let abs = number.abs();
+            let d = if abs == 1.0 {
+                1.0
+            } else {
+                (abs.log10().ceil()).max(0.0)
+            };
+            let power = significant_digits - d as usize;
+
+            let magnitude = 10.0_f64.powi(power as i32);
+            let shifted = number * magnitude;
+            let rounded_number = shifted.round();
+            let unshifted = rounded_number as f64 / magnitude;
+            dbg!(
+                number,
+                (number.abs() + 0.000001).log10().ceil(),
+                significant_digits,
+                power,
+                d
+            );
+            format!("{:.*}", power, unshifted)
+        }
+        if t == 0.0 {
+            write!(f, "{:.1} {}", t, n)
+        } else if let Some(prec) = f.precision() {
+            write!(f, "{} {}", round_to_significant_digits3(t, prec), n)
+        } else {
+            write!(f, "{} {}", t, n)
+        }
+    }
+}
+
+#[test]
+fn aaa() {
+    assert_eq!(format!("{:.4}", SecFmt(0.0)), "0.0 s");
+    assert_eq!(format!("{:.3}", SecFmt(1.0 / 1000.0)), "1.00 ms");
+    assert_eq!(format!("{:.3}", SecFmt(1.0 / 1000.0 / 1000.0)), "1.00 us");
+    assert_eq!(format!("{:.4}", SecFmt(0.00_000_000_1)), "1.000 ns");
+    assert_eq!(format!("{:.4}", SecFmt(0.00_000_000_000_1)), "1.000 ps");
+    assert_eq!(format!("{:.2}", SecFmt(0.0000000012)), "1.2 ns");
+    assert_eq!(format!("{:.4}", SecFmt(10.43333)), "10.43 s");
+    assert_eq!(format!("{:.3}", SecFmt(10.43333)), "10.4 s");
+    assert_eq!(format!("{:.2}", SecFmt(10.43333)), "10 s");
+    assert_eq!(format!("{:3e}", 10.43333), "1.043333e1");
 }

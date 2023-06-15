@@ -5,7 +5,6 @@ use std::{
 };
 
 use hyper_ast::{
-    hashed::SyntaxNodeHashs,
     position::{StructuralPosition, TreePath, TreePathMut},
     store::defaults::{LabelIdentifier, NodeIdentifier},
     tree_gen::SubTreeMetrics,
@@ -15,27 +14,32 @@ use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
 use hyper_ast_gen_ts_xml::{legion::XmlTreeGen, types::Type};
 use num::ToPrimitive;
 
-use crate::{Accumulator, SimpleStores, TStore, PROPAGATE_ERROR_ON_BAD_CST_NODE};
+use crate::{
+    processing::ObjectName, Accumulator, DefaultMetrics, SimpleStores, TStore,
+    PROPAGATE_ERROR_ON_BAD_CST_NODE, ParseErr,
+};
 
 pub(crate) fn handle_pom_file<'a>(
     tree_gen: &mut XmlTreeGen<'a, TStore>,
-    name: &[u8],
+    name: &ObjectName,
     text: &'a [u8],
-) -> Result<POM, ()> {
+) -> Result<POM, ParseErr> {
     let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(text) {
         Ok(tree) => tree,
         Err(tree) => {
             log::warn!("bad CST");
-            log::debug!("{:?}", std::str::from_utf8(name));
+            log::debug!("{:?}", name.try_str());
             log::debug!("{}", tree.root_node().to_sexp());
             if PROPAGATE_ERROR_ON_BAD_CST_NODE {
-                return Err(());
+                return Err(ParseErr::IllFormed);
             } else {
                 tree
             }
         }
     };
-    let x = tree_gen.generate_file(&name, text, tree.walk()).local;
+    let x = tree_gen
+        .generate_file(name.as_bytes(), text, tree.walk())
+        .local;
     // TODO extract submodules, dependencies and directories. maybe even more ie. artefact id, ...
     let x = POM {
         compressed_node: x.compressed_node,
@@ -50,7 +54,7 @@ pub(crate) fn handle_pom_file<'a>(
 #[derive(Debug, Clone)]
 pub struct POM {
     pub compressed_node: NodeIdentifier,
-    pub metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
+    pub metrics: DefaultMetrics,
     submodules: Vec<String>,
     source_dirs: Vec<String>,
     test_source_dirs: Vec<String>,
@@ -190,7 +194,7 @@ impl<'a> IterMavenModules2<'a> {
 
 #[derive(Debug, Clone)]
 pub struct MD {
-    pub(crate) metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
+    pub(crate) metrics: DefaultMetrics,
     #[allow(unused)] // TODO needed for scalable module level reference analysis
     pub(crate) ana: MavenPartialAnalysis,
 }
@@ -199,7 +203,7 @@ pub struct MavenModuleAcc {
     pub(crate) name: String,
     pub(crate) children_names: Vec<LabelIdentifier>,
     pub(crate) children: Vec<NodeIdentifier>,
-    pub(crate) metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>, //java_tree_gen::SubTreeMetrics<SyntaxNodeHashs<u32>>,
+    pub(crate) metrics: DefaultMetrics, //java_tree_gen::SubTreeMetrics<SyntaxNodeHashs<u32>>,
     pub(crate) ana: MavenPartialAnalysis,
     pub(crate) sub_modules: Option<Vec<PathBuf>>,
     pub(crate) main_dirs: Option<Vec<PathBuf>>,
@@ -270,6 +274,7 @@ impl MavenModuleAcc {
 
 impl MavenModuleAcc {
     pub(crate) fn push_pom(&mut self, name: LabelIdentifier, full_node: POM) {
+        assert!(!self.children_names.contains(&name));
         self.children.push(full_node.compressed_node);
         self.children_names.push(name);
         self.main_dirs = Some(full_node.source_dirs.iter().map(|x| x.into()).collect());

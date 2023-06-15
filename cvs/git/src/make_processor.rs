@@ -18,11 +18,10 @@ use hyper_ast_gen_ts_cpp::types::Type;
 use hyper_ast_gen_ts_java::legion_with_refs::{eq_node, hash32};
 
 use crate::{
-    cpp::CppAcc,
-    cpp_processor::CppProcessor,
     git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
     make::{MakeModuleAcc, MD},
     preprocessed::RepositoryProcessor,
+    processing::{erased::ParametrizedCommitProc2, CacheHolding, InFiles, ObjectName},
     Processor, SimpleStores,
 };
 
@@ -31,6 +30,7 @@ pub struct MakeProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
     repository: &'a Repository,
     stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
     dir_path: &'c mut Peekable<Components<'c>>,
+    handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<MakeProc>,
 }
 
 impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
@@ -43,6 +43,11 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
         name: &[u8],
         oid: git2::Oid,
     ) -> Self {
+        let h = prepro
+            .processing_systems
+            .mut_or_default::<MakeProcessorHolder>();
+        let handle =
+            <MakeProc as crate::processing::erased::CommitProcExt>::register_param(h, Parameter);
         let tree = repository.find_tree(oid).unwrap();
         let prepared = prepare_dir_exploration(tree, &mut dir_path);
         let name = std::str::from_utf8(&name).unwrap().to_string();
@@ -52,9 +57,11 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
             repository,
             prepro,
             dir_path,
+            handle,
         }
     }
 }
+type Caches = <crate::processing::file_sys::Make as crate::processing::CachesHolding>::Caches;
 
 impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
     for MakeProcessor<'a, 'b, 'c, RMS, FFWD, MakeModuleAcc>
@@ -63,7 +70,10 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
         match current_dir {
             BasicGitObject::Tree(oid, name) => {
                 if let Some(s) = self.dir_path.peek() {
-                    if name.eq(std::os::unix::prelude::OsStrExt::as_bytes(s.as_os_str())) {
+                    if name
+                        .as_bytes()
+                        .eq(std::os::unix::prelude::OsStrExt::as_bytes(s.as_os_str()))
+                    {
                         self.dir_path.next();
                         self.stack.last_mut().expect("never empty").1.clear();
                         let tree = self.repository.find_tree(oid).unwrap();
@@ -71,7 +81,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                         self.stack.push((
                             oid,
                             prepared,
-                            MakeModuleAcc::new(std::str::from_utf8(&name).unwrap().to_string()),
+                            MakeModuleAcc::new(name.try_into().unwrap()),
                         ));
                         return;
                     } else {
@@ -79,23 +89,26 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                     }
                 }
                 // check if module or src/main/java or src/test/java
-                if let Some(already) = self.prepro.object_map_make.get(&oid) {
+                if let Some(already) = self
+                    .prepro
+                    .processing_systems
+                    .mut_or_default::<MakeProcessorHolder>()
+                    .get_caches_mut()
+                    .object_map
+                    .get(&oid)
+                {
                     // reinit already computed node for post order
                     let full_node = already.clone();
 
                     let w = &mut self.stack.last_mut().unwrap().2;
-                    let name = self
-                        .prepro
-                        .main_stores_mut()
-                        .label_store
-                        .get_or_insert(std::str::from_utf8(&name).unwrap());
+                    let name = self.prepro.intern_object_name(name);
                     assert!(!w.children_names.contains(&name));
                     w.push_submodule(name, full_node);
                     return;
                 }
-                // TODO use maven pom.xml to find source_dir  and tests_dir ie. ignore resources, maybe also tests
-                // TODO maybe at some point try to handle maven modules and source dirs that reference parent directory in their path
-                log::debug!("mm tree {:?}", std::str::from_utf8(&name));
+                // TODO use Make pom.xml to find source_dir  and tests_dir ie. ignore resources, maybe also tests
+                // TODO maybe at some point try to handle Make modules and source dirs that reference parent directory in their path
+                log::debug!("mm tree {:?}", name.try_str());
 
                 let parent_acc = &mut self.stack.last_mut().unwrap().2;
                 if true {
@@ -111,7 +124,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                     return;
                 }
 
-                let helper = MakeModuleHelper::from((parent_acc, name.as_ref()));
+                let helper = MakeModuleHelper::from((parent_acc, &name));
                 if helper.source_directories.0 || helper.test_source_directories.0 {
                     // handle as source dir
                     let (name, (full_node, _)) = self.prepro.help_handle_cpp_folder(
@@ -138,7 +151,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                     let tree = self.repository.find_tree(oid).unwrap();
                     let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
                     if helper.submodules.0 {
-                        // handle as maven module
+                        // handle as Make module
                         self.stack.push((oid, prepared, helper.into()));
                     } else {
                         // search further inside
@@ -147,7 +160,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                 } else if RMS && !(helper.source_directories.0 || helper.test_source_directories.0)
                 {
                     let tree = self.repository.find_tree(oid).unwrap();
-                    // anyway try to find maven modules, but maybe can do better
+                    // anyway try to find Make modules, but maybe can do better
                     let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
                     self.stack.push((oid, prepared, helper.into()));
                 }
@@ -159,29 +172,35 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                 if self.dir_path.peek().is_some() {
                     return;
                 }
-                if name.eq(b"Makefile") {
-                    self.prepro.help_handle_makefile(
-                        oid,
-                        &mut self.stack.last_mut().unwrap().2,
-                        name,
-                        &self.repository,
-                    )
-                } else if name.ends_with(b".cpp") || name.ends_with(b".cxx") {
-                    self.prepro.help_handle_cpp_file2(
-                        oid,
-                        &mut self.stack.last_mut().unwrap().2,
-                        name,
-                        self.repository,
-                    )
-                } else if name.ends_with(b".h") || name.ends_with(b".hpp") {
-                    self.prepro.help_handle_cpp_file2(
-                        oid,
-                        &mut self.stack.last_mut().unwrap().2,
-                        name,
-                        self.repository,
-                    )
+                if crate::processing::file_sys::MakeFile::matches(&name) {
+                    self.prepro
+                        .help_handle_makefile(
+                            oid,
+                            &mut self.stack.last_mut().unwrap().2,
+                            name,
+                            &self.repository,
+                            self.handle.into(),
+                        )
+                        .unwrap();
+                } else if crate::processing::file_sys::Cpp::matches(&name) {
+                    self.prepro
+                        .help_handle_cpp_file2(
+                            oid,
+                            &mut self.stack.last_mut().unwrap().2,
+                            &name,
+                            self.repository,
+                            self.handle.into(),
+                        )
+                        .unwrap();
+                // } else if name.ends_with(b".h") || name.ends_with(b".hpp") {
+                //     self.prepro.help_handle_cpp_file2(
+                //         oid,
+                //         &mut self.stack.last_mut().unwrap().2,
+                //         name,
+                //         self.repository,
+                //     )
                 } else {
-                    log::debug!("not cpp source file {:?}", std::str::from_utf8(&name));
+                    log::debug!("not cpp source file {:?}", name.try_str());
                 }
             }
         }
@@ -189,7 +208,12 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
     fn post(&mut self, oid: Oid, acc: MakeModuleAcc) -> Option<(NodeIdentifier, MD)> {
         let name = acc.name.clone();
         let full_node = Self::make(acc, self.prepro.main_stores_mut());
-        self.prepro.object_map_make.insert(oid, full_node.clone());
+        self.prepro
+            .processing_systems
+            .mut_or_default::<MakeProcessorHolder>()
+            .get_caches_mut()
+            .object_map
+            .insert(oid, full_node.clone());
 
         let name = self.prepro.main_stores.label_store.get_or_insert(name);
         if self.stack.is_empty() {
@@ -288,6 +312,37 @@ pub(crate) fn make(mut acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeId
     full_node
 }
 
+use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
+impl RepositoryProcessor {
+    fn help_handle_makefile(
+        &mut self,
+        oid: Oid,
+        parent_acc: &mut MakeModuleAcc,
+        name: ObjectName,
+        repository: &Repository,
+        parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<MakefileProc>,
+    ) -> Result<(), crate::ParseErr> {
+        let x = self
+            .processing_systems
+            .caching_blob_handler::<crate::processing::file_sys::MakeFile>()
+            .handle(oid, repository, &name, parameters, |c, n, t| {
+                crate::make::handle_makefile_file(
+                    &mut XmlTreeGen {
+                        line_break: "\n".as_bytes().to_vec(),
+                        stores: &mut self.main_stores,
+                    },
+                    n,
+                    t,
+                )
+                .map_err(|_| crate::ParseErr::IllFormed)
+            })?;
+        let name = self.intern_object_name(&name);
+        assert!(!parent_acc.children_names.contains(&name));
+        parent_acc.push_makefile(name, x);
+        Ok(())
+    }
+}
+
 struct MakeModuleHelper {
     name: String,
     submodules: (bool, Vec<PathBuf>),
@@ -295,15 +350,15 @@ struct MakeModuleHelper {
     test_source_directories: (bool, Vec<PathBuf>),
 }
 
-impl From<(&mut MakeModuleAcc, &[u8])> for MakeModuleHelper {
-    fn from((parent_acc, name): (&mut MakeModuleAcc, &[u8])) -> Self {
+impl From<(&mut MakeModuleAcc, &ObjectName)> for MakeModuleHelper {
+    fn from((parent_acc, name): (&mut MakeModuleAcc, &ObjectName)) -> Self {
         let process = |mut v: &mut Option<Vec<PathBuf>>| {
-            let mut v = drain_filter_strip(&mut v, name);
+            let mut v = drain_filter_strip(&mut v, name.as_bytes());
             let c = v.drain_filter(|x| x.components().next().is_none()).count();
             (c > 0, v)
         };
         Self {
-            name: std::str::from_utf8(name).unwrap().to_string(),
+            name: name.try_into().unwrap(),
             submodules: process(&mut parent_acc.sub_modules),
             source_directories: process(&mut parent_acc.main_dirs),
             test_source_directories: process(&mut parent_acc.test_dirs),
@@ -346,7 +401,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
     {
         let mut children_objects: Vec<_> = tree.collect();
         let p = children_objects.iter().position(|x| match x.r#type() {
-            ObjectType::File => x.name().eq(b"Makefile"),
+            ObjectType::File => crate::processing::file_sys::MakeFile::matches(x.name()),
             ObjectType::Dir => false,
         });
         if let Some(p) = p {
@@ -370,7 +425,7 @@ pub(crate) fn prepare_dir_exploration(
         .collect();
     if dir_path.peek().is_none() {
         let p = children_objects.iter().position(|x| match x {
-            BasicGitObject::Blob(_, n) => n.eq(b"Makefile"),
+            BasicGitObject::Blob(_, n) => crate::processing::file_sys::MakeFile::matches(n),
             _ => false,
         });
         if let Some(p) = p {
@@ -379,4 +434,252 @@ pub(crate) fn prepare_dir_exploration(
         }
     }
     children_objects
+}
+
+// # Pom
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct Parameter;
+impl From<crate::processing::erased::ParametrizedCommitProcessor2Handle<MakeProc>>
+    for crate::processing::erased::ParametrizedCommitProcessor2Handle<MakefileProc>
+{
+    fn from(
+        value: crate::processing::erased::ParametrizedCommitProcessor2Handle<MakeProc>,
+    ) -> Self {
+        crate::processing::erased::ParametrizedCommitProcessor2Handle(
+            value.0,
+            std::marker::PhantomData,
+        )
+    }
+}
+impl From<crate::processing::erased::ParametrizedCommitProcessor2Handle<MakeProc>>
+    for crate::processing::erased::ParametrizedCommitProcessor2Handle<crate::cpp_processor::CppProc>
+{
+    fn from(
+        value: crate::processing::erased::ParametrizedCommitProcessor2Handle<MakeProc>,
+    ) -> Self {
+        crate::processing::erased::ParametrizedCommitProcessor2Handle(
+            value.0,
+            std::marker::PhantomData,
+        )
+    }
+}
+// #[derive(Default)]
+struct MakefileProcessorHolder(Option<MakefileProc>);
+impl Default for MakefileProcessorHolder {
+    fn default() -> Self {
+        Self(Some(MakefileProc(Parameter, Default::default())))
+    }
+}
+struct MakefileProc(Parameter, crate::processing::caches::Makefile);
+impl crate::processing::erased::Parametrized for MakefileProcessorHolder {
+    type T = Parameter;
+    fn register_param(
+        &mut self,
+        t: Self::T,
+    ) -> crate::processing::erased::ParametrizedCommitProcessorHandle {
+        let l = self.0.iter().position(|x| &x.0 == &t).unwrap_or_else(|| {
+            let l = 0; //self.0.len();
+                       // self.0.push(MakefileProc(t));
+            self.0 = Some(MakefileProc(t, Default::default()));
+            l
+        });
+        use crate::processing::erased::ConfigParametersHandle;
+        use crate::processing::erased::ParametrizedCommitProc;
+        use crate::processing::erased::ParametrizedCommitProcessorHandle;
+        ParametrizedCommitProcessorHandle(self.erased_handle(), ConfigParametersHandle(l))
+    }
+}
+// TODO should not have to impl this trait
+impl crate::processing::erased::CommitProc for MakefileProc {
+    fn process_root_tree(
+        &mut self,
+        repository: &git2::Repository,
+        tree_oid: &git2::Oid,
+    ) -> hyper_ast::store::defaults::NodeIdentifier {
+        unimplemented!()
+    }
+
+    fn prepare_processing(
+        &self,
+        repository: &git2::Repository,
+        commit_builder: crate::preprocessed::CommitBuilder,
+    ) -> Box<dyn crate::processing::erased::PreparedCommitProc> {
+        unimplemented!()
+    }
+
+    fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
+        unimplemented!()
+    }
+}
+
+impl crate::processing::erased::CommitProcExt for MakefileProc {
+    type Holder = MakefileProcessorHolder;
+}
+impl crate::processing::erased::ParametrizedCommitProc2 for MakefileProcessorHolder {
+    type Proc = MakefileProc;
+
+    fn with_parameters_mut(
+        &mut self,
+        parameters: crate::processing::erased::ConfigParametersHandle,
+    ) -> &mut Self::Proc {
+        assert_eq!(0, parameters.0);
+        self.0.as_mut().unwrap()
+    }
+
+    fn with_parameters(
+        &self,
+        parameters: crate::processing::erased::ConfigParametersHandle,
+    ) -> &Self::Proc {
+        assert_eq!(0, parameters.0);
+        self.0.as_ref().unwrap()
+    }
+}
+impl CacheHolding<crate::processing::caches::Makefile> for MakefileProc {
+    fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Makefile {
+        &mut self.1
+    }
+    fn get_caches(&self) -> &crate::processing::caches::Makefile {
+        &self.1
+    }
+}
+impl CacheHolding<crate::processing::caches::Makefile> for MakefileProcessorHolder {
+    fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Makefile {
+        &mut self.0.as_mut().unwrap().1
+    }
+    fn get_caches(&self) -> &crate::processing::caches::Makefile {
+        &self.0.as_ref().unwrap().1
+    }
+}
+
+// # Make
+#[derive(Default)]
+pub(crate) struct MakeProcessorHolder(Option<MakeProc>);
+pub(crate) struct MakeProc {
+    parameter: Parameter,
+    cache: crate::processing::caches::Make,
+    commits: std::collections::HashMap<git2::Oid, crate::Commit>,
+}
+impl crate::processing::erased::Parametrized for MakeProcessorHolder {
+    type T = Parameter;
+    fn register_param(
+        &mut self,
+        t: Self::T,
+    ) -> crate::processing::erased::ParametrizedCommitProcessorHandle {
+        let l = self
+            .0
+            .iter()
+            .position(|x| &x.parameter == &t)
+            .unwrap_or_else(|| {
+                let l = 0; //self.0.len();
+                           // self.0.push(MakeProc(t));
+                self.0 = Some(MakeProc {
+                    parameter: t,
+                    cache: Default::default(),
+                    commits: Default::default(),
+                });
+                l
+            });
+        use crate::processing::erased::ConfigParametersHandle;
+        use crate::processing::erased::ParametrizedCommitProc;
+        use crate::processing::erased::ParametrizedCommitProcessorHandle;
+        ParametrizedCommitProcessorHandle(self.erased_handle(), ConfigParametersHandle(l))
+    }
+}
+struct PreparedMakeCommitProc<'repo> {
+    repository: &'repo git2::Repository,
+    commit_builder: crate::preprocessed::CommitBuilder,
+}
+impl<'repo> crate::processing::erased::PreparedCommitProc for PreparedMakeCommitProc<'repo> {
+    fn process(
+        self: Box<PreparedMakeCommitProc<'repo>>,
+        prepro: &mut RepositoryProcessor,
+    ) -> hyper_ast::store::defaults::NodeIdentifier {
+        let dir_path = PathBuf::from("");
+        let mut dir_path = dir_path.components().peekable();
+        let name = b"";
+        // TODO check parameter in self to know it is a recusive module search
+        let root_full_node = MakeProcessor::<true, false, MakeModuleAcc>::new(
+            self.repository,
+            prepro,
+            &mut dir_path,
+            name,
+            self.commit_builder.tree_oid(),
+        )
+        .process();
+        let h = prepro
+            .processing_systems
+            .mut_or_default::<MakeProcessorHolder>();
+        let handle =
+            <MakeProc as crate::processing::erased::CommitProcExt>::register_param(h, Parameter);
+        let commit_oid = self.commit_builder.commit_oid();
+        let commit = self.commit_builder.finish(root_full_node.0);
+        h.with_parameters_mut(handle.0)
+            .commits
+            .insert(commit_oid, commit);
+        root_full_node.0
+    }
+}
+impl crate::processing::erased::CommitProc for MakeProc {
+    fn process_root_tree(
+        &mut self,
+        repository: &git2::Repository,
+        tree_oid: &git2::Oid,
+    ) -> hyper_ast::store::defaults::NodeIdentifier {
+        unimplemented!("see reason in the java proc")
+    }
+
+    fn prepare_processing<'repo>(
+        &self,
+        repository: &'repo git2::Repository,
+        commit_builder: crate::preprocessed::CommitBuilder,
+    ) -> Box<dyn crate::processing::erased::PreparedCommitProc + 'repo> {
+        Box::new(PreparedMakeCommitProc {
+            repository,
+            commit_builder,
+        })
+    }
+
+    fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
+        self.commits.get(&commit_oid)
+    }
+}
+
+impl crate::processing::erased::CommitProcExt for MakeProc {
+    type Holder = MakeProcessorHolder;
+}
+impl crate::processing::erased::ParametrizedCommitProc2 for MakeProcessorHolder {
+    type Proc = MakeProc;
+
+    fn with_parameters_mut(
+        &mut self,
+        parameters: crate::processing::erased::ConfigParametersHandle,
+    ) -> &mut Self::Proc {
+        assert_eq!(0, parameters.0);
+        self.0.as_mut().unwrap()
+    }
+
+    fn with_parameters(
+        &self,
+        parameters: crate::processing::erased::ConfigParametersHandle,
+    ) -> &Self::Proc {
+        assert_eq!(0, parameters.0);
+        self.0.as_ref().unwrap()
+    }
+}
+impl CacheHolding<crate::processing::caches::Make> for MakeProc {
+    fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Make {
+        &mut self.cache
+    }
+    fn get_caches(&self) -> &crate::processing::caches::Make {
+        &self.cache
+    }
+}
+impl CacheHolding<crate::processing::caches::Make> for MakeProcessorHolder {
+    fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Make {
+        &mut self.0.as_mut().unwrap().cache
+    }
+    fn get_caches(&self) -> &crate::processing::caches::Make {
+        &self.0.as_ref().unwrap().cache
+    }
 }

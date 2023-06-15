@@ -1096,7 +1096,6 @@ impl NodeStore {
         let (variant, offset) = self.index.get(&id)?;
         Some(self.variants[*variant as usize].get(*offset))
     }
-
     pub fn unavailable_node<T>(&self) -> HashedNodeRef<'_, T> {
         HashedNodeRef {
             index: 0,

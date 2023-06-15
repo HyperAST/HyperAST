@@ -464,6 +464,7 @@ pub fn get_spacing(
     text: &[u8],
     _parent_indentation: &Spaces,
 ) -> Option<Vec<u8>> {
+    // TODO change debug assert to assert if you want to strictly enforce spaces, issues with other char leaking is often caused by "bad" grammar.
     if padding_start != pos {
         let spaces = &text[padding_start..pos];
         // let spaces = Space::format_indentation(spaces);
@@ -472,10 +473,10 @@ pub fn get_spacing(
             if bslash && (*x == b'\n' || *x == b'\r') {
                 bslash = false
             } else if *x == b'\\' {
-                assert!(!bslash);
+                debug_assert!(!bslash);
                 bslash = true
             } else {
-                assert!(
+                debug_assert!(
                     *x == b' ' || *x == b'\n' || *x == b'\t' || *x == b'\r',
                     "{} {} {:?}",
                     x,
@@ -484,7 +485,7 @@ pub fn get_spacing(
                 )
             }
         });
-        assert!(
+        debug_assert!(
             !bslash,
             "{}",
             std::str::from_utf8(&&text[padding_start.saturating_sub(100)..pos + 50]).unwrap()

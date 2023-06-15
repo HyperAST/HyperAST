@@ -1,5 +1,5 @@
 use std::{
-    fmt::Display,
+    fmt::{Debug, Display},
     path::{Path, PathBuf},
 };
 
@@ -7,10 +7,12 @@ pub use git2::Oid;
 use git2::{RemoteCallbacks, Repository, Revwalk, TreeEntry};
 use hyper_ast::position::Position;
 
+use crate::processing::ObjectName;
+
 pub fn all_commits_between<'a>(
     repository: &'a Repository,
-    before: &'a str,
-    after: &'a str,
+    before: &str,
+    after: &str,
 ) -> Result<Revwalk<'a>, git2::Error> {
     use git2::*;
     let mut rw = repository.revwalk()?;
@@ -138,6 +140,7 @@ pub enum Forge {
     Github,
     Gitlab,
 }
+
 impl Forge {
     fn url(&self) -> &str {
         match self {
@@ -155,6 +158,8 @@ impl Forge {
         }
     }
 }
+
+// TODO use `&'static str`s to derive with Copy 
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct Repo {
     pub forge: Forge,
@@ -170,6 +175,12 @@ impl Repo {
         let url = self.url();
         let path = format!("{}", "/tmp/hyperastgitresources/repo/");
         fetch_repository(url, path)
+    }
+}
+
+impl Display for Repo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{}{}/{}", self.forge.url(), self.user, self.name)
     }
 }
 
@@ -213,8 +224,8 @@ pub fn up_to_date_repo(path: &Path, mut fo: git2::FetchOptions, url: Url) -> Rep
 }
 
 pub(crate) enum BasicGitObject {
-    Blob(Oid, Vec<u8>),
-    Tree(Oid, Vec<u8>),
+    Blob(Oid, ObjectName),
+    Tree(Oid, ObjectName),
 }
 
 // impl<'a> From<TreeEntry<'a>> for BasicGitObjects {
@@ -234,20 +245,24 @@ impl<'a> TryFrom<TreeEntry<'a>> for BasicGitObject {
 
     fn try_from(x: TreeEntry<'a>) -> Result<Self, Self::Error> {
         if x.kind().unwrap().eq(&git2::ObjectType::Tree) {
-            Ok(Self::Tree(x.id(), x.name_bytes().to_owned()))
+            Ok(Self::Tree(x.id(), x.name_bytes().into()))
         } else if x.kind().unwrap().eq(&git2::ObjectType::Blob) {
-            Ok(Self::Blob(x.id(), x.name_bytes().to_owned()))
+            Ok(Self::Blob(x.id(), x.name_bytes().into()))
         } else {
             Err(x)
         }
     }
 }
 
+pub trait NamedObject {
+    fn name(&self) -> &ObjectName;
+}
+
 impl NamedObject for BasicGitObject {
-    fn name(&self) -> &[u8] {
+    fn name(&self) -> &ObjectName {
         match self {
-            BasicGitObject::Blob(_, n) => &n,
-            BasicGitObject::Tree(_, n) => &n,
+            BasicGitObject::Blob(_, n) => n,
+            BasicGitObject::Tree(_, n) => n,
         }
     }
 }
@@ -267,10 +282,6 @@ impl UniqueObject for BasicGitObject {
             BasicGitObject::Blob { 0: id, .. } => id,
         }
     }
-}
-
-pub trait NamedObject {
-    fn name(&self) -> &[u8];
 }
 
 pub enum ObjectType {

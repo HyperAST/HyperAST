@@ -168,7 +168,7 @@ impl<IdN: Clone + Eq + NodeId> NodeId for TIdN<IdN> {
     }
 
     unsafe fn from_ref_id(id: &Self::IdN) -> &Self {
-        todo!()
+        std::mem::transmute(id)
     }
 }
 

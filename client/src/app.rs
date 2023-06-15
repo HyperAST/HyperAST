@@ -6,34 +6,17 @@ use axum::{
     routing::{get, post},
     BoxError, Json, Router,
 };
-use http::{header, HeaderValue, StatusCode};
+use http::StatusCode;
 use tower::ServiceBuilder;
-use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
+use tower_http::trace::TraceLayer;
 
 use crate::{
     commit, fetch, file,
-    scripting::{self, ComputeResult, ScriptContent, ScriptingError, ScriptingParam},
-    track, view, RepoConfig, SharedState,
+    scripting::{
+        self, ScriptContent, ScriptContentDepth, ScriptingError, ScriptingParam,
+    },
+    track, view, SharedState,
 };
-impl From<&RepoConfig> for hyper_ast_cvs_git::multi_preprocessed::ProcessingConfig<&'static str> {
-    fn from(value: &RepoConfig) -> Self {
-        match value {
-            RepoConfig::CppMake => Self::CppMake {
-                limit: 3,
-                dir_path: "src",
-            },
-            RepoConfig::JavaMaven => Self::JavaMaven {
-                limit: 3,
-                dir_path: "",
-            },
-        }
-    }
-}
-impl From<RepoConfig> for hyper_ast_cvs_git::multi_preprocessed::ProcessingConfig<&'static str> {
-    fn from(value: RepoConfig) -> Self {
-        (&value).into()
-    }
-}
 
 impl IntoResponse for ScriptingError {
     fn into_response(self) -> Response {
@@ -43,13 +26,25 @@ impl IntoResponse for ScriptingError {
     }
 }
 
+// TODO try to use the extractor pattern more, specifically for the shared state,
+// I think it would help inadvertently holding resources longer than necessary,
+// and maybe do more preparation stuff here, + measurments ? can it be done by a layer ?
+
 // #[axum_macros::debug_handler]
 async fn scripting(
     axum::extract::Path(path): axum::extract::Path<ScriptingParam>,
     axum::extract::State(state): axum::extract::State<SharedState>,
     axum::extract::Json(script): axum::extract::Json<ScriptContent>,
-) -> axum::response::Result<Json<ComputeResult>> {
+) -> axum::response::Result<Json<scripting::ComputeResult>> {
     let r = scripting::simple(script, state, path)?;
+    Ok(r)
+}
+async fn scripting_depth(
+    axum::extract::Path(path): axum::extract::Path<ScriptingParam>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+    axum::extract::Json(script): axum::extract::Json<ScriptContentDepth>,
+) -> axum::response::Result<Json<scripting::ComputeResults>> {
+    let r = scripting::simple_depth(script, state, path)?;
     Ok(r)
 }
 
@@ -65,10 +60,15 @@ pub fn scripting_app(_st: SharedState) -> Router<SharedState> {
         // .request_body_limit(1024 * 5_000 /* ~5mb */)
         .timeout(Duration::from_secs(10))
         .layer(TraceLayer::new_for_http());
-    Router::new().route(
-        "/script/github/:user/:name/:commit",
-        post(scripting).layer(scripting_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
-    )
+    Router::new()
+        .route(
+            "/script/github/:user/:name/:commit",
+            post(scripting).layer(scripting_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/script-depth/github/:user/:name/:commit",
+            post(scripting_depth).layer(scripting_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
     // .route(
     //     "/script/gitlab/:user/:name/:commit",
     //     post(scripting).layer(scripting_service_config), // .with_state(Arc::clone(&shared_state)),

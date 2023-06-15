@@ -853,7 +853,7 @@ mod test {
 //     }
 // }
 
-// TODO materialize nodes type in the handle ie. NodeIdentier,
+// TODO materialize nodes type in the handle ie. NodeIdentifier,
 // to allow filtering spaces in a slice,
 // without having to access the node store.
 
