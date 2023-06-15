@@ -1,5 +1,5 @@
 use std::{
-    future::{IntoFuture},
+    future::{self, IntoFuture},
     ops::Range,
     sync::{Arc, Mutex, RwLock},
 };
@@ -741,7 +741,7 @@ impl IncrementalHighlightLayout2 {
         sections: &mut Vec<LayoutSection>,
     ) {
         let whole = &self.text;
-        let i: usize = range.start;
+        let i = range.start;
         let line = &whole[range];
         let mut inner = self.inner.write().unwrap();
         let ops = inner.parse_state.parse_line(line, &hh.ps).unwrap();
@@ -767,11 +767,7 @@ impl IncrementalHighlightLayout2 {
 
 use egui::text::{LayoutSection, TextFormat};
 
-<<<<<<<< HEAD:egui_addon/src/syntax_highlighting_async.rs
-use crate::syntax_highlighting_async::async_exec::TimeoutHandle;
-========
 use super::syntect::CodeTheme;
->>>>>>>> quentin/front:hyper_app/src/app/syntax_highlighting/syntax_highlighting_async.rs
 
 fn convert_syntect_style(style: syntect::highlighting::Style) -> TextFormat {
     let fg = style.foreground;

@@ -1,16 +1,18 @@
-use crate::types::{Type, TypeTrait, Typed, WithMetaData};
+use crate::{
+    types::{Type, Typed, TypeTrait, WithMetaData},
+};
 
-pub fn is_cyclomatic_persisted<K: TypeTrait>(t: &K) -> bool {
+pub fn is_cyclomatic_persisted<K:TypeTrait>(t: &K) -> bool {
     t.is_type_declaration() // TODO EnumConstant might not be appropriate here
     || t.is_executable_member()
     || t.is_file()
-    // || t == &Type::ClassDeclaration
-    // || t == &Type::InterfaceDeclaration
-    // || t == &Type::EnumDeclaration
-    // || t == &Type::AnnotationTypeDeclaration
-    // || t == &Type::MethodDeclaration
-    // || t == &Type::ConstructorDeclaration
-    // || t == &Type::Program
+        // || t == &Type::ClassDeclaration
+        // || t == &Type::InterfaceDeclaration
+        // || t == &Type::EnumDeclaration
+        // || t == &Type::AnnotationTypeDeclaration
+        // || t == &Type::MethodDeclaration
+        // || t == &Type::ConstructorDeclaration
+        // || t == &Type::Program
 }
 
 // TODO look at https://crates.io/crates/complexity
@@ -31,7 +33,7 @@ pub struct Mcc {
 }
 
 impl Mcc {
-    pub fn new<K: TypeTrait>(kind: &K) -> Self {
+    pub fn new<K:TypeTrait>(kind: &K) -> Self {
         // TODO also consider || and && as forks
         // we would need to check the operand ie. the children
         Self {
@@ -44,7 +46,7 @@ impl Mcc {
         acc.value += self.value
     }
 
-    pub fn persist<K: TypeTrait>(kind: &K) -> bool {
+    pub fn persist<K:TypeTrait>(kind: &K) -> bool {
         is_cyclomatic_persisted(kind)
     }
 
@@ -59,18 +61,13 @@ impl Mcc {
     // }
 }
 
-impl<T: Typed + WithMetaData<Mcc>> MetaData<T> for Mcc
-where
-    T::Type: TypeTrait,
-{
+impl<T:Typed+WithMetaData<Mcc>> MetaData<T> for Mcc where T::Type: TypeTrait {
     type R = u32;
 
     fn retrieve(node: &T) -> Self::R {
         let kind = node.get_type();
         if Mcc::persist(&kind) {
-            node.get_metadata()
-                .map(|x| x.value + 1)
-                .expect("missing mcc")
+            node.get_metadata().map(|x| x.value + 1).expect("missing mcc")
         } else {
             0
         }

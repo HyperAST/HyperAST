@@ -4,4 +4,8 @@
 #![feature(drain_filter)]
 
 mod app;
-pub use app::{types::Languages, HyperApp};
+
+pub use app::{
+    types::{Lang, Languages},
+    HyperApp,
+};

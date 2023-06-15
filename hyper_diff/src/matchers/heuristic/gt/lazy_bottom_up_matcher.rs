@@ -8,7 +8,7 @@ use crate::{
     },
     matchers::mapping_store::MonoMappingStore,
 };
-use hyper_ast::types::{NodeStore, Tree, TypeStore, Typed, WithStats};
+use hyper_ast::types::{NodeStore, Tree, Typed, WithStats, TypeStore};
 
 pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, S, M> {
     pub(super) node_store: &'a S,

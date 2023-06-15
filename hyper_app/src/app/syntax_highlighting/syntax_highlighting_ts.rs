@@ -2,32 +2,19 @@ use std::sync::{Arc, Mutex};
 
 use egui::text::LayoutJob;
 
-<<<<<<<< HEAD:egui_addon/src/syntax_highlighting/syntax_highlighting_ts.rs
-use crate::Lang;
-
-use crate::code_editor::default_parser;
-use crate::code_editor::editor_content::EditAwareString;
-========
 use crate::{app::code_editor::generic_text_buffer::TextBuffer, Lang};
 
 use super::{
     super::code_editor::{default_parser, editor_content::EditAwareString},
 };
->>>>>>>> quentin/front:hyper_app/src/app/syntax_highlighting/syntax_highlighting_ts.rs
 
 #[cfg(feature = "syntect")]
 pub(crate) use super::syntect::CodeTheme;
 
-<<<<<<<< HEAD:egui_addon/src/syntax_highlighting/syntax_highlighting_ts.rs
-// #[cfg(not(feature = "syntect"))]
-// pub(crate) use super::syntect::CodeTheme;
-
-========
 #[cfg(not(feature = "syntect"))]
 pub(crate) use super::syntect::CodeTheme;
 
 
->>>>>>>> quentin/front:hyper_app/src/app/syntax_highlighting/syntax_highlighting_ts.rs
 use super::TokenType;
 
 // /// View some code with syntax highlighting and selection.
@@ -86,18 +73,8 @@ pub fn highlight(
     code: &EditAwareString,
     language: &Lang,
 ) -> LayoutJob {
-<<<<<<<< HEAD:egui_addon/src/syntax_highlighting/syntax_highlighting_ts.rs
-    use crate::code_editor::generic_text_buffer::TextBuffer;
-
-    impl
-        egui::util::cache::ComputerMut<
-            (&super::simple::CodeTheme, &EditAwareString, &Lang),
-            LayoutJob,
-        > for Highlighter
-========
     impl egui::util::cache::ComputerMut<(&super::simple::CodeTheme, &EditAwareString, &Lang), LayoutJob>
         for Highlighter
->>>>>>>> quentin/front:hyper_app/src/app/syntax_highlighting/syntax_highlighting_ts.rs
     {
         fn compute(
             &mut self,
@@ -123,8 +100,8 @@ pub fn highlight(
                     self.parsed = None;
                     code.edit.take();
                     self.parsed = parser
-                        .parse(code.as_str(), self.parsed.take().as_ref())
-                        .unwrap();
+                    .parse(code.as_str(), self.parsed.take().as_ref())
+                    .unwrap();
                     if !self.parsed.as_ref().unwrap().root_node().has_error() {
                         panic!()
                     }
@@ -261,11 +238,7 @@ impl Default for Highlighter {
 impl Highlighter {
     #[cfg(not(target_arch = "wasm32"))]
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
-<<<<<<<< HEAD:egui_addon/src/syntax_highlighting/syntax_highlighting_ts.rs
-    fn highlight2(&self, theme: &super::simple::CodeTheme, text: &str) -> LayoutJob {
-========
     fn highlight2(&self, theme: &super::simple::CodeTheme, mut text: &str) -> LayoutJob {
->>>>>>>> quentin/front:hyper_app/src/app/syntax_highlighting/syntax_highlighting_ts.rs
         let mut job = LayoutJob::default();
 
         const HIGHLIGHT_NAMES: &[&str; 19] = &[
@@ -388,7 +361,7 @@ impl Highlighter {
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
     fn highlight2(&self, theme: &super::simple::CodeTheme, mut text: &str) -> LayoutJob {
         let mut job = LayoutJob::default();
-        // eframe::web_sys::console::log_1(&text.into());
+        eframe::web_sys::console::log_1(&text.into());
 
         const HIGHLIGHT_NAMES: &[&str; 19] = &[
             "attribute",
@@ -451,7 +424,7 @@ impl Highlighter {
         let query = lang.query(&HIGHLIGHT_QUERY.into()).unwrap();
         let tree: &web_tree_sitter_sg::Tree =
             unsafe { std::mem::transmute(self.parsed.as_ref().unwrap()) };
-        // eframe::web_sys::console::log_1(&tree.root_node().to_string());
+        eframe::web_sys::console::log_1(&tree.root_node().to_string());
         let node: &wasm_bindgen::JsValue =
             unsafe { std::mem::transmute(self.parsed.as_ref().unwrap().root_node()) };
         // eframe::web_sys::console::log_1(node);
@@ -518,17 +491,17 @@ impl Highlighter {
                 }
                 let start = node.start_index();
                 let end = node.end_index();
-                // eframe::web_sys::console::log_0();
-                // eframe::web_sys::console::log_1(&name.clone().into());
-                // eframe::web_sys::console::log_1(&curr_index.into());
-                // eframe::web_sys::console::log_1(&start.into());
+                eframe::web_sys::console::log_0();
+                eframe::web_sys::console::log_1(&name.clone().into());
+                eframe::web_sys::console::log_1(&curr_index.into());
+                eframe::web_sys::console::log_1(&start.into());
                 if text.len() <= curr_index as usize {
                     break;
                 }
                 if curr_index < start {
-                    // eframe::web_sys::console::log_1(
-                    //     &text[curr_index as usize..(start as usize).min(text.len())].into(),
-                    // );
+                    eframe::web_sys::console::log_1(
+                        &text[curr_index as usize..(start as usize).min(text.len())].into(),
+                    );
                     job.append(
                         &text[curr_index as usize..(start as usize).min(text.len())],
                         0.0,
@@ -537,11 +510,11 @@ impl Highlighter {
                 } else if curr_index > start {
                     continue;
                 }
-                // eframe::web_sys::console::log_1(&end.into());
+                eframe::web_sys::console::log_1(&end.into());
                 if text.len() <= start as usize {
                     break;
                 }
-                // eframe::web_sys::console::log_1(&text[start as usize..(end as usize).min(text.len())].into());
+                eframe::web_sys::console::log_1(&text[start as usize..(end as usize).min(text.len())].into());
                 job.append(
                     &text[start as usize..(end as usize).min(text.len())],
                     0.0,
@@ -597,16 +570,7 @@ impl Highlighter {
 #[cfg(not(feature = "syntect"))]
 impl Highlighter {
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
-<<<<<<<< HEAD:egui_addon/src/syntax_highlighting/syntax_highlighting_ts.rs
-    fn highlight(
-        &self,
-        theme: &super::simple::CodeTheme,
-        mut text: &str,
-        _language: &str,
-    ) -> LayoutJob {
-========
     fn highlight(&self, theme: &super::simple::CodeTheme, mut text: &str, _language: &str) -> LayoutJob {
->>>>>>>> quentin/front:hyper_app/src/app/syntax_highlighting/syntax_highlighting_ts.rs
         // Extremely simple syntax highlighter for when we compile without syntect
 
         let mut job = LayoutJob::default();

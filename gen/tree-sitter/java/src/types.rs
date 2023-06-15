@@ -1,10 +1,11 @@
 use std::fmt::Display;
 
 use hyper_ast::{
-    store::defaults::NodeIdentifier,
+    store::{defaults::NodeIdentifier},
     tree_gen::parser::NodeWithU16TypeId,
-    types::{AnyType, HyperType, Lang, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
+    types::{AnyType, HyperType, Lang, NodeId, TypeStore, TypeTrait, TypedNodeId, LangRef},
 };
+
 
 pub struct Single {
     mask: TypeInternalSize,
@@ -29,7 +30,7 @@ mod legion_impls {
     // impl<'a> TypeStore<HashedNodeRef<'a, AnyType>> for Single {
     //     type Ty = Type;
     //     const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
+    
     //     fn resolve_type(&self, n: &HashedNodeRef<'a, AnyType>) -> Self::Ty {
     //         n.get_component::<Type>().unwrap().clone()
     //     }
@@ -52,7 +53,7 @@ mod legion_impls {
     //     //     // T((u16::MAX - self.lang) | t as u16)
     //     //     t
     //     // }
-
+    
     //     // fn resolve(&self, t: Self::Ty) -> Type {
     //     //     t
     //     //     // let t = t.0 as u16;
@@ -61,18 +62,16 @@ mod legion_impls {
     //     // }
     // }
 
+
     impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         type Ty = Type;
         const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
+    
         fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
             todo!()
         }
 
-        fn resolve_lang(
-            &self,
-            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        fn resolve_lang(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> hyper_ast::types::LangWrapper<Self::Ty> {
             todo!()
         }
 
@@ -90,7 +89,7 @@ mod legion_impls {
         //     // T((u16::MAX - Self::Cpp as u16) | t as u16)
         //     t
         // }
-
+    
         // fn resolve(&self, t: Self::Ty) -> Type {
         //     // let t = t.0 as u16;
         //     // let t = t & !TStore::MASK;
@@ -98,19 +97,16 @@ mod legion_impls {
         //     t
         // }
     }
-
+    
     impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
         type Ty = AnyType;
         const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
+    
         fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
             todo!()
         }
 
-        fn resolve_lang(
-            &self,
-            n: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        fn resolve_lang(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> hyper_ast::types::LangWrapper<Self::Ty> {
             todo!()
         }
 
@@ -124,7 +120,8 @@ mod legion_impls {
         }
     }
 }
-pub trait JavaEnabledTypeStore<T>: TypeStore<T> {}
+pub trait JavaEnabledTypeStore<T>: TypeStore<T> {
+}
 
 // impl Single {
 //     fn from<TS: JavaEnabledTypeStore>(value: TS) -> Self {
@@ -245,10 +242,7 @@ impl HyperType for Type {
         self
     }
 
-    fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
-    where
-        Self: Sized,
-    {
+    fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self> where Self:Sized {
         todo!()
     }
 }

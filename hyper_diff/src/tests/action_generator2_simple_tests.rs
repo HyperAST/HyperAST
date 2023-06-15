@@ -17,7 +17,7 @@ use crate::{
     },
     tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
 };
-use hyper_ast::types::{DecompressedSubtree, LabelStore, Labeled, NodeStore};
+use hyper_ast::types::{LabelStore, Labeled, NodeStore, DecompressedSubtree};
 
 type IdD = u16;
 
@@ -84,8 +84,7 @@ fn test_no_actions() {
         NS<Tree>,
         _,
         _,
-    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms)
-    .unwrap();
+    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms).unwrap();
 
     let mut node_store = node_store;
     let mut root = vec![s_src];
@@ -160,8 +159,7 @@ fn test_delete_actions_1() {
         NS<Tree>,
         _,
         _,
-    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms)
-    .unwrap();
+    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms).unwrap();
 
     println!("{:?}", actions);
 
@@ -246,8 +244,7 @@ fn test_insert_actions_1() {
         NS<Tree>,
         _,
         _,
-    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms)
-    .unwrap();
+    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms).unwrap();
 
     println!("{:?}", actions);
 
@@ -336,8 +333,7 @@ fn test_rename_actions_1() {
         NS<Tree>,
         _,
         _,
-    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms)
-    .unwrap();
+    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms).unwrap();
 
     println!("{:?}", actions);
 
@@ -428,8 +424,7 @@ fn test_move_actions_1() {
         NS<Tree>,
         _,
         _,
-    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms)
-    .unwrap();
+    >::_compute_actions(&node_store, &src_arena, &dst_arena, &ms).unwrap();
 
     println!("{:?}", actions);
 

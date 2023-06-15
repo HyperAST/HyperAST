@@ -4,7 +4,7 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use num_traits::{PrimInt, ToPrimitive};
 
-use crate::tree::tree_path::TreePath;
+use crate::tree::tree_path::{TreePath};
 
 pub mod compress;
 pub mod remapping;
@@ -170,7 +170,7 @@ pub trait CmBuilder<IdM, P: TreePath>: Default {
 pub trait CompressedMappingStore {
     type Id;
     type Idx;
-    type P: TreePath<Item = Self::Idx>;
+    type P: TreePath<Item=Self::Idx>;
     type R<'a>: Mree<Id = Self::Id, Idx = Self::Idx, P = Self::P>
     where
         Self: 'a;

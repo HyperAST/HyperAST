@@ -2,7 +2,7 @@
 use std::fmt::Debug;
 
 use bitvec::order::Lsb0;
-use hyper_ast::types::{Labeled, NodeStore, Stored, Typed, WithChildren};
+use hyper_ast::types::{Labeled, NodeStore, Stored, WithChildren, Typed};
 use num_traits::{cast, PrimInt};
 
 use crate::{
@@ -128,7 +128,8 @@ pub struct ScriptGenerator<
     SS,
     SD: BreadthFirstIterable<'a, T, IdD> + DecompressedWithParent<'a, T, IdD>,
     S,
-> {
+>
+{
     store: &'a S,
     src_arena_dont_use: &'a SS,
     mid_arena: Vec<MidNode<T::TreeId, IdD>>, //SuperTreeStore<T::TreeId>,

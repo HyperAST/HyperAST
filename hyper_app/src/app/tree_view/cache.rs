@@ -37,8 +37,9 @@ impl<Value, Computer> FrameCache<Value, Computer> {
     /// Must be called once per frame to clear the cache.
     pub fn evice_cache(&mut self) {
         let current_generation = self.generation;
-        self.cache
-            .retain(|_key, cached| current_generation.abs_diff(cached.0) < 50);
+        self.cache.retain(|_key, cached| {
+            current_generation.abs_diff(cached.0) < 50
+        });
         self.generation = self.generation.wrapping_add(1);
     }
 }

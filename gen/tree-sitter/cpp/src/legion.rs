@@ -1,9 +1,9 @@
 ///! fully compress all subtrees from a cpp CST
 use std::{collections::HashMap, fmt::Debug, io::stdout, vec};
 
-use crate::{types::TIdN, TNode};
 use legion::world::EntryRef;
 use tuples::CombinConcat;
+use crate::{TNode, types::TIdN};
 
 use hyper_ast::{
     filter::BloomSize,
@@ -13,7 +13,9 @@ use hyper_ast::{
     nodes::{self, IoOut, Space},
     store::{
         labels::LabelStore,
-        nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert},
+        nodes::{
+            legion::{compo::NoSpacesCS, PendingInsert, HashedNodeRef},
+        },
         SimpleStores,
         // SimpleStores,
     },
@@ -187,9 +189,7 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 }
 
-impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>>
-    ZippedTreeGen for CppTreeGen<'store, 'cache, TS>
-{
+impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>> ZippedTreeGen for CppTreeGen<'store, 'cache, TS> {
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores<TS>;
     type Text = [u8];
@@ -320,9 +320,7 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
     }
 }
 
-impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>>
-    CppTreeGen<'store, 'cache, TS>
-{
+impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>> CppTreeGen<'store, 'cache, TS> {
     fn make_spacing(
         &mut self,
         spacing: Vec<u8>, //Space>,
@@ -488,9 +486,7 @@ where
     }
 }
 
-impl<'stores, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> TreeGen
-    for CppTreeGen<'stores, 'cache, TS>
-{
+impl<'stores, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> TreeGen for CppTreeGen<'stores, 'cache, TS> {
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;
     fn make(

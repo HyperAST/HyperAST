@@ -1,10 +1,11 @@
-use crate::tree::tree_path::CompressedTreePath;
-use num_traits::PrimInt;
 /// WIP to better express variability in edit scripts actions order,
 /// action_vec only allow one order to apply actions.
 /// Maybe it can be integrated in the existing script generator or it needs major changes.
 /// Maybe an other algorithm similar to the Chawathe that better fits my needs exists in the literature.
 use std::fmt::Debug;
+
+use num_traits::PrimInt;
+use crate::tree::tree_path::CompressedTreePath;
 
 use super::{
     script_generator2::{Act, SimpleAction},
@@ -27,8 +28,9 @@ impl<A: Debug> Actions for ActionsTree<A> {
     }
 }
 
-impl<L, Idx: PrimInt, I> ActionsTree<SimpleAction<L, CompressedTreePath<Idx>, I>> {
-    pub(crate) fn push(&mut self, action: SimpleAction<L, CompressedTreePath<Idx>, I>) {
+impl<L,Idx:PrimInt,I> ActionsTree<SimpleAction<L,CompressedTreePath<Idx>,I>>
+{
+    pub(crate) fn push(&mut self, action: SimpleAction<L,CompressedTreePath<Idx>,I>) {
         Self::push_aux(
             Node {
                 action,
@@ -37,10 +39,7 @@ impl<L, Idx: PrimInt, I> ActionsTree<SimpleAction<L, CompressedTreePath<Idx>, I>
             &mut self.atomics,
         );
     }
-    fn push_aux(
-        node: Node<SimpleAction<L, CompressedTreePath<Idx>, I>>,
-        r: &mut Vec<Node<SimpleAction<L, CompressedTreePath<Idx>, I>>>,
-    ) {
+    fn push_aux(node: Node<SimpleAction<L,CompressedTreePath<Idx>,I>>, r: &mut Vec<Node<SimpleAction<L,CompressedTreePath<Idx>,I>>>) {
         let mut i = 0;
         for x in r.iter_mut() {
             i += 1;
@@ -61,7 +60,7 @@ impl<L, Idx: PrimInt, I> ActionsTree<SimpleAction<L, CompressedTreePath<Idx>, I>
         // }
     }
 
-    fn push_node(&mut self, node: Node<SimpleAction<L, CompressedTreePath<Idx>, I>>) {
+    fn push_node(&mut self, node: Node<SimpleAction<L,CompressedTreePath<Idx>,I>>) {
         Self::push_aux(node, &mut self.atomics);
     }
 

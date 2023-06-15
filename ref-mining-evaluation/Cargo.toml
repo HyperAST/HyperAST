@@ -7,16 +7,17 @@ edition = "2021"
 
 [dependencies]
 hyper_ast_cvs_git = { path = "../cvs/git" }
-hyper_ast = { path = "../hyper_ast", features = ["serialize"] }
+hyper_ast = { path = "../hyper_ast" }
 # log = { version = "0.4.6", features = ["max_level_debug", "release_max_level_info"] }
 
 serde = { version = "1.0.130", features = ["derive"] }
 serde_with = "1.12.0"
 serde_json = "1.0.79"
-clap = { version = "3.1.6", features = ["derive"] }
+clap = { version = "3.1.6",features = ["derive"] }
 termion = "1.5.6"
 
 rayon = "1.5.2"
+
 
 # TODO try using that
 indicatif = "0.17.0"

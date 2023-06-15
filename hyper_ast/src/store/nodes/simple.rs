@@ -6,7 +6,7 @@ use crate::{
     impact::serialize::{Keyed, MySerialize},
     nodes::{CompressedNode, HashSize, RefContainer},
     store::defaults::LabelIdentifier,
-    types::{HyperType, MySlice, NodeId, Typed, TypedNodeId},
+    types::{MySlice, NodeId, Typed, TypedNodeId, HyperType},
 };
 
 pub type NodeIdentifier = NonZeroU64;
@@ -84,9 +84,7 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithStats for Hash
         todo!()
     }
 }
-impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithSerialization
-    for HashedNodeRef<'a, Id>
-{
+impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithSerialization for HashedNodeRef<'a, Id> {
     fn try_bytes_len(&self) -> Option<usize> {
         todo!()
     }
@@ -160,10 +158,7 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> RefContainer for HashedNodeRef<'
     }
 }
 
-impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> HashedNodeRef<'a, Id>
-where
-    Id::Ty: HyperType,
-{
+impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> HashedNodeRef<'a, Id> where Id::Ty: HyperType {
     pub fn is_directory(&self) -> bool {
         self.get_type().is_directory()
     }

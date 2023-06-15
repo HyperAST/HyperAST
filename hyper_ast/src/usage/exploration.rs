@@ -36,7 +36,7 @@
 //                 //     continue;
 //                 // }
 //                 return None;
-//             } else {
+//             } else { 
 //                 let b = ns.resolve(&node);
 //                 if self.is_dead_end(&b) {
 //                     continue;

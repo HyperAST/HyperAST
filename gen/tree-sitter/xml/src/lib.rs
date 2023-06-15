@@ -1,13 +1,16 @@
 #![feature(generic_associated_types)]
 
-#[cfg(feature = "impl")]
+
+#[cfg(feature="impl")]
 pub mod legion;
 
 pub mod types;
 
-#[cfg(feature = "impl")]
+
+#[cfg(feature="impl")]
 #[cfg(test)]
 mod tests;
+
 
 #[cfg(feature = "legion")]
 mod tnode {

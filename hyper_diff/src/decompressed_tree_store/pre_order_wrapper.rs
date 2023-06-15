@@ -156,10 +156,7 @@ where
                 let o = self.inner.map[i];
                 let ori = self.inner.back.original(&o);
                 let node = self.node_store.resolve(&ori);
-                let mut s = self
-                    .label_store
-                    .resolve(&node.get_label_unchecked())
-                    .to_owned();
+                let mut s = self.label_store.resolve(&node.get_label_unchecked()).to_owned();
                 s.truncate(5);
                 writeln!(
                     f,

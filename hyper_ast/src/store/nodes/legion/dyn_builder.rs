@@ -11,7 +11,7 @@
 //! let entity = world.extend(components)[0];
 //! assert_eq!(Ok(&42), world.entry(entity).unwrap().get_component::<i32>());
 //! assert_eq!(Ok(&vec![0, 1, 2, 3]), world.entry(entity).unwrap().get_component::<Vec<i32>>());
-//!
+//! 
 //! ```
 
 // WIP
@@ -228,7 +228,9 @@ impl ComponentSource for BuiltEntity {
         let entity = entities.next().unwrap();
         writer.push(entity);
 
-        let v = unsafe { Vec::from_raw_parts(self.inner.storage.as_ptr(), self.inner.cursor, 4) };
+        let v = unsafe {
+            Vec::from_raw_parts(self.inner.storage.as_ptr(), self.inner.cursor, 4)
+        };
         dbg!(&v);
         std::mem::forget(v);
 
@@ -244,30 +246,31 @@ impl ComponentSource for BuiltEntity {
             println!("cursor: {:?}", self.inner.cursor);
             println!("len:    {:?}", len);
             if ty.id().type_id() == TypeId::of::<(Vec<usize>,)>() {
-                let aaa = ptr as *mut (Vec<usize>,);
-                dbg!(unsafe { aaa.as_ref() });
+                let aaa = ptr as *mut (Vec::<usize>,);
+                dbg!(unsafe {aaa.as_ref()});
             } else if ty.id().type_id() == TypeId::of::<(Box<[u32]>,)>() {
                 let aaa = ptr as *mut (Box<[u32]>,);
-                dbg!(unsafe { aaa.as_ref() });
+                dbg!(unsafe {aaa.as_ref()});
             } else if ty.id().type_id() == TypeId::of::<Vec<u64>>() {
-                let aaa = ptr as *mut Vec<u64>;
-                dbg!(unsafe { aaa.as_ref() });
+                let aaa = ptr as *mut Vec::<u64>;
+                dbg!(unsafe {aaa.as_ref()});
             }
             let len = 1;
             unsafe { target.extend_memcopy_raw(ptr, len) };
             if ty.id().type_id() == TypeId::of::<(Vec<usize>,)>() {
-                let aaa = ptr as *mut (Vec<usize>,);
-                dbg!(unsafe { aaa.as_ref() });
+                let aaa = ptr as *mut (Vec::<usize>,);
+                dbg!(unsafe {aaa.as_ref()});
             } else if ty.id().type_id() == TypeId::of::<(Box<[u32]>,)>() {
                 let aaa = ptr as *mut (Box<[u32]>,);
-                dbg!(unsafe { aaa.as_ref() });
+                dbg!(unsafe {aaa.as_ref()});
             } else if ty.id().type_id() == TypeId::of::<Vec<u64>>() {
-                let aaa = ptr as *mut Vec<u64>;
-                dbg!(unsafe { aaa.as_ref() });
+                let aaa = ptr as *mut Vec::<u64>;
+                dbg!(unsafe {aaa.as_ref()});
             }
         }
     }
 }
+
 
 // impl legion::internals::insert::KnownLength for DynBuiltEntity<(), Iter>
 // where
@@ -445,7 +448,8 @@ impl<M> Common<M> {
         align: usize,
         storage: NonNull<u8>,
     ) -> (NonNull<u8>, Layout) {
-        let layout = Layout::from_size_align(min_size.next_power_of_two().max(64), align).unwrap();
+        let layout =
+            Layout::from_size_align(min_size.next_power_of_two().max(64), align).unwrap();
         let new_storage = NonNull::new_unchecked(alloc(layout));
         std::ptr::copy_nonoverlapping(storage.as_ptr(), new_storage.as_ptr(), cursor);
         (new_storage, layout)
@@ -493,7 +497,7 @@ impl<M> Common<M> {
                 }
 
                 if ty.id().type_id() == TypeId::of::<(Vec<usize>,)>() {
-                    let aaa = ptr as *mut (Vec<usize>,);
+                    let aaa = ptr as *mut (Vec::<usize>,);
                     dbg!(aaa.as_ref());
                     // let v = unsafe { Vec::<usize>::from_raw_parts(ptr as *mut usize, 4, 4) };
                     // dbg!(&v);
@@ -571,10 +575,7 @@ fn example() {
     let components = components.build();
     let entity = world.extend(components)[0];
     assert_eq!(Ok(&42), world.entry(entity).unwrap().get_component::<i32>());
-    assert_eq!(
-        Ok(&vec![0, 1, 2, 3]),
-        world.entry(entity).unwrap().get_component::<Vec<i32>>()
-    );
+    assert_eq!(Ok(&vec![0, 1, 2, 3]), world.entry(entity).unwrap().get_component::<Vec<i32>>());
 }
 
 #[test]
@@ -593,25 +594,17 @@ fn simple() {
     components.add(comp2);
     let mut comp3: Vec<u64> = vec![0, 1, 2, 3];
     let comp3_saved = comp3.clone();
-    let comp3_ptr = (&mut comp3) as *mut Vec<u64>;
+    let comp3_ptr  = (&mut comp3) as *mut Vec<u64>;
     components.add(comp3);
     let comp4: String = "ewgwgwsegwesf".into();
     components.add(comp4.clone());
     let comp5: u64 = 0;
     components.add(comp5);
     let components = components.build();
-    dbg!(unsafe { comp0_ptr.as_ref() });
+    dbg!(unsafe{comp0_ptr.as_ref()});
     let entity = world.extend(components)[0];
-    assert_eq!(
-        Some(&comp0_saved),
-        unsafe { comp0_ptr.as_ref() },
-        "slice should not have changed"
-    );
-    assert_eq!(
-        Some(&comp3_saved),
-        unsafe { comp3_ptr.as_ref() },
-        "vec should not have changed"
-    );
+    assert_eq!(Some(&comp0_saved),unsafe{comp0_ptr.as_ref()}, "slice should not have changed");
+    assert_eq!(Some(&comp3_saved),unsafe{comp3_ptr.as_ref()}, "vec should not have changed");
 
     if let Some(entry) = world.entry(entity) {
         unsafe{(*comp0_ptr).0[5] += 1};

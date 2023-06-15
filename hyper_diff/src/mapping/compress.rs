@@ -1,5 +1,5 @@
 //! commpress mappings
-//!
+//! 
 //! - [ ] wrap a Legion world to provide the compressed mapping store
 //! - [ ] add an oracle implemented with a bloom filter
 //!   ie. if a subtree does not contain rest of path, skip
@@ -478,7 +478,9 @@ mod test {
     use hyper_ast::types::DecompressedSubtree;
 
     use crate::{
-        decompressed_tree_store::{CompletePostOrder, DecompressedWithParent, PostOrderIterable},
+        decompressed_tree_store::{
+            CompletePostOrder, DecompressedWithParent, PostOrderIterable,
+        },
         mapping::{
             compress::{Compressor, CompressorHelper, MappedHelper},
             remapping::Remapper,
@@ -742,14 +744,11 @@ mod test {
     }
 
     mod integration {
-        use crate::matchers::{
-            heuristic::gt::{
-                bottom_up_matcher::BottomUpMatcher,
-                greedy_bottom_up_matcher::GreedyBottomUpMatcher,
-                greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
-            },
-            mapping_store::DefaultMultiMappingStore,
-        };
+        use crate::matchers::{heuristic::gt::{
+            bottom_up_matcher::BottomUpMatcher,
+            greedy_bottom_up_matcher::GreedyBottomUpMatcher,
+            greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
+        }, mapping_store::DefaultMultiMappingStore};
 
         use super::*;
 
@@ -771,9 +770,7 @@ mod test {
                 _,
                 _,
                 _,
-            >::matchh::<DefaultMultiMappingStore<_>>(
-                &node_store, &src, &dst, mappings
-            );
+            >::matchh::<DefaultMultiMappingStore<_>>(&node_store, &src, &dst, mappings);
             let SubtreeMatcher { mappings, .. } = mapper.into();
             let mapper = GreedyBottomUpMatcher::<
                 CompletePostOrder<_, u16>,

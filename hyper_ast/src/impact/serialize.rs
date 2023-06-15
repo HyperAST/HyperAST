@@ -166,7 +166,7 @@ impl Error for CachedHasherError {
 pub struct CachedHasher<'a, I, S, H: VaryHasher<S>> {
     pub(crate) index: I,
     pub(crate) table: &'a mut Table<H>,
-    pub(crate) phantom: PhantomData<(*const H, *const S)>,
+    pub(crate) phantom: PhantomData<(*const H,*const S)>,
 }
 impl<'a, I, S, H: VaryHasher<S>> CachedHasher<'a, I, S, H> {
     pub fn new(table: &'a mut Table<H>, index: I) -> Self {
@@ -188,10 +188,11 @@ impl<H: VaryHasher<u8>> CachedHasher<'static, usize, u8, H> {
         match x.serialize(s) {
             Ok(x) => table[x].iter().map(|x| x.finish()).collect(),
             Err(e) => {
-                log::error!("error {} with hashing of {}", e, x.key());
+                log::error!("error {} with hashing of {}",e, x.key());
                 vec![]
-            }
+            },
         }
+        
     }
 }
 
@@ -206,9 +207,9 @@ impl<'a, H: VaryHasher<u16>> CachedHasher<'a, usize, u16, H> {
         match x.serialize(s) {
             Ok(x) => table[x].iter().map(|x| x.finish()).collect(),
             Err(e) => {
-                log::error!("error {} with hashing of {}", e, x.key());
+                log::error!("error {} with hashing of {}",e, x.key());
                 vec![]
-            }
+            },
         }
     }
 }
@@ -291,7 +292,7 @@ pub struct CachedHasherAux<'a, I, S, H: VaryHasher<S>> {
     index: I,
     table: &'a mut Table<H>,
     acc: Vec<H>,
-    _phantom: PhantomData<*const S>,
+    _phantom: PhantomData<*const S>
 }
 
 impl<'a, H: VaryHasher<u8>> MySerializePar for CachedHasherAux<'a, usize, u8, H> {

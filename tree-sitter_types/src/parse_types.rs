@@ -144,7 +144,7 @@ fn node_info_to_struct(m: &mut HM, x: NodeInfoJSON) -> TokenStream {
         assert_eq!(x.fields, None);
         assert_eq!(x.children, None);
 
-        let (ed, edp): (Vec<_>, Vec<_>) = subtypes
+        let (ed,edp): (Vec<_>,Vec<_>) = subtypes
             .iter()
             .map(|x| {
                 let x = if !x.named {
@@ -154,16 +154,14 @@ fn node_info_to_struct(m: &mut HM, x: NodeInfoJSON) -> TokenStream {
                 };
                 let a = format_ident!("TSField{}", &x);
                 let b = format_ident!("TSType{}", &x);
-                (
-                    quote! {
-                        #a(#b)
-                    },
-                    quote! {
-                        #a(x)
-                    },
-                )
+                (quote! {
+                    #a(#b)
+                },quote! {
+                    #a(x)
+                })
             })
             .unzip();
+
 
         impls.extend(quote! {
             impl Display for #kind {

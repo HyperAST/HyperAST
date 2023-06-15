@@ -9,7 +9,9 @@ use num::ToPrimitive;
 
 use crate::{
     impact::serialize::{Keyed, MySerialize},
-    types::{HyperType, IterableChildren, MySlice, NodeId},
+    types::{
+        HyperType, IterableChildren, MySlice, NodeId,
+    },
 };
 
 // pub type TypeIdentifier = Type;
@@ -469,6 +471,7 @@ impl Space {
     // }
 }
 
+
 pub struct IoOut<W: std::io::Write> {
     stream: W,
 }
@@ -515,7 +518,10 @@ impl<'store, IdN, HAST, const TY: bool, const LABELS: bool, const IDS: bool, con
     SimpleSerializer<'store, IdN, HAST, TY, LABELS, IDS, SPC>
 {
     pub fn new(stores: &'store HAST, root: IdN) -> Self {
-        Self { stores, root }
+        Self {
+            stores,
+            root,
+        }
     }
 }
 
@@ -669,7 +675,8 @@ impl Format for Text {}
 
 pub type JsonSerializer<'a, 'b, IdN, HAST, const SPC: bool> =
     IndentedSerializer<'a, 'b, IdN, HAST, Json, SPC>;
-pub type TextSerializer<'a, 'b, IdN, HAST> = IndentedSerializer<'a, 'b, IdN, HAST, Text, true>;
+pub type TextSerializer<'a, 'b, IdN, HAST> =
+    IndentedSerializer<'a, 'b, IdN, HAST, Text, true>;
 
 pub struct IndentedSerializer<'a, 'b, IdN, HAST, Fmt: Format = Text, const SPC: bool = false> {
     stores: &'a HAST,
@@ -678,9 +685,7 @@ pub struct IndentedSerializer<'a, 'b, IdN, HAST, Fmt: Format = Text, const SPC: 
     phantom: PhantomData<Fmt>,
 }
 
-impl<'store, 'b, IdN, HAST, Fmt: Format, const SPC: bool>
-    IndentedSerializer<'store, 'b, IdN, HAST, Fmt, SPC>
-{
+impl<'store, 'b, IdN, HAST, Fmt: Format, const SPC: bool> IndentedSerializer<'store, 'b, IdN, HAST, Fmt, SPC> {
     pub fn new(stores: &'store HAST, root: IdN) -> Self {
         Self {
             stores,
@@ -698,8 +703,8 @@ where
     HAST: crate::types::NodeStore<IdN>,
     HAST: crate::types::LabelStore<str>,
     HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST::R<'store>:
-        crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
+    HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
+        + crate::types::WithChildren<TreeId = IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.serialize(&self.root, &self.root_indent, f) {
@@ -716,8 +721,8 @@ where
     HAST: crate::types::NodeStore<IdN>,
     HAST: crate::types::LabelStore<str>,
     HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST::R<'store>:
-        crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
+    HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
+        + crate::types::WithChildren<TreeId = IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.serialize(&self.root, &self.root_indent, f) {
@@ -733,8 +738,8 @@ where
     HAST: crate::types::NodeStore<IdN>,
     HAST: crate::types::LabelStore<str>,
     HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST::R<'store>:
-        crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
+    HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
+        + crate::types::WithChildren<TreeId = IdN>,
 {
     fn serialize(
         &self,
@@ -809,8 +814,8 @@ where
     HAST: crate::types::NodeStore<IdN>,
     HAST: crate::types::LabelStore<str>,
     HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST::R<'store>:
-        crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
+    HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
+        + crate::types::WithChildren<TreeId = IdN>,
 {
     fn serialize(
         &self,

@@ -2,9 +2,7 @@ use std::{fmt::Debug, marker::PhantomData, ops::Deref};
 
 use num_traits::{cast, one, zero, PrimInt};
 
-use hyper_ast::types::{
-    Children, IterableChildren, NodeId, NodeStore, Stored, WithChildren, WithStats,
-};
+use hyper_ast::types::{Children, IterableChildren, NodeStore, Stored, WithChildren, WithStats, NodeId};
 
 use super::{
     basic_post_order::BasicPostOrder, simple_post_order::SimplePostOrder, CompletePostOrder,

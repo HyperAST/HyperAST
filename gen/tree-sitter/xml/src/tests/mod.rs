@@ -1,20 +1,21 @@
 use std::path::{Path, PathBuf};
 
-use hyper_ast::store::{labels::LabelStore, SimpleStores};
-use tree_sitter::Parser;
+use hyper_ast::store::{SimpleStores, labels::LabelStore};
+use tree_sitter::{Parser};
 
-use crate::{
-    legion::{tree_sitter_parse_xml, XmlTreeGen},
-    types::TStore,
-};
+use crate::{legion::{XmlTreeGen, tree_sitter_parse_xml}, types::TStore};
+
+
 
 #[test]
 fn xml_tree_sitter_simple() {
+    
     let mut parser = Parser::new();
 
     {
         parser.set_language(tree_sitter_xml::language()).unwrap();
     }
+
 
     let text = {
         let source_code1 = "<?xml version=\"1.0\"?><!-- q -->
@@ -57,36 +58,30 @@ fn xml_tree_sitter_simple2() {
           ";
         source_code1.as_bytes()
     };
-    let tree = match tree_sitter_parse_xml(text) {
-        Ok(t) => t,
-        Err(t) => t,
-    };
+    let tree = match tree_sitter_parse_xml(text) {Ok(t)=>t,Err(t)=>t};
     println!("{}", tree.root_node().to_sexp());
 }
 
 #[test]
 fn xml_tree_sitter_on_pom() {
-    let path: PathBuf = Path::new("../../../benchmark/pom.xml").to_path_buf();
 
+    let path: PathBuf = Path::new("../../../benchmark/pom.xml").to_path_buf();
+    
     let text = std::fs::read(path).unwrap();
-    let tree = match tree_sitter_parse_xml(&text) {
-        Ok(t) => t,
-        Err(t) => t,
-    };
+    let tree = match tree_sitter_parse_xml(&text) {Ok(t)=>t,Err(t)=>t};
     println!("{:#?}", tree.root_node().to_sexp());
 }
 
 #[test]
 fn hyperAST_on_pom() {
-    let path: PathBuf = Path::new("../../../benchmark/pom.xml").to_path_buf();
 
+    let path: PathBuf = Path::new("../../../benchmark/pom.xml").to_path_buf();
+    
     let text = std::fs::read(path).unwrap();
-    let tree = match tree_sitter_parse_xml(&text) {
-        Ok(t) => t,
-        Err(t) => t,
-    };
+    let tree = match tree_sitter_parse_xml(&text) {Ok(t)=>t,Err(t)=>t};
     println!("{:#?}", tree.root_node().to_sexp());
 }
+
 
 #[test]
 fn xml_issue_cdata() {
@@ -100,10 +95,7 @@ fn xml_issue_cdata() {
 </project>"#;
         source_code1.as_bytes()
     };
-    let tree = match tree_sitter_parse_xml(text) {
-        Ok(t) => t,
-        Err(t) => t,
-    };
+    let tree = match tree_sitter_parse_xml(text) {Ok(t)=>t,Err(t)=>t};
     println!("{:#?}", tree.root_node().to_sexp());
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),

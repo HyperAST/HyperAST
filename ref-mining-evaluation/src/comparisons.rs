@@ -35,7 +35,11 @@ pub struct ComparedRanges {
 
 impl Display for ComparedRanges {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.file,)?;
+        write!(
+            f,
+            "{}",
+            self.file,
+        )?;
         if !self.left.is_empty() {
             write!(
                 f,
@@ -47,7 +51,7 @@ impl Display for ComparedRanges {
                     .intersperse("".to_string())
                     .collect::<String>(),
                 color::Bg(color::Reset),
-            )?
+                )?
         }
         if !self.right.is_empty() {
             write!(

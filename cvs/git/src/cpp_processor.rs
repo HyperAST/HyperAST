@@ -2,8 +2,7 @@ use std::{iter::Peekable, path::Components};
 
 use git2::{Oid, Repository};
 use hyper_ast::{
-    filter::BloomSize,
-    hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
+    hashed::SyntaxNodeHashs,
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
         nodes::legion::PendingInsert,

@@ -2,9 +2,11 @@ use std::{borrow::Borrow, fmt::Debug, marker::PhantomData};
 
 use num_traits::{cast, zero, PrimInt};
 
-use crate::decompressed_tree_store::{
-    BreadthFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
-    ShallowDecompressedTreeStore,
+use crate::{
+    decompressed_tree_store::{
+        BreadthFirstIterable, DecompressedTreeStore, DecompressedWithParent,
+        PostOrder, ShallowDecompressedTreeStore,
+    },
 };
 use hyper_ast::types::{NodeStore, WithChildren};
 

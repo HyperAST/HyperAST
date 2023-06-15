@@ -10,12 +10,10 @@ use hyper_ast_cvs_git::{
 };
 use num_traits::ToPrimitive;
 
-use crate::{
-    other_tools,
-    postprocess::{CompressedBfPostProcess, PathJsonPostProcess},
-    window_combination::write_perfs,
-};
 use hyper_diff::algorithms::{self, ComputeTime};
+use crate::{
+    window_combination::{write_perfs}, other_tools, postprocess::{CompressedBfPostProcess, PathJsonPostProcess},
+};
 
 pub struct CommitCompareParameters<'a> {
     pub configured_repo: ConfiguredRepoHandle2,
@@ -94,7 +92,7 @@ pub fn windowed_commits_compare(
         .map(|x| x.0.len())
         .min()
         .unwrap();
-    dbg!(&min_len, 0..=min_len - window_size);
+    dbg!(&min_len,0..=min_len - window_size);
     for c in (0..min_len - window_size).map(|c| {
         processing_ordered_commits
             .iter()
@@ -239,7 +237,11 @@ pub fn windowed_commits_compare(
                     &partial_lazy,
                 );
                 if let Some((gt_timings, gt_counts, valid)) = res {
-                    dbg!(&gt_counts, &valid, &gt_timings,);
+                    dbg!(
+                        &gt_counts,
+                        &valid,
+                        &gt_timings,
+                    );
                     writeln!(
                         buf_validity,
                         "{oid_src}/{oid_dst},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
@@ -252,15 +254,13 @@ pub fn windowed_commits_compare(
                         valid.missing_mappings,
                         valid.additional_mappings,
                         gt_counts.actions,
-                        summarized_lazy.actions.map_or(-1, |x| x as isize),
+                        summarized_lazy.actions.map_or(-1,|x|x as isize),
                         &gt_counts.src_heap,
                         &gt_counts.dst_heap,
                         Into::<isize>::into(&src_mem),
                         Into::<isize>::into(&dst_mem),
-                        not_lazy.mappings,
-                        not_lazy.actions.map_or(-1, |x| x as isize),
-                        partial_lazy.mappings,
-                        partial_lazy.actions.map_or(-1, |x| x as isize),
+                        not_lazy.mappings, not_lazy.actions.map_or(-1,|x|x as isize), 
+                        partial_lazy.mappings, partial_lazy.actions.map_or(-1,|x|x as isize), 
                     )
                     .unwrap();
                     writeln!(
@@ -287,54 +287,25 @@ pub fn windowed_commits_compare(
                         "gumtree_lazy",
                         src_s,
                         dst_s,
-                        -1, //gt_counts.mappings,
+                        -1,//gt_counts.mappings,
                         summarized_lazy.mappings,
-                        -1, //valid.missing_mappings,
-                        -1, //valid.additional_mappings,
-                        -1, //gt_counts.actions,
-                        summarized_lazy.actions.map_or(-1, |x| x as isize),
-                        -1, //&gt_counts.src_heap,
-                        -1, //&gt_counts.dst_heap,
+                        -1,//valid.missing_mappings,
+                        -1,//valid.additional_mappings,
+                        -1,//gt_counts.actions,
+                        summarized_lazy.actions.map_or(-1,|x|x as isize),
+                        -1,//&gt_counts.src_heap,
+                        -1,//&gt_counts.dst_heap,
                         Into::<isize>::into(&src_mem),
                         Into::<isize>::into(&dst_mem),
-                        not_lazy.mappings,
-                        not_lazy.actions.map_or(-1, |x| x as isize),
-                        partial_lazy.mappings,
-                        partial_lazy.actions.map_or(-1, |x| x as isize),
+                        not_lazy.mappings, not_lazy.actions.map_or(-1,|x|x as isize), 
+                        partial_lazy.mappings, partial_lazy.actions.map_or(-1,|x|x as isize), 
                     )
                     .unwrap();
                 }
 
-                write_perfs(
-                    buf_perfs,
-                    "gumtree_lazy",
-                    &oid_src,
-                    &oid_dst,
-                    src_s,
-                    dst_s,
-                    summarized_lazy,
-                )
-                .unwrap();
-                write_perfs(
-                    buf_perfs,
-                    "gumtree_not_lazy",
-                    &oid_src,
-                    &oid_dst,
-                    src_s,
-                    dst_s,
-                    &not_lazy,
-                )
-                .unwrap();
-                write_perfs(
-                    buf_perfs,
-                    "gumtree_partial_lazy",
-                    &oid_src,
-                    &oid_dst,
-                    src_s,
-                    dst_s,
-                    &partial_lazy,
-                )
-                .unwrap();
+                write_perfs(buf_perfs,"gumtree_lazy", &oid_src, &oid_dst, src_s, dst_s,summarized_lazy).unwrap();
+                write_perfs(buf_perfs,"gumtree_not_lazy", &oid_src, &oid_dst, src_s, dst_s,&not_lazy).unwrap();
+                write_perfs(buf_perfs,"gumtree_partial_lazy", &oid_src, &oid_dst, src_s, dst_s,&partial_lazy).unwrap();
                 buf_validity.flush().unwrap();
                 buf_perfs.flush().unwrap();
             } else {

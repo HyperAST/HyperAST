@@ -12,7 +12,7 @@ use hyper_ast::{
     nodes::{self, IoOut, Space},
     store::{
         labels::LabelStore,
-        nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert},
+        nodes::legion::{compo::NoSpacesCS, PendingInsert, HashedNodeRef},
         SimpleStores,
     },
     store::{
@@ -27,10 +27,7 @@ use hyper_ast::{
     types::LabelStore as _,
 };
 
-use crate::{
-    types::{TIdN, Type, XmlEnabledTypeStore},
-    TNode,
-};
+use crate::{types::{XmlEnabledTypeStore, Type, TIdN}, TNode};
 
 pub type LabelIdentifier = hyper_ast::store::labels::DefaultLabelIdentifier;
 
@@ -117,9 +114,7 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 }
 
-impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> ZippedTreeGen
-    for XmlTreeGen<'stores, TS>
-{
+impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> ZippedTreeGen for XmlTreeGen<'stores, TS> {
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores<TS>;
     type Text = [u8];
@@ -393,9 +388,7 @@ pub fn eq_node<'a>(
     }
 }
 
-impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> TreeGen
-    for XmlTreeGen<'stores, TS>
-{
+impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> TreeGen for XmlTreeGen<'stores, TS> {
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;
     fn make(

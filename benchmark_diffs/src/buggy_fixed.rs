@@ -6,8 +6,8 @@ use crate::{
     preprocess::{iter_dirs, parse_dir_pair, parse_string_pair, JavaPreprocessFileSys},
     tempfile,
 };
-use hyper_ast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores};
-use hyper_ast_cvs_git::{no_space::as_nospaces, TStore};
+use hyper_ast::store::{labels::LabelStore, nodes::{legion::NodeStore}, SimpleStores};
+use hyper_ast_cvs_git::{TStore, no_space::as_nospaces};
 use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
 use hyper_diff::actions::Actions;
 use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
@@ -342,7 +342,7 @@ mod test {
     use super::*;
     use hyper_ast::{
         nodes::{IoOut, SyntaxSerializer, SyntaxWithIdsSerializer},
-        store::defaults::NodeIdentifier,
+        store::{defaults::NodeIdentifier},
         types::{DecompressedSubtree, Typed},
     };
     use hyper_ast_cvs_git::no_space::NoSpaceNodeStoreWrapper;
@@ -884,14 +884,8 @@ mod test {
         // let dst = tree_gen.stores.node_store.resolve(dst).get_child(&0);
 
         use hyper_ast::types::LabelStore as _;
-        println!(
-            "{}",
-            SyntaxWithIdsSerializer::<_, _, true>::new(tree_gen.stores, src)
-        );
-        println!(
-            "{}",
-            SyntaxWithIdsSerializer::<_, _, true>::new(tree_gen.stores, dst)
-        );
+        println!("{}", SyntaxWithIdsSerializer::<_,_, true>::new(tree_gen.stores, src));
+        println!("{}", SyntaxWithIdsSerializer::<_,_, true>::new(tree_gen.stores, dst));
         let stores = tree_gen.stores;
         let mappings = VecStore::default();
         type DS<T> = LazyPostOrder<T, u32>;
@@ -929,7 +923,14 @@ mod test {
         let counts = pp.counts();
         let gt_timings = pp.performances();
         dbg!(gt_timings, counts.mappings, counts.actions);
-        let valid = pp._validity_mappings(stores, &src_arena, src, &dst_arena, dst, &mappings);
+        let valid = pp._validity_mappings(
+            stores,
+            &src_arena,
+            src,
+            &dst_arena,
+            dst,
+            &mappings,
+        );
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
 

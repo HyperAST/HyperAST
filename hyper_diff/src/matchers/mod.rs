@@ -187,11 +187,11 @@ where
             M,
         >,
     ) -> &'a Mapping<CompletePostOrder<HAST::T, u32>, CompletePostOrder<HAST::T, u32>, M> {
-        unsafe { std::mem::transmute(p) }
+        unsafe { std::mem::transmute(p)}
     }
 }
 
-use crate::decompressed_tree_store::lazy_post_order::LazyPostOrder;
+use crate::decompressed_tree_store::{lazy_post_order::LazyPostOrder};
 impl<'store, HAST: HyperAST<'store>, M>
     Mapper<'store, HAST, LazyPostOrder<HAST::T, u32>, LazyPostOrder<HAST::T, u32>, M>
 where
@@ -221,6 +221,6 @@ where
             M,
         >,
     ) -> &'a mut Mapping<LazyPostOrder<HAST::T, u32>, LazyPostOrder<HAST::T, u32>, M> {
-        unsafe { std::mem::transmute(p) }
+        unsafe { std::mem::transmute(p)}
     }
 }

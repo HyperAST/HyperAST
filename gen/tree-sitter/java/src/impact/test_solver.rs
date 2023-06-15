@@ -28,40 +28,27 @@ fn test() {
     let package = s.intern(RefsEnum::Root);
     let package = s.intern_ref(RefsEnum::ScopedIdentifier(package, intern_label("p")));
 
-    let given = {
-        let mask = s.intern(RefsEnum::Mask(root, vec![on_demand, package].into()));
-        let mask = s.intern(RefsEnum::Mask(mask, vec![object].into()));
 
-        s.try_solve_node_with(x, mask)
-            .expect("maybemissing to be replaced")
+    let given = {
+        let mask = s.intern(RefsEnum::Mask(root, vec![on_demand,package].into()));
+        let mask = s.intern(RefsEnum::Mask(mask, vec![object].into()));
+        
+        s
+        .try_solve_node_with(x, mask)
+        .expect("maybemissing to be replaced")
     };
     let given2 = {
-        let mask = s.intern(RefsEnum::Mask(
-            root,
-            vec![on_demand, package, object].into(),
-        ));
-
-        s.try_solve_node_with(x, mask)
-            .expect("maybemissing to be replaced")
+        let mask = s.intern(RefsEnum::Mask(root, vec![on_demand, package, object].into()));
+        
+        s
+        .try_solve_node_with(x, mask)
+        .expect("maybemissing to be replaced")
     };
     let expect = {
-        let mask = s.intern(RefsEnum::Mask(
-            root,
-            vec![on_demand, package, object].into(),
-        ));
+        let mask = s.intern(RefsEnum::Mask(root, vec![on_demand, package, object].into()));
         s.intern_ref(RefsEnum::ScopedIdentifier(mask, intern_label("E")))
     };
 
-    assert!(
-        expect == given,
-        "given {:?} but expected {:?}",
-        s.nodes.with(given),
-        s.nodes.with(expect)
-    );
-    assert!(
-        expect == given2,
-        "given {:?} but expected {:?}",
-        s.nodes.with(given2),
-        s.nodes.with(expect)
-    );
+    assert!(expect==given,"given {:?} but expected {:?}",s.nodes.with(given),s.nodes.with(expect));
+    assert!(expect==given2,"given {:?} but expected {:?}",s.nodes.with(given2),s.nodes.with(expect));
 }

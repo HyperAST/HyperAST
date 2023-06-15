@@ -1,5 +1,6 @@
 use std::{fmt::Debug, time::Instant};
 
+use hyper_ast::types::{self, HyperAST};
 use crate::{
     actions::script_generator2::{ScriptGenerator, SimpleAction},
     decompressed_tree_store::{bfs_wrapper::SimpleBfsMapper, CompletePostOrder},
@@ -13,7 +14,6 @@ use crate::{
     },
     tree::tree_path::CompressedTreePath,
 };
-use hyper_ast::types::{self, HyperAST};
 
 type CDS<T> = CompletePostOrder<T, u32>;
 

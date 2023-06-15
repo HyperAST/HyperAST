@@ -26,13 +26,13 @@ pub mod buggy_fixed;
 pub mod window_combination;
 // #[cfg(test)]
 // pub mod bin::window_combination;
-pub mod cross_repo;
 pub mod diff_output;
-pub mod other_tools;
 pub mod postprocess;
 pub mod preprocess;
+pub mod other_tools;
+pub mod cross_repo;
 
-use std::{env, fs, io, path, time};
+use std::{io, fs, path, env, time};
 
 pub fn tempfile() -> io::Result<(path::PathBuf, fs::File)> {
     let mut path = env::temp_dir();
@@ -42,7 +42,8 @@ pub fn tempfile() -> io::Result<(path::PathBuf, fs::File)> {
     Ok((path, file))
 }
 
-pub fn with_profiling<F: Fn()>(out: &path::Path, f: F) {
+
+pub fn with_profiling<F:Fn()>(out: &path::Path,f:F) {
     let guard = pprof::ProfilerGuardBuilder::default()
         .frequency(1000)
         .blocklist(&[

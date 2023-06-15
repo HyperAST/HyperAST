@@ -1,9 +1,6 @@
-use std::{
-    borrow::Borrow,
-    fmt::{Debug, Display},
-};
+use std::{fmt::{Debug, Display}, borrow::Borrow};
 
-use string_interner::{DefaultSymbol, StringInterner, Symbol};
+use string_interner::{StringInterner, DefaultSymbol, Symbol};
 
 use crate::types::LabelStore as _;
 

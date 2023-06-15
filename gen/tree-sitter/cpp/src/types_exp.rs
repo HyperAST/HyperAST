@@ -1,3 +1,4 @@
+
 macro_rules! make_type {
     (
         $(#[$km0:meta])*
@@ -62,7 +63,7 @@ macro_rules! make_type {
     };
 }
 
-make_type! {
+make_type!{
     Keyword {
         #[strum(serialize = "\n")]
         TS0,

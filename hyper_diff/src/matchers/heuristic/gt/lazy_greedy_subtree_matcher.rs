@@ -2,20 +2,19 @@ use std::hash::Hash;
 use std::{fmt::Debug, marker::PhantomData};
 
 use crate::decompressed_tree_store::{
-    ContiguousDescendants, DecompressedWithParent, LazyDecompressedTreeStore, Shallow,
+    ContiguousDescendants, DecompressedWithParent, LazyDecompressedTreeStore,
+    Shallow,
 };
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{mapping_store::MultiMappingStore, similarity_metrics};
 use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyper_ast::compat::HashMap;
-use hyper_ast::types::{
-    DecompressedSubtree, HashKind, HyperAST, IterableChildren, NodeId, NodeStore, Tree, WithHashs,
-    WithStats,
-};
+use hyper_ast::types::{HashKind, IterableChildren, NodeStore, Tree, WithHashs, WithStats, DecompressedSubtree, HyperAST, NodeId};
 use logging_timer::time;
 use num_traits::{PrimInt, ToPrimitive};
 
-pub struct LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, T, S, M, const MIN_HEIGHT: usize = 1> {
+pub struct LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, T, S, M, const MIN_HEIGHT: usize = 1>
+{
     internal: SubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>,
 }
 
@@ -37,7 +36,7 @@ impl<
         const MIN_HEIGHT: usize, // = 2
     > LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>
 where
-    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+    T::TreeId: Clone + NodeId<IdN=T::TreeId>,
     T::Label: Clone,
     T::Type: Copy + Eq + Send + Sync,
     Dsrc::IdD: Debug + Hash + Eq + PrimInt,
@@ -76,7 +75,7 @@ where
             },
         }
     }
-
+    
     pub fn matchh<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD> + Default>(
         node_store: &'a S,
         src: &'a T::TreeId,
@@ -106,11 +105,7 @@ where
         self.filter_mappings(&mm);
     }
 
-    pub fn compute_multi_mapping<
-        MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD> + Default,
-    >(
-        &mut self,
-    ) -> MM {
+    pub fn compute_multi_mapping<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD> + Default>(&mut self) -> MM {
         let mut mm: MM = Default::default();
         mm.topit(self.internal.src_arena.len(), self.internal.dst_arena.len());
         self.internal.matchh_to_be_filtered(&mut mm);
@@ -136,7 +131,7 @@ impl<
         const MIN_HEIGHT: usize, // = 2
     > LazyGreedySubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>
 where
-    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+    T::TreeId: Clone + NodeId<IdN=T::TreeId>,
     T::Label: Clone,
     T::Type: Copy + Eq + Send + Sync,
     Dsrc::IdD: Debug + Hash + Eq + Copy,
@@ -431,7 +426,7 @@ impl<
         const MIN_HEIGHT: usize,
     > SubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>
 where
-    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
+    T::TreeId: Clone + NodeId<IdN=T::TreeId>,
     T::Type: Copy + Eq + Send + Sync,
     Dsrc::IdD: Clone,
     Ddst::IdD: Clone,

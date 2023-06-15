@@ -56,14 +56,7 @@ fn main() {
     let diff_algorithm = args.get(8).unwrap_or(&diff_algorithm);
     // concecutive_commits
     let preprocessed = PreProcessedRepository::new(&repo_name);
-    windowed_commits_compare(
-        window_size,
-        preprocessed,
-        (before, after),
-        dir_path,
-        diff_algorithm,
-        out,
-    );
+    windowed_commits_compare(window_size, preprocessed, (before, after), dir_path, diff_algorithm, out);
 }
 
 #[test]

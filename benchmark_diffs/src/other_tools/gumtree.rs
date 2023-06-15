@@ -24,7 +24,8 @@ where
     HAST: types::NodeStore<IdN>,
     HAST: types::LabelStore<str>,
     HAST: types::TypeStore<HAST::R<'a>>,
-    HAST::R<'a>: types::Labeled<Label = HAST::I> + types::WithChildren<TreeId = IdN>,
+    HAST::R<'a>: types::Labeled<Label = HAST::I>
+        + types::WithChildren<TreeId = IdN>,
 {
     let (src, mut src_f) = tempfile().unwrap();
     dbg!(&src);

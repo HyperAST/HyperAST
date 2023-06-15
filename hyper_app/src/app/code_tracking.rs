@@ -3,17 +3,16 @@ use std::{
     ops::Range,
 };
 
-use crate::app::{
-    code_editor::generic_text_buffer::byte_index_from_char_index, show_remote_code, API_URL,
-};
 use egui::Id;
-use egui_addon::{
-    egui_utils::{highlight_byte_range, radio_collapsing, show_wip},
-    interactive_split::interactive_splitter::InteractiveSplitter,
-};
 use poll_promise::Promise;
 
+use crate::app::{
+    code_editor::generic_text_buffer::byte_index_from_char_index, egui_utils::highlight_byte_range,
+    interactive_split, show_remote_code, API_URL,
+};
+
 use super::{
+    egui_utils::{radio_collapsing, show_wip},
     show_repo_menu,
     types::CodeRange,
     types::{self, Commit, Resource},
@@ -28,7 +27,7 @@ pub struct FetchedFile {
 
 impl Resource<FetchedFile> {
     pub(super) fn from_response(ctx: &egui::Context, response: ehttp::Response) -> Self {
-        // wasm_rs_dbg::dbg!(&response);
+        wasm_rs_dbg::dbg!(&response);
         let content_type = response.content_type().unwrap_or_default();
         // let image = if content_type.starts_with("image/") {
         //     RetainedImage::from_image_bytes(&response.url, &response.bytes).ok()
@@ -202,14 +201,14 @@ pub(super) fn track(
         )
     };
 
-    // wasm_rs_dbg::dbg!(&url);
+    wasm_rs_dbg::dbg!(&url);
     let mut request = ehttp::Request::get(&url);
     // request
     //     .headers
     //     .insert("Content-Type".to_string(), "text".to_string());
 
     ehttp::fetch(request, move |response| {
-        // wasm_rs_dbg::dbg!(&response);
+        wasm_rs_dbg::dbg!(&response);
         ctx.request_repaint(); // wake up UI thread
         let resource =
             response.and_then(|response| Resource::<TrackingResult>::from_response(&ctx, response));
@@ -223,7 +222,7 @@ impl Resource<TrackingResult> {
         ctx: &egui::Context,
         response: ehttp::Response,
     ) -> Result<Self, String> {
-        // wasm_rs_dbg::dbg!(&response);
+        wasm_rs_dbg::dbg!(&response);
         // let content_type = response.content_type().unwrap_or_default();
 
         let text = response.text();
@@ -248,7 +247,7 @@ impl Resource<TrackingResultWithChanges> {
         ctx: &egui::Context,
         response: ehttp::Response,
     ) -> Result<Self, String> {
-        // wasm_rs_dbg::dbg!(&response);
+        wasm_rs_dbg::dbg!(&response);
         // let content_type = response.content_type().unwrap_or_default();
 
         let text = response.text();
@@ -309,7 +308,7 @@ pub(super) fn show_code_tracking_menu(
         });
     };
 
-    radio_collapsing(ui, id, title, selected, &wanted, add_body);
+    radio_collapsing(ui, id, title, selected, wanted, add_body);
 }
 
 pub(super) fn show_code_tracking_results(
@@ -319,8 +318,9 @@ pub(super) fn show_code_tracking_results(
     fetched_files: &mut HashMap<types::FileIdentifier, RemoteFile>,
     ctx: &egui::Context,
 ) {
+    use interactive_split::Splitter;
     let result_changed = tracking_result.try_poll();
-    InteractiveSplitter::vertical().show(ui, |ui1, ui2| {
+    Splitter::vertical().show(ui, |ui1, ui2| {
         let mut pos_ratio = None;
         ui2.push_id(ui2.id().with("second"), |ui| {
             let file_result = fetched_files.entry(tracking.target.file.clone());
@@ -358,14 +358,14 @@ pub(super) fn show_code_tracking_results(
                     //     }
                     // });
                     if result_changed {
-                        // wasm_rs_dbg::dbg!(
-                        //     aa.content_size,
-                        //     aa.state.offset.y,
-                        //     aa.inner_rect.height(),
-                        //     rect.top(),
-                        // );
+                        wasm_rs_dbg::dbg!(
+                            aa.content_size,
+                            aa.state.offset.y,
+                            aa.inner_rect.height(),
+                            rect.top(),
+                        );
                         pos_ratio = Some((rect.top() - aa.state.offset.y) / aa.inner_rect.height());
-                        // wasm_rs_dbg::dbg!(pos_ratio);
+                        wasm_rs_dbg::dbg!(pos_ratio);
                     }
                 }
                 if !aa.inner.response.is_pointer_button_down_on() {
@@ -378,7 +378,7 @@ pub(super) fn show_code_tracking_results(
                             end: byte_index_from_char_index(s, r.end),
                         };
                         if tracking.target.range != Some(r.clone()) {
-                            // wasm_rs_dbg::dbg!(&r);
+                            wasm_rs_dbg::dbg!(&r);
                             tracking.target.range = Some(r);
                             tracking_result.buffer(track(
                                 ctx,
@@ -440,8 +440,8 @@ pub(super) fn show_code_tracking_results(
                                             .map(|x| x.unwrap_or(0.5))
                                     });
                                     if result_changed || b.is_some() {
-                                        // wasm_rs_dbg::dbg!(result_changed);
-                                        // wasm_rs_dbg::dbg!(pos_ratio);
+                                        wasm_rs_dbg::dbg!(result_changed);
+                                        wasm_rs_dbg::dbg!(pos_ratio);
                                         if b.is_some() {
                                             ctx.memory_mut(|mem| {
                                                 mem.data
@@ -449,12 +449,12 @@ pub(super) fn show_code_tracking_results(
                                             });
                                         }
 
-                                        // wasm_rs_dbg::dbg!(
-                                        //     aa.content_size,
-                                        //     aa.state.offset.y,
-                                        //     aa.inner_rect.height(),
-                                        //     rect.top(),
-                                        // );
+                                        wasm_rs_dbg::dbg!(
+                                            aa.content_size,
+                                            aa.state.offset.y,
+                                            aa.inner_rect.height(),
+                                            rect.top(),
+                                        );
                                         let pos_ratio = pos_ratio.unwrap_or(b.unwrap_or(0.5));
                                         let qq = pos_ratio * aa.inner_rect.height();
                                         aa.state.offset.y = rect.top() - qq;
@@ -464,14 +464,14 @@ pub(super) fn show_code_tracking_results(
                             }
                         }
                     } else {
-                        // wasm_rs_dbg::dbg!(&track_result);
+                        wasm_rs_dbg::dbg!(&track_result);
                     }
                 }
                 Some(Err(err)) => {
-                    // wasm_rs_dbg::dbg!(err);
+                    wasm_rs_dbg::dbg!(err);
                 }
                 None => {
-                    // wasm_rs_dbg::dbg!();
+                    wasm_rs_dbg::dbg!();
                     // *track_result = Some(code_tracking::track(
                     //     ctx,
                     //     &tracking.target.file.commit,
