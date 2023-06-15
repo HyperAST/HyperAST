@@ -10,8 +10,8 @@ use crate::code_editor::editor_content::EditAwareString;
 #[cfg(feature = "syntect")]
 pub(crate) use super::syntect::CodeTheme;
 
-#[cfg(not(feature = "syntect"))]
-pub(crate) use super::syntect::CodeTheme;
+// #[cfg(not(feature = "syntect"))]
+// pub(crate) use super::syntect::CodeTheme;
 
 
 use super::TokenType;
@@ -240,7 +240,7 @@ impl Default for Highlighter {
 impl Highlighter {
     #[cfg(not(target_arch = "wasm32"))]
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
-    fn highlight2(&self, theme: &super::simple::CodeTheme, mut text: &str) -> LayoutJob {
+    fn highlight2(&self, theme: &super::simple::CodeTheme, text: &str) -> LayoutJob {
         let mut job = LayoutJob::default();
 
         const HIGHLIGHT_NAMES: &[&str; 19] = &[
@@ -361,9 +361,9 @@ impl Highlighter {
 
     #[cfg(target_arch = "wasm32")]
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
-    fn highlight2(&self, theme: &CodeTheme, mut text: &str) -> LayoutJob {
+    fn highlight2(&self, theme: &super::simple::CodeTheme, mut text: &str) -> LayoutJob {
         let mut job = LayoutJob::default();
-        eframe::web_sys::console::log_1(&text.into());
+        // eframe::web_sys::console::log_1(&text.into());
 
         const HIGHLIGHT_NAMES: &[&str; 19] = &[
             "attribute",
@@ -426,7 +426,7 @@ impl Highlighter {
         let query = lang.query(&HIGHLIGHT_QUERY.into()).unwrap();
         let tree: &web_tree_sitter_sg::Tree =
             unsafe { std::mem::transmute(self.parsed.as_ref().unwrap()) };
-        eframe::web_sys::console::log_1(&tree.root_node().to_string());
+        // eframe::web_sys::console::log_1(&tree.root_node().to_string());
         let node: &wasm_bindgen::JsValue =
             unsafe { std::mem::transmute(self.parsed.as_ref().unwrap().root_node()) };
         // eframe::web_sys::console::log_1(node);
@@ -493,17 +493,17 @@ impl Highlighter {
                 }
                 let start = node.start_index();
                 let end = node.end_index();
-                eframe::web_sys::console::log_0();
-                eframe::web_sys::console::log_1(&name.clone().into());
-                eframe::web_sys::console::log_1(&curr_index.into());
-                eframe::web_sys::console::log_1(&start.into());
+                // eframe::web_sys::console::log_0();
+                // eframe::web_sys::console::log_1(&name.clone().into());
+                // eframe::web_sys::console::log_1(&curr_index.into());
+                // eframe::web_sys::console::log_1(&start.into());
                 if text.len() <= curr_index as usize {
                     break;
                 }
                 if curr_index < start {
-                    eframe::web_sys::console::log_1(
-                        &text[curr_index as usize..(start as usize).min(text.len())].into(),
-                    );
+                    // eframe::web_sys::console::log_1(
+                    //     &text[curr_index as usize..(start as usize).min(text.len())].into(),
+                    // );
                     job.append(
                         &text[curr_index as usize..(start as usize).min(text.len())],
                         0.0,
@@ -512,11 +512,11 @@ impl Highlighter {
                 } else if curr_index > start {
                     continue;
                 }
-                eframe::web_sys::console::log_1(&end.into());
+                // eframe::web_sys::console::log_1(&end.into());
                 if text.len() <= start as usize {
                     break;
                 }
-                eframe::web_sys::console::log_1(&text[start as usize..(end as usize).min(text.len())].into());
+                // eframe::web_sys::console::log_1(&text[start as usize..(end as usize).min(text.len())].into());
                 job.append(
                     &text[start as usize..(end as usize).min(text.len())],
                     0.0,

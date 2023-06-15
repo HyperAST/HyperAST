@@ -4,7 +4,9 @@ use std::{
     sync::Arc,
 };
 
-use egui_addon::code_editor::generic_text_buffer::byte_index_from_char_index;
+use egui_addon::{
+    code_editor::generic_text_buffer::byte_index_from_char_index, egui_utils::{highlight_byte_range, show_wip, radio_collapsing}, meta_edge::meta_egde,
+};
 use epaint::{ahash::HashSet, Pos2};
 use hyper_ast::{
     store::nodes::fetched::NodeIdentifier,
@@ -16,7 +18,6 @@ use crate::app::{
     code_aspects::{self, HightLightHandle},
     code_tracking::TrackingResultWithChanges,
     commit::fetch_commit,
-    egui_utils::highlight_byte_range,
     show_remote_code1, tree_view,
     types::Resource,
     API_URL,
@@ -26,8 +27,7 @@ use super::{
     code_aspects::FetchedView,
     code_tracking::{self, RemoteFile, TrackingResult},
     commit::CommitMetadata,
-    egui_utils::{radio_collapsing, show_wip},
-    show_commit_menu, show_repo_menu,
+    show_commit_menu,
     tree_view::FetchedHyperAST,
     types::{self, CodeRange, Commit, ComputeConfigAspectViews},
     AccumulableResult, Buffered, MultiBuffered,
@@ -184,7 +184,7 @@ pub(super) fn show_menu(
         });
     };
 
-    radio_collapsing(ui, id, title, selected, wanted, add_body);
+    radio_collapsing(ui, id, title, selected, &wanted, add_body);
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -297,7 +297,7 @@ pub(crate) fn show_results(
                     } else {
                         if !md.is_waiting() {
                             let code_range = &mut long_tracking.origins[0];
-                            wasm_rs_dbg::dbg!(&code_range);
+                            // wasm_rs_dbg::dbg!(&code_range);
                             md.buffer(fetch_commit(ui.ctx(), &code_range.file.commit));
                         }
                         return;
@@ -386,13 +386,13 @@ pub(crate) fn show_results(
                         // });
                         let track = tracking_result.content.track.results.get(0).unwrap();
                         if let Some(code_range) = &track.intermediary {
-                            wasm_rs_dbg::dbg!(&code_range);
+                            // wasm_rs_dbg::dbg!(&code_range);
                             md.buffer(fetch_commit(ui.ctx(), &code_range.file.commit));
                         } else if let Some(code_range) = track.matched.get(0) {
-                            wasm_rs_dbg::dbg!(&code_range);
+                            // wasm_rs_dbg::dbg!(&code_range);
                             md.buffer(fetch_commit(ui.ctx(), &code_range.file.commit));
                         } else if let Some(code_range) = &track.fallback {
-                            wasm_rs_dbg::dbg!(&code_range);
+                            // wasm_rs_dbg::dbg!(&code_range);
                             md.buffer(fetch_commit(ui.ctx(), &code_range.file.commit));
                         } else {
                             unreachable!("should have been matched or been given a fallback")
@@ -654,10 +654,10 @@ pub(crate) fn show_results(
     let mut new_origins = vec![];
     let mut add_contents = |ui: &mut egui::Ui, col_range: Range<usize>| -> Attacheds {
         let min_col = col_range.start;
-        // wasm_rs_dbg::dbg!(&col_range, &long_tracking.results);
+        // // wasm_rs_dbg::dbg!(&col_range, &long_tracking.results);
         let mut attacheds: Attacheds = vec![];
         let mut defered_focus_scroll = None;
-        // wasm_rs_dbg::dbg!(&long_tracking.results);
+        // // wasm_rs_dbg::dbg!(&long_tracking.results);
         for col in col_range {
             attacheds.push((Default::default(), Default::default()));
             let x_range = ui.available_rect_before_wrap().x_range();
@@ -741,7 +741,7 @@ pub(crate) fn show_results(
                                 assert_ne!(long_tracking.origins[0].file.commit, qqq.commit);
                                 curr_view.left_commit = Some(&mut qqq.commit);
                             }
-                            // wasm_rs_dbg::dbg!(
+                            // // wasm_rs_dbg::dbg!(
                             //     total_cols,
                             //     col,
                             //     long_tracking.origins.len(),
@@ -860,7 +860,7 @@ pub(crate) fn show_results(
                     };
                 }
             }
-            // wasm_rs_dbg::dbg!(col, total_cols);
+            // // wasm_rs_dbg::dbg!(col, total_cols);
 
             let curr_commit = {
                 let curr = if curr_view.matcheds.get(0).is_some() {
@@ -1013,7 +1013,7 @@ pub(crate) fn show_results(
                                 curr
                             };
                             if curr.range != Some(r.clone()) {
-                                // wasm_rs_dbg::dbg!(&r);
+                                // // wasm_rs_dbg::dbg!(&r);
                                 if is_origin(col) {
                                     curr.range = Some(r.clone());
                                 }
@@ -1049,18 +1049,18 @@ pub(crate) fn show_results(
         }
 
         if let Some((o, i, mut scroll)) = defered_focus_scroll {
-            wasm_rs_dbg::dbg!(&o);
+            // // wasm_rs_dbg::dbg!(&o);
             let o: f32 = o;
-            wasm_rs_dbg::dbg!(attacheds.get(i));
-            wasm_rs_dbg::dbg!(i);
+            // // wasm_rs_dbg::dbg!(attacheds.get(i));
+            // // wasm_rs_dbg::dbg!(i);
             let g_o = attacheds
                 .get(i)
                 .and_then(|a| a.0.get(&0))
                 .and_then(|x| x.1)
                 .map(|p| p.min.y)
                 .unwrap_or(timeline_window.height() / 2000.0);
-            wasm_rs_dbg::dbg!(scroll.state.offset);
-            wasm_rs_dbg::dbg!(g_o);
+            // // wasm_rs_dbg::dbg!(scroll.state.offset);
+            // // wasm_rs_dbg::dbg!(g_o);
             let g_o: f32 = 50.0;
             scroll.state.offset = (0.0, (o - g_o).max(0.0)).into();
             scroll.state.store(ui.ctx(), scroll.id);
@@ -1110,9 +1110,9 @@ pub(crate) fn show_results(
                 if cable {
                     let green: egui::Id = green;
                     let blue: egui::Id = blue;
-                    let in_plug = Plug::to(green.clone()).default_pos(egui::Pos2::ZERO);
+                    // let in_plug = Plug::to(green.clone()).default_pos(egui::Pos2::ZERO);
                     let out_plug = Plug::to(blue.clone());
-                    ui.add(Cable::new(green.with(blue), in_plug, out_plug));
+                    // ui.add(Cable::new(green.with(blue), in_plug, out_plug));
                 }
 
                 if let (Some(m_rect), Some(src_rect)) = (g_rect, b_rect) {
@@ -1209,9 +1209,9 @@ pub(crate) fn show_results(
                             hovered_fut = Some(src.clone());
                         }
                         if let Some(past) = resp.inner.1 {
-                            wasm_rs_dbg::dbg!(&past);
+                            // wasm_rs_dbg::dbg!(&past);
                             if past.double_clicked() {
-                                wasm_rs_dbg::dbg!(&past);
+                                // wasm_rs_dbg::dbg!(&past);
                             } else {
                                 if past.is_pointer_button_down_on() {
                                     let id = src_id;
@@ -1230,11 +1230,11 @@ pub(crate) fn show_results(
                         }
                         {
                             let is_dragged = ui.memory(|mem| mem.is_being_dragged(line_id));
-                            wasm_rs_dbg::dbg!(&is_dragged);
+                            // wasm_rs_dbg::dbg!(&is_dragged);
                             if is_dragged {
                                 let state =
                                     ui.memory_mut(|mem| mem.data.get_temp::<(Pos2, Pos2)>(line_id));
-                                wasm_rs_dbg::dbg!(&state, ui.ctx().pointer_latest_pos());
+                                // wasm_rs_dbg::dbg!(&state, ui.ctx().pointer_latest_pos());
                                 let state = if let Some(mut state) = state {
                                     if let Some(pos) = ui.ctx().pointer_latest_pos() {
                                         state.1 = pos;
@@ -1243,7 +1243,7 @@ pub(crate) fn show_results(
                                 } else {
                                     ui.ctx().pointer_latest_pos().map(|x| (x, x))
                                 };
-                                wasm_rs_dbg::dbg!(&state);
+                                // wasm_rs_dbg::dbg!(&state);
                                 if let Some(state) = state {
                                     ui.painter().line_segment(
                                         [state.0, state.1],
@@ -1264,7 +1264,7 @@ pub(crate) fn show_results(
                                 ui.memory_mut(|mem| mem.data.get_temp::<(Pos2, Pos2)>(line_id)) else {
                                     panic!()
                                 };
-                                wasm_rs_dbg::dbg!(&state);
+                                // wasm_rs_dbg::dbg!(&state);
                                 if let Some(pos) = ui.ctx().pointer_latest_pos() {
                                     state.1 = pos;
                                 }
@@ -1302,9 +1302,9 @@ pub(crate) fn show_results(
                                 hovered_fut = Some(m.clone());
                             }
                             if let Some(past) = resp.inner.1 {
-                                wasm_rs_dbg::dbg!(&past);
+                                // wasm_rs_dbg::dbg!(&past);
                                 if past.double_clicked() {
-                                    wasm_rs_dbg::dbg!(&past);
+                                    // wasm_rs_dbg::dbg!(&past);
                                 } else {
                                     if past.is_pointer_button_down_on() {
                                         ui.memory_mut(|mem| {
@@ -1323,12 +1323,12 @@ pub(crate) fn show_results(
                             }
                             {
                                 let is_dragged = ui.memory(|mem| mem.is_being_dragged(line_id));
-                                wasm_rs_dbg::dbg!(&is_dragged);
+                                // wasm_rs_dbg::dbg!(&is_dragged);
                                 if is_dragged {
                                     let state = ui.memory_mut(|mem| {
                                         mem.data.get_temp::<(Pos2, Pos2)>(line_id)
                                     });
-                                    wasm_rs_dbg::dbg!(&state, ui.ctx().pointer_latest_pos());
+                                    // wasm_rs_dbg::dbg!(&state, ui.ctx().pointer_latest_pos());
                                     let state = if let Some(mut state) = state {
                                         if let Some(pos) = ui.ctx().pointer_latest_pos() {
                                             state.1 = pos;
@@ -1337,7 +1337,7 @@ pub(crate) fn show_results(
                                     } else {
                                         ui.ctx().pointer_latest_pos().map(|x| (x, x))
                                     };
-                                    wasm_rs_dbg::dbg!(&state);
+                                    // wasm_rs_dbg::dbg!(&state);
                                     if let Some(state) = state {
                                         ui.painter().line_segment(
                                             [state.0, state.1],
@@ -1358,7 +1358,7 @@ pub(crate) fn show_results(
                                     ui.memory_mut(|mem| mem.data.get_temp::<(Pos2, Pos2)>(line_id)) else {
                                         panic!()
                                     };
-                                    wasm_rs_dbg::dbg!(&state);
+                                    // wasm_rs_dbg::dbg!(&state);
                                     if let Some(pos) = ui.ctx().pointer_latest_pos() {
                                         state.1 = pos;
                                     }
@@ -1373,16 +1373,14 @@ pub(crate) fn show_results(
                                     });
                                 }
                             }
-
                             resp.inner.0.rect
                         };
-                        use egui_cable::prelude::*;
                         if long_tracking.detatched_view_options.cable {
                             let in_id = src_id.with("right");
-                            let in_plug = Plug::to(in_id).default_pos(egui::Pos2::ZERO);
+                            // let in_plug = Plug::to(in_id).default_pos(egui::Pos2::ZERO);
                             let out_id = id.with("left");
-                            let out_plug = Plug::to(out_id).default_pos(egui::Pos2::ZERO);
-                            ui.add(Cable::new(in_id.with(out_id), in_plug, out_plug));
+                            // let out_plug = Plug::to(out_id).default_pos(egui::Pos2::ZERO);
+                            // ui.add(Cable::new(in_id.with(out_id), in_plug, out_plug));
                         }
                         let m_pos = m_rect.center();
                         let src_pos = src_rect.center();
@@ -1402,7 +1400,7 @@ pub(crate) fn show_results(
                         let angle =
                             ((center_v) * epaint::vec2(0.5, 1.0)).normalized().angle() / TAU + 0.5
                                 - 0.125;
-                        // wasm_rs_dbg::dbg!(angle);
+                        // // wasm_rs_dbg::dbg!(angle);
                         if (0.03..0.25).contains(&angle) {
                             // ctrl.0.x += m_rect.width()/2.0 + 150.0;//-b_d / 3.0;
                             // ctrl.1.x -= src_rect.width()/2.0 + 150.0;//-b_d / 3.0;
@@ -1555,98 +1553,6 @@ struct LineDrag {
     ori_trap: egui::Id,
 }
 
-fn meta_egde(
-    m_pos: Pos2,
-    src_pos: Pos2,
-    m_rect: epaint::Rect,
-    ctrl: (Pos2, Pos2),
-    src_rect: epaint::Rect,
-    color: epaint::Color32,
-    ui: &mut egui::Ui,
-) {
-    let tolerance = (m_pos.x - src_pos.x).abs() * 0.001;
-    let offset = epaint::Vec2::Y * 8.0;
-    let link = epaint::CubicBezierShape::from_points_stroke(
-        [
-            m_rect.right_top() + offset,
-            ctrl.0,
-            ctrl.1,
-            src_rect.left_top() + offset,
-        ],
-        false,
-        egui::Color32::TRANSPARENT,
-        (5.0, color),
-    );
-    let up = link.flatten(Some(tolerance));
-    let link = epaint::CubicBezierShape::from_points_stroke(
-        [
-            m_rect.right_bottom() - offset,
-            ctrl.0,
-            ctrl.1,
-            src_rect.left_bottom() - offset,
-        ],
-        false,
-        egui::Color32::TRANSPARENT,
-        (5.0, color),
-    );
-    let down = link.flatten(Some(tolerance));
-    let l = up.len() + down.len();
-    let color_step = 255.0 / l as f32;
-    let mut out = epaint::Mesh::default();
-    let mut up = up.into_iter();
-    let mut down = down.into_iter();
-    let mut p_up = up.next().unwrap();
-    let mut p_down = down.next().unwrap();
-    let mut idx = 0;
-    let mut color = egui::Color32::GREEN;
-    out.colored_vertex(p_down, color);
-    let f = |idx| {
-        lerp_color_gamma(
-            egui::Color32::GREEN,
-            egui::Color32::RED,
-            idx as f32 / l as f32,
-        )
-    };
-    color = f(idx);
-    out.colored_vertex(p_up, color);
-    color = f(idx);
-    loop {
-        if let Some(x) = down.next() {
-            p_down = x;
-        } else {
-            let mut i = idx;
-            while let Some(x) = up.next() {
-                out.colored_vertex(x, color);
-                color = f(idx);
-                i += 1;
-                out.add_triangle(idx, i, i + 1);
-            }
-            break;
-        };
-        out.colored_vertex(p_down, color);
-        color = f(idx);
-        out.add_triangle(idx, idx + 1, idx + 2);
-        idx += 1;
-        if let Some(x) = up.next() {
-            p_up = x;
-        } else {
-            let mut i = idx;
-            while let Some(x) = down.next() {
-                out.colored_vertex(x, color);
-                color = f(idx);
-                i += 1;
-                out.add_triangle(idx, i + 1, i);
-            }
-            break;
-        };
-        out.colored_vertex(p_up, color);
-        color = f(idx);
-        out.add_triangle(idx + 1, idx, idx + 2);
-        idx += 1;
-    }
-    ui.painter().add(out);
-}
-
 fn color_gr_shift(color: epaint::Color32, step: f32) -> epaint::Color32 {
     egui::Color32::from_rgba_unmultiplied(
         color.r().saturating_add(step.round() as u8),
@@ -1655,14 +1561,7 @@ fn color_gr_shift(color: epaint::Color32, step: f32) -> epaint::Color32 {
         color.a(),
     )
 }
-fn lerp_color_gamma(left: epaint::Color32, right: epaint::Color32, t: f32) -> epaint::Color32 {
-    epaint::Color32::from_rgba_premultiplied(
-        epaint::emath::lerp((left[0] as f32)..=(right[0] as f32), t).round() as u8,
-        epaint::emath::lerp((left[1] as f32)..=(right[1] as f32), t).round() as u8,
-        epaint::emath::lerp((left[2] as f32)..=(right[2] as f32), t).round() as u8,
-        epaint::emath::lerp((left[3] as f32)..=(right[3] as f32), t).round() as u8,
-    )
-}
+
 
 fn show_detached_element(
     ui: &mut egui::Ui,
@@ -1768,7 +1667,7 @@ fn show_detached_element(
                             }
                             if let Some(r) = store.node_store.read().unwrap().try_resolve(r) {
                                 let t = store.type_store.resolve_type(&r);
-                                wasm_rs_dbg::dbg!(t);
+                                // wasm_rs_dbg::dbg!(t);
                                 if t.generic_eq(&hyper_ast_gen_ts_cpp::types::Type::NumberLiteral) {
                                     if value.is_none() {
                                         let l = r.get_label_unchecked();
@@ -1865,9 +1764,9 @@ fn show_detached_element(
             }
             // ui.text_edit_multiline(&mut format!("{:#?}", x));
             if global_opt.cable {
-                cui.add(egui_cable::prelude::Port::new(id.with("left")));
+                // cui.add(egui_cable::prelude::Port::new(id.with("left")));
                 // cui.add_space(10.0);
-                cui.add(egui_cable::prelude::Port::new(id.with("right")));
+                // cui.add(egui_cable::prelude::Port::new(id.with("right")));
             }
             cui.min_rect();
             let min = cui.min_rect().min;
@@ -2114,14 +2013,14 @@ fn show_code_view(
             let color = egui::Color32::RED.linear_multiply(0.1);
             let rect = highlight_byte_range(ui, te, &range, color);
             // if result_changed {
-            //     wasm_rs_dbg::dbg!(
+            //     // wasm_rs_dbg::dbg!(
             //         aa.content_size,
             //         aa.state.offset.y,
             //         aa.inner_rect.height(),
             //         rect.top(),
             //     );
             //     pos_ratio = Some((rect.top() - aa.state.offset.y) / aa.inner_rect.height());
-            //     wasm_rs_dbg::dbg!(pos_ratio);
+            //     // wasm_rs_dbg::dbg!(pos_ratio);
             // }
         }
         if let Some(
@@ -2135,16 +2034,16 @@ fn show_code_view(
             let offset = 0; //aa.inner.0;
             let range = range.start.saturating_sub(offset)..range.end.saturating_sub(offset);
             let color = egui::Color32::BLUE.linear_multiply(0.1);
-            let rect = highlight_byte_range(ui, te, &range, color);
+            // let rect = highlight_byte_range(ui, te, &range, color);
             // if result_changed {
-            //     wasm_rs_dbg::dbg!(
+            //     // wasm_rs_dbg::dbg!(
             //         aa.content_size,
             //         aa.state.offset.y,
             //         aa.inner_rect.height(),
             //         rect.top(),
             //     );
             //     pos_ratio = Some((rect.top() - aa.state.offset.y) / aa.inner_rect.height());
-            //     wasm_rs_dbg::dbg!(pos_ratio);
+            //     // wasm_rs_dbg::dbg!(pos_ratio);
             // }
         }
         if let Some(
@@ -2160,14 +2059,14 @@ fn show_code_view(
             let color = egui::Color32::GREEN.linear_multiply(0.1);
             let rect = highlight_byte_range(ui, te, &range, color);
             // if result_changed {
-            //     wasm_rs_dbg::dbg!(
+            //     // wasm_rs_dbg::dbg!(
             //         aa.content_size,
             //         aa.state.offset.y,
             //         aa.inner_rect.height(),
             //         rect.top(),
             //     );
             //     pos_ratio = Some((rect.top() - aa.state.offset.y) / aa.inner_rect.height());
-            //     wasm_rs_dbg::dbg!(pos_ratio);
+            //     // wasm_rs_dbg::dbg!(pos_ratio);
             // }
         }
 
@@ -2341,9 +2240,9 @@ fn show_tree_view(
             }
         });
     if let Some(o) = scroll_focus {
-        wasm_rs_dbg::dbg!(o);
-        wasm_rs_dbg::dbg!(&ports);
-        wasm_rs_dbg::dbg!(ports.get(col - min_col + 1));
+        // // wasm_rs_dbg::dbg!(o);
+        // // wasm_rs_dbg::dbg!(&ports);
+        // // wasm_rs_dbg::dbg!(ports.get(col - min_col + 1));
         *defered_focus_scroll = Some((o, col - min_col + 1, scroll));
         None
     } else {
@@ -2354,7 +2253,7 @@ fn show_tree_view(
 
     //     scroll.state.store(ui.ctx(), scroll.id);
     // });
-    // wasm_rs_dbg::dbg!(scroll.state.offset);
+    // // wasm_rs_dbg::dbg!(scroll.state.offset);
 }
 
 fn show_commitid_info(
@@ -2362,24 +2261,24 @@ fn show_commitid_info(
     ui: &mut egui::Ui,
     code_ranges: Vec<&mut CodeRange>,
 ) {
-    if let Some(tracked) = tracked {
-        if let Some(cr) = tracked
-            .track
-            .intermediary
-            .as_ref()
-            .or(tracked.track.matched.get(0).as_ref().copied())
-            .or(tracked.track.fallback.as_ref())
-        {
-            ui.label(format!("commit {}", &cr.file.commit.id));
-        } else {
-            ui.label(format!("commit {}", &code_ranges[0].file.commit.id));
-        }
-        let commits_processed = tracked.track.commits_processed - 1;
-        if commits_processed > 1 {
-            ui.label(format!("skipped {} commits", commits_processed));
-        }
+    let Some(tracked) = tracked  else {
+        ui.label(format!("commit {}", &code_ranges[0].file.commit.id));
+        return;
+    };
+    if let Some(cr) = tracked
+        .track
+        .intermediary
+        .as_ref()
+        .or(tracked.track.matched.get(0).as_ref().copied())
+        .or(tracked.track.fallback.as_ref())
+    {
+        ui.label(format!("commit {}", &cr.file.commit.id));
     } else {
         ui.label(format!("commit {}", &code_ranges[0].file.commit.id));
+    }
+    let commits_processed = tracked.track.commits_processed - 1;
+    if commits_processed > 1 {
+        ui.label(format!("skipped {} commits", commits_processed));
     }
 }
 pub(crate) const TARGET_COLOR: egui::Color32 = egui::Color32::from_rgb(255, 100, 0);
@@ -2424,14 +2323,14 @@ pub(super) fn track(
         )
     };
 
-    wasm_rs_dbg::dbg!(&url);
+    // // wasm_rs_dbg::dbg!(&url);
     let mut request = ehttp::Request::get(&url);
     // request
     //     .headers
     //     .insert("Content-Type".to_string(), "text".to_string());
 
     ehttp::fetch(request, move |response| {
-        wasm_rs_dbg::dbg!(&response);
+        // // wasm_rs_dbg::dbg!(&response);
         ctx.request_repaint(); // wake up UI thread
         let resource = response
             .and_then(|response| {
@@ -2475,14 +2374,14 @@ pub(super) fn track_at_path(
         )
     };
 
-    wasm_rs_dbg::dbg!(&url);
+    // wasm_rs_dbg::dbg!(&url);
     let mut request = ehttp::Request::get(&url);
     // request
     //     .headers
     //     .insert("Content-Type".to_string(), "text".to_string());
 
     ehttp::fetch(request, move |response| {
-        wasm_rs_dbg::dbg!(&response);
+        // wasm_rs_dbg::dbg!(&response);
         ctx.request_repaint(); // wake up UI thread
         let resource = response
             .and_then(|response| {
@@ -2520,14 +2419,14 @@ pub(super) fn track_at_path_with_changes(
         )
     };
 
-    wasm_rs_dbg::dbg!(&url);
+    // wasm_rs_dbg::dbg!(&url);
     let mut request = ehttp::Request::get(&url);
     // request
     //     .headers
     //     .insert("Content-Type".to_string(), "text".to_string());
 
     ehttp::fetch(request, move |response| {
-        wasm_rs_dbg::dbg!(&response);
+        // wasm_rs_dbg::dbg!(&response);
         ctx.request_repaint(); // wake up UI thread
         let resource = response
             .and_then(|response| {

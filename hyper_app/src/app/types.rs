@@ -1,7 +1,7 @@
 use egui_addon::{code_editor, Lang};
 use hyper_ast::store::nodes::fetched::NodeIdentifier;
 
-use std::{collections::HashMap, hash::Hash, ops::Range};
+use std::{collections::{HashMap, HashSet}, hash::Hash, ops::Range};
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub(crate) struct Repo {
@@ -76,39 +76,43 @@ pub(crate) struct ComputeConfigAspectViews {
     pub(super) doc: bool,
     pub(super) ser_opt_cpp_text: String,
     pub(super) ser_opt_java_text: String,
-    // pub(super) ser_opt: HashSet<types::Type>,
+    #[serde(skip)]
+    pub(super) ser_opt_cpp: HashSet<hyper_ast_gen_ts_cpp::types::Type>,
+    #[serde(skip)]
+    pub(super) ser_opt_java: HashSet<hyper_ast_gen_ts_java::types::Type>,
 }
 
-// pub(crate) fn parse_java_type_list(s: &str, out: &mut HashSet<types::Type>) {
-//     s.split(",").for_each(|x| {
-//         if !x.is_empty() {
-//             let t = types::Type::from_str(x);
-//             if let Ok(t) = t {
-//                 out.insert(t);
-//             }
-//         }
-//     });
-// }
+pub(crate) fn parse_java_type_list(s: &str, out: &mut HashSet<hyper_ast_gen_ts_java::types::Type>) {
+    s.split(",").for_each(|x| {
+        if !x.is_empty() {
+            let t = hyper_ast_gen_ts_java::types::Type::from_str(x);
+            if let Some(t) = t {
+                out.insert(t);
+            }
+        }
+    });
+}
 
-// pub(crate) fn parse_cpp_type_list(s: &str, out: &mut HashSet<types::Type>) {
-//     s.split(",").for_each(|x| {
-//         if !x.is_empty() {
-//             let t = types::Type::try_parse_cpp(x);
-//             if let Some(t) = t {
-//                 out.insert(t);
-//             }
-//         }
-//     });
-// }
+pub(crate) fn parse_cpp_type_list(s: &str, out: &mut HashSet<hyper_ast_gen_ts_cpp::types::Type>) {
+    s.split(",").for_each(|x| {
+        if !x.is_empty() {
+            let t = hyper_ast_gen_ts_cpp::types::Type::from_str(x);
+            if let Some(t) = t {
+                out.insert(t);
+            }
+        }
+    });
+}
 
 impl Default for ComputeConfigAspectViews {
     fn default() -> Self {
         let ser_opt_cpp_text = "function_declarator".to_string();
         let ser_opt_java_text = String::default();
-        // let mut ser_opt = Default::default();
-        // parse_java_type_list(&ser_opt_java_text, &mut ser_opt);
-        // parse_cpp_type_list(&ser_opt_cpp_text, &mut ser_opt);
-        // TODO make a regex, might be fast enough
+        let mut ser_opt_cpp = Default::default();
+        let mut ser_opt_java = Default::default();
+        // TODO use regexes
+        parse_java_type_list(&ser_opt_java_text, &mut ser_opt_java);
+        parse_cpp_type_list(&ser_opt_cpp_text, &mut ser_opt_cpp);
         Self {
             commit: Default::default(),
             path: "".into(),
@@ -121,7 +125,8 @@ impl Default for ComputeConfigAspectViews {
             doc: false,
             ser_opt_cpp_text,
             ser_opt_java_text,
-            // ser_opt,
+            ser_opt_cpp,
+            ser_opt_java,
             // commit: "4acedc53a13a727be3640fe234f7e261d2609d58".into(),
         }
     }
@@ -169,7 +174,7 @@ impl Default for Commit {
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Default, PartialEq, Eq, Clone, Copy)]
-pub(crate) enum SelectedConfig {
+pub enum SelectedConfig {
     Single,
     Multi,
     Diff,

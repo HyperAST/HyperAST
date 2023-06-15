@@ -1,11 +1,7 @@
 // started from a draft on egui's github
-
-use epaint::{
-    emath::{lerp, Align},
-    pos2, vec2, Pos2, Rect, Vec2,
-};
-
-use egui::{egui_assert, Layout, Response, Sense, Ui};
+// TODO refact: move to addon
+use epaint::{emath::Align, Pos2, Rect, Vec2};
+use egui::{egui_assert, Layout, Sense, Ui};
 
 /// A splitter which can separate the UI into 2 parts either vertically or horizontally.
 ///
@@ -122,16 +118,16 @@ impl Splitter {
                 let i_spacing = &ui.style().spacing.item_spacing;
                 let line_pos_1 = orientation
                     .t((
-                        orientation.p(remaining_rect.min)+orientation.rev().r(&rect)*ratio,//lerp(orientation.p(rect.min)..=orientation.p(rect.max), *ratio),
+                        orientation.p(remaining_rect.min) + orientation.rev().r(&rect) * ratio, //lerp(orientation.p(rect.min)..=orientation.p(rect.max), *ratio),
                         orientation.rev().p(remaining_rect.min),
                     ))
                     .into();
-                let line_pos_2 = line_pos_1 + orientation.t((0.0, orientation.r(&remaining_rect))).into();
+                let line_pos_2 =
+                    line_pos_1 + orientation.t((0.0, orientation.r(&remaining_rect))).into();
 
                 let mut patition_rect = {
                     let mut rect = remaining_rect;
-                    *orientation.m(&mut rect.max) =
-                        orientation.p(line_pos_1);// - orientation.v(i_spacing);
+                    *orientation.m(&mut rect.max) = orientation.p(line_pos_1); // - orientation.v(i_spacing);
                     rect
                 };
                 *orientation.m(&mut remaining_rect.min) = *orientation.m(&mut patition_rect.max);
@@ -167,6 +163,8 @@ pub enum SplitterOrientation {
     Vertical,
 }
 
+
+mod splitter_orientation {}
 /// The response of showing a Splitter
 pub struct SplitterResponse<R> {
     /// The return value of the closure passed into show.

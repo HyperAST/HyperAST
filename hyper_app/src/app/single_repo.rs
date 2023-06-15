@@ -5,10 +5,9 @@ use crate::app::{
     API_URL,
 };
 
-use egui_addon::code_editor::{CodeEditor, EditorInfo};
+use egui_addon::{code_editor::{CodeEditor, EditorInfo}, egui_utils::{show_wip, radio_collapsing}};
 
 use super::{
-    egui_utils::{radio_collapsing, show_wip},
     show_repo_menu,
     types::{CodeEditors, Commit, Resource, SelectedConfig},
 };
@@ -227,7 +226,7 @@ pub(super) fn show_single_repo_menu(
         });
     };
 
-    radio_collapsing(ui, id, title, selected, wanted, add_body);
+    radio_collapsing(ui, id, title, selected, &wanted, add_body);
 }
 
 pub(super) fn show_short_result(promise: &Option<RemoteResult>, ui: &mut egui::Ui) {

@@ -22,3 +22,12 @@ To go back to the stable toolchain after you are done with the project, run:
 ```bash
 > rustup default stable
 ```
+
+
+// WARN : not working patch
+## MacOS
+issue with trunk https://stackoverflow.com/questions/72146492/unable-to-execute-trunk-serve
+
+```bash
+cargo install wasm-bindgen-cli
+```

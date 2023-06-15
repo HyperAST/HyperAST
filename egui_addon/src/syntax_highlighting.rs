@@ -10,7 +10,7 @@ pub mod syntect;
 #[derive(Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(enum_map::Enum)]
-pub(crate) enum TokenType {
+pub enum TokenType {
     Comment,
     Keyword,
     Literal,

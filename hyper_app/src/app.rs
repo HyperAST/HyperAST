@@ -1,3 +1,15 @@
+use self::{
+    single_repo::ComputeConfigSingle,
+    tree_view::FetchedHyperAST,
+    types::{Commit, Languages, Repo}, interactive_split::splitter::Splitter,
+};
+use egui_addon::{
+    code_editor::{self, generic_text_buffer::byte_index_from_char_index},
+    egui_utils::{radio_collapsing, show_wip},
+    syntax_highlighting::{self, syntax_highlighting_async},
+    Lang,
+};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{hash_map, HashMap, VecDeque},
     fmt::Debug,
@@ -5,29 +17,16 @@ use std::{
     sync::Arc,
 };
 
-use egui_addon::{Lang, syntax_highlighting::{self, syntax_highlighting_async}, code_editor::{self, generic_text_buffer::byte_index_from_char_index}};
-use serde::{Deserialize, Serialize};
-
-use self::{
-    egui_utils::{radio_collapsing, show_wip},
-    single_repo::ComputeConfigSingle,
-    tree_view::FetchedHyperAST,
-    types::{Commit, Languages, Repo},
-};
-
-
 mod code_tracking;
-mod single_repo;
-mod ts_highlight;
-pub(crate) mod types;
-// mod split_from_side_panel;
 mod commit;
-mod egui_utils;
 mod interactive_split;
 mod long_tracking;
 mod multi_split;
+mod single_repo;
 mod split;
 mod tree_view;
+mod ts_highlight;
+pub(crate) mod types;
 mod utils;
 
 // const API_URL: &str = "http://131.254.13.72:8080";
@@ -422,7 +421,7 @@ impl eframe::App for HyperApp {
                         single_repo::show_long_result(&*compute_single_result, ui);
                     });
                 } else {
-                    interactive_split::Splitter::vertical()
+                    Splitter::vertical()
                         .ratio(0.7)
                         .show(ui, |ui1, ui2| {
                             ui1.push_id(ui1.id().with("input"), |ui| {
@@ -612,7 +611,7 @@ fn show_code_scrolled(
     desired_width: f32,
 ) -> Option<egui::scroll_area::ScrollAreaOutput<egui::text_edit::TextEditOutput>> {
     // use egui_demo_lib::syntax_highlighting;
-    
+
     let theme = syntax_highlighting::syntect::CodeTheme::from_memory(ui.ctx());
 
     let mut layouter = |ui: &egui::Ui, code: &str, wrap_width: f32| {
@@ -810,7 +809,7 @@ fn show_multi_repo(
         ui.text_edit_singleline(&mut "github.com/INRIA/spoon");
     };
 
-    radio_collapsing(ui, id, title, selected, wanted, add_body);
+    radio_collapsing(ui, id, title, selected, &wanted, add_body);
 }
 
 fn show_diff(
@@ -825,7 +824,7 @@ fn show_diff(
         ui.text_edit_singleline(&mut "github.com/INRIA/spoon");
     };
 
-    radio_collapsing(ui, id, title, selected, wanted, add_body);
+    radio_collapsing(ui, id, title, selected, &wanted, add_body);
 }
 
 mod code_aspects;
@@ -944,13 +943,13 @@ struct CommitTextBuffer<'a, 'b, 'c> {
     str: &'b mut std::sync::MutexGuard<'c, BorrowFrameCache<String, ComputeCommitStr>>,
 }
 
-impl<'a, 'b, 'c>  CommitTextBuffer<'a, 'b, 'c> {
+impl<'a, 'b, 'c> CommitTextBuffer<'a, 'b, 'c> {
     fn new(
         commit: &'a mut Commit,
         forge: String,
         str: &'b mut std::sync::MutexGuard<'c, BorrowFrameCache<String, ComputeCommitStr>>,
     ) -> Self {
-        str.get((&forge,commit));
+        str.get((&forge, commit));
         Self { commit, forge, str }
     }
 }
@@ -972,7 +971,7 @@ impl<'a, 'b, 'c> code_editor::generic_text_buffer::TextBuffer for CommitTextBuff
             let split: Vec<_> = text.split("/").collect();
             if split[0] != "github.com" {
                 // TODO launch an alert
-                wasm_rs_dbg::dbg!("only github.com is allowed");
+                // wasm_rs_dbg::dbg!("only github.com is allowed");
                 return 0;
             }
             if split.len() == 5 {
@@ -981,7 +980,7 @@ impl<'a, 'b, 'c> code_editor::generic_text_buffer::TextBuffer for CommitTextBuff
                 assert_eq!("commit", split[3].to_string());
                 self.commit.id = split[4].to_string();
             }
-            wasm_rs_dbg::dbg!(&self.commit);
+            // wasm_rs_dbg::dbg!(&self.commit);
             self.str.get((&self.forge, &self.commit));
             return text.chars().count();
         }
@@ -992,7 +991,7 @@ impl<'a, 'b, 'c> code_editor::generic_text_buffer::TextBuffer for CommitTextBuff
         let split: Vec<_> = t.split("/").collect();
         if split[0] != "github.com" {
             // TODO launch an alert
-            wasm_rs_dbg::dbg!("only github.com is allowed");
+            // wasm_rs_dbg::dbg!("only github.com is allowed");
             return 0;
         }
         self.commit.repo.user = split[1].to_string();
@@ -1025,8 +1024,8 @@ impl<'a, 'b, 'c> code_editor::generic_text_buffer::TextBuffer for CommitTextBuff
             let split: Vec<_> = text.split("/").collect();
             if split[0] != "github.com" {
                 // TODO launch an alert
-                wasm_rs_dbg::dbg!(&split[0]);
-                wasm_rs_dbg::dbg!("only github.com is allowed");
+                // wasm_rs_dbg::dbg!(&split[0]);
+                // wasm_rs_dbg::dbg!("only github.com is allowed");
                 return 0;
             }
             if split.len() == 5 {
@@ -1035,7 +1034,7 @@ impl<'a, 'b, 'c> code_editor::generic_text_buffer::TextBuffer for CommitTextBuff
                 assert_eq!("commit", split[3].to_string());
                 self.commit.id = split[4].to_string();
             }
-            wasm_rs_dbg::dbg!(&split, &self.commit);
+            // wasm_rs_dbg::dbg!(&split, &self.commit);
             self.str.get((&self.forge, &self.commit));
             return text.chars().count();
         }
@@ -1050,7 +1049,7 @@ impl<'a, 'b, 'c> code_editor::generic_text_buffer::TextBuffer for CommitTextBuff
         let split: Vec<_> = text.split("/").collect();
         if split[0] != "github.com" {
             // TODO launch an alert
-            wasm_rs_dbg::dbg!("only github.com is allowed");
+            // wasm_rs_dbg::dbg!("only github.com is allowed");
             return 0;
         }
         self.commit.repo.user = split[1].to_string();
@@ -1077,11 +1076,7 @@ impl<'a, 'b, 'c> code_editor::generic_text_buffer::TextBuffer for CommitTextBuff
 
 pub(crate) fn show_commit_menu(ui: &mut egui::Ui, commit: &mut Commit) -> bool {
     let mut mutex_guard = COMMIT_STRS.lock().unwrap();
-    let mut c = CommitTextBuffer::new(
-        commit,
-        "github.com".to_string(),
-        &mut mutex_guard,
-    );
+    let mut c = CommitTextBuffer::new(commit, "github.com".to_string(), &mut mutex_guard);
     let ml = code_editor::generic_text_edit::TextEdit::multiline(&mut c)
         // .margin(egui::Vec2::new(0.0, 0.0))
         // .desired_width(40.0)

@@ -1,5 +1,7 @@
-pub mod syntax_highlighting;
 pub mod code_editor;
+pub mod egui_utils;
+pub mod syntax_highlighting;
+pub mod meta_edge;
 
 #[derive(Debug, Clone)]
 pub struct Lang {

@@ -1,14 +1,10 @@
-use std::sync::{atomic::AtomicBool, Arc};
-
-use eframe::epaint::ahash::HashMap;
-use egui::{Response, TextFormat, WidgetText};
-use egui_demo_lib::easy_mark::easy_mark;
-use epaint::text::LayoutJob;
-use serde::Deserialize;
-
 use self::{editor_content::EditAwareString, generic_text_buffer::TextBuffer};
-
 use super::Lang;
+use eframe::epaint::ahash::HashMap;
+use egui::{Response, WidgetText};
+use egui_demo_lib::easy_mark::easy_mark;
+use serde::Deserialize;
+use std::sync::Arc;
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct CodeEditor {
@@ -107,7 +103,7 @@ impl From<&str> for CodeEditor {
 // }
 
 impl CodeEditor {
-    pub(crate) fn title(&mut self, title: &str) -> &mut Self {
+    pub(crate) fn title(&mut self, _title: &str) -> &mut Self {
         // self.
         self
     }
@@ -152,7 +148,7 @@ impl CodeEditor {
         //     });
         // }
 
-        let mut theme = crate::syntax_highlighting::simple::CodeTheme::from_memory(ui.ctx());
+        let theme = crate::syntax_highlighting::simple::CodeTheme::from_memory(ui.ctx());
         // ui.collapsing("Theme", |ui| {
         //     ui.group(|ui| {
         //         theme.ui(ui);
@@ -188,8 +184,8 @@ impl CodeEditor {
             // .body(|ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 if TREE_SITTER {
-                    let mut layouter = |ui: &egui::Ui, code: &EditAwareString, wrap_width: f32| {
-                        // dbg!(&lang);
+                    let layouter = |ui: &egui::Ui, code: &EditAwareString, wrap_width: f32| {
+                        dbg!(&lang);
                         let mut layout_job =
                             crate::syntax_highlighting::syntax_highlighting_ts::highlight(
                                 ui.ctx(),
@@ -201,14 +197,14 @@ impl CodeEditor {
                         ui.fonts(|f| f.layout_job(layout_job))
                     };
 
-                    let out = generic_text_edit::TextEdit::multiline(code)
-                        .font(egui::TextStyle::Monospace) // for cursor height
-                        .code_editor()
-                        .desired_rows(5)
-                        .lock_focus(true)
-                        .desired_width(f32::INFINITY)
-                        .layouter(&mut layouter)
-                        .show(ui);
+                    // let out = generic_text_edit::TextEdit::multiline(code)
+                    //     .font(egui::TextStyle::Monospace) // for cursor height
+                    //     .code_editor()
+                    //     .desired_rows(5)
+                    //     .lock_focus(true)
+                    //     .desired_width(f32::INFINITY)
+                    //     .layouter(&mut layouter)
+                    //     .show(ui);
                 } else {
                     let language = "rs";
                     let theme =

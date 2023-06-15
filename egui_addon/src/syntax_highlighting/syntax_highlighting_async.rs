@@ -1,5 +1,5 @@
 use std::{
-    future::{self, IntoFuture},
+    future::IntoFuture,
     ops::Range,
     sync::{Arc, Mutex, RwLock},
 };
@@ -182,8 +182,8 @@ pub fn highlight(ctx: &egui::Context, theme: &CodeTheme, code: &str, language: &
     ) -> TimeoutHandle {
         let theme = theme.syntect_theme.syntect_key_name();
 
-        let mut hh = hh.clone();
-        let mut that = this.clone();
+        let hh = hh.clone();
+        // let that = this.clone();
 
         // async fn something_async() {
         //     wasm_rs_dbg::dbg!("aaa");
@@ -317,69 +317,6 @@ pub mod cache {
     }
 }
 
-#[derive(Clone, Copy, Hash, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-enum SyntectTheme {
-    Base16EightiesDark,
-    Base16MochaDark,
-    Base16OceanDark,
-    Base16OceanLight,
-    InspiredGitHub,
-    SolarizedDark,
-    SolarizedLight,
-}
-
-impl SyntectTheme {
-    fn all() -> impl ExactSizeIterator<Item = Self> {
-        [
-            Self::Base16EightiesDark,
-            Self::Base16MochaDark,
-            Self::Base16OceanDark,
-            Self::Base16OceanLight,
-            Self::InspiredGitHub,
-            Self::SolarizedDark,
-            Self::SolarizedLight,
-        ]
-        .iter()
-        .copied()
-    }
-
-    fn name(&self) -> &'static str {
-        match self {
-            Self::Base16EightiesDark => "Base16 Eighties (dark)",
-            Self::Base16MochaDark => "Base16 Mocha (dark)",
-            Self::Base16OceanDark => "Base16 Ocean (dark)",
-            Self::Base16OceanLight => "Base16 Ocean (light)",
-            Self::InspiredGitHub => "InspiredGitHub (light)",
-            Self::SolarizedDark => "Solarized (dark)",
-            Self::SolarizedLight => "Solarized (light)",
-        }
-    }
-
-    fn syntect_key_name(&self) -> &'static str {
-        match self {
-            Self::Base16EightiesDark => "base16-eighties.dark",
-            Self::Base16MochaDark => "base16-mocha.dark",
-            Self::Base16OceanDark => "base16-ocean.dark",
-            Self::Base16OceanLight => "base16-ocean.light",
-            Self::InspiredGitHub => "InspiredGitHub",
-            Self::SolarizedDark => "Solarized (dark)",
-            Self::SolarizedLight => "Solarized (light)",
-        }
-    }
-
-    pub fn is_dark(&self) -> bool {
-        match self {
-            Self::Base16EightiesDark
-            | Self::Base16MochaDark
-            | Self::Base16OceanDark
-            | Self::SolarizedDark => true,
-
-            Self::Base16OceanLight | Self::InspiredGitHub | Self::SolarizedLight => false,
-        }
-    }
-}
-
 struct Highlighter {
     ps: syntect::parsing::SyntaxSet,
     ts: syntect::highlighting::ThemeSet,
@@ -426,7 +363,7 @@ impl Highlighter {
     }
 
     fn init_processing<'a>(&self, text: &'a str) -> (LayoutJob, LinesWithEndings<'a>) {
-        let mut job = LayoutJob {
+        let job = LayoutJob {
             text: text.into(),
             ..Default::default()
         };
@@ -666,7 +603,7 @@ impl IncrementalHighlightLayout2 {
         theme: &'static str,
         mut n: usize,
     ) {
-        let old_n = n;
+        // let old_n = n;
         let th = &hh.ts.themes[theme];
         let highlighter = syntect::highlighting::Highlighter::new(th);
         let mut sections = vec![];
@@ -690,28 +627,28 @@ impl IncrementalHighlightLayout2 {
         }
         this.sections.push(sections);
         let aaa = this.clone();
-        let future = move || {
-            // let mut t = that.write().unwrap();
+        // let future = move || {
+        //     // let mut t = that.write().unwrap();
 
-            // t.async_aux(hh.as_ref(), &highlighter).await
-            IncrementalHighlightLayout2::highlight_n(
-                this.clone(),
-                hh.clone(),
-                theme,
-                (old_n * 2).min(500),
-            )
-            // .into_future()
-            // .await
-        };
+        //     // t.async_aux(hh.as_ref(), &highlighter).await
+        //     IncrementalHighlightLayout2::highlight_n(
+        //         this.clone(),
+        //         hh.clone(),
+        //         theme,
+        //         (old_n * 2).min(500),
+        //     )
+        //     // .into_future()
+        //     // .await
+        // };
         aaa.ctx
             .request_repaint_after(std::time::Duration::from_millis(50));
-        let value = async_exec::spawn_macrotask(Box::new(future));
-        let a = aaa
-            .inner
-            .write()
-            .unwrap()
-            .macrotask
-            .replace(Arc::new(Mutex::new(value)));
+        // let value = async_exec::spawn_macrotask(Box::new(future));
+        // let a = aaa
+        //     .inner
+        //     .write()
+        //     .unwrap()
+        //     .macrotask
+        //     .replace(Arc::new(Mutex::new(value)));
     }
     fn highlight_n(
         this: Arc<Self>,
@@ -995,13 +932,12 @@ pub mod async_exec {
     //     let promise = Promise::spawn_thread("aaa", f);
     // }
 
-    use poll_promise::Promise;
-    pub(crate) fn spawn_stuff<T: Send + 'static>(
-        f: impl std::future::Future<Output = T> + 'static,
-    ) -> poll_promise::Promise<T> {
-        // Promise::spawn_async(f)
-        todo!()
-    }
+    // pub(crate) fn spawn_stuff<T: Send + 'static>(
+    //     f: impl std::future::Future<Output = T> + 'static,
+    // ) -> poll_promise::Promise<T> {
+    //     // Promise::spawn_async(f)
+    //     todo!()
+    // }
 }
 
 pub use async_exec::TimeoutHandle;

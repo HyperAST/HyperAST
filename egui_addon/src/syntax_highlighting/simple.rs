@@ -6,7 +6,7 @@ use super::TokenType;
 pub struct CodeTheme {
     pub(crate) dark_mode: bool,
 
-    pub(crate) formats: enum_map::EnumMap<TokenType, egui::TextFormat>,
+    pub formats: enum_map::EnumMap<TokenType, egui::TextFormat>,
 }
 
 impl CodeTheme {

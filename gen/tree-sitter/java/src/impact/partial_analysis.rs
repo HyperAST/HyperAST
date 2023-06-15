@@ -1,11 +1,8 @@
 use std::{collections::HashMap, fmt::Display, hash::Hash, ops::Deref};
-
 use enumset::{enum_set, EnumSet, EnumSetType};
 use hyper_ast::types::{LabelStore, TypeTrait};
 use num::ToPrimitive;
-
 use crate::{impact::{element::{Arguments, ListSet}, solver::{SolvingAssocTable, SolvingResult}}, types::Type};
-
 use super::{
     declaration::{DeclType, Declarator, DisplayDecl},
     element::{IdentifierFormat, LabelPtr, RawLabelPtr, RefPtr, RefsEnum},
@@ -91,8 +88,6 @@ impl Default for PartialAnalysis {
 }
 
 const FAIL_ON_BAD_CST_NODE: bool = false;
-
-
 
 macro_rules! missing_rule {
     () => {
