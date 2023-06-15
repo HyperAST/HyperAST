@@ -20,7 +20,6 @@ pub mod multi_preprocessed;
 pub mod no_space;
 /// for now only tested on maven repositories with a pom in root.
 pub mod preprocessed;
-pub mod no_space;
 pub mod processing;
 mod utils;
 
