@@ -14,8 +14,8 @@ use crate::{
     nodes::{CompressedNode, HashSize, RefContainer},
     store::{defaults, labels::LabelStore},
     types::{
-        AnyType, IterableChildren, LabelStore as _, MySlice, NodeId,
-        TypeIndex, TypeStore, TypeTrait, Typed, TypedNodeId,
+        AnyType, IterableChildren, LabelStore as _, MySlice, NodeId, TypeIndex, TypeStore,
+        TypeTrait, Typed, TypedNodeId,
     },
 };
 
@@ -1098,11 +1098,22 @@ impl NodeStore {
         Some(self.variants[*variant as usize].get(*offset))
     }
     pub fn unavailable_node<T>(&self) -> HashedNodeRef<'_, T> {
-        HashedNodeRef { index: 0, s_ref: VariantRef::Typed { entities: UNAILABLE_NODE }, phantom: PhantomData }
+        HashedNodeRef {
+            index: 0,
+            s_ref: VariantRef::Typed {
+                entities: UNAILABLE_NODE,
+            },
+            phantom: PhantomData,
+        }
     }
 }
 
-const UNAILABLE_NODE: &'static variants::Typed = &variants::Typed { lang: "", rev: vec![], kind: vec![], size: vec![] };
+const UNAILABLE_NODE: &'static variants::Typed = &variants::Typed {
+    lang: "",
+    rev: vec![],
+    kind: vec![],
+    size: vec![],
+};
 
 fn i64_to_i32x2(n: u64) -> [u32; 2] {
     let n = n.to_le_bytes();
