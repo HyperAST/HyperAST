@@ -314,7 +314,7 @@ pub(crate) fn make(mut acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeId
 
 use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
 impl RepositoryProcessor {
-    pub(crate) fn help_handle_makefile(
+    fn help_handle_makefile(
         &mut self,
         oid: Oid,
         parent_acc: &mut MakeModuleAcc,
@@ -464,9 +464,14 @@ impl From<crate::processing::erased::ParametrizedCommitProcessor2Handle<MakeProc
         )
     }
 }
-#[derive(Default)]
-pub(crate) struct MakefileProcessorHolder(Option<MakefileProc>);
-pub(crate) struct MakefileProc(Parameter, crate::processing::caches::Makefile);
+// #[derive(Default)]
+struct MakefileProcessorHolder(Option<MakefileProc>);
+impl Default for MakefileProcessorHolder {
+    fn default() -> Self {
+        Self(Some(MakefileProc(Parameter, Default::default())))
+    }
+}
+struct MakefileProc(Parameter, crate::processing::caches::Makefile);
 impl crate::processing::erased::Parametrized for MakefileProcessorHolder {
     type T = Parameter;
     fn register_param(
@@ -500,7 +505,7 @@ impl crate::processing::erased::CommitProc for MakefileProc {
         repository: &git2::Repository,
         commit_builder: crate::preprocessed::CommitBuilder,
     ) -> Box<dyn crate::processing::erased::PreparedCommitProc> {
-        todo!()
+        unimplemented!()
     }
 
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
@@ -523,9 +528,9 @@ impl crate::processing::erased::ParametrizedCommitProc2 for MakefileProcessorHol
     }
 
     fn with_parameters(
-        & self,
+        &self,
         parameters: crate::processing::erased::ConfigParametersHandle,
-    ) -> & Self::Proc {
+    ) -> &Self::Proc {
         assert_eq!(0, parameters.0);
         self.0.as_ref().unwrap()
     }
@@ -549,8 +554,8 @@ impl CacheHolding<crate::processing::caches::Makefile> for MakefileProcessorHold
 
 // # Make
 #[derive(Default)]
-struct MakeProcessorHolder(Option<MakeProc>);
-struct MakeProc {
+pub(crate) struct MakeProcessorHolder(Option<MakeProc>);
+pub(crate) struct MakeProc {
     parameter: Parameter,
     cache: crate::processing::caches::Make,
     commits: std::collections::HashMap<git2::Oid, crate::Commit>,
@@ -655,9 +660,9 @@ impl crate::processing::erased::ParametrizedCommitProc2 for MakeProcessorHolder 
     }
 
     fn with_parameters(
-        & self,
+        &self,
         parameters: crate::processing::erased::ConfigParametersHandle,
-    ) -> & Self::Proc {
+    ) -> &Self::Proc {
         assert_eq!(0, parameters.0);
         self.0.as_ref().unwrap()
     }

@@ -99,7 +99,7 @@ pub fn view(state: SharedState, path: Parameters) -> Result<Json<ViewRes>, Strin
         .repositories
         .write()
         .unwrap()
-        .pre_process_with_config2(&mut repo, "", &commit)
+        .pre_process_with_limit(&mut repo, "", &commit, 2)
         .map_err(|e| e.to_string())?;
     log::warn!(
         "done construction of {commits:?} in {}",

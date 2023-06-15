@@ -460,8 +460,16 @@ impl From<crate::processing::erased::ParametrizedCommitProcessor2Handle<MavenPro
         crate::processing::erased::ParametrizedCommitProcessor2Handle(value.0, PhantomData)
     }
 }
-#[derive(Default)]
+// #[derive(Default)]
 struct PomProcessorHolder(Option<PomProc>);
+impl Default for PomProcessorHolder {
+    fn default() -> Self {
+        Self(Some(PomProc {
+            parameter: Parameter,
+            cache: Default::default(),
+        }))
+    }
+}
 struct PomProc {
     parameter: Parameter,
     cache: crate::processing::caches::Pom,
@@ -528,9 +536,9 @@ impl crate::processing::erased::ParametrizedCommitProc2 for PomProcessorHolder {
     }
 
     fn with_parameters(
-        & self,
+        &self,
         parameters: crate::processing::erased::ConfigParametersHandle,
-    ) -> & Self::Proc {
+    ) -> &Self::Proc {
         assert_eq!(0, parameters.0);
         self.0.as_ref().unwrap()
     }
@@ -657,7 +665,7 @@ impl crate::processing::erased::CommitProc for MavenProc {
     }
 
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
-        todo!()
+        self.commits.get(&commit_oid)
     }
 }
 
@@ -676,9 +684,9 @@ impl crate::processing::erased::ParametrizedCommitProc2 for MavenProcessorHolder
     }
 
     fn with_parameters(
-        & self,
+        &self,
         parameters: crate::processing::erased::ConfigParametersHandle,
-    ) -> & Self::Proc {
+    ) -> &Self::Proc {
         assert_eq!(0, parameters.0);
         self.0.as_ref().unwrap()
     }

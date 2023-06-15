@@ -11,7 +11,10 @@ use crate::{
     maven::MavenModuleAcc,
     maven_processor::make,
     preprocessed::{CommitProcessor, RepositoryProcessor},
-    processing::{file_sys, BuildSystem, ConfiguredRepo, ProcessingConfig, RepoConfig, ConfiguredRepo2, erased::ParametrizedCommitProcessorHandle, ConfiguredRepoHandle2},
+    processing::{
+        erased::ParametrizedCommitProcessorHandle, file_sys, BuildSystem, CacheHolding,
+        ConfiguredRepo, ConfiguredRepo2, ConfiguredRepoHandle2, ProcessingConfig, RepoConfig,
+    },
     Commit, DefaultMetrics, SimpleStores,
 };
 
@@ -23,6 +26,7 @@ pub struct PreProcessedRepositories {
     // pub commits: HashMap<RepoConfig, HashMap<git2::Oid, Commit>>,
     pub processor: RepositoryProcessor,
     // pub processing_ordered_commits: HashMap<String,Vec<git2::Oid>>,
+    configs: HashMap<Repo, ParametrizedCommitProcessorHandle>,
 }
 
 pub struct RepositoryInfo {
@@ -132,7 +136,8 @@ impl PreProcessedRepositories {
         commit_oid: &git2::Oid,
     ) -> std::option::Option<&Commit> {
         let proc = self
-            .processor.processing_systems
+            .processor
+            .processing_systems
             .by_id(&config.0)
             .unwrap()
             .get(config.1);
@@ -140,14 +145,33 @@ impl PreProcessedRepositories {
     }
 
     pub fn register_config(&mut self, repo: Repo, config: RepoConfig) -> ConfiguredRepoHandle2 {
-        // let proc = self
-        //     .processor.processing_systems
-        //     .by_id(&repository.config.0)
-        //     .unwrap()
-        //     .get(repository.config.1);
-        // proc.get_commit(*commit_oid)
-        // self
-        todo!()
+        use crate::processing::erased::Parametrized;
+        let r = match config {
+            RepoConfig::JavaMaven => {
+                let h = self
+                    .processor
+                    .processing_systems
+                    .mut_or_default::<crate::maven_processor::MavenProcessorHolder>();
+                ConfiguredRepoHandle2 {
+                    spec: repo,
+                    config: h.register_param(crate::maven_processor::Parameter),
+                }
+            }
+            RepoConfig::CppMake => {
+                let h = self
+                    .processor
+                    .processing_systems
+                    .mut_or_default::<crate::make_processor::MakeProcessorHolder>();
+                ConfiguredRepoHandle2 {
+                    spec: repo,
+                    config: h.register_param(crate::make_processor::Parameter),
+                }
+            }
+            _ => todo!(),
+        };
+
+        self.configs.insert(r.spec.clone(), r.config);
+        r
     }
 
     pub fn get_config(&mut self, repo: Repo) -> Option<ConfiguredRepoHandle2> {
@@ -158,7 +182,9 @@ impl PreProcessedRepositories {
         //     .get(repository.config.1);
         // proc.get_commit(*commit_oid)
         // self
-        todo!()
+        self.configs
+            .get(&repo)
+            .map(|&config| ConfiguredRepoHandle2 { config, spec: repo })
     }
 
     pub fn pre_process_with_limit(
@@ -169,7 +195,8 @@ impl PreProcessedRepositories {
         // dir_path: &str,
         limit: usize,
     ) -> Result<Vec<git2::Oid>, git2::Error> {
-        self.processor.pre_process_with_limit(repository, before, after, limit)
+        self.processor
+            .pre_process_with_limit(repository, before, after, limit)
     }
 
     pub fn pre_process_with_config2(

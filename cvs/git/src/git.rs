@@ -140,6 +140,7 @@ pub enum Forge {
     Github,
     Gitlab,
 }
+
 impl Forge {
     fn url(&self) -> &str {
         match self {
@@ -157,6 +158,8 @@ impl Forge {
         }
     }
 }
+
+// TODO use `&'static str`s to derive with Copy 
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct Repo {
     pub forge: Forge,

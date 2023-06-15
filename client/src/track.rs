@@ -359,7 +359,7 @@ pub fn track_code(
             .repositories
             .write()
             .unwrap()
-            .pre_process_with_config2(&mut repository, "", &commit)
+            .pre_process_with_limit(&mut repository, "", &commit,2)
             .map_err(|e| TrackingError {
                 compute_time: now.elapsed().as_secs_f64(),
                 commits_processed: 0,
@@ -494,7 +494,7 @@ pub(crate) fn track_code_at_path(
             .repositories
             .write()
             .unwrap()
-            .pre_process_with_config2(&mut repository, "", &commit)
+            .pre_process_with_limit(&mut repository, "", &commit, 2)
             .map_err(|e| TrackingError {
                 compute_time: now.elapsed().as_secs_f64(),
                 commits_processed: 0,
@@ -508,7 +508,7 @@ pub(crate) fn track_code_at_path(
                 .repositories
                 .write()
                 .unwrap()
-                .pre_process_with_config2(&mut repository, "", before)
+                .pre_process_with_limit(&mut repository, "", before, 2)
                 .map_err(|e| TrackingError {
                     compute_time: now.elapsed().as_secs_f64(),
                     commits_processed: 0,
@@ -650,7 +650,7 @@ pub(crate) fn track_code_at_path_with_changes(
             .repositories
             .write()
             .unwrap()
-            .pre_process_with_config2(&mut repository, "", &commit)
+            .pre_process_with_limit(&mut repository, "", &commit,2)
             .map_err(|e| TrackingError {
                 compute_time: now.elapsed().as_secs_f64(),
                 commits_processed: 0,

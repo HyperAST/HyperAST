@@ -34,7 +34,7 @@ pub fn from_hyper_ast(state: SharedState, path: FetchFileParam) -> Result<String
         .repositories
         .write()
         .unwrap()
-        .pre_process_with_config2(&mut repo, "", &commit)
+        .pre_process_with_limit(&mut repo, "", &commit, 2)
         .map_err(|e| e.to_string())?;
     log::warn!("done construction of {commits:?} in {}", repo.spec,);
     let repositories = state.repositories.read().unwrap();
