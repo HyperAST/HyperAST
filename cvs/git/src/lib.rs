@@ -17,9 +17,9 @@ pub mod make_processor;
 #[cfg(feature = "maven")]
 pub mod maven_processor;
 pub mod multi_preprocessed;
+pub mod no_space;
 /// for now only tested on maven repositories with a pom in root.
 pub mod preprocessed;
-pub mod no_space;
 pub mod processing;
 mod utils;
 
@@ -106,13 +106,10 @@ mod type_store {
     use std::{fmt::Display, hash::Hash, ops::Deref};
 
     use hyper_ast::{
-        store::{
-            defaults::NodeIdentifier,
-            nodes::{legion::HashedNodeRef},
-        },
+        store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef},
         types::{
             AnyType, HyperType, Lang, LangRef, LangWrapper, NodeId, Shared, TypeIndex, TypeStore,
-            TypedNodeId, T, Typed,
+            Typed, TypedNodeId, T,
         },
     };
     #[cfg(feature = "cpp")]
@@ -311,7 +308,10 @@ mod type_store {
             n.get_type()
         }
 
-        fn resolve_lang(&self, n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        fn resolve_lang(
+            &self,
+            n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>,
+        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
             todo!()
         }
 
@@ -331,7 +331,10 @@ mod type_store {
             n.get_type()
         }
 
-        fn resolve_lang(&self, n: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        fn resolve_lang(
+            &self,
+            n: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>,
+        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
             todo!()
         }
 
@@ -350,7 +353,10 @@ mod type_store {
             n.get_type()
         }
 
-        fn resolve_lang(&self, n: &NoSpaceWrapper<'a, NodeIdentifier>) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        fn resolve_lang(
+            &self,
+            n: &NoSpaceWrapper<'a, NodeIdentifier>,
+        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
             todo!()
         }
 
@@ -574,5 +580,5 @@ mod type_store {
     }
 }
 
-pub use type_store::TStore;
 pub use type_store::MultiType;
+pub use type_store::TStore;

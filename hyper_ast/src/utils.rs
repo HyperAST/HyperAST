@@ -131,6 +131,27 @@ pub fn memusage_linux() -> MemoryUsage {
     }
 }
 
+#[cfg(all(target_os = "macos", feature = "jemalloc"))]
+pub fn memusage_linux() -> MemoryUsage {
+    // #[cfg(not(target_env = "msvc"))]
+    use jemalloc_ctl::{epoch, stats};
+    // Obtain a MIB for the `epoch`, `stats.allocated`, and
+    // `atats.resident` keys:
+    let e = epoch::mib().unwrap();
+    let allocated = stats::allocated::mib().unwrap();
+    // let resident = stats::resident::mib().unwrap();
+    e.advance().unwrap();
+
+    // Read statistics using MIB key:
+    let allocated = allocated.read().unwrap();
+    // let allocated = 0;
+    // let resident = resident.read().unwrap();
+    // println!("{} bytes allocated/{} bytes resident", allocated, resident);
+    MemoryUsage {
+        allocated: Bytes(allocated as isize),
+    }
+}
+
 #[derive(Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct Bytes(isize);
 

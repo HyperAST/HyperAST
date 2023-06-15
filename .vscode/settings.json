@@ -1,0 +1,5 @@
+{
+    "rust-analyzer.linkedProjects": [
+        "./egui_addon/Cargo.toml"
+    ]
+}

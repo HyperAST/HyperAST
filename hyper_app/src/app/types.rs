@@ -1,12 +1,10 @@
-use hyper_ast::{store::nodes::fetched::NodeIdentifier, types};
-
-use super::code_editor;
+use egui_addon::{code_editor, Lang};
+use hyper_ast::store::nodes::fetched::NodeIdentifier;
 
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
     ops::Range,
-    str::FromStr,
 };
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug, serde::Deserialize, serde::Serialize)]
@@ -119,7 +117,6 @@ impl Default for ComputeConfigAspectViews {
         // TODO use regexes
         parse_java_type_list(&ser_opt_java_text, &mut ser_opt_java);
         parse_cpp_type_list(&ser_opt_cpp_text, &mut ser_opt_cpp);
-        // TODO make a regex, might be fast enough
         Self {
             commit: Default::default(),
             path: "".into(),
@@ -181,7 +178,7 @@ impl Default for Commit {
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Default, PartialEq, Eq, Clone, Copy)]
-pub(crate) enum SelectedConfig {
+pub enum SelectedConfig {
     Single,
     Multi,
     Diff,
@@ -236,15 +233,3 @@ impl<T> Resource<T> {
 }
 
 pub type Languages = HashMap<String, Lang>;
-
-#[derive(Debug, Clone)]
-pub struct Lang {
-    pub name: String,
-    pub lang: tree_sitter::Language,
-}
-
-impl Hash for Lang {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-    }
-}

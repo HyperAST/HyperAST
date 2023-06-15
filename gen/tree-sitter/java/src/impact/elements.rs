@@ -14,7 +14,6 @@
 
 // use super::{label_value::LabelValue, element::{RefsEnum, RefPtr, LabelPtr, Nodes, ExplorableRef, self}, java_element::Primitive, reference::{DisplayRef, self}, declaration::{Declarator, DeclType, self, DisplayDecl}};
 
-
 // fn default_imports<F: FnMut(&str) -> LabelPtr>(solver: &mut Solver, mut intern_label: F) {
 //     macro_rules! scoped {
 //         ( $o:expr, $i:expr ) => {{

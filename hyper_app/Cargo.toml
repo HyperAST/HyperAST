@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.65"
 
-
 [dependencies]
 egui = "0.21.0"
 eframe = { version = "0.21.0", default-features = false, features = [
@@ -41,10 +40,14 @@ serde_qs = "0.12.0"
 crossbeam-queue = "0.3.8"
 # hyper_ast_client = {path = "../client", package="client"}
 
-hyper_ast = { path = "../hyper_ast", default-features = false, features = ["serialize", "web"] }
+hyper_ast = { path = "../hyper_ast", default-features = false, features = [
+    "serialize",
+    "web",
+] }
 hyper_ast_gen_ts_cpp = { path = "../gen/tree-sitter/cpp", default-features = false }
 hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java", default-features = false }
 hyper_ast_gen_ts_xml = { path = "../gen/tree-sitter/xml", default-features = false }
+egui_addon = { path = "../egui_addon" }
 
 nohash-hasher = "0.2.0"
 
@@ -75,7 +78,6 @@ serde-wasm-bindgen = "0.4"
 js-sys = "0.3"
 # wasm-bindgen-futures = "0.4"
 
-
 [dependencies.syntect]
 version = "5"
 features = ["default-fancy"]
@@ -94,7 +96,6 @@ opt-level = 2 # fast and small wasm
 # Optimize all dependencies even in debug builds:
 [profile.dev.package."*"]
 opt-level = 2
-
 
 [patch.crates-io]
 

@@ -15,7 +15,8 @@ use crate::{
     tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
 };
 use hyper_ast::types::{
-    LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Tree as _, Typed, WithChildren, DecompressedSubtree,
+    DecompressedSubtree, LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Tree as _, Typed,
+    WithChildren,
 };
 use std::fmt;
 
@@ -100,13 +101,17 @@ fn test_with_action_example() {
                 NS<Tree>,
                 _,
                 _,
-            >::_compute_actions(&node_store, &src_arena, &dst_arena2, &ms).unwrap();
+            >::_compute_actions(&node_store, &src_arena, &dst_arena2, &ms)
+            .unwrap();
 
         log::debug!("{:?}", actions);
 
         macro_rules! test_action {
             ( ins $at:expr, $to:expr ) => {{
-                let a = make_insert::<Tree, CompressedTreePath<_>>(dst_arena.original(&from_dst(&$at)), (&$at, &$to));
+                let a = make_insert::<Tree, CompressedTreePath<_>>(
+                    dst_arena.original(&from_dst(&$at)),
+                    (&$at, &$to),
+                );
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
@@ -116,12 +121,16 @@ fn test_with_action_example() {
                 assert!(actions.has_actions(&[a]));
             }};
             ( upd $lab:expr; $at:expr, $to:expr ) => {{
-                let a = make_update::<Tree, CompressedTreePath<_>>(label_store.get($lab).unwrap(), (&$at, &$to));
+                let a = make_update::<Tree, CompressedTreePath<_>>(
+                    label_store.get($lab).unwrap(),
+                    (&$at, &$to),
+                );
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
             ( mov $from:expr, $m_from:expr => $to:expr, $m_to:expr ) => {{
-                let a = make_move::<Tree, CompressedTreePath<_>>((&$from, &$m_from), (&$to, &$m_to));
+                let a =
+                    make_move::<Tree, CompressedTreePath<_>>((&$from, &$m_from), (&$to, &$m_to));
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
@@ -503,13 +512,17 @@ fn test_with_action_example2() {
             NS<Tree>,
             _,
             _,
-        >::_compute_actions(&node_store, &src_arena, &dst_arena2, &ms).unwrap();
+        >::_compute_actions(&node_store, &src_arena, &dst_arena2, &ms)
+        .unwrap();
 
         log::debug!("{:?}", actions);
 
         macro_rules! test_action {
             ( ins $at:expr, $to:expr ) => {{
-                let a = make_insert::<Tree, CompressedTreePath<_>>(dst_arena.original(&from_dst(&$at)), (&$at, &$to));
+                let a = make_insert::<Tree, CompressedTreePath<_>>(
+                    dst_arena.original(&from_dst(&$at)),
+                    (&$at, &$to),
+                );
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
@@ -519,12 +532,16 @@ fn test_with_action_example2() {
                 assert!(actions.has_actions(&[a]));
             }};
             ( upd $lab:expr; $at:expr, $to:expr ) => {{
-                let a = make_update::<Tree, CompressedTreePath<_>>(label_store.get($lab).unwrap(), (&$at, &$to));
+                let a = make_update::<Tree, CompressedTreePath<_>>(
+                    label_store.get($lab).unwrap(),
+                    (&$at, &$to),
+                );
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
             ( mov $from:expr, $m_from:expr => $to:expr, $m_to:expr ) => {{
-                let a = make_move::<Tree, CompressedTreePath<_>>((&$from, &$m_from), (&$to, &$m_to));
+                let a =
+                    make_move::<Tree, CompressedTreePath<_>>((&$from, &$m_from), (&$to, &$m_to));
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
@@ -734,7 +751,8 @@ fn test_with_zs_custom_example() {
             NS<Tree>,
             _,
             _,
-        >::_compute_actions(&node_store, &src_arena, &dst_arena2, &ms).unwrap();
+        >::_compute_actions(&node_store, &src_arena, &dst_arena2, &ms)
+        .unwrap();
 
         log::debug!("{:?}", actions);
         macro_rules! test_action {
@@ -752,12 +770,16 @@ fn test_with_zs_custom_example() {
                 assert!(actions.has_actions(&[a]));
             }};
             ( upd $lab:expr; $at:expr, $to:expr ) => {{
-                let a = make_update::<Tree, CompressedTreePath<_>>(label_store.get($lab).unwrap(), (&$at, &$to));
+                let a = make_update::<Tree, CompressedTreePath<_>>(
+                    label_store.get($lab).unwrap(),
+                    (&$at, &$to),
+                );
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};
             ( mov $from:expr, $m_from:expr => $to:expr, $m_to:expr ) => {{
-                let a = make_move::<Tree, CompressedTreePath<_>>((&$from, &$m_from), (&$to, &$m_to));
+                let a =
+                    make_move::<Tree, CompressedTreePath<_>>((&$from, &$m_from), (&$to, &$m_to));
                 log::debug!("{:?}", a);
                 assert!(actions.has_actions(&[a]));
             }};

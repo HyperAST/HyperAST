@@ -194,8 +194,7 @@ impl HyperType for Type {
     }
 
     fn is_directory(&self) -> bool {
-        self == &Type::Directory ||
-        self == &Type::MavenDirectory
+        self == &Type::Directory || self == &Type::MavenDirectory
     }
 
     fn is_spaces(&self) -> bool {

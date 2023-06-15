@@ -69,7 +69,7 @@ macro_rules! make_type2 {
     (@as_lit $var:ident) => {paste!{stringify!([<$var:snake>])}};
     (@as_lit $l:literal) => {$l};
 
-    
+
     (
         @colct_disc ($(,)*) -> ($($var_names:ident -> ($($var_ser:tt)*),)*)
     ) => {
@@ -98,7 +98,7 @@ macro_rules! make_type2 {
     };
 
     // (
-    //     @colct_disc ($(#[$_attr:meta])* $var:ident, 
+    //     @colct_disc ($(#[$_attr:meta])* $var:ident,
     //                 $(#[$_attr1:meta])* $var1:ident,
     //                 $(#[$_attr2:meta])* $var2:ident,
     //                 $(#[$_attr3:meta])* $var3:ident, $($tail:tt)*) -> ($($var_names:tt)*)
@@ -119,100 +119,100 @@ macro_rules! make_type2 {
     // };
 
     // (
-    //     @colct_disc ($(#[$_attr:meta])* $var:ident($_lit:literal), 
+    //     @colct_disc ($(#[$_attr:meta])* $var:ident($_lit:literal),
     //     $(#[$_attr1:meta])* $var1:ident($_lit1:literal),
     //     $(#[$_attr2:meta])* $var2:ident($_lit2:literal),
     //     $(#[$_attr3:meta])* $var3:ident($_lit3:literal),
-    //     $(#[$_attr4:meta])* $var4:ident($_lit4:literal), 
+    //     $(#[$_attr4:meta])* $var4:ident($_lit4:literal),
     //     $(#[$_attr5:meta])* $var5:ident($_lit5:literal),
     //     $(#[$_attr6:meta])* $var6:ident($_lit6:literal),
     //     $(#[$_attr7:meta])* $var7:ident($_lit7:literal), $($tail:tt)*) -> ($($var_names:tt)*)
     // ) => {
     //     make_type2!{@colct_disc ($($tail)*) -> ($($var_names)*
-    //         $var -> ($_lit), 
-    //         $var1 -> ($_lit1), 
-    //         $var2 -> ($_lit2), 
+    //         $var -> ($_lit),
+    //         $var1 -> ($_lit1),
+    //         $var2 -> ($_lit2),
     //         $var3 -> ($_lit3),
-    //         $var4 -> ($_lit4), 
-    //         $var5 -> ($_lit5), 
-    //         $var6 -> ($_lit6), 
+    //         $var4 -> ($_lit4),
+    //         $var5 -> ($_lit5),
+    //         $var6 -> ($_lit6),
     //         $var7 -> ($_lit7), )}
     // };
 
     // (
-    //     @colct_disc ($(#[$_attr:meta])* $var:ident($_lit:literal), 
+    //     @colct_disc ($(#[$_attr:meta])* $var:ident($_lit:literal),
     //     $(#[$_attr1:meta])* $var1:ident($_lit1:literal),
     //     $(#[$_attr2:meta])* $var2:ident($_lit2:literal),
     //     $(#[$_attr3:meta])* $var3:ident($_lit3:literal),
-    //     $(#[$_attr4:meta])* $var4:ident($_lit4:literal), 
+    //     $(#[$_attr4:meta])* $var4:ident($_lit4:literal),
     //     $(#[$_attr5:meta])* $var5:ident($_lit5:literal),
     //     $(#[$_attr6:meta])* $var6:ident($_lit6:literal),
-    //     $(#[$_attr7:meta])* $var7:ident($_lit7:literal), 
-    //     $(#[$_attr8:meta])* $var8:ident($_lit8:literal), 
+    //     $(#[$_attr7:meta])* $var7:ident($_lit7:literal),
+    //     $(#[$_attr8:meta])* $var8:ident($_lit8:literal),
     //     $(#[$_attr9:meta])* $var9:ident($_lit9:literal),
     //     $(#[$_attr10:meta])* $var10:ident($_lit10:literal),
     //     $(#[$_attr11:meta])* $var11:ident($_lit11:literal),
-    //     $(#[$_attr12:meta])* $var12:ident($_lit12:literal), 
+    //     $(#[$_attr12:meta])* $var12:ident($_lit12:literal),
     //     $(#[$_attr13:meta])* $var13:ident($_lit13:literal),
     //     $(#[$_attr14:meta])* $var14:ident($_lit14:literal),
     //     $(#[$_attr15:meta])* $var15:ident($_lit15:literal), $($tail:tt)*) -> ($($var_names:tt)*)
     // ) => {
     //     make_type2!{@colct_disc ($($tail)*) -> ($($var_names)*
-    //         $var -> ($_lit), 
-    //         $var1 -> ($_lit1), 
-    //         $var2 -> ($_lit2), 
+    //         $var -> ($_lit),
+    //         $var1 -> ($_lit1),
+    //         $var2 -> ($_lit2),
     //         $var3 -> ($_lit3),
-    //         $var4 -> ($_lit4), 
-    //         $var5 -> ($_lit5), 
-    //         $var6 -> ($_lit6), 
+    //         $var4 -> ($_lit4),
+    //         $var5 -> ($_lit5),
+    //         $var6 -> ($_lit6),
     //         $var7 -> ($_lit7), )}
     // };
 
     // (
-    //     @colct_disc ($(#[$_attr:meta])* $var:ident($_lit:literal), 
+    //     @colct_disc ($(#[$_attr:meta])* $var:ident($_lit:literal),
     //                 $(#[$_attr1:meta])* $var1:ident($_lit1:literal),
     //                 $(#[$_attr2:meta])* $var2:ident($_lit2:literal),
     //                 $(#[$_attr3:meta])* $var3:ident($_lit3:literal), $($tail:tt)*) -> ($($var_names:tt)*)
     // ) => {
     //     make_type2!{@colct_disc ($($tail)*) -> ($($var_names)*
-    //         $var -> ($_lit), 
-    //         $var1 -> ($_lit1), 
-    //         $var2 -> ($_lit2), 
+    //         $var -> ($_lit),
+    //         $var1 -> ($_lit1),
+    //         $var2 -> ($_lit2),
     //         $var3 -> ($_lit3), )}
     // };
 
 
     // (
-    //     @colct_disc ($(#[$_attr:meta])* $var:ident, 
+    //     @colct_disc ($(#[$_attr:meta])* $var:ident,
     //                 $(#[$_attr1:meta])* $var1:ident,
     //                 $(#[$_attr2:meta])* $var2:ident,
     //                 $(#[$_attr3:meta])* $var3:ident,
-    //                 $(#[$_attr4:meta])* $var4:ident, 
+    //                 $(#[$_attr4:meta])* $var4:ident,
     //                 $(#[$_attr5:meta])* $var5:ident,
     //                 $(#[$_attr6:meta])* $var6:ident,
     //                 $(#[$_attr7:meta])* $var7:ident, $($tail:tt)*) -> ($($var_names:tt)*)
     // ) => {
-    //     make_type2!{@colct_disc ($($tail)*) -> ($($var_names)* 
-    //         $var  -> ($var), 
-    //         $var1 -> ($var1), 
-    //         $var3 -> ($var2), 
-    //         $var3 -> ($var3), 
-    //         $var4 -> ($var4), 
-    //         $var5 -> ($var5), 
-    //         $var6 -> ($var6), 
+    //     make_type2!{@colct_disc ($($tail)*) -> ($($var_names)*
+    //         $var  -> ($var),
+    //         $var1 -> ($var1),
+    //         $var3 -> ($var2),
+    //         $var3 -> ($var3),
+    //         $var4 -> ($var4),
+    //         $var5 -> ($var5),
+    //         $var6 -> ($var6),
     //         $var7 -> ($var7), )}
     // };
 
     // (
-    //     @colct_disc ($(#[$_attr:meta])* $var:ident, 
+    //     @colct_disc ($(#[$_attr:meta])* $var:ident,
     //                 $(#[$_attr1:meta])* $var1:ident,
     //                 $(#[$_attr2:meta])* $var2:ident,
     //                 $(#[$_attr3:meta])* $var3:ident, $($tail:tt)*) -> ($($var_names:tt)*)
     // ) => {
-    //     make_type2!{@colct_disc ($($tail)*) -> ($($var_names)* 
-    //         $var  -> ($var), 
-    //         $var1 -> ($var1), 
-    //         $var2 -> ($var2), 
+    //     make_type2!{@colct_disc ($($tail)*) -> ($($var_names)*
+    //         $var  -> ($var),
+    //         $var1 -> ($var1),
+    //         $var2 -> ($var2),
     //         $var3 -> ($var3), )}
     // };
 
@@ -226,7 +226,7 @@ macro_rules! make_type2 {
     (
         @colct_disc ($(#[$_attr:meta])* $var:ident, $($tail:tt)*) -> ($($var_names:tt)*)
     ) => {
-        
+
         make_type2!{@colct_disc ($($tail)*) -> ($($var_names)* $var -> ($var), )}
     };
     (
@@ -242,27 +242,27 @@ macro_rules! make_type2 {
     };
 
     // (
-    //     @colct_disc2 {$($kkk:tt)*} ($(#[$_attr:meta])* $var:ident($_a:ty $(,)*), 
-    //     $(#[$_attr1:meta])* $var1:ident($_a1:ty $(,)*), 
-    //     $(#[$_attr2:meta])* $var2:ident($_a2:ty $(,)*), 
+    //     @colct_disc2 {$($kkk:tt)*} ($(#[$_attr:meta])* $var:ident($_a:ty $(,)*),
+    //     $(#[$_attr1:meta])* $var1:ident($_a1:ty $(,)*),
+    //     $(#[$_attr2:meta])* $var2:ident($_a2:ty $(,)*),
     //     $(#[$_attr3:meta])* $var3:ident($_a3:ty $(,)*), $($tail:tt)*) -> ($($var_names:tt)*)
     // ) => {
-    //     make_type2!{@colct_disc2 {$($kkk)*} ($($tail)*) -> ($($var_names)* 
-    //         $var -> ($var), 
-    //         $var1 -> ($var1), 
-    //         $var2 -> ($var2), 
+    //     make_type2!{@colct_disc2 {$($kkk)*} ($($tail)*) -> ($($var_names)*
+    //         $var -> ($var),
+    //         $var1 -> ($var1),
+    //         $var2 -> ($var2),
     //         $var3 -> ($var3), )}
     // };
 
     // (
-    //     @colct_disc2 {$($kkk:tt)*} ($(#[$_attr:meta])* $var:ident($_a:ty $(,)*), 
+    //     @colct_disc2 {$($kkk:tt)*} ($(#[$_attr:meta])* $var:ident($_a:ty $(,)*),
     //                                $(#[$_attr1:meta])* $var1:ident($_a1:ty $(,)*), $($tail:tt)*) -> ($($var_names:tt)*)
     // ) => {
     //     make_type2!{@colct_disc2 {$($kkk)*} ($($tail)*) -> ($($var_names)* $var -> ($var), $var1 -> ($var1), )}
     // };
 
     (
-        @colct_disc2 
+        @colct_disc2
             ($(#[$_attr:meta])* $var:ident($($_a:ty),* $(,)*), $($tail:tt)*) -> ($($var_names:tt)*)
     ) => {
         make_type2!{@colct_disc2 ($($tail)*) -> ($($var_names)* $var -> ($var), )}
@@ -271,7 +271,7 @@ macro_rules! make_type2 {
     // (
     //     @colct_disc2 {$($kkk:tt)*} ($(#[$_attr:meta])* $var:ident, $(#[$_attr1:meta])* $var1:ident, $($tail:tt)*) -> ($($var_names:tt)*)
     // ) => {
-        
+
     //     make_type2!{@colct_disc2 {$($kkk)*} ($($tail)*) -> ($($var_names)* $var -> ($var), $var1 -> ($var1), )}
     // };
 
@@ -279,7 +279,7 @@ macro_rules! make_type2 {
         @colct_disc2
             ($(#[$_attr:meta])* $var:ident, $($tail:tt)*) -> ($($var_names:tt)*)
     ) => {
-        
+
         make_type2!{@colct_disc2 ($($tail)*) -> ($($var_names)* $var -> ($var), )}
     };
 
@@ -293,7 +293,7 @@ macro_rules! make_type2 {
         @colct_disc3
             ($(#[$_attr:meta])* $var:ident{$($_a:tt)*}, $($tail:tt)*) -> ($($var_names:tt)*)
     ) => {
-        
+
         make_type2!{@colct_disc3 ($($tail)*) -> ($($var_names)* $var -> ($var), )}
     };
 
@@ -324,7 +324,7 @@ macro_rules! make_type2 {
 //     dbg!(std::mem::variant_count::<Type>());
 // }
 
-make_type2!{
+make_type2! {
     Keyword {
         Bang("!"),
         BangEq("!="),

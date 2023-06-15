@@ -37,7 +37,7 @@ impl<
     > GreedySubtreeMatcher<'a, Dsrc, Ddst, T, S, M, MIN_HEIGHT>
 where
     S: 'a + NodeStore<T::TreeId, R<'a> = T>,
-    T::TreeId: Clone + NodeId<IdN=T::TreeId>,
+    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
     T::Label: Clone,
     T::Type: Copy + Eq + Send + Sync,
     M::Src: 'a + PrimInt + Debug + Hash,
@@ -705,7 +705,7 @@ impl<
         const MIN_HEIGHT: usize,
     > PriorityTreeList<'a, 'b, D, IdD, T, S, MIN_HEIGHT>
 where
-    T::TreeId: Clone + NodeId<IdN=T::TreeId>,
+    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
     pub(super) fn new(store: &'a S, arena: &'b D, tree: IdD) -> Self {
         let h = height(store, &arena.original(&tree)); // TODO subtree opti, use metadata

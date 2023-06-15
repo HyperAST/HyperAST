@@ -4,8 +4,6 @@ use crate::app::{types::Resource, API_URL};
 
 use super::types::Commit;
 
-
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CommitMetadata {
     /// commit message

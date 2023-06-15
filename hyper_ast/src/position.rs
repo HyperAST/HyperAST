@@ -14,8 +14,7 @@ use crate::{
     },
     types::{
         self, AnyType, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled,
-        NodeId, NodeStore, Tree, TypeStore, Typed, TypedNodeId,
-        WithChildren, WithSerialization,
+        NodeId, NodeStore, Tree, TypeStore, Typed, TypedNodeId, WithChildren, WithSerialization,
     },
 };
 
@@ -1585,11 +1584,7 @@ impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, I
     pub fn make_position<'store, HAST>(self, stores: &'store HAST) -> Position
     where
         'a: 'store,
-        HAST: HyperAST<
-            'store,
-            IdN = IdN::IdN,
-            Label = LabelIdentifier,
-        >,
+        HAST: HyperAST<'store, IdN = IdN::IdN, Label = LabelIdentifier>,
         HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren,
         <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
         IdN: Debug + NodeId,
@@ -1878,11 +1873,7 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
 
     pub fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), String>
     where
-        HAST: HyperAST<
-            'store,
-            IdN = IdN::IdN,
-            Label = LabelIdentifier,
-        >,
+        HAST: HyperAST<'store, IdN = IdN::IdN, Label = LabelIdentifier>,
         HAST::T: WithChildren,
         <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
         IdN: Copy + Eq + Debug + NodeId,

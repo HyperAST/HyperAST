@@ -4,9 +4,12 @@ use crate::app::{utils, API_URL};
 
 use self::example_scripts::EXAMPLES;
 
-use super::{
+use egui_addon::{
     code_editor::{CodeEditor, EditorInfo},
-    egui_utils::radio_collapsing,
+    egui_utils::{radio_collapsing, show_wip}, interactive_split::interactive_splitter::InteractiveSplitter,
+};
+
+use super::{
     show_repo_menu,
     types::{CodeEditors, Commit, Resource, SelectedConfig},
 };
@@ -178,7 +181,7 @@ pub(super) fn show_single_repo(
             show_long_result(&*compute_single_result, ui);
         });
     } else {
-        super::interactive_split::Splitter::vertical()
+        InteractiveSplitter::vertical()
             .ratio(0.7)
             .show(ui, |ui1, ui2| {
                 ui1.push_id(ui1.id().with("input"), |ui| {
@@ -292,7 +295,7 @@ pub(super) fn show_single_repo_menu(
         });
     };
 
-    radio_collapsing(ui, id, title, selected, wanted, add_body);
+    radio_collapsing(ui, id, title, selected, &wanted, add_body);
 }
 
 pub(super) fn show_short_result(promise: &Option<RemoteResult>, ui: &mut egui::Ui) {

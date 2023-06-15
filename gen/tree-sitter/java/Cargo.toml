@@ -18,7 +18,7 @@ controlled-option = "0.4.1"
 string-interner = "0.14.0"
 cfg-if = "1.0"
 hashbrown = { version = "0.13.2", default-features = false, optional = true }
-fasthash = "0.4.0"
+# fasthash = "0.4.0"
 log = { version = "0.4.6" } #, features = ["max_level_debug", "release_max_level_warn"] }
 
 # tree-sitter_types = { path = "../../../tree-sitter_types" }

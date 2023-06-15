@@ -1,0 +1,6 @@
+[book]
+authors = ["Paul ADAM"]
+language = "en"
+multilingual = false
+src = "src"
+title = "HyperAST book"

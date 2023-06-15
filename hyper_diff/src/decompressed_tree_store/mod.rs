@@ -6,17 +6,17 @@
 //! We need both post-order traversal and breadth-first.
 use num_traits::PrimInt;
 
-use hyper_ast::types::{NodeStore, Stored, WithChildren, WithStats, NodeId};
+use hyper_ast::types::{NodeId, NodeStore, Stored, WithChildren, WithStats};
 
 // pub mod breath_first;
 pub mod basic_post_order;
 pub mod bfs_wrapper;
 pub mod breadth_first;
 pub mod complete_post_order;
+pub mod hidding_wrapper;
 pub mod lazy_post_order;
 pub mod pre_order_wrapper;
 pub mod simple_post_order;
-pub mod hidding_wrapper;
 pub use breadth_first::BreathFirst;
 pub mod simple_zs_tree;
 pub use complete_post_order::CompletePostOrder;
@@ -56,7 +56,8 @@ pub trait LazyInitializable<'a, T: Stored + WithStats> {
 }
 
 pub trait FullyDecompressedTreeStore<'a, T: WithChildren, IdD>:
-ShallowDecompressedTreeStore<'a, T, IdD> {
+    ShallowDecompressedTreeStore<'a, T, IdD>
+{
 }
 
 pub trait ShallowDecompressedTreeStore<'a, T: WithChildren, IdD, IdS = IdD> {
@@ -302,8 +303,6 @@ pub trait WrapDecompressed<
         S: NodeStore<T::TreeId, R<'a> = T>;
 }
 
-
-
 // /// Used as a workaround to cache stuff that uses phantom types ie. HashedNodeRef in HyperAST
 // /// TODO provide a cache wrapping this concern.
 // pub trait Persistable {
@@ -314,9 +313,8 @@ pub trait WrapDecompressed<
 
 pub struct PersistedNode<I>(I);
 
-impl<I> hyper_ast::types::Node for PersistedNode<I> {
-}
+impl<I> hyper_ast::types::Node for PersistedNode<I> {}
 
-impl<I:Eq + NodeId> hyper_ast::types::Stored for PersistedNode<I> {
-    type TreeId=I;
+impl<I: Eq + NodeId> hyper_ast::types::Stored for PersistedNode<I> {
+    type TreeId = I;
 }

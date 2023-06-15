@@ -1,4 +1,5 @@
 use egui::TextFormat;
+use egui_cable::prelude::Port;
 use epaint::text::LayoutSection;
 pub use hyper_ast::store::nodes::fetched::{FetchedLabels, NodeIdentifier, NodeStore};
 use hyper_ast::{
@@ -1742,7 +1743,7 @@ fn show_port(ui: &mut egui::Ui, id: egui::Id, pos: epaint::Pos2) {
         .constrain(true)
         .fixed_pos(pos)
         .interactable(false);
-    area.show(ui.ctx(), |ui| ui.add(egui_cable::prelude::Port::new(id)));
+    // area.show(ui.ctx(), |ui| ui.add(Port::new(id)));
 }
 
 const DEBUG_LAYOUT: bool = false;
@@ -1818,7 +1819,7 @@ mod hyper_ast_layouter {
             let mut offset = 0;
             match self._compute(&self.root, self.root_indent, &mut layout, &mut offset) {
                 Err(IndentedAlt::FmtError) => Err(IndentedAlt::FmtError),
-                _ => Ok((offset, layout))
+                _ => Ok((offset, layout)),
             }
         }
         fn _compute(

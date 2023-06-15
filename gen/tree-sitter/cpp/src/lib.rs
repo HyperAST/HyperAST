@@ -1,15 +1,13 @@
-
-#[cfg(feature="impl")]
+#[cfg(feature = "impl")]
 pub mod legion;
 
-#[cfg(feature="impl")]
-pub mod types_exp;
 pub mod types;
+#[cfg(feature = "impl")]
+pub mod types_exp;
 
-#[cfg(feature="impl")]
+#[cfg(feature = "impl")]
 #[cfg(test)]
 mod tests;
-
 
 #[cfg(feature = "legion")]
 mod tnode {

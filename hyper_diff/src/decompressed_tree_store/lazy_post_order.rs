@@ -120,7 +120,7 @@ where
 }
 impl<T: WithChildren, IdD: PrimInt> LazyPostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + Debug+NodeId<IdN=T::TreeId>,
+    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
     fn _position_in_parent(&self, c: &IdD, p: &IdD) -> T::ChildIdx {
         let mut r = 0;
@@ -995,7 +995,7 @@ where
 impl<'d, T: 'd + WithChildren, IdD: PrimInt> ContiguousDescendants<'d, T, IdD, IdD>
     for &mut LazyPostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + Debug+NodeId<IdN=T::TreeId>,
+    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
     fn descendants_range(&self, x: &IdD) -> std::ops::Range<IdD> {
         <LazyPostOrder<T, IdD>>::descendants_range(&self, x)
@@ -1011,7 +1011,7 @@ where
 impl<'d, T: WithChildren, IdD: PrimInt> DecompressedWithParent<'d, T, IdD>
     for &mut LazyPostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + Debug+NodeId<IdN=T::TreeId>,
+    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
     fn has_parent(&self, id: &IdD) -> bool {
         <LazyPostOrder<T, IdD>>::has_parent(&self, id)
@@ -1043,7 +1043,7 @@ where
 impl<'a, T: WithChildren, IdD: PrimInt> ShallowDecompressedTreeStore<'a, T, IdD>
     for &mut LazyPostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + Debug+NodeId<IdN=T::TreeId>,
+    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
     fn len(&self) -> usize {
         <LazyPostOrder<T, IdD>>::len(&self)
@@ -1077,7 +1077,7 @@ where
 impl<'d, T: WithChildren + WithStats, IdD: PrimInt + Shallow<IdD> + Debug>
     LazyDecompressedTreeStore<'d, T, IdD> for &mut LazyPostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + Debug+NodeId<IdN=T::TreeId>,
+    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
     type IdD = IdD;
 
@@ -1103,7 +1103,7 @@ where
 impl<'d, T: WithChildren, IdD: PrimInt> DecompressedTreeStore<'d, T, IdD>
     for &mut LazyPostOrder<T, IdD>
 where
-    T::TreeId: Clone + Eq + Debug+NodeId<IdN=T::TreeId>,
+    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
     fn descendants<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
     where
@@ -1132,7 +1132,7 @@ impl<'d, T: 'd + WithChildren, IdD: PrimInt> LazyPOBorrowSlice<'d, T, IdD, IdD>
     for &mut LazyPostOrder<T, IdD>
 where
     T: WithStats,
-    T::TreeId: Clone + Eq + Debug+NodeId<IdN=T::TreeId>,
+    T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
     IdD: Shallow<IdD> + Debug,
 {
     type SlicePo<'b> = CompletePOSlice<'b,T,IdD, bitvec::boxed::BitBox>

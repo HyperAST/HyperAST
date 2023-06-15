@@ -1,29 +1,9 @@
-use epaint::{
-    emath::{lerp, Align},
-    pos2, vec2, Pos2, Rect, Stroke, Vec2,
+use super::interactive_splitter_orientation::{
+    InteractiveSplitterOrientation, InteractiveSplitterResponse,
 };
-
-use egui::{
-    egui_assert, panel::Side, Context, CursorIcon, Frame, Id, Layout, Response, Sense, SidePanel,
-    Ui,
-};
-
-/// State regarding panels.
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub struct SplitState {
-    pub ratio: f32,
-}
-
-impl SplitState {
-    pub fn load(ctx: &Context, bar_id: Id) -> Option<Self> {
-        ctx.data_mut(|d| d.get_persisted(bar_id))
-    }
-
-    fn store(self, ctx: &Context, bar_id: Id) {
-        ctx.data_mut(|d| d.insert_persisted(bar_id, self));
-    }
-}
+use crate::interactive_split::interactive_split_state::InteractiveSplitState;
+use egui::{egui_assert, lerp, Align, CursorIcon, Frame, Layout, Sense, Ui};
+use epaint::Stroke;
 
 /// A splitter which can separate the UI into 2 parts either vertically or horizontally.
 ///
@@ -36,15 +16,15 @@ impl SplitState {
 /// # });
 /// ```
 #[must_use = "You should call .show()"]
-pub struct Splitter {
-    orientation: SplitterOrientation,
+pub struct InteractiveSplitter {
+    orientation: InteractiveSplitterOrientation,
     ratio: f32,
     resizable: bool,
 }
 
-impl Splitter {
+impl InteractiveSplitter {
     /// Create a new splitter with the given orientation and a ratio of 0.5.
-    pub fn with_orientation(orientation: SplitterOrientation) -> Self {
+    pub fn with_orientation(orientation: InteractiveSplitterOrientation) -> Self {
         Self {
             orientation,
             ratio: 0.5,
@@ -55,7 +35,7 @@ impl Splitter {
     /// Create a new vertical splitter with a ratio of 0.5.
     #[inline]
     pub fn vertical() -> Self {
-        Self::with_orientation(SplitterOrientation::Vertical)
+        Self::with_orientation(InteractiveSplitterOrientation::Vertical)
     }
 
     // /// Create a new horizontal splitter with a ratio of 0.5.
@@ -79,7 +59,7 @@ impl Splitter {
         self,
         ui: &mut Ui,
         add_contents: impl FnOnce(&mut Ui, &mut Ui) -> R,
-    ) -> SplitterResponse<R> {
+    ) -> InteractiveSplitterResponse<R> {
         self.show_dyn(ui, Box::new(add_contents))
     }
 
@@ -87,7 +67,7 @@ impl Splitter {
         self,
         ui: &mut Ui,
         add_contents: Box<dyn FnOnce(&mut Ui, &mut Ui) -> R + 'c>,
-    ) -> SplitterResponse<R> {
+    ) -> InteractiveSplitterResponse<R> {
         let Self {
             orientation,
             ratio,
@@ -102,7 +82,7 @@ impl Splitter {
         let id = ui.id();
 
         let mut ratio = ratio;
-        if let Some(state) = SplitState::load(ui.ctx(), id) {
+        if let Some(state) = InteractiveSplitState::load(ui.ctx(), id) {
             ratio = state.ratio;
         }
 
@@ -233,7 +213,7 @@ impl Splitter {
         let body_returned = inner_response.inner;
         // let body_returned = add_contents(&mut first_ui, &mut second_ui);
 
-        SplitState { ratio }.store(ui.ctx(), ui.id());
+        InteractiveSplitState { ratio }.store(ui.ctx(), ui.id());
 
         {
             let stroke = if is_resizing {
@@ -256,78 +236,11 @@ impl Splitter {
             ui.painter().line_segment([line_pos_1, line_pos_2], stroke);
         }
 
-        SplitterResponse {
+        InteractiveSplitterResponse {
             splitter_response,
             body_returned,
             first_response: ui.interact(first_rect, first_ui.id(), Sense::hover()),
             second_response: ui.interact(second_rect, second_ui.id(), Sense::hover()),
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub enum SplitterOrientation {
-    Horizontal,
-    Vertical,
-}
-
-/// The response of showing a Splitter
-pub struct SplitterResponse<R> {
-    /// The return value of the closure passed into show.
-    pub body_returned: R,
-    /// The response of the top or left UI depending on the splitter's orientation.
-    pub first_response: Response,
-    /// The response of the bottom or right UI depending on the splitter's orientation.
-    pub second_response: Response,
-    /// The response of the whole splitter widget.
-    pub splitter_response: Response,
-}
-
-impl SplitterOrientation {
-    fn rev(self) -> Self {
-        match self {
-            SplitterOrientation::Vertical => SplitterOrientation::Horizontal,
-            SplitterOrientation::Horizontal => SplitterOrientation::Vertical,
-        }
-    }
-    fn v(self, v: &Vec2) -> f32 {
-        match self {
-            SplitterOrientation::Vertical => v.x,
-            SplitterOrientation::Horizontal => v.y,
-        }
-    }
-    fn p(self, p: Pos2) -> f32 {
-        match self {
-            SplitterOrientation::Vertical => p.x,
-            SplitterOrientation::Horizontal => p.y,
-        }
-    }
-    fn m(self, p: &mut Pos2) -> &mut f32 {
-        match self {
-            SplitterOrientation::Vertical => &mut p.x,
-            SplitterOrientation::Horizontal => &mut p.y,
-        }
-    }
-    fn r(self, r: &Rect) -> f32 {
-        match self {
-            SplitterOrientation::Vertical => r.height(),
-            SplitterOrientation::Horizontal => r.width(),
-        }
-    }
-    fn t<T>(self, (a, b): (T, T)) -> (T, T) {
-        match self {
-            SplitterOrientation::Vertical => (a, b),
-            SplitterOrientation::Horizontal => (b, a),
-        }
-    }
-}
-
-impl From<SplitterOrientation> for CursorIcon {
-    fn from(value: SplitterOrientation) -> Self {
-        match value {
-            SplitterOrientation::Horizontal => CursorIcon::ResizeVertical,
-            SplitterOrientation::Vertical => CursorIcon::ResizeHorizontal,
         }
     }
 }

@@ -1,37 +1,26 @@
-use egui::Widget;
-use epaint::Pos2;
-use hyper_ast::store::nodes::fetched;
-use hyper_ast::store::nodes::fetched::LabelIdentifier;
-use poll_promise::Promise;
-use std::collections::HashSet;
-use std::collections::VecDeque;
-use std::fmt::Debug;
-use std::hash::Hash;
-use std::sync::Arc;
-
-use crate::app::API_URL;
-
-use super::egui_utils::radio_collapsing;
-
-use super::egui_utils::show_wip;
-
 use super::show_repo_menu;
-
 use super::tree_view::FetchedViewImpl;
 use super::tree_view::{Action, FetchedHyperAST, NodeIdentifier, PrefillCache};
 use super::types;
 use super::types::Resource;
-// use super::types::parse_cpp_type_list;
-// use super::types::parse_java_type_list;
+use crate::app::API_URL;
+use egui_addon::egui_utils::{radio_collapsing, show_wip};
+use hyper_ast::store::nodes::fetched;
+use hyper_ast::store::nodes::fetched::LabelIdentifier;
+use poll_promise::Promise;
+use std::collections::HashSet;
+use std::fmt::Debug;
+use std::sync::Arc;
 
 pub(crate) fn show_aspects_views_menu(
     ui: &mut egui::Ui,
     selected: &mut types::SelectedConfig,
     aspects: &mut types::ComputeConfigAspectViews,
     store: Arc<FetchedHyperAST>,
-    mut aspects_result: &mut Option<Promise<Result<Resource<FetchedView>, String>>>,
+    aspects_result: &mut Option<Promise<Result<Resource<FetchedView>, String>>>,
 ) {
     let title = "Aspects Views";
+    // WARN Wtf ?
     let wanted = (&*aspects).into();
     let id = ui.make_persistent_id(title);
     let add_body = |ui: &mut egui::Ui| {
@@ -116,7 +105,7 @@ pub(crate) fn show_aspects_views_menu(
         // ui.text_edit_singleline(&mut "github.com/INRIA/spoon");
     };
 
-    radio_collapsing(ui, id, title, selected, wanted, add_body);
+    radio_collapsing(ui, id, title, selected, &wanted, add_body);
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -208,9 +197,9 @@ pub(crate) fn show(
                 );
                 // ui.painter()
                 //     .debug_rect(ui.available_rect_before_wrap(), egui::Color32::GREEN, "");
-                let mut scroll = egui::ScrollArea::both()
+                let scroll = egui::ScrollArea::both()
                     .auto_shrink([false, false])
-                    .show_viewport(ui, |ui, mut viewport| {
+                    .show_viewport(ui, |ui, viewport| {
                         ui.set_height(3_000.0);
                         // ui.set_clip_rect(ui.ctx().screen_rect());
                         if let Some(content) = &mut aspects_result.content {
@@ -272,7 +261,7 @@ impl FetchedView {
         deletions: Option<&[u32]>,
         path: &str,
     ) -> Action {
-        let mut take = self.prefill_cache.take();
+        let take = self.prefill_cache.take();
         // ui.allocate_space((h, ui.available_size().x).into());
         let path = path.split("/").filter_map(|x| x.parse().ok()).collect();
         let mut imp = FetchedViewImpl::new(

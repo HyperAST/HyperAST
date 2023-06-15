@@ -2,8 +2,7 @@ use hyper_ast::types::DecompressedSubtree;
 
 use crate::{
     decompressed_tree_store::{
-        lazy_post_order::LazyPostOrder, LazyDecompressedTreeStore,
-        ShallowDecompressedTreeStore,
+        lazy_post_order::LazyPostOrder, LazyDecompressedTreeStore, ShallowDecompressedTreeStore,
     },
     tests,
     tree::simple_tree::{vpair_to_stores, DisplayTree},

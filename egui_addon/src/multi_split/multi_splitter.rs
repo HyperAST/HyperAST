@@ -1,11 +1,6 @@
-// started from a draft on egui's github
+use egui::{egui_assert, Align, Layout, Sense, Ui};
 
-use epaint::{
-    emath::{lerp, Align},
-    pos2, vec2, Pos2, Rect, Vec2,
-};
-
-use egui::{egui_assert, Layout, Response, Sense, Ui};
+use super::multi_splitter_orientation::{MultiSplitterOrientation, MultiSplitterResponse};
 
 /// A splitter which can separate the UI into 2 parts either vertically or horizontally.
 ///
@@ -18,15 +13,15 @@ use egui::{egui_assert, Layout, Response, Sense, Ui};
 /// # });
 /// ```
 #[must_use = "You should call .show()"]
-pub struct Splitter {
-    orientation: SplitterOrientation,
+pub struct MultiSplitter {
+    orientation: MultiSplitterOrientation,
     // should be inferior to 1
     ratios: Vec<f32>,
 }
 
-impl Splitter {
+impl MultiSplitter {
     /// Create a new splitter with the given orientation and a ratio of 0.5.
-    pub fn with_orientation(orientation: SplitterOrientation) -> Self {
+    pub fn with_orientation(orientation: MultiSplitterOrientation) -> Self {
         Self {
             orientation,
             ratios: vec![0.25, 0.25, 0.25],
@@ -36,13 +31,13 @@ impl Splitter {
     /// Create a new vertical splitter with a ratio of 0.5.
     #[inline]
     pub fn vertical() -> Self {
-        Self::with_orientation(SplitterOrientation::Vertical)
+        Self::with_orientation(MultiSplitterOrientation::Vertical)
     }
 
     /// Create a new horizontal splitter with a ratio of 0.5.
     #[inline]
     pub fn horizontal() -> Self {
-        Self::with_orientation(SplitterOrientation::Horizontal)
+        Self::with_orientation(MultiSplitterOrientation::Horizontal)
     }
 
     /// Set the ratio of the splitter.
@@ -60,7 +55,7 @@ impl Splitter {
         self,
         ui: &mut Ui,
         add_contents: impl FnOnce(&mut [Ui]) -> R,
-    ) -> SplitterResponse<R> {
+    ) -> MultiSplitterResponse<R> {
         self.show_dyn(ui, Box::new(add_contents))
     }
 
@@ -68,7 +63,7 @@ impl Splitter {
         self,
         ui: &mut Ui,
         add_contents: Box<dyn FnOnce(&mut [Ui]) -> R + 'c>,
-    ) -> SplitterResponse<R> {
+    ) -> MultiSplitterResponse<R> {
         let Self {
             orientation,
             ratios,
@@ -122,16 +117,16 @@ impl Splitter {
                 let i_spacing = &ui.style().spacing.item_spacing;
                 let line_pos_1 = orientation
                     .t((
-                        orientation.p(remaining_rect.min)+orientation.rev().r(&rect)*ratio,//lerp(orientation.p(rect.min)..=orientation.p(rect.max), *ratio),
+                        orientation.p(remaining_rect.min) + orientation.rev().r(&rect) * ratio, //lerp(orientation.p(rect.min)..=orientation.p(rect.max), *ratio),
                         orientation.rev().p(remaining_rect.min),
                     ))
                     .into();
-                let line_pos_2 = line_pos_1 + orientation.t((0.0, orientation.r(&remaining_rect))).into();
+                let line_pos_2 =
+                    line_pos_1 + orientation.t((0.0, orientation.r(&remaining_rect))).into();
 
                 let mut patition_rect = {
                     let mut rect = remaining_rect;
-                    *orientation.m(&mut rect.max) =
-                        orientation.p(line_pos_1);// - orientation.v(i_spacing);
+                    *orientation.m(&mut rect.max) = orientation.p(line_pos_1); // - orientation.v(i_spacing);
                     rect
                 };
                 *orientation.m(&mut remaining_rect.min) = *orientation.m(&mut patition_rect.max);
@@ -151,69 +146,11 @@ impl Splitter {
                 .line_segment(line, ui.visuals().widgets.noninteractive.bg_stroke);
         }
 
-        SplitterResponse {
+        MultiSplitterResponse {
             // splitter_response,
             body_returned,
             // first_response: ui.interact(first_rect, first_ui.id(), Sense::hover()),
             // second_response: ui.interact(second_rect, second_ui.id(), Sense::hover()),
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub enum SplitterOrientation {
-    Horizontal,
-    Vertical,
-}
-
-/// The response of showing a Splitter
-pub struct SplitterResponse<R> {
-    /// The return value of the closure passed into show.
-    pub body_returned: R,
-    // /// The response of the top or left UI depending on the splitter's orientation.
-    // pub first_response: Response,
-    // /// The response of the bottom or right UI depending on the splitter's orientation.
-    // pub second_response: Response,
-    // /// The response of the whole splitter widget.
-    // pub splitter_response: Response,
-}
-
-impl SplitterOrientation {
-    fn rev(self) -> Self {
-        match self {
-            SplitterOrientation::Vertical => SplitterOrientation::Horizontal,
-            SplitterOrientation::Horizontal => SplitterOrientation::Vertical,
-        }
-    }
-    fn v(self, v: &Vec2) -> f32 {
-        match self {
-            SplitterOrientation::Vertical => v.x,
-            SplitterOrientation::Horizontal => v.y,
-        }
-    }
-    fn p(self, p: Pos2) -> f32 {
-        match self {
-            SplitterOrientation::Vertical => p.x,
-            SplitterOrientation::Horizontal => p.y,
-        }
-    }
-    fn m(self, p: &mut Pos2) -> &mut f32 {
-        match self {
-            SplitterOrientation::Vertical => &mut p.x,
-            SplitterOrientation::Horizontal => &mut p.y,
-        }
-    }
-    fn r(self, r: &Rect) -> f32 {
-        match self {
-            SplitterOrientation::Vertical => r.height(),
-            SplitterOrientation::Horizontal => r.width(),
-        }
-    }
-    fn t<T>(self, (a, b): (T, T)) -> (T, T) {
-        match self {
-            SplitterOrientation::Vertical => (a, b),
-            SplitterOrientation::Horizontal => (b, a),
         }
     }
 }

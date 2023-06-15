@@ -1,9 +1,8 @@
-
 use std::{collections::HashSet, fmt::Display};
 
 use serde::{Deserialize, Serialize};
 
-use crate::comparisons::{Comparisons, Comparison};
+use crate::comparisons::{Comparison, Comparisons};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CompStats {
@@ -38,7 +37,6 @@ struct StatsAccu {
 
 impl CompStats {
     pub fn compute(comp: &Comparisons) -> Self {
-
         let exact_decls_matches = comp.exact.len();
         let remaining_decls_in_baseline = comp.left.len();
         // let comp_bl = comp
@@ -87,10 +85,12 @@ impl CompStats {
         //     as f64
         //     / comp.exact.len() as f64;
 
-        let mean_of_remaining_refs_in_baseline = accu.f_negatives as f64 / (accu.count as f64 + 0.000001);
-            // comp.exact.iter().map(|x| x.left.len()).sum::<usize>() as f64 / comp.exact.len() as f64;
+        let mean_of_remaining_refs_in_baseline =
+            accu.f_negatives as f64 / (accu.count as f64 + 0.000001);
+        // comp.exact.iter().map(|x| x.left.len()).sum::<usize>() as f64 / comp.exact.len() as f64;
 
-        let mean_of_remaining_refs_in_tool_results = accu.f_positives as f64 / (accu.count as f64 + 0.000001);
+        let mean_of_remaining_refs_in_tool_results =
+            accu.f_positives as f64 / (accu.count as f64 + 0.000001);
         // comp
         //     .exact
         //     .iter()
@@ -123,8 +123,7 @@ impl CompStats {
             }
         }
         let files_len = files.len();
-        let decls_in_baseline_and_tool_with_refs = 
-        comp
+        let decls_in_baseline_and_tool_with_refs = comp
             .exact
             .iter()
             .map(|x| (x.left.len(), x.exact.len()))
@@ -230,9 +229,9 @@ impl StatsAccu {
             t_positives: self.t_positives + x.t_positives,
             f_positives: self.f_positives + x.f_positives,
             f_negatives: self.f_negatives + x.f_negatives,
-            total_precision: self.total_precision+x.precision(),
-            total_recall: self.total_recall+x.recall(),
-            count: self.count+1,
+            total_precision: self.total_precision + x.precision(),
+            total_recall: self.total_recall + x.recall(),
+            count: self.count + 1,
         }
     }
 }
