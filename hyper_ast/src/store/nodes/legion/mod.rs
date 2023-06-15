@@ -396,7 +396,7 @@ mod stores_impl {
         type NS = nodes::legion::NodeStore;
 
         fn typed_node_store(&self) -> &<Self as TypedHyperAST<'store, TIdN>>::NS {
-            todo!()
+            &self.node_store
         }
     }
 }

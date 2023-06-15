@@ -81,7 +81,7 @@ where HAST: TypedHyperAST<
         // T = HashedNodeRef<'a,Type>,
         Label = LabelIdentifier,
     >,
-    IdN: Copy + Eq + Debug + NodeId<IdN = IdN>,
+    IdN: 'a + Copy + Eq + Debug + NodeId<IdN = IdN>,
     HAST::Idx: num::PrimInt + num::traits::NumAssign + Debug,
     HAST: hyper_ast::types::TypeStore<<HAST as hyper_ast::types::HyperAST<'a>>::T>,
     HAST: hyper_ast::types::LabelStore<str, I = LabelIdentifier>,
@@ -92,7 +92,7 @@ where HAST: TypedHyperAST<
     <HAST as hyper_ast::types::TypedHyperAST<'a,TIdN<IdN>>>::T: RefContainer<Result=BloomResult>,
 {
 
-    pub fn eq_root_scoped(d: ExplorableRef, stores: &HAST, b: <HAST as hyper_ast::types::TypedHyperAST<'a,TIdN<IdN>>>::T) -> bool {
+    pub fn eq_root_scoped(d: ExplorableRef, stores: &'a HAST, b: <HAST as hyper_ast::types::TypedHyperAST<'a,TIdN<IdN>>>::T) -> bool {
         match d.as_ref() {
             RefsEnum::Root => false, // TODO check, not sure
             RefsEnum::MaybeMissing => false,
@@ -101,30 +101,32 @@ where HAST: TypedHyperAST<
                 if t == Type::ScopedAbsoluteIdentifier {
                     let mut bo = false;
                     assert!(b.has_children());
-                    todo!();
-                    // for x in b.children().unwrap().iter_children().rev() {
-                    //     // log::trace!("d:{:?}",d);
-                    //     let b = stores.typed_node_store().try_resolve(x).unwrap().0;
-                    //     let t = b.get_type();
-                    //     if t == Type::ScopedAbsoluteIdentifier {
-                    //         if !Self::eq_root_scoped(d.with(*o), stores, b) {
-                    //             return false;
-                    //         }
-                    //     } else if t == Type::Identifier {
-                    //         if bo {
-                    //             return Self::eq_root_scoped(d.with(*o), stores, b);
-                    //         }
-                    //         if let Some(l) = b.try_get_label() {
-                    //             if l != i.as_ref() {
-                    //                 return false;
-                    //             } else {
-                    //             }
-                    //         } else {
-                    //             panic!()
-                    //         }
-                    //         bo = true;
-                    //     }
-                    // }
+                    // TODO todo!();
+                    let it = b.children().unwrap().iter_children();
+                    let it = it.collect::<Vec<_>>();
+                    for x in it.iter().rev() {
+                        // log::trace!("d:{:?}",d);
+                        let b = stores.typed_node_store().try_resolve(x).unwrap().0;
+                        let t = b.get_type();
+                        if t == Type::ScopedAbsoluteIdentifier {
+                            if !Self::eq_root_scoped(d.with(*o), stores, b) {
+                                return false;
+                            }
+                        } else if t == Type::Identifier {
+                            if bo {
+                                return Self::eq_root_scoped(d.with(*o), stores, b);
+                            }
+                            if let Some(l) = b.try_get_label() {
+                                if l != i.as_ref() {
+                                    return false;
+                                } else {
+                                }
+                            } else {
+                                panic!()
+                            }
+                            bo = true;
+                        }
+                    }
                     true
                 } else if t == Type::Identifier {
                     if let Some(l) = b.try_get_label() {
@@ -143,7 +145,10 @@ where HAST: TypedHyperAST<
                 } else {
                     todo!("{:?}", t)
                 }
-            }
+            },
+            RefsEnum::TypeIdentifier(..) => {
+                false
+            },
             x => {
                 panic!("{:?}", x)
             }
@@ -335,7 +340,7 @@ where HAST: TypedHyperAST<
                 // thus we either search directly for scoped identifiers
                 // or we search for simple identifiers because they do not present refs in themself
                 log::debug!("!found {:?}", &t);
-                todo!();
+                // TODO todo!();
                 // log::debug!("{}",legion_with_refs::TreeSyntax::new(
                 //     self.stores.node_store(),
                 //     self.stores.label_store(),
@@ -401,7 +406,7 @@ where HAST: TypedHyperAST<
 
         for (i, x) in b.children().unwrap().iter_children().enumerate() {
             // scout.inc(*x);
-            assert_eq!(Ok(current),scout.node_always(&self.sp_store));
+            // TODO assert_eq!(Ok(current),scout.node_always(&self.sp_store));
             let (b, x) = self.stores.typed_node_store().try_resolve(x).unwrap();
             scout.goto_typed(x, num::cast(i).unwrap());
             log::trace!(
@@ -486,7 +491,7 @@ where HAST: TypedHyperAST<
                     let b = self.stores.typed_node_store().resolve(&x);
                     Self::eq_root_scoped(d, self.stores, b);
                     self.ana.solver.try_unsolve_node_with(target, package);
-                    panic!()
+                    // TODO panic!()
                 }
             } else {
                 if let Some(x) = self.ana.solver.try_unsolve_node_with(target, root_ref) {
@@ -738,6 +743,7 @@ where HAST: TypedHyperAST<
         // b.get_component::<BloomSize>()
             // .map(|_| {
                 let d = self.ana.solver.nodes.with(target);
+                dbg!(&d);
                 b.check(d)
             // })
             // .unwrap_or(BloomResult::MaybeContain)

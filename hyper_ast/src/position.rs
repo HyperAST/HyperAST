@@ -548,7 +548,8 @@ where
     }
 
     fn goto_typed(&mut self, node: TIdN, i: Idx) {
-        todo!()
+        self.path.goto(*node.as_id(), i);
+        self.tdepth = self.tdepth + 1;
     }
 }
 
@@ -970,13 +971,17 @@ where
         if let Some(n) = self.node_typed() {
             Ok(n.clone())
         } else if let Some(y) = self.path.node() {
-            Err(*y)
+            Ok(unsafe { TIdN::from_id(*y) })
+            // TODO do proper state
+            // Err(*y)
         } else {
-            if self.tdepth > 0 {
-                Ok(unsafe { TIdN::from_id(x.nodes[self.ancestors]) })
-            } else {
-                Err(x.nodes[self.ancestors])
-            }
+            Ok(unsafe { TIdN::from_id(x.nodes[self.ancestors]) })
+            // TODO do proper state
+            // if self.tdepth > 0 {
+            //     Ok(unsafe { TIdN::from_id(x.nodes[self.ancestors]) })
+            // } else {
+            //     Err(x.nodes[self.ancestors])
+            // }
         }
     }
     pub fn up2(
