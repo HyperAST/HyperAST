@@ -39,7 +39,7 @@ impl From<&RepoConfig> for ProcessingConfig<&'static str> {
         match value {
             RepoConfig::CppMake => Self::CppMake {
                 limit: 3,
-                dir_path: "src",
+                dir_path: "",
             },
             RepoConfig::JavaMaven => Self::JavaMaven {
                 limit: 3,

@@ -90,6 +90,8 @@ async fn main() {
         shared_state.repositories.write().unwrap().register_config(Forge::Github.repo("INRIA", "spoon"), RepoConfig::JavaMaven);
         shared_state.repositories.write().unwrap().register_config(Forge::Github.repo("official-stockfish", "Stockfish"),
         RepoConfig::CppMake);
+        shared_state.repositories.write().unwrap().register_config(Forge::Github.repo("torvalds", "linux"),
+        RepoConfig::CppMake);
         // let mut hmap = shared_state.configs.write().unwrap();
         // hmap.0.insert(Forge::Github.repo("INRIA", "spoon"), RepoConfig::JavaMaven);
         // hmap.0.insert(
