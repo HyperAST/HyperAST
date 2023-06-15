@@ -1,7 +1,9 @@
 pub mod code_editor;
 pub mod egui_utils;
-pub mod syntax_highlighting;
+pub mod interactive_split;
 pub mod meta_edge;
+pub mod multi_split;
+pub mod syntax_highlighting;
 
 #[derive(Debug, Clone)]
 pub struct Lang {

@@ -190,7 +190,6 @@ fn as_byte_range(whole: &str, range: &str) -> std::ops::Range<usize> {
     offset..(offset + range.len())
 }
 
-
 impl CodeTheme {
     pub fn from_style(style: &egui::Style) -> Self {
         if style.visuals.dark_mode {

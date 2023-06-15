@@ -1,5 +1,5 @@
-use std::ops::Range;
 use crate::code_editor::generic_text_buffer::char_index_from_byte_index2;
+use std::ops::Range;
 
 mod paint_cursor;
 

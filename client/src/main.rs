@@ -26,16 +26,16 @@ use hyper_ast::store::nodes::legion::NodeIdentifier;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 mod app;
+mod changes;
 mod commit;
 mod examples;
 mod fetch;
 mod file;
+mod matching;
 mod scripting;
 mod track;
-mod view;
-mod changes;
-mod matching;
 mod utils;
+mod view;
 
 #[derive(serde::Deserialize, Clone, Copy, Debug)]
 pub enum RepoConfig {

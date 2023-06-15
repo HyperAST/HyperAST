@@ -125,9 +125,15 @@ pub enum ProcessingConfig<P> {
 
 impl ProcessingConfig<&'static str> {
     pub fn java_maven(limit: usize) -> Self {
-        Self::JavaMaven { limit, dir_path: "" }
+        Self::JavaMaven {
+            limit,
+            dir_path: "",
+        }
     }
     pub fn cpp_make(limit: usize) -> Self {
-        Self::CppMake { limit, dir_path: "src" }
+        Self::CppMake {
+            limit,
+            dir_path: "src",
+        }
     }
 }

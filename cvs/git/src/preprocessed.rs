@@ -8,7 +8,7 @@ use std::{
 use git2::{Oid, Repository};
 use hyper_ast::{
     store::{defaults::LabelIdentifier, nodes::DefaultNodeIdentifier as NodeIdentifier},
-    types::{IterableChildren, LabelStore as _, WithChildren, AnyType},
+    types::{AnyType, IterableChildren, LabelStore as _, WithChildren},
     utils::memusage_linux,
 };
 use hyper_ast_gen_ts_java::impact::partial_analysis::PartialAnalysis;
@@ -24,7 +24,7 @@ use crate::{
     make_processor::MakeProcessor,
     maven::{handle_pom_file, MavenModuleAcc, MavenPartialAnalysis, POM},
     maven_processor::MavenProcessor,
-    Commit, Processor, SimpleStores, MD, TStore,
+    Commit, Processor, SimpleStores, TStore, MD,
 };
 use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
@@ -257,7 +257,13 @@ impl PreProcessedRepository {
                     let mut out = BuffOut {
                         buff: "".to_owned(),
                     };
-                    println!("{}", hyper_ast::nodes::TextSerializer::new(&self.processor.main_stores, full_node.local.compressed_node));
+                    println!(
+                        "{}",
+                        hyper_ast::nodes::TextSerializer::new(
+                            &self.processor.main_stores,
+                            full_node.local.compressed_node
+                        )
+                    );
                     // hyper_ast_gen_ts_java::legion_with_refs::serialize(
                     //     &self.processor.main_stores.node_store,
                     //     &self.processor.main_stores.label_store,

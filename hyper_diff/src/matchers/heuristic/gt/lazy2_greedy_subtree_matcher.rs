@@ -12,7 +12,7 @@ use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyper_ast::compat::HashMap;
 use hyper_ast::types::{
     DecompressedSubtree, HashKind, HyperAST, IterableChildren, Labeled, NodeStore, Stored, Tree,
-    Typed, WithChildren, WithHashs, WithStats, TypeStore,
+    TypeStore, Typed, WithChildren, WithHashs, WithStats,
 };
 use logging_timer::time;
 use num_traits::{PrimInt, ToPrimitive};
@@ -92,7 +92,9 @@ where
         Self::filter_mappings(&mut self.internal, &mm);
     }
 
-    pub fn compute_multi_mapping<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD> + Default>(
+    pub fn compute_multi_mapping<
+        MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD> + Default,
+    >(
         internal: &mut Mapper<'a, HAST, Dsrc, Ddst, M>,
     ) -> MM {
         let mut mm: MM = Default::default();
@@ -504,9 +506,7 @@ where
             HAST::T,
             HAST::NS,
             MIN_HEIGHT,
-        >::new(
-            hyperast.node_store(), src_arena.starter(), src_arena
-        );
+        >::new(hyperast.node_store(), src_arena.starter(), src_arena);
         let mut dst_trees = PriorityTreeList::<
             'a,
             '_,
@@ -516,9 +516,7 @@ where
             HAST::T,
             HAST::NS,
             MIN_HEIGHT,
-        >::new(
-            hyperast.node_store(), dst_arena.starter(), dst_arena
-        );
+        >::new(hyperast.node_store(), dst_arena.starter(), dst_arena);
         let match_init_t = now.elapsed().as_secs_f64();
         dbg!(match_init_t);
         while src_trees.peek_height() != -1 && dst_trees.peek_height() != -1 {

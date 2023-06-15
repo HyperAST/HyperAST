@@ -5,7 +5,10 @@ use std::{
 };
 
 use egui_addon::{
-    code_editor::generic_text_buffer::byte_index_from_char_index, egui_utils::{highlight_byte_range, show_wip, radio_collapsing}, meta_edge::meta_egde,
+    code_editor::generic_text_buffer::byte_index_from_char_index,
+    egui_utils::{highlight_byte_range, radio_collapsing, show_wip},
+    meta_edge::meta_egde,
+    multi_split::multi_splitter::MultiSplitter,
 };
 use epaint::{ahash::HashSet, Pos2};
 use hyper_ast::{
@@ -230,7 +233,6 @@ pub(crate) fn show_results(
     long_tracking: &mut LongTacking,
     fetched_files: &mut HashMap<types::FileIdentifier, RemoteFile>,
 ) {
-    use super::multi_split::Splitter;
     let w_id = ui.id().with("Tracking Timeline");
     let timeline_window = ui.available_rect_before_wrap();
     let spacing: egui::Vec2 = (0.0, 0.0).into(); //4.0 // ui.spacing().item_spacing;
@@ -441,7 +443,7 @@ pub(crate) fn show_results(
                 let ratios = (0..total_cols - 1)
                     .map(|_| 1.0 / (total_cols) as f32)
                     .collect();
-                Splitter::vertical().ratios(ratios).show(ui, |uis| {
+                MultiSplitter::vertical().ratios(ratios).show(ui, |uis| {
                     for (col, ui) in uis.into_iter().enumerate() {
                         add_content(ui, col);
                     }
@@ -1561,7 +1563,6 @@ fn color_gr_shift(color: epaint::Color32, step: f32) -> epaint::Color32 {
         color.a(),
     )
 }
-
 
 fn show_detached_element(
     ui: &mut egui::Ui,

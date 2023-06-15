@@ -13,7 +13,7 @@ use hyper_ast::{
 use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
 use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
 
-use crate::{Accumulator, SimpleStores, PROPAGATE_ERROR_ON_BAD_CST_NODE, TStore};
+use crate::{Accumulator, SimpleStores, TStore, PROPAGATE_ERROR_ON_BAD_CST_NODE};
 
 pub(crate) fn handle_makefile_file<'a>(
     tree_gen: &mut XmlTreeGen<'a, TStore>,

@@ -1,22 +1,22 @@
+use crate::types::{TIdN, Type};
 use core::fmt;
-use std::fmt::Debug;
-use crate::types::{Type, TIdN};
 use hyper_ast::{
     filter::{BloomResult, BloomSize},
-    nodes::{RefContainer},
+    nodes::RefContainer,
     position::{
-         ExploreStructuralPositions, Scout, SpHandle,
-        StructuralPositionStore, TreePath, TypedScout, TreePathMut, TypedTreePath,
+        ExploreStructuralPositions, Scout, SpHandle, StructuralPositionStore, TreePath,
+        TreePathMut, TypedScout, TypedTreePath,
     },
     store::defaults::LabelIdentifier,
     store::nodes::legion::HashedNodeRef,
-    store::{
-        defaults::{NodeIdentifier},
-        SimpleStores,
+    store::{defaults::NodeIdentifier, SimpleStores},
+    types::{
+        Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeId, Tree, TypeStore,
+        TypeTrait, Typed, TypedHyperAST, TypedNodeStore, WithChildren, WithSerialization,
     },
-    types::{LabelStore, Labeled, Tree, Typed, WithChildren, IterableChildren, Children, TypedNodeStore, TypedHyperAST, NodeId, HyperAST, TypeTrait, WithSerialization, TypeStore},
 };
-use num::{ToPrimitive, zero, one, cast, Zero};
+use num::{cast, one, zero, ToPrimitive, Zero};
+use std::fmt::Debug;
 // use hyper_ast_core::tree::tree::{WithChildren, Tree, Labeled};
 
 use crate::{
@@ -24,9 +24,7 @@ use crate::{
         element::{IdentifierFormat, LabelPtr},
         reference::DisplayRef,
     },
-    legion_with_refs::{
-        self,
-    },
+    legion_with_refs::{self},
 };
 use hyper_ast::types::AnyType;
 
@@ -38,19 +36,19 @@ use super::{
 
 // TODO use generic node and store
 
-pub struct RefsFinder<'a,IdN,HAST:HyperAST<'a>> {
+pub struct RefsFinder<'a, IdN, HAST: HyperAST<'a>> {
     stores: &'a HAST,
     ana: &'a mut PartialAnalysis,
     /// result of search
-    sp_store: &'a mut StructuralPositionStore<IdN,HAST::Idx>,
+    sp_store: &'a mut StructuralPositionStore<IdN, HAST::Idx>,
     refs: Vec<SpHandle>,
 }
 
-impl<'a,IdN,HAST:HyperAST<'a>> RefsFinder<'a, IdN, HAST> {
+impl<'a, IdN, HAST: HyperAST<'a>> RefsFinder<'a, IdN, HAST> {
     pub fn new(
         stores: &'a HAST,
         ana: &'a mut PartialAnalysis,
-        sp_store: &'a mut StructuralPositionStore<IdN,HAST::Idx>,
+        sp_store: &'a mut StructuralPositionStore<IdN, HAST::Idx>,
     ) -> Self {
         Self {
             stores,
@@ -60,7 +58,6 @@ impl<'a,IdN,HAST:HyperAST<'a>> RefsFinder<'a, IdN, HAST> {
         }
     }
 }
-
 
 macro_rules! missing_rule {
     () => {
@@ -74,9 +71,11 @@ macro_rules! missing_rule {
 /// Main traversal of HyperAST
 /// Recusive traversal, it goes through declaration without handling them particularly
 /// thus is should not search for references to `this` or `super`
-impl<'a, IdN, HAST> RefsFinder<'a,IdN,HAST>
-where HAST: TypedHyperAST<
-        'a, TIdN<IdN>,
+impl<'a, IdN, HAST> RefsFinder<'a, IdN, HAST>
+where
+    HAST: TypedHyperAST<
+        'a,
+        TIdN<IdN>,
         IdN = IdN,
         // T = HashedNodeRef<'a,Type>,
         Label = LabelIdentifier,
@@ -86,13 +85,18 @@ where HAST: TypedHyperAST<
     HAST: hyper_ast::types::TypeStore<<HAST as hyper_ast::types::HyperAST<'a>>::T>,
     HAST: hyper_ast::types::LabelStore<str, I = LabelIdentifier>,
     HAST: hyper_ast::types::NodeStore<IdN, R<'a> = <HAST as hyper_ast::types::HyperAST<'a>>::T>,
-    <HAST as hyper_ast::types::HyperAST<'a>>::T: Tree<Type=AnyType, ChildIdx = HAST::Idx> + WithSerialization,
-    <HAST as hyper_ast::types::HyperAST<'a>>::T: RefContainer<Result=BloomResult>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a,TIdN<IdN>>>::T: Tree<Type=Type,ChildIdx = HAST::Idx>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a,TIdN<IdN>>>::T: RefContainer<Result=BloomResult>,
+    <HAST as hyper_ast::types::HyperAST<'a>>::T:
+        Tree<Type = AnyType, ChildIdx = HAST::Idx> + WithSerialization,
+    <HAST as hyper_ast::types::HyperAST<'a>>::T: RefContainer<Result = BloomResult>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::T:
+        Tree<Type = Type, ChildIdx = HAST::Idx>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::T: RefContainer<Result = BloomResult>,
 {
-
-    pub fn eq_root_scoped(d: ExplorableRef, stores: &HAST, b: <HAST as hyper_ast::types::TypedHyperAST<'a,TIdN<IdN>>>::T) -> bool {
+    pub fn eq_root_scoped(
+        d: ExplorableRef,
+        stores: &HAST,
+        b: <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::T,
+    ) -> bool {
         match d.as_ref() {
             RefsEnum::Root => false, // TODO check, not sure
             RefsEnum::MaybeMissing => false,
@@ -149,11 +153,16 @@ where HAST: TypedHyperAST<
             }
         }
     }
-    
+
     /// Find all references to `target` that was declared in `package`
     /// WARN maybe do not search targets that end with unqualified this, use find_all_with_this it it works
     /// returns the indexes that should be used on self.sp_store the `StructuralPositionStore<NodeIdentifier>`
-    pub fn find_all(mut self, package: RefPtr, target: RefPtr, mut scout: TypedScout<TIdN<HAST::IdN>,HAST::Idx>) -> Vec<SpHandle> {
+    pub fn find_all(
+        mut self,
+        package: RefPtr,
+        target: RefPtr,
+        mut scout: TypedScout<TIdN<HAST::IdN>, HAST::Idx>,
+    ) -> Vec<SpHandle> {
         // self.sp_store.check_with(self.stores, &scout).expect("find_all before");
         // self.find_refs::<false>(package, target, &mut scout);
         let current = scout.node_always(&self.sp_store).unwrap();
@@ -168,7 +177,7 @@ where HAST: TypedHyperAST<
         mut self,
         package: RefPtr,
         target: RefPtr,
-        mut scout: TypedScout<TIdN<HAST::IdN>,HAST::Idx>,
+        mut scout: TypedScout<TIdN<HAST::IdN>, HAST::Idx>,
     ) -> Vec<SpHandle> {
         // self.sp_store.check_with(self.stores, &scout).expect("find_all_with before");
         let current = scout.node_always(&self.sp_store).unwrap();
@@ -179,7 +188,11 @@ where HAST: TypedHyperAST<
     /// Find all references to `target` that was declared in `package`
     /// WARN do not search targets that end with unqualified this, use find_ref_this
     /// returns the indexes that should be used on self.sp_store the `StructuralPositionStore<NodeIdentifier>`
-    pub fn find_all_is_this(mut self, package: RefPtr, mut scout: TypedScout<TIdN<HAST::IdN>, HAST::Idx>) -> Vec<SpHandle> {
+    pub fn find_all_is_this(
+        mut self,
+        package: RefPtr,
+        mut scout: TypedScout<TIdN<HAST::IdN>, HAST::Idx>,
+    ) -> Vec<SpHandle> {
         let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
         let this = self.ana.solver.intern(RefsEnum::This(mm));
         todo!("need a TypedScout for find constructors");
@@ -197,12 +210,14 @@ where HAST: TypedHyperAST<
         target: RefPtr,
         scout: &mut Scout<HAST::IdN, HAST::Idx>,
     ) -> Vec<RefPtr> {
-        self.sp_store.check_with(self.stores, scout).expect("find_refs");
+        self.sp_store
+            .check_with(self.stores, scout)
+            .expect("find_refs");
         let current = scout.node_always(&self.sp_store);
         let b = self.stores.typed_node_store().try_resolve(&current);
-        let has_children = b.as_ref().map_or(false, |(x,_)|x.has_children());
+        let has_children = b.as_ref().map_or(false, |(x, _)| x.has_children());
         // let t = b.as_ref().map_or(Type::ERROR, |(x,_)|x.get_type());
-        if let Some((b,current)) = b {
+        if let Some((b, current)) = b {
             let t = b.get_type();
             let scout = &mut self.sp_store.type_scout(scout, &current);
             match self.find_refs_pre(t, &b, package, scout, target, &current) {
@@ -222,21 +237,24 @@ where HAST: TypedHyperAST<
             return vec![];
         }
         if !b.has_children() {
-            log::error!("droped on {:?}",t);
+            log::error!("droped on {:?}", t);
             return vec![];
         }
         let mut v: Vec<usize> = vec![];
-        log::debug!("c_count {:?}",b.child_count());
+        log::debug!("c_count {:?}", b.child_count());
         // scout.down();
 
         for (i, x) in b.children().unwrap().iter_children().enumerate() {
             // scout.inc(*x);
-            assert_eq!(current,scout.node_always(&self.sp_store));
+            assert_eq!(current, scout.node_always(&self.sp_store));
             scout.goto(*x, num::cast(i).unwrap());
             log::trace!(
                 "rec {} search ref {}",
                 i,
-                DisplayRef::from((self.ana.solver.nodes.with(target), self.stores.label_store())),
+                DisplayRef::from((
+                    self.ana.solver.nodes.with(target),
+                    self.stores.label_store()
+                )),
             );
             let z = self.find_refs::<false>(package, target, scout);
             for w in v.clone() {
@@ -259,7 +277,7 @@ where HAST: TypedHyperAST<
         package: RefPtr,
         target: RefPtr,
         current: TIdN<IdN>,
-        b: <HAST as TypedHyperAST<'a,TIdN<IdN>>>::T,
+        b: <HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
     ) -> Vec<RefPtr> {
         // self.sp_store.check_with(self.stores, scout).expect("find_refs");
@@ -351,63 +369,72 @@ where HAST: TypedHyperAST<
                 // thus we either search directly for scoped identifiers
                 // or we search for simple identifiers because they do not present refs in themself
                 // Moreover we try to avoid double matching refs
-                let tt =  match scout.clone().up(self.sp_store) {
-                    Some(Ok(x)) => {
-                        Some(self
+                let tt = match scout.clone().up(self.sp_store) {
+                    Some(Ok(x)) => Some(self.stores.typed_node_store().resolve(&x).get_type()),
+                    Some(Err(x)) => self
                         .stores
                         .typed_node_store()
-                        .resolve(&x).get_type())
-                    }
-                    Some(Err(x)) => {
-                            self
-                        .stores
-                        .typed_node_store()
-                        .try_resolve(&x).map(|(x,_)|x.get_type())
-                    }
-                    None => None
+                        .try_resolve(&x)
+                        .map(|(x, _)| x.get_type()),
+                    None => None,
                 };
                 if tt != Some(Type::ObjectCreationExpression) {
                     log::debug!("!found {:?}", &t);
 
-                    log::debug!("{}", hyper_ast::nodes::SyntaxSerializer::new(self.stores, *current.as_id()));
-    
+                    log::debug!(
+                        "{}",
+                        hyper_ast::nodes::SyntaxSerializer::new(self.stores, *current.as_id())
+                    );
+
                     self.exact_match(target, scout.clone());
                 }
             } else if t == Type::This {
                 log::debug!("!found This");
-                log::debug!("{}", hyper_ast::nodes::SyntaxSerializer::new(self.stores, *current.as_id()));
+                log::debug!(
+                    "{}",
+                    hyper_ast::nodes::SyntaxSerializer::new(self.stores, *current.as_id())
+                );
                 self.exact_match(target, scout.clone());
                 return vec![];
             } else if t == Type::TypeIdentifier {
                 log::debug!("!found TypeIdentifier");
-                log::debug!("{}",hyper_ast::nodes::SyntaxSerializer::new(self.stores, *current.as_id()));
+                log::debug!(
+                    "{}",
+                    hyper_ast::nodes::SyntaxSerializer::new(self.stores, *current.as_id())
+                );
                 self.exact_match(target, scout.clone());
                 return vec![];
             } else if t == Type::MethodDeclaration {
                 // java_tree_gen::print_tree_syntax(
-                log::debug!("{}",hyper_ast::nodes::SyntaxSerializer::new(self.stores, *current.as_id()));
+                log::debug!(
+                    "{}",
+                    hyper_ast::nodes::SyntaxSerializer::new(self.stores, *current.as_id())
+                );
                 self.exact_match(target, scout.clone());
             } else if !has_children {
                 return vec![];
             }
         }
         if !b.has_children() {
-            log::error!("droped on {:?}",t);
+            log::error!("droped on {:?}", t);
             return vec![];
         }
         let mut v: Vec<usize> = vec![];
-        log::debug!("c_count {:?}",b.child_count());
+        log::debug!("c_count {:?}", b.child_count());
         // scout.down();
 
         for (i, x) in b.children().unwrap().iter_children().enumerate() {
             // scout.inc(*x);
-            assert_eq!(Ok(current),scout.node_always(&self.sp_store));
+            assert_eq!(Ok(current), scout.node_always(&self.sp_store));
             let (b, x) = self.stores.typed_node_store().try_resolve(x).unwrap();
             scout.goto_typed(x, num::cast(i).unwrap());
             log::trace!(
                 "rec {} search ref {}",
                 i,
-                DisplayRef::from((self.ana.solver.nodes.with(target), self.stores.label_store())),
+                DisplayRef::from((
+                    self.ana.solver.nodes.with(target),
+                    self.stores.label_store()
+                )),
             );
             let z = self.find_refs2::<false>(package, target, x, b, scout);
             for w in v.clone() {
@@ -416,7 +443,7 @@ where HAST: TypedHyperAST<
                     DisplayRef::from((self.ana.solver.nodes.with(w), self.stores.label_store())),
                 );
                 let b = self.stores.typed_node_store().resolve(&x);
-                let z = self.find_refs2::<false>(package, w,x, b, scout);
+                let z = self.find_refs2::<false>(package, w, x, b, scout);
                 v.extend(z)
             }
             v.extend(z);
@@ -428,13 +455,16 @@ where HAST: TypedHyperAST<
 
     fn find_refs_pre(
         &mut self,
-        t : Type,
-        b: &<HAST as TypedHyperAST<'a,TIdN<IdN>>>::T,
+        t: Type,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
         package: usize,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
         target: usize,
-        current: &TIdN<IdN>
-    ) -> Result<Type, Vec<usize>> where IdN: Copy + Eq + Debug {
+        current: &TIdN<IdN>,
+    ) -> Result<Type, Vec<usize>>
+    where
+        IdN: Copy + Eq + Debug,
+    {
         if t == Type::Spaces {
             return Err(vec![]);
         } else if t == Type::Comment {
@@ -445,13 +475,13 @@ where HAST: TypedHyperAST<
             let (b, x) = {
                 let mut i = num::zero();
                 let r;
-                let x:TIdN<IdN>;
+                let x: TIdN<IdN>;
                 assert!(b.has_children());
                 loop {
                     let y = b.child(&i).unwrap();
                     // let b = self.stores.node_store().resolve(y);
                     let b = self.stores.typed_node_store().try_resolve(&y);
-                    if let Some((b,y)) = b {
+                    if let Some((b, y)) = b {
                         let t = b.get_type();
                         if t == Type::ScopedAbsoluteIdentifier || t == Type::Identifier {
                             r = b;
@@ -468,11 +498,17 @@ where HAST: TypedHyperAST<
             };
             log::debug!(
                 "d=1 {} {:?}",
-                DisplayRef::from((self.ana.solver.nodes.with(target), self.stores.label_store())),
+                DisplayRef::from((
+                    self.ana.solver.nodes.with(target),
+                    self.stores.label_store()
+                )),
                 &t,
                 // scout.make_position(&self.sp_store, self.stores)
             );
-            log::debug!("{}",hyper_ast::nodes::SyntaxSerializer::new(self.stores, *x.as_id()));
+            log::debug!(
+                "{}",
+                hyper_ast::nodes::SyntaxSerializer::new(self.stores, *x.as_id())
+            );
 
             if Self::eq_root_scoped(d, self.stores, b) {
                 if let Some(x) = self.ana.solver.try_unsolve_node_with(target, package) {
@@ -498,7 +534,10 @@ where HAST: TypedHyperAST<
         } else if t == Type::Program {
             log::debug!(
                 "d=1 {} {:?}",
-                DisplayRef::from((self.ana.solver.nodes.with(target), self.stores.label_store())),
+                DisplayRef::from((
+                    self.ana.solver.nodes.with(target),
+                    self.stores.label_store()
+                )),
                 &t,
                 // scout.make_position(&self.sp_store, &self.stores)
             );
@@ -512,7 +551,10 @@ where HAST: TypedHyperAST<
         } else if t == Type::Directory {
             log::debug!(
                 "d=1 {} {:?}",
-                DisplayRef::from((self.ana.solver.nodes.with(target), self.stores.label_store())),
+                DisplayRef::from((
+                    self.ana.solver.nodes.with(target),
+                    self.stores.label_store()
+                )),
                 &t,
                 // scout.make_position(&self.sp_store, &self.stores)
             );
@@ -522,7 +564,10 @@ where HAST: TypedHyperAST<
         } else if t == Type::ImportDeclaration {
             log::debug!("d=1 {:?}", &t);
             // TODO move print to maybe contains branch
-            log::debug!("{}",hyper_ast::nodes::SyntaxSerializer::new(self.stores, *current.as_id(),));
+            log::debug!(
+                "{}",
+                hyper_ast::nodes::SyntaxSerializer::new(self.stores, *current.as_id(),)
+            );
             if target == package {
                 return Err(vec![]);
             }
@@ -563,7 +608,11 @@ where HAST: TypedHyperAST<
                         parsed_import.unwrap().clone()
                     };
 
-                    if Self::eq_root_scoped(d, self.stores, self.stores.typed_node_store().resolve(&scop)) {
+                    if Self::eq_root_scoped(
+                        d,
+                        self.stores,
+                        self.stores.typed_node_store().resolve(&scop),
+                    ) {
                         if stic {
                             log::debug!("the import is static");
                         }
@@ -734,22 +783,26 @@ where HAST: TypedHyperAST<
         }
         Ok(t)
     }
-    fn check_oracle<T:RefContainer<Result=BloomResult>>(&self, b: &T, target: RefPtr) -> BloomResult {
+    fn check_oracle<T: RefContainer<Result = BloomResult>>(
+        &self,
+        b: &T,
+        target: RefPtr,
+    ) -> BloomResult {
         // b.get_component::<BloomSize>()
-            // .map(|_| {
-                let d = self.ana.solver.nodes.with(target);
-                b.check(d)
-            // })
-            // .unwrap_or(BloomResult::MaybeContain)
+        // .map(|_| {
+        let d = self.ana.solver.nodes.with(target);
+        b.check(d)
+        // })
+        // .unwrap_or(BloomResult::MaybeContain)
     }
 }
 
-
-
 /// prerequisite: recusive traversal limited to expressions ie. should not cross declarations
-impl<'a, IdN, HAST> RefsFinder<'a,IdN,HAST>
-where HAST: TypedHyperAST<
-        'a, TIdN<IdN>,
+impl<'a, IdN, HAST> RefsFinder<'a, IdN, HAST>
+where
+    HAST: TypedHyperAST<
+        'a,
+        TIdN<IdN>,
         IdN = IdN,
         // T = HashedNodeRef<'a,Type>,
         Label = LabelIdentifier,
@@ -759,11 +812,13 @@ where HAST: TypedHyperAST<
     HAST: hyper_ast::types::TypeStore<<HAST as hyper_ast::types::HyperAST<'a>>::T>,
     HAST: hyper_ast::types::LabelStore<str, I = LabelIdentifier>,
     HAST: hyper_ast::types::NodeStore<IdN, R<'a> = <HAST as hyper_ast::types::HyperAST<'a>>::T>,
-    <HAST as hyper_ast::types::HyperAST<'a>>::T: Tree<Type=AnyType, ChildIdx = HAST::Idx> + WithSerialization,
-    <HAST as hyper_ast::types::HyperAST<'a>>::T: RefContainer<Result=BloomResult>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a,TIdN<IdN>>>::T: Tree<Type=Type,ChildIdx = HAST::Idx>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a,TIdN<IdN>>>::T: RefContainer<Result=BloomResult>,
- {
+    <HAST as hyper_ast::types::HyperAST<'a>>::T:
+        Tree<Type = AnyType, ChildIdx = HAST::Idx> + WithSerialization,
+    <HAST as hyper_ast::types::HyperAST<'a>>::T: RefContainer<Result = BloomResult>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::T:
+        Tree<Type = Type, ChildIdx = HAST::Idx>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::T: RefContainer<Result = BloomResult>,
+{
     pub fn exact_match(&mut self, target: RefPtr, mut scout: TypedScout<TIdN<IdN>, HAST::Idx>) {
         let d = ExplorableRef {
             rf: target,
@@ -869,7 +924,10 @@ where HAST: TypedHyperAST<
             self.exact_match_resource(&b, o, i, &mut scout)
         } else if t == Type::VariableDeclarator {
             self.exact_match_var_declarator(&b, o, i, &mut scout)
-        } else if t == Type::ArgumentList || t == Type::ElementValueArrayInitializer || t == Type::TypeArguments {
+        } else if t == Type::ArgumentList
+            || t == Type::ElementValueArrayInitializer
+            || t == Type::TypeArguments
+        {
             self.exact_match_identifier_in_expr_like(&b, o, i, &mut scout)
         } else if t == Type::This || t == Type::Super {
             // self.exact_match_this_super(&b, o, i, &mut scout)
@@ -889,9 +947,7 @@ where HAST: TypedHyperAST<
             || (t == Type::Throws && b.has_children())
         {
             self.exact_match_identifier_in_expr_like(&b, o, i, &mut scout)
-        } else if t == Type::Annotation
-            || t == Type::MarkerAnnotation
-        {
+        } else if t == Type::Annotation || t == Type::MarkerAnnotation {
             self.exact_match_identifier_in_expr_like(&b, o, i, &mut scout)
         } else if t == Type::Identifier || t == Type::TypeIdentifier {
             if &RefsEnum::MaybeMissing != self.ana.solver.nodes.with(o).as_ref() {
@@ -911,14 +967,14 @@ where HAST: TypedHyperAST<
     /// TODO evaluate validity
     pub fn exact_match_this_super(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a,TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
         o: usize,
         i: &LabelIdentifier,
-        scout: &mut TypedScout<TIdN<IdN>,HAST::Idx>,
+        scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
     ) {
         assert!(b.has_children());
         let x = b.child(&zero()).unwrap();
-        let (b,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+        let (b, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
         let t = b.get_type();
         if t == Type::TypeIdentifier {
             if let Some(l) = b.try_get_label() {
@@ -939,7 +995,6 @@ where HAST: TypedHyperAST<
         } else {
             missing_rule!("exact_match_this_super missing {:?}", t)
         }
-    
     }
     fn exact_match_var_declarator(
         &mut self,
@@ -954,7 +1009,7 @@ where HAST: TypedHyperAST<
         assert!(b.has_children());
         let len = b.child_count();
         let x = b.child(&(len - one())).unwrap();
-        let (bb,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+        let (bb, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
         let t = bb.get_type();
         if t == Type::Identifier {
             let l = bb.try_get_label().unwrap();
@@ -981,7 +1036,7 @@ where HAST: TypedHyperAST<
         }
         assert!(b.has_children());
         for (j, x) in b.children().unwrap().iter_children().enumerate() {
-            let (r,x) = self.stores.typed_node_store().try_resolve(x).unwrap();
+            let (r, x) = self.stores.typed_node_store().try_resolve(x).unwrap();
             let t = r.get_type();
             if t == Type::TypeIdentifier {
                 let l = r.try_get_label().unwrap();
@@ -1015,7 +1070,7 @@ where HAST: TypedHyperAST<
         loop {
             let x = b.child(&j).unwrap();
             let (r, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
-            let t:Type = r.get_type();
+            let t: Type = r.get_type();
             if t == Type::TypeIdentifier {
                 let l = r.try_get_label().unwrap();
                 if l == i {
@@ -1051,13 +1106,17 @@ where HAST: TypedHyperAST<
             return;
         }
         assert!(b.has_children());
-        let (r, t,j,x) = {
+        let (r, t, j, x) = {
             let mut i = zero();
             let r;
             let t;
-            let  mut x;
+            let mut x;
             loop {
-                let (b,xx) = self.stores.typed_node_store().try_resolve(&b.child(&i).unwrap()).unwrap();
+                let (b, xx) = self
+                    .stores
+                    .typed_node_store()
+                    .try_resolve(&b.child(&i).unwrap())
+                    .unwrap();
                 x = xx;
                 let tt = b.get_type();
                 if tt == Type::Modifiers {
@@ -1072,12 +1131,12 @@ where HAST: TypedHyperAST<
                     break;
                 }
             }
-            (r, t,i,x)
+            (r, t, i, x)
         };
         if t == Type::TypeIdentifier {
             let l = r.try_get_label().unwrap();
             if l == i {
-                scout.goto_typed(x,j);
+                scout.goto_typed(x, j);
                 self.successful_match(scout);
             }
         } else if is_individually_matched(t) || is_never_reference(t) {
@@ -1091,12 +1150,12 @@ where HAST: TypedHyperAST<
         b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
         _o: usize,
         i: &LabelIdentifier,
-        scout: &mut TypedScout<TIdN<IdN>,HAST::Idx>,
+        scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
     ) {
         assert!(b.has_children());
         let x = b.child_rev(&zero()).unwrap();
         let len = b.child_count();
-        let (bb,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+        let (bb, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
         let t = bb.get_type();
         if t == Type::TypeIdentifier {
             if let Some(l) = bb.try_get_label() {
@@ -1159,7 +1218,7 @@ where HAST: TypedHyperAST<
             return;
         }
         let x = b.child(&zero()).unwrap();
-        let (b,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+        let (b, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
         let t = b.get_type();
         if t == Type::TypeIdentifier {
             let l = b.try_get_label().unwrap();
@@ -1268,7 +1327,7 @@ where HAST: TypedHyperAST<
             return;
         }
         let x = b.child(&zero()).unwrap();
-        let (bb,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+        let (bb, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
         let t = bb.get_type();
         if t == Type::Identifier {
             let l = bb.try_get_label().unwrap();
@@ -1287,7 +1346,7 @@ where HAST: TypedHyperAST<
         }
         let x = b.child_rev(&zero()).unwrap();
         let len = b.child_count();
-        let (bb,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+        let (bb, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
         let t = bb.get_type();
         if t == Type::TypeIdentifier || t == Type::Identifier {
             let l = bb.try_get_label().unwrap();
@@ -1348,7 +1407,7 @@ where HAST: TypedHyperAST<
             return;
         }
         let x = b.child(&zero()).unwrap();
-        let (b,_) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+        let (b, _) = self.stores.typed_node_store().try_resolve(&x).unwrap();
         let t = b.get_type();
         if t == Type::TypeIdentifier {
             // scout.goto(x, 0);
@@ -1383,7 +1442,7 @@ where HAST: TypedHyperAST<
             let x = b.child(&j).unwrap();
             // r = self.stores.node_store().resolve(x);
             let x = {
-                let (b,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+                let (b, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
                 r = b;
                 x
             };
@@ -1447,20 +1506,21 @@ where HAST: TypedHyperAST<
             return;
         }
         assert!(b.has_children());
-        let (r, t,j,x) = {
+        let (r, t, j, x) = {
             let x = b.child(&zero()).unwrap();
-            let (r,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+            let (r, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
             let t = r.get_type();
             if t == Type::Modifiers {
-                let two: <HAST as HyperAST>::Idx = <<HAST as HyperAST>::Idx as num::One>::one() + one();
+                let two: <HAST as HyperAST>::Idx =
+                    <<HAST as HyperAST>::Idx as num::One>::one() + one();
                 let x = b.child(&(two)).unwrap();
-                let (r,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+                let (r, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
                 let t = r.get_type();
                 // scout.goto(x, 2);
-                (r, t,two,x)
+                (r, t, two, x)
             } else {
                 // scout.goto(x, 0);
-                (r, t,zero(),x)
+                (r, t, zero(), x)
             }
         };
         if t == Type::TypeIdentifier {
@@ -1493,7 +1553,7 @@ where HAST: TypedHyperAST<
         let mut x;
         loop {
             let xx = b.child(&j).unwrap();
-            let (b,xx) = self.stores.typed_node_store().try_resolve(&xx).unwrap();
+            let (b, xx) = self.stores.typed_node_store().try_resolve(&xx).unwrap();
             x = xx;
             let tt = b.get_type();
             if tt == Type::Modifiers {
@@ -1531,7 +1591,7 @@ where HAST: TypedHyperAST<
     ) {
         assert!(b.has_children());
         let x = b.child(&num::zero()).unwrap();
-        let (b,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+        let (b, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
         scout.goto_typed(x, zero());
         let t = b.get_type();
         if t == Type::TypeIdentifier {
@@ -1577,7 +1637,14 @@ where HAST: TypedHyperAST<
         assert!(b.has_children());
         let j = b.child_count() - num::one();
         let cs = b.children().unwrap();
-        let has_body = self.stores.typed_node_store().try_resolve(&cs[j]).unwrap().0.get_type() == Type::ClassBody;
+        let has_body = self
+            .stores
+            .typed_node_store()
+            .try_resolve(&cs[j])
+            .unwrap()
+            .0
+            .get_type()
+            == Type::ClassBody;
         let mut j = j.into();
         if has_body {
             log::debug!("object creation expression has body");
@@ -1590,7 +1657,7 @@ where HAST: TypedHyperAST<
 
         loop {
             let x = cs[j];
-            let (r,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+            let (r, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
             let t = r.get_type();
 
             if t == Type::TypeIdentifier {
@@ -1631,7 +1698,7 @@ where HAST: TypedHyperAST<
                 let mut scout2 = scout.clone();
                 scout2.goto_typed(x, j);
                 let x = r.child(&zero()).unwrap();
-                let (b,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+                let (b, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
                 let t = b.get_type();
                 if t == Type::TypeIdentifier {
                     // scout.goto(x, 0);
@@ -1655,7 +1722,8 @@ where HAST: TypedHyperAST<
 
                 let mut scout2 = scout.clone();
                 scout2.goto_typed(x, j);
-                if let Some(oo) = self.exact_match_object_creation_expression_aux(&r, o, i, scout2.clone())
+                if let Some(oo) =
+                    self.exact_match_object_creation_expression_aux(&r, o, i, scout2.clone())
                 {
                     matched_scout = Some(scout2);
                     o = oo;
@@ -1688,7 +1756,7 @@ where HAST: TypedHyperAST<
             j -= one();
         }
         loop {
-            let (r,xx) = self.stores.typed_node_store().try_resolve(&cs[j]).unwrap();
+            let (r, xx) = self.stores.typed_node_store().try_resolve(&cs[j]).unwrap();
             let t = r.get_type();
             if t == Type::TypeIdentifier || t == Type::Identifier {
                 if let Some(l) = r.try_get_label() {
@@ -1743,16 +1811,22 @@ where HAST: TypedHyperAST<
             } else if t == Type::Spaces {
             } else if t == Type::Dot {
             } else if t == Type::FieldAccess {
-                log::debug!("need to handle a.new b.C() {}",hyper_ast::nodes::SyntaxSerializer::new(
-                    self.stores, 
-                    scout.node_always(&self.sp_store).unwrap().as_id().clone()
-                ));
+                log::debug!(
+                    "need to handle a.new b.C() {}",
+                    hyper_ast::nodes::SyntaxSerializer::new(
+                        self.stores,
+                        scout.node_always(&self.sp_store).unwrap().as_id().clone()
+                    )
+                );
             } else if t == Type::GenericType {
                 // TODO need full check if creating anonymous class
-                log::debug!("need to handle a<T>.new b.C() {}",hyper_ast::nodes::SyntaxSerializer::new(
-                    self.stores, 
-                    scout.node_always(&self.sp_store).unwrap().as_id().clone()
-                ));
+                log::debug!(
+                    "need to handle a<T>.new b.C() {}",
+                    hyper_ast::nodes::SyntaxSerializer::new(
+                        self.stores,
+                        scout.node_always(&self.sp_store).unwrap().as_id().clone()
+                    )
+                );
             } else if t == Type::ScopedTypeIdentifier {
                 // TODO need a unit test
                 // TODO need full check if creating anonymous class
@@ -1816,7 +1890,7 @@ where HAST: TypedHyperAST<
     ) -> Option<usize> {
         assert!(b.has_children());
         let x = b.child_rev(&zero()).unwrap();
-        let (bb,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+        let (bb, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
         let t = bb.get_type();
 
         if t == Type::TypeIdentifier {
@@ -1832,7 +1906,7 @@ where HAST: TypedHyperAST<
         }
 
         let x = b.child(&zero()).unwrap();
-        let (bb,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+        let (bb, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
         let t = bb.get_type();
         if t == Type::TypeIdentifier {
             if let Some(l) = bb.try_get_label() {
@@ -1996,7 +2070,7 @@ where HAST: TypedHyperAST<
             }
         }
     }
-    
+
     fn exact_match_field_access(
         &mut self,
         b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
@@ -2154,10 +2228,13 @@ where HAST: TypedHyperAST<
         // } else if o_t == Type::ScopedTypeIdentifier {
         // } else if o_t == Type::GenericType {
         } else {
-            log::debug!("{}",hyper_ast::nodes::SyntaxSerializer::new(
-                self.stores, 
-                scout.node_always(&self.sp_store).unwrap().as_id().clone()
-            ));
+            log::debug!(
+                "{}",
+                hyper_ast::nodes::SyntaxSerializer::new(
+                    self.stores,
+                    scout.node_always(&self.sp_store).unwrap().as_id().clone()
+                )
+            );
             todo!("{:?}", o_t)
         }
     }
@@ -2167,12 +2244,12 @@ where HAST: TypedHyperAST<
         b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
         o: usize,
         i: &string_interner::symbol::SymbolU32,
-        mut scout: TypedScout<TIdN<IdN>,HAST::Idx>,
-    ) -> Option<TypedScout<TIdN<IdN>,HAST::Idx>> {
+        mut scout: TypedScout<TIdN<IdN>, HAST::Idx>,
+    ) -> Option<TypedScout<TIdN<IdN>, HAST::Idx>> {
         assert!(b.has_children());
         // TODO should handle and do a test case for explicit access to the member of a parent instance eg. A.super.b
         let x = b.child(&zero()).unwrap();
-        let (bb,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+        let (bb, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
         let t = bb.get_type();
         let mut matching_o = false;
         if t == Type::TypeIdentifier {
@@ -2297,7 +2374,7 @@ where HAST: TypedHyperAST<
         None
     }
 
-    pub fn successful_match(&mut self, scout: &mut TypedScout<TIdN<IdN>,HAST::Idx>) {
+    pub fn successful_match(&mut self, scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>) {
         self.sp_store.check(self.stores).expect("aa");
         scout.check(self.stores).expect("bb");
         let _r = self.sp_store.push_typed(scout);
@@ -2385,7 +2462,10 @@ where HAST: TypedHyperAST<
 
     /// relax to type eg. generic
     /// ObjectCreationExpression do not go up to statement expression because we need tp handle class body if any
-    fn relax_to_type(&mut self, scout: TypedScout<TIdN<IdN>,HAST::Idx>) -> Option<TypedScout<TIdN<IdN>,HAST::Idx>> {
+    fn relax_to_type(
+        &mut self,
+        scout: TypedScout<TIdN<IdN>, HAST::Idx>,
+    ) -> Option<TypedScout<TIdN<IdN>, HAST::Idx>> {
         let x = scout.node_always(&self.sp_store).unwrap();
         let o = scout.offset_always(&self.sp_store);
         let b = self.stores.typed_node_store().resolve(&x);
@@ -2397,14 +2477,14 @@ where HAST: TypedHyperAST<
             // || t == Type::ParenthesizedExpression
             // || t == Type::CastExpression
             || t == Type::GenericType
-            // || t == Type::SuperInterfaces
-            // || t == Type::Superclass
-            // || t == Type::ExtendsInterfaces
-            // || t == Type::AnnotatedType
-            // || t == Type::This
-            // || t == Type::CatchType
-            // || t == Type::ArrayType
-            // || t == Type::TypeBound
+        // || t == Type::SuperInterfaces
+        // || t == Type::Superclass
+        // || t == Type::ExtendsInterfaces
+        // || t == Type::AnnotatedType
+        // || t == Type::This
+        // || t == Type::CatchType
+        // || t == Type::ArrayType
+        // || t == Type::TypeBound
         {
         } else if t == Type::Identifier || t == Type::TypeIdentifier {
         } else {
@@ -2422,8 +2502,9 @@ where HAST: TypedHyperAST<
                 Some(scout)
             } else if tt == Type::ObjectCreationExpression {
                 if t == Type::ScopedIdentifier
-                || t == Type::ScopedTypeIdentifier
-                || t == Type::GenericType {
+                    || t == Type::ScopedTypeIdentifier
+                    || t == Type::GenericType
+                {
                     self.relax_to_type(parent_scout)
                 } else {
                     Some(scout)
@@ -2432,11 +2513,18 @@ where HAST: TypedHyperAST<
                 self.relax_to_type(parent_scout)
             } else if tt == Type::GenericType {
                 self.relax_to_type(parent_scout)
-            } else if tt == Type::CastExpression { // WARN for spoon
+            } else if tt == Type::CastExpression {
+                // WARN for spoon
                 assert!(bb.has_children());
                 let cs = bb.children().unwrap();
                 for x in cs.after(o).iter_children() {
-                    let t = self.stores.typed_node_store().try_resolve(x).unwrap().0.get_type();
+                    let t = self
+                        .stores
+                        .typed_node_store()
+                        .try_resolve(x)
+                        .unwrap()
+                        .0
+                        .get_type();
                     if t == Type::LParen {
                         return Some(scout);
                     }
@@ -2450,10 +2538,12 @@ where HAST: TypedHyperAST<
         }
     }
 
-
     /// relax type to the element it types
     /// ObjectCreationExpression do not go up to statement expression because we need tp handle class body if any
-    fn relax_to_typed(&mut self, mut scout: TypedScout<TIdN<IdN>,HAST::Idx>) -> Option<TypedScout<TIdN<IdN>,HAST::Idx>> {
+    fn relax_to_typed(
+        &mut self,
+        mut scout: TypedScout<TIdN<IdN>, HAST::Idx>,
+    ) -> Option<TypedScout<TIdN<IdN>, HAST::Idx>> {
         let x = scout.node_always(&self.sp_store).unwrap();
         let b = self.stores.typed_node_store().resolve(&x);
         let t = b.get_type();
@@ -2538,12 +2628,13 @@ where HAST: TypedHyperAST<
                 if let Some(xxx) = parent_parent_scout.up(&self.sp_store) {
                     let bbb = self.stores.typed_node_store().resolve(&xxx.unwrap());
                     let ttt = bbb.get_type();
-                    if ttt == Type::SwitchStatement 
-                    || ttt == Type::SwitchExpression 
-                    || ttt == Type::IfStatement
-                    || ttt == Type::WhileStatement
-                    || ttt == Type::DoStatement
-                    || ttt == Type::SynchronizedStatement {
+                    if ttt == Type::SwitchStatement
+                        || ttt == Type::SwitchExpression
+                        || ttt == Type::IfStatement
+                        || ttt == Type::WhileStatement
+                        || ttt == Type::DoStatement
+                        || ttt == Type::SynchronizedStatement
+                    {
                         Some(scout)
                     } else {
                         self.relax_to_typed(parent_scout)
@@ -2551,16 +2642,23 @@ where HAST: TypedHyperAST<
                 } else {
                     None
                 }
-            } else if tt == Type::CatchType 
-            || tt == Type::Annotation
-            || tt == Type::MarkerAnnotation {
+            } else if tt == Type::CatchType
+                || tt == Type::Annotation
+                || tt == Type::MarkerAnnotation
+            {
                 self.relax_to_typed(parent_scout)
             } else if tt == Type::CastExpression {
                 assert!(bb.has_children());
                 let cs = bb.children().unwrap();
                 let o = scout.offset_always(&self.sp_store);
                 for x in cs.after(o).iter_children() {
-                    let t = self.stores.typed_node_store().try_resolve(x).unwrap().0.get_type();
+                    let t = self
+                        .stores
+                        .typed_node_store()
+                        .try_resolve(x)
+                        .unwrap()
+                        .0
+                        .get_type();
                     if t == Type::TS8 {
                         return Some(scout);
                     }
@@ -2769,21 +2867,26 @@ pub fn remake_pkg_ref<'a, IdN: Copy + Eq + NodeId<IdN = IdN> + Debug, HAST>(
     stores: &'a HAST,
     ana: &mut PartialAnalysis,
     x: TIdN<HAST::IdN>,
-) -> Option<RefPtr> where HAST: TypedHyperAST<'a,TIdN<IdN>,
-    IdN = IdN,
-    // T = HashedNodeRef<'a,Type>,
-    Label = LabelIdentifier,
->,
-<HAST as hyper_ast::types::HyperAST<'a>>::T: Tree<ChildIdx = HAST::Idx>,
-<HAST as hyper_ast::types::TypedHyperAST<'a,TIdN<IdN>>>::T: Tree<Type=Type,ChildIdx = HAST::Idx>,
+) -> Option<RefPtr>
+where
+    HAST: TypedHyperAST<
+        'a,
+        TIdN<IdN>,
+        IdN = IdN,
+        // T = HashedNodeRef<'a,Type>,
+        Label = LabelIdentifier,
+    >,
+    <HAST as hyper_ast::types::HyperAST<'a>>::T: Tree<ChildIdx = HAST::Idx>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::T:
+        Tree<Type = Type, ChildIdx = HAST::Idx>,
 {
     // log::debug!("{}",hyper_ast::nodes::SyntaxSerializer::new(
-    //     stores, 
+    //     stores,
     //     x
     // ));
     let b = stores.typed_node_store().resolve(&x);
     let t = b.get_type();
-    let two = <HAST::Idx as num::One>::one()+one();
+    let two = <HAST::Idx as num::One>::one() + one();
     if t == Type::ScopedAbsoluteIdentifier {
         assert!(b.has_children());
         let x = b.child(&zero()).unwrap();
@@ -2820,32 +2923,33 @@ pub fn remake_pkg_ref<'a, IdN: Copy + Eq + NodeId<IdN = IdN> + Debug, HAST>(
     }
 }
 
-impl<'a,IdN: Copy + Eq + NodeId + Debug, HAST> RefsFinder<'a,IdN,HAST>
-where HAST: TypedHyperAST<
-    'a,TIdN<IdN>,
-    IdN = IdN,
-    // T = HashedNodeRef<'a,Type>,
-    Label = LabelIdentifier,
->,
-HAST: hyper_ast::types::TypeStore<<HAST as hyper_ast::types::HyperAST<'a>>::T>,
-HAST: hyper_ast::types::LabelStore<str, I = LabelIdentifier>,
-HAST: hyper_ast::types::NodeStore<IdN, R<'a> = <HAST as hyper_ast::types::HyperAST<'a>>::T>,
-HAST::Idx: num::PrimInt + num::traits::NumAssign + Debug,
-IdN: Copy + Eq + Debug + NodeId<IdN = IdN>,
-<HAST as hyper_ast::types::HyperAST<'a>>::T: Tree<Type=AnyType, ChildIdx = HAST::Idx> + WithSerialization,
-<HAST as hyper_ast::types::HyperAST<'a>>::T: RefContainer<Result=BloomResult>,
-<HAST as hyper_ast::types::TypedHyperAST<'a,TIdN<IdN>>>::T: Tree<Type=Type,ChildIdx = HAST::Idx>,
-<HAST as hyper_ast::types::TypedHyperAST<'a,TIdN<IdN>>>::T: RefContainer<Result=BloomResult>,
+impl<'a, IdN: Copy + Eq + NodeId + Debug, HAST> RefsFinder<'a, IdN, HAST>
+where
+    HAST: TypedHyperAST<
+        'a,
+        TIdN<IdN>,
+        IdN = IdN,
+        // T = HashedNodeRef<'a,Type>,
+        Label = LabelIdentifier,
+    >,
+    HAST: hyper_ast::types::TypeStore<<HAST as hyper_ast::types::HyperAST<'a>>::T>,
+    HAST: hyper_ast::types::LabelStore<str, I = LabelIdentifier>,
+    HAST: hyper_ast::types::NodeStore<IdN, R<'a> = <HAST as hyper_ast::types::HyperAST<'a>>::T>,
+    HAST::Idx: num::PrimInt + num::traits::NumAssign + Debug,
+    IdN: Copy + Eq + Debug + NodeId<IdN = IdN>,
+    <HAST as hyper_ast::types::HyperAST<'a>>::T:
+        Tree<Type = AnyType, ChildIdx = HAST::Idx> + WithSerialization,
+    <HAST as hyper_ast::types::HyperAST<'a>>::T: RefContainer<Result = BloomResult>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::T:
+        Tree<Type = Type, ChildIdx = HAST::Idx>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::T: RefContainer<Result = BloomResult>,
 {
     /// Structurally find constructors in class
-    pub fn find_constructors(&mut self, mut scout: TypedScout<TIdN<IdN>,HAST::Idx>) {
+    pub fn find_constructors(&mut self, mut scout: TypedScout<TIdN<IdN>, HAST::Idx>) {
         let Ok(x) = scout.node_always(&self.sp_store) else {
             return
         };
-        let b = self
-            .stores
-            .typed_node_store()
-            .resolve(&x);
+        let b = self.stores.typed_node_store().resolve(&x);
         let t = b.get_type();
         if t == Type::ClassBody {
         } else if t == Type::InterfaceBody {
@@ -2867,7 +2971,12 @@ IdN: Copy + Eq + Debug + NodeId<IdN = IdN>,
 
     /// WARN intended to be used starting from searched class
     /// and to find simple this
-    fn find_refs_with_this(&mut self, package: RefPtr, target: RefPtr, scout: &mut TypedScout<TIdN<IdN>,HAST::Idx>) {
+    fn find_refs_with_this(
+        &mut self,
+        package: RefPtr,
+        target: RefPtr,
+        scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
+    ) {
         let current = scout.node_always(&self.sp_store).unwrap();
         let b = self.stores.typed_node_store().resolve(&current);
         let t = b.get_type();
@@ -2888,26 +2997,32 @@ IdN: Copy + Eq + Debug + NodeId<IdN = IdN>,
             || t == Type::AnnotationTypeDeclaration
         {
             return;
-        } else if t == Type::FieldAccess
-        {
+        } else if t == Type::FieldAccess {
             if !b.has_children() {
                 return;
             }
-            let (_,xx) = self.stores.typed_node_store().try_resolve(&b.child(&zero()).unwrap()).unwrap();
+            let (_, xx) = self
+                .stores
+                .typed_node_store()
+                .try_resolve(&b.child(&zero()).unwrap())
+                .unwrap();
             scout.goto_typed(xx, zero());
             log::trace!(
                 "rec search 'this' ref {}",
-                DisplayRef::from((self.ana.solver.nodes.with(target), self.stores.label_store())),
+                DisplayRef::from((
+                    self.ana.solver.nodes.with(target),
+                    self.stores.label_store()
+                )),
             );
             self.find_refs_with_this(package, target, scout);
             scout.up(&self.sp_store);
             return;
         } else if t == Type::This {
             log::debug!("!found 'this' {:?}", &t);
-            log::debug!("{}",hyper_ast::nodes::SyntaxSerializer::new(
-                self.stores,
-                current.as_id().clone(),
-            ));
+            log::debug!(
+                "{}",
+                hyper_ast::nodes::SyntaxSerializer::new(self.stores, current.as_id().clone(),)
+            );
             self.successful_match(scout);
             // scout.check(&self.stores).expect("a");
             // let r = self.sp_store.push(scout);
@@ -2952,12 +3067,15 @@ IdN: Copy + Eq + Debug + NodeId<IdN = IdN>,
         log::debug!("c_count {:?}", b.child_count());
         let mut i = zero();
         for x in b.children().unwrap().iter_children() {
-            let (_,x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+            let (_, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
             scout.goto_typed(x, i);
             i += one();
             log::trace!(
                 "rec search 'this' ref {}",
-                DisplayRef::from((self.ana.solver.nodes.with(target), self.stores.label_store())),
+                DisplayRef::from((
+                    self.ana.solver.nodes.with(target),
+                    self.stores.label_store()
+                )),
             );
             self.find_refs_with_this(package, target, scout);
             scout.up(&self.sp_store);

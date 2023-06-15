@@ -22,10 +22,7 @@ pub fn from_hyper_ast(state: SharedState, path: FetchFileParam) -> Result<String
         file,
     } = path.clone();
     let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
-    let configs = state
-        .configs
-        .read()
-        .unwrap();
+    let configs = state.configs.read().unwrap();
     let config = configs
         .get(&repo_spec)
         .ok_or_else(|| "missing config for repository".to_string())?;
@@ -55,7 +52,7 @@ pub fn from_hyper_ast(state: SharedState, path: FetchFileParam) -> Result<String
         return Err("not found".to_string());
     };
 
-    let file = hyper_ast::nodes::TextSerializer::new(&repositories.processor.main_stores,file);
+    let file = hyper_ast::nodes::TextSerializer::new(&repositories.processor.main_stores, file);
 
     Ok(file.to_string())
 }

@@ -1,19 +1,24 @@
 use core::fmt;
-use std::{
-    io::{stdout, Write},
-};
+use std::io::{stdout, Write};
 
 use hyper_ast::{
-    store::{SimpleStores, labels::LabelStore, nodes::DefaultNodeStore as NodeStore}, 
+    filter::BloomResult,
+    nodes::RefContainer,
+    position::{
+        ExploreStructuralPositions, Scout, StructuralPosition, StructuralPositionStore, TreePath,
+        TypedScout, TypedTreePath,
+    },
+    store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores},
     tree_gen::ZippedTreeGen,
-    position::{ExploreStructuralPositions, StructuralPositionStore, StructuralPosition, Scout, TreePath, TypedScout, TypedTreePath}, 
-    types::{WithChildren, NodeId}, utils::memusage_linux, nodes::RefContainer, filter::BloomResult};
+    types::{NodeId, WithChildren},
+    utils::memusage_linux,
+};
 use pretty_assertions::assert_eq;
 
 use crate::{
-    legion_with_refs::{
-         JavaTreeGen, self, NodeIdentifier,
-    }, impact::element::{RefsEnum, LabelPtr, IdentifierFormat}, types::{TStore, TIdN},
+    impact::element::{IdentifierFormat, LabelPtr, RefsEnum},
+    legion_with_refs::{self, JavaTreeGen, NodeIdentifier},
+    types::{TIdN, TStore},
 };
 
 fn run(text: &[u8]) {
@@ -28,13 +33,22 @@ fn run(text: &[u8]) {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    
-    let tree = match legion_with_refs::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
+
+    let tree = match legion_with_refs::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
     println!();
-    println!("{}", hyper_ast::nodes::SyntaxSerializer::new(&*java_tree_gen.stores, full_node.local.compressed_node));
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(
+            &*java_tree_gen.stores,
+            full_node.local.compressed_node
+        )
+    );
     stdout().flush().unwrap();
 
     // let mut out = IoOut { stream: stdout() };
@@ -45,18 +59,66 @@ fn run(text: &[u8]) {
     //     &mut out,
     //     &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
     // );
-    println!("{}", hyper_ast::nodes::TextSerializer::new(&*java_tree_gen.stores, full_node.local.compressed_node))
+    println!(
+        "{}",
+        hyper_ast::nodes::TextSerializer::new(
+            &*java_tree_gen.stores,
+            full_node.local.compressed_node
+        )
+    )
 }
 #[test]
 fn test_cases() {
     let cases = [
-        CASE_1, CASE_1_1, CASE_1_2, CASE_1_3, CASE_1_4, CASE_1_5, CASE_1_5, CASE_1_6, CASE_1_7, CASE_1_8, CASE_1_9, CASE_1_10,
-        CASE_2, CASE_3, CASE_4, CASE_5, CASE_6, CASE_7, CASE_8, CASE_8_1, CASE_9, 
-        CASE_10, CASE_11, CASE_11_BIS, CASE_12, CASE_13, CASE_14, 
-        CASE_15, CASE_15_1, CASE_15_2, CASE_16, CASE_17, CASE_18, CASE_19,
-        CASE_20, CASE_21, CASE_22, CASE_23, CASE_24,
-        CASE_25, CASE_26, CASE_27, CASE_28, CASE_29, 
-        CASE_30, CASE_31, CASE_32, CASE_33, A
+        CASE_1,
+        CASE_1_1,
+        CASE_1_2,
+        CASE_1_3,
+        CASE_1_4,
+        CASE_1_5,
+        CASE_1_5,
+        CASE_1_6,
+        CASE_1_7,
+        CASE_1_8,
+        CASE_1_9,
+        CASE_1_10,
+        CASE_2,
+        CASE_3,
+        CASE_4,
+        CASE_5,
+        CASE_6,
+        CASE_7,
+        CASE_8,
+        CASE_8_1,
+        CASE_9,
+        CASE_10,
+        CASE_11,
+        CASE_11_BIS,
+        CASE_12,
+        CASE_13,
+        CASE_14,
+        CASE_15,
+        CASE_15_1,
+        CASE_15_2,
+        CASE_16,
+        CASE_17,
+        CASE_18,
+        CASE_19,
+        CASE_20,
+        CASE_21,
+        CASE_22,
+        CASE_23,
+        CASE_24,
+        CASE_25,
+        CASE_26,
+        CASE_27,
+        CASE_28,
+        CASE_29,
+        CASE_30,
+        CASE_31,
+        CASE_32,
+        CASE_33,
+        A,
     ];
     for case in cases {
         run(case.as_bytes())
@@ -65,7 +127,9 @@ fn test_cases() {
 
 #[test]
 fn test_equals() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
     let text = CASE_33.as_bytes();
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
@@ -78,16 +142,31 @@ fn test_equals() {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let tree = match legion_with_refs::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
+    let tree = match legion_with_refs::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
     println!();
-    println!("{}", hyper_ast::nodes::SyntaxSerializer::new(&*java_tree_gen.stores, full_node.local.compressed_node));
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(
+            &*java_tree_gen.stores,
+            full_node.local.compressed_node
+        )
+    );
     println!();
     stdout().flush().unwrap();
 
-    println!("{}", hyper_ast::nodes::TextSerializer::new(&*java_tree_gen.stores, full_node.local.compressed_node));
+    println!(
+        "{}",
+        hyper_ast::nodes::TextSerializer::new(
+            &*java_tree_gen.stores,
+            full_node.local.compressed_node
+        )
+    );
 
     {
         let stores = java_tree_gen.stores;
@@ -120,15 +199,14 @@ fn test_equals() {
             BloomResult::DoNotContain => println!("Do not contains B"),
         }
     }
-//     use hyper_ast::position::extract_position;
-//     let mut position = extract_position(&java_tree_gen.stores, d_it.parents(), d_it.offsets());
-//     position.set_len(b.get_bytes_len() as usize);
-//     println!("position: {:?}", position);
+    //     use hyper_ast::position::extract_position;
+    //     let mut position = extract_position(&java_tree_gen.stores, d_it.parents(), d_it.offsets());
+    //     position.set_len(b.get_bytes_len() as usize);
+    //     println!("position: {:?}", position);
 }
 
 #[test]
 fn test_special() {
-
     // let mut parser: Parser, old_tree: Option<&Tree>
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
@@ -184,7 +262,10 @@ public class A {
         // ";
         source_code1.as_bytes()
     };
-    let tree = match legion_with_refs::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
+    let tree = match legion_with_refs::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
     println!("{}", tree.root_node().to_sexp());
 
     let _full_node = java_tree_gen.generate_file(b"", text, tree.walk());
@@ -281,21 +362,37 @@ public class A {
         // ";
         source_code1.as_bytes()
     };
-    let tree = match legion_with_refs::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
+    let tree = match legion_with_refs::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
 
     println!("debug full node: {:?}", &full_node);
     // let mut out = String::new();
 
-    println!("{}", hyper_ast::nodes::SyntaxSerializer::new(&*java_tree_gen.stores, full_node.local.compressed_node));
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(
+            &*java_tree_gen.stores,
+            full_node.local.compressed_node
+        )
+    );
     stdout().flush().unwrap();
 
     let mut out = BuffOut {
         buff: "".to_owned(),
     };
     use std::fmt::Write;
-    write!(out, "{}", hyper_ast::nodes::TextSerializer::new(&*java_tree_gen.stores, full_node.local.compressed_node));
+    write!(
+        out,
+        "{}",
+        hyper_ast::nodes::TextSerializer::new(
+            &*java_tree_gen.stores,
+            full_node.local.compressed_node
+        )
+    );
     assert_eq!(std::str::from_utf8(text).unwrap(), out.buff);
 
     println!("{:?}", java_tree_gen.stores.node_store);
@@ -331,7 +428,9 @@ impl std::fmt::Write for BuffOut {
 
 #[test]
 fn test_offset_computation() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
     let text = CASE_29.as_bytes();
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
@@ -344,14 +443,20 @@ fn test_offset_computation() {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let tree = match legion_with_refs::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
+    let tree = match legion_with_refs::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
-    let mut s = StructuralPositionStore::from(StructuralPosition::new(full_node.local.compressed_node));
-    let mut scout = Scout::from((StructuralPosition::from((vec![],vec![])),0));
-    let mut scout:TypedScout<TIdN<NodeIdentifier>,u16> = s.type_scout(&mut scout,unsafe { &TIdN::from_id(full_node.local.compressed_node) });
+    let mut s =
+        StructuralPositionStore::from(StructuralPosition::new(full_node.local.compressed_node));
+    let mut scout = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let mut scout: TypedScout<TIdN<NodeIdentifier>, u16> = s.type_scout(&mut scout, unsafe {
+        &TIdN::from_id(full_node.local.compressed_node)
+    });
     {
-        let mut f = |x,i:u16| {
+        let mut f = |x, i: u16| {
             let b = stores.node_store.resolve(x);
             let x = b.child(&i).unwrap();
             use hyper_ast::types::TypedNodeStore;
@@ -362,25 +467,30 @@ fn test_offset_computation() {
             x
         };
         let x = full_node.local.compressed_node;
-        let x = f(x,30);
-        let x = f(*x.as_id(),6);
-        let x = f(*x.as_id(),2);
-        let x = f(*x.as_id(),7);
-        let x = f(*x.as_id(),24);
+        let x = f(x, 30);
+        let x = f(*x.as_id(), 6);
+        let x = f(*x.as_id(), 2);
+        let x = f(*x.as_id(), 7);
+        let x = f(*x.as_id(), 24);
         let _ = x;
     }
     s.check(&stores).unwrap();
     let x = s.push_typed(&mut scout);
-    let z = ExploreStructuralPositions::from((&s,x));
+    let z = ExploreStructuralPositions::from((&s, x));
     let p = z.make_position(&stores);
-    println!("{}",p);
-    println!("|{}|",std::str::from_utf8(&text[p.range()]).unwrap());
-    assert_eq!(std::str::from_utf8(&text[p.range()]).unwrap(),r#"ModelUtils.canBeBuilt(new File("./target/spooned/spoon/test/template/ReturnReplaceResult.java"), 8);"#);
+    println!("{}", p);
+    println!("|{}|", std::str::from_utf8(&text[p.range()]).unwrap());
+    assert_eq!(
+        std::str::from_utf8(&text[p.range()]).unwrap(),
+        r#"ModelUtils.canBeBuilt(new File("./target/spooned/spoon/test/template/ReturnReplaceResult.java"), 8);"#
+    );
 }
 
 #[test]
 fn test_offset_computation2() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).is_test(true).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
+        .is_test(true)
+        .init();
     let text = CASE_30.as_bytes();
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
@@ -393,16 +503,28 @@ fn test_offset_computation2() {
         stores: &mut stores,
         md_cache: &mut md_cache,
     };
-    let tree = match legion_with_refs::tree_sitter_parse(text) {Ok(t)=>t,Err(t)=>t};
+    let tree = match legion_with_refs::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
-    let mut s = StructuralPositionStore::from(StructuralPosition::new(full_node.local.compressed_node));
-    let mut scout = Scout::from((StructuralPosition::from((vec![],vec![])),0));
-    let mut scout:TypedScout<TIdN<NodeIdentifier>,u16> = s.type_scout(&mut scout,unsafe { &TIdN::from_id(full_node.local.compressed_node) });
-    
-    println!("{}", hyper_ast::nodes::SyntaxSerializer::new(&*java_tree_gen.stores, full_node.local.compressed_node));
+    let mut s =
+        StructuralPositionStore::from(StructuralPosition::new(full_node.local.compressed_node));
+    let mut scout = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
+    let mut scout: TypedScout<TIdN<NodeIdentifier>, u16> = s.type_scout(&mut scout, unsafe {
+        &TIdN::from_id(full_node.local.compressed_node)
+    });
+
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(
+            &*java_tree_gen.stores,
+            full_node.local.compressed_node
+        )
+    );
     {
-        let mut f = |x,i:u16| {
+        let mut f = |x, i: u16| {
             let b = stores.node_store.resolve(x);
             let x = b.child(&i).unwrap();
             use hyper_ast::types::TypedNodeStore;
@@ -413,20 +535,23 @@ fn test_offset_computation2() {
             x
         };
         let x = full_node.local.compressed_node;
-        let x = f(x,5);
+        let x = f(x, 5);
         let _ = x;
     }
     s.check(&stores).unwrap();
     let x = s.push_typed(&mut scout);
-    let z = ExploreStructuralPositions::from((&s,x));
+    let z = ExploreStructuralPositions::from((&s, x));
     let p = z.make_position(&stores);
-    println!("{}",p);
-    println!("|{}|",std::str::from_utf8(&text[p.range()]).unwrap());
-    assert_eq!(std::str::from_utf8(&text[p.range()]).unwrap(),r#"public class InnerTypeOk {
+    println!("{}", p);
+    println!("|{}|", std::str::from_utf8(&text[p.range()]).unwrap());
+    assert_eq!(
+        std::str::from_utf8(&text[p.range()]).unwrap(),
+        r#"public class InnerTypeOk {
   private void test() {
     Entry<String, String> test;
   }
-}"#);
+}"#
+    );
 }
 
 /// historic regression test for static analysis
@@ -2050,10 +2175,8 @@ public class TestLocalFileSystem {
  }
 }";
 
-
 // TODO handle same identical name for parameter and its type
-static CASE_25: &'static str = 
-"
+static CASE_25: &'static str = "
 
 package org.apache.hadoop.yarn.api.protocolrecords.impl.pb;
 
@@ -2072,8 +2195,7 @@ public class GetApplicationAttemptReportResponsePBImpl extends
 
 }
 ";
-static CASE_26: &'static str = 
-"
+static CASE_26: &'static str = "
 
 package p;
 
@@ -2091,8 +2213,7 @@ public class A{
 
 // Nothing in X.java file
 // see https://github.com/apache/hadoop/blob/03cfc852791c14fad39db4e5b14104a276c08e59/hadoop-yarn-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/webapp/AggregatedLogsBlock.java
-static CASE_27: &'static str = 
-"/**
+static CASE_27: &'static str = "/**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -2110,8 +2231,7 @@ static CASE_27: &'static str =
  * limitations under the License.
  */";
 
- static CASE_28: &'static str = 
- "package p; 
+static CASE_28: &'static str = "package p; 
 class A {
     org.apa.B x;
 }";
@@ -2224,7 +2344,6 @@ public class A {
         launch(args);
     }
 }"#;
-
 
 static CASE_33: &'static str = r#"package io.quarkus.spring.web.deployment;
 

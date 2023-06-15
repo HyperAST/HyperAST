@@ -1,11 +1,12 @@
 use self::{
     single_repo::ComputeConfigSingle,
     tree_view::FetchedHyperAST,
-    types::{Commit, Languages, Repo}, interactive_split::splitter::Splitter,
+    types::{Commit, Languages, Repo},
 };
 use egui_addon::{
     code_editor::{self, generic_text_buffer::byte_index_from_char_index},
     egui_utils::{radio_collapsing, show_wip},
+    interactive_split::interactive_splitter::InteractiveSplitter,
     syntax_highlighting::{self, syntax_highlighting_async},
     Lang,
 };
@@ -19,11 +20,8 @@ use std::{
 
 mod code_tracking;
 mod commit;
-mod interactive_split;
 mod long_tracking;
-mod multi_split;
 mod single_repo;
-mod split;
 mod tree_view;
 mod ts_highlight;
 pub(crate) mod types;
@@ -421,7 +419,7 @@ impl eframe::App for HyperApp {
                         single_repo::show_long_result(&*compute_single_result, ui);
                     });
                 } else {
-                    Splitter::vertical()
+                    InteractiveSplitter::vertical()
                         .ratio(0.7)
                         .show(ui, |ui1, ui2| {
                             ui1.push_id(ui1.id().with("input"), |ui| {

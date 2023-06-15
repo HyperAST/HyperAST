@@ -1,4 +1,4 @@
-use std::ops::{Range, Deref};
+use std::ops::{Deref, Range};
 
 pub trait AAA {
     fn text(&self) -> &str;
@@ -21,8 +21,8 @@ impl AAA for str {
 ///
 /// Most likely you will use a [`String`] which implements [`TextBuffer`].
 pub trait TextBuffer {
-    type Ref: ?Sized+AAA; //: where for<'a> &'a Self::Ref:Into<str>;
-              // type Ref<'a>: Into<&'a str> where Self: 'a;
+    type Ref: ?Sized + AAA; //: where for<'a> &'a Self::Ref:Into<str>;
+                            // type Ref<'a>: Into<&'a str> where Self: 'a;
 
     /// Can this text be edited?
     fn is_mutable(&self) -> bool;
@@ -179,7 +179,11 @@ pub(crate) fn char_index_from_byte_index(s: &str, byte_index: usize) -> usize {
     ci
 }
 
-pub fn char_index_from_byte_index2(s: &str, byte_index1: usize, byte_index2: usize) -> (usize, usize) {
+pub fn char_index_from_byte_index2(
+    s: &str,
+    byte_index1: usize,
+    byte_index2: usize,
+) -> (usize, usize) {
     let mut ci0 = 0;
     let mut ci = 0;
     let mut i = 0;
@@ -201,5 +205,5 @@ pub fn char_index_from_byte_index2(s: &str, byte_index1: usize, byte_index2: usi
         i += len;
         ci += 1;
     }
-    (ci0,ci)
+    (ci0, ci)
 }

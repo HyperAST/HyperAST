@@ -7,8 +7,8 @@ use std::{
 use num_traits::{cast, NumCast, PrimInt, ToPrimitive};
 
 use hyper_ast::types::{
-    HashKind, LabelStore, Labeled, MySlice, NodeStore, NodeStoreMut, Stored, Typed, WithChildren,
-    WithStats, NodeId,
+    HashKind, LabelStore, Labeled, MySlice, NodeId, NodeStore, NodeStoreMut, Stored, Typed,
+    WithChildren, WithStats,
 };
 
 #[allow(dead_code)]
@@ -297,7 +297,7 @@ impl hyper_ast::types::Tree for Tree {
 
 impl<T: hyper_ast::types::Tree> hyper_ast::types::Tree for TreeRef<'_, T>
 where
-    T::TreeId: Clone + NodeId<IdN=T::TreeId>,
+    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
     fn has_children(&self) -> bool {
         self.0.has_children()
@@ -340,7 +340,7 @@ impl WithChildren for Tree {
 
 impl<T: WithChildren> WithChildren for TreeRef<'_, T>
 where
-    T::TreeId: Clone + NodeId<IdN=T::TreeId>,
+    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
 {
     type ChildIdx = T::ChildIdx;
 

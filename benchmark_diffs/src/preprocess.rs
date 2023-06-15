@@ -7,16 +7,17 @@ use hyper_ast::{
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
-        nodes::legion::{compo, EntryRef, NodeStore, PendingInsert, compo::CS},
+        nodes::legion::{compo, compo::CS, EntryRef, NodeStore, PendingInsert},
         SimpleStores,
     },
     tree_gen::{BasicGlobalData, SubTreeMetrics},
-    types::{LabelStore as _},
+    types::LabelStore as _,
 };
 use hyper_ast_cvs_git::TStore;
 use hyper_ast_gen_ts_java::{
     impact::partial_analysis::PartialAnalysis,
-    legion_with_refs::{BulkHasher, JavaTreeGen, Local, MDCache, MD}, types::Type,
+    legion_with_refs::{BulkHasher, JavaTreeGen, Local, MDCache, MD},
+    types::Type,
 };
 
 pub fn iter_dirs(root_buggy: &std::path::Path) -> impl Iterator<Item = std::fs::DirEntry> {
@@ -379,7 +380,10 @@ impl<'fs, 'prepro> Processor<JavaAcc> for JavaProcessor<'fs, 'prepro, JavaAcc> {
     }
 }
 
-fn make(acc: JavaAcc, stores: &mut SimpleStores<TStore>) -> hyper_ast_gen_ts_java::legion_with_refs::Local {
+fn make(
+    acc: JavaAcc,
+    stores: &mut SimpleStores<TStore>,
+) -> hyper_ast_gen_ts_java::legion_with_refs::Local {
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
 

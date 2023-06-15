@@ -3,7 +3,7 @@
 #![feature(slice_index_methods)]
 
 pub mod compat;
-#[cfg(feature="legion")]
+#[cfg(feature = "legion")]
 pub mod cyclomatic;
 pub mod filter;
 pub mod full;

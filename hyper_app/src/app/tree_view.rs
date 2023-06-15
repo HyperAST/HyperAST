@@ -1819,7 +1819,7 @@ mod hyper_ast_layouter {
             let mut offset = 0;
             match self._compute(&self.root, self.root_indent, &mut layout, &mut offset) {
                 Err(IndentedAlt::FmtError) => Err(IndentedAlt::FmtError),
-                _ => Ok((offset, layout))
+                _ => Ok((offset, layout)),
             }
         }
         fn _compute(

@@ -10,7 +10,7 @@ use hyper_ast::{
     },
     types::{
         AnyType, Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeId, NodeStore,
-        NodeStoreExt, Tree, Typed, WithChildren, TypeStore,
+        NodeStoreExt, Tree, TypeStore, Typed, WithChildren,
     },
 };
 

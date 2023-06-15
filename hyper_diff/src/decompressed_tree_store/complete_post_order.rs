@@ -13,8 +13,8 @@ use num_traits::{cast, PrimInt, ToPrimitive, Zero};
 use hyper_ast::{
     position::Position,
     types::{
-        self, HyperType, LabelStore, NodeId, NodeStore, Stored, Tree,
-        WithChildren, WithSerialization,
+        self, HyperType, LabelStore, NodeId, NodeStore, Stored, Tree, WithChildren,
+        WithSerialization,
     },
 };
 
@@ -74,7 +74,7 @@ where
 
 impl<T: Stored, IdD: PrimInt + Debug> Debug for CompletePostOrder<T, IdD>
 where
-    T::TreeId: Debug + NodeId<IdN=T::TreeId>,
+    T::TreeId: Debug + NodeId<IdN = T::TreeId>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CompletePostOrder")
@@ -264,7 +264,7 @@ where
 impl<'a, T: WithChildren, IdD: PrimInt> super::DecompressedSubtree<'a, T>
     for CompletePostOrder<T, IdD>
 where
-    T::TreeId: Clone + NodeId<IdN=T::TreeId>,
+    T::TreeId: Clone + NodeId<IdN = T::TreeId>,
     <T as WithChildren>::ChildIdx: PrimInt,
 {
     type Out = Self;

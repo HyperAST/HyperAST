@@ -1,20 +1,11 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use dashmap::{RwLock, SharedValue};
 use hyper_ast::{
-    store::{
-        defaults::NodeIdentifier,
-    },
-    types::{ HyperAST, 
-        WithStats,
-    },
+    store::defaults::NodeIdentifier,
+    types::{HyperAST, WithStats},
 };
-use hyper_diff::{
-    decompressed_tree_store::{
-        lazy_post_order,  PersistedNode,
-    },
-};
-
+use hyper_diff::decompressed_tree_store::{lazy_post_order, PersistedNode};
 
 pub(crate) fn get_pair_simp<'a, 'store, HAST: HyperAST<'store, IdN = NodeIdentifier>>(
     partial_comp_cache: &'a crate::PartialDecompCache,
@@ -85,7 +76,6 @@ where
     ) = unsafe { std::mem::transmute((v1, v2)) };
     res
 }
-
 
 fn bi_sharding<'a>(
     partial_comp_cache: &'a crate::PartialDecompCache,

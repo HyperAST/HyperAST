@@ -1,23 +1,19 @@
-
-#[cfg(feature="legion")]
+pub mod fetched;
+#[cfg(feature = "legion")]
 pub mod legion;
 mod simple;
-pub mod fetched;
 
-
-
-#[cfg(feature="legion")]
+#[cfg(feature = "legion")]
 pub type DefaultNodeStore = legion::NodeStore;
-#[cfg(not(feature="legion"))]
+#[cfg(not(feature = "legion"))]
 pub type DefaultNodeStore = simple::NodeStore;
 
-#[cfg(feature="legion")]
+#[cfg(feature = "legion")]
 pub type DefaultNodeIdentifier = legion::NodeIdentifier;
-#[cfg(not(feature="legion"))]
+#[cfg(not(feature = "legion"))]
 pub type DefaultNodeIdentifier = simple::NodeIdentifier;
 
-
-#[cfg(feature="legion")]
+#[cfg(feature = "legion")]
 pub type HashedNodeRef<'store> = legion::HashedNodeRef<'store, DefaultNodeIdentifier>;
-#[cfg(not(feature="legion"))]
+#[cfg(not(feature = "legion"))]
 pub type HashedNodeRef<'store> = simple::HashedNodeRef<'store, DefaultNodeIdentifier>;

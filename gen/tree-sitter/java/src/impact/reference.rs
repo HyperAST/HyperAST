@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use bitvec::order::Lsb0;
 
-use super::element::{Arguments, ExplorableRef, Nodes, RefPtr, RefsEnum, RawLabelPtr};
+use super::element::{Arguments, ExplorableRef, Nodes, RawLabelPtr, RefPtr, RefsEnum};
 
 use hyper_ast::types::LabelStore;
 

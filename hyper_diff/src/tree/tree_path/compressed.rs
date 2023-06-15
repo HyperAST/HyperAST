@@ -153,7 +153,6 @@ impl<Idx: PrimInt> From<Vec<Idx>> for CompressedTreePath<Idx> {
     }
 }
 
-
 /// advanced iterator used to get back path as Idx from compressed path
 #[derive(Clone)]
 pub struct Iter<'a, Idx> {

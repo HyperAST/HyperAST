@@ -1316,14 +1316,18 @@ fn insert_text<TB: TextBuffer>(ccursor: &mut CCursor, text: &mut TB, text_to_ins
 
 // ----------------------------------------------------------------------------
 
-fn replace_selected<TB: TextBuffer>(text: &mut TB, cursor_range: &CursorRange, text_to_insert: &str) -> CCursor {
+fn replace_selected<TB: TextBuffer>(
+    text: &mut TB,
+    cursor_range: &CursorRange,
+    text_to_insert: &str,
+) -> CCursor {
     let [min, max] = cursor_range.sorted_cursors();
     replace_selected_ccursor_range(text, [min.ccursor, max.ccursor], text_to_insert)
 }
 fn replace_selected_ccursor_range<TB: TextBuffer>(
     text: &mut TB,
     [min, max]: [CCursor; 2],
-    text_to_insert: &str
+    text_to_insert: &str,
 ) -> CCursor {
     CCursor {
         index: min.index + text.replace_range(text_to_insert, min.index..max.index),
@@ -1331,7 +1335,6 @@ fn replace_selected_ccursor_range<TB: TextBuffer>(
     }
 }
 // ----------------------------------------------------------------------------
-
 
 fn delete_selected<TB: TextBuffer>(text: &mut TB, cursor_range: &CursorRange) -> CCursor {
     let [min, max] = cursor_range.sorted_cursors();

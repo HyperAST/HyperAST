@@ -127,7 +127,8 @@ impl TextBuffer for EditAwareString {
                     new_end_position,
                 };
                 edit
-            }.into();
+            }
+            .into();
         } else {
             self.generation += 1;
             self.edit = Some(process_edit(unsafe { self.string.as_mut_vec() }, &edit)).into();

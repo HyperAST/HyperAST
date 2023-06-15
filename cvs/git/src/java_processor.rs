@@ -12,11 +12,11 @@ use hyper_ast::{
     tree_gen::SubTreeMetrics,
     types::LabelStore,
 };
+use hyper_ast_gen_ts_java::types::Type;
 use hyper_ast_gen_ts_java::{
     impact::partial_analysis::PartialAnalysis,
     legion_with_refs::{self, eq_node, BulkHasher},
 };
-use hyper_ast_gen_ts_java::types::Type;
 use tuples::CombinConcat;
 
 use crate::{

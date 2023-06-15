@@ -9,10 +9,10 @@ use hyper_ast::{
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder},
     store::{
         defaults::NodeIdentifier,
-        nodes::legion::{compo, NodeStore, compo::CS},
+        nodes::legion::{compo, compo::CS, NodeStore},
     },
     tree_gen::SubTreeMetrics,
-    types::{LabelStore},
+    types::LabelStore,
 };
 use hyper_ast_gen_ts_java::legion_with_refs::{eq_node, hash32};
 use hyper_ast_gen_ts_xml::types::Type;
@@ -217,8 +217,7 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
         let new_main_dirs = drain_filter_strip(&mut acc.main_dirs, b"..");
         let new_test_dirs = drain_filter_strip(&mut acc.test_dirs, b"..");
         let ana = acc.ana;
-        if !new_sub_modules.is_empty() || !new_main_dirs.is_empty() || !new_test_dirs.is_empty()
-        {
+        if !new_sub_modules.is_empty() || !new_main_dirs.is_empty() || !new_test_dirs.is_empty() {
             log::error!(
                 "{:?} {:?} {:?}",
                 new_sub_modules,

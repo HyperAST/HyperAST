@@ -4,7 +4,10 @@ use axum::Json;
 use hyper_ast::{
     compat::HashMap,
     store::defaults::{LabelIdentifier, NodeIdentifier},
-    types::{self, LabelStore, Labeled, NodeStore, Tree, WithChildren, HyperAST, IterableChildren, Children, TypeStore},
+    types::{
+        self, Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeStore, Tree,
+        TypeStore, WithChildren,
+    },
 };
 use hyper_ast_cvs_git::git::fetch_github_repository;
 use serde::{Deserialize, Serialize};
@@ -112,7 +115,7 @@ pub fn view(state: SharedState, path: Parameters) -> Result<Json<ViewRes>, Strin
     let curr = resolve_path(src_tr, path, node_store);
     todo!("should deprecate or accomodate changes in type repr ie. lang + type btw. could allow paking as u16 like before");
     // let type_sys = TypeSys(types::Type::it().map(|x| x.to_string()).collect());
-    
+
     // let view = make_view(vec![(curr, 20)], &repositories.processor.main_stores);
     // let view_res = ViewRes { type_sys, view };
     // Ok(view_res.into())
@@ -172,7 +175,7 @@ where
     HAST::IdN: Hash,
     <HAST::TS as types::TypeStore<HAST::T>>::Ty: Into<u16>,
     HAST: NodeStore<HAST::IdN, R<'a> = HAST::T> + LabelStore<str, I = HAST::Label>,
-    HAST: 'a + HyperAST<'a, Label = LabelIdentifier>
+    HAST: 'a + HyperAST<'a, Label = LabelIdentifier>,
 {
     use num::cast::ToPrimitive;
     let mut label_list = vec![];
@@ -213,7 +216,7 @@ where
         let mut id = EntityHasher::default();
         curr.hash(&mut id);
         let nid = id.finish();
-        let n = stores.node_store().resolve(&curr);//hyper_ast::types::NodeStore::resolve(stores, &curr);
+        let n = stores.node_store().resolve(&curr); //hyper_ast::types::NodeStore::resolve(stores, &curr);
         let k = stores.type_store().resolve_type(&n);
         let k = n.get_type();
         if let Some(l) = n.try_get_label() {
@@ -248,16 +251,20 @@ where
             with_children
                 .cs_ofs
                 .push(with_children.children.len() as u32);
-            with_children.cs_lens.push(cs.child_count().to_u32().unwrap());
-            with_children.children.extend(cs.iter_children().map(|curr| {
-                if advance > 0 {
-                    queue.push((curr.clone(), advance - 1));
-                }
-                let mut id = EntityHasher::default();
-                curr.hash(&mut id);
-                let id = id.finish();
-                id
-            }));
+            with_children
+                .cs_lens
+                .push(cs.child_count().to_u32().unwrap());
+            with_children
+                .children
+                .extend(cs.iter_children().map(|curr| {
+                    if advance > 0 {
+                        queue.push((curr.clone(), advance - 1));
+                    }
+                    let mut id = EntityHasher::default();
+                    curr.hash(&mut id);
+                    let id = id.finish();
+                    id
+                }));
         } else {
             only_typed.ids.push(nid);
             only_typed.kinds.push(k.into());

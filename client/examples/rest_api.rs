@@ -296,7 +296,10 @@ where
     type Rejection = String;
 
     // check for admin permissions...
-    async fn from_request_parts(parts: &mut request::Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut request::Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
         Err("admin auth not implemented".into())
     }
 }
@@ -312,7 +315,10 @@ where
     type Rejection = String;
 
     // check for a logged in user...
-    async fn from_request_parts(parts: &mut request::Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut request::Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
         Err("user auth not implemented".into())
     }
 }

@@ -44,18 +44,19 @@ fn run(text: &[u8]) {
     let root = ana.solver.intern(RefsEnum::Root);
     let package_ref = scoped!(root, "spoon");
     let i = 
-    // scoped!(
+	// scoped!(
     //     scoped!(
             scoped!(scoped!(root, "spoon"), "JLSViolation"
         // ) , "file"),
         // "InvalidPathException"
     );
-    let mut sp_store = StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+    let mut sp_store =
+        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
     let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
-	let x = sp_store.type_scout(&mut x, unsafe {
-		hyper_ast_gen_ts_java::types::TIdN::from_ref_id(&a.local.compressed_node)
-	});
-    usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref,i, x);
+    let x = sp_store.type_scout(&mut x, unsafe {
+        hyper_ast_gen_ts_java::types::TIdN::from_ref_id(&a.local.compressed_node)
+    });
+    usage::RefsFinder::new(&stores, &mut ana, &mut sp_store).find_all(package_ref, i, x);
 }
 
 #[test]

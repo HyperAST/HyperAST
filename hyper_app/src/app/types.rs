@@ -1,7 +1,11 @@
 use egui_addon::{code_editor, Lang};
 use hyper_ast::store::nodes::fetched::NodeIdentifier;
 
-use std::{collections::{HashMap, HashSet}, hash::Hash, ops::Range};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+    ops::Range,
+};
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub(crate) struct Repo {

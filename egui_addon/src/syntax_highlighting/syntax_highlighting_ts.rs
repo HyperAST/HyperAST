@@ -13,7 +13,6 @@ pub(crate) use super::syntect::CodeTheme;
 // #[cfg(not(feature = "syntect"))]
 // pub(crate) use super::syntect::CodeTheme;
 
-
 use super::TokenType;
 
 // /// View some code with syntax highlighting and selection.
@@ -74,9 +73,11 @@ pub fn highlight(
 ) -> LayoutJob {
     use crate::code_editor::generic_text_buffer::TextBuffer;
 
-
-    impl egui::util::cache::ComputerMut<(&super::simple::CodeTheme, &EditAwareString, &Lang), LayoutJob>
-        for Highlighter
+    impl
+        egui::util::cache::ComputerMut<
+            (&super::simple::CodeTheme, &EditAwareString, &Lang),
+            LayoutJob,
+        > for Highlighter
     {
         fn compute(
             &mut self,
@@ -102,8 +103,8 @@ pub fn highlight(
                     self.parsed = None;
                     code.edit.take();
                     self.parsed = parser
-                    .parse(code.as_str(), self.parsed.take().as_ref())
-                    .unwrap();
+                        .parse(code.as_str(), self.parsed.take().as_ref())
+                        .unwrap();
                     if !self.parsed.as_ref().unwrap().root_node().has_error() {
                         panic!()
                     }
@@ -572,7 +573,12 @@ impl Highlighter {
 #[cfg(not(feature = "syntect"))]
 impl Highlighter {
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
-    fn highlight(&self, theme: &super::simple::CodeTheme, mut text: &str, _language: &str) -> LayoutJob {
+    fn highlight(
+        &self,
+        theme: &super::simple::CodeTheme,
+        mut text: &str,
+        _language: &str,
+    ) -> LayoutJob {
         // Extremely simple syntax highlighter for when we compile without syntect
 
         let mut job = LayoutJob::default();

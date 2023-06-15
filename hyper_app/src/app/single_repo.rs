@@ -5,7 +5,10 @@ use crate::app::{
     API_URL,
 };
 
-use egui_addon::{code_editor::{CodeEditor, EditorInfo}, egui_utils::{show_wip, radio_collapsing}};
+use egui_addon::{
+    code_editor::{CodeEditor, EditorInfo},
+    egui_utils::{radio_collapsing, show_wip},
+};
 
 use super::{
     show_repo_menu,

@@ -72,8 +72,8 @@ impl<Idx: PrimInt> Iterator for IntoIter<Idx> {
 #[test]
 fn identity() {
     let v = vec![
-        1, 4684, 68, 46, 84, 684, 68, 46, 846, 4460, 0, 00, 8, 0, 8, 0, 0, 0, 1, 12, 1, 2, 1,
-        21, 2, 1, 2, 12, 1,
+        1, 4684, 68, 46, 84, 684, 68, 46, 846, 4460, 0, 00, 8, 0, 8, 0, 0, 0, 1, 12, 1, 2, 1, 21,
+        2, 1, 2, 12, 1,
     ];
     let path = CompressedTreePath::<u16>::from(v.clone());
     let bits = path.as_bytes();

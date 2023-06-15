@@ -15,7 +15,7 @@ use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
 use hyper_ast_gen_ts_xml::{legion::XmlTreeGen, types::Type};
 use num::ToPrimitive;
 
-use crate::{Accumulator, SimpleStores, PROPAGATE_ERROR_ON_BAD_CST_NODE, TStore};
+use crate::{Accumulator, SimpleStores, TStore, PROPAGATE_ERROR_ON_BAD_CST_NODE};
 
 pub(crate) fn handle_pom_file<'a>(
     tree_gen: &mut XmlTreeGen<'a, TStore>,
@@ -78,9 +78,8 @@ impl<'a> Iterator for IterMavenModules2<'a> {
     type Item = StructuralPosition;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.next_node().map(|x| {
-            (self.parents().to_vec(), self.offsets().to_vec(), x).into()
-        })
+        self.next_node()
+            .map(|x| (self.parents().to_vec(), self.offsets().to_vec(), x).into())
     }
 }
 
@@ -113,11 +112,19 @@ impl<'a> IterMavenModules2<'a> {
             }
         }
 
-        let b = self.stores.node_store.try_resolve_typed::<XmlIdN>(&x).unwrap().0;
+        let b = self
+            .stores
+            .node_store
+            .try_resolve_typed::<XmlIdN>(&x)
+            .unwrap()
+            .0;
         let t = b.get_type();
 
         let is_src = if b.has_label() {
-            self.stores.label_store.resolve(b.get_label_unchecked()).eq("src")
+            self.stores
+                .label_store
+                .resolve(b.get_label_unchecked())
+                .eq("src")
         } else {
             false
         };
@@ -155,7 +162,10 @@ impl<'a> IterMavenModules2<'a> {
                                 "f name: {:?}",
                                 self.stores.label_store.resolve(n.get_label_unchecked())
                             );
-                            self.stores.label_store.resolve(n.get_label_unchecked()).eq("pom.xml")
+                            self.stores
+                                .label_store
+                                .resolve(n.get_label_unchecked())
+                                .eq("pom.xml")
                         } else {
                             false
                         }
@@ -275,11 +285,7 @@ impl MavenModuleAcc {
         // TODO
         // full_node.2.acc(&Type::Directory, &mut self.ana);
     }
-    pub fn push_submodule(
-        &mut self,
-        name: LabelIdentifier,
-        full_node: (NodeIdentifier, MD),
-    ) {
+    pub fn push_submodule(&mut self, name: LabelIdentifier, full_node: (NodeIdentifier, MD)) {
         self.children.push(full_node.0);
         self.children_names.push(name);
         self.metrics.acc(full_node.1.metrics);
@@ -368,7 +374,12 @@ impl<'a, T: TreePathMut<NodeIdentifier, u16> + Debug + Clone> Iterator for IterM
                     let child = children[offset.to_usize().unwrap()];
                     self.path.check(self.stores).unwrap();
                     {
-                        let b = self.stores.node_store.try_resolve_typed::<XmlIdN>(&node).unwrap().0;
+                        let b = self
+                            .stores
+                            .node_store
+                            .try_resolve_typed::<XmlIdN>(&node)
+                            .unwrap()
+                            .0;
                         if b.has_children() {
                             let len = b.child_count();
                             let cs = b.children().unwrap();
@@ -408,7 +419,12 @@ impl<'a, T: TreePathMut<NodeIdentifier, u16> + Debug + Clone> Iterator for IterM
                     continue;
                 }
             } else {
-                let b = self.stores.node_store.try_resolve_typed::<XmlIdN>(&node).unwrap().0;
+                let b = self
+                    .stores
+                    .node_store
+                    .try_resolve_typed::<XmlIdN>(&node)
+                    .unwrap()
+                    .0;
 
                 if self.is_dead_end(&b) {
                     continue;
@@ -448,7 +464,10 @@ impl<'a, T: TreePath<NodeIdentifier>> IterMavenModules<'a, T> {
     fn is_dead_end(&self, b: &XmlNode<'a>) -> bool {
         let t = b.get_type();
         let is_src = if b.has_label() {
-            self.stores.label_store.resolve(b.get_label_unchecked()).eq("src")
+            self.stores
+                .label_store
+                .resolve(b.get_label_unchecked())
+                .eq("src")
         } else {
             false
         };
@@ -470,7 +489,10 @@ impl<'a, T: TreePath<NodeIdentifier>> IterMavenModules<'a, T> {
                                 "f name: {:?}",
                                 self.stores.label_store.resolve(n.get_label_unchecked())
                             );
-                            self.stores.label_store.resolve(n.get_label_unchecked()).eq("pom.xml")
+                            self.stores
+                                .label_store
+                                .resolve(n.get_label_unchecked())
+                                .eq("pom.xml")
                         } else {
                             false
                         }

@@ -69,7 +69,9 @@ fn main() {
     });
     let out = out_validity.zip(out_perfs);
 
-    let diff_algorithm = args.get(3).expect("the diff algo for java gumtree eg. Chawathe or None if it takes too long");
+    let diff_algorithm = args
+        .get(3)
+        .expect("the diff algo for java gumtree eg. Chawathe or None if it takes too long");
 
     let wanted = &args[4..];
 
@@ -77,7 +79,7 @@ fn main() {
         .iter()
         .filter_map(|(short, name, after)| {
             if !wanted.iter().any(|x| x == short) {
-                return None
+                return None;
             }
             Some(CommitCompareParameters {
                 name,

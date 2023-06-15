@@ -1,21 +1,24 @@
-use std::{fs::File, io::BufWriter, io::Write, path::PathBuf, fmt::Display};
+use std::{fmt::Display, fs::File, io::BufWriter, io::Write, path::PathBuf};
 
-use hyper_ast::{
-    store::{
-        defaults::NodeIdentifier,
-        labels::DefaultLabelIdentifier,
-        nodes::{legion::{HashedNodeRef, NodeStore}},
-    },
-    types::{self, Children, MySlice, SimpleHyperAST, WithStats},
-    utils::memusage_linux,
-};
-use hyper_ast_cvs_git::{git::fetch_github_repository, preprocessed::PreProcessedRepository, TStore, no_space::as_nospaces};
-use num_traits::ToPrimitive;
-use hyper_diff::algorithms::{self, ComputeTime};
 use crate::{
     other_tools,
     postprocess::{CompressedBfPostProcess, PathJsonPostProcess},
 };
+use hyper_ast::{
+    store::{
+        defaults::NodeIdentifier,
+        labels::DefaultLabelIdentifier,
+        nodes::legion::{HashedNodeRef, NodeStore},
+    },
+    types::{self, Children, MySlice, SimpleHyperAST, WithStats},
+    utils::memusage_linux,
+};
+use hyper_ast_cvs_git::{
+    git::fetch_github_repository, no_space::as_nospaces, preprocessed::PreProcessedRepository,
+    TStore,
+};
+use hyper_diff::algorithms::{self, ComputeTime};
+use num_traits::ToPrimitive;
 
 pub fn windowed_commits_compare(
     window_size: usize,
@@ -53,8 +56,13 @@ pub fn windowed_commits_compare(
     let c_len = processing_ordered_commits.len();
 
     let mut buf = out
-    .map(|out| (File::create(out.0).unwrap(),File::create(out.1).unwrap()))
-    .map(|file|(BufWriter::with_capacity(4 * 8 * 1024, file.0),BufWriter::with_capacity(4 * 8 * 1024, file.1)));
+        .map(|out| (File::create(out.0).unwrap(), File::create(out.1).unwrap()))
+        .map(|file| {
+            (
+                BufWriter::with_capacity(4 * 8 * 1024, file.0),
+                BufWriter::with_capacity(4 * 8 * 1024, file.1),
+            )
+        });
     if let Some((buf_validity, buf_perfs)) = &mut buf {
         writeln!(
             buf_validity,
@@ -67,9 +75,7 @@ pub fn windowed_commits_compare(
         )
         .unwrap();
     }
-    for c in (0..c_len - 1)
-        .map(|c| &processing_ordered_commits[c..(c + window_size).min(c_len)])
-    {
+    for c in (0..c_len - 1).map(|c| &processing_ordered_commits[c..(c + window_size).min(c_len)]) {
         let oid_src = c[0];
         for oid_dst in &c[1..] {
             log::warn!("diff of {oid_src} and {oid_dst}");
@@ -98,7 +104,9 @@ pub fn windowed_commits_compare(
             let lazy = algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr);
             let summarized_lazy = &lazy.summarize();
             dbg!(summarized_lazy);
-            if summarized_lazy.compare_results(&not_lazy) || summarized_lazy.compare_results(&partial_lazy) {
+            if summarized_lazy.compare_results(&not_lazy)
+                || summarized_lazy.compare_results(&partial_lazy)
+            {
                 log::error!("there is an difference between the optimisations");
             }
 
@@ -113,7 +121,7 @@ pub fn windowed_commits_compare(
                 dst_tr,
                 "gumtree",
                 diff_algorithm,
-                (total_lazy_t*10.).ceil().to_u64().unwrap(),
+                (total_lazy_t * 10.).ceil().to_u64().unwrap(),
                 gt_out_format,
             );
             let res = if gt_out_format == "COMPRESSED" {
@@ -139,7 +147,7 @@ pub fn windowed_commits_compare(
             } else {
                 unimplemented!("gt_out_format {} is not implemented", gt_out_format)
             };
-            
+
             // let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) =
             //     summarized_lazy.mapping_durations.clone().into();
             if let Some((buf_validity, buf_perfs)) = &mut buf {
@@ -153,11 +161,7 @@ pub fn windowed_commits_compare(
                     &partial_lazy,
                 );
                 if let Some((gt_timings, gt_counts, valid)) = res {
-                    dbg!(
-                        &gt_counts,
-                        &valid,
-                        &gt_timings,
-                    );
+                    dbg!(&gt_counts, &valid, &gt_timings,);
                     writeln!(
                         buf_validity,
                         "{oid_src}/{oid_dst},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
@@ -170,13 +174,15 @@ pub fn windowed_commits_compare(
                         valid.missing_mappings,
                         valid.additional_mappings,
                         gt_counts.actions,
-                        summarized_lazy.actions.map_or(-1,|x|x as isize),
+                        summarized_lazy.actions.map_or(-1, |x| x as isize),
                         &gt_counts.src_heap,
                         &gt_counts.dst_heap,
                         Into::<isize>::into(&commit_src.1.memory_used()),
                         Into::<isize>::into(&commit_dst.1.memory_used()),
-                        not_lazy.mappings, not_lazy.actions.map_or(-1,|x|x as isize), 
-                        partial_lazy.mappings, partial_lazy.actions.map_or(-1,|x|x as isize), 
+                        not_lazy.mappings,
+                        not_lazy.actions.map_or(-1, |x| x as isize),
+                        partial_lazy.mappings,
+                        partial_lazy.actions.map_or(-1, |x| x as isize),
                     )
                     .unwrap();
                     writeln!(
@@ -203,25 +209,54 @@ pub fn windowed_commits_compare(
                         "gumtree_lazy",
                         src_s,
                         dst_s,
-                        -1,//gt_counts.mappings,
+                        -1, //gt_counts.mappings,
                         summarized_lazy.mappings,
-                        -1,//valid.missing_mappings,
-                        -1,//valid.additional_mappings,
-                        -1,//gt_counts.actions,
-                        summarized_lazy.actions.map_or(-1,|x|x as isize),
-                        -1,//&gt_counts.src_heap,
-                        -1,//&gt_counts.dst_heap,
+                        -1, //valid.missing_mappings,
+                        -1, //valid.additional_mappings,
+                        -1, //gt_counts.actions,
+                        summarized_lazy.actions.map_or(-1, |x| x as isize),
+                        -1, //&gt_counts.src_heap,
+                        -1, //&gt_counts.dst_heap,
                         Into::<isize>::into(&commit_src.1.memory_used()),
                         Into::<isize>::into(&commit_dst.1.memory_used()),
-                        not_lazy.mappings, not_lazy.actions.map_or(-1,|x|x as isize), 
-                        partial_lazy.mappings, partial_lazy.actions.map_or(-1,|x|x as isize), 
+                        not_lazy.mappings,
+                        not_lazy.actions.map_or(-1, |x| x as isize),
+                        partial_lazy.mappings,
+                        partial_lazy.actions.map_or(-1, |x| x as isize),
                     )
                     .unwrap();
                 }
 
-                write_perfs(buf_perfs,"gumtree_lazy", &oid_src, oid_dst, src_s, dst_s,summarized_lazy).unwrap();
-                write_perfs(buf_perfs,"gumtree_not_lazy", &oid_src, oid_dst, src_s, dst_s,&not_lazy).unwrap();
-                write_perfs(buf_perfs,"gumtree_partial_lazy", &oid_src, oid_dst, src_s, dst_s,&partial_lazy).unwrap();
+                write_perfs(
+                    buf_perfs,
+                    "gumtree_lazy",
+                    &oid_src,
+                    oid_dst,
+                    src_s,
+                    dst_s,
+                    summarized_lazy,
+                )
+                .unwrap();
+                write_perfs(
+                    buf_perfs,
+                    "gumtree_not_lazy",
+                    &oid_src,
+                    oid_dst,
+                    src_s,
+                    dst_s,
+                    &not_lazy,
+                )
+                .unwrap();
+                write_perfs(
+                    buf_perfs,
+                    "gumtree_partial_lazy",
+                    &oid_src,
+                    oid_dst,
+                    src_s,
+                    dst_s,
+                    &partial_lazy,
+                )
+                .unwrap();
                 buf_validity.flush().unwrap();
                 buf_perfs.flush().unwrap();
             } else {
@@ -270,24 +305,31 @@ pub fn windowed_commits_compare(
     log::warn!("hyperAST size: {}", mu - memusage_linux());
 }
 
-pub(crate) fn write_perfs<Id:Display>(
-    buf_perfs:&mut BufWriter<File>,
+pub(crate) fn write_perfs<Id: Display>(
+    buf_perfs: &mut BufWriter<File>,
     kind: &str,
-    oid_src: &Id, oid_dst: &Id, src_s: usize, dst_s: usize,
-    summarized_lazy:&hyper_diff::algorithms::ResultsSummary<hyper_diff::algorithms::PreparedMappingDurations<2>>) -> Result<(), std::io::Error> {
+    oid_src: &Id,
+    oid_dst: &Id,
+    src_s: usize,
+    dst_s: usize,
+    summarized_lazy: &hyper_diff::algorithms::ResultsSummary<
+        hyper_diff::algorithms::PreparedMappingDurations<2>,
+    >,
+) -> Result<(), std::io::Error> {
     writeln!(
         buf_perfs,
         "{}/{},{},{},{},{},{},{},{},{},{},{},{}",
-        oid_src,oid_dst,
+        oid_src,
+        oid_dst,
         kind,
         src_s,
         dst_s,
         summarized_lazy.mappings,
-        summarized_lazy.actions.map_or(-1,|x|x as isize),
+        summarized_lazy.actions.map_or(-1, |x| x as isize),
         summarized_lazy.mapping_durations.preparation[0],
-        summarized_lazy.mapping_durations.mappings.0[0], 
+        summarized_lazy.mapping_durations.mappings.0[0],
         summarized_lazy.mapping_durations.preparation[1],
-        summarized_lazy.mapping_durations.mappings.0[1], 
+        summarized_lazy.mapping_durations.mappings.0[1],
         summarized_lazy.prepare_gen_t,
         summarized_lazy.gen_t,
     )
@@ -298,11 +340,14 @@ mod test {
 
     use super::*;
 
-    use hyper_ast::{store::nodes::{legion::HashedNodeRef}, types::{WithChildren, HyperAST}};
+    use hyper_ast::{
+        store::nodes::legion::HashedNodeRef,
+        types::{HyperAST, WithChildren},
+    };
     use hyper_diff::{
-        decompressed_tree_store::{CompletePostOrder, lazy_post_order::LazyPostOrder},
+        decompressed_tree_store::{lazy_post_order::LazyPostOrder, CompletePostOrder},
         matchers::{
-            heuristic::gt::{greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher}},
+            heuristic::gt::greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
             mapping_store::{DefaultMultiMappingStore, VecStore},
         },
     };
@@ -446,9 +491,10 @@ mod test {
             dst_tr,
             "gumtree-subtree",
             "Chawathe",
-            60*5,
+            60 * 5,
             gt_out_format,
-        ).unwrap();
+        )
+        .unwrap();
 
         let pp = SimpleJsonPostProcess::new(&gt_out);
         let gt_timings = pp.performances();
@@ -464,7 +510,7 @@ mod test {
         );
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
-    
+
     #[test]
     fn issue_lazy_spark() {
         // cargo build --release && time target/release/window_combination apache/spark 14211a19f53bd0f413396582c8970e3e0a74281d 885f4733c413bdbb110946361247fbbd19f6bba9 "" validity_spark.csv perfs_spark.csv 2 Chawathe &> spark.log
@@ -473,7 +519,8 @@ mod test {
         let window_size = 2;
         let mut preprocessed = preprocessed;
         let (before, after) = (
-            "a7f0adb2dd8449af6f9e9b5a25f11b5dcf5868f1", "29b9537e00d857c92378648ca7163ba0dc63da39"
+            "a7f0adb2dd8449af6f9e9b5a25f11b5dcf5868f1",
+            "29b9537e00d857c92378648ca7163ba0dc63da39",
         );
         // before 29b9537e00d857c92378648ca7163ba0dc63da39
         // after a7f0adb2dd8449af6f9e9b5a25f11b5dcf5868f1
@@ -488,7 +535,7 @@ mod test {
         );
         preprocessed.purge_caches();
         let c_len = processing_ordered_commits.len();
-        assert!(c_len> 0);
+        assert!(c_len > 0);
         dbg!(&processing_ordered_commits);
         let c = (0..c_len - 1)
             .map(|c| &processing_ordered_commits[c..(c + window_size).min(c_len)])
@@ -513,8 +560,12 @@ mod test {
         // let dst_tr = stores.node_store.resolve(dst_tr).get_child(&0);
 
         let hyperast = as_nospaces(stores);
-        let mapper: hyper_diff::matchers::Mapper<_, LazyPostOrder<_,u32>, LazyPostOrder<_,u32>, VecStore<u32>> =
-            hyperast.decompress_pair(&src_tr, &dst_tr).into();
+        let mapper: hyper_diff::matchers::Mapper<
+            _,
+            LazyPostOrder<_, u32>,
+            LazyPostOrder<_, u32>,
+            VecStore<u32>,
+        > = hyperast.decompress_pair(&src_tr, &dst_tr).into();
         let partial_lazy = algorithms::gumtree_partial_lazy::diff(&hyperast, &src_tr, &dst_tr);
         dbg!(
             &partial_lazy.mapping_durations,
@@ -530,7 +581,8 @@ mod test {
         let window_size = 2;
         let mut preprocessed = preprocessed;
         let (before, after) = (
-            "7e745b42bda9bf6f8ea681d38992d18036fc021e", "ebfc8945a5dd77b617f4667647ed4b740323acc8"
+            "7e745b42bda9bf6f8ea681d38992d18036fc021e",
+            "ebfc8945a5dd77b617f4667647ed4b740323acc8",
         );
         assert!(window_size > 1);
 
@@ -590,8 +642,8 @@ mod test {
         let dst = &dst_tr;
         let mappings = VecStore::default();
         use hyper_diff::decompressed_tree_store::DecompressedSubtree;
-        let src_arena= LazyPostOrder::<_, u32>::decompress(&stores.node_store, src);
-        let dst_arena= LazyPostOrder::<_, u32>::decompress(&stores.node_store, dst);
+        let src_arena = LazyPostOrder::<_, u32>::decompress(&stores.node_store, src);
+        let dst_arena = LazyPostOrder::<_, u32>::decompress(&stores.node_store, dst);
 
         let mut mapper = hyper_diff::matchers::Mapper {
             hyperast: stores,
@@ -602,27 +654,19 @@ mod test {
             },
         };
         dbg!();
-        use hyper_diff::matchers::mapping_store::MappingStore;
         use hyper_diff::decompressed_tree_store::ShallowDecompressedTreeStore;
+        use hyper_diff::matchers::mapping_store::MappingStore;
         mapper.mapping.mappings.topit(
             mapper.mapping.src_arena.len(),
             mapper.mapping.dst_arena.len(),
         );
         dbg!();
-        let mm = LazyGreedySubtreeMatcher::<
-            _,
-            _,
-            _,
-            VecStore<_>,
-        >::compute_multi_mapping::<DefaultMultiMappingStore<_>>(
-            &mut mapper
-        );
+        let mm = LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::compute_multi_mapping::<
+            DefaultMultiMappingStore<_>,
+        >(&mut mapper);
         dbg!();
         use hyper_diff::matchers::heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
-        LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>,10>::filter_mappings(
-            &mut mapper,
-            &mm,
-        );
+        LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>, 10>::filter_mappings(&mut mapper, &mm);
         // TODO do something with the multi mappings
         // modify filter_mappings to extract redundant mappings
         // the store it alongside other mappings
@@ -646,8 +690,8 @@ mod test {
         //     &dst,
         //     mappings,
         // );
-        let dst_arena = mapper.mapping.dst_arena.complete(&stores.node_store,);
-        let src_arena = mapper.mapping.src_arena.complete(&stores.node_store,);
+        let dst_arena = mapper.mapping.dst_arena.complete(&stores.node_store);
+        let src_arena = mapper.mapping.src_arena.complete(&stores.node_store);
         print_mappings(
             &dst_arena,
             &src_arena,
@@ -663,9 +707,10 @@ mod test {
             dst_tr,
             "gumtree-subtree",
             "Chawathe",
-            60*5,
+            60 * 5,
             gt_out_format,
-        ).unwrap();
+        )
+        .unwrap();
 
         let pp = SimpleJsonPostProcess::new(&gt_out);
         let gt_timings = pp.performances();
@@ -681,9 +726,7 @@ mod test {
         );
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
-    
 }
-
 
 // pub(crate) fn as_nospaces<'a>(
 //     stores: &'a hyper_ast::store::SimpleStores<TStore>,

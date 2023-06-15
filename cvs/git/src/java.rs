@@ -1,4 +1,6 @@
-use crate::{preprocessed::IsSkippedAna, Accumulator, MAX_REFS, PROPAGATE_ERROR_ON_BAD_CST_NODE, TStore};
+use crate::{
+    preprocessed::IsSkippedAna, Accumulator, TStore, MAX_REFS, PROPAGATE_ERROR_ON_BAD_CST_NODE,
+};
 
 use hyper_ast::{
     hashed::SyntaxNodeHashs,

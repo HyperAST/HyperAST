@@ -106,7 +106,6 @@ impl CodeTheme {
     }
 }
 
-
 impl CodeTheme {
     pub fn from_style(style: &egui::Style) -> Self {
         if style.visuals.dark_mode {

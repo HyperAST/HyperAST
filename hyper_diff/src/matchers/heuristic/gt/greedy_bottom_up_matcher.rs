@@ -9,7 +9,7 @@ use crate::decompressed_tree_store::{
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
 use hyper_ast::types::{
-    DecompressedSubtree, HyperAST, LabelStore, NodeStore, SlicedLabel, Tree, WithHashs, NodeId,
+    DecompressedSubtree, HyperAST, LabelStore, NodeId, NodeStore, SlicedLabel, Tree, WithHashs,
 };
 
 use super::bottom_up_matcher::BottomUpMatcher;
@@ -114,7 +114,7 @@ impl<
         SIM_THRESHOLD_DEN,
     >
 where
-    T::TreeId: 'a + Clone + Debug+NodeId<IdN=T::TreeId>,
+    T::TreeId: 'a + Clone + Debug + NodeId<IdN = T::TreeId>,
     T::Type: Debug + Eq + Copy + Send + Sync,
     M::Src: 'a + PrimInt + std::ops::SubAssign + Debug,
     M::Dst: 'a + PrimInt + std::ops::SubAssign + Debug,
@@ -175,8 +175,7 @@ where
         src: &'a T::TreeId,
         dst: &'a T::TreeId,
         mappings: M,
-    ) -> Self
-    {
+    ) -> Self {
         let mut matcher = Self::new(
             compressed_node_store,
             label_store,

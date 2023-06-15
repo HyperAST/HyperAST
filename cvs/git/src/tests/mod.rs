@@ -1,17 +1,17 @@
 pub mod direct_type_ref;
-pub mod obj_creation;
 #[cfg(test)]
 pub mod extends_package_local;
+pub mod obj_creation;
 
 use crate::{git::fetch_github_repository, preprocessed::PreProcessedRepository};
 use hyper_ast_gen_ts_java::impact::element::RefsEnum;
 use std::env;
 
-use hyper_ast::{
-    // types::{Labeled, Tree, WithChildren},
-    utils::memusage_linux,
+use hyper_ast::utils::memusage_linux;
+use hyper_ast_gen_ts_java::impact::{
+    element::{IdentifierFormat, LabelPtr},
+    partial_analysis::PartialAnalysis,
 };
-use hyper_ast_gen_ts_java::impact::{element::{IdentifierFormat, LabelPtr}, partial_analysis::PartialAnalysis};
 
 #[test]
 fn example_main() {
@@ -94,7 +94,6 @@ pub fn find_refs_from_canonical_type(
     println!("memory used {}", mu);
 }
 
-
 #[test]
 fn example_process_make_cpp_project() {
     use std::io::Write;
@@ -119,9 +118,9 @@ fn example_process_make_cpp_project() {
         &mut fetch_github_repository(name),
         "",
         // "587bc647d7d14b53d8625c4446006e23a4acd82a",
-        "f97c5b6909d22277f28e3dea2f146e9314d634dc",// issue with operator[]('K') = KB;
+        "f97c5b6909d22277f28e3dea2f146e9314d634dc", // issue with operator[]('K') = KB;
         "src",
-        2
+        2,
     );
     // let id = preprocessed.processor.object_map_make.get(&a).unwrap();
     // hyper_ast_gen_ts_cpp::legion::print_tree_syntax(&preprocessed.processor.main_stores.node_store, &preprocessed.processor.main_stores.label_store, &id.0);

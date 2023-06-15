@@ -4,18 +4,20 @@ use std::{
 };
 
 use crate::app::{
-    code_editor::generic_text_buffer::byte_index_from_char_index, interactive_split,
-    show_remote_code, API_URL,
+    code_editor::generic_text_buffer::byte_index_from_char_index, show_remote_code, API_URL,
 };
 use egui::Id;
-use egui_addon::egui_utils::{highlight_byte_range, show_wip, radio_collapsing};
+use egui_addon::{
+    egui_utils::{highlight_byte_range, radio_collapsing, show_wip},
+    interactive_split::interactive_splitter::InteractiveSplitter,
+};
 use poll_promise::Promise;
 
 use super::{
     show_repo_menu,
     types::CodeRange,
     types::{self, Commit, Resource},
-    Accumulable, Buffered, interactive_split::splitter::Splitter,
+    Accumulable, Buffered,
 };
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -317,9 +319,8 @@ pub(super) fn show_code_tracking_results(
     fetched_files: &mut HashMap<types::FileIdentifier, RemoteFile>,
     ctx: &egui::Context,
 ) {
-
     let result_changed = tracking_result.try_poll();
-    Splitter::vertical().show(ui, |ui1, ui2| {
+    InteractiveSplitter::vertical().show(ui, |ui1, ui2| {
         let mut pos_ratio = None;
         ui2.push_id(ui2.id().with("second"), |ui| {
             let file_result = fetched_files.entry(tracking.target.file.clone());

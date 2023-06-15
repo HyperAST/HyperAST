@@ -13,8 +13,8 @@ use crate::{
     nodes::{CompressedNode, HashSize, RefContainer},
     store::defaults::LabelIdentifier,
     types::{
-        Children, HyperType, IterableChildren, MySlice, NodeId, TypeTrait, Typed,
-        WithChildren, TypedNodeId, WithMetaData,
+        Children, HyperType, IterableChildren, MySlice, NodeId, TypeTrait, Typed, TypedNodeId,
+        WithChildren, WithMetaData,
     },
 };
 
@@ -27,7 +27,10 @@ pub struct HashedNodeRef<'a, T = NodeIdentifier>(pub(super) EntryRef<'a>, Phanto
 
 impl<'a, T> HashedNodeRef<'a, T> {
     #[doc(hidden)]
-    pub fn cast_type<U:NodeId>(self) -> HashedNodeRef<'a, U> where T:NodeId<IdN = U::IdN> {
+    pub fn cast_type<U: NodeId>(self) -> HashedNodeRef<'a, U>
+    where
+        T: NodeId<IdN = U::IdN>,
+    {
         HashedNodeRef(self.0, PhantomData)
     }
     pub(super) fn new(e: EntryRef<'a>) -> Self {
@@ -53,7 +56,7 @@ impl TypedNodeId for NodeIdentifier {
     type Ty = crate::types::AnyType;
 }
 
-pub struct HashedNode<Id:TypedNodeId<IdN = NodeIdentifier>> {
+pub struct HashedNode<Id: TypedNodeId<IdN = NodeIdentifier>> {
     node: CompressedNode<NodeIdentifier, LabelIdentifier, Id::Ty>,
     hashs: SyntaxNodeHashs<u32>,
 }
@@ -62,7 +65,10 @@ pub struct HashedNode<Id:TypedNodeId<IdN = NodeIdentifier>> {
 
 // * hashed node impl
 
-impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> PartialEq for HashedNode<Id> where Id::IdN: PartialEq {
+impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> PartialEq for HashedNode<Id>
+where
+    Id::IdN: PartialEq,
+{
     fn eq(&self, other: &Self) -> bool {
         self.node == other.node
     }
@@ -212,14 +218,11 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> HashedNodeRef<'a, Id> {
         // }
         // .map_or_else(|_| self
         //     .get_type().to_string().len() as u32,|x|x.0)
-        self.0
-            .get_component::<compo::BytesLen>()
-            .unwrap()
-            .0
+        self.0.get_component::<compo::BytesLen>().unwrap().0
     }
 }
 
-impl<'a, Id: 'static + TypedNodeId<IdN=NodeIdentifier>> HashedNodeRef<'a, Id> {
+impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> HashedNodeRef<'a, Id> {
     // TODO when relativisation is applied, caller of this method should provide the size of the paren ident
     pub fn try_get_bytes_len(&self, _p_indent_len: u32) -> Option<u32>
     where
@@ -343,7 +346,10 @@ impl<'a, T> HashedNodeRef<'a, T> {
     }
 }
 
-impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> HashedNodeRef<'a, Id> where Id::Ty: 'static + Sync + Send + TypeTrait {
+impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> HashedNodeRef<'a, Id>
+where
+    Id::Ty: 'static + Sync + Send + TypeTrait,
+{
     pub fn into_compressed_node(
         &self,
     ) -> Result<CompressedNode<legion::Entity, LabelIdentifier, Id::Ty>, ComponentError> {
@@ -377,7 +383,9 @@ impl<'a, T> AsRef<HashedNodeRef<'a, T>> for HashedNodeRef<'a, T> {
     }
 }
 
-impl<'a, Id: 'static + TypedNodeId<IdN=NodeIdentifier>> crate::types::Typed for HashedNodeRef<'a, Id> {
+impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Typed
+    for HashedNodeRef<'a, Id>
+{
     type Type = Id::Ty;
 
     fn get_type(&self) -> Id::Ty
@@ -571,7 +579,9 @@ impl<'a, T> crate::types::WithHashs for HashedNodeRef<'a, T> {
     }
 }
 
-impl<'a, Id: 'static + TypedNodeId<IdN=NodeIdentifier>> crate::types::Tree for HashedNodeRef<'a, Id> {
+impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Tree
+    for HashedNodeRef<'a, Id>
+{
     fn has_children(&self) -> bool {
         self.cs().map(|x| !x.is_empty()).unwrap_or(false)
     }

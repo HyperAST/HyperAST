@@ -9,7 +9,9 @@ use str_distance::DistanceMetric;
 
 use crate::decompressed_tree_store::{DecompressedTreeStore, PostOrderKeyRoots};
 use crate::matchers::mapping_store::MonoMappingStore;
-use hyper_ast::types::{DecompressedSubtree, LabelStore, NodeStore, SlicedLabel, Stored, Tree, NodeId};
+use hyper_ast::types::{
+    DecompressedSubtree, LabelStore, NodeId, NodeStore, SlicedLabel, Stored, Tree,
+};
 
 // TODO use the Mapping struct
 pub struct ZsMatcher<M, SD, DD = SD> {
@@ -71,7 +73,7 @@ impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
         dst_arena: DD,
     ) -> M
     where
-        T::TreeId: Clone + NodeId<IdN=T::TreeId>,
+        T::TreeId: Clone + NodeId<IdN = T::TreeId>,
         T: Tree<Label = LS::I>,
         T::Type: Copy + Eq + Send + Sync,
         M::Src: PrimInt + std::ops::SubAssign + Debug,
@@ -551,8 +553,7 @@ pub mod qgrams {
         // #[cfg(not(feature = "native"))]
         // let hb = std::collections::hash_map::RandomState::generate_with(42, 142, 542, 9342);
         // Divide s into q-grams and store them in a hash map
-        let mut qgrams =
-            HashMap::<[u8; Q], i32, DefaultHashBuilder>::with_hasher(hb);
+        let mut qgrams = HashMap::<[u8; Q], i32, DefaultHashBuilder>::with_hasher(hb);
         let pad_s = pad::<QM>(s);
         for i in 0..=pad_s.len() - Q {
             // dbg!(i);
