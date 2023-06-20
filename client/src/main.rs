@@ -10,7 +10,9 @@ use std::{
 };
 
 use dashmap::DashMap;
-use hyper_ast_cvs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories, processing::ConfiguredRepoHandle};
+use hyper_ast_cvs_git::{
+    git::Forge, multi_preprocessed::PreProcessedRepositories, processing::ConfiguredRepoHandle,
+};
 use hyper_diff::{decompressed_tree_store::PersistedNode, matchers::mapping_store::VecStore};
 use tower_http::cors::CorsLayer;
 
@@ -36,8 +38,9 @@ mod scripting;
 mod track;
 mod utils;
 mod view;
+mod ws;
 
-#[derive(Default)]
+// #[derive(Default)]
 pub struct AppState {
     db: DashMap<String, Bytes>,
     repositories: RwLock<PreProcessedRepositories>,
@@ -45,6 +48,31 @@ pub struct AppState {
     mappings: MappingCache,
     mappings_alone: MappingAloneCache,
     partial_decomps: PartialDecompCache,
+    doc: Arc<(
+        RwLock<automerge::AutoCommit>,
+        (
+            tokio::sync::broadcast::Sender<(SocketAddr, Vec<automerge::Change>)>,
+            tokio::sync::broadcast::Receiver<(SocketAddr, Vec<automerge::Change>)>,
+        ),
+        RwLock<Vec<tokio::sync::mpsc::Sender<Option<Vec<u8>>>>>,
+    )>,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            db: Default::default(),
+            repositories: Default::default(),
+            mappings: Default::default(),
+            mappings_alone: Default::default(),
+            partial_decomps: Default::default(),
+            doc: Arc::new((
+                RwLock::new(automerge::AutoCommit::new()),
+                tokio::sync::broadcast::channel(50),
+                Default::default(),
+            )),
+        }
+    }
 }
 
 // #[derive(Default)]
@@ -77,21 +105,36 @@ type SharedState = Arc<AppState>;
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "client=debug,client::file=debug,tower_http=debug".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    if true {
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::DEBUG)
+            .init();
+    } else {
+        tracing_subscriber::registry()
+            .with(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| "client=debug,client::file=debug,tower_http=debug".into()),
+            )
+            .with(tracing_subscriber::fmt::layer())
+            .init();
+    }
     let shared_state = SharedState::default();
     {
         use hyper_ast_cvs_git::processing::RepoConfig;
-        shared_state.repositories.write().unwrap().register_config(Forge::Github.repo("INRIA", "spoon"), RepoConfig::JavaMaven);
-        shared_state.repositories.write().unwrap().register_config(Forge::Github.repo("official-stockfish", "Stockfish"),
-        RepoConfig::CppMake);
-        shared_state.repositories.write().unwrap().register_config(Forge::Github.repo("torvalds", "linux"),
-        RepoConfig::CppMake);
+        shared_state
+            .repositories
+            .write()
+            .unwrap()
+            .register_config(Forge::Github.repo("INRIA", "spoon"), RepoConfig::JavaMaven);
+        shared_state.repositories.write().unwrap().register_config(
+            Forge::Github.repo("official-stockfish", "Stockfish"),
+            RepoConfig::CppMake,
+        );
+        shared_state
+            .repositories
+            .write()
+            .unwrap()
+            .register_config(Forge::Github.repo("torvalds", "linux"), RepoConfig::CppMake);
         // let mut hmap = shared_state.configs.write().unwrap();
         // hmap.0.insert(Forge::Github.repo("INRIA", "spoon"), RepoConfig::JavaMaven);
         // hmap.0.insert(
@@ -101,6 +144,7 @@ async fn main() {
     }
     let app = Router::new()
         .fallback(fallback)
+        .route("/ws", axum::routing::get(ws::ws_handler))
         .merge(kv_store_app(Arc::clone(&shared_state)))
         .merge(scripting_app(Arc::clone(&shared_state)))
         .merge(fetch_git_file(Arc::clone(&shared_state)))
@@ -123,7 +167,7 @@ async fn main() {
     let addr = SocketAddr::from((global, 8080));
     tracing::debug!("listening on {}", addr);
     axum::Server::bind(&addr)
-        .serve(app.into_make_service())
+        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .with_graceful_shutdown(shutdown_signal())
         .await
         .unwrap();

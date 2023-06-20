@@ -26,6 +26,7 @@ mod tree_view;
 mod ts_highlight;
 pub(crate) mod types;
 mod utils;
+mod code_editor_automerge;
 
 // const API_URL: &str = "http://131.254.13.72:8080";
 const API_URL: &str = "http://0.0.0.0:8080";
@@ -37,7 +38,7 @@ pub struct HyperApp {
     // Example stuff:
     project_name: String,
 
-    code_editors: types::CodeEditors,
+    code_editors: Arc<std::sync::Mutex<types::CodeEditors<code_editor_automerge::CodeEditor>>>,
 
     #[serde(skip)]
     languages: Arc<HashMap<String, Lang>>,
@@ -284,12 +285,14 @@ impl HyperApp {
         // parsed.walk().node().kind();
 
         let mut r = HyperApp::default();
-        r.code_editors.init.lang = languages.get("JavaScript").cloned();
-        r.code_editors.filter.lang = languages.get("JavaScript").cloned();
-        r.code_editors.accumulate.lang = languages.get("JavaScript").cloned();
+        let mut arc = r.code_editors.lock().unwrap();
+        arc.init.lang = languages.get("JavaScript").cloned();
+        arc.filter.lang = languages.get("JavaScript").cloned();
+        arc.accumulate.lang = languages.get("JavaScript").cloned();
         // dbg!(&r.code_editors.lang);
         // assert!(r.code_editors.lang.is_some());
         r.languages = languages.into();
+        drop(arc);
         // r.code_editor.parser
         //     .set_language(&lang.into())
         //     .expect("Error loading Java grammar");

@@ -7,7 +7,7 @@ use std::{
 
 use lazy_static::lazy_static;
 
-use super::generic_text_buffer::{TextBuffer, AAA};
+use super::generic_text_buffer::{TextBuffer, AsText};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct EditAwareString {
@@ -71,7 +71,7 @@ impl<'a> Into<&'a str> for &'a EditAwareString {
     }
 }
 
-impl AAA for EditAwareString {
+impl AsText for EditAwareString {
     fn text(&self) -> &str {
         &self.string
     }

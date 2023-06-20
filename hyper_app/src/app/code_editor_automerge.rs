@@ -1,22 +1,18 @@
-use self::{editor_content::EditAwareString, generic_text_buffer::TextBuffer};
+//! NOTE Pretty adoc impl, would benefit from being merged with impl in egui_addon
+
 use super::Lang;
 use eframe::epaint::ahash::HashMap;
 use egui::{Response, WidgetText};
+use egui_addon::code_editor::EditorInfo;
 use egui_demo_lib::easy_mark::easy_mark;
-use serde::Deserialize;
 use std::sync::Arc;
 
 const TREE_SITTER: bool = false;
 
-pub(crate) mod editor_content;
-
-pub mod generic_text_buffer;
-pub mod generic_text_edit;
-mod generic_state;
-
+use crate::app::single_repo::exp::Quot as Quote;
 
 #[derive(serde::Deserialize, serde::Serialize)]
-pub struct CodeEditor<C = EditAwareString> {
+pub(crate) struct CodeEditor<C = Quote> {
     #[serde(default = "default_info")]
     pub info: EditorInfo<String>,
     pub language: String,
@@ -31,31 +27,79 @@ pub struct CodeEditor<C = EditAwareString> {
     pub lang: Option<Lang>,
 }
 
-#[derive(Deserialize, serde::Serialize)]
-pub struct EditorInfo<T> {
-    pub title: T,
-    pub short: T,
-    pub long: T,
+impl<C: From<String>> From<(EditorInfo<String>, String)> for CodeEditor<C> {
+    fn from((info, code): (EditorInfo<String>, String)) -> Self {
+        let code = code.into();
+        Self {
+            info,
+            code,
+            ..Default::default()
+        }
+    }
 }
 
-impl Default for EditorInfo<&'static str> {
-    fn default() -> Self {
-        Self {
-            title: "Editor",
-            short: "a code editor",
-            long: "this is a code editor, you should probably make a custom description on its purpose",
+impl autosurgeon::Reconcile for CodeEditor {
+    type Key<'a> = std::borrow::Cow<'a, String>;
+
+    fn reconcile<R: autosurgeon::Reconciler>(&self, mut reconciler: R) -> Result<(), R::Error> {
+        use autosurgeon::reconcile::MapReconciler;
+        let mut m = reconciler.map()?;
+        // m.put("id", &self.language)?;
+        m.put("info.title", &self.info.title)?;
+        m.put("info.short", &self.info.short)?;
+        m.put("info.long", &self.info.long)?;
+        m.put("code", &self.code)?;
+        Ok(())
+    }
+
+    // fn hydrate_key<'a, D: autosurgeon::ReadDoc>(
+    //     doc: &D,
+    //     obj: &automerge::ObjId,
+    //     prop: autosurgeon::Prop<'_>,
+    // ) -> Result<autosurgeon::reconcile::LoadKey<Self::Key<'a>>, autosurgeon::ReconcileError> {
+    //     autosurgeon::hydrate_key(doc, obj, prop, "id".into())
+    // }
+
+    // fn key(&self) -> autosurgeon::reconcile::LoadKey<std::borrow::Cow<'_, String>> {
+    //     autosurgeon::reconcile::LoadKey::Found(std::borrow::Cow::Borrowed(&self.language))
+    // }
+}
+
+impl autosurgeon::Hydrate for CodeEditor {
+    fn hydrate_map<D: autosurgeon::ReadDoc>(
+        doc: &D,
+        obj: &automerge::ObjId,
+    ) -> Result<Self, autosurgeon::HydrateError> {
+        use automerge::ObjType;
+        use autosurgeon::HydrateError;
+        let Some(obj_type) = doc.object_type(obj) else {
+            return Err(HydrateError::unexpected("a map", "a scalar value".to_string()))
+        };
+        match obj_type {
+            ObjType::Map | ObjType::Table => {
+                Ok(Self {
+                    // language: String::hydrate(doc, obj, "id".into())?,
+                    info: EditorInfo {
+                        title: String::hydrate(doc, obj, "info.title".into())?,
+                        short: String::hydrate(doc, obj, "info.short".into())?,
+                        long: String::hydrate(doc, obj, "info.long".into())?,
+                    },
+                    code: crate::app::single_repo::exp::Quot::hydrate(doc, obj, "code".into())?,
+                    ..Default::default()
+                })
+            }
+            ObjType::Text => Err(HydrateError::unexpected(
+                "a map",
+                "a text object".to_string(),
+            )),
+            ObjType::List => Err(HydrateError::unexpected(
+                "a map",
+                "a list object".to_string(),
+            )),
         }
     }
 }
-impl EditorInfo<&'static str> {
-    pub fn copied(&self) -> EditorInfo<String> {
-        EditorInfo {
-            title: self.title.to_string(),
-            short: self.short.to_string(),
-            long: self.long.to_string(),
-        }
-    }
-}
+
 pub(crate) fn default_info() -> EditorInfo<String> {
     EditorInfo::default().copied()
 }
@@ -66,9 +110,7 @@ pub(crate) fn default_parser() -> tree_sitter::Parser {
 
 impl<C: From<String>> Default for CodeEditor<C> {
     fn default() -> Self {
-        Self {
-            language: "JavaScript".into(),
-            code: r#"function  f() { return 0; }
+        let code = &r#"function  f() { return 0; }
 function f() { return 1; }
 
 function f() { return 2; }
@@ -77,9 +119,10 @@ function f() { return 2; }
 //         return x * 2;
 //     }
 // }
-            "#
-            .to_string()
-            .into(),
+//             "#;
+        Self {
+            language: "JavaScript".into(),
+            code: code.to_string().into(),
             parser: default_parser(),
             languages: Default::default(),
             lang: Default::default(),
@@ -121,9 +164,10 @@ impl CodeEditor {
     //     self
     // }
     pub fn code(&self) -> &str {
+        use egui_addon::code_editor::generic_text_buffer::TextBuffer;
         self.code.as_str()
     }
-    pub fn ui(&mut self, ui: &mut egui::Ui) {
+    pub fn ui(&mut self, ui: &mut egui::Ui) -> Option<Response> {
         let Self {
             code, lang, info, ..
         } = self;
@@ -157,7 +201,7 @@ impl CodeEditor {
         //     });
         // }
 
-        let theme = crate::syntax_highlighting::simple::CodeTheme::from_memory(ui.ctx());
+        let theme = egui_addon::syntax_highlighting::simple::CodeTheme::from_memory(ui.ctx());
         // ui.collapsing("Theme", |ui| {
         //     ui.group(|ui| {
         //         theme.ui(ui);
@@ -191,56 +235,62 @@ impl CodeEditor {
         });
         col.show_body_indented(&header_res.response, ui, |ui| {
             // .body(|ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                if TREE_SITTER {
-                    let layouter = |ui: &egui::Ui, code: &EditAwareString, wrap_width: f32| {
-                        dbg!(&lang);
-                        let mut layout_job =
-                            crate::syntax_highlighting::syntax_highlighting_ts::highlight(
-                                ui.ctx(),
-                                &theme,
-                                code,
-                                &lang.as_ref().unwrap(),
-                            );
-                        layout_job.wrap.max_width = wrap_width;
-                        ui.fonts(|f| f.layout_job(layout_job))
-                    };
+            egui::ScrollArea::vertical()
+                .show(ui, |ui| {
+                    if TREE_SITTER {
+                        // let layouter = |ui: &egui::Ui, code: &EditAwareString, wrap_width: f32| {
+                        //     dbg!(&lang);
+                        //     let mut layout_job =
+                        //         egui_addon::syntax_highlighting::syntax_highlighting_ts::highlight(
+                        //             ui.ctx(),
+                        //             &theme,
+                        //             code,
+                        //             &lang.as_ref().unwrap(),
+                        //         );
+                        //     layout_job.wrap.max_width = wrap_width;
+                        //     ui.fonts(|f| f.layout_job(layout_job))
+                        // };
 
-                    // let out = generic_text_edit::TextEdit::multiline(code)
-                    //     .font(egui::TextStyle::Monospace) // for cursor height
-                    //     .code_editor()
-                    //     .desired_rows(5)
-                    //     .lock_focus(true)
-                    //     .desired_width(f32::INFINITY)
-                    //     .layouter(&mut layouter)
-                    //     .show(ui);
-                } else {
-                    let language = "rs";
-                    let theme =
-                        egui_demo_lib::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+                        // let out = generic_text_edit::TextEdit::multiline(code)
+                        //     .font(egui::TextStyle::Monospace) // for cursor height
+                        //     .code_editor()
+                        //     .desired_rows(5)
+                        //     .lock_focus(true)
+                        //     .desired_width(f32::INFINITY)
+                        //     .layouter(&mut layouter)
+                        //     .show(ui);
+                        panic!()
+                    } else {
+                        let language = "rs";
+                        let theme =
+                            egui_demo_lib::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
 
-                    let mut layouter = |ui: &egui::Ui, string: &str, _wrap_width: f32| {
-                        let layout_job = egui_demo_lib::syntax_highlighting::highlight(
-                            ui.ctx(),
-                            &theme,
-                            string,
-                            language,
-                        );
-                        // layout_job.wrap.max_width = wrap_width; // no wrapping
-                        ui.fonts(|f| f.layout_job(layout_job))
-                    };
-
-                    ui.add(
-                        egui::TextEdit::multiline(&mut code.string)
-                            .font(egui::TextStyle::Monospace) // for cursor height
-                            .code_editor()
-                            .desired_rows(1)
-                            .lock_focus(true)
-                            .layouter(&mut layouter),
-                    );
-                }
-            });
-        });
+                        let mut layouter =
+                            |ui: &egui::Ui,
+                             string: &super::single_repo::exp::Quot,
+                             _wrap_width: f32| {
+                                let layout_job = egui_demo_lib::syntax_highlighting::highlight(
+                                    ui.ctx(),
+                                    &theme,
+                                    string.text.as_str(),
+                                    language,
+                                );
+                                // layout_job.wrap.max_width = wrap_width; // no wrapping
+                                ui.fonts(|f| f.layout_job(layout_job))
+                            };
+                        ui.add(
+                            egui_addon::code_editor::generic_text_edit::TextEdit::multiline(code)
+                                .font(egui::TextStyle::Monospace) // for cursor height
+                                .code_editor()
+                                .desired_rows(1)
+                                .lock_focus(true)
+                                .layouter(&mut layouter),
+                        )
+                    }
+                })
+                .inner
+        })
+        .map(|x| x.inner)
     }
 }
 

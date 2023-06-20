@@ -206,11 +206,12 @@ impl From<&ComputeConfigAspectViews> for SelectedConfig {
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
+#[derive(autosurgeon::Hydrate, autosurgeon::Reconcile)]
 #[serde(default)]
-pub(crate) struct CodeEditors {
-    pub(crate) init: code_editor::CodeEditor,
-    pub(crate) filter: code_editor::CodeEditor,
-    pub(crate) accumulate: code_editor::CodeEditor,
+pub(crate) struct CodeEditors<T=code_editor::CodeEditor> {
+    pub(crate) init: T,
+    pub(crate) filter: T,
+    pub(crate) accumulate: T,
 }
 
 #[derive(Debug)]

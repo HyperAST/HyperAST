@@ -4,6 +4,7 @@ pub mod interactive_split;
 pub mod meta_edge;
 pub mod multi_split;
 pub mod syntax_highlighting;
+pub mod async_exec;
 
 #[derive(Debug, Clone)]
 pub struct Lang {

@@ -1,16 +1,16 @@
-use std::ops::{Deref, Range};
+use std::ops::Range;
 
-pub trait AAA {
+pub trait AsText {
     fn text(&self) -> &str;
 }
 
-impl AAA for String {
+impl AsText for String {
     fn text(&self) -> &str {
         &self
     }
 }
 
-impl AAA for str {
+impl AsText for str {
     fn text(&self) -> &str {
         &self
     }
@@ -21,8 +21,8 @@ impl AAA for str {
 ///
 /// Most likely you will use a [`String`] which implements [`TextBuffer`].
 pub trait TextBuffer {
-    type Ref: ?Sized + AAA; //: where for<'a> &'a Self::Ref:Into<str>;
-                            // type Ref<'a>: Into<&'a str> where Self: 'a;
+    /// Main difference wrt. egui's [`egui::TextBufer`]
+    type Ref: ?Sized + AsText;
 
     /// Can this text be edited?
     fn is_mutable(&self) -> bool;
@@ -33,9 +33,6 @@ pub trait TextBuffer {
     fn as_str(&self) -> &str {
         self.as_reference().text()
     }
-    //  {
-    //     self.as_reference().into()
-    // }
 
     /// Reads the given character range.
     fn char_range(&self, char_range: Range<usize>) -> &str {
@@ -92,7 +89,6 @@ pub trait TextBuffer {
 }
 
 impl TextBuffer for String {
-    // type Ref<'a> = &'a str;
     type Ref = String;
     fn is_mutable(&self) -> bool {
         true
@@ -137,7 +133,6 @@ impl TextBuffer for String {
 
 /// Immutable view of a `&str`!
 impl<'a> TextBuffer for &'a str {
-    // type Ref<'b> = &'b str where Self: 'a + 'b;
     type Ref = str;
 
     fn is_mutable(&self) -> bool {
