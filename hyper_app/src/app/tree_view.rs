@@ -23,7 +23,7 @@ use std::{
 
 use crate::app::syntax_highlighting::{
     self as syntax_highlighter,
-    syntax_highlighting_async::{self, async_exec},
+    syntax_highlighting_async,
 };
 
 use super::{
@@ -1966,7 +1966,7 @@ fn make_pp_code(
     #[derive(Default)]
     struct Layouter {
         ctx: egui::Context,
-        mt: Vec<Arc<Mutex<async_exec::TimeoutHandle>>>,
+        mt: Vec<Arc<Mutex<egui_addon::async_exec::TimeoutHandle>>>,
         sections: Vec<LayoutSection>,
         /// remaining, queue
         queued: Arc<(AtomicUsize, crossbeam_queue::SegQueue<Vec<LayoutSection>>)>,
@@ -2007,7 +2007,7 @@ fn make_pp_code(
                     ctx.request_repaint_after(Duration::from_millis(10));
                 };
                 self.mt
-                    .push(Arc::new(Mutex::new(async_exec::spawn_macrotask(Box::new(
+                    .push(Arc::new(Mutex::new(egui_addon::async_exec::spawn_macrotask(Box::new(
                         fut,
                     )))));
                 vec![LayoutSection {
