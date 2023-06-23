@@ -1,5 +1,6 @@
 #[derive(Clone)]
 pub(super) struct Scripts {
+    pub(crate) description: &'static str,
     pub(crate) init: &'static str,
     pub(crate) filter: &'static str,
     pub(crate) accumulate: &'static str,
@@ -69,6 +70,7 @@ pub(super) const EXAMPLES: &[Example] = &[
         config: Config::MavenJava,
         commits: 1,
         scripts: Scripts {
+            description: "",
             init: r##"#{ depth:0, files: 0, type_decl: 0 }"##,
             filter: r##"if is_directory() {
     children().map(|x| [x, #{
@@ -108,6 +110,7 @@ pub(super) const EXAMPLES: &[Example] = &[
         config: Config::MakeCpp,
         commits: 1,
         scripts: Scripts {
+            description: "",
             init: r##"#{ depth:0, files: 0, type_decl: 0 }"##,
             filter: r##"if is_directory() {
     children().map(|x| [x, #{
@@ -160,6 +163,7 @@ pub(super) const EXAMPLES: &[Example] = &[
         config: Config::MakeCpp,
         commits: 10,
         scripts: Scripts {
+            description: "",
             init: r##"#{ depth:0, files: 0, size: 0 }"##,
             filter: r##"if is_directory() {
     children().map(|x| [x, #{
@@ -202,6 +206,7 @@ pub(super) const EXAMPLES: &[Example] = &[
         config: Config::MakeCpp,
         commits: 10,
         scripts: Scripts {
+            description: "",
             init: r##"#{ depth:0, files: 0, size: 0 }"##,
             filter: r##"if is_directory() {
     children().map(|x| [x, #{
@@ -238,6 +243,7 @@ pub(super) const EXAMPLES: &[Example] = &[
         config: Config::MavenJava,
         commits: 1,
         scripts: Scripts {
+            description: "",
             init: r##"#{ depth:0, files: 0, size: 0 }"##,
             filter: r##"if is_directory() {
     children().map(|x| [x, #{
@@ -280,6 +286,7 @@ pub(super) const EXAMPLES: &[Example] = &[
         config: Config::MavenJava,
         commits: 10,
         scripts: Scripts {
+            description: "",
             init: r##"#{ depth:0, files: 0, size: 0 }"##,
             filter: r##"if is_directory() {
     children().map(|x| [x, #{

@@ -18,8 +18,10 @@ use std::{
     sync::Arc,
 };
 
+mod code_editor_automerge;
 mod code_tracking;
 mod commit;
+pub(crate) mod crdt_over_ws;
 mod long_tracking;
 mod single_repo;
 mod tree_view;
@@ -38,7 +40,11 @@ pub struct HyperApp {
     // Example stuff:
     project_name: String,
 
-    code_editors: Arc<std::sync::Mutex<types::CodeEditors<code_editor_automerge::CodeEditor>>>,
+    // code_editors: Arc<std::sync::Mutex<types::CodeEditors<code_editor_automerge::CodeEditor>>>,
+    scripting_context: ScriptingContext<
+        self::types::CodeEditors,
+        types::CodeEditors<code_editor_automerge::CodeEditor>,
+    >,
 
     #[serde(skip)]
     languages: Arc<HashMap<String, Lang>>,
@@ -63,6 +69,27 @@ pub struct HyperApp {
     store: Arc<FetchedHyperAST>,
 
     long_tracking: long_tracking::LongTacking,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+struct ScriptingContext<L, S> {
+    current: EditStatus<L>,
+    local_scripts: HashMap<String, L>,
+    shared_script: Option<Arc<std::sync::Mutex<S>>>,
+    // shared_script: Arc<std::sync::RwLock<Vec<Option<Arc<std::sync::Mutex<S>>>>>>,
+    // shared_scripts: DashMap<String, Arc<std::sync::Mutex<S>>>,
+}
+
+#[derive(Serialize, Deserialize)]
+enum EditStatus<L> {
+    Shared, //(Id)
+    Local { name: String, content: L },
+    Example { i: usize, content: L },
+}
+impl<L:Default> Default for EditStatus<L> {
+    fn default() -> Self {
+        Self::Example { i: 0, content: Default::default() }
+    }
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -244,7 +271,8 @@ impl Default for HyperApp {
         Self {
             // Example stuff:
             project_name: "Simple Computation".to_owned(),
-            code_editors: Default::default(),
+            // code_editors: Default::default(),
+            scripting_context: Default::default(),
             languages: Default::default(),
             single: Default::default(),
             selected: Default::default(),
@@ -285,14 +313,14 @@ impl HyperApp {
         // parsed.walk().node().kind();
 
         let mut r = HyperApp::default();
-        let mut arc = r.code_editors.lock().unwrap();
-        arc.init.lang = languages.get("JavaScript").cloned();
-        arc.filter.lang = languages.get("JavaScript").cloned();
-        arc.accumulate.lang = languages.get("JavaScript").cloned();
+        // let mut arc = r.scripting_context.lock().unwrap();
+        // arc.init.lang = languages.get("JavaScript").cloned();
+        // arc.filter.lang = languages.get("JavaScript").cloned();
+        // arc.accumulate.lang = languages.get("JavaScript").cloned();
         // dbg!(&r.code_editors.lang);
         // assert!(r.code_editors.lang.is_some());
         r.languages = languages.into();
-        drop(arc);
+        // drop(arc);
         // r.code_editor.parser
         //     .set_language(&lang.into())
         //     .expect("Error loading Java grammar");
@@ -316,7 +344,8 @@ impl eframe::App for HyperApp {
         ctx.request_repaint_after(std::time::Duration::from_secs_f32(5.0));
         let Self {
             project_name,
-            code_editors,
+            // code_editors,
+            scripting_context,
             languages,
             selected,
             single,
@@ -409,7 +438,7 @@ impl eframe::App for HyperApp {
                 single_repo::show_single_repo(
                     ui,
                     single,
-                    code_editors,
+                    scripting_context,
                     &mut trigger_compute,
                     compute_single_result,
                 );
@@ -469,7 +498,7 @@ impl eframe::App for HyperApp {
             self.compute_single_result = Some(single_repo::remote_compute_single(
                 ctx,
                 single,
-                code_editors,
+                scripting_context,
             ));
         }
     }

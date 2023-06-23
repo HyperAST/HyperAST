@@ -205,13 +205,29 @@ impl From<&ComputeConfigAspectViews> for SelectedConfig {
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
-#[derive(autosurgeon::Hydrate, autosurgeon::Reconcile)]
+#[derive(
+    serde::Deserialize, serde::Serialize, autosurgeon::Hydrate, autosurgeon::Reconcile, Clone, Debug,
+)]
 #[serde(default)]
-pub(crate) struct CodeEditors<T=code_editor::CodeEditor> {
+pub(crate) struct CodeEditors<T = code_editor::CodeEditor> {
+    pub(crate) description: T,
     pub(crate) init: T,
     pub(crate) filter: T,
     pub(crate) accumulate: T,
+}
+
+impl<T> CodeEditors<T> {
+    pub(crate) fn to_shared<U>(self) -> CodeEditors<U>
+    where
+        T: Into<U>,
+    {
+        CodeEditors {
+            description: self.description.into(),
+            init: self.init.into(),
+            filter: self.filter.into(),
+            accumulate: self.accumulate.into(),
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 const TREE_SITTER: bool = false;
 
-use crate::app::single_repo::exp::Quot as Quote;
+use crate::app::crdt_over_ws::Quote;
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub(crate) struct CodeEditor<C = Quote> {
@@ -25,6 +25,20 @@ pub(crate) struct CodeEditor<C = Quote> {
     pub languages: Arc<HashMap<String, Lang>>,
     #[serde(skip)]
     pub lang: Option<Lang>,
+}
+impl From<egui_addon::code_editor::CodeEditor> for CodeEditor {
+    fn from(value: egui_addon::code_editor::CodeEditor) -> Self {
+        let code = value.code;
+        let code = code.into();
+        Self {
+            info: value.info,
+            language: value.language,
+            code,
+            parser: value.parser,
+            languages: value.languages,
+            lang: value.lang,
+        }
+    }
 }
 
 impl<C: From<String>> From<(EditorInfo<String>, String)> for CodeEditor<C> {
@@ -84,7 +98,7 @@ impl autosurgeon::Hydrate for CodeEditor {
                         short: String::hydrate(doc, obj, "info.short".into())?,
                         long: String::hydrate(doc, obj, "info.long".into())?,
                     },
-                    code: crate::app::single_repo::exp::Quot::hydrate(doc, obj, "code".into())?,
+                    code: crate::app::crdt_over_ws::Quote::hydrate(doc, obj, "code".into())?,
                     ..Default::default()
                 })
             }
@@ -267,7 +281,7 @@ impl CodeEditor {
 
                         let mut layouter =
                             |ui: &egui::Ui,
-                             string: &super::single_repo::exp::Quot,
+                             string: &super::crdt_over_ws::Quote,
                              _wrap_width: f32| {
                                 let layout_job = egui_demo_lib::syntax_highlighting::highlight(
                                     ui.ctx(),

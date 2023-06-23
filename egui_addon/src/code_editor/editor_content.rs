@@ -1,5 +1,6 @@
 use std::{
     cell::RefCell,
+    fmt::Debug,
     hash::Hash,
     ops::Range,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
@@ -7,7 +8,7 @@ use std::{
 
 use lazy_static::lazy_static;
 
-use super::generic_text_buffer::{TextBuffer, AsText};
+use super::generic_text_buffer::{AsText, TextBuffer};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct EditAwareString {
@@ -19,6 +20,20 @@ pub struct EditAwareString {
     pub(crate) reset: AtomicBool,
     #[serde(skip)]
     pub(crate) edit: RefCell<Option<InputEdit>>,
+}
+
+impl Debug for EditAwareString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EditAwareString")
+            .field("string", &self.string)
+            .finish()
+    }
+}
+
+impl Into<String> for EditAwareString {
+    fn into(self) -> String {
+        self.string
+    }
 }
 
 fn default_bool() -> AtomicBool {
