@@ -48,6 +48,7 @@ pub struct AppState {
     mappings: MappingCache,
     mappings_alone: MappingAloneCache,
     partial_decomps: PartialDecompCache,
+    // Single shared doc
     doc: Arc<(
         RwLock<automerge::AutoCommit>,
         (
@@ -56,6 +57,8 @@ pub struct AppState {
         ),
         RwLock<Vec<tokio::sync::mpsc::Sender<Option<Vec<u8>>>>>,
     )>,
+    // Multiple shared docs
+    doc2: ws::SharedDocs,
 }
 
 impl Default for AppState {
@@ -71,6 +74,7 @@ impl Default for AppState {
                 tokio::sync::broadcast::channel(50),
                 Default::default(),
             )),
+            doc2: Default::default(),
         }
     }
 }

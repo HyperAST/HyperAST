@@ -73,22 +73,26 @@ pub struct HyperApp {
 
 #[derive(Default, Serialize, Deserialize)]
 struct ScriptingContext<L, S> {
-    current: EditStatus<L>,
+    current: EditStatus<L, S>,
     local_scripts: HashMap<String, L>,
-    shared_script: Option<Arc<std::sync::Mutex<S>>>,
+    // shared_script: Option<Arc<std::sync::Mutex<S>>>,
     // shared_script: Arc<std::sync::RwLock<Vec<Option<Arc<std::sync::Mutex<S>>>>>>,
     // shared_scripts: DashMap<String, Arc<std::sync::Mutex<S>>>,
 }
 
 #[derive(Serialize, Deserialize)]
-enum EditStatus<L> {
-    Shared, //(Id)
+enum EditStatus<L, S> {
+    Sharing(Arc<std::sync::Mutex<S>>), //(Id)
+    Shared(usize, Arc<std::sync::Mutex<S>>), //(Id)
     Local { name: String, content: L },
     Example { i: usize, content: L },
 }
-impl<L:Default> Default for EditStatus<L> {
+impl<L: Default, S> Default for EditStatus<L, S> {
     fn default() -> Self {
-        Self::Example { i: 0, content: Default::default() }
+        Self::Example {
+            i: 0,
+            content: Default::default(),
+        }
     }
 }
 

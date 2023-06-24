@@ -69,6 +69,14 @@ pub fn scripting_app(_st: SharedState) -> Router<SharedState> {
             "/script-depth/github/:user/:name/:commit",
             post(scripting_depth).layer(scripting_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
         )
+        .route(
+            "/shared-scripts-db",
+            get(crate::ws::connect_db), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/shared-script/:session",
+            get(crate::ws::connect_doc), // .with_state(Arc::clone(&shared_state)),
+        )
     // .route(
     //     "/script/gitlab/:user/:name/:commit",
     //     post(scripting).layer(scripting_service_config), // .with_state(Arc::clone(&shared_state)),

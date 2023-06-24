@@ -5,6 +5,7 @@ use async_executors::JoinHandle;
 use autosurgeon::{reconcile, Hydrate, Reconcile};
 use egui_addon::code_editor::generic_text_buffer::TextBuffer;
 use futures_util::{Future, SinkExt, StreamExt};
+use serde::{Deserialize, Serialize};
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::task::JoinHandle;
 
@@ -13,7 +14,7 @@ pub(crate) struct Quote {
     pub(crate) text: autosurgeon::Text,
 }
 
-impl<'de> serde::Deserialize<'de> for Quote {
+impl<'de> Deserialize<'de> for Quote {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -39,7 +40,7 @@ impl<'de> serde::Deserialize<'de> for Quote {
     }
 }
 
-impl serde::Serialize for Quote {
+impl Serialize for Quote {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -99,6 +100,19 @@ pub(super) type DocSharingState = (automerge::AutoCommit, automerge::sync::State
 
 pub(super) type WsDoc = WsChannel<DocSharingState>;
 
+type User = String;
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub(super) struct SharedDocView {
+    pub(super) owner: User,
+    pub(super) name: String,
+    // TODO show users currently on shared doc
+    writers: Vec<User>,
+    pub(super) id: usize,
+}
+
+pub(super) type WsDocsDb = WsChannel<(Option<usize>, Vec<Option<SharedDocView>>)>;
+
 #[derive(Default)]
 enum WsState {
     Init(poll_promise::Promise<tokio_tungstenite_wasm::Result<WsCont>>),
@@ -112,7 +126,7 @@ enum WsState {
 }
 
 impl<S> WsChannel<S> {
-    pub(super) fn with_data(rt: &Rt, who: usize, ctx: egui::Context, url: String, data: S) -> Self {
+    pub(super) fn with_data(rt: &Rt, who: User, ctx: egui::Context, url: String, data: S) -> Self {
         let (s, p) = poll_promise::Promise::new();
         rt.spawn(async move {
             s.send(WsChannel::<S>::make_ws_async(who, url).await);
@@ -124,7 +138,7 @@ impl<S> WsChannel<S> {
             timer: 0.0,
         }
     }
-    async fn make_ws_async(who: usize, url: String) -> tokio_tungstenite_wasm::Result<WsCont> {
+    async fn make_ws_async(who: User, url: String) -> tokio_tungstenite_wasm::Result<WsCont> {
         wasm_rs_dbg::dbg!(&url);
         match tokio_tungstenite_wasm::connect(url).await {
             Ok(stream) => {
@@ -132,7 +146,11 @@ impl<S> WsChannel<S> {
                 Ok(WsCont(stream))
             }
             Err(e) => {
-                wasm_rs_dbg::dbg!("WebSocket handshake for client {who} failed with {e}!");
+                wasm_rs_dbg::dbg!(
+                    "WebSocket handshake for client {who} failed with {e}!",
+                    &who,
+                    &e
+                );
                 Err(e)
             }
         }
@@ -182,10 +200,19 @@ impl<S> WsChannel<S> {
             WsState::Empty => panic!("unrecoverable state"),
         }
     }
+
+    pub(crate) fn is_connected(&self) -> bool {
+        match &self.ws {
+            WsState::Init(_) => false,
+            WsState::Error(_) => false,
+            WsState::Setup(_, _) => true,
+            WsState::Empty => unreachable!(),
+        }
+    }
 }
 
 impl WsDoc {
-    pub(super) fn new(rt: &Rt, who: usize, ctx: egui::Context, url: String) -> Self {
+    pub(super) fn new(rt: &Rt, who: User, ctx: egui::Context, url: String) -> Self {
         let data = (automerge::AutoCommit::new(), automerge::sync::State::new());
         WsChannel::with_data(rt, who, ctx, url, data)
     }
@@ -213,6 +240,59 @@ impl WsDoc {
                 } else {
                     wasm_rs_dbg::dbg!();
                 }
+            }
+            WsState::Empty => panic!(),
+        };
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+enum DbMsgToServer {
+    Create { name: String },
+    User { name: String },
+}
+impl WsDocsDb {
+    pub(super) fn new(rt: &Rt, who: User, ctx: egui::Context, url: String) -> Self {
+        let channel = WsChannel::with_data(rt, who, ctx, url, (None, vec![]));
+        // match &mut channel.ws {
+        //     WsState::Init(_) => (),
+        //     WsState::Error(_) => (),
+        //     WsState::Setup(sender, _) => {
+        //         let name = "42".to_string();
+        //         let msg = DbMsgToServer::User { name };
+        //         let msg = serde_json::to_string(&msg).unwrap();
+        //         let x = tokio_tungstenite_wasm::Message::Text(msg);
+        //         let mut sender = sender.clone();
+        //         rt.spawn(async move {
+        //             sender.send(x).await.unwrap();
+        //         });
+        //     }
+        //     WsState::Empty => panic!(),
+        // };
+
+        channel
+    }
+
+    pub(crate) fn create_doc_atempt(&mut self, rt: &Rt, name: String, quote: &mut impl Reconcile) {
+        wasm_rs_dbg::dbg!();
+        // let docs: &mut Vec<_> = &mut self.data.write().unwrap();
+        // if let Err(e) = reconcile(doc, &*quote) {
+        //     log::warn!(
+        //         "failed to reconcile while updating local state of CRDT {}",
+        //         e
+        //     );
+        // };
+        match &mut self.ws {
+            WsState::Init(_) => (),
+            WsState::Error(_) => (),
+            WsState::Setup(sender, _) => {
+                let msg = DbMsgToServer::Create { name };
+                let msg = serde_json::to_string(&msg).unwrap();
+                let x = tokio_tungstenite_wasm::Message::Text(msg);
+                let mut sender = sender.clone();
+                rt.spawn(async move {
+                    sender.send(x).await.unwrap();
+                });
             }
             WsState::Empty => panic!(),
         };

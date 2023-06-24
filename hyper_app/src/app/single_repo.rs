@@ -1,4 +1,10 @@
+use std::{
+    ops::DerefMut,
+    sync::{Arc, Mutex, RwLock},
+};
+
 use automerge::sync::SyncDoc;
+use futures_util::SinkExt;
 use poll_promise::Promise;
 
 use crate::app::{crdt_over_ws, utils, API_URL};
@@ -13,7 +19,7 @@ use egui_addon::{
 
 use super::{
     code_editor_automerge,
-    crdt_over_ws::DocSharingState,
+    crdt_over_ws::{DocSharingState, SharedDocView},
     show_repo_menu,
     types::{CodeEditors, Commit, Resource, SelectedConfig},
 };
@@ -45,6 +51,12 @@ const INFO_DESCRIPTION: EditorInfo<&'static str> = EditorInfo {
     long: concat!("TODO syntax similar to markdown",),
 };
 
+// TODO allow to change user name and generate a random default
+#[cfg(target_arch = "wasm32")]
+pub(crate) const USER: &str = "web";
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) const USER: &str = "native";
+
 impl<C: From<(EditorInfo<String>, String)>> From<&example_scripts::Scripts> for CodeEditors<C> {
     fn from(value: &example_scripts::Scripts) -> Self {
         Self {
@@ -71,6 +83,8 @@ pub(super) struct ComputeConfigSingle {
     rt: crdt_over_ws::Rt,
     #[serde(skip)]
     ws: Option<crdt_over_ws::WsDoc>,
+    #[serde(skip)]
+    doc_db: Option<crdt_over_ws::WsDocsDb>,
 }
 
 impl Default for ComputeConfigSingle {
@@ -78,12 +92,14 @@ impl Default for ComputeConfigSingle {
         let rt = Default::default();
         // let quote = Default::default();
         let ws = None;
+        let doc_db = None;
         Self {
             commit: From::from(&example_scripts::EXAMPLES[0].commit),
             // commit: "4acedc53a13a727be3640fe234f7e261d2609d58".into(),
             len: example_scripts::EXAMPLES[0].commits,
             rt,
             ws,
+            doc_db,
         }
     }
 }
@@ -91,8 +107,7 @@ impl Default for ComputeConfigSingle {
 pub(super) type RemoteResult =
     Promise<ehttp::Result<Resource<Result<ComputeResults, ScriptingError>>>>;
 
-type SharedCodeEditors =
-    std::sync::Arc<std::sync::Mutex<CodeEditors<code_editor_automerge::CodeEditor>>>;
+type SharedCodeEditors = std::sync::Arc<Mutex<CodeEditors<code_editor_automerge::CodeEditor>>>;
 
 type ScriptingContext = super::ScriptingContext<
     super::types::CodeEditors,
@@ -122,8 +137,8 @@ pub(super) fn remote_compute_single(
         commits: usize,
     }
     let script = match &mut code_editors.current {
-        super::EditStatus::Shared => {
-            let code_editors = code_editors.shared_script.as_ref().unwrap().lock().unwrap();
+        super::EditStatus::Shared(_, shared_script) | super::EditStatus::Sharing(shared_script) => {
+            let code_editors = shared_script.lock().unwrap();
             ScriptContent {
                 init: code_editors.init.code().to_string(),
                 filter: code_editors.filter.code().to_string(),
@@ -194,34 +209,66 @@ pub(super) fn show_single_repo(
         >,
     >,
 ) {
-    if let Some(ws) = &mut single.ws {
-        if let super::EditStatus::Shared = &mut code_editors.current {
-            let ctx = ui.ctx().clone();
-            let code_editors = if let Some(ce) = &code_editors.shared_script {
-                ce
-            } else {
-                code_editors.shared_script = Some(Default::default());
-                code_editors.shared_script.as_ref().unwrap()
-            };
-            let code_editors = code_editors.clone();
-            let doc = ws.data.clone();
-            let rt = single.rt.clone();
-            if let Err(e) = ws.setup_atempt(
-                |sender, receiver| {
-                    single
-                        .rt
-                        .spawn(update_handler(receiver, sender, doc, ctx, rt, code_editors))
-                },
-                &single.rt,
-            ) {
-                log::error!("{}", e);
+    if let Some(doc_db) = &mut single.doc_db {
+        let ctx = ui.ctx().clone();
+        let rt = single.rt.clone();
+        let owner = USER.to_string();
+        let data = doc_db.data.clone();
+        if let Err(err) = doc_db.setup_atempt(
+            move |sender, receiver| rt.spawn(db_update_handler(sender, receiver, owner, ctx, data)),
+            &single.rt,
+        ) {
+            log::warn!("{}", err);
+        }
+        match &mut code_editors.current {
+            super::EditStatus::Sharing(shared_script) => {
+                let ctx = ui.ctx().clone();
+                let rt = single.rt.clone();
+                let db = doc_db;
+                let guard = &mut db.data.write().unwrap();
+                let (waiting, vec) = guard.deref_mut();
+                if let Some(i) = waiting {
+                    wasm_rs_dbg::dbg!();
+                    let i = *i;
+                    if let Some(Some(view)) = vec.get(i) {
+                        assert_eq!(view.id, i);
+                        let url = format!("ws://{}/shared-script/{}", &API_URL[7..], i);
+                        single.ws = Some(crdt_over_ws::WsDoc::new(&rt, USER.to_string(), ctx, url));
+                    }
+                    code_editors.current = super::EditStatus::Shared(i, shared_script.clone());
+                }
             }
+            super::EditStatus::Shared(_, shared_script) => {
+                if let Some(ws) = &mut single.ws {
+                    wasm_rs_dbg::dbg!();
+                    let ctx = ui.ctx().clone();
+                    let doc = ws.data.clone();
+                    let rt = single.rt.clone();
+                    let code_editors = shared_script.clone();
+                    if let Err(e) = ws.setup_atempt(
+                        |sender, receiver| {
+                            single.rt.spawn(update_handler(
+                                receiver,
+                                sender,
+                                doc,
+                                ctx,
+                                rt,
+                                code_editors,
+                            ))
+                        },
+                        &single.rt,
+                    ) {
+                        log::error!("{}", e);
+                    }
+                }
+            }
+            _ => (),
         }
     } else {
-        let url = format!("ws://{}/ws", &API_URL[7..]);
-        single.ws = Some(crdt_over_ws::WsDoc::new(
+        let url = format!("ws://{}/shared-scripts-db", &API_URL[7..]);
+        single.doc_db = Some(crdt_over_ws::WsDocsDb::new(
             &single.rt,
-            42,
+            USER.to_string(),
             ui.ctx().clone(),
             url,
         ));
@@ -230,7 +277,13 @@ pub(super) fn show_single_repo(
     if is_portrait {
         egui::ScrollArea::vertical().show(ui, |ui| {
             show_scripts_edition(ui, code_editors, single);
-            show_interactions(ui, code_editors, trigger_compute, compute_single_result);
+            handle_interactions(
+                ui,
+                code_editors,
+                compute_single_result,
+                single,
+                trigger_compute,
+            );
             show_long_result(&*compute_single_result, ui);
         });
     } else {
@@ -241,61 +294,106 @@ pub(super) fn show_single_repo(
                     show_scripts_edition(ui, code_editors, single);
                 });
                 let ui = ui2;
-                show_interactions(ui, code_editors, trigger_compute, compute_single_result);
+                handle_interactions(
+                    ui,
+                    code_editors,
+                    compute_single_result,
+                    single,
+                    trigger_compute,
+                );
                 show_long_result(&*compute_single_result, ui);
             });
     }
 }
 
-fn show_interactions(
+fn handle_interactions(
     ui: &mut egui::Ui,
-    code_editors: &mut ScriptingContext,
+    code_editors: &mut super::ScriptingContext<
+        CodeEditors,
+        CodeEditors<code_editor_automerge::CodeEditor>,
+    >,
+    compute_single_result: &mut Option<
+        Promise<Result<Resource<Result<ComputeResults, ScriptingError>>, String>>,
+    >,
+    single: &mut ComputeConfigSingle,
     trigger_compute: &mut bool,
+) {
+    let interaction = show_interactions(ui, code_editors, &single.doc_db, compute_single_result);
+    if interaction.share_button.map_or(false, |x| x.clicked()) {
+        let (name, content) = interaction.editor.unwrap();
+        let content = content.clone().to_shared();
+        let content = Arc::new(Mutex::new(content));
+        let name = name.to_string();
+        code_editors.current = super::EditStatus::Sharing(content.clone());
+        let mut content = content.lock().unwrap();
+        let db = &mut single.doc_db.as_mut().unwrap();
+        db.create_doc_atempt(&single.rt, name, content.deref_mut());
+    } else if interaction.save_button.map_or(false, |x| x.clicked()) {
+        let (name, content) = interaction.editor.unwrap();
+        log::warn!("saving script: {:#?}", content.clone());
+        let name = name.to_string();
+        let content = content.clone();
+        code_editors
+            .local_scripts
+            .insert(name.to_string(), content.clone());
+        code_editors.current = super::EditStatus::Local { name, content };
+    } else if interaction.compute_button.clicked() {
+        *trigger_compute |= true;
+    }
+}
+
+fn show_interactions<'a>(
+    ui: &mut egui::Ui,
+    code_editors: &'a mut ScriptingContext,
+    docs_db: &Option<crdt_over_ws::WsDocsDb>,
     compute_single_result: &mut Option<
         poll_promise::Promise<
             Result<super::types::Resource<Result<ComputeResults, ScriptingError>>, String>,
         >,
     >,
-) {
-    ui.horizontal(|ui| {
-        if let super::EditStatus::Example { i, content } = &code_editors.current {
-            if ui.add(egui::Button::new("Save Script")).clicked() {
-                let name = EXAMPLES[*i].name.to_string();
-                code_editors
-                    .local_scripts
-                    .insert(name.clone(), content.clone());
-                code_editors.current = super::EditStatus::Local {
-                    name,
-                    content: content.clone(),
-                };
-            };
-        } else if let super::EditStatus::Local { name, content } = &mut code_editors.current {
-            let share_button = &ui.add(egui::Button::new("Share Script"));
-            let save_button = &ui.add(egui::Button::new("Save Script"));
-            log::warn!("saving script: {:#?}", content.clone());
-            ui.text_edit_singleline(name);
-            if share_button.clicked() {
-                code_editors
-                    .local_scripts
-                    .insert(name.clone(), content.clone());
-                code_editors.current = super::EditStatus::Shared;
-            } else if save_button.clicked() {
-                code_editors
-                    .local_scripts
-                    .insert(name.clone(), content.clone());
-                code_editors.current = super::EditStatus::Local {
-                    name: name.clone(),
-                    content: content.clone(),
-                };
-            };
+) -> InteractionResp<'a> {
+    let mut save_button = None;
+    let mut share_button = None;
+    let mut editor: Option<(&str, &CodeEditors)> = None;
+    ui.horizontal(|ui| match &mut code_editors.current {
+        super::EditStatus::Example { i, content } => {
+            save_button = Some(ui.add(egui::Button::new("Save Script")));
+            let name = &EXAMPLES[*i].name;
+            editor = Some((name, &*content));
         }
+        super::EditStatus::Local { name, content } => {
+            if let Some(doc_db) = docs_db {
+                if doc_db.is_connected() {
+                    share_button = Some(ui.add(egui::Button::new("Share Script")));
+                }
+            }
+            save_button = Some(ui.add(egui::Button::new("Save Script")));
+            ui.text_edit_singleline(name);
+            editor = Some((name, &*content));
+        }
+        _ => (),
     });
-    ui.horizontal(|ui| {
-        if ui.add(egui::Button::new("Compute")).clicked() {
-            *trigger_compute |= true;
-        };
-        show_short_result(&*compute_single_result, ui);
-    });
+    let compute_button = ui
+        .horizontal(|ui| {
+            let compute_button = ui.add(egui::Button::new("Compute"));
+            show_short_result(&*compute_single_result, ui);
+            compute_button
+        })
+        .inner;
+
+    InteractionResp {
+        compute_button,
+        editor,
+        save_button,
+        share_button,
+    }
+}
+
+struct InteractionResp<'a> {
+    compute_button: egui::Response,
+    save_button: Option<egui::Response>,
+    share_button: Option<egui::Response>,
+    editor: Option<(&'a str, &'a CodeEditors)>,
 }
 
 fn show_scripts_edition(
@@ -305,9 +403,11 @@ fn show_scripts_edition(
 ) {
     show_available_stuff(ui, single, scripting_context);
     match &mut scripting_context.current {
-        super::EditStatus::Shared => {
-            let code_editors = scripting_context.shared_script.as_mut().unwrap();
-            show_shared_code_edition(ui, code_editors, single);
+        super::EditStatus::Example {
+            i: _,
+            content: code_editors,
+        } => {
+            show_local_code_edition(ui, code_editors, single);
         }
         super::EditStatus::Local {
             name: _,
@@ -315,22 +415,22 @@ fn show_scripts_edition(
         } => {
             show_local_code_edition(ui, code_editors, single);
         }
-        super::EditStatus::Example {
-            i: _,
-            content: code_editors,
-        } => {
-            show_local_code_edition(ui, code_editors, single);
+        super::EditStatus::Sharing(code_editors) => {
+            show_shared_code_edition(ui, code_editors, single);
+        }
+        super::EditStatus::Shared(_, code_editors) => {
+            show_shared_code_edition(ui, code_editors, single);
         }
     }
 }
 
 fn show_shared_code_edition(
     ui: &mut egui::Ui,
-    scripting_context: &mut SharedCodeEditors,
+    code_editors: &mut SharedCodeEditors,
     single: &mut ComputeConfigSingle,
 ) {
     let resps = {
-        let mut ce = scripting_context.lock().unwrap();
+        let mut ce = code_editors.lock().unwrap();
         [ce.init.ui(ui), ce.filter.ui(ui), ce.accumulate.ui(ui)]
     };
 
@@ -345,12 +445,12 @@ fn show_shared_code_edition(
             0.01
         };
         let rt = &single.rt;
-        timed_updater(timer, ws, ui, scripting_context, rt);
+        timed_updater(timer, ws, ui, code_editors, rt);
     } else if ws.timer != 0.0 {
         let dt = ui.input(|mem| mem.unstable_dt);
         let timer = ws.timer + dt;
         let rt = &single.rt;
-        timed_updater(timer, ws, ui, scripting_context, rt);
+        timed_updater(timer, ws, ui, code_editors, rt);
     }
 }
 
@@ -379,10 +479,21 @@ fn show_available_stuff(
             .default_open(true)
             .show(ui, |ui| show_locals(ui, single, scripting_context));
     }
-    if !scripting_context.shared_script.is_none() {
-        egui::CollapsingHeader::new("Shared Scripts")
-            .default_open(true)
-            .show(ui, |ui| show_shared(ui, single, scripting_context));
+    if let Some(doc_db) = &single.doc_db {
+        let names: Vec<_> = doc_db
+            .data
+            .read()
+            .unwrap()
+            .1
+            .iter()
+            .filter_map(|d| d.as_ref())
+            .map(|x| (format!("{}/{}", x.owner, x.name), x.id))
+            .collect();
+        if !names.is_empty() {
+            egui::CollapsingHeader::new("Shared Scripts")
+                .default_open(true)
+                .show(ui, |ui| show_shared(ui, single, scripting_context, names));
+        }
     }
 }
 
@@ -404,7 +515,6 @@ fn show_examples(
             if button.clicked() {
                 single.commit = (&ex.commit).into();
                 single.len = ex.commits;
-                scripting_context.current = super::EditStatus::Shared;
                 scripting_context.current = super::EditStatus::Example {
                     i: j,
                     content: (&ex.scripts).into(),
@@ -424,7 +534,11 @@ fn show_locals(
         // let mut n = None;
         for (name, s) in &scripting_context.local_scripts {
             let mut text = egui::RichText::new(name);
-            if let super::EditStatus::Local { name: n, .. } = &scripting_context.current {
+            if let super::EditStatus::Local {
+                name: n,
+                content: _,
+            } = &scripting_context.current
+            {
                 if name == n {
                     text = text.strong();
                 }
@@ -439,10 +553,16 @@ fn show_locals(
             }
             button.context_menu(|ui| {
                 if ui.button("share").clicked() {
-                    scripting_context.current = super::EditStatus::Shared;
-                    scripting_context.shared_script = Some(std::sync::Arc::new(
-                        std::sync::Mutex::new(s.clone().to_shared()),
-                    ));
+                    let content = s.clone().to_shared();
+                    let content = Arc::new(Mutex::new(content));
+                    scripting_context.current =
+                        super::EditStatus::Shared(usize::MAX, content.clone());
+                    let mut content = content.lock().unwrap();
+                    single.doc_db.as_mut().unwrap().create_doc_atempt(
+                        &single.rt,
+                        name.to_string(),
+                        content.deref_mut(),
+                    );
                 }
                 // let rename_button = &ui.button("rename");
                 // if rename_button.clicked() {
@@ -477,26 +597,35 @@ fn show_shared(
     ui: &mut egui::Ui,
     single: &mut ComputeConfigSingle,
     scripting_context: &mut ScriptingContext,
+    names: Vec<(String, usize)>,
 ) {
     let mut r = None;
     ui.horizontal_wrapped(|ui| {
-        for s in scripting_context.shared_script.iter() {
-            let name = "shared";
+        for (name, i) in names.iter() {
             let mut text = egui::RichText::new(name);
-            if let super::EditStatus::Local { name: n, .. } = &scripting_context.current {
-                if name == n {
+            if let super::EditStatus::Shared(j, _) = &scripting_context.current {
+                if j == i {
                     text = text.strong();
                 }
             }
             if ui.button(text).clicked() {
-                // res = Some(ex);
-                scripting_context.current = super::EditStatus::Shared;
-                r = Some(s.clone());
+                r = Some(i);
             }
         }
     });
-    if let Some(r) = r {
-        scripting_context.shared_script = Some(r);
+    if let Some(i) = r {
+        let code_editors: Arc<Mutex<CodeEditors<code_editor_automerge::CodeEditor>>> =
+            Default::default();
+        scripting_context.current = super::EditStatus::Shared(*i, code_editors.clone());
+        let doc_db = single.doc_db.as_ref().unwrap();
+        let doc_views = doc_db.data.write().unwrap();
+        let id = doc_views.1.get(*i).unwrap().as_ref().unwrap().id;
+        if let Some(ws) = &mut single.ws {
+            let ctx = ui.ctx().clone();
+            let rt = single.rt.clone();
+            let url = format!("ws://{}/shared-script/{}", &API_URL[7..], id);
+            *ws = crdt_over_ws::WsDoc::new(&rt, USER.to_string(), ctx, url)
+        }
     }
 }
 fn timed_updater(
@@ -522,13 +651,25 @@ fn timed_updater(
 
 async fn update_handler(
     mut receiver: futures_util::stream::SplitStream<tokio_tungstenite_wasm::WebSocketStream>,
-    sender: futures::channel::mpsc::Sender<tokio_tungstenite_wasm::Message>,
+    mut sender: futures::channel::mpsc::Sender<tokio_tungstenite_wasm::Message>,
     doc: std::sync::Arc<std::sync::RwLock<DocSharingState>>,
     ctx: egui::Context,
     rt: crdt_over_ws::Rt,
     code_editors: SharedCodeEditors,
 ) {
     use futures_util::StreamExt;
+    #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+    enum DbMsgToServer {
+        Create { name: String },
+        User { name: String },
+    }
+    let owner = USER.to_string();
+    sender
+        .send(tokio_tungstenite_wasm::Message::Text(
+            serde_json::to_string(&DbMsgToServer::User { name: owner }).unwrap(),
+        ))
+        .await
+        .unwrap();
     match receiver.next().await {
         Some(Ok(tokio_tungstenite_wasm::Message::Binary(bin))) => {
             let (doc, sync_state): &mut (_, _) = &mut doc.write().unwrap();
@@ -591,6 +732,86 @@ async fn update_handler(
                         sender.send(message).await.unwrap();
                     });
                 };
+            }
+            tokio_tungstenite_wasm::Message::Close(_) => {
+                wasm_rs_dbg::dbg!();
+                break;
+            }
+        }
+    }
+}
+
+async fn db_update_handler(
+    mut sender: futures::channel::mpsc::Sender<tokio_tungstenite_wasm::Message>,
+    mut receiver: futures_util::stream::SplitStream<tokio_tungstenite_wasm::WebSocketStream>,
+    owner: String,
+    ctx: egui::Context,
+    data: Arc<RwLock<(Option<usize>, Vec<Option<SharedDocView>>)>>,
+) {
+    use futures_util::{Future, SinkExt, StreamExt};
+    use serde::{Deserialize, Serialize};
+    type User = String;
+
+    #[derive(Deserialize, Serialize, Debug, Clone)]
+    enum DbMsgToServer {
+        Create { name: String },
+        User { name: String },
+    }
+    {
+        wasm_rs_dbg::dbg!();
+        let name = owner.clone();
+        let msg = DbMsgToServer::User { name };
+        let msg = serde_json::to_string(&msg).unwrap();
+        let msg = tokio_tungstenite_wasm::Message::Text(msg);
+        sender.send(msg).await.unwrap();
+        wasm_rs_dbg::dbg!();
+    }
+    while let Some(Ok(msg)) = receiver.next().await {
+        wasm_rs_dbg::dbg!();
+        match msg {
+            tokio_tungstenite_wasm::Message::Text(msg) => {
+                wasm_rs_dbg::dbg!(&msg);
+
+                #[derive(Deserialize, Serialize, Debug, Clone)]
+                enum DbMsgFromServer {
+                    Add(SharedDocView),
+                    AddWriter(usize, User),
+                    RmWriter(usize, User),
+                    // Rename(usize, String),
+                    Reset { all: Vec<SharedDocView> },
+                }
+                let msg = serde_json::from_str(&msg).unwrap();
+
+                match msg {
+                    DbMsgFromServer::Add(x) => {
+                        let b = x.owner == owner;
+                        let guard = &mut data.write().unwrap();
+                        let (waiting, vec) = guard.deref_mut();
+                        let id = x.id;
+                        vec.resize(id + 1, None);
+                        vec[id] = Some(x);
+                        if b {
+                            *waiting = Some(id);
+                        }
+                        ctx.request_repaint();
+                    }
+                    DbMsgFromServer::AddWriter(_, _) => todo!(),
+                    DbMsgFromServer::RmWriter(_, _) => todo!(),
+                    DbMsgFromServer::Reset { all } => {
+                        let guard = &mut data.write().unwrap();
+                        let (_, vec) = guard.deref_mut();
+                        *vec = vec![];
+                        for x in all {
+                            let id = x.id;
+                            vec.resize(id + 1, None);
+                            vec[id] = Some(x);
+                        }
+                        ctx.request_repaint();
+                    }
+                }
+            }
+            tokio_tungstenite_wasm::Message::Binary(bin) => {
+                wasm_rs_dbg::dbg!();
             }
             tokio_tungstenite_wasm::Message::Close(_) => {
                 wasm_rs_dbg::dbg!();
