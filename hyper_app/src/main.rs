@@ -33,6 +33,7 @@ fn main() {
     use wasm_bindgen::prelude::*;
     // Make sure panics are logged using `console.error`.
     console_error_panic_hook::set_once();
+    wasm_logger::init(wasm_logger::Config::default());
 
     // Redirect tracing to console.log and friends:
     tracing_wasm::set_as_global_default();

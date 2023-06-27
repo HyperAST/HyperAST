@@ -141,6 +141,18 @@ pub enum Forge {
     Gitlab,
 }
 
+impl std::str::FromStr for Forge {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "github.com" => Self::Github,
+            "gitlab.com" => Self::Gitlab,
+            x => return Err(format!("'{}' is not an authorize forge", x))
+        })
+    }
+}
+
 impl Forge {
     fn url(&self) -> &str {
         match self {
@@ -159,7 +171,7 @@ impl Forge {
     }
 }
 
-// TODO use `&'static str`s to derive with Copy 
+// TODO use `&'static str`s to derive with Copy
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct Repo {
     pub forge: Forge,
@@ -181,6 +193,22 @@ impl Repo {
 impl Display for Repo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{}{}/{}", self.forge.url(), self.user, self.name)
+    }
+}
+
+impl std::str::FromStr for Repo {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (forge, repo) = s.split_once("/").ok_or("give a valid repository address without 'https://' and '.git'")?;
+        let (user, name) = repo.split_once("/").ok_or("give a valid repository address without 'https://' and '.git'")?;
+        let forge = forge.parse()?;
+        if name.contains("/") {
+            return Err(format!("{} should not contain anymore '/' give a valid repository address", name))
+        }
+        let user = user.into();
+        let name = name.into();
+        Ok(Self { forge, user, name })
     }
 }
 

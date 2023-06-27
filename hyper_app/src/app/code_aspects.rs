@@ -61,6 +61,7 @@ pub(crate) fn show_aspects_views_menu(
                 .interactive(true)
                 .show(ui)
         });
+        ui.checkbox(&mut aspects.spacing, "Spacing");
         ui.checkbox(&mut aspects.syntax, "Syntax");
         ui.checkbox(&mut aspects.cst, "CST");
         ui.add_enabled_ui(false, |ui| {
@@ -73,33 +74,56 @@ pub(crate) fn show_aspects_views_menu(
             ui.checkbox(&mut aspects.doc, "Doc");
             show_wip(ui, Some(" soon available"));
         });
-        ui.label("cpp types:");
-        let ctr = egui::TextEdit::singleline(&mut aspects.ser_opt_cpp_text)
-            .clip_text(true)
-            .desired_width(150.0)
-            .desired_rows(1)
-            .hint_text("cpp types")
-            .interactive(true)
-            .show(ui)
-            .response;
-        ui.label("java types:");
-        let jtr = egui::TextEdit::singleline(&mut aspects.ser_opt_java_text)
-            .clip_text(true)
-            .desired_width(150.0)
-            .desired_rows(1)
-            .hint_text("java types")
-            .interactive(true)
-            .show(ui)
-            .response;
-        let tr = jtr.union(ctr);
-        if tr.changed() {
-            let mut ser_opt_cpp = Default::default();
-            let mut ser_opt_java = Default::default();
-            // TODO use regexes
-            types::parse_java_type_list(&aspects.ser_opt_java_text, &mut ser_opt_java);
-            types::parse_cpp_type_list(&aspects.ser_opt_cpp_text, &mut ser_opt_cpp);
-            aspects.ser_opt_cpp = ser_opt_cpp;
-            aspects.ser_opt_java = ser_opt_java;
+        // ui.label("cpp types:");
+        // let ctr = egui::TextEdit::singleline(&mut aspects.ser_opt_cpp_text)
+        //     .clip_text(true)
+        //     .desired_width(150.0)
+        //     .desired_rows(1)
+        //     .hint_text("cpp types")
+        //     .interactive(true)
+        //     .show(ui)
+        //     .response;
+        // ui.label("java types:");
+        // let jtr = egui::TextEdit::singleline(&mut aspects.ser_opt_java_text)
+        //     .clip_text(true)
+        //     .desired_width(150.0)
+        //     .desired_rows(1)
+        //     .hint_text("java types")
+        //     .interactive(true)
+        //     .show(ui)
+        //     .response;
+        // let tr = jtr.union(ctr);
+        // if tr.changed() {
+        //     let mut ser_opt_cpp = Default::default();
+        //     let mut ser_opt_java = Default::default();
+        //     // TODO use regexes
+        //     types::parse_java_type_list(&aspects.ser_opt_java_text, &mut ser_opt_java);
+        //     types::parse_cpp_type_list(&aspects.ser_opt_cpp_text, &mut ser_opt_cpp);
+        //     aspects.ser_opt_cpp = ser_opt_cpp;
+        //     aspects.ser_opt_java = ser_opt_java;
+        // }
+        ui.label("serialized Cpp:");
+        let mut rm = None;
+        for x in &aspects.ser_opt_java {
+            let button = &ui.button(x.to_str());
+            if button.clicked() {
+                rm = Some(x.clone());
+            }
+        }
+        if let Some(rm) = rm {
+            aspects.ser_opt_java.remove(&rm);
+        }
+        ui.label("serialized Java:");
+        let mut rm = None;
+        for x in &aspects.ser_opt_cpp {
+            // use ;
+            let button = &ui.button(x.to_str());
+            if button.clicked() {
+                rm = Some(x.clone());
+            }
+        }
+        if let Some(rm) = rm {
+            aspects.ser_opt_cpp.remove(&rm);
         }
 
         // ui.text_edit_singleline(&mut "github.com/INRIA/spoon");
@@ -208,7 +232,7 @@ pub(crate) fn show(
                                 .split("/")
                                 .filter_map(|x| x.parse().ok())
                                 .collect();
-                            content.show(
+                            let action = content.show(
                                 ui,
                                 aspects,
                                 None,
@@ -217,6 +241,20 @@ pub(crate) fn show(
                                 None,
                                 &aspects.path,
                             );
+                            match action {
+                                super::tree_view::Action::SerializeKind(k) => {
+                                    use hyper_ast::types::HyperType;
+                                    let k = &k.as_any();
+                                    if let Some(k) = k.downcast_ref::<hyper_ast_gen_ts_cpp::types::Type>() {
+                                        aspects.ser_opt_cpp.insert(k.to_owned());
+                                    } else if let Some(k) =
+                                        k.downcast_ref::<hyper_ast_gen_ts_java::types::Type>()
+                                    {
+                                        aspects.ser_opt_java.insert(k.to_owned());
+                                    }
+                                }
+                                _ =>()
+                            }
                         }
                     });
                 // egui::Window::new("scroller button").show(ui.ctx(), |ui| {

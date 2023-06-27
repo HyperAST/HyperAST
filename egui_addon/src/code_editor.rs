@@ -14,6 +14,10 @@ mod generic_state;
 pub mod generic_text_buffer;
 pub mod generic_text_edit;
 
+pub trait CodeHolder {
+    fn set_lang(&mut self, lang: String);
+}
+
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct CodeEditor<C = EditAwareString> {
     #[serde(default = "default_info")]
@@ -28,6 +32,12 @@ pub struct CodeEditor<C = EditAwareString> {
     pub languages: Arc<HashMap<String, Lang>>,
     #[serde(skip)]
     pub lang: Option<Lang>,
+}
+
+impl<C> CodeHolder for CodeEditor<C> {
+    fn set_lang(&mut self, lang: String) {
+        self.language = lang;
+    }
 }
 
 impl<C: Debug> Debug for CodeEditor<C> {

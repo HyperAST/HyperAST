@@ -73,13 +73,14 @@ pub(crate) struct ComputeConfigAspectViews {
     pub(super) path: String,
     pub(super) hightlight: String,
     pub(super) cst: bool,
+    pub(super) spacing: bool,
     pub(super) syntax: bool,
     pub(super) ast: bool,
     pub(super) type_decls: bool,
     pub(super) licence: bool,
     pub(super) doc: bool,
-    pub(super) ser_opt_cpp_text: String,
-    pub(super) ser_opt_java_text: String,
+    // pub(super) ser_opt_cpp_text: String,
+    // pub(super) ser_opt_java_text: String,
     #[serde(skip)]
     pub(super) ser_opt_cpp: HashSet<hyper_ast_gen_ts_cpp::types::Type>,
     #[serde(skip)]
@@ -110,25 +111,28 @@ pub(crate) fn parse_cpp_type_list(s: &str, out: &mut HashSet<hyper_ast_gen_ts_cp
 
 impl Default for ComputeConfigAspectViews {
     fn default() -> Self {
-        let ser_opt_cpp_text = "function_declarator".to_string();
-        let ser_opt_java_text = String::default();
-        let mut ser_opt_cpp = Default::default();
-        let mut ser_opt_java = Default::default();
+        // let ser_opt_cpp_text = "function_declarator".to_string();
+        // let ser_opt_java_text = String::default();
+        let mut ser_opt_cpp: HashSet<hyper_ast_gen_ts_cpp::types::Type> = Default::default();
+        ser_opt_cpp.insert(hyper_ast_gen_ts_cpp::types::Type::FunctionDeclarator);
+        let mut ser_opt_java: HashSet<hyper_ast_gen_ts_java::types::Type> = Default::default();
+        ser_opt_java.insert(hyper_ast_gen_ts_java::types::Type::MethodDeclaration);
         // TODO use regexes
-        parse_java_type_list(&ser_opt_java_text, &mut ser_opt_java);
-        parse_cpp_type_list(&ser_opt_cpp_text, &mut ser_opt_cpp);
+        // parse_java_type_list(&ser_opt_java_text, &mut ser_opt_java);
+        // parse_cpp_type_list(&ser_opt_cpp_text, &mut ser_opt_cpp);
         Self {
             commit: Default::default(),
             path: "".into(),
             hightlight: "0".into(),
             cst: true,
+            spacing: false,
             syntax: false,
             ast: false,
             type_decls: false,
             licence: false,
             doc: false,
-            ser_opt_cpp_text,
-            ser_opt_java_text,
+            // ser_opt_cpp_text,
+            // ser_opt_java_text,
             ser_opt_cpp,
             ser_opt_java,
             // commit: "4acedc53a13a727be3640fe234f7e261d2609d58".into(),

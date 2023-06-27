@@ -21,10 +21,7 @@ use std::{
     time::Duration,
 };
 
-use crate::app::syntax_highlighting::{
-    self as syntax_highlighter,
-    syntax_highlighting_async,
-};
+use crate::app::syntax_highlighting::{self as syntax_highlighter, syntax_highlighting_async};
 
 use super::{
     code_aspects::{remote_fetch_labels, remote_fetch_nodes_by_ids, HightLightHandle},
@@ -261,9 +258,11 @@ impl PrefillCache {
             + self.next.as_ref().map_or(0.0, |x| x.height())
     }
 }
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) enum Action {
     Keep,
+    SerializeKind(AnyType),
+    HideKind(AnyType),
     PartialFocused(f32),
     Focused(f32),
     Clicked(Vec<usize>),
@@ -384,7 +383,7 @@ impl<'a> FetchedViewImpl<'a> {
                 self.ui_children_impl2(ui, kind, size as u32, *root, cs.as_ref())
             } else if let Some(label) = l {
                 drop(node_store);
-                self.ui_labeled_impl2(ui, kind, size as u32, label)
+                self.ui_labeled_impl2(ui, kind, size as u32, *root, label)
             } else {
                 drop(node_store);
                 self.ui_typed_impl2(ui, kind, size as u32)
@@ -533,79 +532,7 @@ impl<'a> FetchedViewImpl<'a> {
             load_with_default_open.set_open(true)
         }
 
-        self.additions = if let (Some(add), Some(gp)) = (self.additions, self.global_pos) {
-            let lld = gp - size;
-            // ldd <=    <= pos
-            let start: usize;
-            let end: usize;
-            let mut i = 0;
-            loop {
-                if i >= add.len() {
-                    start = i;
-                    break;
-                }
-                if lld <= add[i] {
-                    start = i;
-                    break;
-                }
-                i += 1;
-            }
-            loop {
-                if i >= add.len() {
-                    end = i;
-                    break;
-                }
-                if add[i] == gp {
-                    end = i + 1;
-                    break;
-                }
-                if add[i] > gp {
-                    end = i;
-                    break;
-                }
-                i += 1;
-            }
-            Some(&add[start..end])
-        } else {
-            None
-        };
-
-        self.deletions = if let (Some(del), Some(gp)) = (self.deletions, self.global_pos) {
-            let lld = gp - size;
-            // ldd <=    <= pos
-            let start: usize;
-            let end: usize;
-            let mut i = 0;
-            loop {
-                if i >= del.len() {
-                    start = i;
-                    break;
-                }
-                if lld <= del[i] {
-                    start = i;
-                    break;
-                }
-                i += 1;
-            }
-            loop {
-                if i >= del.len() {
-                    end = i;
-                    break;
-                }
-                if del[i] == gp {
-                    end = i + 1;
-                    break;
-                }
-                if del[i] > gp {
-                    end = i;
-                    break;
-                }
-                i += 1;
-            }
-            Some(&del[start..end])
-        } else {
-            None
-        };
+        self.additions_deletions_compute(size);
 
         let show: FoldRet<_, _> = load_with_default_open
             .show_header(ui, |ui| {
@@ -769,153 +696,10 @@ impl<'a> FetchedViewImpl<'a> {
         let id = ui.id().with(&self.path);
         // let id = ui.make_persistent_id("my_collapsing_header");
 
-        self.additions = if let (Some(add), Some(gp)) = (self.additions, self.global_pos) {
-            let lld = gp - size;
-            // ldd <=    <= pos
-            let start: usize;
-            let end: usize;
-            let mut i = 0;
-            loop {
-                if i >= add.len() {
-                    start = i;
-                    break;
-                }
-                if lld <= add[i] {
-                    start = i;
-                    break;
-                }
-                i += 1;
-            }
-            loop {
-                if i >= add.len() {
-                    end = i;
-                    break;
-                }
-                if add[i] == gp {
-                    end = i + 1;
-                    break;
-                }
-                if add[i] > gp {
-                    end = i;
-                    break;
-                }
-                i += 1;
-            }
-            Some(&add[start..end])
-        } else {
-            None
-        };
-        self.deletions = if let (Some(del), Some(gp)) = (self.deletions, self.global_pos) {
-            let lld = gp - size;
-            // ldd <=    <= pos
-            let start: usize;
-            let end: usize;
-            let mut i = 0;
-            loop {
-                if i >= del.len() {
-                    start = i;
-                    break;
-                }
-                if lld <= del[i] {
-                    start = i;
-                    break;
-                }
-                i += 1;
-            }
-            loop {
-                if i >= del.len() {
-                    end = i;
-                    break;
-                }
-                if del[i] == gp {
-                    end = i + 1;
-                    break;
-                }
-                if del[i] > gp {
-                    end = i;
-                    break;
-                }
-                i += 1;
-            }
-            Some(&del[start..end])
-        } else {
-            None
-        };
-        if kind
-            .as_any()
-            .downcast_ref()
-            .map_or(false, |x| self.aspects.ser_opt_cpp.contains(x))
-            || kind
-                .as_any()
-                .downcast_ref()
-                .map_or(false, |x| self.aspects.ser_opt_java.contains(x))
-        // TODO use a regex
-        // self
-        //     .aspects
-        //     .ser_opt
-        //     .contains(&kind.to_string().parse().unwrap())
-
-        // kind == Type::ImportDeclaration//"import_declaration"
-        //     || kind.is_expression()//"expression"
-        //     || kind == Type::FormalParameters//"formal_parameters"
-        //     || kind == Type::ExpressionStatement
-        //"expression_statement"
-        {
-            let mut prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
-                prefill_cache
-            } else {
-                PrefillCache {
-                    head: 0.0,
-                    children: vec![],
-                    children_sizes: vec![],
-                    next: None,
-                }
-            };
-            let min = ui.available_rect_before_wrap().min;
-            let theme = syntax_highlighter::simple::CodeTheme::from_memory(ui.ctx());
-            // TODO fetch entire subtree, line breaks would also be useful
-            let layout_job = make_pp_code(self.store.clone(), ui.ctx(), nid, theme);
-            let galley = ui.fonts(|f| f.layout_job(layout_job));
-
-            let size = galley.size();
-            let resp = ui.allocate_exact_size(size, egui::Sense::click());
-
-            let rect = egui::Rect::from_min_size(min, size);
-            if self.additions.is_some() || self.deletions.is_some() {
-                let add = self.additions.unwrap_or_default();
-                let del = self.deletions.unwrap_or_default();
-                if add.is_empty() && del.is_empty() {
-                    ui.painter().debug_rect(rect, egui::Color32::GRAY, "");
-                } else if !add.is_empty() {
-                    if !del.is_empty() {
-                        ui.painter().debug_rect(rect, egui::Color32::BLUE, "");
-                    } else {
-                        // wasm_rs_dbg::dbg!(self.global_pos, size, add);
-                        ui.painter().debug_rect(rect, egui::Color32::GREEN, "");
-                    }
-                } else if !del.is_empty() {
-                    ui.painter().debug_rect(rect, egui::Color32::RED, "");
-                }
-            }
-            let rect = rect; //.expand(3.0);
-            ui.painter_at(rect.expand(1.0)).galley(min, galley);
-            // rect.max.x += 10.0;
-
-            prefill.head = ui.available_rect_before_wrap().min.y - min.y;
-
-            for handle in &mut self.hightlights {
-                // egui::Rect::from_min_size(min, (ui.available_width(), height).into()),
-                selection_highlight(ui, handle, min, rect, self.root_ui_id);
-            }
-            self.prefill_cache = Some(prefill);
-
-            return if resp.1.clicked() {
-                Action::Clicked(self.path.to_vec())
-            } else if let Some((&[], _)) = self.focus {
-                Action::Focused(min.y)
-            } else {
-                Action::Keep
-            };
+        self.additions_deletions_compute(size);
+        if self.is_pp(kind) {
+            let action = self.show_pp(ui, nid);
+            return action;
         }
 
         let mut load_with_default_open =
@@ -1046,6 +830,81 @@ impl<'a> FetchedViewImpl<'a> {
         }
     }
 
+    fn additions_deletions_compute(&mut self, size: u32) {
+        self.additions = if let (Some(add), Some(gp)) = (self.additions, self.global_pos) {
+            let lld = gp - size;
+            // ldd <=    <= pos
+            let start: usize;
+            let end: usize;
+            let mut i = 0;
+            loop {
+                if i >= add.len() {
+                    start = i;
+                    break;
+                }
+                if lld <= add[i] {
+                    start = i;
+                    break;
+                }
+                i += 1;
+            }
+            loop {
+                if i >= add.len() {
+                    end = i;
+                    break;
+                }
+                if add[i] == gp {
+                    end = i + 1;
+                    break;
+                }
+                if add[i] > gp {
+                    end = i;
+                    break;
+                }
+                i += 1;
+            }
+            Some(&add[start..end])
+        } else {
+            None
+        };
+        self.deletions = if let (Some(del), Some(gp)) = (self.deletions, self.global_pos) {
+            let lld = gp - size;
+            // ldd <=    <= pos
+            let start: usize;
+            let end: usize;
+            let mut i = 0;
+            loop {
+                if i >= del.len() {
+                    start = i;
+                    break;
+                }
+                if lld <= del[i] {
+                    start = i;
+                    break;
+                }
+                i += 1;
+            }
+            loop {
+                if i >= del.len() {
+                    end = i;
+                    break;
+                }
+                if del[i] == gp {
+                    end = i + 1;
+                    break;
+                }
+                if del[i] > gp {
+                    end = i;
+                    break;
+                }
+                i += 1;
+            }
+            Some(&del[start..end])
+        } else {
+            None
+        };
+    }
+
     fn ui_non_loaded(
         &mut self,
         ui: &mut egui::Ui,
@@ -1174,9 +1033,16 @@ impl<'a> FetchedViewImpl<'a> {
         ui: &mut egui::Ui,
         kind: AnyType,
         size: u32,
+        nid: NodeIdentifier,
         label: LabelIdentifier,
     ) -> Action {
         let min = ui.available_rect_before_wrap().min;
+        self.draw_count += 1;
+        let id = ui.id().with(&self.path);
+        if self.is_pp(kind) {
+            let action = self.show_pp(ui, nid);
+            return action;
+        }
         let label = if let Some(get) = self.store.label_store.read().unwrap().try_resolve(&label) {
             get.replace("\n", "\\n")
                 .replace("\t", "\\t")
@@ -1199,8 +1065,6 @@ impl<'a> FetchedViewImpl<'a> {
             }
             "...".to_string()
         };
-        self.draw_count += 1;
-        let id = ui.id().with(&self.path);
         let action;
         let rect = if label.len() > 50 {
             if kind.is_spaces() {
@@ -1249,14 +1113,43 @@ impl<'a> FetchedViewImpl<'a> {
                         ui.label(format!("{:?}", self.path));
                     })
                 });
-
-                action = if monospace.interact(egui::Sense::click()).clicked()
-                    || indent.inner.interact(egui::Sense::click()).clicked()
-                {
-                    Action::Clicked(self.path.to_vec())
+                let interaction = (
+                    monospace.interact(egui::Sense::click()),
+                    indent.inner.interact(egui::Sense::click()),
+                );
+                if interaction.0.clicked() || interaction.1.clicked() {
+                    action = Action::Clicked(self.path.to_vec());
                 } else {
-                    Action::Keep
-                };
+                    let mut act = None;
+                    interaction.0.context_menu(|ui: &mut egui::Ui| {
+                        if ui.button("serialize kind").clicked() {
+                            act = Some(Action::SerializeKind(kind));
+                        } else if ui
+                            .button("hide kind")
+                            .interact(egui::Sense::click())
+                            .clicked()
+                        {
+                            act = Some(Action::HideKind(kind));
+                        }
+                    });
+                    interaction.1.context_menu(|ui: &mut egui::Ui| {
+                        if ui.button("serialize kind").clicked() {
+                            act = Some(Action::SerializeKind(kind));
+                        } else if ui
+                            .button("hide kind")
+                            .interact(egui::Sense::click())
+                            .clicked()
+                        {
+                            act = Some(Action::HideKind(kind));
+                        }
+                    });
+                    action = if let Some(act) = act {
+                        act
+                    } else {
+                        Action::Keep
+                    };
+                }
+
                 let rect2 = indent.response.rect;
                 rect1.union(rect2)
             }
@@ -1298,7 +1191,14 @@ impl<'a> FetchedViewImpl<'a> {
             };
             if kind.is_spaces() {
                 action = Action::Keep;
-                if self.aspects.syntax {
+                if self.aspects.spacing {
+                    ui.horizontal(add_contents).response.rect
+                } else {
+                    egui::Rect::from_min_max(min, min)
+                }
+            } else if kind.is_syntax() {
+                action = Action::Keep;
+                if self.aspects.syntax || self.aspects.syntax {
                     ui.horizontal(add_contents).response.rect
                 } else {
                     egui::Rect::from_min_max(min, min)
@@ -1331,10 +1231,118 @@ impl<'a> FetchedViewImpl<'a> {
         action
     }
 
+    fn is_pp(&mut self, kind: AnyType) -> bool {
+        if let Some(x) = kind.as_any().downcast_ref() {
+            if self.aspects.ser_opt_cpp.contains(x) {
+                return true;
+            }
+        };
+        if let Some(x) = kind.as_any().downcast_ref() {
+            if self.aspects.ser_opt_java.contains(x) {
+                return true;
+            }
+        };
+        false
+    }
+
+    fn show_pp(&mut self, ui: &mut egui::Ui, nid: NodeIdentifier) -> Action {
+        let mut prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
+            prefill_cache
+        } else {
+            PrefillCache {
+                head: 0.0,
+                children: vec![],
+                children_sizes: vec![],
+                next: None,
+            }
+        };
+        let min = ui.available_rect_before_wrap().min;
+        let theme = syntax_highlighter::simple::CodeTheme::from_memory(ui.ctx());
+        // TODO fetch entire subtree, line breaks would also be useful
+        let layout_job = make_pp_code(self.store.clone(), ui.ctx(), nid, theme);
+        let galley = ui.fonts(|f| f.layout_job(layout_job));
+
+        let size = galley.size();
+        let resp = ui.allocate_exact_size(size, egui::Sense::click());
+
+        let rect = egui::Rect::from_min_size(min, size);
+        if self.additions.is_some() || self.deletions.is_some() {
+            let add = self.additions.unwrap_or_default();
+            let del = self.deletions.unwrap_or_default();
+            if add.is_empty() && del.is_empty() {
+                ui.painter().debug_rect(rect, egui::Color32::GRAY, "");
+            } else if !add.is_empty() {
+                if !del.is_empty() {
+                    ui.painter().debug_rect(rect, egui::Color32::BLUE, "");
+                } else {
+                    // wasm_rs_dbg::dbg!(self.global_pos, size, add);
+                    ui.painter().debug_rect(rect, egui::Color32::GREEN, "");
+                }
+            } else if !del.is_empty() {
+                ui.painter().debug_rect(rect, egui::Color32::RED, "");
+            }
+        }
+        let rect = rect;
+        //.expand(3.0);
+        ui.painter_at(rect.expand(1.0)).galley(min, galley);
+        // rect.max.x += 10.0;
+
+        prefill.head = ui.available_rect_before_wrap().min.y - min.y;
+
+        for handle in &mut self.hightlights {
+            // egui::Rect::from_min_size(min, (ui.available_width(), height).into()),
+            selection_highlight(ui, handle, min, rect, self.root_ui_id);
+        }
+        self.prefill_cache = Some(prefill);
+
+        let action = if resp.1.clicked() {
+            Action::Clicked(self.path.to_vec())
+        } else if let Some((&[], _)) = self.focus {
+            Action::Focused(min.y)
+        } else {
+            Action::Keep
+        };
+        action
+    }
+
     fn ui_typed_impl2(&mut self, ui: &mut egui::Ui, kind: AnyType, size: u32) -> Action {
         let min = ui.available_rect_before_wrap().min;
         self.draw_count += 1;
-        ui.monospace(format!("{}", kind));
+        let mut resp = None;
+        if kind.is_spaces() {
+            if self.aspects.spacing {
+                resp = Some(ui.monospace(format!("{}", kind)));
+            }
+        } else if kind.is_syntax() {
+            if self.aspects.syntax || self.aspects.syntax {
+                resp = Some(ui.monospace(format!("{}", kind)));
+            }
+        } else {
+            resp = Some(ui.monospace(format!("{}", kind)));
+        }
+        let action;
+        let mut act = None;
+        if let Some(resp) = resp {
+            let menu_content = |ui: &mut egui::Ui| {
+                if ui.button("serialize kind").clicked() {
+                    act = Some(Action::SerializeKind(kind));
+                } else if ui
+                    .button("hide kind")
+                    .interact(egui::Sense::click())
+                    .clicked()
+                {
+                    act = Some(Action::HideKind(kind));
+                }
+            };
+            resp.context_menu(menu_content);
+        }
+        action = if let Some(act) = act {
+            act
+        } else {
+            Action::Keep
+        };
+        // let h = ui.monospace(format!("{}", kind));
+
         let mut prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
             prefill_cache
         } else {
@@ -1346,11 +1354,12 @@ impl<'a> FetchedViewImpl<'a> {
             }
         };
         prefill.head = ui.available_rect_before_wrap().min.y - min.y;
+        // TODO selection_highlight
         self.prefill_cache = Some(prefill);
         if let Some((&[], _)) = self.focus {
             Action::Focused(min.y)
         } else {
-            Action::Keep
+            action
         }
     }
 
@@ -1584,7 +1593,7 @@ impl<'a> FetchedViewImpl<'a> {
             } else if let Some(cs) = cs {
                 imp.ui_children_impl2(ui, kind, size as u32, *c, cs.0.to_vec().as_ref())
             } else if let Some(label) = l {
-                imp.ui_labeled_impl2(ui, kind, size as u32, label)
+                imp.ui_labeled_impl2(ui, kind, size as u32, *c, label)
             } else {
                 imp.ui_typed_impl2(ui, kind, size as u32)
             }
@@ -1670,12 +1679,15 @@ impl<'a> FetchedViewImpl<'a> {
                 Action::PartialFocused(ui.available_rect_before_wrap().min.y)
             }
         };
-        if let Action::Clicked(_) = ret {
-            *action = ret;
-        } else if let Action::Focused(_) = ret {
-            *action = ret;
-        } else if let Action::PartialFocused(_) = ret {
-            *action = ret;
+        match ret {
+            Action::Clicked(_)
+            | Action::Focused(_)
+            | Action::PartialFocused(_)
+            | Action::SerializeKind(_)
+            | Action::HideKind(_) => {
+                *action = ret;
+            }
+            _ => (),
         };
         let c_cache = imp.prefill_cache.unwrap();
         let h = c_cache.height();
@@ -2006,10 +2018,9 @@ fn make_pp_code(
                     h.0.store(len, Ordering::Relaxed);
                     ctx.request_repaint_after(Duration::from_millis(10));
                 };
-                self.mt
-                    .push(Arc::new(Mutex::new(egui_addon::async_exec::spawn_macrotask(Box::new(
-                        fut,
-                    )))));
+                self.mt.push(Arc::new(Mutex::new(
+                    egui_addon::async_exec::spawn_macrotask(Box::new(fut)),
+                )));
                 vec![LayoutSection {
                     leading_space: 0.0,
                     byte_range: 0..self.total_str_len,

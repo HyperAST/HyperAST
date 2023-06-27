@@ -26,6 +26,11 @@ pub(crate) struct CodeEditor<C = Quote> {
     #[serde(skip)]
     pub lang: Option<Lang>,
 }
+impl<C> egui_addon::code_editor::CodeHolder for CodeEditor<C> {
+    fn set_lang(&mut self, lang: String) {
+        self.language = lang;
+    }
+}
 impl From<egui_addon::code_editor::CodeEditor> for CodeEditor {
     fn from(value: egui_addon::code_editor::CodeEditor) -> Self {
         let code = value.code;

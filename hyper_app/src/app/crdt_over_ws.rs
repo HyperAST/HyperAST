@@ -174,7 +174,9 @@ impl<S> WsChannel<S> {
                             wasm_rs_dbg::dbg!();
                             while let Some(x) = r.next().await {
                                 wasm_rs_dbg::dbg!();
-                                sender.send(x).await.expect("Can not send!");
+                                if let Err(err) = sender.send(x).await {
+                                    wasm_rs_dbg::dbg!(err);
+                                }
                             }
                         });
                         self.ws = WsState::Setup(s.clone(), receiver_f(s, receiver))

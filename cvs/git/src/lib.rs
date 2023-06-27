@@ -91,13 +91,13 @@ trait Processor<Acc: Accumulator> {
 
 #[derive(Debug)]
 pub(crate) enum ParseErr {
-    NotUtf8,
+    NotUtf8(std::str::Utf8Error),
     IllFormed,
 }
 
 impl From<std::str::Utf8Error> for ParseErr {
     fn from(value: std::str::Utf8Error) -> Self {
-        ParseErr::NotUtf8
+        ParseErr::NotUtf8(value)
     }
 }
 
@@ -551,6 +551,14 @@ mod type_store {
                 MultiType::Java(t) => t.is_spaces(),
                 MultiType::Cpp(t) => t.is_spaces(),
                 MultiType::Xml(t) => t.is_spaces(),
+            }
+        }
+
+        fn is_syntax(&self) -> bool {
+            match self {
+                MultiType::Java(t) => t.is_syntax(),
+                MultiType::Cpp(t) => t.is_syntax(),
+                MultiType::Xml(t) => t.is_syntax(),
             }
         }
 

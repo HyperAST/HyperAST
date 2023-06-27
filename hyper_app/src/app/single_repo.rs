@@ -46,9 +46,12 @@ const INFO_ACCUMULATE: EditorInfo<&'static str> = EditorInfo {
     ),
 };
 const INFO_DESCRIPTION: EditorInfo<&'static str> = EditorInfo {
-    title: "Script description",
+    title: "Desc",
     short: "describes what this script does",
-    long: concat!("TODO syntax similar to markdown",),
+    long: concat!(
+        "TODO syntax is similar to markdown.\n",
+        "WIP rendering the markdown, there is already an egui helper for that."
+    ),
 };
 
 // TODO allow to change user name and generate a random default
@@ -57,10 +60,15 @@ pub(crate) const USER: &str = "web";
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) const USER: &str = "native";
 
-impl<C: From<(EditorInfo<String>, String)>> From<&example_scripts::Scripts> for CodeEditors<C> {
+impl<C> From<&example_scripts::Scripts> for CodeEditors<C>
+where
+    C: From<(EditorInfo<String>, String)> + egui_addon::code_editor::CodeHolder,
+{
     fn from(value: &example_scripts::Scripts) -> Self {
+        let mut description: C = (INFO_DESCRIPTION.copied(), value.description.into()).into();
+        description.set_lang("md".to_string());
         Self {
-            description: (INFO_DESCRIPTION.copied(), value.description.into()).into(),
+            description, // TODO config with markdown, not js
             init: (INFO_INIT.copied(), value.init.into()).into(),
             filter: (INFO_FILTER.copied(), value.filter.into()).into(),
             accumulate: (INFO_ACCUMULATE.copied(), value.accumulate.into()).into(),
@@ -68,7 +76,10 @@ impl<C: From<(EditorInfo<String>, String)>> From<&example_scripts::Scripts> for 
     }
 }
 
-impl<C: From<(EditorInfo<String>, String)>> Default for CodeEditors<C> {
+impl<C> Default for CodeEditors<C>
+where
+    C: From<(EditorInfo<String>, String)> + egui_addon::code_editor::CodeHolder,
+{
     fn default() -> Self {
         (&example_scripts::EXAMPLES[0].scripts).into()
     }
@@ -78,6 +89,7 @@ impl<C: From<(EditorInfo<String>, String)>> Default for CodeEditors<C> {
 #[serde(default)]
 pub(super) struct ComputeConfigSingle {
     commit: Commit,
+    config: example_scripts::Config,
     len: usize,
     #[serde(skip)]
     rt: crdt_over_ws::Rt,
@@ -95,6 +107,7 @@ impl Default for ComputeConfigSingle {
         let doc_db = None;
         Self {
             commit: From::from(&example_scripts::EXAMPLES[0].commit),
+            config: example_scripts::EXAMPLES[0].config,
             // commit: "4acedc53a13a727be3640fe234f7e261d2609d58".into(),
             len: example_scripts::EXAMPLES[0].commits,
             rt,
@@ -219,6 +232,15 @@ pub(super) fn show_single_repo(
             &single.rt,
         ) {
             log::warn!("{}", err);
+            if ui.button("try restarting sharing connection").clicked() {
+                let url = format!("ws://{}/shared-scripts-db", &API_URL[7..]);
+                *doc_db = crdt_over_ws::WsDocsDb::new(
+                    &single.rt,
+                    USER.to_string(),
+                    ui.ctx().clone(),
+                    url,
+                );
+            }
         }
         match &mut code_editors.current {
             super::EditStatus::Sharing(shared_script) => {
@@ -431,7 +453,12 @@ fn show_shared_code_edition(
 ) {
     let resps = {
         let mut ce = code_editors.lock().unwrap();
-        [ce.init.ui(ui), ce.filter.ui(ui), ce.accumulate.ui(ui)]
+        [
+            ce.description.ui(ui),
+            ce.init.ui(ui),
+            ce.filter.ui(ui),
+            ce.accumulate.ui(ui),
+        ]
     };
 
     let Some(ws) = &mut single.ws else {
@@ -461,7 +488,12 @@ fn show_local_code_edition(
 ) {
     let _resps = {
         let ce = code_editors;
-        [ce.init.ui(ui), ce.filter.ui(ui), ce.accumulate.ui(ui)]
+        [
+            ce.description.ui(ui),
+            ce.init.ui(ui),
+            ce.filter.ui(ui),
+            ce.accumulate.ui(ui),
+        ]
     };
 }
 
@@ -514,11 +546,18 @@ fn show_examples(
             let button = &ui.button(text);
             if button.clicked() {
                 single.commit = (&ex.commit).into();
+                single.config = ex.config;
                 single.len = ex.commits;
                 scripting_context.current = super::EditStatus::Example {
                     i: j,
                     content: (&ex.scripts).into(),
                 };
+            }
+            if button.hovered() {
+                egui::show_tooltip(ui.ctx(), button.id.with("tooltip"), |ui| {
+                    let desc = ex.scripts.description;
+                    egui_demo_lib::easy_mark::easy_mark(ui, desc);
+                });
             }
             j += 1;
         }
@@ -550,6 +589,12 @@ fn show_locals(
                     name: name.clone(),
                     content: s.clone(),
                 };
+            }
+            if button.hovered() {
+                egui::show_tooltip(ui.ctx(), button.id.with("tooltip"), |ui| {
+                    let desc = s.description.code();
+                    egui_demo_lib::easy_mark::easy_mark(ui, desc);
+                });
             }
             button.context_menu(|ui| {
                 if ui.button("share").clicked() {
@@ -898,6 +943,14 @@ pub(super) fn show_single_repo_menu(
             );
             // show_wip(ui, Some("only process one commit"));
         });
+        let mut selected = &mut single.config;
+        egui::ComboBox::from_label("Repo Config")
+            .selected_text(format!("{:?}", selected))
+            .show_ui(ui, |ui| {
+                ui.selectable_value(selected, example_scripts::Config::Any, "Any");
+                ui.selectable_value(selected, example_scripts::Config::MavenJava, "Java");
+                ui.selectable_value(selected, example_scripts::Config::MakeCpp, "Cpp");
+            });
     };
 
     radio_collapsing(ui, id, title, selected, &wanted, add_body);
@@ -1064,14 +1117,13 @@ fn show_long_result_list(content: &ComputeResults, ui: &mut egui::Ui) {
 
 fn show_long_result_table(content: &ComputeResults, ui: &mut egui::Ui) {
     // header
-    let header = content
-        .results
-        .iter()
-        .find(|x| x.is_ok())
-        .as_ref()
-        .unwrap()
-        .as_ref()
-        .unwrap();
+    let header = content.results.iter().find(|x| x.is_ok());
+    let Some(header) = header
+        .as_ref() else {
+            wasm_rs_dbg::dbg!("issue with header");
+            return;
+        };
+    let header = header.as_ref().unwrap();
     use egui_extras::{Column, TableBuilder};
     TableBuilder::new(ui)
         .striped(true)

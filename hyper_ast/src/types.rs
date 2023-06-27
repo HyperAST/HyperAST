@@ -1638,6 +1638,7 @@ pub trait HyperType: Display + Debug {
     fn is_file(&self) -> bool;
     fn is_directory(&self) -> bool;
     fn is_spaces(&self) -> bool;
+    fn is_syntax(&self) -> bool;
     fn get_lang(&self) -> LangWrapper<Self>
     where
         Self: Sized;
@@ -1660,6 +1661,10 @@ impl HyperType for u8 {
     }
 
     fn is_spaces(&self) -> bool {
+        todo!()
+    }
+
+    fn is_syntax(&self) -> bool {
         todo!()
     }
 
@@ -1769,6 +1774,10 @@ impl HyperType for Type {
 
     fn is_spaces(&self) -> bool {
         self == &Type::Spaces
+    }
+
+    fn is_syntax(&self) -> bool {
+        todo!()
     }
 
     fn as_shared(&self) -> Shared {
@@ -3414,6 +3423,7 @@ impl PartialEq for AnyType {
         self.generic_eq(other.0)
     }
 }
+// impl Default for AnyType {}
 impl Eq for AnyType {}
 impl Hash for AnyType {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -3442,6 +3452,10 @@ impl HyperType for AnyType {
 
     fn is_spaces(&self) -> bool {
         self.0.is_spaces()
+    }
+
+    fn is_syntax(&self) -> bool {
+        self.0.is_syntax()
     }
 
     fn as_shared(&self) -> Shared {

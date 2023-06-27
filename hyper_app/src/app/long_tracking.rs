@@ -228,7 +228,7 @@ type Attacheds = Vec<(
 
 pub(crate) fn show_results(
     ui: &mut egui::Ui,
-    aspects: &types::ComputeConfigAspectViews,
+    aspects: &mut types::ComputeConfigAspectViews,
     store: Arc<FetchedHyperAST>,
     long_tracking: &mut LongTacking,
     fetched_files: &mut HashMap<types::FileIdentifier, RemoteFile>,
@@ -915,7 +915,7 @@ pub(crate) fn show_results(
                             tree_viewer,
                             &mut curr_view,
                             trigger,
-                            &aspects,
+                            aspects,
                             col,
                             min_col,
                             &mut attacheds,
@@ -1129,11 +1129,13 @@ pub(crate) fn show_results(
                     // );
                     let m_rect: egui::Rect = m_rect;
                     let src_rect: egui::Rect = src_rect;
-                    let m_pos = m_rect.right_center();
-                    let src_pos = src_rect.left_center();
+                    let mut m_pos = m_rect.right_center();
+                    let mut src_pos = src_rect.left_center();
                     let mut ctrl = (m_pos, src_pos);
                     ctrl.0.x = l_bound;
                     ctrl.1.x = r_bound;
+                    m_pos.x = m_pos.x.at_most(l_bound);
+                    src_pos.x = src_pos.x.at_least(r_bound);
                     // let b_d = (m_pos.x - src_pos.x).abs();
                     // ctrl.0.x += b_d / 2.0 * 1.0;
                     // if ctrl.0.x < min_left_x {
@@ -1149,7 +1151,7 @@ pub(crate) fn show_results(
                     // } else {
                     //     min_right_x = ctrl.1.x;
                     // }
-                    let color = egui::Color32::BLACK;
+                    let color = ui.style().visuals.text_color();
                     let link =
                         epaint::PathShape::line(vec![m_pos, ctrl.0, ctrl.1, src_pos], (2.0, color));
                     ui.painter().add(link);
@@ -2083,7 +2085,7 @@ fn show_tree_view(
     tree_viewer: &mut Resource<FetchedView>,
     curr_view: &mut ColView<'_>,
     trigger: bool,
-    aspects: &ComputeConfigAspectViews,
+    aspects: &mut ComputeConfigAspectViews,
     col: usize,
     min_col: usize,
     ports: &mut Attacheds,
@@ -2228,13 +2230,25 @@ fn show_tree_view(
                         .1
                         .insert(k, (ui.id().with("green_highlight").with(k), green_pos));
                 }
-                if let tree_view::Action::Focused(p) = a {
-                    scroll_focus = Some(p);
-                    None
-                } else if let tree_view::Action::Clicked(p) = a {
-                    Some(p)
-                } else {
-                    None
+                match a {
+                    tree_view::Action::Focused(p) => {
+                        scroll_focus = Some(p);
+                        None
+                    }
+                    tree_view::Action::Clicked(p) => Some(p),
+                    tree_view::Action::SerializeKind(k) => {
+                        let k = &k.as_any();
+                        if let Some(k) = k.downcast_ref::<hyper_ast_gen_ts_cpp::types::Type>() {
+                            aspects.ser_opt_cpp.insert(k.to_owned());
+                        } else if let Some(k) =
+                            k.downcast_ref::<hyper_ast_gen_ts_java::types::Type>()
+                        {
+                            aspects.ser_opt_java.insert(k.to_owned());
+                        }
+
+                        None
+                    }
+                    _ => None,
                 }
             } else {
                 None
@@ -2256,14 +2270,33 @@ fn show_tree_view(
     // });
     // // wasm_rs_dbg::dbg!(scroll.state.offset);
 }
-
+const SC_COPY: egui::KeyboardShortcut =
+    egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::C);
 fn show_commitid_info(
     tracked: Option<TrackingResultWithChanges>,
     ui: &mut egui::Ui,
     code_ranges: Vec<&mut CodeRange>,
 ) {
+    let f_commit = |ui: &mut egui::Ui, id: &str| {
+        if ui.available_width() > 300.0 {
+            ui.label(format!("commit {}", id));
+        } else {
+            let label = ui.label(format!("commit {}", &id[..8]));
+            if label.hovered() {
+                egui::show_tooltip(ui.ctx(), label.id.with("tooltip"), |ui| {
+                    ui.label(id);
+                    ui.label("CTRL+C to copy (and send in the debug console)");
+                });
+                if ui.input_mut(|mem| mem.consume_shortcut(&SC_COPY)) {
+                    ui.output_mut(|mem| mem.copied_text = id.to_string());
+                    wasm_rs_dbg::dbg!(id);
+                }
+            }
+        }
+    };
     let Some(tracked) = tracked  else {
-        ui.label(format!("commit {}", &code_ranges[0].file.commit.id));
+        let id = &code_ranges[0].file.commit.id;
+        f_commit(ui,id);
         return;
     };
     if let Some(cr) = tracked
@@ -2273,9 +2306,11 @@ fn show_commitid_info(
         .or(tracked.track.matched.get(0).as_ref().copied())
         .or(tracked.track.fallback.as_ref())
     {
-        ui.label(format!("commit {}", &cr.file.commit.id));
+        let id = &cr.file.commit.id;
+        f_commit(ui, id);
     } else {
-        ui.label(format!("commit {}", &code_ranges[0].file.commit.id));
+        let id = &code_ranges[0].file.commit.id;
+        f_commit(ui, id);
     }
     let commits_processed = tracked.track.commits_processed - 1;
     if commits_processed > 1 {

@@ -463,7 +463,7 @@ impl eframe::App for HyperApp {
                 .show(ctx, |ui| {
                     long_tracking::show_results(
                         ui,
-                        &aspects,
+                        aspects,
                         store.clone(),
                         long_tracking,
                         fetched_files,
