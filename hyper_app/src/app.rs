@@ -40,7 +40,6 @@ pub struct HyperApp {
     project_name: String,
     api_addr: String,
 
-    // code_editors: Arc<std::sync::Mutex<types::CodeEditors<code_editor_automerge::CodeEditor>>>,
     scripting_context: ScriptingContext<
         self::types::CodeEditors,
         types::CodeEditors<code_editor_automerge::CodeEditor>,

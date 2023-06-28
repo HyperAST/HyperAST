@@ -29,14 +29,6 @@ pub struct PreProcessedRepositories {
     configs: HashMap<Repo, ParametrizedCommitProcessorHandle>,
 }
 
-pub struct RepositoryInfo {
-    pub sys: BuildSystem,
-    /// map repository names to some objects they contain (branches, references, commit).
-    /// At least keeps roots
-    pub commits: HashSet<git2::Oid>,
-    pub handle: crate::processing::ConfiguredRepoHandle2,
-}
-
 #[derive(Default)]
 pub struct CommitsPerSys {
     pub maven: HashMap<git2::Oid, Commit>,
