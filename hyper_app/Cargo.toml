@@ -69,7 +69,7 @@ http = "0.2.6" # Types for HTTP requests and responses.
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-poll-promise = { version = "0.2", default-features = false }
+poll-promise = {  git="https://github.com/quentinLeDilavrec/poll-promise", branch="main", version = "0.2", default-features = false }
 tracing-subscriber = "0.3"
 tree-sitter-javascript = "0.20.0"
 tree-sitter = { version = "0.9.1", package = "tree-sitter-facade-sg" }
@@ -80,7 +80,7 @@ tokio = {version="1.26.0", features=["rt","rt-multi-thread"]}
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 gloo-timers = "0.2.6"
-poll-promise = { version = "0.2", default-features = false, features = ["web"] }
+poll-promise = { git="https://github.com/quentinLeDilavrec/poll-promise", branch="main", version = "0.2", default-features = false, features = ["web"] }
 console_error_panic_hook = "0.1.6"
 tracing-wasm = "0.2"
 tree-sitter = { version = "0.9.1", package = "tree-sitter-facade-sg" }
