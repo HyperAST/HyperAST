@@ -30,7 +30,7 @@ pub(crate) mod types;
 mod utils;
 
 // const API_URL: &str = "http://131.254.13.72:8080";
-const API_URL: &str = "http://0.0.0.0:8080";
+// const API_URL: &str = "http://127.0.0.1:8080";
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -38,6 +38,7 @@ const API_URL: &str = "http://0.0.0.0:8080";
 pub struct HyperApp {
     // Example stuff:
     project_name: String,
+    api_addr: String,
 
     // code_editors: Arc<std::sync::Mutex<types::CodeEditors<code_editor_automerge::CodeEditor>>>,
     scripting_context: ScriptingContext<
@@ -81,7 +82,7 @@ struct ScriptingContext<L, S> {
 
 #[derive(Serialize, Deserialize)]
 enum EditStatus<L, S> {
-    Sharing(Arc<std::sync::Mutex<S>>), //(Id)
+    Sharing(Arc<std::sync::Mutex<S>>),       //(Id)
     Shared(usize, Arc<std::sync::Mutex<S>>), //(Id)
     Local { name: String, content: L },
     Example { i: usize, content: L },
@@ -274,6 +275,7 @@ impl Default for HyperApp {
         Self {
             // Example stuff:
             project_name: "Simple Computation".to_owned(),
+            api_addr: "0.0.0.0:8080".to_string(),
             // code_editors: Default::default(),
             scripting_context: Default::default(),
             languages: Default::default(),
@@ -295,7 +297,7 @@ impl Default for HyperApp {
 
 impl HyperApp {
     /// Called once before the first frame.
-    pub fn new(cc: &eframe::CreationContext<'_>, languages: Languages) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, languages: Languages, api_addr: String) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
         dbg!();
@@ -316,6 +318,7 @@ impl HyperApp {
         // parsed.walk().node().kind();
 
         let mut r = HyperApp::default();
+        r.api_addr = api_addr;
         // let mut arc = r.scripting_context.lock().unwrap();
         // arc.init.lang = languages.get("JavaScript").cloned();
         // arc.filter.lang = languages.get("JavaScript").cloned();
@@ -347,6 +350,7 @@ impl eframe::App for HyperApp {
         ctx.request_repaint_after(std::time::Duration::from_secs_f32(5.0));
         let Self {
             project_name,
+            api_addr,
             // code_editors,
             scripting_context,
             languages,
@@ -413,6 +417,7 @@ impl eframe::App for HyperApp {
                     ui.separator();
                     code_aspects::show_aspects_views_menu(
                         ui,
+                        &api_addr,
                         selected,
                         aspects,
                         store.clone(),
@@ -440,6 +445,7 @@ impl eframe::App for HyperApp {
             egui::CentralPanel::default().show(ctx, |ui| {
                 single_repo::show_single_repo(
                     ui,
+                    api_addr,
                     single,
                     scripting_context,
                     &mut trigger_compute,
@@ -450,6 +456,7 @@ impl eframe::App for HyperApp {
             egui::CentralPanel::default().show(ctx, |ui| {
                 code_tracking::show_code_tracking_results(
                     ui,
+                    &api_addr,
                     tracking,
                     tracking_result,
                     fetched_files,
@@ -462,6 +469,7 @@ impl eframe::App for HyperApp {
                 .show(ctx, |ui| {
                     long_tracking::show_results(
                         ui,
+                        &api_addr,
                         aspects,
                         store.clone(),
                         long_tracking,
@@ -471,7 +479,7 @@ impl eframe::App for HyperApp {
         } else if *selected == types::SelectedConfig::Aspects {
             egui::CentralPanel::default().show(ctx, |ui| {
                 if let Some(aspects_result) = aspects_result {
-                    code_aspects::show(aspects_result, ui, aspects);
+                    code_aspects::show(aspects_result, ui, api_addr, aspects);
                 } else {
                     // *aspects_result = Some(code_aspects::remote_fetch_tree(
                     //     ctx,
@@ -480,6 +488,7 @@ impl eframe::App for HyperApp {
                     // ));
                     *aspects_result = Some(code_aspects::remote_fetch_node(
                         ctx,
+                        &api_addr,
                         store.clone(),
                         &aspects.commit,
                         &aspects.path,
@@ -500,6 +509,7 @@ impl eframe::App for HyperApp {
         if trigger_compute {
             self.compute_single_result = Some(single_repo::remote_compute_single(
                 ctx,
+                api_addr,
                 single,
                 scripting_context,
             ));
@@ -509,6 +519,7 @@ impl eframe::App for HyperApp {
 
 fn show_remote_code(
     ui: &mut egui::Ui,
+    api_addr: &str,
     commit: &mut types::Commit,
     file_path: &mut String,
     file_result: hash_map::Entry<'_, types::FileIdentifier, code_tracking::RemoteFile>,
@@ -524,13 +535,22 @@ fn show_remote_code(
 ) {
     egui::ScrollArea::horizontal()
         .show(ui, |ui| {
-            show_remote_code1(ui, commit, file_path, file_result, f32::INFINITY, false)
+            show_remote_code1(
+                ui,
+                api_addr,
+                commit,
+                file_path,
+                file_result,
+                f32::INFINITY,
+                false,
+            )
         })
         .inner
 }
 
 fn show_remote_code1(
     ui: &mut egui::Ui,
+    api_addr: &str,
     commit: &mut types::Commit,
     mut file_path: &mut String,
     file_result: hash_map::Entry<'_, types::FileIdentifier, code_tracking::RemoteFile>,
@@ -592,6 +612,7 @@ fn show_remote_code1(
             if upd_src {
                 file_result.insert_entry(code_tracking::remote_fetch_file(
                     ui.ctx(),
+                    &api_addr,
                     commit,
                     file_path,
                 ));
@@ -600,6 +621,7 @@ fn show_remote_code1(
         } else {
             file_result.insert_entry(code_tracking::remote_fetch_file(
                 ui.ctx(),
+                &api_addr,
                 commit,
                 file_path,
             ));
@@ -646,6 +668,7 @@ type SkipedBytes = usize;
 
 fn show_remote_code2(
     ui: &mut egui::Ui,
+    api_addr: &str,
     commit: &mut types::Commit,
     mut file_path: &mut String,
     file_result: hash_map::Entry<'_, types::FileIdentifier, code_tracking::RemoteFile>,
@@ -716,6 +739,7 @@ fn show_remote_code2(
             if upd_src {
                 file_result.insert_entry(code_tracking::remote_fetch_file(
                     ui.ctx(),
+                    &api_addr,
                     commit,
                     file_path,
                 ));
@@ -724,6 +748,7 @@ fn show_remote_code2(
         } else {
             file_result.insert_entry(code_tracking::remote_fetch_file(
                 ui.ctx(),
+                &api_addr,
                 commit,
                 file_path,
             ));

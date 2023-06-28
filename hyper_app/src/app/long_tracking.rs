@@ -23,7 +23,6 @@ use crate::app::{
     commit::fetch_commit,
     show_remote_code1, tree_view,
     types::Resource,
-    API_URL,
 };
 
 use super::{
@@ -228,6 +227,7 @@ type Attacheds = Vec<(
 
 pub(crate) fn show_results(
     ui: &mut egui::Ui,
+    api_addr: &str,
     aspects: &mut types::ComputeConfigAspectViews,
     store: Arc<FetchedHyperAST>,
     long_tracking: &mut LongTacking,
@@ -300,7 +300,7 @@ pub(crate) fn show_results(
                         if !md.is_waiting() {
                             let code_range = &mut long_tracking.origins[0];
                             // wasm_rs_dbg::dbg!(&code_range);
-                            md.buffer(fetch_commit(ui.ctx(), &code_range.file.commit));
+                            md.buffer(fetch_commit(ui.ctx(), api_addr, &code_range.file.commit));
                         }
                         return;
                     }
@@ -389,13 +389,13 @@ pub(crate) fn show_results(
                         let track = tracking_result.content.track.results.get(0).unwrap();
                         if let Some(code_range) = &track.intermediary {
                             // wasm_rs_dbg::dbg!(&code_range);
-                            md.buffer(fetch_commit(ui.ctx(), &code_range.file.commit));
+                            md.buffer(fetch_commit(ui.ctx(), api_addr, &code_range.file.commit));
                         } else if let Some(code_range) = track.matched.get(0) {
                             // wasm_rs_dbg::dbg!(&code_range);
-                            md.buffer(fetch_commit(ui.ctx(), &code_range.file.commit));
+                            md.buffer(fetch_commit(ui.ctx(), api_addr, &code_range.file.commit));
                         } else if let Some(code_range) = &track.fallback {
                             // wasm_rs_dbg::dbg!(&code_range);
-                            md.buffer(fetch_commit(ui.ctx(), &code_range.file.commit));
+                            md.buffer(fetch_commit(ui.ctx(), api_addr, &code_range.file.commit));
                         } else {
                             unreachable!("should have been matched or been given a fallback")
                         }
@@ -886,7 +886,7 @@ pub(crate) fn show_results(
                     if !tree_viewer.is_waiting() {
 
                         tree_viewer.buffer(code_aspects::remote_fetch_node(
-                            ui.ctx(),
+                            ui.ctx(),api_addr,
                             store.clone(),
                             &curr_commit,
                             "",
@@ -911,7 +911,7 @@ pub(crate) fn show_results(
                 match tree_viewer {
                     Ok(tree_viewer) => {
                         if let Some(p) = show_tree_view(
-                            ui,
+                            ui,api_addr,
                             tree_viewer,
                             &mut curr_view,
                             trigger,
@@ -936,6 +936,7 @@ pub(crate) fn show_results(
                                     // TODO only request changes when we have none
                                     let track_at_path = track_at_path_with_changes(
                                         ui.ctx(),
+                                        api_addr,
                                         &curr.file.commit,
                                         &curr.path,
                                         &long_tracking.flags,
@@ -955,6 +956,7 @@ pub(crate) fn show_results(
                                     assert_ne!(&curr.file.commit, *past_commit);
                                     let track_at_path = track_at_path(
                                         ui.ctx(),
+                                        api_addr,
                                         &curr.file.commit,
                                         Some(past_commit),
                                         &curr.path,
@@ -967,6 +969,7 @@ pub(crate) fn show_results(
                                 if col == 0 {
                                     let track_at_path = track_at_path_with_changes(
                                         ui.ctx(),
+                                        api_addr,
                                         &curr.file.commit,
                                         &p,
                                         &long_tracking.flags,
@@ -979,6 +982,7 @@ pub(crate) fn show_results(
                                     assert_ne!(&present_commit, past_commit);
                                     let track_at_path = track_at_path(
                                         ui.ctx(),
+                                        api_addr,
                                         &present_commit,
                                         Some(past_commit),
                                         &p,
@@ -992,7 +996,7 @@ pub(crate) fn show_results(
                     Err(err) => panic!("{}", err),
                 }
             } else if long_tracking.ser_view {
-                if let Some(te) = show_code_view(ui, &mut curr_view, fetched_files) {
+                if let Some(te) = show_code_view(ui, api_addr,&mut curr_view, fetched_files) {
                     let offset = 0; //aa.inner.0;
                     if !te.response.is_pointer_button_down_on() {
                         let bb = &te.cursor_range;
@@ -1024,6 +1028,7 @@ pub(crate) fn show_results(
                                         col,
                                         track(
                                             ui.ctx(),
+                                            api_addr,
                                             &curr.file.commit,
                                             &curr.file.file_path,
                                             &Some(r),
@@ -1036,6 +1041,7 @@ pub(crate) fn show_results(
                                         col,
                                         track(
                                             ui.ctx(),
+                                            api_addr,
                                             &curr.file.commit,
                                             &curr.file.file_path,
                                             &Some(r),
@@ -1966,6 +1972,7 @@ struct ColView<'a> {
 
 fn show_code_view(
     ui: &mut egui::Ui,
+    api_addr: &str,
     curr_view: &mut ColView<'_>,
     fetched_files: &mut HashMap<
         types::FileIdentifier,
@@ -1988,6 +1995,7 @@ fn show_code_view(
     let file_result = fetched_files.entry(curr_file.clone());
     let te = show_remote_code1(
         ui,
+        api_addr,
         &mut curr_file.commit,
         &mut curr_file.file_path,
         file_result,
@@ -2082,6 +2090,7 @@ fn show_code_view(
 
 fn show_tree_view(
     ui: &mut egui::Ui,
+    api_addr: &str,
     tree_viewer: &mut Resource<FetchedView>,
     curr_view: &mut ColView<'_>,
     trigger: bool,
@@ -2142,6 +2151,7 @@ fn show_tree_view(
                         let id = ui.id();
                         let a = content.show(
                             ui,
+                            api_addr,
                             aspects,
                             focus,
                             hightlights,
@@ -2172,6 +2182,7 @@ fn show_tree_view(
                         }
                         let a = content.show(
                             ui,
+                            api_addr,
                             aspects,
                             focus,
                             hightlights,
@@ -2211,6 +2222,7 @@ fn show_tree_view(
                     }
                     content.show(
                         ui,
+                        api_addr,
                         aspects,
                         focus,
                         hightlights,
@@ -2321,6 +2333,7 @@ pub(crate) const TARGET_COLOR: egui::Color32 = egui::Color32::from_rgb(255, 100,
 
 pub(super) fn track(
     ctx: &egui::Context,
+    api_addr: &str,
     commit: &Commit,
     file_path: &String,
     range: &Option<Range<usize>>,
@@ -2337,8 +2350,8 @@ pub(super) fn track(
             format!("&{}", flags)
         };
         format!(
-            "{}/track/github/{}/{}/{}/{}?start={}&end={}{}",
-            API_URL,
+            "http://{}/track/github/{}/{}/{}/{}?start={}&end={}{}",
+            api_addr,
             &commit.repo.user,
             &commit.repo.name,
             &commit.id,
@@ -2354,8 +2367,8 @@ pub(super) fn track(
             format!("?{}", flags)
         };
         format!(
-            "{}/track/github/{}/{}/{}/{}{}",
-            API_URL, &commit.repo.user, &commit.repo.name, &commit.id, &file_path, flags
+            "http://{}/track/github/{}/{}/{}/{}{}",
+            api_addr, &commit.repo.user, &commit.repo.name, &commit.id, &file_path, flags
         )
     };
 
@@ -2381,6 +2394,7 @@ pub(super) fn track(
 
 pub(super) fn track_at_path(
     ctx: &egui::Context,
+    api_addr: &str,
     commit: &Commit,
     exact_commit: Option<&Commit>,
     path: &[usize],
@@ -2392,8 +2406,8 @@ pub(super) fn track_at_path(
     let flags = serde_qs::to_string(flags).unwrap(); //.replace("=true", "1").replace("=false", "0");
     let url = {
         format!(
-            "{}/track_at_path/github/{}/{}/{}/{}?{}{}",
-            API_URL,
+            "http://{}/track_at_path/github/{}/{}/{}/{}?{}{}",
+            api_addr,
             &commit.repo.user,
             &commit.repo.name,
             &commit.id,
@@ -2432,6 +2446,7 @@ pub(super) fn track_at_path(
 
 pub(super) fn track_at_path_with_changes(
     ctx: &egui::Context,
+    api_addr: &str,
     commit: &Commit,
     path: &[usize],
     flags: &Flags,
@@ -2442,8 +2457,8 @@ pub(super) fn track_at_path_with_changes(
     let flags = serde_qs::to_string(flags).unwrap(); //.replace("=true", "1").replace("=false", "0");
     let url = {
         format!(
-            "{}/track_at_path_with_changes/github/{}/{}/{}/{}?{}",
-            API_URL,
+            "http://{}/track_at_path_with_changes/github/{}/{}/{}/{}?{}",
+            api_addr,
             &commit.repo.user,
             &commit.repo.name,
             &commit.id,

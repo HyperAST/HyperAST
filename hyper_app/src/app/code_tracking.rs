@@ -3,9 +3,7 @@ use std::{
     ops::Range,
 };
 
-use crate::app::{
-    code_editor::generic_text_buffer::byte_index_from_char_index, show_remote_code, API_URL,
-};
+use crate::app::{code_editor::generic_text_buffer::byte_index_from_char_index, show_remote_code};
 use egui::Id;
 use egui_addon::{
     egui_utils::{highlight_byte_range, radio_collapsing, show_wip},
@@ -64,14 +62,15 @@ pub(super) type RemoteFile = Promise<ehttp::Result<Resource<FetchedFile>>>;
 
 pub(super) fn remote_fetch_file(
     ctx: &egui::Context,
+    api_addr: &str,
     commit: &types::Commit,
     file_path: &str,
 ) -> Promise<Result<Resource<FetchedFile>, String>> {
     let ctx = ctx.clone();
     let (sender, promise) = Promise::new();
     let url = format!(
-        "{}/file/github/{}/{}/{}/{}",
-        API_URL, &commit.repo.user, &commit.repo.name, &commit.id, &file_path,
+        "http://{}/file/github/{}/{}/{}/{}",
+        api_addr, &commit.repo.user, &commit.repo.name, &commit.id, &file_path,
     );
 
     wasm_rs_dbg::dbg!(&url);
@@ -178,6 +177,7 @@ pub(super) type RemoteResult = ehttp::Result<Resource<TrackingResult>>;
 
 pub(super) fn track(
     ctx: &egui::Context,
+    api_addr: &str,
     commit: &Commit,
     file_path: &String,
     range: &Option<Range<usize>>,
@@ -186,8 +186,8 @@ pub(super) fn track(
     let (sender, promise) = Promise::new();
     let url = if let Some(range) = range {
         format!(
-            "{}/track/github/{}/{}/{}/{}?start={}&end={}",
-            API_URL,
+            "http://{}/track/github/{}/{}/{}/{}?start={}&end={}",
+            api_addr,
             &commit.repo.user,
             &commit.repo.name,
             &commit.id,
@@ -197,8 +197,8 @@ pub(super) fn track(
         )
     } else {
         format!(
-            "{}/track/github/{}/{}/{}/{}",
-            API_URL, &commit.repo.user, &commit.repo.name, &commit.id, &file_path,
+            "http://{}/track/github/{}/{}/{}/{}",
+            api_addr, &commit.repo.user, &commit.repo.name, &commit.id, &file_path,
         )
     };
 
@@ -314,6 +314,7 @@ pub(super) fn show_code_tracking_menu(
 
 pub(super) fn show_code_tracking_results(
     ui: &mut egui::Ui,
+    api_addr: &str,
     tracking: &mut types::ComputeConfigTracking,
     tracking_result: &mut Buffered<RemoteResult>,
     fetched_files: &mut HashMap<types::FileIdentifier, RemoteFile>,
@@ -335,6 +336,7 @@ pub(super) fn show_code_tracking_results(
 
             let te = show_remote_code(
                 ui,
+                api_addr,
                 &mut tracking.target.file.commit,
                 &mut tracking.target.file.file_path,
                 file_result,
@@ -382,6 +384,7 @@ pub(super) fn show_code_tracking_results(
                             tracking.target.range = Some(r);
                             tracking_result.buffer(track(
                                 ctx,
+                                api_addr,
                                 &tracking.target.file.commit,
                                 &tracking.target.file.file_path,
                                 &tracking.target.range,
@@ -414,6 +417,7 @@ pub(super) fn show_code_tracking_results(
                             }
                             let te = show_remote_code(
                                 ui,
+                                api_addr,
                                 &mut matched.file.commit.clone(),
                                 &mut matched.file.file_path.clone(),
                                 file_result,

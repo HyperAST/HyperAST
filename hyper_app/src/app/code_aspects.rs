@@ -3,7 +3,6 @@ use super::tree_view::FetchedViewImpl;
 use super::tree_view::{Action, FetchedHyperAST, NodeIdentifier, PrefillCache};
 use super::types;
 use super::types::Resource;
-use crate::app::API_URL;
 use egui_addon::egui_utils::{radio_collapsing, show_wip};
 use hyper_ast::store::nodes::fetched;
 use hyper_ast::store::nodes::fetched::LabelIdentifier;
@@ -14,6 +13,7 @@ use std::sync::Arc;
 
 pub(crate) fn show_aspects_views_menu(
     ui: &mut egui::Ui,
+    api_addr: &str,
     selected: &mut types::SelectedConfig,
     aspects: &mut types::ComputeConfigAspectViews,
     store: Arc<FetchedHyperAST>,
@@ -47,6 +47,7 @@ pub(crate) fn show_aspects_views_menu(
             {
                 *aspects_result = Some(remote_fetch_node(
                     ui.ctx(),
+                    api_addr,
                     store.clone(),
                     &aspects.commit,
                     &aspects.path,
@@ -210,6 +211,7 @@ where
 pub(crate) fn show(
     aspects_result: &mut poll_promise::Promise<Result<types::Resource<FetchedView>, String>>,
     ui: &mut egui::Ui,
+    api_addr: &str,
     aspects: &mut types::ComputeConfigAspectViews,
 ) {
     if let Some(aspects_result) = aspects_result.ready_mut() {
@@ -233,7 +235,7 @@ pub(crate) fn show(
                                 .filter_map(|x| x.parse().ok())
                                 .collect();
                             let action = content.show(
-                                ui,
+                                ui,api_addr,
                                 aspects,
                                 None,
                                 vec![], //(&hightlight, &egui::Color32::RED, &mut None)
@@ -245,7 +247,9 @@ pub(crate) fn show(
                                 super::tree_view::Action::SerializeKind(k) => {
                                     use hyper_ast::types::HyperType;
                                     let k = &k.as_any();
-                                    if let Some(k) = k.downcast_ref::<hyper_ast_gen_ts_cpp::types::Type>() {
+                                    if let Some(k) =
+                                        k.downcast_ref::<hyper_ast_gen_ts_cpp::types::Type>()
+                                    {
                                         aspects.ser_opt_cpp.insert(k.to_owned());
                                     } else if let Some(k) =
                                         k.downcast_ref::<hyper_ast_gen_ts_java::types::Type>()
@@ -253,7 +257,7 @@ pub(crate) fn show(
                                         aspects.ser_opt_java.insert(k.to_owned());
                                     }
                                 }
-                                _ =>()
+                                _ => (),
                             }
                         }
                     });
@@ -292,6 +296,7 @@ impl FetchedView {
     pub(crate) fn show(
         &mut self,
         ui: &mut egui::Ui,
+        api_addr: &str,
         aspects: &types::ComputeConfigAspectViews,
         focus: Option<(&[usize], &[NodeIdentifier])>,
         hightlights: Vec<HightLightHandle<'_>>,
@@ -313,7 +318,7 @@ impl FetchedView {
             additions,
             deletions,
         );
-        let r = imp.show(ui, &self.root);
+        let r = imp.show(ui, api_addr, &self.root);
         // wasm_rs_dbg::dbg!(&imp);
         self.prefill_cache = imp.prefill_cache;
         r
@@ -378,14 +383,15 @@ pub(super) type RemoteView = Promise<ehttp::Result<Resource<FetchedView>>>;
 
 pub(super) fn remote_fetch_tree(
     ctx: &egui::Context,
+    api_addr: &str,
     commit: &types::Commit,
     path: &str,
 ) -> Promise<Result<Resource<FetchedView>, String>> {
     let ctx = ctx.clone();
     let (sender, promise) = Promise::new();
     let url = format!(
-        "{}/view/github/{}/{}/{}/{}",
-        API_URL, &commit.repo.user, &commit.repo.name, &commit.id, &path,
+        "http://{}/view/github/{}/{}/{}/{}",
+        api_addr, &commit.repo.user, &commit.repo.name, &commit.id, &path,
     );
 
     wasm_rs_dbg::dbg!(&url);
@@ -402,6 +408,7 @@ pub(super) fn remote_fetch_tree(
 
 pub(super) fn remote_fetch_node(
     ctx: &egui::Context,
+    api_addr: &str,
     store: Arc<FetchedHyperAST>,
     commit: &types::Commit,
     path: &str,
@@ -409,8 +416,8 @@ pub(super) fn remote_fetch_node(
     let ctx = ctx.clone();
     let (sender, promise) = Promise::new();
     let url = format!(
-        "{}/fetch/github/{}/{}/{}/{}",
-        API_URL, &commit.repo.user, &commit.repo.name, &commit.id, &path,
+        "http://{}/fetch/github/{}/{}/{}/{}",
+        api_addr, &commit.repo.user, &commit.repo.name, &commit.id, &path,
     );
 
     wasm_rs_dbg::dbg!(&url);
@@ -444,13 +451,14 @@ pub(super) fn remote_fetch_node(
 
 pub(super) fn remote_fetch_nodes_by_ids(
     ctx: &egui::Context,
+    api_addr: &str,
     store: Arc<FetchedHyperAST>,
     repo: &types::Repo,
     ids: HashSet<NodeIdentifier>,
 ) -> Promise<Result<Resource<()>, String>> {
     let ctx = ctx.clone();
     let (sender, promise) = Promise::new();
-    let mut url = format!("{}/fetch-ids", API_URL,);
+    let mut url = format!("http://{}/fetch-ids", api_addr,);
     // TODO group ids by arch
     for id in ids {
         url.push('/');
@@ -483,13 +491,14 @@ pub(super) fn remote_fetch_nodes_by_ids(
 
 pub(super) fn remote_fetch_labels(
     ctx: &egui::Context,
+    api_addr: &str,
     store: Arc<FetchedHyperAST>,
     repo: &types::Repo,
     ids: HashSet<LabelIdentifier>,
 ) -> Promise<Result<Resource<()>, String>> {
     let ctx = ctx.clone();
     let (sender, promise) = Promise::new();
-    let mut url = format!("{}/fetch-labels", API_URL,);
+    let mut url = format!("http://{}/fetch-labels", api_addr,);
     for id in ids {
         url.push('/');
         let id: u32 = id.into();

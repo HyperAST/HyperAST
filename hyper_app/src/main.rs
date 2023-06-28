@@ -5,7 +5,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result<()> {
     // Log to stdout (if you run with `RUST_LOG=debug`).
-
+    let api_addr = std::env::args().collect::<Vec<_>>().get(0).map_or("0.0.0.0:8080", |x| x).to_string();
     use egui_addon::Lang;
     tracing_subscriber::fmt::init();
 
@@ -22,7 +22,7 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "HyperAST",
         native_options,
-        Box::new(move |cc| Box::new(hyper_app::HyperApp::new(cc, languages))),
+        Box::new(move |cc| Box::new(hyper_app::HyperApp::new(cc, languages, api_addr))),
     )
 }
 

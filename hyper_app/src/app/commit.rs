@@ -1,6 +1,6 @@
 use poll_promise::Promise;
 
-use crate::app::{types::Resource, API_URL};
+use crate::app::{types::Resource};
 
 use super::types::Commit;
 
@@ -73,13 +73,14 @@ impl CommitMetadata {
 
 pub(super) fn fetch_commit(
     ctx: &egui::Context,
+    api_addr: &str,
     commit: &Commit,
 ) -> Promise<Result<CommitMetadata, String>> {
     let ctx = ctx.clone();
     let (sender, promise) = Promise::new();
     let url = format!(
-        "{}/commit/github/{}/{}/{}",
-        API_URL, &commit.repo.user, &commit.repo.name, &commit.id,
+        "http://{}/commit/github/{}/{}/{}",
+        api_addr, &commit.repo.user, &commit.repo.name, &commit.id,
     );
 
     wasm_rs_dbg::dbg!(&url);
@@ -118,14 +119,15 @@ impl Resource<CommitMetadata> {
 
 pub(super) fn fetch_commit_parents(
     ctx: &egui::Context,
+    api_addr: &str,
     commit: &Commit,
     depth: usize,
 ) -> Promise<Result<Vec<String>, String>> {
     let ctx = ctx.clone();
     let (sender, promise) = Promise::new();
     let url = format!(
-        "{}/commit-parents/github/{}/{}/{}/{}",
-        API_URL, &commit.repo.user, &commit.repo.name, &commit.id, depth
+        "http://{}/commit-parents/github/{}/{}/{}/{}",
+        api_addr, &commit.repo.user, &commit.repo.name, &commit.id, depth
     );
 
     wasm_rs_dbg::dbg!(&url);

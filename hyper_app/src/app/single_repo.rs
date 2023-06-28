@@ -7,7 +7,7 @@ use automerge::sync::SyncDoc;
 use futures_util::SinkExt;
 use poll_promise::Promise;
 
-use crate::app::{crdt_over_ws, utils, API_URL};
+use crate::app::{crdt_over_ws, utils};
 
 use self::example_scripts::EXAMPLES;
 
@@ -129,6 +129,7 @@ type ScriptingContext = super::ScriptingContext<
 
 pub(super) fn remote_compute_single(
     ctx: &egui::Context,
+    api_addr: &str,
     single: &mut ComputeConfigSingle,
     code_editors: &mut ScriptingContext,
 ) -> Promise<Result<Resource<Result<ComputeResults, ScriptingError>>, String>> {
@@ -139,8 +140,8 @@ pub(super) fn remote_compute_single(
     let ctx = ctx.clone();
     let (sender, promise) = Promise::new();
     let url = format!(
-        "{}/script-depth/github/{}/{}/{}",
-        API_URL, &single.commit.repo.user, &single.commit.repo.name, &single.commit.id,
+        "http://{}/script-depth/github/{}/{}/{}",
+        api_addr, &single.commit.repo.user, &single.commit.repo.name, &single.commit.id,
     );
     #[derive(serde::Serialize)]
     struct ScriptContent {
@@ -213,6 +214,7 @@ pub enum ScriptingError {
 
 pub(super) fn show_single_repo(
     ui: &mut egui::Ui,
+    api_addr: &str,
     single: &mut ComputeConfigSingle,
     code_editors: &mut ScriptingContext,
     trigger_compute: &mut bool,
@@ -233,7 +235,7 @@ pub(super) fn show_single_repo(
         ) {
             log::warn!("{}", err);
             if ui.button("try restarting sharing connection").clicked() {
-                let url = format!("ws://{}/shared-scripts-db", &API_URL[7..]);
+                let url = format!("ws://{}/shared-scripts-db", api_addr);
                 *doc_db = crdt_over_ws::WsDocsDb::new(
                     &single.rt,
                     USER.to_string(),
@@ -254,7 +256,7 @@ pub(super) fn show_single_repo(
                     let i = *i;
                     if let Some(Some(view)) = vec.get(i) {
                         assert_eq!(view.id, i);
-                        let url = format!("ws://{}/shared-script/{}", &API_URL[7..], i);
+                        let url = format!("ws://{}/shared-script/{}", api_addr, i);
                         single.ws = Some(crdt_over_ws::WsDoc::new(&rt, USER.to_string(), ctx, url));
                     }
                     code_editors.current = super::EditStatus::Shared(i, shared_script.clone());
@@ -287,7 +289,7 @@ pub(super) fn show_single_repo(
             _ => (),
         }
     } else {
-        let url = format!("ws://{}/shared-scripts-db", &API_URL[7..]);
+        let url = format!("ws://{}/shared-scripts-db", api_addr);
         single.doc_db = Some(crdt_over_ws::WsDocsDb::new(
             &single.rt,
             USER.to_string(),
@@ -298,7 +300,7 @@ pub(super) fn show_single_repo(
     let is_portrait = ui.available_rect_before_wrap().aspect_ratio() < 1.0;
     if is_portrait {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            show_scripts_edition(ui, code_editors, single);
+            show_scripts_edition(ui, api_addr, code_editors, single);
             handle_interactions(
                 ui,
                 code_editors,
@@ -313,7 +315,7 @@ pub(super) fn show_single_repo(
             .ratio(0.7)
             .show(ui, |ui1, ui2| {
                 ui1.push_id(ui1.id().with("input"), |ui| {
-                    show_scripts_edition(ui, code_editors, single);
+                    show_scripts_edition(ui, api_addr, code_editors, single);
                 });
                 let ui = ui2;
                 handle_interactions(
@@ -420,10 +422,11 @@ struct InteractionResp<'a> {
 
 fn show_scripts_edition(
     ui: &mut egui::Ui,
+    api_addr: &str,
     scripting_context: &mut ScriptingContext,
     single: &mut ComputeConfigSingle,
 ) {
-    show_available_stuff(ui, single, scripting_context);
+    show_available_stuff(ui, api_addr, single, scripting_context);
     match &mut scripting_context.current {
         super::EditStatus::Example {
             i: _,
@@ -499,6 +502,7 @@ fn show_local_code_edition(
 
 fn show_available_stuff(
     ui: &mut egui::Ui,
+    api_addr: &str,
     single: &mut ComputeConfigSingle,
     scripting_context: &mut ScriptingContext,
 ) {
@@ -524,7 +528,7 @@ fn show_available_stuff(
         if !names.is_empty() {
             egui::CollapsingHeader::new("Shared Scripts")
                 .default_open(true)
-                .show(ui, |ui| show_shared(ui, single, scripting_context, names));
+                .show(ui, |ui| show_shared(ui, api_addr, single, scripting_context, names));
         }
     }
 }
@@ -640,6 +644,7 @@ fn show_locals(
 
 fn show_shared(
     ui: &mut egui::Ui,
+    api_addr: &str,
     single: &mut ComputeConfigSingle,
     scripting_context: &mut ScriptingContext,
     names: Vec<(String, usize)>,
@@ -668,7 +673,7 @@ fn show_shared(
         if let Some(ws) = &mut single.ws {
             let ctx = ui.ctx().clone();
             let rt = single.rt.clone();
-            let url = format!("ws://{}/shared-script/{}", &API_URL[7..], id);
+            let url = format!("ws://{}/shared-script/{}", api_addr, id);
             *ws = crdt_over_ws::WsDoc::new(&rt, USER.to_string(), ctx, url)
         }
     }

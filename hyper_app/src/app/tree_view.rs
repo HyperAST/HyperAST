@@ -355,7 +355,7 @@ impl<'a> FetchedViewImpl<'a> {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, root: &NodeIdentifier) -> Action {
+    pub fn show(&mut self, ui: &mut egui::Ui, api_addr: &str, root: &NodeIdentifier) -> Action {
         ui.style_mut().spacing.button_padding.y = 0.0;
         ui.style_mut().spacing.item_spacing.y = 0.0;
 
@@ -432,6 +432,7 @@ impl<'a> FetchedViewImpl<'a> {
                 .push_back(waiting.clone());
             remote_fetch_nodes_by_ids(
                 ui.ctx(),
+                api_addr,
                 self.store.clone(),
                 &self.aspects.commit.repo,
                 waiting,
@@ -447,6 +448,7 @@ impl<'a> FetchedViewImpl<'a> {
                 .push_back(waiting.clone());
             remote_fetch_labels(
                 ui.ctx(),
+                api_addr,
                 self.store.clone(),
                 &self.aspects.commit.repo,
                 waiting,
