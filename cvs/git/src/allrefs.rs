@@ -1295,7 +1295,7 @@ pub fn find_package_in_other_folders<
             let mut r = x.clone();
             for n in path.components() {
                 let x = *r.node().unwrap();
-                let n = std::os::unix::prelude::OsStrExt::as_bytes(n.as_os_str());
+                let n = std::ffi::OsStr::as_os_str_bytes(n.as_os_str());
                 let n = std::str::from_utf8(n).unwrap();
                 let aaa = child_by_name_with_idx(stores, x, n);
                 if let Some((x, i)) = aaa {

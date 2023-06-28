@@ -28,7 +28,6 @@ mod tree_view;
 mod ts_highlight;
 pub(crate) mod types;
 mod utils;
-mod code_editor_automerge;
 
 // const API_URL: &str = "http://131.254.13.72:8080";
 const API_URL: &str = "http://0.0.0.0:8080";
