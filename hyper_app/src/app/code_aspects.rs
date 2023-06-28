@@ -103,7 +103,7 @@ pub(crate) fn show_aspects_views_menu(
         //     aspects.ser_opt_cpp = ser_opt_cpp;
         //     aspects.ser_opt_java = ser_opt_java;
         // }
-        ui.label("serialized Cpp:");
+        ui.label("serialized Java:");
         let mut rm = None;
         for x in &aspects.ser_opt_java {
             let button = &ui.button(x.to_str());
@@ -114,7 +114,7 @@ pub(crate) fn show_aspects_views_menu(
         if let Some(rm) = rm {
             aspects.ser_opt_java.remove(&rm);
         }
-        ui.label("serialized Java:");
+        ui.label("serialized Cpp:");
         let mut rm = None;
         for x in &aspects.ser_opt_cpp {
             let button = &ui.button(x.to_str());
@@ -125,7 +125,7 @@ pub(crate) fn show_aspects_views_menu(
         if let Some(rm) = rm {
             aspects.ser_opt_cpp.remove(&rm);
         }
-        ui.label("hidden Cpp:");
+        ui.label("hidden Java:");
         let mut rm = None;
         for x in &aspects.hide_opt_java {
             let button = &ui.button(x.to_str());
@@ -136,7 +136,7 @@ pub(crate) fn show_aspects_views_menu(
         if let Some(rm) = rm {
             aspects.hide_opt_java.remove(&rm);
         }
-        ui.label("hidden Java:");
+        ui.label("hidden Cpp:");
         let mut rm = None;
         for x in &aspects.hide_opt_cpp {
             let button = &ui.button(x.to_str());
