@@ -819,16 +819,20 @@ impl<'a> FetchedViewImpl<'a> {
 
         // ui.label(format!("{:?}", show.body_response.map(|x| x.rect)));
         self.prefill_cache = Some(prefill);
-        if show
-            .header_returned
-            .interact(egui::Sense::click())
-            .clicked()
-        {
+
+        let interact = show.header_returned.interact(egui::Sense::click());
+
+        if interact.clicked() {
             Action::Clicked(self.path.to_vec())
         } else if let Some((&[], _)) = self.focus {
             Action::Focused(min.y)
         } else {
-            show.body_returned.unwrap_or(Action::Keep)
+            let act = node_menu(interact, kind);
+            if let Some(act) = act {
+                act
+            } else {
+                show.body_returned.unwrap_or(Action::Keep)
+            }
         }
     }
 
@@ -1073,10 +1077,16 @@ impl<'a> FetchedViewImpl<'a> {
                 let monospace = ui.monospace(format!("{}: ", kind)).context_menu(|ui| {
                     ui.label(format!("{:?}", self.path));
                 });
-                action = if monospace.interact(egui::Sense::click()).clicked() {
+                let interact = monospace.interact(egui::Sense::click());
+                action = if interact.clicked() {
                     Action::Clicked(self.path.to_vec())
                 } else {
-                    Action::Keep
+                    let act = node_menu(interact, kind);
+                    if let Some(act) = act {
+                        act
+                    } else {
+                        Action::Keep
+                    }
                 };
                 let rect1 = monospace.rect;
                 let rect2 = ui.label(format!("{}", label)).rect;
@@ -1179,13 +1189,16 @@ impl<'a> FetchedViewImpl<'a> {
                             }
                         }
                     }
-                    if ui
-                        .add(egui::Label::new(rt).sense(egui::Sense::click()))
-                        .clicked()
-                    {
+                    let interact = ui.add(egui::Label::new(rt).sense(egui::Sense::click()));
+                    if interact.clicked() {
                         Action::Clicked(self.path.to_vec())
                     } else {
-                        Action::Keep
+                        let act = node_menu(interact, kind);
+                        if let Some(act) = act {
+                            act
+                        } else {
+                            Action::Keep
+                        }
                     }
                 };
                 ui.label(format!("{}", label));
@@ -1241,6 +1254,20 @@ impl<'a> FetchedViewImpl<'a> {
         };
         if let Some(x) = kind.as_any().downcast_ref() {
             if self.aspects.ser_opt_java.contains(x) {
+                return true;
+            }
+        };
+        false
+    }
+
+    fn is_visible(&mut self, kind: AnyType) -> bool {
+        if let Some(x) = kind.as_any().downcast_ref() {
+            if self.aspects.hide_opt_cpp.contains(x) {
+                return true;
+            }
+        };
+        if let Some(x) = kind.as_any().downcast_ref() {
+            if self.aspects.hide_opt_java.contains(x) {
                 return true;
             }
         };
@@ -1751,6 +1778,26 @@ impl<'a> FetchedViewImpl<'a> {
     }
 }
 
+fn node_menu(interact: egui::Response, kind: AnyType) -> Option<Action> {
+    let mut act = None;
+    interact.context_menu(|ui: &mut egui::Ui| {
+        if ui.button("serialize kind").clicked() {
+            act = Some(Action::SerializeKind(kind));
+        } else if ui
+            .button("hide kind")
+            .clicked()
+        {
+            act = Some(Action::HideKind(kind));
+        } else if ui
+            .button("close menu")
+            .clicked()
+        {
+            ui.close_menu();
+        }
+    });
+    act
+}
+
 fn show_port(ui: &mut egui::Ui, id: egui::Id, pos: epaint::Pos2) {
     let area = egui::Area::new(id)
         .order(egui::Order::Middle)
@@ -1854,22 +1901,27 @@ mod hyper_ast_layouter {
             let children = b.children();
 
             if kind.is_spaces() {
-                let s = LabelStore::resolve(self.stores, &label.unwrap());
-                let b: String = Space::format_indentation(s.as_bytes())
-                    .iter()
-                    .map(|x| x.to_string())
-                    .collect();
-                // out.write_str(&b).unwrap();
-                let len = s.len();
-                let end = *offset + len;
-                let format = syntax_highlighter::TokenType::Punctuation;
-                make_section(self.theme, out, format, *offset, end);
-                *offset = end;
-                return Ok(if b.contains("\n") {
-                    b
+                let indent = if let Some(label) = label {
+                    let s = LabelStore::resolve(self.stores, label);
+                    let b: String = Space::format_indentation(s.as_bytes())
+                        .iter()
+                        .map(|x| x.to_string())
+                        .collect();
+                    // out.write_str(&b).unwrap();
+                    let len = s.len();
+                    let end = *offset + len;
+                    let format = syntax_highlighter::TokenType::Punctuation;
+                    make_section(self.theme, out, format, *offset, end);
+                    *offset = end;
+                    if b.contains("\n") {
+                        b
+                    } else {
+                        parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
+                    }
                 } else {
                     parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
-                });
+                };
+                return Ok(indent);
             }
 
             match (label, children) {

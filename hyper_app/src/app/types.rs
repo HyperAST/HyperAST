@@ -81,10 +81,15 @@ pub(crate) struct ComputeConfigAspectViews {
     pub(super) doc: bool,
     // pub(super) ser_opt_cpp_text: String,
     // pub(super) ser_opt_java_text: String,
+    // TODO use an enum set btw...
     #[serde(skip)]
     pub(super) ser_opt_cpp: HashSet<hyper_ast_gen_ts_cpp::types::Type>,
     #[serde(skip)]
     pub(super) ser_opt_java: HashSet<hyper_ast_gen_ts_java::types::Type>,
+    #[serde(skip)]
+    pub(super) hide_opt_cpp: HashSet<hyper_ast_gen_ts_cpp::types::Type>,
+    #[serde(skip)]
+    pub(super) hide_opt_java: HashSet<hyper_ast_gen_ts_java::types::Type>,
 }
 
 pub(crate) fn parse_java_type_list(s: &str, out: &mut HashSet<hyper_ast_gen_ts_java::types::Type>) {
@@ -117,6 +122,8 @@ impl Default for ComputeConfigAspectViews {
         ser_opt_cpp.insert(hyper_ast_gen_ts_cpp::types::Type::FunctionDeclarator);
         let mut ser_opt_java: HashSet<hyper_ast_gen_ts_java::types::Type> = Default::default();
         ser_opt_java.insert(hyper_ast_gen_ts_java::types::Type::MethodDeclaration);
+        let hide_opt_cpp: HashSet<hyper_ast_gen_ts_cpp::types::Type> = Default::default();
+        let hide_opt_java: HashSet<hyper_ast_gen_ts_java::types::Type> = Default::default();
         // TODO use regexes
         // parse_java_type_list(&ser_opt_java_text, &mut ser_opt_java);
         // parse_cpp_type_list(&ser_opt_cpp_text, &mut ser_opt_cpp);
@@ -135,6 +142,8 @@ impl Default for ComputeConfigAspectViews {
             // ser_opt_java_text,
             ser_opt_cpp,
             ser_opt_java,
+            hide_opt_cpp,
+            hide_opt_java,
             // commit: "4acedc53a13a727be3640fe234f7e261d2609d58".into(),
         }
     }

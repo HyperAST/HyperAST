@@ -117,7 +117,6 @@ pub(crate) fn show_aspects_views_menu(
         ui.label("serialized Java:");
         let mut rm = None;
         for x in &aspects.ser_opt_cpp {
-            // use ;
             let button = &ui.button(x.to_str());
             if button.clicked() {
                 rm = Some(x.clone());
@@ -125,6 +124,28 @@ pub(crate) fn show_aspects_views_menu(
         }
         if let Some(rm) = rm {
             aspects.ser_opt_cpp.remove(&rm);
+        }
+        ui.label("hidden Cpp:");
+        let mut rm = None;
+        for x in &aspects.hide_opt_java {
+            let button = &ui.button(x.to_str());
+            if button.clicked() {
+                rm = Some(x.clone());
+            }
+        }
+        if let Some(rm) = rm {
+            aspects.hide_opt_java.remove(&rm);
+        }
+        ui.label("hidden Java:");
+        let mut rm = None;
+        for x in &aspects.hide_opt_cpp {
+            let button = &ui.button(x.to_str());
+            if button.clicked() {
+                rm = Some(x.clone());
+            }
+        }
+        if let Some(rm) = rm {
+            aspects.hide_opt_cpp.remove(&rm);
         }
 
         // ui.text_edit_singleline(&mut "github.com/INRIA/spoon");
@@ -255,6 +276,19 @@ pub(crate) fn show(
                                         k.downcast_ref::<hyper_ast_gen_ts_java::types::Type>()
                                     {
                                         aspects.ser_opt_java.insert(k.to_owned());
+                                    }
+                                }
+                                super::tree_view::Action::HideKind(k) => {
+                                    use hyper_ast::types::HyperType;
+                                    let k = &k.as_any();
+                                    if let Some(k) =
+                                        k.downcast_ref::<hyper_ast_gen_ts_cpp::types::Type>()
+                                    {
+                                        aspects.hide_opt_cpp.insert(k.to_owned());
+                                    } else if let Some(k) =
+                                        k.downcast_ref::<hyper_ast_gen_ts_java::types::Type>()
+                                    {
+                                        aspects.hide_opt_java.insert(k.to_owned());
                                     }
                                 }
                                 _ => (),

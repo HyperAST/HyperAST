@@ -380,7 +380,7 @@ impl Space {
                 CR => Space::CariageReturn,
                 x => {
                     log::debug!("{:?}", x);
-                    log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
+                    // log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
                     dbg!(std::str::from_utf8(spaces));
                     // panic!("{:?}", spaces)
                     Space::Space
@@ -754,17 +754,22 @@ where
         let children = b.children();
 
         if kind.is_spaces() {
-            let s = LabelStore::resolve(self.stores, &label.unwrap());
-            let b: String = Space::format_indentation(s.as_bytes())
-                .iter()
-                .map(|x| x.to_string())
-                .collect();
-            out.write_str(&b).unwrap();
-            return Ok(if b.contains("\n") {
-                b
+            let indent = if let Some(label) = label {
+                let s = LabelStore::resolve(self.stores, label);
+                let b: String = Space::format_indentation(s.as_bytes())
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect();
+                out.write_str(&b).unwrap();
+                if b.contains("\n") {
+                    b
+                } else {
+                    parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
+                }
             } else {
                 parent_indent[parent_indent.rfind('\n').unwrap_or(0)..].to_owned()
-            });
+            };
+            return Ok(indent);
         }
 
         match (label, children) {

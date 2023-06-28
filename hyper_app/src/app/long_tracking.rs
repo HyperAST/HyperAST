@@ -2260,6 +2260,18 @@ fn show_tree_view(
 
                         None
                     }
+                    tree_view::Action::HideKind(k) => {
+                        let k = &k.as_any();
+                        if let Some(k) = k.downcast_ref::<hyper_ast_gen_ts_cpp::types::Type>() {
+                            aspects.hide_opt_cpp.insert(k.to_owned());
+                        } else if let Some(k) =
+                            k.downcast_ref::<hyper_ast_gen_ts_java::types::Type>()
+                        {
+                            aspects.hide_opt_java.insert(k.to_owned());
+                        }
+
+                        None
+                    }
                     _ => None,
                 }
             } else {
