@@ -5,7 +5,12 @@
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result<()> {
     // Log to stdout (if you run with `RUST_LOG=debug`).
-    let api_addr = std::env::args().collect::<Vec<_>>().get(0).map_or("0.0.0.0:8080", |x| x).to_string();
+    let api_addr = std::env::args()
+        .collect::<Vec<_>>()
+        .get(0)
+        .and_then(|x| x.is_empty().then(|| x))
+        .map_or("0.0.0.0:8080", |x| x)
+        .to_string();
     use egui_addon::Lang;
     tracing_subscriber::fmt::init();
 
@@ -31,6 +36,13 @@ fn main() -> eframe::Result<()> {
 fn main() {
     use egui_addon::Lang;
     use wasm_bindgen::prelude::*;
+    let api_addr = std::env::args()
+        .collect::<Vec<_>>()
+        .get(0)
+        .and_then(|x| x.is_empty().then(|| x))
+        .map_or("0.0.0.0:8080", |x| x)
+        .to_string();
+
     // Make sure panics are logged using `console.error`.
     console_error_panic_hook::set_once();
     wasm_logger::init(wasm_logger::Config::default());
@@ -64,7 +76,7 @@ fn main() {
         eframe::start_web(
             "the_canvas_id", // hardcode it
             web_options,
-            Box::new(move |cc| Box::new(hyper_app::HyperApp::new(cc, languages))),
+            Box::new(move |cc| Box::new(hyper_app::HyperApp::new(cc, languages, api_addr))),
         )
         .await
         .expect("failed to start eframe");
