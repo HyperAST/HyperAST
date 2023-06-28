@@ -1456,7 +1456,7 @@ impl<'a> FetchedViewImpl<'a> {
         }
         let hightlights: Vec<_> = self
             .hightlights
-            .drain_filter(|handle| {
+            .extract_if(|handle| {
                 !handle.path.is_empty() && handle.path[0] == i
                 // if x.is_empty() {
                 //     None

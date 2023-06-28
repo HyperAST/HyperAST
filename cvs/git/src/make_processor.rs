@@ -354,7 +354,7 @@ impl From<(&mut MakeModuleAcc, &ObjectName)> for MakeModuleHelper {
     fn from((parent_acc, name): (&mut MakeModuleAcc, &ObjectName)) -> Self {
         let process = |mut v: &mut Option<Vec<PathBuf>>| {
             let mut v = drain_filter_strip(&mut v, name.as_bytes());
-            let c = v.drain_filter(|x| x.components().next().is_none()).count();
+            let c = v.extract_if(|x| x.components().next().is_none()).count();
             (c > 0, v)
         };
         Self {
@@ -382,7 +382,7 @@ fn drain_filter_strip(v: &mut Option<Vec<PathBuf>>, name: &[u8]) -> Vec<PathBuf>
     let name = std::str::from_utf8(&name).unwrap();
     if let Some(sub_modules) = v {
         sub_modules
-            .drain_filter(|x| x.starts_with(name))
+            .extract_if(|x| x.starts_with(name))
             .for_each(|x| {
                 let x = x.strip_prefix(name).unwrap().to_owned();
                 new_sub_modules.push(x);

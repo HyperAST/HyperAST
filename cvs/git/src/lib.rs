@@ -1,5 +1,5 @@
 #![feature(test)]
-#![feature(drain_filter)]
+#![feature(extract_if)]
 #![feature(trait_upcasting)]
 pub mod allrefs;
 pub mod cpp;
