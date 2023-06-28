@@ -1,6 +1,5 @@
+use super::{estimate::Estimate, max::Max, mean::Mean, min::Min, quantile::Quantile, stats::Stats};
 use rhai::Dynamic;
-
-use super::{estimate::Estimate, max::Max, mean::Mean, min::Min, quantile::Quantile};
 
 pub(crate) trait Finalize {
     type Output;
@@ -55,6 +54,11 @@ fn finalize_map(mut map: rhai::Map) -> Dynamic {
                 Err(e) => *v = e.into(),
                 Ok(i) => *v = rhai::Dynamic::from_int(i),
             };
+        } else if v.is::<Stats>() {
+            let x: Stats = v.clone_cast();
+            let x = x.finalize().finalize();
+            dbg!(&x);
+            *v = x;
         } else if v.is::<rhai::Map>() {
             let x = std::mem::replace(v, 0.into());
             let mut x = finalize_map(x.cast::<rhai::Map>());

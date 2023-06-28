@@ -83,14 +83,3 @@ impl Estimate for Quantile {
         Err("Quartile greater than 1.0, quartile must be between 0.0 and 1.0".into())
     }
 }
-
-// impl<'de> serde::Serialize for Quartile {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: serde::Serializer,
-//     {
-//         let x = self.estimate();
-//         // serializer.serialize_i64(x)
-
-//     }
-// }

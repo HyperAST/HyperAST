@@ -5,6 +5,7 @@ mod mean;
 mod min;
 mod quantile;
 mod refs;
+mod stats;
 
 use crate::{scripting::max::Max, SharedState};
 use average::Merge;
@@ -436,7 +437,7 @@ fn simple_aux(
     Ok(r)
 }
 
-use self::{mean::Mean, min::Min, quantile::Quantile};
+use self::{mean::Mean, min::Min, quantile::Quantile, stats::Stats};
 use finalize::Finalize;
 
 fn add_utils(engine: &mut Engine) {
@@ -465,12 +466,19 @@ fn add_utils(engine: &mut Engine) {
         .register_fn("+=", |m: &mut Min, x: i64| m.add_i64(x));
 
     engine
-        .register_type_with_name::<Quantile>("Quartile")
-        .register_fn("Quartile", Quantile::new)
+        .register_type_with_name::<Quantile>("Quantile")
+        .register_fn("Quantile", Quantile::new)
         .register_fn("Median", || Quantile::new(0.5))
         .register_fn("+=", |x: &mut Quantile, y: Quantile| {
             x.merge(&y);
         })
         .register_fn("+=", |m: &mut Quantile, x: i64| m.add_i64(x));
 
+    engine
+        .register_type_with_name::<Stats>("Stats")
+        .register_fn("Stats", Stats::new)
+        .register_fn("+=", |x: &mut Stats, y: Stats| {
+            x.merge(&y);
+        })
+        .register_fn("+=", |m: &mut Stats, x: i64| m.add_i64(x));
 }
