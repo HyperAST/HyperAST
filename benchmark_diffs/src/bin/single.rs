@@ -92,8 +92,7 @@ fn single(repo_name: &str, before: &str, after: &str) {
     let gt_out_format = "JSON";
     // JSON
     let gt_out = other_tools::gumtree::subprocess(
-        &hyperast.node_store,
-        &hyperast.label_store,
+        &hyperast,
         src_tr,
         dst_tr,
         "gumtree",
