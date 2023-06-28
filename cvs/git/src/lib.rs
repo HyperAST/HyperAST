@@ -1,6 +1,8 @@
 #![feature(test)]
 #![feature(extract_if)]
 #![feature(trait_upcasting)]
+#![feature(os_str_bytes)]
+
 pub mod allrefs;
 pub mod cpp;
 pub mod git;
