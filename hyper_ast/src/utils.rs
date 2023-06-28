@@ -83,7 +83,10 @@ pub fn memusage() -> MemoryUsage {
 pub fn memusage() -> MemoryUsage {
     memusage_linux()
 }
-
+#[cfg(all(target_os = "macos", feature = "jemalloc"))]
+pub fn memusage() -> MemoryUsage {
+    memusage_linux()
+}
 #[cfg(all(target_os = "linux", target_env = "gnu", not(feature = "jemalloc")))]
 pub fn memusage_linux() -> MemoryUsage {
     // todo!()
