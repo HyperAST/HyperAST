@@ -3,9 +3,10 @@
 use hyper_ast_cvs_git::preprocessed::PreProcessedRepository;
 use std::{
     env,
+    fs::File,
     io::{BufWriter, Write},
     path::PathBuf,
-    str::FromStr, fs::File,
+    str::FromStr,
 };
 
 use hyper_ast_benchmark_diffs::window_combination::windowed_commits_compare;
@@ -52,12 +53,7 @@ fn main() {
 /// incrementally build each commits and compute diffs
 /// ie. interlace building a commit and computing diff with its child commit
 /// nb. 2 commits need to be build before doing the first diff
-fn inc(
-    mut preprocessed: PreProcessedRepository,
-    before: &str,
-    after: &str,
-    out: Option<PathBuf>,
-) {
+fn inc(mut preprocessed: PreProcessedRepository, before: &str, after: &str, out: Option<PathBuf>) {
     let batch_id = format!("{}:({},{})", &preprocessed.name, before, after);
     dbg!(batch_id);
     // let mu = memusage_linux();
@@ -77,8 +73,8 @@ fn inc(
     // let c_len = processing_ordered_commits.len();
 
     let mut buf = out
-    .map(|out| File::create(out).unwrap())
-    .map(|file| BufWriter::with_capacity(4 * 8 * 1024, file));
+        .map(|out| File::create(out).unwrap())
+        .map(|file| BufWriter::with_capacity(4 * 8 * 1024, file));
     if let Some(buf) = &mut buf {
         writeln!(
             buf,
@@ -102,7 +98,7 @@ fn inc(
         );
         let oid_src = processing_ordered_commits[1];
         let oid_dst = processing_ordered_commits[0];
-        assert_eq!(curr,oid_dst.to_string());
+        assert_eq!(curr, oid_dst.to_string());
         log::warn!("diff of {oid_src} and {oid_dst}");
 
         let stores = &preprocessed.processor.main_stores;
@@ -140,7 +136,7 @@ fn inc(
                 time_dst,
                 summarized_lazy.mappings,
                 total_lazy_t,
-                summarized_lazy.actions.map_or(-1,|x|x as isize),
+                summarized_lazy.actions.map_or(-1, |x| x as isize),
             )
             .unwrap();
             buf.flush().unwrap();
