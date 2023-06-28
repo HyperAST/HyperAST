@@ -10,7 +10,7 @@ use git2::{Oid, Repository};
 use hyper_ast::{
     store::{defaults::LabelIdentifier, nodes::DefaultNodeIdentifier as NodeIdentifier},
     types::{AnyType, IterableChildren, LabelStore as _, WithChildren},
-    utils::memusage_linux,
+    utils::memusage,
 };
 use hyper_ast_gen_ts_java::impact::partial_analysis::PartialAnalysis;
 use log::info;
@@ -576,7 +576,7 @@ impl CommitBuilder {
 
         info!("handle commit: {}", commit_oid);
 
-        let memory_used = memusage_linux();
+        let memory_used = memusage();
         let time = Instant::now();
         Self {
             commit_oid,
@@ -597,7 +597,7 @@ impl CommitBuilder {
 
     pub(crate) fn finish(self, ast_root: NodeIdentifier) -> Commit {
         let processing_time = self.time.elapsed().as_nanos();
-        let memory_used = memusage_linux() - self.memory_used;
+        let memory_used = memusage() - self.memory_used;
         let memory_used = memory_used.into();
         let tree_oid = self.tree_oid;
         let parents = self.parents;

@@ -11,7 +11,7 @@ use hyper_ast::{
     store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores},
     tree_gen::ZippedTreeGen,
     types::{NodeId, WithChildren},
-    utils::memusage_linux,
+    utils::memusage,
 };
 use pretty_assertions::assert_eq;
 
@@ -398,9 +398,9 @@ public class A {
     println!("{:?}", java_tree_gen.stores.node_store);
     println!("{}", java_tree_gen.stores.label_store);
 
-    let mu = memusage_linux();
+    let mu = memusage();
     drop(java_tree_gen);
-    let mu = mu - memusage_linux();
+    let mu = mu - memusage();
     println!("mu {}", mu);
 }
 

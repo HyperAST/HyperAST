@@ -7,7 +7,7 @@ use crate::{git::fetch_github_repository, preprocessed::PreProcessedRepository};
 use hyper_ast_gen_ts_java::impact::element::RefsEnum;
 use std::env;
 
-use hyper_ast::utils::memusage_linux;
+use hyper_ast::utils::memusage;
 use hyper_ast_gen_ts_java::impact::{
     element::{IdentifierFormat, LabelPtr},
     partial_analysis::PartialAnalysis,
@@ -85,12 +85,12 @@ pub fn find_refs_from_canonical_type(
         // preprocessed.print_matched_references(&mut ana, i, root);
     }
 
-    let mu = memusage_linux();
+    let mu = memusage();
     // drop(java_tree_gen);
     // drop(full_nodes);
     // drop(commits);
     drop(preprocessed);
-    let mu = mu - memusage_linux();
+    let mu = mu - memusage();
     println!("memory used {}", mu);
 }
 
