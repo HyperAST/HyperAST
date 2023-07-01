@@ -258,8 +258,9 @@ impl PrefillCache {
             + self.next.as_ref().map_or(0.0, |x| x.height())
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) enum Action {
+    #[default]
     Keep,
     SerializeKind(AnyType),
     HideKind(AnyType),
@@ -849,19 +850,20 @@ impl<'a> FetchedViewImpl<'a> {
         // ui.label(format!("{:?}", show.body_response.map(|x| x.rect)));
         self.prefill_cache = Some(prefill);
 
-        let interact = show.header_returned.interact(egui::Sense::click());
+        let interact = show.header_returned.interact(egui::Sense::click_and_drag());
 
-        if interact.clicked() {
+        if interact.drag_released() {
+            node_menu(ui, interact, kind)
+                .or(show.body_returned)
+                .unwrap_or_default()
+        } else if interact.clicked() {
             Action::Clicked(self.path.to_vec())
         } else if let Some((&[], _)) = self.focus {
             Action::Focused(min.y)
         } else {
-            let act = node_menu(ui, interact, kind);
-            if let Some(act) = act {
-                act
-            } else {
-                show.body_returned.unwrap_or(Action::Keep)
-            }
+            node_menu(ui, interact, kind)
+                .or(show.body_returned)
+                .unwrap_or_default()
         }
     }
 
@@ -966,9 +968,9 @@ impl<'a> FetchedViewImpl<'a> {
                 // ui.label(format!("{}: {}", kind, label));
                 // wasm_rs_dbg::dbg!();
                 ui.monospace(format!("waiting: {}", nid))
-                    // .context_menu(|ui| {
-                    //     ui.label(format!("{:?}", self.path));
-                    // })
+                // .context_menu(|ui| {
+                //     ui.label(format!("{:?}", self.path));
+                // })
             })
             .body(|ui| {
                 // wasm_rs_dbg::dbg!();
@@ -1122,16 +1124,13 @@ impl<'a> FetchedViewImpl<'a> {
                 //     ui.label(format!("{:?}", self.path));
                 // })
                 ;
-                let interact = monospace.interact(egui::Sense::click());
-                action = if interact.clicked() {
+                let interact = monospace.interact(egui::Sense::click_and_drag());
+                action = if interact.drag_released() {
+                    node_menu(ui, interact, kind).unwrap_or_default()
+                } else if interact.clicked() {
                     Action::Clicked(self.path.to_vec())
                 } else {
-                    let act = node_menu(ui, interact, kind);
-                    if let Some(act) = act {
-                        act
-                    } else {
-                        Action::Keep
-                    }
+                    node_menu(ui, interact, kind).unwrap_or_default()
                 };
                 let rect1 = monospace.rect;
                 let rect2 = ui.label(format!("{}", label)).rect;
@@ -1159,7 +1158,7 @@ impl<'a> FetchedViewImpl<'a> {
                             }
                         }
                     }
-                    ui.label(rt)
+                    ui.label(rt).interact(egui::Sense::click_and_drag())
                 }
                 // .context_menu(|ui| {
                 //     ui.label(format!("{:?}", self.path));
@@ -1167,43 +1166,23 @@ impl<'a> FetchedViewImpl<'a> {
                 ;
                 let rect1 = monospace.rect;
                 let indent = ui.indent(id, |ui| {
-                    ui.label(format!("{}", label)).interact(egui::Sense::click())
+                    ui.label(format!("{}", label))
+                        .interact(egui::Sense::click())
                     // .context_menu(|ui| {
                     //     ui.label(format!("{:?}", self.path));
                     // })
                 });
-                let interaction = (
-                    monospace.interact(egui::Sense::click()),
-                    indent.inner.interact(egui::Sense::click()),
-                );
-                if interaction.0.clicked() || interaction.1.clicked() {
-                    action = Action::Clicked(self.path.to_vec());
+                // let interaction = (
+                //     monospace.interact(egui::Sense::click()),
+                //     indent.inner.interact(egui::Sense::click()),
+                // );
+                action = if monospace.drag_released() {
+                    node_menu(ui, monospace, kind).unwrap_or_default()
+                } else if monospace.clicked() {
+                    Action::Clicked(self.path.to_vec())
                 } else {
-                    let mut act = None;
-                    interaction.0.context_menu(|ui: &mut egui::Ui| {
-                        if ui.button("serialize kind").clicked() {
-                            act = Some(Action::SerializeKind(kind));
-                            ui.close_menu();
-                        } else if ui.button("hide kind").clicked() {
-                            act = Some(Action::HideKind(kind));
-                            ui.close_menu();
-                        }
-                    });
-                    interaction.1.context_menu(|ui: &mut egui::Ui| {
-                        if ui.button("serialize kind").clicked() {
-                            act = Some(Action::SerializeKind(kind));
-                            ui.close_menu();
-                        } else if ui.button("hide kind").clicked() {
-                            act = Some(Action::HideKind(kind));
-                            ui.close_menu();
-                        }
-                    });
-                    action = if let Some(act) = act {
-                        act
-                    } else {
-                        Action::Keep
-                    };
-                }
+                    node_menu(ui, monospace, kind).unwrap_or_default()
+                };
 
                 let rect2 = indent.response.rect;
                 rect1.union(rect2)
@@ -1232,16 +1211,14 @@ impl<'a> FetchedViewImpl<'a> {
                             }
                         }
                     }
-                    let interact = ui.add(egui::Label::new(rt).sense(egui::Sense::click()));
-                    if interact.clicked() {
+                    let interact =
+                        ui.add(egui::Label::new(rt).sense(egui::Sense::click_and_drag()));
+                    if interact.drag_released() {
+                        node_menu(ui, interact, kind).unwrap_or_default()
+                    } else if interact.clicked() {
                         Action::Clicked(self.path.to_vec())
                     } else {
-                        let act = node_menu(ui, interact, kind);
-                        if let Some(act) = act {
-                            act
-                        } else {
-                            Action::Keep
-                        }
+                        node_menu(ui, interact, kind).unwrap_or_default()
                     }
                 };
                 ui.label(format!("{}", label));
@@ -1342,7 +1319,7 @@ impl<'a> FetchedViewImpl<'a> {
             let add = self.additions.unwrap_or_default();
             let del = self.deletions.unwrap_or_default();
             if add.is_empty() && del.is_empty() {
-                ui.painter().debug_rect(rect, egui::Color32::GRAY, "");
+                // ui.painter().debug_rect(rect, egui::Color32::GRAY, "");
             } else if !add.is_empty() {
                 if !del.is_empty() {
                     ui.painter().debug_rect(rect, egui::Color32::BLUE, "");
@@ -1405,26 +1382,12 @@ impl<'a> FetchedViewImpl<'a> {
             }
         } else {
             resp = Some(ui.monospace(format!("{}", kind)));
-        }
-        let action;
-        let mut act = None;
-        if let Some(resp) = resp {
-            let menu_content = |ui: &mut egui::Ui| {
-                if ui.button("serialize kind").clicked() {
-                    act = Some(Action::SerializeKind(kind));
-                    ui.close_menu();
-                } else if ui.button("hide kind").clicked() {
-                    act = Some(Action::HideKind(kind));
-                    ui.close_menu();
-                }
-            };
-            resp.context_menu(menu_content);
-        }
-        action = if let Some(act) = act {
-            act
-        } else {
-            Action::Keep
         };
+        let action = resp
+            .and_then(|interact| {
+                node_menu(ui, interact.interact(egui::Sense::click_and_drag()), kind)
+            })
+            .unwrap_or_default();
         // let h = ui.monospace(format!("{}", kind));
 
         let mut prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
@@ -1836,24 +1799,18 @@ impl<'a> FetchedViewImpl<'a> {
 fn node_menu(ui: &mut egui::Ui, interact: egui::Response, kind: AnyType) -> Option<Action> {
     let mut act = None;
     let popup_id = interact.id.with("popup");
-    if interact.secondary_clicked() {
+    if interact.secondary_clicked() || interact.double_clicked() || interact.drag_released() {
         ui.memory_mut(|mem| mem.open_popup(popup_id));
     }
     egui::popup_below_widget(ui, popup_id, &interact, |ui| {
         if ui.button("hide kind").clicked() {
             act = Some(Action::HideKind(kind));
-            if interact.secondary_clicked() {
-                ui.memory_mut(|mem| mem.close_popup());
-            }
+            ui.memory_mut(|mem| mem.close_popup());
         } else if ui.button("serialize kind").clicked() {
             act = Some(Action::SerializeKind(kind));
-            if interact.secondary_clicked() {
-                ui.memory_mut(|mem| mem.close_popup());
-            }
+            ui.memory_mut(|mem| mem.close_popup());
         } else if ui.button("close menu").clicked() {
-            if interact.secondary_clicked() {
-                ui.memory_mut(|mem| mem.close_popup());
-            }
+            ui.memory_mut(|mem| mem.close_popup());
             // ui.close_menu();
         }
     });
