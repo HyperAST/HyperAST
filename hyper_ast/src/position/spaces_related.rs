@@ -36,7 +36,6 @@ where
     HAST: HyperAST<'store>,
     HAST::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
 {
-    let mut offset = 0;
     let mut x = root;
     let mut path_ids = vec![];
     let mut with_spaces = vec![];
@@ -66,7 +65,6 @@ where
                         o = o - one();
                     }
                     with_s_idx = with_s_idx + one();
-                    offset += b.try_bytes_len().unwrap().to_usize().unwrap();
                 }
             } else {
                 with_s_idx = o;
@@ -102,13 +100,6 @@ where
         let l = stores.label_store().resolve(b.get_label_unchecked());
         path.push(l);
     }
-
-    let len = if !t.is_directory() {
-        b.try_bytes_len().unwrap().to_usize().unwrap()
-    } else {
-        0
-    };
-    let path = PathBuf::from_iter(path.iter());
     path_ids.reverse();
     (with_spaces,)
 }

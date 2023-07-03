@@ -1,27 +1,16 @@
 use super::super::{TreePathMut, TypedTreePath};
 use super::{
-    ExploreStructuralPositions, Position, PrimInt, Scout, SpHandle, StructuralPosition,
-    StructuralPositionStore, TreePath,
+    Position, PrimInt, Scout, SpHandle, StructuralPosition, StructuralPositionStore, TreePath,
 };
-use core::fmt;
-use std::{
-    fmt::{Debug, Display},
-    marker::PhantomData,
-};
+use std::{fmt::Debug, marker::PhantomData};
 
-use num::{one, traits::NumAssign, zero, ToPrimitive};
+use num::zero;
 
-use crate::types::{NodeId, NodeStore, Tree, TypeStore, Typed, TypedNodeId, WithChildren};
+use crate::types::{Typed, TypedNodeId, WithChildren, NodeId};
 
 use crate::{
-    store::{
-        defaults::{LabelIdentifier, NodeIdentifier},
-        nodes::HashedNodeRef,
-    },
-    types::{
-        self, AnyType, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled,
-        WithSerialization,
-    },
+    store::defaults::LabelIdentifier,
+    types::{self, HyperAST, WithSerialization},
 };
 
 #[derive(Clone, Debug)]
@@ -239,8 +228,8 @@ where
 
     pub fn make_position<'store, HAST>(
         &self,
-        sp: &StructuralPositionStore<HAST::IdN, Idx>,
-        stores: &'store HAST,
+        _sp: &StructuralPositionStore<HAST::IdN, Idx>,
+        _stores: &'store HAST,
     ) -> Position
     where
         HAST: HyperAST<'store, IdN = TIdN::IdN, Label = LabelIdentifier>,

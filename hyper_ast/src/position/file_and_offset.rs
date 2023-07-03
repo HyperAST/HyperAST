@@ -1,7 +1,7 @@
 use core::fmt;
 use std::{
     fmt::{Debug, Display},
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use super::PrimInt;

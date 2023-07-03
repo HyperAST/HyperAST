@@ -1,10 +1,8 @@
-use std::iter::Peekable;
-
 use num::ToPrimitive;
 
 use crate::{
     store::{
-        defaults::{LabelIdentifier, NodeIdentifier},
+        defaults::{NodeIdentifier},
         nodes::HashedNodeRef,
     },
     types::{

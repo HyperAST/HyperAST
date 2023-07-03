@@ -1,11 +1,9 @@
 //! Gather most of the common behaviors used to compute positions in an HyperAST
 
-use super::{Position, StructuralPosition, TreePath};
-use std::{
-    path::{Path, PathBuf},
-};
-
 use num::ToPrimitive;
+
+use super::{Position, PrimInt, StructuralPosition, TreePath};
+use std::path::PathBuf;
 
 use crate::{
     store::{
@@ -25,29 +23,25 @@ pub fn compute_range<'store, It, HAST>(
     stores: &'store HAST,
 ) -> (usize, usize, HAST::IdN)
 where
-    HAST:
-        HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
+    HAST: HyperAST<'store>,
+    HAST::IdN: Copy,
+    HAST::T: WithSerialization,
     It: Iterator,
-    It::Item: ToPrimitive,
+    It::Item: PrimInt,
 {
     let mut offset = 0;
     let mut x = root;
     for o in offsets {
-        // dbg!(offset);
         let b = stores.node_store().resolve(&x);
-        // dbg!(b.get_type());
-        // dbg!(o.to_usize().unwrap());
         if let Some(cs) = b.children() {
             let cs = cs.clone();
             for y in 0..o.to_usize().unwrap() {
-                let b = stores.node_store().resolve(&cs[y]);
+                let id = &cs[num::cast(y).unwrap()];
+                let b = stores.node_store().resolve(id);
 
                 offset += b.try_bytes_len().unwrap_or(0).to_usize().unwrap();
             }
-            // if o.to_usize().unwrap() >= cs.len() {
-            //     // dbg!("fail");
-            // }
-            if let Some(a) = cs.get(o.to_u16().unwrap()) {
+            if let Some(a) = cs.get(num::cast(o).unwrap()) {
                 x = *a;
             } else {
                 break;
@@ -58,11 +52,8 @@ where
     }
     let b = stores.node_store().resolve(&x);
 
-    (
-        offset,
-        offset + b.try_bytes_len().unwrap_or(0).to_usize().unwrap(),
-        x,
-    )
+    let len = b.try_bytes_len().unwrap_or(0).to_usize().unwrap();
+    (offset, offset + len, x)
 }
 
 pub fn compute_position<'store, HAST, It>(

@@ -1,25 +1,14 @@
-use super::super::{TreePathMut, TypedTreePath};
-use super::{
-    ExploreStructuralPositions, Position, PrimInt, StructuralPosition, StructuralPositionStore,
-    TreePath,
-};
-use core::fmt;
-use std::{
-    fmt::{Debug, Display},
-    marker::PhantomData,
-    path::{Path, PathBuf},
-};
+use super::super::TreePathMut;
+use super::{Position, PrimInt, StructuralPosition, StructuralPositionStore, TreePath};
+use std::fmt::Debug;
 
-use num::{one, traits::NumAssign, zero, ToPrimitive};
+use num::{one, traits::NumAssign, zero};
 
 use crate::{
-    store::{
-        defaults::{LabelIdentifier, NodeIdentifier},
-        nodes::HashedNodeRef,
-    },
+    store::defaults::LabelIdentifier,
     types::{
         self, AnyType, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled,
-        NodeId, NodeStore, Tree, TypeStore, Typed, TypedNodeId, WithChildren, WithSerialization,
+        NodeId, NodeStore, TypeStore, Typed, WithChildren, WithSerialization,
     },
 };
 

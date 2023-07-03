@@ -146,7 +146,7 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
 
     pub fn check<'store, HAST>(&self, stores: &'store HAST) -> Result<(), String>
     where
-        HAST: HyperAST<'store, IdN = IdN::IdN, Label = LabelIdentifier>,
+        HAST: HyperAST<'store, IdN = IdN::IdN>,
         HAST::T: WithChildren,
         <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
         IdN: Copy + Eq + Debug + NodeId,

@@ -43,7 +43,7 @@ pub fn find_refs<'a>(
     let i = scoped!(package_ref, "SpoonAPI");
     let i = scoped_type!(package_ref, "SpoonAPI");
     let i = scoped_type!(scoped!(scoped!(root, "java"), "lang"), "Object");
-    let mut sp_store = StructuralPositionStore::from(StructuralPosition::new(id));
+    let mut sp_store = StructuralPositionStore::new(id);
     let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let x = sp_store.type_scout(&mut x, unsafe {
         hyper_ast_gen_ts_java::types::TIdN::from_ref_id(&id)

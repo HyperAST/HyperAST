@@ -2426,7 +2426,7 @@ where
                     } else {
                         self.refs.push(r);
                     }
-                    let it = ExploreStructuralPositions::from((&*self.sp_store, r));
+                    let it = self.sp_store.get(r);
                     // TODO log::debug!("really found {:?}", it.make_position(self.stores));
                 }
                 let mut s = scout.clone();
@@ -2459,7 +2459,7 @@ where
         } else {
             self.refs.push(r);
         }
-        let it = ExploreStructuralPositions::from((&*self.sp_store, r));
+        let it = self.sp_store.get(r);
         // TODO log::debug!("really found {:?}", it.make_position(&self.stores));
     }
 
