@@ -30,11 +30,13 @@ impl<F: std::ops::Deref, T: PrimInt> Position<F, T> {
         self.file.deref()
     }
 }
+
 impl<T: PrimInt> Position<PathBuf, T> {
     pub fn inc_path(&mut self, s: &str) {
         self.file.push(s);
     }
 }
+
 impl<F: Debug, T: PrimInt> Debug for Position<F, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Position")
@@ -44,6 +46,7 @@ impl<F: Debug, T: PrimInt> Debug for Position<F, T> {
             .finish()
     }
 }
+
 impl<T: PrimInt + Display> Display for Position<PathBuf, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

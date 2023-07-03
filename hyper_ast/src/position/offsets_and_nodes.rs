@@ -1,12 +1,13 @@
-use super::{PrimInt, StructuralPosition, TreePath, TreePathMut};
+use super::{PrimInt, TreePath, TreePathMut};
 
 use crate::types::{HyperAST, NodeId, NodeStore, Tree, WithChildren};
 
 #[derive(Clone, Debug)]
-pub struct Position<IdN, Idx> {
+pub struct StructuralPosition<IdN, Idx> {
     pub(super) nodes: Vec<IdN>,
     pub(super) offsets: Vec<Idx>,
 }
+
 impl<IdN: Copy, Idx: PrimInt> TreePath<IdN, Idx> for StructuralPosition<IdN, Idx> {
     fn node(&self) -> Option<&IdN> {
         self.nodes.last()
@@ -71,5 +72,40 @@ impl<IdN: Copy, Idx: PrimInt> TreePathMut<IdN, Idx> for StructuralPosition<IdN, 
             assert!(*offsets > one());
             *offsets -= one();
         }
+    }
+}
+
+
+impl<IdN, Idx: num::Zero> StructuralPosition<IdN, Idx> {
+    pub fn new(node: IdN) -> Self {
+        Self {
+            nodes: vec![node],
+            offsets: vec![num::zero()],
+        }
+    }
+}
+
+impl<IdN, Idx> From<(Vec<IdN>, Vec<Idx>, IdN)> for StructuralPosition<IdN, Idx> {
+    fn from(mut x: (Vec<IdN>, Vec<Idx>, IdN)) -> Self {
+        assert_eq!(x.0.len() + 1, x.1.len());
+        x.0.push(x.2);
+        Self {
+            nodes: x.0,
+            offsets: x.1,
+        }
+    }
+}
+impl<IdN, Idx> From<(Vec<IdN>, Vec<Idx>)> for StructuralPosition<IdN, Idx> {
+    fn from(x: (Vec<IdN>, Vec<Idx>)) -> Self {
+        assert_eq!(x.0.len(), x.1.len());
+        Self {
+            nodes: x.0,
+            offsets: x.1,
+        }
+    }
+}
+impl<IdN, Idx: num::Zero> From<IdN> for StructuralPosition<IdN, Idx> {
+    fn from(node: IdN) -> Self {
+        Self::new(node)
     }
 }

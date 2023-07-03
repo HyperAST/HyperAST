@@ -16,7 +16,7 @@
 //!
 //! ## Incremental position storing
 //! [structural_pos]
-//! 
+//!
 //! ## topological index
 //! [topological_offset]
 //!     - post-order
@@ -71,6 +71,89 @@ pub trait TypedTreePath<TIdN: TypedNodeId, Idx>: TreePath<TIdN::IdN, Idx> {
     fn goto_typed(&mut self, node: TIdN, i: Idx);
 }
 
+pub mod position_accessors {
+    // we want to represent the possible combination which produce a global position in the HyperAST
+    // 1) root + file path + offset + len
+    // 2) root + path (nodes to consider)
+    // 3) root + topological index (nodes to consider)
+    // 4) parents + offsets + node (nodes to consider)
+    //
+    // to test position equality roots must be equal,
+    // a shared combination of attributes is chosen for the final comparison
+
+    use super::*;
+
+    pub trait RootedPositionT<IdN> {
+        fn root(&self) -> IdN;
+    }
+
+    pub trait SolvedPositionT<IdN> {
+        fn node(&self) -> IdN;
+    }
+
+    pub trait PathPositionT<IdN>
+    where
+        Self::Idx: PrimInt,
+    {
+        type Idx;
+    }
+
+    pub trait PostOrderPathPositionT<IdN>: PathPositionT<IdN> {
+        // type Path: Iterator;
+        // fn path(&self) -> Self::Path;
+    }
+
+    pub trait PreOrderPathPositionT<IdN>: PathPositionT<IdN> {
+        // type Path: Iterator;
+        // fn path(&self) -> Self::Path;
+    }
+    pub trait TopoIndexPositionT<IdN>
+    where
+        Self::IdI: PrimInt,
+    {
+        type IdI;
+        fn index(&self) -> Self::IdI;
+    }
+    pub trait FileAndOffsetPostionT<IdN>
+    where
+        Self::IdO: PrimInt,
+    {
+        /// Offset in characters or bytes
+        type IdO;
+        fn file(&self) -> std::path::PathBuf;
+        fn offset(&self) -> Self::IdO;
+        fn len(&self) -> Self::IdO;
+        fn start(&self) -> Self::IdO;
+        fn end(&self) -> Self::IdO;
+    }
+}
+
+
+
+pub struct PositionConverter<'src, SrcPos> {
+    src: &'src SrcPos,
+}
+
+impl<'src, SrcPos> PositionConverter<'src, SrcPos> {
+    pub fn new(src: &'src SrcPos) -> Self {
+        Self { src }
+    }
+    pub fn with_stores<'store, HAST>(
+        self,
+        stores: &'store HAST,
+    ) -> WithHyperAstPositionConverter<'store, 'src, SrcPos, HAST> {
+        WithHyperAstPositionConverter {
+            src: self.src,
+            stores,
+        }
+    }
+}
+
+pub struct WithHyperAstPositionConverter<'store, 'src, SrcPos, HAST> {
+    src: &'src SrcPos,
+    stores: &'store HAST,
+}
+
 mod offsets {
     use super::PrimInt;
 
@@ -81,26 +164,32 @@ mod file_and_offset;
 
 pub type Position = file_and_offset::Position<PathBuf, usize>;
 
-mod bottom_up;
-pub use bottom_up::*;
-
 mod offsets_and_nodes;
 pub use offsets_and_nodes::*;
 
 mod topological_offset;
 pub use topological_offset::*;
 
-mod scouting;
-pub use scouting::*;
+mod spaces_related;
+pub use spaces_related::{
+    compute_position_and_nodes_with_no_spaces, compute_position_with_no_spaces,
+    global_pos_with_spaces, path_with_spaces,
+};
+
+mod computing_offset_bottom_up;
+// pub use computing_offset_bottom_up::{extract_file_postion, extract_position};
+
+mod computing_offset_top_down;
+pub use computing_offset_top_down::{compute_position, compute_position_and_nodes, compute_range};
 
 mod computing_path;
-pub use computing_path::*;
+pub use computing_path::resolve_range;
 
-mod spaces_related;
-pub use spaces_related::*;
+// advanced optimization, uses a dag StructuralPositionStore to share parent paths
 
-pub use structural_pos::*;
 mod structural_pos;
-
-pub use computing_offset::*;
-mod computing_offset;
+pub use structural_pos::{
+    ExploreStructuralPositions, Scout, SpHandle, StructuralPositionStore, TypedScout,
+};
+pub type StructuralPosition<IdN = NodeIdentifier, Idx = u16> =
+    structural_pos::StructuralPosition<IdN, Idx>;

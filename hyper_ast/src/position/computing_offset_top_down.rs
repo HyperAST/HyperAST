@@ -25,10 +25,10 @@ pub fn compute_range<'store, It, HAST>(
     stores: &'store HAST,
 ) -> (usize, usize, HAST::IdN)
 where
-    It::Item: ToPrimitive,
-    It: Iterator,
     HAST:
         HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
+    It: Iterator,
+    It::Item: ToPrimitive,
 {
     let mut offset = 0;
     let mut x = root;
