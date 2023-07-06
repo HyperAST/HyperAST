@@ -29,10 +29,10 @@ jobs:
         cd book
         mdbook build
 
-        # git clone git@github.com:HyperAST/HyperAST.github.io.git 
-        ssh-agent sh -c 'echo "${{ secrets.GH_PAGE_SHA }}" | ssh-add - && git clone git@github.com:HyperAST/HyperAST.github.io.git'
         git config user.name "Deploy book from CI into github page"
         git config user.email ""
+        # git clone git@github.com:HyperAST/HyperAST.github.io.git 
+        ssh-agent sh -c 'echo "${{ secrets.GH_PAGE_SHA }}" | ssh-add - && git clone git@github.com:HyperAST/HyperAST.github.io.git'
         cd HyperAST.github.io
 
         # Delete the ref to avoid keeping history.
