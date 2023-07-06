@@ -15,7 +15,7 @@ jobs:
             curl -H "Accept: application/vnd.github.everest-preview+json" \
             -H "Authorization: token ${{ secrets.DISPATCH_TOKEN }}" \
             --request POST \
-            --data '{"event_type": "updated_book", "client_payload": { "foo": "bar" }}' https://api.github.com/repos/HyperAST.github.io/dispatches
+            --data '{"event_type": "updated_book", "client_payload": { "foo": "bar" }}' https://api.github.com/repos/HyperAST/HyperAST.github.io/dispatches
 #   deploy:
 #     runs-on: ubuntu-latest
 #     permissions:
