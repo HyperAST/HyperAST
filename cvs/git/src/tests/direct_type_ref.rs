@@ -51,7 +51,7 @@ fn run(text: &[u8]) {
         // "InvalidPathException"
     );
     let mut sp_store =
-        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+        StructuralPositionStore::new(a.local.compressed_node);
     let mut x = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let x = sp_store.type_scout(&mut x, unsafe {
         hyper_ast_gen_ts_java::types::TIdN::from_ref_id(&a.local.compressed_node)

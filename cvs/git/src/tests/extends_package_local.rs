@@ -76,8 +76,7 @@ fn run1(text: &[u8]) {
             ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
         }};
     }
-    let mut sp_store =
-        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+    let mut sp_store = StructuralPositionStore::new(a.local.compressed_node);
 
     // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     let root = ana.solver.intern(RefsEnum::Root);
@@ -271,8 +270,7 @@ fn run2(text: &[u8]) {
             ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
         }};
     }
-    let mut sp_store =
-        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+    let mut sp_store = StructuralPositionStore::new(a.local.compressed_node);
 
     // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     let root = ana.solver.intern(RefsEnum::Root);
@@ -493,10 +491,12 @@ fn run3(text: &[u8]) {
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
     match a.local.ana.as_ref() {
         Some(x) => {
-            println!("refs:",);
+            dbg!("refs:",);
             x.print_refs(&java_tree_gen.stores.label_store);
         }
-        None => println!("None"),
+        None => {
+            dbg!("None");
+        }
     };
     let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
     macro_rules! scoped {
@@ -509,8 +509,7 @@ fn run3(text: &[u8]) {
             ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
         }};
     }
-    let mut sp_store =
-        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+    let mut sp_store = StructuralPositionStore::new(a.local.compressed_node);
 
     let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     let root = ana.solver.intern(RefsEnum::Root);
@@ -693,8 +692,7 @@ fn run3_1(text: &[u8]) {
             ana.solver.intern_ref(RefsEnum::ScopedIdentifier(o, i))
         }};
     }
-    let mut sp_store =
-        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+    let mut sp_store = StructuralPositionStore::new(a.local.compressed_node);
 
     // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     let root = ana.solver.intern(RefsEnum::Root);
@@ -843,8 +841,7 @@ fn run6(text: &[u8]) {
             ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
         }};
     }
-    let mut sp_store =
-        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+    let mut sp_store = StructuralPositionStore::new(a.local.compressed_node);
 
     let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     let root = ana.solver.intern(RefsEnum::Root);
@@ -961,8 +958,7 @@ fn run7(text: &[u8]) {
             ana.solver.intern_ref(RefsEnum::ScopedIdentifier(o, i))
         }};
     }
-    let mut sp_store =
-        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+    let mut sp_store = StructuralPositionStore::new(a.local.compressed_node);
 
     // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     let root = ana.solver.intern(RefsEnum::Root);
@@ -1128,8 +1124,7 @@ fn run8(text: &[u8]) {
             ana.solver.intern_ref(RefsEnum::ScopedIdentifier(o, i))
         }};
     }
-    let mut sp_store =
-        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+    let mut sp_store = StructuralPositionStore::new(a.local.compressed_node);
 
     let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     let root = ana.solver.intern(RefsEnum::Root);
@@ -1266,8 +1261,7 @@ fn run10(text: &[u8]) {
             ana.solver.intern(RefsEnum::ScopedIdentifier(o, i))
         }};
     }
-    let mut sp_store =
-        StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+    let mut sp_store = StructuralPositionStore::new(a.local.compressed_node);
 
     let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     let root = ana.solver.intern(RefsEnum::Root);
@@ -1481,7 +1475,7 @@ fn run11(text: &[u8]) {
         }};
     }
     // let sp_store =
-    //     StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+    //     StructuralPositionStore::new(a.local.compressed_node);
 
     // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     let root = ana.solver.intern(RefsEnum::Root);
@@ -1872,7 +1866,7 @@ fn run12(text: &[u8]) {
     //     }};
     // }
     // let mut sp_store =
-    //     StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+    //     StructuralPositionStore::new(a.local.compressed_node);
 
     // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     // let root = ana.solver.intern(RefsEnum::Root);
@@ -1935,7 +1929,7 @@ fn run13(text: &[u8]) {
     //     }};
     // }
     // let mut sp_store =
-    //     StructuralPositionStore::from(StructuralPosition::new(a.local.compressed_node));
+    //     StructuralPositionStore::new(a.local.compressed_node);
 
     // let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     // let root = ana.solver.intern(RefsEnum::Root);

@@ -106,7 +106,7 @@ pub fn find_declaration_references_position(
     root_folder: StructuralPosition,
     other_folders: Vec<StructuralPosition>,
 ) -> Option<(SearchKinds, Vec<Position>)> {
-    let mut structural_positions = StructuralPosition::new(root).into();
+    let mut structural_positions = StructuralPositionStore::new(root);
     let (rk, references) = find_declaration_references(
         stores,
         &mut structural_positions,

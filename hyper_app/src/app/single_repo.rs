@@ -528,7 +528,9 @@ fn show_available_stuff(
         if !names.is_empty() {
             egui::CollapsingHeader::new("Shared Scripts")
                 .default_open(true)
-                .show(ui, |ui| show_shared(ui, api_addr, single, scripting_context, names));
+                .show(ui, |ui| {
+                    show_shared(ui, api_addr, single, scripting_context, names)
+                });
         }
     }
 }
@@ -1138,11 +1140,24 @@ fn show_long_result_table(content: &ComputeResults, ui: &mut egui::Ui) {
         // .column(Column::remainder())
         .columns(
             Column::auto().resizable(true),
-            header.inner.result.as_object().unwrap().len(),
+            header
+                .inner
+                .result
+                .as_object()
+                .unwrap()
+                .iter()
+                .map(|(_, x)| {
+                    if x.is_object() {
+                        x.as_object().unwrap().len()
+                    } else {
+                        1
+                    }
+                })
+                .sum(),
         )
         .column(Column::auto().resizable(true).clip(false))
         .header(20.0, |mut head| {
-            let hf = |ui: &mut egui::Ui, name| {
+            let hf = |ui: &mut egui::Ui, name: &str| {
                 ui.label(
                     egui::RichText::new(name)
                         .size(15.0)
@@ -1152,10 +1167,19 @@ fn show_long_result_table(content: &ComputeResults, ui: &mut egui::Ui) {
             head.col(|ui| {
                 hf(ui, " commit");
             });
-            for (name, _) in header.inner.result.as_object().unwrap().iter() {
-                head.col(|ui| {
-                    hf(ui, name);
-                });
+            for (name, x) in header.inner.result.as_object().unwrap().iter() {
+                if x.is_object() {
+                    for (n, _) in x.as_object().unwrap().iter() {
+                        let name = format!("{}_{}", name, n);
+                        head.col(move |ui| {
+                            hf(ui, &name);
+                        });
+                    }
+                } else {
+                    head.col(|ui| {
+                        hf(ui, name);
+                    });
+                }
             }
             head.col(|ui| {
                 hf(ui, "compute time");
@@ -1176,10 +1200,17 @@ fn show_long_result_table(content: &ComputeResults, ui: &mut egui::Ui) {
                                 ui.label(&cont.commit[..8]);
                             });
                             for (_, v) in cont.inner.result.as_object().unwrap() {
-                                row.col(|ui| {
-                                    // ui.button(v.to_string());
-                                    ui.label(v.to_string());
-                                });
+                                if v.is_object() {
+                                    for (_, v) in v.as_object().unwrap().iter() {
+                                        row.col(|ui| {
+                                            ui.label(v.to_string());
+                                        });
+                                    }
+                                } else {
+                                    row.col(|ui| {
+                                        ui.label(v.to_string());
+                                    });
+                                }
                             }
                             row.col(|ui| {
                                 ui.label(format!("{:.3}", SecFmt(cont.inner.compute_time)));
@@ -1232,31 +1263,6 @@ impl std::fmt::Display for SecFmt {
             let n = if f.alternate() { "seconds" } else { "s" };
             (x, n)
         };
-        fn round_to_significant_digits3(number: f64, significant_digits: usize) -> String {
-            if number == 0.0 {
-                return format!("{:.*}", significant_digits, number);
-            }
-            let abs = number.abs();
-            let d = if abs == 1.0 {
-                1.0
-            } else {
-                (abs.log10().ceil()).max(0.0)
-            };
-            let power = significant_digits - d as usize;
-
-            let magnitude = 10.0_f64.powi(power as i32);
-            let shifted = number * magnitude;
-            let rounded_number = shifted.round();
-            let unshifted = rounded_number as f64 / magnitude;
-            dbg!(
-                number,
-                (number.abs() + 0.000001).log10().ceil(),
-                significant_digits,
-                power,
-                d
-            );
-            format!("{:.*}", power, unshifted)
-        }
         if t == 0.0 {
             write!(f, "{:.1} {}", t, n)
         } else if let Some(prec) = f.precision() {
@@ -1265,6 +1271,31 @@ impl std::fmt::Display for SecFmt {
             write!(f, "{} {}", t, n)
         }
     }
+}
+pub fn round_to_significant_digits3(number: f64, significant_digits: usize) -> String {
+    if number == 0.0 {
+        return format!("{:.*}", significant_digits, number);
+    }
+    let abs = number.abs();
+    let d = if abs == 1.0 {
+        1.0
+    } else {
+        (abs.log10().ceil()).max(0.0)
+    };
+    let power = significant_digits - d as usize;
+
+    let magnitude = 10.0_f64.powi(power as i32);
+    let shifted = number * magnitude;
+    let rounded_number = shifted.round();
+    let unshifted = rounded_number as f64 / magnitude;
+    dbg!(
+        number,
+        (number.abs() + 0.000001).log10().ceil(),
+        significant_digits,
+        power,
+        d
+    );
+    format!("{:.*}", power, unshifted)
 }
 
 #[test]
