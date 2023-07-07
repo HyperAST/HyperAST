@@ -138,29 +138,11 @@ impl From<&str> for CodeEditor {
     }
 }
 
-// impl super::Demo for CodeEditor {
-//     fn name(&self) -> &'static str {
-//         "🖮 Code Editor"
-//     }
-
-//     fn show(&mut self, ctx: &egui::Context, open: &mut bool) {
-//         use super::View as _;
-//         egui::Window::new(self.name())
-//             .open(open)
-//             .default_height(500.0)
-//             .show(ctx, |ui| self.ui(ui));
-//     }
-// }
-
 impl CodeEditor {
     pub(crate) fn title(&mut self, _title: &str) -> &mut Self {
-        // self.
         self
     }
-    // pub(crate) fn set_info(&mut self, info: EditorInfo<String>) -> &mut Self {
-    //     self.info = info;
-    //     self
-    // }
+
     pub fn code(&self) -> &str {
         self.code.as_str()
     }
@@ -169,61 +151,15 @@ impl CodeEditor {
             code, lang, info, ..
         } = self;
 
-        // ui.horizontal(|ui| {
-        //     ui.set_height(0.0);
-        //     ui.label("init:");
-        // });
-
-        // if cfg!(feature = "syntect") {
-        //     ui.horizontal(|ui| {
-        //         ui.label("Language:");
-        //         if ui.text_edit_singleline(language).changed() {
-        //             todo!()
-        //         }
-        //     });
-        //     ui.horizontal_wrapped(|ui| {
-        //         ui.spacing_mut().item_spacing.x = 0.0;
-        //         ui.label("Syntax highlighting powered by ");
-        //         ui.hyperlink_to("syntect", "https://github.com/trishume/syntect");
-        //         ui.label(".");
-        //     });
-        // } else {
-        //     ui.horizontal_wrapped(|ui| {
-        //         ui.spacing_mut().item_spacing.x = 0.0;
-        //         ui.label("Compile the demo with the ");
-        //         ui.code("syntax_highlighting");
-        //         ui.label(" feature to enable more accurate syntax highlighting using ");
-        //         ui.hyperlink_to("syntect", "https://github.com/trishume/syntect");
-        //         ui.label(".");
-        //     });
-        // }
-
         let theme = crate::syntax_highlighting::simple::CodeTheme::from_memory(ui.ctx());
-        // ui.collapsing("Theme", |ui| {
-        //     ui.group(|ui| {
-        //         theme.ui(ui);
-        //         theme.clone().store_in_memory(ui.ctx());
-        //     });
-        // });
 
         let id = ui.make_persistent_id(&info.title);
         let mut col =
             egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true);
-        // col.show_header(ui, |ui| {
-        //     ui.label(egui::RichText::new(&info.title).heading());
-        //     ui.label(egui::RichText::new(&info.short).italics())
-        //         .on_hover_ui(|ui| {
-        //             easy_mark(ui, &info.long);
-        //         });
-        //     // ui.toggle_value(&mut self.selected, "Filter");
-        //     // ui.radio_value(&mut self.radio_value, false, "");
-        //     // ui.radio_value(&mut self.radio_value, true, "");
-        // })
 
         let title = egui::RichText::new(&info.title).heading();
         let header_res = ui.horizontal(|ui| {
             col.show_toggle_button(ui, checkbox_heading(title));
-            // ui.label("Header");
             ui.add_space(100.);
             ui.label(egui::RichText::new(&info.short).italics())
                 .on_hover_ui(|ui| {
@@ -231,7 +167,6 @@ impl CodeEditor {
                 });
         });
         col.show_body_indented(&header_res.response, ui, |ui| {
-            // .body(|ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 if TREE_SITTER {
                     let layouter = |ui: &egui::Ui, code: &EditAwareString, wrap_width: f32| {
@@ -246,15 +181,6 @@ impl CodeEditor {
                         layout_job.wrap.max_width = wrap_width;
                         ui.fonts(|f| f.layout_job(layout_job))
                     };
-
-                    // let out = generic_text_edit::TextEdit::multiline(code)
-                    //     .font(egui::TextStyle::Monospace) // for cursor height
-                    //     .code_editor()
-                    //     .desired_rows(5)
-                    //     .lock_focus(true)
-                    //     .desired_width(f32::INFINITY)
-                    //     .layouter(&mut layouter)
-                    //     .show(ui);
                 } else {
                     let language = "rs";
                     let theme =
@@ -267,7 +193,6 @@ impl CodeEditor {
                             string,
                             language,
                         );
-                        // layout_job.wrap.max_width = wrap_width; // no wrapping
                         ui.fonts(|f| f.layout_job(layout_job))
                     };
 
@@ -314,12 +239,6 @@ fn checkbox_heading(
         desired_size = desired_size.at_least(epaint::Vec2::splat(spacing.interact_size.y));
         desired_size.y = desired_size.y.max(icon_width);
         let rect = response.rect;
-        // let (rect, mut response) = ui.allocate_exact_size(desired_size, Sense::click());
-
-        if response.clicked() {
-            // *checked = !*checked;
-            // response.mark_changed();
-        }
 
         let checked = openness > 0.8;
         let checked = &checked;
@@ -333,7 +252,6 @@ fn checkbox_heading(
         });
 
         if ui.is_rect_visible(rect) {
-            // let visuals = ui.style().interact_selectable(&response, *checked); // too colorful
             let visuals = ui.style().interact(&response);
             let (small_icon_rect, big_icon_rect) = ui.spacing().icon_rectangles(rect);
             ui.painter().add(epaint::RectShape {
@@ -344,7 +262,6 @@ fn checkbox_heading(
             });
 
             if *checked {
-                // Check mark:
                 ui.painter().add(egui::Shape::line(
                     vec![
                         epaint::pos2(small_icon_rect.left(), small_icon_rect.center().y),
@@ -362,11 +279,5 @@ fn checkbox_heading(
                 text.paint_with_visuals(ui.painter(), text_pos, visuals);
             }
         }
-
-        // ui.checkbox(&mut false, title);
-        // let stroke = ui.style().interact(&response).fg_stroke;
-        // let radius = egui::lerp(2.0..=3.0, openness);
-        // ui.painter()
-        //     .circle_filled(response.rect.center(), radius, stroke.color)
     }
 }
