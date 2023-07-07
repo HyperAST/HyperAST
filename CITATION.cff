@@ -5,7 +5,7 @@ preferred-citation:
   url: "https://hal.inria.fr/hal-03764541v1/document"
   year: "2022"
   type: conference-paper
-  booktitle: "ASE 2022 - 37th IEEE/ACM International Conference on Automated Software Engineering"
+  collection-title: "ASE 2022 - 37th IEEE/ACM International Conference on Automated Software Engineering"
   authors:
     - family-names: Le Dilavrec
       given-names: Quentin
