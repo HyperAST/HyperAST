@@ -92,12 +92,7 @@ impl AsText for EditAwareString {
     }
 }
 
-impl EditAwareString {
-    fn id() {}
-}
-
 impl TextBuffer for EditAwareString {
-    // type Ref<'a> = &'a EditAwareString;
     type Ref = EditAwareString;
 
     fn is_mutable(&self) -> bool {

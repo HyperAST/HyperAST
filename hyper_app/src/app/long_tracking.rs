@@ -1617,7 +1617,7 @@ fn show_detached_element(
     let area = egui::Area::new(id)
         .default_pos(default_pos)
         .show(ui.ctx(), |ui| {
-            let past_resp;
+            let past_resp; 
             let fut_resp;
             let past = ui.painter().add(egui::Shape::Noop);
             let futur = ui.painter().add(egui::Shape::Noop);

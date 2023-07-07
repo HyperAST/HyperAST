@@ -237,7 +237,7 @@ impl<T: Default, U: std::marker::Send + 'static> MultiBuffered<T, U> {
                     if self.content.is_none() {
                         self.content = Some(Default::default())
                     }
-                    let Some(c) = &mut self.content  else {
+                    let Some(c) = &mut self.content else {
                         unreachable!()
                     };
                     c.acc(content)
@@ -296,6 +296,44 @@ impl Default for HyperApp {
 
 impl HyperApp {
     /// Called once before the first frame.
+    #[cfg(target_arch = "wasm32")]
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        languages: Languages,
+        api_addr: Option<String>,
+    ) -> Self {
+        // This is also where you can customize the look and feel of egui using
+        // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
+        dbg!();
+
+        // // Load previous app state (if any).
+        // // Note that you must enable the `persistence` feature for this to work.
+        // if let Some(storage) = cc.storage {
+        //     let mut r: TemplateApp = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+        //     if r.code_editor.lang.is_none() {
+        //         r.code_editor.lang = languages.get("JavaScript").cloned();
+        //     }
+        //     if r.languages.is_empty() {
+        //         r.languages = languages.into();
+        //     }
+        //     return r;
+        // }
+        use wasm_bindgen::prelude::*;
+        #[wasm_bindgen]
+        extern "C" {
+            fn prompt(text: &str, default: &str) -> String;
+        }
+        let api_addr =
+            api_addr.unwrap_or_else(|| unsafe { prompt("API address", "127.0.0.1:8080") });
+
+        let mut r = HyperApp::default();
+        r.api_addr = api_addr;
+        r.languages = languages.into();
+        r
+    }
+
+    /// Called once before the first frame.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new(cc: &eframe::CreationContext<'_>, languages: Languages, api_addr: String) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
@@ -314,23 +352,9 @@ impl HyperApp {
         //     return r;
         // }
 
-        // parsed.walk().node().kind();
-
         let mut r = HyperApp::default();
         r.api_addr = api_addr;
-        // let mut arc = r.scripting_context.lock().unwrap();
-        // arc.init.lang = languages.get("JavaScript").cloned();
-        // arc.filter.lang = languages.get("JavaScript").cloned();
-        // arc.accumulate.lang = languages.get("JavaScript").cloned();
-        // dbg!(&r.code_editors.lang);
-        // assert!(r.code_editors.lang.is_some());
         r.languages = languages.into();
-        // drop(arc);
-        // r.code_editor.parser
-        //     .set_language(&lang.into())
-        //     .expect("Error loading Java grammar");
-        // let parsed = r.code_editor.parser.parse(code, None).unwrap();
-        // r.code_editor.parsed = parsed;
         r
     }
 }

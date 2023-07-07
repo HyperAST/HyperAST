@@ -3,16 +3,23 @@
 # Setup
 - [Rust Toolchain](./setup/rust_toolchain.md)
 
-# Usage
-- [Usage](./usage/use_the_HyperAST.md)
-    - [GUI](./usage/gui.md)
-    - [API](./usage/api.md)
+# How to use HyperAST
+- [QuickStart](./usage/use_the_HyperAST.md)
+    - [Compute code metrics (GUI)]()
+    - [Track code (GUI)]()
+    - [Add a TreeSitter grammar]()
+- [Concrete applications]()
+    - [Track hyper parameters in Stockfish code base]()
+- [Experimental usecases]()
+    - [REST API]()
+    - [Incremental computing]()
 
-# Development
-- [How it is made]()
-
-- [How to contribute](./development/contribute.md)
-    - [How to add a new language](./development/add_new_language.md)
-
-# Details (for developpers)
+# Contribute
 - [Architecture](./details/architecture.md)
+- [How to contribute](./development/contribute.md)
+    - [Add a custom language](./development/add_new_language.md)
+
+# To go further
+- [Scientific Literature]()
+- [Related work]()
+

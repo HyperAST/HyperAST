@@ -41,9 +41,7 @@ fn main() {
     let api_addr = std::env::args()
         .collect::<Vec<_>>()
         .get(0)
-        .and_then(|x| x.is_empty().then(|| x))
-        .map_or(ADDR, |x| x)
-        .to_string();
+        .and_then(|x| x.is_empty().then(|| x.to_string()));
     // Make sure panics are logged using `console.error`.
     console_error_panic_hook::set_once();
     wasm_logger::init(wasm_logger::Config::default());

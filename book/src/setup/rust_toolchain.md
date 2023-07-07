@@ -31,3 +31,5 @@ issue with trunk https://stackoverflow.com/questions/72146492/unable-to-execute-
 ```bash
 cargo install wasm-bindgen-cli
 ```
+
+## Troubleshooting :
