@@ -1,6 +1,8 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
+const ADDR: &str = "127.0.0.1:8080";
+
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result<()> {
@@ -9,7 +11,7 @@ fn main() -> eframe::Result<()> {
         .collect::<Vec<_>>()
         .get(0)
         .and_then(|x| x.is_empty().then(|| x))
-        .map_or("0.0.0.0:8080", |x| x)
+        .map_or(ADDR, |x| x)
         .to_string();
     use egui_addon::Lang;
     tracing_subscriber::fmt::init();
@@ -39,10 +41,7 @@ fn main() {
     let api_addr = std::env::args()
         .collect::<Vec<_>>()
         .get(0)
-        .and_then(|x| x.is_empty().then(|| x))
-        .map_or("0.0.0.0:8080", |x| x)
-        .to_string();
-
+        .and_then(|x| x.is_empty().then(|| x.to_string()));
     // Make sure panics are logged using `console.error`.
     console_error_panic_hook::set_once();
     wasm_logger::init(wasm_logger::Config::default());

@@ -1,6 +1,6 @@
 
 
-## How to run the app (for now only on the web)
+## How to run the app
 
 First terminal :
 ``` bash
