@@ -104,7 +104,11 @@ mod legion_impls {
         const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
 
         fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-            todo!()
+            let t = n.get_component::<Type>().unwrap();
+            let t = <Java as Lang<Type>>::to_u16(*t);
+            let t = <Java as Lang<Type>>::make(t);
+            let t: &'static dyn HyperType = t;
+            t.into()
         }
 
         fn resolve_lang(
@@ -296,6 +300,7 @@ impl HyperType for Type {
         // || self == &Type::Finally // "finally",
         || self == &Type::If // "if",
         || self == &Type::Else // "else",
+
         // || self == &Type::For // "for",
         // || self == &Type::At // "@",
         // || self == &Type::Open // "open",

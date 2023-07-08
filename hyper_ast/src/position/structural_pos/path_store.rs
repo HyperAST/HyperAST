@@ -6,8 +6,7 @@ use crate::{
     position::TreePath,
     store::defaults::LabelIdentifier,
     types::{
-        self, AnyType, HyperAST, NodeId, NodeStore, Tree, Typed, WithChildren,
-        WithSerialization,
+        self, AnyType, HyperAST, NodeId, NodeStore, Tree, Typed, WithChildren, WithSerialization,
     },
 };
 use num::{one, zero};
@@ -15,9 +14,9 @@ use std::fmt::Debug;
 
 impl<IdN, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
     pub fn with_position(x: StructuralPosition<IdN, Idx>) -> Self {
-        let l = x.nodes.len();
+        let l = x.parents.len();
         assert!(!x.offsets[1..].contains(&zero()));
-        let nodes = x.nodes;
+        let nodes = x.parents;
         Self {
             nodes,
             parents: (0..l).into_iter().collect(),
@@ -43,7 +42,7 @@ impl<IdN, Idx> Default for StructuralPositionStore<IdN, Idx> {
 
 impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
     pub fn get(&self, s: SpHandle) -> ExploreStructuralPositions<IdN, Idx> {
-        ExploreStructuralPositions { sps: self, i: s.0 }
+        ExploreStructuralPositions { sps: self, i: s.0, _phantom: Default::default() }
     }
 
     pub fn push_up_scout(&self, s: &mut Scout<IdN, Idx>) -> Option<IdN>
@@ -59,7 +58,7 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
         ends: &[SpHandle],
     ) -> Vec<Position>
     where
-        HAST: HyperAST<'store, IdN = IdN::IdN, Label = LabelIdentifier>,
+        HAST: HyperAST<'store, IdN = IdN::IdN, Label = LabelIdentifier, Idx = Idx>,
         HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren,
         // HAST::Types: Eq + TypeTrait,
         <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
@@ -70,7 +69,10 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
         for x in ends.iter() {
             // let parents = self.parents.iter().peekable();
             let it = self.get(*x);
-            r.push(it.make_position(stores));
+            let position_converter = &crate::position::PositionConverter::new(&it)
+            .with_stores(stores);
+            r.push(position_converter.compute_pos_post_order::<_,Position,_>())
+            // r.push(it.make_position(stores));
         }
         r
     }
@@ -106,8 +108,8 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
             return Ok(());
         }
         let mut i = scout.ancestors;
-        if !scout.path.nodes.is_empty() {
-            let e = scout.path.nodes[0];
+        if !scout.path.parents.is_empty() {
+            let e = scout.path.parents[0];
             let p = self.nodes[i];
             let o = scout.path.offsets[0];
             if o.is_zero() {
@@ -180,7 +182,7 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
 
 impl<IdN: Copy, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
     pub fn push(&mut self, x: &mut Scout<IdN, Idx>) -> SpHandle {
-        assert_eq!(x.path.nodes.len(), x.path.offsets.len());
+        assert_eq!(x.path.parents.len(), x.path.offsets.len());
         if x.path.offsets.is_empty() {
             return SpHandle(x.ancestors);
         }
@@ -194,9 +196,9 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
             if x.path.offsets.len() == 1 {
                 return SpHandle(0);
             }
-            let l = x.path.nodes.len() - 2;
+            let l = x.path.parents.len() - 2;
             let o = self.parents.len();
-            self.nodes.extend(&x.path.nodes[1..]);
+            self.nodes.extend(&x.path.parents[1..]);
 
             self.parents.push(x.ancestors);
             self.parents
@@ -204,24 +206,18 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
 
             self.offsets.extend(&x.path.offsets[1..]);
             x.ancestors = self.nodes.len() - 1;
-            x.path = StructuralPosition {
-                nodes: vec![],
-                offsets: vec![],
-            }
+            x.path = StructuralPosition::empty()
         } else {
-            let l = x.path.nodes.len() - 1;
+            let l = x.path.parents.len() - 1;
             let o = self.parents.len();
-            self.nodes.extend(x.path.nodes.clone());
+            self.nodes.extend(x.path.parents.clone());
             self.parents.push(x.ancestors);
             self.parents
                 .extend((o..o + l).into_iter().collect::<Vec<_>>());
             self.offsets.extend(&x.path.offsets);
             // self.ends.push(self.nodes.len() - 1);
             x.ancestors = self.nodes.len() - 1;
-            x.path = StructuralPosition {
-                nodes: vec![],
-                offsets: vec![],
-            }
+            x.path = StructuralPosition::empty()
             // x.path = StructuralPosition::with_offset(x.path.current_node(), x.path.current_offset());
         }
 

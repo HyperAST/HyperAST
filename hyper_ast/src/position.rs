@@ -83,30 +83,163 @@ pub mod position_accessors {
 
     use super::*;
 
-    pub trait RootedPositionT<IdN> {
+    pub trait RootedPosition<IdN> {
         fn root(&self) -> IdN;
     }
 
-    pub trait SolvedPositionT<IdN> {
+    pub trait SolvedPosition<IdN> {
         fn node(&self) -> IdN;
     }
 
-    pub trait PathPositionT<IdN>
+    pub trait WithOffsets
     where
         Self::Idx: PrimInt,
     {
         type Idx;
+        // type PreOrderIt: Iterator<Item=Self::Idx>;
+        // fn iter_pre_order(&self) -> Self::PreOrderIt;
+        // fn iter_pre_order(&self) -> Box<dyn Iterator<Item=Self::Idx>> {
+        //     todo!()
+        // }
+        // type PostOrderIt: Iterator<Item=Self::Idx>;
+        // fn iter_post_order(&self) -> Self::PostOrderIt;
     }
 
-    pub trait PostOrderPathPositionT<IdN>: PathPositionT<IdN> {
-        // type Path: Iterator;
-        // fn path(&self) -> Self::Path;
+    pub trait WithPath<IdN>: WithOffsets {
+        // fn iter_pre_order(&self) -> Self::PreOrderIt;
+        // fn iter_post_order(&self) -> Self::PostOrderIt;
     }
 
-    pub trait PreOrderPathPositionT<IdN>: PathPositionT<IdN> {
+    pub trait WithPreOrderOffsets: WithOffsets {
         // type Path: Iterator;
         // fn path(&self) -> Self::Path;
+        type It: Iterator<Item = Self::Idx>;
+        fn iter(&self) -> Self::It;
     }
+
+    /// test invariants with [assert_invariants_pre]
+    pub trait WithPreOrderPath<IdN>: WithPath<IdN> + WithPreOrderOffsets {
+        // type Path: Iterator;
+        // fn path(&self) -> Self::Path;
+        type ItPath: Iterator<Item = (Self::Idx, IdN)>;
+        fn iter_offsets_and_nodes(&self) -> Self::ItPath;
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn assert_invariants_pre<'store, IdN, P, HAST>(p: &P, store: &'store HAST)
+    where
+        IdN: std::cmp::Eq + std::hash::Hash + std::fmt::Debug + Clone + NodeId,
+        P: WithPreOrderPath<IdN> + RootedPosition<IdN>,
+        HAST: HyperAST<'store, IdN = IdN::IdN, Idx = P::Idx>,
+        <IdN as NodeId>::IdN: PartialEq<<<IdN as NodeId>::IdN as NodeId>::IdN>,
+        <IdN as NodeId>::IdN: std::fmt::Debug,
+        <<IdN as NodeId>::IdN as NodeId>::IdN: std::fmt::Debug,
+    {
+        use crate::types::NodeStore;
+        use std::collections::HashSet;
+        let mut set: HashSet<IdN> = HashSet::default();
+        let root = p.root();
+        let mut prev = root.clone();
+        let it = p.iter_offsets_and_nodes();
+        let snd_it = p.iter();
+        set.insert(root);
+        for ((o0, x), o1) in it.into_iter().zip(snd_it) {
+            assert_eq!(o0, o1);
+            if !set.insert(x.clone()) {
+                panic!("path returns 2 times the same node")
+            }
+            let b = store.node_store().resolve(prev.as_id());
+            assert_eq!(x.as_id(), &b.child(&o0).expect("should have a child"));
+            prev = x.clone();
+        }
+    }
+
+    pub trait WithPostOrderOffsets: WithOffsets {
+        // type Path: Iterator;
+        // fn path(&self) -> Self::Path;
+        type It: Iterator<Item = Self::Idx>;
+        fn iter(&self) -> Self::It;
+        // TODO into_iter ?
+    }
+
+    /// test invariants with [assert_invariants_post]
+    pub trait WithPostOrderPath<IdN>: WithPath<IdN> + WithPostOrderOffsets {
+        // type Path: Iterator;
+        // fn path(&self) -> Self::Path;
+        type ItPath: Iterator<Item = (Self::Idx, IdN)>;
+        fn iter_offsets_and_parents(&self) -> Self::ItPath;
+    }
+
+    /// - p should only return each node once
+    /// - resolved children should correspond
+    #[cfg(debug_assertions)]
+    pub fn assert_invariants_post<'store, IdN, P, HAST>(p: &P, store: &'store HAST)
+    where
+        IdN: std::cmp::Eq + std::hash::Hash + std::fmt::Debug + Clone + NodeId,
+        P: WithPostOrderPath<IdN> + SolvedPosition<IdN>,
+        HAST: HyperAST<'store, IdN = IdN::IdN, Idx = P::Idx>,
+        <IdN as NodeId>::IdN: PartialEq<<<IdN as NodeId>::IdN as NodeId>::IdN>,
+        <IdN as NodeId>::IdN: std::fmt::Debug,
+        <<IdN as NodeId>::IdN as NodeId>::IdN: std::fmt::Debug,
+    {
+        use crate::types::NodeStore;
+        use std::collections::HashSet;
+        let mut set: HashSet<IdN> = HashSet::default();
+        let node = p.node();
+        let mut prev = node.clone();
+        let it = p.iter_offsets_and_parents();
+        let snd_it = p.iter();
+        set.insert(node);
+        for ((o0, x), o1) in it.into_iter().zip(snd_it) {
+            assert_eq!(o0, o1);
+            if !set.insert(x.clone()) {
+                panic!("path returns 2 times the same node")
+            }
+            let b = store.node_store().resolve(x.as_id());
+            assert_eq!(prev.as_id(), &b.child(&o0).expect("should have a child"));
+            prev = x.clone();
+        }
+    }
+
+    /// test invariants with [assert_invariants_post_full]
+    pub trait WithFullPostOrderPath<IdN>: RootedPosition<IdN> + WithPostOrderPath<IdN> {
+        fn iter_with_nodes(&self) -> (IdN, Self::ItPath);
+    }
+
+    /// - p should only return each node once
+    /// - resolved children should corespond
+    #[cfg(debug_assertions)]
+    pub fn assert_invariants_post_full<'store, IdN, P, HAST>(p: &P, store: &'store HAST)
+    where
+        IdN: std::cmp::Eq + std::hash::Hash + std::fmt::Debug + Clone + NodeId,
+        P: WithFullPostOrderPath<IdN>,
+        HAST: HyperAST<'store, IdN = IdN::IdN, Idx = P::Idx>,
+        <IdN as NodeId>::IdN: PartialEq<<<IdN as NodeId>::IdN as NodeId>::IdN>,
+        <IdN as NodeId>::IdN: std::fmt::Debug,
+        <<IdN as NodeId>::IdN as NodeId>::IdN: std::fmt::Debug,
+    {
+        use crate::types::NodeStore;
+        use std::collections::HashSet;
+        let mut set: HashSet<IdN> = HashSet::default();
+        let (node, it) = p.iter_with_nodes();
+        let mut prev = node.clone();
+        let snd_it = p.iter_offsets_and_parents();
+        let third_it = p.iter();
+        set.insert(node);
+        for (((o0, x), (o1, y)), o2) in it.into_iter().zip(snd_it).zip(third_it) {
+            dbg!(&prev, o0);
+            assert_eq!(x, y);
+            assert_eq!(o0, o1);
+            assert_eq!(o2, o1);
+            if !set.insert(x.clone()) {
+                panic!("path returns 2 times the same node")
+            }
+            let b = store.node_store().resolve(x.as_id());
+            assert_eq!(prev.as_id(), &b.child(&(o0)).expect("should have a child"));
+            prev = x.clone();
+        }
+    }
+
     pub trait TopoIndexPositionT<IdN>
     where
         Self::IdI: PrimInt,
@@ -127,8 +260,6 @@ pub mod position_accessors {
         fn end(&self) -> Self::IdO;
     }
 }
-
-
 
 pub struct PositionConverter<'src, SrcPos> {
     src: &'src SrcPos,
@@ -154,17 +285,33 @@ pub struct WithHyperAstPositionConverter<'store, 'src, SrcPos, HAST> {
     stores: &'store HAST,
 }
 
-mod offsets {
-    use super::PrimInt;
+pub mod building;
 
-    pub struct Position<T: PrimInt>(Vec<T>);
+pub mod tags {
+    #[derive(Clone, Copy, Debug)]
+    pub struct TopDownNoSpace;
+    #[derive(Clone, Copy, Debug)]
+    pub struct TopDownFull;
+    #[derive(Clone, Copy, Debug)]
+    pub struct BottomUpNoSpace;
+    #[derive(Clone, Copy, Debug)]
+    pub struct BottomUpFull;
 }
 
-mod file_and_offset;
+mod node_filter_traits {
+    pub trait NoSpace {}
+    pub trait Full {}
+}
+
+pub use building::CompoundPositionPreparer;
+
+pub mod offsets;
+
+pub mod file_and_offset;
 
 pub type Position = file_and_offset::Position<PathBuf, usize>;
 
-mod offsets_and_nodes;
+pub mod offsets_and_nodes;
 pub use offsets_and_nodes::*;
 
 mod topological_offset;

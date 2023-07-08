@@ -5,12 +5,12 @@ use hyper_ast::{
     filter::BloomResult,
     nodes::RefContainer,
     position::{
-        ExploreStructuralPositions, Scout, StructuralPosition, StructuralPositionStore, TreePath,
-        TypedScout, TypedTreePath,
+        Scout, StructuralPosition, StructuralPositionStore,
+        TypedScout, TypedTreePath, PositionConverter,
     },
     store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores},
     tree_gen::ZippedTreeGen,
-    types::{NodeId, WithChildren},
+    types::{NodeId, WithChildren, Typed},
     utils::memusage,
 };
 use pretty_assertions::assert_eq;
@@ -450,7 +450,7 @@ fn test_offset_computation() {
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     let mut s =
-        StructuralPositionStore::from(StructuralPosition::new(full_node.local.compressed_node));
+        StructuralPositionStore::new(full_node.local.compressed_node);
     let mut scout = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let mut scout: TypedScout<TIdN<NodeIdentifier>, u16> = s.type_scout(&mut scout, unsafe {
         &TIdN::from_id(full_node.local.compressed_node)
@@ -460,10 +460,11 @@ fn test_offset_computation() {
             let b = stores.node_store.resolve(x);
             let x = b.child(&i).unwrap();
             use hyper_ast::types::TypedNodeStore;
-            let x = stores.node_store.try_typed(&x).unwrap();
+            let x:crate::types::TIdN<_> = stores.node_store.try_typed(&x).unwrap();
+            dbg!(stores.node_store.resolve_typed(&x).get_type());
             scout.goto_typed(x, i);
-            scout.up(&s);
-            scout.goto_typed(x, i);
+            // scout.up(&s);
+            // scout.goto_typed(x, i);
             x
         };
         let x = full_node.local.compressed_node;
@@ -476,9 +477,28 @@ fn test_offset_computation() {
     }
     s.check(&stores).unwrap();
     let x = s.push_typed(&mut scout);
-    let z = ExploreStructuralPositions::from((&s, x));
-    let p = z.make_position(&stores);
-    println!("{}", p);
+    let z = s.get(x);
+    hyper_ast::position::position_accessors::assert_invariants_post_full(&z,&stores);
+    let position_converter = &PositionConverter::new(&z).with_stores(&stores);
+    
+    let p = if true {
+        use hyper_ast::position;
+        // use position::offsets_and_nodes;
+        // let src = offsets::OffsetsRef::from(path_to_target.as_slice());
+        // let src = src.with_root(src_tr);
+        // let src = src.with_store(stores);
+        // // let no_spaces_path_to_target: offsets::Offsets<_, position::tags::TopDownNoSpace> =
+        // //     src.compute_no_spaces::<_, offsets::Offsets<_, _>>();
+        let src = position_converter;
+        let pos: position::Position = src.compute_pos_post_order::<_, position::Position, _>();
+        println!("|{}|", std::str::from_utf8(&text[pos.range()]).unwrap());
+        pos
+    } else {
+        panic!("removed")
+        // position_converter.make_file_and_offset()
+    };
+    dbg!(&p);
+    println!("{:?}", p);
     println!("|{}|", std::str::from_utf8(&text[p.range()]).unwrap());
     assert_eq!(
         std::str::from_utf8(&text[p.range()]).unwrap(),
@@ -510,7 +530,7 @@ fn test_offset_computation2() {
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     let mut s =
-        StructuralPositionStore::from(StructuralPosition::new(full_node.local.compressed_node));
+        StructuralPositionStore::new(full_node.local.compressed_node);
     let mut scout = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let mut scout: TypedScout<TIdN<NodeIdentifier>, u16> = s.type_scout(&mut scout, unsafe {
         &TIdN::from_id(full_node.local.compressed_node)
@@ -540,9 +560,26 @@ fn test_offset_computation2() {
     }
     s.check(&stores).unwrap();
     let x = s.push_typed(&mut scout);
-    let z = ExploreStructuralPositions::from((&s, x));
-    let p = z.make_position(&stores);
-    println!("{}", p);
+    let z = s.get(x);
+    hyper_ast::position::position_accessors::assert_invariants_post(&z,&stores);
+    let position_converter = &PositionConverter::new(&z).with_stores(&stores);
+    let p = if true {
+        use hyper_ast::position;
+        // use position::offsets_and_nodes;
+        // let src = offsets::OffsetsRef::from(path_to_target.as_slice());
+        // let src = src.with_root(src_tr);
+        // let src = src.with_store(stores);
+        // // let no_spaces_path_to_target: offsets::Offsets<_, position::tags::TopDownNoSpace> =
+        // //     src.compute_no_spaces::<_, offsets::Offsets<_, _>>();
+        let src = position_converter;
+        let pos: position::Position = src.compute_pos_post_order::<_, position::Position, _>();
+        println!("|{}|", std::str::from_utf8(&text[pos.range()]).unwrap());
+        pos
+    } else {
+        panic!("removed")
+        // position_converter.make_file_and_offset()
+    };
+    println!("{:?}", p);
     println!("|{}|", std::str::from_utf8(&text[p.range()]).unwrap());
     assert_eq!(
         std::str::from_utf8(&text[p.range()]).unwrap(),

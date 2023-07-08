@@ -880,10 +880,21 @@ fn aux(
         compute_range(file_node, &mut offsets_in_file.into_iter(), stores);
     dbg!(start, end);
     dbg!(&target_node);
-
-    let (_, _, no_spaces_path_to_target) =
-        compute_position_with_no_spaces(src_tr, &mut path_to_target.iter().map(|x| *x), stores);
-
+    let no_spaces_path_to_target = if false {
+        // TODO use this version
+        use hyper_ast::position;
+        use position::offsets;
+        let src = offsets::OffsetsRef::from(path_to_target.as_slice());
+        let src = src.with_root(src_tr);
+        let src = src.with_store(stores);
+        let no_spaces_path_to_target: offsets::Offsets<_, position::tags::TopDownNoSpace> =
+            src.compute_no_spaces::<_, offsets::Offsets<_, _>>();
+        no_spaces_path_to_target.into()
+    } else {
+        let (_, _, no_spaces_path_to_target) =
+            compute_position_with_no_spaces(src_tr, &mut path_to_target.iter().map(|x| *x), stores);
+        no_spaces_path_to_target
+    };
     let dst_oid = dst_oid; // WARN not sure what I was doing there commit_dst.clone();
     aux_aux(
         repo_handle,
@@ -924,8 +935,28 @@ fn aux2(
 
     let path_to_target: Vec<_> = path.iter().map(|x| *x as u16).collect();
     dbg!(&path_to_target);
-    let (pos, target_node, no_spaces_path_to_target) =
-        compute_position_with_no_spaces(src_tr, &mut path_to_target.iter().map(|x| *x), stores);
+    let (pos, target_node, no_spaces_path_to_target) = if false {
+        // NOTE trying stuff
+        // TODO use this version
+        use hyper_ast::position;
+        use position::file_and_offset;
+        use position::offsets;
+        use position::offsets_and_nodes;
+        let src = offsets::OffsetsRef::from(path_to_target.as_slice());
+        let src = src.with_root(src_tr);
+        let src = src.with_store(stores);
+        // let no_spaces_path_to_target: offsets::Offsets<_, position::tags::TopDownNoSpace> =
+        //     src.compute_no_spaces::<_, offsets::Offsets<_, _>>();
+        let (pos, path): (
+            position::Position,
+            offsets_and_nodes::SolvedStructuralPosition<_, _, position::tags::TopDownNoSpace>,
+        ) = src.compute_no_spaces::<_, position::CompoundPositionPreparer<_, _>>();
+        // no_spaces_path_to_target.into()
+        let (node, path) = path.into();
+        (pos, node, path)
+    } else {
+        compute_position_with_no_spaces(src_tr, &mut path_to_target.iter().map(|x| *x), stores)
+    };
     dbg!(&path_to_target, &no_spaces_path_to_target);
     let range = pos.range();
     let dst_oid = dst_oid; // WARN not sure what I was doing there commit_dst.clone();

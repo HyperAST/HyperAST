@@ -57,7 +57,7 @@ where
         // VALIDITY: self.tdepth <= 0
         let tdepth = -self.tdepth as usize;
         // VALIDITY: condition for Some variant out of self.path.node()
-        let i = self.path.nodes.len() - 1;
+        let i = self.path.parents.len() - 1;
         if i == tdepth {
             // VALIDITY: checked tdepth
             Some(unsafe { TIdN::from_ref_id(n) })
@@ -92,13 +92,10 @@ where
         x: &StructuralPositionStore<TIdN::IdN, Idx>,
     ) -> Result<Self, Scout<TIdN::IdN, Idx>> {
         if let Some(_) = self.path.pop() {
-            self.path = StructuralPosition {
-                nodes: vec![],
-                offsets: vec![],
-            };
+            self.path = StructuralPosition::empty();
             self.ancestors = x.parents[self.ancestors];
             let tdepth = -self.tdepth as usize;
-            let i = self.path.nodes.len();
+            let i = self.path.parents.len();
             if i == tdepth {
                 self.tdepth += 1;
                 Ok(self)
@@ -111,17 +108,11 @@ where
             Err(Scout { path, ancestors })
         } else if self.tdepth > 1 {
             self.tdepth -= 1;
-            self.path = StructuralPosition {
-                nodes: vec![],
-                offsets: vec![],
-            };
+            self.path = StructuralPosition::empty();
             self.ancestors = x.parents[self.ancestors];
             Ok(self)
         } else {
-            let path = StructuralPosition {
-                nodes: vec![],
-                offsets: vec![],
-            };
+            let path = StructuralPosition::empty();
             let ancestors = x.parents[self.ancestors];
             Err(Scout { path, ancestors })
         }
@@ -129,7 +120,7 @@ where
     pub fn _up(&mut self) {
         self.tdepth -= 1;
         self.path.pop();
-        assert_eq!(self.path.nodes.len(), self.path.offsets.len());
+        assert_eq!(self.path.parents.len(), self.path.offsets.len());
     }
     pub fn node_always(
         &self,
@@ -155,12 +146,9 @@ where
         &mut self,
         x: &StructuralPositionStore<TIdN::IdN, Idx>,
     ) -> Option<Result<TIdN, TIdN::IdN>> {
-        if self.path.nodes.is_empty() {
-            self.path = StructuralPosition {
-                nodes: vec![],
-                offsets: vec![],
-            };
-            assert_eq!(self.path.nodes.len(), self.path.offsets.len());
+        if self.path.parents.is_empty() {
+            self.path = StructuralPosition::empty();
+            assert_eq!(self.path.parents.len(), self.path.offsets.len());
             if self.ancestors == 0 {
                 None
             } else {
@@ -185,7 +173,7 @@ where
         }
         let tdepth = -self.tdepth as usize;
         // VALIDITY: condition for Some variant out of self.path.node()
-        let len = self.path.nodes.len() - 1;
+        let len = self.path.parents.len() - 1;
         if len < tdepth {
             // VALIDITY: checked tdepth
             Some(unsafe { TIdN::from_ref_id(n) })
@@ -379,7 +367,7 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
         &mut self,
         x: &mut TypedScout<TIdN, Idx>,
     ) -> SpHandle {
-        assert_eq!(x.path.nodes.len(), x.path.offsets.len());
+        assert_eq!(x.path.parents.len(), x.path.offsets.len());
         if x.path.offsets.is_empty() {
             return SpHandle(x.ancestors);
         }
@@ -393,9 +381,9 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
             if x.path.offsets.len() == 1 {
                 return SpHandle(0);
             }
-            let l = x.path.nodes.len() - 2;
+            let l = x.path.parents.len() - 2;
             let o = self.parents.len();
-            self.nodes.extend(&x.path.nodes[1..]);
+            self.nodes.extend(&x.path.parents[1..]);
 
             self.parents.push(x.ancestors);
             self.parents
@@ -403,24 +391,18 @@ impl<IdN: Copy, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
 
             self.offsets.extend(&x.path.offsets[1..]);
             x.ancestors = self.nodes.len() - 1;
-            x.path = StructuralPosition {
-                nodes: vec![],
-                offsets: vec![],
-            }
+            x.path = StructuralPosition::empty()
         } else {
-            let l = x.path.nodes.len() - 1;
+            let l = x.path.parents.len() - 1;
             let o = self.parents.len();
-            self.nodes.extend(x.path.nodes.clone());
+            self.nodes.extend(x.path.parents.clone());
             self.parents.push(x.ancestors);
             self.parents
                 .extend((o..o + l).into_iter().collect::<Vec<_>>());
             self.offsets.extend(&x.path.offsets);
             // self.ends.push(self.nodes.len() - 1);
             x.ancestors = self.nodes.len() - 1;
-            x.path = StructuralPosition {
-                nodes: vec![],
-                offsets: vec![],
-            }
+            x.path = StructuralPosition::empty()
             // x.path = StructuralPosition::with_offset(x.path.current_node(), x.path.current_offset());
         }
 
@@ -447,12 +429,9 @@ impl<IdN: Copy + Eq, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
     ) -> TypedScout<TIdN, Idx> {
         assert!(&s.node_always(self) == i.as_id());
         self.push(s);
-        assert_eq!(s.path.nodes.len(), 0);
+        assert_eq!(s.path.parents.len(), 0);
         TypedScout {
-            path: StructuralPosition {
-                nodes: vec![],
-                offsets: vec![],
-            },
+            path: StructuralPosition::empty(),
             ancestors: s.ancestors,
             tdepth: 1,
             phantom: PhantomData,

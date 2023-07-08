@@ -72,7 +72,7 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
         }
     }
     pub fn has_parents(&self) -> bool {
-        if self.path.nodes.is_empty() {
+        if self.path.parents.is_empty() {
             self.ancestors != zero()
         } else {
             true
@@ -83,7 +83,7 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
 impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
     pub fn _up(&mut self) {
         self.path.pop();
-        assert_eq!(self.path.nodes.len(), self.path.offsets.len());
+        assert_eq!(self.path.parents.len(), self.path.offsets.len());
     }
     pub fn make_child(&self, node: IdN, i: Idx) -> Self {
         let mut s = self.clone();
@@ -95,14 +95,11 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
         // if !self.path.offsets.is_empty() && self.path.offsets[0] == 0 {
         //     assert!(self.root == 0);
         // }
-        if self.path.nodes.is_empty() {
+        if self.path.parents.is_empty() {
             // let o = x.offsets[self.root];
-            self.path = StructuralPosition {
-                nodes: vec![],
-                offsets: vec![],
-            };
+            self.path = StructuralPosition::empty();
             // self.path = StructuralPosition::with_offset(x.nodes[self.root], o);
-            assert_eq!(self.path.nodes.len(), self.path.offsets.len());
+            assert_eq!(self.path.parents.len(), self.path.offsets.len());
             if self.ancestors == 0 {
                 None
             } else {
@@ -162,15 +159,15 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
         };
         let mut offset = 0;
         let mut path = vec![];
-        if self.path.nodes.is_empty() {
+        if self.path.parents.is_empty() {
             return sp
                 .get(super::SpHandle(self.ancestors + 1))
                 .make_position_aux(stores, from_file, len, offset, path);
         }
-        let mut i = self.path.nodes.len() - 1;
+        let mut i = self.path.parents.len() - 1;
         if from_file {
             while i > 0 {
-                let p = self.path.nodes[i - 1];
+                let p = self.path.parents[i - 1];
                 let b = stores.node_store().resolve(&p);
                 let t = stores.type_store().resolve_type(&b);
                 // println!("t1:{:?}", t);
@@ -201,13 +198,13 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
                 }
             }
         }
-        if self.path.nodes.is_empty() {
+        if self.path.parents.is_empty() {
         } else if !from_file
         // || (i == 0 && stores.node_store().resolve(self.path.nodes[i]).get_type() == Type::Program)
         {
             loop {
                 from_file = false;
-                let n = self.path.nodes[i];
+                let n = self.path.parents[i];
                 let b = stores.node_store().resolve(&n);
                 // println!("t2:{:?}", b.get_type());
                 let l = stores.label_store().resolve(b.get_label_unchecked());
@@ -222,7 +219,7 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
             let p = if i == 0 {
                 sp.nodes[self.ancestors]
             } else {
-                self.path.nodes[i - 1]
+                self.path.parents[i - 1]
             };
             let b = stores.node_store().resolve(&p);
             let t = stores.type_store().resolve_type(&b);
@@ -259,10 +256,7 @@ impl<IdN: Clone, Idx: PrimInt> From<(StructuralPosition<IdN, Idx>, usize)> for S
     fn from((path, ancestors): (StructuralPosition<IdN, Idx>, usize)) -> Self {
         let path = if !path.offsets.is_empty() && path.offsets[0].is_zero() {
             assert_eq!(ancestors, 0);
-            StructuralPosition {
-                nodes: path.nodes[1..].to_owned(),
-                offsets: path.offsets[1..].to_owned(),
-            }
+            (path.parents[1..].to_owned(), path.offsets[1..].to_owned()).into()
         } else {
             path
         };

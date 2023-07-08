@@ -231,14 +231,14 @@ impl StructuralPosition<NodeIdentifier, u16> {
         };
         let mut offset = 0;
         let mut path = vec![];
-        if self.nodes.is_empty() {
+        if self.parents.is_empty() {
             let file = PathBuf::from_iter(path.iter().rev());
             return Position::new(file, offset, len);
         }
-        let mut i = self.nodes.len() - 1;
+        let mut i = self.parents.len() - 1;
         if from_file {
             while i > 0 {
-                let p = self.nodes[i - 1];
+                let p = self.parents[i - 1];
                 let b = stores.node_store().resolve(&p);
 
                 let t = stores.type_store().resolve_type(&b);
@@ -265,12 +265,12 @@ impl StructuralPosition<NodeIdentifier, u16> {
                 }
             }
         }
-        if self.nodes.is_empty() {
+        if self.parents.is_empty() {
         } else if !from_file
         // || (i == 0 && stores.node_store().resolve(self.nodes[i]).get_type() == Type::Program)
         {
             loop {
-                let n = self.nodes[i];
+                let n = self.parents[i];
                 let b = stores.node_store().resolve(&n);
                 // println!("t2:{:?}", b.get_type());
                 let l = stores.label_store().resolve(b.get_label_unchecked());
@@ -282,7 +282,7 @@ impl StructuralPosition<NodeIdentifier, u16> {
                 }
             }
         } else {
-            let p = self.nodes[i - 1];
+            let p = self.parents[i - 1];
             let b = stores.node_store().resolve(&p);
             let o = self.offsets[i];
             let c: usize = {
