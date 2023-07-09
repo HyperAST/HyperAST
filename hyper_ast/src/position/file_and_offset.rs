@@ -169,6 +169,12 @@ mod impl_receivers {
         }
     }
 
+    impl<IdN, IdO: PrimInt> top_down::SetNode<IdN, Self> for super::Position<PathBuf, IdO> {
+        fn set_node(self, _node: IdN) -> Self {
+            self
+        }
+    }
+
     impl<IdO: PrimInt> top_down::ReceiveDirName<Self> for super::Position<PathBuf, IdO> {
         fn push(mut self, dir_name: &str) -> Self {
             self.file.push(dir_name);
@@ -179,6 +185,13 @@ mod impl_receivers {
     impl<IdO: PrimInt> bottom_up::ReceiveDirName<Self> for super::Position<PathBuf, IdO> {
         fn push(mut self, dir_name: &str) -> Self {
             self.file = std::path::PathBuf::from(dir_name).join(self.file);
+            self
+        }
+    }
+
+    impl<IdO: PrimInt> top_down::SetFileName<Self> for super::Position<PathBuf, IdO> {
+        fn set_file_name(mut self, file_name: &str) -> Self {
+            self.file.push(file_name);
             self
         }
     }

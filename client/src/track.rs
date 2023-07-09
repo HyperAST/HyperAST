@@ -950,7 +950,10 @@ fn aux2(
         let (pos, path): (
             position::Position,
             offsets_and_nodes::SolvedStructuralPosition<_, _, position::tags::TopDownNoSpace>,
-        ) = src.compute_no_spaces::<_, position::CompoundPositionPreparer<_, _>>();
+        ) = src.compute_no_spaces::<_, position::CompoundPositionPreparer<
+            position::Position,
+            offsets_and_nodes::StructuralPosition<_, _, position::tags::TopDownNoSpace>,
+        >>();
         // no_spaces_path_to_target.into()
         let (node, path) = path.into();
         (pos, node, path)

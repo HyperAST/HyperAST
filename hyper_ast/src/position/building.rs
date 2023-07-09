@@ -47,14 +47,13 @@ pub mod top_down {
     pub trait ReceiveDir<IdN, Idx, O>:
         Sized
         + ReceiveParent<IdN, Self::SA1>
-        + SetNode<IdN, Self::O0>
+        + SetNode<IdN, O>
         + SetFileName<Self::SB1<O>>
         + Transition<Self::SB1<O>>
     {
         type SA1: ReceiveIdx<Idx, Self::SA2>;
         type SA2: ReceiveDirName<Self>;
         type SB1<OO>;
-        type O0: Transition<O>;
     }
     pub trait FileSysReceiver {
         type InFile<O>;
@@ -62,44 +61,39 @@ pub mod top_down {
     impl<IdN, Idx, O, T: FileSysReceiver> ReceiveDir<IdN, Idx, O> for T
     where
         T: ReceiveParent<IdN, T>
-            + SetNode<IdN, T>
+            + SetNode<IdN, O>
             + ReceiveIdx<Idx, T>
             + ReceiveDirName<T>
             + SetFileName<T::InFile<O>>
             + Transition<T::InFile<O>>,
-        T: Transition<O>,
     {
         type SA1 = T;
         type SA2 = T;
         type SB1<OO> = T::InFile<OO>;
-        type O0 = T;
     }
 
     pub trait ReceiveInFile<IdN, Idx, IdO, O>:
-        Sized + ReceiveParent<IdN, Self::S1> + SetNode<IdN, Self::O0>
+        Sized + ReceiveParent<IdN, Self::S1> + SetLen<IdO, Self::O0>
     {
         type S1: ReceiveIdx<Idx, Self::S2>;
         type S2: ReceiveOffset<IdO, Self::S3>;
         type S3: ReceiveIdxNoSpace<Idx, Self>;
-        type O0: SetLen<IdO, Self::O1>;
-        type O1: Transition<O>;
+        type O0: SetNode<IdN, O>;
     }
     impl<IdN, Idx, IdO, O, T> ReceiveInFile<IdN, Idx, IdO, O> for T
     where
         T: ReceiveParent<IdN, T>
-            + SetNode<IdN, T>
+            + SetNode<IdN, O>
             + ReceiveOffset<IdO, T>
             + ReceiveIdx<Idx, T>
             + SetLen<IdO, T>
             + ReceiveIdxNoSpace<Idx, T>,
-        T: Transition<O>,
     {
         type S1 = T;
         type S2 = T;
         type S3 = T;
 
         type O0 = T;
-        type O1 = T;
     }
 
     // Great bu try to fusion with `ReceiveInFile`s
@@ -271,7 +265,7 @@ mod impl_c_p_p_receivers2 {
     //     }
     // }
 
-    impl<Idx: PrimInt, A: top_down::ReceiveParent<Idx, A>, B: top_down::ReceiveParent<Idx, B>>
+    impl<Idx: PrimInt, A: top_down::ReceiveIdxNoSpace<Idx, A>, B: top_down::ReceiveIdxNoSpace<Idx, B>>
         top_down::ReceiveIdxNoSpace<Idx, Self> for CompoundPositionPreparer<A, B>
     {
         fn push(self, idx: Idx) -> Self {
@@ -304,14 +298,50 @@ mod impl_c_p_p_receivers2 {
     //         Self(self.0.set(len), self.1.set(len))
     //     }
     // }
-    impl<IdN, IdO: PrimInt, B: top_down::SetNode<IdN, B>> top_down::SetNode<IdN, Self>
+    // impl<IdN, IdO: PrimInt, B: top_down::SetNode<IdN, BB>, BB>
+    //     top_down::SetNode<
+    //         IdN,
+    //         CompoundPositionPreparer<
+    //             super::super::file_and_offset::Position<std::path::PathBuf, IdO>,
+    //             BB,
+    //         >,
+    //     >
+    //     for CompoundPositionPreparer<
+    //         super::super::file_and_offset::Position<std::path::PathBuf, IdO>,
+    //         B,
+    //     >
+    // {
+    //     fn set_node(
+    //         self,
+    //         node: IdN,
+    //     ) -> CompoundPositionPreparer<
+    //         super::super::file_and_offset::Position<std::path::PathBuf, IdO>,
+    //         BB,
+    //     > {
+    //         CompoundPositionPreparer(self.0, self.1.set_node(node))
+    //     }
+    // }
+    impl<IdN, IdO: PrimInt, B: top_down::SetNode<IdN, BB>, BB>
+        top_down::SetNode<
+            IdN,
+            (
+                super::super::file_and_offset::Position<std::path::PathBuf, IdO>,
+                BB,
+            ),
+        >
         for CompoundPositionPreparer<
             super::super::file_and_offset::Position<std::path::PathBuf, IdO>,
             B,
         >
     {
-        fn set_node(self, node: IdN) -> Self {
-            Self(self.0, self.1.set_node(node))
+        fn set_node(
+            self,
+            node: IdN,
+        ) -> (
+            super::super::file_and_offset::Position<std::path::PathBuf, IdO>,
+            BB,
+        ) {
+            (self.0, self.1.set_node(node))
         }
     }
 
@@ -330,9 +360,9 @@ mod impl_c_p_p_receivers2 {
             Self(self.0.transit(), self.1.transit())
         }
     }
-    impl<A: Into<AA>, B: Into<BB>, AA, BB> Transition<(AA, BB)> for CompoundPositionPreparer<A, B> {
-        fn transit(self) -> (AA, BB) {
-            (self.0.into(), self.1.into())
-        }
-    }
+    // impl<A: Into<AA>, B: Into<BB>, AA, BB> Transition<(AA, BB)> for CompoundPositionPreparer<A, B> {
+    //     fn transit(self) -> (AA, BB) {
+    //         (self.0.into(), self.1.into())
+    //     }
+    // }
 }

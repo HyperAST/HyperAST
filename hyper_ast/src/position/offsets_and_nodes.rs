@@ -17,6 +17,14 @@ impl<IdN, Idx, C> StructuralPosition<IdN, Idx, C> {
             _phantom: Default::default()
         }
     }
+    pub(crate) fn solved(self, node: IdN) -> SolvedStructuralPosition<IdN, Idx, C> {
+        SolvedStructuralPosition {
+            parents: self.parents,
+            offsets: self.offsets,
+            node,
+            _phantom: Default::default()
+        }
+    }
 }
 
 /// BottomUp content
@@ -156,6 +164,8 @@ impl<IdN, Idx: num::Zero> From<IdN> for StructuralPosition<IdN, Idx> {
 
 
 mod impl_c_p_p_receivers {
+    use crate::position::building::bottom_up;
+
     use super::super::building;
     use super::PrimInt;
     use building::top_down;
@@ -175,7 +185,7 @@ mod impl_c_p_p_receivers {
     }
 
     impl<IdN, Idx: PrimInt, C> top_down::ReceiveParent<IdN, Self>
-        for SolvedStructuralPosition<IdN, Idx, C>
+        for StructuralPosition<IdN, Idx, C>
     {
         fn push(self, _parent: IdN) -> Self {
             self
@@ -183,7 +193,7 @@ mod impl_c_p_p_receivers {
     }
 
     impl<IdN, Idx: PrimInt, C> building::top_down::ReceiveDirName<Self>
-        for SolvedStructuralPosition<IdN, Idx, C>
+        for StructuralPosition<IdN, Idx, C>
     {
         fn push(self, _dir_name: &str) -> Self {
             self
@@ -192,7 +202,7 @@ mod impl_c_p_p_receivers {
 
     impl<IdN, Idx: PrimInt, C>
         building::bottom_up::ReceiveDirName<Self>
-        for SolvedStructuralPosition<IdN, Idx, C>
+        for StructuralPosition<IdN, Idx, C>
     {
         fn push(self, _dir_name: &str) -> Self {
             self
@@ -208,7 +218,7 @@ mod impl_c_p_p_receivers {
 
     impl<IdN, Idx: PrimInt, C>
         building::top_down::ReceiveIdx<Idx, Self>
-        for SolvedStructuralPosition<IdN, Idx, C>
+        for StructuralPosition<IdN, Idx, C>
     {
         fn push(self, _idx: Idx) -> Self {
             // self.offsets.push(idx);
@@ -234,42 +244,49 @@ mod impl_c_p_p_receivers {
     }
 
     impl<IdN, Idx: PrimInt, C> top_down::FileSysReceiver
-        for SolvedStructuralPosition<IdN, Idx, C>
+        for StructuralPosition<IdN, Idx, C>
     {
         type InFile<O> = Self;
     }
 
     impl<IdN, Idx: PrimInt, IdO, C>
         building::top_down::ReceiveOffset<IdO, Self>
-        for SolvedStructuralPosition<IdN, Idx, C>
+        for StructuralPosition<IdN, Idx, C>
     {
         fn push(self, _bytes: IdO) -> Self {
             self
         }
     }
     impl<IdN, Idx: PrimInt, IdO, C> building::SetLen<IdO, Self>
-        for SolvedStructuralPosition<IdN, Idx, C>
+        for StructuralPosition<IdN, Idx, C>
     {
         fn set(self, _len: IdO) -> Self {
             self
         }
     }
-    impl<IdN, Idx: PrimInt, C> top_down::SetNode<IdN, Self>
-        for SolvedStructuralPosition<IdN, Idx, C>
+    // impl<IdN, Idx: PrimInt, C> top_down::SetNode<IdN, SolvedStructuralPosition<IdN, Idx, C>>
+    //     for StructuralPosition<IdN, Idx, C>
+    // {
+    //     fn set_node(self, node: IdN) -> SolvedStructuralPosition<IdN, Idx, C> {
+    //         self.solved(node)
+    //     }
+    // }
+    impl<IdN, Idx: PrimInt, C> top_down::SetNode<IdN, SolvedStructuralPosition<IdN, Idx, C>>
+        for StructuralPosition<IdN, Idx, C>
     {
-        fn set_node(self, _node: IdN) -> Self {
-            self
+        fn set_node(self, node: IdN) -> SolvedStructuralPosition<IdN, Idx, C> {
+            self.solved(node)
         }
     }
     impl<IdN, Idx: PrimInt, C> top_down::SetFileName<Self>
-        for SolvedStructuralPosition<IdN, Idx, C>
+        for StructuralPosition<IdN, Idx, C>
     {
-        fn set_file_name(self, _file_name: &str) -> Self {
+        fn set_file_name(self, file_name: &str) -> Self {
             self
         }
     }
     impl<IdN, Idx: PrimInt, C> building::Transition<Self>
-        for SolvedStructuralPosition<IdN, Idx, C>
+        for StructuralPosition<IdN, Idx, C>
     {
         fn transit(self) -> Self {
             self

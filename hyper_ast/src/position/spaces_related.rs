@@ -594,7 +594,7 @@ where
                 let (cs, idx) = match (b.children(), offsets_iter.next()) {
                     (Some(cs), Some(o)) => (cs.clone(), o),
                     (None, Some(_)) => panic!("there is no children remaining"),
-                    _ => return builder.set_node(x).transit(),
+                    _ => return builder.set_node(x),
                 };
                 use building::top_down::ReceiveDirName;
                 builder = builder.push(x).push(idx).push(l);
@@ -642,7 +642,7 @@ where
         let len = num::cast(len).unwrap();
         use building::top_down::SetNode;
         use building::SetLen;
-        builder.set_node(x).set(len).transit()
+        builder.set(len).set_node(x)
     }
 }
 

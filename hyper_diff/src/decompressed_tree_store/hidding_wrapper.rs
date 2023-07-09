@@ -453,7 +453,6 @@ impl<
     fn first_descendant(&self, i: &IdD) -> IdD {
         let conv = self.map.borrow()[self.map.borrow().len() - 1 - i.to_usize().unwrap()]; //self.back.borrow_mut().lld(aaa);
         let lld = self.back.borrow().lld(&conv);
-        dbg!(lld, conv, i);
         let mut y = *i;
         loop {
             if y.is_zero() {

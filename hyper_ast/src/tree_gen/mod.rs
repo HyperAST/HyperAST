@@ -319,6 +319,9 @@ where
                     None
                 };
 
+                // TODO opt out of using end_byte other than on leafs,
+                // it should help with trailing spaces,
+                // something like `cursor.node().child_count().ne(0).then(||cursor.node().end_byte())` then just call set_sum_byte_length if some
                 let sbl = cursor.node().end_byte();
                 if cursor.goto_next_sibling() {
                     global.set_sum_byte_length(sbl);
