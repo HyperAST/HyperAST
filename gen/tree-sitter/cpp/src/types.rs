@@ -316,7 +316,12 @@ impl HyperType for Type {
     }
 
     fn is_spaces(&self) -> bool {
-        self == &Type::Spaces || self == &Type::TS0
+        self == &Type::Spaces
+        // setting TS0 as space is causing an issue with global_pos_with_spaces
+        // and TS0 is end list of tokens, so maybe other issues.
+        // Actual fix is to skip TS0 in skipable_pre in the generator,
+        // thus TSO should not appear anymore in generated ast.
+        // || self == &Type::TS0
     }
 
     fn is_syntax(&self) -> bool {

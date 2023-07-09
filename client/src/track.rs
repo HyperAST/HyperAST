@@ -13,7 +13,8 @@ use hyper_ast::{
     },
 };
 use hyper_ast_cvs_git::{
-    git::Repo, multi_preprocessed, preprocessed::child_at_path_tracked, TStore, processing::ConfiguredRepoTrait,
+    git::Repo, multi_preprocessed, preprocessed::child_at_path_tracked,
+    processing::ConfiguredRepoTrait, TStore,
 };
 use hyper_diff::{
     decompressed_tree_store::{
@@ -359,7 +360,7 @@ pub fn track_code(
             .repositories
             .write()
             .unwrap()
-            .pre_process_with_limit(&mut repository, "", &commit,2)
+            .pre_process_with_limit(&mut repository, "", &commit, 2)
             .map_err(|e| TrackingError {
                 compute_time: now.elapsed().as_secs_f64(),
                 commits_processed: 0,
@@ -630,12 +631,13 @@ pub(crate) fn track_code_at_path_with_changes(
         .repositories
         .write()
         .unwrap()
-        .get_config(repo_spec).ok_or_else(|| TrackingError {
-        compute_time: now.elapsed().as_secs_f64(),
-        commits_processed: 0,
-        node_processed: 0,
-        message: "missing config for repository".to_string(),
-    })?;
+        .get_config(repo_spec)
+        .ok_or_else(|| TrackingError {
+            compute_time: now.elapsed().as_secs_f64(),
+            commits_processed: 0,
+            node_processed: 0,
+            message: "missing config for repository".to_string(),
+        })?;
     let mut repository = repo_handle.fetch();
     log::warn!("done cloning {}", repository.spec);
     let mut ori_oid = None;
@@ -650,7 +652,7 @@ pub(crate) fn track_code_at_path_with_changes(
             .repositories
             .write()
             .unwrap()
-            .pre_process_with_limit(&mut repository, "", &commit,2)
+            .pre_process_with_limit(&mut repository, "", &commit, 4)
             .map_err(|e| TrackingError {
                 compute_time: now.elapsed().as_secs_f64(),
                 commits_processed: 0,
@@ -675,14 +677,13 @@ pub(crate) fn track_code_at_path_with_changes(
         };
         match aux2(state.clone(), &repository, src_oid, dst_oid, &path, &flags) {
             MappingResult::Direct { src: aaa, matches } => {
-                let changes =
-                    changes::added_deleted(state, &repository, dst_oid, ori_oid.unwrap())
-                        .map_err(|err| TrackingError {
-                            compute_time: now.elapsed().as_secs_f64(),
-                            commits_processed,
-                            node_processed,
-                            message: err,
-                        })?;
+                let changes = changes::added_deleted(state, &repository, dst_oid, ori_oid.unwrap())
+                    .map_err(|err| TrackingError {
+                        compute_time: now.elapsed().as_secs_f64(),
+                        commits_processed,
+                        node_processed,
+                        message: err,
+                    })?;
                 let aaa = aaa.globalize(repository.spec, commit);
                 let (src, intermediary) = if let Some(src) = source {
                     (src, Some(aaa))
@@ -700,14 +701,13 @@ pub(crate) fn track_code_at_path_with_changes(
                 return Ok(tracking_result.with_changes(changes));
             }
             MappingResult::Missing { src, fallback } => {
-                let changes =
-                    changes::added_deleted(state, &repository, dst_oid, ori_oid.unwrap())
-                        .map_err(|err| TrackingError {
-                            compute_time: now.elapsed().as_secs_f64(),
-                            commits_processed,
-                            node_processed,
-                            message: err,
-                        })?;
+                let changes = changes::added_deleted(state, &repository, dst_oid, ori_oid.unwrap())
+                    .map_err(|err| TrackingError {
+                        compute_time: now.elapsed().as_secs_f64(),
+                        commits_processed,
+                        node_processed,
+                        message: err,
+                    })?;
                 let aaa = src.globalize(repository.spec, commit);
                 let (src, intermediary) = if let Some(src) = source {
                     (src, Some(aaa))
@@ -734,7 +734,10 @@ pub(crate) fn track_code_at_path_with_changes(
                 dbg!(nodes);
                 node_processed += nodes;
                 dbg!(src_oid, dst_oid);
-                if commits.len() < 3 {
+                // TODO fix issue of not stoping when failling to match accurately,
+                // most likely related to miss use of fallback value ?
+                if commits.len() < 3 || !(node_processed < MAX_NODES) {
+                    // no commit remaining (first + second < 3)
                     // NOTE there is no parent commit to dst_commit, thus we should stop now
                     let changes =
                         changes::added_deleted(state, &repository, dst_oid, ori_oid.unwrap())
@@ -779,6 +782,7 @@ pub(crate) fn track_code_at_path_with_changes(
             }
         }
     }
+    // TODO should not look as an irrecoverable fail...
     Err(TrackingError {
         compute_time: now.elapsed().as_secs_f64(),
         commits_processed,
@@ -837,7 +841,9 @@ impl LocalPieceOfCode {
 
 fn aux(
     state: std::sync::Arc<crate::AppState>,
-    repo_handle: &impl ConfiguredRepoTrait<Config = hyper_ast_cvs_git::processing::ParametrizedCommitProcessorHandle>,
+    repo_handle: &impl ConfiguredRepoTrait<
+        Config = hyper_ast_cvs_git::processing::ParametrizedCommitProcessorHandle,
+    >,
     src_oid: hyper_ast_cvs_git::git::Oid,
     dst_oid: hyper_ast_cvs_git::git::Oid,
     file: &String,
@@ -847,11 +853,11 @@ fn aux(
 ) -> MappingResult {
     let repositories = state.repositories.read().unwrap();
     let commit_src = repositories
-        .get_commit(repo_handle.config(),&src_oid)
+        .get_commit(repo_handle.config(), &src_oid)
         .unwrap();
     let src_tr = commit_src.ast_root;
     let commit_dst = repositories
-    .get_commit(&repo_handle.config(),&dst_oid)
+        .get_commit(&repo_handle.config(), &dst_oid)
         .unwrap();
     let dst_tr = commit_dst.ast_root;
     let stores = &repositories.processor.main_stores;
@@ -915,7 +921,9 @@ fn aux(
 
 fn aux2(
     state: std::sync::Arc<crate::AppState>,
-    repo_handle: &impl ConfiguredRepoTrait<Config = hyper_ast_cvs_git::processing::ParametrizedCommitProcessorHandle>,
+    repo_handle: &impl ConfiguredRepoTrait<
+        Config = hyper_ast_cvs_git::processing::ParametrizedCommitProcessorHandle,
+    >,
     src_oid: hyper_ast_cvs_git::git::Oid,
     dst_oid: hyper_ast_cvs_git::git::Oid,
     path: &[usize],
@@ -923,11 +931,11 @@ fn aux2(
 ) -> MappingResult {
     let repositories = state.repositories.read().unwrap();
     let commit_src = repositories
-        .get_commit(repo_handle.config(),&src_oid)
+        .get_commit(repo_handle.config(), &src_oid)
         .unwrap();
     let src_tr = commit_src.ast_root;
     let commit_dst = repositories
-        .get_commit(repo_handle.config(),&dst_oid)
+        .get_commit(repo_handle.config(), &dst_oid)
         .unwrap();
     let dst_tr = commit_dst.ast_root;
     let stores = &repositories.processor.main_stores;
@@ -1077,7 +1085,7 @@ fn aux_aux(
                     let src_size = stores.node_store.resolve(src_tr).size();
                     let dst_size = stores.node_store.resolve(dst_tr).size();
                     let nodes = src_size + dst_size;
-                    let nodes = 10000;
+                    let nodes = 500_000;
 
                     return MappingResult::Skipped {
                         nodes,
@@ -1135,7 +1143,7 @@ fn aux_aux(
                     let src_size = stores.node_store.resolve(src_tr).size();
                     let dst_size = stores.node_store.resolve(dst_tr).size();
                     let nodes = src_size + dst_size;
-                    let nodes = 10000;
+                    let nodes = 500_000;
                     return MappingResult::Skipped {
                         nodes,
                         src: {
@@ -1194,7 +1202,7 @@ fn aux_aux(
                     let src_size = stores.node_store.resolve(src_tr).size();
                     let dst_size = stores.node_store.resolve(dst_tr).size();
                     let nodes = src_size + dst_size;
-                    let nodes = 10000;
+                    let nodes = 500_000;
                     return MappingResult::Skipped {
                         nodes,
                         src: {
@@ -1268,9 +1276,7 @@ fn aux_aux(
 
         dbg!();
         match mappings_cache.entry((src_tr, dst_tr)) {
-            dashmap::mapref::entry::Entry::Occupied(entry) => {
-                entry.into_ref().downgrade()
-            }
+            dashmap::mapref::entry::Entry::Occupied(entry) => entry.into_ref().downgrade(),
             dashmap::mapref::entry::Entry::Vacant(entry) => {
                 let mappings = VecStore::default();
                 let (src_arena, dst_arena) = (pair.0.get_mut(), pair.1.get_mut());

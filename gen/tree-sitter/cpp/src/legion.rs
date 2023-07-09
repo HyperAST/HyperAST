@@ -246,6 +246,11 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
         if kind == Type::StringLiteral || kind == Type::NumberLiteral || kind == Type::CharLiteral {
             *skip = true;
         }
+        // TODO make a test to carcterize behavior and avoid future regressions,
+        // see also related TODO: opt out of using end_byte other than on leafs 
+        if kind == Type::TS0 {
+            *skip = true;
+        }
         let mut acc = self.pre(text, node, stack, global);
         if kind == Type::StringLiteral || kind == Type::NumberLiteral || kind == Type::CharLiteral {
             acc.labeled = true;

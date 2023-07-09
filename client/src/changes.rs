@@ -33,7 +33,9 @@ pub struct DstChanges {
 
 pub(crate) fn added_deleted(
     state: std::sync::Arc<crate::AppState>,
-    repo_handle: &impl ConfiguredRepoTrait<Config = hyper_ast_cvs_git::processing::ParametrizedCommitProcessorHandle>,
+    repo_handle: &impl ConfiguredRepoTrait<
+        Config = hyper_ast_cvs_git::processing::ParametrizedCommitProcessorHandle,
+    >,
     src_oid: hyper_ast_cvs_git::git::Oid,
     dst_oid: hyper_ast_cvs_git::git::Oid,
 ) -> Result<(SrcChanges, DstChanges), String> {
@@ -114,6 +116,7 @@ pub(crate) fn added_deleted(
         }
     };
     let unmapped_dst: Vec<_> = global_pos_with_spaces(
+        &repositories.processor.main_stores,
         dst_tr,
         mapped.1.dst_to_src.iter().enumerate().filter_map(|(i, x)| {
             if *x == 0 {
@@ -122,9 +125,9 @@ pub(crate) fn added_deleted(
                 None
             }
         }),
-        &repositories.processor.main_stores,
     );
     let unmapped_src: Vec<_> = global_pos_with_spaces(
+        &repositories.processor.main_stores,
         src_tr,
         mapped.1.src_to_dst.iter().enumerate().filter_map(|(i, x)| {
             if *x == 0 {
@@ -133,7 +136,6 @@ pub(crate) fn added_deleted(
                 None
             }
         }),
-        &repositories.processor.main_stores,
     );
 
     Ok((
@@ -152,62 +154,73 @@ pub(crate) fn added_deleted(
     ))
 }
 
+// TODO try to move it in hyper_ast::position
+/// no_spaces gives topolgical indexes, topologically ordered,
+/// it maps onto a tree without spaces
 pub fn global_pos_with_spaces<'store, It: Iterator<Item = u32>>(
+    stores: &'store SimpleStores,
     root: NodeIdentifier,
     // increasing order
     mut no_spaces: It,
-    stores: &'store SimpleStores,
 ) -> Vec<It::Item> {
-    let mut offset_with_spaces: u32 = 0;
-    let mut offset_without_spaces: u32 = 0;
-    // let mut x = root;
-    let mut res = vec![];
-    let (children, pos_no_s, pos_w_s) = {
-        let b = stores.node_store().resolve(root);
-        let cs = b.children();
-        (
-            cs.unwrap().iter_children().map(|x| *x).collect::<Vec<_>>(),
-            offset_without_spaces + b.size_no_spaces() as u32,
-            offset_with_spaces + b.size() as u32,
-        )
-    };
     #[derive(Debug)]
     struct Ele {
         id: NodeIdentifier,
-        pos_no_s: u32,
-        pos_w_s: u32,
+        i_no_s: u32,
+        i_w_s: u32,
         idx: usize,
         children: Vec<NodeIdentifier>,
+        d1_no_s: u32,
     }
-    let mut stack = vec![Ele {
-        id: root,
-        pos_no_s,
-        pos_w_s,
-        idx: 0,
-        children,
-    }];
+    let mut res = vec![];
+    let mut stack = {
+        let b = stores.node_store().resolve(root);
+        let cs = b.children().unwrap();
+        let children = cs.iter_children().copied().collect();
+        let i_no_s = b.size_no_spaces() as u32;
+        let i_w_s = b.size() as u32;
+        vec![Ele {
+            id: root,
+            i_no_s,
+            i_w_s,
+            idx: 0,
+            children,
+            d1_no_s: 0,
+        }]
+    };
+    let mut index_with_spaces: u32 = 0;
+    let mut index_no_spaces: u32 = 0;
     while let Some(curr_no_space) = no_spaces.next() {
         loop {
             // dbg!(stack.len());
             let mut ele = stack.pop().unwrap();
             // dbg!(
             //     curr_no_space,
-            //     offset_with_spaces,
-            //     offset_without_spaces,
+            //     index_with_spaces,
+            //     index_no_spaces,
             //     &ele
             // );
-            assert!(offset_without_spaces <= offset_with_spaces);
-            if curr_no_space < offset_without_spaces {
+            // TODO add debug assertion about size_no_space and is_space being compatible
+            assert!(index_no_spaces <= index_with_spaces);
+            if curr_no_space < index_no_spaces {
                 panic!()
-            } else if curr_no_space < ele.pos_no_s {
+            } else if curr_no_space < ele.i_no_s {
                 // need to go down
-                let id = ele.children[ele.idx];
+                let Some(&id) = ele.children.get(ele.idx) else {
+                    for x in ele.children {
+                        let b = stores.node_store().resolve(x);
+                        dbg!(stores.type_store().resolve_type(&b));
+                        dbg!(b.size_no_spaces());
+                    }
+                    panic!()
+                };
                 let b = stores.node_store().resolve(id);
                 if stores.type_store().resolve_type(&b).is_spaces() {
                     ele.idx += 1;
+                    ele.d1_no_s += b.size_no_spaces() as u32;
                     stack.push(ele);
-                    offset_with_spaces += 1;
-                    // dbg!();
+                    index_with_spaces += 1;
+                    // dbg!(b.size_no_spaces());
                     continue;
                 }
                 let cs = b.children();
@@ -215,49 +228,53 @@ pub fn global_pos_with_spaces<'store, It: Iterator<Item = u32>>(
                     // dbg!(b.size_no_spaces(), b.size());
                     Ele {
                         id,
-                        children: cs.iter_children().map(|x| *x).collect::<Vec<_>>(),
-                        pos_no_s: offset_without_spaces + b.size_no_spaces() as u32 - 1,
-                        pos_w_s: offset_with_spaces + b.size() as u32 - 1,
+                        children: cs.iter_children().copied().collect(),
+                        i_no_s: index_no_spaces + b.size_no_spaces() as u32 - 1,
+                        i_w_s: index_with_spaces + b.size() as u32 - 1,
                         idx: 0,
+                        d1_no_s: index_no_spaces,
                     }
-                // } else if curr_no_space == offset_without_spaces {
-                //     ele.idx += 1;
-                //     stack.push(ele);
-                //     res.push(offset_with_spaces);
-                //     offset_without_spaces += 1;
-                //     offset_with_spaces += 1;
-                //     break;
                 } else {
-                    // ele.idx += 1;
-                    // stack.push(ele);
-                    // offset_without_spaces += 1;
-                    // offset_with_spaces += 1;
-                    // continue;
                     // dbg!();
                     Ele {
                         id,
                         children: vec![],
-                        pos_no_s: offset_without_spaces,
-                        pos_w_s: offset_with_spaces,
+                        i_no_s: index_no_spaces,
+                        i_w_s: index_with_spaces,
                         idx: 0,
+                        d1_no_s: index_no_spaces,
                     }
                 };
                 ele.idx += 1;
+                if ele.idx >= ele.children.len() {
+                    // dbg!(ele.idx);
+                }
                 stack.push(ele);
                 stack.push(value);
-            } else if curr_no_space == ele.pos_no_s {
-                res.push(offset_with_spaces);
-                offset_without_spaces = ele.pos_no_s + 1;
-                offset_with_spaces = ele.pos_w_s + 1;
+            } else if curr_no_space == ele.i_no_s {
+                let b = stores.node_store().resolve(ele.id);
+                if stores.type_store().resolve_type(&b).is_spaces() {
+                    panic!();
+                }
+                res.push(index_with_spaces);
+                if let Some(e) = stack.last_mut() {
+                    e.d1_no_s += b.size_no_spaces() as u32;
+                }
+                index_no_spaces = ele.i_no_s + 1;
+                index_with_spaces = ele.i_w_s + 1;
                 // dbg!();
                 break;
             } else {
-                // offset_without_spaces + ele.size_no_s < curr_no_space
+                // index_no_spaces + ele.size_no_s < curr_no_space
                 // we can skip the current node
                 // we already poped ele
-                offset_without_spaces = ele.pos_no_s + 1;
-                offset_with_spaces = ele.pos_w_s + 1;
+                index_no_spaces = ele.i_no_s + 1;
+                index_with_spaces = ele.i_w_s + 1;
                 // dbg!();
+                let b = stores.node_store().resolve(ele.id);
+                if let Some(e) = stack.last_mut() {
+                    e.d1_no_s += b.size_no_spaces() as u32;
+                }
             }
         }
     }
