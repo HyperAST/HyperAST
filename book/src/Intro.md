@@ -10,3 +10,7 @@ It is meant to be state of the art and fast to be able to be used on big code ba
 
 > This book is here to make it easier to understand how to use HyperAST for any programmers(understanding the API but mainly how to use the GUI). It it also here to explain how to contribute to the project (mainly add support for new language).
 
+<p align="center">
+    HyperAST and Coevolution by Stable Diffusion
+    <img src = "./coevolution.png" alt = "HyperAST and Coevolution by Stable Diffusion">
+</p>
