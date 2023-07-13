@@ -1,9 +1,34 @@
 # HyperAST
 
+[![CICD badge]][CICD]
+[![DOI](https://zenodo.org/badge/14164618.svg)](https://doi.org/10.1145/3551349.3560423)
+![](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)
+
+[CICD badge]: https://github.com/HyperAST/HyperAST/actions/workflows/deploy.yml/badge.svg
+[CICD]: https://github.com/HyperAST/HyperAST/actions/workflows/deploy.yml
+
+> [Home Page HyperAST](https://hyperast.github.io/)
+
+### [Book](https://hyperast.github.io/book/index.html)
+
+#### [Getting Started](https://hyperast.github.io/book/quickstart/quickstart.html)
+
+##### [Compute code Metrics(GUI)](https://hyperast.github.io/book/quickstart/compute_code_metrics.html)
+
+##### [Track Code(GUI)](https://hyperast.github.io/book/quickstart/track_code.html)
+
+---
+
+### [GUI](https://hyperast.github.io/gui/index.html)
+
+---
+
+### [Doc](https://hyperast.github.io/doc/hyper_ast/index.html)
+
 ## Summary
 
 The HyperAST is an AST structured as a Direct Acyclic Graph (DAG) (similar to MerkleDAG used in Git).
-An HyperAST is efficently constructed by leveraging Git and TreeSitter.
+An HyperAST is efficiently constructed by leveraging Git and TreeSitter.
 
 It reimplements the Gumtree algorithm in Rust while using the HyperAST as the underlying AST structure.
 
@@ -26,9 +51,3 @@ If you use the HyperAST is an academic purpose, please cite the following paper:
 }
 ```
 
-## TODO shores
-
-- [] handle error nodes from tree-sitter
-  should make hyperAST bijective even for bad code
-  - missing `Node::is_missing`
-  - error `Node::is_error`
