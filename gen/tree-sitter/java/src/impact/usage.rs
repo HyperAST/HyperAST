@@ -793,7 +793,6 @@ where
         // b.get_component::<BloomSize>()
             // .map(|_| {
                 let d = self.ana.solver.nodes.with(target);
-                dbg!(&d);
                 b.check(d)
             // })
             // .unwrap_or(BloomResult::MaybeContain)
@@ -2430,7 +2429,12 @@ where
                     // TODO log::debug!("really found {:?}", it.make_position(self.stores));
                 }
                 let mut s = scout.clone();
-                let x = s.up(&self.sp_store).expect("up").unwrap();
+                let Some(x) = s.up(&self.sp_store) else {
+                    dbg!("expected up to work");
+                    return;
+                };
+                let x = x.unwrap();
+                // let x = s.up(&self.sp_store).expect("up").unwrap();
                 let b = self.stores.typed_node_store().resolve(&x);
                 let t = b.get_type();
                 if t == Type::ExpressionStatement
