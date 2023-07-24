@@ -4,6 +4,7 @@ use std::{
     path::PathBuf,
 };
 
+use enumset::EnumSet;
 use hyper_ast::{
     position::{StructuralPosition, TreePath, TreePathMut},
     store::defaults::{LabelIdentifier, NodeIdentifier},
@@ -15,8 +16,8 @@ use hyper_ast_gen_ts_xml::{legion::XmlTreeGen, types::Type};
 use num::ToPrimitive;
 
 use crate::{
-    processing::ObjectName, Accumulator, DefaultMetrics, SimpleStores, TStore,
-    PROPAGATE_ERROR_ON_BAD_CST_NODE, ParseErr,
+    processing::ObjectName, Accumulator, DefaultMetrics, ParseErr, SimpleStores, TStore,
+    PROPAGATE_ERROR_ON_BAD_CST_NODE,
 };
 
 pub(crate) fn handle_pom_file<'a>(
@@ -197,6 +198,7 @@ pub struct MD {
     pub(crate) metrics: DefaultMetrics,
     #[allow(unused)] // TODO needed for scalable module level reference analysis
     pub(crate) ana: MavenPartialAnalysis,
+    pub(crate) status: EnumSet<SemFlags>,
 }
 
 pub struct MavenModuleAcc {
@@ -208,6 +210,7 @@ pub struct MavenModuleAcc {
     pub(crate) sub_modules: Option<Vec<PathBuf>>,
     pub(crate) main_dirs: Option<Vec<PathBuf>>,
     pub(crate) test_dirs: Option<Vec<PathBuf>>,
+    pub(crate) status: EnumSet<SemFlags>,
 }
 
 impl From<String> for MavenModuleAcc {
@@ -222,6 +225,7 @@ impl From<String> for MavenModuleAcc {
             sub_modules: None,
             main_dirs: None,
             test_dirs: None,
+            status: Default::default(),
         }
     }
 }
@@ -238,6 +242,7 @@ impl MavenModuleAcc {
             sub_modules: None,
             main_dirs: None,
             test_dirs: None,
+            status: Default::default(),
         }
     }
     pub(crate) fn with_content(
@@ -268,12 +273,22 @@ impl MavenModuleAcc {
             } else {
                 Some(test_dirs)
             },
+            status: Default::default(),
         }
     }
 }
 
+#[derive(enumset::EnumSetType, Debug)]
+pub enum SemFlags {
+    IsMavenModule,
+    HoldMainFolder,
+    HoldTestFolder,
+    HoldMavenSubModule,
+}
+
 impl MavenModuleAcc {
     pub(crate) fn push_pom(&mut self, name: LabelIdentifier, full_node: POM) {
+        self.status |= SemFlags::IsMavenModule;
         assert!(!self.children_names.contains(&name));
         self.children.push(full_node.compressed_node);
         self.children_names.push(name);
@@ -291,6 +306,9 @@ impl MavenModuleAcc {
         // full_node.2.acc(&Type::Directory, &mut self.ana);
     }
     pub fn push_submodule(&mut self, name: LabelIdentifier, full_node: (NodeIdentifier, MD)) {
+        if full_node.1.status.contains(SemFlags::HoldMavenSubModule) || full_node.1.status.contains(SemFlags::IsMavenModule) {
+            self.status |= SemFlags::HoldMavenSubModule;
+        }
         self.children.push(full_node.0);
         self.children_names.push(name);
         self.metrics.acc(full_node.1.metrics);
@@ -302,6 +320,7 @@ impl MavenModuleAcc {
         name: LabelIdentifier,
         full_node: java_tree_gen::Local,
     ) {
+        self.status |= SemFlags::HoldMainFolder;
         self.children.push(full_node.compressed_node);
         self.children_names.push(name);
         self.metrics.acc(SubTreeMetrics {
@@ -318,6 +337,7 @@ impl MavenModuleAcc {
         name: LabelIdentifier,
         full_node: java_tree_gen::Local,
     ) {
+        self.status |= SemFlags::HoldTestFolder;
         self.children.push(full_node.compressed_node);
         self.children_names.push(name);
         self.metrics.acc(SubTreeMetrics {
@@ -513,6 +533,9 @@ impl<'a, T: TreePath<NodeIdentifier>> IterMavenModules<'a, T> {
 impl hyper_ast::tree_gen::Accumulator for MavenModuleAcc {
     type Node = (LabelIdentifier, (NodeIdentifier, MD));
     fn push(&mut self, (name, full_node): Self::Node) {
+        let s = full_node.1.status - SemFlags::IsMavenModule;
+        assert!(!s.contains(SemFlags::IsMavenModule));
+        self.status |= s;
         self.children.push(full_node.0);
         self.children_names.push(name);
         self.metrics.acc(full_node.1.metrics);

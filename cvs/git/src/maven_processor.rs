@@ -5,7 +5,7 @@ use std::{
 };
 
 use git2::{Oid, Repository};
-use hyper_ast::{store::defaults::NodeIdentifier, types::LabelStore};
+use hyper_ast::{store::defaults::NodeIdentifier, types::LabelStore, tree_gen::Accumulator};
 use hyper_ast_gen_ts_xml::types::Type;
 
 use crate::{
@@ -95,7 +95,9 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
             .get_caches_mut()
             .object_map
             .insert(oid, full_node.clone());
-
+        if name == "pac4j-kerberos" {
+            dbg!(full_node.1.status);
+        }
         let name = self.prepro.intern_label(&name);
         if self.stack.is_empty() {
             Some(full_node)
@@ -107,7 +109,11 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                 w.children_names,
                 name
             );
-            w.push_submodule(name, full_node);
+            if full_node.1.status.contains(crate::maven::SemFlags::IsMavenModule) {
+                w.push_submodule(name, full_node);
+            } else {
+                w.push((name, full_node));
+            }
             None
         }
     }
@@ -151,11 +157,17 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
         {
             // reinit already computed node for post order
             let full_node = already.clone();
-
+            if name.try_str().unwrap() == "pac4j-kerberos" {
+                dbg!(full_node.1.status);
+            }
             let w = &mut self.stack.last_mut().unwrap().2;
             let name = self.prepro.intern_object_name(&name);
             assert!(!w.children_names.contains(&name));
-            w.push_submodule(name, full_node);
+            if full_node.1.status.contains(crate::maven::SemFlags::IsMavenModule) {
+                w.push_submodule(name, full_node);
+            } else {
+                w.push((name, full_node));
+            }
             return;
         }
         log::debug!("mm tree {:?}", name.try_str());
@@ -256,22 +268,49 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
         log::info!("make mm {} {}", &acc.name, acc.children.len());
         let vacant = insertion.vacant();
         assert_eq!(acc.children_names.len(), acc.children.len());
-        NodeStore::insert_after_prepare(
-            vacant,
-            (
-                Type::MavenDirectory,
-                label,
-                hashs,
-                compo::Size(size),
-                compo::Height(height),
-                compo::SizeNoSpaces(size_no_spaces),
-                CS(acc.children_names.into_boxed_slice()), // TODO extract dir names
-                CS(acc.children.into_boxed_slice()),
-                BloomSize::Much,
-            ),
-        )
+        if false {
+            NodeStore::insert_after_prepare(
+                vacant,
+                (
+                    Type::MavenDirectory,
+                    label,
+                    hashs,
+                    compo::Size(size),
+                    compo::Height(height),
+                    compo::SizeNoSpaces(size_no_spaces),
+                    CS(acc.children_names.into_boxed_slice()), // TODO extract dir names
+                    CS(acc.children.into_boxed_slice()),
+                    BloomSize::Much,
+                ),
+            )
+        } else {
+            // NOTE use of dyn_builder
+            // TODO make it available through cargo feature or runtime config
+            // - should most likely not change the behavior of the HyperAST, need tests
+            // TODO make an even better API
+            // - wrapping the builder,
+            // - modularising computation and storage of metadata,
+            // - checking some invariants when adding metadata,
+            // - checking some invariants for indentifying data on debug builds
+            // - tying up parts of accumulator (hyper_ast::tree_genBasicAccumulator) and builder (EntityBuilder).
+            let mut dyn_builder =
+                hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+            dyn_builder.add(Type::MavenDirectory);
+            dyn_builder.add(hashs.clone());
+            dyn_builder.add(label);
+            dyn_builder.add(BloomSize::Much,);
+            dyn_builder.add(compo::Size(size));
+            dyn_builder.add(compo::SizeNoSpaces(size_no_spaces));
+            dyn_builder.add(compo::Height(height));
+            dyn_builder.add(CS(acc.children_names.into_boxed_slice()));
+            dyn_builder.add(CS(acc.children.into_boxed_slice()));
+            if !acc.status.is_empty() {
+                dyn_builder.add(acc.status);
+            }
+            NodeStore::insert_built_after_prepare(vacant, dyn_builder.build())
+        }
     };
-
+    let status = acc.status;
     let metrics = SubTreeMetrics {
         size,
         height,
@@ -279,7 +318,7 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
         size_no_spaces,
     };
 
-    let full_node = (node_id.clone(), MD { metrics, ana });
+    let full_node = (node_id.clone(), MD { metrics, ana, status });
     full_node
 }
 
