@@ -66,7 +66,7 @@ pub fn write_referencial_relations<W: Write>(
         writeln!(out, r#","content": ["#).unwrap();
         let mut writer = Writer::new(out);
         let declarations = iter_declarations(stores, module);
-        for (decl, root_folder, of) in declarations {
+        for ExpandedDeclaration(decl, root_folder, of) in declarations {
             let now = Instant::now();
             let references =
                 find_declaration_references_position(root, stores, &decl, root_folder, of);
@@ -102,7 +102,7 @@ impl Display for SearchKinds {
 pub fn find_declaration_references_position(
     root: NodeIdentifier,
     stores: &SimpleStores,
-    declaration: &StructuralPosition,
+    declaration: &DeclSp,
     root_folder: StructuralPosition,
     other_folders: Vec<StructuralPosition>,
 ) -> Option<(SearchKinds, Vec<Position>)> {
@@ -121,7 +121,7 @@ pub fn find_declaration_references_position(
 fn find_declaration_references(
     stores: &SimpleStores,
     structural_positions: &mut StructuralPositionStore,
-    declaration: &StructuralPosition,
+    declaration: &DeclSp,
     root_folder: StructuralPosition,
     other_folders: Vec<StructuralPosition>,
 ) -> Option<(SearchKinds, Vec<SpHandle>)> {
@@ -133,10 +133,11 @@ fn find_declaration_references(
     let of = other_folders
         .iter()
         .map(|x| (x.make_position(stores).file().to_owned(), x.clone()));
+    let decl_pos = &declaration.make_position(stores);
     let p_in_of = find_package_in_other_folders(
         stores,
-        declaration.make_position(stores).file(),
-        declaration.make_position(stores).file(),
+        decl_pos.file(),
+        decl_pos.file(),
         of,
     );
     let p_in_of: Vec<TypedScout> = p_in_of
@@ -262,50 +263,49 @@ impl<'a, W: Write> Writer<'a, W> {
     }
 }
 
-type ExtendedDeclaration = (
-    StructuralPosition,
-    StructuralPosition,
-    Vec<StructuralPosition>,
-);
+type DeclSp = StructuralPosition;
+pub(crate) struct ExpandedDeclaration(DeclSp, MavenModuleSp, Vec<FolderSp>);
 
-pub fn modules_iter_declarations<'a>(
+pub(crate) fn modules_iter_declarations<'a>(
     stores: &'a SimpleStores,
-    modules: IterMavenModules<'a, StructuralPosition>,
-) -> impl Iterator<Item = ExtendedDeclaration> + 'a {
+    modules: IterMavenModules<'a, MavenModuleSp>,
+) -> impl Iterator<Item = ExpandedDeclaration> + 'a {
     modules
         .flat_map(|maven_module| maven_module_folders(stores, maven_module))
-        .flat_map(|(f, _m, of)| make_decl_iter(stores, f, of))
+        .flat_map(|ExpandedMavenModule(f, _m, of)| make_decl_iter(stores, f, of))
 }
 
-pub fn iter_declarations<'a>(
+pub(crate) fn iter_declarations<'a>(
     stores: &'a SimpleStores,
-    maven_module: StructuralPosition,
-) -> impl Iterator<Item = ExtendedDeclaration> + 'a {
+    maven_module: MavenModuleSp,
+) -> impl Iterator<Item = ExpandedDeclaration> + 'a {
     maven_module_folders(stores, maven_module)
         .into_iter()
-        .flat_map(|(f, _m, of)| make_decl_iter(stores, f, of))
+        .flat_map(|ExpandedMavenModule(f, _m, of)| make_decl_iter(stores, f, of))
 }
 
 fn make_decl_iter(
     stores: &SimpleStores,
-    f: StructuralPosition,
-    of: Vec<StructuralPosition>,
-) -> impl Iterator<Item = ExtendedDeclaration> + '_ {
+    f: FolderSp,
+    of: Vec<FolderSp>,
+) -> impl Iterator<Item = ExpandedDeclaration> + '_ {
     let n = *f.node().unwrap();
     // let n = unsafe {
     //     JavaIdN::from_id(n)
     // };
-    IterDeclarations::new(stores, f.clone(), n).map(move |x| (x, f.clone(), of.clone()))
+    IterDeclarations::new(stores, f.clone(), n)
+        .map(move |x| ExpandedDeclaration(x, f.clone(), of.clone()))
 }
+
+type MavenModuleSp = StructuralPosition;
+type FolderSp = StructuralPosition;
+
+struct ExpandedMavenModule(FolderSp, MavenModuleSp, Vec<FolderSp>);
 
 fn maven_module_folders(
     stores: &SimpleStores,
-    maven_module: StructuralPosition,
-) -> Vec<(
-    StructuralPosition,
-    StructuralPosition,
-    Vec<StructuralPosition>,
-)> {
+    maven_module: MavenModuleSp,
+) -> Vec<ExpandedMavenModule> {
     let src = goto_by_name(stores, maven_module.clone(), "src");
     let source_tests = src
         .clone()
@@ -318,10 +318,14 @@ fn maven_module_folders(
     let mut test_folders = vec![];
     if let Some(source_tests) = source_tests {
         test_folders.push(source_tests.clone());
-        r.push((source_tests, maven_module.clone(), vec![]))
+        r.push(ExpandedMavenModule(
+            source_tests,
+            maven_module.clone(),
+            vec![],
+        ))
     }
     if let Some(source) = source {
-        r.push((source, maven_module, test_folders))
+        r.push(ExpandedMavenModule(source, maven_module, test_folders))
     }
     r
 }
