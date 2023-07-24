@@ -1,5 +1,5 @@
 #![feature(test)]
-#![feature(drain_filter)]
+#![feature(extract_if)]
 pub mod allrefs;
 pub mod git;
 pub mod java;

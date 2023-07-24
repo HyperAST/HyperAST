@@ -161,7 +161,7 @@ impl Tag {
         // dbg!(&pattern);
         // dbg!(&variables);
         let mut names = variables
-            .drain_filter(|x| x.0 == "name")
+            .extract_if(|x| x.0 == "name")
             .collect::<Vec<_>>();
         if names.len() == 0 {
             return Err("Missing name variable".into())?;

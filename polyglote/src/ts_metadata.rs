@@ -221,7 +221,7 @@ impl<'a, 'b> PatternParser<'a, 'b> {
                             .into_iter()
                             .map(|cap| {
                                 let x = captures_with_predicates
-                                    .drain_filter(|(c, _)| *c == cap)
+                                    .extract_if(|(c, _)| *c == cap)
                                     .map(|(x, pred)| pred.to_string())
                                     .collect();
                                 (cap, x)

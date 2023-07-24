@@ -1,5 +1,5 @@
 #![feature(iter_collect_into)]
-#![feature(drain_filter)]
+#![feature(extract_if)]
 mod macr;
 mod preprocess;
 mod render_fdg;
