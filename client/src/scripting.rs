@@ -1,8 +1,10 @@
 mod estimate;
 mod finalize;
+mod fs_container;
 mod max;
 mod mean;
 mod min;
+mod named_container;
 mod quantile;
 mod refs;
 mod stats;
@@ -12,8 +14,9 @@ use average::Merge;
 use axum::Json;
 use hyper_ast::{
     store::defaults::NodeIdentifier,
-    types::{HyperType, TypeStore, WithChildren, WithStats},
+    types::{HyperType, LabelStore, Labeled, TypeStore, WithChildren, WithStats},
 };
+use num::ToPrimitive;
 use rhai::{
     packages::{BasicArrayPackage, CorePackage, Package},
     Array, Dynamic, Engine, Instant, Scope,
@@ -138,8 +141,20 @@ pub fn simple_depth(
         .repositories
         .write()
         .unwrap()
-        .get_config(repo_spec)
-        .ok_or_else(|| ScriptingError::Other("missing config for repository".to_string()))?;
+        .get_config(repo_spec.clone());
+    let repo = match repo {
+        Some(repo) => repo,
+        None => {
+            let configs = &mut state.repositories.write().unwrap();
+            configs.register_config(
+                repo_spec.clone(),
+                hyper_ast_cvs_git::processing::RepoConfig::JavaMaven,
+            );
+            log::error!("missing config for {}", repo_spec);
+            configs.get_config(repo_spec.clone()).unwrap()
+        }
+    };
+    // .ok_or_else(|| ScriptingError::Other("missing config for repository".to_string()))?;
     let mut repo = repo.fetch();
     log::warn!("done cloning {}", &repo.spec);
     let commits = state
@@ -345,9 +360,73 @@ fn simple_aux(
                         v.0.iter().map(|x| Dynamic::from(*x)).collect::<Array>()
                     })
             });
+            let s = state.clone();
+            filter_engine.register_fn("is_java_file", move || {
+                let stores = &stores!(s);
+                let node_store = &stores.node_store;
+                let type_store = &stores.type_store;
+                let n = node_store.resolve(current);
+                let t = type_store.resolve_type(&n);
+                t.is_file()
+                    && stores
+                        .label_store
+                        .resolve(n.get_label_unchecked())
+                        .ends_with(".java")
+            });
+            let s = state.clone();
+            filter_engine.register_fn("file_name", move || {
+                let stores = &stores!(s);
+                let node_store = &stores.node_store;
+                let type_store = &stores.type_store;
+                let n = node_store.resolve(current);
+                let t = type_store.resolve_type(&n);
+                if t.is_file() || t.is_directory() {
+                    Ok(stores
+                        .label_store
+                        .resolve(n.get_label_unchecked())
+                        .to_string())
+                } else {
+                    Err(Box::<rhai::EvalAltResult>::from(
+                        "file_name() should be called on a file or a directory",
+                    ))
+                }
+            });
+            let s = state.clone();
+            filter_engine.register_fn("is_maven_module", move || {
+                let stores = &stores!(s);
+                let node_store = &stores.node_store;
+                let n = node_store.resolve(current);
+                use enumset::EnumSet;
+                use hyper_ast_cvs_git::maven::SemFlags;
+                n.get_component::<EnumSet<SemFlags>>()
+                    .map_or(false, |x| x.contains(SemFlags::IsMavenModule))
+            });
+            let s = state.clone();
+            filter_engine.register_fn("hold_maven_submodule", move || {
+                let stores = &stores!(s);
+                let node_store = &stores.node_store;
+                let n = node_store.resolve(current);
+                use enumset::EnumSet;
+                use hyper_ast_cvs_git::maven::SemFlags;
+                n.get_component::<EnumSet<SemFlags>>()
+                    .map_or(false, |x| x.contains(SemFlags::HoldMavenSubModule))
+            });
+            let s = state.clone();
+            filter_engine.register_fn("hold_java_folder", move || {
+                let stores = &stores!(s);
+                let node_store = &stores.node_store;
+                let n = node_store.resolve(current);
+                use enumset::EnumSet;
+                use hyper_ast_cvs_git::maven::SemFlags;
+                n.get_component::<EnumSet<SemFlags>>().map_or(false, |x| {
+                    x.contains(SemFlags::HoldMainFolder) || x.contains(SemFlags::HoldTestFolder)
+                })
+            });
+            add_utils(&mut filter_engine);
             let prepared: Dynamic = filter_engine
                 .eval_ast_with_scope(&mut scope, &filter_script)
                 .map_err(|x| ScriptingError::AtEvaluation(x.to_string()))?;
+            acc.value = Some(scope.get_value("s").unwrap());
             if let Some(prepared) = prepared.try_cast::<Vec<Dynamic>>() {
                 stack.push(Acc {
                     pending_cs: prepared.len() as isize,
@@ -418,10 +497,90 @@ fn simple_aux(
             t.is_file()
         });
         let s = state.clone();
-        acc_engine.register_fn("references", move |sig: String| {
+        acc_engine.register_fn("is_java_file", move || {
             let stores = &stores!(s);
-            refs::find_refs(stores, current, sig).map_or(0, |x| x as i64)
+            let node_store = &stores.node_store;
+            let type_store = &stores.type_store;
+            let n = node_store.resolve(current);
+            let t = type_store.resolve_type(&n);
+            t.is_file()
+                && stores
+                    .label_store
+                    .resolve(n.get_label_unchecked())
+                    .ends_with(".java")
         });
+        let s = state.clone();
+        acc_engine.register_fn("file_name", move || {
+            let stores = &stores!(s);
+            let node_store = &stores.node_store;
+            let type_store = &stores.type_store;
+            let n = node_store.resolve(current);
+            let t = type_store.resolve_type(&n);
+            if t.is_file() || t.is_directory() {
+                Ok(stores
+                    .label_store
+                    .resolve(n.get_label_unchecked())
+                    .to_string())
+            } else {
+                Err(Box::<rhai::EvalAltResult>::from(
+                    "file_name() should be called on a file or a directory",
+                ))
+            }
+        });
+        let s = state.clone();
+        acc_engine.register_fn("is_maven_module", move || {
+            let stores = &stores!(s);
+            let node_store = &stores.node_store;
+            let n = node_store.resolve(current);
+            use enumset::EnumSet;
+            use hyper_ast_cvs_git::maven::SemFlags;
+            n.get_component::<EnumSet<SemFlags>>()
+                .map_or(false, |x| x.contains(SemFlags::IsMavenModule))
+        });
+        let s = state.clone();
+        acc_engine.register_fn("hold_maven_submodule", move || {
+            let stores = &stores!(s);
+            let node_store = &stores.node_store;
+            let n = node_store.resolve(current);
+            use enumset::EnumSet;
+            use hyper_ast_cvs_git::maven::SemFlags;
+            n.get_component::<EnumSet<SemFlags>>()
+                .map_or(false, |x| x.contains(SemFlags::HoldMavenSubModule))
+        });
+        let s = state.clone();
+        acc_engine.register_fn("hold_java_folder", move || {
+            let stores = &stores!(s);
+            let node_store = &stores.node_store;
+            let n = node_store.resolve(current);
+            use enumset::EnumSet;
+            use hyper_ast_cvs_git::maven::SemFlags;
+            n.get_component::<EnumSet<SemFlags>>().map_or(false, |x| {
+                x.contains(SemFlags::HoldMainFolder) || x.contains(SemFlags::HoldTestFolder)
+            })
+        });
+        let s = state.clone();
+        acc_engine.register_fn("references", move |sig: String, p_ref: String| {
+            let stores = &stores!(s);
+            refs::find_refs(stores, current, p_ref, sig).map_or(0, |x| x as i64)
+        });
+
+        let s = state.clone();
+        acc_engine.register_fn(
+            "pp",
+            |s: refs::QPath,
+             node: NodeIdentifier,
+             i: i64|
+             -> Result<refs::Pos, Box<rhai::EvalAltResult>> {
+                // let stores = &stores!(s);
+                // let it = s.0;
+                // let position_converter =
+                //     &hyper_ast::position::PositionConverter::new(&it).with_stores(stores);
+                // let p = position_converter
+                //     .compute_pos_post_order::<_, hyper_ast::position::Position, _>();
+                // Ok(refs::Pos::from(p))
+                todo!("need to choose a convenient path, try to exploit param overloading")
+            },
+        );
         add_utils(&mut acc_engine);
         acc_engine
             .eval_ast_with_scope(&mut scope, &accumulate_script)
@@ -481,4 +640,78 @@ fn add_utils(engine: &mut Engine) {
             x.merge(&y);
         })
         .register_fn("+=", |m: &mut Stats, x: i64| m.add_i64(x));
+
+    use named_container::NamedContainer;
+    engine
+        .register_type_with_name::<NamedContainer<Dynamic>>("NamedCont")
+        .register_fn("NamedCont", NamedContainer::<Dynamic>::new)
+        .register_fn(
+            "+=",
+            |context: rhai::NativeCallContext,
+             x: &mut NamedContainer<Dynamic>,
+             y: Dynamic|
+             -> Result<(), Box<rhai::EvalAltResult>> {
+                let cont = std::mem::replace(&mut x.content, Dynamic::UNIT);
+                context.call_native_fn("+", (cont, y)).map(|y| {
+                    x.content = y;
+                })
+            },
+        )
+        .register_fn(
+            "is_empty",
+            |context: rhai::NativeCallContext,
+             x: &mut NamedContainer<Dynamic>|
+             -> Result<bool, Box<rhai::EvalAltResult>> {
+                context
+                    .call_native_fn("is_empty", (x.content.clone(),))
+                    .map(|r| r)
+            },
+        );
+    use fs_container::FsContainer;
+    engine
+        .register_type_with_name::<FsContainer<Dynamic>>("FsCont")
+        .register_fn("FsCont", FsContainer::<Dynamic>::new)
+        .register_fn(
+            "+=",
+            |context: rhai::NativeCallContext,
+             x: &mut FsContainer<Dynamic>,
+             mut y: Dynamic|
+             -> Result<(), Box<rhai::EvalAltResult>> {
+                // let mut cont = std::mem::replace(&mut x.content, Dynamic::UNIT);
+                // dbg!(&cont, &y);
+                // context.call_native_fn("+=", (cont, y))
+                // .map(|y|{
+                //     x.content = y;
+                // })
+                let cont = &mut x.content;
+                context
+                    .call_native_fn_raw("+=", true, &mut [cont, &mut y])
+                    .and_then(|y| y.as_unit().map_err(|e| e.into()))
+            },
+        )
+        .register_fn(
+            "is_empty",
+            |context: rhai::NativeCallContext,
+             x: &mut FsContainer<Dynamic>|
+             -> Result<bool, Box<rhai::EvalAltResult>> {
+                context
+                    .call_native_fn("is_empty", (x.content.clone(),))
+                    .map(|r| r)
+            },
+        );
+    use refs::QPath;
+    engine
+        .register_type_with_name::<QPath>("Path")
+        .register_fn("Path", QPath::new)
+        .register_fn(
+            "goto",
+            |s: &mut QPath, node: NodeIdentifier, i: i64| -> Result<(), Box<rhai::EvalAltResult>> {
+                let i = i.to_u16().ok_or(concat!(
+                    "given child offset is too big,",
+                    "you most likely made an error,",
+                    "otherwise change the configured offset size"
+                ))?;
+                Ok(s.goto(node, i))
+            },
+        );
 }
