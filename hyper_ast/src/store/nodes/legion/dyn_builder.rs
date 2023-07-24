@@ -228,43 +228,43 @@ impl ComponentSource for BuiltEntity {
         let entity = entities.next().unwrap();
         writer.push(entity);
 
-        let v = unsafe { Vec::from_raw_parts(self.inner.storage.as_ptr(), self.inner.cursor, 4) };
-        dbg!(&v);
-        std::mem::forget(v);
+        // let v = unsafe { Vec::from_raw_parts(self.inner.storage.as_ptr(), self.inner.cursor, 4) };
+        // dbg!(&v);
+        // std::mem::forget(v);
 
         for (ty, offset, _) in &mut self.inner.info {
             let mut target = writer.claim_components_unknown(ty.id());
             let ptr = unsafe { self.inner.storage.as_ptr().add(*offset) };
-            let len = ty.layout().size();
+            // let len = ty.layout().size();
 
-            println!();
-            println!("store:  {:?}", self.inner.storage.as_ptr());
-            println!("ptr:    {:p}", ptr);
-            println!("off:    {:?}", offset);
-            println!("cursor: {:?}", self.inner.cursor);
-            println!("len:    {:?}", len);
-            if ty.id().type_id() == TypeId::of::<(Vec<usize>,)>() {
-                let aaa = ptr as *mut (Vec<usize>,);
-                dbg!(unsafe { aaa.as_ref() });
-            } else if ty.id().type_id() == TypeId::of::<(Box<[u32]>,)>() {
-                let aaa = ptr as *mut (Box<[u32]>,);
-                dbg!(unsafe { aaa.as_ref() });
-            } else if ty.id().type_id() == TypeId::of::<Vec<u64>>() {
-                let aaa = ptr as *mut Vec<u64>;
-                dbg!(unsafe { aaa.as_ref() });
-            }
-            let len = 1;
+            // eprintln!();
+            // eprintln!("store:  {:?}", self.inner.storage.as_ptr());
+            // eprintln!("ptr:    {:p}", ptr);
+            // eprintln!("off:    {:?}", offset);
+            // eprintln!("cursor: {:?}", self.inner.cursor);
+            // eprintln!("len:    {:?}", len);
+            // if ty.id().type_id() == TypeId::of::<(Vec<usize>,)>() {
+            //     let aaa = ptr as *mut (Vec<usize>,);
+            //     // dbg!(unsafe { aaa.as_ref() });
+            // } else if ty.id().type_id() == TypeId::of::<(Box<[u32]>,)>() {
+            //     let aaa = ptr as *mut (Box<[u32]>,);
+            //     // dbg!(unsafe { aaa.as_ref() });
+            // } else if ty.id().type_id() == TypeId::of::<Vec<u64>>() {
+            //     let aaa = ptr as *mut Vec<u64>;
+            //     // dbg!(unsafe { aaa.as_ref() });
+            // }
+            let len = 1; // actually the len of slice, not the len of the component
             unsafe { target.extend_memcopy_raw(ptr, len) };
-            if ty.id().type_id() == TypeId::of::<(Vec<usize>,)>() {
-                let aaa = ptr as *mut (Vec<usize>,);
-                dbg!(unsafe { aaa.as_ref() });
-            } else if ty.id().type_id() == TypeId::of::<(Box<[u32]>,)>() {
-                let aaa = ptr as *mut (Box<[u32]>,);
-                dbg!(unsafe { aaa.as_ref() });
-            } else if ty.id().type_id() == TypeId::of::<Vec<u64>>() {
-                let aaa = ptr as *mut Vec<u64>;
-                dbg!(unsafe { aaa.as_ref() });
-            }
+            // if ty.id().type_id() == TypeId::of::<(Vec<usize>,)>() {
+            //     let aaa = ptr as *mut (Vec<usize>,);
+            //     // dbg!(unsafe { aaa.as_ref() });
+            // } else if ty.id().type_id() == TypeId::of::<(Box<[u32]>,)>() {
+            //     let aaa = ptr as *mut (Box<[u32]>,);
+            //     // dbg!(unsafe { aaa.as_ref() });
+            // } else if ty.id().type_id() == TypeId::of::<Vec<u64>>() {
+            //     let aaa = ptr as *mut Vec<u64>;
+            //     // dbg!(unsafe { aaa.as_ref() });
+            // }
         }
     }
 }
