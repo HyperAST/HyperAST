@@ -49,6 +49,8 @@ lazy_static = "1.4.0"
 getrandom = { version = "0.2.8" }
 indexmap = "=1.6.2"
 
+hecs = { version = "0.9.1", features = [], optional = true }
+
 [dev-dependencies]
 env_logger = "0.9.0"
 
@@ -62,8 +64,9 @@ features = ["derive"]
 optional = true
 
 [features]
-default = ["jemalloc", "legion", "native"]
+default = ["jemalloc", "legion", "hecs", "native"]
 legion = ["dep:legion"]
+hecs = ["dep:hecs"]
 web = ["getrandom/js", "dep:string-interner", "dep:hashbrown"]
 native = ["dep:string-interner", "dep:hashbrown", "hashbrown?/ahash"]
 jemalloc = ["jemallocator", "jemalloc-ctl"]
