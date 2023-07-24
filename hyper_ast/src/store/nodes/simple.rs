@@ -48,7 +48,7 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> Hash for HashedNodeRef<'a, Id> {
     }
 }
 
-impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> Debug for HashedNodeRef<'a, Id>
+impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> Debug for HashedNodeRef<'a, Id>
 where
     Id::Ty: Debug,
 {
