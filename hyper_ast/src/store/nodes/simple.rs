@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash, num::NonZeroU64};
+use std::{fmt::Debug, hash::Hash, marker::PhantomData, num::NonZeroU64};
 
 use crate::{
     filter::BloomResult,
@@ -6,7 +6,7 @@ use crate::{
     impact::serialize::{Keyed, MySerialize},
     nodes::{CompressedNode, HashSize, RefContainer},
     store::defaults::LabelIdentifier,
-    types::{HyperType, MySlice, NodeId, Typed, TypedNodeId},
+    types::{HyperType, Labeled, MySlice, NodeId, Typed, TypedNodeId, WithChildren},
 };
 
 pub type NodeIdentifier = NonZeroU64;
@@ -29,16 +29,14 @@ impl TypedNodeId for NodeIdentifier {
     type Ty = crate::types::AnyType;
 }
 
-pub struct HashedNodeRef<'a, Id: TypedNodeId<IdN = NodeIdentifier>> {
-    id: Id::IdN,
-    ty: Id::Ty,
-    label: Option<LabelIdentifier>,
-    children: &'a [Id::IdN],
-}
+pub struct HashedNodeRef<'a, Id: TypedNodeId<IdN = NodeIdentifier>>(
+    &'a boxed_component::ErasedMap,
+    PhantomData<Id>,
+);
 
 impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> PartialEq for HashedNodeRef<'a, Id> {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
+        std::ptr::eq(self, other)
     }
 }
 
@@ -55,23 +53,27 @@ where
     Id::Ty: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("HashedNodeRef")
-            .field("id", &self.id)
-            .field("ty", &self.ty)
-            .field("label", &self.label)
-            .field("children", &self.children)
-            .finish()
+        let mut acc = f.debug_struct("HashedNodeRef");
+        acc.field("ty", &self.get_type());
+        if let Some(label) = self.try_get_label() {
+            acc.field("label", label);
+        }
+        if let Some(children) = &self.children() {
+            acc.field("children", children);
+        }
+        acc.finish()
     }
 }
 
-impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::Typed for HashedNodeRef<'a, Id>
+impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Typed
+    for HashedNodeRef<'a, Id>
 where
     Id::Ty: Copy + Hash + Eq,
 {
     type Type = Id::Ty;
 
     fn get_type(&self) -> Id::Ty {
-        self.ty
+        *self.0.get::<Id::Ty>().unwrap()
     }
 }
 
@@ -130,7 +132,8 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithHashs for Hash
     }
 }
 
-impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::Tree for HashedNodeRef<'a, Id>
+impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Tree
+    for HashedNodeRef<'a, Id>
 where
     Id::Ty: Copy + Hash + Eq,
 {
@@ -160,7 +163,7 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> RefContainer for HashedNodeRef<'
     }
 }
 
-impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> HashedNodeRef<'a, Id>
+impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> HashedNodeRef<'a, Id>
 where
     Id::Ty: HyperType,
 {
@@ -253,7 +256,9 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> HashedNodeRef<'a, Id> {
     }
 }
 
-pub struct NodeStore {}
+pub struct NodeStore {
+    nodes: std::collections::HashMap<NodeIdentifier, boxed_component::ErasedMap>
+}
 
 impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
     type R<'a> = HashedNodeRef<'a, NodeIdentifier>; // TODO
@@ -262,7 +267,9 @@ impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
     }
 }
 
-impl<TIdN: TypedNodeId<IdN = NodeIdentifier>> crate::types::TypedNodeStore<TIdN> for NodeStore {
+impl<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::TypedNodeStore<TIdN>
+    for NodeStore
+{
     type R<'a> = HashedNodeRef<'a, TIdN>; // TODO
     fn resolve(&self, id: &TIdN) -> Self::R<'_> {
         todo!()
@@ -274,7 +281,7 @@ impl<TIdN: TypedNodeId<IdN = NodeIdentifier>> crate::types::TypedNodeStore<TIdN>
 }
 
 impl NodeStore {
-    pub fn resolve<TIdN: TypedNodeId<IdN = NodeIdentifier>>(
+    pub fn resolve<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>>(
         &self,
         id: NodeIdentifier,
     ) -> <Self as crate::types::TypedNodeStore<TIdN>>::R<'_> {
@@ -291,5 +298,79 @@ impl NodeStore {
 impl NodeStore {
     pub fn new() -> Self {
         todo!()
+    }
+}
+
+mod boxed_component {
+    use std::any::Any;
+    #[derive(Clone, Copy, Debug)]
+    pub struct CommitProcessorHandle(std::any::TypeId);
+    pub struct ErasedMap<V = Box<dyn ErasableComponent>>(
+        std::collections::HashMap<std::any::TypeId, V>,
+    );
+    impl<V> Default for ErasedMap<V> {
+        fn default() -> Self {
+            Self(Default::default())
+        }
+    }
+    impl<V> ErasedMap<V> {
+        pub(crate) fn clear(&mut self) {
+            self.0.clear()
+        }
+    }
+
+    unsafe impl<V> Send for ErasedMap<V> {}
+    unsafe impl<V> Sync for ErasedMap<V> {}
+
+    // Should not need to be public
+    pub trait ErasableComponent: Any + ToErasedComponent {}
+    pub trait ToErasedComponent {
+        fn to_erasable_processor(self: Box<Self>) -> Box<dyn ErasableComponent>;
+        fn as_mut_any(&mut self) -> &mut dyn Any;
+        fn as_any(&self) -> &dyn Any;
+    }
+
+    // todo use downcast-rs
+    impl<T: ErasableComponent> ToErasedComponent for T {
+        fn to_erasable_processor(self: Box<Self>) -> Box<dyn ErasableComponent> {
+            self
+        }
+        fn as_mut_any(&mut self) -> &mut dyn Any {
+            self
+        }
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+    }
+    impl<T> ErasableComponent for T where T: Any {}
+    // NOTE crazy good stuff
+    impl ErasedMap<Box<dyn ErasableComponent>> {
+        pub fn by_id_mut(
+            &mut self,
+            id: &CommitProcessorHandle,
+        ) -> Option<&mut (dyn ErasableComponent + 'static)> {
+            self.0.get_mut(&id.0).map(|x| x.as_mut())
+        }
+        pub fn by_id(
+            &self,
+            id: &CommitProcessorHandle,
+        ) -> Option<&(dyn ErasableComponent + 'static)> {
+            self.0.get(&id.0).map(|x| x.as_ref())
+        }
+        pub fn mut_or_default<T: 'static + ToErasedComponent + Default + Send + Sync>(
+            &mut self,
+        ) -> &mut T {
+            let r = self
+                .0
+                .entry(std::any::TypeId::of::<T>())
+                .or_insert_with(|| Box::new(T::default()).to_erasable_processor());
+            let r = r.as_mut();
+            let r = <dyn Any>::downcast_mut(r.as_mut_any());
+            r.unwrap()
+        }
+        pub fn get<T: 'static + ToErasedComponent + Send + Sync>(&self) -> Option<&T> {
+            let r = self.0.get(&std::any::TypeId::of::<T>())?;
+            <dyn Any>::downcast_ref(r.as_any())
+        }
     }
 }
