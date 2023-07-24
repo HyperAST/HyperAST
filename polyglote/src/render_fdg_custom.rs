@@ -3,9 +3,11 @@ use std::ops::Deref;
 
 use std::collections::HashMap;
 
+use derive_deref::Deref;
 use fdg_img::style::text_anchor::{HPos, Pos, VPos};
 use fdg_img::style::{Color, IntoFont, RGBAColor, ShapeStyle, TextStyle, BLACK};
 use fdg_img::Settings;
+use fdg_sim::petgraph::stable_graph::StableGraph;
 use fdg_sim::petgraph::visit::{EdgeRef, IntoEdgeReferences};
 use fdg_sim::petgraph::Undirected;
 use fdg_sim::Dimensions;
@@ -175,7 +177,9 @@ impl<'a> From<&'a Weigthed<RelSty>> for &'a macroquad::color::Color {
 }
 
 pub(crate) fn render(mut w: TypeSys) {
-    let graph = init_graph(w);
+    let mut graph = Graph::default();
+    graph.process_types(w);
+    let graph = graph.graph;
     // let f = force::fruchterman_reingold_weighted(
     //     25.0, 0.985,
     // );
@@ -397,16 +401,29 @@ pub(crate) fn render(mut w: TypeSys) {
     fs::write("/tmp/fdg_graph.svg", svg.as_bytes()).unwrap();
 }
 
-pub(crate) fn init_graph(
+#[derive(Default)]
+pub struct Graph {
+    graph: StableGraph<fdg_sim::Node<NodeData>, RelData, Undirected>
+}
+
+impl From<Graph> for StableGraph<fdg_sim::Node<NodeData>, RelData, Undirected> {
+    fn from(value: Graph) -> Self {
+        value.graph
+    }
+}
+
+impl Graph {
+
+pub(crate) fn process_types(
+    &mut self,
     mut w: TypeSys,
-) -> fdg_sim::petgraph::stable_graph::StableGraph<fdg_sim::Node<NodeData>, RelData, Undirected> {
-    // initialize a graph
-    let mut graph: ForceGraph<NodeData, RelData> = ForceGraph::default();
+) {
+    let graph = &mut self.graph;
 
-    let mut map = HashMap::with_capacity(w.abstract_types.len() as usize);
-    let mut roles = HashMap::with_capacity(w.abstract_types.len() as usize);
+    let mut map = HashMap::with_capacity(w.types.len() as usize);
+    let mut roles = HashMap::with_capacity(w.types.len() as usize);
 
-    w.abstract_types
+    w.types
         .query_mut::<(&T,)>()
         .with::<(&DChildren,)>()
         .into_iter()
@@ -414,7 +431,7 @@ pub(crate) fn init_graph(
             let handle = graph.add_force_node(t.to_string(), NodeSty::Concrete.into());
             map.insert(e, handle);
         });
-    w.abstract_types
+    w.types
         .query_mut::<(&T,)>()
         .with::<(&Fields,)>()
         .into_iter()
@@ -424,7 +441,7 @@ pub(crate) fn init_graph(
                 map.insert(e, handle);
             }
         });
-    w.abstract_types
+    w.types
         .query_mut::<(&T,)>()
         .with::<(&SubTypes,)>()
         .into_iter()
@@ -434,7 +451,7 @@ pub(crate) fn init_graph(
                 map.insert(e, handle);
             }
         });
-    w.abstract_types
+    w.types
         .query_mut::<(&T,)>()
         .into_iter()
         .for_each(|(e, (t,))| {
@@ -443,7 +460,7 @@ pub(crate) fn init_graph(
                 map.insert(e, handle);
             }
         });
-    w.abstract_types
+    w.types
         .query_mut::<(&Role, &DChildren)>()
         .with::<(&MultipleChildren,)>()
         .with::<(&RequiredChildren,)>()
@@ -458,7 +475,7 @@ pub(crate) fn init_graph(
                 roles.insert(k, handle);
             }
         });
-    w.abstract_types
+    w.types
         .query_mut::<(&Role, &DChildren)>()
         .without::<(&MultipleChildren,)>()
         .with::<(&RequiredChildren,)>()
@@ -473,7 +490,7 @@ pub(crate) fn init_graph(
                 roles.insert(k, handle);
             }
         });
-    w.abstract_types
+    w.types
         .query_mut::<(&Role, &DChildren)>()
         .without::<(&MultipleChildren,)>()
         .without::<(&RequiredChildren,)>()
@@ -488,7 +505,7 @@ pub(crate) fn init_graph(
                 roles.insert(k, handle);
             }
         });
-    w.abstract_types
+    w.types
         .query_mut::<(&Role, &DChildren)>()
         .with::<(&MultipleChildren,)>()
         .without::<(&RequiredChildren,)>()
@@ -504,7 +521,7 @@ pub(crate) fn init_graph(
             }
         });
 
-    w.abstract_types
+    w.types
         .query_mut::<(&SubTypes,)>()
         .into_iter()
         .for_each(|(e, (st,))| {
@@ -516,7 +533,7 @@ pub(crate) fn init_graph(
             }
         });
 
-    w.abstract_types
+    w.types
         .query_mut::<(&Fields,)>()
         .into_iter()
         .for_each(|(e, (fi,))| {
@@ -530,7 +547,7 @@ pub(crate) fn init_graph(
             }
         });
 
-    w.abstract_types
+    w.types
         .query_mut::<(&DChildren,)>()
         .into_iter()
         .for_each(|(e, (cs,))| {
@@ -541,5 +558,5 @@ pub(crate) fn init_graph(
                 }
             }
         });
-    graph
+}
 }

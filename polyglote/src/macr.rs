@@ -30,8 +30,10 @@ macro_rules! mk_get_language {
                 Lang::Rust => tree_sitter_rust::language(),
                 // Lang::Preproc => tree_sitter_preproc::language(),
                 // Lang::Ccomment => tree_sitter_ccomment::language(),
-                Lang::Cpp => tree_sitter_mozcpp::language(),
+                Lang::Cpp => tree_sitter_cpp::language(),
+                // Lang::Cpp => tree_sitter_mozcpp::language(),
                 // Lang::Mozjs => tree_sitter_mozjs::language(),
+                Lang::Xml => tree_sitter_xml::language(),
             }
         }
     };
@@ -70,6 +72,7 @@ mk_langs!(
     // (Mozjs, tree_sitter_mozjs),
     // (Javascript, tree_sitter_javascript),
     (Typescript, tree_sitter_typescript),
+    (Xml, tree_sitter_xml),
 );
 
 

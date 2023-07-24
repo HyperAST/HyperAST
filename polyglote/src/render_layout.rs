@@ -16,37 +16,37 @@ use crate::preprocess::{TypeSys, T, SubTypes, Fields, Role, DChildren, SubType, 
 pub(crate) fn render(mut w: TypeSys) {
     // Create a new graph:
     let mut vg = VisualGraph::new(Orientation::LeftToRight);
-    let mut map = HashMap::with_capacity(w.abstract_types.len() as usize);
+    let mut map = HashMap::with_capacity(w.types.len() as usize);
 
     let sz = Point::new(150., 100.);
 
-    w.abstract_types.query_mut::<(&T,)>().with::<(&Child,)>().into_iter().for_each(|(e, (t,))| {
+    w.types.query_mut::<(&T,)>().with::<(&Child,)>().into_iter().for_each(|(e, (t,))| {
         let node = make_node(t, sz);
         let handle = vg.add_node(node);
         map.insert(e, handle);
     });
-    w.abstract_types.query_mut::<(&T,)>().without::<(&Child,)>().with::<(&SubType,)>().into_iter().for_each(|(e, (t,))| {
+    w.types.query_mut::<(&T,)>().without::<(&Child,)>().with::<(&SubType,)>().into_iter().for_each(|(e, (t,))| {
         let node = make_node(t, sz);
         let handle = vg.add_node(node);
         map.insert(e, handle);
     });
-    w.abstract_types.query_mut::<(&T,)>().without::<(&Child,)>().without::<(&SubType,)>().with::<(&SubTypes,)>().into_iter().for_each(|(e, (t,))| {
+    w.types.query_mut::<(&T,)>().without::<(&Child,)>().without::<(&SubType,)>().with::<(&SubTypes,)>().into_iter().for_each(|(e, (t,))| {
         let node = make_node(t, sz);
         let handle = vg.add_node(node);
         map.insert(e, handle);
     });
-    w.abstract_types.query_mut::<(&T,)>().without::<(&Child,)>().without::<(&SubType,)>().with::<(&DChildren,)>().into_iter().for_each(|(e, (t,))| {
+    w.types.query_mut::<(&T,)>().without::<(&Child,)>().without::<(&SubType,)>().with::<(&DChildren,)>().into_iter().for_each(|(e, (t,))| {
         let node = make_node(t, sz);
         let handle = vg.add_node(node);
         map.insert(e, handle);
     });
-    w.abstract_types.query_mut::<(&T,)>().without::<(&Child,)>().without::<(&SubType,)>().with::<(&Fields,)>().into_iter().for_each(|(e, (t,))| {
+    w.types.query_mut::<(&T,)>().without::<(&Child,)>().without::<(&SubType,)>().with::<(&Fields,)>().into_iter().for_each(|(e, (t,))| {
         let node = make_node(t, sz);
         let handle = vg.add_node(node);
         map.insert(e, handle);
     });
 
-    w.abstract_types.query_mut::<(&Role,)>().into_iter().for_each(|(e, (t,))| {
+    w.types.query_mut::<(&Role,)>().into_iter().for_each(|(e, (t,))| {
         let sp = ShapeKind::new_circle(&t.to_string());
         let look = StyleAttr::simple();
         let node = Element::create(sp, look, Orientation::TopToBottom, sz);
@@ -54,7 +54,7 @@ pub(crate) fn render(mut w: TypeSys) {
         map.insert(e, handle);
     });
 
-    w.abstract_types.query_mut::<(&SubTypes,)>().into_iter().for_each(|(e, (st,))| {
+    w.types.query_mut::<(&SubTypes,)>().into_iter().for_each(|(e, (st,))| {
         for t in st.deref() {
             let mut arrow = Arrow::simple("st");
             arrow.look.line_color = Color::fast("blue");
@@ -62,7 +62,7 @@ pub(crate) fn render(mut w: TypeSys) {
         }
     });
 
-    w.abstract_types.query_mut::<(&Fields,)>().into_iter().for_each(|(e, (fi,))| {
+    w.types.query_mut::<(&Fields,)>().into_iter().for_each(|(e, (fi,))| {
         for t in fi.deref() {
             let mut arrow = Arrow::simple("fi");
             arrow.look.line_color = Color::fast("red");
@@ -70,7 +70,7 @@ pub(crate) fn render(mut w: TypeSys) {
         }
     });
 
-    w.abstract_types.query_mut::<(&DChildren,)>().into_iter().for_each(|(e, (fi,))| {
+    w.types.query_mut::<(&DChildren,)>().into_iter().for_each(|(e, (fi,))| {
         for t in fi.deref() {
             let arrow = Arrow::simple("cs");
             vg.add_edge(arrow, map[&e], map[&t]);

@@ -13,12 +13,16 @@ tree-sitter-query = { git="https://github.com/nvim-treesitter/tree-sitter-query.
 # tree-sitter-tsq = "0.19.0"
 tree-sitter-graph = "0.7.0" # { path = "../tree-sitter-graph" } 
 tree-sitter-typescript = "=0.20.1"
-tree-sitter-java = "=0.20.0"
+# tree-sitter-java = "=0.20.0"
+tree-sitter-java = { git="https://github.com/quentinLeDilavrec/tree-sitter-java", version="0.20" }
 tree-sitter-python = "=0.20.2"
 tree-sitter-rust = "=0.20.3"
 tree-sitter-mozcpp = "0.20.2"
-tree-sitter-cpp = "0.20.0"
+# tree-sitter-cpp = "0.20.0"
+tree-sitter-cpp = { git="https://github.com/quentinLeDilavrec/tree-sitter-cpp", version="0.20" }
 tree-sitter-kotlin = "0.2.11"
+# tree-sitter-xml = "0.20.0"
+tree-sitter-xml = { git="https://github.com/quentinLeDilavrec/tree-sitter-xml", version="0.20" }
 
 serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.79"
@@ -28,16 +32,26 @@ hecs = "0.9.1"
 
 layout-rs = "0.1.1"
 
-fdg-sim = "0.8.0"
-fdg-img = "0.4.1"
-fdg-macroquad = "0.4.0"
+# fdg-sim = "0.8.0"
+# fdg-img = "0.4.1"
+# fdg-macroquad = "0.4.0"
 
-# fdg-sim = { path = "../fdg/fdg-sim"}
-# fdg-img = { path = "../fdg/fdg-img"}
-# fdg-macroquad = { path = "../fdg/fdg-macroquad"}
+fdg-sim = { path = "../fdg/fdg-sim"}
+fdg-img = { path = "../fdg/fdg-img"}
+fdg-macroquad = { path = "../fdg/fdg-macroquad"}
 
 plotters = "0.3"
 
 macroquad = "0.3"
 
 derive_deref = "1.1.1"
+
+quote = "1.0.10"
+syn = "1.0.0"
+proc-macro2 = "1.0.0"
+heck = "0.3.3"
+prettyplease = "0.1.24"
+
+# TODO use types from hyper_ast crate
+strum = "0.23.0"
+strum_macros = "0.23.1"

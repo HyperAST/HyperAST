@@ -11,7 +11,7 @@ members = [
     "benchmark_diffs",
     "polyglote",
 ]
-exclude = ["gen/tree-sitter/java/tree-sitter-java", "fdg", "tree-sitter-graph"]
+exclude = ["gen/tree-sitter/java/tree-sitter-java"]
 default-members = [
     "hyper_diff",
     "gen/tree-sitter/java",
