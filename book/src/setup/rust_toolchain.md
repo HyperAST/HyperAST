@@ -1,10 +1,13 @@
 # How to install Rust toolchain
 
-## Setup Rust
+## Install Rust
 
-> [How to install Rust](https://www.rust-lang.org/tools/install)
+> [rust-lang.org/tools/install](https://www.rust-lang.org/tools/install)
 
-We use the [**nightly toolchain**](https://doc.rust-lang.org/book/appendix-07-nightly-rust.html) of the Rust compiler in this project. It is pretty much stable and offers more features for now.
+### Setup Nightly Channel
+
+We use the [nightly toolchain](https://doc.rust-lang.org/book/appendix-07-nightly-rust.html) of the Rust compiler in this project. It is stable enough and offers useful features.
+
 
 Those commmands will install the nightly toolchain and set it as default.
 
@@ -23,13 +26,15 @@ To go back to the stable toolchain after you are done with the project, run:
 > rustup default stable
 ```
 
+## Troubleshooting :
 
-// WARN : not working patch
-## MacOS
+### MacOS
 issue with trunk https://stackoverflow.com/questions/72146492/unable-to-execute-trunk-serve
 
 ```bash
 cargo install wasm-bindgen-cli
 ```
 
-## Troubleshooting :
+
+
+./concrete_applications/concrete_applications.md
