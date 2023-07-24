@@ -290,10 +290,8 @@ mod spreaded {
         ) -> Option<&T> {
             let r = self
                 .0
-                .get(&std::any::TypeId::of::<T>());
-            let r = r.as_ref();
-            let r = r.map(|r|<dyn Any>::downcast_ref(r.as_any()).unwrap());
-            r
+                .get(&std::any::TypeId::of::<T>())?;
+            <dyn Any>::downcast_ref(r.as_any())
         }
         // pub fn mut_or_default_with_param<T: 'static + CommitProcExt>(
         //     &mut self,
