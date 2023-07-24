@@ -1,16 +1,31 @@
-pub mod parser;
+//! Tree Generators
+//! 
+//! This module contains facilities to help you build an HyperAST.
+//! - [`TreeGen::make`] is where a subtree is pushed in the HyperAST
+//!   - You should also use [`crate::store::nodes::legion::NodeStore::prepare_insertion`]
+//!     to insert subtrees in the HyperAST while deduplicating identical ones
+//! - To visit parsers with a zipper/cursor interface you should implement [`ZippedTreeGen`]
+//!   - [`crate::parser::TreeCursor`] should be implemented to wrap you parser's interface
+//! 
+//! 
+//! ## Important Note
+//! To make code analysis incremental in the HyperAST,
+//! we locally persist locally derived values, we call them metadata.
+//! To save memory, we also deduplicate identical nodes using the type, label and children of a subtree.
+//! In other word, in the HyperAST, you store Metadata (derived values) along subtrees of the HyperAST,
+//! and deduplicate subtree using identifying data. 
+//! To ensure derived data are unique per subtree,
+//! metadata should only be derived from local identifying values.
 
-// use std::hash::Hash;
+
+pub mod parser;
 
 use std::fmt::Debug;
 
 use crate::{
     hashed::NodeHashs,
-    // hashed::{inner_node_hash, SyntaxNodeHashs},
     nodes::Space,
-    // utils::{self, clamp_u64_to_u32},
 };
-// use crate::nodes::SimpleNode1;
 
 use self::parser::{Node as _, TreeCursor as _};
 
@@ -199,8 +214,16 @@ impl<'a> GlobalData for SpacedGlobalData<'a> {
     }
 }
 
+/// Primary trait to implement to generate AST.
 pub trait TreeGen {
+    /// Container holding data waiting to be added to the HyperAST
     type Acc: AccIndentation;
+    /// Container holding global data used during generation.
+    /// 
+    /// Useful for transient data needed during generation,
+    /// this way you avoid cluttering [TreeGen::Acc].
+    /// 
+    /// WARN make sure it does not leaks contextual data in subtrees.
     type Global: GlobalData;
     fn make(
         &mut self,
@@ -238,6 +261,9 @@ impl<Acc> Parents<Acc> {
     }
 }
 
+/// Define a zipped visitor, where you mostly have to implement,
+/// [`ZippedTreeGen::pre`] going down,
+/// and [`ZippedTreeGen::post`] going up in the traversal. 
 pub trait ZippedTreeGen: TreeGen
 where
     Self::Global: TotalBytesGlobalData,
@@ -252,6 +278,15 @@ where
 
     fn init_val(&mut self, text: &Self::Text, node: &Self::Node<'_>) -> Self::Acc;
 
+
+    /// Can be implemented if you want to skip certain nodes,
+    /// note that skipping only act on the "overlay" tree structure,
+    /// meaning that the content of a skipped node is fed to its parents 
+    /// 
+    /// The default implementation skips nothing.
+    /// 
+    ///  see also also the following example use: 
+    /// [`hyper_ast_gen_ts_cpp::legion::CppTreeGen::pre_skippable`](../../hyper_ast_gen_ts_cpp/legion/struct.CppTreeGen.html#method.pre_skippable)
     fn pre_skippable(
         &mut self,
         text: &Self::Text,
@@ -264,6 +299,7 @@ where
         Some(self.pre(text, node, stack, global))
     }
 
+    /// Called when going up
     fn pre(
         &mut self,
         text: &Self::Text,
@@ -273,6 +309,7 @@ where
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc;
 
+    /// Called when going up
     fn post(
         &mut self,
         parent: &mut <Self as TreeGen>::Acc,
