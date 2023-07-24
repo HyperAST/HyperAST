@@ -355,4 +355,354 @@ Works on Stockfish AND on the Linux kernel. Yay"#,
 }"##,
         },
     },
+    Example {
+        name: "folders by maven module",
+        commit: Commit {
+            repo: Repo {
+                forge: Forge::GitHub,
+                user: "INRIA",
+                name: "spoon",
+            },
+            id: "56e12a0c0e0e69ea70863011b4f4ca3305e0542b",
+        },
+        config: Config::MavenJava,
+        commits: 1,
+        scripts: Scripts {
+            description: "Displays folders for each maven modules",
+            init: r##"#{ depth:0, files: 0, type_decl: 0, modules: 0, folders: [], folder_count: 0 }"##,
+            filter: r##"if is_maven_module() {
+    s.modules = 1;
+    s.folders += "mm:"+file_name();
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: false,
+        modules: 0,
+        folders: [],
+        folder_count: s.folder_count,
+        files: s.files,
+        type_decl: s.type_decl,
+    }])
+} else if s.in_folder && type() == "Directory" {
+    s.folders += "j:"+file_name();
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: true,
+        folders: [32],
+        folder_count: s.folder_count,
+        files: s.files,
+        type_decl: s.type_decl, 
+    }])
+} else if s.in_mm && type() == "Directory" {
+    s.folders += "j:"+file_name();
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: true,
+        folders: [],
+        folder_count: s.folder_count,
+        files: s.files,
+        type_decl: s.type_decl,
+    }])
+} else if s.in_mm && hold_java_folder() {
+    s.folders += "hjf:"+file_name();
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: false,
+        modules: 0,
+        folders: [],
+        folder_count: s.folder_count,
+        files: s.files,
+        type_decl: s.type_decl,
+    }])
+} else if s.in_mm && hold_maven_submodule() {
+    s.folders += "hms:"+file_name();
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: false,
+        modules: 0,
+        folders: [],
+        folder_count: s.folder_count,
+        files: s.files,
+        type_decl: s.type_decl,
+    }])
+} else  if is_file() {
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: true,
+        files: s.files,
+        type_decl: s.type_decl,
+    }])
+} else {
+    []
+}"##,
+            accumulate: r##"if is_maven_module() {
+    p.files += s.files;
+    p.modules += s.modules;
+    p.folders += [s.folders];
+    p.folder_count += s.folder_count;
+    p.type_decl += s.type_decl;
+} else if s.in_mm && type() == "Directory" {
+    p.files += s.files;
+    p.type_decl += s.type_decl;
+    p.folders += [["f:"+file_name(), 1]];
+    p.folder_count += 1;
+} else if s.in_mm && (hold_java_folder() || hold_maven_submodule()) {
+    if !s.folders.is_empty() { 
+        p.folders += [s.folders];
+    }
+    p.folder_count += s.folder_count;
+    p.files += s.files;
+    p.type_decl += s.type_decl;
+} else if s.in_mm && hold_java_folder() {
+    if !s.folders.is_empty() { 
+        p.folders += [s.folders];
+    }
+    p.folder_count += s.folder_count;
+    p.files += s.files;
+    p.type_decl += s.type_decl;
+} else if s.in_folder && is_file() {
+    p.files += 1;
+    p.type_decl += s.type_decl;
+} else if is_type_decl() {
+    p.type_decl += 1; 
+}"##,
+        },
+    },
+    Example {
+        name: "data per folder (Java)",
+        commit: Commit {
+            repo: Repo {
+                forge: Forge::GitHub,
+                user: "INRIA",
+                name: "spoon",
+            },
+            id: "56e12a0c0e0e69ea70863011b4f4ca3305e0542b",
+        },
+        config: Config::MavenJava,
+        commits: 1,
+        scripts: Scripts {
+            description: "Displays size, files, and type decl per folder.\nWorks on code bases using Java + Maven",
+            init: r##"#{ depth:0, files: 0, type_decl: 0, modules: 0, folders: [], folder_count: 0 }"##,
+            filter: r##"if is_maven_module() {
+    s.modules = 1;
+    s.folders = FsCont(file_name(), s.folders);
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: false,
+        modules: 0,
+        folders: [],
+        folder_count: s.folder_count,
+        files: s.files,
+        type_decl: s.type_decl,
+    }])
+} else if s.in_folder && type() == "Directory" {
+    s.folders = FsCont(file_name(), s.folders);
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: true,
+        folders: [32],
+        folder_count: s.folder_count,
+        files: s.files,
+        type_decl: s.type_decl, 
+    }])
+} else if s.in_mm && type() == "Directory" {
+    s.folders = FsCont(file_name(), s.folders);
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: true,
+        folders: [],
+        folder_count: s.folder_count,
+        files: s.files,
+        type_decl: s.type_decl,
+    }])
+} else if s.in_mm && hold_java_folder() {
+    s.folders = FsCont(file_name(), s.folders);
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: false,
+        modules: 0,
+        folders: [],
+        folder_count: s.folder_count,
+        files: s.files,
+        type_decl: s.type_decl,
+    }])
+} else if s.in_mm && hold_maven_submodule() {
+    s.folders = FsCont(file_name(), s.folders);
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: false,
+        modules: 0,
+        folders: [],
+        folder_count: s.folder_count,
+        files: s.files,
+        type_decl: s.type_decl,
+    }])
+} else  if is_file() {
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: true,
+        files: s.files,
+        type_decl: s.type_decl,
+    }])
+} else {
+    []
+}"##,
+            accumulate: r##"if is_maven_module() {
+    p.files += s.files;
+    p.modules += s.modules;
+    p.folders += s.folders;
+    p.folder_count += s.folder_count;
+    p.type_decl += s.type_decl;
+} else if s.in_mm && type() == "Directory" {
+    p.files += s.files;
+    p.type_decl += s.type_decl;
+    p.folders += FsCont(file_name(), #{
+        f:s.files, 
+        t:s.type_decl,
+        s:size()});
+    p.folder_count += 1;
+} else if s.in_mm && (hold_java_folder() || hold_maven_submodule()) {
+    if !s.folders.is_empty() { 
+        p.folders += s.folders;
+    }
+    p.folder_count += s.folder_count;
+    p.files += s.files;
+    p.type_decl += s.type_decl;
+} else if s.in_mm && hold_java_folder() {
+    if !s.folders.is_empty() { 
+        p.folders += s.folders;
+    }
+    p.folder_count += s.folder_count;
+    p.files += s.files;
+    p.type_decl += s.type_decl;
+} else if s.in_folder && is_file() {
+    p.files += 1;
+    p.type_decl += s.type_decl;
+} else if is_type_decl() {
+    p.type_decl += 1;
+}"##,
+        },
+    },
+    Example {
+        name: "refs per folder (Spoon)",
+        commit: Commit {
+            repo: Repo {
+                forge: Forge::GitHub,
+                user: "INRIA",
+                name: "spoon",
+            },
+            id: "56e12a0c0e0e69ea70863011b4f4ca3305e0542b",
+        },
+        config: Config::MavenJava,
+        commits: 1,
+        scripts: Scripts {
+            description: "Also display some ref count per folder.\nWorks on Spoon.\nThere are still missing refs due to a still incomplete port of the original ref analysis.",
+            init: r##"#{ depth:0, files: 0, type_decl: 0, modules: 0, folders: [], folder_count: 0 }"##,
+            filter: r##"if is_maven_module() {
+    s.modules = 1;
+    s.folders = FsCont(file_name(), s.folders);
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: false,
+        modules: 0,
+        folders: [],
+        folder_count: s.folder_count,
+        files: s.files,
+        type_decl: s.type_decl,
+    }])
+} else if s.in_folder && type() == "Directory" {
+    s.folders = FsCont(file_name(), s.folders);
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: true,
+        folders: [32],
+        folder_count: s.folder_count,
+        files: s.files,
+        type_decl: s.type_decl, 
+    }])
+} else if s.in_mm && type() == "Directory" {
+    s.folders = FsCont(file_name(), s.folders);
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: true,
+        folders: [],
+        folder_count: s.folder_count,
+        files: s.files,
+        type_decl: s.type_decl,
+    }])
+} else if s.in_mm && hold_java_folder() {
+    s.folders = FsCont(file_name(), s.folders);
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: false,
+        modules: 0,
+        folders: [],
+        folder_count: s.folder_count,
+        files: s.files,
+        type_decl: s.type_decl,
+    }])
+} else if s.in_mm && hold_maven_submodule() {
+    s.folders = FsCont(file_name(), s.folders);
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: false,
+        modules: 0,
+        folders: [],
+        folder_count: s.folder_count,
+        files: s.files,
+        type_decl: s.type_decl,
+    }])
+} else  if is_file() {
+    children().map(|x| [x, #{
+        depth: s.depth + 1,
+        in_mm: true, in_folder: true,
+        files: s.files,
+        type_decl: s.type_decl,
+    }])
+} else {
+    []
+}"##,
+            accumulate: r##"if is_maven_module() {
+    p.files += s.files;
+    p.modules += s.modules;
+    p.folders += s.folders;
+    p.folder_count += s.folder_count;
+    p.type_decl += s.type_decl;
+} else if s.in_mm && type() == "Directory" {
+    p.files += s.files;
+    p.type_decl += s.type_decl;
+    p.folders += FsCont(file_name(), #{
+        f:s.files, 
+        t:s.type_decl,
+        s:size(),
+        Object: references("java.lang.Object", "/spoon"),
+        File: references("java.io.File", "/spoon"),
+        Charset: references("java.nio.charset.Charset", "/spoon"),
+        FileSystemFolder: references("spoon.support.compiler.FileSystemFolder", "/spoon"),
+        SpoonModelBuilder: references("spoon.SpoonModelBuilder", "/spoon"),
+        SpoonAPI: references("spoon.SpoonAPI", "/spoon"),
+        MavenLauncher: references("spoon.MavenLauncher", "/spoon"),
+    });
+    p.folder_count += 1;
+} else if s.in_mm && (hold_java_folder() || hold_maven_submodule()) {
+    if !s.folders.is_empty() { 
+        p.folders += s.folders;
+    }
+    p.folder_count += s.folder_count;
+    p.files += s.files;
+    p.type_decl += s.type_decl;
+} else if s.in_mm && hold_java_folder() {
+    if !s.folders.is_empty() { 
+        p.folders += s.folders;
+    }
+    p.folder_count += s.folder_count;
+    p.files += s.files;
+    p.type_decl += s.type_decl;
+} else if s.in_folder && is_file() {
+    p.files += 1;
+    p.type_decl += s.type_decl;
+} else if is_type_decl() {
+    p.type_decl += 1;
+}"##,
+        },
+    },
 ];
