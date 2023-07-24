@@ -348,9 +348,7 @@ impl HyperType for Type {
     fn as_shared(&self) -> hyper_ast::types::Shared {
         use hyper_ast::types::Shared;
         match self {
-            Type::ClassDeclaration => Shared::TypeDeclaration,
-            Type::InterfaceDeclaration => Shared::TypeDeclaration,
-            Type::EnumDeclaration => Shared::TypeDeclaration,
+            x if x.is_type_declaration() => Shared::TypeDeclaration,
             Type::Comment => Shared::Comment,
             Type::Identifier => Shared::Identifier,
             Type::TypeIdentifier => Shared::Identifier,
