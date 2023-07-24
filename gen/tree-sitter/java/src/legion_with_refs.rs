@@ -190,6 +190,7 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 }
 
+/// Implements [ZippedTreeGen] to offer a visitor for Java generation
 impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>>
     ZippedTreeGen for JavaTreeGen<'stores, 'cache, TS>
 {
@@ -565,7 +566,7 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
             let hashs = hbuilder.build();
             let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte).try_into().unwrap());
             let mcc = acc.mcc;
-            let compressed_node = if true {
+            let compressed_node = if false {
                 let base = (interned_kind, hashs, bytes_len);
                 compress(
                     label_id,
@@ -743,7 +744,8 @@ fn compress<T: 'static + std::marker::Send + std::marker::Sync>(
         }};
     }
     macro_rules! bloom_dipatch {
-        ( $($c:expr),+ $(,)? ) => {
+        ( $($c:expr),+ $(,)? ) => {{
+            // dbg!(ana.as_ref().map(|x| x.estimated_refs_count()));
             match ana.as_ref().map(|x| x.estimated_refs_count()).unwrap_or(0) {
                 x if x > 2048 => {
                     insert!($($c),+, (BloomSize::Much,),)
@@ -775,9 +777,11 @@ fn compress<T: 'static + std::marker::Send + std::marker::Sync>(
                 x if x > 0 => {
                     insert!($($c),+, bloom!(Bloom::<&'static [u8], u16>))
                 }
-                _ => insert!($($c),+, (BloomSize::None,)),
+                x => {
+                    insert!($($c),+, (BloomSize::None,))
+                },
             }
-        };
+        }};
     }
     macro_rules! children_dipatch {
         ( $c0:expr, $($c:expr),* $(,)? ) => {{
@@ -850,7 +854,7 @@ fn make_partial_ana(
     label_store: &mut LabelStore,
     insertion: &PendingInsert,
 ) -> Option<PartialAnalysis> {
-    ana.and_then(|ana| partial_ana_extraction(kind, ana, label, children, label_store, insertion))
+    partial_ana_extraction(kind, ana, label, children, label_store, insertion)
         .map(|ana| ana_resolve(kind, ana, label_store))
 }
 
@@ -898,7 +902,7 @@ fn ana_resolve(kind: Type, ana: PartialAnalysis, label_store: &LabelStore) -> Pa
 
 fn partial_ana_extraction(
     kind: Type,
-    ana: PartialAnalysis,
+    ana: Option<PartialAnalysis>,
     label: Option<String>,
     children: &[legion::Entity],
     label_store: &mut LabelStore,
@@ -933,7 +937,7 @@ fn partial_ana_extraction(
         }))
     };
     if kind == Type::Program {
-        Some(ana)
+        ana
     } else if kind == Type::Comment {
         None
     } else if let Some(label) = label.as_ref() {
@@ -948,6 +952,9 @@ fn partial_ana_extraction(
         let ty = node.get_type();
         let label = ty.to_str();
         make(Some(label))
+    } else if let Some(ana) = ana {
+        // nothing to do, resolutions at the end of post ?
+        Some(ana)
     } else if kind == Type::Static
         || kind == Type::Public
         || kind == Type::Asterisk
