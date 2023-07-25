@@ -23,15 +23,6 @@ mod legion_impls {
 
     use hyper_ast::{store::nodes::legion::HashedNodeRef, types::TypeIndex};
 
-    impl<'a, TS: TsEnabledTypeStore<HashedNodeRef<'a, Type>>> From<TS> for Single {
-        fn from(value: TS) -> Self {
-            Self {
-                mask: TS::MASK,
-                lang: TS::LANG,
-            }
-        }
-    }
-
     impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         type Ty = Type;
         const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
@@ -109,94 +100,6 @@ pub trait TsEnabledTypeStore<T>: TypeStore<T> {
     }
     fn _intern(l: u16, t: u16) -> Self::Ty;
     fn resolve(&self, t: Self::Ty) -> Type;
-    //  {
-    //     todo!()
-    //     // let t = t.0 as u16;
-    //     // let t = t & !TStore::MASK;
-    //     // Type::resolve(t)
-    // }
-}
-
-#[cfg(feature = "legion")]
-mod exp {
-    use super::*;
-    use crate::TNode;
-    type TypeInternalSize = u16;
-
-    struct T(TypeInternalSize);
-
-    #[repr(u8)]
-    enum TStore {
-        Cpp = 0,
-        Java = 1,
-        Xml = 2,
-        Ts = 3,
-    }
-    enum Types {
-        Cpp(Type),
-        Java(Type),
-        Xml(Type),
-        Ts(Type),
-    }
-
-    trait TypeStore {
-        type T;
-        const MASK: TypeInternalSize;
-    }
-
-    impl TypeStore for TStore {
-        type T = T;
-        const MASK: TypeInternalSize = 0b1100_0000_0000_0000;
-    }
-
-    impl TStore {
-        pub fn intern_cpp(&self, n: TNode) -> T {
-            let t = n.kind_id();
-            Self::_intern(TStore::Cpp, t)
-        }
-        pub fn intern_java(&self, n: TNode) -> T {
-            let t = n.kind_id();
-            Self::_intern(TStore::Java, t)
-        }
-        pub fn intern_xml(&self, n: TNode) -> T {
-            let t = n.kind_id();
-            Self::_intern(TStore::Xml, t)
-        }
-        pub fn intern_ts(&self, n: TNode) -> T {
-            let t = n.kind_id();
-            let t = Type::from_u16(t);
-            let t = t as u16;
-            Self::_intern(TStore::Ts, t)
-        }
-        fn _intern(l: TStore, t: u16) -> T {
-            T((u16::MAX - l as u16) | t)
-        }
-        fn resolve_ts_unchecked(&self, t: T) -> Type {
-            let t = t.0 as u16;
-            let t = t & !TStore::MASK;
-            Type::resolve(t)
-        }
-        pub fn resolve(&self, t: T) -> Types {
-            const TS: u16 = TStore::Ts as u16;
-            const CPP: u16 = TStore::Cpp as u16;
-            const JAVA: u16 = TStore::Java as u16;
-            const XML: u16 = TStore::Xml as u16;
-            match u16::MAX - (t.0 & TStore::MASK) {
-                TS => Types::Ts(self.resolve_ts_unchecked(t)),
-                JAVA => Types::Java(panic!()),
-                CPP => Types::Cpp(panic!()),
-                XML => Types::Xml(panic!()),
-                x => panic!(),
-            }
-        }
-    }
-
-    #[test]
-    fn f() {
-        use std::mem::size_of;
-        dbg!(size_of::<T>());
-        dbg!(size_of::<u16>());
-    }
 }
 
 impl Type {
@@ -204,11 +107,6 @@ impl Type {
         assert!(t < COUNT);
         unsafe { std::mem::transmute(t) }
     }
-}
-
-pub struct Single {
-    mask: TypeInternalSize,
-    lang: TypeInternalSize,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -251,10 +149,6 @@ type TypeInternalSize = u16;
 pub struct T(TypeInternalSize);
 
 pub struct Ts;
-
-impl Ts {
-    const INST: Ts = Ts;
-}
 
 impl LangRef<AnyType> for Ts {
     fn make(&self, t: u16) -> &'static AnyType {
