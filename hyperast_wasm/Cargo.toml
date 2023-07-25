@@ -1,0 +1,44 @@
+[package]
+name = "hyperast_wasm"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib"]
+
+
+[dependencies]
+wasm-bindgen = "0.2.84"
+wasm-rs-dbg = "0.1.2"
+wasm-bindgen-futures = "0.4.34"
+
+hyper_ast = { path = "../hyper_ast", default-features = false, features = [
+    "serialize",
+    "web",
+] }
+hyper_ast_gen_ts_cpp = { path = "../gen/tree-sitter/cpp", default-features = false }
+hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java", default-features = false }
+# hyper_ast_gen_ts_ts = { path = "../gen/tree-sitter/ts", default-features = false }
+hyper_ast_gen_ts_xml = { path = "../gen/tree-sitter/xml", default-features = false }
+
+serde = { version = "1", optional = true, features = ["derive"] }
+serde_json = { version = "1.0.79", optional = true }
+ehttp = { version = "0.2.0" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+poll-promise = {  git="https://github.com/quentinLeDilavrec/poll-promise", branch="main", version = "0.2", default-features = false }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+poll-promise = { git="https://github.com/quentinLeDilavrec/poll-promise", branch="main", version = "0.2", default-features = false, features = ["web"] }
+
+[profile.release]
+opt-level = 2 # fast and small wasm
+
+# Optimize all dependencies even in debug builds:
+[profile.dev.package."*"]
+opt-level = 2
+
+[features]
+default = ["serde", "serde_json"]

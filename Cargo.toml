@@ -10,16 +10,19 @@ members = [
     "ref-mining-evaluation",
     "benchmark_diffs",
     "hyper_app",
+    "hyperast_wasm",
     "egui_addon",
 ]
 exclude = ["gen/tree-sitter/java/tree-sitter-java"]
 default-members = [
+    "hyper_ast",
     "hyper_diff",
     "gen/tree-sitter/java",
     "gen/tree-sitter/cpp",
     "gen/tree-sitter/xml",
     "cvs/git",
     "benchmark",
+    "hyperast_wasm",
     "ref-mining-evaluation",
     "benchmark_diffs",
 ]
