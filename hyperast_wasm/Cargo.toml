@@ -20,7 +20,7 @@ hyper_ast = { path = "../hyper_ast", default-features = false, features = [
 ] }
 hyper_ast_gen_ts_cpp = { path = "../gen/tree-sitter/cpp", default-features = false }
 hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java", default-features = false }
-# hyper_ast_gen_ts_ts = { path = "../gen/tree-sitter/ts", default-features = false }
+hyper_ast_gen_ts_ts = { path = "../gen/tree-sitter/ts", default-features = false }
 hyper_ast_gen_ts_xml = { path = "../gen/tree-sitter/xml", default-features = false }
 
 serde = { version = "1", optional = true, features = ["derive"] }
