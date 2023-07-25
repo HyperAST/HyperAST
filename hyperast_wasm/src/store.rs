@@ -33,6 +33,12 @@ impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
     fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
         let lang = n.get_lang();
         let t: &'static (dyn HyperType + 'static) = match lang {
+            "hyper_ast_gen_ts_ts::types::ts" => {
+                let raw = n.get_raw_type();
+                let t: &'static (dyn HyperType + 'static) =
+                    <hyper_ast_gen_ts_ts::types::Ts as Lang<_>>::make(raw);
+                t
+            }
             "hyper_ast_gen_ts_cpp::types::Cpp" => {
                 let raw = n.get_raw_type();
                 let t: &'static (dyn HyperType + 'static) =
@@ -70,6 +76,9 @@ impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
     ) -> hyper_ast::types::LangWrapper<Self::Ty> {
         let lang = n.get_lang();
         let t = match lang {
+            "hyper_ast_gen_ts_ts::types::Ts" => {
+                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_ts::types::Ts)
+            }
             "hyper_ast_gen_ts_cpp::types::Cpp" => {
                 From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_cpp::types::Cpp)
             }
