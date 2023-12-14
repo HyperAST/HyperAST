@@ -2,7 +2,7 @@
   description = "HyperAST";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-23.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.11";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -17,6 +17,9 @@
             clang
             llvmPackages.bintools
             rustup
+
+            pkg-config 
+            openssl.dev
           ];
 
           RUSTC_VERSION = pkgs.lib.readFile ./rust-toolchain;
@@ -29,10 +32,13 @@
 
           RUSTFLAGS = (builtins.map (a: ''-L ${a}/lib'') [
             # add libraries here
+            
           ]);
 
           BINDGEN_EXTRA_CLANG_ARGS = 
             (builtins.map (a: ''-I"${a}/include"'') [
+              pkgs.pkg-config 
+              pkgs.openssl.dev
               pkgs.glibc.dev 
             ])
             ++ [

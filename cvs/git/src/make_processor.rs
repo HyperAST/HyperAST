@@ -72,7 +72,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                 if let Some(s) = self.dir_path.peek() {
                     if name
                         .as_bytes()
-                        .eq(std::ffi::OsStr::as_os_str_bytes(s.as_os_str()))
+                        .eq(std::ffi::OsStr::as_encoded_bytes(s.as_os_str()))
                     {
                         self.dir_path.next();
                         self.stack.last_mut().expect("never empty").1.clear();
