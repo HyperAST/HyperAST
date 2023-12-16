@@ -301,6 +301,7 @@ impl HyperApp {
         cc: &eframe::CreationContext<'_>,
         languages: Languages,
         api_addr: Option<String>,
+        default_api_addr: &str,
     ) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
@@ -324,7 +325,7 @@ impl HyperApp {
             fn prompt(text: &str, default: &str) -> String;
         }
         let api_addr =
-            api_addr.unwrap_or_else(|| unsafe { prompt("API address", "127.0.0.1:8080") });
+            api_addr.unwrap_or_else(|| unsafe { prompt("API address", default_api_addr) });
 
         let mut r = HyperApp::default();
         r.api_addr = api_addr;

@@ -1,7 +1,7 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-const ADDR: &str = "127.0.0.1:8080";
+const ADDR: &str = "127.0.0.1:8888";
 
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
@@ -75,7 +75,7 @@ fn main() {
         eframe::start_web(
             "the_canvas_id", // hardcode it
             web_options,
-            Box::new(move |cc| Box::new(hyper_app::HyperApp::new(cc, languages, api_addr))),
+            Box::new(move |cc| Box::new(hyper_app::HyperApp::new(cc, languages, api_addr, ADDR))),
         )
         .await
         .expect("failed to start eframe");
