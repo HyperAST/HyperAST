@@ -152,7 +152,7 @@ pub mod web {
     pub(crate) fn spawn_stuff<T: Send + 'static>(
         f: impl std::future::Future<Output = T> + 'static,
     ) -> poll_promise::Promise<T> {
-        Promise::spawn_async(f)
+        Promise::spawn_local(f)
     }
 }
 
