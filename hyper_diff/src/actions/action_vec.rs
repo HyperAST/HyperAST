@@ -264,7 +264,6 @@ pub fn apply_action<T, S, P>(
         let l = node.try_get_label().cloned();
         (t, l)
     };
-    let a = a;
     let roots: &mut Vec<_> = root;
     log::trace!("{:?}", a);
     let SimpleAction { path, action } = a;
