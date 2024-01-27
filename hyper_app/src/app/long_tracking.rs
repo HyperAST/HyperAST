@@ -1103,7 +1103,6 @@ pub(crate) fn show_results(
         }
     }
     {
-        use egui_cable::prelude::*;
         ui.set_clip_rect(timeline_window);
         for i in 0..attacheds.len() - 1 {
             let (left, right) = attacheds.split_at(i + 1);
@@ -1119,7 +1118,6 @@ pub(crate) fn show_results(
                     let green: egui::Id = green;
                     let blue: egui::Id = blue;
                     // let in_plug = Plug::to(green.clone()).default_pos(egui::Pos2::ZERO);
-                    let out_plug = Plug::to(blue.clone());
                     // ui.add(Cable::new(green.with(blue), in_plug, out_plug));
                 }
 
@@ -1501,7 +1499,6 @@ pub(crate) fn show_results(
                 .push([hovered_fut, released_past]);
         }
         for [m, src] in &long_tracking.additionnal_links {
-            use egui_cable::prelude::*;
             let m_rect = *rendered.get(m).unwrap();
             let src_rect = *rendered.get(src).unwrap();
             let m_pos = m_rect.center();

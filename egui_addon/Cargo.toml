@@ -26,8 +26,6 @@ lazy_static = "1.4.0"
 
 wasm-rs-dbg = "0.1.2"
 
-egui_cable = "0.5.0"
-
 enumset = "1.0.12"
 
 crossbeam-queue = "0.3.8"

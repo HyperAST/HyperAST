@@ -51,8 +51,6 @@ egui_addon = { path = "../egui_addon" }
 
 nohash-hasher = "0.2.0"
 
-egui_cable = "0.5.0"
-
 enumset = "1.0.12"
 
 
