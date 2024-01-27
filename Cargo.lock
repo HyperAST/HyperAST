@@ -5434,7 +5434,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-cpp"
 version = "0.20.0"
-source = "git+https://github.com/quentinLeDilavrec/tree-sitter-cpp#a4d9e6a32d3607bae6f35c4b4862406a8d9ced7d"
+source = "git+https://github.com/quentinLeDilavrec/tree-sitter-cpp?rev=a4d9e6a32d3607bae6f35c4b4862406a8d9ced7d#a4d9e6a32d3607bae6f35c4b4862406a8d9ced7d"
 dependencies = [
  "cc",
  "tree-sitter",
@@ -5467,7 +5467,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-java"
 version = "0.20.9"
-source = "git+https://github.com/quentinLeDilavrec/tree-sitter-java?branch=master#5817a59d64bab74007acf7ea3355e06e83628f96"
+source = "git+https://github.com/quentinLeDilavrec/tree-sitter-java?rev=5817a59d64bab74007acf7ea3355e06e83628f96#5817a59d64bab74007acf7ea3355e06e83628f96"
 dependencies = [
  "cc",
  "tree-sitter",
@@ -5517,7 +5517,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-typescript"
 version = "0.20.3"
-source = "git+https://github.com/tree-sitter/tree-sitter-typescript#d847898fec3fe596798c9fda55cb8c05a799001a"
+source = "git+https://github.com/tree-sitter/tree-sitter-typescript?rev=d847898fec3fe596798c9fda55cb8c05a799001a#d847898fec3fe596798c9fda55cb8c05a799001a"
 dependencies = [
  "cc",
  "tree-sitter",
@@ -5526,7 +5526,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-xml"
 version = "0.20.9"
-source = "git+https://github.com/quentinLeDilavrec/tree-sitter-xml#1f06da3921a23255d851c62ca81ce2b176c6eb55"
+source = "git+https://github.com/quentinLeDilavrec/tree-sitter-xml?rev=1f06da3921a23255d851c62ca81ce2b176c6eb55#1f06da3921a23255d851c62ca81ce2b176c6eb55"
 dependencies = [
  "cc",
  "tree-sitter",

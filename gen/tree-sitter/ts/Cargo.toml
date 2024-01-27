@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 tree-sitter = {version = "0.20.9", optional = true}
 # tree-sitter = { path="../../../../tree-sitter/lib", version="0.20", optional = true}
-tree-sitter-typescript = {git = "https://github.com/tree-sitter/tree-sitter-typescript" , optional = true}
+tree-sitter-typescript = {git = "https://github.com/tree-sitter/tree-sitter-typescript", rev="d847898fec3fe596798c9fda55cb8c05a799001a" , optional = true}
 atomic-counter = "1.0.1"
 num = "0.4.0"
 bitvec = "1.0.1"
