@@ -15,3 +15,6 @@ Cargo.lock
 .DS_Store
 # Book output
 /book/book/
+
+# Direnv
+/.direnv/
