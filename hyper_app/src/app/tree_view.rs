@@ -1,5 +1,4 @@
 use egui::TextFormat;
-use egui_cable::prelude::Port;
 use epaint::text::LayoutSection;
 pub use hyper_ast::store::nodes::fetched::{FetchedLabels, NodeIdentifier, NodeStore};
 use hyper_ast::{

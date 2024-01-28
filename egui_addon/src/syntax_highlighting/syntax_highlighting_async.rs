@@ -409,7 +409,6 @@ impl Highlighter {
         code: &str,
         lang: &str,
     ) -> IncrementalHighlightLayout2 {
-        let theme = theme;
         let syntax = self
             .ps
             .find_syntax_by_name(lang)

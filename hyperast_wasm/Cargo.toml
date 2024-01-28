@@ -28,10 +28,10 @@ serde_json = { version = "1.0.79", optional = true }
 ehttp = { version = "0.2.0" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-poll-promise = {  git="https://github.com/quentinLeDilavrec/poll-promise", branch="main", version = "0.2", default-features = false }
+poll-promise = {  version = "0.3", default-features = false }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-poll-promise = { git="https://github.com/quentinLeDilavrec/poll-promise", branch="main", version = "0.2", default-features = false, features = ["web"] }
+poll-promise = { version = "0.3", default-features = false, features = ["web"] }
 
 [profile.release]
 opt-level = 2 # fast and small wasm

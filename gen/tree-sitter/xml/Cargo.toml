@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 tree-sitter = { version = "0.20.9", optional = true }
-tree-sitter-xml = { git = "https://github.com/quentinLeDilavrec/tree-sitter-xml", version = "0.20.0", optional = true }
+tree-sitter-xml = { git = "https://github.com/quentinLeDilavrec/tree-sitter-xml", rev="1f06da3921a23255d851c62ca81ce2b176c6eb55", version = "0.20.0", optional = true }
 hyper_ast = { path = "../../../hyper_ast", default-features = false }
 
 

@@ -35,7 +35,7 @@ pub fn pearson<T: Borrow<[u8]>>(x0: usize, x: T) -> u8 {
         ret = T[(ret ^ b) as usize];
     }
 
-    return ret;
+    ret
 }
 
 pub fn pearson_mod<T: Borrow<[u8]>, const MOD: u8>(x0: usize, x: T) -> u8 {
@@ -48,7 +48,7 @@ pub fn pearson_mod<T: Borrow<[u8]>, const MOD: u8>(x0: usize, x: T) -> u8 {
         ret = T[(ret ^ b) as usize] % MOD;
     }
 
-    return ret;
+    ret
 }
 
 #[cfg(test)]
