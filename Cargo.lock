@@ -2493,6 +2493,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyper_ast_gen_ts_tsquery"
+version = "0.1.0"
+dependencies = [
+ "atomic-counter",
+ "bitvec",
+ "cfg-if",
+ "controlled-option",
+ "enumset",
+ "env_logger",
+ "hashbrown 0.13.2",
+ "hyper_ast",
+ "hyper_ast_gen_ts_cpp",
+ "legion",
+ "libc",
+ "log",
+ "num",
+ "pretty_assertions",
+ "serde",
+ "string-interner",
+ "tree-sitter",
+ "tree-sitter-query",
+ "tuples",
+]
+
+[[package]]
 name = "hyper_ast_gen_ts_xml"
 version = "0.1.0"
 dependencies = [
@@ -5500,6 +5525,16 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-highlight",
  "tree-sitter-tags",
+]
+
+[[package]]
+name = "tree-sitter-query"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d4374ba146382b2c9a50290e79283b5035544912c0e1387e3ff08e6137f4cb4"
+dependencies = [
+ "cc",
+ "tree-sitter",
 ]
 
 [[package]]
