@@ -1,4 +1,4 @@
-///! fully compress all subtrees from a typescript CST
+///! fully compress all subtrees from a tree-sitter query CST
 use std::{collections::HashMap, fmt::Debug};
 
 use crate::{types::TIdN, TNode};
@@ -25,11 +25,11 @@ use hyper_ast::{
     types::LabelStore as _,
 };
 
-use crate::types::{TsEnabledTypeStore, Type};
+use crate::types::{TsQueryEnabledTypeStore, Type};
 
 pub type LabelIdentifier = hyper_ast::store::labels::DefaultLabelIdentifier;
 
-pub struct TsTreeGen<'store, 'cache, TS> {
+pub struct TsQueryTreeGen<'store, 'cache, TS> {
     pub line_break: Vec<u8>,
     pub stores: &'store mut SimpleStores<TS>,
     pub md_cache: &'cache mut MDCache,
@@ -130,8 +130,20 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 }
 
-impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>>
-    ZippedTreeGen for TsTreeGen<'store, 'cache, TS>
+pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
+    let mut parser = tree_sitter::Parser::new();
+    let language = tree_sitter_query::language();
+    parser.set_language(language).unwrap();
+    let tree = parser.parse(text, None).unwrap();
+    if tree.root_node().has_error() {
+        Err(tree)
+    } else {
+        Ok(tree)
+    }
+}
+
+impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>>
+    ZippedTreeGen for TsQueryTreeGen<'store, 'cache, TS>
 {
     type Stores = SimpleStores<TS>;
     type Text = [u8];
@@ -168,6 +180,30 @@ impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdent
             padding_start: 0,
             indentation: indent,
         }
+    }
+    fn pre_skippable(
+        &mut self,
+        text: &Self::Text,
+        node: &Self::Node<'_>,
+        stack: &Parents<Self::Acc>,
+        global: &mut Self::Global,
+        skip: &mut bool,
+    ) -> Option<<Self as TreeGen>::Acc> {
+        let type_store = &mut self.stores().type_store;
+        // let kind = node.kind();
+        // let Some(kind) = type_store.try_cpp(kind) else {
+        //     return None
+        // };
+        let kind = node.obtain_type(type_store);
+        // TODO remove this mitigations as it breaks captures on anonymous nodes
+        if kind == Type::TS0 || kind == Type::AnonymousNode {
+            *skip = true;
+        }
+        let mut acc = self.pre(text, node, stack, global);
+        if kind == Type::TS0 || kind == Type::AnonymousNode {
+            acc.labeled = true;
+        }
+        Some(acc)
     }
     fn pre(
         &mut self,
@@ -220,6 +256,7 @@ impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdent
                 local: self.make_spacing(spacing),
             });
         }
+        
         let label = if acc.labeled {
             std::str::from_utf8(&text[acc.start_byte..acc.end_byte])
                 .ok()
@@ -231,8 +268,8 @@ impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdent
     }
 }
 
-impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>>
-    TsTreeGen<'store, 'cache, TS>
+impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>>
+    TsQueryTreeGen<'store, 'cache, TS>
 {
     fn make_spacing(
         &mut self,
@@ -288,23 +325,11 @@ impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdent
     pub fn new(
         stores: &'store mut <Self as ZippedTreeGen>::Stores,
         md_cache: &'cache mut MDCache,
-    ) -> TsTreeGen<'store, 'cache, TS> {
-        TsTreeGen::<'store, 'cache, TS> {
+    ) -> TsQueryTreeGen<'store, 'cache, TS> {
+        TsQueryTreeGen::<'store, 'cache, TS> {
             line_break: "\n".as_bytes().to_vec(),
             stores,
             md_cache,
-        }
-    }
-
-    pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
-        let mut parser = tree_sitter::Parser::new();
-        let language = tree_sitter_typescript::language_typescript();
-        parser.set_language(language).unwrap();
-        let tree = parser.parse(text, None).unwrap();
-        if tree.root_node().has_error() {
-            Err(tree)
-        } else {
-            Ok(tree)
         }
     }
 
@@ -390,8 +415,8 @@ where
     }
 }
 
-impl<'stores, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> TreeGen
-    for TsTreeGen<'stores, 'cache, TS>
+impl<'stores, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> TreeGen
+    for TsQueryTreeGen<'stores, 'cache, TS>
 {
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;
@@ -403,7 +428,7 @@ impl<'stores, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIde
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
-        let interned_kind = TsEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
+        let interned_kind = TsQueryEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;

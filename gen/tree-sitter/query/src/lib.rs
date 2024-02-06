@@ -1,13 +1,11 @@
+pub mod types;
+
 #[cfg(feature = "impl")]
 pub mod legion;
 
-pub mod types;
-#[cfg(feature = "impl")]
-pub mod types_exp;
-
 #[cfg(feature = "impl")]
 #[cfg(test)]
-mod tests;
+pub mod tests;
 
 #[cfg(feature = "legion")]
 mod tnode {
@@ -51,5 +49,4 @@ mod tnode {
 #[cfg(feature = "legion")]
 pub use tnode::TNode;
 
-
-pub mod iter;
+mod search;

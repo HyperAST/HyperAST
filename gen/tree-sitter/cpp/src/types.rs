@@ -247,7 +247,7 @@ impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
 }
 
 #[repr(u8)]
-pub(crate) enum TStore {
+pub enum TStore {
     Cpp = 0,
 }
 
@@ -564,6 +564,14 @@ const COUNT: u16 = 454;
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.to_str())
+    }
+}
+
+impl TryFrom<&str> for Type {
+    type Error= ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Type::from_str(value).ok_or(())
     }
 }
 
