@@ -1,4 +1,4 @@
-///! fully compress all subtrees from a cpp CST
+///! fully compress all subtrees from a typescript CST
 use std::{collections::HashMap, fmt::Debug};
 
 use crate::{types::TIdN, TNode};
@@ -8,7 +8,6 @@ use hyper_ast::{
     filter::BloomSize,
     full::FullNode,
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
-    // impact::{element::RefsEnum, elements::*, partial_analysis::PartialAnalysis},
     nodes::Space,
     store::{
         nodes::legion::{compo, compo::CS, NodeIdentifier},
@@ -17,7 +16,6 @@ use hyper_ast::{
     store::{
         nodes::legion::{compo::NoSpacesCS, HashedNodeRef},
         SimpleStores,
-        // SimpleStores,
     },
     tree_gen::{
         compute_indentation, get_spacing, has_final_space, parser::Node as _, AccIndentation,
@@ -31,7 +29,7 @@ use crate::types::{TsEnabledTypeStore, Type};
 
 pub type LabelIdentifier = hyper_ast::store::labels::DefaultLabelIdentifier;
 
-pub struct CppTreeGen<'store, 'cache, TS> {
+pub struct TsTreeGen<'store, 'cache, TS> {
     pub line_break: Vec<u8>,
     pub stores: &'store mut SimpleStores<TS>,
     pub md_cache: &'cache mut MDCache,
@@ -133,7 +131,7 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
 }
 
 impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>>
-    ZippedTreeGen for CppTreeGen<'store, 'cache, TS>
+    ZippedTreeGen for TsTreeGen<'store, 'cache, TS>
 {
     type Stores = SimpleStores<TS>;
     type Text = [u8];
@@ -146,7 +144,7 @@ impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdent
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
         let type_store = &mut self.stores().type_store;
-        let kind = node.obtain_type(type_store); //type_store.get_cpp(node.kind());
+        let kind = node.obtain_type(type_store);
         let parent_indentation = Space::try_format_indentation(&self.line_break)
             .unwrap_or_else(|| vec![Space::Space; self.line_break.len()]);
         let indent = compute_indentation(
@@ -180,8 +178,6 @@ impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdent
     ) -> <Self as TreeGen>::Acc {
         let type_store = &mut self.stores().type_store;
         let parent_indentation = &stack.parent().unwrap().indentation();
-        // let kind = node.kind();
-        // let kind = type_store.get_cpp(kind);
         let kind = node.obtain_type(type_store);
         let indent = compute_indentation(
             &self.line_break,
@@ -236,7 +232,7 @@ impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdent
 }
 
 impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>>
-    CppTreeGen<'store, 'cache, TS>
+    TsTreeGen<'store, 'cache, TS>
 {
     fn make_spacing(
         &mut self,
@@ -292,8 +288,8 @@ impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdent
     pub fn new(
         stores: &'store mut <Self as ZippedTreeGen>::Stores,
         md_cache: &'cache mut MDCache,
-    ) -> CppTreeGen<'store, 'cache, TS> {
-        CppTreeGen::<'store, 'cache, TS> {
+    ) -> TsTreeGen<'store, 'cache, TS> {
+        TsTreeGen::<'store, 'cache, TS> {
             line_break: "\n".as_bytes().to_vec(),
             stores,
             md_cache,
@@ -395,7 +391,7 @@ where
 }
 
 impl<'stores, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> TreeGen
-    for CppTreeGen<'stores, 'cache, TS>
+    for TsTreeGen<'stores, 'cache, TS>
 {
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;
