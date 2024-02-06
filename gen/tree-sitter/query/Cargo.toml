@@ -1,0 +1,49 @@
+[package]
+name = "hyper_ast_gen_ts_tsquery"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tree-sitter = { version = "0.20.9", optional = true }
+tree-sitter-query = { version = "0.1.0", optional = true }
+atomic-counter = "1.0.1"
+num = "0.4.0"
+bitvec = "1.0.1"
+controlled-option = "0.4.1"
+string-interner = "0.14.0"
+cfg-if = "1.0"
+hashbrown = { version = "0.13.2", default-features = false, optional = true }
+log = { version = "0.4.6" } #, features = ["max_level_debug", "release_max_level_warn"] }
+
+hyper_ast = { path = "../../../hyper_ast", default-features = false }
+
+libc = "0.2"
+
+legion = { version = "0.4.0", optional = true }
+tuples = "=1.4.1"
+
+enumset = "1.0.8"
+
+serde = { version = "1.0.130" }
+
+# [build-dependencies]
+# cc = "*"
+
+[dev-dependencies]
+pretty_assertions = "1.0.0"
+env_logger = "0.9.0"
+hyper_ast_gen_ts_cpp = { path="../cpp", version = "0.1.0" }
+
+
+[features]
+default = ["impl"]
+legion = ["hyper_ast/legion", "dep:legion"]
+impl = [
+    "hyper_ast/jemalloc",
+    "legion",
+    "dep:hashbrown",
+    "hyper_ast/native", 
+    "hashbrown?/ahash",
+    "dep:tree-sitter",
+    "dep:tree-sitter-query",
+]
