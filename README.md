@@ -28,9 +28,9 @@
 ## Summary
 
 HyperAST is an AST structured as a Direct Acyclic Graph (DAG) (similar to MerkleDAG used in Git).
-An HyperAST is efficiently constructed by leveraging Git and TreeSitter.
+An HyperAST is efficiently constructed by leveraging [Git](https://git-scm.com/) and [TreeSitter](https://tree-sitter.github.io/tree-sitter/).
 
-It reimplements the Gumtree algorithm in Rust while using HyperAST as the underlying AST structure.
+It reimplements the [Gumtree](https://hal.science/hal-01054552/document) algorithm in Rust while using HyperAST as the underlying AST structure.
 
 It implements a use-def solver,
 that uses a context-free indexing of references present in subtrees (each subtree has a bloom filter of contained references).
