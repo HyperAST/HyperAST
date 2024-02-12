@@ -385,17 +385,15 @@ mod stores_impl {
     impl<'store, TIdN, TS> TypedHyperAST<'store, TIdN> for SimpleStores<TS, nodes::DefaultNodeStore>
     where
         TIdN: 'static + TypedNodeId<IdN = Self::IdN>,
-        // TIdN: TypeTrait,
-        // TS: SpecializedTypeStore<self::nodes::legion::HashedNodeRef<'store, TIdN>, Ty = TIdN::Ty>,
         TS: TypeStore<
             self::nodes::legion::HashedNodeRef<'store, nodes::DefaultNodeIdentifier>,
             Ty = AnyType,
         >,
     {
-        type T = self::nodes::legion::HashedNodeRef<'store, TIdN>;
-        type NS = nodes::legion::NodeStore;
+        type TT = self::nodes::legion::HashedNodeRef<'store, TIdN>;
+        type TNS = nodes::legion::NodeStore;
 
-        fn typed_node_store(&self) -> &<Self as TypedHyperAST<'store, TIdN>>::NS {
+        fn typed_node_store(&self) -> &Self::TNS {
             &self.node_store
         }
     }

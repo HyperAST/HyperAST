@@ -351,6 +351,7 @@ mod type_store {
         const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
 
         fn resolve_type(&self, n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Ty {
+            //// NOTE: use of the deref polymorphism trick
             n.get_type()
         }
 
@@ -577,6 +578,10 @@ mod type_store {
                 MultiType::Cpp(t) => t.as_any(),
                 MultiType::Xml(t) => t.as_any(),
             }
+        }
+
+        fn as_static(&self) -> &'static dyn HyperType {
+            todo!("would need a static array in the size of the cartesian product...")
         }
 
         fn get_lang(&self) -> LangWrapper<Self>

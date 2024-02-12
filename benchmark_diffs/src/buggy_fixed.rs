@@ -6,9 +6,14 @@ use crate::{
     preprocess::{iter_dirs, parse_dir_pair, parse_string_pair, JavaPreprocessFileSys},
     tempfile,
 };
-use hyper_ast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores};
-use hyper_ast_cvs_git::{no_space::as_nospaces, TStore};
+use hyper_ast::store::{
+    labels::LabelStore,
+    nodes::{legion::NodeStore, HashedNodeRef},
+    SimpleStores,
+};
 use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
+// use hyper_ast_gen_ts_java::types::TStore;
+use hyper_ast_cvs_git::TStore;
 use hyper_diff::actions::Actions;
 use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
 
@@ -16,6 +21,7 @@ use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
 fn test_simple_1() {
     let buggy = r#"class A{class C{}class B{{while(1){if(1){}else{}};}}}class D{class E{}class F{{while(2){if(2){}else{}};}}}"#;
     let fixed = r#"class A{class C{}}class B{{while(1){if(1){}else{}};}}class D{class E{}}class F{{while(2){if(2){}else{}};}}"#;
+    // use hyper_ast_gen_ts_java::types::TStore;
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
         type_store: TStore::default(),
@@ -28,6 +34,9 @@ fn test_simple_1() {
         md_cache: &mut md_cache,
     };
     let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
+
+    let aaa = hyper_ast_gen_ts_java::types::TStore::default();
+    let stores = stores.change_type_store(aaa);
 
     println!(
         "{}",
@@ -332,21 +341,20 @@ mod examples {
 
 #[cfg(test)]
 mod test {
-    use std::io::stdout;
-
-    use crate::{
-        other_tools::gumtree::subprocess,
-        postprocess::{print_mappings, print_mappings_no_ranges, PathJsonPostProcess},
-    };
-
-    use super::*;
     use hyper_ast::{
         nodes::{IoOut, SyntaxSerializer, SyntaxWithIdsSerializer},
-        store::defaults::NodeIdentifier,
-        types::{DecompressedSubtree, Typed},
+        store::{
+            defaults::NodeIdentifier, labels::LabelStore, nodes::legion::NodeStore, SimpleStores,
+        },
+        types::{DecompressedSubtree, SimpleHyperAST, Typed},
     };
+    use std::io::stdout;
+
     use hyper_ast_cvs_git::no_space::NoSpaceNodeStoreWrapper;
-    use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
+    use hyper_ast_gen_ts_xml::{legion::XmlTreeGen};
+    // use hyper_ast_gen_ts_xml::types::TStore;
+    use hyper_ast_cvs_git::TStore;
+
     use hyper_diff::{
         decompressed_tree_store::lazy_post_order::LazyPostOrder,
         matchers::{
@@ -355,6 +363,14 @@ mod test {
             },
             // heuristic::gt::greedy_subtree_matcher::{GreedySubtreeMatcher, SubtreeMatcher},
             mapping_store::{DefaultMultiMappingStore, VecStore},
+        },
+    };
+
+    use crate::{
+        other_tools::gumtree::subprocess,
+        postprocess::{
+            print_mappings, print_mappings_no_ranges, CompressedBfPostProcess, PathJsonPostProcess,
+            SimpleJsonPostProcess,
         },
     };
     static CASE7: &'static str = r#"<project>
@@ -457,6 +473,14 @@ mod test {
         // let node_store = &tree_gen.stores.node_store;
         let node_store = &NoSpaceNodeStoreWrapper::from(&tree_gen.stores.node_store);
 
+        // let mut stores = SimpleHyperAST {
+        //     label_store: label_store,
+        //     type_store: hyper_ast_cvs_git::TStore::default(),
+        //     node_store: node_store,
+        //     _phantom: std::marker::PhantomData,
+        // };
+        let stores = hyper_ast_cvs_git::no_space::as_nospaces(tree_gen.stores);
+
         // print_tree_syntax_with_ids(
         //     |id: &NodeIdentifier| -> _ {
         //         node_store
@@ -487,7 +511,7 @@ mod test {
         type DS<T> = LazyPostOrder<T, u32>;
         let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh::<
             DefaultMultiMappingStore<_>,
-        >(node_store, &src, &dst, mappings);
+        >(&stores, &src, &dst, mappings);
         let SubtreeMatcher {
             src_arena,
             dst_arena,
@@ -570,6 +594,7 @@ mod test {
 
         let label_store = &tree_gen.stores.label_store;
         let node_store = &tree_gen.stores.node_store;
+        let stores = &*tree_gen.stores;
         // let node_store = &AAA {
         //     s: &tree_gen.stores.node_store,
         // };
@@ -607,7 +632,7 @@ mod test {
         type DS<T> = LazyPostOrder<T, u32>;
         let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh::<
             DefaultMultiMappingStore<_>,
-        >(node_store, &src, &dst, mappings);
+        >(stores, &src, &dst, mappings);
         let SubtreeMatcher {
             src_arena,
             dst_arena,
@@ -633,13 +658,12 @@ mod test {
         )
         .unwrap();
 
-        let pp = PathJsonPostProcess::new(&gt_out);
+        let pp = SimpleJsonPostProcess::new(&gt_out);
         let gt_timings = pp.performances();
         let counts = pp.counts();
         dbg!(gt_timings, counts.mappings, counts.actions);
         let valid = pp._validity_mappings(
-            node_store,
-            label_store,
+            stores,
             &src_arena,
             src,
             &dst_arena,
@@ -688,17 +712,19 @@ mod test {
             (full_node1, full_node2)
         };
         let src = src_tr.local.compressed_node;
-        dbg!(tree_gen.stores.node_store.resolve(src).get_type());
+        use hyper_ast::types::HyperAST;
+        dbg!(tree_gen.stores.resolve_type(&src));
         let dst = dst_tr.local.compressed_node;
 
-        let label_store = &tree_gen.stores.label_store;
-        let node_store = &tree_gen.stores.node_store;
-        let node_store = &NoSpaceNodeStoreWrapper::from(node_store);
+        // let label_store = &tree_gen.stores.label_store;
+        // let node_store = &tree_gen.stores.node_store;
+        // let node_store = &NoSpaceNodeStoreWrapper::from(node_store);
+        let stores = hyper_ast_cvs_git::no_space::as_nospaces(tree_gen.stores);
         let mappings = VecStore::default();
         type DS<T> = LazyPostOrder<T, u32>;
         let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh::<
             DefaultMultiMappingStore<_>,
-        >(node_store, &src, &dst, mappings);
+        >(&stores, &src, &dst, mappings);
         let SubtreeMatcher {
             src_arena,
             dst_arena,
@@ -713,8 +739,8 @@ mod test {
         //     &mappings,
         // );
 
-        let src_arena = src_arena.complete(node_store);
-        let dst_arena = dst_arena.complete(node_store);
+        let src_arena = src_arena.complete(&stores.node_store);
+        let dst_arena = dst_arena.complete(&stores.node_store);
 
         let gt_out = subprocess(
             tree_gen.stores,
@@ -732,8 +758,7 @@ mod test {
         let (pp, gt_timings) = pp.performances();
         dbg!(gt_timings, counts.mappings, counts.actions);
         let valid = pp._validity_mappings(
-            node_store,
-            label_store,
+            &stores,
             &src_arena,
             src,
             &dst_arena,
@@ -883,7 +908,6 @@ mod test {
         let dst = dst_tr.local.compressed_node;
         // let dst = tree_gen.stores.node_store.resolve(dst).get_child(&0);
 
-        use hyper_ast::types::LabelStore as _;
         println!(
             "{}",
             SyntaxWithIdsSerializer::<_, _, true>::new(tree_gen.stores, src)
@@ -897,7 +921,7 @@ mod test {
         type DS<T> = LazyPostOrder<T, u32>;
         let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh::<
             DefaultMultiMappingStore<_>,
-        >(&stores.node_store, &src, &dst, mappings);
+        >(stores, &src, &dst, mappings);
         let SubtreeMatcher {
             src_arena,
             dst_arena,
@@ -909,8 +933,7 @@ mod test {
         print_mappings(
             &dst_arena,
             &src_arena,
-            &stores.node_store,
-            &stores.label_store,
+            stores,
             &mappings,
         );
 
@@ -1003,14 +1026,15 @@ mod test {
         // let dst = tree_gen.stores.node_store.resolve(dst).child(&6).unwrap();
         // let dst = tree_gen.stores.node_store.resolve(dst).child(&4).unwrap();
 
-        let label_store = &tree_gen.stores.label_store;
-        let node_store = &tree_gen.stores.node_store;
-        let node_store = &NoSpaceNodeStoreWrapper::from(node_store);
+        // let label_store = &tree_gen.stores.label_store;
+        // let node_store = &tree_gen.stores.node_store;
+        // let node_store = &NoSpaceNodeStoreWrapper::from(node_store);
+        let stores = hyper_ast_cvs_git::no_space::as_nospaces(tree_gen.stores);
         let mappings = VecStore::default();
         type DS<T> = LazyPostOrder<T, u32>;
         let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _>::matchh::<
             DefaultMultiMappingStore<_>,
-        >(node_store, &src, &dst, mappings);
+        >(&stores, &src, &dst, mappings);
         let SubtreeMatcher {
             src_arena,
             dst_arena,
@@ -1018,10 +1042,10 @@ mod test {
             ..
         } = mapper.into();
 
-        let src_arena = src_arena.complete(node_store);
-        let dst_arena = dst_arena.complete(node_store);
+        let src_arena = src_arena.complete(&stores.node_store);
+        let dst_arena = dst_arena.complete(&stores.node_store);
 
-        print_mappings_no_ranges(&dst_arena, &src_arena, node_store, label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
 
         let gt_out = subprocess(
             tree_gen.stores,
@@ -1039,8 +1063,7 @@ mod test {
         let (pp, gt_timings) = pp.performances();
         dbg!(gt_timings, counts.mappings, counts.actions);
         let valid = pp._validity_mappings(
-            node_store,
-            label_store,
+            &stores,
             &src_arena,
             src,
             &dst_arena,
@@ -1098,16 +1121,17 @@ mod test {
         // let dst = tree_gen.stores.node_store.resolve(dst).child(&6).unwrap();
         // let dst = tree_gen.stores.node_store.resolve(dst).child(&4).unwrap();
 
-        let label_store = &tree_gen.stores.label_store;
-        let node_store = &tree_gen.stores.node_store;
-        let node_store = &NoSpaceNodeStoreWrapper::from(node_store);
+        // let label_store = &tree_gen.stores.label_store;
+        // let node_store = &tree_gen.stores.node_store;
+        // let node_store = &NoSpaceNodeStoreWrapper::from(node_store);
+        let stores = hyper_ast_cvs_git::no_space::as_nospaces(tree_gen.stores);
         let mappings = VecStore::default();
         type DS<T> = LazyPostOrder<T, u32>;
         // let mapper = LazyGreedySubtreeMatcher::<DS<_>, DS<_>, _, _, _, _>::matchh(
         //     node_store, &src, &dst, mappings,
         // );
         let mapper = {
-            let node_store = node_store;
+            let node_store = &stores.node_store;
             let src = &src;
             let dst = &dst;
             let mappings = mappings;
@@ -1118,7 +1142,7 @@ mod test {
             // src_arena.go_through_descendants(node_store, &src_arena.root());
             // dst_arena.go_through_descendants(node_store, &dst_arena.root());
             let mut matcher = LazyGreedySubtreeMatcher::<_, _, _, _, _, 1>::new(
-                node_store, src_arena, dst_arena, mappings,
+                &stores, src_arena, dst_arena, mappings,
             );
             LazyGreedySubtreeMatcher::execute::<DefaultMultiMappingStore<_>>(&mut matcher);
             matcher
@@ -1130,10 +1154,10 @@ mod test {
             ..
         } = mapper.into();
 
-        let src_arena = src_arena.complete(node_store);
-        let dst_arena = dst_arena.complete(node_store);
+        let src_arena = src_arena.complete(&stores.node_store);
+        let dst_arena = dst_arena.complete(&stores.node_store);
 
-        print_mappings_no_ranges(&dst_arena, &src_arena, node_store, label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
 
         let gt_out = subprocess(
             tree_gen.stores,
@@ -1151,8 +1175,7 @@ mod test {
         let (pp, gt_timings) = pp.performances();
         dbg!(gt_timings, counts.mappings, counts.actions);
         let valid = pp._validity_mappings(
-            node_store,
-            label_store,
+            &stores,
             &src_arena,
             src,
             &dst_arena,
@@ -1816,7 +1839,24 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     let (src_tr, dst_tr) = parse_dir_pair(&mut java_gen, &src, &dst);
     let parse_t = now.elapsed().as_secs_f64();
 
-    let stores = as_nospaces(&java_gen.main_stores);
+    // use hyper_ast_cvs_git::no_space::IntoNoSpace;
+    // let stores: hyper_ast::types::SimpleHyperAST<_, _, _, _> = (&stores).into();
+
+    // let aaa = hyper_ast_cvs_git::TStore::default();
+    // let stores: hyper_ast::types::SimpleHyperAST<_, _, _, _> = stores.change_type_store(aaa);
+    let stores = hyper_ast_cvs_git::no_space::as_nospaces(&java_gen.main_stores);
+    // // let stores = (&java_gen.main_stores).as_nospaces();
+    // let stores = java_gen.main_stores.as_nospaces();
+
+    // : hyper_ast::types::SimpleHyperAST<
+    //     hyper_ast_cvs_git::no_space::NoSpaceWrapper<
+    //     '_,
+    //     hyper_ast_gen_ts_java::types::TIdN<hyper_ast::store::defaults::NodeIdentifier>,
+    // >,
+    // &TStore,
+    // hyper_ast_cvs_git::no_space::NoSpaceNodeStoreWrapper<'_>,
+    // &LabelStore,
+    // >
 
     dbg!(&parse_t);
     dbg!(&src_tr.metrics.size);
@@ -1834,7 +1874,6 @@ pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
         gen_t,
     } = algorithms::gumtree::diff(&stores, &src_tr.compressed_node, &dst_tr.compressed_node);
     let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
-
     let gt_out = other_tools::gumtree::subprocess(
         &stores,
         src_tr.compressed_node,

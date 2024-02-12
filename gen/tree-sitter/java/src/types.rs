@@ -85,6 +85,27 @@ mod legion_impls {
             }
         }
     }
+    impl<'a, R> TypeStore<R> for &TStore {
+        type Ty = Type;
+        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
+
+        fn resolve_type(&self, n: &R) -> Self::Ty {
+            todo!()
+        }
+
+        fn resolve_lang(
+            &self,
+            n: &R,
+        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
+            todo!()
+        }
+
+        type Marshaled = TypeIndex;
+
+        fn marshal_type(&self, n: &R) -> Self::Marshaled {
+            todo!()
+        }
+    }
     impl<'a> JavaEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         // fn intern(&self, t: Type) -> Self::Ty {
         //     // T((u16::MAX - Self::Cpp as u16) | t as u16)
@@ -147,7 +168,7 @@ impl Type {
 }
 
 #[repr(u8)]
-pub(crate) enum TStore {
+pub enum TStore {
     Java = 0,
 }
 
@@ -359,6 +380,10 @@ impl HyperType for Type {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn as_static(&self) -> &'static dyn HyperType {
+        todo!()
     }
 
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>

@@ -13,8 +13,7 @@ use super::{
 use hyper_ast::{
     position::Position,
     types::{
-        self, Children, HyperType, IterableChildren, LabelStore, NodeId, NodeStore, Stored, Tree,
-        WithChildren, WithSerialization, WithStats,
+        self, Children, HyperAST, HyperType, IterableChildren, LabelStore, NodeId, NodeStore, Stored, Tree, TypeStore, WithChildren, WithSerialization, WithStats
     },
 };
 use logging_timer::time;
@@ -759,24 +758,26 @@ impl<'a, T: WithChildren, IdD: PrimInt + Hash + Eq> From<(&'a LazyPostOrder<T, I
 }
 
 impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, IdD> {
-    pub fn position<'b, S, LS>(&mut self, store: &'b S, lstore: &'b LS, c: &IdD) -> &Position
+    pub fn position<'b, HAST>(&mut self, stores: &'b HAST, c: &IdD) -> &Position
     where
-        S: NodeStore<T::TreeId, R<'b> = T>,
+        HAST: HyperAST<'b, IdN = T::TreeId, T = T, Label = T::Label>,
+        // S: NodeStore<T::TreeId, R<'b> = T>,
         T::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
-        LS: LabelStore<str>,
-        T: Tree<Label = LS::I> + WithSerialization,
+        // LS: LabelStore<str>,
+        T: WithSerialization,
+        // T: Tree<Label = LS::I> + WithSerialization,
     {
         if self.cache.contains_key(&c) {
             return self.cache.get(&c).unwrap();
         } else if let Some(p) = self.ds.parent(c) {
-            let p_r = store.resolve(&self.ds.original(&p));
-            let p_t = p_r.get_type();
+            let p_r = stores.node_store().resolve(&self.ds.original(&p));
+            let p_t = stores.type_store().resolve_type(&p_r);
             if p_t.is_directory() {
                 let ori = self.ds.original(&c);
                 if self.root == ori {
-                    let r = store.resolve(&ori);
+                    let r = stores.node_store().resolve(&ori);
                     return self.cache.entry(*c).or_insert(Position::new(
-                        lstore.resolve(&r.get_label_unchecked()).into(),
+                        stores.label_store().resolve(&r.get_label_unchecked()).into(),
                         0,
                         r.try_bytes_len().unwrap_or(0),
                     ));
@@ -785,9 +786,9 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
                     .cache
                     .get(&p)
                     .cloned()
-                    .unwrap_or_else(|| self.position(store, lstore, &p).clone());
-                let r = store.resolve(&ori);
-                pos.inc_path(lstore.resolve(&r.get_label_unchecked()));
+                    .unwrap_or_else(|| self.position(stores, &p).clone());
+                let r = stores.node_store().resolve(&ori);
+                pos.inc_path(stores.label_store().resolve(&r.get_label_unchecked()));
                 pos.set_len(r.try_bytes_len().unwrap_or(0));
                 return self.cache.entry(*c).or_insert(pos);
             }
@@ -799,9 +800,9 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
                     .cache
                     .get(&lsib)
                     .cloned()
-                    .unwrap_or_else(|| self.position(store, lstore, &lsib).clone());
+                    .unwrap_or_else(|| self.position(stores, &lsib).clone());
                 pos.inc_offset(pos.range().end - pos.range().start);
-                let r = store.resolve(&self.ds.original(&c));
+                let r = stores.node_store().resolve(&self.ds.original(&c));
                 pos.set_len(r.try_bytes_len().unwrap());
                 self.cache.entry(*c).or_insert(pos)
             } else {
@@ -812,7 +813,7 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
                 );
                 let ori = self.ds.original(&c);
                 if self.root == ori {
-                    let r = store.resolve(&ori);
+                    let r = stores.node_store().resolve(&ori);
                     return self.cache.entry(*c).or_insert(Position::new(
                         "".into(),
                         0,
@@ -823,21 +824,21 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
                     .cache
                     .get(&p)
                     .cloned()
-                    .unwrap_or_else(|| self.position(store, lstore, &p).clone());
-                let r = store.resolve(&ori);
+                    .unwrap_or_else(|| self.position(stores, &p).clone());
+                let r = stores.node_store().resolve(&ori);
                 pos.set_len(
                     r.try_bytes_len()
-                        .unwrap_or_else(|| panic!("{:?}", r.get_type())),
+                        .unwrap_or_else(|| panic!("{:?}", stores.type_store().resolve_type(&r))),
                 );
                 self.cache.entry(*c).or_insert(pos)
             }
         } else {
             let ori = self.ds.original(&c);
             assert_eq!(self.root, ori);
-            let r = store.resolve(&ori);
-            let t = r.get_type();
+            let r = stores.node_store().resolve(&ori);
+            let t = stores.type_store().resolve_type(&r);
             let pos = if t.is_directory() || t.is_file() {
-                let file = lstore.resolve(&r.get_label_unchecked()).into();
+                let file = stores.label_store().resolve(&r.get_label_unchecked()).into();
                 let offset = 0;
                 let len = r.try_bytes_len().unwrap_or(0);
                 Position::new(file, offset, len)
@@ -879,17 +880,18 @@ where
     F: Fn(U, T::TreeId) -> U,
     G: Fn(U, T::TreeId) -> U,
 {
-    pub fn position<'b, S>(&mut self, store: &'b S, c: &IdD) -> &U
+    pub fn position<'b, HAST>(&mut self, stores: &'b HAST, c: &IdD) -> &U
     where
-        S: NodeStore<T::TreeId, R<'b> = T>,
+        HAST: HyperAST<'b, IdN = T::TreeId, T = T, Label = T::Label>,
+        // S: NodeStore<T::TreeId, R<'b> = T>,
         T::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
         T: Tree + WithSerialization,
     {
         if self.cache.contains_key(&c) {
             return self.cache.get(&c).unwrap();
         } else if let Some(p) = self.ds.parent(c) {
-            let p_r = store.resolve(&self.ds.original(&p));
-            let p_t = p_r.get_type();
+            let p_r = stores.node_store().resolve(&self.ds.original(&p));
+            let p_t = stores.type_store().resolve_type(&p_r);
             if p_t.is_directory() {
                 let ori = self.ds.original(&c);
                 if self.root == ori {
@@ -898,14 +900,14 @@ where
                         .entry(*c)
                         .or_insert((self.with_p)(Default::default(), ori));
                 }
-                let pos = self.position(store, &p).clone();
+                let pos = self.position(stores, &p).clone();
                 return self.cache.entry(*c).or_insert((self.with_p)(pos, ori));
             }
 
             let p_lld = self.ds.first_descendant(&p);
             if let Some(lsib) = self.ds.lsib(c, &p_lld) {
                 assert_ne!(lsib.to_usize(), c.to_usize());
-                let pos = self.position(store, &lsib).clone();
+                let pos = self.position(stores, &lsib).clone();
                 self.cache
                     .entry(*c)
                     .or_insert((self.with_lsib)(pos, self.ds.original(&c)))
@@ -922,7 +924,7 @@ where
                         .entry(*c)
                         .or_insert((self.with_p)(Default::default(), ori));
                 }
-                let pos = self.position(store, &p).clone();
+                let pos = self.position(stores, &p).clone();
                 self.cache.entry(*c).or_insert((self.with_p)(pos, ori))
             }
         } else {

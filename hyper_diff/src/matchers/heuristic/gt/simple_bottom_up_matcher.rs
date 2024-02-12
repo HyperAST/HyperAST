@@ -8,7 +8,7 @@ use crate::decompressed_tree_store::{
 };
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::similarity_metrics;
-use hyper_ast::types::{NodeStore, Tree, WithHashs};
+use hyper_ast::types::{HyperAST, NodeStore, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
@@ -80,10 +80,12 @@ impl<
             + DecompressedWithParent<'a, T, IdD>
             + BreathFirstContiguousSiblings<'a, T, IdD>,
         T: 'a + Tree + WithHashs,
-        S: 'a + NodeStore<T::TreeId, R<'a> = T>,
+        HAST: HyperAST<'a, IdN = T::TreeId, T = T>,
         M: MonoMappingStore<Src = IdD, Dst = IdD>,
-    > SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
+    > SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>
 where
+    HAST::TS: hyper_ast::types::TypeStore<T, Ty = T::Type>,
+    T: hyper_ast::types::Typed,
     T::Type: Hash + Copy + Eq + Send + Sync,
 {
     fn execute(&mut self) {
@@ -97,7 +99,7 @@ where
                 let t_size = self
                     .internal
                     .src_arena
-                    .descendants(self.internal.node_store, &(i as IdD))
+                    .descendants(self.internal.stores.node_store(), &(i as IdD))
                     .len();
 
                 for cand in candidates {
@@ -106,7 +108,7 @@ where
                             + ((self
                                 .internal
                                 .src_arena
-                                .descendants(self.internal.node_store, &cand)
+                                .descendants(self.internal.stores.node_store(), &cand)
                                 .len()
                                 + t_size)
                                 .to_f64()
@@ -116,11 +118,11 @@ where
                         &self
                             .internal
                             .src_arena
-                            .descendants(self.internal.node_store, &(i as IdD)),
+                            .descendants(self.internal.stores.node_store(), &(i as IdD)),
                         &self
                             .internal
                             .dst_arena
-                            .descendants(self.internal.node_store, &cand),
+                            .descendants(self.internal.stores.node_store(), &cand),
                         &self.internal.mappings,
                     );
                     if sim > max && sim >= threshold {

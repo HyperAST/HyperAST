@@ -217,13 +217,13 @@ pub fn apply_actions<T, S, P>(
     node_store: &mut S,
 ) where
     P: TreePath<Item = T::ChildIdx> + Debug,
-    T: hyper_ast::types::Tree,
+    T: hyper_ast::types::TypedTree,
     T::Type: Debug + Copy + Send + Sync,
     T::Label: Debug + Copy,
     T::TreeId: Debug + Copy + NodeId<IdN = T::TreeId>,
     T::ChildIdx: Debug + Copy,
     S: NodeStoreExt<T> + NodeStore<T::TreeId>, //NodeStoreExt<'a, T, R>,
-    for<'d> S::R<'d>: hyper_ast::types::Tree<
+    for<'d> S::R<'d>: hyper_ast::types::TypedTree<
         TreeId = T::TreeId,
         Type = T::Type,
         Label = T::Label,
@@ -245,13 +245,13 @@ pub fn apply_action<T, S, P>(
     s: &'_ mut S,
 ) where
     P: TreePath<Item = T::ChildIdx> + Debug,
-    T: hyper_ast::types::Tree,
+    T: hyper_ast::types::TypedTree,
     T::Type: Debug + Copy + Send + Sync,
     T::Label: Debug + Copy,
     T::TreeId: Debug + Copy + NodeId<IdN = T::TreeId>,
     T::ChildIdx: Debug + Copy,
     S: NodeStoreExt<T> + NodeStore<T::TreeId>, //NodeStoreExt<'a, T, R>,
-    for<'d> S::R<'d>: hyper_ast::types::Tree<
+    for<'d> S::R<'d>: hyper_ast::types::TypedTree<
         TreeId = T::TreeId,
         Type = T::Type,
         Label = T::Label,

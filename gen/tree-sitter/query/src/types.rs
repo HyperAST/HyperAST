@@ -235,6 +235,12 @@ impl HyperType for Type {
         self
     }
 
+    fn as_static(&self) -> &'static dyn HyperType {
+        let t = <TsQuery as Lang<Type>>::to_u16(*self);
+        let t = <TsQuery as Lang<Type>>::make(t);
+        t
+    }
+
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,

@@ -162,7 +162,7 @@ impl<
 where
     HAST::T: 'a + Tree + WithHashs + WithStats,
     HAST::IdN: 'a + Clone + Eq + Debug,
-    <HAST::T as Typed>::Type: Copy + Eq + Send + Sync,
+    // <HAST::T as Typed>::Type: Copy + Eq + Send + Sync,
     Dsrc::IdD: 'a + PrimInt + std::ops::SubAssign + Debug,
     Ddst::IdD: 'a + PrimInt + std::ops::SubAssign + Debug,
     M::Src: 'a + PrimInt + std::ops::SubAssign + Debug,
@@ -223,7 +223,7 @@ where
                 }
 
                 if let Some(best) = best {
-                    Self::last_chance_match_zs(internal, &label_store, a, best);
+                    Self::last_chance_match_zs(internal, a, best);
                     internal.mappings.link(*a.shallow(), *best.shallow());
                 }
             }
@@ -235,7 +235,7 @@ where
         );
         let src = internal.src_arena.starter();
         let dst = internal.dst_arena.starter();
-        Self::last_chance_match_zs(internal, label_store, src, dst);
+        Self::last_chance_match_zs(internal, src, dst);
         // println!("nodes:{}", c);
         // println!("nodes:{}", c2);
     }
@@ -257,7 +257,6 @@ where
 
     pub(crate) fn last_chance_match_zs(
         internal: &mut Mapper<'a, HAST, Dsrc, Ddst, M>,
-        label_store: &'a HAST::LS,
         src: Dsrc::IdD,
         dst: Ddst::IdD,
     ) {
@@ -281,7 +280,7 @@ where
             src_offset = src - src_arena.root();
             let dst_arena = dst_arena.slice_po(node_store, &dst);
             dst_offset = dst - dst_arena.root();
-            ZsMatcher::match_with(node_store, label_store, src_arena, dst_arena)
+            ZsMatcher::match_with(internal.hyperast, src_arena, dst_arena)
         } else {
             let o_src = src_arena.original(&src);
             let o_dst = dst_arena.original(&dst);
@@ -317,7 +316,7 @@ where
                 assert!(dst_arena.kr[dst_arena.kr.len() - 1]);
                 dbg!(last == dst_arena_z.root());
             }
-            ZsMatcher::match_with(node_store, label_store, src_arena, dst_arena)
+            ZsMatcher::match_with(internal.hyperast, src_arena, dst_arena)
         };
         use num_traits::ToPrimitive;
         assert_eq!(
@@ -331,13 +330,13 @@ where
             let dst: Ddst::IdD = dst_offset + cast(t).unwrap();
             // use it
             if !mappings.is_src(src.shallow()) && !mappings.is_dst(dst.shallow()) {
-                let tsrc = node_store
-                    .resolve(&mapping.src_arena.original(&src))
-                    .get_type();
-                let tdst = node_store
+                let tsrc = internal
+                    .hyperast
+                    .resolve_type(&mapping.src_arena.original(&src));
+                let tdst = internal
+                    .hyperast
                     // .resolve(&matcher.src_arena.tree(&t))
-                    .resolve(&mapping.dst_arena.original(&dst))
-                    .get_type();
+                    .resolve_type(&mapping.dst_arena.original(&dst));
                 if tsrc == tdst {
                     mappings.link(*src.shallow(), *dst.shallow());
                 }

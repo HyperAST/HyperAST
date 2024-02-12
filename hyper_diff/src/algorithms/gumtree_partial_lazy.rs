@@ -42,7 +42,7 @@ where
     HAST::Label: Clone + Copy + Eq + Debug,
     <HAST::T as types::Typed>::Type: Eq + Debug,
     <HAST::T as types::WithChildren>::ChildIdx: Debug,
-    HAST::T: 'store + types::WithHashs + types::WithStats,
+    HAST::T: 'store + types::Typed + types::WithHashs + types::WithStats,
 {
     let now = Instant::now();
     let mapper: Mapper<_, DS<HAST::T>, DS<HAST::T>, VecStore<_>> =
@@ -73,7 +73,7 @@ where
     );
     let bottomup_prepare_t = now.elapsed().as_secs_f64();
     let now = Instant::now();
-    let mapper = GreedyBottomUpMatcher::<_, _, _, _, _, VecStore<_>>::match_it(mapper);
+    let mapper = GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::match_it(mapper);
     dbg!(&now.elapsed().as_secs_f64());
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();

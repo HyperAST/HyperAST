@@ -45,6 +45,16 @@ pub struct SimpleStores<TS, NS = nodes::DefaultNodeStore, LS = labels::LabelStor
     pub node_store: NS,
 }
 
+impl<TS, NS, LS> SimpleStores<TS, NS, LS> {
+    pub fn change_type_store<TS2>(self, new: TS2) -> SimpleStores<TS2, NS, LS> {
+        SimpleStores {
+            type_store: new,
+            node_store: self.node_store,
+            label_store: self.label_store,
+        }
+    }
+}
+
 impl<TS: Default, NS: Default, LS: Default> Default for SimpleStores<TS, NS, LS> {
     fn default() -> Self {
         Self {
@@ -91,7 +101,7 @@ where
 
 impl<'store, T, TS, NS, LS> crate::types::TypeStore<T> for SimpleStores<TS, NS, LS>
 where
-    T: crate::types::Tree,
+    T: crate::types::TypedTree,
     T::TreeId: crate::types::NodeId<IdN = T::TreeId>,
     T::Type: 'static + std::hash::Hash,
     TS: TypeStore<T, Ty = T::Type>,
@@ -121,20 +131,38 @@ pub mod defaults {
     pub type NodeIdentifier = super::nodes::DefaultNodeIdentifier;
 }
 
-impl<'store, TS> From<&'store SimpleStores<TS, nodes::DefaultNodeStore>>
-    for SimpleHyperAST<
-        self::nodes::HashedNodeRef<'store>,
-        &'store TS,
-        &'store nodes::DefaultNodeStore,
-        &'store labels::LabelStore,
-    >
+// impl<'store, TS> From<&'store SimpleStores<TS, nodes::DefaultNodeStore>>
+//     for SimpleHyperAST<
+//         self::nodes::HashedNodeRef<'store>,
+//         &'store TS,
+//         &'store nodes::DefaultNodeStore,
+//         &'store labels::LabelStore,
+//     >
+// {
+//     fn from(value: &'store SimpleStores<TS, nodes::DefaultNodeStore>) -> Self {
+//         Self {
+//             type_store: &value.type_store,
+//             node_store: &value.node_store,
+//             label_store: &value.label_store,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
+// }
+
+impl<'store, T, TS, NS, LS> From<&'store SimpleStores<TS, NS, LS>>
+for SimpleHyperAST<
+    T,
+    &'store TS,
+    &'store NS,
+    &'store LS,
+>
 {
-    fn from(value: &'store SimpleStores<TS, nodes::DefaultNodeStore>) -> Self {
-        Self {
-            type_store: &value.type_store,
-            node_store: &value.node_store,
-            label_store: &value.label_store,
-            _phantom: std::marker::PhantomData,
-        }
+fn from(value: &'store SimpleStores<TS, NS, LS>) -> Self {
+    Self {
+        type_store: &value.type_store,
+        node_store: &value.node_store,
+        label_store: &value.label_store,
+        _phantom: std::marker::PhantomData,
     }
+}
 }

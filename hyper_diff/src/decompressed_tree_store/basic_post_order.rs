@@ -271,7 +271,8 @@ where
         for d in p {
             let a = self.original(&r);
             let node = store.resolve(&a);
-            let cs = node.children().filter(|x| x.is_empty());
+            let cs = node.children();
+            let cs = cs.filter(|x| !x.is_empty());
             let Some(cs) = cs  else {
                 panic!("no children in this tree")
             };

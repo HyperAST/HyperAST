@@ -222,10 +222,10 @@ where
     where
         HAST: HyperAST<'store, IdN = TIdN::IdN, Label = LabelIdentifier>,
         HAST: crate::types::TypedHyperAST<'store, TIdN>,
-        <HAST as crate::types::TypedHyperAST<'store, TIdN>>::T:
+        <HAST as crate::types::TypedHyperAST<'store, TIdN>>::TT:
             Typed<Type = TIdN::Ty> + WithSerialization + WithChildren,
         <HAST as crate::types::HyperAST<'store>>::T: WithSerialization + WithChildren,
-        <<HAST as crate::types::TypedHyperAST<'store, TIdN>>::T as types::WithChildren>::ChildIdx:
+        <<HAST as crate::types::TypedHyperAST<'store, TIdN>>::TT as types::WithChildren>::ChildIdx:
             Debug,
         HAST::IdN: Copy + Debug,
         TIdN: Debug,

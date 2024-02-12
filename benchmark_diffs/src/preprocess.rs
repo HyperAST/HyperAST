@@ -13,12 +13,13 @@ use hyper_ast::{
     tree_gen::{BasicGlobalData, SubTreeMetrics},
     types::LabelStore as _,
 };
-use hyper_ast_cvs_git::TStore;
 use hyper_ast_gen_ts_java::{
     impact::partial_analysis::PartialAnalysis,
     legion_with_refs::{BulkHasher, JavaTreeGen, Local, MDCache, MD},
-    types::Type,
+    types::{Type},
 };
+// use hyper_ast_gen_ts_java::types::TStore;
+use hyper_ast_cvs_git::TStore;
 
 pub fn iter_dirs(root_buggy: &std::path::Path) -> impl Iterator<Item = std::fs::DirEntry> {
     std::fs::read_dir(root_buggy)

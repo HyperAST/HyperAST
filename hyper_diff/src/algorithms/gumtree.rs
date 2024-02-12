@@ -37,7 +37,7 @@ pub fn diff<'store, HAST: HyperAST<'store>>(
 where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Debug + Clone + Copy,
-    <HAST::T as types::Typed>::Type: Debug,
+    // <HAST::T as types::Typed>::Type: Debug,
     <HAST::T as types::WithChildren>::ChildIdx: Debug,
     HAST::T: 'store + types::WithHashs + types::WithStats,
 {
@@ -47,12 +47,12 @@ where
     let subtree_prepare_t = now.elapsed().as_secs_f64();
     let now = Instant::now();
     let mapper =
-        GreedySubtreeMatcher::<_, _, _, _, _>::match_it::<_, DefaultMultiMappingStore<_>>(mapper);
+        GreedySubtreeMatcher::<_, _, _, _, _>::match_it::<DefaultMultiMappingStore<_>>(mapper);
     let subtree_matcher_t = now.elapsed().as_secs_f64();
     let subtree_mappings_s = mapper.mappings().len();
     dbg!(&subtree_matcher_t, &subtree_mappings_s);
     let now = Instant::now();
-    let mapper = GreedyBottomUpMatcher::<_, _, _, _, _, _>::match_it(mapper);
+    let mapper = GreedyBottomUpMatcher::<_, _, _, _, _>::match_it(mapper);
     dbg!(&now.elapsed().as_secs_f64());
     let bottomup_matcher_t = now.elapsed().as_secs_f64();
     let bottomup_mappings_s = mapper.mappings().len();

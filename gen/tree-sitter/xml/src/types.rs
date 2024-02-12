@@ -102,7 +102,7 @@ pub trait XmlEnabledTypeStore<T>: TypeStore<T> {
 }
 
 #[repr(u8)]
-pub(crate) enum TStore {
+pub enum TStore {
     Cpp = 0,
 }
 
@@ -187,6 +187,12 @@ impl HyperType for Type {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn as_static(&self) -> &'static dyn HyperType {
+        let t = <Xml as Lang<Type>>::to_u16(*self);
+        let t = <Xml as Lang<Type>>::make(t);
+        t
     }
 
     fn is_file(&self) -> bool {

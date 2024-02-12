@@ -1,4 +1,4 @@
-#![feature(min_specialization)]
+// #![feature(min_specialization)]
 #![feature(exact_size_is_empty)]
 #![feature(slice_index_methods)]
 

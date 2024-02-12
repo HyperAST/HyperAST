@@ -742,6 +742,8 @@ mod test {
     }
 
     mod integration {
+        use hyper_ast::types::{SimpleHyperAST, TypeStore, Typed};
+
         use crate::matchers::{
             heuristic::gt::{
                 bottom_up_matcher::BottomUpMatcher,
@@ -757,12 +759,22 @@ mod test {
         fn aaaa() {
             let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_action2());
             // let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_action2());
+            
+            let stores = SimpleHyperAST {
+                type_store: crate::tree::TStore,
+                node_store,
+                label_store,
+                _phantom: PhantomData::<Tree>,
+            };
+            
             let mut mappings = DefaultMappingStore::default();
-            let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-            let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+            let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+            let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
             mappings.topit(src_arena.len(), dst_arena.len());
-            print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+            print_mappings_no_ranges(&dst_arena, &src_arena, &stores.node_store, &stores.label_store, &mappings);
             println!();
+
+            let stores = stores.change_tree_type::<TreeRef<Tree>>();
 
             let mappings = DefaultMappingStore::default();
             let mapper = GreedySubtreeMatcher::<
@@ -772,7 +784,7 @@ mod test {
                 _,
                 _,
             >::matchh::<DefaultMultiMappingStore<_>>(
-                &node_store, &src, &dst, mappings
+                &stores, &src, &dst, mappings
             );
             let SubtreeMatcher { mappings, .. } = mapper.into();
             let mapper = GreedyBottomUpMatcher::<
@@ -782,14 +794,14 @@ mod test {
                 _,
                 _,
                 _,
-            >::matchh(&node_store, &label_store, &src, &dst, mappings);
+            >::matchh(&stores, &stores.label_store, &src, &dst, mappings);
             let BottomUpMatcher {
                 src_arena,
                 dst_arena,
                 mappings,
                 ..
             } = mapper.into();
-            print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+            print_mappings_no_ranges(&dst_arena, &src_arena, &stores.node_store, &stores.label_store, &mappings);
             println!();
 
             auto(src_arena, dst_arena, mappings);

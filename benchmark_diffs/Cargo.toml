@@ -43,6 +43,9 @@ jemallocator = "0.5.0"
 
 # [build-dependencies]
 
+[dev-dependencies]
+hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
+
 # [profile.release]
 # debug = 1
 

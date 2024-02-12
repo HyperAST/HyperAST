@@ -1624,6 +1624,7 @@ impl<T> LangRef<T> for LangWrapper<T> {
 pub trait HyperType: Display + Debug {
     fn as_shared(&self) -> Shared;
     fn as_any(&self) -> &dyn std::any::Any;
+    fn as_static(&self) -> &'static dyn HyperType;
     fn generic_eq(&self, other: &dyn HyperType) -> bool
     where
         Self: 'static + PartialEq + Sized,
@@ -1649,6 +1650,10 @@ impl HyperType for u8 {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
+        todo!()
+    }
+
+    fn as_static(&self) -> &'static dyn HyperType {
         todo!()
     }
 
@@ -1762,6 +1767,10 @@ impl LangRef<Type> for Old {
 }
 
 impl HyperType for Type {
+    fn as_static(&self) -> &'static dyn HyperType {
+        todo!()
+    }
+
     fn is_directory(&self) -> bool {
         self == &Type::Directory || self == &Type::MavenDirectory || self == &Type::MakeDirectory
     }
@@ -2409,8 +2418,7 @@ pub trait Labeled {
     fn get_label_unchecked<'a>(&'a self) -> &'a Self::Label;
     fn try_get_label<'a>(&'a self) -> Option<&'a Self::Label>;
 }
-
-pub trait Tree: Typed + Labeled + WithChildren
+pub trait Tree: Labeled + WithChildren
 // where
 //     <Self::Children as std::ops::Deref>::Target: std::ops::Index<<Self as WithChildren>::ChildIdx, Output = <Self as Stored>::TreeId>
 //         + Sized,
@@ -2418,6 +2426,16 @@ pub trait Tree: Typed + Labeled + WithChildren
     fn has_children(&self) -> bool;
     fn has_label(&self) -> bool;
 }
+
+pub trait TypedTree: Typed + Tree
+// where
+//     <Self::Children as std::ops::Deref>::Target: std::ops::Index<<Self as WithChildren>::ChildIdx, Output = <Self as Stored>::TreeId>
+//         + Sized,
+{
+}
+
+impl<T> TypedTree for T where Self: Typed + Tree {}
+
 pub trait DeCompressedTree<T: PrimInt>: Tree {
     fn get_parent(&self) -> T;
     // fn has_parent(&self) -> bool;
@@ -2597,7 +2615,7 @@ impl<IdN, S> DecompressibleNodeStore<IdN> for S where S: NodeStore<IdN> {}
 pub trait NodeStoreMut<T: Stored> {
     fn get_or_insert(&mut self, node: T) -> T::TreeId;
 }
-pub trait NodeStoreExt<T: Tree> {
+pub trait NodeStoreExt<T: TypedTree> {
     fn build_then_insert(
         &mut self,
         i: T::TreeId,
@@ -2660,14 +2678,14 @@ pub trait HyperAST<'store> {
     type IdN: NodeId<IdN = Self::IdN>;
     type Idx: PrimInt;
     type Label;
-    type T: Tree<TreeId = Self::IdN, Label = Self::Label, ChildIdx = Self::Idx>;
+    type T: Tree<Label = Self::Label, TreeId = Self::IdN, ChildIdx = Self::Idx>;
     type NS: 'store + NodeStore<Self::IdN, R<'store> = Self::T>;
     fn node_store(&self) -> &Self::NS;
 
     type LS: LabelStore<str, I = Self::Label>;
     fn label_store(&self) -> &Self::LS;
 
-    type TS: TypeStore<Self::T, Ty = <Self::T as Typed>::Type>;
+    type TS: TypeStore<Self::T>;
     fn type_store(&self) -> &Self::TS;
 
     fn decompress<D: DecompressedSubtree<'store, Self::T, Out = D>>(
@@ -2702,11 +2720,22 @@ pub trait HyperAST<'store> {
             )
         }
     }
+    fn resolve_type(&'store self, id: &Self::IdN) -> <Self::TS as TypeStore<Self::T>>::Ty {
+        let ns = self.node_store();
+        let n = ns.resolve(id);
+        self.type_store().resolve_type(&n).clone()
+    }
 }
+
 pub trait TypedHyperAST<'store, TIdN: TypedNodeId<IdN = Self::IdN>>: HyperAST<'store> {
-    type T: Tree<Type = TIdN::Ty, TreeId = Self::IdN, Label = Self::Label>;
-    type NS: 'store + TypedNodeStore<TIdN, R<'store> = <Self as TypedHyperAST<'store, TIdN>>::T>;
-    fn typed_node_store(&self) -> &<Self as TypedHyperAST<'store, TIdN>>::NS;
+    type TT: TypedTree<
+        Type = TIdN::Ty,
+        TreeId = TIdN::IdN,
+        Label = Self::Label,
+        ChildIdx = <<Self as HyperAST<'store>>::T as WithChildren>::ChildIdx,
+    >;
+    type TNS: 'store + TypedNodeStore<TIdN, R<'store> = Self::TT>;
+    fn typed_node_store(&self) -> &Self::TNS;
 }
 
 pub struct SimpleHyperAST<T, TS, NS, LS> {
@@ -2714,6 +2743,25 @@ pub struct SimpleHyperAST<T, TS, NS, LS> {
     pub node_store: NS,
     pub label_store: LS,
     pub _phantom: std::marker::PhantomData<T>,
+}
+
+impl<T, TS, NS, LS> SimpleHyperAST<T, TS, NS, LS> {
+    pub fn change_type_store<TS2>(self, new: TS2) -> SimpleHyperAST<T, TS2, NS, LS> {
+        SimpleHyperAST {
+            type_store: new,
+            node_store: self.node_store,
+            label_store: self.label_store,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+    pub fn change_tree_type<T2>(self) -> SimpleHyperAST<T2, TS, NS, LS> {
+        SimpleHyperAST {
+            type_store: self.type_store,
+            node_store: self.node_store,
+            label_store: self.label_store,
+            _phantom: std::marker::PhantomData,
+        }
+    }
 }
 
 impl<T, TS: Default, NS: Default, LS: Default> Default for SimpleHyperAST<T, TS, NS, LS> {
@@ -2731,7 +2779,6 @@ impl<T, TS, NS, LS> NodeStore<T::TreeId> for SimpleHyperAST<T, TS, NS, LS>
 where
     T: Tree,
     T::TreeId: NodeId<IdN = T::TreeId>,
-    T::Type: 'static,
     NS: NodeStore<T::TreeId>,
 {
     type R<'a> = NS::R<'a>
@@ -2747,7 +2794,6 @@ impl<'store, T, TS, NS, LS> LabelStore<str> for SimpleHyperAST<T, TS, NS, LS>
 where
     T: Tree,
     T::TreeId: NodeId<IdN = T::TreeId>,
-    T::Type: 'static,
     LS: LabelStore<str, I = T::Label>,
     <T as Labeled>::Label: Copy,
 {
@@ -2768,7 +2814,7 @@ where
 
 impl<'store, T, TS, NS, LS> TypeStore<T> for SimpleHyperAST<T, TS, NS, LS>
 where
-    T: Tree,
+    T: TypedTree,
     T::TreeId: NodeId<IdN = T::TreeId>,
     T::Type: 'static + std::hash::Hash,
     TS: TypeStore<T, Ty = T::Type>,
@@ -2801,8 +2847,7 @@ impl<'store, T, TS, NS, LS> HyperAST<'store> for SimpleHyperAST<T, TS, NS, LS>
 where
     T: Tree,
     T::TreeId: NodeId<IdN = T::TreeId>,
-    T::Type: 'static,
-    TS: TypeStore<T, Ty = T::Type>,
+    TS: TypeStore<T>,
     NS: 'store + NodeStore<T::TreeId, R<'store> = T>,
     LS: LabelStore<str, I = T::Label>,
 {
@@ -3464,6 +3509,10 @@ impl HyperType for AnyType {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self.0.as_any()
+    }
+
+    fn as_static(&self) -> &'static dyn HyperType {
+        self.0.as_static()
     }
 
     fn get_lang(&self) -> LangWrapper<Self>

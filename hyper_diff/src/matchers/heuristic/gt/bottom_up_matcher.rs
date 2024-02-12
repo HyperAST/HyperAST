@@ -7,10 +7,10 @@ use crate::{
     matchers::mapping_store::MonoMappingStore,
     utils::sequence_algorithms::longest_common_subsequence,
 };
-use hyper_ast::types::{HashKind, NodeStore, Tree, Typed, WithHashs};
+use hyper_ast::types::{HashKind, NodeStore, Tree, TypeStore, Typed, TypedTree, WithHashs};
 
-pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, S, M> {
-    pub(super) node_store: &'a S,
+pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M> {
+    pub(super) stores: &'a HAST,
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,
     pub mappings: M,
@@ -22,18 +22,18 @@ impl<
         Dsrc: DecompressedTreeStore<'a, T, M::Src> + DecompressedWithParent<'a, T, M::Src>,
         Ddst: DecompressedTreeStore<'a, T, M::Dst> + DecompressedWithParent<'a, T, M::Dst>,
         T: 'a + Tree,
-        S: 'a + NodeStore<T::TreeId, R<'a> = T>,
+        HAST: HyperAST<'a, IdN = T::TreeId, T = T>,
         M: MonoMappingStore,
-    > BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
+    > BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>
 where
-    T::Type: Eq + Copy + Send + Sync,
+    // T::Type: Eq + Copy + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
     pub(super) fn get_dst_candidates(&self, src: &M::Src) -> Vec<M::Dst> {
         let mut seeds = vec![];
         let s = &self.src_arena.original(src);
-        for c in self.src_arena.descendants(self.node_store, src) {
+        for c in self.src_arena.descendants(self.stores.node_store(), src) {
             if self.mappings.is_src(&c) {
                 let m = self.mappings.get_dst_unchecked(&c);
                 seeds.push(m);
@@ -41,7 +41,8 @@ where
         }
         let mut candidates = vec![];
         let mut visited = bitvec::bitbox![0;self.dst_arena.len()];
-        let t = self.node_store.resolve(s).get_type();
+
+        let t = self.stores.resolve_type(s);
         for mut seed in seeds {
             loop {
                 let Some(parent) = self.dst_arena.parent(&seed) else {
@@ -52,7 +53,7 @@ where
                 }
                 visited.set(parent.to_usize().unwrap(), true);
                 let p = &self.dst_arena.original(&parent);
-                if self.node_store.resolve(p).get_type() == t
+                if self.stores.resolve_type(p) == t
                     && !(self.mappings.is_dst(&parent) || parent == self.dst_arena.root())
                 {
                     candidates.push(parent);
@@ -69,11 +70,11 @@ impl<
         Dsrc: DecompressedTreeStore<'a, T, M::Src> + DecompressedWithParent<'a, T, M::Src>,
         Ddst: DecompressedTreeStore<'a, T, M::Dst> + DecompressedWithParent<'a, T, M::Dst>,
         T: 'a + Tree + WithHashs,
-        S: 'a + NodeStore<T::TreeId, R<'a> = T>,
+        HAST: HyperAST<'a, IdN = T::TreeId, T = T>,
         M: MonoMappingStore,
-    > BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
+    > BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>
 where
-    T::Type: Copy + Send + Sync + Eq + Hash,
+    <HAST::TS as TypeStore<T>>::Ty: Copy + Send + Sync + Eq + Hash,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
@@ -83,23 +84,15 @@ where
         if !src.is_zero() && !dst.is_zero() {
             self.histogram_matching(src, dst); //self.histogramMaking(src, dst),
         } else if !(src.is_zero() || dst.is_zero()) {
-            if self
-                .node_store
-                .resolve(
-                    &self
-                        .src_arena
-                        .original(&self.src_arena.parent(src).unwrap()),
-                )
-                .get_type()
-                == self
-                    .node_store
-                    .resolve(
-                        &self
-                            .dst_arena
-                            .original(&self.dst_arena.parent(dst).unwrap()),
-                    )
-                    .get_type()
-            {
+            if self.stores.resolve_type(
+                &self
+                    .src_arena
+                    .original(&self.src_arena.parent(src).unwrap()),
+            ) == self.stores.resolve_type(
+                &self
+                    .dst_arena
+                    .original(&self.dst_arena.parent(dst).unwrap()),
+            ) {
                 self.histogram_matching(src, dst) //self.histogramMaking(src, dst),
             }
         }
@@ -109,7 +102,7 @@ where
         // look at descendants
         // in mappings
         self.src_arena
-            .descendants(self.node_store, src)
+            .descendants(self.stores.node_store(), src)
             .iter()
             .all(|x| !self.mappings.is_src(x))
     }
@@ -117,16 +110,20 @@ where
         // look at descendants
         // in mappings
         self.dst_arena
-            .descendants(self.node_store, dst)
+            .descendants(self.stores.node_store(), dst)
             .iter()
             .all(|x| !self.mappings.is_dst(x))
     }
 
     pub(crate) fn add_mapping_recursively(&mut self, src: &M::Src, dst: &M::Dst) {
         self.src_arena
-            .descendants(self.node_store, src)
+            .descendants(self.stores.node_store(), src)
             .iter()
-            .zip(self.dst_arena.descendants(self.node_store, dst).iter())
+            .zip(
+                self.dst_arena
+                    .descendants(self.stores.node_store(), dst)
+                    .iter(),
+            )
             .for_each(|(src, dst)| self.mappings.link(*src, *dst));
     }
 
@@ -136,8 +133,8 @@ where
         dst: &M::Dst,
         cmp: F,
     ) {
-        let src_children = &self.src_arena.children(self.node_store, src);
-        let dst_children = &self.dst_arena.children(self.node_store, dst);
+        let src_children = &self.src_arena.children(self.stores.node_store(), src);
+        let dst_children = &self.dst_arena.children(self.stores.node_store(), dst);
 
         // self.compressed_node_store
         // .get_node_at_id(&self.src_arena.original(src));
@@ -158,12 +155,12 @@ where
         // todo with longestCommonSubsequenceWithIsomorphism
         self.lcs_matching(src, dst, |s, src, dst| {
             let a = {
-                let r = s.node_store.resolve(&s.src_arena.original(src));
+                let r = s.stores.node_store().resolve(&s.src_arena.original(src));
                 let h = r.hash(h);
                 h
             };
             let b = {
-                let r = s.node_store.resolve(&s.dst_arena.original(dst));
+                let r = s.stores.node_store().resolve(&s.dst_arena.original(dst));
                 let h = r.hash(h);
                 h
             };
@@ -180,24 +177,23 @@ where
     }
 
     pub(super) fn histogram_matching(&mut self, src: &M::Src, dst: &M::Dst) {
-        let mut src_histogram: HashMap<<T as Typed>::Type, Vec<M::Src>> = HashMap::new(); //Map<Type, List<ITree>>
-        for c in self.src_arena.children(self.node_store, src) {
-            let t = &self
-                .node_store
-                .resolve(&self.src_arena.original(&c))
-                .get_type();
+        let mut src_histogram: HashMap<<HAST::TS as TypeStore<T>>::Ty, Vec<M::Src>> = HashMap::new(); //Map<Type, List<ITree>>
+        for c in self.src_arena.children(self.stores.node_store(), src) {
+            let t = &self.stores.type_store().resolve_type(
+                &self
+                    .stores
+                    .node_store()
+                    .resolve(&self.src_arena.original(&c)),
+            );
             if !src_histogram.contains_key(t) {
                 src_histogram.insert(*t, vec![]);
             }
             src_histogram.get_mut(t).unwrap().push(c);
         }
 
-        let mut dst_histogram: HashMap<<T as Typed>::Type, Vec<M::Dst>> = HashMap::new(); //Map<Type, List<ITree>>
-        for c in self.dst_arena.children(self.node_store, dst) {
-            let t = &self
-                .node_store
-                .resolve(&self.dst_arena.original(&c))
-                .get_type();
+        let mut dst_histogram: HashMap<<HAST::TS as TypeStore<T>>::Ty, Vec<M::Dst>> = HashMap::new(); //Map<Type, List<ITree>>
+        for c in self.dst_arena.children(self.stores.node_store(), dst) {
+            let t = &self.stores.resolve_type(&self.dst_arena.original(&c));
             if !dst_histogram.contains_key(t) {
                 dst_histogram.insert(*t, vec![]);
             }
@@ -230,7 +226,7 @@ impl<
     > crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
 where
     HAST::T: 'a + Tree,
-    <HAST::T as Typed>::Type: Eq + Copy + Send + Sync,
+    // <HAST::T as Typed>::Type: Eq + Copy + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
@@ -249,7 +245,7 @@ where
         }
         let mut candidates = vec![];
         let mut visited = bitvec::bitbox![0;dst_arena.len()];
-        let t = node_store.resolve(s).get_type();
+        let t = self.hyperast.resolve_type(s);
         for mut seed in seeds {
             loop {
                 let Some(parent) = dst_arena.parent(&seed) else {
@@ -260,7 +256,7 @@ where
                 }
                 visited.set(parent.to_usize().unwrap(), true);
                 let p = &dst_arena.original(&parent);
-                if node_store.resolve(p).get_type() == t
+                if self.hyperast.resolve_type(p) == t
                     && !(mappings.is_dst(&parent) || parent == dst_arena.root())
                 {
                     candidates.push(parent);
@@ -281,8 +277,7 @@ impl<
     > crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
 where
     HAST::T: 'a + Tree + WithHashs,
-    <HAST::T as Typed>::Type: Eq + Copy + Send + Sync,
-    <HAST::T as Typed>::Type: Eq + Hash + Copy + Send + Sync,
+    <HAST::TS as TypeStore<HAST::T>>::Ty: Copy + Send + Sync + Eq + Hash,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
     M::Src: Shallow<M::Src>,
@@ -294,25 +289,15 @@ where
         if !src.is_zero() && !dst.is_zero() {
             self.histogram_matching(src, dst); //self.histogramMaking(src, dst),
         } else if !(src.is_zero() || dst.is_zero()) {
-            if self
-                .hyperast
-                .node_store()
-                .resolve(
-                    &self
-                        .src_arena
-                        .original(&self.src_arena.parent(src).unwrap()),
-                )
-                .get_type()
-                == self
-                    .hyperast
-                    .node_store()
-                    .resolve(
-                        &self
-                            .dst_arena
-                            .original(&self.dst_arena.parent(dst).unwrap()),
-                    )
-                    .get_type()
-            {
+            if self.hyperast.resolve_type(
+                &self
+                    .src_arena
+                    .original(&self.src_arena.parent(src).unwrap()),
+            ) == self.hyperast.resolve_type(
+                &self
+                    .dst_arena
+                    .original(&self.dst_arena.parent(dst).unwrap()),
+            ) {
                 self.histogram_matching(src, dst) //self.histogramMaking(src, dst),
             }
         }
@@ -393,26 +378,22 @@ where
     }
 
     pub(super) fn histogram_matching(&mut self, src: &M::Src, dst: &M::Dst) {
-        let mut src_histogram: HashMap<<HAST::T as Typed>::Type, Vec<M::Src>> = HashMap::new(); //Map<Type, List<ITree>>
+        let mut src_histogram: HashMap<<HAST::TS as TypeStore<HAST::T>>::Ty, Vec<M::Src>> = HashMap::new(); //Map<Type, List<ITree>>
         for c in self.src_arena.children(self.hyperast.node_store(), src) {
             let t = &self
                 .hyperast
-                .node_store()
-                .resolve(&self.src_arena.original(&c))
-                .get_type();
+                .resolve_type(&self.src_arena.original(&c));
             if !src_histogram.contains_key(t) {
                 src_histogram.insert(*t, vec![]);
             }
             src_histogram.get_mut(t).unwrap().push(c);
         }
 
-        let mut dst_histogram: HashMap<<HAST::T as Typed>::Type, Vec<M::Dst>> = HashMap::new(); //Map<Type, List<ITree>>
+        let mut dst_histogram: HashMap<<HAST::TS as TypeStore<HAST::T>>::Ty, Vec<M::Dst>> = HashMap::new(); //Map<Type, List<ITree>>
         for c in self.dst_arena.children(self.hyperast.node_store(), dst) {
             let t = &self
                 .hyperast
-                .node_store()
-                .resolve(&self.dst_arena.original(&c))
-                .get_type();
+                .resolve_type(&self.dst_arena.original(&c));
             if !dst_histogram.contains_key(t) {
                 dst_histogram.insert(*t, vec![]);
             }
