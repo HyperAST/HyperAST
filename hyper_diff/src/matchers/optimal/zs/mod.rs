@@ -22,7 +22,7 @@ pub struct ZsMatcher<M, SD, DD = SD> {
 }
 
 impl<SD, DD, M: MonoMappingStore + Default> ZsMatcher<M, SD, DD> {
-    pub fn matchh<'store: 'b, 'b: 'c, 'c, T, HAST, LS>(
+    pub fn matchh<'store: 'b, 'b: 'c, 'c, T, HAST>(
         stores: &'store HAST,
         src: T::TreeId,
         dst: T::TreeId,

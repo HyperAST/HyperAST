@@ -3,7 +3,7 @@ use std::fmt::Display;
 use hyper_ast::{
     store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
-    types::{AnyType, HyperType, Lang, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
+    types::{AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
 };
 
 #[cfg(feature = "legion")]
@@ -32,20 +32,20 @@ mod legion_impls {
             &self,
             n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            From::<&'static (dyn LangRef<Type>)>::from(&Xml)
+            From::<&'static (dyn LangRef<Type>)>::from(&Lang)
         }
 
         type Marshaled = TypeIndex;
 
         fn marshal_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Marshaled {
             TypeIndex {
-                lang: LangRef::<Type>::name(&Xml),
+                lang: LangRef::<Type>::name(&Lang),
                 ty: self.resolve_type(n) as u16,
             }
         }
     }
     impl<'a> XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        const LANG: TypeInternalSize = Self::Cpp as u16;
+        const LANG: TypeInternalSize = Self::Xml as u16;
 
         fn _intern(l: u16, t: u16) -> Self::Ty {
             // T((u16::MAX - l as u16) | t)
@@ -67,7 +67,8 @@ mod legion_impls {
         const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
 
         fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-            todo!()
+            let t = n.get_component::<Type>().unwrap();
+            as_any(t)
         }
 
         fn resolve_lang(
@@ -81,11 +82,17 @@ mod legion_impls {
 
         fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
             TypeIndex {
-                lang: LangRef::<Type>::name(&Xml),
+                lang: LangRef::<Type>::name(&Lang),
                 ty: *n.get_component::<Type>().unwrap() as u16,
             }
         }
     }
+}
+pub fn as_any(t: &Type) -> AnyType {
+    let t = <Xml as hyper_ast::types::Lang<Type>>::to_u16(*t);
+    let t = <Xml as hyper_ast::types::Lang<Type>>::make(t);
+    let t: &'static dyn HyperType = t;
+    t.into()
 }
 pub trait XmlEnabledTypeStore<T>: TypeStore<T> {
     const LANG: u16;
@@ -103,12 +110,12 @@ pub trait XmlEnabledTypeStore<T>: TypeStore<T> {
 
 #[repr(u8)]
 pub enum TStore {
-    Cpp = 0,
+    Xml = 0,
 }
 
 impl Default for TStore {
     fn default() -> Self {
-        Self::Cpp
+        Self::Xml
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -139,14 +146,15 @@ type TypeInternalSize = u16;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct T(TypeInternalSize);
 
-pub struct Xml;
+pub struct Lang;
+pub type Xml = Lang;
 
-impl Lang<Type> for Xml {
+impl hyper_ast::types::Lang<Type> for Xml {
     fn make(t: u16) -> &'static Type {
-        Xml.make(t)
+        Lang.make(t)
     }
     fn to_u16(t: Type) -> u16 {
-        Xml.to_u16(t)
+        Lang.to_u16(t)
     }
 }
 
@@ -178,6 +186,18 @@ impl LangRef<AnyType> for Xml {
     }
 }
 impl HyperType for Type {
+    fn generic_eq(&self, other: &dyn HyperType) -> bool
+    where
+        Self: 'static + PartialEq + Sized,
+    {
+        // Do a type-safe casting. If the types are different,
+        // return false, otherwise test the values for equality.
+        other
+            .as_any()
+            .downcast_ref::<Self>()
+            .map_or(false, |a| self == a)
+    }
+
     fn as_shared(&self) -> hyper_ast::types::Shared {
         use hyper_ast::types::Shared;
         match self {
@@ -190,8 +210,8 @@ impl HyperType for Type {
     }
 
     fn as_static(&self) -> &'static dyn HyperType {
-        let t = <Xml as Lang<Type>>::to_u16(*self);
-        let t = <Xml as Lang<Type>>::make(t);
+        let t = <Xml as hyper_ast::types::Lang<Type>>::to_u16(*self);
+        let t = <Xml as hyper_ast::types::Lang<Type>>::make(t);
         t
     }
 

@@ -4,7 +4,7 @@ use hyper_ast::{
     store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
     types::{
-        AnyType, HyperType, Lang, LangRef, LangWrapper, NodeId, TypeStore, TypeTrait, TypedNodeId,
+        AnyType, HyperType, LangRef, LangWrapper, NodeId, TypeStore, TypeTrait, TypedNodeId,
     },
 };
 
@@ -63,14 +63,14 @@ mod legion_impls {
             &self,
             n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            From::<&'static (dyn LangRef<Type>)>::from(&Cpp)
+            From::<&'static (dyn LangRef<Type>)>::from(&Lang)
         }
 
         type Marshaled = TypeIndex;
 
         fn marshal_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Marshaled {
             TypeIndex {
-                lang: LangRef::<Type>::name(&Cpp),
+                lang: LangRef::<Type>::name(&Lang),
                 ty: *n.get_component::<Type>().unwrap() as u16,
             }
         }
@@ -98,7 +98,7 @@ mod legion_impls {
         const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
         fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
             From::<&'static (dyn HyperType)>::from(LangRef::<Type>::make(
-                &Cpp,
+                &Lang,
                 *n.get_component::<Type>().unwrap() as u16,
             ))
         }
@@ -107,14 +107,14 @@ mod legion_impls {
             &self,
             n: &HashedNodeRef<'a, NodeIdentifier>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            From::<&'static (dyn LangRef<AnyType>)>::from(&Cpp)
+            From::<&'static (dyn LangRef<AnyType>)>::from(&Lang)
         }
 
         type Marshaled = TypeIndex;
 
         fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
             TypeIndex {
-                lang: LangRef::<Type>::name(&Cpp),
+                lang: LangRef::<Type>::name(&Lang),
                 ty: *n.get_component::<Type>().unwrap() as u16,
             }
         }
@@ -262,10 +262,18 @@ type TypeInternalSize = u16;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct T(TypeInternalSize);
 
-pub struct Cpp;
+pub struct Lang;
+pub type Cpp = Lang;
 
 impl Cpp {
-    const INST: Cpp = Cpp;
+    const INST: Cpp = Lang;
+}
+
+pub fn as_any(t: &Type) -> AnyType {
+    let t = <Cpp as hyper_ast::types::Lang<Type>>::to_u16(*t);
+    let t = <Cpp as hyper_ast::types::Lang<Type>>::make(t);
+    let t: &'static dyn HyperType = t;
+    t.into()
 }
 
 impl LangRef<AnyType> for Cpp {
@@ -297,16 +305,28 @@ impl LangRef<Type> for Cpp {
     }
 }
 
-impl Lang<Type> for Cpp {
+impl hyper_ast::types::Lang<Type> for Cpp {
     fn make(t: u16) -> &'static Type {
-        Cpp.make(t)
+        Lang.make(t)
     }
     fn to_u16(t: Type) -> u16 {
-        Cpp.to_u16(t)
+        Lang.to_u16(t)
     }
 }
 
 impl HyperType for Type {
+    fn generic_eq(&self, other: &dyn HyperType) -> bool
+    where
+        Self: 'static + PartialEq + Sized,
+    {
+        // Do a type-safe casting. If the types are different,
+        // return false, otherwise test the values for equality.
+        other
+            .as_any()
+            .downcast_ref::<Self>()
+            .map_or(false, |a| self == a)
+    }
+    
     fn is_directory(&self) -> bool {
         self == &Type::Directory
     }
@@ -469,9 +489,20 @@ impl HyperType for Type {
         self
     }
 
+    /// ```
+    /// # fn main() {
+    /// # use hyper_ast_gen_ts_cpp::types::Type;
+    /// # use hyper_ast::types::HyperType;
+    /// let k0 = Type::FunctionDefinition.as_static();
+    /// let k1 = Type::FunctionDefinition.as_static();
+    /// let k2 = Type::EnumSpecifier.as_static();
+    /// assert!(std::ptr::eq(k0,k1));
+    /// assert!(!std::ptr::eq(k0,k2));
+    /// # }
+    /// ```
     fn as_static(&self) -> &'static dyn HyperType {
-        let t = <Cpp as Lang<Type>>::to_u16(*self);
-        let t = <Cpp as Lang<Type>>::make(t);
+        let t = <Cpp as hyper_ast::types::Lang<Type>>::to_u16(*self);
+        let t = <Cpp as hyper_ast::types::Lang<Type>>::make(t);
         t
     }
 
@@ -479,7 +510,7 @@ impl HyperType for Type {
     where
         Self: Sized,
     {
-        From::<&'static (dyn LangRef<Self>)>::from(&Cpp)
+        From::<&'static (dyn LangRef<Self>)>::from(&Lang)
     }
 }
 impl TypeTrait for Type {

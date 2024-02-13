@@ -3,7 +3,7 @@ use std::fmt::Display;
 use hyper_ast::{
     store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
-    types::{AnyType, HyperType, Lang, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
+    types::{AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
 };
 
 pub struct Single {
@@ -80,7 +80,7 @@ mod legion_impls {
 
         fn marshal_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Marshaled {
             TypeIndex {
-                lang: LangRef::<Type>::name(&Java),
+                lang: LangRef::<Type>::name(&Lang),
                 ty: *n.get_component::<Type>().unwrap() as u16,
             }
         }
@@ -126,10 +126,7 @@ mod legion_impls {
 
         fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
             let t = n.get_component::<Type>().unwrap();
-            let t = <Java as Lang<Type>>::to_u16(*t);
-            let t = <Java as Lang<Type>>::make(t);
-            let t: &'static dyn HyperType = t;
-            t.into()
+            as_any(t)
         }
 
         fn resolve_lang(
@@ -143,12 +140,20 @@ mod legion_impls {
 
         fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
             TypeIndex {
-                lang: LangRef::<Type>::name(&Java),
+                lang: LangRef::<Type>::name(&Lang),
                 ty: *n.get_component::<Type>().unwrap() as u16,
             }
         }
     }
+    pub fn as_any(t: &Type) -> AnyType {
+        let t = <Java as hyper_ast::types::Lang<Type>>::to_u16(*t);
+        let t = <Java as hyper_ast::types::Lang<Type>>::make(t);
+        let t: &'static dyn HyperType = t;
+        t.into()
+    }
 }
+#[cfg(feature = "legion")]
+pub use legion_impls::as_any;
 pub trait JavaEnabledTypeStore<T>: TypeStore<T> {}
 
 // impl Single {
@@ -205,14 +210,15 @@ type TypeInternalSize = u16;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct T(TypeInternalSize);
-pub struct Java;
+pub struct Lang;
+pub type Java = Lang;
 
-impl Lang<Type> for Java {
+impl hyper_ast::types::Lang<Type> for Java {
     fn make(t: u16) -> &'static Type {
-        Java.make(t)
+        Lang.make(t)
     }
     fn to_u16(t: Type) -> u16 {
-        Java.to_u16(t)
+        Lang.to_u16(t)
     }
 }
 impl LangRef<Type> for Java {
@@ -241,6 +247,18 @@ impl LangRef<AnyType> for Java {
     }
 }
 impl HyperType for Type {
+    fn generic_eq(&self, other: &dyn HyperType) -> bool
+    where
+        Self: 'static + PartialEq + Sized,
+    {
+        // Do a type-safe casting. If the types are different,
+        // return false, otherwise test the values for equality.
+        other
+            .as_any()
+            .downcast_ref::<Self>()
+            .map_or(false, |a| self == a)
+    }
+
     fn is_directory(&self) -> bool {
         self == &Type::Directory
     }

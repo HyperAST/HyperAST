@@ -39,7 +39,6 @@ fn test_with_custom_example() {
     };
     let mapper = ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(
         &stores,
-        &stores.label_store,
         src,
         dst,
     );
@@ -104,7 +103,6 @@ fn test_with_custom_example2() {
     };
     let mapper = ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(
         &stores,
-        &stores.label_store,
         src,
         dst,
     );
@@ -152,7 +150,6 @@ fn test_with_slide_example() {
     };
     let mapper = ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(
         &stores,
-        &stores.label_store,
         src,
         dst,
     );
@@ -198,7 +195,6 @@ fn test_with_slide_example2() {
     };
     let mapper = ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(
         &stores,
-        &stores.label_store,
         src,
         dst,
     );
