@@ -50,9 +50,8 @@ pub fn top_down<'store, HAST: HyperAST<'store>>(
 where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
-    <HAST::T as types::Typed>::Type: Debug,
     <HAST::T as types::WithChildren>::ChildIdx: Debug,
-    HAST::T: 'store + types::WithHashs + types::WithStats,
+    HAST::T: 'store + types::WithHashs + types::WithStats, 
 {
     let mut mm: DefaultMultiMappingStore<_> = Default::default();
     mm.topit(src_arena.len(), dst_arena.len());
@@ -74,7 +73,6 @@ pub fn full<'store, HAST: HyperAST<'store>>(
 ) where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
-    <HAST::T as types::Typed>::Type: Debug,
     <HAST::T as types::WithChildren>::ChildIdx: Debug,
     HAST::T: 'store + types::WithHashs + types::WithStats,
 {
@@ -98,7 +96,6 @@ pub fn full2<'store, HAST: HyperAST<'store>>(
 where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
-    <HAST::T as types::Typed>::Type: Debug,
     <HAST::T as types::WithChildren>::ChildIdx: Debug,
     HAST::T: 'store + types::WithHashs + types::WithStats,
 {
