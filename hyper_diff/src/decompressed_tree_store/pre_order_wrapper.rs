@@ -6,7 +6,8 @@ use std::{
 use num_traits::{cast, zero, PrimInt, ToPrimitive, Zero};
 
 use crate::decompressed_tree_store::{DecompressedTreeStore, PostOrder};
-use hyper_ast::types::{LabelStore, NodeStore, Tree, WithChildren, WithSerialization};
+use hyper_ast::types::{HyperAST, LabelStore, Labeled, NodeStore, WithChildren, WithSerialization};
+use hyper_ast::types::TypeStore;
 
 use super::FullyDecompressedTreeStore;
 
@@ -96,40 +97,37 @@ pub struct DisplaySimplePreOrderMapper<
     'store: 'a,
     'a: 'b,
     'b,
-    T: WithChildren,
     IdD: PrimInt,
-    S,
-    LS,
-    D: PostOrder<'a, T, IdD>,
+    HAST: HyperAST<'store>,
+    D: PostOrder<'a, HAST::T, IdD>,
 > {
-    pub inner: &'b SimplePreOrderMapper<'a, T, IdD, D>,
-    pub node_store: &'store S,
-    pub label_store: &'store LS,
+    pub inner: &'b SimplePreOrderMapper<'a, HAST::T, IdD, D>,
+    pub stores: &'store HAST,
 }
 
-impl<'store: 'a, 'a: 'b, 'b, T: Tree + WithSerialization, IdD: PrimInt, S, LS, D> Display
-    for DisplaySimplePreOrderMapper<'store, 'a, 'b, T, IdD, S, LS, D>
+impl<'store: 'a, 'a: 'b, 'b, IdD: PrimInt, HAST, D> Display
+    for DisplaySimplePreOrderMapper<'store, 'a, 'b, IdD, HAST, D>
 where
-    T::TreeId: Clone + Debug + Eq,
-    T::Type: Copy + Send + Sync,
-    S: NodeStore<T::TreeId, R<'store> = T>,
-    LS: LabelStore<str, I = T::Label>,
-    T::Type: Debug,
-    D: PostOrder<'a, T, IdD>,
+    HAST: HyperAST<'store>,
+    HAST::T: WithSerialization,
+    // T::TreeId: Clone + Debug + Eq,
+    // T::Type: Copy + Send + Sync,
+    // T::Type: Debug,
+    D: PostOrder<'a, HAST::T, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut pos = 0;
         for i in 0..self.inner.map.len() {
             let o = self.inner.map[i];
             let ori = self.inner.back.original(&o);
-            let node = self.node_store.resolve(&ori);
+            let node = self.stores.node_store().resolve(&ori);
             let len = node.try_bytes_len().unwrap_or(0);
             writeln!(
                 f,
                 "{:>3}:{} {:?}    [{},{}]",
                 o.to_usize().unwrap(),
                 "  ".repeat(self.inner.depth[i].to_usize().unwrap()),
-                node.get_type(),
+                self.stores.type_store().resolve_type(&node),
                 pos,
                 pos + len,
             )?;
@@ -140,24 +138,23 @@ where
         Ok(())
     }
 }
-impl<'store: 'a, 'a: 'b, 'b, T: Tree, IdD: PrimInt, S, LS, D> Debug
-    for DisplaySimplePreOrderMapper<'store, 'a, 'b, T, IdD, S, LS, D>
+impl<'store: 'a, 'a: 'b, 'b, IdD: PrimInt, HAST, D> Debug
+    for DisplaySimplePreOrderMapper<'store, 'a, 'b, IdD, HAST, D>
 where
-    T::TreeId: Clone + Debug + Eq,
-    T::Type: Copy + Send + Sync,
-    S: NodeStore<T::TreeId, R<'store> = T>,
-    LS: LabelStore<str, I = T::Label>,
-    T::Type: Debug,
-    D: PostOrder<'a, T, IdD>,
+    // HAST::IdN: Clone + Debug + Eq,
+    // T::Type: Copy + Send + Sync,
+    HAST: HyperAST<'store>,
+    // T::Type: Debug,
+    D: PostOrder<'a, HAST::T, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if f.alternate() {
             for i in 0..self.inner.map.len() {
                 let o = self.inner.map[i];
                 let ori = self.inner.back.original(&o);
-                let node = self.node_store.resolve(&ori);
+                let node = self.stores.node_store().resolve(&ori);
                 let mut s = self
-                    .label_store
+                    .stores.label_store()
                     .resolve(&node.get_label_unchecked())
                     .to_owned();
                 s.truncate(5);
@@ -166,7 +163,7 @@ where
                     "{:>3}:{} {:?}; {}",
                     o.to_usize().unwrap(),
                     "  ".repeat(self.inner.depth[i].to_usize().unwrap()),
-                    node.get_type(),
+                    self.stores.type_store().resolve_type(&node),
                     s.escape_debug()
                 )?;
             }
@@ -175,13 +172,13 @@ where
         for i in 0..self.inner.map.len() {
             let o = self.inner.map[i];
             let ori = self.inner.back.original(&o);
-            let node = self.node_store.resolve(&ori);
+            let node = self.stores.node_store().resolve(&ori);
             writeln!(
                 f,
                 "{:>3}:{} {:?}",
                 o.to_usize().unwrap(),
                 "  ".repeat(self.inner.depth[i].to_usize().unwrap()),
-                node.get_type(),
+                self.stores.type_store().resolve_type(&node),
             )?;
         }
         Ok(())

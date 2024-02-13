@@ -1,8 +1,6 @@
 use std::fmt::{self, Debug};
 
-use hyper_ast::types::HyperType;
-use hyper_ast::types::NodeStore;
-use hyper_ast::types::TypeTrait;
+use hyper_ast::types::{NodeStore, TypeStore, TypedHyperAST, TypedTree};
 use hyper_ast::{
     position::{TreePath, TreePathMut},
     store::nodes::legion::NodeIdentifier,
@@ -63,19 +61,20 @@ where
     }
 }
 
-
 impl<
         'a,
         T: TreePathMut<NodeIdentifier, u16> + Clone + Debug,
-        HAST: HyperAST<'a, IdN = NodeIdentifier, Idx = u16>,
+        HAST: TypedHyperAST<'a, TIdN<NodeIdentifier>, IdN = NodeIdentifier, Idx = u16>,
     > Iterator for IterAll<'a, T, HAST>
 where
-    <HAST::T as Typed>::Type: Copy + Send + Sync,
-    HAST::NS: TypedNodeStore<TIdN<NodeIdentifier>>,
-    for<'b> <HAST::NS as TypedNodeStore<TIdN<HAST::IdN>>>::R<'b>:
-        Tree<Type = Type, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
-    <HAST::NS as NodeStore<HAST::IdN>>::R<'a>:
-        Tree<Type = AnyType, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
+    // HAST::NS: TypedNodeStore<TIdN<NodeIdentifier>>,
+    // HAST::TS: TypeStore<HAST::T, Ty = Type>,
+    // HAST::TT: TypedTree<Type = Type>,
+    // <HAST::T as Typed>::Type: Copy + Send + Sync,
+    // for<'b> <HAST::NS as TypedNodeStore<TIdN<HAST::IdN>>>::R<'b>:
+    //     TypedTree<Type = Type, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
+    // <HAST::NS as NodeStore<HAST::IdN>>::R<'a>:
+    //     TypedTree<Type = AnyType, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
 {
     type Item = T;
 
@@ -124,7 +123,7 @@ where
                     }
                     self.stack.push((node, offset + 1, Some(children)));
                     let child = if let Some(tid) =
-                        TypedNodeStore::try_typed(self.stores.node_store(), &child)
+                        self.stores.typed_node_store().try_typed(&child)
                     {
                         Id::Cpp(tid)
                     } else {
@@ -140,12 +139,10 @@ where
                 }
             } else {
                 let b = match &node {
-                    Id::Cpp(node) => TypedNodeStore::resolve(self.stores.node_store(), node),
+                    Id::Cpp(node) => self.stores.typed_node_store().resolve(node),
                     Id::Other(node) => {
-                        let b = hyper_ast::types::NodeStore::resolve(
-                            self.stores.node_store(),
-                            node,
-                        );
+                        let b =
+                            hyper_ast::types::NodeStore::resolve(self.stores.node_store(), node);
                         if b.has_children() {
                             let children = b.children();
                             let children = children.unwrap();
@@ -158,15 +155,12 @@ where
                         continue;
                     }
                 };
-                
+
                 if b.has_children() {
                     let children = b.children();
                     let children = children.unwrap();
-                    self.stack.push((
-                        node,
-                        0,
-                        Some(children.iter_children().cloned().collect()),
-                    ));
+                    self.stack
+                        .push((node, 0, Some(children.iter_children().cloned().collect())));
                 }
                 return Some(self.path.clone());
             }

@@ -10,8 +10,8 @@ use crate::{
 };
 use hyper_ast::types::{NodeStore, Tree, TypeStore, Typed, WithStats};
 
-pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, S, M> {
-    pub(super) node_store: &'a S,
+pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M> {
+    pub(super) stores: &'a HAST,
     pub src_arena: Dsrc,
     pub dst_arena: Ddst,
     pub mappings: M,
@@ -29,11 +29,11 @@ impl<
             + DecompressedWithParent<'a, T, Ddst::IdD>
             + LazyDecompressedTreeStore<'a, T, M::Dst>,
         T: 'a + Tree + WithStats,
-        S: 'a + NodeStore<T::TreeId, R<'a> = T>,
+        HAST: HyperAST<'a, IdN = T::TreeId, T = T>,
         M: MonoMappingStore,
-    > BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>
+    > BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>
 where
-    T::Type: Copy + Eq + Send + Sync,
+    // T::Type: Copy + Eq + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
     Dsrc::IdD: PrimInt + std::ops::SubAssign + Debug,
@@ -42,16 +42,16 @@ where
     pub(super) fn get_dst_candidates(&mut self, src: &Dsrc::IdD) -> Vec<Ddst::IdD> {
         let mut seeds = vec![];
         let s = &self.src_arena.original(src);
-        for c in self.src_arena.descendants(self.node_store, src) {
+        for c in self.src_arena.descendants(self.stores.node_store(), src) {
             if self.mappings.is_src(&c) {
                 let m = self.mappings.get_dst_unchecked(&c);
-                let m = self.dst_arena.decompress_to(self.node_store, &m);
+                let m = self.dst_arena.decompress_to(self.stores.node_store(), &m);
                 seeds.push(m);
             }
         }
         let mut candidates = vec![];
         let mut visited = bitvec::bitbox![0;self.dst_arena.len()];
-        let t = self.node_store.resolve(s).get_type();
+        let t = self.stores.resolve_type(s);
         for mut seed in seeds {
             loop {
                 let Some(parent) = self.dst_arena.parent(&seed) else {
@@ -62,7 +62,7 @@ where
                 }
                 visited.set(parent.to_usize().unwrap(), true);
                 let p = &self.dst_arena.original(&parent);
-                if self.node_store.resolve(p).get_type() == t
+                if self.stores.resolve_type(p) == t
                     && !(self.mappings.is_dst(parent.shallow())
                         || parent.shallow() == &self.dst_arena.root())
                 {
@@ -90,16 +90,14 @@ impl<
     > crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
 where
     HAST::T: 'a + Tree + WithStats,
-    <HAST::T as Typed>::Type: Eq + Copy + Send + Sync,
+    // <HAST::T as Typed>::Type: Eq + Copy + Send + Sync,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
     Dsrc::IdD: PrimInt + std::ops::SubAssign + Debug,
     Ddst::IdD: PrimInt + std::ops::SubAssign + Debug,
 {
     pub(super) fn get_dst_candidates_lazily(&mut self, src: &Dsrc::IdD) -> Vec<Ddst::IdD> {
-        use hyper_ast::types::Typed;
         let node_store = self.hyperast.node_store();
-        let type_store = self.hyperast.type_store();
         let src_arena = &self.mapping.src_arena;
         let dst_arena = &mut self.mapping.dst_arena;
         let mappings = &self.mapping.mappings;
@@ -114,7 +112,7 @@ where
         }
         let mut candidates = vec![];
         let mut visited = bitvec::bitbox![0;dst_arena.len()];
-        let t = type_store.resolve_type(&node_store.resolve(s));
+        let t = self.hyperast.resolve_type(s);
         for mut seed in seeds {
             loop {
                 let Some(parent) = dst_arena.parent(&seed) else {
@@ -125,7 +123,7 @@ where
                 }
                 visited.set(parent.to_usize().unwrap(), true);
                 let p = &dst_arena.original(&parent);
-                if type_store.resolve_type(&node_store.resolve(p)) == t
+                if self.hyperast.resolve_type(p) == t
                     && !(mappings.is_dst(parent.shallow()) || parent.shallow() == &dst_arena.root())
                 {
                     candidates.push(parent);

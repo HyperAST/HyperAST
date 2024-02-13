@@ -5,8 +5,7 @@ use hyper_ast::{
     position::{StructuralPosition, TreePath, TreePathMut},
     store::{defaults::NodeIdentifier, SimpleStores},
     types::{
-        AnyType, HyperAST, HyperType, IterableChildren, NodeId, NodeStore, Tree, TypeTrait, Typed,
-        TypedNodeStore, WithChildren,
+        AnyType, HyperAST, HyperType, IterableChildren, NodeId, NodeStore, Tree, TypeTrait, Typed, TypedHyperAST, TypedNodeStore, TypedTree, WithChildren
     },
 };
 use num::ToPrimitive;
@@ -44,17 +43,17 @@ impl<'a, T: TreePath<NodeIdentifier, u16>, HAST> Debug for IterDeclarations<'a, 
 impl<
         'a,
         T: TreePathMut<NodeIdentifier, u16> + Clone + Debug,
-        HAST: HyperAST<'a, IdN = NodeIdentifier, Idx = u16>,
+        HAST: TypedHyperAST<'a, crate::types::TIdN<NodeIdentifier>, IdN = NodeIdentifier, Idx = u16>,
     > Iterator for IterDeclarations<'a, T, HAST>
 where
     // HAST::TS: JavaEnabledTypeStore<HAST::T>,
-    <HAST::T as Typed>::Type: Copy + Send + Sync,
+    <HAST::TT as Typed>::Type: Copy + Send + Sync,
     HAST::NS: TypedNodeStore<crate::types::TIdN<NodeIdentifier>>,
     // HAST::NS: TypedNodeStore<crate::types::TIdN<HAST::IdN>>,
     for<'b> <HAST::NS as TypedNodeStore<crate::types::TIdN<HAST::IdN>>>::R<'b>:
-        Tree<Type = Type, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
+        TypedTree<Type = Type, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
     <HAST::NS as NodeStore<HAST::IdN>>::R<'a>:
-        Tree<Type = AnyType, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
+        TypedTree<Type = AnyType, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
 {
     type Item = T;
 

@@ -23,15 +23,13 @@ pub struct GreedyBottomUpMatcher<
     Dsrc,
     Ddst,
     T: 'a + Tree + WithHashs,
-    S,
-    LS: LabelStore<SlicedLabel, I = T::Label>,
+    HAST,
     M: MonoMappingStore,
     const SIZE_THRESHOLD: usize = 1000,
     const SIM_THRESHOLD_NUM: u64 = 1,
     const SIM_THRESHOLD_DEN: u64 = 2,
 > {
-    label_store: &'a LS,
-    internal: BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>,
+    internal: BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>,
 }
 
 /// Enable using a slice instead of recreating a ZsTree for each call to ZsMatch, see last_chance_match
@@ -49,27 +47,25 @@ impl<
             + PostOrder<'a, T, M::Dst>,
         // IdD: PrimInt + std::ops::SubAssign + Debug,
         T: Tree + WithHashs,
-        S,
-        LS: LabelStore<SlicedLabel, I = T::Label>,
+        HAST: HyperAST<'a, IdN = T::TreeId, T = T, Label = T::Label>,
         M: MonoMappingStore,
         const SIZE_THRESHOLD: usize,  // = 1000,
         const SIM_THRESHOLD_NUM: u64, // = 1,
         const SIM_THRESHOLD_DEN: u64, // = 2,
-    > Into<BottomUpMatcher<'a, Dsrc, Ddst, T, S, M>>
+    > Into<BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>>
     for GreedyBottomUpMatcher<
         'a,
         Dsrc,
         Ddst,
         T,
-        S,
-        LS,
+        HAST,
         M,
         SIZE_THRESHOLD,
         SIM_THRESHOLD_NUM,
         SIM_THRESHOLD_DEN,
     >
 {
-    fn into(self) -> BottomUpMatcher<'a, Dsrc, Ddst, T, S, M> {
+    fn into(self) -> BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M> {
         self.internal
     }
 }
@@ -94,8 +90,7 @@ impl<
             + ContiguousDescendants<'a, T, M::Dst>
             + POBorrowSlice<'a, T, M::Dst>,
         T: 'a + Tree + WithHashs,
-        S: 'a + NodeStore<T::TreeId, R<'a> = T>,
-        LS: 'a + LabelStore<SlicedLabel, I = T::Label>,
+        HAST: HyperAST<'a, IdN = T::TreeId, T = T, Label = T::Label>,
         M: MonoMappingStore + Default,
         const SIZE_THRESHOLD: usize,
         const SIM_THRESHOLD_NUM: u64,
@@ -106,8 +101,7 @@ impl<
         Dsrc,
         Ddst,
         T,
-        S,
-        LS,
+        HAST,
         M,
         SIZE_THRESHOLD,
         SIM_THRESHOLD_NUM,
@@ -115,21 +109,19 @@ impl<
     >
 where
     T::TreeId: 'a + Clone + Debug + NodeId<IdN = T::TreeId>,
-    T::Type: Debug + Eq + Copy + Send + Sync,
+    // T::Type: Debug + Eq + Copy + Send + Sync,
     M::Src: 'a + PrimInt + std::ops::SubAssign + Debug,
     M::Dst: 'a + PrimInt + std::ops::SubAssign + Debug,
 {
     pub fn new(
-        node_store: &'a S,
-        label_store: &'a LS,
+        stores: &'a HAST,
         src_arena: Dsrc,
         dst_arena: Ddst,
         mappings: M,
     ) -> Self {
         Self {
-            label_store,
             internal: BottomUpMatcher {
-                node_store,
+                stores,
                 src_arena,
                 dst_arena,
                 mappings,
@@ -138,21 +130,18 @@ where
         }
     }
 
-    pub fn match_it<HAST>(
+    pub fn match_it(
         mapping: crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>,
     ) -> crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
-    where
-        HAST: HyperAST<'a, NS = S, LS = LS>,
     {
         let mut matcher = Self {
             internal: BottomUpMatcher {
-                node_store: mapping.hyperast.node_store(),
+                stores: mapping.hyperast,
                 src_arena: mapping.mapping.src_arena,
                 dst_arena: mapping.mapping.dst_arena,
                 mappings: mapping.mapping.mappings,
                 _phantom: PhantomData,
             },
-            label_store: mapping.hyperast.label_store(),
         };
         matcher.internal.mappings.topit(
             matcher.internal.src_arena.len(),
@@ -170,17 +159,15 @@ where
     }
 
     pub fn matchh(
-        compressed_node_store: &'a S,
-        label_store: &'a LS,
+        compressed_node_store: &'a HAST,
         src: &'a T::TreeId,
         dst: &'a T::TreeId,
         mappings: M,
     ) -> Self {
         let mut matcher = Self::new(
             compressed_node_store,
-            label_store,
-            Dsrc::decompress(compressed_node_store, src),
-            Ddst::decompress(compressed_node_store, dst),
+            Dsrc::decompress(compressed_node_store.node_store(), src),
+            Ddst::decompress(compressed_node_store.node_store(), dst),
             mappings,
         );
         matcher.internal.mappings.topit(
@@ -246,7 +233,7 @@ where
         use num_traits::ToPrimitive;
         let r = self
             .internal
-            .node_store
+            .stores.node_store()
             .resolve(&self.internal.src_arena.original(&src))
             .has_children();
         assert_eq!(
@@ -264,23 +251,22 @@ where
         let src_s = self
             .internal
             .src_arena
-            .descendants_count(self.internal.node_store, &src);
+            .descendants_count(self.internal.stores.node_store(), &src);
         let dst_s = self
             .internal
             .dst_arena
-            .descendants_count(self.internal.node_store, &dst);
+            .descendants_count(self.internal.stores.node_store(), &dst);
         if !(src_s < cast(SIZE_THRESHOLD).unwrap() || dst_s < cast(SIZE_THRESHOLD).unwrap()) {
             return;
         }
-        let node_store = self.internal.node_store;
-        let label_store = self.label_store;
+        let node_store = self.internal.stores.node_store();
         let src_offset;
         use crate::decompressed_tree_store::ShallowDecompressedTreeStore;
         let mappings: M = if SLICE {
             let src_arena = self.internal.src_arena.slice_po(&src);
             src_offset = src - src_arena.root();
             let dst_arena = self.internal.dst_arena.slice_po(&dst);
-            ZsMatcher::match_with(node_store, label_store, src_arena, dst_arena)
+            ZsMatcher::match_with(self.internal.stores, src_arena, dst_arena)
         } else {
             let o_src = self.internal.src_arena.original(&src);
             let o_dst = self.internal.dst_arena.original(&dst);
@@ -317,7 +303,7 @@ where
                 assert!(dst_arena.kr[dst_arena.kr.len() - 1]);
                 dbg!(last == dst_arena_z.root());
             }
-            ZsMatcher::match_with(node_store, label_store, src_arena, dst_arena)
+            ZsMatcher::match_with(self.internal.stores, src_arena, dst_arena)
         };
         let dst_offset = self.internal.dst_arena.first_descendant(&dst);
         assert_eq!(self.internal.src_arena.first_descendant(&src), src_offset);
@@ -329,15 +315,13 @@ where
             if !self.internal.mappings.is_src(&src) && !self.internal.mappings.is_dst(&dst) {
                 let tsrc = self
                     .internal
-                    .node_store
-                    .resolve(&self.internal.src_arena.original(&src))
-                    .get_type();
+                    .stores
+                    .resolve_type(&self.internal.src_arena.original(&src));
                 let tdst = self
                     .internal
-                    .node_store
+                    .stores
                     // .resolve(&matcher.src_arena.tree(&t))
-                    .resolve(&self.internal.dst_arena.original(&dst))
-                    .get_type();
+                    .resolve_type(&self.internal.dst_arena.original(&dst));
                 if tsrc == tdst {
                     self.internal.mappings.link(src, dst);
                 }

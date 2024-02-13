@@ -4,9 +4,8 @@ use crate::types::TStore;
 
 type CppTreeGen<'store, 'cache> = crate::legion::CppTreeGen<'store, 'cache, TStore>;
 type SimpleStores = hyper_ast::store::SimpleStores<TStore>;
-
 #[test]
-fn xml_tree_sitter_simple() {
+pub(crate) fn cpp_tree_sitter_simple() {
     let mut parser = Parser::new();
 
     {
@@ -63,7 +62,7 @@ int main(int argl, int* argv) {
 }
 
 #[test]
-fn cpp_simple_test() {
+pub(crate) fn cpp_simple_test() {
     let text = {
         let source_code1 = r#"
 int main(int argl, int* argv) {
@@ -91,8 +90,9 @@ int main(int argl, int* argv) {
         hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
     );
 }
+
 #[test]
-fn cpp_def_bl_test() {
+pub(crate) fn cpp_def_bl_test() {
     let text = {
         let source_code1 = CODE_DEF_BL_SHRINK;
         source_code1.as_bytes()
@@ -117,14 +117,14 @@ fn cpp_def_bl_test() {
     // println!("{}", tree.root_node().to_sexp());
 }
 
-const CODE_DEF_BL_SHRINK: &str = r#"
+pub(crate) const CODE_DEF_BL_SHRINK: &str = r#"
 #if   defined(__AVX512BW__) || \
      defined(__AVX512F__)
 
 "#;
 
 #[test]
-fn cpp_char_literal_test() {
+pub(crate) fn cpp_char_literal_test() {
     let text = {
         let source_code1 = CODE_CHAR_LIT;
         source_code1.as_bytes()
@@ -150,11 +150,11 @@ fn cpp_char_literal_test() {
     // println!("{}", tree.root_node().to_sexp());
 }
 
-const CODE_CHAR_LIT: &str = r#"
+pub(crate) const CODE_CHAR_LIT: &str = r#"
 
 // format_cp_aligned_dot() converts a Value into (centi)pawns, always keeping two decimals.
 static void format_cp_aligned_dot(Value v, std::stringstream &stream) {
-  const double cp = 1.0 * std::abs(int(v)) / UCI::NormalizeToPawnValue;
+    const double cp = 1.0 * std::abs(int(v)) / UCI::NormalizeToPawnValue;
 
   stream << (v < 0 ? '-' : v > 0 ? '+' : ' ')
          << std::setiosflags(std::ios::fixed)
@@ -168,12 +168,13 @@ std::string trace(Position& pos) {
     const int x = ((int)file) * 8;
     const int y = (7 - (int)rank) * 3;
     for (int i = 1; i < 8; ++i)
-       board[y][x+i] = board[y+3][x+i] = '-';
-}
+        board[y][x+i] = board[y+3][x+i] = '-';
+    }
 
 "#;
+
 #[test]
-fn cpp_asm_test() {
+pub(crate) fn cpp_asm_test() {
     let text = {
         let source_code1 = CODE_ASM;
         source_code1.as_bytes()
@@ -198,7 +199,7 @@ fn cpp_asm_test() {
     // println!("{}", tree.root_node().to_sexp());
 }
 
-const CODE_ASM: &str = r#"
+pub(crate) const CODE_ASM: &str = r#"
 int f() {
     asm(
         "vpmaddwd    %[tmp0], %[ones], %[tmp0]\n\t"
@@ -212,7 +213,7 @@ int f() {
 "#;
 
 #[test]
-fn cpp_op_test() {
+pub(crate) fn cpp_op_test() {
     let text = {
         let source_code1 = CODE_OP;
         source_code1.as_bytes()
@@ -238,7 +239,7 @@ fn cpp_op_test() {
 }
 
 // https://github.com/official-stockfish/Stockfish/blob/d55a5a4d81b613e5a82e428770347b06fbd2d9a8/src/position.cpp
-const CODE_OP: &str = r#"
+pub(crate) const CODE_OP: &str = r#"
 
 namespace {
 
@@ -250,21 +251,20 @@ bool isZero(char c) { return c == '0'; }
 struct PieceLetters : public std::map<char, Piece> {
 
   PieceLetters() {
-
-    operator[]('K') = WK; operator[]('k') = BK;
-    operator[]('Q') = WQ; operator[]('q') = BQ;
-    operator[]('R') = WR; operator[]('r') = BR;
-    operator[]('B') = WB; operator[]('b') = BB;
-    operator[]('N') = WN; operator[]('n') = BN;
-    operator[]('P') = WP; operator[]('p') = BP;
-    operator[](' ') = PIECE_NONE; operator[]('.') = PIECE_NONE_DARK_SQ;
-  }
+      operator[]('K') = WK; operator[]('k') = BK;
+      operator[]('Q') = WQ; operator[]('q') = BQ;
+      operator[]('R') = WR; operator[]('r') = BR;
+      operator[]('B') = WB; operator[]('b') = BB;
+      operator[]('N') = WN; operator[]('n') = BN;
+      operator[]('P') = WP; operator[]('p') = BP;
+      operator[](' ') = PIECE_NONE; operator[]('.') = PIECE_NONE_DARK_SQ;
+    }
 } pieceLetters;
 }
 "#;
 
 #[test]
-fn cpp_3_test() {
+pub(crate) fn cpp_3_test() {
     let text = {
         let source_code1 = CODE_MACRO_SEMICOLON;
         source_code1.as_bytes()
@@ -288,13 +288,12 @@ fn cpp_3_test() {
     );
     // println!("{}", tree.root_node().to_sexp());
 }
-// https://github.com/official-stockfish/Stockfish/blob/95212222c7444538b84326208e433ac12f15e9fb/src/piece.h
 
-const CODE_MACRO_SEMICOLON: &str = r#"
+pub(crate) const CODE_MACRO_SEMICOLON: &str = r#"
 
 enum Color {
 };
-    
+
 ENABLE_OPERATORS_ON(PieceType)
 ENABLE_OPERATORS_ON(Piece)
 ENABLE_OPERATORS_ON(Color)
@@ -310,7 +309,7 @@ int main() {
 
 "#;
 
-const CODE_3: &str = r#"/*
+pub(crate) const CODE_3: &str = r#"/*
 Stockfish, a UCI chess playing engine derived from Glaurung 2.1
 Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
 Copyright (C) 2008-2010 Marco Costalba, Joona Kiiski, Tord Romstad
@@ -405,7 +404,7 @@ return ch[pt];
 #endif // !defined(PIECE_H_INCLUDED)
 "#;
 
-const CODE_OP_whole_save: &str = r#"/*
+pub(crate) const CODE_OP_whole_save: &str = r#"/*
 Stockfish, a UCI chess playing engine derived from Glaurung 2.1
 Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
 Copyright (C) 2008-2010 Marco Costalba, Joona Kiiski, Tord Romstad

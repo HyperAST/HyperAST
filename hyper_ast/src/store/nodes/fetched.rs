@@ -838,7 +838,6 @@ impl SimplePackedBuilder {
     pub fn add<TS, T>(&mut self, type_store: &TS, id: NodeIdentifier, node: T)
     where
         TS: TypeStore<T, Marshaled = TypeIndex>,
-        T::Type: 'static,
         T: crate::types::Tree<Label = defaults::LabelIdentifier> + crate::types::WithStats,
         <T::TreeId as NodeId>::IdN: Copy + Into<NodeIdentifier>,
     {

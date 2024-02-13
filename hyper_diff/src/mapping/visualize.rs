@@ -7,7 +7,7 @@
 //!
 use std::fmt::Debug;
 
-use hyper_ast::types::{self, LabelStore, NodeStore, Tree};
+use hyper_ast::types::HyperAST;
 use num_traits::PrimInt;
 
 use crate::{
@@ -24,24 +24,22 @@ pub fn print_mappings_no_ranges<
     'a,
     IdD: 'a + PrimInt + Debug,
     M: MonoMappingStore<Src = IdD, Dst = IdD>,
-    IdN: Clone + Eq + Debug,
-    NS: NodeStore<IdN>,
-    LS: LabelStore<str>,
-    DD: PostOrder<'a, NS::R<'store>, IdD> + FullyDecompressedTreeStore<'a, NS::R<'store>, IdD>,
-    SD: PostOrder<'a, NS::R<'store>, IdD> + FullyDecompressedTreeStore<'a, NS::R<'store>, IdD>,
+    // IdN: Clone + Eq + Debug,
+    HAST: HyperAST<'store>,
+    DD: PostOrder<'a, HAST::T, IdD> + FullyDecompressedTreeStore<'a, HAST::T, IdD>,
+    SD: PostOrder<'a, HAST::T, IdD> + FullyDecompressedTreeStore<'a, HAST::T, IdD>,
 >(
     dst_arena: &'a DD,
     src_arena: &'a SD,
-    node_store: &'store NS,
-    label_store: &'store LS,
+    stores: &'store HAST,
     mappings: &M,
 ) where
-    <NS as types::NodeStore<IdN>>::R<'store>: 'store + Tree<TreeId = IdN, Label = LS::I>,
-    <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug + Copy + Send + Sync,
+    // HAST::T: 'store + Tree<TreeId = IdN, Label = LS::I>,
+    // <HAST::T as types::Typed>::Type: Debug + Copy + Send + Sync,
 {
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);
-    let disp = DisplayCompletePostOrder::new(node_store, label_store, dst_arena);
+    let disp = DisplayCompletePostOrder::new(stores, dst_arena);
     let dst_arena = format!("{:#?}", disp);
     let mappings = src_arena
         .map
@@ -70,8 +68,7 @@ pub fn print_mappings_no_ranges<
         "{:#?}",
         DisplaySimplePreOrderMapper {
             inner: &src_arena,
-            node_store,
-            label_store,
+            stores,
         }
     );
     let cols = vec![src_arena, mappings, dst_arena];
@@ -103,24 +100,22 @@ pub fn print_mappings_no_ranges_label<
     'a,
     IdD: 'a + PrimInt + Debug,
     M: MonoMappingStore<Src = IdD, Dst = IdD>,
-    IdN: Clone + Eq + Debug,
-    NS: NodeStore<IdN>,
-    LS: LabelStore<str>,
-    DD: PostOrder<'a, NS::R<'store>, IdD> + FullyDecompressedTreeStore<'a, NS::R<'store>, IdD>,
-    SD: PostOrder<'a, NS::R<'store>, IdD> + FullyDecompressedTreeStore<'a, NS::R<'store>, IdD>,
+    // IdN: Clone + Eq + Debug,
+    HAST: HyperAST<'store>,
+    DD: PostOrder<'a, HAST::T, IdD> + FullyDecompressedTreeStore<'a, HAST::T, IdD>,
+    SD: PostOrder<'a, HAST::T, IdD> + FullyDecompressedTreeStore<'a, HAST::T, IdD>,
 >(
     dst_arena: &'a DD,
     src_arena: &'a SD,
-    node_store: &'store NS,
-    label_store: &'store LS,
+    stores: &'store HAST,
     mappings: &M,
 ) where
-    <NS as types::NodeStore<IdN>>::R<'store>: 'store + Tree<TreeId = IdN, Label = LS::I>,
-    <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug + Copy + Send + Sync,
+    // HAST::T: 'store + Tree<TreeId = IdN, Label = LS::I>,
+    // <HAST::T as types::Typed>::Type: Debug + Copy + Send + Sync,
 {
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);
-    let disp = DisplayCompletePostOrder::new(node_store, label_store, dst_arena);
+    let disp = DisplayCompletePostOrder::new(stores, dst_arena);
     let dst_arena = format!("{:?}", disp);
     let mappings = src_arena
         .map
@@ -149,8 +144,7 @@ pub fn print_mappings_no_ranges_label<
         "{:?}",
         DisplaySimplePreOrderMapper {
             inner: &src_arena,
-            node_store,
-            label_store,
+            stores,
         }
     );
     let cols = vec![src_arena, mappings, dst_arena];

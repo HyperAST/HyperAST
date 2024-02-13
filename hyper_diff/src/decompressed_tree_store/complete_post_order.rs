@@ -13,8 +13,8 @@ use num_traits::{cast, PrimInt, ToPrimitive, Zero};
 use hyper_ast::{
     position::Position,
     types::{
-        self, HyperType, LabelStore, NodeId, NodeStore, Stored, Tree, WithChildren,
-        WithSerialization,
+        self, HyperAST, HyperType, LabelStore, NodeId, NodeStore, Stored, Tree, TypeStore,
+        WithChildren, WithSerialization,
     },
 };
 
@@ -84,78 +84,70 @@ where
     }
 }
 
-pub struct DisplayCompletePostOrder<'store: 'a, 'a, T: Stored, IdD: PrimInt, S, LS, D>
+pub struct DisplayCompletePostOrder<'store: 'a, 'a, IdD: PrimInt, HAST, D>
 where
-    T: WithChildren,
-    S: NodeStore<T::TreeId>,
-    LS: LabelStore<str>,
-    D: ShallowDecompressedTreeStore<'a, T, IdD>,
+    HAST: HyperAST<'store>,
+    D: ShallowDecompressedTreeStore<'a, HAST::T, IdD>,
 {
     inner: &'a D,
-    node_store: &'store S,
-    label_store: &'store LS,
-    _phantom: PhantomData<(&'store T, &'a IdD)>,
+    stores: &'store HAST,
+    _phantom: PhantomData<&'a IdD>,
 }
-impl<'store: 'a, 'a, T: Stored, IdD: PrimInt, S, LS, D>
-    DisplayCompletePostOrder<'store, 'a, T, IdD, S, LS, D>
+impl<'store: 'a, 'a, IdD: PrimInt, HAST, D> DisplayCompletePostOrder<'store, 'a, IdD, HAST, D>
 where
-    T: WithChildren,
-    S: NodeStore<T::TreeId>,
-    LS: LabelStore<str>,
-    D: ShallowDecompressedTreeStore<'a, T, IdD>,
+    HAST: HyperAST<'store>,
+    D: ShallowDecompressedTreeStore<'a, HAST::T, IdD>,
 {
-    pub fn new(node_store: &'store S, label_store: &'store LS, inner: &'a D) -> Self {
+    pub fn new(stores: &'store HAST, inner: &'a D) -> Self {
         Self {
             inner,
-            node_store,
-            label_store,
+            stores,
             _phantom: PhantomData,
         }
     }
 }
-impl<'store: 'a, 'a, T, IdD: PrimInt, S, LS, D> Display
-    for DisplayCompletePostOrder<'store, 'a, T, IdD, S, LS, D>
+impl<'store: 'a, 'a, IdD: PrimInt, HAST, D> Display
+    for DisplayCompletePostOrder<'store, 'a, IdD, HAST, D>
 where
-    T::TreeId: Clone + Debug,
-    S: NodeStore<T::TreeId, R<'store> = T>,
-    T: Tree + WithSerialization,
-    T::Type: Copy + Debug + Send + Sync,
-    LS: LabelStore<str, I = T::Label>,
-    D: DecompressedTreeStore<'a, T, IdD>
-        + PostOrder<'a, T, IdD>
-        + FullyDecompressedTreeStore<'a, T, IdD>,
+    HAST: HyperAST<'store>,
+    HAST::T: WithSerialization,
+    // T::TreeId: Clone + Debug,
+    // T::Type: Copy + Debug + Send + Sync,
+    D: DecompressedTreeStore<'a, HAST::T, IdD>
+        + PostOrder<'a, HAST::T, IdD>
+        + FullyDecompressedTreeStore<'a, HAST::T, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let m = SimplePreOrderMapper::from(self.inner);
         std::fmt::Display::fmt(
             &DisplaySimplePreOrderMapper {
                 inner: &m,
-                node_store: self.node_store,
-                label_store: self.label_store,
+                stores: self.stores,
             },
             f,
         )
     }
 }
 
-impl<'store: 'a, 'a, T, IdD: PrimInt, S, LS, D> Debug
-    for DisplayCompletePostOrder<'store, 'a, T, IdD, S, LS, D>
+impl<'store: 'a, 'a, IdD: PrimInt, HAST, D> Debug
+    for DisplayCompletePostOrder<'store, 'a, IdD, HAST, D>
 where
-    T::TreeId: Clone + Debug,
-    S: NodeStore<T::TreeId, R<'store> = T>,
-    T: Tree,
-    T::Type: Copy + Debug + Send + Sync,
-    LS: LabelStore<str, I = T::Label>,
-    D: DecompressedTreeStore<'a, T, IdD>
-        + PostOrder<'a, T, IdD>
-        + FullyDecompressedTreeStore<'a, T, IdD>,
+    HAST: HyperAST<'store>,
+    // HAST::T: WithSerialization,
+    // T::TreeId: Clone + Debug,
+    // S: NodeStore<T::TreeId, R<'store> = T>,
+    // T: Tree,
+    // T::Type: Copy + Debug + Send + Sync,
+    // LS: LabelStore<str, I = T::Label>,
+    D: DecompressedTreeStore<'a, HAST::T, IdD>
+        + PostOrder<'a, HAST::T, IdD>
+        + FullyDecompressedTreeStore<'a, HAST::T, IdD>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let m = SimplePreOrderMapper::from(self.inner);
         DisplaySimplePreOrderMapper {
             inner: &m,
-            node_store: self.node_store,
-            label_store: self.label_store,
+            stores: self.stores,
         }
         .fmt(f)
     }
@@ -402,24 +394,25 @@ impl<'a, T: WithChildren, IdD: PrimInt + Hash + Eq> From<(&'a CompletePostOrder<
 }
 
 impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, IdD> {
-    pub fn position<'b, S, LS>(&mut self, store: &'b S, lstore: &'b LS, c: &IdD) -> &Position
+    pub fn position<'b, HAST>(&mut self, stores: &'b HAST, c: &IdD) -> &Position
     where
-        S: NodeStore<T::TreeId, R<'b> = T>,
+        HAST: HyperAST<'b, IdN = T::TreeId, T = T, Label = T::Label>, //NodeStore<T::TreeId, R<'b> = T>,
         T::TreeId: Clone + Debug + NodeId<IdN = T::TreeId>,
-        LS: LabelStore<str>,
-        T: Tree<Label = LS::I> + WithSerialization,
+        // LS: LabelStore<str>,
+        T: WithSerialization,
+        // T: Tree<Label = LS::I> + WithSerialization,
     {
         if self.cache.contains_key(&c) {
             return self.cache.get(&c).unwrap();
         } else if let Some(p) = self.ds.parent(c) {
-            let p_r = store.resolve(&self.ds.original(&p));
-            let p_t = p_r.get_type();
+            let p_r = stores.node_store().resolve(&self.ds.original(&p));
+            let p_t = stores.type_store().resolve_type(&p_r);
             if p_t.is_directory() {
                 let ori = self.ds.original(&c);
                 if self.root == ori {
-                    let r = store.resolve(&ori);
+                    let r = stores.node_store().resolve(&ori);
                     return self.cache.entry(*c).or_insert(Position::new(
-                        lstore.resolve(&r.get_label_unchecked()).into(),
+                        stores.label_store().resolve(r.get_label_unchecked()).into(),
                         0,
                         r.try_bytes_len().unwrap_or(0),
                     ));
@@ -428,9 +421,9 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
                     .cache
                     .get(&p)
                     .cloned()
-                    .unwrap_or_else(|| self.position(store, lstore, &p).clone());
-                let r = store.resolve(&ori);
-                pos.inc_path(lstore.resolve(&r.get_label_unchecked()));
+                    .unwrap_or_else(|| self.position(stores, &p).clone());
+                let r = stores.node_store().resolve(&ori);
+                pos.inc_path(stores.label_store().resolve(r.get_label_unchecked()));
                 pos.set_len(r.try_bytes_len().unwrap_or(0));
                 return self.cache.entry(*c).or_insert(pos);
             }
@@ -441,9 +434,9 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
                     .cache
                     .get(&lsib)
                     .cloned()
-                    .unwrap_or_else(|| self.position(store, lstore, &lsib).clone());
+                    .unwrap_or_else(|| self.position(stores, &lsib).clone());
                 pos.inc_offset(pos.range().end - pos.range().start);
-                let r = store.resolve(&self.ds.original(&c));
+                let r = stores.node_store().resolve(&self.ds.original(&c));
                 pos.set_len(r.try_bytes_len().unwrap());
                 self.cache.entry(*c).or_insert(pos)
             } else {
@@ -454,7 +447,7 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
                 );
                 let ori = self.ds.original(&c);
                 if self.root == ori {
-                    let r = store.resolve(&ori);
+                    let r = stores.node_store().resolve(&ori);
                     return self.cache.entry(*c).or_insert(Position::new(
                         "".into(),
                         0,
@@ -465,21 +458,21 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
                     .cache
                     .get(&p)
                     .cloned()
-                    .unwrap_or_else(|| self.position(store, lstore, &p).clone());
-                let r = store.resolve(&ori);
+                    .unwrap_or_else(|| self.position(stores, &p).clone());
+                let r = stores.node_store().resolve(&ori);
                 pos.set_len(
                     r.try_bytes_len()
-                        .unwrap_or_else(|| panic!("{:?}", r.get_type())),
+                        .unwrap_or_else(|| panic!("{:?}", stores.type_store().resolve_type(&r))),
                 );
                 self.cache.entry(*c).or_insert(pos)
             }
         } else {
             let ori = self.ds.original(&c);
             assert_eq!(self.root, ori);
-            let r = store.resolve(&ori);
-            let t = r.get_type();
+            let r = stores.node_store().resolve(&ori);
+            let t = stores.type_store().resolve_type(&r);
             let pos = if t.is_directory() || t.is_file() {
-                let file = lstore.resolve(&r.get_label_unchecked()).into();
+                let file = stores.label_store().resolve(r.get_label_unchecked()).into();
                 let offset = 0;
                 let len = r.try_bytes_len().unwrap_or(0);
                 Position::new(file, offset, len)
@@ -526,7 +519,7 @@ where
 {
     pub fn position<'b, S>(&mut self, store: &'b S, c: &IdD) -> &U
     where
-        S: NodeStore<T::TreeId, R<'b> = T>,
+        S: NodeStore<T::TreeId, R<'b> = T> + TypeStore<T>,
         T::TreeId: Clone + Debug,
         T: Tree + WithSerialization,
     {
@@ -534,7 +527,7 @@ where
             return self.cache.get(&c).unwrap();
         } else if let Some(p) = self.ds.parent(c) {
             let p_r = store.resolve(&self.ds.original(&p));
-            let p_t = p_r.get_type();
+            let p_t = store.resolve_type(&p_r);
             if p_t.is_directory() {
                 let ori = self.ds.original(&c);
                 if self.root == ori {

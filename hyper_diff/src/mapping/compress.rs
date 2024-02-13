@@ -475,7 +475,7 @@ where
 mod test {
     use std::marker::PhantomData;
 
-    use hyper_ast::types::DecompressedSubtree;
+    use hyper_ast::types::{DecompressedSubtree, SimpleHyperAST};
 
     use crate::{
         decompressed_tree_store::{CompletePostOrder, DecompressedWithParent, PostOrderIterable},
@@ -504,11 +504,17 @@ mod test {
     fn hands_on() {
         let (label_store, node_store, src, dst) =
             vpair_to_stores((examples::example_move1().0, examples::example_move().1));
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = D::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = D::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = D::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = D::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
         mappings.link(0, 1);
         mappings.link(1, 2);
@@ -522,7 +528,7 @@ mod test {
         // |   1:       0; e | 2 |   2:     0; e |
         // |   4:   0; h     | 3 |               |
 
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
@@ -611,11 +617,17 @@ mod test {
     fn hands_on2() {
         let (label_store, node_store, src, dst) =
             vpair_to_stores(examples::example_gumtree_ambiguous());
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
         mappings.link(6, 10);
         mappings.link(1, 4);
@@ -635,7 +647,7 @@ mod test {
         // |               |    |   7:     0; c   |
         // |               |    |   8:     0; d   |
 
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
@@ -742,6 +754,7 @@ mod test {
     }
 
     mod integration {
+
         use crate::matchers::{
             heuristic::gt::{
                 bottom_up_matcher::BottomUpMatcher,
@@ -757,12 +770,22 @@ mod test {
         fn aaaa() {
             let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_action2());
             // let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_action2());
+            
+            let stores = SimpleHyperAST {
+                type_store: crate::tree::TStore,
+                node_store,
+                label_store,
+                _phantom: PhantomData::<_>,
+            };
+            
             let mut mappings = DefaultMappingStore::default();
-            let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-            let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+            let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+            let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
             mappings.topit(src_arena.len(), dst_arena.len());
-            print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+            print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
             println!();
+
+            let stores = stores.change_tree_type::<TreeRef<Tree>>();
 
             let mappings = DefaultMappingStore::default();
             let mapper = GreedySubtreeMatcher::<
@@ -772,7 +795,7 @@ mod test {
                 _,
                 _,
             >::matchh::<DefaultMultiMappingStore<_>>(
-                &node_store, &src, &dst, mappings
+                &stores, &src, &dst, mappings
             );
             let SubtreeMatcher { mappings, .. } = mapper.into();
             let mapper = GreedyBottomUpMatcher::<
@@ -781,15 +804,14 @@ mod test {
                 _,
                 _,
                 _,
-                _,
-            >::matchh(&node_store, &label_store, &src, &dst, mappings);
+            >::matchh(&stores, &src, &dst, mappings);
             let BottomUpMatcher {
                 src_arena,
                 dst_arena,
                 mappings,
                 ..
             } = mapper.into();
-            print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+            print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
             println!();
 
             auto(src_arena, dst_arena, mappings);
@@ -828,11 +850,17 @@ mod test {
     #[test]
     fn test_action2() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_action2());
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
         mappings.link(11, 12);
         mappings.link(4, 2);
@@ -856,7 +884,7 @@ mod test {
         // |   9:     0; k | 8  |   9:       0; v   |
         // |               |    |   8:         0; k |
 
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
@@ -891,11 +919,17 @@ mod test {
     fn test_gumtree_ambiguous() {
         let (label_store, node_store, src, dst) =
             vpair_to_stores(examples::example_gumtree_ambiguous());
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
         mappings.link(6, 10);
         mappings.link(1, 4);
@@ -915,7 +949,7 @@ mod test {
         // |               |    |   7:     0; c   |
         // |               |    |   8:     0; d   |
 
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
@@ -948,11 +982,17 @@ mod test {
     #[test]
     fn test_gt_java_code() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_gt_java_code());
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
         mappings.link(6, 7);
         mappings.link(0, 0);
@@ -969,7 +1009,7 @@ mod test {
         // |   4:     0; r1 | 4 |   3:       0; f  |
         // |                |   |   4:       0; r2 |
 
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
@@ -1002,11 +1042,17 @@ mod test {
     #[test]
     fn test_move2() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move2());
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
         mappings.link(1, 1);
         mappings.link(2, 2);
@@ -1020,7 +1066,7 @@ mod test {
         // |   2:     0; e | 2 |   1:       0; d |
         // |   4:   0; h   | 4 |   2:       0; e |
 
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
@@ -1098,11 +1144,17 @@ mod test {
     #[test]
     fn test_move3() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move3());
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
         mappings.link(4, 1);
         mappings.link(2, 2);
@@ -1116,7 +1168,7 @@ mod test {
         // |   2:     0; d | 2 |   4:     0; i   |
         // |   3:     0; e | 3 |   2:       0; d |
         // |   5:   0; h   | 5 |   3:       0; e |
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
@@ -1196,11 +1248,17 @@ mod test {
     fn test_move_mix2b() {
         let (label_store, node_store, src, dst) =
             vpair_to_stores((examples::example_move1().0, examples::example_move().1));
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
         mappings.link(0, 1);
         mappings.link(1, 2);
@@ -1214,7 +1272,7 @@ mod test {
         // |   1:       0; e | 2 |   2:     0; e |
         // |   4:   0; h     | 3 |               |
 
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
@@ -1293,11 +1351,17 @@ mod test {
     fn test_move_mix2() {
         let (label_store, node_store, src, dst) =
             vpair_to_stores((examples::example_move().0, examples::example_move1().1));
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
         mappings.link(0, 1);
         mappings.link(1, 2);
@@ -1311,7 +1375,7 @@ mod test {
         // |   3:   0; h   | 4 |   1:       0; d |
         // |               |   |   2:       0; e |
 
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
@@ -1391,9 +1455,15 @@ mod test {
     #[test]
     fn test_move1b() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move1());
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         mappings.link(0, 1);
         mappings.link(1, 2);
@@ -1402,7 +1472,7 @@ mod test {
         mappings.link(4, 4);
         mappings.link(5, 5);
 
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
@@ -1480,9 +1550,15 @@ mod test {
     #[test]
     fn test_move1() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move1());
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         mappings.link(0, 1);
         mappings.link(1, 2);
@@ -1491,7 +1567,7 @@ mod test {
         mappings.link(4, 4);
         mappings.link(5, 5);
 
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
@@ -1569,9 +1645,15 @@ mod test {
     #[test]
     fn test_move() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_move());
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         mappings.link(0, 1);
         mappings.link(1, 2);
@@ -1579,7 +1661,7 @@ mod test {
         mappings.link(3, 3);
         mappings.link(4, 4);
 
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
@@ -1654,15 +1736,21 @@ mod test {
     #[test]
     fn test_simple1a() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_simple1());
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         mappings.link(0, 0);
         mappings.link(1, 1);
         mappings.link(3, 3);
 
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         let mut cm = ArenaMStore::<SimpleCompressedMapping<usize, TP<_>>> { v: vec![] };
@@ -1708,15 +1796,21 @@ mod test {
     #[test]
     fn test_simple1() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_simple1());
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         mappings.link(0, 0);
         mappings.link(1, 1);
         mappings.link(2, 2);
         mappings.link(3, 3);
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         // let mut mappings = mappings;
@@ -1758,14 +1852,20 @@ mod test {
     #[test]
     fn test_simple() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_simple());
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         mappings.link(0, 0);
         mappings.link(1, 1);
         mappings.link(2, 2);
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         // let mut mappings = mappings;
@@ -1810,12 +1910,18 @@ mod test {
     #[test]
     fn test_single() {
         let (label_store, node_store, src, dst) = vpair_to_stores(examples::example_single());
+        let stores = SimpleHyperAST {
+            type_store: crate::tree::TStore,
+            node_store,
+            label_store,
+            _phantom: PhantomData::<_>,
+        };
         let mut mappings = DefaultMappingStore::default();
-        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &src);
-        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&node_store, &dst);
+        let src_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &src);
+        let dst_arena = CompletePostOrder::<TreeRef<Tree>, u16>::decompress(&stores.node_store, &dst);
         mappings.topit(src_arena.len(), dst_arena.len());
         mappings.link(0, 0);
-        print_mappings_no_ranges(&dst_arena, &src_arena, &node_store, &label_store, &mappings);
+        print_mappings_no_ranges(&dst_arena, &src_arena, &stores, &mappings);
         println!();
 
         // for (src,dst) in mappings._iter() {

@@ -526,8 +526,8 @@ where
     HAST: crate::types::NodeStore<IdN>,
     HAST: crate::types::LabelStore<str>,
     HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST::R<'store>: crate::types::Typed
-        + crate::types::Labeled<Label = HAST::I>
+    HAST::R<'store>:
+        crate::types::Labeled<Label = HAST::I>
         + crate::types::WithChildren<TreeId = IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -542,8 +542,7 @@ where
     HAST: crate::types::NodeStore<IdN>,
     HAST: crate::types::LabelStore<str>,
     HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST::R<'store>: crate::types::Typed
-        + crate::types::Labeled<Label = HAST::I>
+    HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
         + crate::types::WithChildren<TreeId = IdN>,
 {
     // pub fn tree_syntax_with_ids(
@@ -555,7 +554,6 @@ where
         use crate::types::LabelStore;
         use crate::types::Labeled;
         use crate::types::NodeStore;
-        use crate::types::Typed;
         use crate::types::WithChildren;
         let b = NodeStore::resolve(self.stores, id);
         // let kind = (self.stores.type_store(), b);

@@ -42,7 +42,8 @@ pub(crate) const PROPAGATE_ERROR_ON_BAD_CST_NODE: bool = false;
 
 pub(crate) const MAX_REFS: u32 = 10000; //4096;
 
-pub(crate) type DefaultMetrics = hyper_ast::tree_gen::SubTreeMetrics<hyper_ast::hashed::SyntaxNodeHashs<u32>>;
+pub(crate) type DefaultMetrics =
+    hyper_ast::tree_gen::SubTreeMetrics<hyper_ast::hashed::SyntaxNodeHashs<u32>>;
 
 pub struct Diffs();
 pub struct Impacts();
@@ -89,7 +90,6 @@ trait Processor<Acc: Accumulator> {
     fn post(&mut self, oid: Oid, acc: Acc) -> Option<Acc::Unlabeled>;
 }
 
-
 #[derive(Debug)]
 pub(crate) enum ParseErr {
     NotUtf8(std::str::Utf8Error),
@@ -104,14 +104,11 @@ impl From<std::str::Utf8Error> for ParseErr {
 
 mod type_store {
     use core::panic;
-    use std::{fmt::Display, hash::Hash, ops::Deref};
+    use std::{fmt::Display, hash::Hash};
 
     use hyper_ast::{
         store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef},
-        types::{
-            AnyType, HyperType, Lang, LangRef, LangWrapper, NodeId, Shared, TypeIndex, TypeStore,
-            Typed, TypedNodeId, T,
-        },
+        types::{AnyType, HyperType, LangRef, LangWrapper, Shared, TypeIndex, TypeStore, Typed},
     };
     #[cfg(feature = "cpp")]
     use hyper_ast_gen_ts_cpp::types::CppEnabledTypeStore;
@@ -137,76 +134,75 @@ mod type_store {
 
     type TypeInternalSize = u16;
 
+    macro_rules! on_multi {
+        ($n:expr, [$on0:ident $(, $on:ident)*], ($with:ident, $with1:ident) => $body:expr, $default:expr) => {
+            if let Ok($with) = $n.get_component::<$on0::types::Type>() {
+                use $on0 as $with1;
+                $body
+            } $( else if let Ok($with) = $n.get_component::<$on::types::Type>() {
+                use $on as $with1;
+                $body
+            })* else {
+                $default
+            }
+        };
+    }
+
     impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
         type Ty = AnyType;
         const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
 
         fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-            if let Ok(t) = n.get_component::<hyper_ast_gen_ts_java::types::Type>() {
-                let t = *t as u16;
-                let t = <hyper_ast_gen_ts_java::types::Java as hyper_ast::types::Lang<_>>::make(t);
-                From::<&'static (dyn HyperType)>::from(t)
-            } else if let Ok(t) = n.get_component::<hyper_ast_gen_ts_cpp::types::Type>() {
-                let t = *t as u16;
-                let t = <hyper_ast_gen_ts_cpp::types::Cpp as hyper_ast::types::Lang<_>>::make(t);
-                From::<&'static (dyn HyperType)>::from(t)
-            } else if let Ok(t) = n.get_component::<hyper_ast_gen_ts_xml::types::Type>() {
-                let t = *t as u16;
-                let t = <hyper_ast_gen_ts_xml::types::Xml as hyper_ast::types::Lang<_>>::make(t);
-                From::<&'static (dyn HyperType)>::from(t)
-            } else {
-                dbg!(n, n.archetype().layout().component_types());
-                panic!()
-            }
+            on_multi!(n, [
+                    hyper_ast_gen_ts_java,
+                    hyper_ast_gen_ts_cpp,
+                    hyper_ast_gen_ts_xml
+                ], 
+                (t, u) => u::types::as_any(t),
+                {
+                    dbg!(n, n.archetype().layout().component_types());
+                    panic!()
+                }
+            )
         }
 
         fn resolve_lang(
             &self,
             n: &HashedNodeRef<'a, NodeIdentifier>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            if let Ok(t) = n.get_component::<hyper_ast_gen_ts_java::types::Type>() {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_java::types::Java)
-            } else if let Ok(t) = n.get_component::<hyper_ast_gen_ts_cpp::types::Type>() {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_cpp::types::Cpp)
-            } else if let Ok(t) = n.get_component::<hyper_ast_gen_ts_xml::types::Type>() {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_xml::types::Xml)
-            } else {
-                dbg!(n, n.archetype().layout().component_types());
-                panic!()
-            }
+            on_multi!(n, [
+                    hyper_ast_gen_ts_java,
+                    hyper_ast_gen_ts_cpp,
+                    hyper_ast_gen_ts_xml
+                ], 
+                (_t, u) => From::<&'static (dyn LangRef<AnyType>)>::from(&u::types::Lang),
+                {
+                    dbg!(n, n.archetype().layout().component_types());
+                    panic!()
+                }
+            )
         }
 
         type Marshaled = TypeIndex;
 
         fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-            if let Ok(t) = n.get_component::<hyper_ast_gen_ts_java::types::Type>() {
-                let t = *t as u16;
-                let t = <hyper_ast_gen_ts_java::types::Java as hyper_ast::types::Lang<_>>::make(t);
-                let lang = hyper_ast::types::LangRef::<hyper_ast_gen_ts_java::types::Type>::name(
-                    &hyper_ast_gen_ts_java::types::Java,
-                );
-                let ty = *t as u16;
-                TypeIndex { lang, ty }
-            } else if let Ok(t) = n.get_component::<hyper_ast_gen_ts_cpp::types::Type>() {
-                let t = *t as u16;
-                let t = <hyper_ast_gen_ts_cpp::types::Cpp as hyper_ast::types::Lang<_>>::make(t);
-                let lang = hyper_ast::types::LangRef::<hyper_ast_gen_ts_cpp::types::Type>::name(
-                    &hyper_ast_gen_ts_cpp::types::Cpp,
-                );
-                let ty = *t as u16;
-                TypeIndex { lang, ty }
-            } else if let Ok(t) = n.get_component::<hyper_ast_gen_ts_xml::types::Type>() {
-                let t = *t as u16;
-                let t = <hyper_ast_gen_ts_xml::types::Xml as hyper_ast::types::Lang<_>>::make(t);
-                let lang = hyper_ast::types::LangRef::<hyper_ast_gen_ts_xml::types::Type>::name(
-                    &hyper_ast_gen_ts_xml::types::Xml,
-                );
-                let ty = *t as u16;
-                TypeIndex { lang, ty }
-            } else {
-                dbg!(n, n.archetype().layout().component_types());
-                panic!()
-            }
+            on_multi!(n, [
+                    hyper_ast_gen_ts_java,
+                    hyper_ast_gen_ts_cpp,
+                    hyper_ast_gen_ts_xml
+                ], 
+                (t, u) => {
+                    let ty = <u::types::Lang as hyper_ast::types::Lang<_>>::to_u16(*t);
+                    let lang = hyper_ast::types::LangRef::<u::types::Type>::name(
+                        &u::types::Lang,
+                    );
+                    TypeIndex { lang, ty }
+                },
+                {
+                    dbg!(n, n.archetype().layout().component_types());
+                    panic!()
+                }
+            )
         }
     }
 
@@ -498,85 +494,78 @@ mod type_store {
         Xml(hyper_ast_gen_ts_xml::types::Type),
     }
 
+    macro_rules! on_multi {
+        ($on:ident, $with:ident => $body:expr) => {
+            match $on {
+                MultiType::Java($with) => $body,
+                MultiType::Cpp($with) => $body,
+                MultiType::Xml($with) => $body,
+            }
+        };
+        ($on1:ident, $on2:ident, ($with1:ident,$with2:ident) => $body:expr, _ => $default:expr) => {
+            match ($on1, $on2) {
+                (MultiType::Java($with1), MultiType::Java($with2)) => $body,
+                (MultiType::Cpp($with1), MultiType::Cpp($with2)) => $body,
+                (MultiType::Xml($with1), MultiType::Xml($with2)) => $body,
+                _ => $default,
+            }
+        };
+    }
+
     unsafe impl Send for MultiType {}
     unsafe impl Sync for MultiType {}
     impl PartialEq for MultiType {
         fn eq(&self, other: &Self) -> bool {
-            match (self, other) {
-                (MultiType::Java(s), MultiType::Java(o)) => s == o,
-                (MultiType::Cpp(s), MultiType::Cpp(o)) => s == o,
-                (MultiType::Xml(s), MultiType::Xml(o)) => s == o,
-                _ => false,
-            }
+            on_multi!(self, other, (s, o) => s == o, _ => false)
         }
     }
     impl Eq for MultiType {}
     impl Hash for MultiType {
         fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-            match self {
-                MultiType::Java(t) => t.hash(state),
-                MultiType::Cpp(t) => t.hash(state),
-                MultiType::Xml(t) => t.hash(state),
-            }
+            on_multi!(self, t => t.hash(state))
         }
     }
     impl Display for MultiType {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            match self {
-                MultiType::Java(t) => std::fmt::Display::fmt(t, f),
-                MultiType::Cpp(t) => std::fmt::Display::fmt(t, f),
-                MultiType::Xml(t) => std::fmt::Display::fmt(t, f),
-            }
+            on_multi!(self, t => std::fmt::Display::fmt(t, f))
         }
     }
 
     impl HyperType for MultiType {
+        fn generic_eq(&self, other: &dyn HyperType) -> bool
+        where
+            Self: 'static + PartialEq + Sized,
+        {
+            // elegant solution leveraging the static nature of node types
+            std::ptr::eq(self.as_static(), other.as_static())
+        }
+
         fn is_file(&self) -> bool {
-            match self {
-                MultiType::Java(t) => t.is_file(),
-                MultiType::Cpp(t) => t.is_file(),
-                MultiType::Xml(t) => t.is_file(),
-            }
+            on_multi!(self, t => t.is_file())
         }
 
         fn is_directory(&self) -> bool {
-            match self {
-                MultiType::Java(t) => t.is_file(),
-                MultiType::Cpp(t) => t.is_file(),
-                MultiType::Xml(t) => t.is_file(),
-            }
+            on_multi!(self, t => t.is_directory())
         }
 
         fn is_spaces(&self) -> bool {
-            match self {
-                MultiType::Java(t) => t.is_spaces(),
-                MultiType::Cpp(t) => t.is_spaces(),
-                MultiType::Xml(t) => t.is_spaces(),
-            }
+            on_multi!(self, t => t.is_spaces())
         }
 
         fn is_syntax(&self) -> bool {
-            match self {
-                MultiType::Java(t) => t.is_syntax(),
-                MultiType::Cpp(t) => t.is_syntax(),
-                MultiType::Xml(t) => t.is_syntax(),
-            }
+            on_multi!(self, t => t.is_syntax())
         }
 
         fn as_shared(&self) -> Shared {
-            match self {
-                MultiType::Java(t) => t.as_shared(),
-                MultiType::Cpp(t) => t.as_shared(),
-                MultiType::Xml(t) => t.as_shared(),
-            }
+            on_multi!(self, t => t.as_shared())
         }
 
         fn as_any(&self) -> &dyn std::any::Any {
-            match self {
-                MultiType::Java(t) => t.as_any(),
-                MultiType::Cpp(t) => t.as_any(),
-                MultiType::Xml(t) => t.as_any(),
-            }
+            on_multi!(self, t => t.as_any())
+        }
+
+        fn as_static(&self) -> &'static dyn HyperType {
+            on_multi!(self, t => t.as_static())
         }
 
         fn get_lang(&self) -> LangWrapper<Self>
@@ -591,3 +580,92 @@ mod type_store {
 
 pub use type_store::MultiType;
 pub use type_store::TStore;
+
+#[test]
+fn type_test_generic_eq() {
+    use hyper_ast::types::HyperType;
+
+    let t0 = hyper_ast_gen_ts_cpp::types::Type::FunctionDefinition;
+    let t1 = hyper_ast_gen_ts_cpp::types::Type::EnumSpecifier;
+
+    let k = MultiType::Cpp(t0);
+    let k0 = MultiType::Cpp(t0);
+    let k1 = MultiType::Cpp(t1);
+    assert!(k.eq(&k));
+    assert!(k.eq(&k0));
+    assert!(k0.eq(&k));
+    assert!(k1.eq(&k1));
+    assert!(k.ne(&k1));
+    assert!(k1.ne(&k));
+
+    assert!(k.generic_eq(&k));
+    assert!(k.generic_eq(&k0));
+    assert!(k0.generic_eq(&k));
+    assert!(k1.generic_eq(&k1));
+    assert!(!k.generic_eq(&k1));
+    assert!(!k1.generic_eq(&k));
+
+    let ak = hyper_ast_gen_ts_cpp::types::as_any(&t0.clone());
+    let ak0 = hyper_ast_gen_ts_cpp::types::as_any(&t0.clone());
+    let ak1 = hyper_ast_gen_ts_cpp::types::as_any(&t1.clone());
+
+    assert!(ak.generic_eq(&ak));
+    assert!(ak.generic_eq(&ak0));
+    assert!(ak0.generic_eq(&ak));
+    assert!(ak1.generic_eq(&ak1));
+    assert!(!ak.generic_eq(&ak1));
+    assert!(!ak1.generic_eq(&ak));
+
+    assert!(k.generic_eq(&ak));
+    assert!(k.generic_eq(&ak0));
+    assert!(k0.generic_eq(&ak));
+    assert!(k1.generic_eq(&ak1));
+    assert!(!k.generic_eq(&ak1));
+    assert!(!k1.generic_eq(&ak));
+
+    assert!(ak.generic_eq(&k));
+    assert!(ak.generic_eq(&k0));
+    assert!(ak0.generic_eq(&k));
+    assert!(ak1.generic_eq(&k1));
+    assert!(!ak.generic_eq(&k1));
+    assert!(!ak1.generic_eq(&k));
+
+    assert!(ak.eq(&ak));
+    assert!(ak.eq(&ak0));
+    assert!(ak0.eq(&ak));
+    assert!(ak1.eq(&ak1));
+    assert!(!ak.eq(&ak1));
+    assert!(!ak1.eq(&ak));
+
+    let ak = t0.clone();
+    let ak0 = t0.clone();
+    let ak1 = t1.clone();
+
+    assert!(ak.generic_eq(&ak));
+    assert!(ak.generic_eq(&ak0));
+    assert!(ak0.generic_eq(&ak));
+    assert!(ak1.generic_eq(&ak1));
+    assert!(!ak.generic_eq(&ak1));
+    assert!(!ak1.generic_eq(&ak));
+
+    assert!(k.generic_eq(&ak));
+    assert!(k.generic_eq(&ak0));
+    assert!(k0.generic_eq(&ak));
+    assert!(k1.generic_eq(&ak1));
+    assert!(!k.generic_eq(&ak1));
+    assert!(!k1.generic_eq(&ak));
+
+    assert!(ak.generic_eq(&k));
+    assert!(ak.generic_eq(&k0));
+    assert!(ak0.generic_eq(&k));
+    assert!(ak1.generic_eq(&k1));
+    assert!(!ak.generic_eq(&k1));
+    assert!(!ak1.generic_eq(&k));
+
+    assert!(ak.eq(&ak));
+    assert!(ak.eq(&ak0));
+    assert!(ak0.eq(&ak));
+    assert!(ak1.eq(&ak1));
+    assert!(!ak.eq(&ak1));
+    assert!(!ak1.eq(&ak));
+}

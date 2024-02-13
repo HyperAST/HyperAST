@@ -9,6 +9,100 @@ use hyper_ast::{
     types::{self, Children, MySlice, NodeId, SimpleHyperAST, TypedNodeId},
 };
 
+// pub trait IntoNoSpace<'a> {
+//     type R;
+//     fn as_nospaces(&'a self) -> Self::R;
+// }
+
+// impl<'a, T, TS: 'a, NS: 'a, LS: 'a> IntoNoSpace<'a> for hyper_ast::types::SimpleHyperAST<T, TS, NS, LS>
+// where
+//     NoSpaceNodeStoreWrapper<'a>: From<&'a NS>,
+// {
+//     type R = SimpleHyperAST<
+//         NoSpaceWrapper<'a, NodeIdentifier>,
+//         &'a TS,
+//         NoSpaceNodeStoreWrapper<'a>,
+//         &'a LS,
+//     >;
+
+//     fn as_nospaces(&'a self) -> Self::R {
+//         let type_store = &self.type_store;
+//         let label_store = &self.label_store;
+//         let node_store = &self.node_store;
+//         let node_store = node_store.into();
+//         SimpleHyperAST {
+//             type_store,
+//             node_store,
+//             label_store,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
+// }
+
+// impl<'a, TS: 'a> IntoNoSpace<'a> for hyper_ast::store::SimpleStores<TS> {
+//     type R = SimpleHyperAST<
+//         NoSpaceWrapper<'a, NodeIdentifier>,
+//         &'a TS,
+//         NoSpaceNodeStoreWrapper<'a>,
+//         &'a hyper_ast::store::labels::LabelStore,
+//     >;
+
+//     fn as_nospaces(&'a self) -> Self::R {
+//         let type_store = &self.type_store;
+//         let label_store = &self.label_store;
+//         let node_store = &self.node_store;
+//         let node_store = node_store.into();
+//         SimpleHyperAST {
+//             type_store,
+//             node_store,
+//             label_store,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
+// }
+
+// impl<'a> IntoNoSpace<'a> for &hyper_ast::store::SimpleStores<TStore> {
+//     type R = SimpleHyperAST<
+//         NoSpaceWrapper<'a, NodeIdentifier>,
+//         &'a TStore,
+//         NoSpaceNodeStoreWrapper<'a>,
+//         &'a hyper_ast::store::labels::LabelStore,
+//     >;
+
+//     fn as_nospaces(&'a self) -> Self::R {
+//         let type_store = &self.type_store;
+//         let label_store = &self.label_store;
+//         let node_store = &self.node_store;
+//         let node_store = node_store.into();
+//         SimpleHyperAST {
+//             type_store,
+//             node_store,
+//             label_store,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
+// }
+
+// pub fn as_nospaces<'a, TS>(
+//     stores: &'a hyper_ast::store::SimpleStores<TS>,
+// ) -> SimpleHyperAST<
+//     NoSpaceWrapper<'a, NodeIdentifier>,
+//     &'a TS,
+//     NoSpaceNodeStoreWrapper<'a>,
+//     &'a hyper_ast::store::labels::LabelStore,
+// > {
+//     let type_store = &stores.type_store;
+//     let label_store = &stores.label_store;
+//     let node_store = &stores.node_store;
+//     let node_store = node_store.into();
+//     SimpleHyperAST {
+//         type_store,
+//         node_store,
+//         label_store,
+//         _phantom: std::marker::PhantomData,
+//     }
+// }
+
 pub fn as_nospaces<'a>(
     stores: &'a hyper_ast::store::SimpleStores<TStore>,
 ) -> SimpleHyperAST<
@@ -202,9 +296,73 @@ impl<'a, T> types::Stored for NoSpaceWrapper<'a, T> {
     type TreeId = NodeIdentifier;
 }
 
+
+// // NOTE: use of the deref polymorphism trick
+// impl<'a, T: 'static + TypedNodeId<IdN = NodeIdentifier>> types::Typed for &NoSpaceWrapper<'a, T> {
+//     type Type = <T as TypedNodeId>::Ty;
+
+//     fn get_type(&self) -> Self::Type {
+//         self.inner.get_type()
+//     }
+// }
+
 // impl<'a> NoSpaceWrapper<'a> {
 //     fn cs(&self) -> Option<&NoSpaceSlice<<Self as types::Stored>::TreeId>> {
 //         self.inner.cs().map(|x|x.into()).ok()
+//     }
+// }
+
+// impl<'a, T> types::Labeled for &NoSpaceWrapper<'a, T> {
+//     type Label = LabelIdentifier;
+
+//     fn get_label_unchecked(&self) -> &LabelIdentifier {
+//         self.inner.get_label_unchecked()
+//     }
+
+//     fn try_get_label(&self) -> Option<&Self::Label> {
+//         self.inner.try_get_label()
+//     }
+// }
+
+// impl<'a, T> types::Node for &NoSpaceWrapper<'a, T> {}
+
+// impl<'a, T> types::Stored for &NoSpaceWrapper<'a, T> {
+//     type TreeId = NodeIdentifier;
+// }
+// impl<'a, T> types::WithChildren for &NoSpaceWrapper<'a, T> {
+//     type ChildIdx = u16;
+//     type Children<'b> = MySlice<Self::TreeId> where Self: 'b;
+
+//     fn child_count(&self) -> u16 {
+//         self.inner.no_spaces().map_or(0, |x| x.child_count())
+//     }
+
+//     fn child(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+//         self.inner
+//             .no_spaces()
+//             .ok()
+//             .and_then(|x| x.get(*idx).copied())
+//     }
+
+//     fn child_rev(&self, idx: &Self::ChildIdx) -> Option<Self::TreeId> {
+//         self.inner
+//             .no_spaces()
+//             .ok()
+//             .and_then(|x| x.rev(*idx).copied())
+//     }
+
+//     fn children(&self) -> Option<&Self::Children<'_>> {
+//         self.inner.no_spaces().ok()
+//     }
+// }
+
+// impl<'a, T: TypedNodeId<IdN = NodeIdentifier> + 'static> types::Tree for &NoSpaceWrapper<'a, T> {
+//     fn has_children(&self) -> bool {
+//         self.inner.has_children()
+//     }
+
+//     fn has_label(&self) -> bool {
+//         self.inner.has_label()
 //     }
 // }
 
@@ -276,6 +434,15 @@ impl<'a> types::Tree for NoSpaceWrapper<'a, NodeIdentifier> {
 // }
 
 impl<'store> types::NodeStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'store> {
+    type R<'a> = NoSpaceWrapper<'a, NodeIdentifier> where Self: 'a;
+    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+        NoSpaceWrapper {
+            inner: unsafe { self.s._resolve(id.as_id()) },
+        }
+    }
+}
+
+impl<'store> types::NodeStore<NodeIdentifier> for &NoSpaceNodeStoreWrapper<'store> {
     type R<'a> = NoSpaceWrapper<'a, NodeIdentifier> where Self: 'a;
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
         NoSpaceWrapper {

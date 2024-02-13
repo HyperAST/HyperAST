@@ -395,7 +395,7 @@ mod test {
         let mappings = VecStore::default();
         type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
         let mapper = GreedySubtreeMatcher::<DS, DS, _, _, _>::matchh::<DefaultMultiMappingStore<_>>(
-            &stores.node_store,
+            stores,
             &src,
             &dst,
             mappings,
@@ -409,8 +409,7 @@ mod test {
         print_mappings(
             &dst_arena,
             &src_arena,
-            &stores.node_store,
-            &stores.label_store,
+            stores,
             &mappings,
         );
     }
@@ -465,7 +464,7 @@ mod test {
         let mappings = VecStore::default();
         type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
         let mapper = GreedySubtreeMatcher::<DS, DS, _, _, _>::matchh::<DefaultMultiMappingStore<_>>(
-            &stores.node_store,
+            stores,
             &src,
             &dst,
             mappings,
@@ -479,8 +478,7 @@ mod test {
         print_mappings(
             &dst_arena,
             &src_arena,
-            &stores.node_store,
-            &stores.label_store,
+            stores,
             &mappings,
         );
 
@@ -695,8 +693,7 @@ mod test {
         print_mappings(
             &dst_arena,
             &src_arena,
-            &stores.node_store,
-            &stores.label_store,
+            stores,
             &mapper.mapping.mappings,
         );
 

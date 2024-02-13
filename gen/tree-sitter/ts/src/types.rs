@@ -189,6 +189,18 @@ impl Lang<Type> for Ts {
 }
 
 impl HyperType for Type {
+    fn generic_eq(&self, other: &dyn HyperType) -> bool
+    where
+        Self: 'static + PartialEq + Sized,
+    {
+        // Do a type-safe casting. If the types are different,
+        // return false, otherwise test the values for equality.
+        other
+            .as_any()
+            .downcast_ref::<Self>()
+            .map_or(false, |a| self == a)
+    }
+    
     fn is_directory(&self) -> bool {
         self == &Type::Directory
     }
@@ -228,6 +240,12 @@ impl HyperType for Type {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn as_static(&self) -> &'static dyn HyperType {
+        let t = <Ts as Lang<Type>>::to_u16(*self);
+        let t = <Ts as Lang<Type>>::make(t);
+        t
     }
 
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>

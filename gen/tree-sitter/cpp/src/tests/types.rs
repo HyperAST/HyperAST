@@ -1,21 +1,12 @@
-pub mod tests_legion_with_refs;
-
-mod tree_sitter_types_test;
-
-// fn f() {
-//     tree_sitter_java::language().node_kind_count();
-// }
-
-
-
 
 #[test]
+//
 fn type_test_generic_eq() {
     use hyper_ast::types::HyperType;
     
-    let k = crate::types::Type::EnhancedForStatement;
-    let k0 = crate::types::Type::EnhancedForStatement;
-    let k1 = crate::types::Type::ClassDeclaration;
+    let k = crate::types::Type::FunctionDefinition;
+    let k0 = crate::types::Type::FunctionDefinition;
+    let k1 = crate::types::Type::EnumSpecifier;
     assert!(k.eq(&k));
     assert!(k.eq(&k0));
     assert!(k0.eq(&k));
@@ -30,9 +21,9 @@ fn type_test_generic_eq() {
     assert!(!k.generic_eq(&k1));
     assert!(!k1.generic_eq(&k));
 
-    let ak = crate::types::as_any(&crate::types::Type::EnhancedForStatement);
-    let ak0 = crate::types::as_any(&crate::types::Type::EnhancedForStatement);
-    let ak1 = crate::types::as_any(&crate::types::Type::ClassDeclaration);
+    let ak = crate::types::as_any(&crate::types::Type::FunctionDefinition);
+    let ak0 = crate::types::as_any(&crate::types::Type::FunctionDefinition);
+    let ak1 = crate::types::as_any(&crate::types::Type::EnumSpecifier);
 
     assert!(ak.generic_eq(&ak));
     assert!(ak.generic_eq(&ak0));

@@ -7,12 +7,9 @@ use hyper_ast::{
         ExploreStructuralPositions, Scout, SpHandle, StructuralPositionStore, TreePath,
         TreePathMut, TypedScout, TypedTreePath,
     },
-    store::defaults::LabelIdentifier,
-    store::nodes::legion::HashedNodeRef,
-    store::{defaults::NodeIdentifier, SimpleStores},
+    store::{defaults::{LabelIdentifier, NodeIdentifier}, nodes::legion::HashedNodeRef, SimpleStores},
     types::{
-        Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeId, Tree, TypeStore,
-        TypeTrait, Typed, TypedHyperAST, TypedNodeStore, WithChildren, WithSerialization,
+        Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeId, Tree, TypeStore, TypeTrait, Typed, TypedHyperAST, TypedNodeStore, TypedTree, WithChildren, WithSerialization
     },
 };
 use num::{cast, one, zero, ToPrimitive, Zero};
@@ -86,14 +83,14 @@ where
     HAST: hyper_ast::types::LabelStore<str, I = LabelIdentifier>,
     HAST: hyper_ast::types::NodeStore<IdN, R<'a> = <HAST as hyper_ast::types::HyperAST<'a>>::T>,
     <HAST as hyper_ast::types::HyperAST<'a>>::T:
-        Tree<Type = AnyType, ChildIdx = HAST::Idx> + WithSerialization,
+        TypedTree<Type = AnyType, ChildIdx = HAST::Idx> + WithSerialization,
     <HAST as hyper_ast::types::HyperAST<'a>>::T: RefContainer<Result = BloomResult>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::T:
-        Tree<Type = Type, ChildIdx = HAST::Idx>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::T: RefContainer<Result = BloomResult>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
+        TypedTree<Type = Type, ChildIdx = HAST::Idx>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT: RefContainer<Result = BloomResult>,
 {
 
-    pub fn eq_root_scoped(d: ExplorableRef, stores: &'a HAST, b: <HAST as hyper_ast::types::TypedHyperAST<'a,TIdN<IdN>>>::T) -> bool {
+    pub fn eq_root_scoped(d: ExplorableRef, stores: &'a HAST, b: <HAST as hyper_ast::types::TypedHyperAST<'a,TIdN<IdN>>>::TT) -> bool {
         match d.as_ref() {
             RefsEnum::Root => false, // TODO check, not sure
             RefsEnum::MaybeMissing => false,
@@ -279,7 +276,7 @@ where
         package: RefPtr,
         target: RefPtr,
         current: TIdN<IdN>,
-        b: <HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: <HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
     ) -> Vec<RefPtr> {
         // self.sp_store.check_with(self.stores, scout).expect("find_refs");
@@ -458,7 +455,7 @@ where
     fn find_refs_pre(
         &mut self,
         t: Type,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         package: usize,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
         target: usize,
@@ -815,11 +812,11 @@ where
     HAST: hyper_ast::types::LabelStore<str, I = LabelIdentifier>,
     HAST: hyper_ast::types::NodeStore<IdN, R<'a> = <HAST as hyper_ast::types::HyperAST<'a>>::T>,
     <HAST as hyper_ast::types::HyperAST<'a>>::T:
-        Tree<Type = AnyType, ChildIdx = HAST::Idx> + WithSerialization,
+        Tree<ChildIdx = HAST::Idx> + WithSerialization,
     <HAST as hyper_ast::types::HyperAST<'a>>::T: RefContainer<Result = BloomResult>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::T:
-        Tree<Type = Type, ChildIdx = HAST::Idx>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::T: RefContainer<Result = BloomResult>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
+        TypedTree<Type = Type, ChildIdx = HAST::Idx>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT: RefContainer<Result = BloomResult>,
 {
     pub fn exact_match(&mut self, target: RefPtr, mut scout: TypedScout<TIdN<IdN>, HAST::Idx>) {
         let d = ExplorableRef {
@@ -969,7 +966,7 @@ where
     /// TODO evaluate validity
     pub fn exact_match_this_super(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: usize,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1000,7 +997,7 @@ where
     }
     fn exact_match_var_declarator(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: usize,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1028,7 +1025,7 @@ where
     }
     fn exact_match_identifier_in_expr_like(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: usize,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1062,7 +1059,7 @@ where
 
     fn exact_match_resource(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         _o: usize,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1099,7 +1096,7 @@ where
 
     fn exact_match_field_declaration(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: usize,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1149,7 +1146,7 @@ where
 
     fn exact_match_annotated_type(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         _o: usize,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1182,7 +1179,7 @@ where
 
     fn exact_match_class_literal(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         _o: usize,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1210,7 +1207,7 @@ where
 
     fn exact_match_method_reference(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: usize,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1259,7 +1256,7 @@ where
 
     fn exact_match_cast_expression(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: usize,
         i: &LabelIdentifier,
         mut scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1319,7 +1316,7 @@ where
 
     fn exact_match_instanceof_expression(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: RefPtr,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1370,7 +1367,7 @@ where
 
     fn exact_match_array_type(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: RefPtr,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1399,7 +1396,7 @@ where
 
     fn exact_match_generic_type(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: RefPtr,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1429,7 +1426,7 @@ where
 
     fn exact_match_extend_impl_things(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         _o: RefPtr,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1499,7 +1496,7 @@ where
 
     fn exact_match_variable_declaration(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: RefPtr,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1543,7 +1540,7 @@ where
 
     fn exact_match_method_declaration(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         _o: RefPtr,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1586,7 +1583,7 @@ where
 
     fn exact_match_method_invocation(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         _o: RefPtr,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1631,7 +1628,7 @@ where
 
     fn exact_match_object_creation_expression(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: RefPtr,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1885,7 +1882,7 @@ where
 
     fn exact_match_object_creation_expression_aux(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: usize,
         i: &LabelIdentifier,
         scout: TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -1962,7 +1959,7 @@ where
 
     fn exact_match_enhanced_for_statement(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: RefPtr,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -2022,7 +2019,7 @@ where
 
     fn exact_match_array_access(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: RefPtr,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -2075,7 +2072,7 @@ where
 
     fn exact_match_field_access(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: RefPtr,
         i: &LabelIdentifier,
         scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -2114,7 +2111,7 @@ where
     /// so that we can do the match in 2 times like with `A.new B.C()` (nit a field access here ;))
     fn is_field_access_exact_match(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: usize,
         i: &string_interner::symbol::SymbolU32,
         mut scout: TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -2243,7 +2240,7 @@ where
 
     fn is_scoped_type_identifier_exact_match(
         &mut self,
-        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::T,
+        b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         o: usize,
         i: &string_interner::symbol::SymbolU32,
         mut scout: TypedScout<TIdN<IdN>, HAST::Idx>,
@@ -2884,8 +2881,8 @@ where
         Label = LabelIdentifier,
     >,
     <HAST as hyper_ast::types::HyperAST<'a>>::T: Tree<ChildIdx = HAST::Idx>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::T:
-        Tree<Type = Type, ChildIdx = HAST::Idx>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
+        TypedTree<Type = Type, ChildIdx = HAST::Idx>,
 {
     // log::debug!("{}",hyper_ast::nodes::SyntaxSerializer::new(
     //     stores,
@@ -2945,11 +2942,11 @@ where
     HAST::Idx: num::PrimInt + num::traits::NumAssign + Debug,
     IdN: Copy + Eq + Debug + NodeId<IdN = IdN>,
     <HAST as hyper_ast::types::HyperAST<'a>>::T:
-        Tree<Type = AnyType, ChildIdx = HAST::Idx> + WithSerialization,
+        Tree<ChildIdx = HAST::Idx> + WithSerialization,
     <HAST as hyper_ast::types::HyperAST<'a>>::T: RefContainer<Result = BloomResult>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::T:
-        Tree<Type = Type, ChildIdx = HAST::Idx>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::T: RefContainer<Result = BloomResult>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
+        TypedTree<Type = Type, ChildIdx = HAST::Idx>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT: RefContainer<Result = BloomResult>,
 {
     /// Structurally find constructors in class
     pub fn find_constructors(&mut self, mut scout: TypedScout<TIdN<IdN>, HAST::Idx>) {

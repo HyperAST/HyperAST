@@ -221,7 +221,6 @@ where
         let nid = id.finish();
         let n = stores.node_store().resolve(&curr); //hyper_ast::types::NodeStore::resolve(stores, &curr);
         let k = stores.type_store().resolve_type(&n);
-        let k = n.get_type();
         if let Some(l) = n.try_get_label() {
             let l = label_map.entry(*l).or_insert_with(|| {
                 let i = label_list.len() as u32;

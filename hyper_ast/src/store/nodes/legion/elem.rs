@@ -13,8 +13,8 @@ use crate::{
     nodes::{CompressedNode, HashSize, RefContainer},
     store::defaults::LabelIdentifier,
     types::{
-        Children, HyperType, IterableChildren, MySlice, NodeId, TypeTrait, Typed, TypedNodeId,
-        WithChildren, WithMetaData,
+        AnyType, Children, HyperType, IterableChildren, MySlice, NodeId, TypeTrait, Typed,
+        TypedNodeId, WithChildren, WithMetaData,
     },
 };
 
@@ -392,7 +392,39 @@ impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Typed
     where
         Id::Ty: Copy + Send + Sync,
     {
-        *self.0.get_component::<Id::Ty>().unwrap()
+        match self.0.get_component::<Id::Ty>() {
+            Ok(t) => *t,
+            e => *e.unwrap(),
+
+            // Err(ComponentError::NotFound {..}) => {
+            //     let type_type = self.0.archetype().layout().component_types()[0];
+            //     self.0.
+            //     todo!()
+            // }
+        }
+    }
+}
+impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Typed
+    for &HashedNodeRef<'a, Id>
+{
+    type Type = AnyType;
+
+    fn get_type(&self) -> AnyType {
+        match self.0.get_component::<Id::Ty>() {
+            Ok(t) => {
+                let t: &'static dyn HyperType = t.as_static();
+                t.into()
+            }
+            Err(ComponentError::NotFound { .. }) => {
+                let type_type = self.0.archetype().layout().component_types()[0];
+                // self.0.
+                todo!()
+            }
+            e => {
+                let t: &'static dyn HyperType = e.unwrap().as_static();
+                t.into()
+            }
+        }
     }
 }
 
@@ -600,7 +632,7 @@ impl<'a, T> RefContainer for HashedNodeRef<'a, T> {
         use crate::filter::BF as _;
 
         let Ok(e) = self.0.get_component::<BloomSize>() else {
-            return BloomResult::MaybeContain
+            return BloomResult::MaybeContain;
         };
         macro_rules! check {
         ( $($t:ty),* ) => {
