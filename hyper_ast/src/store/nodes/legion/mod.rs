@@ -138,8 +138,7 @@ impl NodeStore {
             (u64, &mut legion::World, &DefaultHashBuilder),
         ),
         components: dyn_builder::BuiltEntity,
-    ) -> legion::Entity
-    {
+    ) -> legion::Entity {
         let (&mut symbol, _) = {
             let symbol = internal.extend(components)[0];
             vacant.insert_with_hasher(hash, symbol, (), |id| {
@@ -207,6 +206,16 @@ impl Debug for NodeStore {
 impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
     type R<'a> = HashedNodeRef<'a, NodeIdentifier>;
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+        self.internal
+            .entry_ref(id.clone())
+            .map(|x| HashedNodeRef::new(x))
+            .unwrap()
+    }
+}
+
+impl<'a> crate::types::NodeStoreLean<NodeIdentifier> for &'a NodeStore {
+    type R = HashedNodeRef<'a, NodeIdentifier>;
+    fn resolve(&self, id: &NodeIdentifier) -> Self::R {
         self.internal
             .entry_ref(id.clone())
             .map(|x| HashedNodeRef::new(x))
@@ -345,8 +354,93 @@ impl Default for NodeStore {
 mod stores_impl {
     use crate::{
         store::{labels, nodes, SimpleStores},
-        types::{AnyType, HyperAST, TypeStore, TypedHyperAST, TypedNodeId},
+        types::{
+            AnyType, HyperAST, HyperASTAsso, HyperASTLean, HyperASTShared, TypeStore,
+            TypedHyperAST, TypedNodeId,
+        },
     };
+
+    impl<TS> HyperASTShared for SimpleStores<TS, nodes::DefaultNodeStore> {
+        type IdN = nodes::DefaultNodeIdentifier;
+
+        type Idx = u16;
+        type Label = labels::DefaultLabelIdentifier;
+    }
+
+    impl<'store, TS> HyperASTLean for &'store SimpleStores<TS, nodes::DefaultNodeStore>
+    where
+        TS: TypeStore<self::nodes::legion::HashedNodeRef<'store>>,
+    {
+        type T = self::nodes::legion::HashedNodeRef<'store, Self::IdN>;
+
+        type NS = nodes::legion::NodeStore;
+
+        fn node_store(&self) -> &Self::NS {
+            &self.node_store
+        }
+
+        type LS = labels::LabelStore;
+
+        fn label_store(&self) -> &Self::LS {
+            &self.label_store
+        }
+
+        type TS = TS;
+
+        fn type_store(&self) -> &Self::TS {
+            &self.type_store
+        }
+    }
+
+    impl<'store, TS> HyperASTAsso for &'store SimpleStores<TS, nodes::DefaultNodeStore>
+    where
+        TS: for<'s> TypeStore<self::nodes::legion::HashedNodeRef<'s>>,
+    {
+        type T<'s> = self::nodes::legion::HashedNodeRef<'s, Self::IdN> where Self: 's;
+
+        type NS<'s> = nodes::legion::NodeStore where Self: 's;
+
+        fn node_store(&self) -> &Self::NS<'_> {
+            &self.node_store
+        }
+
+        type LS = labels::LabelStore;
+
+        fn label_store(&self) -> &Self::LS {
+            &self.label_store
+        }
+
+        type TS<'s> = TS where Self: 's;
+
+        fn type_store(&self) -> &Self::TS<'_> {
+            &self.type_store
+        }
+    }
+
+    // impl<TS> HyperASTAsso for SimpleStores<TS, nodes::DefaultNodeStore>
+    // where
+    //     TS: for<'s> TypeStore<self::nodes::legion::elem::HashedNodeRef<'s, Self::IdN>>,
+    // {
+    //     type T<'s> = self::nodes::legion::HashedNodeRef<'s, Self::IdN> where TS: 's;
+
+    //     type NS<'s> = nodes::legion::NodeStore where Self: 's;
+
+    //     fn node_store(&self) -> &Self::NS<'_> {
+    //         &self.node_store
+    //     }
+
+    //     type LS = labels::LabelStore;
+
+    //     fn label_store(&self) -> &Self::LS {
+    //         &self.label_store
+    //     }
+
+    //     type TS<'s> = TS where TS: 's;
+
+    //     fn type_store(&self) -> &Self::TS<'_> {
+    //         &self.type_store
+    //     }
+    // }
 
     impl<'store, TS> HyperAST<'store> for SimpleStores<TS, nodes::DefaultNodeStore>
     where

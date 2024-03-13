@@ -198,6 +198,37 @@ where
     (Position::new(file, offset, len), path_ids)
 }
 
+pub fn compute_position_and_nodes2<'store, HAST, It: Iterator>(
+    root: HAST::IdN,
+    offsets: &mut It,
+    stores: &HAST,
+) -> (Position, Vec<HAST::IdN>)
+where
+    It::Item: Clone,
+    HAST: 'store + crate::types::HyperASTShared,
+    HAST::IdN: Clone,
+    &'store HAST: crate::types::HyperASTLean,
+    // for<'a> &'a <&'store HAST as crate::types::HyperASTLean>::NS<'store>: 
+    //     crate::types::NodeStoreLean<<&'store HAST as crate::types::HyperASTShared>::IdN, R = <&'store HAST as crate::types::HyperASTLean>::T>,
+    <&'store HAST as crate::types::HyperASTLean>::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
+{
+    todo!()
+}
+
+pub fn compute_position_and_nodes3<'store, HAST, It: Iterator>(
+    root: HAST::IdN,
+    offsets: &mut It,
+    stores: &HAST,
+) -> (Position, Vec<HAST::IdN>)
+where
+    It::Item: Clone,
+    HAST: 'store + crate::types::HyperASTShared + crate::types::HyperASTAsso,
+    HAST::IdN: Clone,
+    HAST::T<'store>: WithSerialization + WithChildren<ChildIdx = It::Item>,
+{
+    todo!()
+}
+
 impl StructuralPosition<NodeIdentifier, u16> {
     pub fn make_position<'store, HAST>(&self, stores: &'store HAST) -> Position
     where

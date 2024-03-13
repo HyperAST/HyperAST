@@ -306,7 +306,7 @@ where
         let mut no_spaces = vec![];
         let mut path = vec![];
         // iter offsets
-        let mut offsets_iter = self.src.iter();
+        let mut offsets_iter = self.src.iter_offsets();
         loop {
             let b = stores.node_store().resolve(&x);
             let t = stores.type_store().resolve_type(&b);
@@ -318,7 +318,7 @@ where
             }
 
             let (cs, o) = match (b.children(), offsets_iter.next()) {
-                (Some(cs), Some(o)) => (cs, o),
+                (Some(cs), Some(&o)) => (cs, o),
                 (None, Some(_)) => panic!("there is no children remaining"),
                 _ => break,
             };
@@ -373,7 +373,7 @@ where
     {
         let stores = self.stores;
         let mut x = self.src.root();
-        let mut offsets_iter = self.src.iter();
+        let mut offsets_iter = self.src.iter_offsets();
 
         let mut aaa = PathBuf::default();
         let mut offset = 0;
@@ -395,7 +395,7 @@ where
                 }
 
                 let (cs, o) = match (b.children(), offsets_iter.next()) {
-                    (Some(cs), Some(o)) => (cs.clone(), o),
+                    (Some(cs), Some(&o)) => (cs.clone(), o),
                     (None, Some(_)) => panic!("there is no children remaining"),
                     _ => return todo!(),
                 };
@@ -420,7 +420,7 @@ where
             assert!(!t.is_directory());
 
             let (cs, o) = match (b.children(), offsets_iter.next()) {
-                (Some(cs), Some(o)) => (cs.clone(), o),
+                (Some(cs), Some(&o)) => (cs.clone(), o),
                 (None, Some(_)) => panic!("there is no children remaining"),
                 _ => break (b, t),
             };
@@ -471,7 +471,7 @@ where
         let mut builder: B = Default::default();
         let stores = self.stores;
         let mut x = self.src.root();
-        let mut offsets_iter = self.src.iter();
+        let mut offsets_iter = self.src.iter_offsets();
 
         // let mut aaa = PathBuf::default();
         // let mut offset = 0;
@@ -497,7 +497,7 @@ where
                 };
 
                 let (cs, idx) = match (b.children(), offsets_iter.next()) {
-                    (Some(cs), Some(o)) => (cs.clone(), o),
+                    (Some(cs), Some(&o)) => (cs.clone(), o),
                     (None, Some(_)) => panic!("there is no children remaining"),
                     _ => return builder.finish(x),
                 };
@@ -514,7 +514,7 @@ where
             assert!(!t.is_directory());
 
             let (cs, idx) = match (b.children(), offsets_iter.next()) {
-                (Some(cs), Some(idx)) => (cs.clone(), idx),
+                (Some(cs), Some(&idx)) => (cs.clone(), idx),
                 (None, Some(_)) => panic!("there is no children remaining"),
                 _ => break (b, t),
             };
@@ -565,7 +565,7 @@ where
         let mut builder: B = building::top_down::CreateBuilder::create();
         let stores = self.stores;
         let mut x = self.src.root();
-        let mut offsets_iter = self.src.iter();
+        let mut offsets_iter = self.src.iter_offsets();
 
         // let mut aaa = PathBuf::default();
         // let mut offset = 0;
@@ -592,7 +592,7 @@ where
                 };
 
                 let (cs, idx) = match (b.children(), offsets_iter.next()) {
-                    (Some(cs), Some(o)) => (cs.clone(), o),
+                    (Some(cs), Some(&o)) => (cs.clone(), o),
                     (None, Some(_)) => panic!("there is no children remaining"),
                     _ => return builder.set_node(x),
                 };
@@ -610,7 +610,7 @@ where
             assert!(!t.is_directory());
 
             let (cs, idx) = match (b.children(), offsets_iter.next()) {
-                (Some(cs), Some(idx)) => (cs.clone(), idx),
+                (Some(cs), Some(&idx)) => (cs.clone(), idx),
                 (None, Some(_)) => panic!("there is no children remaining"),
                 _ => break (b, t),
             };

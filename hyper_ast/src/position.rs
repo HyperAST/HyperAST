@@ -87,6 +87,10 @@ pub mod position_accessors {
         fn root(&self) -> IdN;
     }
 
+    pub trait AssistedFrom<S, T> {
+        fn compute(&self, store: S) -> T;
+    }
+
     pub trait SolvedPosition<IdN> {
         fn node(&self) -> IdN;
     }
@@ -113,8 +117,8 @@ pub mod position_accessors {
     pub trait WithPreOrderOffsets: WithOffsets {
         // type Path: Iterator;
         // fn path(&self) -> Self::Path;
-        type It: Iterator<Item = Self::Idx>;
-        fn iter(&self) -> Self::It;
+        type It<'a>: Iterator<Item = &'a Self::Idx> where Self: 'a, Self::Idx: 'a;
+        fn iter_offsets(&self) -> Self::It<'_>;
     }
 
     /// test invariants with [assert_invariants_pre]
@@ -141,10 +145,10 @@ pub mod position_accessors {
         let root = p.root();
         let mut prev = root.clone();
         let it = p.iter_offsets_and_nodes();
-        let snd_it = p.iter();
+        let snd_it = p.iter_offsets();
         set.insert(root);
         for ((o0, x), o1) in it.into_iter().zip(snd_it) {
-            assert_eq!(o0, o1);
+            assert_eq!(o0, *o1);
             if !set.insert(x.clone()) {
                 panic!("path returns 2 times the same node")
             }
@@ -259,6 +263,17 @@ pub mod position_accessors {
         fn start(&self) -> Self::IdO;
         fn end(&self) -> Self::IdO;
     }
+    pub trait OffsetPostionT<IdN>
+    where
+        Self::IdO: PrimInt,
+    {
+        /// Offset in characters or bytes
+        type IdO;
+        fn offset(&self) -> Self::IdO;
+        fn len(&self) -> Self::IdO;
+        fn start(&self) -> Self::IdO;
+        fn end(&self) -> Self::IdO;
+    }
 }
 
 pub struct PositionConverter<'src, SrcPos> {
@@ -327,7 +342,7 @@ mod computing_offset_bottom_up;
 // pub use computing_offset_bottom_up::{extract_file_postion, extract_position};
 
 mod computing_offset_top_down;
-pub use computing_offset_top_down::{compute_position, compute_position_and_nodes, compute_range};
+pub use computing_offset_top_down::{compute_position, compute_position_and_nodes, compute_position_and_nodes2, compute_position_and_nodes3, compute_range};
 
 mod computing_path;
 pub use computing_path::resolve_range;

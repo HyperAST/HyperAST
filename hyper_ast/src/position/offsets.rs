@@ -64,10 +64,10 @@ impl<'a, IdN: Copy, Idx: PrimInt> position_accessors::WithOffsets
 impl<'a, IdN: Copy, Idx: PrimInt> position_accessors::WithPreOrderOffsets
     for RootedOffsetsRef<'a, IdN, Idx>
 {
-    type It = std::iter::Copied<std::slice::Iter<'a, Idx>>;
+    type It<'b> = std::slice::Iter<'b, Idx> where Self: 'b, Idx: 'b;
 
-    fn iter(&self) -> Self::It {
-        self.offsets.iter().copied()
+    fn iter_offsets(&self) -> Self::It<'_> {
+        self.offsets.iter()
     }
 }
 

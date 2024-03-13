@@ -7,17 +7,16 @@ use hyper_ast::{
 };
 use hyper_diff::decompressed_tree_store::{lazy_post_order, PersistedNode};
 
+pub type LPO<T> = SharedValue<lazy_post_order::LazyPostOrder<T, u32>>;
+
 pub(crate) fn get_pair_simp<'a, 'store, HAST: HyperAST<'store, IdN = NodeIdentifier>>(
     partial_comp_cache: &'a crate::PartialDecompCache,
     hyperast: &'store HAST,
     src: &NodeIdentifier,
     dst: &NodeIdentifier,
 ) -> (
-    &'a mut SharedValue<
-        // lazy_post_order::LazyPostOrder<hyper_ast::store::nodes::legion::HashedNodeRef<'a>, u32>,
-        lazy_post_order::LazyPostOrder<<HAST as HyperAST<'store>>::T, u32>,
-    >,
-    &'a mut SharedValue<lazy_post_order::LazyPostOrder<<HAST as HyperAST<'store>>::T, u32>>,
+    &'a mut LPO<HAST::T>,
+    &'a mut LPO<HAST::T>,
 )
 where
     <HAST as HyperAST<'store>>::T: WithStats,
@@ -119,7 +118,7 @@ fn bi_sharding<'a>(
             HashMap<NodeIdentifier, SharedValue<LazyPostOrder<PersistedNode<NodeIdentifier>, u32>>>,
         >];
     let mut shards = unsafe { shards.as_mut().unwrap() };
-    dbg!(index1, index2, shards.len());
+    // dbg!(index1, index2, shards.len());
     // let mut shards:&mut [_] = unsafe { std::mem::transmute(shards) };
 
     // let mut shard1: &mut RwLock<HashMap<NodeIdentifier, SharedValue<LazyPostOrder<PersistedNode<NodeIdentifier>, u32>>>> = &mut shards[index1];
