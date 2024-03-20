@@ -28,6 +28,7 @@ use hyper_ast::store::nodes::legion::NodeIdentifier;
 
 mod app;
 mod changes;
+mod cli;
 mod commit;
 mod examples;
 mod fetch;
@@ -38,7 +39,6 @@ mod track;
 mod utils;
 mod view;
 mod ws;
-mod cli;
 
 // #[derive(Default)]
 pub struct AppState {
@@ -95,6 +95,9 @@ impl Default for AppState {
 pub(crate) type PartialDecompCache = DashMap<NodeIdentifier, DS<PersistedNode<NodeIdentifier>>>;
 pub(crate) type MappingAloneCache =
     DashMap<(NodeIdentifier, NodeIdentifier), (MappingStage, VecStore<u32>)>;
+pub(crate) type MappingAloneCacheRef<'a> =
+    dashmap::mapref::one::Ref<'a, (NodeIdentifier, NodeIdentifier), (MappingStage, VecStore<u32>)>;
+
 pub(crate) enum MappingStage {
     Subtree,
     Bottomup,

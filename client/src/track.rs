@@ -34,9 +34,7 @@ use tokio::time::Instant;
 
 use crate::{
     changes::{self, DstChanges, SrcChanges},
-    matching, no_space,
-    utils::get_pair_simp,
-    ConfiguredRepoHandle, MappingAloneCache, PartialDecompCache, SharedState,
+    matching, no_space, MappingAloneCache, PartialDecompCache, SharedState,
 };
 
 #[derive(Deserialize, Clone, Debug)]
@@ -119,81 +117,6 @@ impl Flags {
             || self.dependent
             || self.references
             || self.declaration
-    }
-}
-
-#[derive(EnumSetType, Debug)]
-pub enum FlagsE {
-    Upd,
-    Child,
-    Parent,
-    ExactChild,
-    ExactParent,
-    SimChild,
-    SimParent,
-    Meth,
-    Typ,
-    Top,
-    File,
-    Pack,
-    Dependency,
-    Dependent,
-    References,
-    Declaration,
-}
-
-impl Into<EnumSet<FlagsE>> for &Flags {
-    fn into(self) -> EnumSet<FlagsE> {
-        let mut r = EnumSet::new();
-        if self.upd {
-            r.insert(FlagsE::Upd);
-        }
-        if self.child {
-            r.insert(FlagsE::Child);
-        }
-        if self.parent {
-            r.insert(FlagsE::Parent);
-        }
-        if self.exact_child {
-            r.insert(FlagsE::ExactChild);
-        }
-        if self.exact_parent {
-            r.insert(FlagsE::ExactParent);
-        }
-        if self.sim_child {
-            r.insert(FlagsE::SimChild);
-        }
-        if self.sim_parent {
-            r.insert(FlagsE::SimParent);
-        }
-        if self.meth {
-            r.insert(FlagsE::Meth);
-        }
-        if self.typ {
-            r.insert(FlagsE::Typ);
-        }
-        if self.top {
-            r.insert(FlagsE::Top);
-        }
-        if self.file {
-            r.insert(FlagsE::File);
-        }
-        if self.pack {
-            r.insert(FlagsE::Pack);
-        }
-        if self.dependency {
-            r.insert(FlagsE::Dependency);
-        }
-        if self.dependent {
-            r.insert(FlagsE::Dependent);
-        }
-        if self.references {
-            r.insert(FlagsE::References);
-        }
-        if self.declaration {
-            r.insert(FlagsE::Declaration);
-        }
-        r
     }
 }
 
@@ -288,7 +211,10 @@ pub struct PieceOfCode<IdN = self::IdN, Idx = usize> {
     end: usize,
 }
 
-fn custom_ser<IdN: Clone + Into<self::IdN>, S>(x: &Vec<IdN>, serializer: S) -> Result<S::Ok, S::Error>
+fn custom_ser<IdN: Clone + Into<self::IdN>, S>(
+    x: &Vec<IdN>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
@@ -822,7 +748,7 @@ enum MappingResult<IdN, Idx, T = PieceOfCode<IdN, Idx>> {
     },
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 struct LocalPieceOfCode<IdN, Idx> {
     file: String,
     start: usize,
@@ -931,22 +857,30 @@ impl<IdN, Idx> LocalPieceOfCode<IdN, Idx> {
 }
 
 #[derive(Clone)]
-struct AAA<IdN, Idx> {
+struct TargetCodeElement<IdN, Idx> {
     start: usize,
     end: usize,
     path: Vec<Idx>,
+    path_no_spaces: Vec<Idx>,
+    root: IdN,
     node: IdN,
 }
 
-impl<IdN: Clone, Idx> position_accessors::SolvedPosition<IdN> for AAA<IdN, Idx> {
+impl<IdN: Clone, Idx> position_accessors::SolvedPosition<IdN> for TargetCodeElement<IdN, Idx> {
     fn node(&self) -> IdN {
         self.node.clone()
     }
 }
 
-impl<IdN, Idx: PrimInt> position_accessors::WithPath<IdN> for AAA<IdN, Idx> {}
+impl<IdN: Clone, Idx> position_accessors::RootedPosition<IdN> for TargetCodeElement<IdN, Idx> {
+    fn root(&self) -> IdN {
+        self.root.clone()
+    }
+}
 
-impl<IdN, Idx: PrimInt> position_accessors::WithPreOrderOffsets for AAA<IdN, Idx> {
+impl<IdN, Idx: PrimInt> position_accessors::WithPath<IdN> for TargetCodeElement<IdN, Idx> {}
+
+impl<IdN, Idx: PrimInt> position_accessors::WithPreOrderOffsets for TargetCodeElement<IdN, Idx> {
     type It<'a> = std::slice::Iter<'a, Idx> where Idx: 'a, Self: 'a;
 
     fn iter_offsets(&self) -> Self::It<'_> {
@@ -954,7 +888,7 @@ impl<IdN, Idx: PrimInt> position_accessors::WithPreOrderOffsets for AAA<IdN, Idx
     }
 }
 
-impl<IdN, Idx: PrimInt> position_accessors::WithPreOrderPath<IdN> for AAA<IdN, Idx> {
+impl<IdN, Idx: PrimInt> position_accessors::WithPreOrderPath<IdN> for TargetCodeElement<IdN, Idx> {
     type ItPath = std::vec::IntoIter<(Idx, IdN)>;
 
     fn iter_offsets_and_nodes(&self) -> Self::ItPath {
@@ -962,11 +896,11 @@ impl<IdN, Idx: PrimInt> position_accessors::WithPreOrderPath<IdN> for AAA<IdN, I
     }
 }
 
-impl<IdN, Idx: PrimInt> position_accessors::WithOffsets for AAA<IdN, Idx> {
+impl<IdN, Idx: PrimInt> position_accessors::WithOffsets for TargetCodeElement<IdN, Idx> {
     type Idx = Idx;
 }
 
-impl<IdN, Idx> position_accessors::OffsetPostionT<IdN> for AAA<IdN, Idx> {
+impl<IdN, Idx> position_accessors::OffsetPostionT<IdN> for TargetCodeElement<IdN, Idx> {
     type IdO = usize;
 
     fn offset(&self) -> Self::IdO {
@@ -983,6 +917,14 @@ impl<IdN, Idx> position_accessors::OffsetPostionT<IdN> for AAA<IdN, Idx> {
 
     fn end(&self) -> Self::IdO {
         self.end
+    }
+}
+
+impl<IdN, Idx: PrimInt> compute::WithPreOrderOffsetsNoSpaces for TargetCodeElement<IdN, Idx> {
+    type It<'a> = std::slice::Iter<'a, Idx> where Idx: 'a, Self: 'a;
+
+    fn iter_offsets_nospaces(&self) -> Self::It<'_> {
+        self.path_no_spaces.iter()
     }
 }
 
@@ -1048,23 +990,25 @@ fn track_aux(
         no_spaces_path_to_target
     };
     let dst_oid = dst_oid; // WARN not sure what I was doing there commit_dst.clone();
-    let target = AAA::<IdN, Idx> {
+    let target = TargetCodeElement::<IdN, Idx> {
         start: computed_range.0,
         end: computed_range.1,
         path: path_to_target.clone(),
+        path_no_spaces: no_spaces_path_to_target,
         node: computed_range.2,
+        root: src_tr,
+    };
+    let postprocess_matching = |p: LocalPieceOfCode<IdN, Idx>| {
+        p.globalize(repo_handle.spec().clone(), dst_oid.to_string())
     };
     compute::do_tracking(
-        repo_handle,
-        src_tr,
-        dst_tr,
-        flags,
+        &repositories,
         &state.partial_decomps,
         &state.mappings_alone,
-        &repositories,
-        dst_oid,
-        no_spaces_path_to_target,
+        flags,
         &target,
+        dst_tr,
+        &postprocess_matching,
     )
 }
 
@@ -1088,7 +1032,6 @@ fn track_aux2(
         .unwrap();
     let dst_tr = commit_dst.ast_root;
     let stores = &repositories.processor.main_stores;
-    let node_store = &stores.node_store;
 
     let path_to_target: Vec<_> = path.iter().map(|x| *x as u16).collect();
     dbg!(&path_to_target);
@@ -1117,27 +1060,29 @@ fn track_aux2(
     } else {
         compute_position_with_no_spaces(src_tr, &mut path_to_target.iter().map(|x| *x), stores)
     };
-    // dbg!(&path_to_target, &no_spaces_path_to_target);
     let range = pos.range();
-    let target = AAA::<IdN, Idx> {
+    let target = TargetCodeElement::<IdN, Idx> {
         start: range.start,
         end: range.end,
         path: path_to_target.clone(),
+        path_no_spaces: no_spaces_path_to_target,
         node: target_node,
+        root: src_tr,
+    };
+    let postprocess_matching = |p: LocalPieceOfCode<IdN, Idx>| {
+        p.globalize(repo_handle.spec().clone(), dst_oid.to_string())
     };
     compute::do_tracking(
-        repo_handle,
-        src_tr,
-        dst_tr,
-        flags,
+        &repositories,
         &state.partial_decomps,
         &state.mappings_alone,
-        &repositories,
-        dst_oid,
-        no_spaces_path_to_target,
+        flags,
         &target,
+        dst_tr,
+        &postprocess_matching,
     )
 }
+
 mod compute;
 mod more;
 mod my_dash;
