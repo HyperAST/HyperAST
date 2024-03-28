@@ -104,42 +104,58 @@ where
         crate::utils::get_pair_simp(partial_decomps, stores, &current_tr, &other_tr);
     let (src_tree, dst_tree) = (src_tree.get_mut(), dst_tree.get_mut());
 
-    if flags.some() {
+    let hyperast = stores;
+    let mut mapper = Mapper {
+        hyperast,
+        mapping: hyper_diff::matchers::Mapping {
+            src_arena: src_tree,
+            dst_arena: dst_tree,
+            mappings: mapping_store::VecStore::default(),
+        },
+    };
+    let fuller_mappings = if flags.some() {
+        // case where
+        let subtree_mappings = {
+            let hyperast = stores;
+            matching::top_down(hyperast, &mut mapper.mapping.src_arena, &mut mapper.mapping.dst_arena)
+        };
         dbg!();
-        if let Some(value) = track_top_down(
+        if let Some(value) = track_greedy(
             with_spaces_stores,
             stores,
-            src_tree,
-            dst_tree,
+            &mut mapper.mapping.src_arena,
+            &mut mapper.mapping.dst_arena,
+            &subtree_mappings,
             flags,
             target,
             postprocess_matching,
         ) {
             return value;
         }
-    }
+        compute_mappings_full(
+            stores,
+            mappings_alone,
+            &mut mapper,
+            Some(subtree_mappings),
+        )
+    } else {
+        compute_mappings_full(stores, mappings_alone, &mut mapper, None)
+    };
+    let fuller_mappings = &fuller_mappings.1;
 
-    let mapper_mappings = compute_mappings_bottom_up(
-        stores,
-        mappings_alone,
-        src_tree,
-        dst_tree,
-    );
-    let mapper_mappings = &mapper_mappings.1;
-
-    let root = src_tree.root();
-    let mapping_target = src_tree.child_decompressed(
+    let root = mapper.mapping.src_arena.root();
+    let mapping_target = mapper.mapping.src_arena.child_decompressed(
         &stores.node_store,
         &root,
         target.iter_offsets_nospaces().copied(),
     );
 
-    if let Some(mapped) = mapper_mappings.get_dst(&mapping_target) {
+    if let Some(mapped) = fuller_mappings.get_dst(&mapping_target) {
         return track_with_mappings(
             with_spaces_stores,
             stores,
-            src_tree,
-            dst_tree,
+            &mut mapper.mapping.src_arena,
+            &mut mapper.mapping.dst_arena,
             flags,
             target,
             mapping_target,
@@ -147,9 +163,17 @@ where
             postprocess_matching,
         );
     }
+    let Mapper {
+        mapping: hyper_diff::matchers::Mapping {
+            src_arena: src_tree,
+            dst_arena: dst_tree,
+            ..
+        },
+        ..
+    } = mapper;
 
     for parent_target in src_tree.parents(mapping_target) {
-        if let Some(mapped_parent) = mapper_mappings.get_dst(&parent_target) {
+        if let Some(mapped_parent) = fuller_mappings.get_dst(&parent_target) {
             let fallback = {
                 let (path, path_ids) = {
                     let dst_tree = dst_tree;
@@ -341,53 +365,57 @@ type NoSpaceStore<'a, 'store> = types::SimpleHyperAST<
     &'a hyper_ast::store::labels::LabelStore,
 >;
 
-fn compute_mappings_bottom_up<'store, 'a>(
-    stores: &'store NoSpaceStore<'_, 'store>,
-    mappings_alone: &'a MappingAloneCache,
-    src_tree: &mut DecompressedTree<'store>,
-    dst_tree: &mut DecompressedTree<'store>,
-) -> MappingAloneCacheRef<'a> {
+fn compute_mappings_full<'store, 'alone, 'trees, 'mapper, 'rest>(
+    stores: &'store NoSpaceStore<'rest, 'store>,
+    mappings_alone: &'alone MappingAloneCache,
+    mapper: &'mapper mut Mapper<
+        'store,
+        NoSpaceStore<'rest, 'store>,
+        &'trees mut lazy_post_order::LazyPostOrder<NoSpaceWrapper<'store, super::IdN>, u32>,
+        &'trees mut lazy_post_order::LazyPostOrder<NoSpaceWrapper<'store, super::IdN>, u32>,
+        mapping_store::VecStore<u32>,
+    >,
+    partial: Option<mapping_store::MultiVecStore<u32>>,
+) -> MappingAloneCacheRef<'alone> {
     let mappings_cache = mappings_alone;
-    use hyper_diff::matchers::mapping_store::MappingStore;
-    use hyper_diff::matchers::mapping_store::VecStore;
     let hyperast = stores;
-    use hyper_diff::matchers::Mapping;
     match mappings_cache.entry((
-        src_tree.original(&src_tree.root()),
-        dst_tree.original(&dst_tree.root()),
+        mapper.src_arena.original(&mapper.src_arena.root()),
+        mapper.dst_arena.original(&mapper.dst_arena.root()),
     )) {
         dashmap::mapref::entry::Entry::Occupied(entry) => entry.into_ref().downgrade(),
         dashmap::mapref::entry::Entry::Vacant(entry) => {
-            let mappings = VecStore::default();
-            let mut mapper = Mapper {
-                hyperast,
-                mapping: Mapping {
-                    src_arena: src_tree,
-                    dst_arena: dst_tree,
-                    mappings,
-                },
+            let mm = if let Some(mm) = partial {
+                mm
+            } else {
+                use mapping_store::MappingStore;
+                use mapping_store::VecStore;
+                mapper.mapping.mappings.topit(
+                    mapper.mapping.src_arena.len(),
+                    mapper.mapping.dst_arena.len(),
+                );
+
+                matching::LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::compute_multi_mapping::<
+                    mapping_store::DefaultMultiMappingStore<_>,
+                >(mapper)
             };
-            mapper.mapping.mappings.topit(
-                mapper.mapping.src_arena.len(),
-                mapper.mapping.dst_arena.len(),
-            );
 
-            let vec_store = matching::full2(hyperast, mapper);
+            matching::bottom_up_hiding(hyperast, &mm, mapper);
 
-            entry
-                .insert((crate::MappingStage::Bottomup, vec_store))
-                .downgrade()
+            let value = (crate::MappingStage::Bottomup, mapper.mapping.mappings.clone());
+            entry.insert(value).downgrade()
         }
     }
 }
 
 const CONST_NODE_COUNTING: Option<usize> = Some(500_000);
 
-fn track_top_down<'store, C, P>(
+fn track_greedy<'store, C, P>(
     with_spaces_stores: &'store SimpleStores<TStore>,
     stores: &'store NoSpaceStore<'_, 'store>,
     src_tree: &mut DecompressedTree<'store>,
     dst_tree: &mut DecompressedTree<'store>,
+    subtree_mappings: &mapping_store::MultiVecStore<IdD>,
     // no_spaces_path_to_target: &[u16],
     flags: &Flags,
     target: &P,
@@ -407,20 +435,13 @@ where
     let tracker_nospace = MappingTracker {
         stores: &hyper_ast_cvs_git::no_space::IntoNoSpaceGAT::as_nospaces(with_spaces_stores),
     };
-    let mapped = {
-        let hyperast = stores;
-        let src = current_tr;
-        let dst = other_tr;
-        matching::top_down(hyperast, src_tree, dst_tree)
-    };
-    let mapper_mappings = &mapped;
     let mut curr = src_tree.root();
     let path = target.iter_offsets_nospaces().copied().collect::<Vec<_>>();
     let mut path = &path[..];
     let flags: EnumSet<_> = flags.into();
     loop {
         // dbg!(path);
-        let dsts = mapper_mappings.get_dsts(&curr);
+        let dsts = subtree_mappings.get_dsts(&curr);
         let curr_flags = FlagsE::Upd | FlagsE::Child | FlagsE::SimChild; //  | FlagsE::ExactChild
         let parent_flags = curr_flags | FlagsE::Parent | FlagsE::SimParent; //  | FlagsE::ExactParent
         if dsts.is_empty() {
