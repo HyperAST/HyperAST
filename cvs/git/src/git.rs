@@ -123,7 +123,7 @@ where
     let mut callbacks = RemoteCallbacks::new();
 
     callbacks.transfer_progress(|x| {
-        log::info!("transfer {}/{}", x.received_objects(), x.total_objects());
+        log::debug!("transfer {}/{}", x.received_objects(), x.total_objects());
         true
     });
 

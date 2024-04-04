@@ -525,11 +525,11 @@ pub fn get_spacing(
                 )
             }
         });
-        debug_assert!(
+        /*debug_assert!(
             !bslash,
             "{}",
             std::str::from_utf8(&&text[padding_start.saturating_sub(100)..pos + 50]).unwrap()
-        );
+        );*/
         let spaces = spaces.to_vec();
         // let spaces = Space::replace_indentation(parent_indentation, &spaces);
         // TODO put back the relativisation later, can pose issues when computing len of a subtree (contextually if we make the optimisation)

@@ -469,7 +469,7 @@ impl PreProcessedRepository {
     ) -> Vec<git2::Oid> {
         log::info!(
             "commits to process: {:?}",
-            all_commits_between(&repository, before, after).map(|x| x.count())
+            all_commits_between(&repository, before, after).map(|x| x.take(limit).count())
         );
         let mut processing_ordered_commits = vec![];
         let rw = all_commits_between(&repository, before, after);
