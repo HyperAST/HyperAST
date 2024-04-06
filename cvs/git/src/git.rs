@@ -9,7 +9,22 @@ use hyper_ast::position::Position;
 
 use crate::processing::ObjectName;
 
-pub fn all_commits_between<'a>(
+/// Initialize a [git2::revwalk::Revwalk] to explore commits between before and after.
+/// 
+/// # Arguments
+///
+/// * `repository` - The repository where the walk is done
+/// * `before` - The the parent commit
+/// * `after` - The the child commit
+/// 
+/// # Property
+/// 
+/// if `after` is not a descendant of before then only walk `before`
+///
+/// # Errors
+/// 
+/// This function just lets errors from [git2] bubble up.
+pub(crate) fn all_commits_between<'a>(
     repository: &'a Repository,
     before: &str,
     after: &str,
@@ -17,10 +32,7 @@ pub fn all_commits_between<'a>(
     use git2::*;
     let mut rw = repository.revwalk()?;
     if !before.is_empty() {
-        // rw.hide_ref(before)?;
-        // log::debug!("{}", before);
         let c = retrieve_commit(repository, before)?;
-        // log::debug!("{:?}", c);
         for c in c.parents() {
             rw.hide(c.id())?;
         }
