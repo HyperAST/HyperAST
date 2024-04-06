@@ -5,7 +5,7 @@ use hyper_ast::{
     utils::memusage_linux,
 };
 use hyper_ast_cvs_git::{
-    git::{fetch_github_repository, Repo, Forge}, maven::MavenModuleAcc,
+    maven::MavenModuleAcc,
     multi_preprocessed::PreProcessedRepositories, no_space::as_nospaces, processing::{ConfiguredRepoHandle2, ConfiguredRepoTrait, CacheHolding},
 };
 use num_traits::ToPrimitive;
@@ -107,8 +107,6 @@ pub fn windowed_commits_compare(
             log::warn!("diff of {oid_src:?} and {oid_dst:?}");
             assert_eq!(oid_src.len(),oid_dst.len());
             
-            type Caches = <hyper_ast_cvs_git::processing::file_sys::Maven as hyper_ast_cvs_git::processing::CachesHolding>::Caches;
-
             let mut src_acc = MavenModuleAcc::from("".to_string());
             let mut src_mem = hyper_ast::utils::Bytes::default(); // NOTE it does not consider the size of the root, but it is an implementation detail
             let mut src_s = 0;

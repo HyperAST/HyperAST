@@ -1,14 +1,8 @@
 use hyper_ast::utils::memusage_linux;
 use hyper_ast_cvs_git::preprocessed::PreProcessedRepository;
 use num_traits::ToPrimitive;
-use std::{
-    env,
-    io::{BufWriter, Write},
-    path::PathBuf,
-    str::FromStr, fs::File,
-};
 
-use hyper_ast_benchmark_diffs::{window_combination::windowed_commits_compare, other_tools, postprocess::{CompressedBfPostProcess, PathJsonPostProcess}};
+use hyper_ast_benchmark_diffs::{other_tools, postprocess::CompressedBfPostProcess};
 
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
@@ -17,8 +11,8 @@ use jemallocator::Jemalloc;
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
-
 fn main() {
+    use std::env;
     let args: Vec<String> = env::args().collect();
     log::warn!("args: {:?}", args);
     let repo_name = args
@@ -31,25 +25,34 @@ fn main() {
 
 #[test]
 fn aaa() {
-    single("apache/maven", "a02834611bad3442ad073b10f1dee2322916f1f3", "c3cf29438e3d65d6ee5c5726f8611af99d9a649a")
+    single(
+        "apache/maven",
+        "a02834611bad3442ad073b10f1dee2322916f1f3",
+        "c3cf29438e3d65d6ee5c5726f8611af99d9a649a",
+    )
 }
 
 #[test]
 fn bbb() {
-    single("apache/maven", "14449e426aee2763d6435b63ef632b7c0b9ed767", "6fba7aa3c4d31d088df3ef682f7307b7c9a2f17c")
+    single(
+        "apache/maven",
+        "14449e426aee2763d6435b63ef632b7c0b9ed767",
+        "6fba7aa3c4d31d088df3ef682f7307b7c9a2f17c",
+    )
 }
 
 fn single(repo_name: &str, before: &str, after: &str) {
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
-    let processing_ordered_commits = preprocessed.pre_process_with_limit(
+    let oid_src = preprocessed.pre_process_single(
         &mut hyper_ast_cvs_git::git::fetch_github_repository(&preprocessed.name),
         before,
+        "",
+    );
+    let oid_dst = preprocessed.pre_process_single(
+        &mut hyper_ast_cvs_git::git::fetch_github_repository(&preprocessed.name),
         after,
         "",
-        2,
     );
-    let oid_src = processing_ordered_commits[1];
-    let oid_dst = processing_ordered_commits[0];
     log::warn!("diff of {oid_src} and {oid_dst}");
 
     let stores = &preprocessed.processor.main_stores;
@@ -85,7 +88,7 @@ fn single(repo_name: &str, before: &str, after: &str) {
         time_dst,
         summarized_lazy.mappings,
         total_lazy_t,
-        summarized_lazy.actions.map_or(-1,|x|x as isize),
+        summarized_lazy.actions.map_or(-1, |x| x as isize),
     );
     let diff_algorithm = "Chawathe";
     // let gt_out_format = "COMPRESSED"; // JSON
@@ -106,6 +109,11 @@ fn single(repo_name: &str, before: &str, after: &str) {
             let (pp, counts) = pp.counts();
             let (pp, gt_timings) = pp.performances();
             let valid = pp.validity_mappings(&lazy.mapper);
+            dbg!(counts);
+            dbg!(gt_timings);
+            dbg!(valid.additional_mappings);
+            dbg!(valid.missing_mappings);
+
         }
     } else if gt_out_format == "JSON" {
         if let Some(gt_out) = &gt_out {
@@ -113,6 +121,8 @@ fn single(repo_name: &str, before: &str, after: &str) {
             let gt_timings = pp.performances();
             let counts = pp.counts();
             let valid = pp.validity_mappings(&lazy.mapper);
+            dbg!(counts);
+            dbg!(gt_timings);
             dbg!(valid.additional_mappings.len());
             dbg!(valid.missing_mappings.len());
             // Some((gt_timings, counts, valid.map(|x| x.len())))

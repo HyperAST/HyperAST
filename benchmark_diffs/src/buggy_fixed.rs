@@ -8,7 +8,7 @@ use crate::{
 };
 use hyper_ast::store::{
     labels::LabelStore,
-    nodes::{legion::NodeStore, HashedNodeRef},
+    nodes::legion::NodeStore,
     SimpleStores,
 };
 use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
@@ -342,16 +342,15 @@ mod examples {
 #[cfg(test)]
 mod test {
     use hyper_ast::{
-        nodes::{IoOut, SyntaxSerializer, SyntaxWithIdsSerializer},
+        nodes::SyntaxWithIdsSerializer,
         store::{
-            defaults::NodeIdentifier, labels::LabelStore, nodes::legion::NodeStore, SimpleStores,
+            labels::LabelStore, nodes::legion::NodeStore, SimpleStores,
         },
-        types::{DecompressedSubtree, SimpleHyperAST, Typed},
+        types::{DecompressedSubtree, Typed},
     };
-    use std::io::stdout;
 
     use hyper_ast_cvs_git::no_space::NoSpaceNodeStoreWrapper;
-    use hyper_ast_gen_ts_xml::{legion::XmlTreeGen};
+    use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
     // use hyper_ast_gen_ts_xml::types::TStore;
     use hyper_ast_cvs_git::TStore;
 
@@ -592,8 +591,8 @@ mod test {
         let dst = dst_tr.local.compressed_node;
         // let dst = tree_gen.stores.node_store.resolve(dst).get_child(&0);
 
-        let label_store = &tree_gen.stores.label_store;
-        let node_store = &tree_gen.stores.node_store;
+        // let label_store = &tree_gen.stores.label_store;
+        // let node_store = &tree_gen.stores.node_store;
         let stores = &*tree_gen.stores;
         // let node_store = &AAA {
         //     s: &tree_gen.stores.node_store,

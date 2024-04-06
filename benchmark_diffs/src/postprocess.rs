@@ -131,7 +131,7 @@ pub mod compressed_bf_post_process {
 
     impl PP2 {
         pub fn validity_mappings<'store: 'a, 'a, HAST, SD, DD>(
-            mut self,
+            self,
             mapper: &'a Mapper<'store, HAST, DD, SD, VecStore<u32>>,
         ) -> ValidityRes<usize>
         where
@@ -184,7 +184,6 @@ pub mod compressed_bf_post_process {
             let bf_f = self.file.read_u32::<BigEndian>().unwrap() as usize;
             let bf_l = self.file.read_u32::<BigEndian>().unwrap() as usize;
 
-            use hyper_ast::types::Typed;
             let now = Instant::now();
 
             let mut gt_bf = bitvec::bitvec![u64,bitvec::order::Lsb0; 0;bf_l];
@@ -464,7 +463,7 @@ impl SimpleJsonPostProcess {
         }
     }
     pub fn validity_mappings<'store: 'a, 'a, HAST, SD, DD>(
-        mut self,
+        self,
         mapper: &'a Mapper<'store, HAST, DD, SD, VecStore<u32>>,
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Tree>>>
     where
@@ -599,7 +598,7 @@ impl PathJsonPostProcess {
         }
     }
     pub fn validity_mappings<'store: 'a, 'a, HAST, SD, DD>(
-        mut self,
+        self,
         mapper: &'a Mapper<'store, HAST, DD, SD, VecStore<u32>>,
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Path>>>
     where
@@ -1016,7 +1015,7 @@ mod tests {
         // } = mapping;
         let MappingDurations([subtree_matcher_t, bottomup_matcher_t]) = mapping_durations.into();
 
-        let hast_timings = vec![subtree_matcher_t, bottomup_matcher_t, gen_t];
+        let hast_timings = vec![subtree_matcher_t, bottomup_matcher_t, prepare_gen_t + gen_t];
 
         dbg!(&hast_timings);
         let pp = CompressedBfPostProcess::create(&gt_out);
