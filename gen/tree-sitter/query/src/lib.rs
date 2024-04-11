@@ -50,3 +50,6 @@ mod tnode {
 pub use tnode::TNode;
 
 pub mod search;
+
+#[cfg(feature = "legion")]
+pub mod iter;
