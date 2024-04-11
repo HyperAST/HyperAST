@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use num::{one, zero, ToPrimitive};
 
 use super::Position;
-use super::PrimInt;
+use crate::PrimInt;
 use super::WithHyperAstPositionConverter;
 use crate::position::building;
 use crate::types::{
@@ -318,7 +318,7 @@ where
             }
 
             let (cs, o) = match (b.children(), offsets_iter.next()) {
-                (Some(cs), Some(&o)) => (cs, o),
+                (Some(cs), Some(o)) => (cs, o),
                 (None, Some(_)) => panic!("there is no children remaining"),
                 _ => break,
             };
@@ -395,7 +395,7 @@ where
                 }
 
                 let (cs, o) = match (b.children(), offsets_iter.next()) {
-                    (Some(cs), Some(&o)) => (cs.clone(), o),
+                    (Some(cs), Some(o)) => (cs.clone(), o),
                     (None, Some(_)) => panic!("there is no children remaining"),
                     _ => return todo!(),
                 };
@@ -420,7 +420,7 @@ where
             assert!(!t.is_directory());
 
             let (cs, o) = match (b.children(), offsets_iter.next()) {
-                (Some(cs), Some(&o)) => (cs.clone(), o),
+                (Some(cs), Some(o)) => (cs.clone(), o),
                 (None, Some(_)) => panic!("there is no children remaining"),
                 _ => break (b, t),
             };
@@ -497,7 +497,7 @@ where
                 };
 
                 let (cs, idx) = match (b.children(), offsets_iter.next()) {
-                    (Some(cs), Some(&o)) => (cs.clone(), o),
+                    (Some(cs), Some(o)) => (cs.clone(), o),
                     (None, Some(_)) => panic!("there is no children remaining"),
                     _ => return builder.finish(x),
                 };
@@ -514,7 +514,7 @@ where
             assert!(!t.is_directory());
 
             let (cs, idx) = match (b.children(), offsets_iter.next()) {
-                (Some(cs), Some(&idx)) => (cs.clone(), idx),
+                (Some(cs), Some(idx)) => (cs.clone(), idx),
                 (None, Some(_)) => panic!("there is no children remaining"),
                 _ => break (b, t),
             };
@@ -592,7 +592,7 @@ where
                 };
 
                 let (cs, idx) = match (b.children(), offsets_iter.next()) {
-                    (Some(cs), Some(&o)) => (cs.clone(), o),
+                    (Some(cs), Some(o)) => (cs.clone(), o),
                     (None, Some(_)) => panic!("there is no children remaining"),
                     _ => return builder.set_node(x),
                 };
@@ -610,7 +610,7 @@ where
             assert!(!t.is_directory());
 
             let (cs, idx) = match (b.children(), offsets_iter.next()) {
-                (Some(cs), Some(&idx)) => (cs.clone(), idx),
+                (Some(cs), Some(idx)) => (cs.clone(), idx),
                 (None, Some(_)) => panic!("there is no children remaining"),
                 _ => break (b, t),
             };

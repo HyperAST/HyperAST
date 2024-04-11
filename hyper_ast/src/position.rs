@@ -35,16 +35,10 @@
 
 use std::{fmt::Debug, path::PathBuf};
 
-use num::traits::NumAssign;
-
 use crate::{
     store::defaults::NodeIdentifier,
     types::{HyperAST, NodeId, TypedNodeId, WithChildren},
 };
-
-pub trait PrimInt: num::PrimInt + NumAssign + Debug {}
-
-impl<T> PrimInt for T where T: num::PrimInt + NumAssign + Debug {}
 
 pub trait TreePath<IdN = NodeIdentifier, Idx = u16> {
     fn node(&self) -> Option<&IdN>;
@@ -81,6 +75,8 @@ pub mod position_accessors {
     // to test position equality roots must be equal,
     // a shared combination of attributes is chosen for the final comparison
 
+    use crate::PrimInt;
+
     use super::*;
 
     pub trait RootedPosition<IdN> {
@@ -114,11 +110,43 @@ pub mod position_accessors {
         // fn iter_post_order(&self) -> Self::PostOrderIt;
     }
 
+    #[derive(Debug)]
+    pub enum SharedPath<P> {
+        Exact(P),
+        Remain(P),
+        Submatch(P),
+        Different(P),
+    }
+
     pub trait WithPreOrderOffsets: WithOffsets {
         // type Path: Iterator;
         // fn path(&self) -> Self::Path;
-        type It<'a>: Iterator<Item = &'a Self::Idx> where Self: 'a, Self::Idx: 'a;
+        type It<'a>: Iterator<Item = Self::Idx> where Self: 'a, Self::Idx: 'a;
         fn iter_offsets(&self) -> Self::It<'_>;
+
+
+        fn shared_ancestors<Other:WithPreOrderOffsets<Idx= Self::Idx>>(
+            &self,
+            other: &Other,
+        ) -> SharedPath<Vec<Self::Idx>> {
+            let mut other = other.iter_offsets();
+            let mut r = vec![];
+            for s in self.iter_offsets() {
+                if let Some(other) = other.next() {
+                    if s != other {
+                        return SharedPath::Different(r);
+                    }
+                    r.push(s);
+                } else {
+                    return SharedPath::Submatch(r);
+                }
+            }
+            if other.next().is_some() {
+                SharedPath::Remain(r)
+            } else {
+                SharedPath::Exact(r)
+            }
+        }
     }
 
     /// test invariants with [assert_invariants_pre]
@@ -148,7 +176,7 @@ pub mod position_accessors {
         let snd_it = p.iter_offsets();
         set.insert(root);
         for ((o0, x), o1) in it.into_iter().zip(snd_it) {
-            assert_eq!(o0, *o1);
+            assert_eq!(o0, o1);
             if !set.insert(x.clone()) {
                 panic!("path returns 2 times the same node")
             }

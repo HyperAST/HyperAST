@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use super::PrimInt;
+use crate::PrimInt;
 
 #[derive(PartialEq, Eq, Hash, Clone, Default)]
 pub struct Position<F, T: PrimInt> {
@@ -127,7 +127,7 @@ mod impl_receivers {
     use super::super::building;
     use building::top_down;
     use building::bottom_up;
-    use super::super::PrimInt;
+    use crate::PrimInt;
 
 
     impl<IdO: PrimInt> top_down::CreateBuilder for super::Position<PathBuf, IdO> {

@@ -7,12 +7,12 @@ use hyper_ast::{
         compute_position, compute_position_and_nodes, compute_position_with_no_spaces,
         compute_range, path_with_spaces,
         position_accessors::{self, SolvedPosition, WithOffsets, WithPreOrderPath},
-        resolve_range, PrimInt,
+        resolve_range,
     },
     store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef, SimpleStores},
     types::{
         self, HyperAST, IterableChildren, NodeStore, Typed, WithChildren, WithHashs, WithStats,
-    },
+    }, PrimInt,
 };
 use hyper_ast_cvs_git::{
     git::Repo, multi_preprocessed, preprocessed::child_at_path_tracked,
@@ -881,10 +881,10 @@ impl<IdN: Clone, Idx> position_accessors::RootedPosition<IdN> for TargetCodeElem
 impl<IdN, Idx: PrimInt> position_accessors::WithPath<IdN> for TargetCodeElement<IdN, Idx> {}
 
 impl<IdN, Idx: PrimInt> position_accessors::WithPreOrderOffsets for TargetCodeElement<IdN, Idx> {
-    type It<'a> = std::slice::Iter<'a, Idx> where Idx: 'a, Self: 'a;
+    type It<'a> = std::iter::Copied<std::slice::Iter<'a, Idx>> where Idx: 'a, Self: 'a;
 
     fn iter_offsets(&self) -> Self::It<'_> {
-        self.path.iter()
+        self.path.iter().copied()
     }
 }
 

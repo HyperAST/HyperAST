@@ -2,7 +2,8 @@
 
 use num::ToPrimitive;
 
-use super::{Position, PrimInt, StructuralPosition, TreePath};
+use super::{Position, StructuralPosition, TreePath};
+use crate::PrimInt;
 use std::path::PathBuf;
 
 use crate::{

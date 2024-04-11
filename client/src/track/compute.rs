@@ -117,7 +117,11 @@ where
         // case where
         let subtree_mappings = {
             let hyperast = stores;
-            matching::top_down(hyperast, &mut mapper.mapping.src_arena, &mut mapper.mapping.dst_arena)
+            matching::top_down(
+                hyperast,
+                &mut mapper.mapping.src_arena,
+                &mut mapper.mapping.dst_arena,
+            )
         };
         dbg!();
         if let Some(value) = track_greedy(
@@ -132,12 +136,7 @@ where
         ) {
             return value;
         }
-        compute_mappings_full(
-            stores,
-            mappings_alone,
-            &mut mapper,
-            Some(subtree_mappings),
-        )
+        compute_mappings_full(stores, mappings_alone, &mut mapper, Some(subtree_mappings))
     } else {
         compute_mappings_full(stores, mappings_alone, &mut mapper, None)
     };
@@ -164,11 +163,12 @@ where
         );
     }
     let Mapper {
-        mapping: hyper_diff::matchers::Mapping {
-            src_arena: src_tree,
-            dst_arena: dst_tree,
-            ..
-        },
+        mapping:
+            hyper_diff::matchers::Mapping {
+                src_arena: src_tree,
+                dst_arena: dst_tree,
+                ..
+            },
         ..
     } = mapper;
 
@@ -402,7 +402,10 @@ fn compute_mappings_full<'store, 'alone, 'trees, 'mapper, 'rest>(
 
             matching::bottom_up_hiding(hyperast, &mm, mapper);
 
-            let value = (crate::MappingStage::Bottomup, mapper.mapping.mappings.clone());
+            let value = (
+                crate::MappingStage::Bottomup,
+                mapper.mapping.mappings.clone(),
+            );
             entry.insert(value).downgrade()
         }
     }
@@ -459,14 +462,14 @@ where
                     src: {
                         let (pos, path_ids) = compute_position_and_nodes(
                             current_tr,
-                            &mut target.iter_offsets().copied(),
+                            &mut target.iter_offsets(),
                             with_spaces_stores,
                         );
 
                         LocalPieceOfCode::from_file_and_range(
                             pos.file(),
                             target.start()..target.end(),
-                            target.iter_offsets().copied().collect(),
+                            target.iter_offsets().collect(),
                             path_ids,
                         )
                     },
@@ -502,11 +505,11 @@ where
                     src: {
                         let (pos, path_ids) = compute_position_and_nodes(
                             current_tr,
-                            &mut target.iter_offsets().copied(),
+                            &mut target.iter_offsets(),
                             with_spaces_stores,
                         );
 
-                        let path = target.iter_offsets().copied().collect();
+                        let path = target.iter_offsets().collect();
                         LocalPieceOfCode::from_position(&pos, path, path_ids)
                     },
                     next: dsts
@@ -594,8 +597,8 @@ fn compute_local2(
 ) -> LocalPieceOfCode<super::IdN, super::Idx> {
     let tr = path.root();
     let (pos, path_ids) =
-        compute_position_and_nodes(tr, &mut path.iter_offsets().copied(), with_spaces_stores);
-    let path = path.iter_offsets().copied().collect();
+        compute_position_and_nodes(tr, &mut path.iter_offsets(), with_spaces_stores);
+    let path = path.iter_offsets().collect();
     LocalPieceOfCode::from_position(&pos, path, path_ids)
 }
 

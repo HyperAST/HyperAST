@@ -1,6 +1,6 @@
-use super::{PrimInt, TreePath, TreePathMut, tags};
-
+use super::{tags, TreePath, TreePathMut};
 use crate::types::{HyperAST, NodeId, NodeStore, Tree, WithChildren};
+use crate::PrimInt;
 
 /// BottomUp content
 #[derive(Clone, Debug)]

@@ -1,5 +1,5 @@
 use super::{
-    super::{Position, PrimInt},
+    super::Position,
     ExploreStructuralPositions, Scout, SpHandle, StructuralPosition, StructuralPositionStore,
 };
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
     store::defaults::LabelIdentifier,
     types::{
         self, AnyType, HyperAST, NodeId, NodeStore, Tree, Typed, WithChildren, WithSerialization,
-    },
+    }, PrimInt,
 };
 use num::{one, zero};
 use std::fmt::Debug;

@@ -4,7 +4,6 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::str::FromStr;
 
-use num::PrimInt;
 use num::ToPrimitive;
 use strum::IntoEnumIterator;
 use strum_macros::AsRefStr;
@@ -12,6 +11,8 @@ use strum_macros::Display;
 use strum_macros::EnumCount;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
+
+use crate::PrimInt;
 
 pub trait HashKind {
     fn structural() -> Self;

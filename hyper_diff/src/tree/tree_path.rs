@@ -6,7 +6,8 @@
 //! - [ ] low compute cost extend
 use std::{fmt::Debug, marker::PhantomData};
 
-use num_traits::{cast, PrimInt, ToPrimitive};
+use hyper_ast::PrimInt;
+use num_traits::{cast, ToPrimitive};
 
 pub trait TreePath: IntoIterator {
     type ItemIterator<'a>: Iterator<Item = Self::Item>

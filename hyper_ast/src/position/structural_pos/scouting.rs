@@ -1,9 +1,10 @@
 use super::super::TreePathMut;
-use super::{Position, PrimInt, StructuralPosition, StructuralPositionStore, TreePath};
+use super::{Position, StructuralPosition, StructuralPositionStore, TreePath};
 use std::fmt::Debug;
 
 use num::{one, traits::NumAssign, zero};
 
+use crate::PrimInt;
 use crate::{
     store::defaults::LabelIdentifier,
     types::{

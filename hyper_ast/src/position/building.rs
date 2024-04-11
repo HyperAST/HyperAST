@@ -194,7 +194,7 @@ pub struct CompoundPositionPreparer<A, B>(A, B);
 mod impl_c_p_p_receivers2 {
 
     use super::super::file_and_offset::Position;
-    use super::super::PrimInt;
+    use crate::PrimInt;
     use super::bottom_up;
     use super::top_down;
     use super::CompoundPositionPreparer;
