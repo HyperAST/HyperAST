@@ -7,7 +7,7 @@ use legion::{
 };
 
 use crate::{
-    types::{NodeId, TypedNodeId},
+    types::{NodeId, Typed, TypedNodeId},
     utils::make_hash,
 };
 
@@ -165,6 +165,14 @@ impl NodeStore {
             .entry_ref(*id)
             .map(|x| HashedNodeRef::new(x))
             .unwrap()
+    }
+
+    pub fn resolve_with_type<T: 'static + TypedNodeId<IdN = NodeIdentifier>>(&self, id: &T::IdN) -> (T::Ty, HashedNodeRef<T>) {
+        let n = self.internal
+            .entry_ref(*id)
+            .map(|x| HashedNodeRef::new(x))
+            .unwrap();
+        (n.get_type(), n)
     }
 
     pub fn try_resolve(&self, id: NodeIdentifier) -> Option<HashedNodeRef<NodeIdentifier>> {
