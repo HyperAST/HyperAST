@@ -49,4 +49,7 @@ mod tnode {
 #[cfg(feature = "legion")]
 pub use tnode::TNode;
 
-mod search;
+pub mod search;
+
+#[cfg(feature = "legion")]
+pub mod iter;

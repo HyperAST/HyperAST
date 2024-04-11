@@ -1,2 +1,2 @@
-use super::PrimInt;
+use crate::PrimInt;
 pub struct Position<T: PrimInt>(T);

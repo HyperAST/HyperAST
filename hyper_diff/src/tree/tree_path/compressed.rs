@@ -1,3 +1,5 @@
+use hyper_ast::position::position_accessors::SharedPath;
+
 use super::*;
 
 #[derive(Clone)]
@@ -19,32 +21,32 @@ impl<Idx: PartialEq> PartialEq for CompressedTreePath<Idx> {
 }
 impl<Idx: Eq> Eq for CompressedTreePath<Idx> {}
 
-pub enum SharedPath<P> {
-    Exact(P),
-    Remain(P),
-    Submatch(P),
-    Different(P),
+
+fn shared_ancestors<Idx: PartialEq>(
+    curr: impl Iterator<Item = Idx>,
+    mut other: impl Iterator<Item = Idx>,
+) -> SharedPath<Vec<Idx>> {
+    let mut r = vec![];
+    for s in curr {
+        if let Some(other) = other.next() {
+            if s != other {
+                return SharedPath::Different(r);
+            }
+            r.push(s);
+        } else {
+            return SharedPath::Submatch(r);
+        }
+    }
+    if other.next().is_some() {
+        SharedPath::Remain(r)
+    } else {
+        SharedPath::Exact(r)
+    }
 }
 
 impl<Idx: PrimInt> CompressedTreePath<Idx> {
-    pub fn shared_ancestors(&self, other: &Self) -> SharedPath<Vec<Idx>> {
-        let mut other = other.iter();
-        let mut r = vec![];
-        for s in self.iter() {
-            if let Some(other) = other.next() {
-                if s != other {
-                    return SharedPath::Different(r);
-                }
-                r.push(s);
-            } else {
-                return SharedPath::Submatch(r);
-            }
-        }
-        if other.next().is_some() {
-            SharedPath::Remain(r)
-        } else {
-            SharedPath::Exact(r)
-        }
+    pub(crate) fn shared_ancestors(&self, other: &Self) -> SharedPath<Vec<Idx>> {
+        shared_ancestors(self.iter(), other.iter())
     }
 }
 
@@ -62,7 +64,7 @@ impl<Idx: PrimInt> Debug for CompressedTreePath<Idx> {
 }
 
 impl<Idx: PrimInt> CompressedTreePath<Idx> {
-    fn iter(&self) -> impl Iterator<Item = Idx> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = Idx> + '_ {
         Iter {
             is_even: (self.bits[0] & 1) == 1,
             side: true,

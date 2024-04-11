@@ -38,19 +38,19 @@ impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
     fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
         let lang = n.get_lang();
         let t: &'static (dyn HyperType + 'static) = match lang {
-            "hyper_ast_gen_ts_cpp::types::Cpp" => {
+            "hyper_ast_gen_ts_cpp::types::Lang" => {
                 let raw = n.get_raw_type();
                 let t: &'static (dyn HyperType + 'static) =
                     <hyper_ast_gen_ts_cpp::types::Cpp as Lang<_>>::make(raw);
                 t
             }
-            "hyper_ast_gen_ts_java::types::Java" => {
+            "hyper_ast_gen_ts_java::types::Lang" => {
                 let raw = n.get_raw_type();
                 let t: &'static (dyn HyperType + 'static) =
                     <hyper_ast_gen_ts_java::types::Java as Lang<_>>::make(raw);
                 t
             }
-            "hyper_ast_gen_ts_xml::types::Xml" => {
+            "hyper_ast_gen_ts_xml::types::Lang" => {
                 let raw = n.get_raw_type();
                 let t: &'static (dyn HyperType + 'static) =
                     <hyper_ast_gen_ts_xml::types::Xml as Lang<_>>::make(raw);
@@ -75,17 +75,17 @@ impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
     ) -> hyper_ast::types::LangWrapper<Self::Ty> {
         let lang = n.get_lang();
         let t = match lang {
-            "hyper_ast_gen_ts_cpp::types::Cpp" => {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_cpp::types::Cpp)
+            "hyper_ast_gen_ts_cpp::types::Lang" => {
+                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_cpp::types::Lang)
             }
-            "hyper_ast_gen_ts_java::types::Java" => {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_java::types::Java)
+            "hyper_ast_gen_ts_java::types::Lang" => {
+                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_java::types::Lang)
             }
-            "hyper_ast_gen_ts_xml::types::Xml" => {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_xml::types::Xml)
+            "hyper_ast_gen_ts_xml::types::Lang" => {
+                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_xml::types::Lang)
             }
             "" => {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_java::types::Java)
+                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_java::types::Lang)
             }
             // "xml" => From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_xml::types::Xml),
             x => panic!("{}", x),

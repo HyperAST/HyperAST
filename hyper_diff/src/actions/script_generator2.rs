@@ -1,7 +1,8 @@
 /// inspired by the implementation in gumtree
 use std::{collections::HashSet, fmt::Debug, hash::Hash};
 
-use num_traits::{cast, PrimInt, ToPrimitive};
+use num_traits::{cast, ToPrimitive};
+use hyper_ast::PrimInt;
 
 use crate::{
     actions::Actions,
@@ -601,7 +602,7 @@ where
             .unwrap_or(&d); //self.src_arena.children(self.store, w);
         self.src_in_order.remove_all(&w_c);
         let x_c = self.dst_arena.children(self.store, x);
-        self.dst_in_order.remove_all(&x_c);
+        self.dst_in_order.remove_all(x_c.as_slice());
 
         // todo use iter filter collect
         let mut s1 = vec![];
@@ -831,7 +832,7 @@ struct Iter<'a, IdC, IdD: PrimInt> {
     mid_arena: &'a mut [MidNode<IdC, IdD>],
 }
 
-impl<'a, IdC, IdD: num_traits::PrimInt> Iterator for Iter<'a, IdC, IdD> {
+impl<'a, IdC, IdD: PrimInt> Iterator for Iter<'a, IdC, IdD> {
     type Item = IdD;
 
     fn next(&mut self) -> Option<Self::Item> {

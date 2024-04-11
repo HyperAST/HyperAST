@@ -5,10 +5,8 @@ use hyper_diff::{decompressed_tree_store::ShallowDecompressedTreeStore, matchers
 
 use hyper_diff::decompressed_tree_store::hidding_wrapper;
 use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
-use hyper_diff::matchers::heuristic::gt::{
-    lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher,
-    lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher,
-};
+use hyper_diff::matchers::heuristic::gt::lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher;
+pub use hyper_diff::matchers::heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
 use hyper_diff::matchers::mapping_store::DefaultMultiMappingStore;
 use hyper_diff::matchers::mapping_store::MappingStore;
 use hyper_diff::matchers::mapping_store::VecStore;
@@ -83,26 +81,24 @@ pub fn full<'store, HAST: HyperAST<'store>>(
     GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(mapper, hyperast.label_store());
 }
 
-pub fn full2<'store, HAST: HyperAST<'store>>(
+pub fn bottom_up_hiding<'store, 'a, 'b, HAST: HyperAST<'store>>(
     hyperast: &'store HAST,
-    mut mapper: Mapper<
+    mm: &hyper_diff::matchers::mapping_store::MultiVecStore<u32>,
+    mapper: &'b mut Mapper<
         'store,
         HAST,
-        &mut LazyPostOrder<HAST::T, u32>,
-        &mut LazyPostOrder<HAST::T, u32>,
+        &'a mut LazyPostOrder<HAST::T, u32>,
+        &'a mut LazyPostOrder<HAST::T, u32>,
         VecStore<u32>,
     >,
-) -> VecStore<u32>
+)
 where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
     <HAST::T as types::WithChildren>::ChildIdx: Debug,
     HAST::T: 'store + types::WithHashs + types::WithStats,
 {
-    let mm = LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::compute_multi_mapping::<
-        DefaultMultiMappingStore<_>,
-    >(&mut mapper);
-    LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::filter_mappings(&mut mapper, &mm);
+    LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::filter_mappings(mapper, mm);
     use hidding_wrapper::*;
 
     // # hide matched subtrees
@@ -118,10 +114,10 @@ where
     // a simple arithmetic op allow to still have nodes in post order where root() == len() - 1
     {
         let (src_arena, dst_arena, mappings) = hide(
-            mapper.mapping.src_arena,
+            &mut *mapper.mapping.src_arena,
             &map_src,
             &rev_src,
-            mapper.mapping.dst_arena,
+            &mut *mapper.mapping.dst_arena,
             &map_dst,
             &rev_dst,
             &mut mapper.mapping.mappings,
@@ -141,5 +137,32 @@ where
             hyperast.label_store(),
         );
     }
-    mapper.mapping.mappings
+}
+
+
+pub fn full2<'store, 'a, 'b, HAST: HyperAST<'store>>(
+    hyperast: &'store HAST,
+    mapper: &'b mut Mapper<
+        'store,
+        HAST,
+        &'a mut LazyPostOrder<HAST::T, u32>,
+        &'a mut LazyPostOrder<HAST::T, u32>,
+        VecStore<u32>,
+    >,
+)
+where
+    HAST::IdN: Clone + Debug + Eq,
+    HAST::Label: Clone + Copy + Eq + Debug,
+    <HAST::T as types::WithChildren>::ChildIdx: Debug,
+    HAST::T: 'store + types::WithHashs + types::WithStats,
+{
+    let mut mm: DefaultMultiMappingStore<_> = Default::default();
+    mm.topit(mapper.src_arena.len(), mapper.dst_arena.len());
+    Mapper::<HAST, _, _, VecStore<u32>>::compute_multimapping::<_, 1>(
+        mapper.hyperast,
+        &mut mapper.mapping.src_arena,
+        &mut mapper.mapping.dst_arena,
+        &mut mm,
+    );
+    bottom_up_hiding(hyperast, &mm, mapper);
 }

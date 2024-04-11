@@ -1,4 +1,4 @@
-use super::{building, tags, Position, PrimInt, TreePath, WithHyperAstPositionConverter};
+use super::{building, tags, Position, TreePath, WithHyperAstPositionConverter};
 use std::{fmt::Debug, path::PathBuf};
 
 use num::one;
@@ -8,7 +8,7 @@ use crate::{
     types::{
         self, AnyType, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled,
         NodeId, NodeStore, TypeStore, Typed, TypedNodeId, WithChildren, WithSerialization,
-    },
+    }, PrimInt,
 };
 
 pub use super::offsets_and_nodes::StructuralPosition;

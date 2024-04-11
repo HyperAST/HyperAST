@@ -54,3 +54,4 @@ fn run(text: &[u8]) {
 }
 
 mod search;
+mod auto;

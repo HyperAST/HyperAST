@@ -21,12 +21,8 @@ use crate::{
     make_processor::MakeProcessor,
     maven::MavenModuleAcc,
     maven_processor::MavenProcessor,
-    processing::{
-        erased::ParametrizedCommitProcessorHandle, file_sys, CacheHolding, ConfiguredRepo,
-        ConfiguredRepo2,
-    },
-    utils::TypeMap,
-    Commit, DefaultMetrics, Processor, SimpleStores, TStore,
+    processing::{file_sys, CacheHolding, ConfiguredRepo2},
+    Commit, DefaultMetrics, Processor, SimpleStores,
 };
 // use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
 
@@ -178,6 +174,7 @@ impl PreProcessedRepository {
     }
 }
 impl RepositoryProcessor {
+    /// If `before` and `after` are unrelated then only one commit will be processed.
     pub(crate) fn pre_process(
         &mut self,
         repository: &mut ConfiguredRepo2,
@@ -192,8 +189,7 @@ impl RepositoryProcessor {
         let r = rw
             .map(|oid| {
                 let oid = oid.unwrap();
-                let builder =
-                    crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
+                let builder = crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
                 let get = &self
                     .processing_systems
                     .by_id_mut(&repository.config.0)
@@ -208,6 +204,7 @@ impl RepositoryProcessor {
         Ok(r)
     }
 
+    /// If `before` and `after` are unrelated then only one commit will be processed.
     pub fn pre_process_with_limit(
         &mut self,
         repository: &mut ConfiguredRepo2,
@@ -224,14 +221,13 @@ impl RepositoryProcessor {
             .take(limit)
             .map(|oid| {
                 let oid = oid.unwrap();
-                let builder =
-                    crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
+                let builder = crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
                 let commit_processor = self
                     .processing_systems
                     .by_id_mut(&repository.config.0)
                     .unwrap()
                     .get_mut(repository.config.1);
-                let id = commit_processor
+                let _id = commit_processor
                     .prepare_processing(&repository.repo, builder)
                     .process(self);
                 oid
@@ -242,6 +238,7 @@ impl RepositoryProcessor {
 }
 #[cfg(feature = "maven_java")]
 impl PreProcessedRepository {
+    /// If `before` and `after` are unrelated then only one commit will be processed.
     pub fn pre_process(
         &mut self,
         repository: &mut Repository,
@@ -257,7 +254,7 @@ impl PreProcessedRepository {
         let rw = all_commits_between(&repository, before, after);
         let Ok(rw) = rw else {
             dbg!(rw.err());
-            return vec![]
+            return vec![];
         };
         rw
             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
@@ -328,24 +325,13 @@ impl PreProcessedRepository {
                 if let Ok(full_node) = self.processor.handle_java_file(&b"".into(), text)
                 // handle_java_file(&mut self.processor.java_generator(text), b"", text)
                 {
-                    let mut out = BuffOut {
-                        buff: "".to_owned(),
-                    };
-                    println!(
-                        "{}",
-                        hyper_ast::nodes::TextSerializer::new(
-                            &self.processor.main_stores,
-                            full_node.local.compressed_node
-                        )
-                    );
-                    // hyper_ast_gen_ts_java::legion_with_refs::serialize(
-                    //     &self.processor.main_stores.node_store,
-                    //     &self.processor.main_stores.label_store,
-                    //     &full_node.local.compressed_node,
-                    //     &mut out,
-                    //     &std::str::from_utf8(&"\n".as_bytes().to_vec()).unwrap(),
-                    // );
-                    if std::str::from_utf8(text).unwrap() == out.buff {
+                    let out = hyper_ast::nodes::TextSerializer::new(
+                        &self.processor.main_stores,
+                        full_node.local.compressed_node,
+                    )
+                    .to_string();
+                    println!("{}", out);
+                    if std::str::from_utf8(text).unwrap() == out {
                         eq += 1;
                     } else {
                         not += 1;
@@ -367,6 +353,16 @@ impl PreProcessedRepository {
         (eq, not)
     }
 
+    /// Preprocess commits in `repository` between `before` and `after`.
+    ///
+    /// `limit`: the number of commits that will be preprocessed.
+    /// `dir_path`: the subdirectory to consider for the analysis.
+    ///
+    /// If `before` and `after` are unrelated then only one commit will be processed.
+    ///
+    /// # Panics in debug mode
+    ///
+    /// Panics in debug mode if `before` and 'after' are unrelated.
     pub fn pre_process_with_limit(
         &mut self,
         repository: &mut Repository,
@@ -375,30 +371,25 @@ impl PreProcessedRepository {
         dir_path: &str,
         limit: usize,
     ) -> Vec<git2::Oid> {
-        log::info!(
-            "commits to process: {:?}",
-            all_commits_between(&repository, before, after).map(|x| x.count())
-        );
+        let count = all_commits_between(&repository, before, after).map(|x| x.count());
+        log::info!("commits to process: {:?}", count);
         let mut processing_ordered_commits = vec![];
         let rw = all_commits_between(&repository, before, after);
         let Ok(rw) = rw else {
             dbg!(rw.err());
-            return vec![]
+            return vec![];
         };
-        rw
-            // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
-            .take(limit) // TODO make a variable
-            .for_each(|oid| {
-                let oid = oid.unwrap();
-                let c = CommitProcessor::<file_sys::Maven>::handle_commit::<true>(
-                    &mut self.processor,
-                    &repository,
-                    dir_path,
-                    oid,
-                );
-                processing_ordered_commits.push(oid.clone());
-                self.commits.insert(oid.clone(), c);
-            });
+        rw.take(limit).for_each(|oid| {
+            let oid = oid.unwrap();
+            let c = CommitProcessor::<file_sys::Maven>::handle_commit::<true>(
+                &mut self.processor,
+                &repository,
+                dir_path,
+                oid,
+            );
+            processing_ordered_commits.push(oid.clone());
+            self.commits.insert(oid.clone(), c);
+        });
         processing_ordered_commits
     }
 
@@ -422,6 +413,15 @@ impl PreProcessedRepository {
 
 #[cfg(feature = "java")]
 impl PreProcessedRepository {
+    /// Preprocess commits in `repository` between `before` and `after`.
+    ///
+    /// `dir_path`: the subdirectory to consider for the analysis.
+    ///
+    /// If `before` and `after` are unrelated then only one commit will be processed.
+    ///
+    /// # Panics in debug mode
+    ///
+    /// Panics in debug mode if `before` and 'after' are unrelated.
     pub fn pre_process_no_maven(
         &mut self,
         repository: &mut Repository,
@@ -437,7 +437,7 @@ impl PreProcessedRepository {
         let rw = all_commits_between(&repository, before, after);
         let Ok(rw) = rw else {
             dbg!(rw.err());
-            return vec![]
+            return vec![];
         };
         rw
             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
@@ -459,6 +459,15 @@ impl PreProcessedRepository {
 
 #[cfg(feature = "make_cpp")]
 impl PreProcessedRepository {
+    /// Preprocess commits in `repository` between `before` and `after`.
+    ///
+    /// `dir_path`: the subdirectory to consider for the analysis.
+    ///
+    /// If `before` and `after` are unrelated then only one commit will be processed.
+    ///
+    /// # Panics in debug mode
+    ///
+    /// Panics in debug mode if `before` and 'after' are unrelated.
     pub fn pre_process_make_project_with_limit(
         &mut self,
         repository: &mut Repository,
@@ -475,7 +484,7 @@ impl PreProcessedRepository {
         let rw = all_commits_between(&repository, before, after);
         let Ok(rw) = rw else {
             dbg!(rw.err());
-            return vec![]
+            return vec![];
         };
         rw
             // .skip(1500)release-1.0.0 refs/tags/release-3.3.2-RC4
@@ -555,7 +564,7 @@ pub trait IdHolder {
 }
 
 /// Help building a commit, also measure time and memory usage
-/// 
+///
 /// WARN the memory usage is actually the diference of heap size between the start and end of processing,
 /// and it would be biased by concurent building (not possible at the time of writing this warning)
 pub struct CommitBuilder {
@@ -702,12 +711,12 @@ impl CommitProcessor<file_sys::Any> for RepositoryProcessor {
     type Module = (NodeIdentifier, DefaultMetrics);
     fn handle_module<'a, 'b, const RMS: bool>(
         &mut self,
-        repository: &'a Repository,
-        dir_path: &'b mut Peekable<Components<'b>>,
-        name: &[u8],
-        oid: git2::Oid,
+        _repository: &'a Repository,
+        _dir_path: &'b mut Peekable<Components<'b>>,
+        _name: &[u8],
+        _oid: git2::Oid,
     ) -> Self::Module {
-        todo!()
+        todo!("still not sure how to dispatch")
     }
 }
 
@@ -725,12 +734,12 @@ impl CommitProcessor<file_sys::Npm> for RepositoryProcessor {
     type Module = (NodeIdentifier, DefaultMetrics);
     fn handle_module<'a, 'b, const RMS: bool>(
         &mut self,
-        repository: &'a Repository,
-        dir_path: &'b mut Peekable<Components<'b>>,
-        name: &[u8],
-        oid: git2::Oid,
+        _repository: &'a Repository,
+        _dir_path: &'b mut Peekable<Components<'b>>,
+        _name: &[u8],
+        _oid: git2::Oid,
     ) -> Self::Module {
-        todo!()
+        todo!("need to implement NpmProcessor")
         // let root_full_node = NpmProcessor::<RMS, FFWD, NpmModuleAcc>::new(repository, self, dir_path, name, oid)
         //     .process();
         // // self.object_map_make
@@ -740,16 +749,6 @@ impl CommitProcessor<file_sys::Npm> for RepositoryProcessor {
 }
 
 impl RepositoryProcessor {
-    fn handle_any_module<'a, 'b, const RMS: bool, const FFWD: bool>(
-        &mut self,
-        repository: &'a Repository,
-        dir_path: &'b mut Peekable<Components<'b>>,
-        name: &[u8],
-        oid: git2::Oid,
-    ) -> (NodeIdentifier, DefaultMetrics) {
-        todo!()
-    }
-
     pub fn child_by_name(&self, d: NodeIdentifier, name: &str) -> Option<NodeIdentifier> {
         child_by_name(&self.main_stores, d, name)
     }
@@ -832,112 +831,6 @@ pub fn child_at_path_tracked<'a>(
     Some((d, offsets))
 }
 
-pub(crate) struct CachingBlobWrapper<'cache, C> {
-    caches: &'cache mut TypeMap,
-    phantom: std::marker::PhantomData<C>,
-}
-
-impl TypeMap {
-    pub(crate) fn caching_blob_handler<C>(&mut self) -> CachingBlobWrapper<'_, C> {
-        CachingBlobWrapper {
-            caches: self,
-            phantom: std::marker::PhantomData,
-        }
-    }
-}
-
-impl<'cache, C: crate::processing::CachesHolding> CachingBlobWrapper<'cache, C> {
-    pub fn handle<
-        N,
-        E: From<std::str::Utf8Error>,
-        F: FnOnce(
-            &mut TypeMap,
-            &N,
-            &[u8],
-        ) -> Result<<C::Caches as crate::processing::ObjectMapper>::V, E>,
-    >(
-        &mut self,
-        oid: Oid,
-        repository: &Repository,
-        name: &N,
-        wrapped: F,
-    ) -> Result<<C::Caches as crate::processing::ObjectMapper>::V, E>
-    where
-        for<'a> &'a N: TryInto<&'a str>,
-        C::Caches: 'static + crate::processing::ObjectMapper<K = Oid> + Send + Sync + Default,
-        <C::Caches as crate::processing::ObjectMapper>::V: Clone,
-        // for<'a> <&'a N as TryInto<&'a str>>::Error: std::fmt::Debug,
-    {
-        let caches = self.caches.mut_or_default::<C::Caches>();
-        use crate::processing::ObjectMapper;
-        if let Some(already) = caches.get(&oid) {
-            //.object_map_pom.get(&oid) {
-            // TODO reinit already computed node for post order
-            let full_node = already.clone();
-            return Ok(full_node);
-        }
-        log::info!(
-            "blob {:?} {:?}",
-            name.try_into().unwrap_or("'non utf8 name'"),
-            oid
-        );
-        let blob = repository.find_blob(oid).unwrap();
-        std::str::from_utf8(blob.content())?;
-        let text = blob.content();
-        let full_node = wrapped(self.caches, &name, text);
-        if let Ok(x) = &full_node {
-            self.caches
-                .mut_or_default::<C::Caches>()
-                .insert(oid, x.clone());
-        }
-        full_node
-    }
-    pub fn handle2<
-        N: Clone,
-        E: From<std::str::Utf8Error>,
-        F: FnOnce(
-            &mut TypeMap,
-            &N,
-            &[u8],
-        ) -> Result<<C::Caches as crate::processing::ObjectMapper>::V, E>,
-    >(
-        &mut self,
-        oid: Oid,
-        repository: &Repository,
-        name: &N,
-        wrapped: F,
-    ) -> Result<<C::Caches as crate::processing::ObjectMapper>::V, E>
-    where
-        for<'a> &'a N: TryInto<&'a str>,
-        C::Caches: 'static + crate::processing::ObjectMapper<K = (Oid, N)> + Send + Sync + Default,
-        <C::Caches as crate::processing::ObjectMapper>::V: Clone,
-        // for<'a> <&'a N as TryInto<&'a str>>::Error: std::fmt::Debug,
-    {
-        let caches = self.caches.mut_or_default::<C::Caches>();
-        use crate::processing::ObjectMapper;
-        if let Some(already) = caches.get(&(oid, name.clone())) {
-            //.object_map_pom.get(&oid) {
-            // TODO reinit already computed node for post order
-            let full_node = already.clone();
-            return Ok(full_node);
-        }
-        log::info!(
-            "blob {:?} {:?}",
-            name.try_into().unwrap_or("'non utf8 name'"),
-            oid
-        );
-        let blob = repository.find_blob(oid).unwrap();
-        std::str::from_utf8(blob.content())?;
-        let text = blob.content();
-        let full_node = wrapped(self.caches, &name, text);
-        if let Ok(x) = &full_node {
-            self.caches
-                .mut_or_default::<C::Caches>()
-                .insert((oid, name.clone()), x.clone());
-        }
-        full_node
-    }
-}
 pub(crate) struct CachingBlobWrapper2<'cache, C> {
     processors: &'cache mut crate::processing::erased::ProcessorMap,
     phantom: std::marker::PhantomData<C>,

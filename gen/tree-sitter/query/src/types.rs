@@ -342,6 +342,16 @@ impl Display for Type {
     }
 }
 
+
+
+impl TryFrom<&str> for Type {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Type::from_str(value).ok_or_else(|| value.to_owned())
+    }
+}
+
 #[repr(u16)]
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Type {

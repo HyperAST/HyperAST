@@ -1,6 +1,7 @@
 #![feature(test)]
 pub mod actions;
 pub mod decompressed_tree_store;
+#[cfg(feature = "experimental")]
 pub mod mapping;
 pub mod matchers;
 pub mod tree;

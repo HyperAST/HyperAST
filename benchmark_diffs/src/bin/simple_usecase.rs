@@ -2,14 +2,11 @@
 
 use hyper_ast_cvs_git::preprocessed::PreProcessedRepository;
 use std::{
-    env,
     fs::File,
     io::{BufWriter, Write},
     path::PathBuf,
     str::FromStr,
 };
-
-use hyper_ast_benchmark_diffs::window_combination::windowed_commits_compare;
 
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
@@ -19,7 +16,7 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let args: Vec<String> = std::env::args().collect();
     log::warn!("args: {:?}", args);
     let repo_name = args
         .get(1)
@@ -33,6 +30,8 @@ fn main() {
             Some(PathBuf::from_str(x).unwrap())
         }
     });
+    let whol = args.get(5).map_or(false, |x| x == "--whole");
+
     let preprocessed = PreProcessedRepository::new(&repo_name);
     // let (before, after) = (
     //         // "e01840e86db739374c9c4eb84a948b24ca017d8e", // parent
@@ -47,7 +46,11 @@ fn main() {
     //         "00dc4b0b13622dfeccb8d67757422c5bd1bf1e38",
     //     );
     // whole();
-    inc(preprocessed, before, after, out);
+    if whol {
+        whole(preprocessed, before, after, out);
+    } else {
+        inc(preprocessed, before, after, out);
+    }
 }
 
 /// incrementally build each commits and compute diffs
@@ -149,11 +152,12 @@ fn inc(mut preprocessed: PreProcessedRepository, before: &str, after: &str, out:
     log::warn!("hyperAST size: {}", mu - memusage_linux());
 }
 
+/// build the commits then compute diffs
 fn whole(
     mut preprocessed: PreProcessedRepository,
     before: &str,
     after: &str,
-    buf: Option<BufWriter<File>>,
+    out: Option<PathBuf>,
 ) {
     let window_size = 2;
     let batch_id = format!("{}:({},{})", &preprocessed.name, before, after);
@@ -178,6 +182,17 @@ fn whole(
         preprocessed.commits.len(),
         processing_ordered_commits
     );
+    let mut buf = out
+        .map(|out| File::create(out).unwrap())
+        .map(|file| BufWriter::with_capacity(4 * 8 * 1024, file));
+    if let Some(buf) = &mut buf {
+        writeln!(
+            buf,
+            "input,src_s,dst_s,src_heap,dst_heap,src_t,dst_t,mappings,diff_t,changes"
+        )
+        .unwrap();
+        buf.flush().unwrap();
+    }
     let mut i = 0;
     let c_len = processing_ordered_commits.len();
     use hyper_ast_gen_ts_java::utils::memusage_linux;
@@ -188,19 +203,43 @@ fn whole(
 
             let stores = &preprocessed.processor.main_stores;
 
+            use hyper_ast::types::WithStats;
             let commit_src = preprocessed.commits.get_key_value(&oid_src).unwrap();
+            let time_src = commit_src.1.processing_time();
             let src_tr = commit_src.1.ast_root;
+            let src_s = stores.node_store.resolve(src_tr).size();
 
             let commit_dst = preprocessed.commits.get_key_value(&oid_dst).unwrap();
+            let time_dst = commit_dst.1.processing_time();
             let dst_tr = commit_dst.1.ast_root;
+            let dst_s = stores.node_store.resolve(dst_tr).size();
 
             let hyperast = hyper_ast_cvs_git::no_space::as_nospaces(stores);
 
             let mu = memusage_linux();
             let lazy = hyper_diff::algorithms::gumtree_lazy::diff(&hyperast, &src_tr, &dst_tr);
             let summarized_lazy = &lazy.summarize();
+            use hyper_diff::algorithms::ComputeTime;
+            let total_lazy_t: f64 = summarized_lazy.time();
             dbg!(summarized_lazy);
             log::warn!("ed+mappings size: {}", memusage_linux() - mu);
+            if let Some(buf) = &mut buf {
+                writeln!(
+                    buf,
+                    "{oid_src}/{oid_dst},{},{},{},{},{},{},{},{},{}",
+                    src_s,
+                    dst_s,
+                    Into::<isize>::into(&commit_src.1.memory_used()),
+                    Into::<isize>::into(&commit_dst.1.memory_used()),
+                    time_src,
+                    time_dst,
+                    summarized_lazy.mappings,
+                    total_lazy_t,
+                    summarized_lazy.actions.map_or(-1, |x| x as isize),
+                )
+                .unwrap();
+                buf.flush().unwrap();
+            }
         }
         log::warn!("done computing diff {i}");
         i += 1;

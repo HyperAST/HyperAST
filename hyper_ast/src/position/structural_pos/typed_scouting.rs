@@ -1,6 +1,6 @@
 use super::super::{TreePathMut, TypedTreePath};
 use super::{
-    Position, PrimInt, Scout, SpHandle, StructuralPosition, StructuralPositionStore, TreePath,
+    Position, Scout, SpHandle, StructuralPosition, StructuralPositionStore, TreePath,
 };
 use std::{fmt::Debug, marker::PhantomData};
 
@@ -8,6 +8,7 @@ use num::zero;
 
 use crate::types::{Typed, TypedNodeId, WithChildren, NodeId};
 
+use crate::PrimInt;
 use crate::{
     store::defaults::LabelIdentifier,
     types::{self, HyperAST, WithSerialization},

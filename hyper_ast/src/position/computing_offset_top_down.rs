@@ -2,7 +2,8 @@
 
 use num::ToPrimitive;
 
-use super::{Position, PrimInt, StructuralPosition, TreePath};
+use super::{Position, StructuralPosition, TreePath};
+use crate::PrimInt;
 use std::path::PathBuf;
 
 use crate::{
@@ -196,6 +197,37 @@ where
     let file = PathBuf::from_iter(path.iter());
     path_ids.reverse();
     (Position::new(file, offset, len), path_ids)
+}
+
+pub fn compute_position_and_nodes2<'store, HAST, It: Iterator>(
+    root: HAST::IdN,
+    offsets: &mut It,
+    stores: &HAST,
+) -> (Position, Vec<HAST::IdN>)
+where
+    It::Item: Clone,
+    HAST: 'store + crate::types::HyperASTShared,
+    HAST::IdN: Clone,
+    &'store HAST: crate::types::HyperASTLean,
+    // for<'a> &'a <&'store HAST as crate::types::HyperASTLean>::NS<'store>: 
+    //     crate::types::NodeStoreLean<<&'store HAST as crate::types::HyperASTShared>::IdN, R = <&'store HAST as crate::types::HyperASTLean>::T>,
+    <&'store HAST as crate::types::HyperASTLean>::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
+{
+    todo!()
+}
+
+pub fn compute_position_and_nodes3<'store, HAST, It: Iterator>(
+    root: HAST::IdN,
+    offsets: &mut It,
+    stores: &HAST,
+) -> (Position, Vec<HAST::IdN>)
+where
+    It::Item: Clone,
+    HAST: 'store + crate::types::HyperASTShared + crate::types::HyperASTAsso,
+    HAST::IdN: Clone,
+    HAST::T<'store>: WithSerialization + WithChildren<ChildIdx = It::Item>,
+{
+    todo!()
 }
 
 impl StructuralPosition<NodeIdentifier, u16> {
