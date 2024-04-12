@@ -486,7 +486,11 @@ mod tsq_ser {
                         write!(out, "(")?;
                         w_kind(out)?;
                         for id in it {
-                            write!(out, " ")?;
+                            let b = NodeStore::resolve(self.stores, id);
+                            let kind = self.stores.resolve_type(&b);
+                            if !kind.is_spaces() {
+                                write!(out, " ")?;
+                            }
                             self.serialize(&id, count, out)?;
                         }
                         write!(out, ")")?;
@@ -543,9 +547,9 @@ mod tsq_ser {
 
 mod tsq_transform {
     use hyper_ast::{
-        PrimInt,
         store::{defaults::NodeIdentifier, SimpleStores},
         types::{IterableChildren, Labeled, Typed},
+        PrimInt,
     };
 
     use crate::types::TIdN;
