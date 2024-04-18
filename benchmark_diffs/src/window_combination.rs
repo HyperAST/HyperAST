@@ -5,17 +5,11 @@ use crate::{
     postprocess::{CompressedBfPostProcess, PathJsonPostProcess},
 };
 use hyper_ast::{
-    store::{
-        defaults::NodeIdentifier,
-        labels::DefaultLabelIdentifier,
-        nodes::legion::{HashedNodeRef, NodeStore},
-    },
-    types::{self, Children, MySlice, SimpleHyperAST, WithStats},
+    types::WithStats,
     utils::memusage_linux,
 };
 use hyper_ast_cvs_git::{
     git::fetch_github_repository, no_space::as_nospaces, preprocessed::PreProcessedRepository,
-    TStore,
 };
 use hyper_diff::algorithms::{self, ComputeTime};
 use num_traits::ToPrimitive;
@@ -342,7 +336,7 @@ mod test {
 
     use hyper_ast::{
         store::nodes::legion::HashedNodeRef,
-        types::{HyperAST, WithChildren},
+        types::WithChildren,
     };
     use hyper_diff::{
         decompressed_tree_store::{lazy_post_order::LazyPostOrder, CompletePostOrder},
@@ -558,12 +552,6 @@ mod test {
         // let dst_tr = stores.node_store.resolve(dst_tr).get_child(&0);
 
         let hyperast = as_nospaces(stores);
-        let mapper: hyper_diff::matchers::Mapper<
-            _,
-            LazyPostOrder<_, u32>,
-            LazyPostOrder<_, u32>,
-            VecStore<u32>,
-        > = hyperast.decompress_pair(&src_tr, &dst_tr).into();
         let partial_lazy = algorithms::gumtree_partial_lazy::diff(&hyperast, &src_tr, &dst_tr);
         dbg!(
             &partial_lazy.mapping_durations,

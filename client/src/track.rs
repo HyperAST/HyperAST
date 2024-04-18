@@ -5,12 +5,14 @@ use enumset::{EnumSet, EnumSetType};
 use hyper_ast::{
     position::{
         compute_position, compute_position_and_nodes, compute_position_with_no_spaces,
-        compute_range, path_with_spaces, resolve_range,
+        compute_range, path_with_spaces,
+        position_accessors::{self, SolvedPosition, WithOffsets, WithPreOrderPath},
+        resolve_range,
     },
     store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef, SimpleStores},
     types::{
         self, HyperAST, IterableChildren, NodeStore, Typed, WithChildren, WithHashs, WithStats,
-    },
+    }, PrimInt,
 };
 use hyper_ast_cvs_git::{
     git::Repo, multi_preprocessed, preprocessed::child_at_path_tracked,
@@ -32,9 +34,7 @@ use tokio::time::Instant;
 
 use crate::{
     changes::{self, DstChanges, SrcChanges},
-    matching, no_space,
-    utils::get_pair_simp,
-    ConfiguredRepoHandle, MappingAloneCache, PartialDecompCache, SharedState,
+    matching, no_space, MappingAloneCache, PartialDecompCache, SharedState,
 };
 
 #[derive(Deserialize, Clone, Debug)]
@@ -120,92 +120,25 @@ impl Flags {
     }
 }
 
-#[derive(EnumSetType, Debug)]
-pub enum FlagsE {
-    Upd,
-    Child,
-    Parent,
-    ExactChild,
-    ExactParent,
-    SimChild,
-    SimParent,
-    Meth,
-    Typ,
-    Top,
-    File,
-    Pack,
-    Dependency,
-    Dependent,
-    References,
-    Declaration,
-}
-
-impl Into<EnumSet<FlagsE>> for &Flags {
-    fn into(self) -> EnumSet<FlagsE> {
-        let mut r = EnumSet::new();
-        if self.upd {
-            r.insert(FlagsE::Upd);
-        }
-        if self.child {
-            r.insert(FlagsE::Child);
-        }
-        if self.parent {
-            r.insert(FlagsE::Parent);
-        }
-        if self.exact_child {
-            r.insert(FlagsE::ExactChild);
-        }
-        if self.exact_parent {
-            r.insert(FlagsE::ExactParent);
-        }
-        if self.sim_child {
-            r.insert(FlagsE::SimChild);
-        }
-        if self.sim_parent {
-            r.insert(FlagsE::SimParent);
-        }
-        if self.meth {
-            r.insert(FlagsE::Meth);
-        }
-        if self.typ {
-            r.insert(FlagsE::Typ);
-        }
-        if self.top {
-            r.insert(FlagsE::Top);
-        }
-        if self.file {
-            r.insert(FlagsE::File);
-        }
-        if self.pack {
-            r.insert(FlagsE::Pack);
-        }
-        if self.dependency {
-            r.insert(FlagsE::Dependency);
-        }
-        if self.dependent {
-            r.insert(FlagsE::Dependent);
-        }
-        if self.references {
-            r.insert(FlagsE::References);
-        }
-        if self.declaration {
-            r.insert(FlagsE::Declaration);
-        }
-        r
-    }
-}
-
 #[derive(Deserialize, Serialize)]
-pub struct TrackingResult {
+pub struct TrackingResult<IdN, Idx> {
     pub compute_time: f64,
     commits_processed: usize,
-    src: PieceOfCode,
-    intermediary: Option<PieceOfCode>,
-    fallback: Option<PieceOfCode>,
-    matched: Vec<PieceOfCode>,
+    #[serde(bound(serialize = "IdN: Clone + Into<self::IdN>, Idx: Serialize"))]
+    src: PieceOfCode<IdN, Idx>,
+    #[serde(bound(serialize = "IdN: Clone + Into<self::IdN>, Idx: Serialize"))]
+    intermediary: Option<PieceOfCode<IdN, Idx>>,
+    #[serde(bound(serialize = "IdN: Clone + Into<self::IdN>, Idx: Serialize"))]
+    fallback: Option<PieceOfCode<IdN, Idx>>,
+    #[serde(bound(serialize = "IdN: Clone + Into<self::IdN>, Idx: Serialize"))]
+    matched: Vec<PieceOfCode<IdN, Idx>>,
 }
 
-impl IntoResponse for TrackingResult {
+// set the type of offset used to index in children list
+type Idx = u16;
+type IdN = NodeIdentifier;
+
+impl IntoResponse for TrackingResult<IdN, Idx> {
     fn into_response(self) -> axum::response::Response {
         let mut resp = serde_json::to_string(&self).unwrap().into_response();
         let headers = resp.headers_mut();
@@ -219,11 +152,11 @@ impl IntoResponse for TrackingResult {
     }
 }
 
-impl TrackingResult {
+impl<IdN, Idx> TrackingResult<IdN, Idx> {
     pub(crate) fn with_changes(
         self,
         (src_changes, dst_changes): (SrcChanges, DstChanges),
-    ) -> TrackingResultWithChanges {
+    ) -> TrackingResultWithChanges<IdN, Idx> {
         TrackingResultWithChanges {
             track: self,
             src_changes,
@@ -233,13 +166,14 @@ impl TrackingResult {
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct TrackingResultWithChanges {
-    pub track: TrackingResult,
+pub struct TrackingResultWithChanges<IdN, Idx> {
+    #[serde(bound(serialize = "IdN: Clone + Into<self::IdN>, Idx: Serialize"))]
+    pub track: TrackingResult<IdN, Idx>,
     src_changes: SrcChanges,
     dst_changes: DstChanges,
 }
 
-impl IntoResponse for TrackingResultWithChanges {
+impl IntoResponse for TrackingResultWithChanges<IdN, Idx> {
     fn into_response(self) -> axum::response::Response {
         let mut resp = serde_json::to_string(&self).unwrap().into_response();
         let headers = resp.headers_mut();
@@ -263,27 +197,32 @@ impl IntoResponse for TrackingResultWithChanges {
 // }
 
 #[derive(Deserialize, Serialize, Debug)]
-pub struct PieceOfCode {
+pub struct PieceOfCode<IdN = self::IdN, Idx = usize> {
     user: String,
     name: String,
     commit: String,
-    path: Vec<usize>,
+    path: Vec<Idx>,
+    #[serde(bound(serialize = "IdN: Clone + Into<self::IdN>"))]
     #[serde(serialize_with = "custom_ser")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    path_ids: Vec<NodeIdentifier>, // WARN this is not fetched::NodeIdentifier
+    path_ids: Vec<IdN>, // WARN this is not fetched::NodeIdentifier
     file: String,
     start: usize,
     end: usize,
 }
 
-fn custom_ser<S>(x: &Vec<NodeIdentifier>, serializer: S) -> Result<S::Ok, S::Error>
+fn custom_ser<IdN: Clone + Into<self::IdN>, S>(
+    x: &Vec<IdN>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
     use serde::ser::SerializeSeq;
     let mut seq = serializer.serialize_seq(Some(x.len()))?;
     for element in x {
-        let id: u64 = unsafe { std::mem::transmute(*element) };
+        let element: self::IdN = element.clone().into();
+        let id: u64 = unsafe { std::mem::transmute(element) };
         seq.serialize_element(&id)?;
     }
     seq.end()
@@ -317,7 +256,7 @@ pub fn track_code(
     state: SharedState,
     path: TrackingParam,
     query: TrackingQuery,
-) -> Result<TrackingResult, TrackingError> {
+) -> Result<TrackingResult<IdN, Idx>, TrackingError> {
     let now = Instant::now();
     let TrackingParam {
         user,
@@ -370,7 +309,7 @@ pub fn track_code(
         log::warn!("done construction of {commits:?} in {}", repository.spec);
         let src_oid = commits[0];
         let dst_oid = commits[1];
-        match aux(
+        match track_aux(
             state.clone(),
             &repository,
             src_oid,
@@ -454,7 +393,7 @@ pub(crate) fn track_code_at_path(
     state: SharedState,
     path: TrackingAtPathParam,
     query: TrackingQuery,
-) -> Result<TrackingResult, TrackingError> {
+) -> Result<TrackingResult<IdN, Idx>, TrackingError> {
     let now = Instant::now();
     let TrackingQuery {
         start,
@@ -487,7 +426,7 @@ pub(crate) fn track_code_at_path(
     let mut commit = commit.clone();
     let mut node_processed = 0;
     let mut commits_processed = 1;
-    let mut path: Vec<_> = path.split("/").filter_map(|x| x.parse().ok()).collect();
+    let mut path: Vec<Idx> = path.split("/").filter_map(|x| x.parse().ok()).collect();
     let mut source = None;
     while node_processed < MAX_NODES {
         commits_processed += 1;
@@ -520,7 +459,7 @@ pub(crate) fn track_code_at_path(
         } else {
             commits[1]
         };
-        match aux2(state.clone(), &repository, src_oid, dst_oid, &path, &flags) {
+        match track_aux2(state.clone(), &repository, src_oid, dst_oid, &path, &flags) {
             MappingResult::Direct { src: aaa, matches } => {
                 let aaa = aaa.globalize(repository.spec, commit);
                 let (src, intermediary) = if let Some(src) = source {
@@ -611,7 +550,7 @@ pub(crate) fn track_code_at_path_with_changes(
     state: SharedState,
     path: TrackingAtPathParam,
     query: TrackingQuery,
-) -> Result<TrackingResultWithChanges, TrackingError> {
+) -> Result<TrackingResultWithChanges<IdN, Idx>, TrackingError> {
     let now = Instant::now();
     let TrackingQuery {
         start: _,
@@ -675,7 +614,7 @@ pub(crate) fn track_code_at_path_with_changes(
                 message: "this commit has no parent".into(),
             });
         };
-        match aux2(state.clone(), &repository, src_oid, dst_oid, &path, &flags) {
+        match track_aux2(state.clone(), &repository, src_oid, dst_oid, &path, &flags) {
             MappingResult::Direct { src: aaa, matches } => {
                 let changes = changes::added_deleted(state, &repository, dst_oid, ori_oid.unwrap())
                     .map_err(|err| TrackingError {
@@ -701,6 +640,7 @@ pub(crate) fn track_code_at_path_with_changes(
                 return Ok(tracking_result.with_changes(changes));
             }
             MappingResult::Missing { src, fallback } => {
+                dbg!();
                 let changes = changes::added_deleted(state, &repository, dst_oid, ori_oid.unwrap())
                     .map_err(|err| TrackingError {
                         compute_time: now.elapsed().as_secs_f64(),
@@ -775,7 +715,7 @@ pub(crate) fn track_code_at_path_with_changes(
                     unreachable!()
                 } else {
                     let next = &next[0]; // TODO stop on branching ?
-                    dbg!(next);
+                                         // dbg!(next);
                     path = next.path.clone();
                     commit = next.commit.clone();
                 }
@@ -791,33 +731,93 @@ pub(crate) fn track_code_at_path_with_changes(
     })
 }
 
-enum MappingResult {
+enum MappingResult<IdN, Idx, T = PieceOfCode<IdN, Idx>> {
     Direct {
-        src: LocalPieceOfCode,
-        matches: Vec<PieceOfCode>,
+        src: LocalPieceOfCode<IdN, Idx>,
+        matches: Vec<T>,
     },
     Missing {
-        src: LocalPieceOfCode,
-        fallback: PieceOfCode,
+        src: LocalPieceOfCode<IdN, Idx>,
+        fallback: T,
     },
     Error(String),
     Skipped {
         nodes: usize,
-        src: LocalPieceOfCode,
-        next: Vec<PieceOfCode>,
+        src: LocalPieceOfCode<IdN, Idx>,
+        next: Vec<T>,
     },
 }
 
-struct LocalPieceOfCode {
+#[derive(Clone, PartialEq, Debug)]
+struct LocalPieceOfCode<IdN, Idx> {
     file: String,
     start: usize,
     end: usize,
-    path: Vec<usize>,
-    path_ids: Vec<NodeIdentifier>,
+    path: Vec<Idx>,
+    path_ids: Vec<IdN>,
 }
 
-impl LocalPieceOfCode {
-    pub(crate) fn globalize(self, spec: Repo, commit: impl ToString) -> PieceOfCode {
+impl<'a, S, IdN: Clone, Idx: Clone> From<(&S, &'a LocalPieceOfCode<IdN, Idx>)>
+    for LocalPieceOfCode<IdN, Idx>
+{
+    fn from((_, p): (&S, &'a LocalPieceOfCode<IdN, Idx>)) -> Self {
+        p.clone()
+    }
+}
+
+impl<IdN, Idx> LocalPieceOfCode<IdN, Idx> {
+    pub(crate) fn from_position(
+        pos: &hyper_ast::position::Position,
+        path: Vec<Idx>,
+        path_ids: Vec<IdN>,
+    ) -> Self {
+        let std::ops::Range { start, end } = pos.range();
+        let file = pos.file().to_str().unwrap().to_string();
+        Self {
+            file,
+            start,
+            end,
+            path,
+            path_ids,
+        }
+    }
+    pub(crate) fn from_file_and_range(
+        file: &std::path::Path,
+        range: std::ops::Range<usize>,
+        path: Vec<Idx>,
+        path_ids: Vec<IdN>,
+    ) -> Self {
+        let std::ops::Range { start, end } = range;
+        let file = file.to_str().unwrap().to_string();
+        Self {
+            file,
+            start,
+            end,
+            path,
+            path_ids,
+        }
+    }
+    pub(crate) fn from_pos<P>(pos: &P) -> Self
+    where
+        P: WithOffsets<Idx = Idx>
+            + WithPreOrderPath<IdN>
+            + hyper_ast::position::position_accessors::FileAndOffsetPostionT<IdN, IdO = usize>,
+    {
+        let mut path = vec![];
+        let mut path_ids = vec![];
+        for (o, i) in pos.iter_offsets_and_nodes() {
+            path.push(o);
+            path_ids.push(i);
+        }
+        Self {
+            file: pos.file().to_str().unwrap().to_owned(),
+            start: pos.start(),
+            end: pos.end(),
+            path,
+            path_ids,
+        }
+    }
+    pub(crate) fn globalize(self, spec: Repo, commit: impl ToString) -> PieceOfCode<IdN, Idx> {
         let LocalPieceOfCode {
             file,
             start,
@@ -837,9 +837,98 @@ impl LocalPieceOfCode {
             end,
         }
     }
+    fn map_path<Idx2, F: Fn(Idx) -> Idx2>(self, f: F) -> LocalPieceOfCode<IdN, Idx2> {
+        let LocalPieceOfCode {
+            file,
+            start,
+            end,
+            path,
+            path_ids,
+        } = self;
+        let path = path.into_iter().map(f).collect();
+        LocalPieceOfCode {
+            file,
+            start,
+            end,
+            path,
+            path_ids,
+        }
+    }
 }
 
-fn aux(
+#[derive(Clone)]
+struct TargetCodeElement<IdN, Idx> {
+    start: usize,
+    end: usize,
+    path: Vec<Idx>,
+    path_no_spaces: Vec<Idx>,
+    root: IdN,
+    node: IdN,
+}
+
+impl<IdN: Clone, Idx> position_accessors::SolvedPosition<IdN> for TargetCodeElement<IdN, Idx> {
+    fn node(&self) -> IdN {
+        self.node.clone()
+    }
+}
+
+impl<IdN: Clone, Idx> position_accessors::RootedPosition<IdN> for TargetCodeElement<IdN, Idx> {
+    fn root(&self) -> IdN {
+        self.root.clone()
+    }
+}
+
+impl<IdN, Idx: PrimInt> position_accessors::WithPath<IdN> for TargetCodeElement<IdN, Idx> {}
+
+impl<IdN, Idx: PrimInt> position_accessors::WithPreOrderOffsets for TargetCodeElement<IdN, Idx> {
+    type It<'a> = std::iter::Copied<std::slice::Iter<'a, Idx>> where Idx: 'a, Self: 'a;
+
+    fn iter_offsets(&self) -> Self::It<'_> {
+        self.path.iter().copied()
+    }
+}
+
+impl<IdN, Idx: PrimInt> position_accessors::WithPreOrderPath<IdN> for TargetCodeElement<IdN, Idx> {
+    type ItPath = std::vec::IntoIter<(Idx, IdN)>;
+
+    fn iter_offsets_and_nodes(&self) -> Self::ItPath {
+        todo!()
+    }
+}
+
+impl<IdN, Idx: PrimInt> position_accessors::WithOffsets for TargetCodeElement<IdN, Idx> {
+    type Idx = Idx;
+}
+
+impl<IdN, Idx> position_accessors::OffsetPostionT<IdN> for TargetCodeElement<IdN, Idx> {
+    type IdO = usize;
+
+    fn offset(&self) -> Self::IdO {
+        self.start
+    }
+
+    fn len(&self) -> Self::IdO {
+        self.end - self.start
+    }
+
+    fn start(&self) -> Self::IdO {
+        self.start
+    }
+
+    fn end(&self) -> Self::IdO {
+        self.end
+    }
+}
+
+impl<IdN, Idx: PrimInt> compute::WithPreOrderOffsetsNoSpaces for TargetCodeElement<IdN, Idx> {
+    type It<'a> = std::slice::Iter<'a, Idx> where Idx: 'a, Self: 'a;
+
+    fn iter_offsets_nospaces(&self) -> Self::It<'_> {
+        self.path_no_spaces.iter()
+    }
+}
+
+fn track_aux(
     state: std::sync::Arc<crate::AppState>,
     repo_handle: &impl ConfiguredRepoTrait<
         Config = hyper_ast_cvs_git::processing::ParametrizedCommitProcessorHandle,
@@ -850,7 +939,7 @@ fn aux(
     start: Option<usize>,
     end: Option<usize>,
     flags: &Flags,
-) -> MappingResult {
+) -> MappingResult<IdN, Idx> {
     let repositories = state.repositories.read().unwrap();
     let commit_src = repositories
         .get_commit(repo_handle.config(), &src_oid)
@@ -875,17 +964,16 @@ fn aux(
     dbg!(&offsets_to_file);
     let mut path_to_target = vec![];
     let (node, offsets_in_file) = resolve_range(file_node, start.unwrap_or(0), end, stores);
-    path_to_target.extend(offsets_to_file.iter().map(|x| *x as u16));
+    path_to_target.extend(offsets_to_file.iter().map(|x| *x as Idx));
     dbg!(&node);
     dbg!(&offsets_in_file);
     let aaa = node_store.resolve(file_node);
     dbg!(aaa.try_get_bytes_len(0));
-    path_to_target.extend(offsets_in_file.iter().map(|x| *x as u16));
+    path_to_target.extend(offsets_in_file.iter().map(|x| *x as Idx));
 
-    let (start, end, target_node) =
-        compute_range(file_node, &mut offsets_in_file.into_iter(), stores);
-    dbg!(start, end);
-    dbg!(&target_node);
+    let computed_range = compute_range(file_node, &mut offsets_in_file.into_iter(), stores);
+    dbg!(computed_range.0, computed_range.1);
+    dbg!(&computed_range.2);
     let no_spaces_path_to_target = if false {
         // TODO use this version
         use hyper_ast::position;
@@ -902,33 +990,38 @@ fn aux(
         no_spaces_path_to_target
     };
     let dst_oid = dst_oid; // WARN not sure what I was doing there commit_dst.clone();
-    aux_aux(
-        repo_handle,
-        src_tr,
-        dst_tr,
-        path_to_target,
-        no_spaces_path_to_target,
-        flags,
-        start,
-        end,
+    let target = TargetCodeElement::<IdN, Idx> {
+        start: computed_range.0,
+        end: computed_range.1,
+        path: path_to_target.clone(),
+        path_no_spaces: no_spaces_path_to_target,
+        node: computed_range.2,
+        root: src_tr,
+    };
+    let postprocess_matching = |p: LocalPieceOfCode<IdN, Idx>| {
+        p.globalize(repo_handle.spec().clone(), dst_oid.to_string())
+    };
+    compute::do_tracking(
+        &repositories,
         &state.partial_decomps,
         &state.mappings_alone,
-        repositories,
-        dst_oid,
-        target_node,
+        flags,
+        &target,
+        dst_tr,
+        &postprocess_matching,
     )
 }
 
-fn aux2(
+fn track_aux2(
     state: std::sync::Arc<crate::AppState>,
     repo_handle: &impl ConfiguredRepoTrait<
         Config = hyper_ast_cvs_git::processing::ParametrizedCommitProcessorHandle,
     >,
     src_oid: hyper_ast_cvs_git::git::Oid,
     dst_oid: hyper_ast_cvs_git::git::Oid,
-    path: &[usize],
+    path: &[Idx],
     flags: &Flags,
-) -> MappingResult {
+) -> MappingResult<IdN, Idx> {
     let repositories = state.repositories.read().unwrap();
     let commit_src = repositories
         .get_commit(repo_handle.config(), &src_oid)
@@ -939,11 +1032,10 @@ fn aux2(
         .unwrap();
     let dst_tr = commit_dst.ast_root;
     let stores = &repositories.processor.main_stores;
-    let node_store = &stores.node_store;
 
     let path_to_target: Vec<_> = path.iter().map(|x| *x as u16).collect();
     dbg!(&path_to_target);
-    let (pos, target_node, no_spaces_path_to_target) = if false {
+    let (pos, target_node, no_spaces_path_to_target): _ = if false {
         // NOTE trying stuff
         // TODO use this version
         use hyper_ast::position;
@@ -968,1292 +1060,29 @@ fn aux2(
     } else {
         compute_position_with_no_spaces(src_tr, &mut path_to_target.iter().map(|x| *x), stores)
     };
-    dbg!(&path_to_target, &no_spaces_path_to_target);
     let range = pos.range();
-    let dst_oid = dst_oid; // WARN not sure what I was doing there commit_dst.clone();
-    aux_aux(
-        repo_handle,
-        src_tr,
-        dst_tr,
-        path_to_target,
-        no_spaces_path_to_target,
-        flags,
-        range.start,
-        range.end,
+    let target = TargetCodeElement::<IdN, Idx> {
+        start: range.start,
+        end: range.end,
+        path: path_to_target.clone(),
+        path_no_spaces: no_spaces_path_to_target,
+        node: target_node,
+        root: src_tr,
+    };
+    let postprocess_matching = |p: LocalPieceOfCode<IdN, Idx>| {
+        p.globalize(repo_handle.spec().clone(), dst_oid.to_string())
+    };
+    compute::do_tracking(
+        &repositories,
         &state.partial_decomps,
         &state.mappings_alone,
-        repositories,
-        dst_oid,
-        target_node,
+        flags,
+        &target,
+        dst_tr,
+        &postprocess_matching,
     )
 }
 
-fn aux_aux(
-    repo_handle: &impl ConfiguredRepoTrait,
-    src_tr: NodeIdentifier,
-    dst_tr: NodeIdentifier,
-    path_to_target: Vec<u16>,
-    no_spaces_path_to_target: Vec<u16>,
-    flags: &Flags,
-    start: usize,
-    end: usize,
-    partial_decomps: &PartialDecompCache,
-    mappings_alone: &MappingAloneCache,
-    repositories: std::sync::RwLockReadGuard<multi_preprocessed::PreProcessedRepositories>,
-    dst_oid: hyper_ast_cvs_git::git::Oid,
-    target_node: NodeIdentifier,
-) -> MappingResult {
-    let with_spaces_stores = &repositories.processor.main_stores;
-    let stores = &no_space::as_nospaces(with_spaces_stores);
-    let node_store = &stores.node_store;
-    // NOTE: persists mappings, could also easily persist diffs,
-    // but some compression on mappins could help
-    // such as, not storing the decompression arenas
-    // or encoding mappings more efficiently considering that most slices could simply by represented as ranges (ie. mapped identical subtrees)
-    // let mapper = lazy_mapping(repos, &mut state.mappings, src_tr, dst_tr);
-
-    dbg!(src_tr, dst_tr);
-    if src_tr == dst_tr {
-        let src_size = stores.node_store.resolve(src_tr).size();
-        let dst_size = stores.node_store.resolve(dst_tr).size();
-        let nodes = src_size + dst_size;
-        let (pos, path_ids) = compute_position_and_nodes(
-            dst_tr,
-            &mut path_to_target.iter().copied(),
-            with_spaces_stores,
-        );
-        dbg!();
-        let range = pos.range();
-        let matches = vec![PieceOfCode {
-            user: repo_handle.spec().user.clone(),
-            name: repo_handle.spec().name.clone(),
-            commit: dst_oid.to_string(),
-            file: pos.file().to_str().unwrap().to_string(),
-            start: range.start,
-            end: range.end,
-            path: path_to_target.iter().map(|x| *x as usize).collect(),
-            path_ids: path_ids.clone(),
-        }];
-        let src = LocalPieceOfCode {
-            file: pos.file().to_string_lossy().to_string(),
-            start,
-            end,
-            path: path_to_target.iter().map(|x| *x as usize).collect(),
-            path_ids,
-        };
-        if flags.some() {
-            return MappingResult::Skipped {
-                nodes,
-                src,
-                next: matches,
-            };
-        } else {
-            return MappingResult::Direct { src, matches };
-        }
-    }
-    let pair = get_pair_simp(partial_decomps, stores, &src_tr, &dst_tr);
-
-    if flags.some() {
-        dbg!();
-
-        let mapped = {
-            let mappings_cache = mappings_alone;
-            let hyperast = stores;
-            let src = &src_tr;
-            let dst = &dst_tr;
-            let (src_arena, dst_arena) = (pair.0.get_mut(), pair.1.get_mut());
-            matching::top_down(hyperast, src_arena, dst_arena)
-        };
-        let (mapper_src_arena, mapper_dst_arena) = (pair.0.get_mut(), pair.1.get_mut());
-        let mapper_mappings = &mapped;
-        let mut curr = mapper_src_arena.root();
-        let mut path = &no_spaces_path_to_target[..];
-        let flags: EnumSet<_> = flags.into();
-        loop {
-            dbg!(path);
-            let dsts = mapper_mappings.get_dsts(&curr);
-            let curr_flags = FlagsE::Upd | FlagsE::Child | FlagsE::SimChild; //  | FlagsE::ExactChild
-            let parent_flags = curr_flags | FlagsE::Parent | FlagsE::SimParent; //  | FlagsE::ExactParent
-            if dsts.is_empty() {
-                // continue through path_to_target
-                dbg!(curr);
-            } else if path.len() == 0 {
-                // need to check curr node flags
-                if flags.is_subset(curr_flags) {
-                    // only trigger on curr and children changed
-
-                    let src_size = stores.node_store.resolve(src_tr).size();
-                    let dst_size = stores.node_store.resolve(dst_tr).size();
-                    let nodes = src_size + dst_size;
-                    let nodes = 500_000;
-
-                    return MappingResult::Skipped {
-                        nodes,
-                        src: {
-                            let (pos, path_ids) = compute_position_and_nodes(
-                                src_tr,
-                                &mut path_to_target.iter().copied(),
-                                with_spaces_stores,
-                            );
-
-                            LocalPieceOfCode {
-                                file: pos.file().to_string_lossy().to_string(),
-                                start,
-                                end,
-                                path: path_to_target.iter().map(|x| *x as usize).collect(),
-                                path_ids,
-                            }
-                        },
-                        next: dsts
-                            .iter()
-                            .map(|x| {
-                                let path_dst = mapper_dst_arena.path(&mapper_dst_arena.root(), x);
-                                let (path_dst,) = path_with_spaces(
-                                    dst_tr,
-                                    &mut path_dst.iter().copied(),
-                                    &repositories.processor.main_stores,
-                                );
-                                let (pos, path_ids) = compute_position_and_nodes(
-                                    dst_tr,
-                                    &mut path_dst.iter().copied(),
-                                    with_spaces_stores,
-                                );
-                                let range = pos.range();
-                                PieceOfCode {
-                                    user: repo_handle.spec().user.clone(),
-                                    name: repo_handle.spec().name.clone(),
-                                    commit: dst_oid.to_string(),
-                                    file: pos.file().to_str().unwrap().to_string(),
-                                    start: range.start,
-                                    end: range.end,
-                                    path: path_dst.iter().map(|x| *x as usize).collect(),
-                                    path_ids,
-                                }
-                            })
-                            .collect(),
-                    };
-                }
-                // also the type of src and dsts
-                // also check it file path changed
-                // can we test if parent changed ? at least we can ckeck some attributes
-            } else if path.len() == 1 {
-                // need to check parent node flags
-                if flags.is_subset(parent_flags) {
-                    // only trigger on parent, curr and children changed
-                    let src_size = stores.node_store.resolve(src_tr).size();
-                    let dst_size = stores.node_store.resolve(dst_tr).size();
-                    let nodes = src_size + dst_size;
-                    let nodes = 500_000;
-                    return MappingResult::Skipped {
-                        nodes,
-                        src: {
-                            let (pos, path_ids) = compute_position_and_nodes(
-                                src_tr,
-                                &mut path_to_target.iter().copied(),
-                                with_spaces_stores,
-                            );
-
-                            LocalPieceOfCode {
-                                file: pos.file().to_string_lossy().to_string(),
-                                start,
-                                end,
-                                path: path_to_target.iter().map(|x| *x as usize).collect(),
-                                path_ids,
-                            }
-                        },
-                        next: dsts
-                            .iter()
-                            .map(|x| {
-                                let mut path_dst =
-                                    mapper_dst_arena.path(&mapper_dst_arena.root(), x);
-                                path_dst.extend(path); // WARN with similarity it might not be possible to simply concat path...
-                                let (path_dst,) = path_with_spaces(
-                                    dst_tr,
-                                    &mut path_dst.iter().copied(),
-                                    &repositories.processor.main_stores,
-                                );
-                                let (pos, path_ids) = compute_position_and_nodes(
-                                    dst_tr,
-                                    &mut path_dst.iter().copied(),
-                                    with_spaces_stores,
-                                );
-                                let range = pos.range();
-                                PieceOfCode {
-                                    user: repo_handle.spec().user.clone(),
-                                    name: repo_handle.spec().name.clone(),
-                                    commit: dst_oid.to_string(),
-                                    file: pos.file().to_str().unwrap().to_string(),
-                                    start: range.start,
-                                    end: range.end,
-                                    path: path_dst.iter().map(|x| *x as usize).collect(),
-                                    path_ids,
-                                }
-                            })
-                            .collect(),
-                    };
-                }
-                // also the type of src and dsts
-                // also check if file path changed
-                // can we test if parent changed ? at least we can ckeck some attributes
-            } else {
-                // need to check flags, the type of src and dsts
-                if flags.is_subset(parent_flags) {
-                    // only trigger on parent, curr and children changed
-                    let src_size = stores.node_store.resolve(src_tr).size();
-                    let dst_size = stores.node_store.resolve(dst_tr).size();
-                    let nodes = src_size + dst_size;
-                    let nodes = 500_000;
-                    return MappingResult::Skipped {
-                        nodes,
-                        src: {
-                            let (pos, path_ids) = compute_position_and_nodes(
-                                src_tr,
-                                &mut path_to_target.iter().copied(),
-                                with_spaces_stores,
-                            );
-
-                            LocalPieceOfCode {
-                                file: pos.file().to_string_lossy().to_string(),
-                                start,
-                                end,
-                                path: path_to_target.iter().map(|x| *x as usize).collect(),
-                                path_ids,
-                            }
-                        },
-                        next: dsts
-                            .iter()
-                            .map(|x| {
-                                let mut path_dst =
-                                    mapper_dst_arena.path(&mapper_dst_arena.root(), x);
-                                path_dst.extend(path); // WARN with similarity it might not be possible to simply concat path...
-                                let (path_dst,) = path_with_spaces(
-                                    dst_tr,
-                                    &mut path_dst.iter().copied(),
-                                    &repositories.processor.main_stores,
-                                );
-                                let (pos, path_ids) = compute_position_and_nodes(
-                                    dst_tr,
-                                    &mut path_dst.iter().copied(),
-                                    with_spaces_stores,
-                                );
-                                let range = pos.range();
-                                PieceOfCode {
-                                    user: repo_handle.spec().user.clone(),
-                                    name: repo_handle.spec().name.clone(),
-                                    commit: dst_oid.to_string(),
-                                    file: pos.file().to_str().unwrap().to_string(),
-                                    start: range.start,
-                                    end: range.end,
-                                    path: path_dst.iter().map(|x| *x as usize).collect(),
-                                    path_ids,
-                                }
-                            })
-                            .collect(),
-                    };
-                }
-                // also check if file path changed
-                // can we test if parent changed ? at least we can ckeck some attributes
-            }
-
-            let Some(i) = path.get(0) else {
-                break;
-            };
-            path = &path[1..];
-            let cs = mapper_src_arena.decompress_children(node_store, &curr);
-            if cs.is_empty() {
-                break;
-            }
-            curr = cs[*i as usize];
-        }
-    }
-
-    let mapped = {
-        let mappings_cache = mappings_alone;
-        use hyper_diff::matchers::mapping_store::MappingStore;
-        use hyper_diff::matchers::mapping_store::VecStore;
-        let hyperast = stores;
-        use hyper_diff::matchers::Mapping;
-
-        dbg!();
-        match mappings_cache.entry((src_tr, dst_tr)) {
-            dashmap::mapref::entry::Entry::Occupied(entry) => entry.into_ref().downgrade(),
-            dashmap::mapref::entry::Entry::Vacant(entry) => {
-                let mappings = VecStore::default();
-                let (src_arena, dst_arena) = (pair.0.get_mut(), pair.1.get_mut());
-                dbg!(src_arena.len());
-                dbg!(dst_arena.len());
-                let src_size = stores.node_store.resolve(src_tr).size();
-                let dst_size = stores.node_store.resolve(dst_tr).size();
-                dbg!(src_size);
-                dbg!(dst_size);
-                let mut mapper = Mapper {
-                    hyperast,
-                    mapping: Mapping {
-                        src_arena,
-                        dst_arena,
-                        mappings,
-                    },
-                };
-                dbg!();
-                dbg!(mapper.mapping.src_arena.len());
-                dbg!(mapper.mapping.dst_arena.len());
-                mapper.mapping.mappings.topit(
-                    mapper.mapping.src_arena.len(),
-                    mapper.mapping.dst_arena.len(),
-                );
-                dbg!();
-
-                let vec_store = matching::full2(hyperast, mapper);
-
-                dbg!();
-                entry
-                    .insert((crate::MappingStage::Bottomup, vec_store))
-                    .downgrade()
-            }
-        }
-    };
-    let (mapper_src_arena, mapper_dst_arena) = (pair.0.get_mut(), pair.1.get_mut());
-    let mapper_mappings = &mapped.1;
-    let root = mapper_src_arena.root();
-    let mapping_target =
-        mapper_src_arena.child_decompressed(node_store, &root, &no_spaces_path_to_target);
-
-    let mut matches = vec![];
-    if let Some(mapped) = mapper_mappings.get_dst(&mapping_target) {
-        let mapped = mapper_dst_arena.decompress_to(node_store, &mapped);
-        let path = mapper_dst_arena.path(&mapper_dst_arena.root(), &mapped);
-        let mut path_ids = vec![mapper_dst_arena.original(&mapped)];
-        mapper_dst_arena
-            .parents(mapped)
-            .map(|i| mapper_dst_arena.original(&i))
-            .collect_into(&mut path_ids);
-        path_ids.pop();
-        assert_eq!(path.len(), path_ids.len());
-        let (path,) = path_with_spaces(
-            dst_tr,
-            &mut path.iter().copied(),
-            &repositories.processor.main_stores,
-        );
-        let (pos, mapped_node) =
-            compute_position(dst_tr, &mut path.iter().copied(), with_spaces_stores);
-        dbg!(&pos);
-        dbg!(&mapped_node);
-        let mut flagged = false;
-        let mut triggered = false;
-        if flags.exact_child {
-            flagged = true;
-            dbg!();
-            triggered |= target_node != mapped_node;
-        }
-        if flags.child || flags.sim_child {
-            flagged = true;
-            dbg!();
-
-            let target_node = stores.node_store.resolve(target_node);
-            let mapped_node = stores.node_store.resolve(mapped_node);
-            if flags.sim_child {
-                triggered |= target_node.hash(&types::HashKind::structural())
-                    != mapped_node.hash(&types::HashKind::structural());
-            } else {
-                triggered |= target_node.hash(&types::HashKind::label())
-                    != mapped_node.hash(&types::HashKind::label());
-            }
-        }
-        if flags.upd {
-            flagged = true;
-            dbg!();
-            // TODO need role name
-            // let target_ident = child_by_type(stores, target_node, &Type::Identifier);
-            // let mapped_ident = child_by_type(stores, mapped_node, &Type::Identifier);
-            // if let (Some(target_ident), Some(mapped_ident)) = (target_ident, mapped_ident) {
-            //     let target_node = stores.node_store.resolve(target_ident.0);
-            //     let target_ident = target_node.try_get_label();
-            //     let mapped_node = stores.node_store.resolve(mapped_ident.0);
-            //     let mapped_ident = mapped_node.try_get_label();
-            //     triggered |= target_ident != mapped_ident;
-            // }
-        }
-        if flags.parent {
-            flagged = true;
-            dbg!();
-
-            let target_parent = mapper_src_arena.parent(&mapping_target);
-            let target_parent = target_parent.map(|x| mapper_src_arena.original(&x));
-            let mapped_parent = mapper_dst_arena.parent(&mapped);
-            let mapped_parent = mapped_parent.map(|x| mapper_dst_arena.original(&x));
-            triggered |= target_parent != mapped_parent;
-        }
-        // if flags.meth {
-        //     flagged = true;
-        //     dbg!();
-        // }
-        // if flags.typ {
-        //     flagged = true;
-        //     dbg!();
-        // }
-        // if flags.top {
-        //     flagged = true;
-        //     dbg!();
-        // }
-        // if flags.file {
-        //     flagged = true;
-        //     dbg!();
-        // }
-        // if flags.pack {
-        //     flagged = true;
-        //     dbg!();
-        // }
-        // TODO add flags for artefacts (tests, prod code, build, lang, misc)
-        // TODO add flags for similarity comps
-        let range = pos.range();
-        matches.push(PieceOfCode {
-            user: repo_handle.spec().user.clone(),
-            name: repo_handle.spec().name.clone(),
-            commit: dst_oid.to_string(),
-            file: pos.file().to_str().unwrap().to_string(),
-            start: range.start,
-            end: range.end,
-            path: path.iter().map(|x| *x as usize).collect(),
-            path_ids: path_ids.clone(),
-        });
-        if flagged && !triggered {
-            use hyper_ast::types::WithStats;
-            let src_size = stores.node_store.resolve(src_tr).size();
-            let dst_size = stores.node_store.resolve(dst_tr).size();
-            let nodes = src_size + dst_size;
-            return MappingResult::Skipped {
-                nodes,
-                src: {
-                    let (pos, path_ids) = compute_position_and_nodes(
-                        src_tr,
-                        &mut path_to_target.iter().copied(),
-                        with_spaces_stores,
-                    );
-
-                    LocalPieceOfCode {
-                        file: pos.file().to_string_lossy().to_string(),
-                        start,
-                        end,
-                        path: path_to_target.iter().map(|x| *x as usize).collect(),
-                        path_ids,
-                    }
-                },
-                next: matches,
-            };
-        }
-        let path = path_to_target.iter().map(|x| *x as usize).collect();
-        let (target_pos, target_path_ids) = compute_position_and_nodes(
-            src_tr,
-            &mut path_to_target.iter().copied(),
-            with_spaces_stores,
-        );
-        return MappingResult::Direct {
-            src: LocalPieceOfCode {
-                file: target_pos.file().to_string_lossy().to_string(),
-                start,
-                end,
-                path,
-                path_ids: target_path_ids,
-            },
-            matches,
-        };
-    }
-
-    for parent_target in mapper_src_arena.parents(mapping_target) {
-        if let Some(mapped_parent) = mapper_mappings.get_dst(&parent_target) {
-            let mapped_parent = mapper_dst_arena.decompress_to(node_store, &mapped_parent);
-            let path = mapper_dst_arena.path(&mapper_dst_arena.root(), &mapped_parent);
-            let mut path_ids = vec![mapper_dst_arena.original(&mapped_parent)];
-            mapper_dst_arena
-                .parents(mapped_parent)
-                .map(|i| mapper_dst_arena.original(&i))
-                .collect_into(&mut path_ids);
-            path_ids.pop();
-            assert_eq!(path.len(), path_ids.len());
-            let (path,) = path_with_spaces(
-                dst_tr,
-                &mut path.iter().copied(),
-                &repositories.processor.main_stores,
-            );
-            let (pos, mapped_node) =
-                compute_position(dst_tr, &mut path.iter().copied(), with_spaces_stores);
-            dbg!(&pos);
-            dbg!(&mapped_node);
-            let range = pos.range();
-            let fallback = PieceOfCode {
-                user: repo_handle.spec().user.clone(),
-                name: repo_handle.spec().name.clone(),
-                commit: dst_oid.to_string(),
-                file: pos.file().to_str().unwrap().to_string(),
-                start: range.start,
-                end: range.end,
-                path: path.iter().map(|x| *x as usize).collect(),
-                path_ids: path_ids.clone(),
-            };
-
-            let src = {
-                let path = path_to_target.iter().map(|x| *x as usize).collect();
-                let (target_pos, target_path_ids) = compute_position_and_nodes(
-                    src_tr,
-                    &mut path_to_target.iter().copied(),
-                    with_spaces_stores,
-                );
-                LocalPieceOfCode {
-                    file: target_pos.file().to_string_lossy().to_string(),
-                    start,
-                    end,
-                    path,
-                    path_ids: target_path_ids,
-                }
-            };
-            return MappingResult::Missing { src, fallback };
-        };
-    }
-    let path = path_to_target.iter().map(|x| *x as usize).collect();
-    let (target_pos, target_path_ids) = compute_position_and_nodes(
-        src_tr,
-        &mut path_to_target.iter().copied(),
-        with_spaces_stores,
-    );
-    // TODO what should be done if there is no match ?
-    MappingResult::Direct {
-        src: LocalPieceOfCode {
-            file: target_pos.file().to_string_lossy().to_string(),
-            start,
-            end,
-            path,
-            path_ids: target_path_ids,
-        },
-        matches,
-    }
-}
-
-// fn diff<'a>(
-//     repositories: &'a multi_preprocessed::PreProcessedRepositories,
-//     mappings: &'a mut crate::MappingCache,
-//     src_tr: NodeIdentifier,
-//     dst_tr: NodeIdentifier,
-// ) -> &'a hyper_diff::matchers::Mapping<
-//     hyper_diff::decompressed_tree_store::CompletePostOrder<
-//         hyper_ast::store::nodes::legion::HashedNodeRef<'a>,
-//         u32,
-//     >,
-//     hyper_diff::decompressed_tree_store::CompletePostOrder<
-//         hyper_ast::store::nodes::legion::HashedNodeRef<'a>,
-//         u32,
-//     >,
-//     hyper_diff::matchers::mapping_store::VecStore<u32>,
-// > {
-//     use hyper_diff::decompressed_tree_store::CompletePostOrder;
-//     let mapped = mappings.entry((src_tr, dst_tr)).or_insert_with(|| {
-//         hyper_diff::algorithms::gumtree_lazy::diff(
-//             &repositories.processor.main_stores,
-//             &src_tr,
-//             &dst_tr,
-//         )
-//         .mapper
-//         .persist()
-//     });
-//     unsafe { Mapper::<_,CompletePostOrder<_,_>,CompletePostOrder<_,_>,_>::unpersist(&repositories.processor.main_stores, &*mapped) }
-// }
-
-// WARN lazy subtrees are not complete
-fn lazy_mapping<'a>(
-    repositories: &'a multi_preprocessed::PreProcessedRepositories,
-    mappings: &'a crate::MappingCache,
-    src_tr: NodeIdentifier,
-    dst_tr: NodeIdentifier,
-) -> dashmap::mapref::one::RefMut<
-    'a,
-    (NodeIdentifier, NodeIdentifier),
-    hyper_diff::matchers::Mapping<
-        hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
-            u32,
-        >,
-        hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
-            u32,
-        >,
-        hyper_diff::matchers::mapping_store::VecStore<u32>,
-    >,
-> {
-    use hyper_ast::types::HyperAST;
-    use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
-    use hyper_diff::matchers::heuristic::gt::{
-        lazy2_greedy_bottom_up_matcher::GreedyBottomUpMatcher,
-        lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher,
-    };
-    use hyper_diff::matchers::mapping_store::DefaultMultiMappingStore;
-    use hyper_diff::matchers::mapping_store::MappingStore;
-    use hyper_diff::matchers::mapping_store::VecStore;
-    let mapped = mappings.entry((src_tr, dst_tr)).or_insert_with(|| {
-        let hyperast = &repositories.processor.main_stores;
-        let src = &src_tr;
-        let dst = &dst_tr;
-        let now = Instant::now();
-        let mapper: Mapper<_, LazyPostOrder<_, u32>, LazyPostOrder<_, u32>, VecStore<_>> =
-            hyperast.decompress_pair(src, dst).into();
-        let subtree_prepare_t = now.elapsed().as_secs_f64();
-        let now = Instant::now();
-        let mapper =
-            LazyGreedySubtreeMatcher::<_, _, _, _>::match_it::<DefaultMultiMappingStore<_>>(mapper);
-        let subtree_matcher_t = now.elapsed().as_secs_f64();
-        let subtree_mappings_s = mapper.mappings().len();
-        dbg!(&subtree_matcher_t, &subtree_mappings_s);
-        let bottomup_prepare_t = 0.;
-        let now = Instant::now();
-        let mapper = GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::match_it(mapper);
-        dbg!(&now.elapsed().as_secs_f64());
-        let bottomup_matcher_t = now.elapsed().as_secs_f64();
-        let bottomup_mappings_s = mapper.mappings().len();
-        dbg!(&bottomup_matcher_t, &bottomup_mappings_s);
-        // let now = Instant::now();
-
-        // NOTE could also have completed trees
-        // let node_store = hyperast.node_store();
-        // let mapper = mapper.map(
-        //     |src_arena| CompletePostOrder::from(src_arena.complete(node_store)),
-        //     |dst_arena| {
-        //         let complete = CompletePostOrder::from(dst_arena.complete(node_store));
-        //         SimpleBfsMapper::from(node_store, complete)
-        //     },
-        // );
-
-        // NOTE we do not use edit scripts here
-        // let prepare_gen_t = now.elapsed().as_secs_f64();
-        // let now = Instant::now();
-        // let actions = ScriptGenerator::compute_actions(mapper.hyperast, &mapper.mapping).ok();
-        // let gen_t = now.elapsed().as_secs_f64();
-        // dbg!(gen_t);
-        // let mapper = mapper.map(|x| x, |dst_arena| dst_arena.back);
-        Mapper::<_, LazyPostOrder<_, _>, LazyPostOrder<_, _>, _>::persist(mapper)
-    });
-    pub unsafe fn unpersist<'a>(
-        _hyperast: &'a SimpleStores<TStore>,
-        p: dashmap::mapref::one::RefMut<
-            'a,
-            (NodeIdentifier, NodeIdentifier),
-            hyper_diff::matchers::Mapping<
-                LazyPostOrder<
-                    hyper_diff::decompressed_tree_store::PersistedNode<NodeIdentifier>,
-                    u32,
-                >,
-                LazyPostOrder<
-                    hyper_diff::decompressed_tree_store::PersistedNode<NodeIdentifier>,
-                    u32,
-                >,
-                VecStore<u32>,
-            >,
-        >,
-    ) -> dashmap::mapref::one::RefMut<
-        'a,
-        (NodeIdentifier, NodeIdentifier),
-        hyper_diff::matchers::Mapping<
-            LazyPostOrder<HashedNodeRef<'a, NodeIdentifier>, u32>,
-            LazyPostOrder<HashedNodeRef<'a, NodeIdentifier>, u32>,
-            VecStore<u32>,
-        >,
-    > {
-        unsafe { std::mem::transmute(p) }
-    }
-    unsafe { unpersist(&repositories.processor.main_stores, mapped) }
-}
-
-struct RRR<'a>(
-    dashmap::mapref::one::Ref<
-        'a,
-        (NodeIdentifier, NodeIdentifier),
-        (
-            crate::MappingStage,
-            hyper_diff::matchers::mapping_store::VecStore<u32>,
-        ),
-    >,
-);
-
-mod my_dash {
-    use std::{
-        cell::UnsafeCell,
-        collections::hash_map::RandomState,
-        fmt::Debug,
-        hash::{BuildHasher, Hash},
-    };
-
-    use dashmap::{DashMap, RwLockWriteGuard, SharedValue};
-    use hashbrown::HashMap;
-
-    // pub fn entries<'a, K: 'a + Eq + Hash, V: 'a, S: BuildHasher + Clone>(
-    //     map: DashMap<K, V, S>,
-    //     key1: K,
-    //     key2: K,
-    // ) -> Entry<'a, K, V, S> {
-    //     let hash = map.hash_usize(&key1);
-
-    //     let idx = map.determine_shard(hash);
-
-    //     let shard: RwLockWriteGuard<HashMap<K, SharedValue<V>, S>> = unsafe {
-    //         debug_assert!(idx < map.shards().len());
-
-    //         map.shards().get_unchecked(idx).write()
-    //     };
-
-    //     #[repr(transparent)]
-    //     struct MySharedValue<T> {
-    //         value: UnsafeCell<T>,
-    //     }
-
-    //     impl<T> MySharedValue<T> {
-    //         /// Get a mutable raw pointer to the underlying value
-    //         fn as_ptr(&self) -> *mut T {
-    //             self.value.get()
-    //         }
-    //     }
-    //     // SAFETY: Sharded and UnsafeCell are transparent wrappers of V
-    //     let shard: RwLockWriteGuard<HashMap<K, V, S>> = unsafe { std::mem::transmute(shard) };
-    //     if let Some((kptr, vptr)) = shard.get_key_value(&key1) {
-    //         unsafe {
-    //             let kptr: *const K = kptr;
-    //             // SAFETY: same memory layout because transparent and same fields
-    //             let vptr: &MySharedValue<V> = std::mem::transmute(&vptr);
-    //             let vptr: *mut V = vptr.as_ptr();
-    //             Entry::Occupied(OccupiedEntry::new(shard, key1, (kptr, vptr)))
-    //         }
-    //     } else {
-    //         unsafe {
-    //             // SAFETY: same memory layout because transparent and same fields
-    //             let shard: RwLockWriteGuard<HashMap<K, V, S>> = std::mem::transmute(shard);
-    //             Entry::Vacant(VacantEntry::new(shard, key1))
-    //         }
-    //     }
-    pub fn entries<'a, K: 'a + Eq + Hash, V: 'a, S: BuildHasher + Clone>(
-        map: &'a DashMap<K, V, S>,
-        key1: K,
-        key2: K,
-    ) -> Entry<'a, K, V, S> {
-        assert!(key1 != key2, "keys should be different");
-        let hash1 = map.hash_usize(&key1);
-        let idx1 = map.determine_shard(hash1);
-        let hash2 = map.hash_usize(&key2);
-        let idx2 = map.determine_shard(hash2);
-
-        if idx1 == idx2 {
-            let shard = unsafe {
-                debug_assert!(idx1 < map.shards().len());
-                debug_assert!(idx2 < map.shards().len());
-                map.shards().get_unchecked(idx1).write()
-            };
-            // SAFETY: Sharded and UnsafeCell are transparent wrappers of V
-            let shard: RwLockWriteGuard<HashMap<K, V, S>> = unsafe { std::mem::transmute(shard) };
-            let elem1 = shard
-                .get_key_value(&key1)
-                .map(|(kptr, vptr)| unsafe { as_ptr(kptr, vptr) });
-            let elem2 = shard
-                .get_key_value(&key2)
-                .map(|(kptr, vptr)| unsafe { as_ptr(kptr, vptr) });
-            Entry {
-                shard1: shard,
-                shard2: None,
-                key1,
-                key2,
-                elem1,
-                elem2,
-            }
-        } else {
-            let (shard1, shard2) = unsafe {
-                debug_assert!(idx1 < map.shards().len());
-                debug_assert!(idx2 < map.shards().len());
-                (
-                    map.shards().get_unchecked(idx1).write(),
-                    map.shards().get_unchecked(idx2).write(),
-                )
-            };
-            let shard1: RwLockWriteGuard<HashMap<K, V, S>> = unsafe { std::mem::transmute(shard1) };
-            let shard2: RwLockWriteGuard<HashMap<K, V, S>> = unsafe { std::mem::transmute(shard2) };
-            let elem1 = shard1
-                .get_key_value(&key1)
-                .map(|(kptr, vptr)| unsafe { as_ptr(kptr, vptr) });
-            let elem2 = shard2
-                .get_key_value(&key2)
-                .map(|(kptr, vptr)| unsafe { as_ptr(kptr, vptr) });
-            Entry {
-                shard1: shard1,
-                shard2: Some(shard2),
-                key1,
-                key2,
-                elem1,
-                elem2,
-            }
-        }
-    }
-
-    unsafe fn as_ptr<'a, K: 'a + Eq + Hash, V: 'a>(kptr1: &K, vptr1: &V) -> (*const K, *mut V) {
-        let kptr1: *const K = kptr1;
-        // SAFETY: same memory layout because transparent and same fields
-        let vptr1: &MySharedValue<V> = std::mem::transmute(&vptr1);
-        let vptr1: *mut V = vptr1.as_ptr();
-        (kptr1, vptr1)
-    }
-
-    pub(super) unsafe fn shard_as_ptr<'a, V: 'a>(vptr1: &SharedValue<V>) -> *mut V {
-        // SAFETY: same memory layout because transparent and same fields
-        let vptr1: &MySharedValue<V> = std::mem::transmute(&vptr1);
-        let vptr1: *mut V = vptr1.as_ptr();
-        vptr1
-    }
-
-    pub(super) unsafe fn shard_as_ptr2<'a, V: 'a>(vptr1: &V) -> *mut V {
-        // SAFETY: same memory layout because transparent and same fields
-        let vptr1: &MySharedValue<V> = std::mem::transmute(&vptr1);
-        let vptr1: *mut V = vptr1.as_ptr();
-        vptr1
-    }
-
-    #[repr(transparent)]
-    struct MySharedValue<T> {
-        value: UnsafeCell<T>,
-    }
-
-    impl<T> MySharedValue<T> {
-        /// Get a mutable raw pointer to the underlying value
-        fn as_ptr(&self) -> *mut T {
-            self.value.get()
-        }
-    }
-    pub struct Entry<'a, K, V, S = RandomState> {
-        shard1: RwLockWriteGuard<'a, HashMap<K, V, S>>,
-        shard2: Option<RwLockWriteGuard<'a, HashMap<K, V, S>>>,
-        elem1: Option<(*const K, *mut V)>,
-        elem2: Option<(*const K, *mut V)>,
-        key1: K,
-        key2: K,
-    }
-    unsafe impl<'a, K: Eq + Hash + Sync, V: Sync, S: BuildHasher> Send for Entry<'a, K, V, S> {}
-    unsafe impl<'a, K: Eq + Hash + Sync, V: Sync, S: BuildHasher> Sync for Entry<'a, K, V, S> {}
-
-    impl<'a, K: Clone + Eq + Hash + Debug, V: Debug, S: BuildHasher> Entry<'a, K, V, S> {
-        pub fn or_insert_with(
-            self,
-            value: impl FnOnce((Option<()>, Option<()>)) -> (Option<V>, Option<V>),
-        ) -> RefMut<'a, K, V, S> {
-            match self {
-                Entry {
-                    shard1,
-                    shard2,
-                    elem1: Some((k1, v1)),
-                    elem2: Some((k2, v2)),
-                    ..
-                } => {
-                    dbg!(v1);
-                    dbg!(v2);
-                    RefMut {
-                        guard1: shard1,
-                        guard2: shard2,
-                        k1,
-                        k2,
-                        v1,
-                        v2,
-                    }
-                }
-                Entry {
-                    mut shard1,
-                    shard2: None,
-                    elem1,
-                    elem2,
-                    key1,
-                    key2,
-                } => {
-                    let (r1, r2) = value((elem1.as_ref().map(|_| ()), elem2.as_ref().map(|_| ())));
-                    let k1 = key1.clone();
-                    let k2 = key2.clone();
-                    if elem1.is_none() {
-                        let value = r1.expect("some value");
-                        let key = key1;
-                        let shard = &mut shard1;
-                        insert2_p1(key, shard, value)
-                    }
-                    if elem2.is_none() {
-                        let value = r2.expect("some value");
-                        let key = key2;
-                        let shard = &mut shard1;
-                        insert2_p1(key, shard, value)
-                    }
-                    let (k1, v1) = elem1.unwrap_or_else(|| {
-                        let shard = &mut shard1;
-                        insert2_p2(&k1, shard)
-                    });
-                    let (k2, v2) = elem2.unwrap_or_else(|| {
-                        let shard = &mut shard1;
-                        insert2_p2(&k2, shard)
-                    });
-                    dbg!(v1);
-                    dbg!(v2);
-                    RefMut {
-                        guard1: shard1,
-                        guard2: None,
-                        k1,
-                        k2,
-                        v1,
-                        v2,
-                    }
-                }
-                Entry {
-                    mut shard1,
-                    shard2: Some(mut shard2),
-                    elem1,
-                    elem2,
-                    key1,
-                    key2,
-                } => {
-                    let (r1, r2) = value((elem1.as_ref().map(|_| ()), elem2.as_ref().map(|_| ())));
-                    // let (k1, v1) = elem1.unwrap_or_else(|| {
-                    //     let value = r1.expect("some value");
-                    //     let key = key1;
-                    //     let shard = &mut shard1;
-                    //     println!("{:p}", shard);
-                    //     println!("{:p}", &key);
-                    //     println!("{}", shard.hasher().hash_one(&key));
-                    //     insert2(key, shard, value)
-                    // });
-                    // let (k2, v2) = elem2.unwrap_or_else(|| {
-                    //     let value = r2.expect("some value");
-                    //     let key = key2;
-                    //     let shard = &mut shard2;
-                    //     insert2(key, shard, value)
-                    // });
-                    let k1 = key1.clone();
-                    let k2 = key2.clone();
-                    dbg!(&k1);
-                    dbg!(&k2);
-                    println!("{:p}", &k1);
-                    println!("{:p}", &k2);
-                    println!("{:p}", &r1);
-                    println!("{:p}", &r2);
-                    if elem1.is_none() {
-                        let value = r1.expect("some value");
-                        dbg!(&value);
-                        println!("{:p}", &value);
-                        let key = key1;
-                        let shard = &mut shard1;
-                        insert2_p1_shard(key, shard, value)
-                    }
-                    if elem2.is_none() {
-                        let value = r2.expect("some value");
-                        dbg!(&value);
-                        println!("{:p}", &value);
-                        let key = key2;
-                        let shard = &mut shard2;
-                        insert2_p1(key, shard, value)
-                    }
-                    let (k1, v1) = elem1.unwrap_or_else(|| {
-                        let shard = &mut shard1;
-                        dbg!(shard.hasher().hash_one(&k1));
-                        let shard: &mut RwLockWriteGuard<HashMap<K, SharedValue<V>>> =
-                            unsafe { std::mem::transmute(shard) };
-                        insert2_p2_shard(&k1, shard)
-                    });
-                    let (k2, v2) = elem2.unwrap_or_else(|| {
-                        let shard = &mut shard2;
-                        insert2_p2(&k2, shard)
-                    });
-                    println!("{:p}", &shard1);
-                    dbg!(shard1.len());
-                    println!("{:p}", &shard2);
-                    dbg!(shard2.len());
-                    dbg!(v1);
-                    dbg!(v2);
-                    RefMut {
-                        guard1: shard1,
-                        guard2: Some(shard2),
-                        k1,
-                        k2,
-                        v1,
-                        v2,
-                    }
-                }
-            }
-        }
-    }
-
-    fn insert2<'a, K: Eq + Hash, V, S: BuildHasher>(
-        key: K,
-        shard: &mut RwLockWriteGuard<'a, HashMap<K, V, S>>,
-        value: V,
-    ) -> (*const K, *mut V) {
-        let c = unsafe { std::ptr::read(&key) };
-        shard.insert(key, value);
-        // let shard: &mut RwLockWriteGuard<HashMap<K, SharedValue<V>>> =
-        //     unsafe { std::mem::transmute(shard) };
-        {
-            // let shard: &'a mut RwLockWriteGuard<'a, HashMap<K, SharedValue<V>>> = shard;
-            unsafe {
-                use std::mem;
-                dbg!();
-                let (k, v) = shard.get_key_value(&c).unwrap();
-                dbg!();
-                let k = change_lifetime_const(k);
-                dbg!();
-                let v = &mut *shard_as_ptr2(v);
-                dbg!();
-                mem::forget(c);
-                dbg!();
-                (k, v)
-            }
-        }
-    }
-
-    fn insert2_p1<'a, K: Eq + Hash, V, S: BuildHasher>(
-        key: K,
-        shard: &mut RwLockWriteGuard<'a, HashMap<K, V, S>>,
-        value: V,
-    ) {
-        println!("{:p}", &key);
-        println!("{}", shard.hasher().hash_one(&key));
-        println!("{:p}", &value);
-        shard.insert(key, value);
-    }
-
-    fn insert2_p1_shard<'a, K: Eq + Hash, V, S: BuildHasher>(
-        key: K,
-        shard: &mut RwLockWriteGuard<'a, HashMap<K, V, S>>,
-        value: V,
-    ) {
-        println!("{:p}", &key);
-        println!("{}", shard.hasher().hash_one(&key));
-        println!("{:p}", &value);
-        // let shard: &mut RwLockWriteGuard<HashMap<K, SharedValue<V>>> =
-        //             unsafe { std::mem::transmute(shard) };
-        // let value: SharedValue<V> = SharedValue::new(value);
-        println!("{:p}", &key);
-        println!("{}", shard.hasher().hash_one(&key));
-        println!("{:p}", &value);
-        // todo!()
-        shard.insert(key, value);
-    }
-
-    fn insert2_p2<'a, K: Eq + Hash, V, S: BuildHasher>(
-        key: &K,
-        shard: &mut RwLockWriteGuard<'a, HashMap<K, V, S>>,
-    ) -> (*const K, *mut V) {
-        unsafe {
-            use std::mem;
-            dbg!();
-            println!("{:p}", &key);
-            println!("{}", shard.hasher().hash_one(&key));
-            let (k, v) = shard.get_key_value(key).unwrap();
-            dbg!();
-            let k = change_lifetime_const(k);
-            dbg!();
-            let v = &mut *shard_as_ptr2(v);
-            dbg!();
-            (k, v)
-        }
-    }
-
-    fn insert2_p2_shard<'a, K: Eq + Hash, V, S: BuildHasher>(
-        key: &K,
-        shard: &mut RwLockWriteGuard<'a, HashMap<K, SharedValue<V>, S>>,
-    ) -> (*const K, *mut V) {
-        unsafe {
-            dbg!();
-            println!("{:p}", &key);
-            println!("{}", shard.hasher().hash_one(&key));
-            todo!();
-
-            let (k, v) = shard.get_key_value(key).unwrap();
-            dbg!();
-            let k = change_lifetime_const(k);
-            dbg!();
-            let v = &mut *shard_as_ptr(v);
-            dbg!();
-            (k, v)
-        }
-    }
-
-    fn insert<'a, K: Eq + Hash, V>(
-        key: K,
-        shard: &'a mut RwLockWriteGuard<'a, HashMap<K, SharedValue<V>>>,
-        value: SharedValue<V>,
-    ) -> (*const K, *mut V) {
-        unsafe {
-            use std::mem;
-            use std::ptr;
-            let c: K = ptr::read(&key);
-            dbg!();
-            println!("{:p}", &key);
-            println!("{}", shard.hasher().hash_one(&key));
-            println!("{:p}", &value);
-            {
-                // let shard: &mut RwLockWriteGuard<HashMap<K, V>> =
-                //     unsafe { std::mem::transmute(shard) };
-                // let value: V =
-                //     unsafe { std::mem::transmute(value) };
-                shard.insert(key, value);
-            }
-            dbg!();
-            let (k, v) = shard.get_key_value(&c).unwrap();
-            dbg!();
-            let k = change_lifetime_const(k);
-            dbg!();
-            let v = &mut *shard_as_ptr(v);
-            dbg!();
-            mem::forget(c);
-            dbg!();
-            (k, v)
-        }
-    }
-
-    /// # Safety
-    ///
-    /// Requires that you ensure the reference does not become invalid.
-    /// The object has to outlive the reference.
-    unsafe fn change_lifetime_const<'a, 'b, T>(x: &'a T) -> &'b T {
-        &*(x as *const T)
-    }
-
-    pub struct RefMut<'a, K, V, S = RandomState> {
-        guard1: RwLockWriteGuard<'a, HashMap<K, V, S>>,
-        guard2: Option<RwLockWriteGuard<'a, HashMap<K, V, S>>>,
-        k1: *const K,
-        k2: *const K,
-        v1: *mut V,
-        v2: *mut V,
-    }
-
-    unsafe impl<'a, K: Eq + Hash + Sync, V: Sync, S: BuildHasher> Send for RefMut<'a, K, V, S> {}
-    unsafe impl<'a, K: Eq + Hash + Sync, V: Sync, S: BuildHasher> Sync for RefMut<'a, K, V, S> {}
-
-    impl<'a, K: Eq + Hash, V, S: BuildHasher> RefMut<'a, K, V, S> {
-        pub fn value_mut(&mut self) -> (&mut V, &mut V) {
-            unsafe { (&mut *self.v1, &mut *self.v2) }
-        }
-    }
-}
-
-// WARN lazy subtrees are not complete
-fn lazy_subtree_mapping<'a, 'b>(
-    repositories: &'a multi_preprocessed::PreProcessedRepositories,
-    partial_comp_cache: &'a crate::PartialDecompCache,
-    src_tr: NodeIdentifier,
-    dst_tr: NodeIdentifier,
-) -> hyper_diff::matchers::Mapping<
-    dashmap::mapref::one::RefMut<
-        'a,
-        NodeIdentifier,
-        hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
-            u32,
-        >,
-    >,
-    dashmap::mapref::one::RefMut<
-        'a,
-        NodeIdentifier,
-        hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<
-            hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
-            u32,
-        >,
-    >,
-    mapping_store::MultiVecStore<u32>,
-> {
-    use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
-    use hyper_diff::matchers::heuristic::gt::lazy2_greedy_subtree_matcher::LazyGreedySubtreeMatcher;
-    use hyper_diff::matchers::mapping_store::DefaultMultiMappingStore;
-    use hyper_diff::matchers::mapping_store::MappingStore;
-    use hyper_diff::matchers::mapping_store::VecStore;
-    use hyper_diff::matchers::Mapping;
-
-    let hyperast = &repositories.processor.main_stores;
-    let src = &src_tr;
-    let dst = &dst_tr;
-    let now = Instant::now();
-    assert_ne!(src, dst);
-    let (mut decompress_src, mut decompress_dst) = {
-        use hyper_ast::types::DecompressedSubtree;
-        let mut cached_decomp = |id: &NodeIdentifier| -> Option<
-            dashmap::mapref::one::RefMut<NodeIdentifier, LazyPostOrder<HashedNodeRef<'a>, u32>>,
-        > {
-            let decompress = partial_comp_cache
-                .try_entry(*id)?
-                .or_insert_with(|| unsafe {
-                    std::mem::transmute(LazyPostOrder::<_, u32>::decompress(
-                        hyperast.node_store(),
-                        id,
-                    ))
-                });
-            Some(unsafe { std::mem::transmute(decompress) })
-        };
-        loop {
-            match (cached_decomp(src), cached_decomp(dst)) {
-                (Some(decompress_src), Some(decompress_dst)) => {
-                    break (decompress_src, decompress_dst)
-                }
-                (None, None) => {
-                    dbg!();
-                }
-                _ => {
-                    dbg!(
-                        partial_comp_cache.hash_usize(src),
-                        partial_comp_cache.hash_usize(dst)
-                    );
-                    dbg!(
-                        partial_comp_cache.determine_shard(partial_comp_cache.hash_usize(src)),
-                        partial_comp_cache.determine_shard(partial_comp_cache.hash_usize(dst))
-                    );
-                }
-            }
-            sleep(Duration::from_secs(2));
-        }
-    };
-    hyperast
-        .node_store
-        .resolve(decompress_src.original(&decompress_src.root()));
-    hyperast
-        .node_store
-        .resolve(decompress_dst.original(&decompress_dst.root()));
-
-    let mappings = VecStore::default();
-    let mut mapper = Mapper {
-        hyperast,
-        mapping: Mapping {
-            src_arena: decompress_src.value_mut(),
-            dst_arena: decompress_dst.value_mut(),
-            mappings,
-        },
-    };
-    mapper.mapping.mappings.topit(
-        mapper.mapping.src_arena.len(),
-        mapper.mapping.dst_arena.len(),
-    );
-    dbg!();
-    let mm = LazyGreedySubtreeMatcher::<
-        'a,
-        SimpleStores<TStore>,
-        &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
-        &mut LazyPostOrder<HashedNodeRef<'a>, u32>,
-        VecStore<_>,
-    >::compute_multi_mapping::<DefaultMultiMappingStore<_>>(&mut mapper);
-    dbg!();
-
-    hyper_diff::matchers::Mapping {
-        src_arena: decompress_src,
-        dst_arena: decompress_dst,
-        mappings: mm,
-    }
-}
-
-pub fn child_by_type<'store, HAST: HyperAST<'store, IdN = NodeIdentifier>>(
-    stores: &'store HAST,
-    d: NodeIdentifier,
-    t: &<HAST::TS as types::TypeStore<HAST::T>>::Ty,
-) -> Option<(NodeIdentifier, usize)> {
-    let n = stores.node_store().resolve(&d);
-    let s = n
-        .children()
-        .unwrap()
-        .iter_children()
-        .enumerate()
-        .find(|(_, x)| {
-            stores.resolve_type(*x).eq(t)
-        })
-        .map(|(i, x)| (*x, i));
-    s
-}
+mod compute;
+mod more;
+mod my_dash;

@@ -80,6 +80,19 @@ where
     }
 }
 
+impl<IdN, TS, NS, LS> crate::types::NodeStoreLean<IdN> for SimpleStores<TS, NS, LS>
+where
+    NS::R: crate::types::Tree<TreeId = IdN>,
+    IdN: crate::types::NodeId<IdN = IdN>,
+    NS: crate::types::NodeStoreLean<IdN>,
+{
+    type R = NS::R;
+
+    fn resolve(&self, id: &IdN) -> Self::R {
+        self.node_store.resolve(id)
+    }
+}
+
 impl<'store, TS, NS, LS> crate::types::LabelStore<str> for SimpleStores<TS, NS, LS>
 where
     LS: crate::types::LabelStore<str>,

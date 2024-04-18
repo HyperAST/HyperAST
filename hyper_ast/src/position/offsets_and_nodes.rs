@@ -1,11 +1,11 @@
-use super::{PrimInt, TreePath, TreePathMut, tags};
-
+use super::{tags, TreePath, TreePathMut};
 use crate::types::{HyperAST, NodeId, NodeStore, Tree, WithChildren};
+use crate::PrimInt;
 
 /// BottomUp content
 #[derive(Clone, Debug)]
 pub struct StructuralPosition<IdN, Idx, Config = tags::TopDownFull> {
-    pub(super) parents: Vec<IdN>, //parents? // most likely parents 
+    pub(super) parents: Vec<IdN>, //parents? // most likely parents
     pub(super) offsets: Vec<Idx>,
     _phantom: std::marker::PhantomData<Config>,
 }
@@ -14,7 +14,7 @@ impl<IdN, Idx, C> StructuralPosition<IdN, Idx, C> {
         Self {
             parents: vec![],
             offsets: vec![],
-            _phantom: Default::default()
+            _phantom: Default::default(),
         }
     }
     pub(crate) fn solved(self, node: IdN) -> SolvedStructuralPosition<IdN, Idx, C> {
@@ -22,8 +22,36 @@ impl<IdN, Idx, C> StructuralPosition<IdN, Idx, C> {
             parents: self.parents,
             offsets: self.offsets,
             node,
-            _phantom: Default::default()
+            _phantom: Default::default(),
         }
+    }
+}
+
+impl<IdN, Idx: PrimInt> super::position_accessors::WithOffsets for StructuralPosition<IdN, Idx> {
+    type Idx = Idx;
+}
+
+impl<IdN, Idx: PrimInt> super::position_accessors::WithPath<IdN> for StructuralPosition<IdN, Idx> {}
+
+impl<IdN, Idx: PrimInt> super::position_accessors::WithPreOrderOffsets
+    for StructuralPosition<IdN, Idx>
+{
+    type It<'a> = SPIter<'a, Idx> where Idx: 'a, Self: 'a;
+
+    fn iter_offsets(&self) -> Self::It<'_> {
+        let mut iter = self.offsets.iter();
+        iter.next().unwrap();
+        SPIter(iter)
+    }
+}
+
+pub struct SPIter<'a, Idx>(std::slice::Iter<'a, Idx>);
+
+impl<'a, Idx: PrimInt> Iterator for SPIter<'a, Idx> {
+    type Item = Idx;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().map(|x| *x - num::one())
     }
 }
 
@@ -45,7 +73,7 @@ impl<IdN, Idx, C> From<SolvedStructuralPosition<IdN, Idx, C>> for StructuralPosi
         Self {
             parents: value.parents,
             offsets: value.offsets,
-            _phantom: Default::default()
+            _phantom: Default::default(),
         }
     }
 }
@@ -125,12 +153,12 @@ impl<IdN: Copy, Idx: PrimInt> TreePathMut<IdN, Idx> for StructuralPosition<IdN, 
     }
 }
 
-impl<IdN, Idx: num::Zero,C> StructuralPosition<IdN, Idx,C> {
+impl<IdN, Idx: num::Zero, C> StructuralPosition<IdN, Idx, C> {
     pub fn new(node: IdN) -> Self {
         Self {
             parents: vec![node],
             offsets: vec![num::zero()],
-            _phantom: Default::default()
+            _phantom: Default::default(),
         }
     }
 }
@@ -142,7 +170,7 @@ impl<IdN, Idx> From<(Vec<IdN>, Vec<Idx>, IdN)> for StructuralPosition<IdN, Idx> 
         Self {
             parents: x.0,
             offsets: x.1,
-            _phantom: Default::default()
+            _phantom: Default::default(),
         }
     }
 }
@@ -152,7 +180,7 @@ impl<IdN, Idx> From<(Vec<IdN>, Vec<Idx>)> for StructuralPosition<IdN, Idx> {
         Self {
             parents: x.0,
             offsets: x.1,
-            _phantom: Default::default()
+            _phantom: Default::default(),
         }
     }
 }
@@ -162,19 +190,15 @@ impl<IdN, Idx: num::Zero> From<IdN> for StructuralPosition<IdN, Idx> {
     }
 }
 
-
 mod impl_c_p_p_receivers {
-    use crate::position::building::bottom_up;
 
     use super::super::building;
     use super::PrimInt;
-    use building::top_down;
     use super::SolvedStructuralPosition;
     use super::StructuralPosition;
+    use building::top_down;
 
-    impl<IdN, Idx: PrimInt, C> top_down::CreateBuilder
-        for StructuralPosition<IdN, Idx, C>
-    {
+    impl<IdN, Idx: PrimInt, C> top_down::CreateBuilder for StructuralPosition<IdN, Idx, C> {
         fn create() -> Self {
             Self {
                 offsets: vec![],
@@ -184,9 +208,7 @@ mod impl_c_p_p_receivers {
         }
     }
 
-    impl<IdN, Idx: PrimInt, C> top_down::ReceiveParent<IdN, Self>
-        for StructuralPosition<IdN, Idx, C>
-    {
+    impl<IdN, Idx: PrimInt, C> top_down::ReceiveParent<IdN, Self> for StructuralPosition<IdN, Idx, C> {
         fn push(self, _parent: IdN) -> Self {
             self
         }
@@ -200,8 +222,7 @@ mod impl_c_p_p_receivers {
         }
     }
 
-    impl<IdN, Idx: PrimInt, C>
-        building::bottom_up::ReceiveDirName<Self>
+    impl<IdN, Idx: PrimInt, C> building::bottom_up::ReceiveDirName<Self>
         for StructuralPosition<IdN, Idx, C>
     {
         fn push(self, _dir_name: &str) -> Self {
@@ -216,8 +237,7 @@ mod impl_c_p_p_receivers {
     //     }
     // }
 
-    impl<IdN, Idx: PrimInt, C>
-        building::top_down::ReceiveIdx<Idx, Self>
+    impl<IdN, Idx: PrimInt, C> building::top_down::ReceiveIdx<Idx, Self>
         for StructuralPosition<IdN, Idx, C>
     {
         fn push(self, _idx: Idx) -> Self {
@@ -233,8 +253,7 @@ mod impl_c_p_p_receivers {
     //     }
     // }
 
-    impl<IdN, Idx: PrimInt, C>
-        building::top_down::ReceiveIdxNoSpace<Idx, Self>
+    impl<IdN, Idx: PrimInt, C> building::top_down::ReceiveIdxNoSpace<Idx, Self>
         for StructuralPosition<IdN, Idx, C>
     {
         fn push(mut self, idx: Idx) -> Self {
@@ -243,23 +262,18 @@ mod impl_c_p_p_receivers {
         }
     }
 
-    impl<IdN, Idx: PrimInt, C> top_down::FileSysReceiver
-        for StructuralPosition<IdN, Idx, C>
-    {
+    impl<IdN, Idx: PrimInt, C> top_down::FileSysReceiver for StructuralPosition<IdN, Idx, C> {
         type InFile<O> = Self;
     }
 
-    impl<IdN, Idx: PrimInt, IdO, C>
-        building::top_down::ReceiveOffset<IdO, Self>
+    impl<IdN, Idx: PrimInt, IdO, C> building::top_down::ReceiveOffset<IdO, Self>
         for StructuralPosition<IdN, Idx, C>
     {
         fn push(self, _bytes: IdO) -> Self {
             self
         }
     }
-    impl<IdN, Idx: PrimInt, IdO, C> building::SetLen<IdO, Self>
-        for StructuralPosition<IdN, Idx, C>
-    {
+    impl<IdN, Idx: PrimInt, IdO, C> building::SetLen<IdO, Self> for StructuralPosition<IdN, Idx, C> {
         fn set(self, _len: IdO) -> Self {
             self
         }
@@ -278,16 +292,12 @@ mod impl_c_p_p_receivers {
             self.solved(node)
         }
     }
-    impl<IdN, Idx: PrimInt, C> top_down::SetFileName<Self>
-        for StructuralPosition<IdN, Idx, C>
-    {
+    impl<IdN, Idx: PrimInt, C> top_down::SetFileName<Self> for StructuralPosition<IdN, Idx, C> {
         fn set_file_name(self, file_name: &str) -> Self {
             self
         }
     }
-    impl<IdN, Idx: PrimInt, C> building::Transition<Self>
-        for StructuralPosition<IdN, Idx, C>
-    {
+    impl<IdN, Idx: PrimInt, C> building::Transition<Self> for StructuralPosition<IdN, Idx, C> {
         fn transit(self) -> Self {
             self
         }

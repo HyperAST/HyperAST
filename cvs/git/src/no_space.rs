@@ -9,35 +9,226 @@ use hyper_ast::{
     types::{self, Children, MySlice, NodeId, SimpleHyperAST, TypedNodeId},
 };
 
-// pub trait IntoNoSpace<'a> {
-//     type R;
-//     fn as_nospaces(&'a self) -> Self::R;
+// pub trait NoSpaceNodeStoreContainer: types::HyperASTAsso {
+//     type NST<'store>: types::Tree<Label = Self::Label, TreeId = Self::IdN, ChildIdx = Self::Idx> where Self: 'store;
+
+//     type NSNS<'store>: types::NodeStore<Self::IdN, R<'store> = Self::NST<'store>>
+//     where
+//         Self: 'store;
+//     fn no_spaces_node_store<'a>(&'a self) -> Self::NSNS<'a>;
 // }
 
-// impl<'a, T, TS: 'a, NS: 'a, LS: 'a> IntoNoSpace<'a> for hyper_ast::types::SimpleHyperAST<T, TS, NS, LS>
-// where
-//     NoSpaceNodeStoreWrapper<'a>: From<&'a NS>,
-// {
-//     type R = SimpleHyperAST<
-//         NoSpaceWrapper<'a, NodeIdentifier>,
-//         &'a TS,
-//         NoSpaceNodeStoreWrapper<'a>,
-//         &'a LS,
-//     >;
+pub trait AsNoSpace {
+    type R;
+    fn as_nospaces(&self) -> &Self::R;
+}
 
-//     fn as_nospaces(&'a self) -> Self::R {
-//         let type_store = &self.type_store;
-//         let label_store = &self.label_store;
-//         let node_store = &self.node_store;
-//         let node_store = node_store.into();
-//         SimpleHyperAST {
-//             type_store,
-//             node_store,
-//             label_store,
-//             _phantom: std::marker::PhantomData,
-//         }
+pub trait AsNoSpace2 {
+    type R;
+    fn as_nospaces(&self) -> Self::R;
+}
+
+// impl<'a, T: types::Stored, TS: 'a, NS: 'a, LS: 'a> AsNoSpace2
+//     for &'a hyper_ast::store::SimpleStores<TS, NS, LS>
+// {
+//     type R = SimpleHyperAST<NoSpaceWrapper<'a, T::TreeId>, TS, NoSpaceNodeStore<NS>, LS>;
+
+//     fn as_nospaces(&self) -> &Self::R {
+//         unsafe { std::mem::transmute(self) }
 //     }
 // }
+
+impl<'a, T: types::Stored, TS: 'a, NS: 'a, LS: 'a> AsNoSpace
+    for &'a hyper_ast::types::SimpleHyperAST<T, TS, NS, LS>
+{
+    type R = SimpleHyperAST<NoSpaceWrapper<'a, T::TreeId>, TS, NoSpaceNodeStore<NS>, LS>;
+
+    fn as_nospaces(&self) -> &Self::R {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+impl<T: types::Stored, TS, NS, LS> AsNoSpace for hyper_ast::types::SimpleHyperAST<T, TS, NS, LS> {
+    type R = SimpleHyperAST<NoSpaceNode<T>, TS, NoSpaceNodeStore<NS>, LS>;
+
+    fn as_nospaces(&self) -> &Self::R {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+impl<TS, NS, LS> AsNoSpace for hyper_ast::store::SimpleStores<TS, NS, LS> {
+    type R = hyper_ast::store::SimpleStores<TS, NoSpaceNodeStore<NS>, LS>;
+
+    fn as_nospaces(&self) -> &Self::R {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+pub trait IntoNoSpaceGAT {
+    type R<'a>
+    where
+        Self: 'a;
+    fn as_nospaces(&self) -> Self::R<'_>;
+    fn as_nospaces2<'a>(&'a self) -> Self::R<'a>;
+}
+
+impl<'a, T: types::Stored, TS: 'a, NS: 'a, LS: 'a> IntoNoSpaceGAT
+    for &'a hyper_ast::types::SimpleHyperAST<T, TS, NS, LS>
+where
+    for<'b> NoSpaceNodeStoreWrapper<'b>: From<&'b NS>,
+{
+    type R<'b> = SimpleHyperAST<
+        NoSpaceWrapper<'b, T::TreeId>,
+        &'b TS,
+        NoSpaceNodeStoreWrapper<'b>,
+        &'b LS,
+    > where Self: 'b;
+
+    fn as_nospaces(&self) -> Self::R<'_> {
+        let type_store = &self.type_store;
+        let label_store = &self.label_store;
+        let node_store = &self.node_store;
+        let node_store = node_store.into();
+        SimpleHyperAST {
+            type_store,
+            node_store,
+            label_store,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    fn as_nospaces2(&self) -> Self::R<'_> {
+        let type_store = &self.type_store;
+        let label_store = &self.label_store;
+        let node_store = &self.node_store;
+        let node_store = node_store.into();
+        SimpleHyperAST {
+            type_store,
+            node_store,
+            label_store,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+impl<'a, TS: 'a, NS: 'a, LS: 'a> IntoNoSpaceGAT for &'a hyper_ast::store::SimpleStores<TS, NS, LS>
+where
+    for<'b> NoSpaceNodeStoreWrapper<'b>: From<&'b NS>,
+{
+    type R<'b> = SimpleHyperAST<
+        NoSpaceWrapper<'b, NodeIdentifier>,
+        &'b TS,
+        NoSpaceNodeStoreWrapper<'b>,
+        &'b LS,
+    > where Self: 'b;
+
+    fn as_nospaces(&self) -> Self::R<'_> {
+        let type_store = &self.type_store;
+        let label_store = &self.label_store;
+        let node_store = &self.node_store;
+        let node_store = node_store.into();
+        SimpleHyperAST {
+            type_store,
+            node_store,
+            label_store,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+    fn as_nospaces2(&self) -> Self::R<'_> {
+        let type_store = &self.type_store;
+        let label_store = &self.label_store;
+        let node_store = &self.node_store;
+        let node_store = node_store.into();
+        SimpleHyperAST {
+            type_store,
+            node_store,
+            label_store,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+pub trait NoSpaceMarker {}
+
+impl<T: NoSpaceMarker, TS, NS: NoSpaceMarker, LS> NoSpaceMarker for SimpleHyperAST<T, TS, NS, LS> {}
+impl<TS, NS: NoSpaceMarker, LS> NoSpaceMarker for hyper_ast::store::SimpleStores<TS, NS, LS> {}
+
+impl<'a, TS: 'a, NS: 'a, LS: 'a> IntoNoSpaceGAT for hyper_ast::store::SimpleStores<TS, NS, LS>
+where
+    for<'b> NoSpaceNodeStoreWrapper<'b>: From<&'b NS>,
+{
+    type R<'b> = SimpleHyperAST<
+        NoSpaceWrapper<'b, NodeIdentifier>,
+        &'b TS,
+        NoSpaceNodeStoreWrapper<'b>,
+        &'b LS,
+    > where Self: 'b;
+
+    fn as_nospaces(&self) -> Self::R<'_> {
+        let type_store = &self.type_store;
+        let label_store = &self.label_store;
+        let node_store = &self.node_store;
+        let node_store = node_store.into();
+        SimpleHyperAST {
+            type_store,
+            node_store,
+            label_store,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+    fn as_nospaces2(&self) -> Self::R<'_> {
+        let type_store = &self.type_store;
+        let label_store = &self.label_store;
+        let node_store = &self.node_store;
+        let node_store = node_store.into();
+        SimpleHyperAST {
+            type_store,
+            node_store,
+            label_store,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+// impl<TS> NoSpaceNodeStoreContainer for hyper_ast::store::SimpleStores<TS>
+// where
+//     TS: for<'s> hyper_ast::types::TypeStore<hyper_ast::store::nodes::legion::HashedNodeRef<'s>>,
+// {
+//     type NST<'store> = NoSpaceWrapper<'store, Self::IdN> where Self: 'store;
+//     type NSNS<'store> = NoSpaceNodeStoreWrapper<'store> where Self: 'store;
+
+//     fn no_spaces_node_store<'b>(&'b self) -> Self::NSNS<'b> {
+//         Into::<NoSpaceNodeStoreWrapper>::into(&self.node_store)
+//     }
+// }
+
+pub trait IntoNoSpaceLife<'a> {
+    type R<'b>
+    where
+        Self: 'b,
+        Self: 'a;
+    fn as_nospaces(&'a self) -> Self::R<'a>;
+}
+
+impl<'a, T: types::Stored, TS: 'a, NS: 'a, LS: 'a> IntoNoSpaceLife<'a>
+    for &hyper_ast::types::SimpleHyperAST<T, TS, NS, LS>
+where
+    NoSpaceNodeStoreWrapper<'a>: From<&'a NS>,
+{
+    type R<'b> =
+        SimpleHyperAST<NoSpaceWrapper<'a, T::TreeId>, &'a TS, NoSpaceNodeStoreWrapper<'a>, &'a LS> where Self: 'b, Self: 'a;
+
+    fn as_nospaces(&'a self) -> Self::R<'a> {
+        let type_store = &self.type_store;
+        let label_store = &self.label_store;
+        let node_store = &self.node_store;
+        let node_store = node_store.into();
+        SimpleHyperAST {
+            type_store,
+            node_store,
+            label_store,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
 
 // impl<'a, TS: 'a> IntoNoSpace<'a> for hyper_ast::store::SimpleStores<TS> {
 //     type R = SimpleHyperAST<
@@ -127,10 +318,11 @@ pub fn as_nospaces<'a>(
 pub struct NoSpaceNodeStoreWrapper<'a> {
     pub s: &'a NodeStore,
 }
+impl<'a> NoSpaceMarker for NoSpaceNodeStoreWrapper<'a> {}
 
 #[repr(transparent)]
-pub struct NoSpaceNodeStoreWrapperT<'a> {
-    pub s: &'a NodeStore,
+pub struct NoSpaceNodeStore<NS> {
+    pub s: NS,
 }
 
 impl<'a> From<&'a NodeStore> for NoSpaceNodeStoreWrapper<'a> {
@@ -139,9 +331,15 @@ impl<'a> From<&'a NodeStore> for NoSpaceNodeStoreWrapper<'a> {
     }
 }
 
-impl<'a> From<NoSpaceNodeStoreWrapper<'a>> for NoSpaceNodeStoreWrapperT<'a> {
-    fn from(value: NoSpaceNodeStoreWrapper<'a>) -> Self {
-        NoSpaceNodeStoreWrapperT { s: value.s }
+impl<NS> From<NS> for NoSpaceNodeStore<NS> {
+    fn from(s: NS) -> Self {
+        Self { s }
+    }
+}
+
+impl<NS> From<&NS> for &NoSpaceNodeStore<NS> {
+    fn from(s: &NS) -> Self {
+        unsafe { std::mem::transmute(s) }
     }
 }
 
@@ -157,6 +355,13 @@ impl<'a> From<NoSpaceNodeStoreWrapper<'a>> for NoSpaceNodeStoreWrapperT<'a> {
 #[repr(transparent)]
 pub struct NoSpaceWrapper<'a, T> {
     inner: HashedNodeRef<'a, T>,
+}
+
+impl<'a, T> NoSpaceMarker for NoSpaceWrapper<'a, T> {}
+
+#[repr(transparent)]
+pub struct NoSpaceNode<N> {
+    inner: N,
 }
 
 impl<'a, T> AsRef<HashedNodeRef<'a, T>> for NoSpaceWrapper<'a, T> {
@@ -295,7 +500,6 @@ impl<'a, T> types::Node for NoSpaceWrapper<'a, T> {}
 impl<'a, T> types::Stored for NoSpaceWrapper<'a, T> {
     type TreeId = NodeIdentifier;
 }
-
 
 // // NOTE: use of the deref polymorphism trick
 // impl<'a, T: 'static + TypedNodeId<IdN = NodeIdentifier>> types::Typed for &NoSpaceWrapper<'a, T> {
@@ -451,14 +655,14 @@ impl<'store> types::NodeStore<NodeIdentifier> for &NoSpaceNodeStoreWrapper<'stor
     }
 }
 
-impl<'store> types::NodeStore<MIdN<NodeIdentifier>> for NoSpaceNodeStoreWrapperT<'store> {
-    type R<'a> = NoSpaceWrapper<'a, MIdN<NodeIdentifier>> where Self: 'a;
-    fn resolve(&self, id: &MIdN<NodeIdentifier>) -> Self::R<'_> {
-        NoSpaceWrapper {
-            inner: unsafe { self.s._resolve(id.as_id()) },
-        }
-    }
-}
+// impl<NS> types::NodeStore<MIdN<NodeIdentifier>> for NoSpaceNodeStore<NS> {
+//     type R<'a> = NoSpaceWrapper<'a, MIdN<NodeIdentifier>> where Self: 'a;
+//     fn resolve(&self, id: &MIdN<NodeIdentifier>) -> Self::R<'_> {
+//         NoSpaceWrapper {
+//             inner: unsafe { self.s._resolve(id.as_id()) },
+//         }
+//     }
+// }
 
 // impl<'store> types::NodeStore<NodeIdentifier> for NoSpaceNodeStoreWrapper<'store, NodeIdentifier> {
 //     type R<'a> = NoSpaceWrapper<'a, NodeIdentifier> where Self: 'a;

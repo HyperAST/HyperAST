@@ -476,7 +476,7 @@ impl<'d, T: WithChildren + WithStats, IdD: PrimInt + Shallow<IdD> + Debug> LazyP
 where
     T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
-    pub fn child_decompressed<'b, S>(&mut self, store: &'b S, x: &IdD, p: &[T::ChildIdx]) -> IdD
+    pub fn child_decompressed<'b, S>(&mut self, store: &'b S, x: &IdD, p: impl Iterator<Item=T::ChildIdx>) -> IdD
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
     {
@@ -485,7 +485,7 @@ where
             let cs = self.decompress_children(store, &r);
             let mut z: IdD = zero();
             let cs = cs
-                .get(..(*d + one()).to_usize().unwrap())
+                .get(..(d + one()).to_usize().unwrap())
                 .expect("no child corresponding to given path");
             for x in cs {
                 z = z + self._size(x); //Self::size2(store, x);

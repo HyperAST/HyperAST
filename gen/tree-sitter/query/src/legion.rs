@@ -10,11 +10,13 @@ use hyper_ast::{
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
     nodes::Space,
     store::{
-        nodes::legion::{compo, compo::CS, NodeIdentifier},
-        nodes::DefaultNodeStore as NodeStore,
-    },
-    store::{
-        nodes::legion::{compo::NoSpacesCS, HashedNodeRef},
+        nodes::{
+            legion::{
+                compo::{self, NoSpacesCS, CS},
+                HashedNodeRef, NodeIdentifier,
+            },
+            DefaultNodeStore as NodeStore,
+        },
         SimpleStores,
     },
     tree_gen::{
@@ -47,9 +49,7 @@ pub struct MD {
 
 impl From<Local> for MD {
     fn from(x: Local) -> Self {
-        MD {
-            metrics: x.metrics,
-        }
+        MD { metrics: x.metrics }
     }
 }
 
@@ -196,11 +196,11 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
         // };
         let kind = node.obtain_type(type_store);
         // TODO remove this mitigations as it breaks captures on anonymous nodes
-        if kind == Type::TS0 || kind == Type::AnonymousNode {
+        if kind == Type::TS0 || kind == Type::AnonymousNode || kind == Type::String {
             *skip = true;
         }
         let mut acc = self.pre(text, node, stack, global);
-        if kind == Type::TS0 || kind == Type::AnonymousNode {
+        if kind == Type::TS0 || kind == Type::AnonymousNode || kind == Type::String {
             acc.labeled = true;
         }
         Some(acc)
@@ -256,7 +256,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
                 local: self.make_spacing(spacing),
             });
         }
-        
+
         let label = if acc.labeled {
             std::str::from_utf8(&text[acc.start_byte..acc.end_byte])
                 .ok()
@@ -415,8 +415,11 @@ where
     }
 }
 
-impl<'stores, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> TreeGen
-    for TsQueryTreeGen<'stores, 'cache, TS>
+impl<
+        'stores,
+        'cache,
+        TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>,
+    > TreeGen for TsQueryTreeGen<'stores, 'cache, TS>
 {
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;
@@ -428,7 +431,8 @@ impl<'stores, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, TIdN<No
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
-        let interned_kind = TsQueryEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
+        let interned_kind =
+            TsQueryEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
@@ -502,5 +506,140 @@ impl<'stores, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, TIdN<No
             local,
         };
         full_node
+    }
+}
+
+impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
+    pub fn build_then_insert(
+        &mut self,
+        i: <hashed::HashedNode as hyper_ast::types::Stored>::TreeId,
+        t: Type,
+        l: Option<LabelIdentifier>,
+        cs: Vec<NodeIdentifier>,
+    ) -> NodeIdentifier {
+        let mut acc: Acc = {
+            let kind = t;
+            Acc {
+                labeled: l.is_some(),
+                start_byte: 0,
+                end_byte: 0,
+                metrics: Default::default(),
+                indentation: vec![],
+                simple: BasicAccumulator {
+                    kind,
+                    children: vec![],
+                },
+                no_space: vec![],
+                padding_start: 0,
+            }
+        };
+        for c in cs {
+            let local = {
+                // print_tree_syntax(&self.stores.node_store, &self.stores.label_store, &c);
+                // println!();
+                let md = self.md_cache.get(&c);
+                let metrics = if let Some(md) = md {
+                    let metrics = md.metrics;
+                    metrics
+                } else {
+                    use hyper_ast::hashed::SyntaxNodeHashsKinds;
+                    use hyper_ast::types::WithHashs;
+                    let (kind, node) = self.stores.node_store.resolve_with_type::<TIdN<NodeIdentifier>>(&c);
+                    let hashs = SyntaxNodeHashs {
+                        structt: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Struct),
+                        label: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Label),
+                        syntax: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Syntax),
+                    };
+                    use hyper_ast::types::WithStats;
+                    use num::ToPrimitive;
+                    let metrics = SubTreeMetrics {
+                        size: node.size().to_u32().unwrap(),
+                        height: node.height().to_u32().unwrap(),
+                        size_no_spaces: node.size_no_spaces().to_u32().unwrap(),
+                        hashs,
+                    };
+                    metrics
+                };
+                Local {
+                    compressed_node: c,
+                    metrics,
+                }
+            };
+            let global = BasicGlobalData::default();
+            let full_node = FullNode { global, local };
+            acc.push(full_node);
+        }
+        let node_store = &mut self.stores.node_store;
+        let label_store = &mut self.stores.label_store;
+        let interned_kind =
+            TsQueryEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
+        let hashs = acc.metrics.hashs;
+        let size = acc.metrics.size + 1;
+        let height = acc.metrics.height + 1;
+        let size_no_spaces = acc.metrics.size_no_spaces + 1;
+
+        let label = l.map(|l|label_store.resolve(&l));
+        let hbuilder = hashed::Builder::new(hashs, &interned_kind, &label, size_no_spaces);
+        let hsyntax = hbuilder.most_discriminating();
+        let hashable = &hsyntax;
+
+        let label_id = l;
+        let eq = eq_node(&interned_kind, label_id.as_ref(), &acc.simple.children);
+
+        let insertion = node_store.prepare_insertion(&hashable, eq);
+
+        let local = if let Some(compressed_node) = insertion.occupied_id() {
+            let hashs = hbuilder.build();
+            let metrics = SubTreeMetrics {
+                size,
+                height,
+                hashs,
+                size_no_spaces,
+            };
+            Local {
+                compressed_node,
+                metrics,
+            }
+        } else {
+            let hashs = hbuilder.build();
+
+            let mut dyn_builder =
+                hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+            dyn_builder.add(interned_kind);
+            dyn_builder.add(hashs.clone());
+            dyn_builder.add(compo::BytesLen(
+                (acc.end_byte - acc.start_byte).try_into().unwrap(),
+            ));
+            if let Some(label_id) = label_id {
+                dyn_builder.add(label_id);
+            }
+            match acc.simple.children.len() {
+                0 => {}
+                x => {
+                    let a = acc.simple.children.into_boxed_slice();
+                    dyn_builder.add(compo::Size(size));
+                    dyn_builder.add(compo::SizeNoSpaces(size_no_spaces));
+                    dyn_builder.add(compo::Height(height));
+                    dyn_builder.add(CS(a));
+                    if x != acc.no_space.len() {
+                        dyn_builder.add(NoSpacesCS(acc.no_space.into_boxed_slice()));
+                    }
+                }
+            }
+            let compressed_node =
+                NodeStore::insert_built_after_prepare(insertion.vacant(), dyn_builder.build());
+
+            let metrics = SubTreeMetrics {
+                size,
+                height,
+                hashs,
+                size_no_spaces,
+            };
+            Local {
+                compressed_node,
+                metrics,
+            }
+        };
+        local.compressed_node
     }
 }

@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-git2 = { version = "0.16.1", features = ["vendored-libgit2", "vendored-openssl"] }
+git2 = { version = "0.18.2", features = ["vendored-libgit2", "vendored-openssl"] }
 tree-sitter = "0.20.10"
 hyper_ast_gen_ts_cpp = { path = "../../gen/tree-sitter/cpp", optional = true }
 hyper_ast_gen_ts_java = { path = "../../gen/tree-sitter/java", optional = true }

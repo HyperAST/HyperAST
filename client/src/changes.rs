@@ -106,7 +106,8 @@ pub(crate) fn added_deleted(
                     mapper.mapping.dst_arena.len(),
                 );
 
-                let vec_store = matching::full2(hyperast, mapper);
+                matching::full2(hyperast, &mut mapper);
+                let vec_store = mapper.mappings.clone();
 
                 dbg!();
                 entry

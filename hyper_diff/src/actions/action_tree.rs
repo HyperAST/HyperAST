@@ -1,5 +1,6 @@
+use hyper_ast::PrimInt;
+
 use crate::tree::tree_path::CompressedTreePath;
-use num_traits::PrimInt;
 /// WIP to better express variability in edit scripts actions order,
 /// action_vec only allow one order to apply actions.
 /// Maybe it can be integrated in the existing script generator or it needs major changes.
@@ -7,7 +8,7 @@ use num_traits::PrimInt;
 use std::fmt::Debug;
 
 use super::{
-    script_generator2::{Act, SimpleAction},
+    script_generator2::SimpleAction,
     Actions,
 };
 
@@ -44,7 +45,7 @@ impl<L, Idx: PrimInt, I> ActionsTree<SimpleAction<L, CompressedTreePath<Idx>, I>
         let mut i = 0;
         for x in r.iter_mut() {
             i += 1;
-            use crate::tree::tree_path::SharedPath;
+            use hyper_ast::position::position_accessors::SharedPath;
             match x.action.path.mid.shared_ancestors(&node.action.path.mid) {
                 SharedPath::Exact(_) => panic!(),
                 SharedPath::Remain(_) => panic!(),

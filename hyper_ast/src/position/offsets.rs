@@ -1,6 +1,8 @@
 use std::marker::PhantomData;
 
-use super::{position_accessors, tags, PrimInt};
+use crate::PrimInt;
+
+use super::{position_accessors, tags};
 
 // TODO remove PrimInt, also in impls
 pub struct Offsets<Idx: PrimInt, Config = tags::TopDownFull> {
@@ -64,9 +66,9 @@ impl<'a, IdN: Copy, Idx: PrimInt> position_accessors::WithOffsets
 impl<'a, IdN: Copy, Idx: PrimInt> position_accessors::WithPreOrderOffsets
     for RootedOffsetsRef<'a, IdN, Idx>
 {
-    type It = std::iter::Copied<std::slice::Iter<'a, Idx>>;
+    type It<'b> = std::iter::Copied<std::slice::Iter<'b, Idx>> where Self: 'b, Idx: 'b;
 
-    fn iter(&self) -> Self::It {
+    fn iter_offsets(&self) -> Self::It<'_> {
         self.offsets.iter().copied()
     }
 }
@@ -90,7 +92,7 @@ pub(super) struct SolvedPathPosition<IdN, Idx> {
 mod impl_receivers {
     use super::super::building;
     use building::top_down;
-    use super::super::PrimInt;
+    use crate::PrimInt;
     use super::tags;
     use super::Offsets;
 

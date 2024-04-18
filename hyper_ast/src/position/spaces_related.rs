@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use num::{one, zero, ToPrimitive};
 
 use super::Position;
-use super::PrimInt;
+use crate::PrimInt;
 use super::WithHyperAstPositionConverter;
 use crate::position::building;
 use crate::types::{
@@ -306,7 +306,7 @@ where
         let mut no_spaces = vec![];
         let mut path = vec![];
         // iter offsets
-        let mut offsets_iter = self.src.iter();
+        let mut offsets_iter = self.src.iter_offsets();
         loop {
             let b = stores.node_store().resolve(&x);
             let t = stores.type_store().resolve_type(&b);
@@ -373,7 +373,7 @@ where
     {
         let stores = self.stores;
         let mut x = self.src.root();
-        let mut offsets_iter = self.src.iter();
+        let mut offsets_iter = self.src.iter_offsets();
 
         let mut aaa = PathBuf::default();
         let mut offset = 0;
@@ -471,7 +471,7 @@ where
         let mut builder: B = Default::default();
         let stores = self.stores;
         let mut x = self.src.root();
-        let mut offsets_iter = self.src.iter();
+        let mut offsets_iter = self.src.iter_offsets();
 
         // let mut aaa = PathBuf::default();
         // let mut offset = 0;
@@ -565,7 +565,7 @@ where
         let mut builder: B = building::top_down::CreateBuilder::create();
         let stores = self.stores;
         let mut x = self.src.root();
-        let mut offsets_iter = self.src.iter();
+        let mut offsets_iter = self.src.iter_offsets();
 
         // let mut aaa = PathBuf::default();
         // let mut offset = 0;
