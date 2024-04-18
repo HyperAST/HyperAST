@@ -11,10 +11,10 @@ hyper_diff = { path = "../hyper_diff" }
 hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
 hyper_ast_cvs_git = { path = "../cvs/git" }
 env_logger = "0.9.0"
-log = { version = "0.4.6", features = [
-    "max_level_debug",
-    "release_max_level_warn",
-] }
+log = { version = "0.4.6"}#, features = [
+    #"max_level_debug",
+    #"release_max_level_warn",
+#] }
 
 pommes = "0.0.2"
 

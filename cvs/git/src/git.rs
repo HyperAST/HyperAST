@@ -197,7 +197,7 @@ impl Repo {
     }
     pub fn fetch(&self) -> Repository {
         let url = self.url();
-        let path = format!("{}", "/tmp/hyperastgitresources/repo/");
+        let path = format!("{}", "/home/clahoche/tmp/hyperastgitresources/repo/");
         fetch_repository(url, path)
     }
 }
