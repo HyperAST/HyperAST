@@ -180,10 +180,18 @@ fn t() {
     pub trait ErasableProcessor: Any + ToErasedProc + ParametrizedCommitProc {}
     pub trait ToErasedProc {
         fn to_erasable_processor(self: Box<Self>) -> Box<dyn ErasableProcessor>;
+        fn as_mut_any(&mut self) -> &mut dyn Any;
+        fn as_any(&self) -> &dyn Any;
     }
 
     impl<T: ErasableProcessor> ToErasedProc for T {
         fn to_erasable_processor(self: Box<Self>) -> Box<dyn ErasableProcessor> {
+            self
+        }
+        fn as_mut_any(&mut self) -> &mut dyn Any {
+            self
+        }
+        fn as_any(&self) -> &dyn Any {
             self
         }
     }
@@ -205,7 +213,7 @@ fn t() {
                 .entry(std::any::TypeId::of::<T>())
                 .or_insert_with(|| Box::new(T::default()).to_erasable_processor());
             let r = r.as_mut();
-            let r = <dyn Any>::downcast_mut(r);
+            let r = <dyn Any>::downcast_mut(r.as_mut_any());
             r.unwrap()
         }
     }
