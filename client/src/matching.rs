@@ -269,3 +269,73 @@ where
 // [client/src/matching.rs:173] bottom_up_hiding_t = 61.255278167
 // [client/src/changes.rs:163]
 
+
+// with the hidden nodes
+// [client/src/track/compute.rs:126]
+// [client/src/track.rs:674] nodes = 500000
+// [client/src/track.rs:676] src_oid = 0de92576100bba948cae854ebb9cd5a7a9502b43
+// [client/src/track.rs:676] dst_oid = b84af67f4c88f3e3f7b61bf2035475f79fb3e62e
+// 2024-04-20T13:06:04.093127Z  WARN request{method=GET uri=/track_at_path_with_changes/github/official-stockfish/Stockfish/5d1644ba696c0a4d81450f922d216bf6479d4929/0/33/2/126/0/0/6/26?upd=true&child=true&parent=false&exact_child=false&exact_parent=false&sim_child=false&sim_parent=false&meth=false&typ=false&top=false&file=false&pack=false&dependency=false&dependent=false&references=false&declaration=false version=HTTP/1.1}: client::track: done construction of [b84af67f4c88f3e3f7b61bf2035475f79fb3e62e, 7c8b7222f5eea024ab480abb2d9289fd1e42da9c, ec9038b7b4cb2701c3a3b8be56632e7f08e461ac, ab65d3fd0ecf340842408548bc7f3e6c28ad4c85] in official-stockfish    
+// [client/src/track.rs:1037] &path_to_target = [
+//     0,
+//     38,
+//     2,
+//     128,
+//     0,
+//     0,
+//     4,
+//     38,
+// ]
+// [hyper_diff/src/matchers/heuristic/gt/lazy2_greedy_subtree_matcher.rs:521] match_init_t = 6.5667e-5
+// [client/src/track/compute.rs:126]
+// [hyper_diff/src/matchers/heuristic/gt/lazy2_greedy_subtree_matcher.rs:242] &ambiguous_mappings.len() = 2494
+// [client/src/track/compute.rs:414] bottom_up_hiding_t = 1.792081625
+// [client/src/track.rs:643]
+// [client/src/changes.rs:133]
+// [client/src/changes.rs:140] src_arena.len() = 140600
+// [client/src/changes.rs:141] dst_arena.len() = 154226
+// [client/src/changes.rs:144] src_size = 140600
+// [client/src/changes.rs:145] dst_size = 154226
+// [client/src/changes.rs:154]
+// [client/src/changes.rs:155] mapper.mapping.src_arena.len() = 140600
+// [client/src/changes.rs:156] mapper.mapping.dst_arena.len() = 154226
+// [hyper_diff/src/matchers/heuristic/gt/lazy2_greedy_subtree_matcher.rs:521] match_init_t = 2.2125e-5
+// [client/src/matching.rs:169] compute_multimapping_t = 417.817973
+// [hyper_diff/src/matchers/heuristic/gt/lazy2_greedy_subtree_matcher.rs:242] &ambiguous_mappings.len() = 820501
+// [client/src/matching.rs:173] bottom_up_hiding_t = 344.150003833
+// [client/src/changes.rs:164]
+
+
+// after some cleanup, I was working at the same time so lower perfs are expected
+// [client/src/track.rs:674] nodes = 500000
+// [client/src/track.rs:676] src_oid = 0de92576100bba948cae854ebb9cd5a7a9502b43
+// [client/src/track.rs:676] dst_oid = b84af67f4c88f3e3f7b61bf2035475f79fb3e62e
+// 2024-04-22T16:18:29.209662Z  WARN request{method=GET uri=/track_at_path_with_changes/github/official-stockfish/Stockfish/5d1644ba696c0a4d81450f922d216bf6479d4929/0/33/2/126/0/0/6/26?upd=true&child=true&parent=false&exact_child=false&exact_parent=false&sim_child=false&sim_parent=false&meth=false&typ=false&top=false&file=false&pack=false&dependency=false&dependent=false&references=false&declaration=false version=HTTP/1.1}: client::track: done construction of [b84af67f4c88f3e3f7b61bf2035475f79fb3e62e, 7c8b7222f5eea024ab480abb2d9289fd1e42da9c, ec9038b7b4cb2701c3a3b8be56632e7f08e461ac, ab65d3fd0ecf340842408548bc7f3e6c28ad4c85] in official-stockfish    
+// [client/src/track.rs:1037] &path_to_target = [
+//     0,
+//     38,
+//     2,
+//     128,
+//     0,
+//     0,
+//     4,
+//     38,
+// ]
+// [hyper_diff/src/matchers/heuristic/gt/lazy2_greedy_subtree_matcher.rs:521] match_init_t = 2.8791e-5
+// [client/src/track/compute.rs:126]
+// [hyper_diff/src/matchers/heuristic/gt/lazy2_greedy_subtree_matcher.rs:242] &ambiguous_mappings.len() = 2494
+// [client/src/track/compute.rs:417] bottom_up_hiding_t = 2.561074541
+// [client/src/track.rs:643]
+// [client/src/changes.rs:133]
+// [client/src/changes.rs:140] src_arena.len() = 140574
+// [client/src/changes.rs:141] dst_arena.len() = 154186
+// [client/src/changes.rs:144] src_size = 140574
+// [client/src/changes.rs:145] dst_size = 154186
+// [client/src/changes.rs:154]
+// [client/src/changes.rs:155] mapper.mapping.src_arena.len() = 140574
+// [client/src/changes.rs:156] mapper.mapping.dst_arena.len() = 154186
+// [hyper_diff/src/matchers/heuristic/gt/lazy2_greedy_subtree_matcher.rs:521] match_init_t = 3.3458e-5
+// [client/src/matching.rs:169] compute_multimapping_t = 451.249137042
+// [hyper_diff/src/matchers/heuristic/gt/lazy2_greedy_subtree_matcher.rs:242] &ambiguous_mappings.len() = 820722
+// [client/src/matching.rs:173] bottom_up_hiding_t = 386.213826542
+// [client/src/changes.rs:164]

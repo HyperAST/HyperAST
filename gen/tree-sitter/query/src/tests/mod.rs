@@ -55,3 +55,59 @@ fn run(text: &[u8]) {
 
 mod search;
 mod auto;
+
+
+fn cpp_tree(
+    text: &[u8],
+) -> (
+    SimpleStores<hyper_ast_gen_ts_cpp::types::TStore>,
+    legion::Entity,
+) {
+    use hyper_ast_gen_ts_cpp::types::TStore;
+    use hyper_ast_gen_ts_cpp::legion::CppTreeGen;
+    let tree = match CppTreeGen::<TStore>::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    // println!("{:#?}", tree.root_node().to_sexp());
+    let mut stores: SimpleStores<TStore> = SimpleStores::default();
+    let mut md_cache = Default::default();
+    let mut tree_gen = CppTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
+    let entity = x.compressed_node;
+    // println!(
+    //     "{}",
+    //     hyper_ast::nodes::SyntaxSerializer::<_, _, true>::new(&stores, entity)
+    // );
+    (stores, entity)
+}
+fn xml_tree(
+    text: &[u8],
+) -> (
+    SimpleStores<hyper_ast_gen_ts_xml::types::TStore>,
+    legion::Entity,
+) {
+    use hyper_ast_gen_ts_xml::types::TStore;
+    use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
+    let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    // println!("{:#?}", tree.root_node().to_sexp());
+    let mut stores: SimpleStores<TStore> = SimpleStores::default();
+    let mut tree_gen = XmlTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+    };
+    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
+    let entity = x.compressed_node;
+    // println!(
+    //     "{}",
+    //     hyper_ast::nodes::SyntaxSerializer::<_, _, true>::new(&stores, entity)
+    // );
+    (stores, entity)
+}

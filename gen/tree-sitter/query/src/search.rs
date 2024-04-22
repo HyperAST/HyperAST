@@ -1,12 +1,9 @@
-use std::io::{stdout, Write};
-
 use crate::legion::TsQueryTreeGen;
 use crate::types::TStore;
 
 use hyper_ast::store::{defaults::LabelIdentifier, labels::LabelStore};
 use hyper_ast::types::{
-    self, HyperAST, IterableChildren, Labeled, NodeStore, Typed, TypedHyperAST, TypedNodeStore,
-    WithChildren,
+    HyperAST, IterableChildren, Labeled, Typed, TypedHyperAST, TypedNodeStore, WithChildren,
 };
 
 use hyper_ast::store::nodes::legion::NodeIdentifier;
@@ -25,8 +22,8 @@ pub(crate) struct QuickTrigger<T> {
     pub(crate) root_types: Arc<[T]>,
 }
 
-pub struct PreparedMatcher<'a, HAST, Ty> {
-    pub(crate) query_store: &'a HAST,
+pub struct PreparedMatcher<HAST, Ty> {
+    pub(crate) query_store: HAST,
     pub(crate) quick_trigger: QuickTrigger<Ty>,
     pub(crate) patterns: Arc<[Pattern<Ty>]>,
 }
@@ -56,15 +53,12 @@ impl<'a, 'b, Ty> PatternMatcher<'a, 'b, Ty> {
     }
 }
 
-impl<'a, Ty: for<'b> TryFrom<&'b str>> PreparedMatcher<'a, SimpleStores<TStore>, Ty>
+impl<'a, Ty: for<'b> TryFrom<&'b str>, QHAST: std::ops::Deref<Target = SimpleStores<TStore>>>
+    PreparedMatcher<QHAST, Ty>
 where
     for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
 {
-    pub fn is_matching<'store, HAST, TIdN>(
-        &self,
-        code_store: &'store HAST,
-        id: HAST::IdN,
-    ) -> bool
+    pub fn is_matching<'store, HAST, TIdN>(&self, code_store: &'store HAST, id: HAST::IdN) -> bool
     where
         HAST: TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::NodeId<IdN = HAST::IdN>
@@ -118,15 +112,44 @@ where
     }
 }
 
-impl<'a, Ty> PreparedMatcher<'a, SimpleStores<TStore>, Ty>
+impl<HAST, Ty> PreparedMatcher<HAST, Ty>
 where
     Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
     for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
 {
-    pub fn new(
-        query_store: &'a SimpleStores<crate::types::TStore>,
-        query: NodeIdentifier,
-    ) -> Self {
+    pub(crate) fn with_patterns(
+        query_store: HAST,
+        root_types: Vec<Ty>,
+        patterns: Vec<Pattern<Ty>>,
+    ) -> PreparedMatcher<HAST, Ty> {
+        Self {
+            query_store,
+            quick_trigger: QuickTrigger {
+                root_types: root_types.into(),
+            },
+            patterns: patterns.into(),
+        }
+    }
+}
+
+impl<'a, Ty> PreparedMatcher<&'a SimpleStores<TStore>, Ty>
+where
+    Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
+    for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
+{
+    pub fn new(query_store: &'a SimpleStores<crate::types::TStore>, query: NodeIdentifier) -> Self {
+        let (root_types, patterns) = Self::new_aux(query_store, query);
+
+        Self::with_patterns(query_store, root_types, patterns)
+    }
+
+    pub(crate) fn new_aux(
+        query_store: &'a SimpleStores<TStore>,
+        query: legion::Entity,
+    ) -> (Vec<Ty>, Vec<Pattern<Ty>>)
+    where
+        Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
+    {
         use crate::types::TIdN;
         use crate::types::Type;
         use hyper_ast::types::LabelStore;
@@ -178,14 +201,7 @@ where
                 todo!("{}", t)
             }
         }
-
-        Self {
-            query_store,
-            quick_trigger: QuickTrigger {
-                root_types: root_types.into(),
-            },
-            patterns: patterns.into(),
-        }
+        (root_types, patterns)
     }
     pub(crate) fn process_named_node(
         query_store: &'a SimpleStores<crate::types::TStore>,
@@ -380,7 +396,7 @@ where
             .unwrap()
             .0;
         let t = sharp.get_type();
-        assert_eq!(t, Type::TS3);
+        assert_eq!(t, Type::Sharp);
 
         let pred = cs.next().unwrap();
         let pred = query_store
@@ -539,7 +555,7 @@ impl MatchingRes {
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub(crate) enum CaptureRes {
+pub enum CaptureRes {
     Label(String),
     Node,
 }
@@ -733,50 +749,30 @@ pub(crate) fn extract_root_type(
 }
 
 pub(crate) fn ts_query(text: &[u8]) -> (SimpleStores<crate::types::TStore>, legion::Entity) {
-    use crate::types::TStore;
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
         type_store: TStore::default(),
         node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
     };
+    let query = ts_query2(&mut stores, text);
+    (stores, query)
+}
+
+pub(crate) fn ts_query2(stores: &mut SimpleStores<TStore>, text: &[u8]) -> legion::Entity {
     let mut md_cache = Default::default();
-    let mut java_tree_gen = TsQueryTreeGen {
+    let mut query_tree_gen = TsQueryTreeGen {
         line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
+        stores: stores,
         md_cache: &mut md_cache,
     };
 
     let tree = match crate::legion::tree_sitter_parse(text) {
         Ok(t) => t,
-        Err(t) => t,
+        Err(t) => {
+            eprintln!("{}", t.root_node().to_sexp());
+            t
+        }
     };
-    // println!("{}", tree.root_node().to_sexp());
-    let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
-
-    // println!();
-    // println!(
-    //     "{}",
-    //     hyper_ast::nodes::SyntaxSerializer::<_, _, true>::new(
-    //         &*java_tree_gen.stores,
-    //         full_node.local.compressed_node
-    //     )
-    // );
-    // stdout().flush().unwrap();
-    // println!(
-    //     "{}",
-    //     hyper_ast::nodes::JsonSerializer::<_, _, false>::new(
-    //         &*java_tree_gen.stores,
-    //         full_node.local.compressed_node
-    //     )
-    // );
-    // stdout().flush().unwrap();
-    // println!(
-    //     "{}",
-    //     hyper_ast::nodes::TextSerializer::new(
-    //         &*java_tree_gen.stores,
-    //         full_node.local.compressed_node
-    //     )
-    // );
-    // stdout().flush().unwrap();
-    (stores, full_node.local.compressed_node)
+    let full_node = query_tree_gen.generate_file(b"", text, tree.walk());
+    full_node.local.compressed_node
 }

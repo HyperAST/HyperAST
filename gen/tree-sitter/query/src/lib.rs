@@ -1,3 +1,5 @@
+#![feature(lazy_cell)]
+
 pub mod types;
 
 #[cfg(feature = "impl")]
@@ -53,3 +55,5 @@ pub mod search;
 
 #[cfg(feature = "legion")]
 pub mod iter;
+
+pub mod auto;

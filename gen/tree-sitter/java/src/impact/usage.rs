@@ -283,7 +283,7 @@ where
         // let current = scout.node_typed().unwrap();
         // let b = self.stores.typed_node_store().resolve(current);
         let has_children = b.has_children();
-        let t = b.get_type();
+        let Some(t) = b.try_get_type() else {return vec![]};
         match self.find_refs_pre(t, &b, package, scout, target, &current) {
             Ok(value) => (),
             Err(value) => return value,
@@ -466,7 +466,7 @@ where
     {
         if t == Type::Spaces {
             return Err(vec![]);
-        } else if t == Type::Comment {
+        } else if t.is_comment() {
             return Err(vec![]);
         } else if t == Type::PackageDeclaration {
             let root_ref = self.ana.solver.intern(RefsEnum::Root);
@@ -1197,7 +1197,7 @@ where
                     self.successful_match(scout); // TODO
                 }
             } else {
-                todo!()
+                // todo!() // TODO should not append
             }
         } else if is_individually_matched(t) || is_never_reference(t) {
         } else {
@@ -1290,7 +1290,7 @@ where
                         self.successful_match(&mut scout);
                     }
                 } else if t == Type::Identifier {
-                } else if t == Type::TS4 {
+                } else if t == Type::_ConstructorDeclarator {
                 } else if is_individually_matched(t) || is_never_reference(t) {
                 } else {
                     missing_rule!("exact_match_cast_expression missing {:?}", t)
@@ -1484,7 +1484,7 @@ where
                     // } else {
                     //     todo!("{:?}", t)
                     // }
-                } else if t == Type::TS4 {
+                } else if t == Type::_ConstructorDeclarator {
                 } else if is_individually_matched(t) || is_never_reference(t) {
                 } else {
                     missing_rule!("exact_match_extend_impl_things missing {:?}", t)
@@ -2632,8 +2632,7 @@ where
                 if let Some(xxx) = parent_parent_scout.up(&self.sp_store) {
                     let bbb = self.stores.typed_node_store().resolve(&xxx.unwrap());
                     let ttt = bbb.get_type();
-                    if ttt == Type::SwitchStatement
-                        || ttt == Type::SwitchExpression
+                    if ttt == Type::SwitchExpression
                         || ttt == Type::IfStatement
                         || ttt == Type::WhileStatement
                         || ttt == Type::DoStatement
@@ -2663,7 +2662,7 @@ where
                         .unwrap()
                         .0
                         .get_type();
-                    if t == Type::TS8 {
+                    if t == Type::_MethodHeader {
                         return Some(scout);
                     }
                 }
@@ -2849,7 +2848,7 @@ fn is_individually_matched(t: Type) -> bool {
 }
 /// WARN not exaustive set
 fn is_never_reference(t: Type) -> bool {
-    t == Type::Comment
+    t.is_comment()
     || t == Type::ClassLiteral // out of scope for tool ie. reflexivity
     || t == Type::StringLiteral
     || t == Type::CharacterLiteral
@@ -2986,7 +2985,7 @@ where
         let t = b.get_type();
         if t == Type::Spaces {
             return;
-        } else if t == Type::Comment {
+        } else if t.is_comment() {
             return;
         } else if t == Type::ImportDeclaration
             // || t == Type::MavenDirectory

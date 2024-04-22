@@ -49,6 +49,13 @@ fn run(text: &[u8]) {
             full_node.local.compressed_node
         )
     );
+    println!(
+        "{}",
+        hyper_ast::nodes::SexpSerializer::new(
+            &*java_tree_gen.stores,
+            full_node.local.compressed_node
+        )
+    );
     stdout().flush().unwrap();
 
     // let mut out = IoOut { stream: stdout() };
@@ -1006,11 +1013,11 @@ class A {
     }
 }";
 
-static CASE_17: &'static str = "package q.w.e;
+static CASE_17: &'static str =r#"package q.w.e;
 enum SSLCipher {
     // exportable ciphers
-    @SuppressWarnings({\"unchecked\", \"rawtypes\"})
-    B_NULL(\"NULL\", NULL_CIPHER, 0, 0, 0, 0, true, true,
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    B_NULL("NULL", NULL_CIPHER, 0, 0, 0, 0, true, true,
         (Map.Entry<ReadCipherGenerator,
                 ProtocolVersion[]>[])(new Map.Entry[] {
             new SimpleImmutableEntry<ReadCipherGenerator, ProtocolVersion[]>(
@@ -1033,7 +1040,8 @@ enum SSLCipher {
                 ProtocolVersion.PROTOCOLS_TO_13
             )
         })),
-";
+}
+"#;
 
 static CASE_18: &'static str = "
 module java.compiler {

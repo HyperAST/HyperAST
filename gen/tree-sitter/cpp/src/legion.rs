@@ -1,5 +1,5 @@
 ///! fully compress all subtrees from a cpp CST
-use std::{collections::HashMap, fmt::Debug, io::stdout, vec};
+use std::{collections::HashMap, fmt::Debug, vec};
 
 use crate::{types::TIdN, TNode};
 use legion::world::EntryRef;
@@ -9,22 +9,23 @@ use hyper_ast::{
     filter::BloomSize,
     full::FullNode,
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
-    // impact::{element::RefsEnum, elements::*, partial_analysis::PartialAnalysis},
-    nodes::{self, IoOut, Space},
+    nodes::Space,
     store::{
-        labels::LabelStore,
-        nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert},
+        nodes::{
+            legion::{
+                compo::{self, NoSpacesCS, CS},
+                HashedNodeRef, NodeIdentifier, PendingInsert,
+            },
+            DefaultNodeStore as NodeStore,
+        },
         SimpleStores,
-        // SimpleStores,
-    },
-    store::{
-        nodes::legion::{compo, compo::CS, NodeIdentifier},
-        nodes::DefaultNodeStore as NodeStore,
     },
     tree_gen::{
-        compute_indentation, get_spacing, has_final_space, parser::Node as _, AccIndentation,
-        Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, SpacedGlobalData,
-        Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, ZippedTreeGen,
+        compute_indentation, get_spacing, has_final_space,
+        parser::{Node as _, Visibility},
+        AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
+        PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen,
+        WithByteRange, ZippedTreeGen,
     },
     types::LabelStore as _,
 };
@@ -96,6 +97,22 @@ pub struct Acc {
     indentation: Spaces,
 }
 
+impl Debug for Acc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Acc")
+            .field("simple", &self.simple)
+            .field("no_space", &self.no_space)
+            .field("labeled", &self.labeled)
+            .field("start_byte", &self.start_byte)
+            .field("end_byte", &self.end_byte)
+            .field("metrics", &self.metrics)
+            .field("ana", &self.ana)
+            .field("padding_start", &self.padding_start)
+            .field("indentation", &self.indentation)
+            .finish()
+    }
+}
+
 pub type FNode = FullNode<BasicGlobalData, Local>;
 impl Accumulator for Acc {
     type Node = FNode;
@@ -109,51 +126,55 @@ impl AccIndentation for Acc {
         &self.indentation
     }
 }
+impl WithByteRange for Acc {
+    fn begin_byte(&self) -> usize {
+        self.start_byte
+    }
+
+    fn has_children(&self) -> bool {
+        !self.simple.children.is_empty()
+    }
+
+    fn end_byte(&self) -> usize {
+        self.end_byte
+    }
+}
+
+/// enables recovering of hdden nodes from tree-sitter
+#[cfg(not(debug_assertions))]
+const HIDDEN_NODES: bool = true;
+#[cfg(debug_assertions)]
+static HIDDEN_NODES: bool = true;
 
 #[repr(transparent)]
 pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
 
-mod ts_internal {
-    mod ffi {
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+#[allow(dead_code)] // NOTE: created by tree sitter
+enum TreeCursorStep {
+    TreeCursorStepNone,
+    TreeCursorStepHidden,
+    TreeCursorStepVisible,
+}
 
-        #[repr(C)]
-        #[derive(Debug, Copy, Clone)]
-        pub struct TSTreeCursor {
-            pub tree: *const ::std::os::raw::c_void,
-            pub id: *const ::std::os::raw::c_void,
-            pub context: [u32; 2usize],
-        }
-        extern "C" {
-            pub fn ts_tree_cursor_goto_first_child_internal(
-                arg1: *mut TSTreeCursor,
-            ) -> TreeCursorStep;
-            pub fn ts_tree_cursor_goto_next_sibling_internal(
-                arg1: *mut TSTreeCursor,
-            ) -> TreeCursorStep;
-        }
-        #[repr(C)]
-        #[derive(PartialEq, Eq)]
-        pub enum TreeCursorStep {
-            TreeCursorStepNone,
-            TreeCursorStepHidden,
-            TreeCursorStepVisible,
+impl TreeCursorStep {
+    fn ok(&self) -> Option<Visibility> {
+        match self {
+            TreeCursorStep::TreeCursorStepNone => None,
+            TreeCursorStep::TreeCursorStepHidden => Some(Visibility::Hidden),
+            TreeCursorStep::TreeCursorStepVisible => Some(Visibility::Visible),
         }
     }
-    pub struct TreeCursor<'a>(ffi::TSTreeCursor, std::marker::PhantomData<&'a ()>);
-    impl<'a> TreeCursor<'a> {
-        pub fn goto_first_child_internal(&mut self) -> bool {
-            return unsafe { ffi::ts_tree_cursor_goto_first_child_internal(&mut self.0) }
-                != ffi::TreeCursorStep::TreeCursorStepNone;
-        }
-        pub fn goto_next_sibling_internal(&mut self) -> bool {
-            return unsafe { ffi::ts_tree_cursor_goto_next_sibling_internal(&mut self.0) }
-                != ffi::TreeCursorStep::TreeCursorStepNone;
-        }
+}
 
-        pub fn as_internal<'b>(ts: &'b mut tree_sitter::TreeCursor<'a>) -> &'b mut Self {
-            unsafe { std::mem::transmute(ts) }
-        }
-    }
+extern "C" {
+    fn ts_tree_cursor_goto_first_child_internal(
+        self_: *mut tree_sitter::ffi::TSTreeCursor,
+    ) -> TreeCursorStep;
+    fn ts_tree_cursor_goto_next_sibling_internal(
+        self_: *mut tree_sitter::ffi::TSTreeCursor,
+    ) -> TreeCursorStep;
 }
 
 impl<'a> Debug for TTreeCursor<'a> {
@@ -168,29 +189,60 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
         TNode(self.0.node())
     }
 
-    fn goto_first_child(&mut self) -> bool {
-        self.0.goto_first_child()
-        // // self.0.node().is_missing()
-        // self.0.goto_first_child_internal()
-        // // ts_internal::TreeCursor::as_internal(&mut self.0).goto_first_child_internal()
+    fn role(&self) -> Option<std::num::NonZeroU16> {
+        self.0.field_id()
     }
 
     fn goto_parent(&mut self) -> bool {
         self.0.goto_parent()
-        // self.0.goto_parent_internal()
+    }
+
+    fn goto_first_child(&mut self) -> bool {
+        self.goto_first_child_extended().is_some()
     }
 
     fn goto_next_sibling(&mut self) -> bool {
-        self.0.goto_next_sibling()
-        // self.0.goto_next_sibling_internal()
-        // // ts_internal::TreeCursor::as_internal(&mut self.0).goto_next_sibling_internal()
+        self.goto_next_sibling_extended().is_some()
+    }
+
+    fn goto_first_child_extended(&mut self) -> Option<Visibility> {
+        if HIDDEN_NODES {
+            unsafe {
+                let s = &mut self.0;
+                let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
+                ts_tree_cursor_goto_first_child_internal(s)
+            }
+            .ok()
+        } else {
+            if self.0.goto_first_child() {
+                Some(Visibility::Visible)
+            } else {
+                None
+            }
+        }
+    }
+
+    fn goto_next_sibling_extended(&mut self) -> Option<Visibility> {
+        if HIDDEN_NODES {
+            unsafe {
+                let s = &mut self.0;
+                let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
+                ts_tree_cursor_goto_next_sibling_internal(s)
+            }
+            .ok()
+        } else {
+            if self.0.goto_next_sibling() {
+                Some(Visibility::Visible)
+            } else {
+                None
+            }
+        }
     }
 }
 
 impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>>
     ZippedTreeGen for CppTreeGen<'store, 'cache, TS>
 {
-    // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores<TS>;
     type Text = [u8];
     type Node<'b> = TNode<'b>;
@@ -235,27 +287,24 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
         node: &Self::Node<'_>,
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
-        skip: &mut bool,
-    ) -> Option<<Self as TreeGen>::Acc> {
+    ) -> PreResult<<Self as TreeGen>::Acc> {
         let type_store = &mut self.stores().type_store;
-        // let kind = node.kind();
-        // let Some(kind) = type_store.try_cpp(kind) else {
-        //     return None
-        // };
         let kind = node.obtain_type(type_store);
-        if kind == Type::StringLiteral || kind == Type::NumberLiteral || kind == Type::CharLiteral {
-            *skip = true;
+        if HIDDEN_NODES {
+            if kind == Type::_ExpressionNotBinary
+                || kind == Type::_FunctionDeclaratorSeq
+                || kind == Type::ParameterListRepeat1
+                || kind == Type::TranslationUnitRepeat1
+                || kind.is_repeat()
+            {
+                return PreResult::Ignore;
+            }
         }
-        // TODO make a test to carcterize behavior and avoid future regressions,
-        // see also related TODO: opt out of using end_byte other than on leafs 
-        if kind == Type::TS0 {
-            *skip = true;
+        if node.0.is_missing() {
+            return PreResult::Skip;
         }
-        let mut acc = self.pre(text, node, stack, global);
-        if kind == Type::StringLiteral || kind == Type::NumberLiteral || kind == Type::CharLiteral {
-            acc.labeled = true;
-        }
-        Some(acc)
+        let acc = self.pre(text, node, stack, global);
+        PreResult::Ok(acc)
     }
     fn pre(
         &mut self,
@@ -309,9 +358,11 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
             parent.indentation(),
         );
         if let Some(spacing) = spacing {
+            let local = self.make_spacing(spacing);
+            debug_assert_ne!(parent.simple.children.len(), 0);
             parent.push(FullNode {
                 global: global.into(),
-                local: self.make_spacing(spacing),
+                local,
             });
         }
         let label = if acc.labeled {
@@ -394,7 +445,7 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
     pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
         let mut parser = tree_sitter::Parser::new();
         let language = tree_sitter_cpp::language();
-        parser.set_language(language).unwrap();
+        parser.set_language(&language).unwrap();
         let tree = parser.parse(text, None).unwrap();
         if tree.root_node().has_error() {
             Err(tree)
@@ -522,13 +573,6 @@ impl<'stores, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeId
 
         let insertion = node_store.prepare_insertion(&hashable, eq);
 
-        // let ana = None as Option<PartialAnalysis>;
-
-        // let ana = match ana {
-        //     Some(ana) => Some(ana), // TODO partial ana resolution
-        //     None => None,
-        // };
-
         let local = if let Some(compressed_node) = insertion.occupied_id() {
             let ana = None;
             let hashs = hbuilder.build();
@@ -547,20 +591,59 @@ impl<'stores, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeId
             let ana = None;
             let hashs = hbuilder.build();
             let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte).try_into().unwrap());
-            let base = (interned_kind, hashs, bytes_len);
-            let compressed_node = compress(
-                label_id,
-                &ana,
-                acc.simple,
-                acc.no_space,
-                // bytes_len,
-                size,
-                height,
-                size_no_spaces,
-                insertion,
-                // hashs,
-                base,
-            );
+            let compressed_node = if false {
+                let base = (interned_kind, hashs, bytes_len);
+                compress(
+                    label_id,
+                    &ana,
+                    acc.simple,
+                    acc.no_space,
+                    size,
+                    height,
+                    size_no_spaces,
+                    insertion,
+                    base,
+                )
+            } else {
+                // NOTE use of dyn_builder
+                // TODO make it available through cargo feature or runtime config
+                // - should most likely not change the behavior of the HyperAST, need tests
+                // TODO make an even better API
+                // - wrapping the builder,
+                // - modularising computation and storage of metadata,
+                // - checking some invariants when adding metadata,
+                // - checking some invariants for indentifying data on debug builds
+                // - tying up parts of accumulator (hyper_ast::tree_genBasicAccumulator) and builder (EntityBuilder).
+                let mut dyn_builder =
+                    hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+                dyn_builder.add(interned_kind);
+                dyn_builder.add(hashs.clone());
+                dyn_builder.add(compo::BytesLen(
+                    (acc.end_byte - acc.start_byte).try_into().unwrap(),
+                ));
+
+                if let Some(label_id) = label_id {
+                    dyn_builder.add(label_id);
+                }
+
+                match acc.simple.children.len() {
+                    0 => {
+                        // dyn_builder.add(BloomSize::None);
+                    }
+                    x => {
+                        let a = acc.simple.children.into_boxed_slice();
+                        dyn_builder.add(compo::Size(size));
+                        dyn_builder.add(compo::SizeNoSpaces(size_no_spaces));
+                        dyn_builder.add(compo::Height(height));
+                        dyn_builder.add(CS(a));
+                        if x != acc.no_space.len() {
+                            dyn_builder.add(NoSpacesCS(acc.no_space.into_boxed_slice()));
+                        }
+                    }
+                }
+
+                NodeStore::insert_built_after_prepare(insertion.vacant(), dyn_builder.build())
+            };
 
             let metrics = SubTreeMetrics {
                 size,
@@ -642,95 +725,6 @@ fn compress<T: 'static + std::marker::Send + std::marker::Sync>(
     }
 }
 
-// pub fn print_tree_ids(node_store: &NodeStore, id: &NodeIdentifier) {
-//     nodes::print_tree_ids(
-//         |id| -> _ {
-//             node_store
-//                 .resolve::<Type>(id.clone())
-//                 .into_compressed_node()
-//                 .unwrap()
-//         },
-//         id,
-//     )
-// }
-
-// pub fn print_tree_structure(node_store: &NodeStore, id: &NodeIdentifier) {
-//     nodes::print_tree_structure(
-//         |id| -> _ {
-//             node_store
-//                 .resolve::<Type>(id.clone())
-//                 .into_compressed_node()
-//                 .unwrap()
-//         },
-//         id,
-//     )
-// }
-
-// pub fn print_tree_labels(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
-//     nodes::print_tree_labels(
-//         |id| -> _ {
-//             node_store
-//                 .resolve::<Type>(id.clone())
-//                 .into_compressed_node()
-//                 .unwrap()
-//         },
-//         |id| -> _ { label_store.resolve(id).to_owned() },
-//         id,
-//     )
-// }
-
-// pub fn print_tree_syntax(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
-//     nodes::print_tree_syntax(
-//         |id| -> _ {
-//             node_store
-//                 .resolve::<Type>(id.clone())
-//                 .into_compressed_node()
-//                 .unwrap()
-//         },
-//         |id| -> _ { label_store.resolve(id).to_owned() },
-//         id,
-//         &mut Into::<IoOut<_>>::into(stdout()),
-//     )
-// }
-
-// pub fn print_tree_syntax_with_ids(
-//     node_store: &NodeStore,
-//     label_store: &LabelStore,
-//     id: &NodeIdentifier,
-// ) {
-//     nodes::print_tree_syntax_with_ids(
-//         |id| -> _ {
-//             node_store
-//                 .resolve::<Type>(id.clone())
-//                 .into_compressed_node()
-//                 .unwrap()
-//         },
-//         |id| -> _ { label_store.resolve(id).to_owned() },
-//         id,
-//         &mut Into::<IoOut<_>>::into(stdout()),
-//     )
-// }
-
-// pub fn serialize<W: std::fmt::Write>(
-//     node_store: &NodeStore,
-//     label_store: &LabelStore,
-//     id: &NodeIdentifier,
-//     out: &mut W,
-//     parent_indent: &str,
-// ) -> Option<String> {
-//     nodes::serialize(
-//         |id| -> _ {
-//             node_store
-//                 .resolve::<Type>(id.clone())
-//                 .into_compressed_node()
-//                 .unwrap()
-//         },
-//         |id| -> _ { label_store.resolve(id).to_owned() },
-//         id,
-//         out,
-//         parent_indent,
-//     )
-// }
 /// TODO partialana
 impl PartialAnalysis {
     pub(crate) fn refs_count(&self) -> usize {

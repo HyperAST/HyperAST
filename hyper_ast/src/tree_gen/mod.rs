@@ -1,33 +1,29 @@
 //! Tree Generators
-//! 
+//!
 //! This module contains facilities to help you build an HyperAST.
 //! - [`TreeGen::make`] is where a subtree is pushed in the HyperAST
 //!   - You should also use [`crate::store::nodes::legion::NodeStore::prepare_insertion`]
 //!     to insert subtrees in the HyperAST while deduplicating identical ones
 //! - To visit parsers with a zipper/cursor interface you should implement [`ZippedTreeGen`]
 //!   - [`crate::parser::TreeCursor`] should be implemented to wrap you parser's interface
-//! 
-//! 
+//!
+//!
 //! ## Important Note
 //! To make code analysis incremental in the HyperAST,
 //! we locally persist locally derived values, we call them metadata.
 //! To save memory, we also deduplicate identical nodes using the type, label and children of a subtree.
 //! In other word, in the HyperAST, you store Metadata (derived values) along subtrees of the HyperAST,
-//! and deduplicate subtree using identifying data. 
+//! and deduplicate subtree using identifying data.
 //! To ensure derived data are unique per subtree,
 //! metadata should only be derived from local identifying values.
-
 
 pub mod parser;
 
 use std::fmt::Debug;
 
-use crate::{
-    hashed::NodeHashs,
-    nodes::Space,
-};
+use crate::{hashed::NodeHashs, nodes::Space};
 
-use self::parser::{Node as _, TreeCursor as _};
+use self::parser::{Node as _, TreeCursor as _, Visibility};
 
 pub type Spaces = Vec<Space>;
 
@@ -35,6 +31,14 @@ pub type Spaces = Vec<Space>;
 pub trait Accumulator {
     type Node;
     fn push(&mut self, full_node: Self::Node);
+}
+
+pub trait WithByteRange {
+    fn has_children(&self) -> bool {
+        todo!()
+    }
+    fn begin_byte(&self) -> usize;
+    fn end_byte(&self) -> usize;
 }
 
 pub struct BasicAccumulator<T, Id> {
@@ -48,6 +52,13 @@ impl<T, Id> BasicAccumulator<T, Id> {
             kind,
             children: vec![],
         }
+    }
+}
+impl<T: Debug, Id> Debug for BasicAccumulator<T, Id> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BasicAccumulator")
+            .field("kind", &self.kind)
+            .finish()
     }
 }
 
@@ -217,12 +228,13 @@ impl<'a> GlobalData for SpacedGlobalData<'a> {
 /// Primary trait to implement to generate AST.
 pub trait TreeGen {
     /// Container holding data waiting to be added to the HyperAST
-    type Acc: AccIndentation;
+    /// Note: needs WithByteRange to handle hidden node properly, it allows to go back up without using the cursor. When Treesitter is "fixed" change that
+    type Acc: AccIndentation + WithByteRange;
     /// Container holding global data used during generation.
-    /// 
+    ///
     /// Useful for transient data needed during generation,
     /// this way you avoid cluttering [TreeGen::Acc].
-    /// 
+    ///
     /// WARN make sure it does not leaks contextual data in subtrees.
     type Global: GlobalData;
     fn make(
@@ -233,37 +245,113 @@ pub trait TreeGen {
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node;
 }
 
-pub struct Parents<Acc>(Vec<Option<Acc>>);
+#[derive(Debug)]
+pub struct Parents<Acc>(Vec<P<Acc>>);
 impl<Acc> From<Acc> for Parents<Acc> {
     fn from(value: Acc) -> Self {
-        Self::new(value)
+        Self::new(P::Visible(value))
     }
 }
+
+#[derive(Debug)]
+enum P<Acc> {
+    ManualyHidden,
+    BothHidden,
+    Hidden(Acc),
+    Visible(Acc),
+}
+impl<Acc> P<Acc> {
+    fn is_both_hidden(&self) -> bool {
+        match self {
+            P::BothHidden => true,
+            _ => false,
+        }
+    }
+    fn unwrap(self) -> Acc {
+        match self {
+            P::ManualyHidden => panic!(),
+            P::BothHidden => panic!(),
+            P::Hidden(p) => p,
+            P::Visible(p) => p,
+        }
+    }
+    fn as_ref(&self) -> P<&Acc> {
+        match self {
+            P::ManualyHidden => P::ManualyHidden,
+            P::BothHidden => P::BothHidden,
+            P::Hidden(t) => P::Hidden(t),
+            P::Visible(t) => P::Visible(t),
+        }
+    }
+    fn as_mut(&mut self) -> P<&mut Acc> {
+        match self {
+            P::ManualyHidden => P::ManualyHidden,
+            P::BothHidden => P::BothHidden,
+            P::Hidden(t) => P::Hidden(t),
+            P::Visible(t) => P::Visible(t),
+        }
+    }
+}
+impl<Acc> P<Acc> {
+    fn ok(self) -> Option<Acc> {
+        match self {
+            P::ManualyHidden => None,
+            P::BothHidden => None,
+            P::Hidden(p) => Some(p),
+            P::Visible(p) => Some(p),
+        }
+    }
+    fn visibility(self) -> Option<(Visibility, Acc)> {
+        match self {
+            P::ManualyHidden => None,
+            P::BothHidden => None,
+            P::Hidden(a) => Some((Visibility::Hidden, a)),
+            P::Visible(a) => Some((Visibility::Visible, a)),
+        }
+    }
+}
+
 impl<Acc> Parents<Acc> {
-    pub fn new(value: Acc) -> Self {
-        Self(vec![Some(value)])
+    fn new(value: P<Acc>) -> Self {
+        Self(vec![value])
     }
     pub fn finalize(mut self) -> Acc {
         assert_eq!(self.0.len(), 1);
         self.0.pop().unwrap().unwrap()
     }
-    fn push(&mut self, value: Option<Acc>) {
+    fn push(&mut self, value: P<Acc>) {
         self.0.push(value)
     }
-    fn pop(&mut self) -> Option<Option<Acc>> {
+    fn pop(&mut self) -> Option<P<Acc>> {
         self.0.pop()
     }
     pub fn parent(&self) -> Option<&Acc> {
-        self.0.iter().rev().find_map(|x| x.as_ref())
+        self.0.iter().rev().find_map(|x| x.as_ref().ok())
     }
     fn parent_mut(&mut self) -> Option<&mut Acc> {
-        self.0.iter_mut().rev().find_map(|x| x.as_mut())
+        self.0.iter_mut().rev().find_map(|x| x.as_mut().ok())
     }
+    fn parent_mut_with_vis(&mut self) -> Option<(Visibility, &mut Acc)> {
+        self.0
+            .iter_mut()
+            .rev()
+            .find_map(|x| x.as_mut().visibility())
+    }
+}
+
+pub enum PreResult<Acc> {
+    /// Do not process node and its children
+    Skip,
+    /// Do not process node (but process children)
+    Ignore,
+    /// Do not process children
+    SkipChildren(Acc),
+    Ok(Acc),
 }
 
 /// Define a zipped visitor, where you mostly have to implement,
 /// [`ZippedTreeGen::pre`] going down,
-/// and [`ZippedTreeGen::post`] going up in the traversal. 
+/// and [`ZippedTreeGen::post`] going up in the traversal.
 pub trait ZippedTreeGen: TreeGen
 where
     Self::Global: TotalBytesGlobalData,
@@ -278,14 +366,13 @@ where
 
     fn init_val(&mut self, text: &Self::Text, node: &Self::Node<'_>) -> Self::Acc;
 
-
     /// Can be implemented if you want to skip certain nodes,
     /// note that skipping only act on the "overlay" tree structure,
-    /// meaning that the content of a skipped node is fed to its parents 
-    /// 
+    /// meaning that the content of a skipped node is fed to its parents
+    ///
     /// The default implementation skips nothing.
-    /// 
-    ///  see also also the following example use: 
+    ///
+    ///  see also also the following example use:
     /// [`hyper_ast_gen_ts_cpp::legion::CppTreeGen::pre_skippable`](../../hyper_ast_gen_ts_cpp/legion/struct.CppTreeGen.html#method.pre_skippable)
     fn pre_skippable(
         &mut self,
@@ -293,10 +380,8 @@ where
         node: &Self::Node<'_>,
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
-        skip: &mut bool,
-    ) -> Option<<Self as TreeGen>::Acc> {
-        let _ = skip;
-        Some(self.pre(text, node, stack, global))
+    ) -> PreResult<<Self as TreeGen>::Acc> {
+        PreResult::Ok(self.pre(text, node, stack, global))
     }
 
     /// Called when going up
@@ -329,67 +414,180 @@ where
     ) {
         let mut has = Has::Down;
         loop {
-            // dbg!(&cursor, stack.0.len());
-            let sbl = cursor.node().start_byte();
-            if has != Has::Up && cursor.goto_first_child() {
-                global.set_sum_byte_length(sbl);
+            if has != Has::Up
+                && let Some(visibility) = cursor.goto_first_child_extended()
+            {
                 has = Has::Down;
                 global.down();
-                let mut skip = false;
-                let n = self.pre_skippable(text, &cursor.node(), &stack, global, &mut skip);
-                if skip {
-                    assert!(n.is_some());
-                    has = Has::Up;
+                let n = self.pre_skippable(text, &cursor.node(), &stack, global);
+                match n {
+                    PreResult::Skip => {
+                        has = Has::Up;
+                        global.up();
+                    }
+                    PreResult::Ignore => {
+                        if let Visibility::Visible = visibility {
+                            stack.push(P::ManualyHidden);
+                        } else {
+                            stack.push(P::BothHidden);
+                        }
+                    }
+                    PreResult::SkipChildren(acc) => {
+                        has = Has::Up;
+                        if let Visibility::Visible = visibility {
+                            stack.push(P::Visible(acc));
+                        } else {
+                            unimplemented!("Only concrete nodes should be leafs")
+                        }
+                    }
+                    PreResult::Ok(acc) => {
+                        global.set_sum_byte_length(acc.begin_byte());
+                        if let Visibility::Visible = visibility {
+                            stack.push(P::Visible(acc));
+                        } else {
+                            stack.push(P::Hidden(acc));
+                        }
+                    }
                 }
-
-                stack.push(n);
             } else {
-                let acc = stack.pop().unwrap();
-                let is_visible = acc.is_some();
-                if is_visible {
-                    global.up();
-                }
-                let full_node: Option<_> = if let Some(parent) = stack.parent_mut() {
-                    acc.map(|acc| self.post(parent, global, text, acc))
-                } else {
-                    stack.push(acc);
-                    None
+                let is_visible;
+                let is_parent_hidden;
+                let full_node: Option<_> = match (stack.pop().unwrap(), stack.parent_mut_with_vis())
+                {
+                    (P::Visible(acc), None) => {
+                        global.up();
+                        is_visible = true;
+                        is_parent_hidden = false;
+                        global.set_sum_byte_length(acc.end_byte());
+                        stack.push(P::Visible(acc));
+                        None
+                    }
+                    (_, None) => {
+                        panic!();
+                    }
+                    (P::ManualyHidden, Some((v, _))) => {
+                        is_visible = false;
+                        is_parent_hidden = v == Visibility::Hidden;
+                        None
+                    }
+                    (P::BothHidden, Some((v, _))) => {
+                        is_visible = false;
+                        is_parent_hidden = v == Visibility::Hidden;
+                        None
+                    }
+                    (P::Visible(acc), Some((v, parent))) => {
+                        is_visible = true;
+                        is_parent_hidden = v == Visibility::Hidden;
+                        if !acc.has_children() {
+                            global.set_sum_byte_length(acc.end_byte());
+                        }
+                        if is_parent_hidden && parent.end_byte() <= acc.begin_byte() {
+                            panic!()
+                        }
+                        global.up();
+                        let full_node = self.post(parent, global, text, acc);
+                        Some(full_node)
+                    }
+                    (P::Hidden(acc), Some((v, parent))) => {
+                        is_visible = false;
+                        is_parent_hidden = v == Visibility::Hidden;
+                        if !acc.has_children() {
+                            global.set_sum_byte_length(acc.end_byte());
+                        }
+                        if is_parent_hidden && parent.end_byte() <= acc.begin_byte() {
+                            panic!()
+                        }
+                        global.up();
+                        let full_node = self.post(parent, global, text, acc);
+                        Some(full_node)
+                    }
                 };
 
                 // TODO opt out of using end_byte other than on leafs,
                 // it should help with trailing spaces,
                 // something like `cursor.node().child_count().ne(0).then(||cursor.node().end_byte())` then just call set_sum_byte_length if some
-                let sbl = cursor.node().end_byte();
-                if cursor.goto_next_sibling() {
-                    global.set_sum_byte_length(sbl);
+                if let Some(visibility) = cursor.goto_next_sibling_extended() {
                     has = Has::Right;
                     let parent = stack.parent_mut().unwrap();
                     if let Some(full_node) = full_node {
                         parent.push(full_node);
                     }
-                    global.down();
-                    let mut skip = false;
-                    let n = self.pre_skippable(text, &cursor.node(), &stack, global, &mut skip);
-                    if skip {
-                        has = Has::Up;
+                    loop {
+                        let parent = stack.parent_mut().unwrap();
+                        if parent.end_byte() <= cursor.node().start_byte() {
+                            loop {
+                                let p = stack.pop().unwrap();
+                                match p {
+                                    P::ManualyHidden => (),
+                                    P::BothHidden => (),
+                                    P::Hidden(acc) => {
+                                        let parent = stack.parent_mut().unwrap();
+                                        let full_node = self.post(parent, global, text, acc);
+                                        parent.push(full_node);
+                                        break;
+                                    }
+                                    P::Visible(acc) => {
+                                        let parent = stack.parent_mut().unwrap();
+                                        let full_node = self.post(parent, global, text, acc);
+                                        parent.push(full_node);
+                                        break;
+                                    }
+                                }
+                            }
+                        } else {
+                            break;
+                        }
                     }
-                    stack.push(n);
+                    global.down();
+                    let n = self.pre_skippable(text, &cursor.node(), &stack, global);
+                    match n {
+                        PreResult::Skip => {
+                            has = Has::Up;
+                            global.up();
+                        }
+                        PreResult::Ignore => {
+                            if let Visibility::Visible = visibility {
+                                stack.push(P::ManualyHidden);
+                            } else {
+                                stack.push(P::BothHidden);
+                            }
+                        }
+                        PreResult::SkipChildren(acc) => {
+                            has = Has::Up;
+                            if let Visibility::Visible = visibility {
+                                stack.push(P::Visible(acc));
+                            } else {
+                                unimplemented!("Only concrete nodes should be leafs")
+                            }
+                        }
+                        PreResult::Ok(acc) => {
+                            global.set_sum_byte_length(acc.begin_byte());
+                            if let Visibility::Visible = visibility {
+                                stack.push(P::Visible(acc));
+                            } else {
+                                stack.push(P::Hidden(acc));
+                            }
+                        }
+                    }
                 } else {
                     has = Has::Up;
-                    if cursor.goto_parent() {
+                    if is_parent_hidden || stack.0.last().map_or(false, P::is_both_hidden) {
                         if let Some(full_node) = full_node {
-                            global.set_sum_byte_length(sbl);
+                            let parent = stack.parent_mut().unwrap();
+                            parent.push(full_node);
+                        }
+                    } else if cursor.goto_parent() {
+                        if let Some(full_node) = full_node {
                             let parent = stack.parent_mut().unwrap();
                             parent.push(full_node);
                         } else if is_visible {
                             if has == Has::Down {
-                                global.set_sum_byte_length(sbl);
                             }
                             return;
                         }
                     } else {
+                        assert!(full_node.is_none());
                         if has == Has::Down {
-                            global.set_sum_byte_length(sbl);
                         }
                         return;
                     }

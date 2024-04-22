@@ -9,7 +9,7 @@ pub(crate) fn cpp_tree_sitter_simple() {
     let mut parser = Parser::new();
 
     {
-        parser.set_language(tree_sitter_cpp::language()).unwrap();
+        parser.set_language(&tree_sitter_cpp::language()).unwrap();
     }
 
     let text = {
@@ -89,7 +89,328 @@ int main(int argl, int* argv) {
         "{}",
         hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
     );
+    println!(
+        "{}",
+        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+    );
 }
+#[test]
+pub(crate) fn cpp_issue_stockfish_movegen_test() {
+    let text = {
+        let source_code1 = r#"
+void f() {
+f.value < s;
+}
+"#;
+        source_code1.as_bytes()
+    };
+    let tree = match CppTreeGen::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    println!("{:#?}", tree.root_node().to_sexp());
+    let mut stores = SimpleStores::default();
+    let mut md_cache = Default::default();
+    let mut tree_gen = CppTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
+    // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
+    // println!("{}", tree.root_node().to_sexp());
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+    );
+}
+
+#[test]
+pub(crate) fn cpp_template_test() {
+    let text = {
+        let source_code1 = r#"
+void f() {
+    x.g<T>();
+}
+"#;
+        source_code1.as_bytes()
+    };
+    let tree = match CppTreeGen::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    println!("{:#?}", tree.root_node().to_sexp());
+    let mut stores = SimpleStores::default();
+    let mut md_cache = Default::default();
+    let mut tree_gen = CppTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
+    // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
+    // println!("{}", tree.root_node().to_sexp());
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+    );
+}
+
+#[test]
+pub(crate) fn cpp_explicit_cast_test() {
+    let text = {
+        let source_code1 = r#"
+void f() {
+    ((unsigned(b) ^ b) * DeBruijn32);
+}
+"#;
+        source_code1.as_bytes()
+    };
+    let tree = match CppTreeGen::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    println!("{:#?}", tree.root_node().to_sexp());
+    let mut stores = SimpleStores::default();
+    let mut md_cache = Default::default();
+    let mut tree_gen = CppTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
+    // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
+    // println!("{}", tree.root_node().to_sexp());
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+    );
+}
+
+#[test]
+pub(crate) fn cpp_issue_stockfish_endgame_test() {
+    let text = {
+        let source_code1 = r#"
+
+
+template<>
+ScaleFactor ScalingFunction<KNPK>::apply() const {
+}
+
+"#;
+        source_code1.as_bytes()
+    };
+    let tree = match CppTreeGen::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    println!("{:#?}", tree.root_node().to_sexp());
+    let mut stores = SimpleStores::default();
+    let mut md_cache = Default::default();
+    let mut tree_gen = CppTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
+    // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
+    // println!("{}", tree.root_node().to_sexp());
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+    );
+}
+
+#[test]
+pub(crate) fn cpp_issue_stockfish_types_test() {
+    let text = {
+        let source_code1 = r#"
+#ifndef TYPES_H_INCLUDED
+#define TYPES_H_INCLUDED
+        
+
+#define ENABLE_FULL_OPERATORS_ON(T)                             \
+inline T operator+(T d1, T d2) { return T(int(d1) + int(d2)); } \
+inline T operator-(T d1, T d2) { return T(int(d1) - int(d2)); } \
+inline T operator*(int i, T d) { return T(i * int(d)); }        \
+inline T& operator/=(T& d, int i) { return d = T(int(d) / i); }
+
+ENABLE_FULL_OPERATORS_ON(Value)
+ENABLE_FULL_OPERATORS_ON(PieceType)
+ENABLE_FULL_OPERATORS_ON(Rank)
+ENABLE_BASE_OPERATORS_ON(Score)
+
+void f() {}
+
+#endif // #ifndef TYPES_H_INCLUDED
+
+"#;
+        source_code1.as_bytes()
+    };
+    let tree = match CppTreeGen::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    println!("{:#?}", tree.root_node().to_sexp());
+    let mut stores = SimpleStores::default();
+    let mut md_cache = Default::default();
+    let mut tree_gen = CppTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
+    // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
+    // println!("{}", tree.root_node().to_sexp());
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+    );
+}
+
+
+#[test]
+pub(crate) fn cpp_issue_stockfish_tbcore_test() {
+    let text = {
+        let source_code1 = r#"
+#ifndef TBCORE_H
+#define TBCORE_H
+
+struct PairsData {
+char *indextable;
+ushort *sizetable;
+base_t base[1]; // C++ complains about base[]...
+};
+
+struct TBEntry {
+char *data;
+ubyte symmetric;
+ubyte has_pawns;
+}
+#ifndef _WIN32
+__attribute__((__may_alias__))
+#endif
+;
+
+#endif
+"#;
+        source_code1.as_bytes()
+    };
+    let tree = match CppTreeGen::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    println!("{:#?}", tree.root_node().to_sexp());
+    let mut stores = SimpleStores::default();
+    let mut md_cache = Default::default();
+    let mut tree_gen = CppTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
+    // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
+    // println!("{}", tree.root_node().to_sexp());
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+    );
+}
+
+#[test]
+pub(crate) fn cpp_issue_stockfish_TranslationUnitRepeat1_test() {
+    let text = {
+        let source_code1 = r#"
+#ifndef TBCORE_H
+#define TBCORE_H
+
+struct TBEntry {};
+
+#endif
+"#;
+        source_code1.as_bytes()
+    };
+    let tree = match CppTreeGen::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    println!("{:#?}", tree.root_node().to_sexp());
+    let mut stores = SimpleStores::default();
+    let mut md_cache = Default::default();
+    let mut tree_gen = CppTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+    };
+    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
+    // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
+    // println!("{}", tree.root_node().to_sexp());
+    println!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
+    );
+}
+
 
 #[test]
 pub(crate) fn cpp_def_bl_test() {
@@ -124,6 +445,7 @@ pub(crate) const CODE_DEF_BL_SHRINK: &str = r#"
 "#;
 
 #[test]
+
 pub(crate) fn cpp_char_literal_test() {
     let text = {
         let source_code1 = CODE_CHAR_LIT;
@@ -146,6 +468,14 @@ pub(crate) fn cpp_char_literal_test() {
     println!(
         "{}",
         hyper_ast::nodes::SyntaxSerializer::new(&stores, entity)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::TextSerializer::new(&stores, x.compressed_node)
+    );
+    println!(
+        "{}",
+        hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
     );
     // println!("{}", tree.root_node().to_sexp());
 }

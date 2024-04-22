@@ -1,14 +1,8 @@
-use hyper_ast::{
-    position::TreePath,
-    store::{defaults::NodeIdentifier, nodes::legion::NodeStore, SimpleStores},
-    types::{IterableChildren, Labeled, Typed, WithChildren},
-};
-use hyper_ast_gen_ts_cpp::legion::CppTreeGen;
-use std::{io::Write, ops::Deref, sync::Arc};
+use hyper_ast::{position::TreePath, store::defaults::NodeIdentifier, types::Typed};
+use crate::tests::cpp_tree;
 
-use crate::legion::TsQueryTreeGen;
-
-const Q0: &str = r#"(binary_expression (number_literal) "+" (number_literal))"#;
+const Q0: &str =
+    r#"(binary_expression (_expression (number_literal)) "+" (_expression (number_literal)))"#; // TODO make _expression optional
 const C0: &str = r#"int f() {
     return 21 + 21;
 }"#;
@@ -21,8 +15,7 @@ const C2: &str = r#"int f() {
     int a = 21;
     return a + a;
 }"#;
-const Q1: &str =
-    r#"(binary_expression (identifier) @first "+" (identifier) @second) (#eq? @first @second)"#;
+const Q1: &str = r#"(binary_expression (_expression (identifier) @first) "+" (_expression (identifier) @second)) (#eq? @first @second)"#; // TODO make _expression optional
 
 // Possible useful stuff:
 // - test if subtree is conforming to ts query
@@ -102,7 +95,7 @@ fn named() {
         );
     let mut matched = false;
     for e in hyper_ast_gen_ts_cpp::iter::IterAll::new(&code_store, path, code) {
-        if let Some(captures) = prepared_matcher
+        if let Some(_) = prepared_matcher
             .is_matching_and_capture::<_, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>(
                 &code_store,
                 *e.node().unwrap(),
@@ -120,32 +113,4 @@ fn named() {
         }
     }
     assert!(matched);
-}
-
-fn cpp_tree(
-    text: &[u8],
-) -> (
-    SimpleStores<hyper_ast_gen_ts_cpp::types::TStore>,
-    legion::Entity,
-) {
-    use hyper_ast_gen_ts_cpp::types::TStore;
-    let tree = match CppTreeGen::<TStore>::tree_sitter_parse(text) {
-        Ok(t) => t,
-        Err(t) => t,
-    };
-    println!("{:#?}", tree.root_node().to_sexp());
-    let mut stores: SimpleStores<TStore> = SimpleStores::default();
-    let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
-    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
-    let entity = x.compressed_node;
-    println!(
-        "{}",
-        hyper_ast::nodes::SyntaxSerializer::<_, _, true>::new(&stores, entity)
-    );
-    (stores, entity)
 }
