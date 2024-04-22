@@ -583,52 +583,40 @@ where
             return true;
         }
         let src = stores.node_store().resolve(src);
-        let src_h = if H {
-            Some(src.hash(&mut &<HAST::T as WithHashs>::HK::label()))
-        } else {
-            None
-        };
-        let src_t = stores.type_store().resolve_type(&src);
-        let src_l = if src.has_label() {
-            Some(src.get_label_unchecked())
-        } else {
-            None
-        };
-        let src_c: Option<Vec<_>> = src.children().map(|x| x.iter_children().collect());
-
         let dst = stores.node_store().resolve(dst);
-
-        if let Some(src_h) = src_h {
+        if H {
+            let src_h = src.hash(&mut &<HAST::T as WithHashs>::HK::label());
             let dst_h = dst.hash(&mut &<HAST::T as WithHashs>::HK::label());
             if src_h != dst_h {
                 return false;
             }
-        }
-        let dst_t = stores.type_store().resolve_type(&dst);
-        if src_t != dst_t {
+        };
+        if !stores.type_store().type_eq(&src, &dst) {
             return false;
         }
-        if dst.has_label() {
-            if src_l.is_none() || src_l.unwrap() != dst.get_label_unchecked() {
+        if dst.has_label() && src.has_label() {
+            if src.get_label_unchecked() != dst.get_label_unchecked() {
                 return false;
             }
+        } else if dst.has_label() || src.has_label() {
+            return false;
         };
 
-        let dst_c: Option<Vec<_>> = dst.children().map(|x| x.iter_children().collect());
-
-        match (src_c, dst_c) {
+        if src.child_count() != dst.child_count() {
+            return false;
+        }
+        if !src.has_children() {
+            return true;
+        }
+        match (src.children(), dst.children()) {
             (None, None) => true,
             (Some(src_c), Some(dst_c)) => {
-                if src_c.len() != dst_c.len() {
-                    false
-                } else {
-                    for (src, dst) in src_c.iter().zip(dst_c.iter()) {
-                        if !Self::isomorphic_aux::<false>(stores, src, dst) {
-                            return false;
-                        }
+                for (src, dst) in src_c.iter_children().zip(dst_c.iter_children()) {
+                    if !Self::isomorphic_aux::<false>(stores, src, dst) {
+                        return false;
                     }
-                    true
                 }
+                true
             }
             _ => false,
         }

@@ -207,6 +207,37 @@ where
 // [client/src/changes.rs:112]
 
 
+// after type_eq
+// [client/src/track.rs:676] src_oid = 0de92576100bba948cae854ebb9cd5a7a9502b43
+// [client/src/track.rs:676] dst_oid = b84af67f4c88f3e3f7b61bf2035475f79fb3e62e
+// 2024-04-16T08:08:25.213987Z  WARN request{method=GET uri=/track_at_path_with_changes/github/official-stockfish/Stockfish/5d1644ba696c0a4d81450f922d216bf6479d4929/0/33/2/130/8/26?upd=true&child=true&parent=false&exact_child=false&exact_parent=false&sim_child=false&sim_parent=false&meth=false&typ=false&top=false&file=false&pack=false&dependency=false&dependent=false&references=false&declaration=false version=HTTP/1.1}: client::track: done construction of [b84af67f4c88f3e3f7b61bf2035475f79fb3e62e, 7c8b7222f5eea024ab480abb2d9289fd1e42da9c, ec9038b7b4cb2701c3a3b8be56632e7f08e461ac, ab65d3fd0ecf340842408548bc7f3e6c28ad4c85] in official-stockfish    
+// [client/src/track.rs:1037] &path_to_target = [
+//     0,
+//     38,
+//     2,
+//     132,
+//     4,
+//     38,
+// ]
+// [hyper_diff/src/matchers/heuristic/gt/lazy2_greedy_subtree_matcher.rs:521] match_init_t = 2.0333e-5
+// [client/src/track/compute.rs:126]
+// [hyper_diff/src/matchers/heuristic/gt/lazy2_greedy_subtree_matcher.rs:242] &ambiguous_mappings.len() = 1484
+// [client/src/track/compute.rs:414] bottom_up_hiding_t = 1.269342625
+// [client/src/track.rs:643]
+// [client/src/changes.rs:80]
+// [client/src/changes.rs:87] src_arena.len() = 98757
+// [client/src/changes.rs:88] dst_arena.len() = 108457
+// [client/src/changes.rs:91] src_size = 98757
+// [client/src/changes.rs:92] dst_size = 108457
+// [client/src/changes.rs:101]
+// [client/src/changes.rs:102] mapper.mapping.src_arena.len() = 98757
+// [client/src/changes.rs:103] mapper.mapping.dst_arena.len() = 108457
+// [hyper_diff/src/matchers/heuristic/gt/lazy2_greedy_subtree_matcher.rs:521] match_init_t = 2.5583e-5
+// [client/src/matching.rs:169] compute_multimapping_t = 179.631986917
+// [hyper_diff/src/matchers/heuristic/gt/lazy2_greedy_subtree_matcher.rs:242] &ambiguous_mappings.len() = 212352
+// [client/src/matching.rs:173] bottom_up_hiding_t = 63.056121792
+// [client/src/changes.rs:111]
+
 // Concrete type store, using directly cpp type
 // [client/src/track.rs:676] src_oid = 0de92576100bba948cae854ebb9cd5a7a9502b43
 // [client/src/track.rs:676] dst_oid = b84af67f4c88f3e3f7b61bf2035475f79fb3e62e

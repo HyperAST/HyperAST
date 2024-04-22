@@ -45,6 +45,9 @@ mod legion_impls {
                 ty: *n.get_component::<Type>().unwrap() as u16,
             }
         }
+        fn type_eq(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>, m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> bool {
+            n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
+        }
     }
     impl<'a> TsEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         const LANG: TypeInternalSize = Self::Ts as u16;
@@ -88,6 +91,9 @@ mod legion_impls {
                 lang: LangRef::<Type>::name(&Ts),
                 ty: *n.get_component::<Type>().unwrap() as u16,
             }
+        }
+        fn type_eq(&self, n: &HashedNodeRef<'a, NodeIdentifier>, m: &HashedNodeRef<'a, NodeIdentifier>) -> bool {
+            todo!()
         }
     }
 }

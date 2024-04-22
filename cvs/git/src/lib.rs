@@ -157,7 +157,7 @@ mod type_store {
                     hyper_ast_gen_ts_java,
                     hyper_ast_gen_ts_cpp,
                     hyper_ast_gen_ts_xml
-                ], 
+                ],
                 (t, u) => u::types::as_any(t),
                 {
                     dbg!(n, n.archetype().layout().component_types());
@@ -174,7 +174,7 @@ mod type_store {
                     hyper_ast_gen_ts_java,
                     hyper_ast_gen_ts_cpp,
                     hyper_ast_gen_ts_xml
-                ], 
+                ],
                 (_t, u) => From::<&'static (dyn LangRef<AnyType>)>::from(&u::types::Lang),
                 {
                     dbg!(n, n.archetype().layout().component_types());
@@ -190,7 +190,7 @@ mod type_store {
                     hyper_ast_gen_ts_java,
                     hyper_ast_gen_ts_cpp,
                     hyper_ast_gen_ts_xml
-                ], 
+                ],
                 (t, u) => {
                     let ty = <u::types::Lang as hyper_ast::types::Lang<_>>::to_u16(*t);
                     let lang = hyper_ast::types::LangRef::<u::types::Type>::name(
@@ -198,6 +198,25 @@ mod type_store {
                     );
                     TypeIndex { lang, ty }
                 },
+                {
+                    dbg!(n, n.archetype().layout().component_types());
+                    panic!()
+                }
+            )
+        }
+        
+        fn type_eq(&self, n: &HashedNodeRef<'a, NodeIdentifier>, m: &HashedNodeRef<'a, NodeIdentifier>) -> bool {
+            on_multi!(n, [
+                    hyper_ast_gen_ts_java,
+                    hyper_ast_gen_ts_cpp,
+                    hyper_ast_gen_ts_xml
+                ],
+                (t, u) =>{ 
+                    if let Ok(tt) = m.get_component::<u::types::Type>() {
+                        t == tt
+                    } else {
+                        false
+                    }},
                 {
                     dbg!(n, n.archetype().layout().component_types());
                     panic!()
@@ -237,6 +256,13 @@ mod type_store {
         fn marshal_type(&self, n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>) -> Self::Marshaled {
             todo!()
         }
+        fn type_eq(
+            &self,
+            n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>,
+            m: &HashedNodeRef<'a, MIdN<NodeIdentifier>>,
+        ) -> bool {
+            todo!()
+        }
     }
 
     // impl<I: AsRef<HashedNodeRef<'static, NodeIdentifier>>> TypeStore<I> for TStore {
@@ -273,6 +299,13 @@ mod type_store {
         type Marshaled = TypeIndex;
 
         fn marshal_type(&self, n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Marshaled {
+            todo!()
+        }
+        fn type_eq(
+            &self,
+            n: &NoSpaceWrapper<'a, NodeIdentifier>,
+            m: &NoSpaceWrapper<'a, NodeIdentifier>,
+        ) -> bool {
             todo!()
         }
     }
@@ -317,6 +350,13 @@ mod type_store {
         fn marshal_type(&self, n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>) -> Self::Marshaled {
             todo!()
         }
+        fn type_eq(
+            &self,
+            n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>,
+            m: &HashedNodeRef<'a, MIdN<NodeIdentifier>>,
+        ) -> bool {
+            todo!()
+        }
     }
 
     impl<'a> TypeStore<NoSpaceWrapper<'a, MIdN<NodeIdentifier>>> for &TStore {
@@ -340,6 +380,14 @@ mod type_store {
         fn marshal_type(&self, n: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>) -> Self::Marshaled {
             todo!()
         }
+
+        fn type_eq(
+            &self,
+            n: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>,
+            m: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>,
+        ) -> bool {
+            todo!()
+        }
     }
 
     impl<'a> TypeStore<NoSpaceWrapper<'a, NodeIdentifier>> for &TStore {
@@ -348,6 +396,17 @@ mod type_store {
 
         fn resolve_type(&self, n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Ty {
             n.get_type()
+            // on_multi!(n.as_ref(), [
+            //     hyper_ast_gen_ts_java,
+            //     hyper_ast_gen_ts_cpp,
+            //     hyper_ast_gen_ts_xml
+            // ],
+            // (t, u) => u::types::as_any(t),
+            // {
+            //     dbg!(n.as_ref().archetype().layout().component_types());
+            //     panic!()
+            // }
+            // )
         }
 
         fn resolve_lang(
@@ -361,6 +420,29 @@ mod type_store {
 
         fn marshal_type(&self, n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Marshaled {
             todo!()
+        }
+        
+        fn type_eq(
+            &self,
+            n: &NoSpaceWrapper<'a, NodeIdentifier>,
+            m: &NoSpaceWrapper<'a, NodeIdentifier>,
+        ) -> bool {
+            on_multi!(n.as_ref(), [
+                    hyper_ast_gen_ts_java,
+                    hyper_ast_gen_ts_cpp,
+                    hyper_ast_gen_ts_xml
+                ],
+                (t, u) =>{ 
+                    if let Ok(tt) = m.as_ref().get_component::<u::types::Type>() {
+                        t == tt
+                    } else {
+                        false
+                    }},
+                {
+                    dbg!(n.as_ref().archetype().layout().component_types());
+                    panic!()
+                }
+            )
         }
     }
 
@@ -390,6 +472,14 @@ mod type_store {
             &self,
             n: &HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
         ) -> Self::Marshaled {
+            todo!()
+        }
+
+        fn type_eq(
+            &self,
+            n: &HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
+            m: &HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
+        ) -> bool {
             todo!()
         }
     }
@@ -425,6 +515,14 @@ mod type_store {
             &self,
             n: &HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>>,
         ) -> Self::Marshaled {
+            todo!()
+        }
+
+        fn type_eq(
+            &self,
+            n: &HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>>,
+            m: &HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>>,
+        ) -> bool {
             todo!()
         }
     }
@@ -469,6 +567,14 @@ mod type_store {
             &self,
             n: &HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>,
         ) -> Self::Marshaled {
+            todo!()
+        }
+
+        fn type_eq(
+            &self,
+            n: &HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>,
+            m: &HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>,
+        ) -> bool {
             todo!()
         }
     }

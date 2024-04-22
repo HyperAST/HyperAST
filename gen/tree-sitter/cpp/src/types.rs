@@ -3,9 +3,7 @@ use std::fmt::Display;
 use hyper_ast::{
     store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
-    types::{
-        AnyType, HyperType, LangRef, LangWrapper, NodeId, TypeStore, TypeTrait, TypedNodeId,
-    },
+    types::{AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
 };
 
 #[cfg(feature = "legion")]
@@ -74,6 +72,13 @@ mod legion_impls {
                 ty: *n.get_component::<Type>().unwrap() as u16,
             }
         }
+        fn type_eq(
+            &self,
+            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
+            m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
+        ) -> bool {
+            n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
+        }
     }
     impl<'a> CppEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         const LANG: TypeInternalSize = Self::Cpp as u16;
@@ -97,10 +102,7 @@ mod legion_impls {
         type Ty = AnyType;
         const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
         fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-            From::<&'static (dyn HyperType)>::from(LangRef::<Type>::make(
-                &Lang,
-                *n.get_component::<Type>().unwrap() as u16,
-            ))
+            as_any(n.get_component::<Type>().unwrap())
         }
 
         fn resolve_lang(
@@ -117,6 +119,13 @@ mod legion_impls {
                 lang: LangRef::<Type>::name(&Lang),
                 ty: *n.get_component::<Type>().unwrap() as u16,
             }
+        }
+        fn type_eq(
+            &self,
+            n: &HashedNodeRef<'a, NodeIdentifier>,
+            m: &HashedNodeRef<'a, NodeIdentifier>,
+        ) -> bool {
+            todo!()
         }
     }
 }

@@ -43,6 +43,9 @@ mod legion_impls {
                 ty: self.resolve_type(n) as u16,
             }
         }
+        fn type_eq(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>, m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> bool {
+            n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
+        }
     }
     impl<'a> XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         const LANG: TypeInternalSize = Self::Xml as u16;
@@ -67,8 +70,7 @@ mod legion_impls {
         const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
 
         fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-            let t = n.get_component::<Type>().unwrap();
-            as_any(t)
+            as_any(n.get_component::<Type>().unwrap())
         }
 
         fn resolve_lang(
@@ -85,6 +87,9 @@ mod legion_impls {
                 lang: LangRef::<Type>::name(&Lang),
                 ty: *n.get_component::<Type>().unwrap() as u16,
             }
+        }
+        fn type_eq(&self, n: &HashedNodeRef<'a, NodeIdentifier>, m: &HashedNodeRef<'a, NodeIdentifier>) -> bool {
+            todo!()
         }
     }
 }

@@ -2059,6 +2059,7 @@ pub trait Stored: Node {
 pub trait Typed {
     type Type: HyperType + Eq + Copy + Send + Sync; // todo try remove Hash and copy
     fn get_type(&self) -> Self::Type; // TODO add TypeTrait bound on Self::Type to forbid AnyType from being given
+    fn try_get_type(&self) -> Option<Self::Type> { Some(self.get_type())}
 }
 
 // impl<T, A: Allocator> ops::Deref for Vec<T, A> {
@@ -2707,6 +2708,7 @@ pub trait TypeStore<T> {
     fn resolve_lang(&self, n: &T) -> LangWrapper<Self::Ty>;
     type Marshaled;
     fn marshal_type(&self, n: &T) -> Self::Marshaled;
+    fn type_eq(&self, n: &T, m: &T) -> bool;
 }
 
 pub trait SpecializedTypeStore<T: Typed>: TypeStore<T> {}
@@ -2763,6 +2765,7 @@ pub trait HyperAST<'store> {
         self.type_store().resolve_type(&n).clone()
     }
 }
+
 pub trait HyperASTShared {
     type IdN: NodeId;
     type Idx: PrimInt;
@@ -2878,6 +2881,17 @@ pub struct SimpleHyperAST<T, TS, NS, LS> {
     pub _phantom: std::marker::PhantomData<T>,
 }
 
+impl<T, TS, NS:Copy, LS> SimpleHyperAST<T, TS, NS, &LS> {
+    pub fn change_type_store_ref<TS2>(&self, new: TS2) -> SimpleHyperAST<T, TS2, NS, &LS> {
+        SimpleHyperAST {
+            type_store: new,
+            node_store: self.node_store,
+            label_store: self.label_store,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
 impl<T, TS, NS, LS> SimpleHyperAST<T, TS, NS, LS> {
     pub fn change_type_store<TS2>(self, new: TS2) -> SimpleHyperAST<T, TS2, NS, LS> {
         SimpleHyperAST {
@@ -2981,6 +2995,9 @@ where
 
     fn marshal_type(&self, n: &T) -> Self::Marshaled {
         self.type_store.marshal_type(n)
+    }
+    fn type_eq(&self, n: &T, m: &T) -> bool {
+        self.type_store.type_eq(n,m)
     }
 }
 

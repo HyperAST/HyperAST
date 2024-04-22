@@ -84,6 +84,13 @@ mod legion_impls {
                 ty: *n.get_component::<Type>().unwrap() as u16,
             }
         }
+        fn type_eq(
+            &self,
+            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
+            m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
+        ) -> bool {
+            n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
+        }
     }
     impl<'a, R> TypeStore<R> for &TStore {
         type Ty = Type;
@@ -93,16 +100,16 @@ mod legion_impls {
             todo!()
         }
 
-        fn resolve_lang(
-            &self,
-            n: &R,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        fn resolve_lang(&self, n: &R) -> hyper_ast::types::LangWrapper<Self::Ty> {
             todo!()
         }
 
         type Marshaled = TypeIndex;
 
         fn marshal_type(&self, n: &R) -> Self::Marshaled {
+            todo!()
+        }
+        fn type_eq(&self, n: &R, m: &R) -> bool {
             todo!()
         }
     }

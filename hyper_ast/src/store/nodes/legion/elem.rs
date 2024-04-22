@@ -403,6 +403,9 @@ impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Typed
             // }
         }
     }
+    fn try_get_type(&self) -> Option<Self::Type> {
+        self.0.get_component::<Id::Ty>().ok().copied()
+    }
 }
 impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Typed
     for &HashedNodeRef<'a, Id>

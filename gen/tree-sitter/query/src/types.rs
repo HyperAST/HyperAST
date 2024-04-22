@@ -3,9 +3,7 @@ use std::fmt::Display;
 use hyper_ast::{
     store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
-    types::{
-        AnyType, HyperType, Lang, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId,
-    },
+    types::{AnyType, HyperType, Lang, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
 };
 
 #[cfg(feature = "legion")]
@@ -44,6 +42,13 @@ mod legion_impls {
                 lang: LangRef::<Type>::name(&TsQuery),
                 ty: *n.get_component::<Type>().unwrap() as u16,
             }
+        }
+        fn type_eq(
+            &self,
+            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
+            m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
+        ) -> bool {
+            n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
         }
     }
     impl<'a> TsQueryEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
@@ -88,6 +93,13 @@ mod legion_impls {
                 lang: LangRef::<Type>::name(&TsQuery),
                 ty: *n.get_component::<Type>().unwrap() as u16,
             }
+        }
+        fn type_eq(
+            &self,
+            n: &HashedNodeRef<'a, NodeIdentifier>,
+            m: &HashedNodeRef<'a, NodeIdentifier>,
+        ) -> bool {
+            todo!()
         }
     }
 }

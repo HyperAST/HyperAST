@@ -30,6 +30,9 @@ impl hyper_ast::types::TypeStore<Tree> for TStore {
         todo!()
     }
     
+    fn type_eq(&self, n: &Tree, m: &Tree) -> bool {
+        todo!()
+    }
 }
 
 impl<'a> hyper_ast::types::TypeStore<TreeRef<'a, Tree>> for TStore {
@@ -52,4 +55,7 @@ impl<'a> hyper_ast::types::TypeStore<TreeRef<'a, Tree>> for TStore {
         todo!()
     }
     
+    fn type_eq(&self, n: &TreeRef<'a, Tree>, m: &TreeRef<'a, Tree>) -> bool {
+        todo!()
+    }
 }
