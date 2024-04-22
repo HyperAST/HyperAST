@@ -12,6 +12,7 @@ members = [
     "hyper_app",
     "hyperast_wasm",
     "egui_addon",
+    "polyglote",
 ]
 exclude = ["gen/tree-sitter/java/tree-sitter-java"]
 default-members = [
@@ -26,4 +27,5 @@ default-members = [
     "hyperast_wasm",
     "ref-mining-evaluation",
     "benchmark_diffs",
+    "polyglote",
 ]
