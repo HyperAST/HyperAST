@@ -928,7 +928,6 @@ where
         // - llds: should be easy when extracting
         let mut llds: Vec<IdD> = vec![*x; len];
         let mut curr = map_lld.clone();
-        dbg!();
         while curr <= *x {
             let conv = self.map.borrow()[self.map.borrow().len() - 1 - curr.to_usize().unwrap()];
             // dbg!(conv);
@@ -948,7 +947,6 @@ where
             id_compressed.push(self.back.borrow_mut().original(&conv));
             curr = curr + num_traits::one();
         }
-        dbg!();
         let mut visited = bitvec::bitbox!(0; len);
         for i in (1..len).rev() {
             if !visited[llds[i].to_usize().unwrap()] {
