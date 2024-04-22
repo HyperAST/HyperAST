@@ -136,6 +136,9 @@ where
     fn marshal_type(&self, n: &T) -> Self::Marshaled {
         self.type_store.marshal_type(n)
     }
+    fn type_eq(&self, n: &T, m: &T) -> bool {
+        self.type_store.type_eq(n,m)
+    }
 }
 
 pub mod defaults {
