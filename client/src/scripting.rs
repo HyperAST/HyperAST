@@ -303,8 +303,8 @@ fn simple_aux(
     // let s = state.clone().read().unwrap();
     let result: Dynamic = loop {
         let Some(mut acc) = stack.pop() else {
-        unreachable!()
-    };
+            unreachable!()
+        };
 
         let stack_len = stack.len();
 
@@ -561,7 +561,7 @@ fn simple_aux(
         let s = state.clone();
         acc_engine.register_fn("references", move |sig: String, p_ref: String| {
             let stores = &stores!(s);
-            refs::find_refs(stores, current, p_ref, sig).map_or(0, |x| x as i64)
+            refs::find_refs(stores, current, &p_ref, &sig).map_or(0, |x| x as i64)
         });
 
         let s = state.clone();
