@@ -953,7 +953,7 @@ fn track_aux(
     let node_store = &stores.node_store;
 
     // let size = node_store.resolve(src_tr).size();
-    log::error!("searching for {file}");
+    log::error!("tracking {file}");
     let file_node =
         child_at_path_tracked(&repositories.processor.main_stores, src_tr, file.split("/"));
 
