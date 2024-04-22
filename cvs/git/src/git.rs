@@ -10,19 +10,19 @@ use hyper_ast::position::Position;
 use crate::processing::ObjectName;
 
 /// Initialize a [git2::revwalk::Revwalk] to explore commits between before and after.
-/// 
+///
 /// # Arguments
 ///
 /// * `repository` - The repository where the walk is done
 /// * `before` - The the parent commit
 /// * `after` - The the child commit
-/// 
+///
 /// # Property
-/// 
+///
 /// if `after` is not a descendant of before then only walk `before`
 ///
 /// # Errors
-/// 
+///
 /// This function just lets errors from [git2] bubble up.
 pub(crate) fn all_commits_between<'a>(
     repository: &'a Repository,
@@ -160,7 +160,7 @@ impl std::str::FromStr for Forge {
         Ok(match s {
             "github.com" => Self::Github,
             "gitlab.com" => Self::Gitlab,
-            x => return Err(format!("'{}' is not an authorize forge", x))
+            x => return Err(format!("'{}' is not an authorize forge", x)),
         })
     }
 }
@@ -212,11 +212,18 @@ impl std::str::FromStr for Repo {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (forge, repo) = s.split_once("/").ok_or("give a valid repository address without 'https://' and '.git'")?;
-        let (user, name) = repo.split_once("/").ok_or("give a valid repository address without 'https://' and '.git'")?;
+        let (forge, repo) = s
+            .split_once("/")
+            .ok_or("give a valid repository address without 'https://' and '.git'")?;
+        let (user, name) = repo
+            .split_once("/")
+            .ok_or("give a valid repository address without 'https://' and '.git'")?;
         let forge = forge.parse()?;
         if name.contains("/") {
-            return Err(format!("{} should not contain anymore '/' give a valid repository address", name))
+            return Err(format!(
+                "{} should not contain anymore '/' give a valid repository address",
+                name
+            ));
         }
         let user = user.into();
         let name = name.into();
@@ -245,7 +252,7 @@ pub fn up_to_date_repo(path: &Path, mut fo: git2::FetchOptions, url: Url) -> Rep
             .unwrap_or_else(|e| log::error!("{}", e));
 
         repository
-    } else if path.exists() {
+    } else if path.exists() && path.read_dir().map_or(true, |mut x| x.next().is_some()) {
         todo!()
     } else {
         let mut builder = git2::build::RepoBuilder::new();
@@ -257,6 +264,13 @@ pub fn up_to_date_repo(path: &Path, mut fo: git2::FetchOptions, url: Url) -> Rep
         log::info!("clone {} in {:?}", url, path);
         let repository = match builder.clone(&url.to_string(), path.join(".git").as_path()) {
             Ok(repo) => repo,
+            Err(e) if e.code() == git2::ErrorCode::Locked => match builder
+                .clone(&url.to_string(), path.join(".git").as_path())
+            {
+                Ok(repo) => repo,
+                Err(e) if e.code() == git2::ErrorCode::Locked => panic!("failed to clone: {}", e),
+                Err(e) => panic!("failed to clone: {}", e),
+            },
             Err(e) => panic!("failed to clone: {}", e),
         };
         repository
