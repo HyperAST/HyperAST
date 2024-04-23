@@ -30,16 +30,9 @@ enumset = "1.0.12"
 
 crossbeam-queue = "0.3.8"
 
-[dependencies.syntect]
-version = "5"
-features = ["default-fancy"]
-default-features = false
-
-# TODO put it behind a feature
-autosurgeon = "0.7.1"
-automerge = { version = "0.4.0" }
-# used to add extra-traits flag needed by code in autosurgeon-derive
-syn = { version = "2", features = ["full", "extra-traits"] }
+syntect = { version = "5", features = [
+    "default-fancy",
+], default-features = false }
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
