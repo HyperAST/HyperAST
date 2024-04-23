@@ -137,7 +137,7 @@ where
         self.type_store.marshal_type(n)
     }
     fn type_eq(&self, n: &T, m: &T) -> bool {
-        self.type_store.type_eq(n,m)
+        self.type_store.type_eq(n, m)
     }
 }
 
@@ -166,19 +166,14 @@ pub mod defaults {
 // }
 
 impl<'store, T, TS, NS, LS> From<&'store SimpleStores<TS, NS, LS>>
-for SimpleHyperAST<
-    T,
-    &'store TS,
-    &'store NS,
-    &'store LS,
->
+    for SimpleHyperAST<T, &'store TS, &'store NS, &'store LS>
 {
-fn from(value: &'store SimpleStores<TS, NS, LS>) -> Self {
-    Self {
-        type_store: &value.type_store,
-        node_store: &value.node_store,
-        label_store: &value.label_store,
-        _phantom: std::marker::PhantomData,
+    fn from(value: &'store SimpleStores<TS, NS, LS>) -> Self {
+        Self {
+            type_store: &value.type_store,
+            node_store: &value.node_store,
+            label_store: &value.label_store,
+            _phantom: std::marker::PhantomData,
+        }
     }
-}
 }

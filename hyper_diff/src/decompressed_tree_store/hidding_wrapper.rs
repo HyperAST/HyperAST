@@ -1,9 +1,9 @@
 use std::{
     borrow::{Borrow, BorrowMut},
-    collections::{BTreeMap},
+    collections::BTreeMap,
     fmt::Debug,
     marker::PhantomData,
-    ops::{Index},
+    ops::Index,
 };
 
 use bitvec::slice::BitSlice;
@@ -11,18 +11,16 @@ use num_traits::{cast, zero, PrimInt, ToPrimitive, Zero};
 
 use crate::{
     decompressed_tree_store::{
-        DecompressedTreeStore, DecompressedWithParent, PostOrder,
-        ShallowDecompressedTreeStore,
+        DecompressedTreeStore, DecompressedWithParent, PostOrder, ShallowDecompressedTreeStore,
     },
     matchers::mapping_store::{MappingStore, MonoMappingStore},
 };
 use hyper_ast::types::{self, NodeId, NodeStore, Stored, WithChildren, WithStats};
 
 use super::{
-    lazy_post_order::{LazyPostOrder},
-    simple_post_order::SimplePOSlice,
-    ContiguousDescendants, IterKr, LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrderIterable,
-    PostOrderKeyRoots, Shallow,
+    lazy_post_order::LazyPostOrder, simple_post_order::SimplePOSlice, ContiguousDescendants,
+    IterKr, LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrderIterable, PostOrderKeyRoots,
+    Shallow,
 };
 
 /// Wrap or just map a decommpressed tree in breadth-first eg. post-order,
@@ -457,8 +455,12 @@ impl<
                 break;
             }
             // dbg!(y, lld);
-            let Some(conv) = self.map.borrow().get(self.map.borrow().len() - 1 - y.to_usize().unwrap()) else {
-                break
+            let Some(conv) = self
+                .map
+                .borrow()
+                .get(self.map.borrow().len() - 1 - y.to_usize().unwrap())
+            else {
+                break;
             };
             // dbg!(conv, y);
             if lld < *conv {
@@ -641,8 +643,12 @@ where
                 break;
             }
             // dbg!(y, lld);
-            let Some(conv) = self.map.borrow().get(self.map.borrow().len() - 1 - y.to_usize().unwrap()) else {
-                break
+            let Some(conv) = self
+                .map
+                .borrow()
+                .get(self.map.borrow().len() - 1 - y.to_usize().unwrap())
+            else {
+                break;
             };
             if lld < *conv {
                 y = y - num_traits::one();

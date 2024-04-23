@@ -1,10 +1,6 @@
-use std::{
-    collections::{HashMap},
-    fmt::Display,
-    str::FromStr,
-};
+use std::{collections::HashMap, fmt::Display, str::FromStr};
 
-use tree_sitter::{TreeCursor};
+use tree_sitter::TreeCursor;
 
 type TagedRole = String;
 
@@ -159,9 +155,7 @@ impl Tag {
         } = Query::parse_query(input, cursor)?;
         // dbg!(&pattern);
         // dbg!(&variables);
-        let mut names = variables
-            .extract_if(|x| x.0 == "name")
-            .collect::<Vec<_>>();
+        let mut names = variables.extract_if(|x| x.0 == "name").collect::<Vec<_>>();
         if names.len() == 0 {
             return Err("Missing name variable".into())?;
         }

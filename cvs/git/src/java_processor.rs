@@ -416,9 +416,9 @@ impl crate::processing::erased::ParametrizedCommitProc2 for JavaProcessorHolder 
     }
 
     fn with_parameters(
-        & self,
+        &self,
         parameters: crate::processing::erased::ConfigParametersHandle,
-    ) -> & Self::Proc {
+    ) -> &Self::Proc {
         assert_eq!(0, parameters.0);
         self.0.as_ref().unwrap()
     }

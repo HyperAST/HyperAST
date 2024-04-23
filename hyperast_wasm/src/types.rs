@@ -39,7 +39,7 @@ impl Default for Commit {
 
 #[derive(serde::Deserialize, serde::Serialize, Default)]
 #[serde(default)]
-pub  struct ComputeConfigMulti {
+pub struct ComputeConfigMulti {
     pub list: Vec<Commit>,
 }
 

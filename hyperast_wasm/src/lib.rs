@@ -1,5 +1,5 @@
-mod store;
 mod network;
+mod store;
 mod types;
 
 use wasm_bindgen::prelude::*;
@@ -27,16 +27,14 @@ fn run() {
 }
 
 use crate::store::FetchedHyperAST;
-use std::sync::Arc;
-use std::collections::HashMap;
 use crate::store::NodeIdentifier;
-
+use std::collections::HashMap;
+use std::sync::Arc;
 
 // #[wasm_bindgen]
 // pub struct HyperAstDb2 {
 //     ast: Arc<FetchedHyperAST>,
 // }
-
 
 #[wasm_bindgen]
 pub struct HyperAstDb {
@@ -50,10 +48,10 @@ impl HyperAstDb {
     pub fn new(api_addr: &str) -> Self {
         let api_addr = api_addr.to_string();
         let ast = Default::default();
-        Self { api_addr,ast }
+        Self { api_addr, ast }
     }
 
-    pub fn git(&mut self, ) -> GitSession {
+    pub fn git(&mut self) -> GitSession {
         // user: &str, name: &str, commit: &str
         // let commit = types::Commit {
         //     repo: types::Repo {
@@ -88,22 +86,26 @@ impl ScratchPadSession {
     }
 }
 type LocalId = std::num::NonZeroU32;
-enum InternalNodeId{
+enum InternalNodeId {
     Remote(NodeIdentifier),
     Local(LocalId),
 }
 
 #[wasm_bindgen]
-pub struct NodeId(
-    InternalNodeId
-);
+pub struct NodeId(InternalNodeId);
 
 #[wasm_bindgen]
 impl ScratchPadSession {
     pub fn snap_build(&mut self, _prev: f32, _path: &[f32], _typ: String) -> () {
         todo!("compute parents from prev snap and path to edit")
     }
-    pub fn snap_build_with_label(&mut self, _prev: f32, _path: &[f32], _typ: String, _label: String) -> () {
+    pub fn snap_build_with_label(
+        &mut self,
+        _prev: f32,
+        _path: &[f32],
+        _typ: String,
+        _label: String,
+    ) -> () {
         todo!("compute parents from prev snap and path to edit")
     }
     pub fn snap_build_empty(&mut self, _prev: f32, _path: &[f32]) -> () {
@@ -127,7 +129,7 @@ impl ScratchPadSession {
 pub struct GitSession {
     api_addr: String,
     ast: Arc<FetchedHyperAST>,
-    commits: HashMap<types::Commit, NodeIdentifier>
+    commits: HashMap<types::Commit, NodeIdentifier>,
 }
 
 impl GitSession {
@@ -147,4 +149,3 @@ impl GitSession {
         todo!()
     }
 }
-

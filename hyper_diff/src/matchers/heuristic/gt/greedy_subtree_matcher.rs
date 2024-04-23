@@ -10,7 +10,8 @@ use crate::matchers::{mapping_store::MultiMappingStore, similarity_metrics};
 use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyper_ast::compat::HashMap;
 use hyper_ast::types::{
-    DecompressedSubtree, HashKind, HyperAST, IterableChildren, NodeId, NodeStore, Tree, TypeStore, WithHashs
+    DecompressedSubtree, HashKind, HyperAST, IterableChildren, NodeId, NodeStore, Tree, TypeStore,
+    WithHashs,
 };
 use num_traits::{one, zero, PrimInt, ToPrimitive};
 
@@ -248,11 +249,15 @@ where
             let (t, l) = {
                 let o = self.internal.src_arena.original(a);
                 let n = self.internal.stores.node_store().resolve(&o);
-                (self.internal.stores.type_store().resolve_type(&n), n.try_get_label().cloned())
+                (
+                    self.internal.stores.type_store().resolve_type(&n),
+                    n.try_get_label().cloned(),
+                )
             };
             let o = self.internal.dst_arena.original(b);
             let n = self.internal.stores.node_store().resolve(&o);
-            t == self.internal.stores.type_store().resolve_type(&n) && l.as_ref() == n.try_get_label()
+            t == self.internal.stores.type_store().resolve_type(&n)
+                && l.as_ref() == n.try_get_label()
         });
         (2 * common.len()).to_f64().unwrap() / (s1.len() + s2.len()).to_f64().unwrap()
     }
@@ -475,7 +480,11 @@ where
         self.src_arena
             .descendants(self.stores.node_store(), src)
             .iter()
-            .zip(self.dst_arena.descendants(self.stores.node_store(), dst).iter())
+            .zip(
+                self.dst_arena
+                    .descendants(self.stores.node_store(), dst)
+                    .iter(),
+            )
             .for_each(|(src, dst)| self.mappings.link(*src, *dst));
     }
 
@@ -495,10 +504,16 @@ where
         &self,
         multi_mappings: &mut MM,
     ) {
-        let mut src_trees =
-            PriorityTreeList::new(self.stores.node_store(), &self.src_arena, self.src_arena.root());
-        let mut dst_trees =
-            PriorityTreeList::new(self.stores.node_store(), &self.dst_arena, self.dst_arena.root());
+        let mut src_trees = PriorityTreeList::new(
+            self.stores.node_store(),
+            &self.src_arena,
+            self.src_arena.root(),
+        );
+        let mut dst_trees = PriorityTreeList::new(
+            self.stores.node_store(),
+            &self.dst_arena,
+            self.dst_arena.root(),
+        );
         // let mut aaa = 0;
         while src_trees.peek_height() != -1 && dst_trees.peek_height() != -1 {
             // aaa += 1;
@@ -586,14 +601,16 @@ where
         let max_src_pos = if self.src_arena.has_parent(src) {
             one()
         } else {
-            self.stores.node_store()
+            self.stores
+                .node_store()
                 .resolve(&self.src_arena.original(&p_src))
                 .child_count()
         };
         let max_dst_pos = if self.dst_arena.has_parent(dst) {
             one()
         } else {
-            self.stores.node_store()
+            self.stores
+                .node_store()
                 .resolve(&self.dst_arena.original(&p_dst))
                 .child_count()
         };

@@ -4,13 +4,13 @@ use std::path::PathBuf;
 use num::{one, zero, ToPrimitive};
 
 use super::Position;
-use crate::PrimInt;
 use super::WithHyperAstPositionConverter;
 use crate::position::building;
 use crate::types::{
     self, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled, NodeStore,
     TypeStore, WithChildren, WithSerialization,
 };
+use crate::PrimInt;
 
 pub fn path_with_spaces<'store, HAST, It: Iterator>(
     root: HAST::IdN,

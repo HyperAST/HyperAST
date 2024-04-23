@@ -5,12 +5,12 @@ use hyper_ast::{
     filter::BloomResult,
     nodes::RefContainer,
     position::{
-        Scout, StructuralPosition, StructuralPositionStore,
-        TypedScout, TypedTreePath, PositionConverter,
+        PositionConverter, Scout, StructuralPosition, StructuralPositionStore, TypedScout,
+        TypedTreePath,
     },
     store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores},
     tree_gen::ZippedTreeGen,
-    types::{NodeId, WithChildren, Typed},
+    types::{NodeId, Typed, WithChildren},
     utils::memusage,
 };
 use pretty_assertions::assert_eq;
@@ -456,8 +456,7 @@ fn test_offset_computation() {
     };
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
-    let mut s =
-        StructuralPositionStore::new(full_node.local.compressed_node);
+    let mut s = StructuralPositionStore::new(full_node.local.compressed_node);
     let mut scout = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let mut scout: TypedScout<TIdN<NodeIdentifier>, u16> = s.type_scout(&mut scout, unsafe {
         &TIdN::from_id(full_node.local.compressed_node)
@@ -467,7 +466,7 @@ fn test_offset_computation() {
             let b = stores.node_store.resolve(x);
             let x = b.child(&i).unwrap();
             use hyper_ast::types::TypedNodeStore;
-            let x:crate::types::TIdN<_> = stores.node_store.try_typed(&x).unwrap();
+            let x: crate::types::TIdN<_> = stores.node_store.try_typed(&x).unwrap();
             dbg!(stores.node_store.resolve_typed(&x).get_type());
             scout.goto_typed(x, i);
             // scout.up(&s);
@@ -485,9 +484,9 @@ fn test_offset_computation() {
     s.check(&stores).unwrap();
     let x = s.push_typed(&mut scout);
     let z = s.get(x);
-    hyper_ast::position::position_accessors::assert_invariants_post_full(&z,&stores);
+    hyper_ast::position::position_accessors::assert_invariants_post_full(&z, &stores);
     let position_converter = &PositionConverter::new(&z).with_stores(&stores);
-    
+
     let p = if true {
         use hyper_ast::position;
         // use position::offsets_and_nodes;
@@ -536,8 +535,7 @@ fn test_offset_computation2() {
     };
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
-    let mut s =
-        StructuralPositionStore::new(full_node.local.compressed_node);
+    let mut s = StructuralPositionStore::new(full_node.local.compressed_node);
     let mut scout = Scout::from((StructuralPosition::from((vec![], vec![])), 0));
     let mut scout: TypedScout<TIdN<NodeIdentifier>, u16> = s.type_scout(&mut scout, unsafe {
         &TIdN::from_id(full_node.local.compressed_node)
@@ -568,7 +566,7 @@ fn test_offset_computation2() {
     s.check(&stores).unwrap();
     let x = s.push_typed(&mut scout);
     let z = s.get(x);
-    hyper_ast::position::position_accessors::assert_invariants_post(&z,&stores);
+    hyper_ast::position::position_accessors::assert_invariants_post(&z, &stores);
     let position_converter = &PositionConverter::new(&z).with_stores(&stores);
     let p = if true {
         use hyper_ast::position;
@@ -1013,7 +1011,7 @@ class A {
     }
 }";
 
-static CASE_17: &'static str =r#"package q.w.e;
+static CASE_17: &'static str = r#"package q.w.e;
 enum SSLCipher {
     // exportable ciphers
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -1126,7 +1124,7 @@ class A {
 /// Same name field and type
 // TODO need mandatory type ref and mandatory member ref
 // so that we do not mask ref to super and interfaces with a field of the same name.
-static CASE_23: &'static str = 
+static CASE_23: &'static str =
 "package spoon.test.template.testclasses;
 
 import spoon.reflect.code.CtStatement;
@@ -1203,7 +1201,7 @@ interface _TargetType_ {
 
 }";
 
-static CASE_24: &'static str = 
+static CASE_24: &'static str =
 "/**
 * Licensed to the Apache Software Foundation (ASF) under one
 * or more contributor license agreements.  See the NOTICE file
@@ -2281,7 +2279,7 @@ class A {
     org.apa.B x;
 }";
 
-static CASE_29: &'static str = 
+static CASE_29: &'static str =
 "/**\r
  * Copyright (C) 2006-2018 INRIA and contributors\r
  * Spoon - http://spoon.gforge.inria.fr/\r

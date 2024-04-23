@@ -21,7 +21,6 @@ impl<Idx: PartialEq> PartialEq for CompressedTreePath<Idx> {
 }
 impl<Idx: Eq> Eq for CompressedTreePath<Idx> {}
 
-
 fn shared_ancestors<Idx: PartialEq>(
     curr: impl Iterator<Item = Idx>,
     mut other: impl Iterator<Item = Idx>,

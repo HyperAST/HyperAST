@@ -1,6 +1,6 @@
 use poll_promise::Promise;
 
-use crate::app::{types::Resource};
+use crate::app::types::Resource;
 
 use super::types::Commit;
 

@@ -209,9 +209,10 @@ where
     HAST: 'store + crate::types::HyperASTShared,
     HAST::IdN: Clone,
     &'store HAST: crate::types::HyperASTLean,
-    // for<'a> &'a <&'store HAST as crate::types::HyperASTLean>::NS<'store>: 
+    // for<'a> &'a <&'store HAST as crate::types::HyperASTLean>::NS<'store>:
     //     crate::types::NodeStoreLean<<&'store HAST as crate::types::HyperASTShared>::IdN, R = <&'store HAST as crate::types::HyperASTLean>::T>,
-    <&'store HAST as crate::types::HyperASTLean>::T: WithSerialization + WithChildren<ChildIdx = It::Item>,
+    <&'store HAST as crate::types::HyperASTLean>::T:
+        WithSerialization + WithChildren<ChildIdx = It::Item>,
 {
     todo!()
 }

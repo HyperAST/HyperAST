@@ -8,7 +8,8 @@ use crate::{
     types::{
         self, AnyType, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled,
         NodeId, NodeStore, TypeStore, Typed, TypedNodeId, WithChildren, WithSerialization,
-    }, PrimInt,
+    },
+    PrimInt,
 };
 
 pub use super::offsets_and_nodes::StructuralPosition;
@@ -104,7 +105,9 @@ mod esp_impl {
 
         fn next(&mut self) -> Option<Self::Item> {
             let o = self.0.sps.offsets[self.0.i];
-            self.0.try_go_up().map(|h| (o - one(), self.0.sps.nodes[h.0]))
+            self.0
+                .try_go_up()
+                .map(|h| (o - one(), self.0.sps.nodes[h.0]))
             // let o = self.0.sps.offsets[self.0.i];
             // let n = self.0.sps.nodes[self.0.i];
             // self.0.try_go_up().map(|h| (o, n))
@@ -325,7 +328,7 @@ where
             let builder = loop {
                 let Some(aaa) = iter.next() else {
                     use bottom_up::SetRoot;
-                    return builder.set_root(prev_x)
+                    return builder.set_root(prev_x);
                 };
                 x = aaa.1;
                 o = aaa.0;
@@ -373,7 +376,7 @@ where
         loop {
             let Some(aaa) = iter.next() else {
                 use bottom_up::SetRoot;
-                return builder.set_root(prev_x)
+                return builder.set_root(prev_x);
             };
             x = aaa.1;
             o = aaa.0;
@@ -515,12 +518,7 @@ impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, I
                     );
                 }
                 let c: usize = {
-                    let v: Vec<_> = b
-                        .children()
-                        .unwrap()
-                        .before(o)
-                        .iter_children()
-                        .collect();
+                    let v: Vec<_> = b.children().unwrap().before(o).iter_children().collect();
                     v.iter()
                         .map(|x| {
                             let b = stores.node_store().resolve(x);

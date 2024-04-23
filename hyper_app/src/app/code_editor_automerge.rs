@@ -92,7 +92,10 @@ impl autosurgeon::Hydrate for CodeEditor {
         use automerge::ObjType;
         use autosurgeon::HydrateError;
         let Some(obj_type) = doc.object_type(obj) else {
-            return Err(HydrateError::unexpected("a map", "a scalar value".to_string()))
+            return Err(HydrateError::unexpected(
+                "a map",
+                "a scalar value".to_string(),
+            ));
         };
         match obj_type {
             ObjType::Map | ObjType::Table => {

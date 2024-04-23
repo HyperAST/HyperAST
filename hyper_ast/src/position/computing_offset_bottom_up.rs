@@ -1,10 +1,7 @@
 use num::ToPrimitive;
 
 use crate::{
-    store::{
-        defaults::{NodeIdentifier},
-        nodes::HashedNodeRef,
-    },
+    store::{defaults::NodeIdentifier, nodes::HashedNodeRef},
     types::{
         AnyType, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled, NodeStore,
         TypeStore, WithChildren, WithSerialization,
@@ -93,7 +90,7 @@ where
     It: Iterator<Item = HAST::IdN>, //Iterator<Item = HAST::IdN>,
 {
     let Some(p) = nodes.next() else {
-        return Position::default()
+        return Position::default();
     };
     let b = stores.node_store().resolve(&p);
     // println!("type {:?}", b.get_type());
@@ -118,7 +115,7 @@ where
     It: Iterator<Item = (HAST::IdN, usize)> + Into<It2>, //Iterator<Item = ParentWithChildOffset<HAST::IdN>>,
     It2: Iterator<Item = HAST::IdN>,
 {
-    let Some((p,o)) = it.next() else {
+    let Some((p, o)) = it.next() else {
         return Position::default();
     };
 

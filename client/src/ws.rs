@@ -379,7 +379,9 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, state: SharedState, s
                         let shared = &mut shared.unwrap().write().unwrap();
                         let shared = shared.deref_mut();
                         let message = automerge::sync::Message::decode(&d).unwrap();
-                        shared.doc.sync()
+                        shared
+                            .doc
+                            .sync()
                             .receive_sync_message(&mut sync_state, message)
                             .unwrap();
                     }
@@ -415,7 +417,9 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, state: SharedState, s
                             let s = if let Some(x) = state.doc2.docs.write().unwrap().get(session) {
                                 if let Some(x) = x {
                                     let mut shared_doc = x.write().unwrap();
-                                    let Some(s) = &mut shared_doc.members.get_mut(i) else {break};
+                                    let Some(s) = &mut shared_doc.members.get_mut(i) else {
+                                        break;
+                                    };
                                     s.clone()
                                 } else {
                                     break;

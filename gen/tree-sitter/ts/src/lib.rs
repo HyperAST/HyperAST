@@ -5,7 +5,6 @@ pub mod types;
 
 #[cfg(feature = "legion")]
 mod tnode {
-    
 
     #[repr(transparent)]
     pub struct TNode<'a>(pub(super) tree_sitter::Node<'a>);

@@ -204,14 +204,18 @@ mod type_store {
                 }
             )
         }
-        
-        fn type_eq(&self, n: &HashedNodeRef<'a, NodeIdentifier>, m: &HashedNodeRef<'a, NodeIdentifier>) -> bool {
+
+        fn type_eq(
+            &self,
+            n: &HashedNodeRef<'a, NodeIdentifier>,
+            m: &HashedNodeRef<'a, NodeIdentifier>,
+        ) -> bool {
             on_multi!(n, [
                     hyper_ast_gen_ts_java,
                     hyper_ast_gen_ts_cpp,
                     hyper_ast_gen_ts_xml
                 ],
-                (t, u) =>{ 
+                (t, u) =>{
                     if let Ok(tt) = m.get_component::<u::types::Type>() {
                         t == tt
                     } else {
@@ -421,7 +425,7 @@ mod type_store {
         fn marshal_type(&self, n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Marshaled {
             todo!()
         }
-        
+
         fn type_eq(
             &self,
             n: &NoSpaceWrapper<'a, NodeIdentifier>,
@@ -432,7 +436,7 @@ mod type_store {
                     hyper_ast_gen_ts_cpp,
                     hyper_ast_gen_ts_xml
                 ],
-                (t, u) =>{ 
+                (t, u) =>{
                     if let Ok(tt) = m.as_ref().get_component::<u::types::Type>() {
                         t == tt
                     } else {

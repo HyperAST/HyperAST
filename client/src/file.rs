@@ -38,9 +38,7 @@ pub fn from_hyper_ast(state: SharedState, path: FetchFileParam) -> Result<String
         .map_err(|e| e.to_string())?;
     log::warn!("done construction of {commits:?} in {}", repo.spec,);
     let repositories = state.repositories.read().unwrap();
-    let commit_src = repositories
-        .get_commit(&repo.config,&commits[0])
-        .unwrap();
+    let commit_src = repositories.get_commit(&repo.config, &commits[0]).unwrap();
     let src_tr = commit_src.ast_root;
 
     // let size = node_store.resolve(src_tr).size();

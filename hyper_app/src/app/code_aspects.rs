@@ -256,7 +256,8 @@ pub(crate) fn show(
                                 .filter_map(|x| x.parse().ok())
                                 .collect();
                             let action = content.show(
-                                ui,api_addr,
+                                ui,
+                                api_addr,
                                 aspects,
                                 None,
                                 vec![], //(&hightlight, &egui::Color32::RED, &mut None)

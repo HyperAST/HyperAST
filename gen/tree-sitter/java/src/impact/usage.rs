@@ -7,9 +7,15 @@ use hyper_ast::{
         ExploreStructuralPositions, Scout, SpHandle, StructuralPositionStore, TreePath,
         TreePathMut, TypedScout, TypedTreePath,
     },
-    store::{defaults::{LabelIdentifier, NodeIdentifier}, nodes::legion::HashedNodeRef, SimpleStores},
+    store::{
+        defaults::{LabelIdentifier, NodeIdentifier},
+        nodes::legion::HashedNodeRef,
+        SimpleStores,
+    },
     types::{
-        Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeId, Tree, TypeStore, TypeTrait, Typed, TypedHyperAST, TypedNodeStore, TypedTree, WithChildren, WithSerialization
+        Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeId, Tree, TypeStore,
+        TypeTrait, Typed, TypedHyperAST, TypedNodeStore, TypedTree, WithChildren,
+        WithSerialization,
     },
 };
 use num::{cast, one, zero, ToPrimitive, Zero};
@@ -87,10 +93,14 @@ where
     <HAST as hyper_ast::types::HyperAST<'a>>::T: RefContainer<Result = BloomResult>,
     <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
         TypedTree<Type = Type, ChildIdx = HAST::Idx>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT: RefContainer<Result = BloomResult>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
+        RefContainer<Result = BloomResult>,
 {
-
-    pub fn eq_root_scoped(d: ExplorableRef, stores: &'a HAST, b: <HAST as hyper_ast::types::TypedHyperAST<'a,TIdN<IdN>>>::TT) -> bool {
+    pub fn eq_root_scoped(
+        d: ExplorableRef,
+        stores: &'a HAST,
+        b: <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT,
+    ) -> bool {
         match d.as_ref() {
             RefsEnum::Root => false, // TODO check, not sure
             RefsEnum::MaybeMissing => false,
@@ -143,10 +153,8 @@ where
                 } else {
                     todo!("{:?}", t)
                 }
-            },
-            RefsEnum::TypeIdentifier(..) => {
-                false
-            },
+            }
+            RefsEnum::TypeIdentifier(..) => false,
             x => {
                 panic!("{:?}", x)
             }
@@ -283,7 +291,9 @@ where
         // let current = scout.node_typed().unwrap();
         // let b = self.stores.typed_node_store().resolve(current);
         let has_children = b.has_children();
-        let Some(t) = b.try_get_type() else {return vec![]};
+        let Some(t) = b.try_get_type() else {
+            return vec![];
+        };
         match self.find_refs_pre(t, &b, package, scout, target, &current) {
             Ok(value) => (),
             Err(value) => return value,
@@ -330,7 +340,7 @@ where
                 || t == Type::ArgumentList
                 || t == Type::TypeArguments
                 || t == Type::TernaryExpression
-                || t == Type::UpdateExpression 
+                || t == Type::UpdateExpression
                 || t == Type::UnaryExpression
                 || t == Type::BinaryExpression
                 || t == Type::ParenthesizedExpression
@@ -788,11 +798,11 @@ where
         target: RefPtr,
     ) -> BloomResult {
         // b.get_component::<BloomSize>()
-            // .map(|_| {
-                let d = self.ana.solver.nodes.with(target);
-                b.check(d)
-            // })
-            // .unwrap_or(BloomResult::MaybeContain)
+        // .map(|_| {
+        let d = self.ana.solver.nodes.with(target);
+        b.check(d)
+        // })
+        // .unwrap_or(BloomResult::MaybeContain)
     }
 }
 
@@ -811,12 +821,12 @@ where
     HAST: hyper_ast::types::TypeStore<<HAST as hyper_ast::types::HyperAST<'a>>::T>,
     HAST: hyper_ast::types::LabelStore<str, I = LabelIdentifier>,
     HAST: hyper_ast::types::NodeStore<IdN, R<'a> = <HAST as hyper_ast::types::HyperAST<'a>>::T>,
-    <HAST as hyper_ast::types::HyperAST<'a>>::T:
-        Tree<ChildIdx = HAST::Idx> + WithSerialization,
+    <HAST as hyper_ast::types::HyperAST<'a>>::T: Tree<ChildIdx = HAST::Idx> + WithSerialization,
     <HAST as hyper_ast::types::HyperAST<'a>>::T: RefContainer<Result = BloomResult>,
     <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
         TypedTree<Type = Type, ChildIdx = HAST::Idx>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT: RefContainer<Result = BloomResult>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
+        RefContainer<Result = BloomResult>,
 {
     pub fn exact_match(&mut self, target: RefPtr, mut scout: TypedScout<TIdN<IdN>, HAST::Idx>) {
         let d = ExplorableRef {
@@ -2616,9 +2626,7 @@ where
         }
         let mut parent_scout = scout.clone();
         if let Some(xx) = parent_scout.up(&self.sp_store) {
-            let Ok(xx) = xx else {
-                return Some(scout)
-            };
+            let Ok(xx) = xx else { return Some(scout) };
             let bb = self.stores.typed_node_store().resolve(&xx);
             let tt = bb.get_type();
             if tt == Type::ScopedIdentifier
@@ -2940,17 +2948,17 @@ where
     HAST: hyper_ast::types::NodeStore<IdN, R<'a> = <HAST as hyper_ast::types::HyperAST<'a>>::T>,
     HAST::Idx: num::PrimInt + num::traits::NumAssign + Debug,
     IdN: Copy + Eq + Debug + NodeId<IdN = IdN>,
-    <HAST as hyper_ast::types::HyperAST<'a>>::T:
-        Tree<ChildIdx = HAST::Idx> + WithSerialization,
+    <HAST as hyper_ast::types::HyperAST<'a>>::T: Tree<ChildIdx = HAST::Idx> + WithSerialization,
     <HAST as hyper_ast::types::HyperAST<'a>>::T: RefContainer<Result = BloomResult>,
     <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
         TypedTree<Type = Type, ChildIdx = HAST::Idx>,
-    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT: RefContainer<Result = BloomResult>,
+    <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
+        RefContainer<Result = BloomResult>,
 {
     /// Structurally find constructors in class
     pub fn find_constructors(&mut self, mut scout: TypedScout<TIdN<IdN>, HAST::Idx>) {
         let Ok(x) = scout.node_always(&self.sp_store) else {
-            return
+            return;
         };
         let b = self.stores.typed_node_store().resolve(&x);
         let t = b.get_type();

@@ -129,7 +129,7 @@ impl From<hyper_ast::position::Position> for Pos {
     fn from(value: hyper_ast::position::Position) -> Self {
         Self(value)
     }
-} 
+}
 
 // impl QPath {
 //     fn convert<HAST>(self, stores: HAST) -> Pos {

@@ -117,11 +117,9 @@ pub(crate) struct Chidlren {
     types: Vec<TsType>,
 }
 
-pub(crate) fn consider_tags(_tags: ts_metadata::Tags, _typesys : &mut TypeSys) {
-}
+pub(crate) fn consider_tags(_tags: ts_metadata::Tags, _typesys: &mut TypeSys) {}
 
-pub(crate) fn consider_highlights(_tags: ts_metadata::HighLights, _typesys : &mut TypeSys) {
-}
+pub(crate) fn consider_highlights(_tags: ts_metadata::HighLights, _typesys: &mut TypeSys) {}
 
 impl TypeSys {
     pub(crate) fn new(lang: Language, types: Vec<TsType>) -> Self {
@@ -160,10 +158,10 @@ impl TypeSys {
                     let ent = self.types.spawn(builder.build());
                     vac.insert(ent);
                     self.list.push(ent);
-                },
+                }
                 std::collections::btree_map::Entry::Occupied(occ) => {
                     self.list.push(occ.get().clone())
-                },
+                }
             }
             // let name = camel_case(name);
             // use std::collections::hash_map::Entry;
@@ -180,7 +178,7 @@ impl TypeSys {
             // names.insert(i, e);
         }
     }
-    fn add_token_hierarchy(&mut self, types: Vec<TsType>, ) {
+    fn add_token_hierarchy(&mut self, types: Vec<TsType>) {
         let mut world = &mut self.types;
         let names = &mut self.index;
         for ty in types {
@@ -253,7 +251,7 @@ impl TypeSys {
             let e = world.spawn(builder.build());
             names.insert(t, e);
         }
-    
+
         let mut cmd = CommandBuffer::new();
         world
             .query_mut::<(&mut SubTypes, &mut Vec<TsType>)>()
@@ -296,38 +294,37 @@ pub(crate) fn get_token_hierarchy(types: Vec<TsType>, _escape: bool) -> TypeSys 
     r
 }
 
-
 pub fn get_token_names(language: &Language, _escape: bool) -> Vec<(String, bool, String)> {
     let count = language.node_kind_count();
     let mut names: BTreeMap<usize, (String, bool, String)> = BTreeMap::default();
     let mut name_count = HashMap::new();
     // for anon in &[false, true] {
-        for i in 0..count {
-            let named = language.node_kind_is_named(i as u16);
-            let visible = language.node_kind_is_visible(i as u16);
-            // if anonymous != *anon {
-            //     continue;
-            // }
-            let kind = language.node_kind_for_id(i as u16).unwrap();
-            dbg!(named);
-            dbg!(visible);
-            dbg!(kind);
-            let name = kind.to_string();//sanitize_identifier(kind);
-            let ts_name = kind.to_string();//sanitize_string(kind, escape);
-            let name = camel_case(name);
-            use std::collections::hash_map::Entry;
-            let e = match name_count.entry(name.clone()) {
-                Entry::Occupied(mut e) => {
-                    *e.get_mut() += 1;
-                    (format!("{}{}", name, e.get()), true, ts_name)
-                }
-                Entry::Vacant(e) => {
-                    e.insert(1);
-                    (name, false, ts_name)
-                }
-            };
-            names.insert(i, e);
-        }
+    for i in 0..count {
+        let named = language.node_kind_is_named(i as u16);
+        let visible = language.node_kind_is_visible(i as u16);
+        // if anonymous != *anon {
+        //     continue;
+        // }
+        let kind = language.node_kind_for_id(i as u16).unwrap();
+        dbg!(named);
+        dbg!(visible);
+        dbg!(kind);
+        let name = kind.to_string(); //sanitize_identifier(kind);
+        let ts_name = kind.to_string(); //sanitize_string(kind, escape);
+        let name = camel_case(name);
+        use std::collections::hash_map::Entry;
+        let e = match name_count.entry(name.clone()) {
+            Entry::Occupied(mut e) => {
+                *e.get_mut() += 1;
+                (format!("{}{}", name, e.get()), true, ts_name)
+            }
+            Entry::Vacant(e) => {
+                e.insert(1);
+                (name, false, ts_name)
+            }
+        };
+        names.insert(i, e);
+    }
     // }
     let mut names: Vec<_> = names.values().cloned().collect();
     names.push(("Error".to_string(), false, "ERROR".to_string()));

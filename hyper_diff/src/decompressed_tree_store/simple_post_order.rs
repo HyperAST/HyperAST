@@ -5,7 +5,8 @@ use num_traits::{cast, one, zero, PrimInt, ToPrimitive, Zero};
 use hyper_ast::{
     position::Position,
     types::{
-        self, Children, HyperAST, HyperType, IterableChildren, LabelStore, NodeId, NodeStore, Stored, Tree, TypeStore, WithChildren, WithSerialization
+        self, Children, HyperAST, HyperType, IterableChildren, LabelStore, NodeId, NodeStore,
+        Stored, Tree, TypeStore, WithChildren, WithSerialization,
     },
 };
 
@@ -357,7 +358,7 @@ where
             let a = self.original(&r);
             let node = store.resolve(&a);
             let cs = node.children().filter(|x| !x.is_empty());
-            let Some(cs) = cs  else {
+            let Some(cs) = cs else {
                 panic!("no children in this tree")
             };
             let mut z = 0;
@@ -490,8 +491,8 @@ where
     {
         let tmp = store.resolve(x);
         let Some(cs) = tmp.children() else {
-                return 1;
-            };
+            return 1;
+        };
 
         let mut z = 0;
         for x in cs.iter_children() {
@@ -550,7 +551,10 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
                 if self.root == ori {
                     let r = stores.node_store().resolve(&ori);
                     return self.cache.entry(*c).or_insert(Position::new(
-                        stores.label_store().resolve(&r.get_label_unchecked()).into(),
+                        stores
+                            .label_store()
+                            .resolve(&r.get_label_unchecked())
+                            .into(),
                         0,
                         r.try_bytes_len().unwrap_or(0),
                     ));
@@ -611,7 +615,10 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
             let r = stores.node_store().resolve(&ori);
             let t = stores.type_store().resolve_type(&r);
             let pos = if t.is_directory() || t.is_file() {
-                let file = stores.label_store().resolve(&r.get_label_unchecked()).into();
+                let file = stores
+                    .label_store()
+                    .resolve(&r.get_label_unchecked())
+                    .into();
                 let offset = 0;
                 let len = r.try_bytes_len().unwrap_or(0);
                 Position::new(file, offset, len)

@@ -1062,7 +1062,7 @@ where
                         let b = NodeStore::resolve(self.stores, id);
                         let kind = self.stores.resolve_type(&b);
                         if !kind.is_spaces() {
-                            write!(out,"\n{}", "  ".repeat(indent + 1))?;
+                            write!(out, "\n{}", "  ".repeat(indent + 1))?;
                             self.serialize(&id, indent + 1, out)?;
                         }
                     }

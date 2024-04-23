@@ -891,11 +891,11 @@ impl Resource<Result<ComputeResults, ScriptingError>> {
         if response.status != 200 {
             let Some(text) = response.text() else {
                 wasm_rs_dbg::dbg!();
-                return Err("".to_string())
+                return Err("".to_string());
             };
             let Ok(json) = serde_json::from_str::<ScriptingError>(text) else {
                 wasm_rs_dbg::dbg!();
-                return Err("".to_string())
+                return Err("".to_string());
             };
             return Ok(Self {
                 response,
@@ -1125,11 +1125,10 @@ fn show_long_result_list(content: &ComputeResults, ui: &mut egui::Ui) {
 fn show_long_result_table(content: &ComputeResults, ui: &mut egui::Ui) {
     // header
     let header = content.results.iter().find(|x| x.is_ok());
-    let Some(header) = header
-        .as_ref() else {
-            wasm_rs_dbg::dbg!("issue with header");
-            return;
-        };
+    let Some(header) = header.as_ref() else {
+        wasm_rs_dbg::dbg!("issue with header");
+        return;
+    };
     let header = header.as_ref().unwrap();
     use egui_extras::{Column, TableBuilder};
     TableBuilder::new(ui)

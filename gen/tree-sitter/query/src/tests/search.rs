@@ -1,5 +1,5 @@
-use hyper_ast::{position::TreePath, store::defaults::NodeIdentifier, types::Typed};
 use crate::tests::cpp_tree;
+use hyper_ast::{position::TreePath, store::defaults::NodeIdentifier, types::Typed};
 
 const Q0: &str =
     r#"(binary_expression (_expression (number_literal)) "+" (_expression (number_literal)))"#; // TODO make _expression optional

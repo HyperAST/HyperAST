@@ -242,7 +242,7 @@ fn main() -> std::io::Result<()> {
 }
 
 mod refl {
-    use std::{marker::PhantomData};
+    use std::marker::PhantomData;
 
     struct Class {}
     struct Identifier {}
@@ -901,7 +901,7 @@ mod generate_types {
                         let _camel_case = leafs.fmt(&t, |k| format!("TS{}", &k.to_camel_case()));
                         let camel_case = "aaaa";
                         format_ident!("{}", &camel_case)
-                    } else  {
+                    } else {
                         format_ident!("{}", &camel_case)
                     };
 

@@ -293,12 +293,8 @@ mod spreaded {
             let r = <dyn Any>::downcast_mut(r.as_mut_any());
             r.unwrap()
         }
-        pub fn get<T: 'static + ToErasedProc + Default + Send + Sync>(
-            &self,
-        ) -> Option<&T> {
-            let r = self
-                .0
-                .get(&std::any::TypeId::of::<T>())?;
+        pub fn get<T: 'static + ToErasedProc + Default + Send + Sync>(&self) -> Option<&T> {
+            let r = self.0.get(&std::any::TypeId::of::<T>())?;
             <dyn Any>::downcast_ref(r.as_any())
         }
         // pub fn mut_or_default_with_param<T: 'static + CommitProcExt>(
@@ -369,7 +365,10 @@ mod spreaded {
             fn with_parameters(&self, parameters: ConfigParametersHandle) -> &Self::Proc {
                 &self.0[parameters.0]
             }
-            fn with_parameters_mut(&mut self, parameters: ConfigParametersHandle) -> &mut Self::Proc {
+            fn with_parameters_mut(
+                &mut self,
+                parameters: ConfigParametersHandle,
+            ) -> &mut Self::Proc {
                 &mut self.0[parameters.0]
             }
         }

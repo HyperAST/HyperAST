@@ -11,7 +11,8 @@ use hyper_ast::{
         nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert},
     },
     tree_gen::{
-        BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange
+        BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics,
+        TextedGlobalData, TreeGen, WithByteRange,
     },
     types::{self, AnyType, NodeStoreExt, TypeStore, TypeTrait, WithHashs, WithStats},
     utils,
@@ -346,20 +347,20 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
     }
 
     fn pre_skippable(
-            &mut self,
-            text: &Self::Text,
-            node: &Self::Node<'_>,
-            stack: &Parents<Self::Acc>,
-            global: &mut Self::Global,
-        ) -> PreResult<<Self as TreeGen>::Acc> {
-            let type_store = &mut self.stores().type_store;
-            let kind = node.obtain_type(type_store);
-            let mut acc = self.pre(text, node, stack, global);
-            if kind == Type::StringLiteral {
-                acc.labeled = true;
-                return PreResult::SkipChildren(acc)
-            }
-            PreResult::Ok(acc)
+        &mut self,
+        text: &Self::Text,
+        node: &Self::Node<'_>,
+        stack: &Parents<Self::Acc>,
+        global: &mut Self::Global,
+    ) -> PreResult<<Self as TreeGen>::Acc> {
+        let type_store = &mut self.stores().type_store;
+        let kind = node.obtain_type(type_store);
+        let mut acc = self.pre(text, node, stack, global);
+        if kind == Type::StringLiteral {
+            acc.labeled = true;
+            return PreResult::SkipChildren(acc);
+        }
+        PreResult::Ok(acc)
     }
 
     fn pre(
@@ -585,7 +586,7 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
 
     fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {
         if !ANA {
-            return None
+            return None;
         }
         let label_store = &mut self.stores.label_store;
         if kind == &Type::ClassBody
@@ -982,7 +983,7 @@ fn make_partial_ana(
     insertion: &PendingInsert,
 ) -> Option<PartialAnalysis> {
     if !ANA {
-        return None
+        return None;
     }
     partial_ana_extraction(kind, ana, label, children, label_store, insertion)
         .map(|ana| ana_resolve(kind, ana, label_store))

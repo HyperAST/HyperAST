@@ -1,9 +1,8 @@
-
 #[test]
 //
 fn type_test_generic_eq() {
     use hyper_ast::types::HyperType;
-    
+
     let k = crate::types::Type::FunctionDefinition;
     let k0 = crate::types::Type::FunctionDefinition;
     let k1 = crate::types::Type::EnumSpecifier;

@@ -104,7 +104,8 @@ impl<IdN, Idx: PrimInt, IdO: PrimInt + Default>
     }
 }
 impl<IdN, Idx: PrimInt, IdO: PrimInt>
-    SealedFileTopDownPosBuilder<IdN, Idx, IdO, NoSpacePrepareParams<Idx>> for Position<PathBuf, IdO>
+    SealedFileTopDownPosBuilder<IdN, Idx, IdO, NoSpacePrepareParams<Idx>>
+    for Position<PathBuf, IdO>
 {
     type Prepared = Position<PathBuf, IdO>;
 
@@ -123,12 +124,11 @@ impl<IdN, Idx: PrimInt, IdO: PrimInt>
     }
 }
 mod impl_receivers {
-    use std::path::PathBuf;
     use super::super::building;
-    use building::top_down;
-    use building::bottom_up;
     use crate::PrimInt;
-
+    use building::bottom_up;
+    use building::top_down;
+    use std::path::PathBuf;
 
     impl<IdO: PrimInt> top_down::CreateBuilder for super::Position<PathBuf, IdO> {
         fn create() -> Self {
@@ -139,7 +139,6 @@ mod impl_receivers {
             }
         }
     }
-
 
     impl<IdO: PrimInt> bottom_up::CreateBuilder for super::Position<PathBuf, IdO> {
         fn create() -> Self {
@@ -239,7 +238,9 @@ mod impl_receivers {
         type InFile<O> = Self;
     }
 
-    impl<IdO: PrimInt> building::Transition<super::Position<PathBuf, IdO>> for super::Position<PathBuf, IdO> {
+    impl<IdO: PrimInt> building::Transition<super::Position<PathBuf, IdO>>
+        for super::Position<PathBuf, IdO>
+    {
         fn transit(self) -> super::Position<PathBuf, IdO> {
             self
         }

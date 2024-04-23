@@ -13,7 +13,9 @@ fn xml_tree_sitter_simple() {
     let mut parser = Parser::new();
 
     {
-        parser.set_language(&tree_sitter_xml::language_xml()).unwrap();
+        parser
+            .set_language(&tree_sitter_xml::language_xml())
+            .unwrap();
     }
 
     let text = {

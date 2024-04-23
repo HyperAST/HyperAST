@@ -15,8 +15,7 @@ use crate::{
     tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
 };
 use hyper_ast::types::{
-    DecompressedSubtree, LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Typed,
-    WithChildren,
+    DecompressedSubtree, LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Typed, WithChildren,
 };
 use std::fmt;
 

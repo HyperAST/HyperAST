@@ -7,10 +7,7 @@ use crate::tree::tree_path::CompressedTreePath;
 /// Maybe an other algorithm similar to the Chawathe that better fits my needs exists in the literature.
 use std::fmt::Debug;
 
-use super::{
-    script_generator2::SimpleAction,
-    Actions,
-};
+use super::{script_generator2::SimpleAction, Actions};
 
 pub struct ActionsTree<A> {
     atomics: Vec<Node<A>>,

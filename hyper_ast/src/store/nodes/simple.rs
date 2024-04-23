@@ -257,7 +257,7 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> HashedNodeRef<'a, Id> {
 }
 
 pub struct NodeStore {
-    nodes: std::collections::HashMap<NodeIdentifier, boxed_component::ErasedMap>
+    nodes: std::collections::HashMap<NodeIdentifier, boxed_component::ErasedMap>,
 }
 
 impl crate::types::NodeStore<NodeIdentifier> for NodeStore {

@@ -14,7 +14,7 @@ pub(super) struct Options {
     pub address: SocketAddr,
 
     /// config a specific repository (multiple uses)
-    /// 
+    ///
     /// use the following syntax: <forge>/<user>/<name>:<config>
     /// example: github.com/INRIA/spoon:Java
     #[clap(short, long)]

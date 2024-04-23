@@ -12,9 +12,7 @@ use tower_http::trace::TraceLayer;
 
 use crate::{
     commit, fetch, file,
-    scripting::{
-        self, ScriptContent, ScriptContentDepth, ScriptingError, ScriptingParam,
-    },
+    scripting::{self, ScriptContent, ScriptContentDepth, ScriptingError, ScriptingParam},
     track, view, SharedState,
 };
 

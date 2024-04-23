@@ -1,5 +1,3 @@
-
-
 use tree_sitter::{Tree, TreeCursor};
 
 pub fn ts_query_tree_from_str(input: &str) -> Tree {
@@ -166,9 +164,7 @@ impl<'a, 'b> PatternParser<'a, 'b> {
                     node,
                     "should have gone back to same query node"
                 );
-                Ok(Patt::Alternation {
-                    patt,
-                })
+                Ok(Patt::Alternation { patt })
             }
             "grouping" => {
                 println!("{}", self.cursor.node().utf8_text(self.input).unwrap());
@@ -292,7 +288,7 @@ impl<'a, 'b> PatternParser<'a, 'b> {
             x => {
                 dbg!(self.cursor.node().utf8_text(self.input).unwrap());
                 panic!("{} not handled", x)
-            }, //Err(format!("{} not handled", x).into()),
+            } //Err(format!("{} not handled", x).into()),
         }
     }
 }

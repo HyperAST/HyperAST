@@ -52,7 +52,9 @@ pub struct RootedOffsetsRef<'a, IdN, Idx> {
 
 impl<'a, IdN, Idx> super::node_filter_traits::Full for RootedOffsetsRef<'a, IdN, Idx> {}
 
-impl<'a, IdN: Copy, Idx> position_accessors::RootedPosition<IdN> for RootedOffsetsRef<'a, IdN, Idx> {
+impl<'a, IdN: Copy, Idx> position_accessors::RootedPosition<IdN>
+    for RootedOffsetsRef<'a, IdN, Idx>
+{
     fn root(&self) -> IdN {
         self.root
     }
@@ -91,10 +93,10 @@ pub(super) struct SolvedPathPosition<IdN, Idx> {
 
 mod impl_receivers {
     use super::super::building;
-    use building::top_down;
-    use crate::PrimInt;
     use super::tags;
     use super::Offsets;
+    use crate::PrimInt;
+    use building::top_down;
 
     impl<Idx: PrimInt, C> building::top_down::CreateBuilder for Offsets<Idx, C> {
         fn create() -> Self {
@@ -124,7 +126,9 @@ mod impl_receivers {
         }
     }
 
-    impl<Idx: PrimInt> building::top_down::ReceiveIdx<Idx, Self> for Offsets<Idx, tags::TopDownNoSpace> {
+    impl<Idx: PrimInt> building::top_down::ReceiveIdx<Idx, Self>
+        for Offsets<Idx, tags::TopDownNoSpace>
+    {
         fn push(self, _idx: Idx) -> Self {
             // self.offsets.push(idx);
             self
@@ -138,7 +142,9 @@ mod impl_receivers {
         }
     }
 
-    impl<Idx: PrimInt> building::top_down::ReceiveIdxNoSpace<Idx, Self> for Offsets<Idx, tags::TopDownNoSpace> {
+    impl<Idx: PrimInt> building::top_down::ReceiveIdxNoSpace<Idx, Self>
+        for Offsets<Idx, tags::TopDownNoSpace>
+    {
         fn push(mut self, idx: Idx) -> Self {
             self.offsets.push(idx);
             self
@@ -149,7 +155,9 @@ mod impl_receivers {
         type InFile<O> = Self;
     }
 
-    impl<Idx: PrimInt, IdO: PrimInt, C> building::top_down::ReceiveOffset<IdO, Self> for Offsets<Idx, C> {
+    impl<Idx: PrimInt, IdO: PrimInt, C> building::top_down::ReceiveOffset<IdO, Self>
+        for Offsets<Idx, C>
+    {
         fn push(self, _bytes: IdO) -> Self {
             self
         }

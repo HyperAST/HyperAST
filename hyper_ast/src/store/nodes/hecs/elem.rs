@@ -68,7 +68,7 @@ mod impl_traits_noderef {
         for HashedNodeRef<'a, Id>
     {
         type Type = Id::Ty;
-    
+
         fn get_type(&self) -> Id::Ty
         where
             Id::Ty: Copy + Send + Sync,

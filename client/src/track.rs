@@ -12,7 +12,8 @@ use hyper_ast::{
     store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef, SimpleStores},
     types::{
         self, HyperAST, IterableChildren, NodeStore, Typed, WithChildren, WithHashs, WithStats,
-    }, PrimInt,
+    },
+    PrimInt,
 };
 use hyper_ast_cvs_git::{
     git::Repo, multi_preprocessed, preprocessed::child_at_path_tracked,

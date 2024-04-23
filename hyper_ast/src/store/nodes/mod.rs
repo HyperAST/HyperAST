@@ -1,9 +1,9 @@
 pub mod fetched;
+#[cfg(feature = "hecs")]
+pub mod hecs;
 #[cfg(feature = "legion")]
 pub mod legion;
 mod simple;
-#[cfg(feature = "hecs")]
-pub mod hecs;
 
 #[cfg(feature = "legion")]
 pub type DefaultNodeStore = legion::NodeStore;

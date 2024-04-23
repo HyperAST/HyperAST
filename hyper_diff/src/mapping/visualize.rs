@@ -33,9 +33,10 @@ pub fn print_mappings_no_ranges<
     src_arena: &'a SD,
     stores: &'store HAST,
     mappings: &M,
-) where
-    // HAST::T: 'store + Tree<TreeId = IdN, Label = LS::I>,
-    // <HAST::T as types::Typed>::Type: Debug + Copy + Send + Sync,
+)
+where
+// HAST::T: 'store + Tree<TreeId = IdN, Label = LS::I>,
+// <HAST::T as types::Typed>::Type: Debug + Copy + Send + Sync,
 {
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);
@@ -109,9 +110,10 @@ pub fn print_mappings_no_ranges_label<
     src_arena: &'a SD,
     stores: &'store HAST,
     mappings: &M,
-) where
-    // HAST::T: 'store + Tree<TreeId = IdN, Label = LS::I>,
-    // <HAST::T as types::Typed>::Type: Debug + Copy + Send + Sync,
+)
+where
+// HAST::T: 'store + Tree<TreeId = IdN, Label = LS::I>,
+// <HAST::T as types::Typed>::Type: Debug + Copy + Send + Sync,
 {
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);

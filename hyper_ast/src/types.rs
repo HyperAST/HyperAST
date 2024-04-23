@@ -2059,7 +2059,9 @@ pub trait Stored: Node {
 pub trait Typed {
     type Type: HyperType + Eq + Copy + Send + Sync; // todo try remove Hash and copy
     fn get_type(&self) -> Self::Type; // TODO add TypeTrait bound on Self::Type to forbid AnyType from being given
-    fn try_get_type(&self) -> Option<Self::Type> { Some(self.get_type())}
+    fn try_get_type(&self) -> Option<Self::Type> {
+        Some(self.get_type())
+    }
 }
 
 // impl<T, A: Allocator> ops::Deref for Vec<T, A> {
@@ -2559,7 +2561,10 @@ pub trait NodeStoreLean<IdN> {
 }
 
 pub trait NodeStoreLife<'store, IdN> {
-    type R<'s> where Self: 's, Self: 'store;
+    type R<'s>
+    where
+        Self: 's,
+        Self: 'store;
     fn resolve(&'store self, id: &IdN) -> Self::R<'store>;
 }
 
@@ -2781,13 +2786,13 @@ where
     type Label = T::Label;
 }
 
-pub trait HyperASTLean: HyperASTShared
-where
-{
+pub trait HyperASTLean: HyperASTShared {
     type T: Tree<Label = Self::Label, TreeId = Self::IdN, ChildIdx = Self::Idx>;
 
     type NS;
-    fn node_store(&self) -> &Self::NS where for<'a> &'a Self::NS: NodeStoreLean<Self::IdN, R = Self::T>;
+    fn node_store(&self) -> &Self::NS
+    where
+        for<'a> &'a Self::NS: NodeStoreLean<Self::IdN, R = Self::T>;
 
     type LS: LabelStore<str, I = Self::Label>;
     fn label_store(&self) -> &Self::LS;
@@ -2795,27 +2800,39 @@ where
     type TS: TypeStore<Self::T>;
     fn type_store(&self) -> &Self::TS;
 
-    fn resolve_type(&self, id: &Self::IdN) -> <Self::TS as TypeStore<Self::T>>::Ty where for<'a> &'a Self::NS: NodeStoreLean<Self::IdN, R = Self::T> {
+    fn resolve_type(&self, id: &Self::IdN) -> <Self::TS as TypeStore<Self::T>>::Ty
+    where
+        for<'a> &'a Self::NS: NodeStoreLean<Self::IdN, R = Self::T>,
+    {
         let ns = self.node_store();
         let n = ns.resolve(id);
         self.type_store().resolve_type(&n).clone()
     }
 }
 
-pub trait HyperASTAsso: HyperASTShared
-where
-{
-    type T<'store>: Tree<Label = Self::Label, TreeId = Self::IdN, ChildIdx = Self::Idx> where Self: 'store;
+pub trait HyperASTAsso: HyperASTShared {
+    type T<'store>: Tree<Label = Self::Label, TreeId = Self::IdN, ChildIdx = Self::Idx>
+    where
+        Self: 'store;
 
-    type NS<'store>: NodeStore<Self::IdN, R<'store> = Self::T<'store>> where Self: 'store, T: 'store;
+    type NS<'store>: NodeStore<Self::IdN, R<'store> = Self::T<'store>>
+    where
+        Self: 'store,
+        T: 'store;
     fn node_store<'a>(&'a self) -> &'a Self::NS<'a>;
-    fn node_store2<'a, 'b>(&'a self) -> Self::NS<'b> {panic!()}
-    fn node_store3(&self) -> Self::NS<'_> {panic!()}
+    fn node_store2<'a, 'b>(&'a self) -> Self::NS<'b> {
+        panic!()
+    }
+    fn node_store3(&self) -> Self::NS<'_> {
+        panic!()
+    }
 
     type LS: LabelStore<str, I = Self::Label>;
     fn label_store(&self) -> &Self::LS;
 
-    type TS<'store>: TypeStore<Self::T<'store>> where Self: 'store;
+    type TS<'store>: TypeStore<Self::T<'store>>
+    where
+        Self: 'store;
     fn type_store(&self) -> &Self::TS<'_>;
 
     fn resolve_type(&self, id: &Self::IdN) -> <Self::TS<'_> as TypeStore<Self::T<'_>>>::Ty {
@@ -2832,7 +2849,10 @@ where
     type T = T::T;
 
     type NS = T::NS;
-    fn node_store(&self) -> &T::NS where for<'a> &'a Self::NS: NodeStoreLean<Self::IdN, R = Self::T> {
+    fn node_store(&self) -> &T::NS
+    where
+        for<'a> &'a Self::NS: NodeStoreLean<Self::IdN, R = Self::T>,
+    {
         (*self).node_store()
     }
 
@@ -2846,13 +2866,15 @@ where
         (*self).type_store()
     }
 
-    fn resolve_type(&self, id: &Self::IdN) -> <Self::TS as TypeStore<Self::T>>::Ty where for<'a> &'a Self::NS: NodeStoreLean<Self::IdN, R = Self::T> {
+    fn resolve_type(&self, id: &Self::IdN) -> <Self::TS as TypeStore<Self::T>>::Ty
+    where
+        for<'a> &'a Self::NS: NodeStoreLean<Self::IdN, R = Self::T>,
+    {
         (*self).resolve_type(id)
     }
 }
 
-pub trait TypedHyperASTLean<TIdN: TypedNodeId<IdN = Self::IdN>>: HyperASTLean
-{
+pub trait TypedHyperASTLean<TIdN: TypedNodeId<IdN = Self::IdN>>: HyperASTLean {
     type TT: TypedTree<
         Type = TIdN::Ty,
         TreeId = TIdN::IdN,
@@ -2881,7 +2903,7 @@ pub struct SimpleHyperAST<T, TS, NS, LS> {
     pub _phantom: std::marker::PhantomData<T>,
 }
 
-impl<T, TS, NS:Copy, LS> SimpleHyperAST<T, TS, NS, &LS> {
+impl<T, TS, NS: Copy, LS> SimpleHyperAST<T, TS, NS, &LS> {
     pub fn change_type_store_ref<TS2>(&self, new: TS2) -> SimpleHyperAST<T, TS2, NS, &LS> {
         SimpleHyperAST {
             type_store: new,
@@ -2997,7 +3019,7 @@ where
         self.type_store.marshal_type(n)
     }
     fn type_eq(&self, n: &T, m: &T) -> bool {
-        self.type_store.type_eq(n,m)
+        self.type_store.type_eq(n, m)
     }
 }
 
@@ -3059,7 +3081,6 @@ where
     for<'s> NS: 's + NodeStore<T::TreeId, R<'s> = T>,
     LS: LabelStore<str, I = T::Label>,
 {
-
     type T<'s> = T where Self:'s;
 
     type NS<'s> = NS where Self:'s;

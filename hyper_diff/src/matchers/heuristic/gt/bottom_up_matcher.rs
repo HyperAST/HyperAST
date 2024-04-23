@@ -177,7 +177,8 @@ where
     }
 
     pub(super) fn histogram_matching(&mut self, src: &M::Src, dst: &M::Dst) {
-        let mut src_histogram: HashMap<<HAST::TS as TypeStore<T>>::Ty, Vec<M::Src>> = HashMap::new(); //Map<Type, List<ITree>>
+        let mut src_histogram: HashMap<<HAST::TS as TypeStore<T>>::Ty, Vec<M::Src>> =
+            HashMap::new(); //Map<Type, List<ITree>>
         for c in self.src_arena.children(self.stores.node_store(), src) {
             let t = &self.stores.type_store().resolve_type(
                 &self
@@ -191,7 +192,8 @@ where
             src_histogram.get_mut(t).unwrap().push(c);
         }
 
-        let mut dst_histogram: HashMap<<HAST::TS as TypeStore<T>>::Ty, Vec<M::Dst>> = HashMap::new(); //Map<Type, List<ITree>>
+        let mut dst_histogram: HashMap<<HAST::TS as TypeStore<T>>::Ty, Vec<M::Dst>> =
+            HashMap::new(); //Map<Type, List<ITree>>
         for c in self.dst_arena.children(self.stores.node_store(), dst) {
             let t = &self.stores.resolve_type(&self.dst_arena.original(&c));
             if !dst_histogram.contains_key(t) {
@@ -378,22 +380,20 @@ where
     }
 
     pub(super) fn histogram_matching(&mut self, src: &M::Src, dst: &M::Dst) {
-        let mut src_histogram: HashMap<<HAST::TS as TypeStore<HAST::T>>::Ty, Vec<M::Src>> = HashMap::new(); //Map<Type, List<ITree>>
+        let mut src_histogram: HashMap<<HAST::TS as TypeStore<HAST::T>>::Ty, Vec<M::Src>> =
+            HashMap::new(); //Map<Type, List<ITree>>
         for c in self.src_arena.children(self.hyperast.node_store(), src) {
-            let t = &self
-                .hyperast
-                .resolve_type(&self.src_arena.original(&c));
+            let t = &self.hyperast.resolve_type(&self.src_arena.original(&c));
             if !src_histogram.contains_key(t) {
                 src_histogram.insert(*t, vec![]);
             }
             src_histogram.get_mut(t).unwrap().push(c);
         }
 
-        let mut dst_histogram: HashMap<<HAST::TS as TypeStore<HAST::T>>::Ty, Vec<M::Dst>> = HashMap::new(); //Map<Type, List<ITree>>
+        let mut dst_histogram: HashMap<<HAST::TS as TypeStore<HAST::T>>::Ty, Vec<M::Dst>> =
+            HashMap::new(); //Map<Type, List<ITree>>
         for c in self.dst_arena.children(self.hyperast.node_store(), dst) {
-            let t = &self
-                .hyperast
-                .resolve_type(&self.dst_arena.original(&c));
+            let t = &self.hyperast.resolve_type(&self.dst_arena.original(&c));
             if !dst_histogram.contains_key(t) {
                 dst_histogram.insert(*t, vec![]);
             }

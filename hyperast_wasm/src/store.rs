@@ -1,17 +1,13 @@
 pub use hyper_ast::store::nodes::fetched::{FetchedLabels, NodeIdentifier, NodeStore};
 use hyper_ast::{
     store::nodes::fetched::{HashedNodeRef, LabelIdentifier},
-    types::{
-        AnyType, HyperType, Lang, LangRef, TypeIndex, TypeStore as _,
-    },
+    types::{AnyType, HyperType, Lang, LangRef, TypeIndex, TypeStore as _},
 };
 use std::{
     borrow::Borrow,
     collections::{HashSet, VecDeque},
     hash::Hash,
 };
-
-
 
 #[derive(Default)]
 pub(crate) struct TStore;
@@ -93,8 +89,12 @@ impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
     fn marshal_type(&self, _n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
         todo!()
     }
-    
-    fn type_eq(&self, _n: &HashedNodeRef<'a, NodeIdentifier>, _m: &HashedNodeRef<'a, NodeIdentifier>) -> bool {
+
+    fn type_eq(
+        &self,
+        _n: &HashedNodeRef<'a, NodeIdentifier>,
+        _m: &HashedNodeRef<'a, NodeIdentifier>,
+    ) -> bool {
         todo!()
     }
 }
@@ -228,8 +228,12 @@ impl<'a, 'b> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>>
     fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
         self.type_store.marshal_type(n)
     }
-    
-    fn type_eq(&self, _n: &HashedNodeRef<'a, NodeIdentifier>, _m: &HashedNodeRef<'a, NodeIdentifier>) -> bool {
+
+    fn type_eq(
+        &self,
+        _n: &HashedNodeRef<'a, NodeIdentifier>,
+        _m: &HashedNodeRef<'a, NodeIdentifier>,
+    ) -> bool {
         todo!()
     }
 }

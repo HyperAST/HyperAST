@@ -31,7 +31,7 @@
 //!         phantom: PhantomData
 //!     }
 //! }
-//! 
+//!
 //! trait Final {}
 //! struct Typed;
 //! struct Keyword;
@@ -40,7 +40,7 @@
 //! impl Final for Labeled {}
 //! struct WithChildren;
 //! impl Final for WithChildren {}
-//! 
+//!
 //! // use a bound on T to know if it can have a label ?
 //! impl<T> Builder<T,Typed> {
 //!     pub fn label(self, l: LabelIdentifier) -> Builder<T, Labeled> {
@@ -68,7 +68,7 @@
 //!         }
 //!     }
 //! }
-//! 
+//!
 //! impl<T, S:Final> Builder<T,S> {
 //!     pub fn add_metadata(self, md: MD) -> Builder<T, S> {
 //!         let mut inner = self.inner;
@@ -82,7 +82,7 @@
 //!         self.inner.build()
 //!     }
 //! }
-//! 
+//!
 //! ```
 
 use std::{
@@ -119,9 +119,7 @@ impl EntityBuilder {
         Self::default()
     }
     pub fn build(self) -> BuiltEntity {
-        BuiltEntity {
-            inner: self.inner,
-        }
+        BuiltEntity { inner: self.inner }
     }
 
     /// Add `component` to the entity.
@@ -581,11 +579,11 @@ fn example() {
 fn simple() {
     let mut world = legion::World::new(Default::default());
     let mut components = EntityBuilder::new();
-    let mut comp0: (Box<[u32]>,) = (vec![0,0,0,0,0,1,4100177920].into_boxed_slice(),);//0, 14, 43, 10, 876, 7, 1065, 35
+    let mut comp0: (Box<[u32]>,) = (vec![0, 0, 0, 0, 0, 1, 4100177920].into_boxed_slice(),); //0, 14, 43, 10, 876, 7, 1065, 35
     let mut comp0_saved = comp0.clone();
-    let comp0_ptr  = (&mut comp0) as *mut (Box<[u32]>,);
+    let comp0_ptr = (&mut comp0) as *mut (Box<[u32]>,);
     components.add(comp0);
-    unsafe{(*comp0_ptr).0[4] = 42};
+    unsafe { (*comp0_ptr).0[4] = 42 };
     comp0_saved.0[4] = 42;
     let comp1: i32 = 0;
     components.add(comp1);
@@ -614,9 +612,9 @@ fn simple() {
     );
 
     if let Some(entry) = world.entry(entity) {
-        unsafe{(*comp0_ptr).0[5] += 1};
+        unsafe { (*comp0_ptr).0[5] += 1 };
         comp0_saved.0[5] += 1;
-        dbg!(unsafe{comp0_ptr.as_ref()});
+        dbg!(unsafe { comp0_ptr.as_ref() });
         assert_eq!(Ok(&comp0_saved), entry.get_component::<(Box<[u32]>,)>());
         assert_eq!(Ok(&comp1), entry.get_component::<i32>());
         assert_eq!(Ok(&comp2), entry.get_component::<bool>());

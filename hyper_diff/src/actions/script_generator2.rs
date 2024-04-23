@@ -1,8 +1,8 @@
 /// inspired by the implementation in gumtree
 use std::{collections::HashSet, fmt::Debug, hash::Hash};
 
-use num_traits::{cast, ToPrimitive};
 use hyper_ast::PrimInt;
+use num_traits::{cast, ToPrimitive};
 
 use crate::{
     actions::Actions,

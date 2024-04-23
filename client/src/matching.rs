@@ -49,7 +49,7 @@ where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
     <HAST::T as types::WithChildren>::ChildIdx: Debug,
-    HAST::T: 'store + types::WithHashs + types::WithStats, 
+    HAST::T: 'store + types::WithHashs + types::WithStats,
 {
     let mut mm: DefaultMultiMappingStore<_> = Default::default();
     mm.topit(src_arena.len(), dst_arena.len());
@@ -91,8 +91,7 @@ pub fn bottom_up_hiding<'store, 'a, 'b, HAST: HyperAST<'store>>(
         &'a mut LazyPostOrder<HAST::T, u32>,
         VecStore<u32>,
     >,
-)
-where
+) where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
     <HAST::T as types::WithChildren>::ChildIdx: Debug,
@@ -139,7 +138,6 @@ where
     }
 }
 
-
 pub fn full2<'store, 'a, 'b, HAST: HyperAST<'store>>(
     hyperast: &'store HAST,
     mapper: &'b mut Mapper<
@@ -149,8 +147,7 @@ pub fn full2<'store, 'a, 'b, HAST: HyperAST<'store>>(
         &'a mut LazyPostOrder<HAST::T, u32>,
         VecStore<u32>,
     >,
-)
-where
+) where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
     <HAST::T as types::WithChildren>::ChildIdx: Debug,
@@ -171,14 +168,13 @@ where
     bottom_up_hiding(hyperast, &mm, mapper);
     let bottom_up_hiding_t = now.elapsed().as_secs_f64();
     dbg!(bottom_up_hiding_t);
-
 }
 
 // There is, I believe a performance regression after having replaced the get_type by TStore::resolve_type
 // TODO handle this perf regression
 // [client/src/track.rs:676] src_oid = 0de92576100bba948cae854ebb9cd5a7a9502b43
 // [client/src/track.rs:676] dst_oid = b84af67f4c88f3e3f7b61bf2035475f79fb3e62e
-// 2024-04-15T13:18:54.600731Z  WARN request{method=GET uri=/track_at_path_with_changes/github/official-stockfish/Stockfish/1e6d21dbb6918a2d5f2f09730b0c30e3a4895d5c/0/33/2/125/4/32?upd=true&child=true&parent=false&exact_child=false&exact_parent=false&sim_child=false&sim_parent=false&meth=false&typ=false&top=false&file=false&pack=false&dependency=false&dependent=false&references=false&declaration=false version=HTTP/1.1}: client::track: done construction of [b84af67f4c88f3e3f7b61bf2035475f79fb3e62e, 7c8b7222f5eea024ab480abb2d9289fd1e42da9c, ec9038b7b4cb2701c3a3b8be56632e7f08e461ac, ab65d3fd0ecf340842408548bc7f3e6c28ad4c85] in official-stockfish    
+// 2024-04-15T13:18:54.600731Z  WARN request{method=GET uri=/track_at_path_with_changes/github/official-stockfish/Stockfish/1e6d21dbb6918a2d5f2f09730b0c30e3a4895d5c/0/33/2/125/4/32?upd=true&child=true&parent=false&exact_child=false&exact_parent=false&sim_child=false&sim_parent=false&meth=false&typ=false&top=false&file=false&pack=false&dependency=false&dependent=false&references=false&declaration=false version=HTTP/1.1}: client::track: done construction of [b84af67f4c88f3e3f7b61bf2035475f79fb3e62e, 7c8b7222f5eea024ab480abb2d9289fd1e42da9c, ec9038b7b4cb2701c3a3b8be56632e7f08e461ac, ab65d3fd0ecf340842408548bc7f3e6c28ad4c85] in official-stockfish
 // [client/src/track.rs:1037] &path_to_target = [
 //     0,
 //     38,
@@ -206,11 +202,10 @@ where
 // [client/src/matching.rs:173] bottom_up_hiding_t = 45.245505583
 // [client/src/changes.rs:112]
 
-
 // after type_eq
 // [client/src/track.rs:676] src_oid = 0de92576100bba948cae854ebb9cd5a7a9502b43
 // [client/src/track.rs:676] dst_oid = b84af67f4c88f3e3f7b61bf2035475f79fb3e62e
-// 2024-04-16T08:08:25.213987Z  WARN request{method=GET uri=/track_at_path_with_changes/github/official-stockfish/Stockfish/5d1644ba696c0a4d81450f922d216bf6479d4929/0/33/2/130/8/26?upd=true&child=true&parent=false&exact_child=false&exact_parent=false&sim_child=false&sim_parent=false&meth=false&typ=false&top=false&file=false&pack=false&dependency=false&dependent=false&references=false&declaration=false version=HTTP/1.1}: client::track: done construction of [b84af67f4c88f3e3f7b61bf2035475f79fb3e62e, 7c8b7222f5eea024ab480abb2d9289fd1e42da9c, ec9038b7b4cb2701c3a3b8be56632e7f08e461ac, ab65d3fd0ecf340842408548bc7f3e6c28ad4c85] in official-stockfish    
+// 2024-04-16T08:08:25.213987Z  WARN request{method=GET uri=/track_at_path_with_changes/github/official-stockfish/Stockfish/5d1644ba696c0a4d81450f922d216bf6479d4929/0/33/2/130/8/26?upd=true&child=true&parent=false&exact_child=false&exact_parent=false&sim_child=false&sim_parent=false&meth=false&typ=false&top=false&file=false&pack=false&dependency=false&dependent=false&references=false&declaration=false version=HTTP/1.1}: client::track: done construction of [b84af67f4c88f3e3f7b61bf2035475f79fb3e62e, 7c8b7222f5eea024ab480abb2d9289fd1e42da9c, ec9038b7b4cb2701c3a3b8be56632e7f08e461ac, ab65d3fd0ecf340842408548bc7f3e6c28ad4c85] in official-stockfish
 // [client/src/track.rs:1037] &path_to_target = [
 //     0,
 //     38,
@@ -241,7 +236,7 @@ where
 // Concrete type store, using directly cpp type
 // [client/src/track.rs:676] src_oid = 0de92576100bba948cae854ebb9cd5a7a9502b43
 // [client/src/track.rs:676] dst_oid = b84af67f4c88f3e3f7b61bf2035475f79fb3e62e
-// 2024-04-16T10:51:13.038962Z  WARN request{method=GET uri=/track_at_path_with_changes/github/official-stockfish/Stockfish/5d1644ba696c0a4d81450f922d216bf6479d4929/0/33/2/130/8/26?upd=true&child=true&parent=false&exact_child=false&exact_parent=false&sim_child=false&sim_parent=false&meth=false&typ=false&top=false&file=false&pack=false&dependency=false&dependent=false&references=false&declaration=false version=HTTP/1.1}: client::track: done construction of [b84af67f4c88f3e3f7b61bf2035475f79fb3e62e, 7c8b7222f5eea024ab480abb2d9289fd1e42da9c, ec9038b7b4cb2701c3a3b8be56632e7f08e461ac, ab65d3fd0ecf340842408548bc7f3e6c28ad4c85] in official-stockfish    
+// 2024-04-16T10:51:13.038962Z  WARN request{method=GET uri=/track_at_path_with_changes/github/official-stockfish/Stockfish/5d1644ba696c0a4d81450f922d216bf6479d4929/0/33/2/130/8/26?upd=true&child=true&parent=false&exact_child=false&exact_parent=false&sim_child=false&sim_parent=false&meth=false&typ=false&top=false&file=false&pack=false&dependency=false&dependent=false&references=false&declaration=false version=HTTP/1.1}: client::track: done construction of [b84af67f4c88f3e3f7b61bf2035475f79fb3e62e, 7c8b7222f5eea024ab480abb2d9289fd1e42da9c, ec9038b7b4cb2701c3a3b8be56632e7f08e461ac, ab65d3fd0ecf340842408548bc7f3e6c28ad4c85] in official-stockfish
 // [client/src/track.rs:1037] &path_to_target = [
 //     0,
 //     38,
@@ -269,13 +264,12 @@ where
 // [client/src/matching.rs:173] bottom_up_hiding_t = 61.255278167
 // [client/src/changes.rs:163]
 
-
 // with the hidden nodes
 // [client/src/track/compute.rs:126]
 // [client/src/track.rs:674] nodes = 500000
 // [client/src/track.rs:676] src_oid = 0de92576100bba948cae854ebb9cd5a7a9502b43
 // [client/src/track.rs:676] dst_oid = b84af67f4c88f3e3f7b61bf2035475f79fb3e62e
-// 2024-04-20T13:06:04.093127Z  WARN request{method=GET uri=/track_at_path_with_changes/github/official-stockfish/Stockfish/5d1644ba696c0a4d81450f922d216bf6479d4929/0/33/2/126/0/0/6/26?upd=true&child=true&parent=false&exact_child=false&exact_parent=false&sim_child=false&sim_parent=false&meth=false&typ=false&top=false&file=false&pack=false&dependency=false&dependent=false&references=false&declaration=false version=HTTP/1.1}: client::track: done construction of [b84af67f4c88f3e3f7b61bf2035475f79fb3e62e, 7c8b7222f5eea024ab480abb2d9289fd1e42da9c, ec9038b7b4cb2701c3a3b8be56632e7f08e461ac, ab65d3fd0ecf340842408548bc7f3e6c28ad4c85] in official-stockfish    
+// 2024-04-20T13:06:04.093127Z  WARN request{method=GET uri=/track_at_path_with_changes/github/official-stockfish/Stockfish/5d1644ba696c0a4d81450f922d216bf6479d4929/0/33/2/126/0/0/6/26?upd=true&child=true&parent=false&exact_child=false&exact_parent=false&sim_child=false&sim_parent=false&meth=false&typ=false&top=false&file=false&pack=false&dependency=false&dependent=false&references=false&declaration=false version=HTTP/1.1}: client::track: done construction of [b84af67f4c88f3e3f7b61bf2035475f79fb3e62e, 7c8b7222f5eea024ab480abb2d9289fd1e42da9c, ec9038b7b4cb2701c3a3b8be56632e7f08e461ac, ab65d3fd0ecf340842408548bc7f3e6c28ad4c85] in official-stockfish
 // [client/src/track.rs:1037] &path_to_target = [
 //     0,
 //     38,
@@ -305,12 +299,11 @@ where
 // [client/src/matching.rs:173] bottom_up_hiding_t = 344.150003833
 // [client/src/changes.rs:164]
 
-
 // after some cleanup, I was working at the same time so lower perfs are expected
 // [client/src/track.rs:674] nodes = 500000
 // [client/src/track.rs:676] src_oid = 0de92576100bba948cae854ebb9cd5a7a9502b43
 // [client/src/track.rs:676] dst_oid = b84af67f4c88f3e3f7b61bf2035475f79fb3e62e
-// 2024-04-22T16:18:29.209662Z  WARN request{method=GET uri=/track_at_path_with_changes/github/official-stockfish/Stockfish/5d1644ba696c0a4d81450f922d216bf6479d4929/0/33/2/126/0/0/6/26?upd=true&child=true&parent=false&exact_child=false&exact_parent=false&sim_child=false&sim_parent=false&meth=false&typ=false&top=false&file=false&pack=false&dependency=false&dependent=false&references=false&declaration=false version=HTTP/1.1}: client::track: done construction of [b84af67f4c88f3e3f7b61bf2035475f79fb3e62e, 7c8b7222f5eea024ab480abb2d9289fd1e42da9c, ec9038b7b4cb2701c3a3b8be56632e7f08e461ac, ab65d3fd0ecf340842408548bc7f3e6c28ad4c85] in official-stockfish    
+// 2024-04-22T16:18:29.209662Z  WARN request{method=GET uri=/track_at_path_with_changes/github/official-stockfish/Stockfish/5d1644ba696c0a4d81450f922d216bf6479d4929/0/33/2/126/0/0/6/26?upd=true&child=true&parent=false&exact_child=false&exact_parent=false&sim_child=false&sim_parent=false&meth=false&typ=false&top=false&file=false&pack=false&dependency=false&dependent=false&references=false&declaration=false version=HTTP/1.1}: client::track: done construction of [b84af67f4c88f3e3f7b61bf2035475f79fb3e62e, 7c8b7222f5eea024ab480abb2d9289fd1e42da9c, ec9038b7b4cb2701c3a3b8be56632e7f08e461ac, ab65d3fd0ecf340842408548bc7f3e6c28ad4c85] in official-stockfish
 // [client/src/track.rs:1037] &path_to_target = [
 //     0,
 //     38,

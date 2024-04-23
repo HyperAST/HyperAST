@@ -77,7 +77,6 @@ mk_langs!(
     (Xml, tree_sitter_xml),
 );
 
-
 impl Lang {
     pub fn get_language(&self) -> Language {
         get_language(self)

@@ -1,15 +1,13 @@
 use crate::store::FetchedHyperAST;
 use crate::types;
-use types::ApiAddr;
 use hyper_ast::store::nodes::fetched;
 use hyper_ast::store::nodes::fetched::LabelIdentifier;
 use hyper_ast::store::nodes::fetched::NodeIdentifier;
 use poll_promise::Promise;
+use types::ApiAddr;
 
+use std::collections::HashSet;
 use std::sync::Arc;
-use std::{
-    collections::{HashSet},
-};
 
 #[derive(Debug)]
 pub(crate) struct Resource<T> {

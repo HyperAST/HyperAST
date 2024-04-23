@@ -581,14 +581,12 @@ where
                             let parent = stack.parent_mut().unwrap();
                             parent.push(full_node);
                         } else if is_visible {
-                            if has == Has::Down {
-                            }
+                            if has == Has::Down {}
                             return;
                         }
                     } else {
                         assert!(full_node.is_none());
-                        if has == Has::Down {
-                        }
+                        if has == Has::Down {}
                         return;
                     }
                 }

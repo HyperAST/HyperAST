@@ -13,9 +13,7 @@ use crate::decompressed_tree_store::{
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::Mapper;
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
-use hyper_ast::types::{
-    DecompressedSubtree, HyperAST, NodeStore, Tree, WithHashs, WithStats,
-};
+use hyper_ast::types::{DecompressedSubtree, HyperAST, NodeStore, Tree, WithHashs, WithStats};
 
 use crate::decompressed_tree_store::SimpleZsTree as ZsTree;
 
@@ -243,7 +241,7 @@ where
     fn src_has_children(internal: &Mapper<'a, HAST, Dsrc, Ddst, M>, src: Dsrc::IdD) -> bool {
         let o = internal.src_arena.original(&src);
         let r = internal.hyperast.node_store().resolve(&o).has_children();
-        
+
         // TODO put it back
         // debug_assert_eq!(
         //     r,

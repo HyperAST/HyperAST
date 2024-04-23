@@ -43,7 +43,11 @@ mod legion_impls {
                 ty: self.resolve_type(n) as u16,
             }
         }
-        fn type_eq(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>, m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> bool {
+        fn type_eq(
+            &self,
+            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
+            m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
+        ) -> bool {
             n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
         }
     }
@@ -88,7 +92,11 @@ mod legion_impls {
                 ty: *n.get_component::<Type>().unwrap() as u16,
             }
         }
-        fn type_eq(&self, _n: &HashedNodeRef<'a, NodeIdentifier>, _m: &HashedNodeRef<'a, NodeIdentifier>) -> bool {
+        fn type_eq(
+            &self,
+            _n: &HashedNodeRef<'a, NodeIdentifier>,
+            _m: &HashedNodeRef<'a, NodeIdentifier>,
+        ) -> bool {
             todo!()
         }
     }
@@ -420,7 +428,6 @@ impl Display for Type {
 //     Type::Directory,
 //     Type::ERROR,
 // ];
-
 
 impl TryFrom<&str> for Type {
     type Error = String;

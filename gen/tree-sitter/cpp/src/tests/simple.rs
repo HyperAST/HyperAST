@@ -312,7 +312,6 @@ void f() {}
     );
 }
 
-
 #[test]
 pub(crate) fn cpp_issue_stockfish_tbcore_test() {
     let text = {
@@ -410,7 +409,6 @@ struct TBEntry {};
         hyper_ast::nodes::SexpSerializer::new(&stores, x.compressed_node)
     );
 }
-
 
 #[test]
 pub(crate) fn cpp_def_bl_test() {

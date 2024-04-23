@@ -305,7 +305,9 @@ impl MavenModuleAcc {
         // full_node.2.acc(&Type::Directory, &mut self.ana);
     }
     pub fn push_submodule(&mut self, name: LabelIdentifier, full_node: (NodeIdentifier, MD)) {
-        if full_node.1.status.contains(SemFlags::HoldMavenSubModule) || full_node.1.status.contains(SemFlags::IsMavenModule) {
+        if full_node.1.status.contains(SemFlags::HoldMavenSubModule)
+            || full_node.1.status.contains(SemFlags::IsMavenModule)
+        {
             self.status |= SemFlags::HoldMavenSubModule;
         }
         self.children.push(full_node.0);

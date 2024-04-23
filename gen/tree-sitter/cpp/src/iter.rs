@@ -4,14 +4,11 @@ use hyper_ast::types::{NodeStore, TypedHyperAST};
 use hyper_ast::{
     position::{TreePath, TreePathMut},
     store::nodes::legion::NodeIdentifier,
-    types::{
-        HyperAST, IterableChildren, NodeId, Tree, TypedNodeStore, WithChildren,
-    },
+    types::{HyperAST, IterableChildren, NodeId, Tree, TypedNodeStore, WithChildren},
 };
 use num::ToPrimitive;
 
 use crate::types::TIdN;
-
 
 pub struct IterAll<'a, T, HAST> {
     stores: &'a HAST,
@@ -67,14 +64,14 @@ impl<
         HAST: TypedHyperAST<'a, TIdN<NodeIdentifier>, IdN = NodeIdentifier, Idx = u16>,
     > Iterator for IterAll<'a, T, HAST>
 where
-    // HAST::NS: TypedNodeStore<TIdN<NodeIdentifier>>,
-    // HAST::TS: TypeStore<HAST::T, Ty = Type>,
-    // HAST::TT: TypedTree<Type = Type>,
-    // <HAST::T as Typed>::Type: Copy + Send + Sync,
-    // for<'b> <HAST::NS as TypedNodeStore<TIdN<HAST::IdN>>>::R<'b>:
-    //     TypedTree<Type = Type, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
-    // <HAST::NS as NodeStore<HAST::IdN>>::R<'a>:
-    //     TypedTree<Type = AnyType, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
+// HAST::NS: TypedNodeStore<TIdN<NodeIdentifier>>,
+// HAST::TS: TypeStore<HAST::T, Ty = Type>,
+// HAST::TT: TypedTree<Type = Type>,
+// <HAST::T as Typed>::Type: Copy + Send + Sync,
+// for<'b> <HAST::NS as TypedNodeStore<TIdN<HAST::IdN>>>::R<'b>:
+//     TypedTree<Type = Type, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
+// <HAST::NS as NodeStore<HAST::IdN>>::R<'a>:
+//     TypedTree<Type = AnyType, TreeId = HAST::IdN, Label = HAST::Label, ChildIdx = u16>,
 {
     type Item = T;
 
@@ -122,8 +119,7 @@ where
                         ));
                     }
                     self.stack.push((node, offset + 1, Some(children)));
-                    let child = if let Some(tid) =
-                        self.stores.typed_node_store().try_typed(&child)
+                    let child = if let Some(tid) = self.stores.typed_node_store().try_typed(&child)
                     {
                         Id::Cpp(tid)
                     } else {

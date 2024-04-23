@@ -2,9 +2,7 @@ use std::fmt::Debug;
 
 use num_traits::{cast, one, zero, PrimInt, ToPrimitive};
 
-use hyper_ast::types::{
-    self, Children, IterableChildren, NodeId, NodeStore, Stored, WithChildren,
-};
+use hyper_ast::types::{self, Children, IterableChildren, NodeId, NodeStore, Stored, WithChildren};
 
 use super::{
     ContiguousDescendants, DecompressedTreeStore, Iter, PostOrder, PostOrderIterable,
@@ -273,7 +271,7 @@ where
             let node = store.resolve(&a);
             let cs = node.children();
             let cs = cs.filter(|x| !x.is_empty());
-            let Some(cs) = cs  else {
+            let Some(cs) = cs else {
                 panic!("no children in this tree")
             };
             let mut z = 0;
@@ -404,8 +402,8 @@ where
     {
         let tmp = store.resolve(x);
         let Some(cs) = tmp.children() else {
-                return 1;
-            };
+            return 1;
+        };
 
         let mut z = 0;
         for x in cs.iter_children() {
@@ -473,7 +471,7 @@ where
             let a = self.original(&r);
             let node = store.resolve(&a);
             let cs = node.children().filter(|x| x.is_empty());
-            let Some(cs) = cs  else {
+            let Some(cs) = cs else {
                 panic!("no children in this tree")
             };
             let mut z = 0;

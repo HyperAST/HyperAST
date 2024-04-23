@@ -1466,8 +1466,10 @@ impl Solver {
                     // }
 
                     // x[].length -> int
-                    if let RefsEnum::Array(_)= o_enum && sss.is_length_token(i) {
-                        return Some(sss.intern(RefsEnum::Primitive(Primitive::Int)))
+                    if let RefsEnum::Array(_) = o_enum
+                        && sss.is_length_token(i)
+                    {
+                        return Some(sss.intern(RefsEnum::Primitive(Primitive::Int)));
                     }
 
                     let m = if let RefsEnum::Mask(_, x) = o_enum {
@@ -1726,8 +1728,10 @@ impl Solver {
                     // }
 
                     // x[].length -> int
-                    if let RefsEnum::Array(_)= o_enum && sss.is_length_token(i) {
-                        return Some(sss.intern(RefsEnum::Primitive(Primitive::Int)))
+                    if let RefsEnum::Array(_) = o_enum
+                        && sss.is_length_token(i)
+                    {
+                        return Some(sss.intern(RefsEnum::Primitive(Primitive::Int)));
                     }
 
                     let m = if let RefsEnum::Mask(_, x) = o_enum {

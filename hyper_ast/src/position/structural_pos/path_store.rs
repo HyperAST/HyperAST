@@ -1,13 +1,14 @@
 use super::{
-    super::Position,
-    ExploreStructuralPositions, Scout, SpHandle, StructuralPosition, StructuralPositionStore,
+    super::Position, ExploreStructuralPositions, Scout, SpHandle, StructuralPosition,
+    StructuralPositionStore,
 };
 use crate::{
     position::TreePath,
     store::defaults::LabelIdentifier,
     types::{
         self, AnyType, HyperAST, NodeId, NodeStore, Tree, Typed, WithChildren, WithSerialization,
-    }, PrimInt,
+    },
+    PrimInt,
 };
 use num::{one, zero};
 use std::fmt::Debug;
@@ -42,7 +43,11 @@ impl<IdN, Idx> Default for StructuralPositionStore<IdN, Idx> {
 
 impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
     pub fn get(&self, s: SpHandle) -> ExploreStructuralPositions<IdN, Idx> {
-        ExploreStructuralPositions { sps: self, i: s.0, _phantom: Default::default() }
+        ExploreStructuralPositions {
+            sps: self,
+            i: s.0,
+            _phantom: Default::default(),
+        }
     }
 
     pub fn push_up_scout(&self, s: &mut Scout<IdN, Idx>) -> Option<IdN>
@@ -69,9 +74,9 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
         for x in ends.iter() {
             // let parents = self.parents.iter().peekable();
             let it = self.get(*x);
-            let position_converter = &crate::position::PositionConverter::new(&it)
-            .with_stores(stores);
-            r.push(position_converter.compute_pos_post_order::<_,Position,_>())
+            let position_converter =
+                &crate::position::PositionConverter::new(&it).with_stores(stores);
+            r.push(position_converter.compute_pos_post_order::<_, Position, _>())
             // r.push(it.make_position(stores));
         }
         r

@@ -28,7 +28,6 @@ impl<E: std::error::Error + 'static> std::fmt::Display for LocatedError<E> {
     }
 }
 
-
 impl Into<LocatedError<std::io::Error>> for std::io::Error {
     #[track_caller]
     fn into(self) -> LocatedError<std::io::Error> {
@@ -70,7 +69,6 @@ impl Into<LocatedError<StringlyError>> for &str {
         }
     }
 }
-
 
 impl Into<LocatedError<StringlyError>> for String {
     #[track_caller]

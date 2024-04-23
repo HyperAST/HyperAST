@@ -98,8 +98,12 @@ impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
     fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
         todo!()
     }
-    
-    fn type_eq(&self, n: &HashedNodeRef<'a, NodeIdentifier>, m: &HashedNodeRef<'a, NodeIdentifier>) -> bool {
+
+    fn type_eq(
+        &self,
+        n: &HashedNodeRef<'a, NodeIdentifier>,
+        m: &HashedNodeRef<'a, NodeIdentifier>,
+    ) -> bool {
         todo!()
     }
 }
@@ -233,8 +237,12 @@ impl<'a, 'b> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>>
     fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
         self.type_store.marshal_type(n)
     }
-    
-    fn type_eq(&self, n: &HashedNodeRef<'a, NodeIdentifier>, m: &HashedNodeRef<'a, NodeIdentifier>) -> bool {
+
+    fn type_eq(
+        &self,
+        n: &HashedNodeRef<'a, NodeIdentifier>,
+        m: &HashedNodeRef<'a, NodeIdentifier>,
+    ) -> bool {
         self.type_store.type_eq(n, m)
     }
 }

@@ -171,11 +171,9 @@ fn resolve_path(
     for i in path.unwrap_or_default().split("/") {
         dbg!(i);
         let i = i.parse();
-        let Ok(i) = i else {
-            break
-        };
+        let Ok(i) = i else { break };
         let Some(n) = node_store.resolve(curr).child(&i) else {
-            break
+            break;
         };
         curr = n;
     }

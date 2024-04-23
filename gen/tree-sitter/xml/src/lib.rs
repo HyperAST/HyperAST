@@ -11,7 +11,6 @@ mod tests;
 
 #[cfg(feature = "legion")]
 mod tnode {
-    
 
     #[repr(transparent)]
     pub struct TNode<'a>(pub(crate) tree_sitter::Node<'a>);

@@ -13,7 +13,8 @@ use super::{
 use hyper_ast::{
     position::Position,
     types::{
-        self, Children, HyperAST, HyperType, IterableChildren, LabelStore, NodeId, NodeStore, Stored, Tree, TypeStore, WithChildren, WithSerialization, WithStats
+        self, Children, HyperAST, HyperType, IterableChildren, LabelStore, NodeId, NodeStore,
+        Stored, Tree, TypeStore, WithChildren, WithSerialization, WithStats,
     },
 };
 use logging_timer::time;
@@ -268,7 +269,7 @@ where
             let mut next = None;
             loop {
                 // Termination: either rem diminish, or if rem is empty s diminish
-                let Some((p,mut rem)) = s.pop() else {
+                let Some((p, mut rem)) = s.pop() else {
                     break;
                 };
                 let Some(z) = rem.pop() else {
@@ -280,8 +281,13 @@ where
                 s.push((p, rem));
                 break;
             }
-            let Some((p,z)) = next else {
-                assert!(self._size(x) <= one() || self.tree(&(c + one())) != self.tree(x), "{:?} {:?}", self.tree(&(c + one())), self.tree(x));
+            let Some((p, z)) = next else {
+                assert!(
+                    self._size(x) <= one() || self.tree(&(c + one())) != self.tree(x),
+                    "{:?} {:?}",
+                    self.tree(&(c + one())),
+                    self.tree(x)
+                );
                 assert!(c == self.lld(x) || c + one() == self.lld(x));
                 break;
             };
@@ -426,7 +432,7 @@ where
             let a = self.original(&r);
             let node = store.resolve(&a);
             let cs = node.children().filter(|x| x.is_empty());
-            let Some(cs) = cs  else {
+            let Some(cs) = cs else {
                 panic!("no children in this tree")
             };
             let mut z = 0;
@@ -476,7 +482,12 @@ impl<'d, T: WithChildren + WithStats, IdD: PrimInt + Shallow<IdD> + Debug> LazyP
 where
     T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
-    pub fn child_decompressed<'b, S>(&mut self, store: &'b S, x: &IdD, p: impl Iterator<Item=T::ChildIdx>) -> IdD
+    pub fn child_decompressed<'b, S>(
+        &mut self,
+        store: &'b S,
+        x: &IdD,
+        p: impl Iterator<Item = T::ChildIdx>,
+    ) -> IdD
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
     {
@@ -734,8 +745,8 @@ where
     {
         let tmp = store.resolve(x);
         let Some(cs) = tmp.children() else {
-                return 1;
-            };
+            return 1;
+        };
 
         let mut z = 0;
         for x in cs.iter_children() {
@@ -777,7 +788,10 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
                 if self.root == ori {
                     let r = stores.node_store().resolve(&ori);
                     return self.cache.entry(*c).or_insert(Position::new(
-                        stores.label_store().resolve(&r.get_label_unchecked()).into(),
+                        stores
+                            .label_store()
+                            .resolve(&r.get_label_unchecked())
+                            .into(),
                         0,
                         r.try_bytes_len().unwrap_or(0),
                     ));
@@ -838,7 +852,10 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
             let r = stores.node_store().resolve(&ori);
             let t = stores.type_store().resolve_type(&r);
             let pos = if t.is_directory() || t.is_file() {
-                let file = stores.label_store().resolve(&r.get_label_unchecked()).into();
+                let file = stores
+                    .label_store()
+                    .resolve(&r.get_label_unchecked())
+                    .into();
                 let offset = 0;
                 let len = r.try_bytes_len().unwrap_or(0);
                 Position::new(file, offset, len)

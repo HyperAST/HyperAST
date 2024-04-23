@@ -13,11 +13,8 @@ pub(crate) use super::syntect::CodeTheme;
 // #[cfg(not(feature = "syntect"))]
 // pub(crate) use super::syntect::CodeTheme;
 
-
 #[cfg(not(feature = "syntect"))]
 pub(crate) use super::syntect::CodeTheme;
-
-
 
 use super::TokenType;
 
