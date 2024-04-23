@@ -360,7 +360,6 @@ pub mod offsets_and_nodes;
 pub use offsets_and_nodes::*;
 
 mod topological_offset;
-pub use topological_offset::*;
 
 mod spaces_related;
 pub use spaces_related::{

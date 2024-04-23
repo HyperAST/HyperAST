@@ -1,5 +1,4 @@
 use std::{
-    borrow::Borrow,
     fmt::{Debug, Display, Write},
     hash::Hash,
     marker::PhantomData,
@@ -381,7 +380,7 @@ impl Space {
                 x => {
                     log::debug!("{:?}", x);
                     // log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
-                    dbg!(std::str::from_utf8(spaces));
+                    log::trace!("{:?}", std::str::from_utf8(spaces));
                     // panic!("{:?}", spaces)
                     Space::Space
                 }
@@ -998,7 +997,7 @@ where
                     dbg!(s);
                 }
                 if !children.is_empty() {
-                    let mut it = children.iter_children();
+                    let it = children.iter_children();
                     for id in it {
                         self.serialize(&id, indent + 1, out)?;
                     }

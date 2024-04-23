@@ -3,9 +3,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use crate::{
-    store::labels::DefaultLabelIdentifier, store::nodes::DefaultNodeIdentifier, types::Type,
-};
+use crate::{store::labels::DefaultLabelIdentifier, store::nodes::DefaultNodeIdentifier};
 use crate::{
     types::{AnyType, HashKind, HyperType, MySlice, NodeId},
     PrimInt,

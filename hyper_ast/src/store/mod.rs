@@ -2,8 +2,6 @@ use std::borrow::Borrow;
 
 use crate::types::{SimpleHyperAST, TypeStore};
 
-// use crate::nodes::TypeIdentifier;
-
 pub mod handle;
 pub mod labels;
 // pub mod mapped_world;
@@ -11,33 +9,6 @@ pub mod nodes;
 // pub mod ecs; // TODO try a custom ecs ?
 // pub mod radix_hash_store; // TODO yet another WIP store
 // pub mod vec_map_store; // TODO yet another WIP store
-
-// struct T(TYPE_INTERNAL_SIZE);
-
-// pub struct TypeStore {
-//     langs: Vec<Lang>,
-// }
-
-pub struct Lang {
-    id_l: usize,
-    strs: Vec<&'static str>,
-    inner: Vec<u16>,
-}
-
-pub trait HLang {
-    type Id;
-    fn lang_id(&self) -> HLangId;
-    fn new(idl: HLangId) -> Self;
-}
-pub struct HLangId(usize);
-pub struct HLangFactory(usize);
-impl HLangFactory {
-    fn make<L: HLang>(&mut self) -> L {
-        let res = L::new(HLangId(self.0));
-        self.0 += 1;
-        res
-    }
-}
 
 pub struct SimpleStores<TS, NS = nodes::DefaultNodeStore, LS = labels::LabelStore> {
     pub label_store: LS,
@@ -146,24 +117,6 @@ pub mod defaults {
     pub type LabelValue = super::labels::DefaultLabelValue;
     pub type NodeIdentifier = super::nodes::DefaultNodeIdentifier;
 }
-
-// impl<'store, TS> From<&'store SimpleStores<TS, nodes::DefaultNodeStore>>
-//     for SimpleHyperAST<
-//         self::nodes::HashedNodeRef<'store>,
-//         &'store TS,
-//         &'store nodes::DefaultNodeStore,
-//         &'store labels::LabelStore,
-//     >
-// {
-//     fn from(value: &'store SimpleStores<TS, nodes::DefaultNodeStore>) -> Self {
-//         Self {
-//             type_store: &value.type_store,
-//             node_store: &value.node_store,
-//             label_store: &value.label_store,
-//             _phantom: std::marker::PhantomData,
-//         }
-//     }
-// }
 
 impl<'store, T, TS, NS, LS> From<&'store SimpleStores<TS, NS, LS>>
     for SimpleHyperAST<T, &'store TS, &'store NS, &'store LS>
