@@ -56,8 +56,8 @@ impl crate::types::LabelStore<DefaultLabelValue> for LabelStore {
 
 impl crate::types::LabelStore<DefaultLabelValue> for &LabelStore {
     type I = DefaultLabelIdentifier;
-    fn get_or_insert<T: Borrow<DefaultLabelValue>>(&mut self, node: T) -> Self::I {
-        unimplemented!()
+    fn get_or_insert<T: Borrow<DefaultLabelValue>>(&mut self, _node: T) -> Self::I {
+        unimplemented!("&mut & does not allow to mutate in place :/")
     }
     fn get<T: Borrow<DefaultLabelValue>>(&self, node: T) -> Option<Self::I> {
         self.internal.get(node.borrow())
