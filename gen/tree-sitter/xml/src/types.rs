@@ -30,7 +30,7 @@ mod legion_impls {
 
         fn resolve_lang(
             &self,
-            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
+            _n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
             From::<&'static (dyn LangRef<Type>)>::from(&Lang)
         }
@@ -50,7 +50,7 @@ mod legion_impls {
     impl<'a> XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         const LANG: TypeInternalSize = Self::Xml as u16;
 
-        fn _intern(l: u16, t: u16) -> Self::Ty {
+        fn _intern(_l: u16, _t: u16) -> Self::Ty {
             // T((u16::MAX - l as u16) | t)
             todo!()
         }
@@ -75,7 +75,7 @@ mod legion_impls {
 
         fn resolve_lang(
             &self,
-            n: &HashedNodeRef<'a, NodeIdentifier>,
+            _n: &HashedNodeRef<'a, NodeIdentifier>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
             todo!()
         }
@@ -88,7 +88,7 @@ mod legion_impls {
                 ty: *n.get_component::<Type>().unwrap() as u16,
             }
         }
-        fn type_eq(&self, n: &HashedNodeRef<'a, NodeIdentifier>, m: &HashedNodeRef<'a, NodeIdentifier>) -> bool {
+        fn type_eq(&self, _n: &HashedNodeRef<'a, NodeIdentifier>, _m: &HashedNodeRef<'a, NodeIdentifier>) -> bool {
             todo!()
         }
     }
@@ -137,7 +137,7 @@ impl<IdN: Clone + Eq + NodeId> NodeId for TIdN<IdN> {
         Self(id)
     }
 
-    unsafe fn from_ref_id(id: &Self::IdN) -> &Self {
+    unsafe fn from_ref_id(_id: &Self::IdN) -> &Self {
         todo!()
     }
 }
@@ -182,11 +182,11 @@ impl LangRef<AnyType> for Xml {
         std::any::type_name::<Xml>()
     }
 
-    fn make(&self, t: u16) -> &'static AnyType {
+    fn make(&self, _t: u16) -> &'static AnyType {
         todo!()
     }
 
-    fn to_u16(&self, t: AnyType) -> u16 {
+    fn to_u16(&self, _t: AnyType) -> u16 {
         todo!()
     }
 }
@@ -880,7 +880,7 @@ impl Type {
             "Directory" => Type::Directory,
             "MavenDirectory" => Type::MavenDirectory,
             "ERROR" => Type::ERROR,
-            x => return None,
+            _x => return None,
         })
     }
     pub fn to_str(&self) -> &'static str {

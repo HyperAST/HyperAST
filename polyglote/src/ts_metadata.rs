@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+
 
 use tree_sitter::{Tree, TreeCursor};
 
@@ -186,14 +186,14 @@ impl<'a, 'b> PatternParser<'a, 'b> {
                         let node = self.cursor.node();
                         let parameters = node.child_by_field_name("parameters").unwrap();
                         let pred = node.utf8_text(self.input).unwrap();
-                        for c in parameters.children(&mut self.cursor.clone()) {
+                        for _c in parameters.children(&mut self.cursor.clone()) {
                             if node.kind() == "capture" {
                                 captures_with_predicates.push((
                                     node.child_by_field_name("name")
                                         .unwrap()
                                         .utf8_text(self.input)
                                         .unwrap(),
-                                    pred.clone(),
+                                    pred,
                                 ))
                             }
                         }
@@ -225,18 +225,18 @@ impl<'a, 'b> PatternParser<'a, 'b> {
                             .map(|cap| {
                                 let x = captures_with_predicates
                                     .extract_if(|(c, _)| *c == cap)
-                                    .map(|(x, pred)| pred.to_string())
+                                    .map(|(_x, pred)| pred.to_string())
                                     .collect();
                                 (cap, x)
                             })
                             .collect(),
                     },
-                    Patt::FieldDefinition { field, patt } => unreachable!(),
-                    Patt::Alternation { patt } => unimplemented!(),
+                    Patt::FieldDefinition { field: _, patt: _ } => unreachable!(),
+                    Patt::Alternation { patt: _ } => unimplemented!(),
                     Patt::Predicated {
-                        kind,
-                        patt,
-                        captures_with_predicates,
+                        kind: _,
+                        patt: _,
+                        captures_with_predicates: _,
                     } => panic!("possible ? grammar too lenient"),
                 })
             }

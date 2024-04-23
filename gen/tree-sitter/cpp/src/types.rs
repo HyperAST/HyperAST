@@ -42,7 +42,7 @@ mod legion_impls {
     use hyper_ast::{store::nodes::legion::HashedNodeRef, types::TypeIndex};
 
     impl<'a, TS: CppEnabledTypeStore<HashedNodeRef<'a, Type>>> From<TS> for Single {
-        fn from(value: TS) -> Self {
+        fn from(_value: TS) -> Self {
             Self {
                 mask: TS::MASK,
                 lang: TS::LANG,
@@ -59,7 +59,7 @@ mod legion_impls {
 
         fn resolve_lang(
             &self,
-            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
+            _n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
             From::<&'static (dyn LangRef<Type>)>::from(&Lang)
         }
@@ -83,7 +83,7 @@ mod legion_impls {
     impl<'a> CppEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         const LANG: TypeInternalSize = Self::Cpp as u16;
 
-        fn _intern(l: u16, t: u16) -> Self::Ty {
+        fn _intern(_l: u16, _t: u16) -> Self::Ty {
             // T((u16::MAX - l as u16) | t)
             todo!()
         }
@@ -107,7 +107,7 @@ mod legion_impls {
 
         fn resolve_lang(
             &self,
-            n: &HashedNodeRef<'a, NodeIdentifier>,
+            _n: &HashedNodeRef<'a, NodeIdentifier>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
             From::<&'static (dyn LangRef<AnyType>)>::from(&Lang)
         }
@@ -122,8 +122,8 @@ mod legion_impls {
         }
         fn type_eq(
             &self,
-            n: &HashedNodeRef<'a, NodeIdentifier>,
-            m: &HashedNodeRef<'a, NodeIdentifier>,
+            _n: &HashedNodeRef<'a, NodeIdentifier>,
+            _m: &HashedNodeRef<'a, NodeIdentifier>,
         ) -> bool {
             todo!()
         }
@@ -207,7 +207,7 @@ mod exp {
                 CPP => Types::Cpp(self.resolve_cpp_unchecked(t)),
                 JAVA => Types::Java(panic!()),
                 XML => Types::Xml(panic!()),
-                x => panic!(),
+                _x => panic!(),
             }
         }
     }
@@ -246,7 +246,7 @@ impl<IdN: Clone + Eq + NodeId> NodeId for TIdN<IdN> {
         Self(id)
     }
 
-    unsafe fn from_ref_id(id: &Self::IdN) -> &Self {
+    unsafe fn from_ref_id(_id: &Self::IdN) -> &Self {
         todo!()
     }
 }
@@ -286,7 +286,7 @@ pub fn as_any(t: &Type) -> AnyType {
 }
 
 impl LangRef<AnyType> for Cpp {
-    fn make(&self, t: u16) -> &'static AnyType {
+    fn make(&self, _t: u16) -> &'static AnyType {
         panic!()
         // &From::<&'static dyn HyperType>::from(&S_T_L[t as usize])
     }
@@ -2197,7 +2197,7 @@ impl Type {
             "Spaces" => Type::Spaces,
             "Directory" => Type::Directory,
             "ERROR" => Type::ERROR,
-            x => return None,
+            _x => return None,
         })
     }
     pub fn to_str(&self) -> &'static str {

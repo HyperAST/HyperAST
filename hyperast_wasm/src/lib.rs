@@ -100,13 +100,13 @@ pub struct NodeId(
 
 #[wasm_bindgen]
 impl ScratchPadSession {
-    pub fn snap_build(&mut self, prev: f32, path: &[f32], typ: String) -> () {
+    pub fn snap_build(&mut self, _prev: f32, _path: &[f32], _typ: String) -> () {
         todo!("compute parents from prev snap and path to edit")
     }
-    pub fn snap_build_with_label(&mut self, prev: f32, path: &[f32], typ: String, label: String) -> () {
+    pub fn snap_build_with_label(&mut self, _prev: f32, _path: &[f32], _typ: String, _label: String) -> () {
         todo!("compute parents from prev snap and path to edit")
     }
-    pub fn snap_build_empty(&mut self, prev: f32, path: &[f32]) -> () {
+    pub fn snap_build_empty(&mut self, _prev: f32, _path: &[f32]) -> () {
         todo!("compute parents from prev snap and path to edit")
     }
     // pub async fn push_type(&mut self, typ: &str) -> NodeId {
@@ -118,7 +118,7 @@ impl ScratchPadSession {
     // pub async fn push_with_children(&mut self, typ: &str, children: Vec<NodeId>, ) -> NodeId {
     //     todo!()
     // }
-    pub async fn fetch_node(&mut self, node: &mut NodeId) -> String {
+    pub async fn fetch_node(&mut self, _node: &mut NodeId) -> String {
         todo!()
     }
 }
@@ -143,7 +143,7 @@ impl GitSession {
 
 #[wasm_bindgen]
 impl GitSession {
-    pub async fn fetch_node(&mut self, node: NodeId) -> String {
+    pub async fn fetch_node(&mut self, _node: NodeId) -> String {
         todo!()
     }
 }

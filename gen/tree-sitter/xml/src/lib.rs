@@ -11,7 +11,7 @@ mod tests;
 
 #[cfg(feature = "legion")]
 mod tnode {
-    use super::*;
+    
 
     #[repr(transparent)]
     pub struct TNode<'a>(pub(crate) tree_sitter::Node<'a>);

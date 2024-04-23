@@ -1,17 +1,17 @@
 use std::fmt::{self, Debug};
 
-use hyper_ast::types::{NodeStore, TypeStore, TypedHyperAST, TypedTree};
+use hyper_ast::types::{NodeStore, TypedHyperAST};
 use hyper_ast::{
     position::{TreePath, TreePathMut},
     store::nodes::legion::NodeIdentifier,
     types::{
-        AnyType, HyperAST, IterableChildren, NodeId, Tree, Typed, TypedNodeStore, WithChildren,
+        HyperAST, IterableChildren, NodeId, Tree, TypedNodeStore, WithChildren,
     },
 };
 use num::ToPrimitive;
 
 use crate::types::TIdN;
-use crate::types::Type;
+
 
 pub struct IterAll<'a, T, HAST> {
     stores: &'a HAST,

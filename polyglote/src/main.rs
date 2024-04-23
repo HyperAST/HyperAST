@@ -5,7 +5,6 @@ mod preprocess;
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::{Debug, Display},
-    fs::File,
     path::Path,
 };
 
@@ -169,7 +168,7 @@ use strum_macros::*;
 
 use crate::{
     macr::{get_language, get_language_name, Lang},
-    preprocess::{consider_tags, get_token_hierarchy, TsType},
+    preprocess::{consider_tags, TsType},
 };
 
 #[test]
@@ -215,8 +214,8 @@ fn main() -> std::io::Result<()> {
     generate_types::ggg(&types);
     todo!();
     let lang = Lang::Cpp;
-    let tags = tree_sitter_cpp::TAGS_QUERY;
-    let hi = tree_sitter_cpp::HIGHLIGHT_QUERY;
+    let _tags = tree_sitter_cpp::TAGS_QUERY;
+    let _hi = tree_sitter_cpp::HIGHLIGHT_QUERY;
     let n_types = tree_sitter_cpp::NODE_TYPES;
     // dbg!(preprocess::get_token_names(&lang.get_language(), false));
     let types = preprocess_aux(n_types, lang, None, None)?;
@@ -232,7 +231,7 @@ fn main() -> std::io::Result<()> {
     let tags = tree_sitter_python::TAGS_QUERY;
     let hi = tree_sitter_python::HIGHLIGHTS_QUERY;
     let n_types = tree_sitter_python::NODE_TYPES;
-    let types = preprocess_aux(n_types, lang, Some(tags), Some(hi))?;
+    let _types = preprocess_aux(n_types, lang, Some(tags), Some(hi))?;
     // let lang = Lang::Rust;
     // let tags = tree_sitter_rust::TAGGING_QUERY;
     // let hi = tree_sitter_rust::HIGHLIGHT_QUERY;
@@ -243,7 +242,7 @@ fn main() -> std::io::Result<()> {
 }
 
 mod refl {
-    use std::{any::Any, marker::PhantomData};
+    use std::{marker::PhantomData};
 
     struct Class {}
     struct Identifier {}
@@ -899,7 +898,7 @@ mod generate_types {
                     dbg!(&camel_case);
                     dbg!(&t);
                     let kind = if camel_case == "0" {
-                        let camel_case = leafs.fmt(&t, |k| format!("TS{}", &k.to_camel_case()));
+                        let _camel_case = leafs.fmt(&t, |k| format!("TS{}", &k.to_camel_case()));
                         let camel_case = "aaaa";
                         format_ident!("{}", &camel_case)
                     } else  {
@@ -1289,7 +1288,7 @@ mod generate_types {
             count += 1;
         }
 
-        let count = typesys.list.len();
+        let _count = typesys.list.len();
         let len = typesys.list.len() as u16;
 
         let res = quote! {
@@ -1554,7 +1553,7 @@ fn preprocess() -> Result<TypeSys, std::io::Error> {
     let tags = tree_sitter_java::TAGS_QUERY;
     let hi = tree_sitter_java::HIGHLIGHTS_QUERY;
     let n_types = tree_sitter_java::NODE_TYPES;
-    let types = preprocess_aux(n_types, lang, Some(tags), Some(hi))?;
+    let _types = preprocess_aux(n_types, lang, Some(tags), Some(hi))?;
     let lang = Lang::Cpp;
     let tags = tree_sitter_cpp::TAGS_QUERY;
     let hi = tree_sitter_cpp::HIGHLIGHT_QUERY;
@@ -1631,7 +1630,7 @@ fn preprocess_aux(
     let c_name = camel_case(name.to_string());
     let file_name = format!("{}.rs", file_template.replace('$', &c_name.to_lowercase()));
     // dbg!(&file_name);
-    let path = output.join(file_name);
+    let _path = output.join(file_name);
     // let mut file = File::create(path)?;
     // let names = preprocess::get_token_names(&language, false);
     let mut typesys = TypeSys::new(language, types);

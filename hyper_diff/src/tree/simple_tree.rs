@@ -250,7 +250,7 @@ impl<T> hyper_ast::types::WithSerialization for TreeRef<'_, T> {
 }
 impl<T> Clone for TreeRef<'_, T> {
     fn clone(&self) -> Self {
-        Self(self.0.clone())
+        Self(self.0)
     }
 }
 

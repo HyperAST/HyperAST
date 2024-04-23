@@ -114,7 +114,7 @@ fn xml_issue_cdata() {
         line_break: "\n".as_bytes().to_vec(),
         stores: &mut stores,
     };
-    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
+    let _x = tree_gen.generate_file(b"", text, tree.walk()).local;
     // println!("{}", tree.root_node().to_sexp());
 }
 

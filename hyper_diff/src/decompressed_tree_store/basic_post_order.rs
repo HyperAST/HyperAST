@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use num_traits::{cast, one, zero, PrimInt, ToPrimitive};
 
 use hyper_ast::types::{
-    self, Children, IterableChildren, NodeId, NodeStore, Stored, Typed, WithChildren,
+    self, Children, IterableChildren, NodeId, NodeStore, Stored, WithChildren,
 };
 
 use super::{

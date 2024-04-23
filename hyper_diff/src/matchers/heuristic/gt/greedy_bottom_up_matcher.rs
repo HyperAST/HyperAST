@@ -9,7 +9,7 @@ use crate::decompressed_tree_store::{
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
 use hyper_ast::types::{
-    DecompressedSubtree, HyperAST, LabelStore, NodeId, NodeStore, SlicedLabel, Tree, WithHashs,
+    DecompressedSubtree, HyperAST, LabelStore, NodeId, NodeStore, Tree, WithHashs,
 };
 
 use super::bottom_up_matcher::BottomUpMatcher;

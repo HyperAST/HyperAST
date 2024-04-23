@@ -1,11 +1,10 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{HashMap},
     fmt::Display,
-    mem::size_of,
     str::FromStr,
 };
 
-use tree_sitter::{Tree, TreeCursor};
+use tree_sitter::{TreeCursor};
 
 type TagedRole = String;
 
@@ -156,7 +155,7 @@ impl Tag {
     fn parse(input: &[u8], cursor: &mut TreeCursor) -> Result<(TagedRole, Vec<Tag>), Error> {
         let Query {
             mut variables,
-            mut pattern,
+            pattern,
         } = Query::parse_query(input, cursor)?;
         // dbg!(&pattern);
         // dbg!(&variables);
@@ -263,9 +262,9 @@ impl Alternate {
                 // }
             }
             Patt::Predicated {
-                kind,
-                patt,
-                captures_with_predicates,
+                kind: _,
+                patt: _,
+                captures_with_predicates: _,
             } => {
                 unimplemented!()
             }

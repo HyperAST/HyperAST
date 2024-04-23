@@ -1,10 +1,9 @@
 use std::{
     borrow::{Borrow, BorrowMut},
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap},
     fmt::Debug,
     marker::PhantomData,
-    ops::{Deref, Index},
-    slice,
+    ops::{Index},
 };
 
 use bitvec::slice::BitSlice;
@@ -12,7 +11,7 @@ use num_traits::{cast, zero, PrimInt, ToPrimitive, Zero};
 
 use crate::{
     decompressed_tree_store::{
-        BreadthFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
+        DecompressedTreeStore, DecompressedWithParent, PostOrder,
         ShallowDecompressedTreeStore,
     },
     matchers::mapping_store::{MappingStore, MonoMappingStore},
@@ -20,8 +19,7 @@ use crate::{
 use hyper_ast::types::{self, NodeId, NodeStore, Stored, WithChildren, WithStats};
 
 use super::{
-    basic_post_order::BasicPOSlice,
-    lazy_post_order::{self, LazyPostOrder},
+    lazy_post_order::{LazyPostOrder},
     simple_post_order::SimplePOSlice,
     ContiguousDescendants, IterKr, LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrderIterable,
     PostOrderKeyRoots, Shallow,
@@ -195,28 +193,28 @@ where
         let src = self
             .back
             .get_src_unchecked(&self.map_dst[self.map_dst.len() - 1 - dst.to_usize().unwrap()]);
-        *self.rev_src.borrow().get(&src).unwrap()
+        *self.rev_src.get(&src).unwrap()
     }
 
     fn get_dst_unchecked(&self, src: &Self::Src) -> Self::Dst {
         let dst = self
             .back
             .get_dst_unchecked(&self.map_src[self.map_src.len() - 1 - src.to_usize().unwrap()]);
-        *self.rev_dst.borrow().get(&dst).unwrap()
+        *self.rev_dst.get(&dst).unwrap()
     }
 
     fn get_src(&self, dst: &Self::Dst) -> Option<Self::Src> {
         let src = self
             .back
             .get_src(&self.map_dst[self.map_dst.len() - 1 - dst.to_usize().unwrap()])?;
-        self.rev_src.borrow().get(&src).copied()
+        self.rev_src.get(&src).copied()
     }
 
     fn get_dst(&self, src: &Self::Src) -> Option<Self::Dst> {
         let dst = self
             .back
             .get_dst(&self.map_src[self.map_src.len() - 1 - src.to_usize().unwrap()])?;
-        self.rev_dst.borrow().get(&dst).copied()
+        self.rev_dst.get(&dst).copied()
     }
 
     fn link_if_both_unmapped(&mut self, src: Self::Src, dst: Self::Dst) -> bool {
@@ -512,17 +510,17 @@ impl<
 
     type PIt<'a>=DTS::PIt<'a> where D: 'a, Self:'a;
 
-    fn parents(&self, id: IdD) -> Self::PIt<'_> {
+    fn parents(&self, _id: IdD) -> Self::PIt<'_> {
         // self.back.borrow().parents(id)
         todo!()
     }
 
-    fn path(&self, parent: &IdD, descendant: &IdD) -> Vec<T::ChildIdx> {
+    fn path(&self, _parent: &IdD, _descendant: &IdD) -> Vec<T::ChildIdx> {
         // self.back.borrow().path(parent, descendant)
         todo!()
     }
 
-    fn lca(&self, a: &IdD, b: &IdD) -> IdD {
+    fn lca(&self, _a: &IdD, _b: &IdD) -> IdD {
         // self.back.borrow().lca(a, b)
         todo!()
     }
@@ -541,7 +539,7 @@ where
     T::TreeId: Clone + Debug,
     <T as WithChildren>::ChildIdx: PrimInt,
 {
-    fn decompress<S>(store: &'a S, id: &<T as Stored>::TreeId) -> Self::Out
+    fn decompress<S>(_store: &'a S, _id: &<T as Stored>::TreeId) -> Self::Out
     where
         S: NodeStore<<T as Stored>::TreeId, R<'a> = T>,
     {
@@ -657,7 +655,7 @@ where
 
     type Slice<'b> = SimplePOSlice<'b,T,IdD> where Self: 'b;
 
-    fn slice(&self, x: &IdD) -> Self::Slice<'_> {
+    fn slice(&self, _x: &IdD) -> Self::Slice<'_> {
         todo!()
     }
 }
@@ -1008,7 +1006,7 @@ where
         cast(self.len() - 1).unwrap()
     }
 
-    fn child<'b, S>(&self, store: &'b S, x: &IdD, p: &[T::ChildIdx]) -> IdD
+    fn child<'b, S>(&self, _store: &'b S, _x: &IdD, _p: &[T::ChildIdx]) -> IdD
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
     {
@@ -1016,7 +1014,7 @@ where
         // self.simple.child(store, x, p)
     }
 
-    fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    fn children<'b, S>(&self, _store: &'b S, _x: &IdD) -> Vec<IdD>
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
     {
@@ -1030,7 +1028,7 @@ impl<'a, T: WithChildren, IdD: PrimInt, Kr: Borrow<BitSlice>> DecompressedTreeSt
 where
     T::TreeId: Clone + Eq + Debug,
 {
-    fn descendants<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    fn descendants<'b, S>(&self, _store: &'b S, _x: &IdD) -> Vec<IdD>
     where
         S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
@@ -1038,12 +1036,12 @@ where
         // self.simple.descendants(store, x)
     }
 
-    fn first_descendant(&self, i: &IdD) -> IdD {
+    fn first_descendant(&self, _i: &IdD) -> IdD {
         todo!()
         // self.simple.first_descendant(i)
     }
 
-    fn descendants_count<'b, S>(&self, store: &'b S, x: &IdD) -> usize
+    fn descendants_count<'b, S>(&self, _store: &'b S, _x: &IdD) -> usize
     where
         S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
@@ -1051,7 +1049,7 @@ where
         // self.simple.descendants_count(store, x)
     }
 
-    fn is_descendant(&self, desc: &IdD, of: &IdD) -> bool {
+    fn is_descendant(&self, _desc: &IdD, _of: &IdD) -> bool {
         todo!()
         // self.simple.is_descendant(desc, of)
     }

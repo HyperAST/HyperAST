@@ -113,7 +113,7 @@ where
         idxs
     }
 
-    fn lca(&self, a: &IdD, b: &IdD) -> IdD {
+    fn lca(&self, _a: &IdD, _b: &IdD) -> IdD {
         todo!()
     }
 }

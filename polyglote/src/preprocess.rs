@@ -117,10 +117,10 @@ pub(crate) struct Chidlren {
     types: Vec<TsType>,
 }
 
-pub(crate) fn consider_tags(tags: ts_metadata::Tags, typesys : &mut TypeSys) {
+pub(crate) fn consider_tags(_tags: ts_metadata::Tags, _typesys : &mut TypeSys) {
 }
 
-pub(crate) fn consider_highlights(tags: ts_metadata::HighLights, typesys : &mut TypeSys) {
+pub(crate) fn consider_highlights(_tags: ts_metadata::HighLights, _typesys : &mut TypeSys) {
 }
 
 impl TypeSys {
@@ -182,7 +182,7 @@ impl TypeSys {
     }
     fn add_token_hierarchy(&mut self, types: Vec<TsType>, ) {
         let mut world = &mut self.types;
-        let mut names = &mut self.index;
+        let names = &mut self.index;
         for ty in types {
             let mut builder = EntityBuilder::new();
             match ty {
@@ -286,7 +286,7 @@ impl TypeSys {
     }
 }
 
-pub(crate) fn get_token_hierarchy(types: Vec<TsType>, escape: bool) -> TypeSys {
+pub(crate) fn get_token_hierarchy(types: Vec<TsType>, _escape: bool) -> TypeSys {
     let mut r = TypeSys {
         list: Default::default(),
         index: Default::default(),
@@ -297,7 +297,7 @@ pub(crate) fn get_token_hierarchy(types: Vec<TsType>, escape: bool) -> TypeSys {
 }
 
 
-pub fn get_token_names(language: &Language, escape: bool) -> Vec<(String, bool, String)> {
+pub fn get_token_names(language: &Language, _escape: bool) -> Vec<(String, bool, String)> {
     let count = language.node_kind_count();
     let mut names: BTreeMap<usize, (String, bool, String)> = BTreeMap::default();
     let mut name_count = HashMap::new();

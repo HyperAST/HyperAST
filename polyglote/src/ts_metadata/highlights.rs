@@ -194,7 +194,7 @@ impl HighLights {
                         "should have gone back to same query node"
                     );
                 }
-                kind => {
+                _kind => {
                     // dbg!(kind);
                     let Query { variables, pattern } = Query::parse_query(input, &mut cursor)?;
                     if variables.is_empty() {

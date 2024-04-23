@@ -12,7 +12,7 @@ use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyper_ast::compat::HashMap;
 use hyper_ast::types::{
     DecompressedSubtree, HashKind, HyperAST, IterableChildren, Labeled, NodeStore, Stored, Tree,
-    TypeStore, Typed, WithChildren, WithHashs, WithStats,
+    TypeStore, WithChildren, WithHashs, WithStats,
 };
 use logging_timer::time;
 use num_traits::{PrimInt, ToPrimitive};

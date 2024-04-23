@@ -1,5 +1,5 @@
 use std::hash::Hash;
-use std::marker::PhantomData;
+
 
 use num_traits::ToPrimitive;
 
@@ -8,7 +8,7 @@ use crate::decompressed_tree_store::{
 };
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::similarity_metrics;
-use hyper_ast::types::{HyperAST, NodeStore, Tree, WithHashs};
+use hyper_ast::types::{HyperAST, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 

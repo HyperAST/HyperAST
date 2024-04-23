@@ -397,7 +397,7 @@ impl<'a, TS: XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>>> XmlTr
         full_node
     }
 
-    fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {
+    fn build_ana(&mut self, _kind: &Type) -> Option<PartialAnalysis> {
         None
     }
 }
