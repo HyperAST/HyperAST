@@ -400,6 +400,7 @@ pub struct Common<M> {
     indices: TypeIdMap<usize>,
 }
 
+#[allow(unused)] // I might use it later
 impl<M> Common<M> {
     fn has<T: Component>(&self) -> bool {
         self.indices.contains_key(&TypeId::of::<T>())

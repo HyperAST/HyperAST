@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash, num::NonZeroU64};
+use std::{fmt::Debug, hash::Hash};
 
 use hashbrown::hash_map::DefaultHashBuilder;
 use legion::{

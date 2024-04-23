@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash, marker::PhantomData, num::NonZeroU64, ops::Deref};
+use std::{fmt::Debug, hash::Hash, marker::PhantomData, ops::Deref};
 
 use legion::{
     storage::{Archetype, Component},
@@ -417,14 +417,11 @@ impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Typed
                 let t: &'static dyn HyperType = t.as_static();
                 t.into()
             }
-            Err(ComponentError::NotFound { .. }) => {
-                let type_type = self.0.archetype().layout().component_types()[0];
-                // self.0.
-                todo!()
+            Err(e@ComponentError::NotFound { .. }) => {
+                todo!("{:?}", e)
             }
             e => {
-                let t: &'static dyn HyperType = e.unwrap().as_static();
-                t.into()
+                todo!("{:?}", e)
             }
         }
     }
