@@ -322,7 +322,7 @@ where
             prev_x = x;
             len
         };
-        use crate::position::building::bottom_up::ReceiveNode;
+        use bottom_up::ReceiveNode;
         let mut builder: B::SB1<O> = if let Some(len) = len {
             let mut builder = builder.set(len);
             let builder = loop {
@@ -392,7 +392,7 @@ where
                     .resolve_type(&stores.node_store().resolve(x.as_id())))
                 .collect::<Vec<_>>());
 
-            use bottom_up::{ReceiveIdx, ReceiveNode, ReceiveOffset};
+            use bottom_up::ReceiveIdx;
             builder = builder.push(prev_x).push(o);
             prev_x = x;
         }
@@ -427,7 +427,7 @@ where
 // TODO make_position should be a From<ExploreStructuralPositions> for FileAndOffsetPostionT and moved to relevant place
 // TODO here the remaining logic should be about giving an iterator through the structural position
 impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, IdN, Idx> {
-    fn make_position<'store, HAST>(self, stores: &'store HAST) -> Position
+    pub fn make_position<'store, HAST>(self, stores: &'store HAST) -> Position
     where
         'a: 'store,
         HAST: HyperAST<'store, IdN = IdN::IdN>,

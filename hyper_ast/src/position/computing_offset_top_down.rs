@@ -35,7 +35,6 @@ where
     for o in offsets {
         let b = stores.node_store().resolve(&x);
         if let Some(cs) = b.children() {
-            let cs = cs.clone();
             for y in 0..o.to_usize().unwrap() {
                 let id = &cs[num::cast(y).unwrap()];
                 let b = stores.node_store().resolve(id);
@@ -86,7 +85,6 @@ where
         }
 
         if let Some(cs) = b.children() {
-            let cs = cs.clone();
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
                     let b = stores.node_store().resolve(y);
@@ -156,7 +154,6 @@ where
         }
 
         if let Some(cs) = b.children() {
-            let cs = cs.clone();
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
                     let b = stores.node_store().resolve(y);
@@ -200,9 +197,9 @@ where
 }
 
 pub fn compute_position_and_nodes2<'store, HAST, It: Iterator>(
-    root: HAST::IdN,
-    offsets: &mut It,
-    stores: &HAST,
+    _root: HAST::IdN,
+    _offsets: &mut It,
+    _stores: &HAST,
 ) -> (Position, Vec<HAST::IdN>)
 where
     It::Item: Clone,
@@ -218,9 +215,9 @@ where
 }
 
 pub fn compute_position_and_nodes3<'store, HAST, It: Iterator>(
-    root: HAST::IdN,
-    offsets: &mut It,
-    stores: &HAST,
+    _root: HAST::IdN,
+    _offsets: &mut It,
+    _stores: &HAST,
 ) -> (Position, Vec<HAST::IdN>)
 where
     It::Item: Clone,

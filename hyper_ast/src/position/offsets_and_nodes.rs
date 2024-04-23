@@ -293,7 +293,7 @@ mod impl_c_p_p_receivers {
         }
     }
     impl<IdN, Idx: PrimInt, C> top_down::SetFileName<Self> for StructuralPosition<IdN, Idx, C> {
-        fn set_file_name(self, file_name: &str) -> Self {
+        fn set_file_name(self, _file_name: &str) -> Self {
             self
         }
     }

@@ -95,11 +95,11 @@ impl<IdN, Idx: PrimInt, IdO: PrimInt + Default>
         self
     }
 
-    fn push(&mut self, parent: IdN, offset: Idx, dir_name: &str, _additional: ()) {
+    fn push(&mut self, _parent: IdN, _offset: Idx, dir_name: &str, _additional: ()) {
         self.file.push(dir_name);
     }
 
-    fn finish(self, node: IdN) -> Self::Prepared {
+    fn finish(self, _node: IdN) -> Self::Prepared {
         todo!("how exactly should directories be handled")
     }
 }
@@ -109,11 +109,11 @@ impl<IdN, Idx: PrimInt, IdO: PrimInt>
 {
     type Prepared = Position<PathBuf, IdO>;
 
-    fn push(&mut self, parent: IdN, idx: Idx, offset: IdO, (no_s_idx,): (Idx,)) {
+    fn push(&mut self, _parent: IdN, _idx: Idx, offset: IdO, (_no_s_idx,): (Idx,)) {
         self.offset += offset;
     }
 
-    fn finish(self, node: IdN, len: Idx, _additional: ()) -> Self::Prepared {
+    fn finish(self, _node: IdN, len: Idx, _additional: ()) -> Self::Prepared {
         assert_eq!(self.len, num::zero());
         let len = num::cast(len).unwrap();
         Self::Prepared {

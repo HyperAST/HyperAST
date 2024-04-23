@@ -41,7 +41,6 @@ where
         }
         let mut with_s_idx = zero();
         if let Some(cs) = b.children() {
-            let cs = cs.clone();
             if !t.is_directory() {
                 for y in cs.iter_children() {
                     let b = stores.node_store().resolve(y);
@@ -100,9 +99,9 @@ impl<'store, 'src, 'a, Idx: PrimInt, HAST>
     >
 {
     pub fn path_with_spaces<It: Iterator>(
-        root: HAST::IdN,
-        no_spaces: &mut It,
-        stores: &'store HAST,
+        _root: HAST::IdN,
+        _no_spaces: &mut It,
+        _stores: &'store HAST,
     ) -> Filtered<Vec<It::Item>, node_filters::Full>
     where
         It::Item: Clone + PrimInt,
@@ -115,10 +114,10 @@ impl<'store, 'src, 'a, Idx: PrimInt, HAST>
 }
 
 pub fn global_pos_with_spaces<'store, T, NS, It: Iterator>(
-    root: T::TreeId,
+    _root: T::TreeId,
     // increasing order
-    no_spaces: &mut It,
-    node_store: &'store NS,
+    _no_spaces: &mut It,
+    _node_store: &'store NS,
 ) -> (Vec<It::Item>,)
 where
     It::Item: Clone + PrimInt,
@@ -198,7 +197,6 @@ where
         }
         let mut no_s_idx = zero();
         if let Some(cs) = b.children() {
-            let cs = cs.clone();
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
                     let b = stores.node_store().resolve(y);
@@ -271,7 +269,7 @@ impl<T, F> From<T> for Filtered<T, F> {
 // type NoSpace
 
 // top to bottom
-type PathNoSpace<IdN, Idx> =
+pub type PathNoSpace<IdN, Idx> =
     Filtered<super::offsets::RootedOffsets<IdN, Idx>, node_filters::NoSpace>;
 
 // top to bottom

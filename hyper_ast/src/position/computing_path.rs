@@ -21,7 +21,6 @@ where
     'main: loop {
         let b = stores.node_store().resolve(&x);
         if let Some(cs) = b.children() {
-            let cs = cs.clone();
             for (y, child_id) in cs.iter_children().enumerate() {
                 let b = stores.node_store().resolve(child_id);
 
