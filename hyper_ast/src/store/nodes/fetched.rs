@@ -2,32 +2,23 @@ use std::{
     fmt::{Debug, Display},
     hash::{Hash, Hasher},
     marker::PhantomData,
-    num::{NonZeroU32, NonZeroU64},
 };
 
 use string_interner::{DefaultHashBuilder, Symbol};
 
 use crate::{
-    filter::BloomResult,
-    hashed::SyntaxNodeHashsKinds,
-    impact::serialize::{Keyed, MySerialize},
-    nodes::{CompressedNode, HashSize, RefContainer},
-    store::{defaults, labels::LabelStore},
+    store::defaults,
     types::{
-        AnyType, IterableChildren, LabelStore as _, MySlice, NodeId, TypeIndex, TypeStore,
-        TypeTrait, Typed, TypedNodeId,
+        AnyType, Children, IterableChildren, MySlice, NodeId, TypeIndex, TypeStore, TypeTrait,
+        TypedNodeId,
     },
 };
 
 use strum_macros::*;
 #[cfg(feature = "native")]
 type HashMap<K, V> = hashbrown::HashMap<K, V, DefaultHashBuilder>;
-#[cfg(feature = "native")]
-type HashSet<K> = hashbrown::HashSet<K, DefaultHashBuilder>;
 #[cfg(not(feature = "native"))]
 type HashMap<K, V> = hashbrown::HashMap<K, V, std::collections::hash_map::RandomState>;
-#[cfg(not(feature = "native"))]
-type HashSet<K> = hashbrown::HashSet<K, std::collections::hash_map::RandomState>;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 #[repr(transparent)]
@@ -109,7 +100,7 @@ impl From<LabelIdentifier> for u32 {
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
-pub struct NodeIdentifier(NonZeroU32);
+pub struct NodeIdentifier(std::num::NonZeroU32);
 
 impl NodeId for NodeIdentifier {
     type IdN = Self;
@@ -129,11 +120,6 @@ impl TypedNodeId for NodeIdentifier {
     type Ty = crate::types::AnyType;
 }
 
-// struct Location {
-//     arch: u32,
-//     offset: u32,
-// }
-
 #[cfg(feature = "legion")]
 impl From<crate::store::nodes::legion::NodeIdentifier> for NodeIdentifier {
     fn from(id: crate::store::nodes::legion::NodeIdentifier) -> Self {
@@ -145,31 +131,14 @@ impl From<crate::store::nodes::legion::NodeIdentifier> for NodeIdentifier {
 }
 
 impl NodeIdentifier {
-    // pub fn to_bytes(&self) -> [u8; 8] {
-    //     self.into()
-    // }
     pub fn to_u32(&self) -> u32 {
         self.0.into()
     }
-    pub fn from_u32(value: NonZeroU32) -> Self {
+    pub fn from_u32(value: std::num::NonZeroU32) -> Self {
         Self(value)
     }
 }
-// impl From<&NodeIdentifier> for [u8; 8] {
-//     fn from(value: &NodeIdentifier) -> Self {
-//         let v: u64 = value.0.into();
-//         v.to_le_bytes()
-//     }
-// }
-// impl TryFrom<&[u8]> for NodeIdentifier {
-//     type Error = ();
 
-//     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-//         let bytes: [u8; 8] = value.try_into().map_err(|_| ())?;
-//         let value = u64::from_le_bytes(bytes);
-//         Ok(NodeIdentifier(NonZeroU64::try_from(value).map_err(|_| ())?))
-//     }
-// }
 impl Display for NodeIdentifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -181,21 +150,17 @@ impl Hash for NodeIdentifier {
     }
 }
 
-// #[cfg(not(feature = "fetched_par"))]
-
 pub struct FetchedLabels(HashMap<LabelIdentifier, String>);
-// #[cfg(feature = "fetched_par")]
-// pub type FetchedLabels = HashMap<LabelIdentifier, String>;
 
 impl crate::types::LabelStore<str> for FetchedLabels {
     type I = LabelIdentifier;
 
-    fn get_or_insert<T: std::borrow::Borrow<str>>(&mut self, node: T) -> Self::I {
-        todo!()
+    fn get_or_insert<T: std::borrow::Borrow<str>>(&mut self, _node: T) -> Self::I {
+        unimplemented!("definitely very inefficient, so should avoid using it anyway")
     }
 
-    fn get<T: std::borrow::Borrow<str>>(&self, node: T) -> Option<Self::I> {
-        todo!()
+    fn get<T: std::borrow::Borrow<str>>(&self, _node: T) -> Option<Self::I> {
+        unimplemented!("definitely very inefficient, so should avoid using it anyway")
     }
 
     fn resolve(&self, id: &Self::I) -> &str {
@@ -248,20 +213,6 @@ impl<'a, T> HashedNodeRef<'a, T> {
     }
 }
 
-// impl<'a,T> PartialEq for HashedNodeRef<'a,T> {
-//     fn eq(&self, other: &Self) -> bool {
-//         self.id == other.id
-//     }
-// }
-
-// impl<'a,T> Eq for HashedNodeRef<'a,T> {}
-
-// impl<'a,T> Hash for HashedNodeRef<'a,T> {
-//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-//         todo!()
-//     }
-// }
-
 impl<'a, T> Debug for HashedNodeRef<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("HashedNodeRef")
@@ -284,42 +235,37 @@ impl<'a, T> crate::types::Stored for HashedNodeRef<'a, T> {
     type TreeId = NodeIdentifier;
 }
 
+impl<'a, T> HashedNodeRef<'a, T> {
+    fn _children(&self) -> Option<&[NodeIdentifier]> {
+        match self.s_ref {
+            VariantRef::Typed { .. } => None,
+            VariantRef::Labeled { .. } => None,
+            VariantRef::Children { entities, .. } => {
+                Some(&entities.children[self.index as usize][..])
+            }
+            VariantRef::Both { entities, .. } => Some(&entities.children[self.index as usize][..]),
+        }
+    }
+}
+
 impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     type ChildIdx = u16;
     type Children<'b> = MySlice<<Self::TreeId as NodeId>::IdN> where Self: 'b;
 
     fn child_count(&self) -> Self::ChildIdx {
-        todo!()
+        self.children().map_or(0, |x| x.child_count())
     }
 
     fn child(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN> {
-        todo!()
+        self.children().and_then(|x| x.get(*idx)).copied()
     }
 
     fn child_rev(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN> {
-        todo!()
+        self.children().and_then(|x| x.rev(*idx)).copied()
     }
 
     fn children(&self) -> Option<&Self::Children<'_>> {
-        match self.s_ref {
-            VariantRef::Typed { .. } => None,
-            VariantRef::Labeled { .. } => None,
-            VariantRef::Children { entities, .. } => {
-                Some((&entities.children[self.index as usize][..]).into())
-            }
-            VariantRef::Both { entities, .. } => {
-                Some((&entities.children[self.index as usize][..]).into())
-            }
-        }
-    }
-}
-
-impl<'a, T> crate::types::WithHashs for HashedNodeRef<'a, T> {
-    type HK = SyntaxNodeHashsKinds;
-    type HP = HashSize;
-
-    fn hash(&self, kind: &Self::HK) -> Self::HP {
-        todo!()
+        self._children().map(|x| x.into())
     }
 }
 
@@ -363,104 +309,6 @@ impl<'a, T> crate::types::Labeled for HashedNodeRef<'a, T> {
             VariantRef::Children { .. } => None,
             VariantRef::Both { entities, .. } => Some(&entities.label[self.index as usize]),
         }
-    }
-}
-impl<'a, T> RefContainer for HashedNodeRef<'a, T> {
-    type Result = BloomResult;
-
-    fn check<U: MySerialize + Keyed<usize>>(&self, rf: U) -> Self::Result {
-        todo!()
-    }
-}
-
-impl<'a, T> HashedNodeRef<'a, T> {
-    // // pub(crate) fn new(entry: EntryRef<'a>) -> Self {
-    // //     Self(entry)
-    // // }
-
-    // /// Returns the entity's archetype.
-    // pub fn archetype(&self) -> &Archetype {
-    //     self.0.archetype()
-    // }
-
-    // /// Returns the entity's location.
-    // pub fn location(&self) -> EntityLocation {
-    //     self.0.location()
-    // }
-
-    // /// Returns a reference to one of the entity's components.
-    // pub fn into_component<T: Component>(self) -> Result<&'a T, ComponentError> {
-    //     self.0.into_component::<T>()
-    // }
-
-    // /// Returns a mutable reference to one of the entity's components.
-    // ///
-    // /// # Safety
-    // /// This function bypasses static borrow checking. The caller must ensure that the component reference
-    // /// will not be mutably aliased.
-    // pub unsafe fn into_component_unchecked<T: Component>(
-    //     self,
-    // ) -> Result<&'a mut T, ComponentError> {
-    //     self.0.into_component_unchecked::<T>()
-    // }
-
-    /// Returns a reference to one of the entity's components.
-    pub fn get_component<C>(&self) -> Result<&C, String> {
-        todo!()
-    }
-
-    // /// Returns a mutable reference to one of the entity's components.
-    // ///
-    // /// # Safety
-    // /// This function bypasses static borrow checking. The caller must ensure that the component reference
-    // /// will not be mutably aliased.
-    // pub unsafe fn get_component_unchecked<T: Component>(&self) -> Result<&mut T, ComponentError> {
-    //     self.0.get_component_unchecked::<T>()
-    // }
-
-    pub fn into_compressed_node(
-        &self,
-    ) -> Result<CompressedNode<NodeIdentifier, LabelIdentifier, T>, String> {
-        todo!()
-    }
-
-    // TODO when relativisation is applied, caller of this method should provide the size of the paren ident
-    pub fn get_bytes_len(&self, _p_indent_len: u32) -> u32 {
-        todo!()
-    }
-
-    // TODO when relativisation is applied, caller of this method should provide the size of the paren ident
-    pub fn try_get_bytes_len(&self, _p_indent_len: u32) -> Option<u32> {
-        todo!()
-    }
-
-    pub fn is_directory(&self) -> bool
-    where
-        T: TypedNodeId,
-        T::Ty: TypeTrait,
-    {
-        use crate::types::HyperType;
-        self.get_type().is_directory()
-    }
-
-    pub fn get_child_by_name(
-        &self,
-        name: &<HashedNodeRef<'a, T> as crate::types::Labeled>::Label,
-    ) -> Option<<HashedNodeRef<'a, T> as crate::types::Stored>::TreeId> {
-        todo!()
-    }
-
-    pub fn get_child_idx_by_name(
-        &self,
-        name: &<HashedNodeRef<'a, T> as crate::types::Labeled>::Label,
-    ) -> Option<<HashedNodeRef<'a, T> as crate::types::WithChildren>::ChildIdx> {
-        todo!()
-    }
-
-    pub fn try_get_children_name(
-        &self,
-    ) -> Option<&[<HashedNodeRef<'a, T> as crate::types::Labeled>::Label]> {
-        todo!()
     }
 }
 
@@ -657,14 +505,15 @@ macro_rules! variant_store {
             type Type = T::Ty;
 
             fn get_type(&self) -> T::Ty {
-                match self.s_ref {$(
-                    VariantRef::$c{ entities: variants::$c{lang, kind,..}, ..} => {
-                        // assert_eq!(&std::any::type_name::<<T::Ty as TypeTrait>::Lang>(), lang);
-                        // use crate::types::Lang;
-                        // <T::Ty as TypeTrait>::Lang::make(kind[self.index as usize])
-                        todo!()
-                    },
-                )*}
+                todo!("not sure how to do it")
+                // match self.s_ref {$(
+                //     VariantRef::$c{ entities: variants::$c{lang, kind,..}, ..} => {
+                //         // assert_eq!(&std::any::type_name::<<T::Ty as TypeTrait>::Lang>(), lang);
+                //         // use crate::types::Lang;
+                //         // <T::Ty as TypeTrait>::Lang::make(kind[self.index as usize])
+                //         todo!()
+                //     },
+                // )*}
             }
         }
         impl<'a,T> HashedNodeRef<'a,T> {
@@ -677,7 +526,7 @@ macro_rules! variant_store {
             }
             pub fn get_raw_type(&self) -> u16 {
                 match self.s_ref {$(
-                    VariantRef::$c{ entities: variants::$c{lang, kind,..}, ..} => {
+                    VariantRef::$c{ entities: variants::$c{kind,..}, ..} => {
                         kind[self.index as usize]
                     },
                 )*}
@@ -698,11 +547,6 @@ macro_rules! variant_store {
             fn from(value: RawVariant) -> Self {
                 match value {$(
                     RawVariant::$c{ entities } => {
-                        // let mut index = HashMap::default();
-                        // entities.rev.iter().enumerate().for_each(|(i, x)| {
-                        //     index.insert(*x, i as u32);
-                        // });
-                        // Variant::$c{ index, entities }
                         Variant::$c{ entities }
                     },
                 )*}
@@ -735,52 +579,8 @@ variant_store!(NodeIdentifier, NodeIdentifier;
     },
 );
 
-#[derive(Default)]
-// #[cfg_attr(feature = "serialize", derive(serde::Serialize,serde::Deserialize))]
-pub struct DedupPacked {
-    label_store: crate::store::labels::LabelStore,
-    // TODO maybe use a bloom filter there ? or a specialized u32 hashset
-    stockages: HashMap<u32, (HashSet<u32>, RawVariant)>,
-}
-
-// impl DedupPacked {
-//     pub fn add<T: crate::types::Tree>(&mut self, id: impl Into<NodeIdentifier>, node: T) -> bool {
-//         let id: NodeIdentifier = id.into();
-//         let loc: Location = id.into();
-
-//         match self.stockages.entry(loc.arch) {
-//             hashbrown::hash_map::Entry::Occupied(_) => {
-//                 todo!()
-//             }
-//             hashbrown::hash_map::Entry::Vacant(_) => {
-//                 todo!()
-//             }
-//         }
-//     }
-
-//     // pub fn pack(&mut self) -> PackedStore {
-//     //     todo!()
-//     // }
-
-//     // pub fn unpack(p: PackedStore) -> Self {
-//     //     todo!()
-//     // }
-// }
-
-#[cfg(feature = "serialize")]
-impl serde::Serialize for &mut DedupPacked {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        todo!()
-        // serializer.serialize_u32(self.0.to_usize() as u32)
-    }
-}
-
 // #[derive(Default)]
 pub struct SimplePackedBuilder {
-    langs: Vec<&'static str>,
     // // label_ids: Vec<LabelIdentifier>,
     stockages: HashMap<Arch<&'static str>, RawVariant>,
 }
@@ -798,39 +598,9 @@ impl<S: Hash> Hash for Arch<S> {
 
 impl Default for SimplePackedBuilder {
     fn default() -> Self {
-        let mut r = Self {
-            langs: Default::default(),
+        Self {
             stockages: Default::default(),
-        };
-        // let arch = RawVariantDiscriminants::Typed as u32;
-        // r.stockages.insert(
-        //     arch,
-        //     RawVariant::Typed {
-        //         entities: variants::Typed::default(),
-        //     },
-        // );
-        // let arch = RawVariantDiscriminants::Labeled as u32;
-        // r.stockages.insert(
-        //     arch,
-        //     RawVariant::Labeled {
-        //         entities: variants::Labeled::default(),
-        //     },
-        // );
-        // let arch = RawVariantDiscriminants::Children as u32;
-        // r.stockages.insert(
-        //     arch,
-        //     RawVariant::Children {
-        //         entities: variants::Children::default(),
-        //     },
-        // );
-        // let arch = RawVariantDiscriminants::Both as u32;
-        // r.stockages.insert(
-        //     arch,
-        //     RawVariant::Both {
-        //         entities: variants::Both::default(),
-        //     },
-        // );
-        r
+        }
     }
 }
 
@@ -841,29 +611,13 @@ impl SimplePackedBuilder {
         T: crate::types::Tree<Label = defaults::LabelIdentifier> + crate::types::WithStats,
         <T::TreeId as NodeId>::IdN: Copy + Into<NodeIdentifier>,
     {
-        // use crate::types::Lang;
-        // let kind = type_store.resolve_type(&node);
         let TypeIndex {
             lang: lang_name,
             ty: type_id,
         } = type_store.marshal_type(&node);
-        // let l_id = self
-        //     .langs
-        //     .iter()
-        //     .position(|x| x == &lang_name)
-        //     .unwrap_or_else(|| {
-        //         let l = self.langs.len();
-        //         assert!(l < 8); // NOTE: limit for now
-        //         self.langs.push(lang_name);
-        //         l
-        //     }) as u32;
-        // if true {
-        //     panic!("{}", lang_name);
-        // }
         if let Some(children) = node.children() {
             let children = children.iter_children().map(|x| (*x).into()).collect();
             if node.has_label() {
-                // let arch = l_id.rotate_right(3) | RawVariantDiscriminants::Both as u32;
                 match self
                     .stockages
                     .entry(Arch(lang_name, RawVariantDiscriminants::Both))
@@ -884,7 +638,6 @@ impl SimplePackedBuilder {
                     _ => unreachable!("SimplePackedBuilder::add variant Both"),
                 }
             } else {
-                // let arch = l_id.rotate_right(3) |  RawVariantDiscriminants::Children as u32;
                 match self
                     .stockages
                     .entry(Arch(lang_name, RawVariantDiscriminants::Children))
@@ -905,7 +658,6 @@ impl SimplePackedBuilder {
                 }
             }
         } else if node.has_label() {
-            // let arch = l_id.rotate_right(3) |  RawVariantDiscriminants::Labeled as u32;
             match self
                 .stockages
                 .entry(Arch(lang_name, RawVariantDiscriminants::Labeled))
@@ -925,7 +677,6 @@ impl SimplePackedBuilder {
                 _ => unreachable!("SimplePackedBuilder::add variant Labeled"),
             }
         } else {
-            // let arch = l_id.rotate_right(3) |  RawVariantDiscriminants::Typed as u32;
             match self
                 .stockages
                 .entry(Arch(lang_name, RawVariantDiscriminants::Typed))
@@ -1029,15 +780,8 @@ impl SimplePackedBuilder {
         }
     }
 
-    pub fn build(self, // ls: &crate::store::labels::LabelStore
-    ) -> SimplePacked<&'static str> {
+    pub fn build(self) -> SimplePacked<&'static str> {
         let mut res = SimplePacked::default();
-        // res.labels = self
-        //     .label_ids
-        //     .iter()
-        //     .map(|x| ls.resolve(&x.0).to_string())
-        //     .collect();
-        // res.label_ids = self.label_ids;
         res.storages_arch.reserve_exact(self.stockages.len());
         res.storages_variants.reserve_exact(self.stockages.len());
         for (arch, variant) in self.stockages {
@@ -1060,38 +804,12 @@ pub struct SimplePacked<S> {
 impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
     type R<'a> = HashedNodeRef<'a, AnyType>;
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
-        todo!()
-    }
-}
-impl<TIdN: TypedNodeId> crate::types::TypedNodeStore<TIdN> for NodeStore
-where
-    TIdN::Ty: TypeTrait,
-{
-    type R<'a> = HashedNodeRef<'a, TIdN>;
-    fn resolve(&self, id: &TIdN) -> Self::R<'_> {
-        todo!()
-    }
-
-    fn try_typed(&self, id: &<TIdN as NodeId>::IdN) -> Option<TIdN> {
-        todo!()
+        self.try_resolve(*id).unwrap()
     }
 }
 
 impl NodeStore {
-    pub fn resolve(&self, id: NodeIdentifier) -> HashedNodeRef<'_, AnyType> {
-        todo!()
-    }
     pub fn try_resolve<T>(&self, id: NodeIdentifier) -> Option<HashedNodeRef<'_, T>> {
-        // // let loc: Location = id.into();
-        // // self.stockages
-        // //     .get(&loc.arch)
-        // //     .and_then(|s| s.try_resolve(loc.offset))
-        // for v in self.stockages.values() {
-        //     let r = v.try_resolve(id);
-        //     if r.is_some() {
-        //         return r;
-        //     }
-        // }
         let (variant, offset) = self.index.get(&id)?;
         Some(self.variants[*variant as usize].get(*offset))
     }
@@ -1113,14 +831,6 @@ const UNAILABLE_NODE: &'static variants::Typed = &variants::Typed {
     size: vec![],
 };
 
-fn i64_to_i32x2(n: u64) -> [u32; 2] {
-    let n = n.to_le_bytes();
-    [
-        u32::from_le_bytes(n[..4].try_into().unwrap()),
-        u32::from_le_bytes(n[4..].try_into().unwrap()),
-    ]
-}
-
 impl NodeStore {
     pub fn len(&self) -> usize {
         let mut total = 0;
@@ -1134,44 +844,19 @@ impl NodeStore {
 impl NodeStore {
     pub fn new() -> Self {
         Self {
-            // stockages: Default::default(),
             index: Default::default(),
             vindex: Default::default(),
             variants: Default::default(),
         }
     }
 
-    pub fn extend(&mut self, raw: SimplePacked<String>) //-> (Vec<LabelIdentifier>, Vec<String>)
-    {
+    pub fn extend(&mut self, raw: SimplePacked<String>) {
         for (arch, entities) in raw.storages_arch.into_iter().zip(raw.storages_variants) {
             self._extend_from_raw(arch, entities)
         }
-        // (raw.label_ids, raw.labels)
     }
 
-    // fn _extend(&mut self, arch: u32, mut entities: Variant) {
-    //     match self.stockages.entry(arch) {
-    //         hashbrown::hash_map::Entry::Occupied(mut occ) => {
-    //             occ.get_mut().extend(entities);
-    //         }
-    //         hashbrown::hash_map::Entry::Vacant(vac) => {
-    //             let (index, rev) = entities.index_and_rev_mut();
-    //             if index.is_empty() {
-    //                 rev.iter().enumerate().for_each(|(i, x)| {
-    //                     index.insert(*x, i as u32);
-    //                 })
-    //             }
-    //             vac.insert(entities);
-    //         }
-    //     }
-    // }
-
     fn _extend_from_raw(&mut self, arch: Arch<String>, entities: RawVariant) {
-        // let var_index = self.variants.len() as u32;
-        // let new =  ();
-        // for ent in entities.rev() {
-
-        // }
         match self.vindex.entry(arch) {
             hashbrown::hash_map::Entry::Occupied(occ) => {
                 let var = &mut self.variants[*occ.get() as usize];
