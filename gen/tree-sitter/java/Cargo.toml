@@ -23,7 +23,6 @@ hashbrown = { version = "0.13.2", default-features = false, optional = true }
 # fasthash = "0.4.0"
 log = { version = "0.4.6" } #, features = ["max_level_debug", "release_max_level_warn"] }
 
-# tree-sitter_types = { path = "../../../tree-sitter_types" }
 hyper_ast = { path = "../../../hyper_ast", default-features = false }
 
 libc = "0.2"

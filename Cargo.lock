@@ -5775,18 +5775,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tree-sitter_types"
-version = "0.1.0"
-dependencies = [
- "cc",
- "heck 0.3.3",
- "pretty_assertions",
- "quote",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
