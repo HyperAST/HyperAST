@@ -602,6 +602,8 @@ where
         },
     }
 }
+
+#[allow(unused)] // TODO action_generator2 need a rework anyway
 pub(crate) fn make_move_update<T: Stored + Labeled + WithChildren, P>(
     from: (&[T::ChildIdx], &[T::ChildIdx]),
     new: T::Label,

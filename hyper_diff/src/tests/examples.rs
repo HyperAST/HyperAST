@@ -2,12 +2,14 @@ use crate::tree::simple_tree::{tree, SimpleTree};
 
 type ST<K> = SimpleTree<K>;
 
+#[allow(unused)] // TODO make a test with this example
 pub(crate) fn example_single() -> (ST<u8>, ST<u8>) {
     let src = tree!(0, "f");
     let dst = tree!(0, "f");
     (src, dst)
 }
 
+#[allow(unused)] // TODO make a test with this example
 pub(crate) fn example_simple() -> (ST<u8>, ST<u8>) {
     let src = tree!(
         0, "f"; [
@@ -22,6 +24,7 @@ pub(crate) fn example_simple() -> (ST<u8>, ST<u8>) {
     (src, dst)
 }
 
+#[allow(unused)] // TODO make a test with this example
 pub(crate) fn example_simple1() -> (ST<u8>, ST<u8>) {
     let src = tree!(
         0, "f"; [
@@ -40,6 +43,7 @@ pub(crate) fn example_simple1() -> (ST<u8>, ST<u8>) {
     (src, dst)
 }
 
+#[allow(unused)] // TODO make a test with this example
 pub(crate) fn example_move() -> (ST<u8>, ST<u8>) {
     let src = tree!(
         0, "f"; [
@@ -60,6 +64,7 @@ pub(crate) fn example_move() -> (ST<u8>, ST<u8>) {
     (src, dst)
 }
 
+#[allow(unused)] // TODO make a test with this example
 pub(crate) fn example_move1() -> (ST<u8>, ST<u8>) {
     let src = tree!(
         0, "f"; [
@@ -84,6 +89,7 @@ pub(crate) fn example_move1() -> (ST<u8>, ST<u8>) {
     (src, dst)
 }
 
+#[allow(unused)] // TODO make a test with this example
 pub(crate) fn example_move2() -> (ST<u8>, ST<u8>) {
     let src = tree!(
         0, "f"; [
@@ -107,6 +113,7 @@ pub(crate) fn example_move2() -> (ST<u8>, ST<u8>) {
     (src, dst)
 }
 
+#[allow(unused)] // TODO make a test with this example
 pub(crate) fn example_move3() -> (ST<u8>, ST<u8>) {
     let src = tree!(
         0, "f"; [
