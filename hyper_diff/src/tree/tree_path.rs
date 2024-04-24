@@ -69,6 +69,7 @@ pub mod slicing;
 pub mod indexed;
 
 #[cfg(test)]
+#[allow(unused)]
 mod small_vec_stuff_for_compressed_path {
     use std::mem::size_of;
 

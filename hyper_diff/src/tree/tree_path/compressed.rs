@@ -44,6 +44,7 @@ fn shared_ancestors<Idx: PartialEq>(
 }
 
 impl<Idx: PrimInt> CompressedTreePath<Idx> {
+    #[allow(unused)] // will be needed for applying actions
     pub(crate) fn shared_ancestors(&self, other: &Self) -> SharedPath<Vec<Idx>> {
         shared_ancestors(self.iter(), other.iter())
     }
