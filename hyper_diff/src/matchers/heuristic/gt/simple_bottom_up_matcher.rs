@@ -87,7 +87,7 @@ where
     T: hyper_ast::types::Typed,
     T::Type: Hash + Copy + Eq + Send + Sync,
 {
-    fn execute(&mut self) {
+    pub fn execute(&mut self) {
         for i in (0..self.internal.src_arena.len()).rev() {
             let a: IdD = num_traits::cast(i).unwrap();
             if !(self.internal.mappings.is_src(&a) || !self.internal.src_arena.has_children(&a)) {

@@ -78,7 +78,7 @@ where
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
-    pub(super) fn last_chance_match_histogram(&mut self, src: &M::Src, dst: &M::Dst) {
+    pub fn last_chance_match_histogram(&mut self, src: &M::Src, dst: &M::Dst) {
         self.lcs_equal_matching(src, dst);
         self.lcs_structure_matching(src, dst);
         if !src.is_zero() && !dst.is_zero() {
@@ -232,7 +232,7 @@ where
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
-    pub(super) fn get_dst_candidates(&self, src: &M::Src) -> Vec<M::Dst> {
+    pub fn get_dst_candidates(&self, src: &M::Src) -> Vec<M::Dst> {
         let node_store = self.hyperast.node_store();
         let src_arena = &self.mapping.src_arena;
         let dst_arena = &self.mapping.dst_arena;
@@ -285,7 +285,7 @@ where
     M::Src: Shallow<M::Src>,
     M::Dst: Shallow<M::Dst>,
 {
-    pub(super) fn last_chance_match_histogram(&mut self, src: &M::Src, dst: &M::Dst) {
+    pub fn last_chance_match_histogram(&mut self, src: &M::Src, dst: &M::Dst) {
         self.lcs_equal_matching(src, dst);
         self.lcs_structure_matching(src, dst);
         if !src.is_zero() && !dst.is_zero() {
