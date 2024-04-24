@@ -1,3 +1,6 @@
+//! This decompressed tree store is I thnk a pretty good utils to improve perfs of the bottom-up matcher.
+//! But it will require some more love, as I initially did not finish to implement everithing.
+
 use std::{
     borrow::{Borrow, BorrowMut},
     collections::BTreeMap,
@@ -322,45 +325,6 @@ where
         },
     )
 }
-
-// impl<'a, T: 'a + WithChildren, IdD: PrimInt, DTS: PostOrder<'a, T, IdD>, D: BorrowMut<DTS>>
-//     SimpleHiddingMapper<'a, T, IdD, DTS, D>
-// {
-
-//     pub fn from_subtree_mapping<S, M: Index<usize>>(store: &'a S, back: D, side: &M) -> Self
-//     where
-//         S: NodeStore<T::TreeId, R<'a> = T>,
-//         M::Output: PrimInt
-//     {
-//         let x: &DTS = back.borrow();
-//         let mut map = Vec::with_capacity(x.len());
-//         let mut i = x.root();
-
-//         while num_traits::zero() < i {
-//             map.push(cs);
-//             i += 1;
-//         }
-
-//         map.shrink_to_fit();
-//         Self {
-//             map,
-//             // fc,
-//             back,
-//             phantom: PhantomData,
-//         }
-//     }
-// }
-
-// impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: BorrowMut<DTS>>
-//     Initializable<'a, T> for SimpleHiddingMapper<'a, T, IdD, DTS, D>
-// {
-//     fn make<S>(_store: &'a S, _root: &T::TreeId) -> Self
-//     where
-//         S: NodeStore<T::TreeId, R<'a> = T>,
-//     {
-//         panic!()
-//     }
-// }
 
 impl<
         'a,
@@ -903,25 +867,7 @@ where
         S: NodeStore<<T>::TreeId, R<'b> = T>,
     {
         self.decompress_visible_descendants(store, x);
-        // let aaa = &self.map.borrow()[self.map.borrow().len() - 1 - x.to_usize().unwrap()];
-        // dbg!(&aaa);
-        // let mut aaa = *aaa; //self.back.borrow_mut().lld(aaa);
-        // dbg!(&aaa);
-        // loop {
-        //     dbg!(&aaa);
-        //     let cs = self.back.borrow_mut().decompress_children(store, &aaa);
-        //     let c = *cs.get(0).unwrap();
-        //     // assert_ne!(c, aaa);
-        //     if !self.rev.borrow().contains_key(&c) {
-        //         dbg!(c);
-        //         break;
-        //     }
-        //     aaa = c;
-        // }
-        // let map_lld = self.rev.borrow().get(&aaa).unwrap();
         let map_lld = self.first_descendant(x);
-        // dbg!(x, map_lld, &self.map.borrow(), self.rev.borrow());
-        // TODO extract actual values
         let len = x.to_usize().unwrap() - map_lld.to_usize().unwrap() + 1;
         // - id_compressed ez
         let mut id_compressed: Vec<T::TreeId> = Vec::with_capacity(len);
@@ -959,12 +905,6 @@ where
                 visited.set(llds[i].to_usize().unwrap(), true);
             }
         }
-        // dbg!(
-        //     id_compressed.len(),
-        //     id_parent.len(),
-        //     llds.len(),
-        //     self.map.borrow().len()
-        // );
         CompleteWHPO {
             map: self.map.borrow(),
             id_compressed,
@@ -976,9 +916,12 @@ where
 }
 
 pub struct CompleteWHPO<'a, T: Stored, IdD, Kr: Borrow<BitSlice>> {
+
+    #[allow(unused)] // TODO continue implementing traits, but after so long I would need test to avoid writting garbage.
     pub(crate) map: &'a [IdD],
     pub(crate) id_compressed: Vec<T::TreeId>,
     pub(crate) llds: Vec<IdD>,
+    #[allow(unused)] // TODO continue implementing traits, but after so long I would need test to avoid writting garbage.
     pub(crate) id_parent: Vec<IdD>,
     pub(super) kr: Kr,
 }
@@ -1068,12 +1011,10 @@ where
 {
     fn lld(&self, i: &IdD) -> IdD {
         self.llds[i.to_usize().unwrap()]
-        // self.simple.lld(i)
     }
 
     fn tree(&self, id: &IdD) -> T::TreeId {
         self.id_compressed[id.to_usize().unwrap()].clone()
-        // self.simple.tree(id)
     }
 }
 
@@ -1082,9 +1023,6 @@ impl<'a, T: WithChildren + 'a, IdD: PrimInt, Kr: Borrow<BitSlice>> PostOrderKeyR
 where
     T::TreeId: Clone + Eq + Debug,
 {
-    // fn kr(&self, x: IdD) -> IdD {
-    //     self.kr[x.to_usize().unwrap()]
-    // }
     type Iter<'b> = IterKr<'b,IdD>
     where
         Self: 'b;

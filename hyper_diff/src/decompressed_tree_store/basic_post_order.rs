@@ -163,7 +163,7 @@ where
     <T as WithChildren>::ChildIdx: PrimInt,
 {
     /// WARN oposite order than id_compressed
-    pub(crate) fn compute_kr(&self) -> Box<[IdD]> {
+    pub fn compute_kr(&self) -> Box<[IdD]> {
         self.as_slice().compute_kr()
     }
 

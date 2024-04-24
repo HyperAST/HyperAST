@@ -66,6 +66,7 @@ impl<T: Stored, IdD> SimplePostOrder<T, IdD> {
 /// WIP WithParent (need some additional offset computations)
 pub struct SimplePOSlice<'a, T: Stored, IdD> {
     pub(super) basic: BasicPOSlice<'a, T, IdD>,
+    #[allow(unused)] // WIP
     pub(super) id_parent: &'a [IdD],
 }
 
