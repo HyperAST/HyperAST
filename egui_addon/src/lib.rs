@@ -18,17 +18,6 @@ impl std::hash::Hash for Lang {
     }
 }
 
-#[derive(Clone, Default)]
-pub struct Languages();
-
-impl Languages {
-    pub fn get(&self, name: &str) -> Option<Lang> {
-        match name {
-            "JavaScript" => Some(Lang {
-                name: name.into(),
-                lang: tree_sitter_javascript::language().into(),
-            }),
-            _ => None
-        }
-    }
+pub trait Languages {
+    fn get(&self, lang: &str) -> Option<Lang>;
 }

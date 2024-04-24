@@ -139,7 +139,7 @@ impl InteractiveSplitter {
         //         rect
         //     }
         // };
-        let mut second_rect = {
+        let second_rect = {
             let mut rect = rect;
             *orientation.m(&mut rect.min) = orientation.p(line_pos_1) + orientation.v(i_spacing);
             rect

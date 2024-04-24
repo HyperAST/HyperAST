@@ -1,3 +1,4 @@
+
 use crate::Languages;
 
 use self::{editor_content::EditAwareString, generic_text_buffer::TextBuffer};
@@ -20,7 +21,7 @@ pub trait CodeHolder {
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
-pub struct CodeEditor<C = EditAwareString> {
+pub struct CodeEditor<L, C = EditAwareString> {
     #[serde(default = "default_info")]
     pub info: EditorInfo<String>,
     pub lang_name: String,
@@ -30,19 +31,19 @@ pub struct CodeEditor<C = EditAwareString> {
     #[serde(default = "default_parser")]
     pub parser: tree_sitter::Parser,
     #[serde(skip)]
-    pub languages: Languages,
+    pub languages: L,
     #[serde(skip)]
     pub lang: Option<Lang>,
 }
 
-impl<C> CodeHolder for CodeEditor<C> {
+impl<L: Languages, C> CodeHolder for CodeEditor<L, C> {
     fn set_lang(&mut self, lang: &str) {
         self.lang = self.languages.get(lang);
         self.lang_name = lang.into();
     }
 }
 
-impl<C: Debug> Debug for CodeEditor<C> {
+impl<L, C: Debug> Debug for CodeEditor<L, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CodeEditor")
             .field("code", &self.code)
@@ -63,7 +64,7 @@ impl<C: Clone> Clone for CodeEditor<C> {
     }
 }
 
-impl<C: From<String>> From<(EditorInfo<String>, String)> for CodeEditor<C> {
+impl<L: Default + Languages, C: From<String>> From<(EditorInfo<String>, String)> for CodeEditor<L, C> {
     fn from((info, code): (EditorInfo<String>, String)) -> Self {
         let code = code.into();
         Self {
@@ -107,9 +108,9 @@ pub(crate) fn default_parser() -> tree_sitter::Parser {
     tree_sitter::Parser::new().unwrap()
 }
 
-impl<C: From<String>> Default for CodeEditor<C> {
+impl<L:Default + Languages, C: From<String>> Default for CodeEditor<L, C> {
     fn default() -> Self {
-        let languages = Languages::default();
+        let languages = L::default();
         let lang = languages.get("JavaScript");
         Self {
             lang_name: "JavaScript".into(),
@@ -133,7 +134,7 @@ function f() { return 2; }
     }
 }
 
-impl From<&str> for CodeEditor {
+impl<L:Default + Languages> From<&str> for CodeEditor<L> {
     fn from(value: &str) -> Self {
         Self {
             code: value.to_string().into(),
@@ -142,7 +143,7 @@ impl From<&str> for CodeEditor {
     }
 }
 
-impl CodeEditor {
+impl<L:Default> CodeEditor<L> {
     pub fn code(&self) -> &str {
         self.code.as_str()
     }

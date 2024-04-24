@@ -1,7 +1,7 @@
 use egui::NumExt;
 
 pub(crate) fn paint_cursor_selection(
-    ui: &mut egui::Ui,
+    _ui: &mut egui::Ui,
     painter: &egui::Painter,
     pos: egui::Pos2,
     galley: &egui::Galley,
@@ -42,7 +42,7 @@ pub(crate) fn paint_cursor_selection(
     }
 }
 
-pub(crate) fn paint_cursor_end(
+pub fn paint_cursor_end(
     ui: &mut egui::Ui,
     row_height: f32,
     painter: &egui::Painter,

@@ -81,7 +81,7 @@ impl MultiSplitter {
             ));
         }
 
-        let (rect, splitter_response) =
+        let (rect, _splitter_response) =
             ui.allocate_exact_size(ui.available_size_before_wrap(), Sense::hover());
 
         // let ratio = ratios[0];
@@ -114,7 +114,7 @@ impl MultiSplitter {
         let (mut uis, lines): (Vec<_>, Vec<_>) = ratios
             .iter()
             .map(|ratio| {
-                let i_spacing = &ui.style().spacing.item_spacing;
+                let _i_spacing = &ui.style().spacing.item_spacing;
                 let line_pos_1 = orientation
                     .t((
                         orientation.p(remaining_rect.min) + orientation.rev().r(&rect) * ratio, //lerp(orientation.p(rect.min)..=orientation.p(rect.max), *ratio),

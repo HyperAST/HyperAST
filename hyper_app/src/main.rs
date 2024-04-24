@@ -15,7 +15,7 @@ fn main() -> eframe::Result<()> {
         .to_string();
     tracing_subscriber::fmt::init();
 
-    let languages: egui_addon::Languages = Default::default();
+    let languages = hyper_app::Languages::default();
     // let mut parser = tree_sitter::Parser::new().unwrap();
     // parser.set_language(&lang.into()).expect("Error loading Java grammar");
     // let parsed = parser.parse("function f() {}", None).unwrap().unwrap();

@@ -963,7 +963,7 @@ fn events<TB: TextBuffer>(
                 if !text_to_insert.is_empty() {
                     // let mut ccursor = delete_selected(text, &cursor_range);
                     // insert_text(&mut ccursor, text, text_to_insert);
-                    let mut ccursor = replace_selected(text, &cursor_range, text_to_insert);
+                    let ccursor = replace_selected(text, &cursor_range, text_to_insert);
                     Some(CCursorRange::one(ccursor))
                 } else {
                     None

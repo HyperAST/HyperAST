@@ -4,7 +4,9 @@ use std::{
     marker::PhantomData,
 };
 
-use string_interner::{DefaultHashBuilder, Symbol};
+use string_interner::{Symbol};
+#[cfg(feature = "native")]
+use string_interner::DefaultHashBuilder;
 
 use crate::{
     store::defaults,

@@ -6,3 +6,4 @@
 
 mod app;
 pub use app::HyperApp;
+pub use app::Languages;

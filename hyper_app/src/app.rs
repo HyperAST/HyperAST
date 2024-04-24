@@ -6,8 +6,7 @@ use self::{
 use egui_addon::{
     code_editor::{self, generic_text_buffer::byte_index_from_char_index},
     egui_utils::{radio_collapsing, show_wip},
-    syntax_highlighting,
-    Lang,
+    syntax_highlighting, Lang,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -16,8 +15,6 @@ use std::{
     ops::Range,
     sync::Arc,
 };
-use egui_addon::Languages;
-
 
 mod code_editor_automerge;
 mod code_tracking;
@@ -30,6 +27,8 @@ mod tree_view;
 mod ts_highlight;
 pub(crate) mod types;
 mod utils;
+
+pub use self::types::Languages;
 
 // const API_URL: &str = "http://131.254.13.72:8080";
 // const API_URL: &str = "http://127.0.0.1:8080";
@@ -375,7 +374,7 @@ impl eframe::App for HyperApp {
         //     .on_new_frame(ctx.input(|i| i.time), frame.info().cpu_usage);
         ctx.request_repaint_after(std::time::Duration::from_secs_f32(5.0));
         let Self {
-            project_name:_,
+            project_name: _,
             api_addr,
             // code_editors,
             scripting_context,

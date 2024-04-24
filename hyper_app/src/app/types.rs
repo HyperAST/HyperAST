@@ -1,11 +1,7 @@
 use egui_addon::code_editor;
 use hyper_ast::store::nodes::fetched::NodeIdentifier;
 
-use std::{
-    collections::HashSet,
-    hash::Hash,
-    ops::Range,
-};
+use std::{collections::HashSet, hash::Hash, ops::Range};
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub(crate) struct Repo {
@@ -189,11 +185,27 @@ impl From<&ComputeConfigAspectViews> for SelectedConfig {
     }
 }
 
+#[derive(Default, Clone)]
+pub struct Languages;
+
+impl egui_addon::Languages for Languages {
+    fn get(&self, lang: &str) -> Option<egui_addon::Lang> {
+        match lang {
+            #[cfg(not(target_arch = "wasm32"))]
+            "JavaScript" => Some(egui_addon::Lang {
+                name: "JavaScript".into(),
+                lang: tree_sitter_javascript::language().into(),
+            }),
+            _ => None,
+        }
+    }
+}
+
 #[derive(
     serde::Deserialize, serde::Serialize, autosurgeon::Hydrate, autosurgeon::Reconcile, Clone, Debug,
 )]
 #[serde(default)]
-pub(crate) struct CodeEditors<T = code_editor::CodeEditor> {
+pub(crate) struct CodeEditors<T = code_editor::CodeEditor<Languages>> {
     pub(crate) description: T,
     pub(crate) init: T,
     pub(crate) filter: T,

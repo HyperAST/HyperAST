@@ -1,8 +1,8 @@
 //! NOTE Pretty adoc impl, would benefit from being merged with impl in egui_addon
 
-use super::Lang;
+use super::{types::Languages, Lang};
 use egui::{Response, WidgetText};
-use egui_addon::{code_editor::EditorInfo, Languages};
+use egui_addon::{code_editor::EditorInfo, Languages as _};
 use egui_demo_lib::easy_mark::easy_mark;
 
 const TREE_SITTER: bool = false;
@@ -21,7 +21,6 @@ pub(crate) struct CodeEditor<C = Quote> {
     #[allow(unused)] // TODO need highlighting in web for tree-sitter
     pub parser: tree_sitter::Parser,
     #[serde(skip)]
-    #[allow(unused)] // will be used soon
     pub languages: Languages,
     #[serde(skip)]
     pub lang: Option<Lang>,
@@ -32,8 +31,8 @@ impl<C> egui_addon::code_editor::CodeHolder for CodeEditor<C> {
         self.lang = self.languages.get(lang);
     }
 }
-impl From<egui_addon::code_editor::CodeEditor> for CodeEditor {
-    fn from(value: egui_addon::code_editor::CodeEditor) -> Self {
+impl From<egui_addon::code_editor::CodeEditor<Languages>> for CodeEditor {
+    fn from(value: egui_addon::code_editor::CodeEditor<Languages>) -> Self {
         let code = value.code;
         let code = code.into();
         Self {

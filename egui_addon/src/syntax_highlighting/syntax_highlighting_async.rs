@@ -1,5 +1,4 @@
 use std::{
-    future::IntoFuture,
     ops::Range,
     sync::{Arc, Mutex, RwLock},
 };
