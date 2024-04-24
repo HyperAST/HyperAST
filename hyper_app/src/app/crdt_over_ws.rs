@@ -275,7 +275,7 @@ impl WsDocsDb {
         channel
     }
 
-    pub(crate) fn create_doc_atempt(&mut self, rt: &Rt, name: String, quote: &mut impl Reconcile) {
+    pub(crate) fn create_doc_atempt(&mut self, rt: &Rt, name: String, _quote: &mut impl Reconcile) {
         wasm_rs_dbg::dbg!();
         // let docs: &mut Vec<_> = &mut self.data.write().unwrap();
         // if let Err(e) = reconcile(doc, &*quote) {

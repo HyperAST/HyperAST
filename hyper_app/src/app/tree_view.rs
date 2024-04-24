@@ -95,14 +95,14 @@ impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
 
     type Marshaled = TypeIndex;
 
-    fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
+    fn marshal_type(&self, _n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
         todo!()
     }
 
     fn type_eq(
         &self,
-        n: &HashedNodeRef<'a, NodeIdentifier>,
-        m: &HashedNodeRef<'a, NodeIdentifier>,
+        _n: &HashedNodeRef<'a, NodeIdentifier>,
+        _m: &HashedNodeRef<'a, NodeIdentifier>,
     ) -> bool {
         todo!()
     }
@@ -130,12 +130,6 @@ pub struct FetchedHyperAST {
     pub(crate) labels_waiting: std::sync::Mutex<Option<HashSet<LabelIdentifier>>>,
     /// timer to avoid flooding
     pub(crate) timer: std::sync::Mutex<Option<f32>>,
-}
-
-struct Fetchable<'a, I, S> {
-    pub(crate) store: &'a std::sync::RwLock<S>,
-    pub(crate) pending: &'a std::sync::Mutex<VecDeque<HashSet<I>>>,
-    pub(crate) waiting: &'a std::sync::Mutex<Option<HashSet<I>>>,
 }
 
 impl FetchedHyperAST {
@@ -191,12 +185,12 @@ impl<'b> hyper_ast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAS
 impl<'b> hyper_ast::types::LabelStore<str> for AcessibleFetchedHyperAST<'b> {
     type I = LabelIdentifier;
 
-    fn get_or_insert<U: Borrow<str>>(&mut self, node: U) -> Self::I {
-        todo!()
+    fn get_or_insert<U: Borrow<str>>(&mut self, _node: U) -> Self::I {
+        todo!("TODO remove this method from trait as it cannot be implemented on immutable/append_only label stores")
     }
 
-    fn get<U: Borrow<str>>(&self, node: U) -> Option<Self::I> {
-        todo!()
+    fn get<U: Borrow<str>>(&self, _node: U) -> Option<Self::I> {
+        todo!("TODO remove this method from trait as it cannot be implemented efficiently for all stores")
     }
 
     fn resolve(&self, id: &Self::I) -> &str {
@@ -282,7 +276,6 @@ pub(crate) enum Action {
     PartialFocused(f32),
     Focused(f32),
     Clicked(Vec<usize>),
-    Delete,
 }
 pub(crate) struct FetchedViewImpl<'a> {
     store: Arc<FetchedHyperAST>,
@@ -308,7 +301,9 @@ impl<'a> Debug for FetchedViewImpl<'a> {
             .finish()
     }
 }
+
 struct FoldRet<U, V> {
+    #[allow(unused)]
     toggle_response: egui::Response,
     header_response: egui::Response,
     header_returned: U,
@@ -348,7 +343,7 @@ impl<'a> FetchedViewImpl<'a> {
         store: Arc<FetchedHyperAST>,
         aspects: &'a super::types::ComputeConfigAspectViews,
         take: Option<PrefillCache>,
-        hightlights: Vec<(HightLightHandle<'a>)>,
+        hightlights: Vec<HightLightHandle<'a>>,
         focus: Option<(&'a [usize], &'a [NodeIdentifier])>,
         path: Vec<usize>,
         root_ui_id: egui::Id,
@@ -529,7 +524,7 @@ impl<'a> FetchedViewImpl<'a> {
         cs: &[NodeIdentifier],
     ) -> Action {
         if self.is_hidden(kind) {
-            let mut prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
+            let prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
                 prefill_cache
             } else {
                 PrefillCache {
@@ -716,7 +711,7 @@ impl<'a> FetchedViewImpl<'a> {
         cs: &[NodeIdentifier],
     ) -> Action {
         if self.is_hidden(kind) {
-            let mut prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
+            let prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
                 prefill_cache
             } else {
                 PrefillCache {
@@ -1084,12 +1079,12 @@ impl<'a> FetchedViewImpl<'a> {
         &mut self,
         ui: &mut egui::Ui,
         kind: AnyType,
-        size: u32,
+        _size: u32,
         nid: NodeIdentifier,
         label: LabelIdentifier,
     ) -> Action {
         if self.is_hidden(kind) {
-            let mut prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
+            let prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
                 prefill_cache
             } else {
                 PrefillCache {
@@ -1369,9 +1364,9 @@ impl<'a> FetchedViewImpl<'a> {
         action
     }
 
-    fn ui_typed_impl2(&mut self, ui: &mut egui::Ui, kind: AnyType, size: u32) -> Action {
+    fn ui_typed_impl2(&mut self, ui: &mut egui::Ui, kind: AnyType, _size: u32) -> Action {
         if self.is_hidden(kind) {
-            let mut prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
+            let prefill = if let Some(prefill_cache) = self.prefill_cache.take() {
                 prefill_cache
             } else {
                 PrefillCache {
@@ -1535,12 +1530,12 @@ impl<'a> FetchedViewImpl<'a> {
                 id: handle.id,
             })
             .collect();
-        let mut ignore = None;
+        // let mut ignore = None;
         let mut imp = if let Some(child) = prefill_old.children.get(i) {
             let child_size = prefill_old.children_sizes.get(i).unwrap(); // children and children_sizes should be the same sizes
             let exact_max_y = rect.min.y + *child;
             if focus.is_none() && exact_max_y < CLIP_LEN {
-                ignore = Some(exact_max_y);
+                // ignore = Some(exact_max_y);
                 // FetchedViewImpl {
                 //     store: self.store,
                 //     prefill_cache: None,
@@ -1753,26 +1748,26 @@ impl<'a> FetchedViewImpl<'a> {
         };
         let c_cache = imp.prefill_cache.unwrap();
         let h = c_cache.height();
-        if let Some(e_m_y) = ignore {
-            prefill.children.push(h);
-            prefill
-                .children_sizes
-                .push(_size.map(|x| x.try_into().unwrap()));
-            if prefill_old.children.len() == i {
-                prefill.next = Some(Box::new(c_cache));
-            }
-            if DEBUG_LAYOUT {
-                ui.painter().debug_rect(
-                egui::Rect::from_min_size(rect.min, (500.0-i as f32 * 3.0, e_m_y-rect.min.y).into()),
-                egui::Color32::RED,
-                format!(
-                    "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t{}\t{}\t{}\t{}",
-                    h,rect.min.y, rect.min.y + h, e_m_y
-                ),
-            );
-            }
-            return ControlFlow::Continue(());
-        }
+        // if let Some(e_m_y) = ignore {
+        //     prefill.children.push(h);
+        //     prefill
+        //         .children_sizes
+        //         .push(_size.map(|x| x.try_into().unwrap()));
+        //     if prefill_old.children.len() == i {
+        //         prefill.next = Some(Box::new(c_cache));
+        //     }
+        //     if DEBUG_LAYOUT {
+        //         ui.painter().debug_rect(
+        //         egui::Rect::from_min_size(rect.min, (500.0-i as f32 * 3.0, e_m_y-rect.min.y).into()),
+        //         egui::Color32::RED,
+        //         format!(
+        //             "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t{}\t{}\t{}\t{}",
+        //             h,rect.min.y, rect.min.y + h, e_m_y
+        //         ),
+        //     );
+        //     }
+        //     return ControlFlow::Continue(());
+        // }
 
         self.min_before_count += imp.min_before_count;
         self.draw_count += imp.draw_count;
@@ -1847,6 +1842,7 @@ fn node_menu(ui: &mut egui::Ui, interact: egui::Response, kind: AnyType) -> Opti
     act
 }
 
+#[allow(unused)] // TODO reenable ports after fixing the dependency (I believe it was not maintained anymore, and very convoluted structure btw)
 fn show_port(ui: &mut egui::Ui, id: egui::Id, pos: epaint::Pos2) {
     let area = egui::Area::new(id)
         .order(egui::Order::Middle)
@@ -2206,7 +2202,7 @@ fn selection_highlight(
 
         if clip.intersects(rect) {
             if *color == &egui::Color32::BLUE {
-                let id = root_ui_id.with("blue_highlight").with(id);
+                let _id = root_ui_id.with("blue_highlight").with(id);
                 // wasm_rs_dbg::dbg!("green", id);
                 let pos = egui::pos2(min.x - 15.0, min.y - 10.0);
                 let pos = clip.clamp(pos);
@@ -2215,7 +2211,7 @@ fn selection_highlight(
                     **ret_pos = Some(rect);
                 }
             } else if *color == &TARGET_COLOR {
-                let id = root_ui_id.with("green_highlight").with(id);
+                let _id = root_ui_id.with("green_highlight").with(id);
                 let pos = egui::pos2(rect.max.x - 10.0, rect.min.y - 10.0);
                 let pos = clip.clamp(pos);
                 if ui.clip_rect().contains(pos) {

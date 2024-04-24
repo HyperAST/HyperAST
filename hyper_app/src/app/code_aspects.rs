@@ -75,34 +75,6 @@ pub(crate) fn show_aspects_views_menu(
             ui.checkbox(&mut aspects.doc, "Doc");
             show_wip(ui, Some(" soon available"));
         });
-        // ui.label("cpp types:");
-        // let ctr = egui::TextEdit::singleline(&mut aspects.ser_opt_cpp_text)
-        //     .clip_text(true)
-        //     .desired_width(150.0)
-        //     .desired_rows(1)
-        //     .hint_text("cpp types")
-        //     .interactive(true)
-        //     .show(ui)
-        //     .response;
-        // ui.label("java types:");
-        // let jtr = egui::TextEdit::singleline(&mut aspects.ser_opt_java_text)
-        //     .clip_text(true)
-        //     .desired_width(150.0)
-        //     .desired_rows(1)
-        //     .hint_text("java types")
-        //     .interactive(true)
-        //     .show(ui)
-        //     .response;
-        // let tr = jtr.union(ctr);
-        // if tr.changed() {
-        //     let mut ser_opt_cpp = Default::default();
-        //     let mut ser_opt_java = Default::default();
-        //     // TODO use regexes
-        //     types::parse_java_type_list(&aspects.ser_opt_java_text, &mut ser_opt_java);
-        //     types::parse_cpp_type_list(&aspects.ser_opt_cpp_text, &mut ser_opt_cpp);
-        //     aspects.ser_opt_cpp = ser_opt_cpp;
-        //     aspects.ser_opt_java = ser_opt_java;
-        // }
         ui.label("serialized Java:");
         let mut rm = None;
         for x in &aspects.ser_opt_java {
@@ -244,13 +216,13 @@ pub(crate) fn show(
                 );
                 // ui.painter()
                 //     .debug_rect(ui.available_rect_before_wrap(), egui::Color32::GREEN, "");
-                let scroll = egui::ScrollArea::both()
+                let _scroll = egui::ScrollArea::both()
                     .auto_shrink([false, false])
-                    .show_viewport(ui, |ui, viewport| {
+                    .show_viewport(ui, |ui, _viewport| {
                         ui.set_height(3_000.0);
                         // ui.set_clip_rect(ui.ctx().screen_rect());
                         if let Some(content) = &mut aspects_result.content {
-                            let hightlight: Vec<usize> = aspects
+                            let _hightlight: Vec<usize> = aspects
                                 .hightlight
                                 .split("/")
                                 .filter_map(|x| x.parse().ok())
@@ -360,6 +332,7 @@ impl FetchedView {
     }
 }
 
+#[allow(unused)]
 impl Resource<FetchedView> {
     fn from_response(ctx: &egui::Context, response: ehttp::Response) -> Self {
         wasm_rs_dbg::dbg!(&response);
@@ -374,6 +347,7 @@ impl Resource<FetchedView> {
         }
     }
 }
+#[allow(unused)]
 impl Resource<FetchedNodes> {
     fn from_response(ctx: &egui::Context, response: ehttp::Response) -> Self {
         wasm_rs_dbg::dbg!(&response);
@@ -387,6 +361,7 @@ impl Resource<FetchedNodes> {
         }
     }
 }
+#[allow(unused)]
 impl Resource<FetchedNode> {
     fn from_response(ctx: &egui::Context, response: ehttp::Response) -> Self {
         wasm_rs_dbg::dbg!(&response);
@@ -400,6 +375,7 @@ impl Resource<FetchedNode> {
         }
     }
 }
+#[allow(unused)]
 impl Resource<FetchedLabels> {
     fn from_response(ctx: &egui::Context, response: ehttp::Response) -> Self {
         wasm_rs_dbg::dbg!(&response);
@@ -416,6 +392,7 @@ impl Resource<FetchedLabels> {
 
 pub(super) type RemoteView = Promise<ehttp::Result<Resource<FetchedView>>>;
 
+#[allow(unused)]
 pub(super) fn remote_fetch_tree(
     ctx: &egui::Context,
     api_addr: &str,
@@ -484,6 +461,7 @@ pub(super) fn remote_fetch_node(
     promise
 }
 
+#[allow(unused)]
 pub(super) fn remote_fetch_nodes_by_ids(
     ctx: &egui::Context,
     api_addr: &str,
@@ -524,6 +502,7 @@ pub(super) fn remote_fetch_nodes_by_ids(
     promise
 }
 
+#[allow(unused)]
 pub(super) fn remote_fetch_labels(
     ctx: &egui::Context,
     api_addr: &str,

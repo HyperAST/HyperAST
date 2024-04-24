@@ -13,13 +13,9 @@ fn main() -> eframe::Result<()> {
         .and_then(|x| x.is_empty().then(|| x))
         .map_or(ADDR, |x| x)
         .to_string();
-    use egui_addon::Lang;
     tracing_subscriber::fmt::init();
 
-    let lang = tree_sitter_javascript::language().into();
-    let name = "JavaScript".to_string();
-    let mut languages: hyper_app::Languages = Default::default();
-    languages.insert(name.clone(), Lang { name, lang });
+    let languages: egui_addon::Languages = Default::default();
     // let mut parser = tree_sitter::Parser::new().unwrap();
     // parser.set_language(&lang.into()).expect("Error loading Java grammar");
     // let parsed = parser.parse("function f() {}", None).unwrap().unwrap();

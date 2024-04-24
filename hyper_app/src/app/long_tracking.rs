@@ -1970,6 +1970,7 @@ struct ColView<'a> {
     deletions: Option<&'a [u32]>,
 }
 
+#[allow(unused)]
 fn show_code_view(
     ui: &mut egui::Ui,
     api_addr: &str,

@@ -1,8 +1,8 @@
-use egui_addon::{code_editor, Lang};
+use egui_addon::code_editor;
 use hyper_ast::store::nodes::fetched::NodeIdentifier;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     hash::Hash,
     ops::Range,
 };
@@ -92,41 +92,14 @@ pub(crate) struct ComputeConfigAspectViews {
     pub(super) hide_opt_java: HashSet<hyper_ast_gen_ts_java::types::Type>,
 }
 
-pub(crate) fn parse_java_type_list(s: &str, out: &mut HashSet<hyper_ast_gen_ts_java::types::Type>) {
-    s.split(",").for_each(|x| {
-        if !x.is_empty() {
-            let t = hyper_ast_gen_ts_java::types::Type::from_str(x);
-            if let Some(t) = t {
-                out.insert(t);
-            }
-        }
-    });
-}
-
-pub(crate) fn parse_cpp_type_list(s: &str, out: &mut HashSet<hyper_ast_gen_ts_cpp::types::Type>) {
-    s.split(",").for_each(|x| {
-        if !x.is_empty() {
-            let t = hyper_ast_gen_ts_cpp::types::Type::from_str(x);
-            if let Some(t) = t {
-                out.insert(t);
-            }
-        }
-    });
-}
-
 impl Default for ComputeConfigAspectViews {
     fn default() -> Self {
-        // let ser_opt_cpp_text = "function_declarator".to_string();
-        // let ser_opt_java_text = String::default();
         let mut ser_opt_cpp: HashSet<hyper_ast_gen_ts_cpp::types::Type> = Default::default();
         ser_opt_cpp.insert(hyper_ast_gen_ts_cpp::types::Type::FunctionDeclarator);
         let mut ser_opt_java: HashSet<hyper_ast_gen_ts_java::types::Type> = Default::default();
         ser_opt_java.insert(hyper_ast_gen_ts_java::types::Type::MethodDeclaration);
         let hide_opt_cpp: HashSet<hyper_ast_gen_ts_cpp::types::Type> = Default::default();
         let hide_opt_java: HashSet<hyper_ast_gen_ts_java::types::Type> = Default::default();
-        // TODO use regexes
-        // parse_java_type_list(&ser_opt_java_text, &mut ser_opt_java);
-        // parse_cpp_type_list(&ser_opt_cpp_text, &mut ser_opt_cpp);
         Self {
             commit: Default::default(),
             path: "".into(),
@@ -138,8 +111,6 @@ impl Default for ComputeConfigAspectViews {
             type_decls: false,
             licence: false,
             doc: false,
-            // ser_opt_cpp_text,
-            // ser_opt_java_text,
             ser_opt_cpp,
             ser_opt_java,
             hide_opt_cpp,
@@ -261,5 +232,3 @@ impl<T> Resource<T> {
         }
     }
 }
-
-pub type Languages = HashMap<String, Lang>;

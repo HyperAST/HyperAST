@@ -1,10 +1,11 @@
+use crate::Languages;
+
 use self::{editor_content::EditAwareString, generic_text_buffer::TextBuffer};
 use super::Lang;
-use eframe::epaint::ahash::HashMap;
 use egui::{Response, WidgetText};
 use egui_demo_lib::easy_mark::easy_mark;
 use serde::Deserialize;
-use std::{fmt::Debug, sync::Arc};
+use std::fmt::Debug;
 
 const TREE_SITTER: bool = false;
 
@@ -15,28 +16,29 @@ pub mod generic_text_buffer;
 pub mod generic_text_edit;
 
 pub trait CodeHolder {
-    fn set_lang(&mut self, lang: String);
+    fn set_lang(&mut self, lang: &str);
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct CodeEditor<C = EditAwareString> {
     #[serde(default = "default_info")]
     pub info: EditorInfo<String>,
-    pub language: String,
+    pub lang_name: String,
     // code: String,
     pub code: C,
     #[serde(skip)]
     #[serde(default = "default_parser")]
     pub parser: tree_sitter::Parser,
     #[serde(skip)]
-    pub languages: Arc<HashMap<String, Lang>>,
+    pub languages: Languages,
     #[serde(skip)]
     pub lang: Option<Lang>,
 }
 
 impl<C> CodeHolder for CodeEditor<C> {
-    fn set_lang(&mut self, lang: String) {
-        self.language = lang;
+    fn set_lang(&mut self, lang: &str) {
+        self.lang = self.languages.get(lang);
+        self.lang_name = lang.into();
     }
 }
 
@@ -52,7 +54,7 @@ impl<C: Clone> Clone for CodeEditor<C> {
     fn clone(&self) -> Self {
         Self {
             info: self.info.clone(),
-            language: self.language.clone(),
+            lang_name: self.lang_name.clone(),
             code: self.code.clone(),
             lang: self.lang.clone(),
             parser: default_parser(),
@@ -107,8 +109,10 @@ pub(crate) fn default_parser() -> tree_sitter::Parser {
 
 impl<C: From<String>> Default for CodeEditor<C> {
     fn default() -> Self {
+        let languages = Languages::default();
+        let lang = languages.get("JavaScript");
         Self {
-            language: "JavaScript".into(),
+            lang_name: "JavaScript".into(),
             code: r#"function  f() { return 0; }
 function f() { return 1; }
 
@@ -123,7 +127,7 @@ function f() { return 2; }
             .into(),
             parser: default_parser(),
             languages: Default::default(),
-            lang: Default::default(),
+            lang,
             info: EditorInfo::default().copied(),
         }
     }
@@ -139,10 +143,6 @@ impl From<&str> for CodeEditor {
 }
 
 impl CodeEditor {
-    pub(crate) fn title(&mut self, _title: &str) -> &mut Self {
-        self
-    }
-
     pub fn code(&self) -> &str {
         self.code.as_str()
     }
@@ -169,7 +169,7 @@ impl CodeEditor {
         col.show_body_indented(&header_res.response, ui, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 if TREE_SITTER {
-                    let layouter = |ui: &egui::Ui, code: &EditAwareString, wrap_width: f32| {
+                    let _layouter = |ui: &egui::Ui, code: &EditAwareString, wrap_width: f32| {
                         dbg!(&lang);
                         let mut layout_job =
                             crate::syntax_highlighting::syntax_highlighting_ts::highlight(

@@ -25,9 +25,9 @@ pub struct FetchedFile {
 }
 
 impl Resource<FetchedFile> {
-    pub(super) fn from_response(ctx: &egui::Context, response: ehttp::Response) -> Self {
+    pub(super) fn from_response(_ctx: &egui::Context, response: ehttp::Response) -> Self {
         // wasm_rs_dbg::dbg!(&response);
-        let content_type = response.content_type().unwrap_or_default();
+        let _content_type = response.content_type().unwrap_or_default();
         // let image = if content_type.starts_with("image/") {
         //     RetainedImage::from_image_bytes(&response.url, &response.bytes).ok()
         // } else {
@@ -74,7 +74,7 @@ pub(super) fn remote_fetch_file(
     );
 
     wasm_rs_dbg::dbg!(&url);
-    let mut request = ehttp::Request::get(&url);
+    let request = ehttp::Request::get(&url);
     // request
     //     .headers
     //     .insert("Content-Type".to_string(), "text".to_string());
@@ -173,7 +173,7 @@ pub struct DstChanges {
 }
 
 pub(super) type ComputeResult = Resource<TrackingResult>;
-pub(super) type RemoteResult = ehttp::Result<Resource<TrackingResult>>;
+pub(super) type RemoteResult = ehttp::Result<ComputeResult>;
 
 pub(super) fn track(
     ctx: &egui::Context,
@@ -203,7 +203,7 @@ pub(super) fn track(
     };
 
     // wasm_rs_dbg::dbg!(&url);
-    let mut request = ehttp::Request::get(&url);
+    let request = ehttp::Request::get(&url);
     // request
     //     .headers
     //     .insert("Content-Type".to_string(), "text".to_string());
@@ -220,7 +220,7 @@ pub(super) fn track(
 
 impl Resource<TrackingResult> {
     pub(super) fn from_response(
-        ctx: &egui::Context,
+        _ctx: &egui::Context,
         response: ehttp::Response,
     ) -> Result<Self, String> {
         // wasm_rs_dbg::dbg!(&response);
@@ -245,7 +245,7 @@ impl Resource<TrackingResult> {
 
 impl Resource<TrackingResultWithChanges> {
     pub(super) fn from_response(
-        ctx: &egui::Context,
+        _ctx: &egui::Context,
         response: ehttp::Response,
     ) -> Result<Self, String> {
         // wasm_rs_dbg::dbg!(&response);
@@ -272,7 +272,7 @@ pub(super) fn show_code_tracking_menu(
     ui: &mut egui::Ui,
     selected: &mut types::SelectedConfig,
     tracking: &mut types::ComputeConfigTracking,
-    mut tracking_result: &mut Buffered<Result<Resource<TrackingResult>, String>>,
+    tracking_result: &mut Buffered<Result<Resource<TrackingResult>, String>>,
 ) {
     let title = "Code Tracking";
     let wanted = types::SelectedConfig::Tracking;
@@ -471,7 +471,7 @@ pub(super) fn show_code_tracking_results(
                         // wasm_rs_dbg::dbg!(&track_result);
                     }
                 }
-                Some(Err(err)) => {
+                Some(Err(_err)) => {
                     // wasm_rs_dbg::dbg!(err);
                 }
                 None => {

@@ -13,7 +13,7 @@ use self::example_scripts::EXAMPLES;
 
 use egui_addon::{
     code_editor::EditorInfo,
-    egui_utils::{radio_collapsing, show_wip},
+    egui_utils::radio_collapsing,
     interactive_split::interactive_splitter::InteractiveSplitter,
 };
 
@@ -66,7 +66,7 @@ where
 {
     fn from(value: &example_scripts::Scripts) -> Self {
         let mut description: C = (INFO_DESCRIPTION.copied(), value.description.into()).into();
-        description.set_lang("md".to_string());
+        description.set_lang("md");
         Self {
             description, // TODO config with markdown, not js
             init: (INFO_INIT.copied(), value.init.into()).into(),
@@ -168,7 +168,6 @@ pub(super) fn remote_compute_single(
             commits: single.len,
         },
     };
-    drop(code_editors);
 
     let mut request = ehttp::Request::post(&url, serde_json::to_vec(&script).unwrap());
     request.headers.insert(
@@ -770,7 +769,6 @@ async fn update_handler(
                 let mut sender = sender.clone();
                 if let Some(message) = doc.sync().generate_sync_message(sync_state) {
                     wasm_rs_dbg::dbg!();
-                    use futures_util::SinkExt;
                     let message =
                         tokio_tungstenite_wasm::Message::Binary(message.encode().to_vec());
                     rt.spawn(async move {
@@ -778,7 +776,6 @@ async fn update_handler(
                     });
                 } else {
                     wasm_rs_dbg::dbg!();
-                    use futures_util::SinkExt;
                     let message = tokio_tungstenite_wasm::Message::Binary(vec![]);
                     rt.spawn(async move {
                         sender.send(message).await.unwrap();
@@ -800,7 +797,7 @@ async fn db_update_handler(
     ctx: egui::Context,
     data: Arc<RwLock<(Option<usize>, Vec<Option<SharedDocView>>)>>,
 ) {
-    use futures_util::{Future, SinkExt, StreamExt};
+    use futures_util::StreamExt;
     use serde::{Deserialize, Serialize};
     type User = String;
 
@@ -862,7 +859,7 @@ async fn db_update_handler(
                     }
                 }
             }
-            tokio_tungstenite_wasm::Message::Binary(bin) => {
+            tokio_tungstenite_wasm::Message::Binary(_bin) => {
                 wasm_rs_dbg::dbg!();
             }
             tokio_tungstenite_wasm::Message::Close(_) => {
@@ -950,7 +947,7 @@ pub(super) fn show_single_repo_menu(
             );
             // show_wip(ui, Some("only process one commit"));
         });
-        let mut selected = &mut single.config;
+        let selected = &mut single.config;
         egui::ComboBox::from_label("Repo Config")
             .selected_text(format!("{:?}", selected))
             .show_ui(ui, |ui| {
