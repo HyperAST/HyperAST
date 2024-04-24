@@ -321,7 +321,6 @@ where
                 _ => break,
             };
 
-            let cs = cs.clone();
             let mut no_s_idx = zero();
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
@@ -590,7 +589,7 @@ where
                 };
 
                 let (cs, idx) = match (b.children(), offsets_iter.next()) {
-                    (Some(cs), Some(o)) => (cs.clone(), o),
+                    (Some(cs), Some(o)) => (cs, o),
                     (None, Some(_)) => panic!("there is no children remaining"),
                     _ => return builder.set_node(x),
                 };
@@ -608,7 +607,7 @@ where
             assert!(!t.is_directory());
 
             let (cs, idx) = match (b.children(), offsets_iter.next()) {
-                (Some(cs), Some(idx)) => (cs.clone(), idx),
+                (Some(cs), Some(idx)) => (cs, idx),
                 (None, Some(_)) => panic!("there is no children remaining"),
                 _ => break (b, t),
             };
