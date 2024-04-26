@@ -4,7 +4,7 @@ use tree_sitter::TreeCursor;
 
 use super::{ts_query_tree_from_str, Error, Patt, Query};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct HighLights {
     per_cat: BTreeMap<String, Vec<(String, Vec<usize>, usize)>>,
     patterns: Vec<Patt>,
@@ -18,21 +18,6 @@ impl FromStr for HighLights {
         let root_node = tree.root_node();
         let cursor = root_node.walk();
         HighLights::parse(tags.as_bytes(), cursor)
-    }
-}
-
-impl HighLights {
-    pub fn get(&self, variable: &str) -> Option<Vec<(&[usize], &Patt)>> {
-        let (first, second) = variable.split_once(".").unwrap_or((variable, ""));
-        let cat = self.per_cat.get(first)?;
-        let mut r = vec![];
-        for (c, x, idx) in cat {
-            let patt = self.patterns.get(*idx).expect("a pattern");
-            if c == second || second == "*" {
-                r.push((x.as_ref(), patt));
-            }
-        }
-        Some(r)
     }
 }
 
@@ -108,12 +93,6 @@ impl Display for HighLights {
 }
 
 impl HighLights {
-    // fn compress(
-    //     &mut self,
-    //     partial: BTreeMap<string_interner::DefaultSymbol, Vec<(Option<String>, Vec<usize>, usize)>>,
-    //     pos: usize,
-    // ) {
-    // }
     fn parse(input: &[u8], mut cursor: TreeCursor) -> Result<Self, Error> {
         let mut partial = BTreeMap::default(); //MultiLTree::Rec(Default::default());
         let mut patterns = vec![];
@@ -198,9 +177,11 @@ impl HighLights {
                     // dbg!(kind);
                     let Query { variables, pattern } = Query::parse_query(input, &mut cursor)?;
                     if variables.is_empty() {
-                        dbg!(cursor.node().to_sexp());
                         // TODO should not append
-                        return Err("no_variables".into());
+                        // Query::parse_query does not implement processing lists
+                        // return Err("no_variables".into());
+                        cursor.goto_next_sibling();
+                        continue;
                     }
                     let patt_idx = patterns.len();
                     patterns.push(pattern);

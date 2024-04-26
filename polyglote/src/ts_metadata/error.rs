@@ -37,28 +37,6 @@ impl Into<LocatedError<std::io::Error>> for std::io::Error {
         }
     }
 }
-// impl From<std::io::Error> for LocatedError<std::io::Error> {
-//     // The magic happens here
-//     #[track_caller]
-//     fn from(err: std::io::Error) -> Self {
-//         LocatedError {
-//             inner: err,
-//             location: std::panic::Location::caller(),
-//         }
-//     }
-// }
-
-// TODO issue with auto implemented Into, not using #[track_caller]
-
-// impl From<&str> for LocatedError<StringlyError> {
-//     #[track_caller]
-//     fn from(err: &str) -> Self {
-//         LocatedError {
-//             inner: StringlyError(err.to_string()),
-//             location: std::panic::Location::caller(),
-//         }
-//     }
-// }
 
 impl Into<LocatedError<StringlyError>> for &str {
     #[track_caller]
@@ -79,12 +57,3 @@ impl Into<LocatedError<StringlyError>> for String {
         }
     }
 }
-// impl From<String> for LocatedError<StringlyError> {
-//     #[track_caller]
-//     fn from(err: String) -> Self {
-//         LocatedError {
-//             inner: StringlyError(err),
-//             location: std::panic::Location::caller(),
-//         }
-//     }
-// }

@@ -1,8 +1,11 @@
-use super::*;
+use strum_macros::AsRefStr;
+use tree_sitter::Language;
+
+use polyglote::LanguageCompo;
 
 macro_rules! mk_enum {
     ( $( $camel:ident ),* ) => {
-        #[derive(Clone, Debug, PartialEq)]
+        #[derive(Clone, Debug, PartialEq, AsRefStr)]
         pub enum Lang {
             $(
                 $camel,
@@ -18,67 +21,159 @@ macro_rules! mk_enum {
 }
 
 macro_rules! mk_get_language {
-    ( $( ($camel:ident, $name:ident) ),* ) => {
-        pub fn get_language(lang: &Lang) -> Language {
-            match lang {
-                Lang::Query => tree_sitter_query::language(),
-                // Lang::Kotlin => tree_sitter_kotlin::language(),
-                Lang::Java => tree_sitter_java::language(),
-                Lang::Typescript => tree_sitter_typescript::language_typescript(),
-                // Lang::Tsx => tree_sitter_typescript::language_tsx(),
-                // Lang::Javascript => tree_sitter_javascript::language(),
-                Lang::Python => tree_sitter_python::language(),
-                // Lang::Rust => tree_sitter_rust::language(),
-                // Lang::Preproc => tree_sitter_preproc::language(),
-                // Lang::Ccomment => tree_sitter_ccomment::language(),
-                Lang::Cpp => tree_sitter_cpp::language(),
-                // Lang::Cpp => tree_sitter_mozcpp::language(),
-                // Lang::Mozjs => tree_sitter_mozjs::language(),
-                Lang::Xml => tree_sitter_xml::language_xml(),
-            }
+    (@default $camel:ident { $crat:ident, lang: $lang:ident } ) => {
+        fn name(&self) -> &str {
+            stringify!($camel)
+        }
+        fn language(&self) -> Language {
+            $crat::$lang()
         }
     };
-}
+    (@each $camel:ident { $crat:ident, lang: $lang:ident, $($attrs:tt)* } ) => {
+        mk_get_language!{ @default $camel { $crat, lang: $lang } }
+        mk_get_language!{ @others $crat, $($attrs)* }
+    };
+    (@each $camel:ident { $crat:ident, $($attrs:tt)* } ) => {
+        mk_get_language!{ @default $camel { $crat, lang: language } }
+        mk_get_language!{@others $crat, $($attrs)* }
+    };
+    (@each $camel:ident { $crat:ident } ) => {
+        mk_get_language!{ @default $camel { $crat, lang: language } }
+    };
+    (@others $crat:ident, ) => {};
+    (@others $crat:ident, tags: $tags:ident, $($attrs:tt)* ) => {
+        fn tags(&self) -> &str {
+            $crat::$tags
+        }
+        mk_get_language!{@others $crat, $($attrs)* }
+    };
+    (@others $crat:ident, injects: $injects:ident, $($attrs:tt)* ) => {
+        fn injects(&self) -> &str {
+            $crat::$injects
+        }
+        mk_get_language!{@others $crat, $($attrs)* }
+    };
+    (@others $crat:ident, hi: $hi:ident, $($attrs:tt)* ) => {
+        fn highlights(&self) -> &str {
+            $crat::$hi
+        }
+    };
+    (@others $crat:ident, n_types: $n_types:ident, $($attrs:tt)* ) => {
+        fn node_types(&self) -> &str {
+            $crat::$n_types
+        }
+    };
+    ($( $camel:ident { $($attrs:tt)* } ),*) => {
+        $(
+            pub struct $camel;
+            impl LanguageCompo for $camel {
+                mk_get_language!{@each $camel { $($attrs)* }}
+            }
+        )*
 
-macro_rules! mk_get_language_name {
-    ( $( $camel:ident ),* ) => {
-        pub fn get_language_name(lang: &Lang) -> &'static str {
-            match lang {
-                $(
-                    Lang::$camel => stringify!($camel),
-                )*
+
+        impl LanguageCompo for Lang {
+            fn language(&self) -> Language {
+                match self {
+                    $(Lang::$camel => $camel.language(),)*
+                    // Lang::Kotlin => tree_sitter_kotlin::language(),
+                    // Lang::Tsx => tree_sitter_typescript::language_tsx(),
+                    // Lang::Javascript => tree_sitter_javascript::language(),
+                    // Lang::Rust => tree_sitter_rust::language(),
+                    // Lang::Preproc => tree_sitter_preproc::language(),
+                    // Lang::Ccomment => tree_sitter_ccomment::language(),
+                    // Lang::Cpp => tree_sitter_mozcpp::language(),
+                    // Lang::Mozjs => tree_sitter_mozjs::language(),
+                }
+            }
+
+            fn name(&self) -> &str {
+                match self {
+                    $(Lang::$camel => $camel.name(),)*
+                }
+            }
+
+            fn tags(&self) -> &str {
+                match self {
+                    $(Lang::$camel => $camel.tags(),)*
+                }
+            }
+
+            fn highlights(&self) -> &str {
+                match self {
+                    $(Lang::$camel => $camel.highlights(),)*
+                }
+            }
+
+            fn node_types(&self) -> &str {
+                match self {
+                    $(Lang::$camel => $camel.node_types(),)*
+                }
             }
         }
     };
 }
 
 macro_rules! mk_langs {
-    ( $( ($camel:ident, $name:ident) ),* $(,)?) => {
+    ( $( $camel:ident {$($rest:tt)*} ),* $(,)?) => {
         mk_enum!($( $camel ),*);
-        mk_get_language!($( ($camel, $name) ),*);
-        mk_get_language_name!($( $camel ),*);
+        mk_get_language!($( $camel {$($rest)*}),*);
     };
 }
 
 mk_langs!(
     // 1) Name for enum 2) tree-sitter function to call to get a Language
-    (Query, tree_sitter_query),
-    // (Kotlin, tree_sitter_kotlin),
-    (Java, tree_sitter_java),
-    // (Rust, tree_sitter_rust),
-    (Cpp, tree_sitter_cpp),
-    (Python, tree_sitter_python),
-    // (Tsx, tree_sitter_tsx),
-    // (Ccomment, tree_sitter_ccomment),
-    // (Preproc, tree_sitter_preproc),
-    // (Mozjs, tree_sitter_mozjs),
-    // (Javascript, tree_sitter_javascript),
-    (Typescript, tree_sitter_typescript),
-    (Xml, tree_sitter_xml),
+    Query {
+        tree_sitter_query,
+        injects: INJECTIONS_QUERY,
+        hi: HIGHLIGHTS_QUERY,
+        n_types: NODE_TYPES,
+    },
+    Java {
+        tree_sitter_java,
+        tags: TAGS_QUERY,
+        hi: HIGHLIGHTS_QUERY,
+        n_types: NODE_TYPES,
+    },
+    // Rust {
+    //     tree_sitter_rust,
+    //     tags: TAGS_QUERY,
+    //     hi: HIGHLIGHT_QUERY,
+    //     n_types: NODE_TYPES,
+    // },
+    Cpp {
+        tree_sitter_cpp,
+        tags: TAGS_QUERY,
+        hi: HIGHLIGHT_QUERY,
+        n_types: NODE_TYPES,
+    },
+    // Tsx { tree_sitter_tsx},
+    // Ccomment { tree_sitter_ccomment},
+    // Preproc { tree_sitter_preproc},
+    // Mozjs { tree_sitter_mozjs},
+    // Javascript { tree_sitter_javascript},
+    Xml {
+        tree_sitter_xml,
+        lang: language_xml,
+        hi: XML_HIGHLIGHT_QUERY,
+        n_types: XML_NODE_TYPES,
+    },
+    Typescript {
+        tree_sitter_typescript,
+        lang: language_typescript,
+        tags: TAGGING_QUERY,
+        hi: HIGHLIGHT_QUERY,
+        n_types: NODE_TYPES,
+    },
+    Python {
+        tree_sitter_python,
+        tags: TAGS_QUERY,
+        hi: HIGHLIGHTS_QUERY,
+        n_types: NODE_TYPES,
+    },
+    // Kotlin {
+    //     tree_sitter_kotlin,
+    //     lang: language,
+    //     n_types: NODE_TYPES,
+    // },
 );
-
-impl Lang {
-    pub fn get_language(&self) -> Language {
-        get_language(self)
-    }
-}

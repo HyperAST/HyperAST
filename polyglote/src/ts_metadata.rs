@@ -1,24 +1,15 @@
 use tree_sitter::{Tree, TreeCursor};
 
+pub mod tags;
+
+pub mod highlights;
+
 pub fn ts_query_tree_from_str(input: &str) -> Tree {
     let mut query_parser = tree_sitter::Parser::new();
     query_parser
         .set_language(&tree_sitter_query::language())
         .unwrap();
     query_parser.parse(input, None).unwrap()
-}
-
-mod tags;
-pub use tags::Tags;
-
-mod highlights;
-pub use highlights::HighLights;
-
-#[test]
-fn t() {
-    use std::mem::size_of;
-    dbg!(size_of::<Option<String>>());
-    dbg!(size_of::<String>());
 }
 
 mod error;
@@ -72,6 +63,9 @@ impl<'a, 'b> PatternParser<'a, 'b> {
                 loop {
                     let ts_role = self.cursor.field_name();
                     if !self.cursor.node().is_named() {
+                        if self.cursor.node().kind() == "_" {
+                            kind = Some("_");
+                        }
                     } else if self.cursor.node().kind() == "anonymous_node" {
                         dbg!(self.cursor.node().utf8_text(self.input).unwrap());
                         dbg!(self.cursor.node().to_sexp());
@@ -112,6 +106,7 @@ impl<'a, 'b> PatternParser<'a, 'b> {
                         ));
                         captures.push(ident.to_string());
                     } else {
+                        dbg!();
                         let r = self.parse()?;
                         patt.push(r);
                         *self.current_path.last_mut().unwrap() += 1;
@@ -128,7 +123,6 @@ impl<'a, 'b> PatternParser<'a, 'b> {
                     node,
                     "should have gone back to same query node"
                 );
-
                 Ok(Patt::Node {
                     kind: kind.ok_or("missing type of node".into())?.to_string(),
                     patt,
@@ -284,6 +278,9 @@ impl<'a, 'b> PatternParser<'a, 'b> {
                     field: field.expect("missing field of node").to_string(),
                     patt: Box::new(patt.expect("a pattern")),
                 })
+            }
+            "program" => {
+                Err("nothing to do".into())
             }
             x => {
                 dbg!(self.cursor.node().utf8_text(self.input).unwrap());

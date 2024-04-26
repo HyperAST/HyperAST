@@ -1,11 +1,17 @@
-use derive_deref::Deref;
+use std::collections::{BTreeMap, HashMap};
+use std::fmt::{Debug, Display};
 
-use super::*;
+use derive_deref::Deref;
+use hecs::{CommandBuffer, EntityBuilder, World};
+use serde::Deserialize;
+use tree_sitter::Language;
+
+use crate::{camel_case, ts_metadata};
 
 type NodeIdentifier = hecs::Entity;
 
 #[derive(Default)]
-pub(crate) struct TypeSys {
+pub struct TypeSys {
     pub(crate) list: Vec<hecs::Entity>,
     pub(crate) index: BTreeMap<String, hecs::Entity>,
     pub(crate) types: World,
@@ -41,6 +47,14 @@ impl Debug for TypeSys {
             }
         }
         Ok(())
+    }
+}
+
+impl Display for TypeSys {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let toks = crate::generate_types::process_types_into_tokens(self);
+        let res = syn::parse_file(&toks.to_string()).unwrap();
+        write!(f, "{}", prettyplease::unparse(&res))
     }
 }
 
@@ -117,9 +131,13 @@ pub(crate) struct Chidlren {
     types: Vec<TsType>,
 }
 
-pub(crate) fn consider_tags(_tags: ts_metadata::Tags, _typesys: &mut TypeSys) {}
+pub(crate) fn consider_tags(_tags: ts_metadata::tags::Tags, _typesys: &mut TypeSys) {}
 
-pub(crate) fn consider_highlights(_tags: ts_metadata::HighLights, _typesys: &mut TypeSys) {}
+pub(crate) fn consider_highlights(
+    _tags: ts_metadata::highlights::HighLights,
+    _typesys: &mut TypeSys,
+) {
+}
 
 impl TypeSys {
     pub(crate) fn new(lang: Language, types: Vec<TsType>) -> Self {
@@ -138,9 +156,6 @@ impl TypeSys {
             let named = language.node_kind_is_named(i as u16);
             let visible = language.node_kind_is_visible(i as u16);
             let kind = language.node_kind_for_id(i as u16).unwrap();
-            dbg!(named);
-            dbg!(visible);
-            dbg!(kind);
             // let name = kind.to_string();//sanitize_identifier(kind);
             // let ts_name = kind.to_string();//sanitize_string(kind, escape);
             match self.index.entry(kind.to_string()) {
@@ -153,7 +168,6 @@ impl TypeSys {
                         builder.add(Hidden);
                     }
                     let t = kind.to_string();
-                    dbg!(&t);
                     builder.add(T(t));
                     let ent = self.types.spawn(builder.build());
                     vac.insert(ent);
@@ -282,16 +296,6 @@ impl TypeSys {
             });
         cmd.run_on(&mut world);
     }
-}
-
-pub(crate) fn get_token_hierarchy(types: Vec<TsType>, _escape: bool) -> TypeSys {
-    let mut r = TypeSys {
-        list: Default::default(),
-        index: Default::default(),
-        types: Default::default(),
-    };
-    r.add_token_hierarchy(types);
-    r
 }
 
 pub fn get_token_names(language: &Language, _escape: bool) -> Vec<(String, bool, String)> {

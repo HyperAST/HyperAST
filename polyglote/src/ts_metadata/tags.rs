@@ -6,7 +6,7 @@ type TagedRole = String;
 
 use super::{ts_query_tree_from_str, Error, Patt, Query};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Tags {
     pub(crate) declarations: HashMap<TagedRole, Tag>,
     pub(crate) references: HashMap<TagedRole, Tag>,
@@ -159,13 +159,16 @@ impl Tag {
         if names.len() == 0 {
             return Err("Missing name variable".into())?;
         }
+        dbg!(&variables);
         let role = variables
-            .into_iter()
+            .into_iter().rev()
             .next()
             .ok_or_else(|| "Missing tag variable name variable".into())
             .and_then(|x| {
+                dbg!(&x);
                 if x.1.len() > 1 {
-                    Err("missplaced tag variable name".into())
+                    Ok(x.0) // should be ok actually
+                    // Err("missplaced tag variable name".into())
                 } else {
                     Ok(x.0)
                 }
