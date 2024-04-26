@@ -124,6 +124,16 @@ pub struct StructuralPositionStore<IdN = NodeIdentifier, Idx = u16> {
     offsets: Vec<Idx>,
 }
 
+impl<IdN, Idx> Debug for StructuralPositionStore<IdN, Idx> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StructuralPositionStore")
+            .field("nodes", &self.nodes.len())
+            .field("parents", &self.parents.len())
+            .field("offsets", &self.offsets.len())
+            .finish()
+    }
+}
+
 // #[derive(Clone, Debug)]
 // pub struct StructuralPositionWithIndentation {
 //     pub(crate) nodes: Vec<NodeIdentifier>,
