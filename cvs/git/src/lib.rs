@@ -1,7 +1,5 @@
 #![feature(test)]
 #![feature(extract_if)]
-#![feature(trait_upcasting)]
-#![feature(os_str_bytes)]
 pub mod allrefs;
 pub mod cpp;
 pub mod git;
@@ -229,6 +227,7 @@ mod type_store {
         }
     }
 
+    #[allow(unused)] // TODO find a better way of declaring type stores
     impl<'a> TypeStore<HashedNodeRef<'a, MIdN<NodeIdentifier>>> for TStore {
         type Ty = MultiType;
         const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
@@ -264,8 +263,8 @@ mod type_store {
             &self,
             n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>,
             m: &HashedNodeRef<'a, MIdN<NodeIdentifier>>,
-        ) -> bool {
-            todo!()
+        ) -> bool {            
+            todo!("{:?} {:?}", n, m)
         }
     }
 
@@ -295,20 +294,20 @@ mod type_store {
 
         fn resolve_lang(
             &self,
-            n: &NoSpaceWrapper<'a, NodeIdentifier>,
+            _n: &NoSpaceWrapper<'a, NodeIdentifier>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
             todo!()
         }
 
         type Marshaled = TypeIndex;
 
-        fn marshal_type(&self, n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Marshaled {
+        fn marshal_type(&self, _n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Marshaled {
             todo!()
         }
         fn type_eq(
             &self,
-            n: &NoSpaceWrapper<'a, NodeIdentifier>,
-            m: &NoSpaceWrapper<'a, NodeIdentifier>,
+            _n: &NoSpaceWrapper<'a, NodeIdentifier>,
+            _m: &NoSpaceWrapper<'a, NodeIdentifier>,
         ) -> bool {
             todo!()
         }
@@ -346,12 +345,12 @@ mod type_store {
             &self,
             n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            todo!()
+            todo!("{:?}", n)
         }
 
         type Marshaled = TypeIndex;
 
-        fn marshal_type(&self, n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>) -> Self::Marshaled {
+        fn marshal_type(&self, _n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>) -> Self::Marshaled {
             todo!()
         }
         fn type_eq(
@@ -359,7 +358,7 @@ mod type_store {
             n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>,
             m: &HashedNodeRef<'a, MIdN<NodeIdentifier>>,
         ) -> bool {
-            todo!()
+            todo!("{:?} {:?}", n, m)
         }
     }
 
@@ -374,21 +373,21 @@ mod type_store {
 
         fn resolve_lang(
             &self,
-            n: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>,
+            _n: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
             todo!()
         }
 
         type Marshaled = TypeIndex;
 
-        fn marshal_type(&self, n: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>) -> Self::Marshaled {
+        fn marshal_type(&self, _n: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>) -> Self::Marshaled {
             todo!()
         }
 
         fn type_eq(
             &self,
-            n: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>,
-            m: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>,
+            _n: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>,
+            _m: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>,
         ) -> bool {
             todo!()
         }
@@ -415,14 +414,14 @@ mod type_store {
 
         fn resolve_lang(
             &self,
-            n: &NoSpaceWrapper<'a, NodeIdentifier>,
+            _n: &NoSpaceWrapper<'a, NodeIdentifier>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
             todo!()
         }
 
         type Marshaled = TypeIndex;
 
-        fn marshal_type(&self, n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Marshaled {
+        fn marshal_type(&self, _n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Marshaled {
             todo!()
         }
 
@@ -460,14 +459,14 @@ mod type_store {
             &self,
             n: &HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
         ) -> Self::Ty {
-            todo!()
+            todo!("{:?}", n)
         }
 
         fn resolve_lang(
             &self,
             n: &HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            todo!()
+            todo!("{:?}", n)
         }
 
         type Marshaled = TypeIndex;
@@ -476,7 +475,7 @@ mod type_store {
             &self,
             n: &HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
         ) -> Self::Marshaled {
-            todo!()
+            todo!("{:?}", n)
         }
 
         fn type_eq(
@@ -484,7 +483,7 @@ mod type_store {
             n: &HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
             m: &HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
         ) -> bool {
-            todo!()
+            todo!("{:?} {:?}", n, m)
         }
     }
     impl<'a>
@@ -503,14 +502,14 @@ mod type_store {
             &self,
             n: &HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>>,
         ) -> Self::Ty {
-            todo!()
+            todo!("{:?}", n)
         }
 
         fn resolve_lang(
             &self,
             n: &HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            todo!()
+            todo!("{:?}", n)
         }
 
         type Marshaled = TypeIndex;
@@ -519,7 +518,7 @@ mod type_store {
             &self,
             n: &HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>>,
         ) -> Self::Marshaled {
-            todo!()
+            todo!("{:?}", n)
         }
 
         fn type_eq(
@@ -527,7 +526,7 @@ mod type_store {
             n: &HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>>,
             m: &HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>>,
         ) -> bool {
-            todo!()
+            todo!("{:?} {:?}", n, m)
         }
     }
     impl<'a>
@@ -537,11 +536,11 @@ mod type_store {
         const LANG: u16 = 0;
 
         fn _intern(l: u16, t: u16) -> Self::Ty {
-            hyper_ast_gen_ts_xml::types::Type::resolve(t)
+            unimplemented!("remove _intern {} {}", l , t)
         }
 
         fn resolve(&self, t: Self::Ty) -> hyper_ast_gen_ts_xml::types::Type {
-            todo!()
+            todo!("{:?}", t)
         }
     }
 
@@ -555,14 +554,14 @@ mod type_store {
             &self,
             n: &HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>,
         ) -> Self::Ty {
-            todo!()
+            todo!("{:?}", n)
         }
 
         fn resolve_lang(
             &self,
             n: &HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            todo!()
+            todo!("{:?}", n)
         }
 
         type Marshaled = TypeIndex;
@@ -571,7 +570,7 @@ mod type_store {
             &self,
             n: &HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>,
         ) -> Self::Marshaled {
-            todo!()
+            todo!("{:?}", n)
         }
 
         fn type_eq(
@@ -579,7 +578,7 @@ mod type_store {
             n: &HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>,
             m: &HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>,
         ) -> bool {
-            todo!()
+            todo!("{:?} {:?}", n, m)
         }
     }
     impl<'a>
@@ -589,11 +588,11 @@ mod type_store {
         const LANG: u16 = 0;
 
         fn _intern(l: u16, t: u16) -> Self::Ty {
-            hyper_ast_gen_ts_cpp::types::Type::resolve(t)
+            unimplemented!("remove _intern {} {}", l , t)
         }
 
         fn resolve(&self, t: Self::Ty) -> hyper_ast_gen_ts_cpp::types::Type {
-            todo!()
+            todo!("{:?}", t)
         }
     }
 
