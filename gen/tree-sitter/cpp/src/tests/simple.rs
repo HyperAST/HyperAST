@@ -368,6 +368,7 @@ __attribute__((__may_alias__))
     );
 }
 
+#[allow(non_snake_case)]
 #[test]
 pub(crate) fn cpp_issue_stockfish_TranslationUnitRepeat1_test() {
     let text = {

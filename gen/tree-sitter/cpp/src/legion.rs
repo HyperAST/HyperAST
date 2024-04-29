@@ -140,7 +140,7 @@ impl WithByteRange for Acc {
     }
 }
 
-/// enables recovering of hdden nodes from tree-sitter
+/// enables recovering of hidden nodes from tree-sitter
 #[cfg(not(debug_assertions))]
 const HIDDEN_NODES: bool = true;
 #[cfg(debug_assertions)]

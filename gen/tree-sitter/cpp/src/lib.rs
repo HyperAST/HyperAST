@@ -2,6 +2,7 @@
 pub mod legion;
 
 pub mod types;
+#[allow(unused)]
 #[cfg(feature = "impl")]
 pub mod types_exp;
 

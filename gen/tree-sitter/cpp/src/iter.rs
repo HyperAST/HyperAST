@@ -1,6 +1,6 @@
 use std::fmt::{self, Debug};
 
-use hyper_ast::types::{NodeStore, TypedHyperAST};
+use hyper_ast::types::TypedHyperAST;
 use hyper_ast::{
     position::{TreePath, TreePathMut},
     store::nodes::legion::NodeIdentifier,
