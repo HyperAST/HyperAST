@@ -1,17 +1,12 @@
 use crate::types::{TIdN, Type};
 use core::fmt;
 use hyper_ast::{
-    filter::{BloomResult, BloomSize},
+    filter::BloomResult,
     nodes::RefContainer,
     position::{
-        ExploreStructuralPositions, Scout, SpHandle, StructuralPositionStore, TreePath,
-        TreePathMut, TypedScout, TypedTreePath,
+        Scout, SpHandle, StructuralPositionStore, TreePath, TreePathMut, TypedScout, TypedTreePath,
     },
-    store::{
-        defaults::{LabelIdentifier, NodeIdentifier},
-        nodes::legion::HashedNodeRef,
-        SimpleStores,
-    },
+    store::defaults::LabelIdentifier,
     types::{
         Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeId, Tree, TypeStore,
         TypeTrait, Typed, TypedHyperAST, TypedNodeStore, TypedTree, WithChildren,
@@ -22,12 +17,9 @@ use num::{cast, one, zero, ToPrimitive, Zero};
 use std::fmt::Debug;
 // use hyper_ast_core::tree::tree::{WithChildren, Tree, Labeled};
 
-use crate::{
-    impact::{
-        element::{IdentifierFormat, LabelPtr},
-        reference::DisplayRef,
-    },
-    legion_with_refs::{self},
+use crate::impact::{
+    element::{IdentifierFormat, LabelPtr},
+    reference::DisplayRef,
 };
 use hyper_ast::types::AnyType;
 
@@ -45,6 +37,17 @@ pub struct RefsFinder<'a, IdN, HAST: HyperAST<'a>> {
     /// result of search
     sp_store: &'a mut StructuralPositionStore<IdN, HAST::Idx>,
     refs: Vec<SpHandle>,
+}
+
+impl<'a, IdN, HAST: HyperAST<'a>> Debug for RefsFinder<'a, IdN, HAST> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RefsFinder")
+            .field("ana", &self.ana)
+            .field("sp_store", &self.sp_store)
+            .field("refs", &self.refs.len())
+            .finish()
+    }
+
 }
 
 impl<'a, IdN, HAST: HyperAST<'a>> RefsFinder<'a, IdN, HAST> {
@@ -196,13 +199,13 @@ where
     /// WARN do not search targets that end with unqualified this, use find_ref_this
     /// returns the indexes that should be used on self.sp_store the `StructuralPositionStore<NodeIdentifier>`
     pub fn find_all_is_this(
-        mut self,
+        self,
         package: RefPtr,
-        mut scout: TypedScout<TIdN<HAST::IdN>, HAST::Idx>,
+        scout: TypedScout<TIdN<HAST::IdN>, HAST::Idx>,
     ) -> Vec<SpHandle> {
-        let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
-        let this = self.ana.solver.intern(RefsEnum::This(mm));
-        todo!("need a TypedScout for find constructors");
+        // let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
+        // let this = self.ana.solver.intern(RefsEnum::This(mm));
+        todo!("need a TypedScout for find constructors {:?} {} {:?}", self, package, scout);
         // self.find_constructors(scout.clone());
         // self.sp_store.check_with(self.stores, &scout).expect("find_all_is_this before");
         // self.find_refs_with_this(package, this, &mut scout);
@@ -210,6 +213,7 @@ where
         // self.refs
     }
 
+    #[allow(unused)] // need to do some ab testing
     /// WARN do not search targets that end with unqualified this, use find_ref_this
     fn find_refs<const IM: bool>(
         &mut self,
@@ -295,7 +299,7 @@ where
             return vec![];
         };
         match self.find_refs_pre(t, &b, package, scout, target, &current) {
-            Ok(value) => (),
+            Ok(_) => (),
             Err(value) => return value,
         };
         if !IM && !has_children {
@@ -467,7 +471,7 @@ where
         t: Type,
         b: &<HAST as TypedHyperAST<'a, TIdN<IdN>>>::TT,
         package: usize,
-        scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
+        _scout: &mut TypedScout<TIdN<IdN>, HAST::Idx>,
         target: usize,
         current: &TIdN<IdN>,
     ) -> Result<Type, Vec<usize>>
@@ -828,7 +832,7 @@ where
     <HAST as hyper_ast::types::TypedHyperAST<'a, TIdN<IdN>>>::TT:
         RefContainer<Result = BloomResult>,
 {
-    pub fn exact_match(&mut self, target: RefPtr, mut scout: TypedScout<TIdN<IdN>, HAST::Idx>) {
+    pub fn exact_match(&mut self, target: RefPtr, scout: TypedScout<TIdN<IdN>, HAST::Idx>) {
         let d = ExplorableRef {
             rf: target,
             nodes: &self.ana.solver.nodes,
@@ -914,7 +918,7 @@ where
         } else if t == Type::FieldAccess {
             self.exact_match_field_access(&b, o, i, &mut scout);
         } else if t == Type::ScopedTypeIdentifier {
-            if let Some(mut scout) = self.is_scoped_type_identifier_exact_match(&b, o, i, scout) {
+            if let Some(scout) = self.is_scoped_type_identifier_exact_match(&b, o, i, scout) {
                 self.successful_match(&mut scout.into());
             }
         } else if t == Type::ClassLiteral {
@@ -1899,7 +1903,7 @@ where
     ) -> Option<usize> {
         assert!(b.has_children());
         let x = b.child_rev(&zero()).unwrap();
-        let (bb, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+        let (bb, _) = self.stores.typed_node_store().try_resolve(&x).unwrap();
         let t = bb.get_type();
 
         if t == Type::TypeIdentifier {
@@ -2136,7 +2140,7 @@ where
         };
         let (o_b, o_id) = self.stores.typed_node_store().try_resolve(&o_id).unwrap();
         let o_t = o_b.get_type();
-        let (i_b, i_id) = self.stores.typed_node_store().try_resolve(&i_id).unwrap();
+        let (i_b, _) = self.stores.typed_node_store().try_resolve(&i_id).unwrap();
         let i_t = i_b.get_type();
 
         let eref = self.ana.solver.nodes.with(o);
@@ -2362,7 +2366,7 @@ where
         }
         if matching_o {
             let x = b.child_rev(&zero()).unwrap();
-            let (bb, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
+            let (bb, _) = self.stores.typed_node_store().try_resolve(&x).unwrap();
             let t = bb.get_type();
 
             if t == Type::TypeIdentifier || t == Type::Identifier {
@@ -2432,7 +2436,7 @@ where
                     } else {
                         self.refs.push(r);
                     }
-                    let it = self.sp_store.get(r);
+                    // let it = self.sp_store.get(r);
                     // TODO log::debug!("really found {:?}", it.make_position(self.stores));
                 }
                 let mut s = scout.clone();
@@ -2448,7 +2452,7 @@ where
                     || t == Type::CastExpression
                     || t == Type::ParenthesizedExpression
                 {
-                    scout.up(&self.sp_store).expect("up");
+                    let _ = scout.up(&self.sp_store).expect("up");
                     scout.check(self.stores).expect("dd");
                     if let Err(e) = self.sp_store.check(self.stores) {
                         log::error!("backtrace: {}", std::backtrace::Backtrace::force_capture());
@@ -2470,7 +2474,7 @@ where
         } else {
             self.refs.push(r);
         }
-        let it = self.sp_store.get(r);
+        // let it = self.sp_store.get(r);
         // TODO log::debug!("really found {:?}", it.make_position(&self.stores));
     }
 
@@ -2556,7 +2560,7 @@ where
     /// ObjectCreationExpression do not go up to statement expression because we need tp handle class body if any
     fn relax_to_typed(
         &mut self,
-        mut scout: TypedScout<TIdN<IdN>, HAST::Idx>,
+        scout: TypedScout<TIdN<IdN>, HAST::Idx>,
     ) -> Option<TypedScout<TIdN<IdN>, HAST::Idx>> {
         let x = scout.node_always(&self.sp_store).unwrap();
         let b = self.stores.typed_node_store().resolve(&x);
@@ -2904,7 +2908,7 @@ where
         let (_, x) = stores.typed_node_store().try_resolve(&x).unwrap();
         let o = remake_pkg_ref(stores, ana, x)?;
         let x = b.child(&(two)).unwrap();
-        let (b, x) = stores.typed_node_store().try_resolve(&x).unwrap();
+        let (b, _) = stores.typed_node_store().try_resolve(&x).unwrap();
         if let Some(i) = b.try_get_label() {
             let f = IdentifierFormat::from(stores.label_store().resolve(i));
             let l = LabelPtr::new(*i, f);
@@ -2980,6 +2984,7 @@ where
         }
     }
 
+    #[allow(unused)] // TODO use it for ab testing
     /// WARN intended to be used starting from searched class
     /// and to find simple this
     fn find_refs_with_this(

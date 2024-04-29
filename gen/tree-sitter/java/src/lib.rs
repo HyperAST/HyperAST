@@ -10,6 +10,7 @@ pub mod compat;
 pub mod legion_with_refs;
 
 pub mod types;
+#[allow(unused)]
 #[cfg(feature = "impl")]
 pub mod types_exp;
 
@@ -26,7 +27,6 @@ pub use hyper_ast::utils;
 
 #[cfg(feature = "legion")]
 mod tnode {
-    use super::*;
 
     #[repr(transparent)]
     pub struct TNode<'a>(pub(super) tree_sitter::Node<'a>);

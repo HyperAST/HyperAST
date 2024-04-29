@@ -1,5 +1,5 @@
 use crate::{
-    types::{TIdN, TStore},
+    types::TIdN,
     TNode,
 };
 use hyper_ast::{
@@ -11,8 +11,7 @@ use hyper_ast::{
         nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert},
     },
     tree_gen::{
-        BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics,
-        TextedGlobalData, TreeGen, WithByteRange,
+        parser::Visibility, BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange
     },
     types::{self, AnyType, NodeStoreExt, TypeStore, TypeTrait, WithHashs, WithStats},
     utils,
@@ -28,7 +27,7 @@ use hyper_ast::{
     filter::BF,
     filter::{Bloom, BloomSize},
     hashed::{self, SyntaxNodeHashs, SyntaxNodeHashsKinds},
-    nodes::{self, Space},
+    nodes::Space,
     store::{
         nodes::legion::{compo, compo::CS},
         nodes::DefaultNodeStore as NodeStore,
@@ -193,6 +192,13 @@ impl Debug for Acc {
             .finish()
     }
 }
+
+/// enables recovering of hidden nodes from tree-sitter
+#[cfg(not(debug_assertions))]
+const HIDDEN_NODES: bool = true;
+#[cfg(debug_assertions)]
+static HIDDEN_NODES: bool = true;
+
 #[repr(transparent)]
 pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
 
@@ -210,6 +216,16 @@ enum TreeCursorStep {
     TreeCursorStepNone,
     TreeCursorStepHidden,
     TreeCursorStepVisible,
+}
+
+impl TreeCursorStep {
+    fn ok(&self) -> Option<Visibility> {
+        match self {
+            TreeCursorStep::TreeCursorStepNone => None,
+            TreeCursorStep::TreeCursorStepHidden => Some(Visibility::Hidden),
+            TreeCursorStep::TreeCursorStepVisible => Some(Visibility::Visible),
+        }
+    }
 }
 
 extern "C" {
@@ -235,69 +251,46 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 
     fn goto_first_child(&mut self) -> bool {
-        self.0.goto_first_child()
-        // // pub struct TreeCursorAAA<'cursor>(tree_sitter::ffi::TSTreeCursor, std::marker::PhantomData<&'cursor ()>);
-        // match unsafe {
-        //     let s = &mut self.0;
-        //     let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
-        //     ts_tree_cursor_goto_first_child_internal(s)
-        //     // let s: *mut TreeCursorAAA = std::mem::transmute(s);
-        //     // ts_tree_cursor_goto_first_child_internal(&mut (*s).0)
-        // } {
-        //     TreeCursorStep::TreeCursorStepNone => false,
-        //     TreeCursorStep::TreeCursorStepHidden => true,
-        //     TreeCursorStep::TreeCursorStepVisible => true,
-        // }
+        self.goto_first_child_extended().is_some()
     }
 
     fn goto_next_sibling(&mut self) -> bool {
-        self.0.goto_next_sibling()
-        // pub struct TreeCursorAAA<'cursor>(
-        //     tree_sitter::ffi::TSTreeCursor,
-        //     std::marker::PhantomData<&'cursor ()>,
-        // );
-        // match unsafe {
-        //     let s = &mut self.0;
-        //     let s: *mut TreeCursorAAA = std::mem::transmute(s);
-        //     ts_tree_cursor_goto_next_sibling_internal(&mut (*s).0)
-        // } {
-        //     TreeCursorStep::TreeCursorStepNone => false,
-        //     TreeCursorStep::TreeCursorStepHidden => true,
-        //     TreeCursorStep::TreeCursorStepVisible => true,
-        // }
+        self.goto_next_sibling_extended().is_some()
     }
 
-    // fn goto_first_child_internal(&mut self) -> Option<bool> {
-    //     // self.0.goto_first_child()
-    //     // pub struct TreeCursorAAA<'cursor>(tree_sitter::ffi::TSTreeCursor, std::marker::PhantomData<&'cursor ()>);
-    //     match unsafe {
-    //         let s = &mut self.0;
-    //         let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
-    //         ts_tree_cursor_goto_first_child_internal(s)
-    //         // let s: *mut TreeCursorAAA = std::mem::transmute(s);
-    //         // ts_tree_cursor_goto_first_child_internal(&mut (*s).0)
-    //     } {
-    //         TreeCursorStep::TreeCursorStepNone => None,
-    //         TreeCursorStep::TreeCursorStepHidden => Some(false),
-    //         TreeCursorStep::TreeCursorStepVisible => Some(true),
-    //     }
-    // }
+    fn goto_first_child_extended(&mut self) -> Option<Visibility> {
+        if HIDDEN_NODES {
+            unsafe {
+                let s = &mut self.0;
+                let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
+                ts_tree_cursor_goto_first_child_internal(s)
+            }
+            .ok()
+        } else {
+            if self.0.goto_first_child() {
+                Some(Visibility::Visible)
+            } else {
+                None
+            }
+        }
+    }
 
-    // fn goto_next_sibling_internal(&mut self) -> Option<bool> {
-    //     pub struct TreeCursorAAA<'cursor>(
-    //         tree_sitter::ffi::TSTreeCursor,
-    //         std::marker::PhantomData<&'cursor ()>,
-    //     );
-    //     match unsafe {
-    //         let s = &mut self.0;
-    //         let s: *mut TreeCursorAAA = std::mem::transmute(s);
-    //         ts_tree_cursor_goto_next_sibling_internal(&mut (*s).0)
-    //     } {
-    //         TreeCursorStep::TreeCursorStepNone => None,
-    //         TreeCursorStep::TreeCursorStepHidden => Some(false),
-    //         TreeCursorStep::TreeCursorStepVisible => Some(true),
-    //     }
-    // }
+    fn goto_next_sibling_extended(&mut self) -> Option<Visibility> {
+        if HIDDEN_NODES {
+            unsafe {
+                let s = &mut self.0;
+                let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
+                ts_tree_cursor_goto_next_sibling_internal(s)
+            }
+            .ok()
+        } else {
+            if self.0.goto_next_sibling() {
+                Some(Visibility::Visible)
+            } else {
+                None
+            }
+        }
+    }
 }
 
 /// Implements [ZippedTreeGen] to offer a visitor for Java generation
@@ -906,7 +899,7 @@ fn compress<T: 'static + std::marker::Send + std::marker::Sync>(
                 x if x > 0 => {
                     insert!($($c),+, bloom!(Bloom::<&'static [u8], u16>))
                 }
-                x => {
+                _ => {
                     insert!($($c),+, (BloomSize::None,))
                 },
             }

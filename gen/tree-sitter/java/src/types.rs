@@ -6,11 +6,6 @@ use hyper_ast::{
     types::{AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
 };
 
-pub struct Single {
-    mask: TypeInternalSize,
-    lang: TypeInternalSize,
-}
-
 #[cfg(feature = "legion")]
 mod legion_impls {
     use super::*;
@@ -66,14 +61,14 @@ mod legion_impls {
         const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
 
         fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
-            todo!()
+            todo!("{:?}", n)
         }
 
         fn resolve_lang(
             &self,
             n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            todo!()
+            todo!("{:?}", n)
         }
 
         type Marshaled = TypeIndex;
@@ -96,20 +91,20 @@ mod legion_impls {
         type Ty = Type;
         const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
 
-        fn resolve_type(&self, n: &R) -> Self::Ty {
+        fn resolve_type(&self, _n: &R) -> Self::Ty {
             todo!()
         }
 
-        fn resolve_lang(&self, n: &R) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        fn resolve_lang(&self, _n: &R) -> hyper_ast::types::LangWrapper<Self::Ty> {
             todo!()
         }
 
         type Marshaled = TypeIndex;
 
-        fn marshal_type(&self, n: &R) -> Self::Marshaled {
+        fn marshal_type(&self, _n: &R) -> Self::Marshaled {
             todo!()
         }
-        fn type_eq(&self, n: &R, m: &R) -> bool {
+        fn type_eq(&self, _n: &R, _m: &R) -> bool {
             todo!()
         }
     }
@@ -140,7 +135,7 @@ mod legion_impls {
             &self,
             n: &HashedNodeRef<'a, NodeIdentifier>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            todo!()
+            todo!("{:?}", n)
         }
 
         type Marshaled = TypeIndex;
@@ -156,7 +151,7 @@ mod legion_impls {
             n: &HashedNodeRef<'a, NodeIdentifier>,
             m: &HashedNodeRef<'a, NodeIdentifier>,
         ) -> bool {
-            todo!()
+            todo!("{:?} {:?}", n, m)
         }
     }
     pub fn as_any(t: &Type) -> AnyType {
@@ -170,21 +165,6 @@ mod legion_impls {
 pub use legion_impls::as_any;
 pub trait JavaEnabledTypeStore<T>: TypeStore<T> {}
 
-// impl Single {
-//     fn from<TS: JavaEnabledTypeStore>(value: TS) -> Self {
-//         Self {
-//             mask: TS::MASK,
-//             lang: todo!(),
-//         }
-//     }
-// }
-
-impl Type {
-    fn resolve(t: u16) -> Self {
-        assert!(t < COUNT);
-        unsafe { std::mem::transmute(t) }
-    }
-}
 
 #[repr(u8)]
 pub enum TStore {
@@ -250,10 +230,10 @@ impl LangRef<Type> for Java {
 }
 impl LangRef<AnyType> for Java {
     fn make(&self, t: u16) -> &'static AnyType {
-        todo!()
+        todo!("{}", t)
     }
     fn to_u16(&self, t: AnyType) -> u16 {
-        todo!()
+        todo!("{}", t)
     }
 
     fn name(&self) -> &'static str {
