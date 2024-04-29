@@ -542,7 +542,7 @@ impl<
 impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
     pub fn build_then_insert(
         &mut self,
-        i: <hashed::HashedNode as hyper_ast::types::Stored>::TreeId,
+        _i: <hashed::HashedNode as hyper_ast::types::Stored>::TreeId,
         t: Type,
         l: Option<LabelIdentifier>,
         cs: Vec<NodeIdentifier>,
@@ -574,7 +574,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
                 } else {
                     use hyper_ast::hashed::SyntaxNodeHashsKinds;
                     use hyper_ast::types::WithHashs;
-                    let (kind, node) = self
+                    let (_, node) = self
                         .stores
                         .node_store
                         .resolve_with_type::<TIdN<NodeIdentifier>>(&c);

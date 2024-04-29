@@ -8,12 +8,11 @@ pub struct TreeToQuery<
     'a,
     HAST: types::HyperAST<'a>,
     TIdN: hyper_ast::types::TypedNodeId,
-    QHAST,
     const PP: bool = true,
 > {
     stores: &'a HAST,
     root: HAST::IdN,
-    matcher: crate::search::PreparedMatcher<QHAST, TIdN::Ty>,
+    matcher: crate::search::PreparedMatcher<TIdN::Ty>,
     phantom: PhantomData<TIdN>,
 }
 
@@ -85,37 +84,30 @@ impl<
         'a,
         HAST: types::TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN>,
-    > TreeToQuery<'store, HAST, TIdN, QStoreRef<'a, crate::types::TStore>>
+    > TreeToQuery<'store, HAST, TIdN>
 where
     TIdN::Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
     for<'b> <TIdN::Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
 {
-    pub fn new(
-        stores: &'store HAST,
-        root: HAST::IdN,
-    ) -> TreeToQuery<'store, HAST, TIdN, QStoreRef<'a, crate::types::TStore>> {
+    pub fn new(stores: &'store HAST, root: HAST::IdN) -> TreeToQuery<'store, HAST, TIdN> {
         Self::with_pred(stores, root, "")
     }
     pub fn with_pred(
         stores: &'store HAST,
         root: HAST::IdN,
         matcher: &str,
-    ) -> TreeToQuery<'store, HAST, TIdN, QStoreRef<'a, crate::types::TStore>> {
+    ) -> TreeToQuery<'store, HAST, TIdN> {
         use std::ops::Deref;
         let query_store = Q_STORE.deref();
 
         let query =
             crate::search::ts_query2(&mut query_store.0.write().unwrap(), matcher.as_bytes());
         let matcher = {
-            let (root_types, patterns) = crate::search::PreparedMatcher::<_, TIdN::Ty>::new_aux(
+            let (root_types, patterns) = crate::search::PreparedMatcher::<TIdN::Ty>::new_aux(
                 &query_store.0.read().unwrap(),
                 query,
             );
-            crate::search::PreparedMatcher::<_, TIdN::Ty>::with_patterns(
-                QStoreRef(query_store.0.read().unwrap()),
-                root_types,
-                patterns,
-            )
+            crate::search::PreparedMatcher::<TIdN::Ty>::with_patterns(root_types, patterns)
         };
         Self {
             stores,
@@ -130,14 +122,12 @@ impl<
         'store,
         HAST: types::TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
-        QHAST: std::ops::Deref<Target = hyper_ast::store::SimpleStores<crate::types::TStore>>,
         const PP: bool,
-    > Display for TreeToQuery<'store, HAST, TIdN, QHAST, PP>
+    > Display for TreeToQuery<'store, HAST, TIdN, PP>
 where
     HAST::IdN: Debug + Copy,
     TIdN::Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
     for<'b> <TIdN::Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
-    QHAST::Target: types::HyperAST<'store>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, &mut 0, 0, f).map(|_| ())
@@ -148,9 +138,8 @@ impl<
         'store,
         HAST: types::TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
-        QHAST: std::ops::Deref<Target = hyper_ast::store::SimpleStores<crate::types::TStore>>,
         const PP: bool,
-    > TreeToQuery<'store, HAST, TIdN, QHAST, PP>
+    > TreeToQuery<'store, HAST, TIdN, PP>
 where
     HAST::IdN: Debug + Copy,
     TIdN::Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug + Eq + Copy,

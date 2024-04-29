@@ -1,6 +1,8 @@
 use crate::tests::cpp_tree;
 use hyper_ast::{position::TreePath, store::defaults::NodeIdentifier, types::Typed};
 
+use hyper_ast_gen_ts_cpp::iter::IterAll as CppIter;
+
 const Q0: &str =
     r#"(binary_expression (_expression (number_literal)) "+" (_expression (number_literal)))"#; // TODO make _expression optional
 const C0: &str = r#"int f() {
@@ -30,26 +32,22 @@ const Q1: &str = r#"(binary_expression (_expression (identifier) @first) "+" (_e
 // - edit distance between query and subtree
 // - acceleration related to extracting entropy from basic constructs
 
+type CppTIdN = hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>;
+
+type Cpp = hyper_ast_gen_ts_cpp::types::Type;
+
 #[test]
 fn simple() {
     let (code_store, code) = cpp_tree(C0.as_bytes());
     let (query_store, query) = crate::search::ts_query(Q0.as_bytes());
     let path = hyper_ast::position::StructuralPosition::new(code);
-    let prepared_matcher =
-        crate::search::PreparedMatcher::<_, hyper_ast_gen_ts_cpp::types::Type>::new(
-            &query_store,
-            query,
-        );
+    let prepared_matcher = crate::search::PreparedMatcher::<Cpp>::new(&query_store, query);
     let mut matched = false;
-    for e in hyper_ast_gen_ts_cpp::iter::IterAll::new(&code_store, path, code) {
-        if prepared_matcher.is_matching::<_, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>(
-            &code_store,
-            *e.node().unwrap(),
-        ) {
-            type T = hyper_ast_gen_ts_cpp::types::TIdN<hyper_ast::store::defaults::NodeIdentifier>;
+    for e in CppIter::new(&code_store, path, code) {
+        if prepared_matcher.is_matching::<_, CppTIdN>(&code_store, *e.node().unwrap()) {
             let n = code_store
                 .node_store
-                .try_resolve_typed::<T>(e.node().unwrap())
+                .try_resolve_typed::<CppTIdN>(e.node().unwrap())
                 .unwrap()
                 .0;
             let t = n.get_type();
@@ -60,24 +58,9 @@ fn simple() {
     assert!(matched);
     let (code_store1, code1) = cpp_tree(C1.as_bytes());
     let path = hyper_ast::position::StructuralPosition::new(code1);
-    let prepared_matcher =
-        crate::search::PreparedMatcher::<_, hyper_ast_gen_ts_cpp::types::Type>::new(
-            &query_store,
-            query,
-        );
-    for e in hyper_ast_gen_ts_cpp::iter::IterAll::new(&code_store1, path, code1) {
-        if prepared_matcher.is_matching::<_, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>(
-            &code_store1,
-            *e.node().unwrap(),
-        ) {
-            type T = hyper_ast_gen_ts_cpp::types::TIdN<hyper_ast::store::defaults::NodeIdentifier>;
-            let n = code_store1
-                .node_store
-                .try_resolve_typed::<T>(e.node().unwrap())
-                .unwrap()
-                .0;
-            let t = n.get_type();
-            dbg!(t);
+    let prepared_matcher = crate::search::PreparedMatcher::<Cpp>::new(&query_store, query);
+    for e in CppIter::new(&code_store1, path, code1) {
+        if prepared_matcher.is_matching::<_, CppTIdN>(&code_store1, *e.node().unwrap()) {
             panic!("should not match")
         }
     }
@@ -88,27 +71,13 @@ fn named() {
     let (code_store, code) = cpp_tree(C2.as_bytes());
     let (query_store, query) = crate::search::ts_query(Q1.as_bytes());
     let path = hyper_ast::position::StructuralPosition::new(code);
-    let prepared_matcher =
-        crate::search::PreparedMatcher::<_, hyper_ast_gen_ts_cpp::types::Type>::new(
-            &query_store,
-            query,
-        );
+    let prepared_matcher = crate::search::PreparedMatcher::<Cpp>::new(&query_store, query);
     let mut matched = false;
-    for e in hyper_ast_gen_ts_cpp::iter::IterAll::new(&code_store, path, code) {
-        if let Some(_) = prepared_matcher
-            .is_matching_and_capture::<_, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>(
-                &code_store,
-                *e.node().unwrap(),
-            )
+    for e in CppIter::new(&code_store, path, code) {
+        if let Some(c) =
+            prepared_matcher.is_matching_and_capture::<_, CppTIdN>(&code_store, *e.node().unwrap())
         {
-            type T = hyper_ast_gen_ts_cpp::types::TIdN<hyper_ast::store::defaults::NodeIdentifier>;
-            let n = code_store
-                .node_store
-                .try_resolve_typed::<T>(e.node().unwrap())
-                .unwrap()
-                .0;
-            let t = n.get_type();
-            dbg!(t);
+            dbg!(c);
             matched = true;
         }
     }

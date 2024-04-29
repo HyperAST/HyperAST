@@ -78,7 +78,7 @@ fn gen_match_simple() {
 
     {
         let path = StructuralPosition::new(code);
-        let prepared_matcher = PreparedMatcher::<_, Cpp>::new(&query_store, query);
+        let prepared_matcher = PreparedMatcher::<Cpp>::new(&query_store, query);
         let mut matched = false;
         for e in CppIter::new(&code_store, path, code) {
             if prepared_matcher.is_matching::<_, CppTIdN>(&code_store, *e.node().unwrap()) {
@@ -95,7 +95,7 @@ fn gen_match_simple() {
     {
         let (code_store1, code1) = cpp_tree(C1.as_bytes());
         let path = StructuralPosition::new(code1);
-        let prepared_matcher = PreparedMatcher::<_, Cpp>::new(&query_store, query);
+        let prepared_matcher = PreparedMatcher::<Cpp>::new(&query_store, query);
         for e in CppIter::new(&code_store1, path, code1) {
             if prepared_matcher.is_matching::<_, CppTIdN>(&code_store1, *e.node().unwrap()) {
                 let n = code_store1
@@ -132,9 +132,8 @@ fn gen_match_xml() {
     );
     println!();
     println!("{}", TextSerializer::new(&code_store, pat));
-    let q0 =
-        tsq_ser_meta::TreeToQuery::<_, XmlTIdN, _, true>::with_pred(&code_store, pat, "(Name)")
-            .to_string();
+    let q0 = tsq_ser_meta::TreeToQuery::<_, XmlTIdN, true>::with_pred(&code_store, pat, "(Name)")
+        .to_string();
     println!("{}", q0);
     // let q0 = format!("(document (element (content (element {}))))", q0);
     // let q0 = format!("(element (STag (Name) @id (#eq? @id \"artifactId\")))");
@@ -142,7 +141,7 @@ fn gen_match_xml() {
 
     {
         let path = StructuralPosition::new(code);
-        let prepared_matcher = PreparedMatcher::<_, Xml>::new(&query_store, query);
+        let prepared_matcher = PreparedMatcher::<Xml>::new(&query_store, query);
         let mut matched = false;
         for e in XmlIter::new(&code_store, path, code) {
             if prepared_matcher.is_matching::<_, XmlTIdN>(&code_store, *e.node().unwrap()) {
@@ -160,7 +159,7 @@ fn gen_match_xml() {
         let build = code_store.node_store.resolve(build).child(&1).unwrap();
         let build = code_store.node_store.resolve(build).child(&21).unwrap();
         let path = StructuralPosition::new(build);
-        let prepared_matcher = PreparedMatcher::<_, Xml>::new(&query_store, query);
+        let prepared_matcher = PreparedMatcher::<Xml>::new(&query_store, query);
         let mut matched = false;
         for e in XmlIter::new(&code_store, path, build) {
             if prepared_matcher.is_matching::<_, XmlTIdN>(&code_store, *e.node().unwrap()) {
@@ -190,7 +189,7 @@ fn gen_match_xml() {
         println!();
         println!("{}", TextSerializer::new(&code_store, neg_subtree));
         let path = StructuralPosition::new(neg_subtree);
-        let prepared_matcher = PreparedMatcher::<_, Xml>::new(&query_store, query);
+        let prepared_matcher = PreparedMatcher::<Xml>::new(&query_store, query);
         for e in XmlIter::new(&code_store, path, neg_subtree) {
             if prepared_matcher.is_matching::<_, XmlTIdN>(&code_store, *e.node().unwrap()) {
                 let (t, _) = code_store
@@ -219,7 +218,7 @@ fn gen_match_named() {
     let (mut query_store, query) = crate::search::ts_query(q0.as_bytes());
 
     let path = StructuralPosition::new(code);
-    let prepared_matcher = PreparedMatcher::<_, Cpp>::new(&query_store, query);
+    let prepared_matcher = PreparedMatcher::<Cpp>::new(&query_store, query);
     let mut matched = false;
     for e in CppIter::new(&code_store, path, code) {
         if prepared_matcher.is_matching::<_, CppTIdN>(&code_store, *e.node().unwrap()) {
@@ -238,7 +237,7 @@ fn gen_match_named() {
         TextSerializer::new(&code_store1, code1)
     );
     let path = StructuralPosition::new(code1);
-    let prepared_matcher = PreparedMatcher::<_, Cpp>::new(&query_store, query);
+    let prepared_matcher = PreparedMatcher::<Cpp>::new(&query_store, query);
     for e in CppIter::new(&code_store1, path, code1) {
         if prepared_matcher.is_matching::<_, CppTIdN>(&code_store1, *e.node().unwrap()) {
             panic!("should not match")
@@ -254,7 +253,7 @@ fn gen_match_named() {
     );
 
     let path = StructuralPosition::new(code2);
-    let prepared_matcher = PreparedMatcher::<_, Cpp>::new(&query_store, query);
+    let prepared_matcher = PreparedMatcher::<Cpp>::new(&query_store, query);
     for e in CppIter::new(&code_store2, path, code2) {
         if prepared_matcher.is_matching::<_, CppTIdN>(&code_store2, *e.node().unwrap()) {
             panic!("should not match")
@@ -269,7 +268,7 @@ fn gen_match_named() {
     let (query_store1, query1) = crate::search::ts_query(M0.as_bytes());
 
     let path = StructuralPosition::new(query);
-    let prepared_matcher = PreparedMatcher::<_, crate::types::Type>::new(&query_store1, query1);
+    let prepared_matcher = PreparedMatcher::<crate::types::Type>::new(&query_store1, query1);
     let mut per_label = std::collections::HashMap::<
         String,
         Vec<(String, StructuralPosition<NodeIdentifier, u16>)>,
@@ -282,8 +281,8 @@ fn gen_match_named() {
             )
         {
             dbg!(&capts);
-            let k = capts.get("label").unwrap().clone().label().unwrap();
-            let v = capts.get("id").unwrap().clone().label().unwrap();
+            let k = capts.get("label").unwrap().clone().try_label().unwrap();
+            let v = capts.get("id").unwrap().clone().try_label().unwrap();
             let p = e;
             per_label.entry(k).or_insert(vec![]).push((v, p));
         }
@@ -335,7 +334,7 @@ fn gen_match_named() {
 
     {
         let path = StructuralPosition::new(code2);
-        let prepared_matcher = PreparedMatcher::<_, Cpp>::new(&query_store, query);
+        let prepared_matcher = PreparedMatcher::<Cpp>::new(&query_store, query);
         let mut matched = false;
         for e in CppIter::new(&code_store2, path, code2) {
             if prepared_matcher.is_matching::<_, CppTIdN>(&code_store2, *e.node().unwrap()) {

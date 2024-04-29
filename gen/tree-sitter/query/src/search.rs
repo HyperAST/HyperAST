@@ -1,7 +1,7 @@
 use crate::legion::TsQueryTreeGen;
 use crate::types::TStore;
 
-use hyper_ast::store::{defaults::LabelIdentifier, labels::LabelStore};
+use hyper_ast::store::labels::LabelStore;
 use hyper_ast::types::{
     HyperAST, IterableChildren, Labeled, Typed, TypedHyperAST, TypedNodeStore, WithChildren,
 };
@@ -22,39 +22,13 @@ pub(crate) struct QuickTrigger<T> {
     pub(crate) root_types: Arc<[T]>,
 }
 
-pub struct PreparedMatcher<HAST, Ty> {
-    pub(crate) query_store: HAST,
+pub struct PreparedMatcher<Ty> {
     pub(crate) quick_trigger: QuickTrigger<Ty>,
     pub(crate) patterns: Arc<[Pattern<Ty>]>,
 }
 
-pub(crate) struct PatternMatcher<'a, 'b, Ty> {
-    pub(crate) query_store: &'a SimpleStores<crate::types::TStore>,
-    pub(crate) patterns: &'b Pattern<Ty>,
-}
-
-impl<'a, 'b, Ty> PatternMatcher<'a, 'b, Ty> {
-    pub(crate) fn is_matching<'store, HAST, TS, TIdN>(
-        &self,
-        code_store: &'store HAST,
-        id: TIdN,
-    ) -> bool
-    where
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::NodeId<IdN = HAST::IdN>
-            + hyper_ast::types::TypedNodeId<Ty = Ty>
-            + 'static,
-        Ty: std::fmt::Debug + Eq + Copy,
-    {
-        let n = code_store.typed_node_store().resolve(&id);
-        let t = n.get_type();
-        dbg!(t);
-        true
-    }
-}
-
-impl<'a, Ty: for<'b> TryFrom<&'b str>, QHAST: std::ops::Deref<Target = SimpleStores<TStore>>>
-    PreparedMatcher<QHAST, Ty>
+impl<'a, Ty: for<'b> TryFrom<&'b str>>
+    PreparedMatcher<Ty>
 where
     for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
 {
@@ -112,18 +86,16 @@ where
     }
 }
 
-impl<HAST, Ty> PreparedMatcher<HAST, Ty>
+impl<Ty> PreparedMatcher<Ty>
 where
     Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
     for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
 {
     pub(crate) fn with_patterns(
-        query_store: HAST,
         root_types: Vec<Ty>,
         patterns: Vec<Pattern<Ty>>,
-    ) -> PreparedMatcher<HAST, Ty> {
+    ) -> PreparedMatcher<Ty> {
         Self {
-            query_store,
             quick_trigger: QuickTrigger {
                 root_types: root_types.into(),
             },
@@ -132,7 +104,7 @@ where
     }
 }
 
-impl<'a, Ty> PreparedMatcher<&'a SimpleStores<TStore>, Ty>
+impl<'a, Ty> PreparedMatcher<Ty>
 where
     Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
     for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
@@ -140,7 +112,7 @@ where
     pub fn new(query_store: &'a SimpleStores<crate::types::TStore>, query: NodeIdentifier) -> Self {
         let (root_types, patterns) = Self::new_aux(query_store, query);
 
-        Self::with_patterns(query_store, root_types, patterns)
+        Self::with_patterns(root_types, patterns)
     }
 
     pub(crate) fn new_aux(
@@ -295,7 +267,6 @@ where
                     Pattern::NamedNode { .. } | Pattern::Capture { .. } => (),
                     Pattern::Predicated { .. } => panic!(),
                     Pattern::AnonymousNode { .. } => todo!("not sure if it works properly"),
-                    p => todo!("{:?} still not implemented to be captured", p), // TODO quantificators will need more works
                 }
                 res = Pattern::Capture {
                     name,
@@ -561,7 +532,7 @@ pub enum CaptureRes {
 }
 
 impl CaptureRes {
-    pub(crate) fn label(self) -> Option<String> {
+    pub fn try_label(self) -> Option<String> {
         match self {
             CaptureRes::Label(l) => Some(l),
             CaptureRes::Node => None,
@@ -690,61 +661,8 @@ impl<Ty> Pattern<Ty> {
                         MatchingRes::fals()
                     }
                 }
-                p => todo!("{:?}", p),
             },
         }
-    }
-}
-
-pub(crate) struct QueryMatcher<'a, T, S> {
-    pub(crate) quick_trigger: QuickTrigger<T>,
-    pub(crate) query_store: &'a SimpleStores<crate::types::TStore>,
-    pub(crate) state: S,
-}
-
-pub(crate) fn extract_root_type(
-    query_store: &SimpleStores<crate::types::TStore>,
-    query: NodeIdentifier,
-) -> LabelIdentifier {
-    use crate::types::TIdN;
-    use crate::types::Type;
-    use hyper_ast::store::nodes::legion::NodeIdentifier;
-    let n = query_store
-        .node_store
-        .try_resolve_typed::<TIdN<NodeIdentifier>>(&query)
-        .unwrap()
-        .0;
-    let t = n.get_type();
-    dbg!(t);
-    assert_eq!(t, Type::Program);
-    if n.child_count() == 1 {
-        let rule = n.child(&0).unwrap();
-        let rule = query_store
-            .node_store
-            .try_resolve_typed::<TIdN<NodeIdentifier>>(&rule)
-            .unwrap()
-            .0;
-        let t = rule.get_type();
-        dbg!(t);
-        if t == Type::NamedNode {
-            let ty = rule.child(&1).unwrap();
-            let ty = query_store
-                .node_store
-                .try_resolve_typed::<TIdN<NodeIdentifier>>(&ty)
-                .unwrap()
-                .0;
-            let t = ty.get_type();
-            dbg!(t);
-            let l = ty.try_get_label();
-            dbg!(l);
-            l.unwrap().clone()
-        } else if t == Type::Identifier {
-            todo!()
-        } else {
-            todo!()
-        }
-    } else {
-        todo!()
     }
 }
 
@@ -762,7 +680,7 @@ pub(crate) fn ts_query2(stores: &mut SimpleStores<TStore>, text: &[u8]) -> legio
     let mut md_cache = Default::default();
     let mut query_tree_gen = TsQueryTreeGen {
         line_break: "\n".as_bytes().to_vec(),
-        stores: stores,
+        stores,
         md_cache: &mut md_cache,
     };
 

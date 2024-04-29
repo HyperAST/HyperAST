@@ -30,7 +30,7 @@ mod legion_impls {
 
         fn resolve_lang(
             &self,
-            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
+            _n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
             From::<&'static (dyn LangRef<Type>)>::from(&TsQuery)
         }
@@ -56,7 +56,7 @@ mod legion_impls {
 
         fn _intern(l: u16, t: u16) -> Self::Ty {
             // T((u16::MAX - l as u16) | t)
-            todo!()
+            todo!("{} {}", l, t)
         }
         fn intern(&self, t: Type) -> Self::Ty {
             t
@@ -81,7 +81,7 @@ mod legion_impls {
 
         fn resolve_lang(
             &self,
-            n: &HashedNodeRef<'a, NodeIdentifier>,
+            _n: &HashedNodeRef<'a, NodeIdentifier>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
             From::<&'static (dyn LangRef<AnyType>)>::from(&TsQuery)
         }
@@ -99,7 +99,7 @@ mod legion_impls {
             n: &HashedNodeRef<'a, NodeIdentifier>,
             m: &HashedNodeRef<'a, NodeIdentifier>,
         ) -> bool {
-            todo!()
+            todo!("{:?} {:?}", n, m)
         }
     }
 }
@@ -135,7 +135,7 @@ impl<IdN: Clone + Eq + NodeId> NodeId for TIdN<IdN> {
         Self(id)
     }
 
-    unsafe fn from_ref_id(id: &Self::IdN) -> &Self {
+    unsafe fn from_ref_id(_id: &Self::IdN) -> &Self {
         todo!()
     }
 }
@@ -164,7 +164,7 @@ pub struct TsQuery;
 
 impl LangRef<AnyType> for TsQuery {
     fn make(&self, t: u16) -> &'static AnyType {
-        panic!()
+        panic!("{}", t)
         // &From::<&'static dyn HyperType>::from(&S_T_L[t as usize])
     }
     fn to_u16(&self, t: AnyType) -> u16 {
@@ -518,7 +518,7 @@ impl Type {
             "Spaces" => Type::Spaces,
             "Directory" => Type::Directory,
             "ERROR" => Type::ERROR,
-            x => return None,
+            _ => return None,
         })
     }
     pub fn to_str(&self) -> &'static str {

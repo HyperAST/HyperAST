@@ -73,7 +73,7 @@ where
     fn serialize(
         &self,
         id: &HAST::IdN,
-        mut count: &mut usize,
+        count: &mut usize,
         out: &mut std::fmt::Formatter<'_>,
     ) -> Result<(), std::fmt::Error> {
         const LABELS0: bool = false;

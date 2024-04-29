@@ -1,6 +1,6 @@
 use hyper_ast::{
     store::{defaults::NodeIdentifier, SimpleStores},
-    types::{IterableChildren, Labeled, Typed},
+    types::{IterableChildren, Labeled},
     PrimInt,
 };
 

@@ -11,7 +11,6 @@ pub mod tests;
 
 #[cfg(feature = "legion")]
 mod tnode {
-    use super::*;
 
     #[repr(transparent)]
     pub struct TNode<'a>(pub(super) tree_sitter::Node<'a>);
@@ -48,6 +47,7 @@ mod tnode {
     }
 }
 
+use hyper_ast::types::HyperAST;
 #[cfg(feature = "legion")]
 pub use tnode::TNode;
 
@@ -57,3 +57,76 @@ pub mod search;
 pub mod iter;
 
 pub mod auto;
+
+pub fn prepare_matcher<Ty>(query: &str) -> crate::search::PreparedMatcher<Ty>
+where
+    Ty: std::fmt::Debug,
+    Ty: for<'a> TryFrom<&'a str>,
+    for<'a> <Ty as TryFrom<&'a str>>::Error: std::fmt::Debug,
+{
+    let (query_store, query) = crate::search::ts_query(query.as_bytes());
+    let prepared_matcher = crate::search::PreparedMatcher::<Ty>::new(&query_store, query);
+    prepared_matcher
+}
+
+pub struct IterMatched<M, HAST, It, TIdN> {
+    iter: It,
+    matcher: M,
+    hast: HAST,
+    _phantom: std::marker::PhantomData<TIdN>,
+}
+
+impl<'a, HAST, It: Iterator, TIdN> Iterator
+    for IterMatched<crate::search::PreparedMatcher<TIdN::Ty>, &'a HAST, It, TIdN>
+where
+    HAST: hyper_ast::types::HyperAST<'a> + hyper_ast::types::TypedHyperAST<'a, TIdN>,
+    &'a HAST: hyper_ast::types::HyperAST<'a, IdN = <HAST as HyperAST<'a>>::IdN>
+        + hyper_ast::types::TypedHyperAST<'a, TIdN>,
+    TIdN: 'static + hyper_ast::types::TypedNodeId<IdN = <HAST as HyperAST<'a>>::IdN>,
+    It::Item: hyper_ast::position::TypedTreePath<TIdN, <HAST as HyperAST<'a>>::Idx>,
+    for<'b> &'b str: Into<<TIdN as hyper_ast::types::TypedNodeId>::Ty>,
+    TIdN::IdN: Copy,
+{
+    type Item = (
+        It::Item,
+        std::collections::HashMap<String, search::CaptureRes>,
+    );
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(e) = self.iter.next() {
+            use hyper_ast::position::TreePath;
+            if let Some(c) = self
+                .matcher
+                .is_matching_and_capture::<_, TIdN>(self.hast, *e.node().unwrap())
+            {
+                return Some((e, c));
+            }
+        }
+        None
+    }
+}
+
+impl<Ty> crate::search::PreparedMatcher<Ty> {
+    pub fn apply_matcher<'a, HAST, It, TIdN>(
+        &self,
+        hast: &'a HAST,
+        root: TIdN::IdN,
+    ) -> IterMatched<&crate::search::PreparedMatcher<Ty>, &'a HAST, It, TIdN>
+    where
+        HAST: 'a + hyper_ast::types::HyperAST<'a>,
+        TIdN: hyper_ast::types::TypedNodeId<Ty = Ty, IdN = HAST::IdN>,
+        It: From<(&'a HAST, It::Item)>,
+        It::Item: From<HAST::IdN>,
+        It: Iterator,
+        It::Item: hyper_ast::position::TreePathMut<HAST::IdN, HAST::Idx>,
+    {
+        let path = It::Item::from(root);
+        let iter = It::from((hast, path));
+        IterMatched {
+            iter,
+            matcher: self,
+            hast,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
