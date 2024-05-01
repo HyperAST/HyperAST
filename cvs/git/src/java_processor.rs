@@ -1,4 +1,4 @@
-use std::{fmt::Display, iter::Peekable, path::Components};
+use std::{iter::Peekable, path::Components};
 
 use git2::{Oid, Repository};
 use hyper_ast::{
@@ -23,10 +23,7 @@ use crate::{
     git::BasicGitObject,
     java::JavaAcc,
     preprocessed::{IsSkippedAna, RepositoryProcessor},
-    processing::{
-        erased::{CommitProcExt, Parametrized, ParametrizedCommitProc2},
-        CacheHolding, InFiles, ObjectName,
-    },
+    processing::{erased::CommitProcExt, CacheHolding, InFiles, ObjectName},
     Processor, SimpleStores,
 };
 
@@ -368,9 +365,9 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
                 });
                 l
             });
-        use crate::processing::erased::ConfigParametersHandle;
-        use crate::processing::erased::ParametrizedCommitProc;
-        use crate::processing::erased::ParametrizedCommitProcessorHandle;
+        use crate::processing::erased::{
+            ConfigParametersHandle, ParametrizedCommitProc, ParametrizedCommitProcessorHandle,
+        };
         ParametrizedCommitProcessorHandle(self.erased_handle(), ConfigParametersHandle(l))
     }
 }
@@ -378,14 +375,14 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
 impl crate::processing::erased::CommitProc for JavaProc {
     fn process_root_tree(
         &mut self,
-        repository: &git2::Repository,
+        _repository: &git2::Repository,
         tree_oid: &git2::Oid,
     ) -> hyper_ast::store::defaults::NodeIdentifier {
         // let root_full_node =
         //     MavenProcessor::<RMS, true, MavenModuleAcc>::new(repository, self, dir_path, name, oid)
         //         .process();
         // root_full_node.0
-        unimplemented!()
+        unimplemented!("{}", tree_oid)
     }
 
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
@@ -394,8 +391,8 @@ impl crate::processing::erased::CommitProc for JavaProc {
 
     fn prepare_processing<'repo>(
         &self,
-        repository: &'repo git2::Repository,
-        commit_builder: crate::preprocessed::CommitBuilder,
+        _repository: &'repo git2::Repository,
+        _commit_builder: crate::preprocessed::CommitBuilder,
     ) -> Box<dyn crate::processing::erased::PreparedCommitProc + 'repo> {
         todo!()
     }

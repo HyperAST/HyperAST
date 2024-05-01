@@ -41,36 +41,6 @@ pub struct PreProcessedRepository {
 #[derive(Default)]
 pub struct RepositoryProcessor {
     pub main_stores: SimpleStores,
-
-    // // any
-    // pub object_map_any: OidMap<(NodeIdentifier, DefaultMetrics)>,
-    // // maven
-    // #[cfg(feature = "maven")]
-    // pub object_map_maven: OidMap<(NodeIdentifier, crate::maven::MD)>,
-    // // make
-    // #[cfg(feature = "make")]
-    // pub object_map_make: OidMap<(NodeIdentifier, crate::make::MD)>,
-    // // npm
-    // #[cfg(feature = "npm")]
-    // pub object_map_npm: OidMap<(NodeIdentifier, DefaultMetrics)>,
-
-    // // pom.xml
-    // #[cfg(feature = "maven")]
-    // pub object_map_pom: OidMap<POM>,
-    // // MakeFile
-    // #[cfg(feature = "make")]
-    // pub object_map_makefile: OidMap<MakeFile>,
-    // // Java
-    // #[cfg(feature = "java")]
-    // pub(super) java_md_cache: java_tree_gen::MDCache,
-    // #[cfg(feature = "java")]
-    // pub object_map_java: NamedMap<(java_tree_gen::Local, IsSkippedAna)>,
-    // // Cpp
-    // #[cfg(feature = "cpp")]
-    // pub(super) cpp_md_cache: cpp_tree_gen::MDCache,
-    // #[cfg(feature = "cpp")]
-    // pub object_map_cpp: NamedMap<(cpp_tree_gen::Local, IsSkippedAna)>,
-    // pub processing_systems: TypeMap,
     pub processing_systems: crate::processing::erased::ProcessorMap,
 }
 // NOTE what about making a constraints between sys processors
@@ -114,11 +84,6 @@ impl RepositoryProcessor {
 
     pub fn purge_caches(&mut self) {
         self.processing_systems.clear();
-        // self.object_map_maven.clear();
-        // self.object_map_java.clear();
-        // self.object_map_pom.clear();
-        // self.java_md_cache.clear();
-        // self.cpp_md_cache.clear();
     }
 }
 
