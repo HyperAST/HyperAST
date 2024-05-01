@@ -1,11 +1,9 @@
 //! NOTE Pretty adoc impl, would benefit from being merged with impl in egui_addon
 
-use super::Lang;
-use eframe::epaint::ahash::HashMap;
+use super::{types::Languages, Lang};
 use egui::{Response, WidgetText};
-use egui_addon::code_editor::EditorInfo;
+use egui_addon::{code_editor::EditorInfo, Languages as _};
 use egui_demo_lib::easy_mark::easy_mark;
-use std::sync::Arc;
 
 const TREE_SITTER: bool = false;
 
@@ -15,29 +13,31 @@ use crate::app::crdt_over_ws::Quote;
 pub(crate) struct CodeEditor<C = Quote> {
     #[serde(default = "default_info")]
     pub info: EditorInfo<String>,
-    pub language: String,
+    pub lang_name: String,
     // code: String,
     pub code: C,
     #[serde(skip)]
     #[serde(default = "default_parser")]
+    #[allow(unused)] // TODO need highlighting in web for tree-sitter
     pub parser: tree_sitter::Parser,
     #[serde(skip)]
-    pub languages: Arc<HashMap<String, Lang>>,
+    pub languages: Languages,
     #[serde(skip)]
     pub lang: Option<Lang>,
 }
 impl<C> egui_addon::code_editor::CodeHolder for CodeEditor<C> {
-    fn set_lang(&mut self, lang: String) {
-        self.language = lang;
+    fn set_lang(&mut self, lang: &str) {
+        self.lang_name = lang.to_owned();
+        self.lang = self.languages.get(lang);
     }
 }
-impl From<egui_addon::code_editor::CodeEditor> for CodeEditor {
-    fn from(value: egui_addon::code_editor::CodeEditor) -> Self {
+impl From<egui_addon::code_editor::CodeEditor<Languages>> for CodeEditor {
+    fn from(value: egui_addon::code_editor::CodeEditor<Languages>) -> Self {
         let code = value.code;
         let code = code.into();
         Self {
             info: value.info,
-            language: value.language,
+            lang_name: value.lang_name,
             code,
             parser: value.parser,
             languages: value.languages,
@@ -92,7 +92,10 @@ impl autosurgeon::Hydrate for CodeEditor {
         use automerge::ObjType;
         use autosurgeon::HydrateError;
         let Some(obj_type) = doc.object_type(obj) else {
-            return Err(HydrateError::unexpected("a map", "a scalar value".to_string()))
+            return Err(HydrateError::unexpected(
+                "a map",
+                "a scalar value".to_string(),
+            ));
         };
         match obj_type {
             ObjType::Map | ObjType::Table => {
@@ -129,6 +132,8 @@ pub(crate) fn default_parser() -> tree_sitter::Parser {
 
 impl<C: From<String>> Default for CodeEditor<C> {
     fn default() -> Self {
+        let languages = Languages::default();
+        let lang = languages.get("JavaScript");
         let code = &r#"function  f() { return 0; }
 function f() { return 1; }
 
@@ -140,11 +145,11 @@ function f() { return 2; }
 // }
 //             "#;
         Self {
-            language: "JavaScript".into(),
+            lang_name: lang.as_ref().map(|x| x.name.clone()).unwrap(),
             code: code.to_string().into(),
             parser: default_parser(),
-            languages: Default::default(),
-            lang: Default::default(),
+            languages,
+            lang,
             info: EditorInfo::default().copied(),
         }
     }
@@ -174,21 +179,16 @@ impl From<&str> for CodeEditor {
 // }
 
 impl CodeEditor {
-    pub(crate) fn title(&mut self, _title: &str) -> &mut Self {
-        // self.
-        self
-    }
-    // pub(crate) fn set_info(&mut self, info: EditorInfo<String>) -> &mut Self {
-    //     self.info = info;
-    //     self
-    // }
     pub fn code(&self) -> &str {
         use egui_addon::code_editor::generic_text_buffer::TextBuffer;
         self.code.as_str()
     }
     pub fn ui(&mut self, ui: &mut egui::Ui) -> Option<Response> {
         let Self {
-            code, lang, info, ..
+            code,
+            lang: _,
+            info,
+            ..
         } = self;
 
         // ui.horizontal(|ui| {
@@ -220,7 +220,7 @@ impl CodeEditor {
         //     });
         // }
 
-        let theme = egui_addon::syntax_highlighting::simple::CodeTheme::from_memory(ui.ctx());
+        let _theme = egui_addon::syntax_highlighting::simple::CodeTheme::from_memory(ui.ctx());
         // ui.collapsing("Theme", |ui| {
         //     ui.group(|ui| {
         //         theme.ui(ui);

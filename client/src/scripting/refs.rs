@@ -12,8 +12,8 @@ use hyper_ast_gen_ts_java::impact::{partial_analysis::PartialAnalysis, usage};
 pub fn find_refs<'a>(
     stores: &'a SimpleStores<TStore>,
     id: NodeIdentifier,
-    package_ref: String,
-    sig: String,
+    package_ref: &str,
+    sig: &str,
 ) -> Option<usize> {
     let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
 
@@ -41,7 +41,7 @@ pub fn find_refs<'a>(
     let mm = ana.solver.intern(RefsEnum::MaybeMissing);
     // let package_ref = scoped!(root, "spoon");
     let package_ref = {
-        let mut sig = package_ref.as_str();
+        let mut sig = package_ref;
         dbg!(sig);
         let mut i = if sig.starts_with("/") {
             sig = &sig[1..];
@@ -70,7 +70,7 @@ pub fn find_refs<'a>(
     // let i = scoped_type!(scoped!(scoped!(scoped!(root, "spoon"), "compiler"), "builder"), "JDTBuilder");
     // let i = scoped_type!(scoped!(scoped!(scoped!(mm, "spoon"), "compiler"), "builder"), "JDTBuilder");
     // let i = scoped_type!(scoped!(mm, "builder"), "JDTBuilder");
-    let mut sig = sig.as_str();
+    let mut sig = sig;
     dbg!(sig);
     let mut i = if sig.starts_with("/") {
         sig = &sig[1..];
@@ -129,7 +129,7 @@ impl From<hyper_ast::position::Position> for Pos {
     fn from(value: hyper_ast::position::Position) -> Self {
         Self(value)
     }
-} 
+}
 
 // impl QPath {
 //     fn convert<HAST>(self, stores: HAST) -> Pos {

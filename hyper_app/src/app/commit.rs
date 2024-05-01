@@ -1,6 +1,6 @@
 use poll_promise::Promise;
 
-use crate::app::{types::Resource};
+use crate::app::types::Resource;
 
 use super::types::Commit;
 
@@ -101,7 +101,7 @@ pub(super) fn fetch_commit(
 }
 
 impl Resource<CommitMetadata> {
-    fn from_response(ctx: &egui::Context, response: ehttp::Response) -> Result<Self, String> {
+    fn from_response(_ctx: &egui::Context, response: ehttp::Response) -> Result<Self, String> {
         wasm_rs_dbg::dbg!(&response);
         // let content_type = response.content_type().unwrap_or_default();
 
@@ -116,7 +116,7 @@ impl Resource<CommitMetadata> {
         })
     }
 }
-
+#[allow(unused)]
 pub(super) fn fetch_commit_parents(
     ctx: &egui::Context,
     api_addr: &str,
@@ -148,6 +148,7 @@ pub(super) fn fetch_commit_parents(
 }
 
 impl Resource<Vec<String>> {
+    #[allow(unused)]
     fn from_response(ctx: &egui::Context, response: ehttp::Response) -> Result<Self, String> {
         wasm_rs_dbg::dbg!(&response);
         // let content_type = response.content_type().unwrap_or_default();

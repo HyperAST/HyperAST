@@ -9,7 +9,7 @@ use crate::decompressed_tree_store::{
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::{optimal::zs::ZsMatcher, similarity_metrics};
 use hyper_ast::types::{
-    DecompressedSubtree, HyperAST, LabelStore, NodeId, NodeStore, SlicedLabel, Tree, WithHashs,
+    DecompressedSubtree, HyperAST, NodeId, NodeStore, Tree, WithHashs,
 };
 
 use super::bottom_up_matcher::BottomUpMatcher;
@@ -113,12 +113,7 @@ where
     M::Src: 'a + PrimInt + std::ops::SubAssign + Debug,
     M::Dst: 'a + PrimInt + std::ops::SubAssign + Debug,
 {
-    pub fn new(
-        stores: &'a HAST,
-        src_arena: Dsrc,
-        dst_arena: Ddst,
-        mappings: M,
-    ) -> Self {
+    pub fn new(stores: &'a HAST, src_arena: Dsrc, dst_arena: Ddst, mappings: M) -> Self {
         Self {
             internal: BottomUpMatcher {
                 stores,
@@ -132,8 +127,7 @@ where
 
     pub fn match_it(
         mapping: crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>,
-    ) -> crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
-    {
+    ) -> crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M> {
         let mut matcher = Self {
             internal: BottomUpMatcher {
                 stores: mapping.hyperast,
@@ -233,7 +227,8 @@ where
         use num_traits::ToPrimitive;
         let r = self
             .internal
-            .stores.node_store()
+            .stores
+            .node_store()
             .resolve(&self.internal.src_arena.original(&src))
             .has_children();
         assert_eq!(

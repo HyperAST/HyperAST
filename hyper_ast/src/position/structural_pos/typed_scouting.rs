@@ -1,12 +1,10 @@
 use super::super::{TreePathMut, TypedTreePath};
-use super::{
-    Position, Scout, SpHandle, StructuralPosition, StructuralPositionStore, TreePath,
-};
+use super::{Position, Scout, SpHandle, StructuralPosition, StructuralPositionStore, TreePath};
 use std::{fmt::Debug, marker::PhantomData};
 
 use num::zero;
 
-use crate::types::{Typed, TypedNodeId, WithChildren, NodeId};
+use crate::types::{NodeId, Typed, TypedNodeId, WithChildren};
 
 use crate::PrimInt;
 use crate::{

@@ -1,10 +1,7 @@
 use num::ToPrimitive;
 
 use crate::{
-    store::{
-        defaults::{NodeIdentifier},
-        nodes::HashedNodeRef,
-    },
+    store::{defaults::NodeIdentifier, nodes::HashedNodeRef},
     types::{
         AnyType, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled, NodeStore,
         TypeStore, WithChildren, WithSerialization,
@@ -16,7 +13,7 @@ use super::Position;
 ///
 /// precondition: slices are read from right to left eg.
 /// [dir, file, class, method, statement] ~> dir/file:20:40
-pub(super) fn extract_file_postion<'store, HAST: HyperAST<'store>>(
+pub fn extract_file_postion<'store, HAST: HyperAST<'store>>(
     stores: &'store HAST,
     parents: &[HAST::IdN],
 ) -> Position {
@@ -41,7 +38,7 @@ pub(super) fn extract_file_postion<'store, HAST: HyperAST<'store>>(
 ///
 /// precondition: slices are read from right to left eg.
 /// [dir, file, class, method, statement] ~> dir/file:20:40
-pub(super) fn extract_position<'store, HAST>(
+pub fn extract_position<'store, HAST>(
     stores: &'store HAST,
     parents: &[HAST::IdN],
     offsets: &[usize],
@@ -84,7 +81,7 @@ where
     }
 }
 
-pub(super) fn extract_file_postion_it_rec<'store, HAST, It>(
+pub fn extract_file_postion_it_rec<'store, HAST, It>(
     stores: &'store HAST,
     mut nodes: It,
 ) -> Position
@@ -93,7 +90,7 @@ where
     It: Iterator<Item = HAST::IdN>, //Iterator<Item = HAST::IdN>,
 {
     let Some(p) = nodes.next() else {
-        return Position::default()
+        return Position::default();
     };
     let b = stores.node_store().resolve(&p);
     // println!("type {:?}", b.get_type());
@@ -107,7 +104,7 @@ where
     r
 }
 
-pub(super) fn extract_position_it_rec<'store, HAST, It, It2>(
+pub fn extract_position_it_rec<'store, HAST, It, It2>(
     stores: &'store HAST,
     mut it: It,
 ) -> Position
@@ -118,7 +115,7 @@ where
     It: Iterator<Item = (HAST::IdN, usize)> + Into<It2>, //Iterator<Item = ParentWithChildOffset<HAST::IdN>>,
     It2: Iterator<Item = HAST::IdN>,
 {
-    let Some((p,o)) = it.next() else {
+    let Some((p, o)) = it.next() else {
         return Position::default();
     };
 
@@ -155,7 +152,7 @@ where
     }
 }
 
-pub(super) fn extract_file_postion_it<'store, HAST, It>(stores: &'store HAST, nodes: It) -> Position
+pub fn extract_file_postion_it<'store, HAST, It>(stores: &'store HAST, nodes: It) -> Position
 where
     HAST: HyperAST<'store>,
     It: Iterator<Item = HAST::IdN>, //Iterator<Item = HAST::IdN>,
@@ -174,7 +171,7 @@ where
     r
 }
 
-pub(super) fn extract_position_it<'store, HAST, It, It2>(
+pub fn extract_position_it<'store, HAST, It, It2>(
     stores: &'store HAST,
     mut it: It,
 ) -> Position

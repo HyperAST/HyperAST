@@ -1,5 +1,4 @@
 use std::hash::Hash;
-use std::marker::PhantomData;
 
 use num_traits::ToPrimitive;
 
@@ -8,7 +7,7 @@ use crate::decompressed_tree_store::{
 };
 use crate::matchers::mapping_store::MonoMappingStore;
 use crate::matchers::similarity_metrics;
-use hyper_ast::types::{HyperAST, NodeStore, Tree, WithHashs};
+use hyper_ast::types::{HyperAST, Tree, WithHashs};
 
 use super::bottom_up_matcher::BottomUpMatcher;
 
@@ -88,7 +87,7 @@ where
     T: hyper_ast::types::Typed,
     T::Type: Hash + Copy + Eq + Send + Sync,
 {
-    fn execute(&mut self) {
+    pub fn execute(&mut self) {
         for i in (0..self.internal.src_arena.len()).rev() {
             let a: IdD = num_traits::cast(i).unwrap();
             if !(self.internal.mappings.is_src(&a) || !self.internal.src_arena.has_children(&a)) {

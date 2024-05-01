@@ -1,6 +1,6 @@
 use super::*;
-use hecs::{Entity, EntityRef as EntryRef, World};
 use hashbrown::hash_map::DefaultHashBuilder;
+use hecs::{Entity, EntityRef as EntryRef, World};
 
 pub struct PendingInsert<'a>(
     crate::compat::hash_map::RawEntryMut<'a, Entity, (), ()>,
@@ -10,18 +10,12 @@ pub struct PendingInsert<'a>(
 impl<'a> PendingInsert<'a> {
     pub fn occupied_id(&self) -> Option<NodeIdentifier> {
         match &self.0 {
-            hashbrown::hash_map::RawEntryMut::Occupied(occupied) => {
-                Some(occupied.key().clone())
-            }
+            hashbrown::hash_map::RawEntryMut::Occupied(occupied) => Some(occupied.key().clone()),
             _ => None,
         }
     }
     pub fn resolve<T>(&self, id: NodeIdentifier) -> HashedNodeRef<T> {
-        self.1
-             .1
-            .entity(id)
-            .map(|x| HashedNodeRef::new(x))
-            .unwrap()
+        self.1 .1.entity(id).map(|x| HashedNodeRef::new(x)).unwrap()
     }
     pub fn occupied(
         &'a self,
@@ -79,10 +73,8 @@ impl NodeStore {
         let (&mut symbol, _) = {
             let symbol = internal.spawn(components);
             vacant.insert_with_hasher(hash, symbol, (), |id| {
-                let node: elem::HashedNodeRef<'_, NodeIdentifier> = internal
-                    .entity(*id)
-                    .map(|x| HashedNodeRef::new(x))
-                    .unwrap();
+                let node: elem::HashedNodeRef<'_, NodeIdentifier> =
+                    internal.entity(*id).map(|x| HashedNodeRef::new(x)).unwrap();
 
                 crate::utils::make_hash(hasher, &node)
             })

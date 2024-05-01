@@ -1,0 +1,48 @@
+[package]
+name = "polyglote"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# enums = { git = "https://github.com/mozilla/rust-code-analysis", branch = "master", package = "enums", version = "0.0.1" }
+# tree-sitter = "0.20.9"
+tree-sitter = "0.22.2"
+tree-sitter-loader = "0.22.2"
+tree-sitter-query = { git = "https://github.com/tree-sitter-grammars/tree-sitter-query.git", rev = "2e31ca2771f6042b0e4e0c41a6290014a9e1face", version = "0.2.1" }
+# tree-sitter-tsq = "0.19.0"
+tree-sitter-graph = "0.11.2"        # { path = "../tree-sitter-graph" } 
+tree-sitter-typescript = { git = "https://github.com/quentinLeDilavrec/tree-sitter-typescript", rev = "eee64b9ea005d2641cfce5b0a81404a9c8877740", version = "0.20.5" }
+
+# tree-sitter-java = "0.21.0"
+# tree-sitter-java = { git = "https://github.com/quentinLeDilavrec/tree-sitter-java", version = "0.20" }
+tree-sitter-java = { path="../../tree-sitter-java", version = "0.21.0" }
+
+tree-sitter-python = "0.21.0"
+# tree-sitter-rust = "=0.20.3"
+# tree-sitter-mozcpp = "0.20.2"
+# tree-sitter-cpp = "0.22.0"
+tree-sitter-cpp = { path="../../tree-sitter-cpp", version="0.22" }
+# tree-sitter-cpp = { git = "https://github.com/quentinLeDilavrec/tree-sitter-cpp", version = "0.20" }
+tree-sitter-kotlin = "0.3.5"
+tree-sitter-xml = "0.6.2"
+# tree-sitter-xml = { git = "https://github.com/quentinLeDilavrec/tree-sitter-xml", version = "0.20" }
+
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.79"
+
+hecs = "0.9.1"
+# hecs-hierarchy = "0.11.7"
+
+derive_deref = "1.1.1"
+
+quote = "1.0.10"
+syn = "1.0.0"
+proc-macro2 = "1.0.0"
+heck = "0.3.3"
+prettyplease = "0.1.24"
+
+# TODO use types from hyper_ast crate
+strum = "0.23.0"
+strum_macros = "0.23.1"

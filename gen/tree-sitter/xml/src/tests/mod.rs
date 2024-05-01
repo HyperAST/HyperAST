@@ -13,7 +13,9 @@ fn xml_tree_sitter_simple() {
     let mut parser = Parser::new();
 
     {
-        parser.set_language(tree_sitter_xml::language()).unwrap();
+        parser
+            .set_language(&tree_sitter_xml::language_xml())
+            .unwrap();
     }
 
     let text = {
@@ -66,7 +68,7 @@ fn xml_tree_sitter_simple2() {
 
 #[test]
 fn xml_tree_sitter_on_pom() {
-    let path: PathBuf = Path::new("../../../benchmark/pom.xml").to_path_buf();
+    let path: PathBuf = Path::new("src/tests/pom.xml.test").to_path_buf();
 
     let text = std::fs::read(path).unwrap();
     let tree = match tree_sitter_parse_xml(&text) {
@@ -78,7 +80,7 @@ fn xml_tree_sitter_on_pom() {
 
 #[test]
 fn hyperAST_on_pom() {
-    let path: PathBuf = Path::new("../../../benchmark/pom.xml").to_path_buf();
+    let path: PathBuf = Path::new("src/tests/pom.xml.test").to_path_buf();
 
     let text = std::fs::read(path).unwrap();
     let tree = match tree_sitter_parse_xml(&text) {
@@ -114,7 +116,7 @@ fn xml_issue_cdata() {
         line_break: "\n".as_bytes().to_vec(),
         stores: &mut stores,
     };
-    let x = tree_gen.generate_file(b"", text, tree.walk()).local;
+    let _x = tree_gen.generate_file(b"", text, tree.walk()).local;
     // println!("{}", tree.root_node().to_sexp());
 }
 
@@ -122,8 +124,8 @@ fn xml_issue_cdata() {
 fn type_test_generic_eq() {
     use hyper_ast::types::HyperType;
 
-    let k = crate::types::Type::Text;
-    let k0 = crate::types::Type::Text;
+    let k = crate::types::Type::Document;
+    let k0 = crate::types::Type::Document;
     let k1 = crate::types::Type::Element;
     assert!(k.eq(&k));
     assert!(k.eq(&k0));
@@ -139,8 +141,8 @@ fn type_test_generic_eq() {
     assert!(!k.generic_eq(&k1));
     assert!(!k1.generic_eq(&k));
 
-    let ak = crate::types::as_any(&crate::types::Type::Text);
-    let ak0 = crate::types::as_any(&crate::types::Type::Text);
+    let ak = crate::types::as_any(&crate::types::Type::Document);
+    let ak0 = crate::types::as_any(&crate::types::Type::Document);
     let ak1 = crate::types::as_any(&crate::types::Type::Element);
 
     assert!(ak.generic_eq(&ak));

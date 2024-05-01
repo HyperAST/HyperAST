@@ -6,12 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tree-sitter = "0.20.9"
+tree-sitter = "0.22.2"
 tree-sitter-cli = "0.20.7"
-hyper_ast = { path = "../hyper_ast", default-features = false, features = ["serialize"] }
+hyper_ast = { path = "../hyper_ast", default-features = false, features = [
+    "serialize",
+] }
 hyper_diff = { path = "../hyper_diff" }
 hyper_ast_cvs_git = { path = "../cvs/git" }
 hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
+hyper_ast_gen_ts_cpp = { path = "../gen/tree-sitter/cpp" }
 env_logger = "0.9.0"
 log = { version = "0.4.6", features = [
     # "max_level_debug",
@@ -21,7 +24,10 @@ log = { version = "0.4.6", features = [
 rhai = { version = "1.12.0", features = ["sync", "serde"] }
 average = "0.13.1"
 
-axum = { version="0.6.7", features = ["ws","headers"] } # Web framework that focuses on ergonomics and modularity.
+axum = { version = "0.6.7", features = [
+    "ws",
+    "headers",
+] } # Web framework that focuses on ergonomics and modularity.
 hyper = { version = "0.14.17", features = [
     "full",
 ] } # A fast and correct HTTP library.
@@ -37,7 +43,10 @@ serde = { version = "1.0.136", features = [
 
 # try crdt with ws https://github.com/tokio-rs/axum/blob/main/examples/websockets/Cargo.toml
 futures = "0.3"
-futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+futures-util = { version = "0.3", default-features = false, features = [
+    "sink",
+    "std",
+] }
 headers = "0.3"
 
 serde_json = "1.0.79" # Serde serializion/deserialization of JSON data.
@@ -48,7 +57,8 @@ tracing = "0.1.32" #  Application-level tracing for Rust.
 tracing-subscriber = { version = "0.3.9", features = [
     "env-filter",
 ] } # Utilities for implementing and composing `tracing` subscribers.
-axum-extra = { version = "0.7.4", features = [] } # fallbacks for access levels, use typed-routing feature if needed
+axum-extra = { version = "0.7.4", features = [
+] } # fallbacks for access levels, use typed-routing feature if needed
 
 tower-http = { version = "0.3.0", features = [
     "add-extension",
@@ -79,8 +89,7 @@ syn = { version = "2", features = ["full", "extra-traits"] }
 
 clap = { version = "3.0", features = ["derive"] }
 
-[dependencies.hashbrown]
-version = "0.12.3"
+hashbrown = "0.12.3"
 
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["blocking"] }

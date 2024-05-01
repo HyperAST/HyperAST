@@ -6,7 +6,9 @@ use hyper_ast::{
 };
 use hyper_ast_cvs_git::{
     maven::MavenModuleAcc,
-    multi_preprocessed::PreProcessedRepositories, no_space::as_nospaces, processing::{ConfiguredRepoHandle2, ConfiguredRepoTrait, CacheHolding},
+    multi_preprocessed::PreProcessedRepositories,
+    no_space::as_nospaces,
+    processing::{CacheHolding, ConfiguredRepoHandle2, ConfiguredRepoTrait},
 };
 use num_traits::ToPrimitive;
 
@@ -43,13 +45,18 @@ pub fn windowed_commits_compare(
         .map(|x| {
             println!("{}:({},{})", x.configured_repo.spec(), &x.before, &x.after);
             repo_names.push(x.configured_repo.spec().to_string());
-            (preprocessed.pre_process_with_limit(
-                &mut x.configured_repo.clone().fetch(),
-                x.before,
-                x.before,
-                // x.dir_path,
-                limit,
-            ).unwrap(), x.configured_repo)
+            (
+                preprocessed
+                    .pre_process_with_limit(
+                        &mut x.configured_repo.clone().fetch(),
+                        x.before,
+                        x.before,
+                        // x.dir_path,
+                        limit,
+                    )
+                    .unwrap(),
+                x.configured_repo,
+            )
         })
         .collect();
     let hyperast_size = memusage_linux() - mu;
@@ -98,20 +105,21 @@ pub fn windowed_commits_compare(
     for c in (0..min_len - window_size).map(|c| {
         processing_ordered_commits
             .iter()
-            .map(|x| (&x.0[c..(c + window_size)],&x.1))
+            .map(|x| (&x.0[c..(c + window_size)], &x.1))
             .collect::<Vec<_>>()
     }) {
         // dbg!(&c, 1..min_len - window_size);
         let oid_src: Vec<_> = c.iter().map(|x| (x.0[0], x.1)).collect();
-        for oid_dst in (1..window_size).map(|i| c.iter().map(|c|(c.0[i],c.1)).collect::<Vec<_>>()) {
+        for oid_dst in (1..window_size).map(|i| c.iter().map(|c| (c.0[i], c.1)).collect::<Vec<_>>())
+        {
             log::warn!("diff of {oid_src:?} and {oid_dst:?}");
-            assert_eq!(oid_src.len(),oid_dst.len());
-            
+            assert_eq!(oid_src.len(), oid_dst.len());
+
             let mut src_acc = MavenModuleAcc::from("".to_string());
             let mut src_mem = hyper_ast::utils::Bytes::default(); // NOTE it does not consider the size of the root, but it is an implementation detail
             let mut src_s = 0;
             for (i, (oid_src, repo)) in oid_src.iter().enumerate() {
-                let commit_src = preprocessed.get_commit(repo.config(),&oid_src).unwrap();
+                let commit_src = preprocessed.get_commit(repo.config(), &oid_src).unwrap();
                 let node_store = &preprocessed.processor.main_stores.node_store;
                 let src_tr = commit_src.ast_root;
                 let s = node_store.resolve(src_tr).size();
@@ -127,7 +135,8 @@ pub fn windowed_commits_compare(
                         .processing_systems
                         .get::<hyper_ast_cvs_git::maven_processor::MavenProcessorHolder>()
                         .unwrap()
-                        .get_caches().object_map
+                        .get_caches()
+                        .object_map
                         //.get::<Caches>().unwrap().object_map//object_map_maven
                         .get(&oid)
                         .unwrap()
@@ -138,8 +147,8 @@ pub fn windowed_commits_compare(
             let mut dst_acc = MavenModuleAcc::from("".to_string());
             let mut dst_mem = hyper_ast::utils::Bytes::default();
             let mut dst_s = 0;
-            for (i, (oid_dst,repo)) in oid_dst.iter().enumerate() {
-                let commit_dst = preprocessed.get_commit(repo.config(),&oid_dst).unwrap();
+            for (i, (oid_dst, repo)) in oid_dst.iter().enumerate() {
+                let commit_dst = preprocessed.get_commit(repo.config(), &oid_dst).unwrap();
                 let node_store = &preprocessed.processor.main_stores.node_store;
                 let dst_tr = commit_dst.ast_root;
                 let s = node_store.resolve(dst_tr).size();
@@ -155,7 +164,8 @@ pub fn windowed_commits_compare(
                         .processing_systems
                         .get::<hyper_ast_cvs_git::maven_processor::MavenProcessorHolder>()
                         .unwrap()
-                        .get_caches().object_map
+                        .get_caches()
+                        .object_map
                         // .get::<Caches>().unwrap().object_map//object_map_maven
                         .get(&oid)
                         .unwrap()
@@ -223,8 +233,16 @@ pub fn windowed_commits_compare(
             } else {
                 unimplemented!("gt_out_format {} is not implemented", gt_out_format)
             };
-            let oid_src = oid_src.iter().map(|x|x.0.to_string()).collect::<Vec<String>>().join("+");
-            let oid_dst = oid_dst.iter().map(|x|x.0.to_string()).collect::<Vec<String>>().join("+");
+            let oid_src = oid_src
+                .iter()
+                .map(|x| x.0.to_string())
+                .collect::<Vec<String>>()
+                .join("+");
+            let oid_dst = oid_dst
+                .iter()
+                .map(|x| x.0.to_string())
+                .collect::<Vec<String>>()
+                .join("+");
 
             if let Some((buf_validity, buf_perfs)) = &mut buf {
                 dbg!(
@@ -352,10 +370,10 @@ pub fn windowed_commits_compare(
                         &gt_timings[1],
                         &gt_timings[2],
                         summarized_lazy.mapping_durations.preparation[0],
-                        summarized_lazy.mapping_durations.mappings.0[0], 
+                        summarized_lazy.mapping_durations.mappings.0[0],
                         summarized_lazy.mapping_durations.preparation[1],
-                        summarized_lazy.mapping_durations.mappings.0[1], 
-                        summarized_lazy.gen_t, 
+                        summarized_lazy.mapping_durations.mappings.0[1],
+                        summarized_lazy.gen_t,
                         summarized_lazy.prepare_gen_t,
                         not_lazy.mapping_durations.preparation[0],
                         not_lazy.mapping_durations.mappings.0[0],

@@ -180,10 +180,18 @@ fn t() {
     pub trait ErasableProcessor: Any + ToErasedProc + ParametrizedCommitProc {}
     pub trait ToErasedProc {
         fn to_erasable_processor(self: Box<Self>) -> Box<dyn ErasableProcessor>;
+        fn as_mut_any(&mut self) -> &mut dyn Any;
+        fn as_any(&self) -> &dyn Any;
     }
 
     impl<T: ErasableProcessor> ToErasedProc for T {
         fn to_erasable_processor(self: Box<Self>) -> Box<dyn ErasableProcessor> {
+            self
+        }
+        fn as_mut_any(&mut self) -> &mut dyn Any {
+            self
+        }
+        fn as_any(&self) -> &dyn Any {
             self
         }
     }
@@ -205,7 +213,7 @@ fn t() {
                 .entry(std::any::TypeId::of::<T>())
                 .or_insert_with(|| Box::new(T::default()).to_erasable_processor());
             let r = r.as_mut();
-            let r = <dyn Any>::downcast_mut(r);
+            let r = <dyn Any>::downcast_mut(r.as_mut_any());
             r.unwrap()
         }
     }
@@ -285,12 +293,8 @@ mod spreaded {
             let r = <dyn Any>::downcast_mut(r.as_mut_any());
             r.unwrap()
         }
-        pub fn get<T: 'static + ToErasedProc + Default + Send + Sync>(
-            &self,
-        ) -> Option<&T> {
-            let r = self
-                .0
-                .get(&std::any::TypeId::of::<T>())?;
+        pub fn get<T: 'static + ToErasedProc + Default + Send + Sync>(&self) -> Option<&T> {
+            let r = self.0.get(&std::any::TypeId::of::<T>())?;
             <dyn Any>::downcast_ref(r.as_any())
         }
         // pub fn mut_or_default_with_param<T: 'static + CommitProcExt>(
@@ -361,7 +365,10 @@ mod spreaded {
             fn with_parameters(&self, parameters: ConfigParametersHandle) -> &Self::Proc {
                 &self.0[parameters.0]
             }
-            fn with_parameters_mut(&mut self, parameters: ConfigParametersHandle) -> &mut Self::Proc {
+            fn with_parameters_mut(
+                &mut self,
+                parameters: ConfigParametersHandle,
+            ) -> &mut Self::Proc {
                 &mut self.0[parameters.0]
             }
         }

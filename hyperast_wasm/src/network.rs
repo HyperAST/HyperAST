@@ -1,17 +1,13 @@
 use crate::store::FetchedHyperAST;
 use crate::types;
-use types::ApiAddr;
 use hyper_ast::store::nodes::fetched;
 use hyper_ast::store::nodes::fetched::LabelIdentifier;
 use hyper_ast::store::nodes::fetched::NodeIdentifier;
 use poll_promise::Promise;
+use types::ApiAddr;
 
+use std::collections::HashSet;
 use std::sync::Arc;
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-    ops::Range,
-};
 
 #[derive(Debug)]
 pub(crate) struct Resource<T> {
@@ -35,7 +31,7 @@ impl<T> Resource<T> {
 impl Resource<FetchedNodes> {
     fn from_response(response: ehttp::Response) -> Self {
         wasm_rs_dbg::dbg!(&response);
-        let content_type = response.content_type().unwrap_or_default();
+        let _content_type = response.content_type().unwrap_or_default();
         let text = response.text();
         let text = text.map(|x| serde_json::from_str(x).unwrap());
 
@@ -48,7 +44,7 @@ impl Resource<FetchedNodes> {
 impl Resource<FetchedNode> {
     fn from_response(response: ehttp::Response) -> Self {
         wasm_rs_dbg::dbg!(&response);
-        let content_type = response.content_type().unwrap_or_default();
+        let _content_type = response.content_type().unwrap_or_default();
         let text = response.text();
         let text = text.map(|x| serde_json::from_str(x).unwrap());
 
@@ -61,7 +57,7 @@ impl Resource<FetchedNode> {
 impl Resource<FetchedLabels> {
     fn from_response(response: ehttp::Response) -> Self {
         wasm_rs_dbg::dbg!(&response);
-        let content_type = response.content_type().unwrap_or_default();
+        let _content_type = response.content_type().unwrap_or_default();
         let text = response.text();
         let text = text.map(|x| serde_json::from_str(x).unwrap());
 
@@ -75,7 +71,7 @@ impl Resource<FetchedLabels> {
 impl Resource<FetchedView> {
     fn from_response(response: ehttp::Response) -> Self {
         wasm_rs_dbg::dbg!(&response);
-        let content_type = response.content_type().unwrap_or_default();
+        let _content_type = response.content_type().unwrap_or_default();
         let text = response.text();
         wasm_rs_dbg::dbg!(&text);
         let text = text.map(|x| serde_json::from_str(x).unwrap());
@@ -207,7 +203,7 @@ pub(super) fn remote_fetch_node(
 pub(super) fn remote_fetch_nodes_by_ids(
     api_addr: &ApiAddr,
     store: Arc<FetchedHyperAST>,
-    repo: &types::Repo,
+    _repo: &types::Repo,
     ids: HashSet<NodeIdentifier>,
 ) -> Promise<Result<Resource<()>, String>> {
     let (sender, promise) = Promise::new();
@@ -244,7 +240,7 @@ pub(super) fn remote_fetch_nodes_by_ids(
 pub(super) fn remote_fetch_labels(
     api_addr: &ApiAddr,
     store: Arc<FetchedHyperAST>,
-    repo: &types::Repo,
+    _repo: &types::Repo,
     ids: HashSet<LabelIdentifier>,
 ) -> Promise<Result<Resource<()>, String>> {
     let (sender, promise) = Promise::new();

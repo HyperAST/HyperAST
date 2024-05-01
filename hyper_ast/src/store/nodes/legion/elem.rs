@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash, marker::PhantomData, num::NonZeroU64, ops::Deref};
+use std::{fmt::Debug, hash::Hash, marker::PhantomData, ops::Deref};
 
 use legion::{
     storage::{Archetype, Component},
@@ -395,13 +395,15 @@ impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Typed
         match self.0.get_component::<Id::Ty>() {
             Ok(t) => *t,
             e => *e.unwrap(),
-
             // Err(ComponentError::NotFound {..}) => {
             //     let type_type = self.0.archetype().layout().component_types()[0];
             //     self.0.
             //     todo!()
             // }
         }
+    }
+    fn try_get_type(&self) -> Option<Self::Type> {
+        self.0.get_component::<Id::Ty>().ok().copied()
     }
 }
 impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Typed
@@ -415,14 +417,11 @@ impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Typed
                 let t: &'static dyn HyperType = t.as_static();
                 t.into()
             }
-            Err(ComponentError::NotFound { .. }) => {
-                let type_type = self.0.archetype().layout().component_types()[0];
-                // self.0.
-                todo!()
+            Err(e@ComponentError::NotFound { .. }) => {
+                todo!("{:?}", e)
             }
             e => {
-                let t: &'static dyn HyperType = e.unwrap().as_static();
-                t.into()
+                todo!("{:?}", e)
             }
         }
     }

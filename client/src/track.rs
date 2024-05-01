@@ -12,7 +12,8 @@ use hyper_ast::{
     store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef, SimpleStores},
     types::{
         self, HyperAST, IterableChildren, NodeStore, Typed, WithChildren, WithHashs, WithStats,
-    }, PrimInt,
+    },
+    PrimInt,
 };
 use hyper_ast_cvs_git::{
     git::Repo, multi_preprocessed, preprocessed::child_at_path_tracked,
@@ -953,7 +954,7 @@ fn track_aux(
     let node_store = &stores.node_store;
 
     // let size = node_store.resolve(src_tr).size();
-    log::error!("searching for {file}");
+    log::error!("tracking {file}");
     let file_node =
         child_at_path_tracked(&repositories.processor.main_stores, src_tr, file.split("/"));
 

@@ -1,12 +1,9 @@
-use std::io::{stdout, Write};
-
 use crate::legion::TsQueryTreeGen;
 use crate::types::TStore;
 
-use hyper_ast::store::{defaults::LabelIdentifier, labels::LabelStore};
+use hyper_ast::store::labels::LabelStore;
 use hyper_ast::types::{
-    self, HyperAST, IterableChildren, Labeled, NodeStore, Typed, TypedHyperAST, TypedNodeStore,
-    WithChildren,
+    HyperAST, IterableChildren, Labeled, Typed, TypedHyperAST, TypedNodeStore, WithChildren,
 };
 
 use hyper_ast::store::nodes::legion::NodeIdentifier;
@@ -25,46 +22,17 @@ pub(crate) struct QuickTrigger<T> {
     pub(crate) root_types: Arc<[T]>,
 }
 
-pub struct PreparedMatcher<'a, HAST, Ty> {
-    pub(crate) query_store: &'a HAST,
+pub struct PreparedMatcher<Ty> {
     pub(crate) quick_trigger: QuickTrigger<Ty>,
     pub(crate) patterns: Arc<[Pattern<Ty>]>,
 }
 
-pub(crate) struct PatternMatcher<'a, 'b, Ty> {
-    pub(crate) query_store: &'a SimpleStores<crate::types::TStore>,
-    pub(crate) patterns: &'b Pattern<Ty>,
-}
-
-impl<'a, 'b, Ty> PatternMatcher<'a, 'b, Ty> {
-    pub(crate) fn is_matching<'store, HAST, TS, TIdN>(
-        &self,
-        code_store: &'store HAST,
-        id: TIdN,
-    ) -> bool
-    where
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::NodeId<IdN = HAST::IdN>
-            + hyper_ast::types::TypedNodeId<Ty = Ty>
-            + 'static,
-        Ty: std::fmt::Debug + Eq + Copy,
-    {
-        let n = code_store.typed_node_store().resolve(&id);
-        let t = n.get_type();
-        dbg!(t);
-        true
-    }
-}
-
-impl<'a, Ty: for<'b> TryFrom<&'b str>> PreparedMatcher<'a, SimpleStores<TStore>, Ty>
+impl<'a, Ty: for<'b> TryFrom<&'b str>>
+    PreparedMatcher<Ty>
 where
     for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
 {
-    pub fn is_matching<'store, HAST, TIdN>(
-        &self,
-        code_store: &'store HAST,
-        id: HAST::IdN,
-    ) -> bool
+    pub fn is_matching<'store, HAST, TIdN>(&self, code_store: &'store HAST, id: HAST::IdN) -> bool
     where
         HAST: TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::NodeId<IdN = HAST::IdN>
@@ -118,15 +86,42 @@ where
     }
 }
 
-impl<'a, Ty> PreparedMatcher<'a, SimpleStores<TStore>, Ty>
+impl<Ty> PreparedMatcher<Ty>
 where
     Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
     for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
 {
-    pub fn new(
-        query_store: &'a SimpleStores<crate::types::TStore>,
-        query: NodeIdentifier,
-    ) -> Self {
+    pub(crate) fn with_patterns(
+        root_types: Vec<Ty>,
+        patterns: Vec<Pattern<Ty>>,
+    ) -> PreparedMatcher<Ty> {
+        Self {
+            quick_trigger: QuickTrigger {
+                root_types: root_types.into(),
+            },
+            patterns: patterns.into(),
+        }
+    }
+}
+
+impl<'a, Ty> PreparedMatcher<Ty>
+where
+    Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
+    for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
+{
+    pub fn new(query_store: &'a SimpleStores<crate::types::TStore>, query: NodeIdentifier) -> Self {
+        let (root_types, patterns) = Self::new_aux(query_store, query);
+
+        Self::with_patterns(root_types, patterns)
+    }
+
+    pub(crate) fn new_aux(
+        query_store: &'a SimpleStores<TStore>,
+        query: legion::Entity,
+    ) -> (Vec<Ty>, Vec<Pattern<Ty>>)
+    where
+        Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
+    {
         use crate::types::TIdN;
         use crate::types::Type;
         use hyper_ast::types::LabelStore;
@@ -178,14 +173,7 @@ where
                 todo!("{}", t)
             }
         }
-
-        Self {
-            query_store,
-            quick_trigger: QuickTrigger {
-                root_types: root_types.into(),
-            },
-            patterns: patterns.into(),
-        }
+        (root_types, patterns)
     }
     pub(crate) fn process_named_node(
         query_store: &'a SimpleStores<crate::types::TStore>,
@@ -279,7 +267,6 @@ where
                     Pattern::NamedNode { .. } | Pattern::Capture { .. } => (),
                     Pattern::Predicated { .. } => panic!(),
                     Pattern::AnonymousNode { .. } => todo!("not sure if it works properly"),
-                    p => todo!("{:?} still not implemented to be captured", p), // TODO quantificators will need more works
                 }
                 res = Pattern::Capture {
                     name,
@@ -380,7 +367,7 @@ where
             .unwrap()
             .0;
         let t = sharp.get_type();
-        assert_eq!(t, Type::TS3);
+        assert_eq!(t, Type::Sharp);
 
         let pred = cs.next().unwrap();
         let pred = query_store
@@ -539,13 +526,13 @@ impl MatchingRes {
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub(crate) enum CaptureRes {
+pub enum CaptureRes {
     Label(String),
     Node,
 }
 
 impl CaptureRes {
-    pub(crate) fn label(self) -> Option<String> {
+    pub fn try_label(self) -> Option<String> {
         match self {
             CaptureRes::Label(l) => Some(l),
             CaptureRes::Node => None,
@@ -674,109 +661,36 @@ impl<Ty> Pattern<Ty> {
                         MatchingRes::fals()
                     }
                 }
-                p => todo!("{:?}", p),
             },
         }
     }
 }
 
-pub(crate) struct QueryMatcher<'a, T, S> {
-    pub(crate) quick_trigger: QuickTrigger<T>,
-    pub(crate) query_store: &'a SimpleStores<crate::types::TStore>,
-    pub(crate) state: S,
-}
-
-pub(crate) fn extract_root_type(
-    query_store: &SimpleStores<crate::types::TStore>,
-    query: NodeIdentifier,
-) -> LabelIdentifier {
-    use crate::types::TIdN;
-    use crate::types::Type;
-    use hyper_ast::store::nodes::legion::NodeIdentifier;
-    let n = query_store
-        .node_store
-        .try_resolve_typed::<TIdN<NodeIdentifier>>(&query)
-        .unwrap()
-        .0;
-    let t = n.get_type();
-    dbg!(t);
-    assert_eq!(t, Type::Program);
-    if n.child_count() == 1 {
-        let rule = n.child(&0).unwrap();
-        let rule = query_store
-            .node_store
-            .try_resolve_typed::<TIdN<NodeIdentifier>>(&rule)
-            .unwrap()
-            .0;
-        let t = rule.get_type();
-        dbg!(t);
-        if t == Type::NamedNode {
-            let ty = rule.child(&1).unwrap();
-            let ty = query_store
-                .node_store
-                .try_resolve_typed::<TIdN<NodeIdentifier>>(&ty)
-                .unwrap()
-                .0;
-            let t = ty.get_type();
-            dbg!(t);
-            let l = ty.try_get_label();
-            dbg!(l);
-            l.unwrap().clone()
-        } else if t == Type::Identifier {
-            todo!()
-        } else {
-            todo!()
-        }
-    } else {
-        todo!()
-    }
-}
-
 pub(crate) fn ts_query(text: &[u8]) -> (SimpleStores<crate::types::TStore>, legion::Entity) {
-    use crate::types::TStore;
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
         type_store: TStore::default(),
         node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
     };
+    let query = ts_query2(&mut stores, text);
+    (stores, query)
+}
+
+pub(crate) fn ts_query2(stores: &mut SimpleStores<TStore>, text: &[u8]) -> legion::Entity {
     let mut md_cache = Default::default();
-    let mut java_tree_gen = TsQueryTreeGen {
+    let mut query_tree_gen = TsQueryTreeGen {
         line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
+        stores,
         md_cache: &mut md_cache,
     };
 
     let tree = match crate::legion::tree_sitter_parse(text) {
         Ok(t) => t,
-        Err(t) => t,
+        Err(t) => {
+            eprintln!("{}", t.root_node().to_sexp());
+            t
+        }
     };
-    // println!("{}", tree.root_node().to_sexp());
-    let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
-
-    // println!();
-    // println!(
-    //     "{}",
-    //     hyper_ast::nodes::SyntaxSerializer::<_, _, true>::new(
-    //         &*java_tree_gen.stores,
-    //         full_node.local.compressed_node
-    //     )
-    // );
-    // stdout().flush().unwrap();
-    // println!(
-    //     "{}",
-    //     hyper_ast::nodes::JsonSerializer::<_, _, false>::new(
-    //         &*java_tree_gen.stores,
-    //         full_node.local.compressed_node
-    //     )
-    // );
-    // stdout().flush().unwrap();
-    // println!(
-    //     "{}",
-    //     hyper_ast::nodes::TextSerializer::new(
-    //         &*java_tree_gen.stores,
-    //         full_node.local.compressed_node
-    //     )
-    // );
-    // stdout().flush().unwrap();
-    (stores, full_node.local.compressed_node)
+    let full_node = query_tree_gen.generate_file(b"", text, tree.walk());
+    full_node.local.compressed_node
 }

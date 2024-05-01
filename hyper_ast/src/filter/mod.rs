@@ -6,7 +6,9 @@ use std::marker::PhantomData;
 
 use bitvec::{order::Lsb0, view::BitViewSized};
 
-use self::default::{MyDefaultHasher, Pearson, VaryHasher};
+use self::default::{Pearson, VaryHasher};
+#[cfg(feature = "native")]
+use self::default::MyDefaultHasher;
 
 #[derive(PartialEq, Eq)]
 pub enum BloomSize {

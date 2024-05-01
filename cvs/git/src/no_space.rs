@@ -315,6 +315,7 @@ pub fn as_nospaces<'a>(
 }
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub struct NoSpaceNodeStoreWrapper<'a> {
     pub s: &'a NodeStore,
 }

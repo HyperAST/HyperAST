@@ -176,7 +176,10 @@ pub trait DecompressedWithParent<'a, T: WithChildren, IdD> {
     fn parents(&self, id: IdD) -> Self::PIt<'_>;
     fn position_in_parent(&self, c: &IdD) -> Option<T::ChildIdx>;
     fn path(&self, parent: &IdD, descendant: &IdD) -> Vec<T::ChildIdx>;
-    fn path_rooted(&self, descendant: &IdD) -> Vec<T::ChildIdx> where Self: ShallowDecompressedTreeStore<'a, T, IdD> {
+    fn path_rooted(&self, descendant: &IdD) -> Vec<T::ChildIdx>
+    where
+        Self: ShallowDecompressedTreeStore<'a, T, IdD>,
+    {
         self.path(&self.root(), descendant)
     }
     /// lowest common ancestor

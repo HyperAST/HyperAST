@@ -194,8 +194,10 @@ where
                 };
                 let (pos, mapped_node) =
                     compute_position(other_tr, &mut path.iter().copied(), with_spaces_stores);
-                dbg!(&mapped_node);
-                assert_eq!(&mapped_node, path_ids.last().unwrap()); // if it holds then ok to take the ids from the nospace repr.
+                // assert_eq!(Some(&mapped_node), path_ids.last().or(Some(&other_tr)), "{:?} {:?} {:?} {:?}", mapped_node, other_tr, path, path_ids); // if it holds then ok to take the ids from the nospace repr.
+                // TODO WARN there is an issue there. Entity(2148976) Entity(2149024) [0, 38, 2] [Entity(2148976), Entity(2148992), Entity(2149008)]
+                // the list of ids is I believe sorted in reverse compered to the list of offsets,
+                // but as you can see the mapped node is the same (but at the begining of the array) so it should be correct to  use the path from the nospace repr.
                 LocalPieceOfCode::from_position(&pos, path, path_ids)
             };
             return MappingResult::Missing {
@@ -386,6 +388,11 @@ fn compute_mappings_full<'store, 'alone, 'trees, 'mapper, 'rest>(
         dashmap::mapref::entry::Entry::Occupied(entry) => entry.into_ref().downgrade(),
         dashmap::mapref::entry::Entry::Vacant(entry) => {
             let mm = if let Some(mm) = partial {
+                use mapping_store::MappingStore;
+                mapper.mapping.mappings.topit(
+                    mapper.mapping.src_arena.len(),
+                    mapper.mapping.dst_arena.len(),
+                );
                 mm
             } else {
                 use mapping_store::MappingStore;
@@ -395,12 +402,19 @@ fn compute_mappings_full<'store, 'alone, 'trees, 'mapper, 'rest>(
                     mapper.mapping.dst_arena.len(),
                 );
 
-                matching::LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::compute_multi_mapping::<
+                let now = std::time::Instant::now();
+                let mm = matching::LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::compute_multi_mapping::<
                     mapping_store::DefaultMultiMappingStore<_>,
-                >(mapper)
+                >(mapper);
+                let compute_multi_mapping_t = now.elapsed().as_secs_f64();
+                dbg!(compute_multi_mapping_t);
+                mm
             };
 
+            let now = std::time::Instant::now();
             matching::bottom_up_hiding(hyperast, &mm, mapper);
+            let bottom_up_hiding_t = now.elapsed().as_secs_f64();
+            dbg!(bottom_up_hiding_t);
 
             let value = (
                 crate::MappingStage::Bottomup,

@@ -1,6 +1,7 @@
 // #![feature(min_specialization)]
 #![feature(exact_size_is_empty)]
 #![feature(slice_index_methods)]
+#![feature(let_chains)]
 
 pub mod compat;
 #[cfg(feature = "legion")]

@@ -7,7 +7,10 @@ use crate::{
         optimal::zs::ZsMatcher,
     },
     tests::examples::{example_gt_java_code, example_gt_slides, example_zs_paper},
-    tree::{simple_tree::{vpair_to_stores, DisplayTree}, TStore},
+    tree::{
+        simple_tree::{vpair_to_stores, DisplayTree},
+        TStore,
+    },
 };
 use hyper_ast::types::{LabelStore, SimpleHyperAST};
 
@@ -37,11 +40,8 @@ fn test_with_custom_example() {
         label_store,
         _phantom: PhantomData,
     };
-    let mapper = ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(
-        &stores,
-        src,
-        dst,
-    );
+    let mapper =
+        ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(&stores, src, dst);
     let ZsMatcher {
         src_arena,
         dst_arena,
@@ -101,11 +101,8 @@ fn test_with_custom_example2() {
         label_store,
         _phantom: PhantomData,
     };
-    let mapper = ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(
-        &stores,
-        src,
-        dst,
-    );
+    let mapper =
+        ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(&stores, src, dst);
     let ZsMatcher {
         src_arena,
         dst_arena,
@@ -148,11 +145,8 @@ fn test_with_slide_example() {
         label_store,
         _phantom: PhantomData,
     };
-    let mapper = ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(
-        &stores,
-        src,
-        dst,
-    );
+    let mapper =
+        ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(&stores, src, dst);
     let ZsMatcher {
         src_arena,
         dst_arena,
@@ -193,11 +187,8 @@ fn test_with_slide_example2() {
         label_store,
         _phantom: PhantomData,
     };
-    let mapper = ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(
-        &stores,
-        src,
-        dst,
-    );
+    let mapper =
+        ZsMatcher::<DefaultMappingStore<u16>, SimpleZsTree<_, u16>>::matchh(&stores, src, dst);
     let ZsMatcher {
         src_arena,
         dst_arena,

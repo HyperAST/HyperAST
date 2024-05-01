@@ -1,5 +1,5 @@
 ///! fully compress all subtrees from an Xml CST
-use std::{fmt::Debug, io::stdout, vec};
+use std::{fmt::Debug, vec};
 
 use legion::world::EntryRef;
 use tuples::CombinConcat;
@@ -8,21 +8,22 @@ use hyper_ast::{
     filter::BloomSize,
     full::FullNode,
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
-    // impact::{element::RefsEnum, elements::*, partial_analysis::PartialAnalysis},
-    nodes::{self, IoOut, Space},
+    nodes::Space,
     store::{
-        labels::LabelStore,
-        nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert},
+        nodes::{
+            legion::{
+                compo::{self, NoSpacesCS, CS},
+                HashedNodeRef, NodeIdentifier, PendingInsert,
+            },
+            DefaultNodeStore as NodeStore,
+        },
         SimpleStores,
-    },
-    store::{
-        nodes::legion::{compo, compo::CS, NodeIdentifier},
-        nodes::DefaultNodeStore as NodeStore,
     },
     tree_gen::{
         compute_indentation, get_spacing, has_final_space, parser::Node as _, AccIndentation,
-        Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, SpacedGlobalData,
-        Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, ZippedTreeGen,
+        Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
+        SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
+        ZippedTreeGen,
     },
     types::LabelStore as _,
 };
@@ -89,6 +90,21 @@ impl AccIndentation for Acc {
         &self.indentation
     }
 }
+
+impl WithByteRange for Acc {
+    fn has_children(&self) -> bool {
+        !self.simple.children.is_empty()
+    }
+
+    fn begin_byte(&self) -> usize {
+        self.start_byte
+    }
+
+    fn end_byte(&self) -> usize {
+        self.end_byte
+    }
+}
+
 #[repr(transparent)]
 pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
 
@@ -102,6 +118,10 @@ impl<'a> Debug for TTreeCursor<'a> {
 impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<'a> {
     fn node(&self) -> TNode<'a> {
         TNode(self.0.node())
+    }
+
+    fn role(&self) -> Option<std::num::NonZeroU16> {
+        self.0.field_id()
     }
 
     fn goto_first_child(&mut self) -> bool {
@@ -160,6 +180,22 @@ impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier
         }
     }
 
+    fn pre_skippable(
+        &mut self,
+        text: &Self::Text,
+        node: &Self::Node<'_>,
+        stack: &Parents<Self::Acc>,
+        global: &mut Self::Global,
+    ) -> PreResult<<Self as TreeGen>::Acc> {
+        let type_store = &mut self.stores().type_store;
+        let kind = node.obtain_type(type_store);
+        let mut acc = self.pre(text, node, stack, global);
+        if kind == Type::AttValue {
+            acc.labeled = true;
+            return PreResult::SkipChildren(acc);
+        }
+        PreResult::Ok(acc)
+    }
     fn pre(
         &mut self,
         text: &[u8],
@@ -228,8 +264,8 @@ impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier
 
 pub fn tree_sitter_parse_xml(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
     let mut parser = tree_sitter::Parser::new();
-    let language = tree_sitter_xml::language();
-    parser.set_language(language).unwrap();
+    let language = tree_sitter_xml::language_xml();
+    parser.set_language(&language).unwrap();
     let tree = parser.parse(text, None).unwrap();
     if tree.root_node().has_error() {
         Err(tree)
@@ -300,8 +336,8 @@ impl<'a, TS: XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>>> XmlTr
 
     pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
         let mut parser = tree_sitter::Parser::new();
-        let language = tree_sitter_xml::language();
-        parser.set_language(language).unwrap();
+        let language = tree_sitter_xml::language_xml();
+        parser.set_language(&language).unwrap();
         let tree = parser.parse(text, None).unwrap();
         if tree.root_node().has_error() {
             Err(tree)
@@ -361,7 +397,7 @@ impl<'a, TS: XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>>> XmlTr
         full_node
     }
 
-    fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {
+    fn build_ana(&mut self, _kind: &Type) -> Option<PartialAnalysis> {
         None
     }
 }

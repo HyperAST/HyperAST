@@ -7,7 +7,7 @@ use crate::{
     matchers::mapping_store::MonoMappingStore,
     utils::sequence_algorithms::longest_common_subsequence,
 };
-use hyper_ast::types::{HashKind, NodeStore, Tree, TypeStore, Typed, TypedTree, WithHashs};
+use hyper_ast::types::{HashKind, NodeStore, Tree, TypeStore, WithHashs};
 
 pub struct BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M> {
     pub(super) stores: &'a HAST,
@@ -78,7 +78,7 @@ where
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
-    pub(super) fn last_chance_match_histogram(&mut self, src: &M::Src, dst: &M::Dst) {
+    pub fn last_chance_match_histogram(&mut self, src: &M::Src, dst: &M::Dst) {
         self.lcs_equal_matching(src, dst);
         self.lcs_structure_matching(src, dst);
         if !src.is_zero() && !dst.is_zero() {
@@ -177,7 +177,8 @@ where
     }
 
     pub(super) fn histogram_matching(&mut self, src: &M::Src, dst: &M::Dst) {
-        let mut src_histogram: HashMap<<HAST::TS as TypeStore<T>>::Ty, Vec<M::Src>> = HashMap::new(); //Map<Type, List<ITree>>
+        let mut src_histogram: HashMap<<HAST::TS as TypeStore<T>>::Ty, Vec<M::Src>> =
+            HashMap::new(); //Map<Type, List<ITree>>
         for c in self.src_arena.children(self.stores.node_store(), src) {
             let t = &self.stores.type_store().resolve_type(
                 &self
@@ -191,7 +192,8 @@ where
             src_histogram.get_mut(t).unwrap().push(c);
         }
 
-        let mut dst_histogram: HashMap<<HAST::TS as TypeStore<T>>::Ty, Vec<M::Dst>> = HashMap::new(); //Map<Type, List<ITree>>
+        let mut dst_histogram: HashMap<<HAST::TS as TypeStore<T>>::Ty, Vec<M::Dst>> =
+            HashMap::new(); //Map<Type, List<ITree>>
         for c in self.dst_arena.children(self.stores.node_store(), dst) {
             let t = &self.stores.resolve_type(&self.dst_arena.original(&c));
             if !dst_histogram.contains_key(t) {
@@ -230,7 +232,7 @@ where
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
-    pub(super) fn get_dst_candidates(&self, src: &M::Src) -> Vec<M::Dst> {
+    pub fn get_dst_candidates(&self, src: &M::Src) -> Vec<M::Dst> {
         let node_store = self.hyperast.node_store();
         let src_arena = &self.mapping.src_arena;
         let dst_arena = &self.mapping.dst_arena;
@@ -283,7 +285,7 @@ where
     M::Src: Shallow<M::Src>,
     M::Dst: Shallow<M::Dst>,
 {
-    pub(super) fn last_chance_match_histogram(&mut self, src: &M::Src, dst: &M::Dst) {
+    pub fn last_chance_match_histogram(&mut self, src: &M::Src, dst: &M::Dst) {
         self.lcs_equal_matching(src, dst);
         self.lcs_structure_matching(src, dst);
         if !src.is_zero() && !dst.is_zero() {
@@ -378,22 +380,20 @@ where
     }
 
     pub(super) fn histogram_matching(&mut self, src: &M::Src, dst: &M::Dst) {
-        let mut src_histogram: HashMap<<HAST::TS as TypeStore<HAST::T>>::Ty, Vec<M::Src>> = HashMap::new(); //Map<Type, List<ITree>>
+        let mut src_histogram: HashMap<<HAST::TS as TypeStore<HAST::T>>::Ty, Vec<M::Src>> =
+            HashMap::new(); //Map<Type, List<ITree>>
         for c in self.src_arena.children(self.hyperast.node_store(), src) {
-            let t = &self
-                .hyperast
-                .resolve_type(&self.src_arena.original(&c));
+            let t = &self.hyperast.resolve_type(&self.src_arena.original(&c));
             if !src_histogram.contains_key(t) {
                 src_histogram.insert(*t, vec![]);
             }
             src_histogram.get_mut(t).unwrap().push(c);
         }
 
-        let mut dst_histogram: HashMap<<HAST::TS as TypeStore<HAST::T>>::Ty, Vec<M::Dst>> = HashMap::new(); //Map<Type, List<ITree>>
+        let mut dst_histogram: HashMap<<HAST::TS as TypeStore<HAST::T>>::Ty, Vec<M::Dst>> =
+            HashMap::new(); //Map<Type, List<ITree>>
         for c in self.dst_arena.children(self.hyperast.node_store(), dst) {
-            let t = &self
-                .hyperast
-                .resolve_type(&self.dst_arena.original(&c));
+            let t = &self.hyperast.resolve_type(&self.dst_arena.original(&c));
             if !dst_histogram.contains_key(t) {
                 dst_histogram.insert(*t, vec![]);
             }

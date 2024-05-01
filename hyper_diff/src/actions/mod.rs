@@ -1,3 +1,4 @@
+#[allow(unused)] // still very experimental
 pub mod action_tree;
 pub mod action_vec;
 pub mod script_generator;

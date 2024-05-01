@@ -16,7 +16,7 @@ use hyper_ast::{
 use hyper_ast_gen_ts_java::{
     impact::partial_analysis::PartialAnalysis,
     legion_with_refs::{BulkHasher, JavaTreeGen, Local, MDCache, MD},
-    types::{Type},
+    types::Type,
 };
 // use hyper_ast_gen_ts_java::types::TStore;
 use hyper_ast_cvs_git::TStore;

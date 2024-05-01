@@ -1,8 +1,8 @@
 /// inspired by the implementation in gumtree
 use std::{collections::HashSet, fmt::Debug, hash::Hash};
 
-use num_traits::{cast, ToPrimitive};
 use hyper_ast::PrimInt;
+use num_traits::{cast, ToPrimitive};
 
 use crate::{
     actions::Actions,
@@ -126,6 +126,7 @@ where
     pub store: &'store S,
     src_arena_dont_use: &'a1 SS,
     cpy2ori: Vec<IdD>,
+    #[allow(unused)] // TODO remove it after making sure it is not needed to construct an action_tree
     ori2cpy: Vec<usize>,
     mid_arena: Vec<MidNode<T::TreeId, IdD>>, //SuperTreeStore<T::TreeId>,
     mid_root: Vec<IdD>,

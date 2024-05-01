@@ -21,8 +21,9 @@ use hyper_ast::{
     },
     tree_gen::{
         compute_indentation, get_spacing, has_final_space, parser::Node as _, AccIndentation,
-        Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, SpacedGlobalData,
-        Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, ZippedTreeGen,
+        Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
+        SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
+        ZippedTreeGen,
     },
     types::LabelStore as _,
 };
@@ -102,6 +103,34 @@ impl AccIndentation for Acc {
     }
 }
 
+impl WithByteRange for Acc {
+    fn has_children(&self) -> bool {
+        !self.simple.children.is_empty()
+    }
+
+    fn begin_byte(&self) -> usize {
+        self.start_byte
+    }
+
+    fn end_byte(&self) -> usize {
+        self.end_byte
+    }
+}
+impl Debug for Acc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Acc")
+            .field("simple", &self.simple)
+            .field("no_space", &self.no_space)
+            .field("labeled", &self.labeled)
+            .field("start_byte", &self.start_byte)
+            .field("end_byte", &self.end_byte)
+            .field("metrics", &self.metrics)
+            .field("padding_start", &self.padding_start)
+            .field("indentation", &self.indentation)
+            .finish()
+    }
+}
+
 #[repr(transparent)]
 pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
 
@@ -115,6 +144,10 @@ impl<'a> Debug for TTreeCursor<'a> {
 impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<'a> {
     fn node(&self) -> TNode<'a> {
         TNode(self.0.node())
+    }
+
+    fn role(&self) -> Option<std::num::NonZeroU16> {
+        self.0.field_id()
     }
 
     fn goto_first_child(&mut self) -> bool {
@@ -133,7 +166,7 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
 pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
     let mut parser = tree_sitter::Parser::new();
     let language = tree_sitter_query::language();
-    parser.set_language(language).unwrap();
+    parser.set_language(&language).unwrap();
     let tree = parser.parse(text, None).unwrap();
     if tree.root_node().has_error() {
         Err(tree)
@@ -187,8 +220,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
         node: &Self::Node<'_>,
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
-        skip: &mut bool,
-    ) -> Option<<Self as TreeGen>::Acc> {
+    ) -> PreResult<<Self as TreeGen>::Acc> {
         let type_store = &mut self.stores().type_store;
         // let kind = node.kind();
         // let Some(kind) = type_store.try_cpp(kind) else {
@@ -196,14 +228,12 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
         // };
         let kind = node.obtain_type(type_store);
         // TODO remove this mitigations as it breaks captures on anonymous nodes
-        if kind == Type::TS0 || kind == Type::AnonymousNode || kind == Type::String {
-            *skip = true;
-        }
         let mut acc = self.pre(text, node, stack, global);
-        if kind == Type::TS0 || kind == Type::AnonymousNode || kind == Type::String {
+        if kind == Type::Quote || kind == Type::AnonymousNode || kind == Type::String {
             acc.labeled = true;
+            return PreResult::SkipChildren(acc);
         }
-        Some(acc)
+        PreResult::Ok(acc)
     }
     fn pre(
         &mut self,
@@ -512,7 +542,7 @@ impl<
 impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
     pub fn build_then_insert(
         &mut self,
-        i: <hashed::HashedNode as hyper_ast::types::Stored>::TreeId,
+        _i: <hashed::HashedNode as hyper_ast::types::Stored>::TreeId,
         t: Type,
         l: Option<LabelIdentifier>,
         cs: Vec<NodeIdentifier>,
@@ -544,7 +574,10 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
                 } else {
                     use hyper_ast::hashed::SyntaxNodeHashsKinds;
                     use hyper_ast::types::WithHashs;
-                    let (kind, node) = self.stores.node_store.resolve_with_type::<TIdN<NodeIdentifier>>(&c);
+                    let (_, node) = self
+                        .stores
+                        .node_store
+                        .resolve_with_type::<TIdN<NodeIdentifier>>(&c);
                     let hashs = SyntaxNodeHashs {
                         structt: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Struct),
                         label: WithHashs::hash(&node, &SyntaxNodeHashsKinds::Label),
@@ -578,7 +611,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
         let height = acc.metrics.height + 1;
         let size_no_spaces = acc.metrics.size_no_spaces + 1;
 
-        let label = l.map(|l|label_store.resolve(&l));
+        let label = l.map(|l| label_store.resolve(&l));
         let hbuilder = hashed::Builder::new(hashs, &interned_kind, &label, size_no_spaces);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;

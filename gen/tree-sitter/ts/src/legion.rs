@@ -10,17 +10,19 @@ use hyper_ast::{
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
     nodes::Space,
     store::{
-        nodes::legion::{compo, compo::CS, NodeIdentifier},
-        nodes::DefaultNodeStore as NodeStore,
-    },
-    store::{
-        nodes::legion::{compo::NoSpacesCS, HashedNodeRef},
+        nodes::{
+            legion::{
+                compo::{self, NoSpacesCS, CS},
+                HashedNodeRef, NodeIdentifier,
+            },
+            DefaultNodeStore as NodeStore,
+        },
         SimpleStores,
     },
     tree_gen::{
         compute_indentation, get_spacing, has_final_space, parser::Node as _, AccIndentation,
         Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, SpacedGlobalData,
-        Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, ZippedTreeGen,
+        Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange, ZippedTreeGen,
     },
     types::LabelStore as _,
 };
@@ -47,9 +49,7 @@ pub struct MD {
 
 impl From<Local> for MD {
     fn from(x: Local) -> Self {
-        MD {
-            metrics: x.metrics,
-        }
+        MD { metrics: x.metrics }
     }
 }
 
@@ -102,6 +102,34 @@ impl AccIndentation for Acc {
     }
 }
 
+impl WithByteRange for Acc {
+    fn has_children(&self) -> bool {
+        !self.simple.children.is_empty()
+    }
+
+    fn begin_byte(&self) -> usize {
+        self.start_byte
+    }
+
+    fn end_byte(&self) -> usize {
+        self.end_byte
+    }
+}
+impl Debug for Acc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Acc")
+            .field("simple", &self.simple)
+            .field("no_space", &self.no_space)
+            .field("labeled", &self.labeled)
+            .field("start_byte", &self.start_byte)
+            .field("end_byte", &self.end_byte)
+            .field("metrics", &self.metrics)
+            .field("padding_start", &self.padding_start)
+            .field("indentation", &self.indentation)
+            .finish()
+    }
+}
+
 #[repr(transparent)]
 pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
 
@@ -115,6 +143,10 @@ impl<'a> Debug for TTreeCursor<'a> {
 impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<'a> {
     fn node(&self) -> TNode<'a> {
         TNode(self.0.node())
+    }
+
+    fn role(&self) -> Option<std::num::NonZeroU16> {
+        self.0.field_id()
     }
 
     fn goto_first_child(&mut self) -> bool {
@@ -299,7 +331,7 @@ impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdent
     pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
         let mut parser = tree_sitter::Parser::new();
         let language = tree_sitter_typescript::language_typescript();
-        parser.set_language(language).unwrap();
+        parser.set_language(&language).unwrap();
         let tree = parser.parse(text, None).unwrap();
         if tree.root_node().has_error() {
             Err(tree)

@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    marker::PhantomData,
-};
+use std::{collections::HashMap, marker::PhantomData};
 
 use git2::Repository;
 use hyper_ast::store::nodes::DefaultNodeIdentifier as NodeIdentifier;
@@ -12,15 +9,14 @@ use crate::{
     maven_processor::make,
     preprocessed::{CommitProcessor, RepositoryProcessor},
     processing::{
-        erased::ParametrizedCommitProcessorHandle, file_sys, BuildSystem, CacheHolding,
-        ConfiguredRepo, ConfiguredRepo2, ConfiguredRepoHandle2, ProcessingConfig, RepoConfig,
+        erased::ParametrizedCommitProcessorHandle, ConfiguredRepo, ConfiguredRepo2,
+        ConfiguredRepoHandle2, RepoConfig,
     },
-    Commit, DefaultMetrics, SimpleStores,
+    Commit, SimpleStores,
 };
 
 /// Preprocess git repositories
 /// share most components with PreProcessedRepository
-
 #[derive(Default)]
 pub struct PreProcessedRepositories {
     // pub commits: HashMap<RepoConfig, HashMap<git2::Oid, Commit>>,

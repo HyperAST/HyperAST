@@ -6,11 +6,7 @@ use crate::{
     preprocess::{iter_dirs, parse_dir_pair, parse_string_pair, JavaPreprocessFileSys},
     tempfile,
 };
-use hyper_ast::store::{
-    labels::LabelStore,
-    nodes::legion::NodeStore,
-    SimpleStores,
-};
+use hyper_ast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores};
 use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
 // use hyper_ast_gen_ts_java::types::TStore;
 use hyper_ast_cvs_git::TStore;
@@ -343,9 +339,7 @@ mod examples {
 mod test {
     use hyper_ast::{
         nodes::SyntaxWithIdsSerializer,
-        store::{
-            labels::LabelStore, nodes::legion::NodeStore, SimpleStores,
-        },
+        store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores},
         types::{DecompressedSubtree, Typed},
     };
 
@@ -661,14 +655,7 @@ mod test {
         let gt_timings = pp.performances();
         let counts = pp.counts();
         dbg!(gt_timings, counts.mappings, counts.actions);
-        let valid = pp._validity_mappings(
-            stores,
-            &src_arena,
-            src,
-            &dst_arena,
-            dst,
-            &mappings,
-        );
+        let valid = pp._validity_mappings(stores, &src_arena, src, &dst_arena, dst, &mappings);
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
 
@@ -756,14 +743,7 @@ mod test {
         let (pp, counts) = pp.counts();
         let (pp, gt_timings) = pp.performances();
         dbg!(gt_timings, counts.mappings, counts.actions);
-        let valid = pp._validity_mappings(
-            &stores,
-            &src_arena,
-            src,
-            &dst_arena,
-            dst,
-            &mappings,
-        );
+        let valid = pp._validity_mappings(&stores, &src_arena, src, &dst_arena, dst, &mappings);
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
     pub static CASE9: &'static str = r#"<project>
@@ -929,12 +909,7 @@ mod test {
         } = mapper.into();
         let src_arena = src_arena.complete(&stores.node_store);
         let dst_arena = dst_arena.complete(&stores.node_store);
-        print_mappings(
-            &dst_arena,
-            &src_arena,
-            stores,
-            &mappings,
-        );
+        print_mappings(&dst_arena, &src_arena, stores, &mappings);
 
         let gt_out = subprocess(
             stores,
@@ -1061,14 +1036,7 @@ mod test {
         let (pp, counts) = pp.counts();
         let (pp, gt_timings) = pp.performances();
         dbg!(gt_timings, counts.mappings, counts.actions);
-        let valid = pp._validity_mappings(
-            &stores,
-            &src_arena,
-            src,
-            &dst_arena,
-            dst,
-            &mappings,
-        );
+        let valid = pp._validity_mappings(&stores, &src_arena, src, &dst_arena, dst, &mappings);
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
 
@@ -1173,14 +1141,7 @@ mod test {
         let (pp, counts) = pp.counts();
         let (pp, gt_timings) = pp.performances();
         dbg!(gt_timings, counts.mappings, counts.actions);
-        let valid = pp._validity_mappings(
-            &stores,
-            &src_arena,
-            src,
-            &dst_arena,
-            dst,
-            &mappings,
-        );
+        let valid = pp._validity_mappings(&stores, &src_arena, src, &dst_arena, dst, &mappings);
         dbg!(valid.additional_mappings, valid.missing_mappings);
     }
 }

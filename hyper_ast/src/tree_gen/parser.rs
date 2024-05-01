@@ -33,9 +33,39 @@ pub trait Node<'a> {
 pub trait NodeWithU16TypeId<'a>: Node<'a> {
     fn kind_id(&self) -> u16;
 }
+
+#[derive(PartialEq, Eq)]
+pub enum Visibility {
+    Visible,
+    Hidden,
+}
+
 pub trait TreeCursor<'a, N: Node<'a>> {
     fn node(&self) -> N;
-    fn goto_first_child(&mut self) -> bool;
+    fn role(&self) -> Option<std::num::NonZeroU16>;
     fn goto_parent(&mut self) -> bool;
+
+    /// try to goto first child and return if it is visible
+    /// NOTE should be overridden to process hidden nodes
+    fn goto_first_child_extended(&mut self) -> Option<Visibility> {
+        if self.goto_first_child() {
+            Some(Visibility::Visible)
+        } else {
+            None
+        }
+    }
+    /// try to goto next sibling and return if it is visible
+    /// NOTE should be overridden to process hidden nodes
+    fn goto_next_sibling_extended(&mut self) -> Option<Visibility> {
+        if self.goto_next_sibling() {
+            Some(Visibility::Visible)
+        } else {
+            None
+        }
+    }
+    /// try to goto first child
+    fn goto_first_child(&mut self) -> bool;
+
+    /// try to goto next sibling
     fn goto_next_sibling(&mut self) -> bool;
 }

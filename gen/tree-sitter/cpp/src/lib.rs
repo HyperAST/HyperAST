@@ -2,6 +2,7 @@
 pub mod legion;
 
 pub mod types;
+#[allow(unused)]
 #[cfg(feature = "impl")]
 pub mod types_exp;
 
@@ -11,7 +12,6 @@ mod tests;
 
 #[cfg(feature = "legion")]
 mod tnode {
-    use super::*;
 
     #[repr(transparent)]
     pub struct TNode<'a>(pub(super) tree_sitter::Node<'a>);
@@ -50,7 +50,6 @@ mod tnode {
 
 #[cfg(feature = "legion")]
 pub use tnode::TNode;
-
 
 #[cfg(feature = "legion")]
 pub mod iter;

@@ -1,5 +1,5 @@
 use crate::{
-    types::{TIdN, TStore},
+    types::TIdN,
     TNode,
 };
 use hyper_ast::{
@@ -11,11 +11,10 @@ use hyper_ast::{
         nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert},
     },
     tree_gen::{
-        BasicGlobalData, GlobalData, Parents, SpacedGlobalData, SubTreeMetrics, TextedGlobalData,
-        TreeGen,
+        parser::Visibility, BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange
     },
     types::{self, AnyType, NodeStoreExt, TypeStore, TypeTrait, WithHashs, WithStats},
-    utils::{self},
+    utils,
 };
 use legion::world::EntryRef;
 use num::ToPrimitive;
@@ -28,7 +27,7 @@ use hyper_ast::{
     filter::BF,
     filter::{Bloom, BloomSize},
     hashed::{self, SyntaxNodeHashs, SyntaxNodeHashsKinds},
-    nodes::{self, Space},
+    nodes::Space,
     store::{
         nodes::legion::{compo, compo::CS},
         nodes::DefaultNodeStore as NodeStore,
@@ -90,6 +89,9 @@ pub struct MD {
     ana: Option<PartialAnalysis>,
     mcc: Mcc,
 }
+
+// Enables static reference analysis
+const ANA: bool = false;
 
 impl From<Local> for MD {
     fn from(x: Local) -> Self {
@@ -161,6 +163,42 @@ impl AccIndentation for Acc {
         &self.indentation
     }
 }
+impl WithByteRange for Acc {
+    fn has_children(&self) -> bool {
+        !self.simple.children.is_empty()
+    }
+
+    fn begin_byte(&self) -> usize {
+        self.start_byte
+    }
+
+    fn end_byte(&self) -> usize {
+        self.end_byte
+    }
+}
+impl Debug for Acc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Acc")
+            .field("simple", &self.simple)
+            .field("no_space", &self.no_space)
+            .field("labeled", &self.labeled)
+            .field("start_byte", &self.start_byte)
+            .field("end_byte", &self.end_byte)
+            .field("metrics", &self.metrics)
+            .field("ana", &self.ana)
+            .field("mcc", &self.mcc)
+            .field("padding_start", &self.padding_start)
+            .field("indentation", &self.indentation)
+            .finish()
+    }
+}
+
+/// enables recovering of hidden nodes from tree-sitter
+#[cfg(not(debug_assertions))]
+const HIDDEN_NODES: bool = true;
+#[cfg(debug_assertions)]
+static HIDDEN_NODES: bool = true;
+
 #[repr(transparent)]
 pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
 
@@ -172,21 +210,86 @@ impl<'a> Debug for TTreeCursor<'a> {
     }
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+enum TreeCursorStep {
+    TreeCursorStepNone,
+    TreeCursorStepHidden,
+    TreeCursorStepVisible,
+}
+
+impl TreeCursorStep {
+    fn ok(&self) -> Option<Visibility> {
+        match self {
+            TreeCursorStep::TreeCursorStepNone => None,
+            TreeCursorStep::TreeCursorStepHidden => Some(Visibility::Hidden),
+            TreeCursorStep::TreeCursorStepVisible => Some(Visibility::Visible),
+        }
+    }
+}
+
+extern "C" {
+    fn ts_tree_cursor_goto_first_child_internal(
+        self_: *mut tree_sitter::ffi::TSTreeCursor,
+    ) -> TreeCursorStep;
+    fn ts_tree_cursor_goto_next_sibling_internal(
+        self_: *mut tree_sitter::ffi::TSTreeCursor,
+    ) -> TreeCursorStep;
+}
+
 impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<'a> {
     fn node(&self) -> TNode<'a> {
         TNode(self.0.node())
     }
 
-    fn goto_first_child(&mut self) -> bool {
-        self.0.goto_first_child()
+    fn role(&self) -> Option<std::num::NonZeroU16> {
+        self.0.field_id()
     }
 
     fn goto_parent(&mut self) -> bool {
         self.0.goto_parent()
     }
 
+    fn goto_first_child(&mut self) -> bool {
+        self.goto_first_child_extended().is_some()
+    }
+
     fn goto_next_sibling(&mut self) -> bool {
-        self.0.goto_next_sibling()
+        self.goto_next_sibling_extended().is_some()
+    }
+
+    fn goto_first_child_extended(&mut self) -> Option<Visibility> {
+        if HIDDEN_NODES {
+            unsafe {
+                let s = &mut self.0;
+                let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
+                ts_tree_cursor_goto_first_child_internal(s)
+            }
+            .ok()
+        } else {
+            if self.0.goto_first_child() {
+                Some(Visibility::Visible)
+            } else {
+                None
+            }
+        }
+    }
+
+    fn goto_next_sibling_extended(&mut self) -> Option<Visibility> {
+        if HIDDEN_NODES {
+            unsafe {
+                let s = &mut self.0;
+                let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
+                ts_tree_cursor_goto_next_sibling_internal(s)
+            }
+            .ok()
+        } else {
+            if self.0.goto_next_sibling() {
+                Some(Visibility::Visible)
+            } else {
+                None
+            }
+        }
     }
 }
 
@@ -234,6 +337,23 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
             padding_start: 0,
             indentation: indent,
         }
+    }
+
+    fn pre_skippable(
+        &mut self,
+        text: &Self::Text,
+        node: &Self::Node<'_>,
+        stack: &Parents<Self::Acc>,
+        global: &mut Self::Global,
+    ) -> PreResult<<Self as TreeGen>::Acc> {
+        let type_store = &mut self.stores().type_store;
+        let kind = node.obtain_type(type_store);
+        let mut acc = self.pre(text, node, stack, global);
+        if kind == Type::StringLiteral {
+            acc.labeled = true;
+            return PreResult::SkipChildren(acc);
+        }
+        PreResult::Ok(acc)
     }
 
     fn pre(
@@ -303,7 +423,7 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
 pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
     let mut parser = tree_sitter::Parser::new();
     let language = tree_sitter_java::language();
-    parser.set_language(language).unwrap();
+    parser.set_language(&language).unwrap();
     let tree = parser.parse(text, None).unwrap();
     if tree.root_node().has_error() {
         Err(tree)
@@ -382,7 +502,7 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
     pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
         let mut parser = tree_sitter::Parser::new();
         let language = tree_sitter_java::language();
-        parser.set_language(language).unwrap();
+        parser.set_language(&language).unwrap();
         let tree = parser.parse(text, None).unwrap();
         if tree.root_node().has_error() {
             Err(tree)
@@ -458,6 +578,9 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
     }
 
     fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {
+        if !ANA {
+            return None;
+        }
         let label_store = &mut self.stores.label_store;
         if kind == &Type::ClassBody
             || kind == &Type::PackageDeclaration
@@ -636,23 +759,22 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
                         x if x > 0 => bloom!(u16),
                         _ => {
                             dyn_builder.add(BloomSize::None);
-                        }
-                        // TODO use the following after having tested the previous, already enough changes for now
-                        // 2048.. => {
-                        //     dyn_builder.add(BloomSize::Much);
-                        // }
-                        // 1024.. => bloom!([u64; 64]),
-                        // 512.. => bloom!([u64; 32]),
-                        // 256.. => bloom!([u64; 16]),
-                        // 150.. => bloom!([u64; 8]),
-                        // 100.. => bloom!([u64; 4]),
-                        // 32.. => bloom!([u64; 2]),
-                        // 16.. => bloom!(u64),
-                        // 8.. => bloom!(u32),
-                        // 1.. => bloom!(u16),
-                        // 0 => {
-                        //     dyn_builder.add(BloomSize::None);
-                        // }
+                        } // TODO use the following after having tested the previous, already enough changes for now
+                          // 2048.. => {
+                          //     dyn_builder.add(BloomSize::Much);
+                          // }
+                          // 1024.. => bloom!([u64; 64]),
+                          // 512.. => bloom!([u64; 32]),
+                          // 256.. => bloom!([u64; 16]),
+                          // 150.. => bloom!([u64; 8]),
+                          // 100.. => bloom!([u64; 4]),
+                          // 32.. => bloom!([u64; 2]),
+                          // 16.. => bloom!(u64),
+                          // 8.. => bloom!(u32),
+                          // 1.. => bloom!(u16),
+                          // 0 => {
+                          //     dyn_builder.add(BloomSize::None);
+                          // }
                     }
                 }
 
@@ -777,7 +899,7 @@ fn compress<T: 'static + std::marker::Send + std::marker::Sync>(
                 x if x > 0 => {
                     insert!($($c),+, bloom!(Bloom::<&'static [u8], u16>))
                 }
-                x => {
+                _ => {
                     insert!($($c),+, (BloomSize::None,))
                 },
             }
@@ -845,7 +967,6 @@ fn compress<T: 'static + std::marker::Send + std::marker::Sync>(
         (Some(label), _) => children_dipatch!(base, (label,),),
     }
 }
-
 fn make_partial_ana(
     kind: Type,
     ana: Option<PartialAnalysis>,
@@ -854,6 +975,9 @@ fn make_partial_ana(
     label_store: &mut LabelStore,
     insertion: &PendingInsert,
 ) -> Option<PartialAnalysis> {
+    if !ANA {
+        return None;
+    }
     partial_ana_extraction(kind, ana, label, children, label_store, insertion)
         .map(|ana| ana_resolve(kind, ana, label_store))
 }
@@ -938,7 +1062,7 @@ fn partial_ana_extraction(
     };
     if kind == Type::Program {
         ana
-    } else if kind == Type::Comment {
+    } else if kind.is_comment() {
         None
     } else if let Some(label) = label.as_ref() {
         let label = if kind.is_literal() {

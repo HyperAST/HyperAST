@@ -4,24 +4,23 @@ use crate::PrimInt;
 
 use super::{position_accessors, tags};
 
-// TODO remove PrimInt, also in impls
-pub struct Offsets<Idx: PrimInt, Config = tags::TopDownFull> {
+pub struct Offsets<Idx, Config = tags::TopDownFull> {
     /// offsets to go through a tree from top to bottom
     offsets: Vec<Idx>,
     _phantom: PhantomData<Config>,
 }
-impl<Idx: PrimInt, C> Into<Vec<Idx>> for Offsets<Idx, C> {
+impl<Idx, C> Into<Vec<Idx>> for Offsets<Idx, C> {
     fn into(self) -> Vec<Idx> {
         self.offsets
     }
 }
 
-pub struct OffsetsRef<'a, Idx: PrimInt, Config = tags::TopDownFull> {
+pub struct OffsetsRef<'a, Idx, Config = tags::TopDownFull> {
     /// offsets to go through a tree from top to bottom
     offsets: &'a [Idx],
     _phantom: PhantomData<Config>,
 }
-impl<'a, Idx: PrimInt> From<&'a [Idx]> for OffsetsRef<'a, Idx> {
+impl<'a, Idx> From<&'a [Idx]> for OffsetsRef<'a, Idx> {
     fn from(offsets: &'a [Idx]) -> Self {
         Self {
             offsets,
@@ -29,7 +28,7 @@ impl<'a, Idx: PrimInt> From<&'a [Idx]> for OffsetsRef<'a, Idx> {
         }
     }
 }
-impl<'a, Idx: PrimInt> OffsetsRef<'a, Idx> {
+impl<'a, Idx> OffsetsRef<'a, Idx> {
     pub fn with_root<IdN>(self, root: IdN) -> RootedOffsetsRef<'a, IdN, Idx> {
         RootedOffsetsRef {
             root,
@@ -44,6 +43,41 @@ pub struct RootedOffsets<IdN, Idx> {
     offsets: Vec<Idx>,
 }
 
+impl<IdN, Idx> super::node_filter_traits::Full for RootedOffsets<IdN, Idx> {}
+
+impl<IdN: Copy, Idx> position_accessors::RootedPosition<IdN>
+    for RootedOffsets<IdN, Idx>
+{
+    fn root(&self) -> IdN {
+        self.root
+    }
+}
+impl<IdN: Copy, Idx: PrimInt> position_accessors::WithOffsets
+    for RootedOffsets<IdN, Idx>
+{
+    type Idx = Idx;
+}
+
+impl<IdN: Copy, Idx: PrimInt> position_accessors::WithPreOrderOffsets
+    for RootedOffsets<IdN, Idx>
+{
+    type It<'b> = std::iter::Copied<std::slice::Iter<'b, Idx>> where Self: 'b, Idx: 'b;
+
+    fn iter_offsets(&self) -> Self::It<'_> {
+        self.offsets.iter().copied()
+    }
+}
+
+impl<IdN: Copy, Idx: PrimInt> RootedOffsets<IdN, Idx> {
+    pub fn with_store<'store, HAST>(
+        &self,
+        stores: &'store HAST,
+    ) -> super::WithHyperAstPositionConverter<'store, '_, Self, HAST> {
+        super::PositionConverter::new(self).with_stores(stores)
+    }
+}
+
+// TODO try with a slice, i.e. without putting a ref on offests slice
 pub struct RootedOffsetsRef<'a, IdN, Idx> {
     root: IdN,
     /// offsets to go through a tree from top to bottom
@@ -52,7 +86,9 @@ pub struct RootedOffsetsRef<'a, IdN, Idx> {
 
 impl<'a, IdN, Idx> super::node_filter_traits::Full for RootedOffsetsRef<'a, IdN, Idx> {}
 
-impl<'a, IdN: Copy, Idx> position_accessors::RootedPosition<IdN> for RootedOffsetsRef<'a, IdN, Idx> {
+impl<'a, IdN: Copy, Idx> position_accessors::RootedPosition<IdN>
+    for RootedOffsetsRef<'a, IdN, Idx>
+{
     fn root(&self) -> IdN {
         self.root
     }
@@ -82,19 +118,12 @@ impl<'a, IdN: Copy, Idx: PrimInt> RootedOffsetsRef<'a, IdN, Idx> {
     }
 }
 
-pub(super) struct SolvedPathPosition<IdN, Idx> {
-    root: IdN,
-    /// offsets to go through a tree from top to bottom
-    offsets: Vec<Idx>,
-    node: IdN,
-}
-
 mod impl_receivers {
     use super::super::building;
-    use building::top_down;
-    use crate::PrimInt;
     use super::tags;
     use super::Offsets;
+    use crate::PrimInt;
+    use building::top_down;
 
     impl<Idx: PrimInt, C> building::top_down::CreateBuilder for Offsets<Idx, C> {
         fn create() -> Self {
@@ -124,7 +153,9 @@ mod impl_receivers {
         }
     }
 
-    impl<Idx: PrimInt> building::top_down::ReceiveIdx<Idx, Self> for Offsets<Idx, tags::TopDownNoSpace> {
+    impl<Idx: PrimInt> building::top_down::ReceiveIdx<Idx, Self>
+        for Offsets<Idx, tags::TopDownNoSpace>
+    {
         fn push(self, _idx: Idx) -> Self {
             // self.offsets.push(idx);
             self
@@ -138,7 +169,9 @@ mod impl_receivers {
         }
     }
 
-    impl<Idx: PrimInt> building::top_down::ReceiveIdxNoSpace<Idx, Self> for Offsets<Idx, tags::TopDownNoSpace> {
+    impl<Idx: PrimInt> building::top_down::ReceiveIdxNoSpace<Idx, Self>
+        for Offsets<Idx, tags::TopDownNoSpace>
+    {
         fn push(mut self, idx: Idx) -> Self {
             self.offsets.push(idx);
             self
@@ -149,7 +182,9 @@ mod impl_receivers {
         type InFile<O> = Self;
     }
 
-    impl<Idx: PrimInt, IdO: PrimInt, C> building::top_down::ReceiveOffset<IdO, Self> for Offsets<Idx, C> {
+    impl<Idx: PrimInt, IdO: PrimInt, C> building::top_down::ReceiveOffset<IdO, Self>
+        for Offsets<Idx, C>
+    {
         fn push(self, _bytes: IdO) -> Self {
             self
         }
@@ -174,30 +209,4 @@ mod impl_receivers {
             self
         }
     }
-
-    // impl<IdN, Idx, IdO: PrimInt> top_down::ReceiveInFile<IdN, Idx, Self> for Offsets<Idx> {
-    //     type S1 = Self;
-
-    //     type S2 = Self;
-
-    //     fn finish(self) -> Self {
-    //         self
-    //     }
-    // }
-    // impl<IdN, Idx, IdO: PrimInt> top_down::ReceiveDir<IdN, Idx, Self> for Offsets<Idx> {
-    //     type SA1 = Self;
-
-    //     type SA2 = Self;
-
-    //     type SB1 = Self;
-
-    //     fn go_inside_file(mut self, file_name: &str) -> Self::SB1 {
-    //         self.file.push(file_name);
-    //         self
-    //     }
-
-    //     fn finish(self) -> Self {
-    //         self
-    //     }
-    // }
 }

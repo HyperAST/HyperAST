@@ -21,7 +21,6 @@ impl<Idx: PartialEq> PartialEq for CompressedTreePath<Idx> {
 }
 impl<Idx: Eq> Eq for CompressedTreePath<Idx> {}
 
-
 fn shared_ancestors<Idx: PartialEq>(
     curr: impl Iterator<Item = Idx>,
     mut other: impl Iterator<Item = Idx>,
@@ -45,6 +44,7 @@ fn shared_ancestors<Idx: PartialEq>(
 }
 
 impl<Idx: PrimInt> CompressedTreePath<Idx> {
+    #[allow(unused)] // will be needed for applying actions
     pub(crate) fn shared_ancestors(&self, other: &Self) -> SharedPath<Vec<Idx>> {
         shared_ancestors(self.iter(), other.iter())
     }

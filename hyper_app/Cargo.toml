@@ -60,7 +60,10 @@ automerge = { version = "0.4.0" }
 # used to add extra-traits flag needed by code in autosurgeon-derive
 syn = { version = "2", features = ["full", "extra-traits"] }
 async_executors = "0.6"
-futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+futures-util = { version = "0.3", default-features = false, features = [
+    "sink",
+    "std",
+] }
 futures = "0.3"
 tokio-tungstenite-wasm = { version = "0.1.0" }
 http = "0.2.6" # Types for HTTP requests and responses.
@@ -73,12 +76,12 @@ tree-sitter-javascript = "0.20.0"
 tree-sitter = { version = "0.9.1", package = "tree-sitter-facade-sg" }
 tree-sitter-highlight = "0.20.1"
 tree-sitter-native = { version = "0.20.9", package = "tree-sitter" }
-tokio = {version="1.26.0", features=["rt","rt-multi-thread"]}
+tokio = { version = "1.26.0", features = ["rt", "rt-multi-thread"] }
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 gloo-timers = "0.2.6"
-poll-promise = {  version = "0.3", default-features = false, features = ["web"] }
+poll-promise = { version = "0.3", default-features = false, features = ["web"] }
 console_error_panic_hook = "0.1.6"
 tracing-wasm = "0.2"
 tree-sitter = { version = "0.9.1", package = "tree-sitter-facade-sg" }
@@ -90,10 +93,9 @@ js-sys = "0.3"
 # wasm-bindgen-futures = "0.4"
 wasm-logger = "0.2.0"
 
-[dependencies.syntect]
-version = "5"
-features = ["default-fancy"]
-default-features = false
+syntect = { version = "5", features = [
+    "default-fancy",
+], default-features = false }
 
 [features]
 default = ["serde"]

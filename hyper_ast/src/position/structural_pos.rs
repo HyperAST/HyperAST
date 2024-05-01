@@ -8,7 +8,8 @@ use crate::{
     types::{
         self, AnyType, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled,
         NodeId, NodeStore, TypeStore, Typed, TypedNodeId, WithChildren, WithSerialization,
-    }, PrimInt,
+    },
+    PrimInt,
 };
 
 pub use super::offsets_and_nodes::StructuralPosition;
@@ -104,7 +105,9 @@ mod esp_impl {
 
         fn next(&mut self) -> Option<Self::Item> {
             let o = self.0.sps.offsets[self.0.i];
-            self.0.try_go_up().map(|h| (o - one(), self.0.sps.nodes[h.0]))
+            self.0
+                .try_go_up()
+                .map(|h| (o - one(), self.0.sps.nodes[h.0]))
             // let o = self.0.sps.offsets[self.0.i];
             // let n = self.0.sps.nodes[self.0.i];
             // self.0.try_go_up().map(|h| (o, n))
@@ -119,6 +122,16 @@ pub struct StructuralPositionStore<IdN = NodeIdentifier, Idx = u16> {
     pub nodes: Vec<IdN>,
     parents: Vec<usize>,
     offsets: Vec<Idx>,
+}
+
+impl<IdN, Idx> Debug for StructuralPositionStore<IdN, Idx> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StructuralPositionStore")
+            .field("nodes", &self.nodes.len())
+            .field("parents", &self.parents.len())
+            .field("offsets", &self.offsets.len())
+            .finish()
+    }
 }
 
 // #[derive(Clone, Debug)]
@@ -319,13 +332,13 @@ where
             prev_x = x;
             len
         };
-        use crate::position::building::bottom_up::ReceiveNode;
+        use bottom_up::ReceiveNode;
         let mut builder: B::SB1<O> = if let Some(len) = len {
             let mut builder = builder.set(len);
             let builder = loop {
                 let Some(aaa) = iter.next() else {
                     use bottom_up::SetRoot;
-                    return builder.set_root(prev_x)
+                    return builder.set_root(prev_x);
                 };
                 x = aaa.1;
                 o = aaa.0;
@@ -373,7 +386,7 @@ where
         loop {
             let Some(aaa) = iter.next() else {
                 use bottom_up::SetRoot;
-                return builder.set_root(prev_x)
+                return builder.set_root(prev_x);
             };
             x = aaa.1;
             o = aaa.0;
@@ -389,7 +402,7 @@ where
                     .resolve_type(&stores.node_store().resolve(x.as_id())))
                 .collect::<Vec<_>>());
 
-            use bottom_up::{ReceiveIdx, ReceiveNode, ReceiveOffset};
+            use bottom_up::ReceiveIdx;
             builder = builder.push(prev_x).push(o);
             prev_x = x;
         }
@@ -424,7 +437,7 @@ where
 // TODO make_position should be a From<ExploreStructuralPositions> for FileAndOffsetPostionT and moved to relevant place
 // TODO here the remaining logic should be about giving an iterator through the structural position
 impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, IdN, Idx> {
-    fn make_position<'store, HAST>(self, stores: &'store HAST) -> Position
+    pub fn make_position<'store, HAST>(self, stores: &'store HAST) -> Position
     where
         'a: 'store,
         HAST: HyperAST<'store, IdN = IdN::IdN>,
@@ -515,12 +528,7 @@ impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, I
                     );
                 }
                 let c: usize = {
-                    let v: Vec<_> = b
-                        .children()
-                        .unwrap()
-                        .before(o)
-                        .iter_children()
-                        .collect();
+                    let v: Vec<_> = b.children().unwrap().before(o).iter_children().collect();
                     v.iter()
                         .map(|x| {
                             let b = stores.node_store().resolve(x);

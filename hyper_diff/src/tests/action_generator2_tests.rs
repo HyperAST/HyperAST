@@ -15,8 +15,7 @@ use crate::{
     tree::simple_tree::{vpair_to_stores, DisplayTree, TreeRef, NS},
 };
 use hyper_ast::types::{
-    DecompressedSubtree, LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Tree as _, Typed,
-    WithChildren,
+    DecompressedSubtree, LabelStore, Labeled, NodeStore, NodeStoreExt, Stored, Typed, WithChildren,
 };
 use std::fmt;
 
@@ -603,6 +602,8 @@ where
         },
     }
 }
+
+#[allow(unused)] // TODO action_generator2 need a rework anyway
 pub(crate) fn make_move_update<T: Stored + Labeled + WithChildren, P>(
     from: (&[T::ChildIdx], &[T::ChildIdx]),
     new: T::Label,

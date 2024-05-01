@@ -68,7 +68,7 @@ fn simple() {
         if x.get::<&Ty>().unwrap().deref() != &ty {
             return false;
         }
-        // check other components 
+        // check other components
         true
     });
     if let Some(_) = pending.occupied() {

@@ -113,7 +113,6 @@ fn single(repo_name: &str, before: &str, after: &str) {
             dbg!(gt_timings);
             dbg!(valid.additional_mappings);
             dbg!(valid.missing_mappings);
-
         }
     } else if gt_out_format == "JSON" {
         if let Some(gt_out) = &gt_out {

@@ -1,7 +1,4 @@
-use hyper_ast_cvs_git::{
-    processing::{ConfiguredRepoHandle, ConfiguredRepoTrait},
-    SimpleStores,
-};
+use hyper_ast_cvs_git::{processing::ConfiguredRepoTrait, SimpleStores};
 use serde::{Deserialize, Serialize};
 
 use std::fmt::Debug;
@@ -74,7 +71,61 @@ pub(crate) fn added_deleted(
         let mappings_cache = &state.mappings_alone;
         use hyper_diff::matchers::mapping_store::MappingStore;
         use hyper_diff::matchers::mapping_store::VecStore;
+
+        // unsucceful attempt using a type specific Typestore to improve efficiency of diff
+        // #[repr(u8)]
+        // pub enum TStore {
+        //     Maven = 0,
+        //     Java = 1,
+        //     Cpp = 2,
+        // }
+
+        // impl Default for TStore {
+        //     fn default() -> Self {
+        //         Self::Maven
+        //     }
+        // }
+
+        // impl<'a> TypeStore<no_space::NoSpaceWrapper<'a, NodeIdentifier>> for &TStore {
+        //     type Ty = hyper_ast_cvs_git::MultiType;
+        //     const MASK: u16 = 0b1000_0000_0000_0000;
+
+        //     fn resolve_type(&self, n: &no_space::NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Ty {
+        //         use hyper_ast::types::Typed;
+        //         n.get_type()
+        //     }
+
+        //     fn resolve_lang(
+        //         &self,
+        //         n: &no_space::NoSpaceWrapper<'a, NodeIdentifier>,
+        //     ) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        //         todo!()
+        //     }
+
+        //     type Marshaled = hyper_ast::types::TypeIndex;
+
+        //     fn marshal_type(
+        //         &self,
+        //         n: &no_space::NoSpaceWrapper<'a, NodeIdentifier>,
+        //     ) -> Self::Marshaled {
+        //         todo!()
+        //     }
+
+        //     fn type_eq(
+        //         &self,
+        //         n: &no_space::NoSpaceWrapper<'a, NodeIdentifier>,
+        //         m: &no_space::NoSpaceWrapper<'a, NodeIdentifier>,
+        //     ) -> bool {
+        //         n.as_ref()
+        //             .get_component::<hyper_ast_gen_ts_cpp::types::Type>()
+        //             == m.as_ref()
+        //                 .get_component::<hyper_ast_gen_ts_cpp::types::Type>()
+        //     }
+        // }
+        // let tstore2 = TStore::default();
         let hyperast = stores;
+        // let hyperast = hyperast.change_type_store_ref(&tstore2);
+        // let hyperast = &hyperast;
         use hyper_diff::matchers::Mapping;
 
         dbg!();
@@ -105,7 +156,6 @@ pub(crate) fn added_deleted(
                     mapper.mapping.src_arena.len(),
                     mapper.mapping.dst_arena.len(),
                 );
-
                 matching::full2(hyperast, &mut mapper);
                 let vec_store = mapper.mappings.clone();
 

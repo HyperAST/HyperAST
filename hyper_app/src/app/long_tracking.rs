@@ -870,9 +870,9 @@ pub(crate) fn show_results(
                 } else {
                     curr_view.original_targets.get_mut(0)
                 };
-                let Some((curr,_)) = curr else {
-                        continue;
-                    };
+                let Some((curr, _)) = curr else {
+                    continue;
+                };
 
                 &curr.file.commit
             };
@@ -884,9 +884,9 @@ pub(crate) fn show_results(
                 let trigger = tree_viewer.try_poll();
                 let Some(tree_viewer) = tree_viewer.get_mut() else {
                     if !tree_viewer.is_waiting() {
-
                         tree_viewer.buffer(code_aspects::remote_fetch_node(
-                            ui.ctx(),api_addr,
+                            ui.ctx(),
+                            api_addr,
                             store.clone(),
                             &curr_commit,
                             "",
@@ -911,7 +911,8 @@ pub(crate) fn show_results(
                 match tree_viewer {
                     Ok(tree_viewer) => {
                         if let Some(p) = show_tree_view(
-                            ui,api_addr,
+                            ui,
+                            api_addr,
                             tree_viewer,
                             &mut curr_view,
                             trigger,
@@ -927,8 +928,8 @@ pub(crate) fn show_results(
                                 curr_view.original_targets.get_mut(0)
                             };
                             let Some((curr, _)) = curr else {
-                                    panic!();
-                                };
+                                panic!();
+                            };
                             if is_origin(col) {
                                 curr.path = p;
                                 // curr.range = Some(r.clone());
@@ -996,7 +997,7 @@ pub(crate) fn show_results(
                     Err(err) => panic!("{}", err),
                 }
             } else if long_tracking.ser_view {
-                if let Some(te) = show_code_view(ui, api_addr,&mut curr_view, fetched_files) {
+                if let Some(te) = show_code_view(ui, api_addr, &mut curr_view, fetched_files) {
                     let offset = 0; //aa.inner.0;
                     if !te.response.is_pointer_button_down_on() {
                         let bb = &te.cursor_range;
@@ -1013,7 +1014,7 @@ pub(crate) fn show_results(
                                 } else {
                                     curr_view.original_targets.get_mut(0)
                                 };
-                                let Some((curr,_)) = curr else {
+                                let Some((curr, _)) = curr else {
                                     continue;
                                 };
                                 curr
@@ -1269,7 +1270,8 @@ pub(crate) fn show_results(
                                 mem.data.get_temp(line_id) == Some(src_id.with("past_interact"))
                             }) {
                                 let Some(mut state) =
-                                ui.memory_mut(|mem| mem.data.get_temp::<(Pos2, Pos2)>(line_id)) else {
+                                    ui.memory_mut(|mem| mem.data.get_temp::<(Pos2, Pos2)>(line_id))
+                                else {
                                     panic!()
                                 };
                                 // wasm_rs_dbg::dbg!(&state);
@@ -1362,8 +1364,9 @@ pub(crate) fn show_results(
                                 } else if ui.memory_mut(|mem| {
                                     mem.data.get_temp(line_id) == Some(id.with("past_interact"))
                                 }) {
-                                    let Some(mut state) =
-                                    ui.memory_mut(|mem| mem.data.get_temp::<(Pos2, Pos2)>(line_id)) else {
+                                    let Some(mut state) = ui.memory_mut(|mem| {
+                                        mem.data.get_temp::<(Pos2, Pos2)>(line_id)
+                                    }) else {
                                         panic!()
                                     };
                                     // wasm_rs_dbg::dbg!(&state);
@@ -1614,7 +1617,7 @@ fn show_detached_element(
     let area = egui::Area::new(id)
         .default_pos(default_pos)
         .show(ui.ctx(), |ui| {
-            let past_resp; 
+            let past_resp;
             let fut_resp;
             let past = ui.painter().add(egui::Shape::Noop);
             let futur = ui.painter().add(egui::Shape::Noop);
@@ -1967,6 +1970,7 @@ struct ColView<'a> {
     deletions: Option<&'a [u32]>,
 }
 
+#[allow(unused)]
 fn show_code_view(
     ui: &mut egui::Ui,
     api_addr: &str,
@@ -1982,7 +1986,7 @@ fn show_code_view(
         } else {
             curr_view.original_targets.get_mut(0)
         };
-        let Some((curr,_)) = curr else {
+        let Some((curr, _)) = curr else {
             return None;
         };
 
@@ -2315,9 +2319,9 @@ fn show_commitid_info(
             }
         }
     };
-    let Some(tracked) = tracked  else {
+    let Some(tracked) = tracked else {
         let id = &code_ranges[0].file.commit.id;
-        f_commit(ui,id);
+        f_commit(ui, id);
         return;
     };
     if let Some(cr) = tracked

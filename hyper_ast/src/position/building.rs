@@ -194,11 +194,11 @@ pub struct CompoundPositionPreparer<A, B>(A, B);
 mod impl_c_p_p_receivers2 {
 
     use super::super::file_and_offset::Position;
-    use crate::PrimInt;
     use super::bottom_up;
     use super::top_down;
     use super::CompoundPositionPreparer;
     use super::Transition;
+    use crate::PrimInt;
 
     impl<A: top_down::CreateBuilder, B: top_down::CreateBuilder> top_down::CreateBuilder
         for CompoundPositionPreparer<A, B>
@@ -265,8 +265,11 @@ mod impl_c_p_p_receivers2 {
     //     }
     // }
 
-    impl<Idx: PrimInt, A: top_down::ReceiveIdxNoSpace<Idx, A>, B: top_down::ReceiveIdxNoSpace<Idx, B>>
-        top_down::ReceiveIdxNoSpace<Idx, Self> for CompoundPositionPreparer<A, B>
+    impl<
+            Idx: PrimInt,
+            A: top_down::ReceiveIdxNoSpace<Idx, A>,
+            B: top_down::ReceiveIdxNoSpace<Idx, B>,
+        > top_down::ReceiveIdxNoSpace<Idx, Self> for CompoundPositionPreparer<A, B>
     {
         fn push(self, idx: Idx) -> Self {
             Self(self.0.push(idx), self.1.push(idx))

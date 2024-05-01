@@ -1,16 +1,13 @@
+///! WIP this action collection aims to better express all possible order (of application) of actions from edit scripts,
+///! as action_vec only allow one order to apply actions.
+///! Maybe it can be integrated in the existing script generator or it needs major changes.
+///! Maybe an other algorithm similar to the Chawathe that better fits my needs exists in the literature.
 use hyper_ast::PrimInt;
 
 use crate::tree::tree_path::CompressedTreePath;
-/// WIP to better express variability in edit scripts actions order,
-/// action_vec only allow one order to apply actions.
-/// Maybe it can be integrated in the existing script generator or it needs major changes.
-/// Maybe an other algorithm similar to the Chawathe that better fits my needs exists in the literature.
 use std::fmt::Debug;
 
-use super::{
-    script_generator2::SimpleAction,
-    Actions,
-};
+use super::{script_generator2::SimpleAction, Actions};
 
 pub struct ActionsTree<A> {
     atomics: Vec<Node<A>>,

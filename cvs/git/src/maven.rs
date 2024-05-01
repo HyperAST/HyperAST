@@ -28,8 +28,7 @@ pub(crate) fn handle_pom_file<'a>(
     let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(text) {
         Ok(tree) => tree,
         Err(tree) => {
-            log::warn!("bad CST");
-            log::debug!("{:?}", name.try_str());
+            log::warn!("bad CST: {:?}", name.try_str());
             log::debug!("{}", tree.root_node().to_sexp());
             if PROPAGATE_ERROR_ON_BAD_CST_NODE {
                 return Err(ParseErr::IllFormed);
@@ -161,7 +160,7 @@ impl<'a> IterMavenModules2<'a> {
                 if let Some(n) = self.stores.node_store.try_resolve_typed::<XmlIdN>(x) {
                     let n = n.0;
                     log::debug!("f {:?}", n.get_type());
-                    n.get_type().eq(&Type::SourceFile)
+                    n.get_type().eq(&Type::Document)
                         && if n.has_label() {
                             log::debug!(
                                 "f name: {:?}",
@@ -306,7 +305,9 @@ impl MavenModuleAcc {
         // full_node.2.acc(&Type::Directory, &mut self.ana);
     }
     pub fn push_submodule(&mut self, name: LabelIdentifier, full_node: (NodeIdentifier, MD)) {
-        if full_node.1.status.contains(SemFlags::HoldMavenSubModule) || full_node.1.status.contains(SemFlags::IsMavenModule) {
+        if full_node.1.status.contains(SemFlags::HoldMavenSubModule)
+            || full_node.1.status.contains(SemFlags::IsMavenModule)
+        {
             self.status |= SemFlags::HoldMavenSubModule;
         }
         self.children.push(full_node.0);
@@ -508,7 +509,7 @@ impl<'a, T: TreePath<NodeIdentifier>> IterMavenModules<'a, T> {
                 if let Some(n) = self.stores.node_store.try_resolve_typed::<XmlIdN>(x) {
                     let n = n.0;
                     log::debug!("f {:?}", n.get_type());
-                    n.get_type().eq(&Type::SourceFile)
+                    n.get_type().eq(&Type::Document)
                         && if n.has_label() {
                             log::debug!(
                                 "f name: {:?}",

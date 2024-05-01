@@ -9,7 +9,8 @@ use crate::matchers::{mapping_store::MultiMappingStore, similarity_metrics};
 use crate::utils::sequence_algorithms::longest_common_subsequence;
 use hyper_ast::compat::HashMap;
 use hyper_ast::types::{
-    DecompressedSubtree, HashKind, HyperAST, IterableChildren, NodeId, NodeStore, Tree, TypeStore, WithHashs, WithStats
+    DecompressedSubtree, HashKind, HyperAST, IterableChildren, NodeId, NodeStore, Tree, TypeStore,
+    WithHashs, WithStats,
 };
 use logging_timer::time;
 use num_traits::{PrimInt, ToPrimitive};
@@ -301,11 +302,15 @@ where
             let (t, l) = {
                 let o = self.internal.src_arena.original(a);
                 let n = self.internal.stores.node_store().resolve(&o);
-                (self.internal.stores.type_store().resolve_type(&n), n.try_get_label().cloned())
+                (
+                    self.internal.stores.type_store().resolve_type(&n),
+                    n.try_get_label().cloned(),
+                )
             };
             let o = self.internal.dst_arena.original(b);
             let n = self.internal.stores.node_store().resolve(&o);
-            t == self.internal.stores.type_store().resolve_type(&n) && l.as_ref() == n.try_get_label()
+            t == self.internal.stores.type_store().resolve_type(&n)
+                && l.as_ref() == n.try_get_label()
         });
         (2 * common.len()).to_f64().unwrap() / (s1.len() + s2.len()).to_f64().unwrap()
     }
@@ -443,7 +448,11 @@ where
         self.src_arena
             .descendants(self.stores.node_store(), src)
             .iter()
-            .zip(self.dst_arena.descendants(self.stores.node_store(), dst).iter())
+            .zip(
+                self.dst_arena
+                    .descendants(self.stores.node_store(), dst)
+                    .iter(),
+            )
             .for_each(|(src, dst)| self.mappings.link(*src, *dst));
     }
 

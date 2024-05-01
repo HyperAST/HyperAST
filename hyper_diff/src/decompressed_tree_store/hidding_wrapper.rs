@@ -1,10 +1,12 @@
+//! This decompressed tree store is I thnk a pretty good utils to improve perfs of the bottom-up matcher.
+//! But it will require some more love, as I initially did not finish to implement everithing.
+
 use std::{
     borrow::{Borrow, BorrowMut},
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     fmt::Debug,
     marker::PhantomData,
-    ops::{Deref, Index},
-    slice,
+    ops::Index,
 };
 
 use bitvec::slice::BitSlice;
@@ -12,19 +14,16 @@ use num_traits::{cast, zero, PrimInt, ToPrimitive, Zero};
 
 use crate::{
     decompressed_tree_store::{
-        BreadthFirstIterable, DecompressedTreeStore, DecompressedWithParent, PostOrder,
-        ShallowDecompressedTreeStore,
+        DecompressedTreeStore, DecompressedWithParent, PostOrder, ShallowDecompressedTreeStore,
     },
     matchers::mapping_store::{MappingStore, MonoMappingStore},
 };
 use hyper_ast::types::{self, NodeId, NodeStore, Stored, WithChildren, WithStats};
 
 use super::{
-    basic_post_order::BasicPOSlice,
-    lazy_post_order::{self, LazyPostOrder},
-    simple_post_order::SimplePOSlice,
-    ContiguousDescendants, IterKr, LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrderIterable,
-    PostOrderKeyRoots, Shallow,
+    lazy_post_order::LazyPostOrder, simple_post_order::SimplePOSlice, ContiguousDescendants,
+    IterKr, LazyDecompressedTreeStore, LazyPOBorrowSlice, PostOrderIterable, PostOrderKeyRoots,
+    Shallow,
 };
 
 /// Wrap or just map a decommpressed tree in breadth-first eg. post-order,
@@ -195,28 +194,28 @@ where
         let src = self
             .back
             .get_src_unchecked(&self.map_dst[self.map_dst.len() - 1 - dst.to_usize().unwrap()]);
-        *self.rev_src.borrow().get(&src).unwrap()
+        *self.rev_src.get(&src).unwrap()
     }
 
     fn get_dst_unchecked(&self, src: &Self::Src) -> Self::Dst {
         let dst = self
             .back
             .get_dst_unchecked(&self.map_src[self.map_src.len() - 1 - src.to_usize().unwrap()]);
-        *self.rev_dst.borrow().get(&dst).unwrap()
+        *self.rev_dst.get(&dst).unwrap()
     }
 
     fn get_src(&self, dst: &Self::Dst) -> Option<Self::Src> {
         let src = self
             .back
             .get_src(&self.map_dst[self.map_dst.len() - 1 - dst.to_usize().unwrap()])?;
-        self.rev_src.borrow().get(&src).copied()
+        self.rev_src.get(&src).copied()
     }
 
     fn get_dst(&self, src: &Self::Src) -> Option<Self::Dst> {
         let dst = self
             .back
             .get_dst(&self.map_src[self.map_src.len() - 1 - src.to_usize().unwrap()])?;
-        self.rev_dst.borrow().get(&dst).copied()
+        self.rev_dst.get(&dst).copied()
     }
 
     fn link_if_both_unmapped(&mut self, src: Self::Src, dst: Self::Dst) -> bool {
@@ -327,45 +326,6 @@ where
     )
 }
 
-// impl<'a, T: 'a + WithChildren, IdD: PrimInt, DTS: PostOrder<'a, T, IdD>, D: BorrowMut<DTS>>
-//     SimpleHiddingMapper<'a, T, IdD, DTS, D>
-// {
-
-//     pub fn from_subtree_mapping<S, M: Index<usize>>(store: &'a S, back: D, side: &M) -> Self
-//     where
-//         S: NodeStore<T::TreeId, R<'a> = T>,
-//         M::Output: PrimInt
-//     {
-//         let x: &DTS = back.borrow();
-//         let mut map = Vec::with_capacity(x.len());
-//         let mut i = x.root();
-
-//         while num_traits::zero() < i {
-//             map.push(cs);
-//             i += 1;
-//         }
-
-//         map.shrink_to_fit();
-//         Self {
-//             map,
-//             // fc,
-//             back,
-//             phantom: PhantomData,
-//         }
-//     }
-// }
-
-// impl<'a, T: WithChildren, IdD, DTS: DecompressedTreeStore<'a, T, IdD>, D: BorrowMut<DTS>>
-//     Initializable<'a, T> for SimpleHiddingMapper<'a, T, IdD, DTS, D>
-// {
-//     fn make<S>(_store: &'a S, _root: &T::TreeId) -> Self
-//     where
-//         S: NodeStore<T::TreeId, R<'a> = T>,
-//     {
-//         panic!()
-//     }
-// }
-
 impl<
         'a,
         T: WithChildren,
@@ -459,8 +419,12 @@ impl<
                 break;
             }
             // dbg!(y, lld);
-            let Some(conv) = self.map.borrow().get(self.map.borrow().len() - 1 - y.to_usize().unwrap()) else {
-                break
+            let Some(conv) = self
+                .map
+                .borrow()
+                .get(self.map.borrow().len() - 1 - y.to_usize().unwrap())
+            else {
+                break;
             };
             // dbg!(conv, y);
             if lld < *conv {
@@ -512,17 +476,17 @@ impl<
 
     type PIt<'a>=DTS::PIt<'a> where D: 'a, Self:'a;
 
-    fn parents(&self, id: IdD) -> Self::PIt<'_> {
+    fn parents(&self, _id: IdD) -> Self::PIt<'_> {
         // self.back.borrow().parents(id)
         todo!()
     }
 
-    fn path(&self, parent: &IdD, descendant: &IdD) -> Vec<T::ChildIdx> {
+    fn path(&self, _parent: &IdD, _descendant: &IdD) -> Vec<T::ChildIdx> {
         // self.back.borrow().path(parent, descendant)
         todo!()
     }
 
-    fn lca(&self, a: &IdD, b: &IdD) -> IdD {
+    fn lca(&self, _a: &IdD, _b: &IdD) -> IdD {
         // self.back.borrow().lca(a, b)
         todo!()
     }
@@ -541,7 +505,7 @@ where
     T::TreeId: Clone + Debug,
     <T as WithChildren>::ChildIdx: PrimInt,
 {
-    fn decompress<S>(store: &'a S, id: &<T as Stored>::TreeId) -> Self::Out
+    fn decompress<S>(_store: &'a S, _id: &<T as Stored>::TreeId) -> Self::Out
     where
         S: NodeStore<<T as Stored>::TreeId, R<'a> = T>,
     {
@@ -643,8 +607,12 @@ where
                 break;
             }
             // dbg!(y, lld);
-            let Some(conv) = self.map.borrow().get(self.map.borrow().len() - 1 - y.to_usize().unwrap()) else {
-                break
+            let Some(conv) = self
+                .map
+                .borrow()
+                .get(self.map.borrow().len() - 1 - y.to_usize().unwrap())
+            else {
+                break;
             };
             if lld < *conv {
                 y = y - num_traits::one();
@@ -657,7 +625,7 @@ where
 
     type Slice<'b> = SimplePOSlice<'b,T,IdD> where Self: 'b;
 
-    fn slice(&self, x: &IdD) -> Self::Slice<'_> {
+    fn slice(&self, _x: &IdD) -> Self::Slice<'_> {
         todo!()
     }
 }
@@ -899,25 +867,7 @@ where
         S: NodeStore<<T>::TreeId, R<'b> = T>,
     {
         self.decompress_visible_descendants(store, x);
-        // let aaa = &self.map.borrow()[self.map.borrow().len() - 1 - x.to_usize().unwrap()];
-        // dbg!(&aaa);
-        // let mut aaa = *aaa; //self.back.borrow_mut().lld(aaa);
-        // dbg!(&aaa);
-        // loop {
-        //     dbg!(&aaa);
-        //     let cs = self.back.borrow_mut().decompress_children(store, &aaa);
-        //     let c = *cs.get(0).unwrap();
-        //     // assert_ne!(c, aaa);
-        //     if !self.rev.borrow().contains_key(&c) {
-        //         dbg!(c);
-        //         break;
-        //     }
-        //     aaa = c;
-        // }
-        // let map_lld = self.rev.borrow().get(&aaa).unwrap();
         let map_lld = self.first_descendant(x);
-        // dbg!(x, map_lld, &self.map.borrow(), self.rev.borrow());
-        // TODO extract actual values
         let len = x.to_usize().unwrap() - map_lld.to_usize().unwrap() + 1;
         // - id_compressed ez
         let mut id_compressed: Vec<T::TreeId> = Vec::with_capacity(len);
@@ -928,7 +878,6 @@ where
         // - llds: should be easy when extracting
         let mut llds: Vec<IdD> = vec![*x; len];
         let mut curr = map_lld.clone();
-        dbg!();
         while curr <= *x {
             let conv = self.map.borrow()[self.map.borrow().len() - 1 - curr.to_usize().unwrap()];
             // dbg!(conv);
@@ -948,7 +897,6 @@ where
             id_compressed.push(self.back.borrow_mut().original(&conv));
             curr = curr + num_traits::one();
         }
-        dbg!();
         let mut visited = bitvec::bitbox!(0; len);
         for i in (1..len).rev() {
             if !visited[llds[i].to_usize().unwrap()] {
@@ -957,12 +905,6 @@ where
                 visited.set(llds[i].to_usize().unwrap(), true);
             }
         }
-        // dbg!(
-        //     id_compressed.len(),
-        //     id_parent.len(),
-        //     llds.len(),
-        //     self.map.borrow().len()
-        // );
         CompleteWHPO {
             map: self.map.borrow(),
             id_compressed,
@@ -974,9 +916,12 @@ where
 }
 
 pub struct CompleteWHPO<'a, T: Stored, IdD, Kr: Borrow<BitSlice>> {
+
+    #[allow(unused)] // TODO continue implementing traits, but after so long I would need test to avoid writting garbage.
     pub(crate) map: &'a [IdD],
     pub(crate) id_compressed: Vec<T::TreeId>,
     pub(crate) llds: Vec<IdD>,
+    #[allow(unused)] // TODO continue implementing traits, but after so long I would need test to avoid writting garbage.
     pub(crate) id_parent: Vec<IdD>,
     pub(super) kr: Kr,
 }
@@ -1010,7 +955,7 @@ where
         cast(self.len() - 1).unwrap()
     }
 
-    fn child<'b, S>(&self, store: &'b S, x: &IdD, p: &[T::ChildIdx]) -> IdD
+    fn child<'b, S>(&self, _store: &'b S, _x: &IdD, _p: &[T::ChildIdx]) -> IdD
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
     {
@@ -1018,7 +963,7 @@ where
         // self.simple.child(store, x, p)
     }
 
-    fn children<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    fn children<'b, S>(&self, _store: &'b S, _x: &IdD) -> Vec<IdD>
     where
         S: NodeStore<T::TreeId, R<'b> = T>,
     {
@@ -1032,7 +977,7 @@ impl<'a, T: WithChildren, IdD: PrimInt, Kr: Borrow<BitSlice>> DecompressedTreeSt
 where
     T::TreeId: Clone + Eq + Debug,
 {
-    fn descendants<'b, S>(&self, store: &'b S, x: &IdD) -> Vec<IdD>
+    fn descendants<'b, S>(&self, _store: &'b S, _x: &IdD) -> Vec<IdD>
     where
         S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
@@ -1040,12 +985,12 @@ where
         // self.simple.descendants(store, x)
     }
 
-    fn first_descendant(&self, i: &IdD) -> IdD {
+    fn first_descendant(&self, _i: &IdD) -> IdD {
         todo!()
         // self.simple.first_descendant(i)
     }
 
-    fn descendants_count<'b, S>(&self, store: &'b S, x: &IdD) -> usize
+    fn descendants_count<'b, S>(&self, _store: &'b S, _x: &IdD) -> usize
     where
         S: 'b + NodeStore<T::TreeId, R<'b> = T>,
     {
@@ -1053,7 +998,7 @@ where
         // self.simple.descendants_count(store, x)
     }
 
-    fn is_descendant(&self, desc: &IdD, of: &IdD) -> bool {
+    fn is_descendant(&self, _desc: &IdD, _of: &IdD) -> bool {
         todo!()
         // self.simple.is_descendant(desc, of)
     }
@@ -1066,12 +1011,10 @@ where
 {
     fn lld(&self, i: &IdD) -> IdD {
         self.llds[i.to_usize().unwrap()]
-        // self.simple.lld(i)
     }
 
     fn tree(&self, id: &IdD) -> T::TreeId {
         self.id_compressed[id.to_usize().unwrap()].clone()
-        // self.simple.tree(id)
     }
 }
 
@@ -1080,9 +1023,6 @@ impl<'a, T: WithChildren + 'a, IdD: PrimInt, Kr: Borrow<BitSlice>> PostOrderKeyR
 where
     T::TreeId: Clone + Eq + Debug,
 {
-    // fn kr(&self, x: IdD) -> IdD {
-    //     self.kr[x.to_usize().unwrap()]
-    // }
     type Iter<'b> = IterKr<'b,IdD>
     where
         Self: 'b;

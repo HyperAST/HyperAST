@@ -6,8 +6,8 @@ use std::{
 use num_traits::{cast, zero, PrimInt, ToPrimitive, Zero};
 
 use crate::decompressed_tree_store::{DecompressedTreeStore, PostOrder};
-use hyper_ast::types::{HyperAST, LabelStore, Labeled, NodeStore, WithChildren, WithSerialization};
 use hyper_ast::types::TypeStore;
+use hyper_ast::types::{HyperAST, LabelStore, Labeled, NodeStore, WithChildren, WithSerialization};
 
 use super::FullyDecompressedTreeStore;
 
@@ -154,7 +154,8 @@ where
                 let ori = self.inner.back.original(&o);
                 let node = self.stores.node_store().resolve(&ori);
                 let mut s = self
-                    .stores.label_store()
+                    .stores
+                    .label_store()
                     .resolve(&node.get_label_unchecked())
                     .to_owned();
                 s.truncate(5);

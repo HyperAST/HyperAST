@@ -1,5 +1,4 @@
 use std::{
-    future::IntoFuture,
     ops::Range,
     sync::{Arc, Mutex, RwLock},
 };
@@ -478,8 +477,8 @@ impl IncrementalHighlightLayout2 {
             let whole = &this.text;
             let mut inner = this.inner.write().unwrap();
             let Some(line) = whole.get(inner.i..) else {
-                    return
-                };
+                return;
+            };
             let i = inner.i;
             if let Some(i) = line.find("\n") {
                 inner.i += i + 1;
@@ -531,8 +530,8 @@ impl IncrementalHighlightLayout2 {
             let whole = &this.text;
             let mut inner = this.inner.write().unwrap();
             let Some(line) = whole.get(inner.i..) else {
-                    return
-                };
+                return;
+            };
             let i = inner.i;
             if let Some(i) = line.find("\n") {
                 inner.i += i + 1;

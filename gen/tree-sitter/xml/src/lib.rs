@@ -11,7 +11,6 @@ mod tests;
 
 #[cfg(feature = "legion")]
 mod tnode {
-    use super::*;
 
     #[repr(transparent)]
     pub struct TNode<'a>(pub(crate) tree_sitter::Node<'a>);
@@ -50,3 +49,6 @@ mod tnode {
 
 #[cfg(feature = "legion")]
 pub use tnode::TNode;
+
+#[cfg(feature = "legion")]
+pub mod iter;

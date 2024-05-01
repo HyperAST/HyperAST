@@ -10,8 +10,7 @@ use str_distance::DistanceMetric;
 use crate::decompressed_tree_store::{DecompressedTreeStore, PostOrderKeyRoots};
 use crate::matchers::mapping_store::MonoMappingStore;
 use hyper_ast::types::{
-    DecompressedSubtree, HyperAST, LabelStore, NodeId, NodeStore, SlicedLabel, Stored, Tree,
-    TypeStore,
+    DecompressedSubtree, HyperAST, LabelStore, NodeId, NodeStore, Stored, Tree, TypeStore,
 };
 
 // TODO use the Mapping struct

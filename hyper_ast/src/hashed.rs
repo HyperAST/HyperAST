@@ -3,11 +3,12 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use crate::{types::{AnyType, HashKind, HyperType, MySlice, NodeId}, PrimInt};
+use crate::{store::labels::DefaultLabelIdentifier, store::nodes::DefaultNodeIdentifier};
 use crate::{
-    store::labels::DefaultLabelIdentifier, store::nodes::DefaultNodeIdentifier, types::Type,
+    types::{AnyType, HashKind, HyperType, MySlice, NodeId},
+    PrimInt,
 };
-use num::{traits::WrappingAdd};
+use num::traits::WrappingAdd;
 
 use crate::nodes::{CompressedNode, HashSize};
 

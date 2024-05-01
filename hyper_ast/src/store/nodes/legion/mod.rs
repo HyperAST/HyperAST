@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash, num::NonZeroU64};
+use std::{fmt::Debug, hash::Hash};
 
 use hashbrown::hash_map::DefaultHashBuilder;
 use legion::{
@@ -167,8 +167,12 @@ impl NodeStore {
             .unwrap()
     }
 
-    pub fn resolve_with_type<T: 'static + TypedNodeId<IdN = NodeIdentifier>>(&self, id: &T::IdN) -> (T::Ty, HashedNodeRef<T>) {
-        let n = self.internal
+    pub fn resolve_with_type<T: 'static + TypedNodeId<IdN = NodeIdentifier>>(
+        &self,
+        id: &T::IdN,
+    ) -> (T::Ty, HashedNodeRef<T>) {
+        let n = self
+            .internal
             .entry_ref(*id)
             .map(|x| HashedNodeRef::new(x))
             .unwrap();

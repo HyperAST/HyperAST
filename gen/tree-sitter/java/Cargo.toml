@@ -7,9 +7,11 @@ include = ["/src", "tree-sitter-java/"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tree-sitter = { version = "0.20.9", optional = true }
+tree-sitter = { version = "0.22.2", optional = true }
 # tree-sitter-java = {path="tree-sitter-java", version="0.20.0"}
-tree-sitter-java = { git = "https://github.com/quentinLeDilavrec/tree-sitter-java", rev="5817a59d64bab74007acf7ea3355e06e83628f96", version = "0.20.0", optional = true }
+tree-sitter-java = { git = "https://github.com/quentinLeDilavrec/tree-sitter-java", version = "0.21.0", rev = "7699d4a296ca27fc14511bc75a1a899327f483fc", optional = true }
+# tree-sitter-java = { version = "0.21.0", optional = true }
+# tree-sitter-java = { path="../../../../tree-sitter-java", version = "0.21.0", optional = true }
 atomic-counter = "1.0.1"
 num = "0.4.0"
 bitvec = "1.0.1"
@@ -21,7 +23,6 @@ hashbrown = { version = "0.13.2", default-features = false, optional = true }
 # fasthash = "0.4.0"
 log = { version = "0.4.6" } #, features = ["max_level_debug", "release_max_level_warn"] }
 
-# tree-sitter_types = { path = "../../../tree-sitter_types" }
 hyper_ast = { path = "../../../hyper_ast", default-features = false }
 
 libc = "0.2"
@@ -53,7 +54,7 @@ legion = ["hyper_ast/legion", "dep:legion"]
 impl = [
     "hyper_ast/jemalloc",
     "legion",
-    "hyper_ast/native", 
+    "hyper_ast/native",
     "dep:hashbrown",
     "hashbrown?/ahash",
     "dep:tree-sitter",

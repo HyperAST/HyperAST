@@ -3,6 +3,7 @@ use hyper_ast::types::{IterableChildren, NodeId, NodeStore, WithChildren};
 pub mod bottom_up_matcher;
 pub mod greedy_bottom_up_matcher;
 pub mod greedy_subtree_matcher;
+#[allow(unused)] // TODO finish simple bottom up matcher
 pub mod simple_bottom_up_matcher;
 
 // lazy versions, that do not decompress directly subtrees

@@ -8,7 +8,8 @@ use std::{
 use hyper_ast::{
     position::Position,
     types::{
-        self, HyperAST, HyperType, LabelStore, NodeStore, Stored, Tree, TypeStore, WithChildren, WithSerialization
+        self, HyperAST, HyperType, LabelStore, NodeStore, Stored, Tree, TypeStore, WithChildren,
+        WithSerialization,
     },
 };
 use hyper_diff::{
@@ -206,7 +207,9 @@ pub mod compressed_bf_post_process {
                 <<NS as types::NodeStore<IdN>>::R<'store> as types::WithChildren>::ChildIdx,
             )>;
 
-            let with_p = |pos: V<'store, HAST::NS, HAST::IdN>, _ori: HAST::IdN| -> V<'store, HAST::NS, HAST::IdN> {
+            let with_p = |pos: V<'store, HAST::NS, HAST::IdN>,
+                          _ori: HAST::IdN|
+             -> V<'store, HAST::NS, HAST::IdN> {
                 Some((
                     if let Some((x, i)) = pos {
                         let mut c = md5::Context::new();
@@ -219,7 +222,9 @@ pub mod compressed_bf_post_process {
                     num_traits::zero(),
                 ))
             };
-            let with_lsib = |pos: V<'store, HAST::NS, HAST::IdN>, _lsib: HAST::IdN| -> V<'store, HAST::NS, HAST::IdN> {
+            let with_lsib = |pos: V<'store, HAST::NS, HAST::IdN>,
+                             _lsib: HAST::IdN|
+             -> V<'store, HAST::NS, HAST::IdN> {
                 let mut pos = pos.unwrap();
                 pos.1 = pos.1 + num_traits::one();
                 Some(pos)
@@ -467,7 +472,9 @@ impl SimpleJsonPostProcess {
         mapper: &'a Mapper<'store, HAST, DD, SD, VecStore<u32>>,
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Tree>>>
     where
-        HAST: HyperAST<'store> + NodeStore<HAST::IdN, R<'store> = HAST::T> + types::TypeStore<HAST::T>,
+        HAST: HyperAST<'store>
+            + NodeStore<HAST::IdN, R<'store> = HAST::T>
+            + types::TypeStore<HAST::T>,
         HAST::IdN: Clone + Debug + Eq,
         HAST::T: types::Tree + WithSerialization,
         SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
@@ -502,7 +509,9 @@ impl SimpleJsonPostProcess {
         mappings: &VecStore<u32>,
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Tree>>>
     where
-        HAST: HyperAST<'store> + NodeStore<HAST::IdN, R<'store> = HAST::T> + types::TypeStore<HAST::T>,
+        HAST: HyperAST<'store>
+            + NodeStore<HAST::IdN, R<'store> = HAST::T>
+            + types::TypeStore<HAST::T>,
         HAST::IdN: Clone + Debug,
         HAST::T: WithSerialization,
         SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
@@ -528,10 +537,8 @@ impl SimpleJsonPostProcess {
             pos.set_len(r.try_bytes_len().unwrap());
             pos
         };
-        let mut formator_src =
-            FormatCached::from((stores, src_arena, src_tr, with_p, with_lsib));
-        let mut formator_dst =
-            FormatCached::from((stores, dst_arena, dst_tr, with_p, with_lsib));
+        let mut formator_src = FormatCached::from((stores, src_arena, src_tr, with_p, with_lsib));
+        let mut formator_dst = FormatCached::from((stores, dst_arena, dst_tr, with_p, with_lsib));
         let mut formator = |a, b| diff_output::Match {
             src: (stores, formator_src.format(a)).into(),
             dest: (stores, formator_dst.format(b)).into(),
@@ -881,9 +888,10 @@ pub fn print_mappings_no_ranges<
     src_arena: &'a SD,
     stores: &'store HAST,
     mappings: &M,
-) where
-    // <NS as types::NodeStore<IdN>>::R<'store>: 'store + Tree<TreeId = IdN, Label = LS::I>,
-    // <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug,
+)
+where
+// <NS as types::NodeStore<IdN>>::R<'store>: 'store + Tree<TreeId = IdN, Label = LS::I>,
+// <<NS as types::NodeStore<IdN>>::R<'store> as types::Typed>::Type: Debug,
 {
     let mut mapped = vec![false; dst_arena.len()];
     let src_arena = SimplePreOrderMapper::from(src_arena);

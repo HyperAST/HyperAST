@@ -19,8 +19,7 @@ pub(crate) fn handle_cpp_file<'stores, 'cache, 'b: 'stores>(
     let tree = match cpp_tree_gen::CppTreeGen::<TStore>::tree_sitter_parse(text) {
         Ok(tree) => tree,
         Err(tree) => {
-            log::warn!("bad CST");
-            // println!("{}", name);
+            log::warn!("bad CST: {:?}", name.try_str());
             log::debug!("{}", tree.root_node().to_sexp());
             if PROPAGATE_ERROR_ON_BAD_CST_NODE {
                 return Err(());

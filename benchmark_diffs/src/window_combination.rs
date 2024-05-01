@@ -4,10 +4,7 @@ use crate::{
     other_tools,
     postprocess::{CompressedBfPostProcess, PathJsonPostProcess},
 };
-use hyper_ast::{
-    types::WithStats,
-    utils::memusage_linux,
-};
+use hyper_ast::{types::WithStats, utils::memusage_linux};
 use hyper_ast_cvs_git::{
     git::fetch_github_repository, no_space::as_nospaces, preprocessed::PreProcessedRepository,
 };
@@ -270,10 +267,10 @@ pub fn windowed_commits_compare(
                         &gt_timings[1],
                         &gt_timings[2],
                         summarized_lazy.mapping_durations.preparation[0],
-                        summarized_lazy.mapping_durations.mappings.0[0], 
+                        summarized_lazy.mapping_durations.mappings.0[0],
                         summarized_lazy.mapping_durations.preparation[1],
-                        summarized_lazy.mapping_durations.mappings.0[1], 
-                        summarized_lazy.gen_t, 
+                        summarized_lazy.mapping_durations.mappings.0[1],
+                        summarized_lazy.gen_t,
                         summarized_lazy.prepare_gen_t,
                         not_lazy.mapping_durations.preparation[0],
                         not_lazy.mapping_durations.mappings.0[0],
@@ -334,10 +331,7 @@ mod test {
 
     use super::*;
 
-    use hyper_ast::{
-        store::nodes::legion::HashedNodeRef,
-        types::WithChildren,
-    };
+    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::WithChildren};
     use hyper_diff::{
         decompressed_tree_store::{lazy_post_order::LazyPostOrder, CompletePostOrder},
         matchers::{
@@ -389,10 +383,7 @@ mod test {
         let mappings = VecStore::default();
         type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
         let mapper = GreedySubtreeMatcher::<DS, DS, _, _, _>::matchh::<DefaultMultiMappingStore<_>>(
-            stores,
-            &src,
-            &dst,
-            mappings,
+            stores, &src, &dst, mappings,
         );
         let SubtreeMatcher {
             src_arena,
@@ -400,12 +391,7 @@ mod test {
             mappings,
             ..
         } = mapper.into();
-        print_mappings(
-            &dst_arena,
-            &src_arena,
-            stores,
-            &mappings,
-        );
+        print_mappings(&dst_arena, &src_arena, stores, &mappings);
     }
 
     #[test]
@@ -458,10 +444,7 @@ mod test {
         let mappings = VecStore::default();
         type DS<'a> = CompletePostOrder<HashedNodeRef<'a>, u32>;
         let mapper = GreedySubtreeMatcher::<DS, DS, _, _, _>::matchh::<DefaultMultiMappingStore<_>>(
-            stores,
-            &src,
-            &dst,
-            mappings,
+            stores, &src, &dst, mappings,
         );
         let SubtreeMatcher {
             src_arena,
@@ -469,12 +452,7 @@ mod test {
             mappings,
             ..
         } = mapper.into();
-        print_mappings(
-            &dst_arena,
-            &src_arena,
-            stores,
-            &mappings,
-        );
+        print_mappings(&dst_arena, &src_arena, stores, &mappings);
 
         let gt_out_format = "JSON";
         let gt_out = other_tools::gumtree::subprocess(
@@ -678,12 +656,7 @@ mod test {
         // );
         let dst_arena = mapper.mapping.dst_arena.complete(&stores.node_store);
         let src_arena = mapper.mapping.src_arena.complete(&stores.node_store);
-        print_mappings(
-            &dst_arena,
-            &src_arena,
-            stores,
-            &mapper.mapping.mappings,
-        );
+        print_mappings(&dst_arena, &src_arena, stores, &mapper.mapping.mappings);
 
         let gt_out_format = "JSON";
         let gt_out = other_tools::gumtree::subprocess(

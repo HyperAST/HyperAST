@@ -1,14 +1,12 @@
 use self::{
     single_repo::ComputeConfigSingle,
     tree_view::FetchedHyperAST,
-    types::{Commit, Languages, Repo},
+    types::{Commit, Repo},
 };
 use egui_addon::{
     code_editor::{self, generic_text_buffer::byte_index_from_char_index},
     egui_utils::{radio_collapsing, show_wip},
-    interactive_split::interactive_splitter::InteractiveSplitter,
-    syntax_highlighting::{self, syntax_highlighting_async},
-    Lang,
+    syntax_highlighting, Lang,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -22,12 +20,15 @@ mod code_editor_automerge;
 mod code_tracking;
 mod commit;
 pub(crate) mod crdt_over_ws;
+#[allow(unused)]
 mod long_tracking;
 mod single_repo;
 mod tree_view;
 mod ts_highlight;
 pub(crate) mod types;
 mod utils;
+
+pub use self::types::Languages;
 
 // const API_URL: &str = "http://131.254.13.72:8080";
 // const API_URL: &str = "http://127.0.0.1:8080";
@@ -46,7 +47,7 @@ pub struct HyperApp {
     >,
 
     #[serde(skip)]
-    languages: Arc<HashMap<String, Lang>>,
+    languages: Languages,
 
     selected: types::SelectedConfig,
     single: ComputeConfigSingle,
@@ -255,7 +256,7 @@ impl<T: Default, U: std::marker::Send + 'static> MultiBuffered<T, U> {
     pub fn get_mut(&mut self) -> Option<&mut T> {
         self.content.as_mut()
     }
-
+    #[allow(unused)]
     pub fn is_waiting(&self) -> bool {
         !self.waiting.is_empty()
     }
@@ -263,7 +264,7 @@ impl<T: Default, U: std::marker::Send + 'static> MultiBuffered<T, U> {
     pub fn buffer(&mut self, waiting: poll_promise::Promise<U>) {
         self.waiting.push_back(waiting)
     }
-
+    #[allow(unused)]
     pub fn take(&mut self) -> Option<T> {
         self.content.take()
     }
@@ -335,7 +336,7 @@ impl HyperApp {
 
     /// Called once before the first frame.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn new(cc: &eframe::CreationContext<'_>, languages: Languages, api_addr: String) -> Self {
+    pub fn new(_cc: &eframe::CreationContext<'_>, languages: Languages, api_addr: String) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
         dbg!();
@@ -355,7 +356,7 @@ impl HyperApp {
 
         let mut r = HyperApp::default();
         r.api_addr = api_addr;
-        r.languages = languages.into();
+        r.languages = languages;
         r
     }
 }
@@ -373,7 +374,7 @@ impl eframe::App for HyperApp {
         //     .on_new_frame(ctx.input(|i| i.time), frame.info().cpu_usage);
         ctx.request_repaint_after(std::time::Duration::from_secs_f32(5.0));
         let Self {
-            project_name,
+            project_name: _,
             api_addr,
             // code_editors,
             scripting_context,
@@ -795,7 +796,7 @@ fn show_code_scrolled2(
             egui_demo_lib::syntax_highlighting::highlight(ui.ctx(), &theme, code, language);
         if wrap {
             panic!();
-            layout_job.wrap.max_width = wrap_width;
+            // layout_job.wrap.max_width = wrap_width;
         }
         ui.fonts(|f| f.layout_job(layout_job))
     };

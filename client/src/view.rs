@@ -101,14 +101,9 @@ pub fn view(state: SharedState, path: Parameters) -> Result<Json<ViewRes>, Strin
         .unwrap()
         .pre_process_with_limit(&mut repo, "", &commit, 2)
         .map_err(|e| e.to_string())?;
-    log::warn!(
-        "done construction of {commits:?} in {}",
-        repo.spec
-    );
+    log::warn!("done construction of {commits:?} in {}", repo.spec);
     let repositories = state.repositories.read().unwrap();
-    let commit_src = repositories
-        .get_commit(&repo.config,&commits[0])
-        .unwrap();
+    let commit_src = repositories.get_commit(&repo.config, &commits[0]).unwrap();
     let src_tr = commit_src.ast_root;
     dbg!(src_tr);
     let node_store = &repositories.processor.main_stores.node_store;
@@ -157,11 +152,9 @@ fn resolve_path(
     for i in path.unwrap_or_default().split("/") {
         dbg!(i);
         let i = i.parse();
-        let Ok(i) = i else {
-            break
-        };
+        let Ok(i) = i else { break };
         let Some(n) = node_store.resolve(curr).child(&i) else {
-            break
+            break;
         };
         curr = n;
     }

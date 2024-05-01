@@ -5,7 +5,8 @@ use hyper_ast::{
     position::{StructuralPosition, TreePath, TreePathMut},
     store::{defaults::NodeIdentifier, SimpleStores},
     types::{
-        AnyType, HyperAST, HyperType, IterableChildren, NodeId, NodeStore, Tree, TypeTrait, Typed, TypedHyperAST, TypedNodeStore, TypedTree, WithChildren
+        AnyType, HyperAST, HyperType, IterableChildren, NodeId, NodeStore, Tree, TypeTrait, Typed,
+        TypedHyperAST, TypedNodeStore, TypedTree, WithChildren,
     },
 };
 use num::ToPrimitive;
@@ -221,7 +222,7 @@ where
                     let cs = b.children().unwrap();
                     for xx in cs.iter_children() {
                         let bb = TypedNodeStore::try_resolve(self.stores.node_store(), xx);
-                        let Some((bb,_)) = bb else {
+                        let Some((bb, _)) = bb else {
                             continue;
                         };
                         // let bb = self.stores.node_store().resolve(xx);

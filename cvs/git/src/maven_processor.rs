@@ -5,7 +5,7 @@ use std::{
 };
 
 use git2::{Oid, Repository};
-use hyper_ast::{store::defaults::NodeIdentifier, types::LabelStore, tree_gen::Accumulator};
+use hyper_ast::{store::defaults::NodeIdentifier, tree_gen::Accumulator, types::LabelStore};
 use hyper_ast_gen_ts_xml::types::Type;
 
 use crate::{
@@ -109,7 +109,11 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                 w.children_names,
                 name
             );
-            if full_node.1.status.contains(crate::maven::SemFlags::IsMavenModule) {
+            if full_node
+                .1
+                .status
+                .contains(crate::maven::SemFlags::IsMavenModule)
+            {
                 w.push_submodule(name, full_node);
             } else {
                 w.push((name, full_node));
@@ -163,7 +167,11 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             let w = &mut self.stack.last_mut().unwrap().2;
             let name = self.prepro.intern_object_name(&name);
             assert!(!w.children_names.contains(&name));
-            if full_node.1.status.contains(crate::maven::SemFlags::IsMavenModule) {
+            if full_node
+                .1
+                .status
+                .contains(crate::maven::SemFlags::IsMavenModule)
+            {
                 w.push_submodule(name, full_node);
             } else {
                 w.push((name, full_node));
@@ -298,7 +306,7 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
             dyn_builder.add(Type::MavenDirectory);
             dyn_builder.add(hashs.clone());
             dyn_builder.add(label);
-            dyn_builder.add(BloomSize::Much,);
+            dyn_builder.add(BloomSize::Much);
             dyn_builder.add(compo::Size(size));
             dyn_builder.add(compo::SizeNoSpaces(size_no_spaces));
             dyn_builder.add(compo::Height(height));
@@ -318,7 +326,14 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
         size_no_spaces,
     };
 
-    let full_node = (node_id.clone(), MD { metrics, ana, status });
+    let full_node = (
+        node_id.clone(),
+        MD {
+            metrics,
+            ana,
+            status,
+        },
+    );
     full_node
 }
 

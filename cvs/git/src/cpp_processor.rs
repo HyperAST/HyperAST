@@ -2,8 +2,7 @@ use std::{iter::Peekable, path::Components};
 
 use git2::{Oid, Repository};
 use hyper_ast::{
-    filter::BloomSize,
-    hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
+    hashed::SyntaxNodeHashs,
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
         nodes::legion::PendingInsert,
@@ -224,9 +223,9 @@ impl crate::processing::erased::ParametrizedCommitProc2 for CppProcessorHolder {
     }
 
     fn with_parameters(
-        & self,
+        &self,
         parameters: crate::processing::erased::ConfigParametersHandle,
-    ) -> & Self::Proc {
+    ) -> &Self::Proc {
         assert_eq!(0, parameters.0);
         self.0.as_ref().unwrap()
     }

@@ -134,12 +134,7 @@ fn find_declaration_references(
         .iter()
         .map(|x| (x.make_position(stores).file().to_owned(), x.clone()));
     let decl_pos = &declaration.make_position(stores);
-    let p_in_of = find_package_in_other_folders(
-        stores,
-        decl_pos.file(),
-        decl_pos.file(),
-        of,
-    );
+    let p_in_of = find_package_in_other_folders(stores, decl_pos.file(), decl_pos.file(), of);
     let p_in_of: Vec<TypedScout> = p_in_of
         .into_iter()
         .map(|x| {

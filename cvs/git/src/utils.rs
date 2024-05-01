@@ -58,9 +58,7 @@ impl<V: std::any::Any> TypeMap<V> {
     // }
 }
 
-pub struct TypeMap2(
-    std::collections::HashMap<std::any::TypeId, Box<dyn std::any::Any>>
-);
+pub struct TypeMap2(std::collections::HashMap<std::any::TypeId, Box<dyn std::any::Any>>);
 impl Default for TypeMap2 {
     fn default() -> Self {
         Self(Default::default())
@@ -98,18 +96,15 @@ impl TypeMap2 {
     }
 }
 
-
-pub struct TypeMap3<V>(
-    std::collections::HashMap<std::any::TypeId, V>
-);
+pub struct TypeMap3<V>(std::collections::HashMap<std::any::TypeId, V>);
 impl<V> Default for TypeMap3<V> {
     fn default() -> Self {
         Self(Default::default())
     }
 }
 
-unsafe impl<V:Send> Send for TypeMap3<V> {}
-unsafe impl<V:Sync> Sync for TypeMap3<V> {}
+unsafe impl<V: Send> Send for TypeMap3<V> {}
+unsafe impl<V: Sync> Sync for TypeMap3<V> {}
 
 pub trait GG: ToGG {
     fn compute(&self);
@@ -121,11 +116,13 @@ pub trait ToGG {
 impl TypeMap3<Box<dyn GG>> {
     pub fn by_id<T: 'static + Send + Sync>(&mut self) -> Option<&mut (dyn GG + 'static)> {
         self.0
-            .get_mut(&std::any::TypeId::of::<T>()).map(|x|x.as_mut())
+            .get_mut(&std::any::TypeId::of::<T>())
+            .map(|x| x.as_mut())
     }
     pub fn mut_or_default<T: 'static + ToGG + Default + Send + Sync>(&mut self) -> &mut dyn GG {
         self.0
             .entry(std::any::TypeId::of::<T>())
-            .or_insert_with(|| Box::new(T::default()).to_gg()).as_mut()
+            .or_insert_with(|| Box::new(T::default()).to_gg())
+            .as_mut()
     }
 }

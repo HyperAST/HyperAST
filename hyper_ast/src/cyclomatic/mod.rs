@@ -1,4 +1,4 @@
-use crate::types::{Type, TypeTrait, Typed, WithMetaData};
+use crate::types::{TypeTrait, Typed, WithMetaData};
 
 pub fn is_cyclomatic_persisted<K: TypeTrait>(t: &K) -> bool {
     t.is_type_declaration() // TODO EnumConstant might not be appropriate here
@@ -85,37 +85,23 @@ pub trait MetaData<T> {
 /// considering https://github.com/jacoco/jacoco/blob/b68fe1a0a7fb86f12cda689ec473fd6633699b55/org.jacoco.doc/docroot/doc/counters.html#L102
 ///
 /// v(G) = b - d + 1 where b is the number of branches and d the number of dessision points
-struct MccJacoco {
+pub struct MccJacoco {
     value: u32,
 }
 
 /// v(G) = e - n + p
 impl MccJacoco {
-    pub fn new(kind: &Type) -> Self {
+    pub fn new<K: TypeTrait>(kind: &K) -> Self {
+        // TODO also consider || and && as forks
+        // we would need to check the operand ie. the children
         Self {
             value: if kind.is_fork() { 1 } else { 0 },
         }
     }
 
-    pub fn acc(self, kind: &Type, acc: &mut Self) {
-        todo!()
-    }
-}
-
-struct McCabe {
-    value: u32,
-}
-
-/// v(G) = e - n + p
-impl McCabe {
-    pub fn new(kind: &Type) -> Self {
-        Self {
-            value: if kind.is_fork() { 1 } else { 0 },
-        }
-    }
-
-    pub fn acc(self, kind: &Type, acc: &mut Self) {
-        todo!()
+    /// TODO reverse &mut and self
+    pub fn acc(self, acc: &mut Self) {
+        acc.value += self.value
     }
 }
 

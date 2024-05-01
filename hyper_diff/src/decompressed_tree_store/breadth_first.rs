@@ -84,7 +84,7 @@ where
         todo!()
     }
 
-    fn lca(&self, a: &IdD, b: &IdD) -> IdD {
+    fn lca(&self, _a: &IdD, _b: &IdD) -> IdD {
         todo!()
     }
 }
@@ -249,7 +249,7 @@ where
         todo!()
     }
 
-    fn is_descendant(&self, desc: &IdD, of: &IdD) -> bool {
+    fn is_descendant(&self, _desc: &IdD, _of: &IdD) -> bool {
         todo!()
     }
 }

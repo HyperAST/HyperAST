@@ -49,7 +49,7 @@ impl std::str::FromStr for RepoConfig {
             "Ts" => Self::TsNpm,
             "ts" => Self::TsNpm,
             "any" => Self::Any,
-            x => return Err(format!("'{}' is not anvailable config", x))
+            x => return Err(format!("'{}' is not anvailable config", x)),
         })
     }
 }

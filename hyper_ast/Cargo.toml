@@ -6,15 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# tree-sitter = "0.20.0"
 # atomic-counter = "1.0.1"
 num = "0.4.0"
 cfg-if = "1.0"
 hashbrown = { version = "0.13.2", default-features = false, optional = true }
 # fasthash="0.4.0"
-
-# hyper_ast_core = { path = "../../../core" }
-# tree-sitter_types = { path = "../../../tree-sitter_types" }
 
 #  # logging
 log = { version = "0.4.6" } #, features = ["max_level_debug", "release_max_level_warn"] }
@@ -58,10 +54,7 @@ env_logger = "0.9.0"
 jemallocator = { version = "0.5.0", optional = true }
 jemalloc-ctl = { version = "0.5.0", optional = true }
 
-[dependencies.serde]
-version = "1"
-features = ["derive"]
-optional = true
+serde = { version = "1", features = ["derive"], optional = true }
 
 [features]
 default = ["jemalloc", "legion", "hecs", "native"]

@@ -1,25 +1,12 @@
 pub use hyper_ast::store::nodes::fetched::{FetchedLabels, NodeIdentifier, NodeStore};
 use hyper_ast::{
-    nodes::IndentedAlt,
     store::nodes::fetched::{HashedNodeRef, LabelIdentifier},
-    types::{
-        AnyType, HyperType, Labeled, Lang, LangRef, TypeIndex, TypeStore as _, WithChildren,
-        WithStats,
-    },
+    types::{AnyType, HyperType, Lang, LangRef, TypeIndex, TypeStore as _},
 };
 use std::{
     borrow::Borrow,
     collections::{HashSet, VecDeque},
-    fmt::Debug,
     hash::Hash,
-    num::NonZeroU32,
-    ops::ControlFlow,
-    sync::{atomic::AtomicUsize, Arc},
-    time::Duration,
-};
-
-use super::{
-    network::{remote_fetch_labels, remote_fetch_nodes_by_ids},
 };
 
 #[derive(Default)]
@@ -99,7 +86,15 @@ impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
 
     type Marshaled = TypeIndex;
 
-    fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
+    fn marshal_type(&self, _n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
+        todo!()
+    }
+
+    fn type_eq(
+        &self,
+        _n: &HashedNodeRef<'a, NodeIdentifier>,
+        _m: &HashedNodeRef<'a, NodeIdentifier>,
+    ) -> bool {
         todo!()
     }
 }
@@ -187,11 +182,11 @@ impl<'b> hyper_ast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAS
 impl<'b> hyper_ast::types::LabelStore<str> for AcessibleFetchedHyperAST<'b> {
     type I = LabelIdentifier;
 
-    fn get_or_insert<U: Borrow<str>>(&mut self, node: U) -> Self::I {
+    fn get_or_insert<U: Borrow<str>>(&mut self, _node: U) -> Self::I {
         todo!()
     }
 
-    fn get<U: Borrow<str>>(&self, node: U) -> Option<Self::I> {
+    fn get<U: Borrow<str>>(&self, _node: U) -> Option<Self::I> {
         todo!()
     }
 
@@ -232,6 +227,14 @@ impl<'a, 'b> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>>
 
     fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
         self.type_store.marshal_type(n)
+    }
+
+    fn type_eq(
+        &self,
+        _n: &HashedNodeRef<'a, NodeIdentifier>,
+        _m: &HashedNodeRef<'a, NodeIdentifier>,
+    ) -> bool {
+        todo!()
     }
 }
 

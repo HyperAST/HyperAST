@@ -121,11 +121,13 @@ pub mod position_accessors {
     pub trait WithPreOrderOffsets: WithOffsets {
         // type Path: Iterator;
         // fn path(&self) -> Self::Path;
-        type It<'a>: Iterator<Item = Self::Idx> where Self: 'a, Self::Idx: 'a;
+        type It<'a>: Iterator<Item = Self::Idx>
+        where
+            Self: 'a,
+            Self::Idx: 'a;
         fn iter_offsets(&self) -> Self::It<'_>;
 
-
-        fn shared_ancestors<Other:WithPreOrderOffsets<Idx= Self::Idx>>(
+        fn shared_ancestors<Other: WithPreOrderOffsets<Idx = Self::Idx>>(
             &self,
             other: &Other,
         ) -> SharedPath<Vec<Self::Idx>> {
@@ -349,6 +351,7 @@ mod node_filter_traits {
 pub use building::CompoundPositionPreparer;
 
 pub mod offsets;
+pub use offsets::*;
 
 pub mod file_and_offset;
 
@@ -357,20 +360,23 @@ pub type Position = file_and_offset::Position<PathBuf, usize>;
 pub mod offsets_and_nodes;
 pub use offsets_and_nodes::*;
 
-mod topological_offset;
-pub use topological_offset::*;
+pub mod topological_offset;
 
+#[allow(unused)] // TODO remove all not working function and test the remaining ones
 mod spaces_related;
 pub use spaces_related::{
     compute_position_and_nodes_with_no_spaces, compute_position_with_no_spaces,
     global_pos_with_spaces, path_with_spaces,
 };
 
-mod computing_offset_bottom_up;
-// pub use computing_offset_bottom_up::{extract_file_postion, extract_position};
+pub mod computing_offset_bottom_up;
+//pub use computing_offset_bottom_up::{extract_file_postion, extract_position};
 
 mod computing_offset_top_down;
-pub use computing_offset_top_down::{compute_position, compute_position_and_nodes, compute_position_and_nodes2, compute_position_and_nodes3, compute_range};
+pub use computing_offset_top_down::{
+    compute_position, compute_position_and_nodes, compute_position_and_nodes2,
+    compute_position_and_nodes3, compute_range,
+};
 
 mod computing_path;
 pub use computing_path::resolve_range;

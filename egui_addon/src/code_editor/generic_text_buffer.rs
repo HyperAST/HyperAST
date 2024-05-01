@@ -159,7 +159,7 @@ pub fn byte_index_from_char_index(s: &str, char_index: usize) -> usize {
     s.len()
 }
 
-pub(crate) fn char_index_from_byte_index(s: &str, byte_index: usize) -> usize {
+pub fn char_index_from_byte_index(s: &str, byte_index: usize) -> usize {
     let mut ci = 0;
     let mut i = 0;
     let mut it = s.chars();
@@ -179,7 +179,6 @@ pub fn char_index_from_byte_index2(
     byte_index1: usize,
     byte_index2: usize,
 ) -> (usize, usize) {
-    let mut ci0 = 0;
     let mut ci = 0;
     let mut i = 0;
     let mut it = s.chars();
@@ -191,7 +190,7 @@ pub fn char_index_from_byte_index2(
         i += len;
         ci += 1;
     }
-    ci0 = ci;
+    let ci0 = ci;
     while i < byte_index2 {
         let Some(c) = it.next() else {
             break;

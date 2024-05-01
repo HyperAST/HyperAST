@@ -27,7 +27,7 @@ impl Finalize for FsContainer<Dynamic> {
 impl FsContainer<Dynamic> {
     fn finalize_aux(self, acc: &mut rhai::Map, path: &str) {
         if self.content.is_array() {
-            let path = format!("{}{}/",path, self.name);
+            let path = format!("{}{}/", path, self.name);
             let arr: rhai::Array = self.content.cast();
             for x in arr {
                 if x.is::<FsContainer<Dynamic>>() {
@@ -38,7 +38,7 @@ impl FsContainer<Dynamic> {
                 }
             }
         } else {
-            let path = format!("{}{}",path, self.name);
+            let path = format!("{}{}", path, self.name);
             acc.insert(path.into(), self.content);
         }
     }

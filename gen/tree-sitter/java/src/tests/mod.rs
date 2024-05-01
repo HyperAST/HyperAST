@@ -6,13 +6,10 @@ mod tree_sitter_types_test;
 //     tree_sitter_java::language().node_kind_count();
 // }
 
-
-
-
 #[test]
 fn type_test_generic_eq() {
     use hyper_ast::types::HyperType;
-    
+
     let k = crate::types::Type::EnhancedForStatement;
     let k0 = crate::types::Type::EnhancedForStatement;
     let k1 = crate::types::Type::ClassDeclaration;
