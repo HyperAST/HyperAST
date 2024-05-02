@@ -60,7 +60,7 @@ Note: Currently HyperAST uses features from the nightly channel, so you should d
 
 ## How to Cite
 
-If you use HyperAST in an academic purpose, please cite the following paper:
+If you use HyperAST and/or HyperDiff in an academic purpose, please cite the following papers:
 
 ```bibtex
 @inproceedings{ledilavrec:hal-03764541,
@@ -71,6 +71,19 @@ If you use HyperAST in an academic purpose, please cite the following paper:
   PUBLISHER = {{IEEE}},
   PAGES = {1-12},
   YEAR = {2022}
+}
+```
+
+
+```bibtex
+@inproceedings{ledilavrec:hal-04189855,
+  TITLE = {{HyperDiff: Computing Source Code Diffs at Scale}},
+  AUTHOR = {Le Dilavrec, Quentin and Khelladi, Djamel Eddine and Blouin, Arnaud and J{\'e}z{\'e}quel, Jean-Marc},
+  URL = {https://inria.hal.science/hal-04189855},
+  BOOKTITLE = {{ESEC/FSE 2023 - 31st ACM Joint European Software Engineering Conference and Symposium on the Foundations of Software Engineering}},
+  PUBLISHER = {{ACM}},
+  PAGES = {1-12},
+  YEAR = {2023}
 }
 ```
 
