@@ -272,8 +272,6 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
 }
 
 impl<'a, T: TypedNodeId> crate::types::Tree for HashedNodeRef<'a, T>
-where
-    T::Ty: TypeTrait,
 {
     fn has_children(&self) -> bool {
         match self.s_ref {
