@@ -485,7 +485,7 @@ impl<'a>
     const LANG: u16 = 0;
 
     fn _intern(l: u16, t: u16) -> Self::Ty {
-        unimplemented!("remove _intern {} {}", l , t)
+        *<hyper_ast_gen_ts_cpp::types::Cpp as hyper_ast::types::Lang::<hyper_ast_gen_ts_cpp::types::Type>>::make(t)
     }
 
     fn resolve(&self, t: Self::Ty) -> hyper_ast_gen_ts_cpp::types::Type {
@@ -572,6 +572,10 @@ impl HyperType for MultiType {
 
     fn as_static(&self) -> &'static dyn HyperType {
         on_multi!(self, t => t.as_static())
+    }
+    
+    fn as_static_str(&self) -> &'static str {
+        on_multi!(self, t => t.to_str())
     }
 
     fn get_lang(&self) -> LangWrapper<Self>
