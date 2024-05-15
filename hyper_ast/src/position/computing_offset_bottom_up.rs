@@ -176,10 +176,9 @@ pub fn extract_position_it<'store, HAST, It, It2>(
     mut it: It,
 ) -> Position
 where
-    HAST: HyperAST<'store, IdN = NodeIdentifier, Idx = u16>,
-    HAST::TS: TypeStore<HAST::T, Ty = AnyType>,
+    HAST: HyperAST<'store, IdN = NodeIdentifier>,
     HAST::T: WithSerialization,
-    It: Iterator<Item = (HAST::IdN, usize)> + Into<It2>, //Iterator<Item = ParentWithChildOffset<HAST::IdN>>,
+    It: Iterator<Item = (HAST::IdN, HAST::Idx)> + Into<It2>, //Iterator<Item = ParentWithChildOffset<HAST::IdN>>,
     It2: Iterator<Item = HAST::IdN>,
 {
     let mut offset: usize = num::zero();
@@ -189,7 +188,7 @@ where
             let v: Vec<&HAST::IdN> = b
                 .children()
                 .unwrap()
-                .before(o.to_u16().unwrap() - 1)
+                .before(o - num::one())
                 .iter_children()
                 .collect();
             v.into_iter()

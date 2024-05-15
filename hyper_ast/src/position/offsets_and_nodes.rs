@@ -9,6 +9,24 @@ pub struct StructuralPosition<IdN, Idx, Config = tags::TopDownFull> {
     pub(super) offsets: Vec<Idx>,
     _phantom: std::marker::PhantomData<Config>,
 }
+impl<IdN: std::hash::Hash, C, Idx: std::hash::Hash> std::hash::Hash
+    for StructuralPosition<IdN, Idx, C>
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.parents.last().hash(state);
+        self.parents.first().hash(state);
+        self.offsets.hash(state);
+    }
+}
+impl<IdN: std::cmp::PartialEq, C, Idx: std::cmp::PartialEq> PartialEq
+    for StructuralPosition<IdN, Idx, C>
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.parents.last() == other.parents.last()
+            && self.parents.first() == other.parents.first()
+            && self.offsets == other.offsets
+    }
+}
 impl<IdN, Idx, C> StructuralPosition<IdN, Idx, C> {
     pub(crate) fn empty() -> Self {
         Self {

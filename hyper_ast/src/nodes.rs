@@ -8,7 +8,7 @@ use num::ToPrimitive;
 
 use crate::{
     impact::serialize::{Keyed, MySerialize},
-    types::{HyperType, IterableChildren, MySlice, NodeId},
+    types::{HyperAST, HyperType, IterableChildren, MySlice, NodeId},
 };
 
 // pub type TypeIdentifier = Type;
@@ -694,11 +694,7 @@ impl<'store, 'b, IdN, HAST, const SPC: bool> Display
     for IndentedSerializer<'store, 'b, IdN, HAST, Text, SPC>
 where
     IdN: NodeId<IdN = IdN>,
-    HAST: crate::types::NodeStore<IdN>,
-    HAST: crate::types::LabelStore<str>,
-    HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST::R<'store>:
-        crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
+    HAST: HyperAST<'store, IdN = IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.serialize(&self.root, &self.root_indent, f) {
@@ -712,11 +708,7 @@ impl<'store, 'b, IdN, HAST, const SPC: bool> Display
     for IndentedSerializer<'store, 'b, IdN, HAST, Json, SPC>
 where
     IdN: NodeId<IdN = IdN>,
-    HAST: crate::types::NodeStore<IdN>,
-    HAST: crate::types::LabelStore<str>,
-    HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST::R<'store>:
-        crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
+    HAST: HyperAST<'store, IdN = IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.serialize(&self.root, &self.root_indent, f) {
@@ -729,11 +721,7 @@ where
 impl<'store, 'b, IdN, HAST, const SPC: bool> IndentedSerializer<'store, 'b, IdN, HAST, Text, SPC>
 where
     IdN: NodeId<IdN = IdN>,
-    HAST: crate::types::NodeStore<IdN>,
-    HAST: crate::types::LabelStore<str>,
-    HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST::R<'store>:
-        crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
+    HAST: HyperAST<'store, IdN = IdN>,
 {
     fn serialize(
         &self,
@@ -745,15 +733,15 @@ where
         use crate::types::Labeled;
         use crate::types::NodeStore;
         use crate::types::WithChildren;
-        let b = NodeStore::resolve(self.stores, id);
+        let b = self.stores.node_store().resolve(id);
         // let kind = (self.stores.type_store(), b);
-        let kind = self.stores.resolve_type(&b);
+        let kind = self.stores.resolve_type(id);
         let label = b.try_get_label();
         let children = b.children();
 
         if kind.is_spaces() {
             let indent = if let Some(label) = label {
-                let s = LabelStore::resolve(self.stores, label);
+                let s = self.stores.label_store().resolve(label);
                 let b: String = Space::format_indentation(s.as_bytes())
                     .iter()
                     .map(|x| x.to_string())
@@ -777,7 +765,7 @@ where
             }
             (label, Some(children)) => {
                 if let Some(label) = label {
-                    let s = LabelStore::resolve(self.stores, label);
+                    let s = self.stores.label_store().resolve(label);
                     dbg!(s);
                 }
                 if !children.is_empty() {
@@ -799,7 +787,7 @@ where
                 Err(IndentedAlt::NoIndent)
             }
             (Some(label), None) => {
-                let s = LabelStore::resolve(self.stores, label);
+                let s = self.stores.label_store().resolve(label);
                 out.write_str(&s)?;
                 Err(IndentedAlt::NoIndent)
             }
@@ -809,11 +797,7 @@ where
 impl<'store, 'b, IdN, HAST, const SPC: bool> IndentedSerializer<'store, 'b, IdN, HAST, Json, SPC>
 where
     IdN: NodeId<IdN = IdN>,
-    HAST: crate::types::NodeStore<IdN>,
-    HAST: crate::types::LabelStore<str>,
-    HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST::R<'store>:
-        crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
+    HAST: HyperAST<'store, IdN = IdN>,
 {
     fn serialize(
         &self,
@@ -825,14 +809,14 @@ where
         use crate::types::Labeled;
         use crate::types::NodeStore;
         use crate::types::WithChildren;
-        let b = NodeStore::resolve(self.stores, id);
+        let b = self.stores.node_store().resolve(id);
         // let kind = (self.stores.type_store(), b);
-        let kind = self.stores.resolve_type(&b);
+        let kind = self.stores.resolve_type(id);
         let label = b.try_get_label();
         let children = b.children();
 
         if kind.is_spaces() {
-            let s = LabelStore::resolve(self.stores, &label.unwrap());
+            let s = self.stores.label_store().resolve(&label.unwrap());
             let b:String = //s; //String::new();
         Space::format_indentation(s.as_bytes())
             .iter()
@@ -868,7 +852,7 @@ where
                 out.write_str(&escape(&kind.to_string()))?;
                 if let Some(label) = label {
                     out.write_str("\",\"label\":\"")?;
-                    let s = LabelStore::resolve(self.stores, label);
+                    let s = self.stores.label_store().resolve(label);
                     out.write_str(&escape(&s))?;
                 }
                 if !children.is_empty() {
@@ -895,7 +879,7 @@ where
                 out.write_str("{\"kind\":\"")?;
                 out.write_str(&escape(&kind.to_string()))?;
                 out.write_str("\",\"label\":\"")?;
-                let s = LabelStore::resolve(self.stores, label);
+                let s = self.stores.label_store().resolve(label);
                 out.write_str(&escape(&s))?;
                 out.write_str("\"}")?;
                 Err(IndentedAlt::NoIndent)

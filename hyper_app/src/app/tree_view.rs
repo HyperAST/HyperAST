@@ -241,6 +241,37 @@ impl<'a, 'b> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>>
     }
 }
 
+impl<'a, 'b: 'a> hyper_ast::types::HyperAST<'b> for AcessibleFetchedHyperAST<'a>
+where
+    Self: 'b,
+{
+    type IdN = NodeIdentifier;
+
+    type Idx = u16;
+
+    type Label = LabelIdentifier;
+
+    type T = HashedNodeRef<'b, NodeIdentifier>;
+
+    type NS = Self;
+
+    fn node_store(&self) -> &Self::NS {
+        todo!()
+    }
+
+    type LS = Self;
+
+    fn label_store(&self) -> &Self::LS {
+        todo!()
+    }
+
+    type TS = Self;
+
+    fn type_store(&self) -> &Self::TS {
+        todo!()
+    }
+}
+
 impl Hash for FetchedHyperAST {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.label_store.read().unwrap().len().hash(state);
@@ -2019,10 +2050,15 @@ mod hyper_ast_layouter {
 }
 
 fn subtree_to_string(store: &FetchedHyperAST, nid: NodeIdentifier) -> String {
-    ToString::to_string(&hyper_ast::nodes::TextSerializer::<_, _>::new(
-        &store.read(),
-        nid,
-    ))
+    let read = store.read();
+    let s = {
+        // SAFETY: the transmuted value does not escape the function scope
+        // NOTE issue with the usual widening to 'static ...
+        let read: &AcessibleFetchedHyperAST<'_> = unsafe { std::mem::transmute(&read) };
+        ToString::to_string(&hyper_ast::nodes::TextSerializer::<_, _>::new(read, nid))
+    };
+    drop(read);
+    s
 }
 
 fn make_pp_code(
