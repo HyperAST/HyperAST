@@ -197,7 +197,7 @@ impl Debug for Acc {
 #[cfg(not(debug_assertions))]
 const HIDDEN_NODES: bool = true;
 #[cfg(debug_assertions)]
-static HIDDEN_NODES: bool = true;
+static HIDDEN_NODES: bool = false;
 
 #[repr(transparent)]
 pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
