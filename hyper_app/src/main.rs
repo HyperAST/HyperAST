@@ -54,13 +54,13 @@ fn main() {
             .map_err(JsValue::from)
             .unwrap();
         // let mut parser = tree_sitter::Parser::new().unwrap();
-        let lang = web_tree_sitter_sg::Language::load_path("./tree-sitter-javascript.wasm")
-            .await
-            .unwrap()
-            .into();
-        let name = "JavaScript".to_string();
+        // let lang = web_tree_sitter_sg::Language::load_path("./tree-sitter-javascript.wasm")
+        //     .await
+        //     .unwrap()
+        //     .into();
+        // let name = "JavaScript".to_string();
         let mut languages: hyper_app::Languages = Default::default();
-        languages.insert(name.clone(), Lang { name, lang });
+        // languages.insert(name.clone(), Lang { name, lang });
         // panic!("lang");
         // parser.set_language(&lang.into()).expect("Error loading Java grammar");
         // let parsed = parser.parse("function f() {}", None).unwrap().unwrap();
