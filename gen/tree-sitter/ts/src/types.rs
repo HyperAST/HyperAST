@@ -260,6 +260,10 @@ impl HyperType for Type {
         t
     }
 
+    fn as_static_str(&self) -> &'static str {
+        self.to_str()
+    }
+
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,

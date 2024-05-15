@@ -399,6 +399,10 @@ impl HyperType for Type {
         todo!()
     }
 
+    fn as_static_str(&self) -> &'static str {
+        self.to_str()
+    }
+
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,
@@ -628,6 +632,20 @@ impl Type {
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_str())
+    }
+}
+
+// impl<'a> TryFrom<&'a str> for Type {
+//     type Error = ();
+
+//     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+//         Type::from_str(value).ok_or_else(|| ())
+//     }
+// }
+
+impl<'a> From<&'a str> for Type {
+    fn from(value: &'a str) -> Self {
+        Type::from_str(value).unwrap()
     }
 }
 

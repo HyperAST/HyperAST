@@ -228,6 +228,10 @@ impl HyperType for Type {
         t
     }
 
+    fn as_static_str(&self) -> &'static str {
+        self.to_str()
+    }
+
     fn is_file(&self) -> bool {
         self == &Type::Document
     }

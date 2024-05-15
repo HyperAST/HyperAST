@@ -398,6 +398,7 @@ pub trait HyperType: Display + Debug {
     fn as_any(&self) -> &dyn std::any::Any;
     // returns the same address for the same type
     fn as_static(&self) -> &'static dyn HyperType;
+    fn as_static_str(&self) -> &'static str;
     fn generic_eq(&self, other: &dyn HyperType) -> bool
     where
         Self: 'static + Sized;
@@ -438,6 +439,10 @@ impl HyperType for u8 {
     }
 
     fn as_static(&self) -> &'static dyn HyperType {
+        todo!()
+    }
+
+    fn as_static_str(&self) -> &'static str {
         todo!()
     }
 
@@ -1415,6 +1420,10 @@ impl HyperType for AnyType {
 
     fn as_static(&self) -> &'static dyn HyperType {
         self.0.as_static()
+    }
+
+    fn as_static_str(&self) -> &'static str {
+        self.0.as_static_str()
     }
 
     fn get_lang(&self) -> LangWrapper<Self>

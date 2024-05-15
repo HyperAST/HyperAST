@@ -525,6 +525,10 @@ impl HyperType for Type {
         t
     }
 
+    fn as_static_str(&self) -> &'static str {
+        self.to_str()
+    }
+
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,
@@ -1710,6 +1714,7 @@ impl Type {
             540u16 => Type::StatementIdentifier,
             541u16 => Type::TypeIdentifier,
             542u16 => Type::ERROR,
+            u16::MAX => Type::ERROR,
             x => panic!("{}", x),
         }
     }
