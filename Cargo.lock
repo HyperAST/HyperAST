@@ -1357,6 +1357,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dlv-list"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0688c2a7f92e427f44895cd63841bff7b29f8d7a1648b9e7e07a4a365b2e1257"
+
+[[package]]
 name = "document-features"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2499,6 +2505,7 @@ dependencies = [
  "env_logger",
  "hashbrown 0.13.2",
  "hyper_ast",
+ "hyper_ast_gen_ts_tsquery",
  "legion",
  "libc",
  "log",
@@ -2506,9 +2513,12 @@ dependencies = [
  "paste",
  "pretty_assertions",
  "serde",
+ "stack-graphs",
  "string-interner 0.14.0",
  "tree-sitter 0.22.5",
+ "tree-sitter-graph 0.12.2",
  "tree-sitter-java 0.21.0 (git+https://github.com/quentinLeDilavrec/tree-sitter-java?rev=7699d4a296ca27fc14511bc75a1a899327f483fc)",
+ "tree-sitter-stack-graphs",
  "tuples",
  "zerocopy 0.6.6",
 ]
@@ -3034,6 +3044,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "lsp-positions"
+version = "0.3.3"
+dependencies = [
+ "memchr",
+ "tree-sitter 0.22.5",
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -3584,6 +3603,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ordered-multimap"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ccd746e37177e1711c20dd619a1620f34f5c8b569c53590a72dedd5344d8924a"
+dependencies = [
+ "dlv-list",
+ "hashbrown 0.12.3",
+]
+
+[[package]]
 name = "os_str_bytes"
 version = "6.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3796,7 +3825,7 @@ dependencies = [
  "syn 1.0.109",
  "tree-sitter 0.22.5",
  "tree-sitter-cpp 0.22.0",
- "tree-sitter-graph",
+ "tree-sitter-graph 0.11.2",
  "tree-sitter-java 0.21.0",
  "tree-sitter-kotlin",
  "tree-sitter-loader 0.22.5",
@@ -4266,6 +4295,16 @@ dependencies = [
  "spin",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "rust-ini"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6d5f2436026b4f6e79dc829837d467cc7e9a55ee40e750d716713540715a2df"
+dependencies = [
+ "cfg-if",
+ "ordered-multimap",
 ]
 
 [[package]]
@@ -4816,6 +4855,22 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
+
+[[package]]
+name = "stack-graphs"
+version = "0.13.0"
+dependencies = [
+ "bitvec",
+ "controlled-option",
+ "either",
+ "enumset",
+ "fxhash",
+ "itertools",
+ "libc",
+ "lsp-positions",
+ "smallvec",
+ "thiserror",
+]
 
 [[package]]
 name = "static_assertions"
@@ -5612,6 +5667,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-graph"
+version = "0.12.2"
+dependencies = [
+ "log",
+ "regex",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "string-interner 0.12.2",
+ "thiserror",
+ "tree-sitter 0.22.5",
+]
+
+[[package]]
 name = "tree-sitter-highlight"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5724,11 +5793,30 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-query"
-version = "0.2.1"
-source = "git+https://github.com/tree-sitter-grammars/tree-sitter-query?rev=2e31ca2771f6042b0e4e0c41a6290014a9e1face#2e31ca2771f6042b0e4e0c41a6290014a9e1face"
+version = "0.3.0"
+source = "git+https://github.com/tree-sitter-grammars/tree-sitter-query?rev=d25e8d183f319497b8b22a2a1585975b020da722#d25e8d183f319497b8b22a2a1585975b020da722"
 dependencies = [
  "cc",
  "tree-sitter 0.22.5",
+]
+
+[[package]]
+name = "tree-sitter-stack-graphs"
+version = "0.8.2"
+dependencies = [
+ "anyhow",
+ "controlled-option",
+ "itertools",
+ "log",
+ "lsp-positions",
+ "once_cell",
+ "regex",
+ "rust-ini",
+ "stack-graphs",
+ "thiserror",
+ "tree-sitter 0.22.5",
+ "tree-sitter-graph 0.12.2",
+ "tree-sitter-loader 0.22.5",
 ]
 
 [[package]]

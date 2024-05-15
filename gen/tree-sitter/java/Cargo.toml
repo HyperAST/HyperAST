@@ -24,6 +24,9 @@ hashbrown = { version = "0.13.2", default-features = false, optional = true }
 log = { version = "0.4.6" } #, features = ["max_level_debug", "release_max_level_warn"] }
 
 hyper_ast = { path = "../../../hyper_ast", default-features = false }
+tree-sitter-graph = { path = "../../../../tree-sitter-graph", optional = true }
+tree-sitter-stack-graphs = { path = "../../../../stack-graphs/tree-sitter-stack-graphs", optional = true }
+stack-graphs = { path = "../../../../stack-graphs/stack-graphs", optional = true}
 hyper_ast_gen_ts_tsquery = { path = "../query", optional = true }
 
 libc = "0.2"
