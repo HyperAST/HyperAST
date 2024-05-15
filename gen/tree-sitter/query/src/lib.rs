@@ -48,6 +48,7 @@ mod tnode {
 }
 
 use hyper_ast::types::HyperAST;
+use search::Captured;
 #[cfg(feature = "legion")]
 pub use tnode::TNode;
 
@@ -72,24 +73,22 @@ where
 pub struct IterMatched<M, HAST, It, TIdN> {
     iter: It,
     matcher: M,
-    hast: HAST,
+    pub hast: HAST,
     _phantom: std::marker::PhantomData<TIdN>,
 }
 
 impl<'a, HAST, It: Iterator, TIdN> Iterator
-    for IterMatched<crate::search::PreparedMatcher<TIdN::Ty>, &'a HAST, It, TIdN>
+    for IterMatched<&crate::search::PreparedMatcher<TIdN::Ty>, &'a HAST, It, TIdN>
 where
     HAST: hyper_ast::types::HyperAST<'a> + hyper_ast::types::TypedHyperAST<'a, TIdN>,
-    &'a HAST: hyper_ast::types::HyperAST<'a, IdN = <HAST as HyperAST<'a>>::IdN>
-        + hyper_ast::types::TypedHyperAST<'a, TIdN>,
     TIdN: 'static + hyper_ast::types::TypedNodeId<IdN = <HAST as HyperAST<'a>>::IdN>,
-    It::Item: hyper_ast::position::TypedTreePath<TIdN, <HAST as HyperAST<'a>>::Idx>,
+    It::Item: hyper_ast::position::TreePath<TIdN::IdN, <HAST as HyperAST<'a>>::Idx>,
     for<'b> &'b str: Into<<TIdN as hyper_ast::types::TypedNodeId>::Ty>,
     TIdN::IdN: Copy,
 {
     type Item = (
         It::Item,
-        std::collections::HashMap<String, search::CaptureRes>,
+        Captured<HAST::IdN, HAST::Idx>,
     );
 
     fn next(&mut self) -> Option<Self::Item> {

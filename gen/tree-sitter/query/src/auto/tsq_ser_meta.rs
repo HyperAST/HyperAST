@@ -103,11 +103,11 @@ where
         let query =
             crate::search::ts_query2(&mut query_store.0.write().unwrap(), matcher.as_bytes());
         let matcher = {
-            let (root_types, patterns) = crate::search::PreparedMatcher::<TIdN::Ty>::new_aux(
+            let preparing = crate::search::PreparedMatcher::<TIdN::Ty>::new_aux(
                 &query_store.0.read().unwrap(),
                 query,
             );
-            crate::search::PreparedMatcher::<TIdN::Ty>::with_patterns(root_types, patterns)
+            preparing.into()
         };
         Self {
             stores,
