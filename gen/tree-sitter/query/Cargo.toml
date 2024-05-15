@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 tree-sitter = { version = "0.22.2", optional = true }
-tree-sitter-query = { git = "https://github.com/tree-sitter-grammars/tree-sitter-query", rev = "2e31ca2771f6042b0e4e0c41a6290014a9e1face", version = "0.2.1", optional = true }
+tree-sitter-query = { git = "https://github.com/tree-sitter-grammars/tree-sitter-query", rev = "d25e8d183f319497b8b22a2a1585975b020da722", version = "0.3.0", optional = true }
 atomic-counter = "1.0.1"
 num = "0.4.0"
 bitvec = "1.0.1"

@@ -10,7 +10,7 @@ edition = "2021"
 # tree-sitter = "0.20.9"
 tree-sitter = "0.22.2"
 tree-sitter-loader = "0.22.2"
-tree-sitter-query = { git = "https://github.com/tree-sitter-grammars/tree-sitter-query.git", rev = "2e31ca2771f6042b0e4e0c41a6290014a9e1face", version = "0.2.1" }
+tree-sitter-query = { git = "https://github.com/tree-sitter-grammars/tree-sitter-query.git", rev = "d25e8d183f319497b8b22a2a1585975b020da722", version = "0.3.0" }
 # tree-sitter-tsq = "0.19.0"
 tree-sitter-graph = "0.11.2"        # { path = "../tree-sitter-graph" } 
 tree-sitter-typescript = { git = "https://github.com/quentinLeDilavrec/tree-sitter-typescript", rev = "eee64b9ea005d2641cfce5b0a81404a9c8877740", version = "0.20.5" }

@@ -227,9 +227,14 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
         //     return None
         // };
         let kind = node.obtain_type(type_store);
-        // TODO remove this mitigations as it breaks captures on anonymous nodes
         let mut acc = self.pre(text, node, stack, global);
-        if kind == Type::Quote || kind == Type::AnonymousNode || kind == Type::String {
+        if kind == Type::String {
+            acc.labeled = true;
+            return PreResult::SkipChildren(acc);
+        }
+        // TODO find better condition, for now using the alias
+        // NOTE this targets _string in rule anonymous_node
+        else if kind == Type::Identifier {
             acc.labeled = true;
             return PreResult::SkipChildren(acc);
         }
