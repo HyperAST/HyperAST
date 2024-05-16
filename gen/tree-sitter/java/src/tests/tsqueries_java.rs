@@ -44,6 +44,7 @@ fn f_aux<'store>(
         Ok(t) => t,
         Err(t) => t,
     };
+    println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
     (matcher, stores, full_node.local.compressed_node)
 }
@@ -100,7 +101,25 @@ class BBB {}
 
 "#;
 
-const CODES: &[&str] = &[CODE, CODE1];
+const CODE2: &str = r#"
+package a.b;
+
+public class AAA {
+  public AAA() {}
+}
+
+"#;
+
+const CODE3: &str = r#"
+package a.b;
+
+public class AAA {
+  int b = 0;
+}
+
+"#;
+
+const CODES: &[&str] = &[CODE, CODE1, CODE2, CODE3];
 
 const QUERIES: &[&str] = &[
     A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20,
@@ -136,6 +155,7 @@ fn it_g() {
 
 #[test]
 fn it() {
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
     let mut good = vec![];
     let mut bad = vec![];
     for (i, text) in CODES.iter().enumerate() {
@@ -338,6 +358,13 @@ const A36: &str = r#"(modifiers (annotation arguments: (annotation_argument_list
 const A37: &str = r#"(element_value_array_initializer) @this @__tsg__full_match"#;
 const A38: &str = r#"(element_value_pair value: (_) @value) @this @__tsg__full_match"#;
 const A39: &str = r#"(field_declaration (modifiers) @modifiers) @decl @__tsg__full_match"#;
+#[test]
+fn f39() {
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let query = A39;
+    let text = CODE3.as_bytes();
+    f(query, text);
+}
 const A40: &str =
     r#"(interface_declaration name: (_) @name body: (_) @body) @this @__tsg__full_match"#;
 const A41: &str = r#"(interface_declaration (extends_interfaces (type_list (_) @type))) @this @__tsg__full_match"#;
@@ -394,6 +421,15 @@ const A53: &str = r#"[
 #[test]
 fn f53() {
     let query = A53;
+    let text = CODE.as_bytes();
+    f(query, text);
+    // TODO missing matches using supertypes
+    // NOTE adding (class_declaration) and (package_declaration) to the list makes it match the nodes like tsqueries
+}
+#[test]
+fn f53_declaration() {
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let query = "(declaration)";
     let text = CODE.as_bytes();
     f(query, text);
     // TODO missing matches using supertypes

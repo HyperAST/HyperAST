@@ -78,6 +78,7 @@ fn tsg_vanilla() {
 
 #[test]
 fn tsg_hyperast() {
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
     static DEBUG_ATTR_PREFIX: &'static str = "debug_";
     static ROOT_NODE_VAR: &'static str = "ROOT_NODE";
     /// The name of the file path global variable

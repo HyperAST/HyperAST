@@ -3,7 +3,8 @@ use crate::types::TStore;
 
 use hyper_ast::store::labels::LabelStore;
 use hyper_ast::types::{
-    HyperAST, HyperType, IterableChildren, Labeled, TypeStore, Typed, TypedHyperAST, TypedNodeStore, WithChildren
+    HyperAST, HyperType, IterableChildren, Labeled, TypeStore, Typed, TypedHyperAST,
+    TypedNodeStore, WithChildren,
 };
 
 use hyper_ast::store::nodes::legion::NodeIdentifier;
@@ -398,7 +399,10 @@ where
                     }
                 }
                 for name in capture {
-                    res.quantifiers.last_mut().unwrap().insert(name as usize,Quant::One);
+                    res.quantifiers
+                        .last_mut()
+                        .unwrap()
+                        .insert(name as usize, Quant::One);
                     patterns.iter_mut().for_each(|res| {
                         let name = name.to_owned();
                         let r = std::mem::replace(res, Pattern::List(vec![].into()));
@@ -1182,10 +1186,25 @@ impl<Ty> Pattern<Ty> {
 
         match self {
             Pattern::NamedNode { ty, children } => {
+                if t.is_hidden() && *ty != t {
+                    dbg!(ty);
+                    let cs = n.children().unwrap().iter_children();
+                    for child in cs {
+                        let m_res = self.is_matching(code_store, child.clone());
+                        if m_res.matched == Quant::One {
+                            return m_res;
+                        } else if m_res.matched == Quant::Zero {
+                        } else {
+                            todo!("{:?} {:?} {:?} {}", ty, t, m_res.matched, m_res.captures.len());
+                        }
+                    }
+                    return MatchingRes::zero();
+                }
                 if *ty != t {
                     return MatchingRes::zero();
                 }
                 let Some(cs) = n.children() else {
+                    dbg!(ty, t);
                     return MatchingRes {
                         matched: quant_from_bool(children.is_empty()),
                         captures: Default::default(),
@@ -1205,6 +1224,7 @@ impl<Ty> Pattern<Ty> {
                 let mut matched = Quant::Zero;
                 let mut i = num::zero();
                 let mut i_pat = 0;
+                let mut immediate = false;
                 loop {
                     let Some(curr_p) = pats.get(i_pat) else {
                         if matched == Quant::ZeroOrOne {
@@ -1213,25 +1233,25 @@ impl<Ty> Pattern<Ty> {
                         return MatchingRes { matched, captures };
                     };
                     let Some(child) = cs.next() else {
-                        fn is_optional<Ty>(p:&Pattern<Ty>) -> bool {
+                        fn is_optional<Ty>(p: &Pattern<Ty>) -> bool {
                             match p {
-                                Pattern::NamedNode { .. } |
-                                Pattern::AnyNode { .. } |
-                                Pattern::Dot |
-                                Pattern::NegatedField(_) |
-                                Pattern::List(_) |
-                                Pattern::AnonymousNode(_) => false,
-                                Pattern::FieldDefinition { pat, .. } |
-                                Pattern::Capture { pat , ..} => is_optional(pat),
+                                Pattern::NamedNode { .. }
+                                | Pattern::AnyNode { .. }
+                                | Pattern::Dot
+                                | Pattern::NegatedField(_)
+                                | Pattern::List(_)
+                                | Pattern::AnonymousNode(_) => false,
+                                Pattern::FieldDefinition { pat, .. }
+                                | Pattern::Capture { pat, .. } => is_optional(pat),
                                 Pattern::Predicated { predicate, pat } => todo!(),
                                 Pattern::Quantified { quantifier: q, .. } => {
-                                    *q == Quant::Zero ||
-                                    *q == Quant::ZeroOrMore ||
-                                    *q == Quant::ZeroOrOne
-                                },
+                                    *q == Quant::Zero
+                                        || *q == Quant::ZeroOrMore
+                                        || *q == Quant::ZeroOrOne
+                                }
                             }
                         }
-                        if (&pats[i_pat..]).iter().any(|p|!is_optional(p)) {
+                        if (&pats[i_pat..]).iter().any(|p| !is_optional(p)) {
                             return MatchingRes::zero();
                         }
                         let matched = Quant::One;
@@ -1242,19 +1262,31 @@ impl<Ty> Pattern<Ty> {
                         return MatchingRes::zero();
                     };
                     let t = n.get_type();
+                    if t.is_spaces() {
+                        continue;
+                    }
+                    match curr_p {
+                        Pattern::Dot => {
+                            immediate = true;
+                            continue;
+                        }
+                        _ => (),
+                    }
                     dbg!(t);
                     match curr_p.is_matching(code_store, child.clone()) {
                         MatchingRes {
                             matched: Quant::One,
                             captures: mut capt,
                         } => {
-                            i_pat +=1;;
+                            immediate = false;
+                            i_pat += 1;
                             matched = Quant::One;
                             for v in &mut capt {
                                 v.path.push(i);
                             }
                             captures.extend(capt);
-                            let Some((n, _)) = code_store.typed_node_store().try_resolve(&child) else {
+                            let Some((n, _)) = code_store.typed_node_store().try_resolve(&child)
+                            else {
                                 dbg!();
                                 return MatchingRes::zero();
                             };
@@ -1265,7 +1297,11 @@ impl<Ty> Pattern<Ty> {
                             matched: Quant::Zero,
                             ..
                         } => {
-                            let Some((n, _)) = code_store.typed_node_store().try_resolve(&child) else {
+                            if immediate {
+                                return MatchingRes::zero();
+                            }
+                            let Some((n, _)) = code_store.typed_node_store().try_resolve(&child)
+                            else {
                                 dbg!();
                                 return MatchingRes::zero();
                             };
@@ -1276,8 +1312,10 @@ impl<Ty> Pattern<Ty> {
                             matched: Quant::ZeroOrOne,
                             ..
                         } => {
+                            immediate = false;
                             matched = Quant::ZeroOrOne;
-                            let Some((n, _)) = code_store.typed_node_store().try_resolve(&child) else {
+                            let Some((n, _)) = code_store.typed_node_store().try_resolve(&child)
+                            else {
                                 dbg!();
                                 return MatchingRes::zero();
                             };
@@ -1286,6 +1324,7 @@ impl<Ty> Pattern<Ty> {
                         }
                         MatchingRes { matched, .. } => todo!("{:?}", matched),
                     }
+                    assert_eq!(immediate, false);
                     i += num::one();
                 }
             }
@@ -1385,7 +1424,9 @@ impl<Ty> Pattern<Ty> {
             Pattern::AnyNode { children } => {
                 let Some(cs) = n.children() else {
                     return MatchingRes {
-                        matched: quant_from_bool(children.is_empty() && !t.is_spaces() && !t.is_syntax()),
+                        matched: quant_from_bool(
+                            children.is_empty() && !t.is_spaces() && !t.is_syntax(),
+                        ),
                         captures: Default::default(),
                     };
                 };
