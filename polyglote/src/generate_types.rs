@@ -51,10 +51,13 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
     let mut to_str = quote! {};
     let mut as_vec_toks = quote! {};
     let mut hidden_toks = quote! {};
+    let mut hidden_toks_pred = quote! {};
     let mut keyword_toks = quote! {};
     let mut concrete_toks = quote! {};
     let mut with_field_toks = quote! {};
     let mut abstract_toks = quote! {};
+    let mut supertype_pred = quote! {};
+
     let mut alias_dedup = HashMap::<hecs::Entity, Ident>::default();
     let mut leafs = HM::default();
     <JavaKeyword as strum::IntoEnumIterator>::iter().for_each(|x| {
@@ -112,8 +115,10 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             };
     
             if v.has::<Hidden>() {
-                let kind = leafs.fmt(&t, |k| format!("TS{}", &k.to_camel_case()));
                 hidden_toks.extend(q);
+                hidden_toks_pred.extend(quote! {
+                    Type::#kind => true,
+                });
                 cat_from_u16.extend(quote! {
                     #i => TypeEnum::Hidden(Hidden::#kind),
                 });
@@ -174,6 +179,12 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
                     });
                 }
             }
+            hidden_toks_pred.extend(quote! {
+                Type::#kind => true,
+            });
+            supertype_pred.extend(quote! {
+               Type::#kind => true,
+            });
             if camel_case.is_none() {
                 abstract_toks.extend(quote! {
                     // #[strum(serialize = #raw)]
@@ -553,6 +564,19 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
                     Type::ERROR => "ERROR",
                 }
             }
+            pub fn is_hidden(&self) -> bool {
+                match self {
+                    #hidden_toks_pred
+                    _ => false,
+                }
+            }
+            pub fn is_supertype(&self) -> bool {
+                match self {
+                    #supertype_pred
+                    _ => false,
+                }
+            }
+            
         }
         // /// all types
         // enum Types {

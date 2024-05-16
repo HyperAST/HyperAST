@@ -529,6 +529,14 @@ impl HyperType for Type {
         self.to_str()
     }
 
+    fn is_hidden(&self) -> bool {
+        self.is_hidden()
+    }
+    
+    fn is_supertype(&self) -> bool {
+        self.is_supertype()
+    }
+
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,
@@ -2731,6 +2739,105 @@ impl Type {
             Type::Spaces => "Spaces",
             Type::Directory => "Directory",
             Type::ERROR => "ERROR",
+        }
+    }
+    pub fn is_hidden(&self) -> bool {
+        match self {
+            Type::End => true,
+            Type::PreprocIncludeToken2 => true,
+            Type::_PreprocExpression => true,
+            Type::_TypeDefinitionType => true,
+            Type::_TypeDefinitionDeclarators => true,
+            Type::_DeclarationModifiers => true,
+            Type::_DeclarationSpecifiers => true,
+            Type::_Declarator => true,
+            Type::_FieldDeclarator => true,
+            Type::_TypeDeclarator => true,
+            Type::_AbstractDeclarator => true,
+            Type::_TypeSpecifier => true,
+            Type::_FieldDeclarationListItem => true,
+            Type::_ForStatementBody => true,
+            Type::_Expression => true,
+            Type::_ExpressionNotBinary => true,
+            Type::_String => true,
+            Type::_EmptyDeclaration => true,
+            Type::_ClassDeclaration => true,
+            Type::_ClassDeclarationItem => true,
+            Type::_ClassName => true,
+            Type::_EnumBaseClause => true,
+            Type::_ConstructorSpecifiers => true,
+            Type::_FunctionDeclaratorSeq => true,
+            Type::_FunctionAttributesStart => true,
+            Type::_FunctionExceptionSpecification => true,
+            Type::_FunctionAttributesEnd => true,
+            Type::_FunctionPostfix => true,
+            Type::_NamespaceSpecifier => true,
+            Type::_ForRangeLoopBody => true,
+            Type::_Requirement => true,
+            Type::_RequirementClauseConstraint => true,
+            Type::_FoldOperator => true,
+            Type::_BinaryFoldOperator => true,
+            Type::_UnaryLeftFold => true,
+            Type::_UnaryRightFold => true,
+            Type::_BinaryFold => true,
+            Type::TranslationUnitRepeat1 => true,
+            Type::PreprocParamsRepeat1 => true,
+            Type::PreprocIfRepeat1 => true,
+            Type::PreprocIfInFieldDeclarationListRepeat1 => true,
+            Type::PreprocIfInEnumeratorListRepeat1 => true,
+            Type::PreprocIfInEnumeratorListNoCommaRepeat1 => true,
+            Type::PreprocIfAttributeSpecifierRepeat1 => true,
+            Type::PreprocArgumentListRepeat1 => true,
+            Type::DeclarationRepeat1 => true,
+            Type::_TypeDefinitionTypeRepeat1 => true,
+            Type::_TypeDefinitionDeclaratorsRepeat1 => true,
+            Type::_DeclarationSpecifiersRepeat1 => true,
+            Type::AttributeDeclarationRepeat1 => true,
+            Type::AttributedDeclaratorRepeat1 => true,
+            Type::PointerDeclaratorRepeat1 => true,
+            Type::SizedTypeSpecifierRepeat1 => true,
+            Type::EnumeratorListRepeat1 => true,
+            Type::FieldDeclarationRepeat1 => true,
+            Type::ParameterListRepeat1 => true,
+            Type::CaseStatementRepeat1 => true,
+            Type::GenericExpressionRepeat1 => true,
+            Type::GnuAsmExpressionRepeat1 => true,
+            Type::GnuAsmOutputOperandListRepeat1 => true,
+            Type::GnuAsmInputOperandListRepeat1 => true,
+            Type::GnuAsmClobberListRepeat1 => true,
+            Type::GnuAsmGotoListRepeat1 => true,
+            Type::ArgumentListRepeat1 => true,
+            Type::InitializerListRepeat1 => true,
+            Type::InitializerPairRepeat1 => true,
+            Type::CharLiteralRepeat1 => true,
+            Type::ConcatenatedStringRepeat1 => true,
+            Type::StringLiteralRepeat1 => true,
+            Type::_ClassDeclarationRepeat1 => true,
+            Type::BaseClassClauseRepeat1 => true,
+            Type::TemplateParameterListRepeat1 => true,
+            Type::FieldInitializerListRepeat1 => true,
+            Type::OperatorCastDefinitionRepeat1 => true,
+            Type::ConstructorTryStatementRepeat1 => true,
+            Type::StructuredBindingDeclaratorRepeat1 => true,
+            Type::_FunctionPostfixRepeat1 => true,
+            Type::ThrowSpecifierRepeat1 => true,
+            Type::TemplateArgumentListRepeat1 => true,
+            Type::SubscriptArgumentListRepeat1 => true,
+            Type::RequirementSeqRepeat1 => true,
+            Type::RequiresParameterListRepeat1 => true,
+            Type::LambdaCaptureSpecifierRepeat1 => true,
+            _ => false,
+        }
+    }
+    pub fn is_supertype(&self) -> bool {
+        match self {
+            Type::_Declarator => true,
+            Type::_FieldDeclarator => true,
+            Type::_TypeDeclarator => true,
+            Type::_AbstractDeclarator => true,
+            Type::_TypeSpecifier => true,
+            Type::_Expression => true,
+            _ => false,
         }
     }
 }

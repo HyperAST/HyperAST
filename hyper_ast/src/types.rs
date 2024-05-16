@@ -406,6 +406,8 @@ pub trait HyperType: Display + Debug {
     fn is_directory(&self) -> bool;
     fn is_spaces(&self) -> bool;
     fn is_syntax(&self) -> bool;
+    fn is_hidden(&self) -> bool;
+    fn is_supertype(&self) -> bool;
     fn get_lang(&self) -> LangWrapper<Self>
     where
         Self: Sized;
@@ -459,6 +461,14 @@ impl HyperType for u8 {
     }
 
     fn is_syntax(&self) -> bool {
+        todo!()
+    }
+
+    fn is_hidden(&self) -> bool {
+        todo!()
+    }
+
+    fn is_supertype(&self) -> bool {
         todo!()
     }
 
@@ -1424,6 +1434,14 @@ impl HyperType for AnyType {
 
     fn as_static_str(&self) -> &'static str {
         self.0.as_static_str()
+    }
+
+    fn is_hidden(&self) -> bool {
+        self.0.is_hidden()
+    }
+
+    fn is_supertype(&self) -> bool {
+        self.0.is_supertype()
     }
 
     fn get_lang(&self) -> LangWrapper<Self>

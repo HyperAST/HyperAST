@@ -165,7 +165,6 @@ mod legion_impls {
 pub use legion_impls::as_any;
 pub trait JavaEnabledTypeStore<T>: TypeStore<T> {}
 
-
 #[repr(u8)]
 pub enum TStore {
     Java = 0,
@@ -262,6 +261,12 @@ impl HyperType for Type {
     }
     fn is_spaces(&self) -> bool {
         self == &Type::Spaces
+    }
+    fn is_hidden(&self) -> bool {
+        self.is_hidden()
+    }
+    fn is_supertype(&self) -> bool {
+        self.is_supertype()
     }
     fn is_syntax(&self) -> bool {
         self == &Type::LParen // "(",
@@ -626,6 +631,43 @@ impl Type {
             Self::NullLiteral => "null",
             _ => panic!(),
         }
+    }
+
+    pub(crate) fn is_repeat(&self) -> bool {
+        self == &Type::ProgramRepeat1
+            || self == &Type::_StringLiteralRepeat1
+            || self == &Type::_MultilineStringLiteralRepeat1
+            || self == &Type::CastExpressionRepeat1
+            || self == &Type::InferredParametersRepeat1
+            || self == &Type::ArrayCreationExpressionRepeat1
+            || self == &Type::ArgumentListRepeat1
+            || self == &Type::TypeArgumentsRepeat1
+            || self == &Type::DimensionsRepeat1
+            || self == &Type::SwitchBlockRepeat1
+            || self == &Type::SwitchBlockStatementGroupRepeat1
+            || self == &Type::RecordPatternBodyRepeat1
+            || self == &Type::TryStatementRepeat1
+            || self == &Type::CatchTypeRepeat1
+            || self == &Type::ResourceSpecificationRepeat1
+            || self == &Type::ForStatementRepeat1
+            || self == &Type::AnnotationArgumentListRepeat1
+            || self == &Type::ElementValueArrayInitializerRepeat1
+            || self == &Type::ModuleBodyRepeat1
+            || self == &Type::RequiresModuleDirectiveRepeat1
+            || self == &Type::ExportsModuleDirectiveRepeat1
+            || self == &Type::ProvidesModuleDirectiveRepeat1
+            || self == &Type::EnumBodyRepeat1
+            || self == &Type::EnumBodyDeclarationsRepeat1
+            || self == &Type::ModifiersRepeat1
+            || self == &Type::TypeParametersRepeat1
+            || self == &Type::TypeBoundRepeat1
+            || self == &Type::TypeListRepeat1
+            || self == &Type::AnnotationTypeBodyRepeat1
+            || self == &Type::InterfaceBodyRepeat1
+            || self == &Type::_VariableDeclaratorListRepeat1
+            || self == &Type::ArrayInitializerRepeat1
+            || self == &Type::FormalParametersRepeat1
+            || self == &Type::ReceiverParameterRepeat1
     }
 }
 
@@ -1976,6 +2018,91 @@ impl Type {
             Type::Spaces => "Spaces",
             Type::Directory => "Directory",
             Type::ERROR => "ERROR",
+        }
+    }
+    pub fn is_hidden(&self) -> bool {
+        match self {
+            Type::End => true,
+            Type::_MultilineStringFragmentToken1 => true,
+            Type::_MultilineStringFragmentToken2 => true,
+            Type::_EscapeSequenceToken1 => true,
+            Type::_ToplevelStatement => true,
+            Type::_Literal => true,
+            Type::_StringLiteral => true,
+            Type::_MultilineStringLiteral => true,
+            Type::_EscapeSequence => true,
+            Type::Expression => true,
+            Type::PrimaryExpression => true,
+            Type::_UnqualifiedObjectCreationExpression => true,
+            Type::_WildcardBounds => true,
+            Type::Statement => true,
+            Type::EnhancedForVariable => true,
+            Type::_Annotation => true,
+            Type::_ElementValue => true,
+            Type::Declaration => true,
+            Type::ModuleDirective => true,
+            Type::_ConstructorDeclarator => true,
+            Type::_AbsoluteName => true,
+            Type::_DefaultValue => true,
+            Type::_VariableDeclaratorList => true,
+            Type::_VariableDeclaratorId => true,
+            Type::_Type => true,
+            Type::_UnannotatedType => true,
+            Type::_MethodHeader => true,
+            Type::_MethodDeclarator => true,
+            Type::_ReservedIdentifier => true,
+            Type::ProgramRepeat1 => true,
+            Type::_StringLiteralRepeat1 => true,
+            Type::_MultilineStringLiteralRepeat1 => true,
+            Type::CastExpressionRepeat1 => true,
+            Type::InferredParametersRepeat1 => true,
+            Type::ArrayCreationExpressionRepeat1 => true,
+            Type::ArrayCreationExpressionRepeat2 => true,
+            Type::ArgumentListRepeat1 => true,
+            Type::TypeArgumentsRepeat1 => true,
+            Type::DimensionsRepeat1 => true,
+            Type::SwitchBlockRepeat1 => true,
+            Type::SwitchBlockRepeat2 => true,
+            Type::SwitchBlockStatementGroupRepeat1 => true,
+            Type::SwitchBlockStatementGroupRepeat2 => true,
+            Type::RecordPatternBodyRepeat1 => true,
+            Type::TryStatementRepeat1 => true,
+            Type::CatchTypeRepeat1 => true,
+            Type::ResourceSpecificationRepeat1 => true,
+            Type::ForStatementRepeat1 => true,
+            Type::ForStatementRepeat2 => true,
+            Type::AnnotationArgumentListRepeat1 => true,
+            Type::ElementValueArrayInitializerRepeat1 => true,
+            Type::ModuleBodyRepeat1 => true,
+            Type::RequiresModuleDirectiveRepeat1 => true,
+            Type::ExportsModuleDirectiveRepeat1 => true,
+            Type::ProvidesModuleDirectiveRepeat1 => true,
+            Type::EnumBodyRepeat1 => true,
+            Type::EnumBodyDeclarationsRepeat1 => true,
+            Type::ModifiersRepeat1 => true,
+            Type::TypeParametersRepeat1 => true,
+            Type::TypeBoundRepeat1 => true,
+            Type::TypeListRepeat1 => true,
+            Type::AnnotationTypeBodyRepeat1 => true,
+            Type::InterfaceBodyRepeat1 => true,
+            Type::_VariableDeclaratorListRepeat1 => true,
+            Type::ArrayInitializerRepeat1 => true,
+            Type::FormalParametersRepeat1 => true,
+            Type::ReceiverParameterRepeat1 => true,
+            _ => false,
+        }
+    }
+    pub fn is_supertype(&self) -> bool {
+        match self {
+            Type::_Literal => true,
+            Type::Expression => true,
+            Type::PrimaryExpression => true,
+            Type::Statement => true,
+            Type::Declaration => true,
+            Type::ModuleDirective => true,
+            Type::_Type => true,
+            Type::_UnannotatedType => true,
+            _ => false,
         }
     }
 }

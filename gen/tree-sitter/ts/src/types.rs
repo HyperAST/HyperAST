@@ -264,6 +264,14 @@ impl HyperType for Type {
         self.to_str()
     }
 
+    fn is_hidden(&self) -> bool {
+        todo!()
+    }
+    
+    fn is_supertype(&self) -> bool {
+        todo!()
+    }
+
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,
