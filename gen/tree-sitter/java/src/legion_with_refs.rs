@@ -1,7 +1,4 @@
-use crate::{
-    types::TIdN,
-    TNode,
-};
+use crate::{types::TIdN, TNode};
 use hyper_ast::{
     cyclomatic::Mcc,
     full::FullNode,
@@ -11,7 +8,8 @@ use hyper_ast::{
         nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert},
     },
     tree_gen::{
-        parser::Visibility, BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange
+        parser::Visibility, BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData,
+        SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
     },
     types::{self, AnyType, NodeStoreExt, TypeStore, TypeTrait, WithHashs, WithStats},
     utils,
@@ -197,7 +195,18 @@ impl Debug for Acc {
 #[cfg(not(debug_assertions))]
 const HIDDEN_NODES: bool = true;
 #[cfg(debug_assertions)]
-static HIDDEN_NODES: bool = false;
+/// enables recovering of hidden nodes from tree-sitter
+// NOTE static mut allows me to change it in unit tests
+pub(crate) static mut HIDDEN_NODES: bool = false;
+
+#[cfg(not(debug_assertions))]
+const fn should_get_hidden_nodes() -> bool {
+    HIDDEN_NODES
+}
+#[cfg(debug_assertions)]
+pub(crate) fn should_get_hidden_nodes() -> bool {
+    unsafe { HIDDEN_NODES }
+}
 
 #[repr(transparent)]
 pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
@@ -259,7 +268,7 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 
     fn goto_first_child_extended(&mut self) -> Option<Visibility> {
-        if HIDDEN_NODES {
+        if should_get_hidden_nodes() {
             unsafe {
                 let s = &mut self.0;
                 let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
@@ -276,7 +285,7 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 
     fn goto_next_sibling_extended(&mut self) -> Option<Visibility> {
-        if HIDDEN_NODES {
+        if should_get_hidden_nodes() {
             unsafe {
                 let s = &mut self.0;
                 let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
@@ -348,6 +357,14 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
     ) -> PreResult<<Self as TreeGen>::Acc> {
         let type_store = &mut self.stores().type_store;
         let kind = node.obtain_type(type_store);
+        if should_get_hidden_nodes() {
+            if kind.is_repeat() {
+                return PreResult::Ignore;
+            }
+        }
+        if node.0.is_missing() {
+            return PreResult::Skip;
+        }
         let mut acc = self.pre(text, node, stack, global);
         if kind == Type::StringLiteral {
             acc.labeled = true;
