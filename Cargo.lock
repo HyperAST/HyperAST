@@ -3049,6 +3049,7 @@ dependencies = [
 [[package]]
 name = "lsp-positions"
 version = "0.3.3"
+source = "git+https://github.com/quentinLeDilavrec/stack-graphs?rev=d0fa507d4b3892b1db60938f37bf4779f9dae18d#d0fa507d4b3892b1db60938f37bf4779f9dae18d"
 dependencies = [
  "memchr",
  "tree-sitter 0.22.5",
@@ -4859,6 +4860,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 [[package]]
 name = "stack-graphs"
 version = "0.13.0"
+source = "git+https://github.com/quentinLeDilavrec/stack-graphs?rev=d0fa507d4b3892b1db60938f37bf4779f9dae18d#d0fa507d4b3892b1db60938f37bf4779f9dae18d"
 dependencies = [
  "bitvec",
  "controlled-option",
@@ -5669,6 +5671,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-graph"
 version = "0.12.2"
+source = "git+https://github.com/quentinLeDilavrec/tree-sitter-graph?rev=f09e4a7bd49893b3859fd35446a81314968d665b#f09e4a7bd49893b3859fd35446a81314968d665b"
 dependencies = [
  "log",
  "regex",
@@ -5803,6 +5806,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-stack-graphs"
 version = "0.8.2"
+source = "git+https://github.com/quentinLeDilavrec/stack-graphs?rev=d0fa507d4b3892b1db60938f37bf4779f9dae18d#d0fa507d4b3892b1db60938f37bf4779f9dae18d"
 dependencies = [
  "anyhow",
  "controlled-option",

@@ -5,8 +5,8 @@ use hyper_ast::{
     store::{defaults::NodeIdentifier, SimpleStores},
     types::HyperAST,
 };
-use tree_sitter_graph::{graph::GraphErazing, ExtendingStringQuery};
 use tree_sitter_graph::GenQuery;
+use tree_sitter_graph::{graph::GraphErazing, ExtendingStringQuery};
 
 use crate::{legion_with_refs, types::TStore};
 
@@ -71,8 +71,8 @@ fn tsg_vanilla() {
     let mut aaa = tree_sitter_graph::parser::Parser::<ExtendingStringQuery>::new(SOURCE2);
     aaa.parse_into_file(&mut file).unwrap();
 
-    for (i,s) in aaa.query_source.each.into_iter().enumerate() {
-        println!("const A{}: &str r#\"{}\"#;",i, s);
+    for (i, s) in aaa.query_source.each.into_iter().enumerate() {
+        println!("const A{}: &str r#\"{}\"#;", i, s);
     }
 }
 
@@ -98,17 +98,17 @@ fn tsg_hyperast() {
         md_cache: &mut md_cache,
     };
 
-    let text = CODE.as_bytes();
-    let tree = match legion_with_refs::tree_sitter_parse(text) {
+    let text = CODE;
+    let tree = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
         Ok(t) => t,
         Err(t) => t,
     };
     // println!("{}", tree.root_node().to_sexp());
-    let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
+    let full_node = java_tree_gen.generate_file(b"", text.as_bytes(), tree.walk());
 
     // dbg!(&full_node);
-
-    let tsg = impls::PM::from_str(language.clone(), SOURCE2).unwrap();
+    let tsg_source = SOURCE2;
+    let tsg = impls::PM::from_str(language.clone(), tsg_source).unwrap();
     dbg!(&tsg);
 
     type Functions = tree_sitter_graph::functions::Functions<GraphErazing<impls::MyNodeErazing>>;
@@ -131,8 +131,7 @@ fn tsg_hyperast() {
         .add(JUMP_TO_SCOPE_NODE_VAR.into(), jump_to_scope_node.into())
         .expect("Failed to set JUMP_TO_SCOPE_NODE");
 
-    let mut functions = Functions::essentials();
-    functions.add_graph_functions();
+    let mut functions = Functions::stdlib();
     tree_sitter_stack_graphs::functions::add_path_functions(&mut functions);
     let mut config = tree_sitter_graph::ExecutionConfig::new(&functions, &globals)
         .lazy(true)
@@ -156,9 +155,17 @@ fn tsg_hyperast() {
     // MSG: due to current limitations in the borrow checker, this implies a `'static` lifetime
     let tree: MyNode = unsafe { std::mem::transmute(tree) };
 
-    tsg.execute_lazy_into2(&mut graph, tree, &mut config, &cancellation_flag)
-        .unwrap();
-    println!("{}", graph.pretty_print())
+    if let Err(err) = tsg.execute_lazy_into2(&mut graph, tree, &mut config, &cancellation_flag) {
+        println!("{}", graph.pretty_print());
+        let source_path = std::path::Path::new("AAA.java");
+        let tsg_path = std::path::Path::new("java.tsg");
+        eprintln!(
+            "{}",
+            err.display_pretty(&source_path, text, &tsg_path, tsg_source)
+        );
+    } else {
+        println!("{}", graph.pretty_print());
+    }
 }
 
 mod impls {
@@ -215,7 +222,7 @@ mod impls {
             // use hyper_ast::position::computing_offset_bottom_up::extract_position_it;
             // let p = extract_position_it(self.stores, self.pos.iter());
             tree_sitter::Point {
-                row: 0,//p.range().start,
+                row: 0, //p.range().start,
                 column: 0,
             }
         }
@@ -314,23 +321,21 @@ mod impls {
         fn nodes_for_capture_index(&self, index: Self::I) -> impl Iterator<Item = Self::Item> + '_ {
             dbg!(index);
             dbg!(&self.captures);
-            self.captures.by_capture_id(index)
-                .into_iter()
-                .map(|c| {
-                    let mut p = self.root.clone();
-                    for i in c.path.iter().rev() {
-                        use hyper_ast::types::NodeStore;
-                        let nn = self.stores.node_store().resolve(p.node().unwrap());
-                        use hyper_ast::types::WithChildren;
-                        let node = nn.child(i).unwrap();
-                        p.goto(node, *i);
-                    }
-                    assert_eq!(p.node(), Some(&c.match_node));
-                    MyNode {
-                        stores: self.stores,
-                        pos: p,
-                    }
-                })
+            self.captures.by_capture_id(index).into_iter().map(|c| {
+                let mut p = self.root.clone();
+                for i in c.path.iter().rev() {
+                    use hyper_ast::types::NodeStore;
+                    let nn = self.stores.node_store().resolve(p.node().unwrap());
+                    use hyper_ast::types::WithChildren;
+                    let node = nn.child(i).unwrap();
+                    p.goto(node, *i);
+                }
+                assert_eq!(p.node(), Some(&c.match_node));
+                MyNode {
+                    stores: self.stores,
+                    pos: p,
+                }
+            })
         }
         fn pattern_index(&self) -> usize {
             self.captures.pattern_index()

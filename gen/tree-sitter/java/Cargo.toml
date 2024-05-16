@@ -24,9 +24,12 @@ hashbrown = { version = "0.13.2", default-features = false, optional = true }
 log = { version = "0.4.6" } #, features = ["max_level_debug", "release_max_level_warn"] }
 
 hyper_ast = { path = "../../../hyper_ast", default-features = false }
-tree-sitter-graph = { path = "../../../../tree-sitter-graph", optional = true }
-tree-sitter-stack-graphs = { path = "../../../../stack-graphs/tree-sitter-stack-graphs", optional = true }
-stack-graphs = { path = "../../../../stack-graphs/stack-graphs", optional = true}
+tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "f09e4a7bd49893b3859fd35446a81314968d665b", version = "0.12", optional = true }
+tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev="d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true }
+stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev="d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true}
+# tree-sitter-graph = { path = "../../../../tree-sitter-graph", optional = true }
+# tree-sitter-stack-graphs = { path = "../../../../stack-graphs/tree-sitter-stack-graphs", optional = true }
+# stack-graphs = { path = "../../../../stack-graphs/stack-graphs", optional = true}
 hyper_ast_gen_ts_tsquery = { path = "../query", optional = true }
 
 libc = "0.2"
