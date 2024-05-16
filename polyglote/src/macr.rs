@@ -57,11 +57,13 @@ macro_rules! mk_get_language {
         fn highlights(&self) -> &str {
             $crat::$hi
         }
+        mk_get_language!{@others $crat, $($attrs)* }
     };
     (@others $crat:ident, n_types: $n_types:ident, $($attrs:tt)* ) => {
         fn node_types(&self) -> &str {
             $crat::$n_types
         }
+        mk_get_language!{@others $crat, $($attrs)* }
     };
     ($( $camel:ident { $($attrs:tt)* } ),*) => {
         $(
@@ -163,7 +165,7 @@ mk_langs!(
         lang: language_typescript,
         tags: TAGGING_QUERY,
         hi: HIGHLIGHT_QUERY,
-        n_types: NODE_TYPES,
+        n_types: TYPESCRIPT_NODE_TYPES,
     },
     Python {
         tree_sitter_python,
