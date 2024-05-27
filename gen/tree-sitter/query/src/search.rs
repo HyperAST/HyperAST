@@ -15,6 +15,9 @@ mod preprocess;
 
 mod recursive;
 
+#[doc(hidden)]
+pub mod utils;
+
 // for now just uses the root types
 // TODO implement approaches based on probabilitic sets
 pub(crate) struct QuickTrigger<T> {
