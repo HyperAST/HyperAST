@@ -1,6 +1,13 @@
+use std::path::{Path, PathBuf};
+
 use hyper_ast::store::{defaults::NodeIdentifier, SimpleStores};
 
-fn f(query: &str, text: &[u8]) {
+fn tsg_test(p: &str) -> String {
+    let r = "../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test/";
+    std::fs::read_to_string(Path::new(r).join(p)).unwrap()
+}
+
+fn f(query: &str, text: &[u8]) -> usize {
     let (matcher, stores, code) = f_aux(query, text);
 
     use crate::iter::IterAll as JavaIter;
@@ -9,12 +16,15 @@ fn f(query: &str, text: &[u8]) {
     let matchs =
         matcher.apply_matcher::<SimpleStores<TStore>, It<_>, crate::types::TIdN<_>>(&stores, code);
     dbg!();
+    let mut count = 0;
     for m in matchs {
+        count += 1;
         for c in &m.1 .0 {
             dbg!(&matcher.captures[c.id as usize]);
         }
         dbg!(m);
     }
+    count
 }
 
 fn f_aux<'store>(
@@ -46,15 +56,21 @@ fn f_aux<'store>(
     };
     println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
+    eprintln!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
+    );
     (matcher, stores, full_node.local.compressed_node)
 }
-fn g(query: &str, text: &[u8]) {
+fn g(query: &str, text: &[u8]) -> usize {
     let mut cursor = tree_sitter::QueryCursor::default();
     let (query, tree) = g_aux(query, text);
     dbg!(&tree);
     dbg!(tree.root_node().to_sexp());
     let matches = cursor.matches(&query, tree.root_node(), text);
+    let mut count = 0;
     for m in matches {
+        count += 1;
         dbg!(&m);
         dbg!(m.pattern_index);
         for capt in m.captures {
@@ -68,6 +84,7 @@ fn g(query: &str, text: &[u8]) {
             dbg!(k);
         }
     }
+    count
 }
 
 fn g_aux<'query, 'tree>(
@@ -158,9 +175,21 @@ fn it() {
     unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
     let mut good = vec![];
     let mut bad = vec![];
-    for (i, text) in CODES.iter().enumerate() {
+    let codes = CODES.iter();
+    let codes = It::new(
+        Path::new("../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test")
+            .to_owned(),
+    )
+    .map(|x| {
+        let text = std::fs::read_to_string(&x).unwrap();
+        (x, text)
+    });
+    let mut codes_count = 0;
+    let mut used = std::collections::HashSet::<usize>::new();
+    for (i, text) in codes {
+        codes_count += 1;
         for (j, query) in QUERIES.iter().enumerate() {
-            dbg!(i, j);
+            dbg!(&i, &j);
             let text = text.as_bytes();
             let mut cursor = tree_sitter::QueryCursor::default();
             let g_res = g_aux(query, text);
@@ -176,13 +205,16 @@ fn it() {
             };
             let g_c = g_matches.into_iter().count();
             let f_c = f_matches.into_iter().count();
+            if g_c > 0 {
+                used.insert(j);
+            }
             if g_c != 0 || f_c != 0 {
                 if g_c != f_c {
-                    bad.push(((i, j), (g_c, f_c)));
+                    bad.push(((i.clone(), j), (g_c, f_c)));
                     dbg!(g_res.1.root_node().to_sexp());
                     dbg!(g_c, f_c);
                 } else {
-                    good.push(((i, j), g_c));
+                    good.push(((i.clone(), j), g_c));
                 }
             }
             // {
@@ -221,9 +253,69 @@ fn it() {
     for bad in &bad {
         println!("{:?}", bad);
     }
-    dbg!(bad.len()); // should be zero
-    dbg!(good.len());
-    dbg!(QUERIES.len()*CODES.len()-good.len()-bad.len()); // should reach 0 for matching coverage
+    eprintln!("bad    : {}", bad.len()); // should be zero
+    eprintln!("good   : {}", good.len());
+    eprintln!("ratio  : {:.2}", bad.len() as f64 / good.len() as f64 * 100.);
+    let total = QUERIES.len() * codes_count;
+    eprintln!("total  : {}", total);
+    let active = good.len() + bad.len();
+    eprintln!("activ  : {:.2}", active as f64 / total as f64 * 100.); // should reach 0 for matching coverage
+    eprintln!("queries:{}", QUERIES.len()); // should reach 0 for matching coverage
+    eprintln!("used   : {}", used.len()); // should reach 0 for matching coverage
+    eprintln!("used%  : {:.2}", used.len() as f64 / QUERIES.len() as f64 * 100.); // should reach 0 for matching coverage
+    assert_eq!(bad.len(), 0)
+}
+
+struct It {
+    inner: Option<Box<It>>,
+    outer: Option<std::fs::ReadDir>,
+    p: Option<PathBuf>,
+}
+impl It {
+    fn new(p: PathBuf) -> Self {
+        Self {
+            inner: None,
+            outer: None,
+            p: Some(p),
+        }
+    }
+}
+impl Iterator for It {
+    type Item = PathBuf;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        dbg!();
+        let Some(p) = &mut self.inner else {
+            let Some(d) = &mut self.outer else {
+                if let Ok(d) = self.p.as_mut()?.read_dir() {
+                    self.outer = Some(d);
+                    return self.next();
+                } else {
+                    return Some(self.p.take()?);
+                }
+            };
+            let p = d.next()?.ok()?.path();
+            self.inner = Some(Box::new(It::new(p)));
+            return self.next();
+        };
+        let Some(p) = p.next() else {
+            let p = self.outer.as_mut().unwrap().next()?.ok()?.path();
+            self.inner = Some(Box::new(It::new(p)));
+            return self.next();
+        };
+        Some(p)
+    }
+}
+
+#[test]
+fn sg_dataset() {
+    let path = Path::new("../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test");
+    dbg!(path.exists());
+
+    let it = It::new(path.to_owned());
+    for p in it {
+        dbg!(p);
+    }
 }
 
 const A0: &str = r#"(program)@prog @__tsg__full_match"#;
@@ -253,6 +345,17 @@ fn f1() {
     // Would be safer to add another code example
     // CODE1 matches 3 times with tsqueries.
 }
+#[test]
+fn f1_h() {
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let query = A1;
+    let text = CODE.as_bytes();
+    f(query, text);
+    // TODO should match 2 times
+    // Not sure how to handle that
+    // Would be safer to add another code example
+    // CODE1 matches 3 times with tsqueries.
+}
 const A2: &str = r#"[
   (module_declaration)
   (package_declaration)
@@ -261,6 +364,13 @@ const A2: &str = r#"[
 @__tsg__full_match"#;
 #[test]
 fn f2() {
+    let query = A2;
+    let text = CODE.as_bytes();
+    f(query, text);
+}
+#[test]
+fn f2_h() {
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
     let query = A2;
     let text = CODE.as_bytes();
     f(query, text);
@@ -381,6 +491,23 @@ const A45: &str = r#"(method_declaration
   name: (identifier) @name
   body: (block) @_block) @method
 @__tsg__full_match"#;
+#[test]
+fn f45() {
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let query = A45;
+    let text = std::fs::read_to_string("../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test/decl/annotation_type_body.java").unwrap();
+    let text = text.as_bytes();
+    assert_eq!(1, f(query, text));
+}
+#[test]
+fn g45() {
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let query = A45;
+    let text = std::fs::read_to_string("../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test/decl/annotation_type_body.java").unwrap();
+    let text = text.as_bytes();
+    let c = g(query, text);
+    dbg!(c);
+}
 const A46: &str = r#"(method_declaration (formal_parameters (_) @param)) @method
 @__tsg__full_match"#;
 const A47: &str = r#"(formal_parameter type: (_) @type (_) @name) @param
@@ -449,12 +576,61 @@ const A56: &str = r#"(block
   (_) @right
 )
 @__tsg__full_match"#;
+#[test]
+fn f56() {
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let query = A56;
+    let text = tsg_test("decl/annotation_type_body.java");
+    let text = text.as_bytes();
+    assert_eq!(1, f(query, text));
+}
+#[test]
+fn g56() {
+    let query = A56;
+    let text = tsg_test("decl/annotation_type_body.java");
+    let text = text.as_bytes();
+    let c = g(query, text);
+    dbg!(c);
+}
 const A57: &str = r#"(block
   .
   (_) @first) @block @__tsg__full_match"#;
+#[test]
+fn f57() {
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let query = A57;
+    let text = tsg_test("decl/annotation_type_body.java");
+    let text = text.as_bytes();
+    assert_eq!(1, f(query, text));
+}
 const A58: &str = r#"(block
   (_) @last
   . ) @block @__tsg__full_match"#;
+#[test]
+fn f58() {
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let query = A58;
+    let text = tsg_test("decl/type_identifier.java");
+    let text = text.as_bytes();
+    assert_eq!(1, f(query, text));
+    let text = tsg_test("decl/record.java");
+    let text = text.as_bytes();
+    assert_eq!(1, f(query, text));
+    let text = tsg_test("decl/collection_import.java");
+    let text = text.as_bytes();
+    assert_eq!(1, f(query, text));
+    let text = tsg_test("decl/annotation_type_body.java");
+    let text = text.as_bytes();
+    assert_eq!(1, f(query, text));
+}
+#[test]
+fn g58() {
+    let query = A58;
+    let text = tsg_test("decl/type_identifier.java");
+    let text = text.as_bytes();
+    let c = g(query, text);
+    dbg!(c);
+}
 const A59: &str = r#"(break_statement (identifier) @_name) @this @__tsg__full_match"#;
 const A60: &str = r#"(break_statement (identifier) @name) @stmt @__tsg__full_match"#;
 const A61: &str = r#"(continue_statement) @this @__tsg__full_match"#;
@@ -495,6 +671,13 @@ const A79: &str = r#"(local_variable_declaration
   ) @_local_var @__tsg__full_match"#;
 const A80: &str = r#"(variable_declarator
   name: (_) @name) @var_decl @__tsg__full_match"#;
+#[test]
+fn f80_h() {
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let query = A80;
+    let text = CODE3.as_bytes();
+    f(query, text);
+}
 const A81: &str = r#"(return_statement (_) @expr) @stmt
 @__tsg__full_match"#;
 const A82: &str =
@@ -554,6 +737,13 @@ const A112: &str = r#"(array_initializer (_) @expr) @this @__tsg__full_match"#;
 const A113: &str = r#"(class_literal (_) @type) @this @__tsg__full_match"#;
 const A114: &str = r#"(primary_expression/identifier) @name
 @__tsg__full_match"#;
+#[test]
+fn f114_h() {
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let query = A114;
+    let text = CODE.as_bytes();
+    f(query, text);
+}
 const A115: &str = r#"(field_access
   object: (_) @object
   field: (identifier) @name) @field_access @__tsg__full_match"#;
