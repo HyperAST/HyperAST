@@ -20,13 +20,14 @@ use hyper_ast::{
         SimpleStores,
     },
     tree_gen::{
-        compute_indentation, get_spacing, has_final_space, parser::Node as _, AccIndentation,
+        compute_indentation, get_spacing, has_final_space, parser::{Node as _, TreeCursor}, AccIndentation,
         Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
         SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
         ZippedTreeGen,
     },
     types::LabelStore as _,
 };
+use tuples::CombinConcat;
 
 use crate::types::{TsQueryEnabledTypeStore, Type};
 
@@ -217,7 +218,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
     fn pre_skippable(
         &mut self,
         text: &Self::Text,
-        node: &Self::Node<'_>,
+        cursor: &Self::TreeCursor<'_>,
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
@@ -226,8 +227,8 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
         // let Some(kind) = type_store.try_cpp(kind) else {
         //     return None
         // };
-        let kind = node.obtain_type(type_store);
-        let mut acc = self.pre(text, node, stack, global);
+        let kind = cursor.node().obtain_type(type_store);
+        let mut acc = self.pre(text, &cursor.node(), stack, global);
         if kind == Type::String {
             acc.labeled = true;
             return PreResult::SkipChildren(acc);
@@ -312,6 +313,12 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
     ) -> Local {
         let bytes_len = spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
+        use num::ToPrimitive;
+        let line_count = spacing
+            .matches("\n")
+            .count()
+            .to_u16()
+            .expect("too many newlines");
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
         let hbuilder: hashed::Builder<SyntaxNodeHashs<u32>> =
             hashed::Builder::new(Default::default(), &Type::Spaces, &spacing, 1);
@@ -341,10 +348,14 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
         } else {
             let vacant = insertion.vacant();
             let bytes_len = compo::BytesLen(bytes_len.try_into().unwrap());
-            NodeStore::insert_after_prepare(
-                vacant,
-                (Type::Spaces, spacing_id, bytes_len, hashs, BloomSize::None),
-            )
+            let a = (Type::Spaces, spacing_id, bytes_len, hashs, BloomSize::None);
+            if line_count == 0 {
+                NodeStore::insert_after_prepare(vacant, a)
+            } else {
+                use tuples::CombinRight;
+                let a = a.push(compo::LineCount(line_count));
+                NodeStore::insert_after_prepare(vacant, a)
+            }
         };
         Local {
             compressed_node,
@@ -353,6 +364,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
                 height: 1,
                 hashs,
                 size_no_spaces: 0,
+                line_count,
             },
         }
     }
@@ -471,6 +483,7 @@ impl<
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
+        let line_count = acc.metrics.line_count;
         let size_no_spaces = acc.metrics.size_no_spaces + 1;
         let hbuilder = hashed::Builder::new(hashs, &interned_kind, &label, size_no_spaces);
         let hsyntax = hbuilder.most_discriminating();
@@ -490,6 +503,7 @@ impl<
                 height,
                 hashs,
                 size_no_spaces,
+                line_count,
             };
             Local {
                 compressed_node,
@@ -529,6 +543,7 @@ impl<
                 height,
                 hashs,
                 size_no_spaces,
+                line_count,
             };
             Local {
                 compressed_node,
@@ -595,6 +610,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
                         height: node.height().to_u32().unwrap(),
                         size_no_spaces: node.size_no_spaces().to_u32().unwrap(),
                         hashs,
+                        line_count: node.line_count().to_u16().unwrap(),
                     };
                     metrics
                 };
@@ -614,6 +630,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
+        let line_count = acc.metrics.line_count;
         let size_no_spaces = acc.metrics.size_no_spaces + 1;
 
         let label = l.map(|l| label_store.resolve(&l));
@@ -633,6 +650,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
                 height,
                 hashs,
                 size_no_spaces,
+                line_count,
             };
             Local {
                 compressed_node,
@@ -672,6 +690,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
                 height,
                 hashs,
                 size_no_spaces,
+                line_count,
             };
             Local {
                 compressed_node,

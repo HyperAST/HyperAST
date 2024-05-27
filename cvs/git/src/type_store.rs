@@ -578,6 +578,14 @@ impl HyperType for MultiType {
         on_multi!(self, t => t.to_str())
     }
 
+    fn is_hidden(&self) -> bool {
+        on_multi!(self, t => t.is_hidden())
+    }
+
+    fn is_supertype(&self) -> bool {
+        on_multi!(self, t => t.is_supertype())
+    }
+
     fn get_lang(&self) -> LangWrapper<Self>
     where
         Self: Sized,

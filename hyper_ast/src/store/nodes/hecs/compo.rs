@@ -1,12 +1,14 @@
 pub struct Size(pub u32);
 pub struct SizeNoSpaces(pub u32);
 pub struct Height(pub u32);
+pub struct LineCount(pub u16);
 pub struct BytesLen(pub u32);
 
 #[derive(PartialEq, Eq)]
 pub struct CSStaticCount(pub u8);
 pub struct CS0<T: Eq, const N: usize>(pub [T; N]);
 #[derive(PartialEq, Eq, Debug)]
+#[derive(Clone)]
 pub struct CS<T: Eq>(pub Box<[T]>);
 impl<'a, T: Eq> From<&'a CS<T>> for &'a [T] {
     fn from(cs: &'a CS<T>) -> Self {

@@ -20,9 +20,7 @@ use hyper_ast::{
         SimpleStores,
     },
     tree_gen::{
-        compute_indentation, get_spacing, has_final_space, parser::Node as _, AccIndentation,
-        Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, SpacedGlobalData,
-        Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange, ZippedTreeGen,
+        compute_indentation, get_spacing, has_final_space, parser::{Node as _, TreeCursor}, AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange, ZippedTreeGen
     },
     types::LabelStore as _,
 };
@@ -201,6 +199,23 @@ impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdent
             indentation: indent,
         }
     }
+    fn pre_skippable(
+            &mut self,
+            text: &Self::Text,
+            cursor: &Self::TreeCursor<'_>,
+            stack: &Parents<Self::Acc>,
+            global: &mut Self::Global,
+        ) -> hyper_ast::tree_gen::PreResult<<Self as TreeGen>::Acc> {
+        
+            let type_store = &mut self.stores().type_store;
+            let node = cursor.node();
+            if node.0.is_missing() {
+                return PreResult::Skip;
+            }
+            let kind = node.obtain_type(type_store);
+            let mut acc = self.pre(text, &node, stack, global);
+            PreResult::Ok(acc)
+    }
     fn pre(
         &mut self,
         text: &[u8],
@@ -313,6 +328,7 @@ impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdent
                 height: 1,
                 hashs,
                 size_no_spaces: 0,
+                line_count: todo!(),
             },
         }
     }
@@ -436,6 +452,7 @@ impl<'stores, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIde
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
         let interned_kind = TsEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
+        let line_count = acc.metrics.line_count;
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
@@ -458,6 +475,7 @@ impl<'stores, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIde
                 height,
                 hashs,
                 size_no_spaces,
+                line_count,
             };
             Local {
                 compressed_node,
@@ -497,6 +515,7 @@ impl<'stores, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIde
                 height,
                 hashs,
                 size_no_spaces,
+                line_count
             };
             Local {
                 compressed_node,

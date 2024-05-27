@@ -371,6 +371,10 @@ impl WithStats for Tree {
     fn height(&self) -> usize {
         self.height.to_usize().unwrap()
     }
+
+    fn line_count(&self) -> usize {
+        todo!()
+    }
 }
 
 impl<T: Stored + WithStats> WithStats for TreeRef<'_, T>
@@ -383,6 +387,10 @@ where
 
     fn height(&self) -> usize {
         self.0.height()
+    }
+
+    fn line_count(&self) -> usize {
+        self.0.line_count()
     }
 }
 

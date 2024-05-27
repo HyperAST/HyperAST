@@ -560,7 +560,7 @@ pub trait WithChildrenSameLang: WithChildren {
 }
 
 pub trait IterableChildren<T> {
-    type ChildrenIter<'a>: Iterator<Item = &'a T>
+    type ChildrenIter<'a>: Iterator<Item = &'a T> + Clone
     where
         T: 'a,
         Self: 'a;
@@ -783,6 +783,7 @@ mod owned {
 pub trait WithStats {
     fn size(&self) -> usize;
     fn height(&self) -> usize;
+    fn line_count(&self) -> usize;
 }
 pub trait WithMetaData<C> {
     fn get_metadata(&self) -> Option<&C>;

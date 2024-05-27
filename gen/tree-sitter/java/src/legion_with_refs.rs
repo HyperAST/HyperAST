@@ -8,8 +8,9 @@ use hyper_ast::{
         nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert},
     },
     tree_gen::{
-        parser::Visibility, BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData,
-        SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
+        parser::{Node, TreeCursor, Visibility},
+        BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics,
+        TextedGlobalData, TreeGen, WithByteRange,
     },
     types::{self, AnyType, NodeStoreExt, TypeStore, TypeTrait, WithHashs, WithStats},
     utils,
@@ -351,14 +352,20 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
     fn pre_skippable(
         &mut self,
         text: &Self::Text,
-        node: &Self::Node<'_>,
+        cursor: &Self::TreeCursor<'_>,
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
         let type_store = &mut self.stores().type_store;
+        let node = &cursor.node();
         let kind = node.obtain_type(type_store);
         if should_get_hidden_nodes() {
             if kind.is_repeat() {
+                return PreResult::Ignore;
+            } else if kind == Type::_UnannotatedType
+                || kind == Type::_VariableDeclaratorList
+                || kind == Type::_VariableDeclaratorId
+            {
                 return PreResult::Ignore;
             }
         }
@@ -458,6 +465,11 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
     ) -> Local {
         let bytes_len = spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
+        let line_count = spacing
+            .matches("\n")
+            .count()
+            .to_u16()
+            .expect("too many newlines");
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
         let hbuilder: hashed::Builder<SyntaxNodeHashs<u32>> =
             hashed::Builder::new(Default::default(), &Type::Spaces, &spacing, 1);
@@ -487,10 +499,13 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
         } else {
             let vacant = insertion.vacant();
             let bytes_len = compo::BytesLen(bytes_len.try_into().unwrap());
-            NodeStore::insert_after_prepare(
-                vacant,
-                (Type::Spaces, spacing_id, bytes_len, hashs, BloomSize::None),
-            )
+            let a = (Type::Spaces, spacing_id, bytes_len, hashs, BloomSize::None);
+            if line_count == 0 {
+                NodeStore::insert_after_prepare(vacant, a)
+            } else {
+                let a = a.concat((compo::LineCount(line_count),));
+                NodeStore::insert_after_prepare(vacant, a)
+            }
         };
         Local {
             compressed_node,
@@ -499,6 +514,7 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
                 height: 0,
                 size_no_spaces: 0,
                 hashs,
+                line_count: 0,
             },
             ana: Default::default(),
             mcc: Mcc::new(&Type::Spaces),
@@ -666,6 +682,7 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
         let interned_kind = acc.simple.kind;
         // let interned_kind = JavaEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
         let hashs = acc.metrics.hashs;
+        let line_count = acc.metrics.line_count;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
         let size_no_spaces = acc.metrics.size_no_spaces + 1;
@@ -737,6 +754,9 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
                 dyn_builder.add(compo::BytesLen(
                     (acc.end_byte - acc.start_byte).try_into().unwrap(),
                 ));
+                if line_count > 0 {
+                    dyn_builder.add(compo::LineCount(line_count));
+                }
 
                 if Mcc::persist(&acc.simple.kind) {
                     dyn_builder.add(mcc.clone());
@@ -819,6 +839,7 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
                 height,
                 size_no_spaces,
                 hashs,
+                line_count,
             };
 
             // TODO see if possible to only keep md in md_cache, but would need a generational cache I think
@@ -1216,6 +1237,7 @@ where
                         height: node.height().to_u32().unwrap(),
                         size_no_spaces: node.size_no_spaces().to_u32().unwrap(),
                         hashs,
+                        line_count: node.line_count().to_u16().unwrap(),
                     };
                     let mcc = node
                         .get_component::<Mcc>()
@@ -1243,6 +1265,7 @@ where
             let size = acc.metrics.size + 1;
             let height = acc.metrics.height + 1;
             let size_no_spaces = acc.metrics.size_no_spaces + 1;
+            let line_count = acc.metrics.line_count + 1;
             let label = l.map(|l| label_store.resolve(&l));
             let hbuilder = hashed::Builder::new(hashs, &interned_kind, &label, size_no_spaces);
             let hsyntax = hbuilder.most_discriminating();
@@ -1290,6 +1313,7 @@ where
                     height,
                     size_no_spaces,
                     hashs,
+                    line_count,
                 };
 
                 // TODO see if possible to only keep md in md_cache, but would need a generational cache I think

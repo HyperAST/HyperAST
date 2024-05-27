@@ -542,6 +542,10 @@ macro_rules! variant_store {
             fn height(&self) -> usize {
                 todo!()
             }
+
+            fn line_count(&self) -> usize {
+                todo!()
+            }
         }
         impl From<RawVariant> for Variant {
             fn from(value: RawVariant) -> Self {

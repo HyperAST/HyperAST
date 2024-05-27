@@ -443,6 +443,14 @@ impl<'a, T> crate::types::WithStats for HashedNodeRef<'a, T> {
             .and_then(|x| x.0.to_usize())
             .unwrap_or(1)
     }
+
+    fn line_count(&self) -> usize {
+        self.0
+            .get_component::<compo::LineCount>()
+            .ok()
+            .and_then(|x| x.0.to_usize())
+            .unwrap_or(0)
+    }
 }
 
 impl<'a, T> HashedNodeRef<'a, T> {

@@ -220,9 +220,33 @@ mod impl_receivers {
         }
     }
 
+    impl<IdO: PrimInt, T> top_down::ReceiveRows<T, Self> for super::Position<PathBuf, IdO> {
+        fn push(self, row: T) -> Self {
+            self
+        }
+    }
+
+    impl<IdO: PrimInt, T> top_down::ReceiveColumns<T, Self> for super::Position<PathBuf, IdO> {
+        fn push(self, col: T) -> Self {
+            self
+        }
+    }
+
     impl<IdO: PrimInt> bottom_up::ReceiveOffset<IdO, Self> for super::Position<PathBuf, IdO> {
         fn push(mut self, offset: IdO) -> Self {
             self.offset += offset;
+            self
+        }
+    }
+
+    impl<IdO: PrimInt, T> bottom_up::ReceiveRows<T, Self> for super::Position<PathBuf, IdO> {
+        fn push(self, row: T) -> Self {
+            self
+        }
+    }
+
+    impl<IdO: PrimInt, T> bottom_up::ReceiveColumns<T, Self> for super::Position<PathBuf, IdO> {
+        fn push(self, col: T) -> Self {
             self
         }
     }

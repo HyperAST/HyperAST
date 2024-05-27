@@ -239,6 +239,9 @@ impl LangRef<AnyType> for Java {
         std::any::type_name::<Java>()
     }
 }
+
+pub use hyper_ast::types::Role;
+
 impl HyperType for Type {
     fn generic_eq(&self, other: &dyn HyperType) -> bool
     where
@@ -668,6 +671,14 @@ impl Type {
             || self == &Type::ArrayInitializerRepeat1
             || self == &Type::FormalParametersRepeat1
             || self == &Type::ReceiverParameterRepeat1
+            || self == &Type::ArrayCreationExpressionRepeat2
+            || self == &Type::SwitchBlockRepeat2
+            || self == &Type::SwitchBlockStatementGroupRepeat2
+            || self == &Type::ForStatementRepeat2
+            || self == &Type::_MultilineStringFragmentToken1
+            || self == &Type::_MultilineStringFragmentToken2
+            || self == &Type::_EscapeSequenceToken1
+        
     }
 }
 

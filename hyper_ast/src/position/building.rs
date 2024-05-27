@@ -34,6 +34,12 @@ pub mod top_down {
     pub trait ReceiveParent<IdN, O> {
         fn push(self, parent: IdN) -> O;
     }
+    pub trait ReceiveRows<T, O> {
+        fn push(self, row: T) -> O;
+    }
+    pub trait ReceiveColumns<T, O> {
+        fn push(self, col: T) -> O;
+    }
     pub trait SetNode<IdN, O> {
         fn set_node(self, node: IdN) -> O;
     }
@@ -85,6 +91,8 @@ pub mod top_down {
         T: ReceiveParent<IdN, T>
             + SetNode<IdN, O>
             + ReceiveOffset<IdO, T>
+            + ReceiveRows<IdO, T>
+            + ReceiveColumns<IdO, T>
             + ReceiveIdx<Idx, T>
             + SetLen<IdO, T>
             + ReceiveIdxNoSpace<Idx, T>,
@@ -139,6 +147,12 @@ pub mod bottom_up {
     pub trait ReceiveOffset<IdO, O> {
         fn push(self, bytes: IdO) -> O;
     }
+    pub trait ReceiveRows<T, O> {
+        fn push(self, row: T) -> O;
+    }
+    pub trait ReceiveColumns<T, O> {
+        fn push(self, col: T) -> O;
+    }
     pub trait ReceiveNode<IdN, O> {
         fn push(self, node: IdN) -> O;
     }
@@ -154,7 +168,9 @@ pub mod bottom_up {
     {
         type SA1: ReceiveNode<IdN, Self::SA2> + ReceiveDirName<Self::SB1<O>> + SetRoot<IdN, O>;
         type SA2: ReceiveOffset<IdO, Self::SA3>;
-        type SA3: ReceiveIdx<Idx, Self::SA1>;
+        type SA3: ReceiveRows<IdO, Self::SA4>;
+        type SA4: ReceiveColumns<IdO, Self::SA5>;
+        type SA5: ReceiveIdx<Idx, Self::SA1>;
         type SB1<OO>;
     }
     impl<IdN, Idx, IdO, O, T> ReceiveInFile<IdN, Idx, IdO, O> for T
@@ -163,6 +179,8 @@ pub mod bottom_up {
             + ReceiveNode<IdN, T>
             + SetRoot<IdN, O>
             + ReceiveOffset<IdO, T>
+            + ReceiveRows<IdO, T>
+            + ReceiveColumns<IdO, T>
             + ReceiveIdx<Idx, T>
             + ReceiveDirName<T>
             + SetLen<IdO, T>,
@@ -172,6 +190,8 @@ pub mod bottom_up {
         type SA1 = T;
         type SA2 = T;
         type SA3 = T;
+        type SA4 = T;
+        type SA5 = T;
         type SB1<OO> = T;
     }
     pub trait ReceiveDir<IdN, Idx, O>:

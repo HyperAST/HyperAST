@@ -9,6 +9,9 @@ pub struct StructuralPosition<IdN, Idx, Config = tags::TopDownFull> {
     pub(super) offsets: Vec<Idx>,
     _phantom: std::marker::PhantomData<Config>,
 }
+
+impl<IdN, C, Idx> super::node_filter_traits::Full for StructuralPosition<IdN, Idx, C> {}
+
 impl<IdN: std::hash::Hash, C, Idx: std::hash::Hash> std::hash::Hash
     for StructuralPosition<IdN, Idx, C>
 {
@@ -60,6 +63,52 @@ impl<IdN, Idx: PrimInt> super::position_accessors::WithPreOrderOffsets
         let mut iter = self.offsets.iter();
         iter.next().unwrap();
         SPIter(iter)
+    }
+}
+
+impl<IdN, Idx: PrimInt> super::position_accessors::WithPostOrderOffsets
+    for StructuralPosition<IdN, Idx>
+{
+    fn iter(&self) -> impl Iterator<Item = Self::Idx> {
+        self.offsets[1..]
+            .iter()
+            .rev()
+            .cloned()
+            .map(|o| o - num::one())
+    }
+}
+
+impl<IdN: Copy, Idx: PrimInt> super::position_accessors::WithPostOrderPath<IdN>
+    for StructuralPosition<IdN, Idx>
+{
+    fn iter_offsets_and_parents(&self) -> impl Iterator<Item = (Self::Idx, IdN)> {
+        super::position_accessors::WithPostOrderOffsets::iter(self)
+            .zip(self.parents.iter().rev().skip(1).cloned())
+    }
+}
+
+impl<IdN: Copy, Idx: PrimInt> super::position_accessors::RootedPosition<IdN>
+    for StructuralPosition<IdN, Idx>
+{
+    fn root(&self) -> IdN {
+        self.parents.first().unwrap().clone()
+    }
+}
+
+impl<IdN: Copy, Idx: PrimInt> super::position_accessors::WithFullPostOrderPath<IdN>
+    for StructuralPosition<IdN, Idx>
+{
+    fn iter_with_nodes(&self) -> (IdN, impl Iterator<Item = (Self::Idx, IdN)>) {
+        use crate::position::position_accessors::WithPostOrderPath;
+        (*self.node().unwrap(), self.iter_offsets_and_parents())
+    }
+}
+
+impl<IdN: Copy, Idx: PrimInt> super::position_accessors::SolvedPosition<IdN>
+    for StructuralPosition<IdN, Idx>
+{
+    fn node(&self) -> IdN {
+        *TreePath::node(self).unwrap()
     }
 }
 
@@ -139,6 +188,59 @@ impl<IdN: Copy, Idx: PrimInt> TreePath<IdN, Idx> for StructuralPosition<IdN, Idx
             i -= 1;
         }
         Ok(())
+    }
+
+    fn iter(&self) -> impl crate::position::StepedIterator<Item = (IdN, Idx), SecondItem = IdN> {
+        dbg!(self.parents.len());
+        dbg!(self.offsets.len());
+        struct Iter<'a, IdN, Idx> {
+            i: usize,
+            path: &'a StructuralPosition<IdN, Idx>,
+        }
+        struct IterId<'a, IdN> {
+            p: &'a [IdN],
+        }
+
+        impl<'a, IdN: Copy, Idx: PrimInt> Iterator for Iter<'a, IdN, Idx> {
+            type Item = (IdN, Idx);
+
+            fn next(&mut self) -> Option<Self::Item> {
+                if self.i == 0 {
+                    return None;
+                }
+                self.i -= 1;
+                let p = self.path.parents[self.i - 1];
+                let i = self.path.offsets[self.i];
+                Some((p, i))
+            }
+        }
+
+        impl<'a, IdN: Copy, Idx> Into<IterId<'a, IdN>> for Iter<'a, IdN, Idx> {
+            fn into(self) -> IterId<'a, IdN> {
+                IterId {
+                    p: &self.path.parents[0..self.i],
+                }
+            }
+        }
+        impl<'a, IdN: Copy, Idx: PrimInt> crate::position::StepedIterator for Iter<'a, IdN, Idx> {
+            type SecondItem = IdN;
+            type SecondIter = IterId<'a, IdN>;
+        }
+
+        impl<'a, IdN: Copy> Iterator for IterId<'a, IdN> {
+            type Item = IdN;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                let r = self.p.last()?;
+                self.p = &self.p[0..self.p.len() - 1];
+                Some(*r)
+            }
+        }
+
+        Iter {
+            i: self.offsets.len(),
+            path: &self,
+        }
     }
 }
 

@@ -22,7 +22,7 @@ use hyper_ast::{
     },
     tree_gen::{
         compute_indentation, get_spacing, has_final_space,
-        parser::{Node as _, Visibility},
+        parser::{Node as _, TreeCursor, Visibility},
         AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
         PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen,
         WithByteRange, ZippedTreeGen,
@@ -284,11 +284,12 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
     fn pre_skippable(
         &mut self,
         text: &Self::Text,
-        node: &Self::Node<'_>,
+        cursor: &Self::TreeCursor<'_>,
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
         let type_store = &mut self.stores().type_store;
+        let node = cursor.node();
         let kind = node.obtain_type(type_store);
         if HIDDEN_NODES {
             if kind == Type::_ExpressionNotBinary
@@ -303,7 +304,7 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
         if node.0.is_missing() {
             return PreResult::Skip;
         }
-        let acc = self.pre(text, node, stack, global);
+        let acc = self.pre(text, &node, stack, global);
         PreResult::Ok(acc)
     }
     fn pre(
@@ -426,6 +427,7 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
                 height: 1,
                 hashs,
                 size_no_spaces: 0,
+                line_count: 0,
             },
             ana: Default::default(),
         }
@@ -558,6 +560,7 @@ impl<'stores, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeId
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
         let interned_kind = CppEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
+        let line_count = acc.metrics.line_count;
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
@@ -581,6 +584,7 @@ impl<'stores, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeId
                 height,
                 hashs,
                 size_no_spaces,
+                line_count,
             };
             Local {
                 compressed_node,
@@ -650,6 +654,7 @@ impl<'stores, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeId
                 height,
                 hashs,
                 size_no_spaces,
+                line_count,
             };
             Local {
                 compressed_node,

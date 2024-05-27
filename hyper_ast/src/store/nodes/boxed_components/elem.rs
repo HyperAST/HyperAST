@@ -75,6 +75,13 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithStats for Hash
             .and_then(|x| x.0.to_usize())
             .unwrap_or(1)
     }
+
+    fn line_count(&self) -> usize {
+        self.0
+            .get::<compo::LineCount>()
+            .and_then(|x| x.0.to_usize())
+            .unwrap_or(1)
+    }
 }
 impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithSerialization
     for HashedNodeRef<'a, Id>

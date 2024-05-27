@@ -83,6 +83,7 @@ pub struct SubTreeMetrics<U: NodeHashs> {
     pub height: u32,
 
     pub size_no_spaces: u32,
+    pub line_count: u16, 
 }
 
 impl<U: NodeHashs> SubTreeMetrics<U> {
@@ -91,6 +92,7 @@ impl<U: NodeHashs> SubTreeMetrics<U> {
         self.size += other.size;
         self.size_no_spaces += other.size_no_spaces;
         self.hashs.acc(&other.hashs);
+        self.line_count += other.line_count;
     }
 }
 
@@ -377,11 +379,11 @@ where
     fn pre_skippable(
         &mut self,
         text: &Self::Text,
-        node: &Self::Node<'_>,
+        cursor: &Self::TreeCursor<'_>,
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
-        PreResult::Ok(self.pre(text, node, stack, global))
+        PreResult::Ok(self.pre(text, &cursor.node(), stack, global))
     }
 
     /// Called when going up
@@ -419,7 +421,7 @@ where
             {
                 has = Has::Down;
                 global.down();
-                let n = self.pre_skippable(text, &cursor.node(), &stack, global);
+                let n = self.pre_skippable(text, cursor, &stack, global);
                 match n {
                     PreResult::Skip => {
                         has = Has::Up;
@@ -539,7 +541,7 @@ where
                         }
                     }
                     global.down();
-                    let n = self.pre_skippable(text, &cursor.node(), &stack, global);
+                    let n = self.pre_skippable(text, cursor, &stack, global);
                     match n {
                         PreResult::Skip => {
                             has = Has::Up;

@@ -20,7 +20,7 @@ use hyper_ast::{
         SimpleStores,
     },
     tree_gen::{
-        compute_indentation, get_spacing, has_final_space, parser::Node as _, AccIndentation,
+        compute_indentation, get_spacing, has_final_space, parser::{Node as _, TreeCursor}, AccIndentation,
         Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
         SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
         ZippedTreeGen,
@@ -183,13 +183,17 @@ impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier
     fn pre_skippable(
         &mut self,
         text: &Self::Text,
-        node: &Self::Node<'_>,
+        cursor: &Self::TreeCursor<'_>,
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
         let type_store = &mut self.stores().type_store;
+        let node = cursor.node();
+        if node.0.is_missing() {
+            return PreResult::Skip;
+        }
         let kind = node.obtain_type(type_store);
-        let mut acc = self.pre(text, node, stack, global);
+        let mut acc = self.pre(text, &node, stack, global);
         if kind == Type::AttValue {
             acc.labeled = true;
             return PreResult::SkipChildren(acc);
@@ -322,6 +326,7 @@ impl<'a, TS: XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>>> XmlTr
                 height: 1,
                 hashs,
                 size_no_spaces: 0,
+                line_count: todo!(),
             },
             ana: Default::default(),
         }
@@ -442,6 +447,7 @@ impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
+        let line_count = acc.metrics.line_count;
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
@@ -472,6 +478,7 @@ impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier
                 height,
                 hashs,
                 size_no_spaces,
+                line_count,
             };
             Local {
                 compressed_node,
@@ -500,6 +507,7 @@ impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier
                 height,
                 hashs,
                 size_no_spaces,
+                line_count,
             };
             Local {
                 compressed_node,

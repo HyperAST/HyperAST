@@ -6,7 +6,7 @@ use crate::{
     position::TreePath,
     store::defaults::LabelIdentifier,
     types::{
-        self, AnyType, HyperAST, NodeId, NodeStore, Tree, Typed, WithChildren, WithSerialization,
+        self, AnyType, HyperAST, NodeId, NodeStore, Tree, Typed, WithChildren, WithSerialization, WithStats,
     },
     PrimInt,
 };
@@ -64,7 +64,7 @@ impl<IdN: NodeId, Idx: PrimInt> StructuralPositionStore<IdN, Idx> {
     ) -> Vec<Position>
     where
         HAST: HyperAST<'store, IdN = IdN::IdN, Label = LabelIdentifier, Idx = Idx>,
-        HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren,
+        HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren + WithStats,
         // HAST::Types: Eq + TypeTrait,
         <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
         IdN: Copy + Eq + Debug + NodeId,

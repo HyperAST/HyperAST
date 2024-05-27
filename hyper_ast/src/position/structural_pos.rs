@@ -8,6 +8,7 @@ use crate::{
     types::{
         self, AnyType, Children, HyperAST, HyperType, IterableChildren, LabelStore, Labeled,
         NodeId, NodeStore, TypeStore, Typed, TypedNodeId, WithChildren, WithSerialization,
+        WithStats,
     },
     PrimInt,
 };
@@ -59,9 +60,7 @@ mod esp_impl {
     impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> WithPostOrderOffsets
         for ExploreStructuralPositions<'a, IdN, Idx>
     {
-        type It = IterOffsets<'a, IdN, Idx>;
-
-        fn iter(&self) -> Self::It {
+        fn iter(&self) -> impl Iterator<Item = Self::Idx> {
             IterOffsets(self.clone())
         }
     }
@@ -84,16 +83,14 @@ mod esp_impl {
     impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> WithPostOrderPath<IdN>
         for ExploreStructuralPositions<'a, IdN, Idx>
     {
-        type ItPath = IterOffsetsNodes<'a, IdN, Idx>;
-
-        fn iter_offsets_and_parents(&self) -> Self::ItPath {
+        fn iter_offsets_and_parents(&self) -> impl Iterator<Item = (Self::Idx, IdN)> {
             IterOffsetsNodes(self.clone())
         }
     }
     impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> WithFullPostOrderPath<IdN>
         for ExploreStructuralPositions<'a, IdN, Idx>
     {
-        fn iter_with_nodes(&self) -> (IdN, Self::ItPath) {
+        fn iter_with_nodes(&self) -> (IdN, impl Iterator<Item = (Self::Idx, IdN)>) {
             (self.node(), IterOffsetsNodes(self.clone()))
         }
     }
@@ -311,7 +308,7 @@ where
             + super::position_accessors::SolvedPosition<IdN>,
         IdN: Debug + NodeId + Clone,
         IdN::IdN: NodeId<IdN = IdN::IdN> + Eq + Debug,
-        HAST::T: Typed<Type = AnyType> + WithSerialization + WithChildren,
+        HAST::T: WithSerialization + WithChildren + WithStats,
         <<HAST as HyperAST<'store>>::T as types::WithChildren>::ChildIdx: Debug,
         B: building::bottom_up::ReceiveInFile<IdN, HAST::Idx, usize, O>
             + building::bottom_up::CreateBuilder,
@@ -344,7 +341,8 @@ where
                 o = aaa.0;
                 let b = stores.node_store().resolve(x.as_id());
                 let t = stores.type_store().resolve_type(&b);
-
+                dbg!(&prev_x);
+                dbg!(&x);
                 dbg!(o);
                 dbg!(t);
                 let v = &b.children().unwrap();
@@ -359,6 +357,39 @@ where
                 assert_eq!(Some(prev_x.as_id()), v.get(o));
                 let v = v.before(o);
                 let v: Vec<_> = v.iter_children().collect();
+                fn compute<'store, HAST: HyperAST<'store>>(
+                    stores: &'store HAST,
+                    x: &HAST::IdN,
+                    col: &mut usize,
+                ) -> usize
+                where
+                    HAST::T: WithStats + WithSerialization + WithChildren,
+                {
+                    let b = stores.node_store().resolve(&x);
+                    let l = b.line_count();
+                    if l == 0 {
+                        *col += b.try_bytes_len().unwrap() as usize;
+                    } else if let Some(cs) = b.children() {
+                        for x in cs.iter_children() {
+                            if compute(stores, x.as_id(), col) > 0 {
+                                break;
+                            }
+                        }
+                    } else {
+                        *col += b.try_bytes_len().unwrap() as usize - b.line_count();
+                    }
+                    l
+                }
+                let mut row = 0;
+                let mut col = 0;
+                for x in v.iter().rev() {
+                    if row == 0 {
+                        row += compute(stores, x, &mut col);
+                    } else {
+                        let b = stores.node_store().resolve(x);
+                        row += b.line_count();
+                    }
+                }
                 let c = v
                     .into_iter()
                     .map(|x| {
@@ -369,8 +400,8 @@ where
                     })
                     .sum();
 
-                use bottom_up::{ReceiveIdx, ReceiveOffset};
-                builder = builder.push(prev_x).push(c).push(o);
+                use bottom_up::{ReceiveColumns, ReceiveIdx, ReceiveOffset, ReceiveRows};
+                builder = builder.push(prev_x).push(c).push(row).push(col).push(o);
                 prev_x = x;
 
                 if t.is_file() {

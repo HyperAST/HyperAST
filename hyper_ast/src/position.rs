@@ -191,8 +191,7 @@ pub mod position_accessors {
     pub trait WithPostOrderOffsets: WithOffsets {
         // type Path: Iterator;
         // fn path(&self) -> Self::Path;
-        type It: Iterator<Item = Self::Idx>;
-        fn iter(&self) -> Self::It;
+        fn iter(&self) -> impl Iterator<Item = Self::Idx>;
         // TODO into_iter ?
     }
 
@@ -200,8 +199,7 @@ pub mod position_accessors {
     pub trait WithPostOrderPath<IdN>: WithPath<IdN> + WithPostOrderOffsets {
         // type Path: Iterator;
         // fn path(&self) -> Self::Path;
-        type ItPath: Iterator<Item = (Self::Idx, IdN)>;
-        fn iter_offsets_and_parents(&self) -> Self::ItPath;
+        fn iter_offsets_and_parents(&self) -> impl Iterator<Item = (Self::Idx, IdN)>;
     }
 
     /// - p should only return each node once
@@ -237,7 +235,7 @@ pub mod position_accessors {
 
     /// test invariants with [assert_invariants_post_full]
     pub trait WithFullPostOrderPath<IdN>: RootedPosition<IdN> + WithPostOrderPath<IdN> {
-        fn iter_with_nodes(&self) -> (IdN, Self::ItPath);
+        fn iter_with_nodes(&self) -> (IdN, impl Iterator<Item = (Self::Idx, IdN)>);
     }
 
     /// - p should only return each node once
@@ -343,7 +341,7 @@ pub mod tags {
     pub struct BottomUpFull;
 }
 
-mod node_filter_traits {
+pub mod node_filter_traits {
     pub trait NoSpace {}
     pub trait Full {}
 }
@@ -361,6 +359,8 @@ pub mod offsets_and_nodes;
 pub use offsets_and_nodes::*;
 
 pub mod topological_offset;
+
+pub mod row_col;
 
 #[allow(unused)] // TODO remove all not working function and test the remaining ones
 mod spaces_related;
