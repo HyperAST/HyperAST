@@ -363,7 +363,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @this.lexical_scope
 }
 
-(modifiers (_) @annotation) @this {
+(modifiers (annotation) @annotation) @this {
   edge @annotation.ref -> @this.lexical_scope
 }
 

@@ -67,13 +67,13 @@ fn tsg_vanilla() {
 
     println!("{}", graph.pretty_print());
 
-    let mut file = tree_sitter_graph::ast::File::<tree_sitter::Query>::new(language);
-    let mut aaa = tree_sitter_graph::parser::Parser::<ExtendingStringQuery>::new(SOURCE2);
-    aaa.parse_into_file(&mut file).unwrap();
+    // let mut file = tree_sitter_graph::ast::File::<tree_sitter::Query>::new(language);
+    // let mut aaa = tree_sitter_graph::parser::Parser::<ExtendingStringQuery>::new(SOURCE2);
+    // aaa.parse_into_file(&mut file).unwrap();
 
-    for (i, s) in aaa.query_source.each.into_iter().enumerate() {
-        println!("const A{}: &str r#\"{}\"#;", i, s);
-    }
+    // for (i, s) in aaa.query_source.each.into_iter().enumerate() {
+    //     println!("const A{}: &str r#\"{}\"#;", i, s);
+    // }
 }
 
 #[test]
@@ -99,7 +99,7 @@ fn tsg_hyperast() {
         md_cache: &mut md_cache,
     };
 
-    let text = CODE;
+    let text = CODE0;
     let tree = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
         Ok(t) => t,
         Err(t) => t,
@@ -158,8 +158,8 @@ fn tsg_hyperast() {
 
     if let Err(err) = tsg.execute_lazy_into2(&mut graph, tree, &mut config, &cancellation_flag) {
         println!("{}", graph.pretty_print());
-        let source_path = std::path::Path::new("AAA.java");
-        let tsg_path = std::path::Path::new("java.tsg");
+        let source_path = std::path::Path::new("./src/tests/AAA.java");
+        let tsg_path = std::path::Path::new("./src/tests/java.tsg");
         eprintln!(
             "{}",
             err.display_pretty(&source_path, text, &tsg_path, tsg_source)
@@ -198,9 +198,16 @@ mod impls {
 
     impl<'tree, HAST, P> tree_sitter_graph::graph::SyntaxNode for MyNode<'tree, HAST, P>
     where
-        HAST::T: hyper_ast::types::WithSerialization,
+        HAST::T: hyper_ast::types::WithSerialization + hyper_ast::types::WithStats,
         HAST: HyperAST<'tree, IdN = NodeIdentifier>,
-        P: Clone + TreePath<HAST::IdN, HAST::Idx> + std::hash::Hash,
+        P: Clone + Debug
+            + std::hash::Hash
+            + hyper_ast::position::node_filter_traits::Full
+            + hyper_ast::position::position_accessors::WithFullPostOrderPath<
+                HAST::IdN,
+                Idx = HAST::Idx,
+            > + hyper_ast::position::position_accessors::SolvedPosition<HAST::IdN>,
+        HAST::IdN: Copy,
     {
         fn id(&self) -> usize {
             // let id = self.pos.node().unwrap(); // TODO make an associated type
@@ -213,18 +220,22 @@ mod impls {
         }
 
         fn kind(&self) -> &'static str {
-            let n = self.pos.node().unwrap();
-            let n = self.stores.resolve_type(n);
+            let n = self.pos.node();
+            let n = self.stores.resolve_type(&n);
             use hyper_ast::types::HyperType;
             n.as_static_str()
         }
 
         fn start_position(&self) -> tree_sitter::Point {
+            dbg!(&self.pos);
+            let conv =
+                hyper_ast::position::PositionConverter::new(&self.pos).with_stores(self.stores);
+            let pos: hyper_ast::position::row_col::RowCol<usize> = conv.compute_pos_post_order::<_,hyper_ast::position::row_col::RowCol<usize>,_>();
             // use hyper_ast::position::computing_offset_bottom_up::extract_position_it;
             // let p = extract_position_it(self.stores, self.pos.iter());
             tree_sitter::Point {
-                row: 0, //p.range().start,
-                column: 0,
+                row: pos.row() as usize, //p.range().start,
+                column: pos.col() as usize,
             }
         }
 
@@ -247,8 +258,7 @@ mod impls {
         }
 
         fn text(&self) -> String {
-            hyper_ast::nodes::TextSerializer::new(self.stores, *self.pos.node().unwrap())
-                .to_string()
+            hyper_ast::nodes::TextSerializer::new(self.stores, self.pos.node()).to_string()
         }
 
         fn named_child_count(&self) -> usize {
@@ -265,9 +275,16 @@ mod impls {
 
     impl<'tree, HAST, P> tree_sitter_graph::graph::SyntaxNodeExt for MyNode<'tree, HAST, P>
     where
-        HAST::T: hyper_ast::types::WithSerialization,
+        HAST::T: hyper_ast::types::WithSerialization + hyper_ast::types::WithStats,
         HAST: HyperAST<'tree, IdN = NodeIdentifier>,
-        P: Clone + TreePathMut<HAST::IdN, HAST::Idx> + std::hash::Hash,
+        P: Clone + Debug
+            + TreePathMut<HAST::IdN, HAST::Idx>
+            + std::hash::Hash
+            + hyper_ast::position::node_filter_traits::Full
+            + hyper_ast::position::position_accessors::WithFullPostOrderPath<
+                HAST::IdN,
+                Idx = HAST::Idx,
+            > + hyper_ast::position::position_accessors::SolvedPosition<HAST::IdN>,
     {
         type Cursor = Vec<Self>;
 
@@ -323,11 +340,15 @@ mod impls {
             dbg!(index);
             dbg!(&self.captures);
             self.captures.by_capture_id(index).into_iter().map(|c| {
+                dbg!(c);
                 let mut p = self.root.clone();
+                dbg!(p.node());
                 for i in c.path.iter().rev() {
                     use hyper_ast::types::NodeStore;
                     let nn = self.stores.node_store().resolve(p.node().unwrap());
+                    use hyper_ast::types::IterableChildren;
                     use hyper_ast::types::WithChildren;
+                    dbg!(nn.children().unwrap().iter_children().collect::<Vec<_>>());
                     let node = nn.child(i).unwrap();
                     p.goto(node, *i);
                 }
@@ -346,8 +367,13 @@ mod impls {
     pub struct MyQMatches<'query, 'cursor: 'query, 'tree: 'cursor> {
         q: &'query PM<crate::types::Type>,
         cursor: &'cursor mut Vec<u16>,
-        matchs: hyper_ast_gen_ts_tsquery::IterMatched<
-            &'query hyper_ast_gen_ts_tsquery::search::PreparedMatcher<crate::types::Type>,
+        matchs: hyper_ast_gen_ts_tsquery::IterMatched2<
+            hyper_ast_gen_ts_tsquery::search::recursive2::MatchingIter<
+                'tree,
+                SimpleStores<TStore>,
+                crate::types::TIdN<NodeIdentifier>,
+                &'query hyper_ast_gen_ts_tsquery::search::PreparedMatcher<crate::types::Type>,
+            >,
             &'tree SimpleStores<TStore>,
             crate::iter::IterAll<
                 'tree,
@@ -458,7 +484,7 @@ mod impls {
             }
         }
 
-        type Match<'cursor, 'tree: 'cursor> = impls::MyQMatch<'cursor, 'tree, SimpleStores<TStore>, StructuralPosition<NodeIdentifier, u16>>
+        type Match<'cursor, 'tree: 'cursor> = impls::MyQMatch<'cursor, 'tree, SimpleStores<TStore>, hyper_ast::position::StructuralPosition>
         where
             Self: 'cursor;
 
@@ -525,6 +551,8 @@ mod impls {
         }
     }
 }
+
+const CODE0: &str = include_str!("AAA.java");
 
 const CODE: &str = r#"
 package a.b;
