@@ -150,6 +150,9 @@ impl<Ty> Pattern<Ty> {
         dbg!(t);
 
         match self {
+            Pattern::SupNamedNode { sup, ty, children } => {
+                todo!()
+            },
             Pattern::NamedNode { ty, children } => {
                 if t.is_hidden() && *ty != t {
                     dbg!(ty);
@@ -207,6 +210,7 @@ impl<Ty> Pattern<Ty> {
                         pub(crate) fn is_optional<Ty>(p: &Pattern<Ty>) -> bool {
                             match p {
                                 Pattern::NamedNode { .. }
+                                | Pattern::SupNamedNode { .. }
                                 | Pattern::AnyNode { .. }
                                 | Pattern::Dot
                                 | Pattern::NegatedField(_)

@@ -14,6 +14,10 @@ use hyper_ast::types::{HyperAST, Labeled};
 mod preprocess;
 
 mod recursive;
+pub mod recursive2;
+
+mod iterative;
+
 
 #[doc(hidden)]
 pub mod utils;

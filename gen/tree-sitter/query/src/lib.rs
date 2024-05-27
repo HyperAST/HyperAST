@@ -86,10 +86,7 @@ where
     for<'b> &'b str: Into<<TIdN as hyper_ast::types::TypedNodeId>::Ty>,
     TIdN::IdN: Copy,
 {
-    type Item = (
-        It::Item,
-        Captured<HAST::IdN, HAST::Idx>,
-    );
+    type Item = (It::Item, Captured<HAST::IdN, HAST::Idx>);
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(e) = self.iter.next() {
@@ -105,27 +102,107 @@ where
     }
 }
 
+// impl<Ty> crate::search::PreparedMatcher<Ty> {
+//     pub fn apply_matcher<'a, HAST, It, TIdN>(
+//         &self,
+//         hast: &'a HAST,
+//         root: TIdN::IdN,
+//     ) -> IterMatched<&crate::search::PreparedMatcher<Ty>, &'a HAST, It, TIdN>
+//     where
+//         HAST: 'a + hyper_ast::types::HyperAST<'a>,
+//         TIdN: hyper_ast::types::TypedNodeId<Ty = Ty, IdN = HAST::IdN>,
+//         It: From<(&'a HAST, It::Item)>,
+//         It::Item: From<HAST::IdN>,
+//         It: Iterator,
+//         It::Item: hyper_ast::position::TreePathMut<HAST::IdN, HAST::Idx>,
+//     {
+//         let path = It::Item::from(root);
+//         let iter = It::from((hast, path));
+//         IterMatched {
+//             iter,
+//             matcher: self,
+//             hast,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
+// }
+
 impl<Ty> crate::search::PreparedMatcher<Ty> {
     pub fn apply_matcher<'a, HAST, It, TIdN>(
         &self,
         hast: &'a HAST,
         root: TIdN::IdN,
-    ) -> IterMatched<&crate::search::PreparedMatcher<Ty>, &'a HAST, It, TIdN>
+    ) -> IterMatched2<
+        crate::search::recursive2::MatchingIter<
+            'a,
+            HAST,
+            TIdN,
+            &crate::search::PreparedMatcher<TIdN::Ty>,
+        >,
+        &'a HAST,
+        It,
+        TIdN,
+    >
     where
-        HAST: 'a + hyper_ast::types::HyperAST<'a>,
-        TIdN: hyper_ast::types::TypedNodeId<Ty = Ty, IdN = HAST::IdN>,
+        HAST: 'a + hyper_ast::types::HyperAST<'a> + hyper_ast::types::TypedHyperAST<'a, TIdN>,
+        // HAST::TS: hyper_ast::types::TypeStore<HAST::T, Ty = Ty>,
+        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = Ty>,
         It: From<(&'a HAST, It::Item)>,
         It::Item: From<HAST::IdN>,
         It: Iterator,
         It::Item: hyper_ast::position::TreePathMut<HAST::IdN, HAST::Idx>,
     {
-        let path = It::Item::from(root);
-        let iter = It::from((hast, path));
-        IterMatched {
+        let path = It::Item::from(root.clone());
+        let mut iter = It::from((hast, path));
+        let cur = iter.next().unwrap();
+        IterMatched2 {
             iter,
-            matcher: self,
+            cur,
+            matcher: crate::search::recursive2::MatchingIter::new(self, hast, root),
             hast,
             _phantom: std::marker::PhantomData,
         }
+    }
+}
+
+pub struct IterMatched2<M, HAST, It: Iterator, TIdN> {
+    iter: It,
+    cur: It::Item,
+    matcher: M,
+    pub hast: HAST,
+    _phantom: std::marker::PhantomData<TIdN>,
+}
+
+impl<'a, HAST, It: Iterator, TIdN> Iterator
+    for IterMatched2<
+        crate::search::recursive2::MatchingIter<
+            'a,
+            HAST,
+            TIdN,
+            &crate::search::PreparedMatcher<TIdN::Ty>,
+        >,
+        &'a HAST,
+        It,
+        TIdN,
+    >
+where
+    HAST: hyper_ast::types::HyperAST<'a> + hyper_ast::types::TypedHyperAST<'a, TIdN>,
+    TIdN: 'static + hyper_ast::types::TypedNodeId<IdN = <HAST as HyperAST<'a>>::IdN>,
+    It::Item: hyper_ast::position::TreePath<TIdN::IdN, <HAST as HyperAST<'a>>::Idx> + Clone,
+    for<'b> &'b str: Into<<TIdN as hyper_ast::types::TypedNodeId>::Ty>,
+    TIdN::IdN: Copy + std::fmt::Debug,
+{
+    type Item = (It::Item, Captured<HAST::IdN, HAST::Idx>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(c) = self.matcher.next() {
+            return Some((self.cur.clone(), c));
+        } else if let Some(e) = self.iter.next() {
+            use hyper_ast::position::TreePath;
+            self.cur = e;
+            self.matcher.repurpose(*self.cur.node().unwrap());
+            return self.next();
+        }
+        None
     }
 }

@@ -244,6 +244,7 @@ where
             .try_resolve_typed::<TIdN<NodeIdentifier>>(&ty)
             .unwrap()
             .0;
+        let mut supertype = None;
         let mut l = if ty.get_type() == Type::Inderscore {
             None
         } else {
@@ -318,6 +319,7 @@ where
                 assert_eq!(Type::Identifier, ty.get_type());
                 // TODO properly filter using the supertype
                 // NOTE for now just ignore supertype
+                supertype = l;
                 l = {
                     let l = ty.try_get_label();
                     let l = query_store.label_store.resolve(&l.unwrap());
@@ -330,7 +332,19 @@ where
             cs.next();
         }
 
-        let mut res = Pattern::named(l, patterns);
+        let mut res = if let Some(sup) = supertype {
+            if let Some(ty) = l {
+                Pattern::SupNamedNode {
+                    sup,
+                    ty,
+                    children: patterns.into(),
+                }
+            } else {
+                Pattern::named(Some(sup), patterns)
+            }
+        } else {
+            Pattern::named(l, patterns)
+        };
         loop {
             let Some(rule_id) = cs.peek() else {
                 return res;
@@ -364,6 +378,7 @@ where
                 dbg!(capture_id);
                 dbg!(&res);
                 match &res {
+                    Pattern::SupNamedNode { .. } |
                     Pattern::NamedNode { .. } | Pattern::AnyNode { .. } => {
                         preparing.insert_quantifier_for_capture_id(capture_id, Quant::One)
                     }
@@ -622,6 +637,7 @@ where
                             }
                         },
                         Pattern::NegatedField { .. } => todo!(),
+                        Pattern::SupNamedNode { sup, ty, children } => todo!(),
                     }
                     res = Pattern::Capture {
                         name: capture_id,
