@@ -25,3 +25,6 @@ impl<'a, T: Eq, const N: usize> From<&'a CS0<T, N>> for &'a [T] {
         &cs.0
     }
 }
+
+pub struct RoleOffsets(pub Box<[u8]>);
+

@@ -253,6 +253,9 @@ impl<N: Eq + Clone + NodeId<IdN = N>, L, T> crate::types::WithChildren for Compr
         // TODO check if it work, not sure
         Some(f(self).into())
     }
+    fn role_at(&self, at: Self::ChildIdx) -> Option<crate::types::Role> {
+        todo!()
+    }
 }
 
 impl<N, L, T> crate::types::Node for CompressedNode<N, L, T> {}
@@ -607,9 +610,14 @@ where
                     let it = children.iter_children();
                     write!(out, "(")?;
                     w_kind(out)?;
+                    let mut i = num::zero();
                     for id in it {
+                        if let Some(r) = b.role_at(i) {
+                            write!(out, " {}:", r)?;
+                        }
                         write!(out, " ")?;
                         self.serialize(&id, out)?;
+                        i += num::one();
                     }
                     write!(out, ")")?;
                 }

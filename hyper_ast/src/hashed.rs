@@ -283,6 +283,10 @@ where
     fn children<'a>(&'a self) -> Option<&'a Self::Children<'a>> {
         self.node.children()
     }
+
+    fn role_at(&self, at: Self::ChildIdx) -> Option<crate::types::Role> {
+        todo!()
+    }
 }
 
 impl<

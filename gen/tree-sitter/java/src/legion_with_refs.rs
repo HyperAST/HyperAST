@@ -12,7 +12,7 @@ use hyper_ast::{
         BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics,
         TextedGlobalData, TreeGen, WithByteRange,
     },
-    types::{self, AnyType, NodeStoreExt, TypeStore, TypeTrait, WithHashs, WithStats},
+    types::{self, AnyType, NodeStoreExt, Role, TypeStore, TypeTrait, WithHashs, WithStats},
     utils,
 };
 use legion::world::EntryRef;
@@ -112,12 +112,17 @@ pub struct Local {
     pub metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
     pub ana: Option<PartialAnalysis>,
     pub mcc: Mcc,
+    pub role: Option<Role>,
 }
 
 impl Local {
     fn acc(self, acc: &mut Acc) {
         if self.metrics.size_no_spaces > 0 {
             acc.no_space.push(self.compressed_node)
+        }
+        if let Some(role) = self.role {
+            acc.roles.push(role);
+            acc.role_offsets.push(acc.simple.children.len().to_u8().unwrap());
         }
         acc.simple.push(self.compressed_node);
         acc.metrics.acc(self.metrics);
@@ -148,6 +153,9 @@ pub struct Acc {
     mcc: Mcc,
     padding_start: usize,
     indentation: Spaces,
+    role: Option<crate::types::Role>,
+    roles: Vec<crate::types::Role>,
+    role_offsets: Vec<u8>,
 }
 
 impl Accumulator for Acc {
@@ -346,6 +354,9 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
             mcc,
             padding_start: 0,
             indentation: indent,
+            role: None,
+            roles: Default::default(),
+            role_offsets: Default::default(),
         }
     }
 
@@ -373,6 +384,10 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
             return PreResult::Skip;
         }
         let mut acc = self.pre(text, node, stack, global);
+        // TODO replace with wrapper
+        if let Some(r) = cursor.0.field_name() {
+            acc.role = r.try_into().ok();
+        }
         if kind == Type::StringLiteral {
             acc.labeled = true;
             return PreResult::SkipChildren(acc);
@@ -411,6 +426,9 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
                 children: vec![],
             },
             no_space: vec![],
+            role: None,
+            roles: Default::default(),
+            role_offsets: Default::default(),
         }
     }
 
@@ -518,6 +536,7 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
             },
             ana: Default::default(),
             mcc: Mcc::new(&Type::Spaces),
+            role: None,
         }
     }
 
@@ -710,6 +729,7 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
                 metrics,
                 ana,
                 mcc,
+                role: acc.role,
             }
         } else {
             let ana = make_partial_ana(
@@ -756,6 +776,10 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
                 ));
                 if line_count > 0 {
                     dyn_builder.add(compo::LineCount(line_count));
+                }
+                if acc.roles.len() > 0 {
+                    dyn_builder.add(acc.roles.into_boxed_slice());
+                    dyn_builder.add(compo::RoleOffsets(acc.role_offsets.into_boxed_slice()));
                 }
 
                 if Mcc::persist(&acc.simple.kind) {
@@ -856,6 +880,7 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
                 metrics,
                 ana,
                 mcc,
+                role: acc.role,
             }
         };
 
@@ -1212,6 +1237,9 @@ where
                     children: vec![],
                 },
                 no_space: vec![],
+                role: Default::default(),
+                roles: Default::default(),
+                role_offsets: Default::default(),
             }
         };
         for c in cs {
@@ -1249,6 +1277,7 @@ where
                     metrics,
                     ana,
                     mcc,
+                    role: acc.role,
                 }
             };
             let global = BasicGlobalData::default();
@@ -1286,6 +1315,7 @@ where
                     metrics,
                     ana,
                     mcc,
+                    role: acc.role,
                 }
             } else {
                 let ana = None;
@@ -1330,6 +1360,7 @@ where
                     metrics,
                     ana,
                     mcc,
+                    role: acc.role,
                 }
             };
             local

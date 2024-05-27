@@ -604,6 +604,21 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     fn children(&self) -> Option<&Self::Children<'_>> {
         self.cs().ok()
     }
+
+    fn role_at(&self, at: Self::ChildIdx) -> Option<crate::types::Role> {
+        let ro = self.0.get_component::<compo::RoleOffsets>().ok()?;
+        let r = self.0.get_component::<Box<[crate::types::Role]>>().ok()?;
+        let mut i = 0;
+        for &ro in ro.0.as_ref() {
+            if ro as u16 > at {
+                return None;
+            } else if ro as u16 == at {
+                return Some(r[i]);
+            }
+            i += 1;
+        }
+        None
+    }
 }
 
 impl<'a, T> crate::types::WithHashs for HashedNodeRef<'a, T> {

@@ -336,6 +336,10 @@ impl WithChildren for Tree {
     fn children(&self) -> Option<&Self::Children<'_>> {
         Some(self.children.as_slice().into())
     }
+    
+    fn role_at(&self, at: Self::ChildIdx) -> Option<hyper_ast::types::Role> {
+        todo!()
+    }
 }
 
 impl<T: WithChildren> WithChildren for TreeRef<'_, T>
@@ -360,6 +364,10 @@ where
 
     fn children(&self) -> Option<&Self::Children<'_>> {
         self.0.children()
+    }
+    
+    fn role_at(&self, at: Self::ChildIdx) -> Option<hyper_ast::types::Role> {
+        todo!()
     }
 }
 
