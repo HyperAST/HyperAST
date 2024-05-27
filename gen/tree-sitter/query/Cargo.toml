@@ -33,6 +33,7 @@ serde = { version = "1.0.130" }
 pretty_assertions = "1.0.0"
 env_logger = "0.9.0"
 hyper_ast_gen_ts_cpp = { path = "../cpp", version = "0.1.0" }
+tree-sitter-java = { git = "https://github.com/quentinLeDilavrec/tree-sitter-java", version = "0.21.0", rev = "7699d4a296ca27fc14511bc75a1a899327f483fc" }
 hyper_ast_gen_ts_xml = { path = "../xml", version = "0.1.0" }
 criterion = { version = "0.4", features = ["rayon", "plotters", "cargo_bench_support", "html_reports", "real_blackbox"] }
 

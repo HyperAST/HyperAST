@@ -18,6 +18,7 @@ pub mod recursive2;
 
 mod iterative;
 
+pub mod steped;
 
 #[doc(hidden)]
 pub mod utils;
@@ -105,9 +106,14 @@ impl<IdN, Idx> Captured<IdN, Idx> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum Pattern<Ty> {
     NamedNode {
+        ty: Ty,
+        children: Arc<[Pattern<Ty>]>,
+    },
+    SupNamedNode {
+        sup: Ty,
         ty: Ty,
         children: Arc<[Pattern<Ty>]>,
     },
@@ -136,11 +142,52 @@ pub(crate) enum Pattern<Ty> {
     NegatedField(Field),
 }
 
+impl<Ty> Pattern<Ty> {
+    pub(crate) fn unwrap_captures(&self) -> &Self {
+        match self {
+            Pattern::Capture { name: _, pat } => pat.unwrap_captures(),
+            x => x,
+        }
+    }
+    pub(crate) fn is_any_node(&self) -> bool {
+        match self {
+            Pattern::AnyNode { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn is_anonymous(&self) -> bool {
+        match self {
+            Pattern::AnonymousNode { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn is_optional_match(&self) -> bool {
+        match self {
+            Pattern::NamedNode { .. }
+            | Pattern::SupNamedNode { .. }
+            | Pattern::AnyNode { .. }
+            | Pattern::Dot
+            | Pattern::NegatedField(_)
+            | Pattern::List(_)
+            | Pattern::AnonymousNode(_) => false,
+            Pattern::FieldDefinition { pat, .. } | Pattern::Capture { pat, .. } => {
+                pat.is_optional_match()
+            }
+            Pattern::Predicated { predicate, pat } => todo!(),
+            Pattern::Quantified { quantifier: q, .. } => {
+                *q == Quant::Zero || *q == Quant::ZeroOrMore || *q == Quant::ZeroOrOne
+            }
+        }
+    }
+}
+
 type Field = String;
 
 type CaptureId = u32;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum Predicate<I = CaptureId> {
     Eq { left: I, right: I },
     EqString { left: I, right: String },
@@ -190,7 +237,7 @@ impl Predicate<String> {
 #[derive(Debug)]
 pub(crate) struct MatchingRes<IdN = NodeIdentifier, Idx = u16> {
     matched: tree_sitter::CaptureQuantifier,
-    captures: Vec<CaptureRes<IdN, Idx>>,
+    pub(crate) captures: Vec<CaptureRes<IdN, Idx>>,
 }
 
 impl<IdN, Idx> MatchingRes<IdN, Idx> {

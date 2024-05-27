@@ -2556,6 +2556,7 @@ dependencies = [
  "bitvec",
  "cfg-if",
  "controlled-option",
+ "criterion 0.4.0",
  "enumset",
  "env_logger",
  "hashbrown 0.13.2",
@@ -2570,6 +2571,7 @@ dependencies = [
  "serde",
  "string-interner 0.14.0",
  "tree-sitter 0.22.5",
+ "tree-sitter-java 0.21.0 (git+https://github.com/quentinLeDilavrec/tree-sitter-java?rev=7699d4a296ca27fc14511bc75a1a899327f483fc)",
  "tree-sitter-query",
  "tuples",
 ]
