@@ -324,6 +324,7 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
         height,
         hashs,
         size_no_spaces,
+        line_count: 0,
     };
 
     let full_node = (

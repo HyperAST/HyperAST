@@ -176,6 +176,7 @@ impl MakeModuleAcc {
             size: full_node.metrics.size,
             height: full_node.metrics.height,
             size_no_spaces: full_node.metrics.size_no_spaces,
+            line_count: 0,
         });
     }
     pub(crate) fn push_source_directory(
@@ -190,6 +191,7 @@ impl MakeModuleAcc {
             size: full_node.metrics.size,
             height: full_node.metrics.height,
             size_no_spaces: full_node.metrics.size_no_spaces,
+            line_count: 0,
         });
         // TODO ana
         // full_node.2.acc(&Type::Directory, &mut self.ana);
@@ -206,6 +208,7 @@ impl MakeModuleAcc {
             size: full_node.metrics.size,
             height: full_node.metrics.height,
             size_no_spaces: full_node.metrics.size_no_spaces,
+            line_count: 0,
         });
         // TODO ana
         // full_node.2.acc(&Type::Directory, &mut self.ana);

@@ -475,6 +475,10 @@ impl<'a, T> types::WithStats for NoSpaceWrapper<'a, T> {
     fn height(&self) -> usize {
         self.inner.height()
     }
+
+    fn line_count(&self) -> usize {
+        self.inner.line_count()
+    }
 }
 
 impl<'a, T> types::WithSerialization for NoSpaceWrapper<'a, T> {

@@ -157,10 +157,6 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithChildren
     fn children(&self) -> Option<&Self::Children<'_>> {
         self.cs()
     }
-
-    fn role_at(&self, at: Self::ChildIdx) -> Option<crate::types::Role> {
-        todo!()
-    }
 }
 
 impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithHashs for HashedNodeRef<'a, Id> {

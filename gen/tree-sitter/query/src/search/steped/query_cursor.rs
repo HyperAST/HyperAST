@@ -1,22 +1,16 @@
-use num::traits::SaturatingSub;
-
-use crate::search::steped::query_step;
-
 use super::{
-    Node, QueryCursor, Status, Symbol, TreeCursorStep, NONE, PATTERN_DONE_MARKER, WILDCARD_SYMBOL,
+    Node, QueryCursor, Symbol, TreeCursorStep, NONE, PATTERN_DONE_MARKER, WILDCARD_SYMBOL,
 };
 
 // Walk the tree, processing patterns until at least one pattern finishes,
 // If one or more patterns finish, return `true` and store their states in the
 // `finished_states` array. Multiple patterns can finish on the same node. If
 // there are no more matches, return `false`.
-impl<Cursor: super::Cursor> QueryCursor<Cursor, Cursor::Node> {
+impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
     #[allow(unused)]
     pub(crate) fn advance(&mut self, stop_on_definite_step: bool) -> bool {
-        dbg!(self.depth);
         let mut did_match = false;
         loop {
-            dbg!(self.depth);
             if self.halted {
                 while (self.states.len() > 0) {
                     let state = self.states.pop().unwrap();
@@ -166,18 +160,12 @@ impl<Cursor: super::Cursor> QueryCursor<Cursor, Cursor::Node> {
         if self.on_visible_node {
             let symbol = node.symbol();
             let is_named = node.is_named();
-            let Status {
-                has_later_siblings,
-                has_later_named_siblings,
-                can_have_later_siblings_with_this_field,
-                field_id,
-                supertypes,
-            } = self.cursor.current_status();
+            let status = self.cursor.current_status();
             log::trace!(
               "enter node. depth:{}, type:{}, field:{}, row:{} state_count:{}, finished_state_count:{}",
               self.depth,
               node.str_symbol(),
-              query.field_name(field_id),
+              query.field_name(status.field_id),
               node.start_point().row,
               self.states.len(),
               self.finished_states.len()
@@ -200,9 +188,9 @@ impl<Cursor: super::Cursor> QueryCursor<Cursor, Cursor::Node> {
                     } else {
                         parent_intersects_range && !parent_is_error
                     };
-                    should_add &= (!step.field > 0 || field_id == step.field)
+                    should_add &= (!step.field > 0 || status.field_id == step.field)
                         && (Symbol::from(step.supertype_symbol) == Symbol::NONE
-                            || !supertypes.is_empty())
+                            || !status.supertypes.is_empty())
                         && (start_depth <= self.max_start_depth);
                     if should_add {
                         self.add_state(pattern);
@@ -221,13 +209,13 @@ impl<Cursor: super::Cursor> QueryCursor<Cursor, Cursor::Node> {
                     // state at the start of this pattern.
                     if pattern.is_rooted {
                         if node_intersects_range
-                            && (!step.field > 0 || field_id == step.field)
+                            && (!step.field > 0 || status.field_id == step.field)
                             && (start_depth <= self.max_start_depth)
                         {
                             self.add_state(pattern);
                         }
                     } else if (parent_intersects_range && !parent_is_error)
-                        && (!step.field > 0 || field_id == step.field)
+                        && (!step.field > 0 || status.field_id == step.field)
                         && (start_depth <= self.max_start_depth)
                     {
                         self.add_state(pattern);
@@ -288,38 +276,39 @@ impl<Cursor: super::Cursor> QueryCursor<Cursor, Cursor::Node> {
                 if Symbol::from(state!(@step).symbol) == WILDCARD_SYMBOL {
                     node_does_match = !node_is_error && (is_named || !state!(@step).is_named());
                 } else {
-                    let s = state!(@step).symbol;
-                    dbg!(query_step::symbol_name(
-                        unsafe { self.query.as_ref().unwrap() },
-                        symbol.to_usize() as u16
-                    ));
-                    dbg!(query_step::symbol_name(
-                        unsafe { self.query.as_ref().unwrap() },
-                        s
-                    ));
+                    // let s = state!(@step).symbol;
+                    // dbg!(query_step::symbol_name(
+                    //     unsafe { self.query.as_ref().unwrap() },
+                    //     symbol.to_usize() as u16
+                    // ));
+                    // dbg!(query_step::symbol_name(
+                    //     unsafe { self.query.as_ref().unwrap() },
+                    //     s
+                    // ));
                     node_does_match = symbol == Symbol::from(state!(@step).symbol);
                 }
-                let mut later_sibling_can_match = has_later_siblings;
+                let mut later_sibling_can_match = status.has_later_siblings;
                 if (state!(@step).is_immediate() && is_named) || state!().seeking_immediate_match {
                     later_sibling_can_match = false;
                 }
-                if state!(@step).is_last_child() && has_later_named_siblings {
+                if state!(@step).is_last_child() && status.has_later_named_siblings {
                     node_does_match = false;
                 }
                 let ss = state!(@step).supertype_symbol;
-                dbg!(query_step::symbol_name(
-                    unsafe { self.query.as_ref().unwrap() },
-                    ss
-                ));
                 if Symbol::from(ss) != Symbol::END {
-                    let has_supertype = supertypes.contains(&state!(@step).supertype_symbol.into());
+                    // dbg!(query_step::symbol_name(
+                    //     unsafe { self.query.as_ref().unwrap() },
+                    //     ss
+                    // ));
+                    self.cursor.current_status();
+                    let has_supertype = status.supertypes.contains(&state!(@step).supertype_symbol.into());
                     if !has_supertype {
                         node_does_match = false
                     };
                 }
                 if state!(@step).field > 0 {
-                    if state!(@step).field == field_id {
-                        if !can_have_later_siblings_with_this_field {
+                    if state!(@step).field == status.field_id {
+                        if !status.can_have_later_siblings_with_this_field {
                             later_sibling_can_match = false;
                         }
                     } else {
@@ -331,7 +320,7 @@ impl<Cursor: super::Cursor> QueryCursor<Cursor, Cursor::Node> {
                     let negated_field_ids =
                         &query.negated_fields[state!(@step).negated_field_list_id as usize..];
                     for negated_field_id in negated_field_ids {
-                        if node.child_by_field_id(*negated_field_id).id() > 0 {
+                        if node.child_by_field_id(*negated_field_id).is_some() { // .id() > 0 // TODO make a more specialized accessor -> better opt and simple to impl
                             node_does_match = false;
                             break;
                         }
@@ -382,7 +371,7 @@ impl<Cursor: super::Cursor> QueryCursor<Cursor, Cursor::Node> {
                     if let Some(parent) = self.cursor.parent_node() {
                         state!().needs_parent = false;
                         let mut skipped_wildcard = state!(@index);
-                        loop {
+                        while skipped_wildcard > 0 {
                             skipped_wildcard -= 1;
                             if state!(@step skipped_wildcard).is_dead_end()
                                 || state!(@step skipped_wildcard).is_pass_through()
@@ -390,11 +379,11 @@ impl<Cursor: super::Cursor> QueryCursor<Cursor, Cursor::Node> {
                             {
                                 continue;
                             }
+                            if state!(@step skipped_wildcard).capture_ids[0] != NONE {
+                                log::trace!("  capture wildcard parent");
+                                self.capture(state!(@index), skipped_wildcard, &parent);
+                            }
                             break;
-                        }
-                        if state!(@step skipped_wildcard).capture_ids[0] != NONE {
-                            log::trace!("  capture wildcard parent");
-                            self.capture(state!(@index), skipped_wildcard, &parent);
                         }
                     } else {
                         log::trace!("  missing parent node");
@@ -436,10 +425,15 @@ impl<Cursor: super::Cursor> QueryCursor<Cursor, Cursor::Node> {
                     //   QueryState *child_state = &self->states.contents[k];
                     //   QueryStep *child_step = &self->query->steps.contents[child_state->step_index];
                     let mut _k = k;
+                    let _s = state!(_k).step_index;
                     // let mut child_step = &mut self.query.steps[self.states[_k].step_index as usize];
                     // let mut child_state = &mut self.states[_k];
-                    dbg!(self.states.len());
-                    dbg!(unsafe { &(*self.query).steps }.len());
+                    // dbg!(self.states.len());
+                    // dbg!(unsafe { &(*self.query).steps }.len());
+                    // dbg!(_j, _k);
+                    // dbg!(state!(_k).step_index);
+                    // dbg!(state!(@step).alternative_index);
+                    // dbg!(state!(@step _k).alternative_index);
                     if state!(@step _k).alternative_index != NONE {
                         // A "dead-end" step exists only to add a non-sequential jump into the step sequence,
                         // via its alternative index. When a state reaches a dead-end step, it jumps straight
@@ -452,9 +446,10 @@ impl<Cursor: super::Cursor> QueryCursor<Cursor, Cursor::Node> {
                         // A "pass-through" step exists only to add a branch into the step sequence,
                         // via its alternative_index. When a state reaches a pass-through step, it splits
                         // in order to process the alternative step, and then it advances to the next step.
-                        if state!(@step _k).is_pass_through() {
+                        let pt = state!(@step _k).is_pass_through();
+                        if pt {
+                            // dbg!();
                             state!(_k).step_index += 1;
-                            k -= 1;
                         }
 
                         if let Some(_copy) = self.copy_state(&mut _k) {
@@ -468,14 +463,21 @@ impl<Cursor: super::Cursor> QueryCursor<Cursor, Cursor::Node> {
                             );
                             end_index += 1;
                             copy_count += 1;
-                            state!(_copy).step_index = state!(@step _k).alternative_index;
-                            if state!(@step _k).alternative_is_immediate() {
+                            // dbg!(state!(_k).step_index, _k, _copy);
+                            // dbg!(state!(@step _k).alternative_index);
+                            state!(_copy).step_index = query.steps[_s as usize].alternative_index;
+                            if query.steps[_s as usize].alternative_is_immediate() {
                                 state!(_copy).seeking_immediate_match = true;
                             }
                         }
+                        if !pt {
+                            k += 1;
+                        }
+                    } else {
+                        k += 1;
                     }
-                    k += 1;
                 }
+                j += 1 + copy_count;
             }
 
             let mut j = 0;
@@ -590,22 +592,16 @@ impl<Cursor: super::Cursor> QueryCursor<Cursor, Cursor::Node> {
     }
 
     pub fn next_match(&mut self) -> Option<QueryMatch<Cursor::Node>> {
-        dbg!(self.depth);
         if self.finished_states.len() == 0 {
-            dbg!(self.depth);
             if !self.advance(false) {
-                dbg!(self.depth);
-                dbg!(self.finished_states.len());
                 return None;
             }
         }
-        dbg!(self.depth);
-        dbg!(self.finished_states.len());
 
         let mut state = self.finished_states.pop_front().unwrap();
         if state.id == u32::MAX {
-            self.next_state_id += 1;
             state.id = self.next_state_id;
+            self.next_state_id += 1;
         };
         let id = state.id;
         let pattern_index = state.pattern_index as usize;

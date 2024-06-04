@@ -604,10 +604,12 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     fn children(&self) -> Option<&Self::Children<'_>> {
         self.cs().ok()
     }
+    }
 
-    fn role_at(&self, at: Self::ChildIdx) -> Option<crate::types::Role> {
+impl<'a, T> crate::types::WithRoles for HashedNodeRef<'a, T> {
+    fn role_at<Role: 'static + Copy + std::marker::Sync + std::marker::Send>(&self, at: Self::ChildIdx) -> Option<Role> {
         let ro = self.0.get_component::<compo::RoleOffsets>().ok()?;
-        let r = self.0.get_component::<Box<[crate::types::Role]>>().ok()?;
+        let r = self.0.get_component::<Box<[Role]>>().ok()?;
         let mut i = 0;
         for &ro in ro.0.as_ref() {
             if ro as u16 > at {

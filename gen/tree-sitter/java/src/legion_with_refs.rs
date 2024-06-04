@@ -32,7 +32,6 @@ use hyper_ast::{
         nodes::DefaultNodeStore as NodeStore,
         SimpleStores,
     },
-    tree_gen::parser::Node as _,
     tree_gen::{
         compute_indentation, get_spacing, has_final_space, AccIndentation, Accumulator,
         BasicAccumulator, Spaces, ZippedTreeGen,
@@ -122,7 +121,8 @@ impl Local {
         }
         if let Some(role) = self.role {
             acc.roles.push(role);
-            acc.role_offsets.push(acc.simple.children.len().to_u8().unwrap());
+            acc.role_offsets
+                .push(acc.simple.children.len().to_u8().unwrap());
         }
         acc.simple.push(self.compressed_node);
         acc.metrics.acc(self.metrics);
@@ -203,10 +203,10 @@ impl Debug for Acc {
 /// enables recovering of hidden nodes from tree-sitter
 #[cfg(not(debug_assertions))]
 const HIDDEN_NODES: bool = true;
-#[cfg(debug_assertions)]
 /// enables recovering of hidden nodes from tree-sitter
 // NOTE static mut allows me to change it in unit tests
-pub(crate) static mut HIDDEN_NODES: bool = false;
+#[cfg(debug_assertions)]
+pub static mut HIDDEN_NODES: bool = false;
 
 #[cfg(not(debug_assertions))]
 const fn should_get_hidden_nodes() -> bool {
@@ -230,6 +230,7 @@ impl<'a> Debug for TTreeCursor<'a> {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+#[allow(unused)]
 enum TreeCursorStep {
     TreeCursorStepNone,
     TreeCursorStepHidden,
@@ -385,8 +386,13 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
         }
         let mut acc = self.pre(text, node, stack, global);
         // TODO replace with wrapper
-        if let Some(r) = cursor.0.field_name() {
-            acc.role = r.try_into().ok();
+        if !stack
+            .parent()
+            .map_or(false, |a| a.simple.kind.is_supertype())
+        {
+            if let Some(r) = cursor.0.field_name() {
+                acc.role = r.try_into().ok();
+            }
         }
         if kind == Type::StringLiteral {
             acc.labeled = true;
@@ -1199,6 +1205,7 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, AnyType>>>
 where
     <TS as TypeStore<HashedNodeRef<'stores, AnyType>>>::Ty: TypeTrait,
 {
+    #[allow(unused)]
     fn build_then_insert(
         &mut self,
         i: <HashedNode as hyper_ast::types::Stored>::TreeId,

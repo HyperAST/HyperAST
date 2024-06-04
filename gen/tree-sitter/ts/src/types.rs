@@ -50,6 +50,9 @@ mod legion_impls {
         ) -> bool {
             n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
         }
+        fn type_to_u16(&self, t: Self::Ty) -> u16 {
+            tree_sitter_typescript::language_typescript().id_for_node_kind(t.as_static_str(), t.is_named())
+        }
     }
     impl<'a> TsEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         const LANG: TypeInternalSize = Self::Ts as u16;
@@ -176,6 +179,10 @@ impl LangRef<AnyType> for Ts {
     fn name(&self) -> &'static str {
         std::any::type_name::<Ts>()
     }
+
+    fn ts_symbol(&self, t: AnyType) -> u16 {
+        tree_sitter_typescript::language_typescript().id_for_node_kind(t.as_static_str(), t.is_named())
+    }
 }
 
 impl LangRef<Type> for Ts {
@@ -188,6 +195,10 @@ impl LangRef<Type> for Ts {
 
     fn name(&self) -> &'static str {
         std::any::type_name::<Ts>()
+    }
+
+    fn ts_symbol(&self, t: Type) -> u16 {
+        tree_sitter_typescript::language_typescript().id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 
@@ -272,11 +283,18 @@ impl HyperType for Type {
         todo!()
     }
 
+    fn is_named(&self) -> bool {
+        todo!()
+    }
+
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,
     {
         From::<&'static (dyn LangRef<Self>)>::from(&Ts)
+    }
+    fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
+        todo!()
     }
 }
 impl TypeTrait for Type {

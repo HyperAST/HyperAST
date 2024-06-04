@@ -306,6 +306,7 @@ pub(crate) fn make(mut acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeId
         height,
         hashs,
         size_no_spaces,
+        line_count: 0,
     };
 
     let full_node = (node_id.clone(), MD { metrics, ana });

@@ -122,6 +122,9 @@ impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
             }
         )
     }
+    fn type_to_u16(&self, t: Self::Ty) -> u16 {
+        t.get_lang().ts_symbol(t)
+    }
 }
 
 #[allow(unused)] // TODO find a better way of declaring type stores
@@ -160,8 +163,11 @@ impl<'a> TypeStore<HashedNodeRef<'a, MIdN<NodeIdentifier>>> for TStore {
         &self,
         n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>,
         m: &HashedNodeRef<'a, MIdN<NodeIdentifier>>,
-    ) -> bool {            
+    ) -> bool {
         todo!("{:?} {:?}", n, m)
+    }
+    fn type_to_u16(&self, t: Self::Ty) -> u16 {
+        t.get_lang().ts_symbol(t)
     }
 }
 
@@ -207,6 +213,9 @@ impl<'a> TypeStore<NoSpaceWrapper<'a, NodeIdentifier>> for TStore {
         _m: &NoSpaceWrapper<'a, NodeIdentifier>,
     ) -> bool {
         todo!()
+    }
+    fn type_to_u16(&self, t: Self::Ty) -> u16 {
+        t.get_lang().ts_symbol(t)
     }
 }
 // impl<'a, I: AsRef<HashedNodeRef<'a, NodeIdentifier>>> TypeStore<I> for &TStore {
@@ -257,6 +266,9 @@ impl<'a> TypeStore<HashedNodeRef<'a, MIdN<NodeIdentifier>>> for &TStore {
     ) -> bool {
         todo!("{:?} {:?}", n, m)
     }
+    fn type_to_u16(&self, t: Self::Ty) -> u16 {
+        t.get_lang().ts_symbol(t)
+    }
 }
 
 impl<'a> TypeStore<NoSpaceWrapper<'a, MIdN<NodeIdentifier>>> for &TStore {
@@ -287,6 +299,9 @@ impl<'a> TypeStore<NoSpaceWrapper<'a, MIdN<NodeIdentifier>>> for &TStore {
         _m: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>,
     ) -> bool {
         todo!()
+    }
+    fn type_to_u16(&self, t: Self::Ty) -> u16 {
+        t.get_lang().ts_symbol(t)
     }
 }
 
@@ -382,9 +397,11 @@ impl<'a> TypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIden
     ) -> bool {
         todo!("{:?} {:?}", n, m)
     }
+    fn type_to_u16(&self, t: Self::Ty) -> u16 {
+        t.get_lang().ts_symbol(t)
+    }
 }
-impl<'a>
-    JavaEnabledTypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>>
+impl<'a> JavaEnabledTypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>>
     for TStore
 {
 }
@@ -425,15 +442,17 @@ impl<'a> TypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdent
     ) -> bool {
         todo!("{:?} {:?}", n, m)
     }
+    fn type_to_u16(&self, t: Self::Ty) -> u16 {
+        t.get_lang().ts_symbol(t)
+    }
 }
-impl<'a>
-    XmlEnabledTypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>>>
+impl<'a> XmlEnabledTypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>>>
     for TStore
 {
     const LANG: u16 = 0;
 
     fn _intern(l: u16, t: u16) -> Self::Ty {
-        unimplemented!("remove _intern {} {}", l , t)
+        unimplemented!("remove _intern {} {}", l, t)
     }
 
     fn resolve(&self, t: Self::Ty) -> hyper_ast_gen_ts_xml::types::Type {
@@ -478,14 +497,15 @@ impl<'a> TypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdent
         todo!("{:?} {:?}", n, m)
     }
 }
-impl<'a>
-    CppEnabledTypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>>
+impl<'a> CppEnabledTypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>>
     for TStore
 {
     const LANG: u16 = 0;
 
     fn _intern(l: u16, t: u16) -> Self::Ty {
-        *<hyper_ast_gen_ts_cpp::types::Cpp as hyper_ast::types::Lang::<hyper_ast_gen_ts_cpp::types::Type>>::make(t)
+        *<hyper_ast_gen_ts_cpp::types::Cpp as hyper_ast::types::Lang<
+            hyper_ast_gen_ts_cpp::types::Type,
+        >>::make(t)
     }
 
     fn resolve(&self, t: Self::Ty) -> hyper_ast_gen_ts_cpp::types::Type {
@@ -573,7 +593,7 @@ impl HyperType for MultiType {
     fn as_static(&self) -> &'static dyn HyperType {
         on_multi!(self, t => t.as_static())
     }
-    
+
     fn as_static_str(&self) -> &'static str {
         on_multi!(self, t => t.to_str())
     }
@@ -586,15 +606,54 @@ impl HyperType for MultiType {
         on_multi!(self, t => t.is_supertype())
     }
 
+    fn is_named(&self) -> bool {
+        on_multi!(self, t => t.is_named())
+    }
+
     fn get_lang(&self) -> LangWrapper<Self>
     where
         Self: Sized,
     {
-        // self.0.get_lang()
-        panic!()
+        match self {
+            MultiType::Java(t) => {
+                LangWrapper::from(&MultiLang::Java as &'static dyn LangRef<MultiType>)
+            }
+            MultiType::Cpp(t) => {
+                LangWrapper::from(&MultiLang::Cpp as &'static dyn LangRef<MultiType>)
+            }
+            MultiType::Xml(t) => {
+                LangWrapper::from(&MultiLang::Xml as &'static dyn LangRef<MultiType>)
+            }
+        }
+    }
+    fn lang_ref(&self) -> LangWrapper<AnyType> {
+        todo!()
     }
 }
 
+enum MultiLang {
+    Java,
+    Cpp,
+    Xml,
+}
+
+impl LangRef<MultiType> for MultiLang {
+    fn name(&self) -> &'static str {
+        todo!()
+    }
+
+    fn make(&self, t: u16) -> &'static MultiType {
+        unimplemented!()
+    }
+
+    fn to_u16(&self, t: MultiType) -> u16 {
+        todo!()
+    }
+
+    fn ts_symbol(&self, t: MultiType) -> u16 {
+        todo!()
+    }
+}
 
 #[test]
 fn type_test_generic_eq() {

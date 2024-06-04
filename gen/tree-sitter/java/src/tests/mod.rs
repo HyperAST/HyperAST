@@ -4,6 +4,8 @@ mod tree_sitter_types_test;
 
 #[cfg(feature="tsg")]
 mod tsg_hyperast;
+
+#[cfg(feature="tsg")]
 mod tsqueries_java;
 
 // fn f() {

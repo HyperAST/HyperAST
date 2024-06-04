@@ -36,6 +36,22 @@ impl<TS: Default, NS: Default, LS: Default> Default for SimpleStores<TS, NS, LS>
     }
 }
 
+impl<TS, NS, LS> crate::types::RoleStore for SimpleStores<TS, NS, LS>
+where
+    TS: crate::types::RoleStore,
+{
+    type IdF = TS::IdF;
+
+    type Role = TS::Role;
+
+    fn resolve_field(&self, field_id: Self::IdF) -> Self::Role {
+        self.type_store.resolve_field(field_id)
+    }
+    fn intern_role(&self, role: Self::Role) -> Self::IdF {
+        self.type_store.intern_role(role)
+    }
+}
+
 impl<IdN, TS, NS, LS> crate::types::NodeStore<IdN> for SimpleStores<TS, NS, LS>
 where
     for<'a> NS::R<'a>: crate::types::Tree<TreeId = IdN>,
@@ -109,6 +125,9 @@ where
     }
     fn type_eq(&self, n: &T, m: &T) -> bool {
         self.type_store.type_eq(n, m)
+    }
+    fn type_to_u16(&self, t: Self::Ty) -> u16 {
+        self.type_store.type_to_u16(t)
     }
 }
 

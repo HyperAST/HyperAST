@@ -9,7 +9,6 @@ use hyper_ast::{
         TypedTreePath,
     },
     store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores},
-    tree_gen::ZippedTreeGen,
     types::{NodeId, Typed, WithChildren},
     utils::memusage,
 };

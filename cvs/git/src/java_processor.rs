@@ -210,6 +210,7 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
             height,
             size_no_spaces,
             hashs,
+            line_count: 0,
         };
 
         (ana, metrics)
@@ -224,6 +225,7 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
             metrics,
             ana: Some(ana),
             mcc: Mcc::new(&Type::Directory),
+            role: None
         };
     }
 
@@ -247,6 +249,7 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
         metrics,
         ana: Some(ana.clone()),
         mcc: Mcc::new(&Type::Directory),
+        role: None
     };
     full_node
 }

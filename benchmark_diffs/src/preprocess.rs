@@ -447,6 +447,7 @@ fn make(
             height,
             size_no_spaces,
             hashs,
+            line_count: 0
         };
 
         (ana, metrics)
@@ -459,6 +460,7 @@ fn make(
             metrics,
             ana: Some(ana),
             mcc: Mcc::new(&Type::Directory),
+            role: None,
         };
     }
 
@@ -482,6 +484,7 @@ fn make(
         metrics,
         ana: Some(ana.clone()),
         mcc: Mcc::new(&Type::Directory),
+        role: None,
     };
     full_node
 }

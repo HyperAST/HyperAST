@@ -253,9 +253,6 @@ impl<N: Eq + Clone + NodeId<IdN = N>, L, T> crate::types::WithChildren for Compr
         // TODO check if it work, not sure
         Some(f(self).into())
     }
-    fn role_at(&self, at: Self::ChildIdx) -> Option<crate::types::Role> {
-        todo!()
-    }
 }
 
 impl<N, L, T> crate::types::Node for CompressedNode<N, L, T> {}
@@ -496,9 +493,11 @@ pub type LabelSerializer<'a, 'b, IdN, HAST> =
 pub type IdsSerializer<'a, 'b, IdN, HAST> =
     SimpleSerializer<'a, IdN, HAST, false, false, true, false>;
 pub type SyntaxSerializer<'a, 'b, IdN, HAST, const SPC: bool = false> =
-    SimpleSerializer<'a, IdN, HAST, true, true, false, true>;
+    SimpleSerializer<'a, IdN, HAST, true, true, false, true, false>;
 pub type SyntaxWithIdsSerializer<'a, 'b, IdN, HAST, const SPC: bool = false> =
-    SimpleSerializer<'a, IdN, HAST, true, true, true, SPC>;
+    SimpleSerializer<'a, IdN, HAST, true, true, true, SPC, false>;
+pub type SyntaxWithFieldsSerializer<'a, 'b, IdN, HAST, const SPC: bool = false> =
+    SimpleSerializer<'a, IdN, HAST, true, true, true, SPC, true>;
 
 pub struct SimpleSerializer<
     'a,
@@ -508,6 +507,7 @@ pub struct SimpleSerializer<
     const LABELS: bool = false,
     const IDS: bool = false,
     const SPC: bool = false,
+    const ROLES: bool = false,
 > {
     stores: &'a HAST,
     root: IdN,
@@ -522,14 +522,14 @@ impl<'store, IdN, HAST, const TY: bool, const LABELS: bool, const IDS: bool, con
 }
 
 impl<'store, IdN, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool>
-    Display for SimpleSerializer<'store, IdN, HAST, TY, LABELS, IDS, SPC>
+    Display for SimpleSerializer<'store, IdN, HAST, TY, LABELS, IDS, SPC, false>
 where
     IdN: NodeId<IdN = IdN> + Debug,
     HAST: crate::types::NodeStore<IdN>,
     HAST: crate::types::LabelStore<str>,
     HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST::R<'store>:
-        crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
+    HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
+        + crate::types::WithChildren<TreeId = IdN>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, f)
@@ -537,14 +537,134 @@ where
 }
 
 impl<'store, IdN, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool>
-    SimpleSerializer<'store, IdN, HAST, TY, LABELS, IDS, SPC>
+    Display for SimpleSerializer<'store, IdN, HAST, TY, LABELS, IDS, SPC, true>
 where
     IdN: NodeId<IdN = IdN> + Debug,
     HAST: crate::types::NodeStore<IdN>,
     HAST: crate::types::LabelStore<str>,
     HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST::R<'store>:
-        crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
+    HAST: crate::types::RoleStore,
+    HAST::Role: Display,
+    HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
+        + crate::types::WithChildren<TreeId = IdN>
+        + crate::types::WithRoles,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.serialize(&self.root, f)
+    }
+}
+
+impl<'store, IdN, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool>
+    SimpleSerializer<'store, IdN, HAST, TY, LABELS, IDS, SPC, false>
+where
+    IdN: NodeId<IdN = IdN> + Debug,
+    HAST: crate::types::NodeStore<IdN>,
+    HAST: crate::types::LabelStore<str>,
+    HAST: crate::types::TypeStore<HAST::R<'store>>,
+    HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
+        + crate::types::WithChildren<TreeId = IdN>,
+{
+    // pub fn tree_syntax_with_ids(
+    fn serialize(
+        &self,
+        id: &IdN,
+        out: &mut std::fmt::Formatter<'_>,
+    ) -> Result<(), std::fmt::Error> {
+        use crate::types::LabelStore;
+        use crate::types::Labeled;
+        use crate::types::NodeStore;
+        use crate::types::WithChildren;
+        let b = NodeStore::resolve(self.stores, id);
+        // let kind = (self.stores.type_store(), b);
+        let kind = self.stores.resolve_type(&b);
+        let label = b.try_get_label();
+        let children = b.children();
+
+        if kind.is_spaces() {
+            if SPC {
+                let s = LabelStore::resolve(self.stores, &label.unwrap());
+                let b: String = Space::format_indentation(s.as_bytes())
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect();
+                write!(out, "(")?;
+                if IDS { write!(out, "{:?}", id) } else { Ok(()) }.and_then(|x| {
+                    if TY {
+                        write!(out, "_",)
+                    } else {
+                        Ok(x)
+                    }
+                })?;
+                if LABELS {
+                    write!(out, " {:?}", Space::format_indentation(b.as_bytes()))?;
+                }
+                write!(out, ")")?;
+            }
+            return Ok(());
+        }
+
+        let w_kind = |out: &mut std::fmt::Formatter<'_>| {
+            if IDS { write!(out, "{:?}", id) } else { Ok(()) }.and_then(|x| {
+                if TY {
+                    write!(out, "{}", kind.to_string())
+                } else {
+                    Ok(x)
+                }
+            })
+        };
+
+        match (label, children) {
+            (None, None) => {
+                w_kind(out)?;
+            }
+            (label, Some(children)) => {
+                if let Some(label) = label {
+                    let s = LabelStore::resolve(self.stores, label);
+                    if LABELS {
+                        write!(out, " {:?}", Space::format_indentation(s.as_bytes()))?;
+                    }
+                }
+                if !children.is_empty() {
+                    let it = children.iter_children();
+                    write!(out, "(")?;
+                    w_kind(out)?;
+                    for id in it {
+                        write!(out, " ")?;
+                        self.serialize(&id, out)?;
+                    }
+                    write!(out, ")")?;
+                }
+            }
+            (Some(label), None) => {
+                write!(out, "(")?;
+                w_kind(out)?;
+                if LABELS {
+                    let s = LabelStore::resolve(self.stores, label);
+                    if s.len() > 20 {
+                        write!(out, "='{}...'", &s[..20])?;
+                    } else {
+                        write!(out, "='{}'", s)?;
+                    }
+                }
+                write!(out, ")")?;
+            }
+        }
+        return Ok(());
+    }
+}
+
+impl<'store, IdN, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool>
+    SimpleSerializer<'store, IdN, HAST, TY, LABELS, IDS, SPC, true>
+where
+    IdN: NodeId<IdN = IdN> + Debug,
+    HAST: crate::types::NodeStore<IdN>,
+    HAST: crate::types::LabelStore<str>,
+    HAST: crate::types::TypeStore<HAST::R<'store>>,
+    HAST: crate::types::RoleStore,
+    HAST::Role: Display,
+    HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
+        + crate::types::WithChildren<TreeId = IdN>
+        + crate::types::WithRoles,
 {
     // pub fn tree_syntax_with_ids(
     fn serialize(
@@ -612,7 +732,8 @@ where
                     w_kind(out)?;
                     let mut i = num::zero();
                     for id in it {
-                        if let Some(r) = b.role_at(i) {
+                        use crate::types::WithRoles;
+                        if let Some(r) = b.role_at::<HAST::Role>(i) {
                             write!(out, " {}:", r)?;
                         }
                         write!(out, " ")?;

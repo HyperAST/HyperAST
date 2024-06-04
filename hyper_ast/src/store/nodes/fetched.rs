@@ -269,10 +269,6 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     fn children(&self) -> Option<&Self::Children<'_>> {
         self._children().map(|x| x.into())
     }
-
-    fn role_at(&self, at: Self::ChildIdx) -> Option<crate::types::Role> {
-        todo!()
-    }
 }
 
 impl<'a, T: TypedNodeId> crate::types::Tree for HashedNodeRef<'a, T>

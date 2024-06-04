@@ -175,7 +175,7 @@ impl<Ty> Pattern<Ty> {
             Pattern::FieldDefinition { pat, .. } | Pattern::Capture { pat, .. } => {
                 pat.is_optional_match()
             }
-            Pattern::Predicated { predicate, pat } => todo!(),
+            Pattern::Predicated { .. } => todo!(),
             Pattern::Quantified { quantifier: q, .. } => {
                 *q == Quant::Zero || *q == Quant::ZeroOrMore || *q == Quant::ZeroOrOne
             }

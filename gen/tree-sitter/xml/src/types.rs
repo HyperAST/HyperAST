@@ -99,6 +99,9 @@ mod legion_impls {
         ) -> bool {
             todo!()
         }
+        fn type_to_u16(&self, t: Self::Ty) -> u16 {
+            tree_sitter_xml::language_xml().id_for_node_kind(t.as_static_str(), t.is_named())
+        }
     }
 }
 pub fn as_any(t: &Type) -> AnyType {
@@ -183,6 +186,10 @@ impl LangRef<Type> for Xml {
     fn to_u16(&self, t: Type) -> u16 {
         t as u16
     }
+
+    fn ts_symbol(&self, t: Type) -> u16 {
+        tree_sitter_xml::language_xml().id_for_node_kind(t.as_static_str(), t.is_named())
+    }
 }
 
 impl LangRef<AnyType> for Xml {
@@ -196,6 +203,10 @@ impl LangRef<AnyType> for Xml {
 
     fn to_u16(&self, _t: AnyType) -> u16 {
         todo!()
+    }
+
+    fn ts_symbol(&self, t: AnyType) -> u16 {
+        tree_sitter_xml::language_xml().id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 impl HyperType for Type {
@@ -312,10 +323,18 @@ impl HyperType for Type {
         todo!()
     }
 
+    fn is_named(&self) -> bool {
+        todo!()
+    }
+
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,
     {
+        todo!()
+    }
+    
+    fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
         todo!()
     }
 }

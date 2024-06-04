@@ -1,7 +1,62 @@
+//! Experimental! WIP!
+//! For now lets use the analysis done by tree_sitter
+//! cons of implementing the analysis myself: 
+//! - takes time
+//! - more compatible with tree_sitter
+//! - only need to read the analysis
+//! - difficult to access even deeper treesitter apis like the lookhead
+//! pros of implementing the analysis myself: 
+//! - fragile to read internal of tree_sitter
+//! - can add more optimizations
+//! - can use rust idioms
+//! - avoid unsafety due to ffi
+//! 
+//! At least for now implementing the analysis myself is put on hold.
+//! It might still be straitforward and realtively easy to add optimizations by further processing the provided query graph it is needed.
+//! Before impl the analysis, I need some profiling of query performances on the hyperast (also useful for eval.).
+
 use super::*;
 const DEBUG_ANALYZE_QUERY: bool = true;
+// #define MAX_ANALYSIS_STATE_DEPTH 8
+const MAX_ANALYSIS_STATE_DEPTH: u16 = 8;
+// #define MAX_ANALYSIS_ITERATION_COUNT 256
+const MAX_ANALYSIS_ITERATION_COUNT: usize = 256;
 
 type AnalysisSubgraphArray = SortedVec<AnalysisSubgraph>;
+
+
+// struct Query {
+//     pattern_map: Vec<PatternEntry>,
+//     steps: Vec<QueryStep>,
+//     negated_fields: Vec<Vec<FieldId>>,
+//     wildcard_root_pattern_count: usize,
+//     language: Language,
+//     step_offsets: SortedVec<StepOffset>,
+// }
+
+struct QueryStep {
+    supertype_symbol: Symbol,
+    symbol: Symbol,
+    is_named: bool,
+    is_immediate: bool,
+    is_last_child: bool,
+    is_dead_end: bool,
+    is_pass_through: bool,
+    parent_pattern_guaranteed: bool,
+    root_pattern_guaranteed: bool,
+    alternative_is_immediate: bool,
+    contains_captures: bool,
+    field: FieldId,
+    capture_ids: [u16; MAX_STEP_CAPTURE_COUNT],
+    depth: u16,
+    alternative_index: u16,
+    negated_field_list_id: u16,
+}
+
+struct Field {
+    id: usize,
+}
+
 
 struct QueryAnalysis {
     final_step_indices: Vec<u16>,
@@ -1066,4 +1121,127 @@ impl Query {
 
         return all_patterns_are_valid;
     }
+}
+
+struct SortedVec<T, I = usize>(Vec<T>, std::marker::PhantomData<I>);
+
+impl<T, I: TryFrom<usize>> SortedVec<T, I> {
+    fn search_sorted_by<C: Ord, F: Fn(&T) -> C>(&self, f: F, needle: C) -> Option<I> {
+        self.0
+            .binary_search_by_key(&needle, f)
+            .ok()?
+            .try_into()
+            .ok()
+    }
+
+    fn search_sorted_with<F: Fn(&T, &T) -> i32>(&self, compare: F, needle: T) -> Option<I> {
+        // self.0.binary_search_by(&needle, f).ok()?.try_into().ok()
+        todo!()
+    }
+
+    fn insert_sorted_by<C, F: Fn(T) -> C>(&self, f: F, x: T) {
+        todo!()
+    }
+
+    fn back(&self) -> T {
+        todo!()
+    }
+
+    fn push(&self, x: T) {
+        todo!()
+    }
+}
+impl<T> SortedVec<T> {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+impl<T, I> Default for SortedVec<T, I> {
+    fn default() -> Self {
+        Self(Default::default(), Default::default())
+    }
+}
+
+// TODO temporary, later use custom made indexes and impl on individual structs
+impl<T> std::ops::Index<usize> for SortedVec<T, usize> {
+    type Output = T;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
+    }
+}
+impl<T> std::ops::IndexMut<usize> for SortedVec<T, usize> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.0[index]
+    }
+}
+
+struct Language {
+    token_count: usize,
+    symbol_count: usize,
+}
+
+impl Language {
+    fn field_name(&self, i: FieldId) -> &'static str {
+        todo!()
+    }
+    fn symbol_name(&self, s: Symbol) -> &'static str {
+        todo!()
+    }
+
+    fn lookaheads(&self, parse_state: u16) -> tree_sitter::LookaheadIterator {
+        todo!()
+    }
+
+    fn alias_at(&self, production_id: u16, child_index: u16) -> Option<Symbol> {
+        todo!()
+    }
+
+    fn symbol_metadata(&self, sym: Symbol) -> &SymbolMetadata {
+        todo!()
+    }
+
+    fn public_symbol_map(&self, sym: Symbol) -> Symbol {
+        todo!()
+    }
+
+    fn is_hidden(&self, sym: Symbol) -> bool {
+        // sym >= self.language.token_count
+        todo!()
+    }
+
+    fn hidden_symbols(&self) -> impl Iterator<Item = Symbol> {
+        // TSSymbol sym = (uint16_t)self->language->token_count; sym < (uint16_t)self->language->symbol_count; sym++
+        (self.token_count..self.symbol_count).map(|x| {
+            assert!(x < u16::MAX as usize);
+            Symbol::from(x as u16)
+        })
+    }
+
+    fn states(&self) -> impl Iterator<Item = tree_sitter::ffi::TSStateId> {
+        // TSStateId state = 1; state < (uint16_t)self->language->state_count; state++
+        todo!();
+        vec![].into_iter()
+    }
+
+    fn alias_for_symbol(&self, symbol: u16) -> impl Iterator<Item = Symbol> {
+        todo!();
+        vec![].into_iter()
+    }
+
+    fn state_is_primary(&self, state: u16) -> bool {
+        todo!()
+    }
+
+    fn state_predecessor_map_new(&self) -> StatePredecessorMap {
+        todo!()
+    }
+}
+
+struct StatePredecessorMap;
+
+struct SymbolMetadata {
+    visible: bool,
+    named: bool,
 }

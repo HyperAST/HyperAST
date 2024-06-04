@@ -54,6 +54,13 @@ cc = "*"
 pretty_assertions = "1.0.0"
 env_logger = "0.9.0"
 
+[[example]]
+name = "querying"
+required-features = ["impl", "tsg", "all_examples"]
+
+[[example]]
+name = "tsg"
+required-features = ["impl", "tsg", "all_examples"]
 
 [features]
 default = ["impl", "tsg"]
@@ -73,3 +80,4 @@ tsg = [
     "dep:tree-sitter-stack-graphs",
     "dep:hyper_ast_gen_ts_tsquery",
 ]
+all_examples=[]

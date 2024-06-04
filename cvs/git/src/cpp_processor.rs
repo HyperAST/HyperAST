@@ -370,6 +370,7 @@ fn make(acc: CppAcc, stores: &mut SimpleStores) -> cpp_gen::Local {
             height,
             size_no_spaces,
             hashs,
+            line_count: 0,
         };
 
         (None, metrics)

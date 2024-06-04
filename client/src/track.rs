@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::BuildHasher, thread::sleep, time::Duration};
+use std::{fmt::Debug, thread::sleep, time::Duration};
 
 use axum::{response::IntoResponse, Json};
 use enumset::{EnumSet, EnumSetType};
@@ -6,12 +6,12 @@ use hyper_ast::{
     position::{
         compute_position, compute_position_and_nodes, compute_position_with_no_spaces,
         compute_range, path_with_spaces,
-        position_accessors::{self, SolvedPosition, WithOffsets, WithPreOrderPath},
+        position_accessors::{self, WithOffsets, WithPreOrderPath},
         resolve_range,
     },
     store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef, SimpleStores},
     types::{
-        self, HyperAST, IterableChildren, NodeStore, Typed, WithChildren, WithHashs, WithStats,
+        self, HyperAST, IterableChildren, NodeStore, WithChildren, WithHashs, WithStats,
     },
     PrimInt,
 };
@@ -21,7 +21,7 @@ use hyper_ast_cvs_git::{
 };
 use hyper_diff::{
     decompressed_tree_store::{
-        DecompressedWithParent, LazyDecompressedTreeStore, PersistedNode,
+        DecompressedWithParent, LazyDecompressedTreeStore,
         ShallowDecompressedTreeStore,
     },
     matchers::{

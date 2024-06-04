@@ -3,7 +3,7 @@ use std::fmt::Display;
 use hyper_ast::{
     store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
-    types::{AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
+    types::{AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypedNodeId},
 };
 
 #[cfg(feature = "legion")]
@@ -86,6 +86,9 @@ mod legion_impls {
         ) -> bool {
             n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
         }
+        fn type_to_u16(&self, t: Self::Ty) -> u16 {
+            tree_sitter_java::language().id_for_node_kind(t.as_static_str(), t.is_named())
+        }
     }
     impl<'a, R> TypeStore<R> for &TStore {
         type Ty = Type;
@@ -106,6 +109,9 @@ mod legion_impls {
         }
         fn type_eq(&self, _n: &R, _m: &R) -> bool {
             todo!()
+        }
+        fn type_to_u16(&self, t: Self::Ty) -> u16 {
+            tree_sitter_java::language().id_for_node_kind(t.as_static_str(), t.is_named())
         }
     }
     impl<'a> JavaEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
@@ -176,6 +182,28 @@ impl Default for TStore {
     }
 }
 
+impl RoleStore for TStore {
+    type IdF = u16;
+
+    type Role = hyper_ast::types::Role;
+
+    fn resolve_field(&self, field_id: Self::IdF) -> Self::Role {
+        let s = tree_sitter_java::language()
+            .field_name_for_id(field_id)
+            .ok_or_else(|| format!("{}", field_id))
+            .unwrap();
+        hyper_ast::types::Role::try_from(s).expect(s)
+    }
+
+    fn intern_role(&self, role: Self::Role) -> Self::IdF {
+        let field_name = role.to_string();
+        tree_sitter_java::language()
+            .field_id_for_name(field_name)
+            .unwrap()
+            .into()
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TIdN<IdN>(IdN);
 
@@ -214,6 +242,7 @@ impl hyper_ast::types::Lang<Type> for Java {
         Lang.to_u16(t)
     }
 }
+
 impl LangRef<Type> for Java {
     fn make(&self, t: u16) -> &'static Type {
         // unsafe { std::mem::transmute(t) }
@@ -226,6 +255,10 @@ impl LangRef<Type> for Java {
     fn name(&self) -> &'static str {
         std::any::type_name::<Java>()
     }
+
+    fn ts_symbol(&self, t: Type) -> u16 {
+        tree_sitter_java::language().id_for_node_kind(t.as_static_str(), t.is_named())
+    }
 }
 impl LangRef<AnyType> for Java {
     fn make(&self, t: u16) -> &'static AnyType {
@@ -237,6 +270,10 @@ impl LangRef<AnyType> for Java {
 
     fn name(&self) -> &'static str {
         std::any::type_name::<Java>()
+    }
+
+    fn ts_symbol(&self, t: AnyType) -> u16 {
+        tree_sitter_java::language().id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 
@@ -411,11 +448,19 @@ impl HyperType for Type {
         self.to_str()
     }
 
+    fn is_named(&self) -> bool {
+        self.is_named()
+    }
+
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,
     {
-        todo!()
+        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<Self> + 'static))
+    }
+
+    fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
+        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<AnyType> + 'static))
     }
 }
 
@@ -678,7 +723,6 @@ impl Type {
             || self == &Type::_MultilineStringFragmentToken1
             || self == &Type::_MultilineStringFragmentToken2
             || self == &Type::_EscapeSequenceToken1
-        
     }
 }
 
@@ -703,6 +747,7 @@ impl<'a> From<&'a str> for Type {
 }
 
 const COUNT: u16 = 326 + 1 + 2;
+
 #[repr(u16)]
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Type {
@@ -2113,6 +2158,164 @@ impl Type {
             Type::ModuleDirective => true,
             Type::_Type => true,
             Type::_UnannotatedType => true,
+            // maybe just ignore
+            Type::_ElementValue => true,
+            _ => false,
+        }
+    }
+    pub fn is_named(&self) -> bool {
+        match self {
+            Type::Identifier => true,
+            Type::DecimalIntegerLiteral => true,
+            Type::HexIntegerLiteral => true,
+            Type::OctalIntegerLiteral => true,
+            Type::BinaryIntegerLiteral => true,
+            Type::DecimalFloatingPointLiteral => true,
+            Type::HexFloatingPointLiteral => true,
+            Type::True => true,
+            Type::False => true,
+            Type::CharacterLiteral => true,
+            Type::StringFragment => true,
+            Type::EscapeSequence => true,
+            Type::NullLiteral => true,
+            Type::UnderscorePattern => true,
+            Type::BooleanType => true,
+            Type::VoidType => true,
+            Type::This => true,
+            Type::Super => true,
+            Type::LineComment => true,
+            Type::BlockComment => true,
+            Type::Program => true,
+            Type::_Literal => true,
+            Type::StringLiteral => true,
+            Type::MultilineStringFragment => true,
+            Type::StringInterpolation => true,
+            Type::Expression => true,
+            Type::CastExpression => true,
+            Type::AssignmentExpression => true,
+            Type::BinaryExpression => true,
+            Type::InstanceofExpression => true,
+            Type::LambdaExpression => true,
+            Type::InferredParameters => true,
+            Type::TernaryExpression => true,
+            Type::UnaryExpression => true,
+            Type::UpdateExpression => true,
+            Type::PrimaryExpression => true,
+            Type::ArrayCreationExpression => true,
+            Type::DimensionsExpr => true,
+            Type::ParenthesizedExpression => true,
+            Type::ClassLiteral => true,
+            Type::ObjectCreationExpression => true,
+            Type::FieldAccess => true,
+            Type::TemplateExpression => true,
+            Type::ArrayAccess => true,
+            Type::MethodInvocation => true,
+            Type::ArgumentList => true,
+            Type::MethodReference => true,
+            Type::TypeArguments => true,
+            Type::Wildcard => true,
+            Type::WildcardExtends => true,
+            Type::WildcardSuper => true,
+            Type::Dimensions => true,
+            Type::SwitchExpression => true,
+            Type::SwitchBlock => true,
+            Type::SwitchBlockStatementGroup => true,
+            Type::SwitchRule => true,
+            Type::SwitchLabel => true,
+            Type::Pattern => true,
+            Type::TypePattern => true,
+            Type::RecordPattern => true,
+            Type::RecordPatternBody => true,
+            Type::RecordPatternComponent => true,
+            Type::Guard => true,
+            Type::Statement => true,
+            Type::Block => true,
+            Type::ExpressionStatement => true,
+            Type::LabeledStatement => true,
+            Type::AssertStatement => true,
+            Type::DoStatement => true,
+            Type::BreakStatement => true,
+            Type::ContinueStatement => true,
+            Type::ReturnStatement => true,
+            Type::YieldStatement => true,
+            Type::SynchronizedStatement => true,
+            Type::ThrowStatement => true,
+            Type::TryStatement => true,
+            Type::CatchClause => true,
+            Type::CatchFormalParameter => true,
+            Type::CatchType => true,
+            Type::FinallyClause => true,
+            Type::TryWithResourcesStatement => true,
+            Type::ResourceSpecification => true,
+            Type::Resource => true,
+            Type::IfStatement => true,
+            Type::WhileStatement => true,
+            Type::ForStatement => true,
+            Type::EnhancedForStatement => true,
+            Type::MarkerAnnotation => true,
+            Type::Annotation => true,
+            Type::AnnotationArgumentList => true,
+            Type::ElementValuePair => true,
+            Type::ElementValueArrayInitializer => true,
+            Type::Declaration => true,
+            Type::ModuleDeclaration => true,
+            Type::ModuleBody => true,
+            Type::ModuleDirective => true,
+            Type::RequiresModuleDirective => true,
+            Type::RequiresModifier => true,
+            Type::ExportsModuleDirective => true,
+            Type::OpensModuleDirective => true,
+            Type::UsesModuleDirective => true,
+            Type::ProvidesModuleDirective => true,
+            Type::PackageDeclaration => true,
+            Type::ImportDeclaration => true,
+            Type::Asterisk => true,
+            Type::EnumDeclaration => true,
+            Type::EnumBody => true,
+            Type::EnumBodyDeclarations => true,
+            Type::EnumConstant => true,
+            Type::ClassDeclaration => true,
+            Type::Modifiers => true,
+            Type::TypeParameters => true,
+            Type::TypeParameter => true,
+            Type::TypeBound => true,
+            Type::Superclass => true,
+            Type::SuperInterfaces => true,
+            Type::TypeList => true,
+            Type::ClassBody => true,
+            Type::StaticInitializer => true,
+            Type::ConstructorDeclaration => true,
+            Type::ConstructorBody => true,
+            Type::ExplicitConstructorInvocation => true,
+            Type::ScopedIdentifier => true,
+            Type::ScopedAbsoluteIdentifier => true,
+            Type::FieldDeclaration => true,
+            Type::RecordDeclaration => true,
+            Type::AnnotationTypeDeclaration => true,
+            Type::AnnotationTypeBody => true,
+            Type::AnnotationTypeElementDeclaration => true,
+            Type::InterfaceDeclaration => true,
+            Type::ExtendsInterfaces => true,
+            Type::InterfaceBody => true,
+            Type::ConstantDeclaration => true,
+            Type::VariableDeclarator => true,
+            Type::ArrayInitializer => true,
+            Type::_Type => true,
+            Type::_UnannotatedType => true,
+            Type::AnnotatedType => true,
+            Type::ScopedTypeIdentifier => true,
+            Type::GenericType => true,
+            Type::ArrayType => true,
+            Type::IntegralType => true,
+            Type::FloatingPointType => true,
+            Type::FormalParameters => true,
+            Type::FormalParameter => true,
+            Type::ReceiverParameter => true,
+            Type::SpreadParameter => true,
+            Type::LocalVariableDeclaration => true,
+            Type::MethodDeclaration => true,
+            Type::CompactConstructorDeclaration => true,
+            Type::TypeIdentifier => true,
             _ => false,
         }
     }

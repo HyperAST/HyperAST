@@ -3,7 +3,9 @@ use std::fmt::Display;
 use hyper_ast::{
     store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
-    types::{AnyType, HyperType, Lang, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
+    types::{
+        AnyType, HyperType, Lang, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypedNodeId,
+    },
 };
 
 #[cfg(feature = "legion")]
@@ -101,6 +103,9 @@ mod legion_impls {
         ) -> bool {
             todo!("{:?} {:?}", n, m)
         }
+        fn type_to_u16(&self, t: Self::Ty) -> u16 {
+            tree_sitter_query::language().id_for_node_kind(t.as_static_str(), t.is_named())
+        }
     }
 }
 
@@ -155,6 +160,28 @@ impl Default for TStore {
     }
 }
 
+impl RoleStore for TStore {
+    type IdF = u16;
+
+    type Role = hyper_ast::types::Role;
+
+    fn resolve_field(&self, field_id: Self::IdF) -> Self::Role {
+        let s = tree_sitter_query::language()
+            .field_name_for_id(field_id)
+            .ok_or_else(|| format!("{}", field_id))
+            .unwrap();
+        hyper_ast::types::Role::try_from(s).expect(s)
+    }
+    
+    fn intern_role(&self, role: Self::Role) -> Self::IdF {
+        let field_name = role.to_string();
+        tree_sitter_query::language()
+            .field_id_for_name(field_name)
+            .unwrap()
+            .into()
+    }
+}
+
 type TypeInternalSize = u16;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -176,6 +203,10 @@ impl LangRef<AnyType> for TsQuery {
     fn name(&self) -> &'static str {
         std::any::type_name::<TsQuery>()
     }
+
+    fn ts_symbol(&self, t: AnyType) -> u16 {
+        tree_sitter_query::language().id_for_node_kind(t.as_static_str(), t.is_named())
+    }
 }
 
 impl LangRef<Type> for TsQuery {
@@ -188,6 +219,10 @@ impl LangRef<Type> for TsQuery {
 
     fn name(&self) -> &'static str {
         std::any::type_name::<TsQuery>()
+    }
+
+    fn ts_symbol(&self, t: Type) -> u16 {
+        tree_sitter_query::language().id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 
@@ -260,8 +295,12 @@ impl HyperType for Type {
     fn is_hidden(&self) -> bool {
         todo!()
     }
-    
+
     fn is_supertype(&self) -> bool {
+        todo!()
+    }
+
+    fn is_named(&self) -> bool {
         todo!()
     }
 
@@ -270,6 +309,9 @@ impl HyperType for Type {
         Self: Sized,
     {
         From::<&'static (dyn LangRef<Self>)>::from(&TsQuery)
+    }
+    fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
+        todo!()
     }
 }
 
@@ -482,60 +524,58 @@ impl Type {
         }
     }
     pub fn from_str(t: &str) -> Option<Type> {
-        Some(
-            match t {
-                "end" => Type::End,
-                "." => Type::Dot,
-                "\"" => Type::DQuote,
-                "_string_token1" => Type::_StringToken1,
-                "escape_sequence" => Type::EscapeSequence,
-                "*" => Type::Star,
-                "+" => Type::Plus,
-                "?" => Type::QMark,
-                "identifier" => Type::Identifier,
-                "_" => Type::Inderscore,
-                "@" => Type::At,
-                "comment" => Type::Comment,
-                "[" => Type::LBracket,
-                "]" => Type::RBracket,
-                "(" => Type::LParen,
-                ")" => Type::RParen,
-                "/" => Type::Slash,
-                ":" => Type::Colon,
-                "!" => Type::Bang,
-                "#" => Type::Sharp,
-                "predicate_type" => Type::PredicateType,
-                "program" => Type::Program,
-                "_definition" => Type::_Definition,
-                "_group_expression" => Type::_GroupExpression,
-                "_named_node_expression" => Type::_NamedNodeExpression,
-                "_string" => Type::_String,
-                "quantifier" => Type::Quantifier,
-                "_immediate_identifier" => Type::_ImmediateIdentifier,
-                "_node_identifier" => Type::_NodeIdentifier,
-                "capture" => Type::Capture,
-                "string" => Type::String,
-                "parameters" => Type::Parameters,
-                "list" => Type::List,
-                "grouping" => Type::Grouping,
-                "anonymous_node" => Type::AnonymousNode,
-                "named_node" => Type::NamedNode,
-                "_field_name" => Type::_FieldName,
-                "field_definition" => Type::FieldDefinition,
-                "negated_field" => Type::NegatedField,
-                "predicate" => Type::Predicate,
-                "program_repeat1" => Type::ProgramRepeat1,
-                "_string_repeat1" => Type::_StringRepeat1,
-                "parameters_repeat1" => Type::ParametersRepeat1,
-                "list_repeat1" => Type::ListRepeat1,
-                "grouping_repeat1" => Type::GroupingRepeat1,
-                "named_node_repeat1" => Type::NamedNodeRepeat1,
-                "Spaces" => Type::Spaces,
-                "Directory" => Type::Directory,
-                "ERROR" => Type::ERROR,
-                _ => return None,
-            },
-        )
+        Some(match t {
+            "end" => Type::End,
+            "." => Type::Dot,
+            "\"" => Type::DQuote,
+            "_string_token1" => Type::_StringToken1,
+            "escape_sequence" => Type::EscapeSequence,
+            "*" => Type::Star,
+            "+" => Type::Plus,
+            "?" => Type::QMark,
+            "identifier" => Type::Identifier,
+            "_" => Type::Inderscore,
+            "@" => Type::At,
+            "comment" => Type::Comment,
+            "[" => Type::LBracket,
+            "]" => Type::RBracket,
+            "(" => Type::LParen,
+            ")" => Type::RParen,
+            "/" => Type::Slash,
+            ":" => Type::Colon,
+            "!" => Type::Bang,
+            "#" => Type::Sharp,
+            "predicate_type" => Type::PredicateType,
+            "program" => Type::Program,
+            "_definition" => Type::_Definition,
+            "_group_expression" => Type::_GroupExpression,
+            "_named_node_expression" => Type::_NamedNodeExpression,
+            "_string" => Type::_String,
+            "quantifier" => Type::Quantifier,
+            "_immediate_identifier" => Type::_ImmediateIdentifier,
+            "_node_identifier" => Type::_NodeIdentifier,
+            "capture" => Type::Capture,
+            "string" => Type::String,
+            "parameters" => Type::Parameters,
+            "list" => Type::List,
+            "grouping" => Type::Grouping,
+            "anonymous_node" => Type::AnonymousNode,
+            "named_node" => Type::NamedNode,
+            "_field_name" => Type::_FieldName,
+            "field_definition" => Type::FieldDefinition,
+            "negated_field" => Type::NegatedField,
+            "predicate" => Type::Predicate,
+            "program_repeat1" => Type::ProgramRepeat1,
+            "_string_repeat1" => Type::_StringRepeat1,
+            "parameters_repeat1" => Type::ParametersRepeat1,
+            "list_repeat1" => Type::ListRepeat1,
+            "grouping_repeat1" => Type::GroupingRepeat1,
+            "named_node_repeat1" => Type::NamedNodeRepeat1,
+            "Spaces" => Type::Spaces,
+            "Directory" => Type::Directory,
+            "ERROR" => Type::ERROR,
+            _ => return None,
+        })
     }
     pub fn to_str(&self) -> &'static str {
         match self {

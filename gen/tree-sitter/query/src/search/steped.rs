@@ -1,34 +1,248 @@
+//! This query matcher started as a translation from tree_sitter (query.c).
+//! TODOs
+//! - handle range constraint
+//! - use custom indexes
+//! - rework status' consumption after a bit of profiling
+//! - handle matching captures in order
+
 // static const TSQueryError PARENT_DONE = -1;
-// static const uint16_t PATTERN_DONE_MARKER = UINT16_MAX;
-const PATTERN_DONE_MARKER: u16 = u16::MAX; // TODO
-                                           // static const uint16_t NONE = UINT16_MAX;
-const NONE: u16 = u16::MAX; // TODO
-                            // static const TSSymbol WILDCARD_SYMBOL = 0;
-const WILDCARD_SYMBOL: Symbol = Symbol(0); // TODO
+
+const PATTERN_DONE_MARKER: u16 = u16::MAX;
+const NONE: u16 = u16::MAX;
+const WILDCARD_SYMBOL: Symbol = Symbol(0);
 
 // #define MAX_STEP_CAPTURE_COUNT 3
 const MAX_STEP_CAPTURE_COUNT: usize = 3;
 // #define MAX_NEGATED_FIELD_COUNT 8
 // #define MAX_STATE_PREDECESSOR_COUNT 256
-// #define MAX_ANALYSIS_STATE_DEPTH 8
-const MAX_ANALYSIS_STATE_DEPTH: u16 = 8;
-// #define MAX_ANALYSIS_ITERATION_COUNT 256
-const MAX_ANALYSIS_ITERATION_COUNT: usize = 256;
 
+// TODO use indexes on typed collections, it will for me to remove some casts and will help to normalize/generify indexes.
+// it will also make it easier to maintain and change stuff later.
 struct StateId(usize);
 struct StepId(usize);
 struct CaptureListId(usize);
 struct PatternId(usize);
 
-struct Query(std::ptr::NonNull<TSQuery>);
 
-impl Drop for Query {
-    fn drop(&mut self) {
-        unsafe { tree_sitter::ffi::ts_query_delete(std::mem::transmute(self.0.as_ptr())) }
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub struct Symbol(u16);
+
+impl Symbol {
+    const ERROR: Symbol = Symbol(u16::MAX - 1);
+    const NONE: Symbol = Symbol(u16::MAX);
+    const END: Symbol = Symbol(0);
+
+    fn to_usize(&self) -> usize {
+        self.0 as usize
     }
 }
 
-struct QueryCursor<Cursor, Node> {
+impl From<u16> for Symbol {
+    fn from(value: u16) -> Self {
+        Symbol(value)
+    }
+}
+
+pub struct Query {
+    query: *mut crate::search::steped::TSQuery,
+}
+impl Drop for Query {
+    fn drop(&mut self) {
+        unsafe { tree_sitter::ffi::ts_query_delete(std::mem::transmute(self.query)) }
+    }
+}
+impl Debug for Query {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.query.fmt(f)
+    }
+}
+
+pub struct MatchIt<'query, Cursor, Node>(QueryCursor<'query, Cursor, Node>);
+impl<'query, Cursor: self::Cursor> Iterator for MatchIt<'query, Cursor, Cursor::Node> {
+    type Item = query_cursor::QueryMatch<Cursor::Node>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next_match()
+    }
+}
+
+impl Query {
+    pub fn new(
+        source: &str,
+        language: tree_sitter::Language,
+    ) -> Result<Self, tree_sitter::QueryError> {
+        let mut error_offset = 0u32;
+        let mut error_type: tree_sitter::ffi::TSQueryError = 0;
+        let bytes = source.as_bytes();
+        // Compile the query.
+        let ptr = unsafe {
+            tree_sitter::ffi::ts_query_new(
+                language.into_raw(),
+                bytes.as_ptr().cast::<std::ffi::c_char>(),
+                bytes.len() as u32,
+                std::ptr::addr_of_mut!(error_offset),
+                std::ptr::addr_of_mut!(error_type),
+            )
+        };
+
+        // On failure, build an error based on the error code and offset.
+        if ptr.is_null() {
+            use tree_sitter::ffi;
+            use tree_sitter::QueryError;
+            use tree_sitter::QueryErrorKind;
+            if error_type == ffi::TSQueryErrorLanguage {
+                panic!();
+            }
+
+            let offset = error_offset as usize;
+            let mut line_start = 0;
+            let mut row = 0;
+            let mut line_containing_error = None;
+            for line in source.lines() {
+                let line_end = line_start + line.len() + 1;
+                if line_end > offset {
+                    line_containing_error = Some(line);
+                    break;
+                }
+                line_start = line_end;
+                row += 1;
+            }
+            let column = offset - line_start;
+
+            let kind;
+            let message;
+            match error_type {
+                // Error types that report names
+                ffi::TSQueryErrorNodeType | ffi::TSQueryErrorField | ffi::TSQueryErrorCapture => {
+                    let suffix = source.split_at(offset).1;
+                    let end_offset = suffix
+                        .find(|c| !char::is_alphanumeric(c) && c != '_' && c != '-')
+                        .unwrap_or(suffix.len());
+                    message = suffix.split_at(end_offset).0.to_string();
+                    kind = match error_type {
+                        ffi::TSQueryErrorNodeType => QueryErrorKind::NodeType,
+                        ffi::TSQueryErrorField => QueryErrorKind::Field,
+                        ffi::TSQueryErrorCapture => QueryErrorKind::Capture,
+                        _ => unreachable!(),
+                    };
+                }
+
+                // Error types that report positions
+                _ => {
+                    message = line_containing_error.map_or_else(
+                        || "Unexpected EOF".to_string(),
+                        |line| line.to_string() + "\n" + &" ".repeat(offset - line_start) + "^",
+                    );
+                    kind = match error_type {
+                        ffi::TSQueryErrorStructure => QueryErrorKind::Structure,
+                        _ => QueryErrorKind::Syntax,
+                    };
+                }
+            };
+
+            return Err(QueryError {
+                row,
+                column,
+                offset,
+                message,
+                kind,
+            });
+        };
+
+        let query: *mut TSQuery = unsafe { std::mem::transmute(ptr) };
+        eprintln!("{}", unsafe { query.as_ref().unwrap() });
+        Ok(Query { query })
+    }
+
+    pub fn pattern_count(&self) -> usize {
+        unsafe { self.query.as_ref() }.unwrap().pattern_count()
+    }
+
+    pub fn matches<'query, Cursor: self::Cursor>(
+        &'query self,
+        cursor: Cursor,
+    ) -> MatchIt<'query, Cursor, Cursor::Node> {
+        let qcursor = QueryCursor::<Cursor, _> {
+            halted: false,
+            ascending: false,
+            states: vec![],
+            capture_list_pool: crate::search::steped::CaptureListPool::default(),
+            finished_states: Default::default(),
+            max_start_depth: u32::MAX,
+            did_exceed_match_limit: false,
+            depth: 0,
+            on_visible_node: true,
+            query: self.query,
+            cursor,
+            next_state_id: 0,
+            _phantom: std::marker::PhantomData,
+        };
+        MatchIt(qcursor)
+    }
+
+    /// Match all patterns that starts on cursor current node
+    pub fn matches_immediate<'query, Cursor: self::Cursor>(
+        &'query self,
+        cursor: Cursor,
+    ) -> MatchIt<'query, Cursor, Cursor::Node> {
+        let mut qcursor = QueryCursor::<Cursor, _> {
+            halted: false,
+            ascending: false,
+            states: vec![],
+            capture_list_pool: crate::search::steped::CaptureListPool::default(),
+            finished_states: Default::default(),
+            max_start_depth: u32::MAX,
+            did_exceed_match_limit: false,
+            depth: 0,
+            on_visible_node: true,
+            query: self.query,
+            cursor,
+            next_state_id: 0,
+            _phantom: std::marker::PhantomData,
+        };
+        // can only match patterns starting on provided node
+        qcursor.set_max_start_depth(0);
+        MatchIt(qcursor)
+    }
+
+    // warn return value has probably the livness of Query
+    pub fn capture_name(&self, i: u32) -> &'static str {
+        let name = unsafe {
+            let mut length = 0u32;
+            let name = tree_sitter::ffi::ts_query_capture_name_for_id(
+                std::mem::transmute(self.query),
+                i,
+                std::ptr::addr_of_mut!(length),
+            )
+            .cast::<u8>();
+            let name = std::slice::from_raw_parts(name, length as usize);
+            std::str::from_utf8_unchecked(name)
+        };
+        name
+    }
+
+    pub fn capture_count(&self) -> usize {
+        unsafe { self.query.as_ref() }.unwrap().capture_count()
+    }
+
+    pub fn quantifiers_at_pattern(&self, i: usize) -> Vec<tree_sitter::CaptureQuantifier> {
+        let capture_count = self.capture_count();
+        let mut capture_quantifiers = Vec::with_capacity(capture_count as usize);
+        for j in 0..capture_count {
+            unsafe {
+                let quantifier = tree_sitter::ffi::ts_query_capture_quantifier_for_id(
+                    std::mem::transmute(self.query),
+                    i as u32,
+                    j as u32,
+                );
+                capture_quantifiers.push(quantifier.into());
+            }
+        }
+        capture_quantifiers.into()
+    }
+}
+
+pub struct QueryCursor<'query, Cursor, Node> {
     halted: bool,
     ascending: bool,
     on_visible_node: bool,
@@ -40,12 +254,10 @@ struct QueryCursor<Cursor, Node> {
     capture_list_pool: CaptureListPool<Node>,
     finished_states: VecDeque<State>,
     next_state_id: u32,
+    // only triggers when there is no more capture list available
+    // not triggered by reaching max_start_depth
     did_exceed_match_limit: bool,
-}
-impl<Cursor, Node> Drop for QueryCursor<Cursor, Node> {
-    fn drop(&mut self) {
-        unsafe { tree_sitter::ffi::ts_query_delete(std::mem::transmute(self.query)) }
-    }
+    _phantom: std::marker::PhantomData<&'query TSQuery>,
 }
 
 struct CaptureListPool<Node> {
@@ -91,37 +303,36 @@ impl<Node> CaptureListPool<Node> {
         self.free_capture_list_count += 1;
         return r;
     }
-    fn acquire(&mut self) -> u16 {
+    fn acquire(&mut self) -> u32 {
         // First see if any already allocated capture list is currently unused.
         if self.free_capture_list_count > 0 {
-          for i in 0..self.list.len() {
-            if self.list[i].len() == 0 {
-                self.list[i].clear();
-                self.free_capture_list_count -= 1;
-                return i as u16;
+            for i in 0..self.list.len() {
+                if self.list[i].len() == 0 {
+                    self.list[i].clear();
+                    self.free_capture_list_count -= 1;
+                    return i as u32;
+                }
             }
-          }
         }
-      
+
         // Otherwise allocate and initialize a new capture list, as long as that
         // doesn't put us over the requested maximum.
         let i = self.list.len();
         if i >= self.max_capture_list_count as usize {
-          return NONE;
+            return u32::MAX;
         }
         self.list.push(vec![]);
-        // CaptureList list;
-        // array_init(&list);
-        // array_push(&self.list, list);
-        return i as u16;
+        return i as u32;
     }
 }
 
-struct Capture<Node> {
-    node: Node,
-    index: u32,
+#[derive(Clone)]
+pub struct Capture<Node> {
+    pub node: Node,
+    pub index: u32,
 }
 
+#[derive(Clone)]
 struct State {
     id: u32,
     capture_list_id: u32,
@@ -135,178 +346,21 @@ struct State {
     needs_parent: bool,
 }
 
-// struct Query {
-//     pattern_map: Vec<PatternEntry>,
-//     steps: Vec<QueryStep>,
-//     negated_fields: Vec<Vec<FieldId>>,
-//     wildcard_root_pattern_count: usize,
-//     language: Language,
-//     step_offsets: SortedVec<StepOffset>,
-// }
-
-struct StepOffset {
-    byte_offset: u32,
-    step_index: u16,
-}
-struct Language {
-    token_count: usize,
-    symbol_count: usize,
-}
-
-impl Language {
-    fn field_name(&self, i: FieldId) -> &'static str {
-        todo!()
-    }
-    fn symbol_name(&self, s: Symbol) -> &'static str {
-        todo!()
-    }
-
-    fn lookaheads(&self, parse_state: u16) -> tree_sitter::LookaheadIterator {
-        todo!()
-    }
-
-    fn alias_at(&self, production_id: u16, child_index: u16) -> Option<Symbol> {
-        todo!()
-    }
-
-    fn symbol_metadata(&self, sym: Symbol) -> &SymbolMetadata {
-        todo!()
-    }
-
-    fn public_symbol_map(&self, sym: Symbol) -> Symbol {
-        todo!()
-    }
-
-    fn is_hidden(&self, sym: Symbol) -> bool {
-        // sym >= self.language.token_count
-        todo!()
-    }
-
-    fn hidden_symbols(&self) -> impl Iterator<Item = Symbol> {
-        // TSSymbol sym = (uint16_t)self->language->token_count; sym < (uint16_t)self->language->symbol_count; sym++
-        (self.token_count..self.symbol_count).map(|x| {
-            assert!(x < u16::MAX as usize);
-            Symbol::from(x as u16)
-        })
-    }
-
-    fn states(&self) -> impl Iterator<Item = tree_sitter::ffi::TSStateId> {
-        // TSStateId state = 1; state < (uint16_t)self->language->state_count; state++
-        todo!();
-        vec![].into_iter()
-    }
-
-    fn alias_for_symbol(&self, symbol: u16) -> impl Iterator<Item = Symbol> {
-        todo!();
-        vec![].into_iter()
-    }
-
-    fn state_is_primary(&self, state: u16) -> bool {
-        todo!()
-    }
-
-    fn state_predecessor_map_new(&self) -> StatePredecessorMap {
-        todo!()
-    }
-}
-
-struct StatePredecessorMap;
-
-struct SymbolMetadata {
-    visible: bool,
-    named: bool,
-}
-
 struct PatternEntry {
     step_index: u16,
     pattern_index: u16,
     is_rooted: bool,
 }
 
-struct QueryStep {
-    supertype_symbol: Symbol,
-    symbol: Symbol,
-    is_named: bool,
-    is_immediate: bool,
-    is_last_child: bool,
-    is_dead_end: bool,
-    is_pass_through: bool,
-    parent_pattern_guaranteed: bool,
-    root_pattern_guaranteed: bool,
-    alternative_is_immediate: bool,
-    contains_captures: bool,
-    field: FieldId,
-    capture_ids: [u16; MAX_STEP_CAPTURE_COUNT],
-    depth: u16,
-    alternative_index: u16,
-    negated_field_list_id: u16,
-}
-impl TSQuery {
-    fn pattern_map_search(&self, needle: Symbol) -> Option<usize> {
-        dbg!(query_step::symbol_name(self, needle.0));
-        let mut base_index = self.wildcard_root_pattern_count as usize;
-        let mut size = self.pattern_map.len() - base_index;
-        dbg!(needle.to_usize(), base_index, size);
-        if size == 0 {
-            return Some(base_index);
-        }
-        while size > 1 {
-            let half_size = size / 2;
-            let mid_index = base_index + half_size;
-            let mid_symbol =
-                self.steps[self.pattern_map[mid_index].step_index as usize].symbol as usize;
-            dbg!(mid_symbol);
-            dbg!(query_step::symbol_name(self, mid_symbol as u16));
-            if needle.to_usize() > mid_symbol {
-                base_index = mid_index
-            };
-            size -= half_size;
-        }
-        dbg!(base_index, size);
-        dbg!(
-            self.pattern_map[base_index].step_index,
-            self.pattern_map[base_index].pattern_index
-        );
-
-        let mut symbol =
-            self.steps[self.pattern_map[base_index].step_index as usize].symbol as usize;
-        dbg!(symbol);
-        dbg!(query_step::symbol_name(self, symbol as u16));
-
-        if needle.to_usize() > symbol {
-            base_index += 1;
-            if base_index < self.pattern_map.len() {
-                symbol =
-                    self.steps[self.pattern_map[base_index].step_index as usize].symbol as usize;
-            }
-        }
-
-        if needle.to_usize() == symbol {
-            dbg!(base_index);
-            Some(base_index)
-        } else {
-            None
-        }
-    }
-
-    fn step_is_fallible(&self, step_index: u16) -> bool {
-        todo!()
-    }
-
-    fn field_name(&self, field_id: FieldId) -> &str {
-        query_step::field_name(self, field_id).unwrap_or("")
-    }
-}
-
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-enum TreeCursorStep {
+pub enum TreeCursorStep {
     TreeCursorStepNone,
     TreeCursorStepHidden,
     TreeCursorStepVisible,
 }
 
-trait Cursor {
+pub trait Cursor {
     type Node: Node;
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep;
 
@@ -318,8 +372,13 @@ trait Cursor {
     fn parent_node(&self) -> Option<Self::Node>;
 
     fn current_status(&self) -> Status;
-    fn is_sutree_repetition(&self) -> bool;
-    fn sutree_symbol(&self) -> tree_sitter::ffi::TSSymbol;
+
+    // fn is_subtree_repetition(&self) -> bool {
+    //     unimplemented!("related to query analysis, don't know how to handle that for now")
+    // }
+    // fn subtree_symbol(&self) -> tree_sitter::ffi::TSSymbol {
+    //     unimplemented!("related to query analysis, don't know how to handle that for now")
+    // }
 }
 
 impl<'a> Cursor for tree_sitter::TreeCursor<'a> {
@@ -424,51 +483,19 @@ impl<'a> Cursor for tree_sitter::TreeCursor<'a> {
             }
         }
     }
-    fn is_sutree_repetition(&self) -> bool {
-        unimplemented!("missing fct from tree_sitter header")
-        // #[repr(C)]
-        // pub struct Subtree {
-        //     _unused: [u8; 0],
-        // }
-        // extern "C" {
-        //     pub fn ts_tree_cursor_current_subtree(
-        //         self_: *const tree_sitter::ffi::TSTreeCursor,
-        //     ) -> Subtree;
-        //     pub fn ts_subtree_is_repetition(self_: Subtree) -> u32;
-        // }
-        // let s: *mut tree_sitter::ffi::TSTreeCursor = unsafe { std::mem::transmute(self) };
-        // let s = unsafe { ts_tree_cursor_current_subtree(s) };
-        // unsafe { ts_subtree_is_repetition(s) != 0 }
-    }
-    fn sutree_symbol(&self) -> tree_sitter::ffi::TSSymbol {
-        unimplemented!("missing fct from tree_sitter header")
-        // #[repr(C)]
-        // pub struct Subtree {
-        //     _unused: [u8; 0],
-        // }
-        // extern "C" {
-        //     pub fn ts_tree_cursor_current_subtree(
-        //         self_: *const tree_sitter::ffi::TSTreeCursor,
-        //     ) -> Subtree;
-        //     pub fn ts_subtree_symbol(self_: Subtree) -> tree_sitter::ffi::TSSymbol;
-        // }
-        // let s: *mut tree_sitter::ffi::TSTreeCursor = unsafe { std::mem::transmute(self) };
-        // let s = unsafe { ts_tree_cursor_current_subtree(s) };
-        // unsafe { ts_subtree_symbol(s) }
-    }
 }
 
-struct Status {
-    has_later_siblings: bool,
-    has_later_named_siblings: bool,
-    can_have_later_siblings_with_this_field: bool,
-    field_id: FieldId,
-    supertypes: Vec<Symbol>,
+pub struct Status {
+    pub has_later_siblings: bool,
+    pub has_later_named_siblings: bool,
+    pub can_have_later_siblings_with_this_field: bool,
+    pub field_id: FieldId,
+    pub supertypes: Vec<Symbol>,
 }
 
-type FieldId = u16;
+pub type FieldId = u16;
 
-trait Node: Clone {
+pub trait Node: Clone {
     fn symbol(&self) -> Symbol;
 
     fn is_named(&self) -> bool;
@@ -476,9 +503,11 @@ trait Node: Clone {
 
     fn start_point(&self) -> tree_sitter::Point;
 
-    fn child_by_field_id(&self, negated_field_id: FieldId) -> Self;
+    fn child_by_field_id(&self, negated_field_id: FieldId) -> Option<Self>;
 
-    fn id(&self) -> usize;
+    fn equal(&self, other: &Self) -> bool;
+    fn compare(&self, other: &Self) -> std::cmp::Ordering;
+    // fn id(&self) -> usize;
 }
 
 impl<'a> Node for tree_sitter::Node<'a> {
@@ -498,45 +527,56 @@ impl<'a> Node for tree_sitter::Node<'a> {
         self.start_position()
     }
 
-    fn child_by_field_id(&self, field_id: FieldId) -> Self {
-        self.child_by_field_id(field_id).unwrap()
+    fn child_by_field_id(&self, field_id: FieldId) -> Option<Self> {
+        self.child_by_field_id(field_id)
+    }
+    fn equal(&self, other: &Self) -> bool {
+        self.id() == other.id()
     }
 
-    fn id(&self) -> usize {
-        self.id()
+    fn compare(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering::*;
+        let left = self;
+        let right = other;
+        if !left.equal(right) {
+            let left_start = left.start_byte();
+            let right_start = right.start_byte();
+            if left_start < right_start {
+                return Less;
+            } else if left_start > right_start {
+                return Greater;
+            }
+            let left_node_count = left.end_byte();
+            let right_node_count = right.end_byte();
+            if left_node_count > right_node_count {
+                return Less;
+            } else if left_node_count < right_node_count {
+                return Greater;
+            }
+        }
+        Equal
     }
-}
 
-struct Field {
-    id: usize,
-}
-
-#[derive(PartialEq, Eq, Clone, Copy)]
-struct Symbol(u16);
-
-impl Symbol {
-    const ERROR: Symbol = Symbol(u16::MAX - 1);
-    const NONE: Symbol = Symbol(u16::MAX);
-    const END: Symbol = Symbol(0);
-
-    fn to_usize(&self) -> usize {
-        self.0 as usize
-    }
-}
-
-impl From<u16> for Symbol {
-    fn from(value: u16) -> Self {
-        Symbol(value)
-    }
+    // fn id(&self) -> usize {
+    //     self.id()
+    // }
 }
 
 // mod analyze;
 
 mod convert;
 
-mod query_cursor;
+pub mod hyperast;
 
-impl<Cursor: self::Cursor> QueryCursor<Cursor, Cursor::Node> {
+pub mod query_cursor;
+
+impl<'query, Cursor: self::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
+    /// Set the max depth where queries can start being matched
+    /// For example, set it to 0 to only match on the node you start on.
+    pub fn set_max_start_depth(&mut self, max: u32) {
+        self.max_start_depth = max;
+    }
+
     fn should_descend(&self, node_intersects_range: bool) -> bool {
         if node_intersects_range && self.depth < self.max_start_depth {
             return true;
@@ -580,12 +620,68 @@ impl<Cursor: self::Cursor> QueryCursor<Cursor, Cursor::Node> {
         return false;
     }
 
-    fn copy_state(&self, state_index: &mut usize) -> Option<usize> {
-        todo!()
+    fn copy_state(&mut self, state_index: &mut usize) -> Option<usize> {
+        let state = &self.states[*state_index];
+        let capture_list_id = state.capture_list_id;
+        let mut copy = state.clone();
+        copy.capture_list_id = u32::MAX;
+
+        self.states.insert(*state_index + 1, copy);
+        // dbg!(capture_list_id);
+        // If the state has captures, copy its capture list.
+        if capture_list_id != u32::MAX {
+            let new_captures = self.prepare_to_capture(*state_index + 1, *state_index as u32)?;
+            let old_captures = self.capture_list_pool.get(capture_list_id);
+            self.capture_list_pool.list[new_captures] = old_captures.to_vec();
+        }
+        return Some(*state_index + 1);
     }
 
-    fn compare_captures(&self, state: &State, other_state: &State) -> (bool, bool) {
-        todo!()
+    fn compare_captures(&self, left_state: &State, right_state: &State) -> (bool, bool) {
+        let left_captures = self.capture_list_pool.get(left_state.capture_list_id);
+        let right_captures = self.capture_list_pool.get(right_state.capture_list_id);
+        let mut left_contains_right = true;
+        let mut right_contains_left = true;
+        let mut i = 0;
+        let mut j = 0;
+        loop {
+            if i < left_captures.len() {
+                if j < right_captures.len() {
+                    let left = &left_captures[i];
+                    let right = &right_captures[j];
+                    if left.node.equal(&right.node) && left.index == right.index {
+                        i += 1;
+                        j += 1;
+                    } else {
+                        match left.node.compare(&right.node) {
+                            std::cmp::Ordering::Less => {
+                                right_contains_left = false;
+                                i += 1;
+                            }
+                            std::cmp::Ordering::Greater => {
+                                left_contains_right = false;
+                                j += 1;
+                            }
+                            std::cmp::Ordering::Equal => {
+                                right_contains_left = false;
+                                left_contains_right = false;
+                                i += 1;
+                                j += 1;
+                            }
+                        }
+                    }
+                } else {
+                    right_contains_left = false;
+                    break;
+                }
+            } else {
+                if j < right_captures.len() {
+                    left_contains_right = false;
+                }
+                break;
+            }
+        }
+        (left_contains_right, right_contains_left)
     }
 
     fn first_in_progress_capture(
@@ -607,21 +703,25 @@ impl<Cursor: self::Cursor> QueryCursor<Cursor, Cursor::Node> {
                 continue;
             }
 
-            todo!();
+            todo!("code required for matching cartures in order instead of matches or to evict another match because we reached the max number of capture lists");
 
-            // let node = captures[state.consumed_capture_count as usize].node;
-            // if node.end_byte() <= self.start_byte
-            //     || point_lte(node.end_point(), self.start_point)
-            // {
-            //     state.consumed_capture_count += 1;
-            //     i -= 1;
-            //     continue;
-            // }
+            // // let node = captures[state.consumed_capture_count as usize].node;
+            // // if node.end_byte() <= self.start_byte
+            // //     || point_lte(node.end_point(), self.start_point)
+            // // {
+            // //     state.consumed_capture_count += 1;
+            // //     i -= 1;
+            // //     continue;
+            // // }
 
-            // let node_start_byte = node.start_byte();
+            // // let node_start_byte = node.start_byte();
             // if !result
-            //     || node_start_byte < byte_offset
-            //     || (node_start_byte == byte_offset && (state.pattern_index as u32) < pattern_index)
+            //     // || node_start_byte < byte_offset
+            //     || (
+            //         // node_start_byte == byte_offset 
+            //         // &&
+            //         (state.pattern_index as u32) < pattern_index
+            //     )
             // {
             //     let step = &unsafe { &(*self.query).steps }[state.step_index as usize];
             //     if *root_pattern_guaranteed {
@@ -632,7 +732,7 @@ impl<Cursor: self::Cursor> QueryCursor<Cursor, Cursor::Node> {
 
             //     result = true;
             //     state_index = i as u32;
-            //     byte_offset = node_start_byte;
+            //     byte_offset = 0; // TODO node_start_byte;
             //     pattern_index = state.pattern_index as u32;
             // }
         }
@@ -645,13 +745,13 @@ impl<Cursor: self::Cursor> QueryCursor<Cursor, Cursor::Node> {
         state_index_to_preserve: u32,
     ) -> Option<usize> {
         let state = &mut self.states[state_id];
-        if state.capture_list_id == NONE as u32 {
-            state.capture_list_id = self.capture_list_pool.acquire() as u32;
+        if state.capture_list_id == u32::MAX {
+            state.capture_list_id = self.capture_list_pool.acquire();
 
             // If there are no capture lists left in the pool, then terminate whichever
             // state has captured the earliest node in the document, and steal its
             // capture list.
-            if state.capture_list_id == NONE as u32 {
+            if state.capture_list_id == u32::MAX {
                 self.did_exceed_match_limit = true;
                 // uint32_t state_index, byte_offset, pattern_index;
                 if let Some((state_index, byte_offset, pattern_index)) = self
@@ -671,7 +771,7 @@ impl<Cursor: self::Cursor> QueryCursor<Cursor, Cursor::Node> {
                         );
                         let other_state = &mut self.states[state_index as usize];
                         let capture_list_id = other_state.capture_list_id;
-                        other_state.capture_list_id = NONE as u32;
+                        other_state.capture_list_id = u32::MAX; // TODO handle NONE size stuff...
                         other_state.dead = true;
                         let list = &mut self.capture_list_pool.list[capture_list_id as usize];
                         list.clear();
@@ -779,7 +879,7 @@ impl<Cursor: self::Cursor> QueryCursor<Cursor, Cursor::Node> {
             //     .needs_parent = step.depth == 1,
             //     .dead = false,
             id: u32::MAX,
-            capture_list_id: NONE as u32,
+            capture_list_id: u32::MAX,
             step_index: pattern.step_index,
             pattern_index: pattern.pattern_index,
             start_depth: start_depth as u16,
@@ -793,90 +893,8 @@ impl<Cursor: self::Cursor> QueryCursor<Cursor, Cursor::Node> {
     }
 }
 
-struct SortedVec<T, I = usize>(Vec<T>, std::marker::PhantomData<I>);
+pub use query_step::TSQuery;
 
-impl<T, I: TryFrom<usize>> SortedVec<T, I> {
-    fn search_sorted_by<C: Ord, F: Fn(&T) -> C>(&self, f: F, needle: C) -> Option<I> {
-        self.0
-            .binary_search_by_key(&needle, f)
-            .ok()?
-            .try_into()
-            .ok()
-    }
-
-    fn search_sorted_with<F: Fn(&T, &T) -> i32>(&self, compare: F, needle: T) -> Option<I> {
-        // self.0.binary_search_by(&needle, f).ok()?.try_into().ok()
-        todo!()
-    }
-
-    fn insert_sorted_by<C, F: Fn(T) -> C>(&self, f: F, x: T) {
-        todo!()
-    }
-
-    fn back(&self) -> T {
-        todo!()
-    }
-
-    fn push(&self, x: T) {
-        todo!()
-    }
-}
-impl<T> SortedVec<T> {
-    fn len(&self) -> usize {
-        self.0.len()
-    }
-}
-
-impl<T, I> Default for SortedVec<T, I> {
-    fn default() -> Self {
-        Self(Default::default(), Default::default())
-    }
-}
-
-// TODO temporary, later use custom made indexes and impl on individual structs
-impl<T> std::ops::Index<usize> for SortedVec<T, usize> {
-    type Output = T;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.0[index]
-    }
-}
-impl<T> std::ops::IndexMut<usize> for SortedVec<T, usize> {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.0[index]
-    }
-}
-
-#[repr(C)]
-pub struct TSQuery {
-    captures: SymbolTable,
-    predicate_values: SymbolTable,
-    capture_quantifiers: Array<CaptureQuantifiers>,
-    steps: Array<query_step::TSQueryStep>,
-    pattern_map: Array<PatternEntry>,
-    predicate_steps: Array<tree_sitter::ffi::TSQueryPredicateStep>,
-    patterns: Array<QueryPattern>,
-    step_offsets: Array<StepOffset>,
-    negated_fields: Array<tree_sitter::ffi::TSFieldId>,
-    string_buffer: Array<std::ffi::c_char>,
-    repeat_symbols_with_rootless_patterns: Array<tree_sitter::ffi::TSSymbol>,
-    language: *const tree_sitter::ffi::TSLanguage,
-    wildcard_root_pattern_count: u16,
-}
-#[repr(C)]
-struct CaptureQuantifiers;
-#[repr(C)]
-struct QueryPattern;
-#[repr(C)]
-struct SymbolTable {
-    characters: Array<std::ffi::c_char>,
-    slices: Array<Slice>,
-}
-#[repr(C)]
-struct Slice {
-    offset: u32,
-    length: u32,
-}
 #[repr(C)]
 struct Array<T> {
     contents: *mut T,
@@ -914,19 +932,21 @@ impl<T> std::ops::IndexMut<usize> for Array<T> {
     }
 }
 
-pub fn print_query(query: &TSQuery) {
-    eprint!("query steps:\n");
-    let steps = &query.steps;
-    for i in 0..steps.size {
-        let step = unsafe { steps.contents.add(i as usize).as_ref().unwrap() };
-        eprint!("  {}: ", i);
-        print_query_step(query, step);
-        eprint!(",\n");
+impl std::fmt::Display for TSQuery {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "query steps:\n")?;
+        let steps = &self.steps;
+        for i in 0..steps.size {
+            let step = unsafe { steps.contents.add(i as usize).as_ref().unwrap() };
+            write!(f, "  {}: ", i)?;
+            print_query_step(self, step, f)?;
+            write!(f, ",\n")?;
+        }
+        Ok(())
     }
 }
 mod query_step;
 use std::collections::VecDeque;
+use std::fmt::Debug;
 
 pub(crate) use query_step::print_query_step;
-pub(crate) use query_step::TSQueryStep;
-use tree_sitter::ffi::TSSymbol;

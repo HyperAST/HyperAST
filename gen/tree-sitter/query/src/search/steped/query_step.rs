@@ -1,13 +1,118 @@
-use super::print_query;
 use super::FieldId;
 
 use super::NONE;
 
 use super::PATTERN_DONE_MARKER;
 
-use super::TSQuery;
-
 use super::MAX_STEP_CAPTURE_COUNT;
+
+use super::Array;
+use super::PatternEntry;
+
+#[repr(C)]
+pub struct TSQuery {
+    captures: SymbolTable,
+    predicate_values: SymbolTable,
+    capture_quantifiers: Array<CaptureQuantifiers>,
+    pub(super) steps: Array<TSQueryStep>,
+    pub(super) pattern_map: Array<PatternEntry>,
+    predicate_steps: Array<tree_sitter::ffi::TSQueryPredicateStep>,
+    patterns: Array<QueryPattern>,
+    step_offsets: Array<StepOffset>,
+    pub(super) negated_fields: Array<tree_sitter::ffi::TSFieldId>,
+    string_buffer: Array<std::ffi::c_char>,
+    repeat_symbols_with_rootless_patterns: Array<tree_sitter::ffi::TSSymbol>,
+    pub(super) language: *const tree_sitter::ffi::TSLanguage,
+    pub(super) wildcard_root_pattern_count: u16,
+}
+
+#[repr(C)]
+struct StepOffset {
+    byte_offset: u32,
+    step_index: u16,
+}
+#[repr(C)]
+struct CaptureQuantifiers;
+#[repr(C)]
+struct QueryPattern;
+#[repr(C)]
+struct SymbolTable {
+    characters: Array<std::ffi::c_char>,
+    slices: Array<Slice>,
+}
+#[repr(C)]
+struct Slice {
+    offset: u32,
+    length: u32,
+}
+
+impl TSQuery {
+    pub(super) fn pattern_map_search(&self, needle: super::Symbol) -> Option<usize> {
+        // dbg!(query_step::symbol_name(self, needle.0));
+        let mut base_index = self.wildcard_root_pattern_count as usize;
+        let mut size = self.pattern_map.len() - base_index;
+        // dbg!(needle.to_usize(), base_index, size);
+        if size == 0 {
+            return None;
+        }
+        while size > 1 {
+            let half_size = size / 2;
+            let mid_index = base_index + half_size;
+            let mid_symbol =
+                self.steps[self.pattern_map[mid_index].step_index as usize].symbol as usize;
+            // dbg!(mid_symbol);
+            // dbg!(query_step::symbol_name(self, mid_symbol as u16));
+            if needle.to_usize() > mid_symbol {
+                base_index = mid_index
+            };
+            size -= half_size;
+        }
+        // dbg!(base_index, size);
+        // dbg!(
+        //     self.pattern_map[base_index].step_index,
+        //     self.pattern_map[base_index].pattern_index
+        // );
+
+        let mut symbol =
+            self.steps[self.pattern_map[base_index].step_index as usize].symbol as usize;
+        // dbg!(symbol);
+        // dbg!(query_step::symbol_name(self, symbol as u16));
+
+        if needle.to_usize() > symbol {
+            base_index += 1;
+            if base_index < self.pattern_map.len() {
+                symbol =
+                    self.steps[self.pattern_map[base_index].step_index as usize].symbol as usize;
+            }
+        }
+
+        if needle.to_usize() == symbol {
+            // dbg!(base_index);
+            Some(base_index)
+        } else {
+            None
+        }
+    }
+
+    pub(super) fn step_is_fallible(&self, step_index: u16) -> bool {
+        assert!(step_index as usize + 1 < self.steps.len());
+        let step = &self.steps[step_index as usize];
+        let next_step = &self.steps[step_index as usize + 1];
+        return next_step.depth != PATTERN_DONE_MARKER
+            && next_step.depth > step.depth
+            && !next_step.parent_pattern_guaranteed();
+    }
+
+    pub(super) fn field_name(&self, field_id: FieldId) -> &str {
+        super::query_step::field_name(self, field_id).unwrap_or("")
+    }
+    pub(super) fn pattern_count(&self) -> usize {
+        self.patterns.len()
+    }
+    pub(super) fn capture_count(&self) -> usize {
+        self.captures.slices.len()
+    }
+}
 
 #[repr(C)]
 pub(crate) struct TSQueryStep {
@@ -18,6 +123,9 @@ pub(crate) struct TSQueryStep {
     pub(crate) depth: u16,
     pub(crate) alternative_index: u16,
     pub(crate) negated_field_list_id: u16,
+    /// bitfield corresponding to the 9 following flags
+    /// NOTE cannot use one bit attrs in rust without using macro,
+    /// and even then it cannot be accessed like an attribute
     pub(crate) bit_field: u16,
     // is_named: bool,
     // is_immediate: bool,
@@ -32,18 +140,18 @@ pub(crate) struct TSQueryStep {
 
 impl TSQueryStep {
     pub(crate) fn is_named(&self) -> bool {
-        // (block
-        //     .
-        //     (statement) @left
-        //     .
-        //     (statement) @right
-        //     .
-        //   )
-        //
-        // 0: {symbol: block} 1000000 named, contains_captures
-        // 1: {symbol: *}1000010 named, immediate, contains_captures
-        // 2: {symbol: *}1000110 named, last_child,immediate, contains_captures
-        // 3: {DONE}110000000 named, dead_end, contains_captures
+        // (for_statement 
+        //      init: (expression) @init 
+        //      condition: (_) @condition 
+        //      update: (_) @update 
+        //      body: (_) @body) @stmt @__tsg__full_match
+        // query steps:
+        //   0: {symbol: for_statement, contains_captures} bitfield: 1000000,
+        //   1: {symbol: expression/*, contains_captures, field: init} bitfield: 1000000,
+        //   2: {symbol: *, named, contains_captures, field: condition} bitfield: 1000001,
+        //   3: {symbol: *, named, contains_captures, field: update} bitfield: 1000001,
+        //   4: {symbol: *, named, contains_captures, field: body} bitfield: 1000001,
+        //   5: {DONE, root_pattern_guaranteed, parent_pattern_guaranteed} bitfield: 110000000,
         self.bit_field & 0b1 != 0
     }
     pub(crate) fn is_immediate(&self) -> bool {
@@ -72,60 +180,73 @@ impl TSQueryStep {
     }
 }
 
-
-
-pub(crate) fn print_query_step(query: &TSQuery, step: &TSQueryStep) {
+pub(crate) fn print_query_step(
+    query: &TSQuery,
+    step: &TSQueryStep,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
     const WILDCARD_SYMBOL: u16 = 0;
-    eprint!("{{");
+    write!(f, "{{")?;
     if step.depth == PATTERN_DONE_MARKER {
-        eprint!("DONE");
+        write!(f, "DONE")?;
     } else if step.is_dead_end() {
-        eprint!("dead_end");
+        write!(f, "dead_end")?;
     } else if step.is_pass_through() {
-        eprint!("pass_through");
-    } else if step.symbol != WILDCARD_SYMBOL {
-        if let Some(s) = symbol_name(query, step.symbol) {
-            eprint!("symbol: {}", s)
-        } else {
-            eprint!("symbol: {}", step.symbol)
-        }
+        write!(f, "pass_through")?;
     } else {
-        eprint!("symbol: *");
+        write!(f, "symbol: ")?;
+        if step.supertype_symbol != WILDCARD_SYMBOL {
+            if let Some(s) = symbol_name(query, step.supertype_symbol) {
+                write!(f, "{}/", s)?
+            } else {
+                write!(f, "{}/", step.supertype_symbol)?
+            }
+        }
+        if step.symbol != WILDCARD_SYMBOL {
+            if let Some(s) = symbol_name(query, step.symbol) {
+                write!(f, "{}", s)?
+            } else {
+                write!(f, "{}", step.symbol)?
+            }
+        } else {
+            write!(f, "*")?
+        }
     }
     if step.is_named() {
-        eprint!(", named");
+        write!(f, ", named")?;
     }
     if step.is_immediate() {
-        eprint!(", immediate");
+        write!(f, ", immediate")?;
     }
     if step.is_last_child() {
-        eprint!(", last_child");
+        write!(f, ", last_child")?;
     }
     if step.alternative_is_immediate() {
-        eprint!(", alternative_is_immediate");
+        write!(f, ", alternative_is_immediate")?;
     }
     if step.contains_captures() {
-        eprint!(", contains_captures");
+        write!(f, ", contains_captures")?;
     }
     if step.root_pattern_guaranteed() {
-        eprint!(", root_pattern_guaranteed");
+        write!(f, ", root_pattern_guaranteed")?;
     }
     if step.parent_pattern_guaranteed() {
-        eprint!(", parent_pattern_guaranteed");
+        write!(f, ", parent_pattern_guaranteed")?;
     }
 
     if step.field > 0 {
         if let Some(s) = field_name(query, step.field) {
-            eprint!("symbol: {}", s)
+            write!(f, ", field: {}", s)?
         } else {
-            eprint!("symbol: {}", step.symbol)
+            write!(f, ", field: {}", step.field)?
         }
     }
     if step.alternative_index != NONE {
-        eprint!(", alternative: {}", step.alternative_index);
+        write!(f, ", alternative: {}", step.alternative_index)?;
     }
-    eprint!("}}");
-    eprint!(" bitfield: {:b}", step.bit_field);
+    write!(f, "}}")?;
+    // NOTE C is not always zerowing the 7 unused bits so lets mask them
+    write!(f, " bitfield: {:b}", step.bit_field & 0b111111111)
 }
 
 pub(crate) fn symbol_name<'a>(
@@ -160,7 +281,8 @@ fn check_querystep_bitset_regresion() {
         (modifiers "static"?@is_static)?
         type: (_) @type
         name: (identifier) @name
-        (block)+ @_block) @method"#;
+        (block)+ @_block
+        .) @method"#;
     let mut error_offset = 0u32;
     let mut error_type: tree_sitter::ffi::TSQueryError = 0;
     let bytes = source.as_bytes();
@@ -181,7 +303,7 @@ fn check_querystep_bitset_regresion() {
     let query: *mut TSQuery = unsafe { std::mem::transmute(ptr) };
     let query = unsafe { query.as_ref().unwrap() };
 
-    print_query(query);
+    eprintln!("{}", query);
 
     // 0: {symbol: method_declaration, contains_captures} bitfield: 1000000,
     {
@@ -231,7 +353,8 @@ fn check_querystep_bitset_regresion() {
         let step = unsafe { query.steps.contents.add(5).as_ref().unwrap() };
         assert_eq!(symbol_name(query, step.symbol), Some("block"));
         assert!(step.contains_captures());
-        assert_eq!(step.bit_field, 0b1000000);
+        assert!(step.is_last_child());
+        assert_eq!(step.bit_field, 0b1000100);
     }
     // 6: {pass_through, alternative_is_immediate, root_pattern_guaranteed, parent_pattern_guaranteed, alternative: 5} bitfield: 110111110101000,
     {

@@ -46,6 +46,7 @@ pub enum Role {
     Superclass,
     Element,
     Consequence,
+    Key,
 }
 impl<'a> TryFrom<&'a str> for Role {
     type Error = ();
@@ -77,6 +78,7 @@ impl<'a> TryFrom<&'a str> for Role {
             "superclass" => Ok(Role::Superclass),
             "element" => Ok(Role::Element),
             "consequence" => Ok(Role::Consequence),
+            "key" => Ok(Role::Key),
             _ => Err(()),
         }
     }
@@ -110,7 +112,7 @@ impl Display for Role {
             Role::Superclass => "superclass",
             Role::Element => "element",
             Role::Consequence => "consequence",
-            _ => return Ok(()),
+            Role::Key => "key",
         })
     }
 }
@@ -466,8 +468,10 @@ pub trait LangRef<T> {
     fn name(&self) -> &'static str;
     fn make(&self, t: u16) -> &'static T;
     fn to_u16(&self, t: T) -> u16;
+    fn ts_symbol(&self, t: T) -> u16;
 }
-pub struct LangWrapper<T: 'static>(&'static dyn LangRef<T>);
+
+pub struct LangWrapper<T: 'static + ?Sized>(&'static dyn LangRef<T>);
 
 impl<T> From<&'static (dyn LangRef<T> + 'static)> for LangWrapper<T> {
     fn from(value: &'static (dyn LangRef<T> + 'static)) -> Self {
@@ -487,6 +491,10 @@ impl<T> LangRef<T> for LangWrapper<T> {
     fn name(&self) -> &'static str {
         self.0.name()
     }
+
+    fn ts_symbol(&self, t: T) -> u16 {
+        self.0.ts_symbol(t)
+    }
 }
 
 // trait object used to facilitate erasing node types
@@ -504,10 +512,10 @@ pub trait HyperType: Display + Debug {
     fn is_spaces(&self) -> bool;
     fn is_syntax(&self) -> bool;
     fn is_hidden(&self) -> bool;
+    fn is_named(&self) -> bool;
     fn is_supertype(&self) -> bool;
-    fn get_lang(&self) -> LangWrapper<Self>
-    where
-        Self: Sized;
+    fn get_lang(&self) -> LangWrapper<Self> where Self: Sized;
+    fn lang_ref(&self) -> LangWrapper<AnyType>;
 }
 
 // experiment
@@ -569,10 +577,17 @@ impl HyperType for u8 {
         todo!()
     }
 
+    fn is_named(&self) -> bool {
+        todo!()
+    }
+
     fn get_lang(&self) -> LangWrapper<Self>
     where
         Self: Sized,
     {
+        todo!()
+    }
+    fn lang_ref(&self) -> LangWrapper<AnyType> {
         todo!()
     }
 }
@@ -643,7 +658,13 @@ pub trait WithChildren: Node + Stored {
     fn child(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN>;
     fn child_rev(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN>;
     fn children(&self) -> Option<&Self::Children<'_>>;
-    fn role_at(&self, at: Self::ChildIdx) -> Option<Role>;
+}
+
+pub trait WithRoles: WithChildren {
+    fn role_at<Role: 'static + Copy + std::marker::Sync + std::marker::Send>(
+        &self,
+        at: Self::ChildIdx,
+    ) -> Option<Role>;
 }
 
 pub trait WithChildrenSameLang: WithChildren {
@@ -1078,9 +1099,19 @@ pub trait TypeStore<T> {
     type Marshaled;
     fn marshal_type(&self, n: &T) -> Self::Marshaled;
     fn type_eq(&self, n: &T, m: &T) -> bool;
+    fn type_to_u16(&self, t: Self::Ty) -> u16 {
+        t.get_lang().ts_symbol(t)
+    }
 }
 
 pub trait SpecializedTypeStore<T: Typed>: TypeStore<T> {}
+
+pub trait RoleStore {
+    type IdF: 'static + Copy;
+    type Role: 'static + Copy + PartialEq + std::marker::Sync + std::marker::Send;
+    fn resolve_field(&self, field_id: Self::IdF) -> Self::Role;
+    fn intern_role(&self, role: Self::Role) -> Self::IdF;
+}
 
 pub trait HyperAST<'store> {
     type IdN: NodeId<IdN = Self::IdN>;
@@ -1385,6 +1416,10 @@ where
     fn type_eq(&self, n: &T, m: &T) -> bool {
         self.type_store.type_eq(n, m)
     }
+
+    fn type_to_u16(&self, t: Self::Ty) -> u16 {
+        self.type_store.type_to_u16(t)
+    }
 }
 
 pub struct TypeIndex {
@@ -1543,11 +1578,22 @@ impl HyperType for AnyType {
         self.0.is_supertype()
     }
 
+    fn is_named(&self) -> bool {
+        self.0.is_named()
+    }
+
     fn get_lang(&self) -> LangWrapper<Self>
     where
         Self: Sized,
     {
         // self.0.get_lang()
-        panic!()
+        // NOTE quite surprising Oo
+        // the type inference is working in our favour
+        // TODO post on https://users.rust-lang.org/t/understanding-trait-object-safety-return-types/73425 or https://stackoverflow.com/questions/54465400/why-does-returning-self-in-trait-work-but-returning-optionself-requires or https://www.reddit.com/r/rust/comments/lbbobv/3_things_to_try_when_you_cant_make_a_trait_object/
+        self.0.lang_ref()
+    }
+
+    fn lang_ref(&self) -> LangWrapper<AnyType> {
+        self.0.lang_ref()
     }
 }

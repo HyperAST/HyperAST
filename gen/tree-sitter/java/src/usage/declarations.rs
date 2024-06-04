@@ -1,9 +1,9 @@
 use core::fmt;
-use std::{fmt::Debug, ops::AddAssign};
+use std::fmt::Debug;
 
 use hyper_ast::{
-    position::{StructuralPosition, TreePath, TreePathMut},
-    store::{defaults::NodeIdentifier, SimpleStores},
+    position::{TreePath, TreePathMut},
+    store::defaults::NodeIdentifier,
     types::{
         AnyType, HyperAST, HyperType, IterableChildren, NodeId, NodeStore, Tree, TypeTrait, Typed,
         TypedHyperAST, TypedNodeStore, TypedTree, WithChildren,
@@ -267,104 +267,111 @@ where
     }
 }
 
-pub struct IterDeclarationsUnstableOpti<'a, HAST> {
-    stores: &'a HAST,
-    parents: Vec<NodeIdentifier>,
-    offsets: Vec<u16>,
-    /// to tell that we need to pop a parent, we could also use a bitvec instead of Option::None
-    remaining: Vec<Option<NodeIdentifier>>,
-}
+#[cfg(test)]
+mod experiment {
+    use super::*;
+    use hyper_ast::position::StructuralPosition;
+    use std::ops::AddAssign;
 
-impl<'a, HAST> Debug for IterDeclarationsUnstableOpti<'a, HAST> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("IterDeclarations")
-            .field("parents", &self.parents())
-            .field("offsets", &self.offsets())
-            .field("remaining", &self.remaining)
-            .finish()
+    pub struct IterDeclarationsUnstableOpti<'a, HAST> {
+        stores: &'a HAST,
+        parents: Vec<NodeIdentifier>,
+        offsets: Vec<u16>,
+        /// to tell that we need to pop a parent, we could also use a bitvec instead of Option::None
+        remaining: Vec<Option<NodeIdentifier>>,
     }
-}
 
-impl<'a, HAST: HyperAST<'a>> Iterator for IterDeclarationsUnstableOpti<'a, HAST> {
-    type Item = NodeIdentifier;
+    impl<'a, HAST> Debug for IterDeclarationsUnstableOpti<'a, HAST> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("IterDeclarations")
+                .field("parents", &self.parents())
+                .field("offsets", &self.offsets())
+                .field("remaining", &self.remaining)
+                .finish()
+        }
+    }
 
-    fn next(&mut self) -> Option<Self::Item> {
-        let x;
-        loop {
-            if let Some(c) = self.remaining.pop()? {
-                self.offsets.last_mut().unwrap().add_assign(1);
-                x = c;
-                break;
-            } else {
-                self.offsets.pop();
-                self.parents.pop();
+    impl<'a, HAST: HyperAST<'a>> Iterator for IterDeclarationsUnstableOpti<'a, HAST> {
+        type Item = NodeIdentifier;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            let x;
+            loop {
+                if let Some(c) = self.remaining.pop()? {
+                    self.offsets.last_mut().unwrap().add_assign(1);
+                    x = c;
+                    break;
+                } else {
+                    self.offsets.pop();
+                    self.parents.pop();
+                }
+            }
+            todo!()
+
+            // let b = self.stores.node_store().resolve(&x);
+            // let t = b.get_type();
+
+            // if t == Type::Spaces {
+            //     return self.next();
+            // } else if t == Type::Comment {
+            //     return self.next();
+            // } else if t == Type::PackageDeclaration {
+            //     return self.next();
+            // } else if t == Type::ImportDeclaration {
+            //     return self.next();
+            // }
+
+            // self.parents.push(x);
+            // self.offsets.push(0);
+            // self.remaining.push(None);
+            // if let Some(cs) = b.children() {
+            //     self.remaining
+            //         .extend(cs.iter_children().rev().map(|x| Some(*x)));
+            // }
+
+            // if t.is_type_declaration() {
+            //     Some(x)
+            // } else if t == Type::LocalVariableDeclaration {
+            //     Some(x)
+            // } else if t == Type::EnhancedForStatement {
+            //     Some(x)
+            // } else if t == Type::Resource {
+            //     // TODO also need to find an "=" and find the name just before
+            //     Some(x)
+            // } else if t.is_value_member() {
+            //     Some(x)
+            // } else if t.is_parameter() {
+            //     Some(x)
+            // } else if t.is_executable_member() {
+            //     Some(x)
+            // } else {
+            //     while !self.remaining.is_empty() {
+            //         if let Some(x) = self.next() {
+            //             return Some(x);
+            //         }
+            //     }
+            //     None
+            // }
+        }
+    }
+
+    impl<'a, HAST> IterDeclarationsUnstableOpti<'a, HAST> {
+        pub fn new(stores: &'a HAST, root: NodeIdentifier) -> Self {
+            Self {
+                stores,
+                parents: vec![],
+                offsets: vec![0],
+                remaining: vec![Some(root)],
             }
         }
-        todo!()
-
-        // let b = self.stores.node_store().resolve(&x);
-        // let t = b.get_type();
-
-        // if t == Type::Spaces {
-        //     return self.next();
-        // } else if t == Type::Comment {
-        //     return self.next();
-        // } else if t == Type::PackageDeclaration {
-        //     return self.next();
-        // } else if t == Type::ImportDeclaration {
-        //     return self.next();
-        // }
-
-        // self.parents.push(x);
-        // self.offsets.push(0);
-        // self.remaining.push(None);
-        // if let Some(cs) = b.children() {
-        //     self.remaining
-        //         .extend(cs.iter_children().rev().map(|x| Some(*x)));
-        // }
-
-        // if t.is_type_declaration() {
-        //     Some(x)
-        // } else if t == Type::LocalVariableDeclaration {
-        //     Some(x)
-        // } else if t == Type::EnhancedForStatement {
-        //     Some(x)
-        // } else if t == Type::Resource {
-        //     // TODO also need to find an "=" and find the name just before
-        //     Some(x)
-        // } else if t.is_value_member() {
-        //     Some(x)
-        // } else if t.is_parameter() {
-        //     Some(x)
-        // } else if t.is_executable_member() {
-        //     Some(x)
-        // } else {
-        //     while !self.remaining.is_empty() {
-        //         if let Some(x) = self.next() {
-        //             return Some(x);
-        //         }
-        //     }
-        //     None
-        // }
-    }
-}
-
-impl<'a, HAST> IterDeclarationsUnstableOpti<'a, HAST> {
-    pub fn new(stores: &'a HAST, root: NodeIdentifier) -> Self {
-        Self {
-            stores,
-            parents: vec![],
-            offsets: vec![0],
-            remaining: vec![Some(root)],
+        pub fn parents(&self) -> &[NodeIdentifier] {
+            &self.parents[..self.parents.len() - 1]
         }
-    }
-    pub fn parents(&self) -> &[NodeIdentifier] {
-        &self.parents[..self.parents.len() - 1]
-    }
-    pub fn offsets(&self) -> &[u16] {
-        &self.offsets[..self.offsets.len() - 1]
-    }
-    pub fn position(&self, x: NodeIdentifier) -> StructuralPosition<NodeIdentifier, u16> {
-        (self.parents().to_vec(), self.offsets().to_vec(), x).into()
+        pub fn offsets(&self) -> &[u16] {
+            &self.offsets[..self.offsets.len() - 1]
+        }
+        pub fn position(&self, x: NodeIdentifier) -> StructuralPosition<NodeIdentifier, u16> {
+            (self.parents().to_vec(), self.offsets().to_vec(), x).into()
+        }
     }
 }

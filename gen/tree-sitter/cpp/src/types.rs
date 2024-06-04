@@ -70,6 +70,9 @@ mod legion_impls {
         ) -> bool {
             n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
         }
+        fn type_to_u16(&self, t: Self::Ty) -> u16 {
+            tree_sitter_cpp::language().id_for_node_kind(t.as_static_str(), t.is_named())
+        }
     }
     impl<'a> CppEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         const LANG: TypeInternalSize = Self::Cpp as u16;
@@ -117,6 +120,9 @@ mod legion_impls {
             _m: &HashedNodeRef<'a, NodeIdentifier>,
         ) -> bool {
             todo!()
+        }
+        fn type_to_u16(&self, t: Self::Ty) -> u16 {
+            tree_sitter_cpp::language().id_for_node_kind(t.as_static_str(), t.is_named())
         }
     }
 }
@@ -301,6 +307,10 @@ impl LangRef<AnyType> for Cpp {
     fn name(&self) -> &'static str {
         std::any::type_name::<Cpp>()
     }
+
+    fn ts_symbol(&self, t: AnyType) -> u16 {
+        tree_sitter_cpp::language().id_for_node_kind(t.as_static_str(), t.is_named())
+    }
 }
 
 impl LangRef<Type> for Cpp {
@@ -313,6 +323,10 @@ impl LangRef<Type> for Cpp {
 
     fn name(&self) -> &'static str {
         std::any::type_name::<Cpp>()
+    }
+
+    fn ts_symbol(&self, t: Type) -> u16 {
+        tree_sitter_cpp::language().id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 
@@ -537,11 +551,18 @@ impl HyperType for Type {
         self.is_supertype()
     }
 
+    fn is_named(&self) -> bool {
+        todo!()
+    }
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,
     {
-        From::<&'static (dyn LangRef<Self>)>::from(&Lang)
+        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<Self> + 'static))
+    }
+
+    fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
+        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<AnyType> + 'static))
     }
 }
 impl TypeTrait for Type {

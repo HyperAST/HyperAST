@@ -1,7 +1,3 @@
-use core::ffi;
-
-use super::*;
-
 struct SimpleLogger;
 
 impl log::Log for SimpleLogger {
@@ -33,11 +29,14 @@ fn convert() {
     let source = r#"(class_declaration
         name: (identifier) @name
         body: (class_body) @class_body)"#;
-    // let source = "(_
-    //     (expression_statement)
-    //     .
-    //     (statement)
-    // ) @a";
+    let source = r#"(class_declaration
+        (identifier) @name
+        (class_body) @class_body)"#;
+    let source = "(_
+        (expression_statement)
+        .
+        (statement)
+    ) @a";
     let mut error_offset = 0u32;
     let mut error_type: tree_sitter::ffi::TSQueryError = 0;
     let bytes = source.as_bytes();
@@ -118,90 +117,24 @@ fn convert() {
     };
 
     let query: *mut super::TSQuery = unsafe { std::mem::transmute(ptr) };
-    {
-        let query = unsafe { query.as_ref().unwrap() };
-        eprint!("query steps:\n");
-        let steps = &query.steps;
-        const WILDCARD_SYMBOL: u16 = 0;
-        for i in 0..steps.size {
-            let step = unsafe { steps.contents.add(i as usize).as_ref().unwrap() };
-            eprint!("  {}: {{", i);
-            if step.depth == PATTERN_DONE_MARKER {
-                eprint!("DONE");
-            } else if step.is_dead_end() {
-                eprint!("dead_end");
-            } else if step.is_pass_through() {
-                eprint!("pass_through");
-            } else if step.symbol != WILDCARD_SYMBOL {
-                let ptr = unsafe {
-                    tree_sitter::ffi::ts_language_symbol_name(query.language, step.symbol)
-                };
-                if !ptr.is_null() {
-                    eprint!(
-                        "symbol: {}",
-                        unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str().unwrap()
-                    );
-                } else {
-                    eprint!("symbol: {}", step.symbol);
-                }
-            } else {
-                eprint!("symbol: *");
-            }
-            if step.is_named() {
-                eprint!(", named");
-            }
-            if step.is_immediate() {
-                eprint!(", immediate");
-            }
-            if step.is_last_child() {
-                eprint!(", last_child");
-            }
-            if step.alternative_is_immediate() {
-                eprint!(", alternative_is_immediate");
-            }
-            if step.contains_captures() {
-                eprint!(", contains_captures");
-            }
-            if step.root_pattern_guaranteed() {
-                eprint!(", root_pattern_guaranteed");
-            }
-            if step.parent_pattern_guaranteed() {
-                eprint!(", parent_pattern_guaranteed");
-            }
-
-            if step.field > 0 {
-                let ptr = unsafe {
-                    tree_sitter::ffi::ts_language_field_name_for_id(query.language, step.field)
-                };
-                if !ptr.is_null() {
-                    eprint!(
-                        ", field: {}",
-                        unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str().unwrap()
-                    );
-                } else {
-                    eprint!(", field: {}", step.field);
-                }
-            }
-            if step.alternative_index != NONE {
-                eprint!(", alternative: {}", step.alternative_index);
-            }
-            eprint!("}}");
-            eprint!(" bitfield: {:b}", step.bit_field);
-
-            eprint!(",\n");
-        }
-    }
+    eprintln!("{}", unsafe { query.as_ref().unwrap() });
 
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&language).unwrap();
     let text = "class A {}";
+    let text = "class A {
+        B f() {
+            a++;
+            return null;
+        }
+    }";
     let tree = parser.parse(text, None).unwrap();
 
-    let mut qcursor = super::QueryCursor::<tree_sitter::TreeCursor, tree_sitter::Node> {
+    let mut qcursor = super::QueryCursor::<'_, tree_sitter::TreeCursor, tree_sitter::Node> {
         halted: false,
         ascending: false,
         states: vec![],
-        capture_list_pool: CaptureListPool::default(),
+        capture_list_pool: super::CaptureListPool::default(),
         finished_states: Default::default(),
         max_start_depth: u32::MAX,
         did_exceed_match_limit: false,
@@ -213,7 +146,7 @@ fn convert() {
         // .capture_list_pool = capture_list_pool_new(),
         // .max_start_depth = UINT32_MAX,
         depth: 0,
-        on_visible_node: false,
+        on_visible_node: true,
         query,
         cursor: tree.root_node().walk(),
         next_state_id: 0,
@@ -233,6 +166,7 @@ fn convert() {
         // .end_byte = UINT32_MAX,
         // .start_point = {0, 0},
         // .end_point = POINT_MAX,
+        _phantom: std::marker::PhantomData,
     };
     let mut matched = false;
     while let Some(m) = qcursor.next_match() {
