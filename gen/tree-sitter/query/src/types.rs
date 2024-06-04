@@ -104,9 +104,18 @@ mod legion_impls {
             todo!("{:?} {:?}", n, m)
         }
         fn type_to_u16(&self, t: Self::Ty) -> u16 {
-            tree_sitter_query::language().id_for_node_kind(t.as_static_str(), t.is_named())
+            id_for_node_kind(t.as_static_str(), t.is_named())
         }
     }
+}
+
+#[cfg(feature = "impl")]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    tree_sitter_query::language().id_for_node_kind(kind, named)
+}
+#[cfg(not(feature = "impl"))]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    unimplemented!("need treesitter grammar")
 }
 
 pub trait TsQueryEnabledTypeStore<T>: TypeStore<T> {
@@ -205,7 +214,7 @@ impl LangRef<AnyType> for TsQuery {
     }
 
     fn ts_symbol(&self, t: AnyType) -> u16 {
-        tree_sitter_query::language().id_for_node_kind(t.as_static_str(), t.is_named())
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 
@@ -222,7 +231,7 @@ impl LangRef<Type> for TsQuery {
     }
 
     fn ts_symbol(&self, t: Type) -> u16 {
-        tree_sitter_query::language().id_for_node_kind(t.as_static_str(), t.is_named())
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 

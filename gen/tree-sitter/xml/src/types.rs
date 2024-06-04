@@ -100,10 +100,20 @@ mod legion_impls {
             todo!()
         }
         fn type_to_u16(&self, t: Self::Ty) -> u16 {
-            tree_sitter_xml::language_xml().id_for_node_kind(t.as_static_str(), t.is_named())
+            id_for_node_kind(t.as_static_str(), t.is_named())
         }
     }
 }
+
+#[cfg(feature = "impl")]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    tree_sitter_xml::language_xml().id_for_node_kind(kind, named)
+}
+#[cfg(not(feature = "impl"))]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    unimplemented!("need treesitter grammar")
+}
+
 pub fn as_any(t: &Type) -> AnyType {
     let t = <Xml as hyper_ast::types::Lang<Type>>::to_u16(*t);
     let t = <Xml as hyper_ast::types::Lang<Type>>::make(t);
@@ -188,7 +198,7 @@ impl LangRef<Type> for Xml {
     }
 
     fn ts_symbol(&self, t: Type) -> u16 {
-        tree_sitter_xml::language_xml().id_for_node_kind(t.as_static_str(), t.is_named())
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 
@@ -206,7 +216,7 @@ impl LangRef<AnyType> for Xml {
     }
 
     fn ts_symbol(&self, t: AnyType) -> u16 {
-        tree_sitter_xml::language_xml().id_for_node_kind(t.as_static_str(), t.is_named())
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 impl HyperType for Type {
@@ -318,7 +328,7 @@ impl HyperType for Type {
     fn is_hidden(&self) -> bool {
         todo!()
     }
-    
+
     fn is_supertype(&self) -> bool {
         todo!()
     }
@@ -333,7 +343,7 @@ impl HyperType for Type {
     {
         todo!()
     }
-    
+
     fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
         todo!()
     }

@@ -87,7 +87,7 @@ mod legion_impls {
             n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
         }
         fn type_to_u16(&self, t: Self::Ty) -> u16 {
-            tree_sitter_java::language().id_for_node_kind(t.as_static_str(), t.is_named())
+            id_for_node_kind(t.as_static_str(), t.is_named())
         }
     }
     impl<'a, R> TypeStore<R> for &TStore {
@@ -110,8 +110,9 @@ mod legion_impls {
         fn type_eq(&self, _n: &R, _m: &R) -> bool {
             todo!()
         }
+
         fn type_to_u16(&self, t: Self::Ty) -> u16 {
-            tree_sitter_java::language().id_for_node_kind(t.as_static_str(), t.is_named())
+            id_for_node_kind(t.as_static_str(), t.is_named())
         }
     }
     impl<'a> JavaEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
@@ -171,6 +172,15 @@ mod legion_impls {
 pub use legion_impls::as_any;
 pub trait JavaEnabledTypeStore<T>: TypeStore<T> {}
 
+#[cfg(feature = "impl")]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    tree_sitter_java::language().id_for_node_kind(kind, named)
+}
+#[cfg(not(feature = "impl"))]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    unimplemented!("need treesitter grammar")
+}
+
 #[repr(u8)]
 pub enum TStore {
     Java = 0,
@@ -182,6 +192,7 @@ impl Default for TStore {
     }
 }
 
+#[cfg(feature = "impl")]
 impl RoleStore for TStore {
     type IdF = u16;
 
@@ -257,7 +268,7 @@ impl LangRef<Type> for Java {
     }
 
     fn ts_symbol(&self, t: Type) -> u16 {
-        tree_sitter_java::language().id_for_node_kind(t.as_static_str(), t.is_named())
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 impl LangRef<AnyType> for Java {
@@ -273,7 +284,7 @@ impl LangRef<AnyType> for Java {
     }
 
     fn ts_symbol(&self, t: AnyType) -> u16 {
-        tree_sitter_java::language().id_for_node_kind(t.as_static_str(), t.is_named())
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 

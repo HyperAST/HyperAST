@@ -71,7 +71,7 @@ mod legion_impls {
             n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
         }
         fn type_to_u16(&self, t: Self::Ty) -> u16 {
-            tree_sitter_cpp::language().id_for_node_kind(t.as_static_str(), t.is_named())
+            id_for_node_kind(t.as_static_str(), t.is_named())
         }
     }
     impl<'a> CppEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
@@ -122,9 +122,19 @@ mod legion_impls {
             todo!()
         }
         fn type_to_u16(&self, t: Self::Ty) -> u16 {
-            tree_sitter_cpp::language().id_for_node_kind(t.as_static_str(), t.is_named())
+            id_for_node_kind(t.as_static_str(), t.is_named())
         }
     }
+}
+
+
+#[cfg(feature = "impl")]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    tree_sitter_cpp::language().id_for_node_kind(kind, named)
+}
+#[cfg(not(feature = "impl"))]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    unimplemented!("need treesitter grammar")
 }
 
 pub trait CppEnabledTypeStore<T>: TypeStore<T> {
@@ -309,7 +319,7 @@ impl LangRef<AnyType> for Cpp {
     }
 
     fn ts_symbol(&self, t: AnyType) -> u16 {
-        tree_sitter_cpp::language().id_for_node_kind(t.as_static_str(), t.is_named())
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 
@@ -326,7 +336,7 @@ impl LangRef<Type> for Cpp {
     }
 
     fn ts_symbol(&self, t: Type) -> u16 {
-        tree_sitter_cpp::language().id_for_node_kind(t.as_static_str(), t.is_named())
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 

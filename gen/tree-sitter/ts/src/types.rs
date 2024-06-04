@@ -51,7 +51,7 @@ mod legion_impls {
             n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
         }
         fn type_to_u16(&self, t: Self::Ty) -> u16 {
-            tree_sitter_typescript::language_typescript().id_for_node_kind(t.as_static_str(), t.is_named())
+            id_for_node_kind(t.as_static_str(), t.is_named())
         }
     }
     impl<'a> TsEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
@@ -143,6 +143,15 @@ impl<IdN: Clone + Eq + NodeId> NodeId for TIdN<IdN> {
     }
 }
 
+#[cfg(feature = "impl")]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    tree_sitter_typescript::language_typescript().id_for_node_kind(kind, named)
+}
+#[cfg(not(feature = "impl"))]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    unimplemented!("need treesitter grammar")
+}
+
 impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
     type Ty = Type;
 }
@@ -181,7 +190,7 @@ impl LangRef<AnyType> for Ts {
     }
 
     fn ts_symbol(&self, t: AnyType) -> u16 {
-        tree_sitter_typescript::language_typescript().id_for_node_kind(t.as_static_str(), t.is_named())
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 
@@ -198,7 +207,7 @@ impl LangRef<Type> for Ts {
     }
 
     fn ts_symbol(&self, t: Type) -> u16 {
-        tree_sitter_typescript::language_typescript().id_for_node_kind(t.as_static_str(), t.is_named())
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 
