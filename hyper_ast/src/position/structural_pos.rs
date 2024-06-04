@@ -323,7 +323,7 @@ where
         let len = {
             let b = stores.node_store().resolve(x.as_id());
             let t = stores.type_store().resolve_type(&b);
-            dbg!(t);
+            // dbg!(t);
             let len = b.try_bytes_len();
             assert!(len.is_some() || t.is_directory());
             prev_x = x;
@@ -341,17 +341,17 @@ where
                 o = aaa.0;
                 let b = stores.node_store().resolve(x.as_id());
                 let t = stores.type_store().resolve_type(&b);
-                dbg!(&prev_x);
-                dbg!(&x);
-                dbg!(o);
-                dbg!(t);
+                // dbg!(&prev_x);
+                // dbg!(&x);
+                // dbg!(o);
+                // dbg!(t);
                 let v = &b.children().unwrap();
-                dbg!(v
-                    .iter_children()
-                    .map(|x| stores
-                        .type_store()
-                        .resolve_type(&stores.node_store().resolve(x.as_id())))
-                    .collect::<Vec<_>>());
+                // dbg!(v
+                //     .iter_children()
+                //     .map(|x| stores
+                //         .type_store()
+                //         .resolve_type(&stores.node_store().resolve(x.as_id())))
+                //     .collect::<Vec<_>>());
 
                 // dbg!(aaa.0);
                 assert_eq!(Some(prev_x.as_id()), v.get(o));
@@ -400,7 +400,8 @@ where
                     })
                     .sum();
 
-                use bottom_up::{ReceiveColumns, ReceiveIdx, ReceiveOffset, ReceiveRows};
+                use building::{ReceiveRows, ReceiveColumns};
+                use bottom_up::{ReceiveIdx, ReceiveOffset};
                 builder = builder.push(prev_x).push(c).push(row).push(col).push(o);
                 prev_x = x;
 

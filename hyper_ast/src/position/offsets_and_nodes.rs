@@ -30,6 +30,27 @@ impl<IdN: std::cmp::PartialEq, C, Idx: std::cmp::PartialEq> PartialEq
             && self.offsets == other.offsets
     }
 }
+impl<IdN: std::cmp::Eq, C, Idx: std::cmp::Eq> Eq for StructuralPosition<IdN, Idx, C> {}
+impl<IdN: std::cmp::Eq, Idx: PrimInt> PartialOrd for StructuralPosition<IdN, Idx> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl<IdN: std::cmp::Eq, Idx: PrimInt> Ord for StructuralPosition<IdN, Idx> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use crate::position::position_accessors::SharedPath;
+        use std::cmp::Ordering::*;
+        match crate::position::position_accessors::WithPreOrderOffsets::shared_ancestors(
+            self, other,
+        ) {
+            SharedPath::Exact(_) => unreachable!(),
+            SharedPath::Remain(_) => Less,
+            SharedPath::Submatch(_) => Greater,
+            SharedPath::Different(a) => self.offsets[a.len()].cmp(&other.offsets[a.len()]),
+        }
+    }
+}
+
 impl<IdN, Idx, C> StructuralPosition<IdN, Idx, C> {
     pub(crate) fn empty() -> Self {
         Self {
@@ -46,9 +67,16 @@ impl<IdN, Idx, C> StructuralPosition<IdN, Idx, C> {
             _phantom: Default::default(),
         }
     }
+
+    pub fn parent(&self) -> Option<&IdN> {
+        let i = self.parents.len().checked_sub(2)?;
+        self.parents.get(i)
+    }
 }
 
-impl<IdN, Idx: PrimInt> super::position_accessors::WithOffsets for StructuralPosition<IdN, Idx> {
+impl<IdN, Idx: PrimInt, C> super::position_accessors::WithOffsets
+    for StructuralPosition<IdN, Idx, C>
+{
     type Idx = Idx;
 }
 
@@ -283,6 +311,14 @@ impl<IdN, Idx: num::Zero, C> StructuralPosition<IdN, Idx, C> {
     }
 }
 
+impl<IdN, Idx: PrimInt, C> StructuralPosition<IdN, Idx, C> {
+    pub fn o(&self) -> Option<Idx> {
+        self.offsets
+            .last()
+            .and_then(|&x| x.checked_sub(&num::one()))
+    }
+}
+
 impl<IdN, Idx> From<(Vec<IdN>, Vec<Idx>, IdN)> for StructuralPosition<IdN, Idx> {
     fn from(mut x: (Vec<IdN>, Vec<Idx>, IdN)) -> Self {
         assert_eq!(x.0.len() + 1, x.1.len());
@@ -414,6 +450,16 @@ mod impl_c_p_p_receivers {
     }
     impl<IdN, Idx: PrimInt, C> top_down::SetFileName<Self> for StructuralPosition<IdN, Idx, C> {
         fn set_file_name(self, _file_name: &str) -> Self {
+            self
+        }
+    }
+    impl<IdN, Idx: PrimInt, IdO, C> building::ReceiveRows<IdO, Self> for StructuralPosition<IdN, Idx, C> {
+        fn push(self, _row: IdO) -> Self {
+            self
+        }
+    }
+    impl<IdN, Idx: PrimInt, IdO, C> building::ReceiveColumns<IdO, Self> for StructuralPosition<IdN, Idx, C> {
+        fn push(self, _col: IdO) -> Self {
             self
         }
     }

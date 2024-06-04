@@ -184,28 +184,14 @@ mod impl_receivers {
         }
     }
 
-    impl<T: PrimInt> bottom_up::ReceiveRows<T, Self> for super::RowCol<T> {
+    impl<T: PrimInt> building::ReceiveRows<T, Self> for super::RowCol<T> {
         fn push(mut self, row: T) -> Self {
             self.row += row;
             self
         }
     }
 
-    impl<T: PrimInt> bottom_up::ReceiveColumns<T, Self> for super::RowCol<T> {
-        fn push(mut self, col: T) -> Self {
-            self.col += col;
-            self
-        }
-    }
-
-    impl<T: PrimInt> top_down::ReceiveRows<T, Self> for super::RowCol<T> {
-        fn push(mut self, row: T) -> Self {
-            self.row += row;
-            self
-        }
-    }
-
-    impl<T: PrimInt> top_down::ReceiveColumns<T, Self> for super::RowCol<T> {
+    impl<T: PrimInt> building::ReceiveColumns<T, Self> for super::RowCol<T> {
         fn push(mut self, col: T) -> Self {
             self.col += col;
             self

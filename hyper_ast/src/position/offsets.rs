@@ -182,7 +182,7 @@ mod impl_receivers {
         type InFile<O> = Self;
     }
 
-    impl<Idx: PrimInt, IdO: PrimInt, C> building::top_down::ReceiveOffset<IdO, Self>
+    impl<Idx: PrimInt, IdO: PrimInt, C> top_down::ReceiveOffset<IdO, Self>
         for Offsets<Idx, C>
     {
         fn push(self, _bytes: IdO) -> Self {
@@ -204,6 +204,19 @@ mod impl_receivers {
             self
         }
     }
+
+    impl<Idx: PrimInt, T, C> building::ReceiveRows<T, Self> for Offsets<Idx, C> {
+        fn push(self, _row: T) -> Self {
+            self
+        }
+    }
+
+    impl<Idx: PrimInt, T, C> building::ReceiveColumns<T, Self> for Offsets<Idx, C> {
+        fn push(self, _col: T) -> Self {
+            self
+        }
+    }
+
     impl<Idx: PrimInt, C> building::Transition<Self> for Offsets<Idx, C> {
         fn transit(self) -> Self {
             self
