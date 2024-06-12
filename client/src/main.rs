@@ -1,18 +1,15 @@
 #![feature(array_chunks)]
 #![feature(core_intrinsics)]
-#![feature(build_hasher_simple_hash_one)]
 #![feature(map_many_mut)]
 #![feature(iter_collect_into)]
 use std::{
-    collections::HashMap,
     net::SocketAddr,
     sync::{Arc, RwLock},
 };
 
+use app::{querying_app, tsg_app};
 use dashmap::DashMap;
-use hyper_ast_cvs_git::{
-    git::Forge, multi_preprocessed::PreProcessedRepositories, processing::ConfiguredRepoHandle,
-};
+use hyper_ast_cvs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories};
 use hyper_diff::{decompressed_tree_store::PersistedNode, matchers::mapping_store::VecStore};
 use tower_http::cors::CorsLayer;
 
@@ -34,6 +31,8 @@ mod examples;
 mod fetch;
 mod file;
 mod matching;
+mod querying;
+mod tsg;
 mod scripting;
 mod track;
 mod utils;
@@ -133,6 +132,8 @@ async fn main() {
         .route("/ws", axum::routing::get(ws::ws_handler))
         .merge(kv_store_app(Arc::clone(&shared_state)))
         .merge(scripting_app(Arc::clone(&shared_state)))
+        .merge(querying_app(Arc::clone(&shared_state)))
+        .merge(tsg_app(Arc::clone(&shared_state)))
         .merge(fetch_git_file(Arc::clone(&shared_state)))
         .merge(track_code_route(Arc::clone(&shared_state)))
         .merge(view_code_route(Arc::clone(&shared_state)))

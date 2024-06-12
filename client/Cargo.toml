@@ -15,6 +15,7 @@ hyper_diff = { path = "../hyper_diff" }
 hyper_ast_cvs_git = { path = "../cvs/git" }
 hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
 hyper_ast_gen_ts_cpp = { path = "../gen/tree-sitter/cpp" }
+hyper_ast_gen_ts_tsquery = { path = "../gen/tree-sitter/query" }
 env_logger = "0.9.0"
 log = { version = "0.4.6", features = [
     # "max_level_debug",
@@ -90,6 +91,10 @@ syn = { version = "2", features = ["full", "extra-traits"] }
 clap = { version = "3.0", features = ["derive"] }
 
 hashbrown = "0.12.3"
+
+tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "f09e4a7bd49893b3859fd35446a81314968d665b", version = "0.12" }
+tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d" }
+stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d" }
 
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["blocking"] }

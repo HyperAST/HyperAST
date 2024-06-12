@@ -543,7 +543,7 @@ where
     HAST: crate::types::NodeStore<IdN>,
     HAST: crate::types::LabelStore<str>,
     HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST: crate::types::RoleStore,
+    HAST: crate::types::RoleStore<HAST::R<'store>>,
     HAST::Role: Display,
     HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
         + crate::types::WithChildren<TreeId = IdN>
@@ -660,7 +660,7 @@ where
     HAST: crate::types::NodeStore<IdN>,
     HAST: crate::types::LabelStore<str>,
     HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST: crate::types::RoleStore,
+    HAST: crate::types::RoleStore<HAST::R<'store>>,
     HAST::Role: Display,
     HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
         + crate::types::WithChildren<TreeId = IdN>

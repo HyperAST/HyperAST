@@ -164,6 +164,12 @@ impl From<&str> for CodeEditor {
     }
 }
 
+impl AsRef<str> for CodeEditor {
+    fn as_ref(&self) -> &str {
+        self.code()
+    }
+}
+
 // impl super::Demo for CodeEditor {
 //     fn name(&self) -> &'static str {
 //         "🖮 Code Editor"

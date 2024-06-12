@@ -368,7 +368,7 @@ where
                     let b = stores.node_store().resolve(&x);
                     let l = b.line_count();
                     if l == 0 {
-                        *col += b.try_bytes_len().unwrap() as usize;
+                        *col += b.try_bytes_len().unwrap_or_default() as usize;
                     } else if let Some(cs) = b.children() {
                         for x in cs.iter_children() {
                             if compute(stores, x.as_id(), col) > 0 {
@@ -376,7 +376,7 @@ where
                             }
                         }
                     } else {
-                        *col += b.try_bytes_len().unwrap() as usize - b.line_count();
+                        *col += b.try_bytes_len().unwrap_or_default() as usize - b.line_count();
                     }
                     l
                 }
@@ -396,7 +396,7 @@ where
                         let b = stores.node_store().resolve(x);
                         // println!("{:?}", b.get_type());
                         // println!("T1:{:?}", b.get_type());
-                        b.try_bytes_len().unwrap() as usize
+                        b.try_bytes_len().unwrap_or_default() as usize
                     })
                     .sum();
 
@@ -425,14 +425,14 @@ where
             let b = stores.node_store().resolve(x.as_id());
             let t = stores.type_store().resolve_type(&b);
 
-            dbg!(t);
-            let v = &b.children().unwrap();
-            dbg!(v
-                .iter_children()
-                .map(|x| stores
-                    .type_store()
-                    .resolve_type(&stores.node_store().resolve(x.as_id())))
-                .collect::<Vec<_>>());
+            // dbg!(t);
+            // let v = &b.children().unwrap();
+            // dbg!(v
+            //     .iter_children()
+            //     .map(|x| stores
+            //         .type_store()
+            //         .resolve_type(&stores.node_store().resolve(x.as_id())))
+            //     .collect::<Vec<_>>());
 
             use bottom_up::ReceiveIdx;
             builder = builder.push(prev_x).push(o);

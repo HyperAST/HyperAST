@@ -1,13 +1,15 @@
-use super::{Cursor, FieldId, Status, Symbol, TreeCursorStep};
+use super::{Cursor, Status, Symbol, TreeCursorStep};
 use hyper_ast::position::TreePath;
-use hyper_ast::types::{HyperType, RoleStore, WithRoles};
+use hyper_ast::types::{
+    HyperASTShared, HyperType, LabelStore, Labeled, RoleStore, Tree, WithChildren, WithRoles,
+};
 use hyper_ast::{
     position::TreePathMut,
     types::{HyperAST, TypeStore},
 };
 pub type TreeCursor<'hast, HAST> = Node<'hast, HAST>;
 
-pub struct Node<'hast, HAST: HyperAST<'hast>> {
+pub struct Node<'hast, HAST: HyperASTShared> {
     pub stores: &'hast HAST,
     pub pos: hyper_ast::position::StructuralPosition<HAST::IdN, HAST::Idx>,
 }
@@ -36,10 +38,46 @@ impl<'hast, HAST: HyperAST<'hast>> Clone for Node<'hast, HAST> {
     }
 }
 
+pub struct CursorStatus<IdF> {
+    pub has_later_siblings: bool,
+    pub has_later_named_siblings: bool,
+    pub can_have_later_siblings_with_this_field: bool,
+    pub field_id: IdF,
+    pub supertypes: Vec<Symbol>,
+}
+
+impl<IdF: Copy> Status for CursorStatus<IdF> {
+    type IdF = IdF;
+
+    fn has_later_siblings(&self) -> bool {
+        self.has_later_siblings
+    }
+
+    fn has_later_named_siblings(&self) -> bool {
+        self.has_later_named_siblings
+    }
+
+    fn can_have_later_siblings_with_this_field(&self) -> bool {
+        self.can_have_later_siblings_with_this_field
+    }
+
+    fn field_id(&self) -> Self::IdF {
+        self.field_id
+    }
+
+    fn has_supertypes(&self) -> bool {
+        !self.supertypes.is_empty()
+    }
+
+    fn contains_supertype(&self, sym: Symbol) -> bool {
+        self.supertypes.contains(&sym)
+    }
+}
+
 impl<'hast, HAST: HyperAST<'hast>> super::Cursor for self::TreeCursor<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<IdF = FieldId>,
+    HAST::TS: RoleStore<HAST::T>,
     HAST::T: WithRoles,
 {
     type Node = self::Node<'hast, HAST>;
@@ -117,29 +155,11 @@ where
         s.goto_parent().then_some(s.current_node())
     }
 
+    type Status = CursorStatus<<<HAST as HyperAST<'hast>>::TS as RoleStore<HAST::T>>::IdF>;
+
     #[inline]
-    fn current_status(&self) -> Status {
-        use hyper_ast::types::NodeStore;
-        let mut p = self.clone();
-        let role = loop {
-            let Some((_, o)) = p.pos.pop() else {
-                break None;
-            };
-            let Some(n) = p.pos.node() else {
-                break None;
-            };
-            let n = self.stores.node_store().resolve(n);
-            // dbg!(p.kind());
-            if p.kind().is_supertype() {
-                continue;
-            }
-            break n.role_at::<<HAST::TS as RoleStore>::Role>(o - num::one());
-        };
-        let field_id = if let Some(role) = role {
-            self.stores.type_store().intern_role(role)
-        } else {
-            0
-        };
+    fn current_status(&self) -> Self::Status {
+        let (role, field_id) = self.compute_current_role();
         let mut has_later_siblings = false;
         let mut has_later_named_siblings = false;
         let mut can_have_later_siblings_with_this_field = false;
@@ -165,7 +185,7 @@ where
                 }
             }
         }
-        Status {
+        CursorStatus {
             has_later_siblings,
             has_later_named_siblings,
             can_have_later_siblings_with_this_field,
@@ -173,18 +193,22 @@ where
             supertypes: self.clone().super_types(),
         }
     }
+
+    fn text_provider(&self) -> <Self::Node as super::Node>::TP<'_> {
+        ()
+    }
 }
 
 impl<'hast, HAST: HyperAST<'hast>> self::TreeCursor<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<IdF = FieldId>,
+    HAST::TS: RoleStore<HAST::T>,
     HAST::T: WithRoles,
 {
-    fn role(&self) -> Option<<HAST::TS as RoleStore>::Role> {
+    fn role(&self) -> Option<<HAST::TS as RoleStore<HAST::T>>::Role> {
         use hyper_ast::types::NodeStore;
         let n = self.stores.node_store().resolve(self.pos.parent().unwrap());
-        n.role_at::<<HAST::TS as RoleStore>::Role>(self.pos.o().unwrap())
+        n.role_at::<<HAST::TS as RoleStore<HAST::T>>::Role>(self.pos.o().unwrap())
     }
 
     fn super_types(mut self) -> Vec<Symbol> {
@@ -204,12 +228,44 @@ where
             }
         }
     }
+
+    fn compute_current_role(
+        &self,
+    ) -> (
+        Option<<<HAST as HyperAST<'hast>>::TS as RoleStore<HAST::T>>::Role>,
+        <<HAST as HyperAST<'hast>>::TS as RoleStore<HAST::T>>::IdF,
+    ) {
+        use hyper_ast::types::NodeStore;
+        let mut p = self.clone();
+        let lang;
+        let role = loop {
+            let Some((_, o)) = p.pos.pop() else {
+                return (None, Default::default());
+            };
+            let Some(n) = p.pos.node() else {
+                return (None, Default::default());
+            };
+            let n = self.stores.node_store().resolve(n);
+            // dbg!(p.kind());
+            if p.kind().is_supertype() {
+                continue;
+            }
+            lang = p.kind().get_lang();
+            break n.role_at::<<HAST::TS as RoleStore<HAST::T>>::Role>(o - num::one());
+        };
+        let field_id = if let Some(role) = role {
+            self.stores.type_store().intern_role(lang, role)
+        } else {
+            Default::default()
+        };
+        (role, field_id)
+    }
 }
 
 impl<'hast, HAST: HyperAST<'hast>> super::Node for self::Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<IdF = FieldId>,
+    HAST::TS: RoleStore<HAST::T>,
     HAST::T: WithRoles,
 {
     fn symbol(&self) -> Symbol {
@@ -231,11 +287,36 @@ where
         tree_sitter::Point { row: 0, column: 0 }
     }
 
-    fn child_by_field_id(&self, field_id: FieldId) -> Option<Self> {
-        if field_id == 0 {
-            return None;
+    type IdF = <HAST::TS as RoleStore<HAST::T>>::IdF;
+
+    // fn child_by_field_id(&self, field_id: FieldId) -> Option<Self> {
+    //     if field_id == 0 {
+    //         return None;
+    //     }
+    //     let role = self.stores.type_store().resolve_field(field_id);
+    //     let mut slf = self.clone();
+    //     loop {
+    //         if slf.kind().is_supertype() {
+    //             match slf.goto_first_child_internal() {
+    //                 TreeCursorStep::TreeCursorStepNone => panic!(),
+    //                 TreeCursorStep::TreeCursorStepHidden => (),
+    //                 TreeCursorStep::TreeCursorStepVisible => break,
+    //             }
+    //         } else {
+    //             break;
+    //         }
+    //     }
+    //     slf.child_by_role(role).and_then(|_| Some(slf))
+    // }
+
+    fn has_child_with_field_id(&self, field_id: Self::IdF) -> bool {
+        if field_id == Default::default() {
+            return false;
         }
-        let role = self.stores.type_store().resolve_field(field_id);
+        let role = self
+            .stores
+            .type_store()
+            .resolve_field(self.kind().get_lang(), field_id);
         let mut slf = self.clone();
         loop {
             if slf.kind().is_supertype() {
@@ -248,7 +329,7 @@ where
                 break;
             }
         }
-        slf.child_by_role(role).and_then(|_| Some(slf))
+        slf.child_by_role(role).is_some()
     }
 
     fn equal(&self, other: &Self) -> bool {
@@ -264,15 +345,30 @@ where
         }
         Equal
     }
+    type TP<'a> = ();
+    fn text(&self, tp: ()) -> std::borrow::Cow<str> {
+        let id = self.pos.node().unwrap();
+        use hyper_ast::types::NodeStore;
+        let n = self.stores.node_store().resolve(id);
+        if n.has_children() {
+            let r = hyper_ast::nodes::TextSerializer::new(self.stores, *id).to_string();
+            return r.into();
+        }
+        if let Some(l) = n.try_get_label() {
+            let l = self.stores.label_store().resolve(l);
+            return l.into();
+        }
+        "".into()
+    }
 }
 
 impl<'hast, HAST: HyperAST<'hast>> Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<IdF = FieldId>,
+    HAST::TS: RoleStore<HAST::T>,
     HAST::T: WithRoles,
 {
-    fn child_by_role(&mut self, role: <HAST::TS as RoleStore>::Role) -> Option<()> {
+    fn child_by_role(&mut self, role: <HAST::TS as RoleStore<HAST::T>>::Role) -> Option<()> {
         // TODO what about multiple children with same role?
         // NOTE treesitter uses a bin tree for repeats
         let visible = self.is_visible();

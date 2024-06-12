@@ -45,6 +45,14 @@ impl<'a, TS, NS, LS> std::ops::Deref for QStoreRef<'a, TS, NS, LS> {
     }
 }
 
+impl<'a, TS> types::HyperASTShared for QStoreRef<'a, TS, store::nodes::DefaultNodeStore>
+{
+    type IdN = store::nodes::DefaultNodeIdentifier;
+
+    type Idx = u16;
+    type Label = store::labels::DefaultLabelIdentifier;
+}
+
 impl<'store, 'a, TS> types::HyperAST<'store> for QStoreRef<'a, TS, store::nodes::DefaultNodeStore>
 where
     // <TS as TypeStore>::Ty: HyperType + Send + Sync,
@@ -53,11 +61,6 @@ where
         Ty = types::AnyType,
     >,
 {
-    type IdN = store::nodes::DefaultNodeIdentifier;
-
-    type Idx = u16;
-    type Label = store::labels::DefaultLabelIdentifier;
-
     type T = store::nodes::legion::HashedNodeRef<'store, Self::IdN>;
 
     type NS = store::nodes::legion::NodeStore;

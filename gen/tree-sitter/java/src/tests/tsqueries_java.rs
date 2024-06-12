@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use hyper_ast::store::{defaults::NodeIdentifier, SimpleStores};
 
@@ -88,6 +88,7 @@ fn prep_recursive<'store>(
     );
     (matcher, stores, full_node.local.compressed_node)
 }
+
 fn run_baseline(query: &str, text: &[u8]) -> usize {
     let mut cursor = tree_sitter::QueryCursor::default();
     let (query, tree) = prep_baseline(query, text);
@@ -105,8 +106,11 @@ fn run_baseline(query: &str, text: &[u8]) -> usize {
             let _i = query.capture_index_for_name(name).unwrap();
             let n = capt.node;
             let k = n.kind();
-            let r = n.byte_range();
             dbg!(name);
+            if k == "modifiers" {
+                dbg!(n.utf8_text(text).unwrap());
+            }
+            let r = n.byte_range();
             dbg!(k);
             dbg!(r);
         }
@@ -199,8 +203,11 @@ fn prep_stepped<'store>(
 #[cfg(test)]
 fn run_stepped2(query: &str, text: &[u8]) -> usize {
     let (query, tree) = prep_stepped2(query, text);
-
-    let qcursor = query.matches(tree.root_node().walk());
+    let cursor = hyper_ast_gen_ts_tsquery::search::steped::TSTreeCucursor::new(
+        text,
+        tree.root_node().walk(),
+    );
+    let qcursor = query.matches(cursor);
 
     let mut count = 0;
     for m in qcursor {
@@ -272,10 +279,11 @@ fn compare_all_test() {
     //     (x, text)
     // });
 
-    compare_all(codes)
+    compare_all(QUERIES, codes)
 }
 
 fn compare_all(
+    queries: &[&str],
     codes: impl Iterator<Item = (impl std::fmt::Debug + Clone, impl AsRef<str>)>,
 ) {
     unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
@@ -285,7 +293,7 @@ fn compare_all(
     let mut used = std::collections::HashSet::<usize>::new();
     for (i, text) in codes {
         codes_count += 1;
-        for (j, query) in QUERIES.iter().enumerate() {
+        for (j, query) in queries.iter().enumerate() {
             dbg!(&i, &j);
             let text = text.as_ref().as_bytes();
             let mut cursor = tree_sitter::QueryCursor::default();
@@ -724,3 +732,109 @@ fn it_114_h() {
     let text = CODE.as_bytes();
     run_recursive(query, text);
 }
+
+#[test]
+fn st_issue_infinit() {
+    // log::set_logger(&LOGGER)
+    //     .map(|()| log::set_max_level(log::LevelFilter::Trace))
+    //     .unwrap();
+    let codes = CODES.iter().enumerate();
+    // NOTE Uncomment and set the path to a directory containing java files you want to test querying on.
+    let codes = crate::tsg::It::new(
+        // Path::new("../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test")
+        //     .to_owned(),
+        Path::new("../../../../spoon").to_owned(),
+    )
+    .filter(|x| x.is_dir() || x.extension().map_or(false, |e| e.eq("java")))
+    .filter(|x| !x.starts_with("../../../../spoon/src/test/resources"))
+    .filter_map(|x| {
+        let text = match std::fs::read_to_string(&x) {
+            Ok(x) => x,
+            Err(e) => {
+                match e.kind() {
+                    // std::io::ErrorKind::NotFound => todo!(),
+                    std::io::ErrorKind::InvalidData => return None,
+                    _ => panic!("{}", e),
+                }
+            }
+        };
+        Some((x, text))
+    });
+
+    compare_all(&[crate::tsg::A155], codes)
+}
+
+#[test]
+// provoke an infinite loop or is very slow
+//
+fn st_155_spoon() {
+    log::set_logger(&LOGGER)
+        .map(|()| log::set_max_level(log::LevelFilter::Trace))
+        .unwrap();
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let query = crate::tsg::A155;
+    let query = r#"
+(program
+  (package_declaration (_)@pkg)
+  (declaration
+    .
+    (modifiers "public")
+    name: (_) @name
+    body: (_
+        [
+          (method_declaration
+            .
+            (modifiers
+              . ; this is very important otherwise the complexity explodes
+              (marker_annotation 
+                name: (_)@anot_name
+              )@mod +
+            )
+            name: (_)@meth_name
+          )@meth
+          (_)
+        ]*
+    )
+  )
+)"#;
+    let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
+    let text = text.as_bytes();
+    assert_eq!(1, run_stepped2(query, text));
+}
+
+#[test]
+// provoke an infinite loop or is very slow.
+// aparently just very slow ie. the baseline is as slow.
+// no idea how to fix that
+// NOTE immediate predicates would probably be beneficial there ie. shortcut
+// Might be an issue of type of used collection.
+fn bl_155_spoon() {
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let query = crate::tsg::A155;
+    let query = r#"
+(program
+  (package_declaration (_)@pkg)
+  (declaration 
+    (modifiers "public")
+    name: (_) @name
+    body: (_
+        [
+          (method_declaration
+            (modifiers
+              . ; this is very important otherwise the complexity explodes, due to possible interleaved annotations
+              (marker_annotation 
+                name: (_)@anot
+              )+
+            )
+            name: (_)@meth_name
+          )
+          (_)
+        ]*
+    )
+  )
+)"#;
+    let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
+    let text = text.as_bytes();
+    run_baseline(query, text);
+}
+

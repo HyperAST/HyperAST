@@ -1,21 +1,13 @@
 //! Attempt to integrate another query matchers compatible with hyperast.
 //! The query matcher used here is largely inspired by tree_sitter (query.c).
 
-use hyper_ast::{
-    store::SimpleStores,
-    types::{HyperAST, RoleStore, WithRoles},
-};
+use hyper_ast::types::{HyperAST, HyperASTShared, RoleStore, WithRoles, WithSerialization, WithStats};
 use hyper_ast_gen_ts_tsquery::search::steped;
 use std::fmt::Debug;
 use tree_sitter_graph::GenQuery;
 
-type TStore = crate::types::TStore;
-type Type = crate::types::Type;
-
-type HAST = SimpleStores<TStore>;
-
 #[repr(transparent)]
-pub struct Node<'tree, HAST: HyperAST<'tree>>(steped::hyperast::Node<'tree, HAST>);
+pub struct Node<'tree, HAST: HyperASTShared>(steped::hyperast::Node<'tree, HAST>);
 
 impl<'tree, HAST: HyperAST<'tree>> Clone for Node<'tree, HAST> {
     fn clone(&self) -> Self {
@@ -32,7 +24,7 @@ impl<'tree, HAST: HyperAST<'tree>> PartialEq for Node<'tree, HAST> {
 impl<'tree, HAST: HyperAST<'tree>> steped::Node for Node<'tree, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<IdF = steped::FieldId>,
+    HAST::TS: RoleStore<HAST::T>,
     HAST::T: WithRoles,
 {
     fn symbol(&self) -> steped::Symbol {
@@ -51,8 +43,14 @@ where
         self.0.start_point()
     }
 
-    fn child_by_field_id(&self, negated_field_id: steped::FieldId) -> Option<Self> {
-        self.0.child_by_field_id(negated_field_id).map(|x| Self(x))
+    type IdF = <HAST::TS as RoleStore<HAST::T>>::IdF;
+
+    // fn child_by_field_id(&self, field_id: Self::IdF) -> Option<Self> {
+    //     // self.0.child_by_field_id(field_id).map(|x| Self(x))
+    // }
+
+    fn has_child_with_field_id(&self, field_id: Self::IdF) -> bool {
+        self.0.has_child_with_field_id(field_id)
     }
 
     fn equal(&self, other: &Self) -> bool {
@@ -62,12 +60,17 @@ where
     fn compare(&self, other: &Self) -> std::cmp::Ordering {
         self.0.compare(&other.0)
     }
+    
+    type TP<'a> = ();
+    fn text(&self, text_provider: Self::TP<'_>) -> std::borrow::Cow<str> {
+        self.0.text(text_provider)
+    }
 }
 
 impl<'tree, HAST: HyperAST<'tree>> steped::Cursor for Node<'tree, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<IdF = steped::FieldId>,
+    HAST::TS: RoleStore<HAST::T>,
     HAST::T: WithRoles,
 {
     type Node = Self;
@@ -96,8 +99,14 @@ where
         Some(Self(self.0.parent_node()?))
     }
 
-    fn current_status(&self) -> hyper_ast_gen_ts_tsquery::search::steped::Status {
+    type Status = steped::hyperast::CursorStatus<<Self as steped::Node>::IdF>;
+
+    fn current_status(&self) -> Self::Status {
         self.0.current_status()
+    }
+
+    fn text_provider(&self) -> <Self::Node as steped::Node>::TP<'_> {
+        self.0.text_provider()
     }
 }
 
@@ -110,71 +119,58 @@ impl<'tree, HAST: HyperAST<'tree>> Node<'tree, HAST> {
     }
 }
 
-pub struct MyNodeErazing;
+pub struct MyNodeErazing<'hast, HAST>(std::marker::PhantomData<&'hast HAST>);
+impl<'hast, HAST> Default for MyNodeErazing<'hast, HAST> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
 
-impl tree_sitter_graph::graph::Erzd for MyNodeErazing {
+impl<'hast, HAST: 'static + hyper_ast::types::HyperAST<'hast>> tree_sitter_graph::graph::Erzd for MyNodeErazing<'hast, HAST> {
     type Original<'tree> = Node<'tree, HAST>;
 }
 
-impl<'tree, HAST: HyperAST<'tree>> tree_sitter_graph::graph::LErazng for Node<'tree, HAST> {
-    type LErazing = MyNodeErazing;
+impl<'tree, HAST: 'static + HyperAST<'tree>> tree_sitter_graph::graph::LErazng for Node<'tree, HAST> {
+    type LErazing = MyNodeErazing<'tree, HAST>;
 }
 
-pub struct QueryMatcher<Ty> {
+pub struct QueryMatcher<HAST> {
     pub query: hyper_ast_gen_ts_tsquery::search::steped::Query,
-    capture_names: Vec<&'static str>,
-    capture_quantifiers_vec: Vec<Vec<tree_sitter::CaptureQuantifier>>,
-    _phantom: std::marker::PhantomData<Ty>,
+    _phantom: std::marker::PhantomData<HAST>,
 }
 
-impl<Ty> QueryMatcher<Ty> {
+impl<HAST> QueryMatcher<HAST> {
     fn new(
         source: &str,
         language: &tree_sitter::Language,
     ) -> Result<Self, tree_sitter::QueryError> {
         let query = hyper_ast_gen_ts_tsquery::search::steped::Query::new(source, language.clone())?;
 
-        // let string_count = unsafe { ffi::ts_query_string_count(ptr.0) };
-        let capture_count = query.capture_count();
-        let pattern_count = query.pattern_count();
-
-        let mut capture_names = Vec::with_capacity(capture_count as usize);
-        let mut capture_quantifiers_vec = Vec::with_capacity(pattern_count as usize);
-        // let mut text_predicates_vec = Vec::with_capacity(pattern_count);
-        // let mut property_predicates_vec = Vec::with_capacity(pattern_count);
-        // let mut property_settings_vec = Vec::with_capacity(pattern_count);
-        // let mut general_predicates_vec = Vec::with_capacity(pattern_count);
-
-        // Build a vector of strings to store the capture names.
-        for i in 0..capture_count {
-            let name = query.capture_name(i as u32);
-            capture_names.push(name);
-        }
-        // Build a vector to store capture quantifiers.
-        for i in 0..pattern_count {
-            let quantifiers = query.quantifiers_at_pattern(i);
-            capture_quantifiers_vec.push(quantifiers);
-        }
-
         Ok(Self {
             query,
-            capture_names,
-            capture_quantifiers_vec,
             _phantom: std::marker::PhantomData,
         })
     }
 }
 
-impl<Ty: Debug> Debug for QueryMatcher<Ty> {
+impl< HAST> Debug for QueryMatcher<HAST> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.query.fmt(f)
     }
 }
 
-impl GenQuery for QueryMatcher<Type> {
+impl<HAST> GenQuery for QueryMatcher<HAST> 
+        where 
+    HAST: 'static + hyper_ast::types::HyperASTShared + for<'tree> hyper_ast::types::HyperAST<'tree>,
+    for<'tree> <HAST as HyperAST<'tree>>::TS: hyper_ast::types::RoleStore<<HAST as HyperAST<'tree>>::T>,
+    for<'tree> <<HAST as HyperAST<'tree>>::TS as hyper_ast::types::RoleStore<<HAST as HyperAST<'tree>>::T>>::IdF: From<u16> + Into<u16>,
+    for<'tree> <HAST as HyperAST<'tree>>::T: WithSerialization + WithStats + WithRoles,
+    <HAST as HyperASTShared>::IdN: std::fmt::Debug + Copy + std::hash::Hash, 
+    <HAST as HyperASTShared>::Idx: Copy + std::hash::Hash, 
+{
     type Lang = tree_sitter::Language;
 
-    type Ext = ExtendingStringQuery<Type, Self, Self::Lang>;
+    type Ext = ExtendingStringQuery<Self, Self::Lang>;
 
     fn pattern_count(&self) -> usize {
         self.query.pattern_count()
@@ -182,17 +178,14 @@ impl GenQuery for QueryMatcher<Type> {
 
     fn capture_index_for_name(&self, name: &str) -> Option<u32> {
         // dbg!(&self.capture_names);
-        self.capture_names
-            .iter()
-            .position(|x| *x == name)
-            .map(|i| i as u32)
+        self.query.capture_index_for_name(name)
     }
 
     fn capture_quantifiers(
         &self,
         index: usize,
     ) -> impl std::ops::Index<usize, Output = tree_sitter::CaptureQuantifier> {
-        self.capture_quantifiers_vec[index].clone()
+        self.query.capture_quantifiers(index)
     }
 
     fn capture_names(&self) -> &[&str] {
@@ -217,7 +210,11 @@ impl GenQuery for QueryMatcher<Type> {
         Self: 'cursor;
 
     type Matches<'query, 'cursor: 'query, 'tree: 'cursor> =
-    self::MyQMatches<'query, 'cursor, 'tree, steped::MatchIt<'query,Self::Node<'tree>,Self::Node<'tree>>>
+    self::MyQMatches<'query, 'cursor, 'tree, 
+        steped::MatchIt<'query, 
+            Self::Node<'tree>, 
+            Self::Node<'tree>>, 
+        HAST>
     where
         Self: 'tree,
         Self: 'query,
@@ -241,13 +238,13 @@ impl GenQuery for QueryMatcher<Type> {
     }
 }
 
-pub struct ExtendingStringQuery<Ty, Q = tree_sitter::Query, L = tree_sitter::Language> {
+pub struct ExtendingStringQuery<Q = tree_sitter::Query, L = tree_sitter::Language> {
     pub(crate) query: Option<Q>,
     pub(crate) acc: String,
-    pub(crate) _phantom: std::marker::PhantomData<(Ty, L)>,
+    pub(crate) _phantom: std::marker::PhantomData<L>,
 }
 
-impl<Ty, Q, L> Default for ExtendingStringQuery<Ty, Q, L> {
+impl<Q, L> Default for ExtendingStringQuery<Q, L> {
     fn default() -> Self {
         Self {
             query: Default::default(),
@@ -257,10 +254,18 @@ impl<Ty, Q, L> Default for ExtendingStringQuery<Ty, Q, L> {
     }
 }
 
-impl tree_sitter_graph::ExtendedableQuery
-    for ExtendingStringQuery<Type, QueryMatcher<Type>, tree_sitter::Language>
+impl<HAST> tree_sitter_graph::ExtendedableQuery
+    for ExtendingStringQuery<QueryMatcher<HAST>, tree_sitter::Language> 
+    where 
+    HAST: 'static + hyper_ast::types::HyperASTShared + for<'tree> hyper_ast::types::HyperAST<'tree>,
+    for<'tree> <HAST as HyperAST<'tree>>::T: WithSerialization + WithStats+WithRoles,
+    <HAST as HyperASTShared>::IdN: std::fmt::Debug + Copy + std::hash::Hash, 
+    <HAST as HyperASTShared>::Idx: Copy + std::hash::Hash, 
+    for<'tree> <HAST as HyperAST<'tree>>::TS: hyper_ast::types::RoleStore<<HAST as HyperAST<'tree>>::T>,
+    for<'tree> <<HAST as HyperAST<'tree>>::TS as hyper_ast::types::RoleStore<<HAST as HyperAST<'tree>>::T>>::IdF: From<u16> + Into<u16>,
+    
 {
-    type Query = QueryMatcher<Type>;
+    type Query = QueryMatcher<HAST>;
     type Lang = tree_sitter::Language;
 
     fn as_ref(&self) -> Option<&Self::Query> {
@@ -291,7 +296,8 @@ impl tree_sitter_graph::ExtendedableQuery
     }
 }
 
-impl<'tree> tree_sitter_graph::graph::SyntaxNode for Node<'tree, HAST> {
+impl<'tree, HAST: hyper_ast::types::HyperAST<'tree>> tree_sitter_graph::graph::SyntaxNode for Node<'tree, HAST> 
+where HAST::IdN: Copy+std::hash::Hash+ Debug, HAST::Idx: Copy+std::hash::Hash, HAST::T: WithSerialization + WithStats {
     fn id(&self) -> usize {
         use std::hash::Hash;
         use std::hash::Hasher;
@@ -356,7 +362,8 @@ impl<'tree> tree_sitter_graph::graph::SyntaxNode for Node<'tree, HAST> {
     }
 }
 
-impl<'tree> tree_sitter_graph::graph::SyntaxNodeExt for Node<'tree, HAST> {
+impl<'tree, HAST: HyperAST<'tree>> tree_sitter_graph::graph::SyntaxNodeExt for Node<'tree, HAST> 
+where <HAST as HyperASTShared>::IdN: Copy+ std::hash::Hash + Debug, HAST::Idx: Copy+std::hash::Hash, HAST::T: WithSerialization + WithStats {
     type Cursor = Vec<Self>;
 
     fn walk(&self) -> Self::Cursor {
@@ -385,7 +392,7 @@ pub struct MyQMatch<'cursor, 'tree, HAST: HyperAST<'tree>> {
     qm: hyper_ast_gen_ts_tsquery::search::steped::query_cursor::QueryMatch<Node<'tree, HAST>>,
 }
 
-impl<'cursor, 'tree> tree_sitter_graph::graph::QMatch for MyQMatch<'cursor, 'tree, HAST> {
+impl<'cursor, 'tree, HAST: hyper_ast::types::HyperAST<'tree>> tree_sitter_graph::graph::QMatch for MyQMatch<'cursor, 'tree, HAST> {
     type I = u32;
 
     type Item = Node<'tree, HAST>;
@@ -397,20 +404,21 @@ impl<'cursor, 'tree> tree_sitter_graph::graph::QMatch for MyQMatch<'cursor, 'tre
             .filter(move |x| x.index == index)
             .map(|x| x.node.clone())
     }
+
     fn pattern_index(&self) -> usize {
         self.qm.pattern_index
     }
 }
 
-pub struct MyQMatches<'query, 'cursor: 'query, 'tree: 'cursor, It> {
-    q: &'query QueryMatcher<Type>,
+pub struct MyQMatches<'query, 'cursor: 'query, 'tree: 'cursor, It, HAST: HyperASTShared> {
+    q: &'query QueryMatcher<HAST>,
     cursor: &'cursor mut Vec<u16>,
     matchs: It,
     node: Node<'tree, HAST>,
 }
 
-impl<'query, 'cursor: 'query, 'tree: 'cursor, It> Iterator
-    for MyQMatches<'query, 'cursor, 'tree, It>
+impl<'query, 'cursor: 'query, 'tree: 'cursor, It, HAST: HyperAST<'tree>> Iterator
+    for MyQMatches<'query, 'cursor, 'tree, It, HAST>
 where
     It: Iterator<
         Item = hyper_ast_gen_ts_tsquery::search::steped::query_cursor::QueryMatch<

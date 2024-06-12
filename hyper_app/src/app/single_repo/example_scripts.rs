@@ -1,3 +1,5 @@
+use crate::app::types::Config;
+
 #[derive(Clone)]
 pub(super) struct Scripts {
     pub(crate) description: &'static str,
@@ -18,13 +20,6 @@ pub(super) struct Example {
 pub(crate) enum Forge {
     GitHub,
     GitLab,
-}
-
-#[derive(serde::Deserialize, serde::Serialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Config {
-    Any,
-    MavenJava,
-    MakeCpp,
 }
 
 #[derive(Clone)]

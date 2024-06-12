@@ -9,7 +9,7 @@ mod quantile;
 mod refs;
 mod stats;
 
-use crate::{scripting::max::Max, SharedState};
+use crate::SharedState;
 use average::Merge;
 use axum::Json;
 use hyper_ast::{
@@ -102,7 +102,7 @@ pub fn simple(
     let commit_oid = &commits[0];
     simple_aux(
         state,
-        &mut repo,
+        &repo,
         commit_oid,
         &engine,
         &init_script,
@@ -169,7 +169,7 @@ pub fn simple_depth(
         let now = Instant::now();
         let r = simple_aux(
             state.clone(),
-            &mut repo,
+            &repo,
             commit_oid,
             &engine,
             &init_script,
@@ -242,7 +242,7 @@ fn simple_prepare(
 
 fn simple_aux(
     state: rhai::Shared<crate::AppState>,
-    repo: &mut hyper_ast_cvs_git::processing::ConfiguredRepo2,
+    repo: &hyper_ast_cvs_git::processing::ConfiguredRepo2,
     commit_oid: &hyper_ast_cvs_git::git::Oid,
     engine: &Engine,
     init_script: &rhai::AST,
@@ -596,7 +596,7 @@ fn simple_aux(
     Ok(r)
 }
 
-use self::{mean::Mean, min::Min, quantile::Quantile, stats::Stats};
+use self::{max::Max, mean::Mean, min::Min, quantile::Quantile, stats::Stats};
 use finalize::Finalize;
 
 fn add_utils(engine: &mut Engine) {

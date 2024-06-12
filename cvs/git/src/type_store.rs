@@ -127,6 +127,56 @@ impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
     }
 }
 
+impl<'a> hyper_ast::types::RoleStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
+    type IdF = u16;
+
+    type Role = hyper_ast::types::Role;
+
+    fn resolve_field(&self, lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
+        // match self {
+        //     TStore::Maven => todo!(),
+        //     TStore::Java => todo!(),
+        //     TStore::Cpp => todo!(),
+        // }
+        match lang.name() {
+            "Java" => hyper_ast::types::RoleStore::<
+                hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
+            >::resolve_field(
+                &hyper_ast_gen_ts_java::types::TStore::Java, lang, field_id
+            ),
+            "Cpp" => hyper_ast_gen_ts_cpp::types::TStore::Cpp.resolve_field(lang, field_id),
+            "Xml" => hyper_ast_gen_ts_xml::types::TStore::Xml.resolve_field(lang, field_id),
+            x => panic!("{}",x)
+        }
+        // TODO fix that
+
+        // let s = tree_sitter_java::language()
+        //     .field_name_for_id(field_id)
+        //     .ok_or_else(|| format!("{}", field_id))
+        //     .unwrap();
+        // hyper_ast::types::Role::try_from(s).expect(s)
+    }
+
+    fn intern_role(&self, lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
+        // TODO fix that
+        match lang.name() {
+            "hyper_ast_gen_ts_java::types::Lang" => hyper_ast::types::RoleStore::<
+                hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
+            >::intern_role(
+                &hyper_ast_gen_ts_java::types::TStore::Java, lang, role
+            ),
+            "hyper_ast_gen_ts_cpp::types::Lang" => hyper_ast_gen_ts_cpp::types::TStore::Cpp.intern_role(lang, role),
+            "hyper_ast_gen_ts_xml::types::Lang" => hyper_ast_gen_ts_xml::types::TStore::Xml.intern_role(lang, role),
+            x => panic!("{}",x)
+        }
+        // let field_name = role.to_string();
+        // tree_sitter_java::language()
+        //     .field_id_for_name(field_name)
+        //     .unwrap()
+        //     .into()
+    }
+}
+
 #[allow(unused)] // TODO find a better way of declaring type stores
 impl<'a> TypeStore<HashedNodeRef<'a, MIdN<NodeIdentifier>>> for TStore {
     type Ty = MultiType;
@@ -352,7 +402,8 @@ impl<'a> TypeStore<NoSpaceWrapper<'a, NodeIdentifier>> for &TStore {
                     t == tt
                 } else {
                     false
-                }},
+                }
+            },
             {
                 dbg!(n.as_ref().archetype().layout().component_types());
                 panic!()
@@ -520,15 +571,15 @@ pub enum MultiType {
     Xml(hyper_ast_gen_ts_xml::types::Type),
 }
 
-macro_rules! on_multi {
-    ($on:ident, $with:ident => $body:expr) => {
+macro_rules! on_multi2 {
+    ($on:expr, $with:ident => $body:expr) => {
         match $on {
             MultiType::Java($with) => $body,
             MultiType::Cpp($with) => $body,
             MultiType::Xml($with) => $body,
         }
     };
-    ($on1:ident, $on2:ident, ($with1:ident,$with2:ident) => $body:expr, _ => $default:expr) => {
+    ($on1:expr, $on2:expr, ($with1:ident,$with2:ident) => $body:expr, _ => $default:expr) => {
         match ($on1, $on2) {
             (MultiType::Java($with1), MultiType::Java($with2)) => $body,
             (MultiType::Cpp($with1), MultiType::Cpp($with2)) => $body,
@@ -542,18 +593,18 @@ unsafe impl Send for MultiType {}
 unsafe impl Sync for MultiType {}
 impl PartialEq for MultiType {
     fn eq(&self, other: &Self) -> bool {
-        on_multi!(self, other, (s, o) => s == o, _ => false)
+        on_multi2!(self, other, (s, o) => s == o, _ => false)
     }
 }
 impl Eq for MultiType {}
 impl Hash for MultiType {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        on_multi!(self, t => t.hash(state))
+        on_multi2!(self, t => t.hash(state))
     }
 }
 impl Display for MultiType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        on_multi!(self, t => std::fmt::Display::fmt(t, f))
+        on_multi2!(self, t => std::fmt::Display::fmt(t, f))
     }
 }
 
@@ -567,47 +618,47 @@ impl HyperType for MultiType {
     }
 
     fn is_file(&self) -> bool {
-        on_multi!(self, t => t.is_file())
+        on_multi2!(self, t => t.is_file())
     }
 
     fn is_directory(&self) -> bool {
-        on_multi!(self, t => t.is_directory())
+        on_multi2!(self, t => t.is_directory())
     }
 
     fn is_spaces(&self) -> bool {
-        on_multi!(self, t => t.is_spaces())
+        on_multi2!(self, t => t.is_spaces())
     }
 
     fn is_syntax(&self) -> bool {
-        on_multi!(self, t => t.is_syntax())
+        on_multi2!(self, t => t.is_syntax())
     }
 
     fn as_shared(&self) -> Shared {
-        on_multi!(self, t => t.as_shared())
+        on_multi2!(self, t => t.as_shared())
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        on_multi!(self, t => t.as_any())
+        on_multi2!(self, t => t.as_any())
     }
 
     fn as_static(&self) -> &'static dyn HyperType {
-        on_multi!(self, t => t.as_static())
+        on_multi2!(self, t => t.as_static())
     }
 
     fn as_static_str(&self) -> &'static str {
-        on_multi!(self, t => t.to_str())
+        on_multi2!(self, t => t.to_str())
     }
 
     fn is_hidden(&self) -> bool {
-        on_multi!(self, t => t.is_hidden())
+        on_multi2!(self, t => t.is_hidden())
     }
 
     fn is_supertype(&self) -> bool {
-        on_multi!(self, t => t.is_supertype())
+        on_multi2!(self, t => t.is_supertype())
     }
 
     fn is_named(&self) -> bool {
-        on_multi!(self, t => t.is_named())
+        on_multi2!(self, t => t.is_named())
     }
 
     fn get_lang(&self) -> LangWrapper<Self>
@@ -615,13 +666,13 @@ impl HyperType for MultiType {
         Self: Sized,
     {
         match self {
-            MultiType::Java(t) => {
+            MultiType::Java(_t) => {
                 LangWrapper::from(&MultiLang::Java as &'static dyn LangRef<MultiType>)
             }
-            MultiType::Cpp(t) => {
+            MultiType::Cpp(_t) => {
                 LangWrapper::from(&MultiLang::Cpp as &'static dyn LangRef<MultiType>)
             }
-            MultiType::Xml(t) => {
+            MultiType::Xml(_t) => {
                 LangWrapper::from(&MultiLang::Xml as &'static dyn LangRef<MultiType>)
             }
         }
@@ -639,7 +690,11 @@ enum MultiLang {
 
 impl LangRef<MultiType> for MultiLang {
     fn name(&self) -> &'static str {
-        todo!()
+        match self {
+            MultiLang::Java => "Java",
+            MultiLang::Cpp => "Cpp",
+            MultiLang::Xml => "Xml",
+        }
     }
 
     fn make(&self, t: u16) -> &'static MultiType {

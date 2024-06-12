@@ -241,7 +241,7 @@ impl<'a, 'b> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>>
     }
 }
 
-impl<'a, 'b: 'a> hyper_ast::types::HyperAST<'b> for AcessibleFetchedHyperAST<'a>
+impl<'a, 'b: 'a> hyper_ast::types::HyperASTShared for AcessibleFetchedHyperAST<'a>
 where
     Self: 'b,
 {
@@ -250,7 +250,12 @@ where
     type Idx = u16;
 
     type Label = LabelIdentifier;
+}
 
+impl<'a, 'b: 'a> hyper_ast::types::HyperAST<'b> for AcessibleFetchedHyperAST<'a>
+where
+    Self: 'b,
+{
     type T = HashedNodeRef<'b, NodeIdentifier>;
 
     type NS = Self;

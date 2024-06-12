@@ -8,9 +8,7 @@ use hyper_ast::{
     },
     store::defaults::LabelIdentifier,
     types::{
-        Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeId, Tree, TypeStore,
-        TypeTrait, Typed, TypedHyperAST, TypedNodeStore, TypedTree, WithChildren,
-        WithSerialization,
+        Children, HyperAST, HyperASTShared, IterableChildren, LabelStore, Labeled, NodeId, Tree, TypeStore, TypeTrait, Typed, TypedHyperAST, TypedNodeStore, TypedTree, WithChildren, WithSerialization
     },
 };
 use num::{cast, one, zero, ToPrimitive, Zero};
@@ -1524,8 +1522,8 @@ where
             let (r, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
             let t = r.get_type();
             if t == Type::Modifiers {
-                let two: <HAST as HyperAST>::Idx =
-                    <<HAST as HyperAST>::Idx as num::One>::one() + one();
+                let two: <HAST as HyperASTShared>::Idx =
+                    <<HAST as HyperASTShared>::Idx as num::One>::one() + one();
                 let x = b.child(&(two)).unwrap();
                 let (r, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
                 let t = r.get_type();

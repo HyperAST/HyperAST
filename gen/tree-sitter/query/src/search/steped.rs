@@ -23,7 +23,6 @@ struct StepId(usize);
 struct CaptureListId(usize);
 struct PatternId(usize);
 
-
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub struct Symbol(u16);
 
@@ -44,25 +43,147 @@ impl From<u16> for Symbol {
 }
 
 pub struct Query {
-    query: *mut crate::search::steped::TSQuery,
+    q: *mut crate::search::steped::TSQuery,
+    capture_names: Vec<&'static str>,
+    capture_quantifiers_vec: Vec<Vec<tree_sitter::CaptureQuantifier>>,
+    text_predicates: pred::TextPredicateCaptures,
+    property_predicates_vec: Vec<()>,
+    property_settings_vec: Vec<()>,
+    general_predicates_vec: Vec<()>,
 }
+
+mod pred {
+    use super::query_cursor::TextPredicateCapture;
+
+    pub type TextPredsBuilder<C = u32> = PredsBuilder<TextPredicateCapture<C>>;
+
+    pub struct PredsBuilder<P> {
+        curr: Option<Vec<P>>,
+        acc: Vec<Box<[P]>>,
+    }
+
+    impl<P> PredsBuilder<P> {
+        pub fn with_patt_count(pat_count: usize) -> Self {
+            Self {
+                curr: None,
+                acc: Vec::with_capacity(pat_count),
+            }
+        }
+        pub fn prep(&mut self) {
+            if let Some(curr) = self.curr.take() {
+                self.acc.push(curr.into());
+            }
+            self.curr = Some(vec![])
+        }
+        pub fn push(&mut self, value: P) {
+            self.curr.as_mut().unwrap().push(value)
+        }
+        pub fn build(mut self) -> Predicates<P> {
+            if let Some(curr) = self.curr.take() {
+                self.acc.push(curr.into());
+            }
+            Predicates(self.acc.into())
+        }
+    }
+    pub struct Predicates<P>(Box<[Box<[P]>]>);
+    pub type TextPredicateCaptures<C = u32> = Predicates<TextPredicateCapture<C>>;
+
+    impl<P> Predicates<P> {
+        pub fn preds_for_patern_id<'a>(
+            &'a self,
+            id: usize,
+        ) -> impl Iterator<Item = &'a P> {
+            self.0[id].iter()
+        }
+    }
+}
+
+mod pred_opt {
+    use crate::search::steped::query_cursor::TextPredicateCapture;
+
+    struct TextPredsBuilder<C = u32> {
+        offsets: Vec<usize>,
+        variants: Vec<u8>,
+        captures: Vec<C>,
+    }
+
+    impl TextPredsBuilder {
+        fn with_patt_count(pat_count: usize) -> Self {
+            Self {
+                offsets: Vec::with_capacity(pat_count),
+                variants: Default::default(),
+                captures: Default::default(),
+            }
+        }
+    }
+
+    struct TextPredicateCaptures {
+        offsets: Vec<usize>,
+        variants: Vec<u8>,
+        captures: Vec<u32>,
+        // either capture, text_offset, regex_offset, or text_set offset
+        other: Vec<u32>,
+        text: Vec<u8>,
+        // regex: Vec<Regex>,
+        // is_positive: bitvec::vec::BitVec,
+        // match_all_nodes: bitvec::vec::BitVec,
+    }
+
+    impl TextPredicateCaptures {
+        fn preds_for_patern_id(&self, id: usize) -> impl Iterator<Item = TextPredicateCapture> {
+            struct It {}
+            impl Iterator for It {
+                type Item = TextPredicateCapture;
+
+                fn next(&mut self) -> Option<Self::Item> {
+                    todo!()
+                }
+            }
+            let variants = &self.variants[self.offsets[id]..self.offsets[id + 1]];
+            let captures = &self.captures[self.offsets[id]..self.offsets[id + 1]];
+
+            It {}
+        }
+    }
+}
+
 impl Drop for Query {
     fn drop(&mut self) {
-        unsafe { tree_sitter::ffi::ts_query_delete(std::mem::transmute(self.query)) }
+        unsafe { tree_sitter::ffi::ts_query_delete(std::mem::transmute(self.q)) }
     }
 }
 impl Debug for Query {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.query.fmt(f)
+        self.q.fmt(f)
     }
 }
 
 pub struct MatchIt<'query, Cursor, Node>(QueryCursor<'query, Cursor, Node>);
-impl<'query, Cursor: self::Cursor> Iterator for MatchIt<'query, Cursor, Cursor::Node> {
+impl<'query, Cursor: self::Cursor> Iterator for MatchIt<'query, Cursor, Cursor::Node>
+where
+    <Cursor::Status as Status>::IdF: Into<u16> + From<u16>,
+{
     type Item = query_cursor::QueryMatch<Cursor::Node>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.next_match()
+        let n = self.0.query.capture_index_for_name("name").unwrap();
+        loop {
+            dbg!();
+            let result = self.0.next_match()?;
+            dbg!(result.captures.len());
+            for n in result.nodes_for_capture_index(n) {
+                dbg!(n.text(self.0.text_provider()));
+            }
+            if result.satisfies_text_predicates(
+                self.0.text_provider(),
+                self.0
+                    .query
+                    .text_predicates_for_pattern_id(result.pattern_index),
+            ) {
+                dbg!();
+                return Some(result);
+            }
+        }
     }
 }
 
@@ -71,6 +192,174 @@ impl Query {
         source: &str,
         language: tree_sitter::Language,
     ) -> Result<Self, tree_sitter::QueryError> {
+        let ptr = Self::init_tsquery(source, language)?;
+        let query: *mut TSQuery = unsafe { std::mem::transmute(ptr) };
+        let ptr = {
+            struct TSQueryDrop(*mut ffi::TSQuery);
+            impl Drop for TSQueryDrop {
+                fn drop(&mut self) {
+                    unsafe { ffi::ts_query_delete(self.0) }
+                }
+            }
+            TSQueryDrop(ptr)
+        };
+
+        let string_count = TSQuery::string_count(query) as u32;
+        let capture_count = TSQuery::capture_count(query);
+        let pattern_count = TSQuery::pattern_count(query);
+
+        let mut capture_names = Vec::with_capacity(capture_count as usize);
+        let mut capture_quantifiers_vec = Vec::with_capacity(pattern_count as usize);
+        let mut text_predicates_vec = pred::TextPredsBuilder::with_patt_count(pattern_count);
+        let mut property_predicates_vec = Vec::with_capacity(pattern_count);
+        let mut property_settings_vec = Vec::with_capacity(pattern_count);
+        let mut general_predicates_vec = Vec::with_capacity(pattern_count);
+
+        // Build a vector of strings to store the capture names.
+        for i in 0..capture_count {
+            let name = TSQuery::capture_name(query, i as u32);
+            capture_names.push(name);
+        }
+        // Build a vector to store capture quantifiers.
+        for i in 0..pattern_count {
+            let quantifiers = TSQuery::quantifiers_at_pattern(query, i);
+            capture_quantifiers_vec.push(quantifiers);
+        }
+
+        use tree_sitter::ffi;
+
+        // Build a vector of strings to represent literal values used in predicates.
+        let string_values = (0..string_count)
+            .map(|i| unsafe {
+                let mut length = 0u32;
+                let value =
+                    ffi::ts_query_string_value_for_id(ptr.0, i, std::ptr::addr_of_mut!(length))
+                        .cast::<u8>();
+                let value = std::slice::from_raw_parts(value, length as usize);
+                let value = std::str::from_utf8_unchecked(value);
+                value
+            })
+            .collect::<Vec<_>>();
+
+        // Build a vector of predicates for each pattern.
+        for i in 0..pattern_count {
+            let predicate_steps = unsafe {
+                let mut length = 0u32;
+                let raw_predicates = ffi::ts_query_predicates_for_pattern(
+                    ptr.0,
+                    i as u32,
+                    std::ptr::addr_of_mut!(length),
+                );
+                (length > 0)
+                    .then(|| std::slice::from_raw_parts(raw_predicates, length as usize))
+                    .unwrap_or_default()
+            };
+
+            let byte_offset = unsafe { ffi::ts_query_start_byte_for_pattern(ptr.0, i as u32) };
+            let row = source
+                .char_indices()
+                .take_while(|(i, _)| *i < byte_offset as usize)
+                .filter(|(_, c)| *c == '\n')
+                .count();
+
+            use ffi::TSQueryPredicateStepType as T;
+            const TYPE_DONE: T = ffi::TSQueryPredicateStepTypeDone;
+            const TYPE_CAPTURE: T = ffi::TSQueryPredicateStepTypeCapture;
+            const TYPE_STRING: T = ffi::TSQueryPredicateStepTypeString;
+
+            text_predicates_vec.prep();
+            // let mut property_predicates = Vec::new();
+            // let mut property_settings = Vec::new();
+            // let mut general_predicates = Vec::new();
+            for p in predicate_steps.split(|s| s.type_ == TYPE_DONE) {
+                if p.is_empty() {
+                    continue;
+                }
+
+                if p[0].type_ != TYPE_STRING {
+                    return Err(predicate_error(
+                        row,
+                        format!(
+                            "Expected predicate to start with a function name. Got @{}.",
+                            capture_names[p[0].value_id as usize],
+                        ),
+                    ));
+                }
+
+                // Build a predicate for each of the known predicate function names.
+                let operator_name = string_values[p[0].value_id as usize];
+                match operator_name {
+                    "eq?" | "not-eq?" | "any-eq?" | "any-not-eq?" => {
+                        if p.len() != 3 {
+                            return Err(predicate_error(
+                                row,
+                                format!(
+                                "Wrong number of arguments to #eq? predicate. Expected 2, got {}.",
+                                p.len() - 1
+                            ),
+                            ));
+                        }
+                        if p[1].type_ != TYPE_CAPTURE {
+                            return Err(predicate_error(row, format!(
+                                "First argument to #eq? predicate must be a capture name. Got literal \"{}\".",
+                                string_values[p[1].value_id as usize],
+                            )));
+                        }
+
+                        let is_positive = operator_name == "eq?" || operator_name == "any-eq?";
+                        let match_all_nodes = match operator_name {
+                            "eq?" | "not-eq?" => true,
+                            "any-eq?" | "any-not-eq?" => false,
+                            _ => unreachable!(),
+                        };
+                        text_predicates_vec.push(if p[2].type_ == TYPE_CAPTURE {
+                            TextPredicateCapture::EqCapture(TextPred {
+                                left: p[1].value_id,
+                                right: p[2].value_id,
+                                is_positive,
+                                match_all_nodes,
+                            })
+                        } else {
+                            TextPredicateCapture::EqString(TextPred {
+                                left: p[1].value_id,
+                                right: string_values[p[2].value_id as usize].to_string().into(),
+                                is_positive,
+                                match_all_nodes,
+                            })
+                        });
+                    }
+                    _ => {
+                        return Err(predicate_error(
+                            row,
+                            format!("predicate {} not handled", operator_name),
+                        ));
+                    }
+                }
+            }
+            // property_predicates_vec.push(property_predicates.into());
+            // property_settings_vec.push(property_settings.into());
+            // general_predicates_vec.push(general_predicates.into());
+        }
+
+        let text_predicates = text_predicates_vec.build();
+        log::trace!("{}", unsafe { &query.as_ref().unwrap() });
+        let query = Query {
+            q: query,
+            capture_names,
+            capture_quantifiers_vec,
+            text_predicates,
+            general_predicates_vec,
+            property_predicates_vec,
+            property_settings_vec,
+        };
+        std::mem::forget(ptr);
+        Ok(query)
+    }
+
+    pub fn init_tsquery(
+        source: &str,
+        language: tree_sitter::Language,
+    ) -> Result<*mut tree_sitter::ffi::TSQuery, tree_sitter::QueryError> {
         let mut error_offset = 0u32;
         let mut error_type: tree_sitter::ffi::TSQueryError = 0;
         let bytes = source.as_bytes();
@@ -148,14 +437,11 @@ impl Query {
                 kind,
             });
         };
-
-        let query: *mut TSQuery = unsafe { std::mem::transmute(ptr) };
-        eprintln!("{}", unsafe { query.as_ref().unwrap() });
-        Ok(Query { query })
+        Ok(ptr)
     }
 
     pub fn pattern_count(&self) -> usize {
-        unsafe { self.query.as_ref() }.unwrap().pattern_count()
+        TSQuery::pattern_count(self.q as *const TSQuery)
     }
 
     pub fn matches<'query, Cursor: self::Cursor>(
@@ -172,10 +458,9 @@ impl Query {
             did_exceed_match_limit: false,
             depth: 0,
             on_visible_node: true,
-            query: self.query,
+            query: self,
             cursor,
             next_state_id: 0,
-            _phantom: std::marker::PhantomData,
         };
         MatchIt(qcursor)
     }
@@ -195,50 +480,49 @@ impl Query {
             did_exceed_match_limit: false,
             depth: 0,
             on_visible_node: true,
-            query: self.query,
+            query: self,
             cursor,
             next_state_id: 0,
-            _phantom: std::marker::PhantomData,
         };
         // can only match patterns starting on provided node
         qcursor.set_max_start_depth(0);
         MatchIt(qcursor)
     }
 
-    // warn return value has probably the livness of Query
-    pub fn capture_name(&self, i: u32) -> &'static str {
-        let name = unsafe {
-            let mut length = 0u32;
-            let name = tree_sitter::ffi::ts_query_capture_name_for_id(
-                std::mem::transmute(self.query),
-                i,
-                std::ptr::addr_of_mut!(length),
-            )
-            .cast::<u8>();
-            let name = std::slice::from_raw_parts(name, length as usize);
-            std::str::from_utf8_unchecked(name)
-        };
-        name
+    pub fn capture_index_for_name(&self, name: &str) -> Option<u32> {
+        self.capture_names
+            .iter()
+            .position(|x| *x == name)
+            .map(|i| i as u32)
     }
 
-    pub fn capture_count(&self) -> usize {
-        unsafe { self.query.as_ref() }.unwrap().capture_count()
+    pub fn capture_quantifiers(
+        &self,
+        index: usize,
+    ) -> impl std::ops::Index<usize, Output = tree_sitter::CaptureQuantifier> {
+        self.capture_quantifiers_vec[index].clone()
     }
 
-    pub fn quantifiers_at_pattern(&self, i: usize) -> Vec<tree_sitter::CaptureQuantifier> {
-        let capture_count = self.capture_count();
-        let mut capture_quantifiers = Vec::with_capacity(capture_count as usize);
-        for j in 0..capture_count {
-            unsafe {
-                let quantifier = tree_sitter::ffi::ts_query_capture_quantifier_for_id(
-                    std::mem::transmute(self.query),
-                    i as u32,
-                    j as u32,
-                );
-                capture_quantifiers.push(quantifier.into());
-            }
-        }
-        capture_quantifiers.into()
+    pub fn capture_name(&self, i: u32) -> &str {
+        self.capture_names[i as usize]
+    }
+
+    fn text_predicates_for_pattern_id<'a>(
+        &'a self,
+        pattern_index: usize,
+    ) -> impl Iterator<Item = &'a TextPredicateCapture> {
+        self.text_predicates.preds_for_patern_id(pattern_index)
+    }
+}
+
+#[must_use]
+const fn predicate_error(row: usize, message: String) -> tree_sitter::QueryError {
+    tree_sitter::QueryError {
+        kind: tree_sitter::QueryErrorKind::Predicate,
+        row,
+        column: 0,
+        offset: 0,
+        message,
     }
 }
 
@@ -247,7 +531,7 @@ pub struct QueryCursor<'query, Cursor, Node> {
     ascending: bool,
     on_visible_node: bool,
     cursor: Cursor,
-    query: *const TSQuery,
+    query: &'query Query,
     states: Vec<State>,
     depth: u32,
     max_start_depth: u32,
@@ -257,7 +541,6 @@ pub struct QueryCursor<'query, Cursor, Node> {
     // only triggers when there is no more capture list available
     // not triggered by reaching max_start_depth
     did_exceed_match_limit: bool,
-    _phantom: std::marker::PhantomData<&'query TSQuery>,
 }
 
 struct CaptureListPool<Node> {
@@ -327,9 +610,9 @@ impl<Node> CaptureListPool<Node> {
 }
 
 #[derive(Clone)]
-pub struct Capture<Node> {
+pub struct Capture<Node, I = u32> {
     pub node: Node,
-    pub index: u32,
+    pub index: I,
 }
 
 #[derive(Clone)]
@@ -362,6 +645,7 @@ pub enum TreeCursorStep {
 
 pub trait Cursor {
     type Node: Node;
+
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep;
 
     fn goto_first_child_internal(&mut self) -> TreeCursorStep;
@@ -371,7 +655,9 @@ pub trait Cursor {
 
     fn parent_node(&self) -> Option<Self::Node>;
 
-    fn current_status(&self) -> Status;
+    type Status: Status<IdF = <Self::Node as Node>::IdF>;
+
+    fn current_status(&self) -> Self::Status;
 
     // fn is_subtree_repetition(&self) -> bool {
     //     unimplemented!("related to query analysis, don't know how to handle that for now")
@@ -379,9 +665,22 @@ pub trait Cursor {
     // fn subtree_symbol(&self) -> tree_sitter::ffi::TSSymbol {
     //     unimplemented!("related to query analysis, don't know how to handle that for now")
     // }
+
+    fn text_provider(&self) -> <Self::Node as Node>::TP<'_>;
 }
 
-impl<'a> Cursor for tree_sitter::TreeCursor<'a> {
+pub struct TSTreeCucursor<'a> {
+    text: &'a [u8],
+    cursor: tree_sitter::TreeCursor<'a>,
+}
+
+impl<'a> TSTreeCucursor<'a> {
+    pub fn new(text: &'a [u8], cursor: tree_sitter::TreeCursor<'a>) -> Self {
+        Self { text, cursor }
+    }
+}
+
+impl<'a> Cursor for TSTreeCucursor<'a> {
     type Node = tree_sitter::Node<'a>;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep {
@@ -391,7 +690,7 @@ impl<'a> Cursor for tree_sitter::TreeCursor<'a> {
             ) -> TreeCursorStep;
         }
         unsafe {
-            let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(self);
+            let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(&mut self.cursor);
             ts_tree_cursor_goto_next_sibling_internal(s)
         }
     }
@@ -403,27 +702,27 @@ impl<'a> Cursor for tree_sitter::TreeCursor<'a> {
             ) -> TreeCursorStep;
         }
         unsafe {
-            let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(self);
+            let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(&mut self.cursor);
             ts_tree_cursor_goto_first_child_internal(s)
         }
     }
 
     fn goto_parent(&mut self) -> bool {
-        self.goto_parent()
+        self.cursor.goto_parent()
     }
 
     fn current_node(&self) -> Self::Node {
-        self.node()
+        self.cursor.node()
     }
 
     fn parent_node(&self) -> Option<Self::Node> {
         extern "C" {
             pub fn ts_tree_cursor_parent_node(
-                self_: *mut tree_sitter::ffi::TSTreeCursor,
+                self_: *const tree_sitter::ffi::TSTreeCursor,
             ) -> tree_sitter::ffi::TSNode;
         }
         unsafe {
-            let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(self);
+            let s: *const tree_sitter::ffi::TSTreeCursor = std::mem::transmute(&self.cursor);
             let n = ts_tree_cursor_parent_node(s);
             if tree_sitter::ffi::ts_node_is_null(n) {
                 return None;
@@ -432,11 +731,14 @@ impl<'a> Cursor for tree_sitter::TreeCursor<'a> {
             Some(n)
         }
     }
+
+    type Status = TSStatus;
+
     #[inline]
-    fn current_status(&self) -> Status {
+    fn current_status(&self) -> TSStatus {
         extern "C" {
             pub fn ts_tree_cursor_current_status(
-                self_: *mut tree_sitter::ffi::TSTreeCursor,
+                self_: *const tree_sitter::ffi::TSTreeCursor,
                 field_id: *mut tree_sitter::ffi::TSFieldId,
                 has_later_siblings: *mut bool,
                 has_later_named_siblings: *mut bool,
@@ -447,7 +749,7 @@ impl<'a> Cursor for tree_sitter::TreeCursor<'a> {
             ) -> TreeCursorStep;
         }
         unsafe {
-            let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(self);
+            let s: *const tree_sitter::ffi::TSTreeCursor = std::mem::transmute(&self.cursor);
             let mut field_id: tree_sitter::ffi::TSFieldId = 0;
             let mut has_later_siblings: bool = false;
             let mut has_later_named_siblings: bool = false;
@@ -474,7 +776,7 @@ impl<'a> Cursor for tree_sitter::TreeCursor<'a> {
             }
             supertypes.set_len(supertype_count as usize);
             let supertypes = supertypes.into_iter().map(Into::into).collect();
-            Status {
+            TSStatus {
                 has_later_siblings,
                 has_later_named_siblings,
                 can_have_later_siblings_with_this_field,
@@ -483,19 +785,61 @@ impl<'a> Cursor for tree_sitter::TreeCursor<'a> {
             }
         }
     }
+
+    fn text_provider(&self) -> <Self::Node as Node>::TP<'_> {
+        self.text
+    }
 }
 
-pub struct Status {
+pub trait Status {
+    type IdF;
+    fn has_later_siblings(&self) -> bool;
+    fn has_later_named_siblings(&self) -> bool;
+    fn can_have_later_siblings_with_this_field(&self) -> bool;
+    fn field_id(&self) -> Self::IdF;
+    fn has_supertypes(&self) -> bool;
+    fn contains_supertype(&self, sym: Symbol) -> bool;
+}
+
+pub struct TSStatus {
     pub has_later_siblings: bool,
     pub has_later_named_siblings: bool,
     pub can_have_later_siblings_with_this_field: bool,
-    pub field_id: FieldId,
+    pub field_id: tree_sitter::ffi::TSFieldId,
     pub supertypes: Vec<Symbol>,
 }
 
-pub type FieldId = u16;
+impl Status for TSStatus {
+    type IdF = tree_sitter::ffi::TSFieldId;
+
+    fn has_later_siblings(&self) -> bool {
+        self.has_later_siblings
+    }
+
+    fn has_later_named_siblings(&self) -> bool {
+        self.has_later_named_siblings
+    }
+
+    fn can_have_later_siblings_with_this_field(&self) -> bool {
+        self.can_have_later_siblings_with_this_field
+    }
+
+    fn field_id(&self) -> Self::IdF {
+        self.field_id
+    }
+
+    fn has_supertypes(&self) -> bool {
+        !self.supertypes.is_empty()
+    }
+
+    fn contains_supertype(&self, sym: Symbol) -> bool {
+        self.supertypes.contains(&sym)
+    }
+}
 
 pub trait Node: Clone {
+    type IdF;
+
     fn symbol(&self) -> Symbol;
 
     fn is_named(&self) -> bool;
@@ -503,14 +847,25 @@ pub trait Node: Clone {
 
     fn start_point(&self) -> tree_sitter::Point;
 
-    fn child_by_field_id(&self, negated_field_id: FieldId) -> Option<Self>;
+    // fn child_by_field_id(&self, field_id: FieldId) -> Option<Self>;
+    fn has_child_with_field_id(&self, field_id: Self::IdF) -> bool;
 
     fn equal(&self, other: &Self) -> bool;
     fn compare(&self, other: &Self) -> std::cmp::Ordering;
     // fn id(&self) -> usize;
+    type TP<'a>: Copy;
+    fn text(&self, text_provider: Self::TP<'_>) -> std::borrow::Cow<str>;
+    fn text_equal(&self, text_provider: Self::TP<'_>, other: impl Iterator<Item = u8>) -> bool {
+        self.text(text_provider)
+            .as_bytes()
+            .iter()
+            .copied()
+            .eq(other)
+    }
 }
 
 impl<'a> Node for tree_sitter::Node<'a> {
+    type IdF = tree_sitter::ffi::TSFieldId;
     fn symbol(&self) -> Symbol {
         self.kind_id().into()
     }
@@ -527,9 +882,10 @@ impl<'a> Node for tree_sitter::Node<'a> {
         self.start_position()
     }
 
-    fn child_by_field_id(&self, field_id: FieldId) -> Option<Self> {
-        self.child_by_field_id(field_id)
+    fn has_child_with_field_id(&self, field_id: tree_sitter::ffi::TSFieldId) -> bool {
+        self.has_child_with_field_id(field_id)
     }
+
     fn equal(&self, other: &Self) -> bool {
         self.id() == other.id()
     }
@@ -556,6 +912,10 @@ impl<'a> Node for tree_sitter::Node<'a> {
         }
         Equal
     }
+    type TP<'b> = &'a [u8];
+    fn text(&self, text_provider: Self::TP<'_>) -> std::borrow::Cow<str> {
+        self.utf8_text(text_provider).unwrap().into()
+    }
 
     // fn id(&self) -> usize {
     //     self.id()
@@ -564,6 +924,7 @@ impl<'a> Node for tree_sitter::Node<'a> {
 
 // mod analyze;
 
+#[cfg(test)]
 mod convert;
 
 pub mod hyperast;
@@ -586,7 +947,7 @@ impl<'query, Cursor: self::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
         // deeper in the tree, then descend.
         for i in 0..self.states.len() {
             let state = &self.states[i];
-            let next_step = &unsafe { &(*self.query).steps }[state.step_index as usize];
+            let next_step = &unsafe { &(*self.query.q).steps }[state.step_index as usize];
             if next_step.depth != PATTERN_DONE_MARKER
                 && state.start_depth as u32 + next_step.depth as u32 > self.depth
             {
@@ -718,7 +1079,7 @@ impl<'query, Cursor: self::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
             // if !result
             //     // || node_start_byte < byte_offset
             //     || (
-            //         // node_start_byte == byte_offset 
+            //         // node_start_byte == byte_offset
             //         // &&
             //         (state.pattern_index as u32) < pattern_index
             //     )
@@ -798,7 +1159,7 @@ impl<'query, Cursor: self::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
             return;
         };
         let state = &self.states[state_id];
-        let step = &unsafe { &(*self.query).steps }[step_id];
+        let step = &unsafe { &(*self.query.q).steps }[step_id];
         for j in 0..MAX_STEP_CAPTURE_COUNT {
             let capture_id = step.capture_ids[j];
             if step.capture_ids[j] == NONE {
@@ -819,7 +1180,7 @@ impl<'query, Cursor: self::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
     }
 
     fn add_state(&mut self, pattern: &PatternEntry) {
-        let step = &unsafe { &(*self.query).steps }[pattern.step_index as usize];
+        let step = &unsafe { &(*self.query.q).steps }[pattern.step_index as usize];
         let start_depth = self.depth as usize - step.depth as usize;
 
         // Keep the states array in ascending order of start_depth and pattern_index,
@@ -891,8 +1252,13 @@ impl<'query, Cursor: self::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
         };
         self.states.insert(index, element);
     }
+
+    fn text_provider(&self) -> <Cursor::Node as Node>::TP<'_> {
+        self.cursor.text_provider()
+    }
 }
 
+use query_cursor::{TextPred, TextPredicateCapture};
 pub use query_step::TSQuery;
 
 #[repr(C)]
@@ -938,7 +1304,7 @@ impl std::fmt::Display for TSQuery {
         let steps = &self.steps;
         for i in 0..steps.size {
             let step = unsafe { steps.contents.add(i as usize).as_ref().unwrap() };
-            write!(f, "  {}: ", i)?;
+            write!(f, "  {:>2}: ", i)?;
             print_query_step(self, step, f)?;
             write!(f, ",\n")?;
         }

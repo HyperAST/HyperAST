@@ -36,19 +36,32 @@ impl<TS: Default, NS: Default, LS: Default> Default for SimpleStores<TS, NS, LS>
     }
 }
 
-impl<TS, NS, LS> crate::types::RoleStore for SimpleStores<TS, NS, LS>
+impl<'store, T, TS, NS, LS> crate::types::RoleStore<T> for SimpleStores<TS, NS, LS>
 where
-    TS: crate::types::RoleStore,
+    T: crate::types::TypedTree,
+    T::TreeId: crate::types::NodeId<IdN = T::TreeId>,
+    T::Type: 'static + std::hash::Hash,
+    TS: TypeStore<T, Ty = T::Type>,
+    NS: crate::types::NodeStore<T::TreeId>,
+    TS: crate::types::RoleStore<T>,
 {
     type IdF = TS::IdF;
 
     type Role = TS::Role;
 
-    fn resolve_field(&self, field_id: Self::IdF) -> Self::Role {
-        self.type_store.resolve_field(field_id)
+    fn resolve_field(
+        &self,
+        lang: crate::types::LangWrapper<Self::Ty>,
+        field_id: Self::IdF,
+    ) -> Self::Role {
+        self.type_store.resolve_field(lang, field_id)
     }
-    fn intern_role(&self, role: Self::Role) -> Self::IdF {
-        self.type_store.intern_role(role)
+    fn intern_role(
+        &self,
+        lang: crate::types::LangWrapper<Self::Ty>,
+        role: Self::Role,
+    ) -> Self::IdF {
+        self.type_store.intern_role(lang, role)
     }
 }
 

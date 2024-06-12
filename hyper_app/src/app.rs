@@ -22,11 +22,15 @@ mod commit;
 pub(crate) mod crdt_over_ws;
 #[allow(unused)]
 mod long_tracking;
+mod querying;
 mod single_repo;
 mod tree_view;
 mod ts_highlight;
+mod tsg;
 pub(crate) mod types;
 mod utils;
+mod utils_edition;
+mod utils_results_batched;
 
 pub use self::types::Languages;
 
@@ -41,23 +45,35 @@ pub struct HyperApp {
     project_name: String,
     api_addr: String,
 
-    scripting_context: ScriptingContext<
+    scripting_context: EditingContext<
         self::types::CodeEditors,
         types::CodeEditors<code_editor_automerge::CodeEditor>,
     >,
+    querying_context: EditingContext<
+        self::types::QueryEditor,
+        types::QueryEditor<code_editor_automerge::CodeEditor>,
+    >,
+    tsg_context:
+        EditingContext<self::types::TsgEditor, types::TsgEditor<code_editor_automerge::CodeEditor>>,
 
     #[serde(skip)]
     languages: Languages,
 
     selected: types::SelectedConfig,
-    single: ComputeConfigSingle,
+    single: Sharing<ComputeConfigSingle>,
+    query: Sharing<querying::ComputeConfigQuery>,
+    tsg: Sharing<tsg::ComputeConfigQuery>,
     multi: types::ComputeConfigMulti,
     diff: types::ComputeConfigDiff,
     tracking: types::ComputeConfigTracking,
     aspects: types::ComputeConfigAspectViews,
 
     #[serde(skip)]
-    compute_single_result: Option<single_repo::RemoteResult>,
+    compute_single_result: Option<utils_results_batched::RemoteResult<single_repo::ScriptingError>>,
+    #[serde(skip)]
+    querying_result: Option<utils_results_batched::RemoteResult<querying::QueryingError>>,
+    #[serde(skip)]
+    tsg_result: Option<utils_results_batched::RemoteResult<tsg::QueryingError>>,
 
     #[serde(skip)]
     fetched_files: HashMap<types::FileIdentifier, code_tracking::RemoteFile>,
@@ -71,13 +87,60 @@ pub struct HyperApp {
     long_tracking: long_tracking::LongTacking,
 }
 
+#[derive(serde::Deserialize, serde::Serialize, Default)]
+#[serde(default)]
+pub(crate) struct Sharing<T> {
+    pub(crate) content: T,
+    #[serde(skip)]
+    rt: crdt_over_ws::Rt,
+    #[serde(skip)]
+    ws: Option<crdt_over_ws::WsDoc>,
+    #[serde(skip)]
+    doc_db: Option<crdt_over_ws::WsDocsDb>,
+}
+
 #[derive(Default, Serialize, Deserialize)]
-struct ScriptingContext<L, S> {
+struct EditingContext<L, S> {
     current: EditStatus<L, S>,
     local_scripts: HashMap<String, L>,
     // shared_script: Option<Arc<std::sync::Mutex<S>>>,
     // shared_script: Arc<std::sync::RwLock<Vec<Option<Arc<std::sync::Mutex<S>>>>>>,
     // shared_scripts: DashMap<String, Arc<std::sync::Mutex<S>>>,
+}
+impl<L, S> EditingContext<L, S> {
+    pub(crate) fn map<R>(
+        &mut self,
+        f: impl Fn(&mut L) -> R,
+        g: impl Fn(&mut Arc<std::sync::Mutex<S>>) -> R,
+    ) -> R {
+        match &mut self.current {
+            EditStatus::Shared(_, shared) | EditStatus::Sharing(shared) => {
+                // let mut code_editors = shared.lock().unwrap();
+                g(shared)
+                // ScriptContent::new(&mut code_editors, single)
+            }
+            EditStatus::Local { name: _, content } | EditStatus::Example { i: _, content } => {
+                f(content)
+            } // ScriptContent::new(content, single),
+        }
+    }
+    pub(crate) fn when_shared<R>(
+        &mut self,
+        mut g: impl FnMut(&mut Arc<std::sync::Mutex<S>>) -> R,
+    ) -> Option<R> {
+        match &mut self.current {
+            EditStatus::Shared(_, shared) | EditStatus::Sharing(shared) => Some(g(shared)),
+            _ => None,
+        }
+    }
+    pub(crate) fn when_local<R>(&mut self, mut f: impl FnMut(&mut L) -> R) -> Option<R> {
+        match &mut self.current {
+            EditStatus::Local { name: _, content } | EditStatus::Example { i: _, content } => {
+                Some(f(content))
+            }
+            _ => None,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -278,13 +341,19 @@ impl Default for HyperApp {
             api_addr: "0.0.0.0:8080".to_string(),
             // code_editors: Default::default(),
             scripting_context: Default::default(),
+            querying_context: Default::default(),
+            tsg_context: Default::default(),
             languages: Default::default(),
             single: Default::default(),
+            query: Default::default(),
+            tsg: Default::default(),
             selected: Default::default(),
             diff: Default::default(),
             multi: Default::default(),
             tracking: Default::default(),
             compute_single_result: Default::default(),
+            querying_result: Default::default(),
+            tsg_result: Default::default(),
             fetched_files: Default::default(),
             tracking_result: Default::default(),
             aspects: Default::default(),
@@ -378,14 +447,20 @@ impl eframe::App for HyperApp {
             api_addr,
             // code_editors,
             scripting_context,
+            querying_context,
+            tsg_context,
             languages,
             selected,
             single,
+            query,
+            tsg,
             multi,
             diff,
             tracking,
             aspects,
             compute_single_result,
+            querying_result,
+            tsg_result,
             fetched_files,
             tracking_result,
             aspects_result,
@@ -421,6 +496,10 @@ impl eframe::App for HyperApp {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.add_space(20.0);
                     single_repo::show_single_repo_menu(ui, selected, single);
+                    ui.separator();
+                    querying::show_querying_menu(ui, selected, query);
+                    ui.separator();
+                    tsg::show_querying_menu(ui, selected, tsg);
                     ui.separator();
 
                     ui.add_enabled_ui(false, |ui| {
@@ -475,6 +554,28 @@ impl eframe::App for HyperApp {
                     scripting_context,
                     &mut trigger_compute,
                     compute_single_result,
+                );
+            });
+        } else if *selected == types::SelectedConfig::Querying {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                querying::show_querying(
+                    ui,
+                    api_addr,
+                    query,
+                    querying_context,
+                    &mut trigger_compute,
+                    querying_result,
+                );
+            });
+        } else if *selected == types::SelectedConfig::Tsg {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                tsg::show_querying(
+                    ui,
+                    api_addr,
+                    tsg,
+                    tsg_context,
+                    &mut trigger_compute,
+                    tsg_result,
                 );
             });
         } else if *selected == types::SelectedConfig::Tracking {
@@ -532,12 +633,24 @@ impl eframe::App for HyperApp {
         }
 
         if trigger_compute {
-            self.compute_single_result = Some(single_repo::remote_compute_single(
-                ctx,
-                api_addr,
-                single,
-                scripting_context,
-            ));
+            if *selected == types::SelectedConfig::Single {
+                self.compute_single_result = Some(single_repo::remote_compute_single(
+                    ctx,
+                    api_addr,
+                    &mut single.content,
+                    scripting_context,
+                ));
+            } else if *selected == types::SelectedConfig::Querying {
+                self.querying_result = Some(querying::remote_compute_query(
+                    ctx,
+                    api_addr,
+                    query,
+                    querying_context,
+                ));
+            } else if *selected == types::SelectedConfig::Tsg {
+                self.tsg_result =
+                    Some(tsg::remote_compute_query(ctx, api_addr, tsg, tsg_context));
+            }
         }
     }
 }

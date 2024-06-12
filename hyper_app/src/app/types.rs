@@ -160,6 +160,8 @@ impl Default for Commit {
 #[derive(serde::Deserialize, serde::Serialize, Default, PartialEq, Eq, Clone, Copy)]
 pub enum SelectedConfig {
     Single,
+    Querying,
+    Tsg,
     Multi,
     Diff,
     Tracking,
@@ -201,6 +203,10 @@ impl egui_addon::Languages for Languages {
     }
 }
 
+pub(crate) trait WithDesc<T> {
+    fn desc(&self) -> &T;
+}
+
 #[derive(
     serde::Deserialize, serde::Serialize, autosurgeon::Hydrate, autosurgeon::Reconcile, Clone, Debug,
 )]
@@ -212,18 +218,22 @@ pub(crate) struct CodeEditors<T = code_editor::CodeEditor<Languages>> {
     pub(crate) accumulate: T,
 }
 
-impl<T> CodeEditors<T> {
-    pub(crate) fn to_shared<U>(self) -> CodeEditors<U>
-    where
-        T: Into<U>,
-    {
-        CodeEditors {
-            description: self.description.into(),
-            init: self.init.into(),
-            filter: self.filter.into(),
-            accumulate: self.accumulate.into(),
-        }
-    }
+#[derive(
+    serde::Deserialize, serde::Serialize, autosurgeon::Hydrate, autosurgeon::Reconcile, Clone, Debug,
+)]
+#[serde(default)]
+pub(crate) struct QueryEditor<T = code_editor::CodeEditor<Languages>> {
+    pub(crate) description: T,
+    pub(crate) query: T,
+}
+
+#[derive(
+    serde::Deserialize, serde::Serialize, autosurgeon::Hydrate, autosurgeon::Reconcile, Clone, Debug,
+)]
+#[serde(default)]
+pub(crate) struct TsgEditor<T = code_editor::CodeEditor<Languages>> {
+    pub(crate) description: T,
+    pub(crate) query: T,
 }
 
 #[derive(Debug)]
@@ -243,4 +253,11 @@ impl<T> Resource<T> {
             content: self.content.map(f),
         }
     }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Config {
+    Any,
+    MavenJava,
+    MakeCpp,
 }

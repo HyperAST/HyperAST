@@ -285,6 +285,12 @@ impl<'a, TS: XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>>> XmlTr
     ) -> Local {
         let bytes_len = spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
+        use num::ToPrimitive;
+        let line_count = spacing
+            .matches("\n")
+            .count()
+            .to_u16()
+            .expect("too many newlines");
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
         let hbuilder: hashed::Builder<SyntaxNodeHashs<u32>> =
             hashed::Builder::new(Default::default(), &Type::Spaces, &spacing, 1);
@@ -326,7 +332,7 @@ impl<'a, TS: XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>>> XmlTr
                 height: 1,
                 hashs,
                 size_no_spaces: 0,
-                line_count: todo!(),
+                line_count,
             },
             ana: Default::default(),
         }

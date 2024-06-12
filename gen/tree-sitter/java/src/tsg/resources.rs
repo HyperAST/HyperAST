@@ -434,3 +434,43 @@ const A154: &str = r#"(block_comment)@block_comment @__tsg__full_match"#;
 //         return null;
 //     }
 // }";
+
+// issue with infinit loop
+pub const A155: &str = r#"
+(program
+  (package_declaration (_)@pkg)
+  (declaration 
+    (modifiers "public")
+    name: (_) @name
+    body: (_
+      (method_declaration
+        (modifiers (marker_annotation 
+          name: (_)@meth_anot_name
+        ))
+        name: (_)@meth_name
+      )@meth *
+    )
+  )
+)"#;
+
+// issue with infinit loop
+pub(crate) const GEMINI_A: &str = r#"
+(program
+  (declaration 
+    body: (_
+      (declaration 
+        body: (_)
+      )
+    )
+  )
+)"#;
+// issue with infinit loop
+pub(crate) const GEMINI_B: &str = r#"
+(program
+  (declaration 
+    body: (_)
+  )
+  (declaration 
+    body: (_)
+  )
+)"#;

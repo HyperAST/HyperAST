@@ -19,7 +19,7 @@ mod legion_impls {
         }
     }
 
-    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::TypeIndex};
+    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::{LangWrapper, RoleStore, TypeIndex}};
 
     impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         type Ty = Type;
@@ -101,6 +101,28 @@ mod legion_impls {
         }
         fn type_to_u16(&self, t: Self::Ty) -> u16 {
             id_for_node_kind(t.as_static_str(), t.is_named())
+        }
+    }
+
+    impl<'a> RoleStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
+        type IdF = u16;
+
+        type Role = hyper_ast::types::Role;
+
+        fn resolve_field(&self, _lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
+            let s = tree_sitter_xml::language_xml()
+                .field_name_for_id(field_id)
+                .ok_or_else(|| format!("{}", field_id))
+                .unwrap();
+            hyper_ast::types::Role::try_from(s).expect(s)
+        }
+
+        fn intern_role(&self, _lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
+            let field_name = role.to_string();
+            tree_sitter_xml::language_xml()
+                .field_id_for_name(field_name)
+                .unwrap()
+                .into()
         }
     }
 }
@@ -326,26 +348,26 @@ impl HyperType for Type {
     }
 
     fn is_hidden(&self) -> bool {
-        todo!()
+        false // TODO
     }
 
     fn is_supertype(&self) -> bool {
-        todo!()
+        false // TODO
     }
 
     fn is_named(&self) -> bool {
-        todo!()
+        false // TODO
     }
 
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,
     {
-        todo!()
+        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<Self> + 'static))
     }
 
     fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
-        todo!()
+        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<AnyType> + 'static))
     }
 }
 

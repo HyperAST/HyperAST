@@ -5,14 +5,9 @@ use std::{
 
 use poll_promise::Promise;
 
-use crate::app::{
-    utils_edition::{
-        show_available_remote_docs, show_locals_and_interact, show_shared_code_edition,
-    },
-    utils_results_batched::ComputeResults,
-};
+use crate::app::utils_edition::{self, show_available_remote_docs, show_locals_and_interact};
 
-use self::example_scripts::EXAMPLES;
+use self::example_queries::EXAMPLES;
 
 use egui_addon::{
     code_editor::EditorInfo, egui_utils::radio_collapsing,
@@ -21,148 +16,115 @@ use egui_addon::{
 
 use super::{
     code_editor_automerge, show_repo_menu,
-    types::{CodeEditors, Commit, Config, Resource, SelectedConfig, WithDesc},
+    types::{Commit, Config, QueryEditor, Resource, SelectedConfig, WithDesc},
     utils_edition::{show_interactions, update_shared_editors},
-    utils_results_batched, Sharing,
+    utils_results_batched::{self, show_long_result, ComputeResults},
+    Sharing,
 };
-mod example_scripts;
+mod example_queries;
 
-const INFO_INIT: EditorInfo<&'static str> = EditorInfo {
-    title: "Init",
-    short: "initializes the accumulator on the root node",
-    long: concat!("It will recieve the finally results of the entire computation."),
+const INFO_QUERY: EditorInfo<&'static str> = EditorInfo {
+    title: "Query",
+    short: "the query",
+    long: concat!("follows the tree sitter query syntax"),
 };
-const INFO_FILTER:EditorInfo<&'static str> = EditorInfo {
-    title: "Filter",
-    short: "filters nodes of the HyperAST that should be processed",
-    long: concat!("It goes through nodes in pre-order, returning the list of node that should be processed next and initializing their own states.\n","`s` is the current node accumulator")
-    ,
-};
-const INFO_ACCUMULATE: EditorInfo<&'static str> = EditorInfo {
-    title: "Accumulate",
-    short: "accumulates values to produce the wanted metrics",
-    long: concat!(
-        "It goes through nodes in post-order, accumulating values from `s` into `p`.\n",
-        "`s` is the accumulator of the current node.\n",
-        "`p` the accumulator of the parent node."
-    ),
-};
+
 const INFO_DESCRIPTION: EditorInfo<&'static str> = EditorInfo {
     title: "Desc",
-    short: "describes what this script does",
+    short: "describes what this query should match",
     long: concat!(
         "TODO syntax is similar to markdown.\n",
         "WIP rendering the markdown, there is already an egui helper for that."
     ),
 };
 
-impl<C> From<&example_scripts::Scripts> for CodeEditors<C>
+impl<C> From<&example_queries::Query> for QueryEditor<C>
 where
     C: From<(EditorInfo<String>, String)> + egui_addon::code_editor::CodeHolder,
 {
-    fn from(value: &example_scripts::Scripts) -> Self {
+    fn from(value: &example_queries::Query) -> Self {
         let mut description: C = (INFO_DESCRIPTION.copied(), value.description.into()).into();
         description.set_lang("md");
         Self {
             description, // TODO config with markdown, not js
-            init: (INFO_INIT.copied(), value.init.into()).into(),
-            filter: (INFO_FILTER.copied(), value.filter.into()).into(),
-            accumulate: (INFO_ACCUMULATE.copied(), value.accumulate.into()).into(),
+            query: (INFO_QUERY.copied(), value.query.into()).into(),
         }
     }
 }
 
-impl<C> Default for CodeEditors<C>
+impl<C> Default for QueryEditor<C>
 where
     C: From<(EditorInfo<String>, String)> + egui_addon::code_editor::CodeHolder,
 {
     fn default() -> Self {
-        (&example_scripts::EXAMPLES[0].scripts).into()
+        (&example_queries::EXAMPLES[0].query).into()
     }
 }
 
-impl<'a, T> IntoIterator for &'a mut CodeEditors<T> {
-    type Item = &'a mut T;
-
-    type IntoIter = std::array::IntoIter<&'a mut T, 4>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        [
-            &mut self.description,
-            &mut self.init,
-            &mut self.filter,
-            &mut self.accumulate,
-        ]
-        .into_iter()
-    }
-}
-
-impl<T> WithDesc<T> for CodeEditors<T> {
+impl<T> WithDesc<T> for QueryEditor<T> {
     fn desc(&self) -> &T {
         &self.description
     }
 }
 
-impl<T> CodeEditors<T> {
-    pub(crate) fn to_shared<U>(self) -> CodeEditors<U>
+impl<'a, T> IntoIterator for &'a mut QueryEditor<T> {
+    type Item = &'a mut T;
+
+    type IntoIter = std::array::IntoIter<&'a mut T, 2>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        [&mut self.description, &mut self.query].into_iter()
+    }
+}
+
+impl<T> QueryEditor<T> {
+    pub(crate) fn to_shared<U>(self) -> QueryEditor<U>
     where
         T: Into<U>,
     {
-        CodeEditors {
+        QueryEditor {
             description: self.description.into(),
-            init: self.init.into(),
-            filter: self.filter.into(),
-            accumulate: self.accumulate.into(),
+            query: self.query.into(),
         }
     }
 }
 
-impl Into<CodeEditors<super::code_editor_automerge::CodeEditor>> for CodeEditors {
-    fn into(self) -> CodeEditors<super::code_editor_automerge::CodeEditor> {
+impl Into<QueryEditor<super::code_editor_automerge::CodeEditor>> for QueryEditor {
+    fn into(self) -> QueryEditor<super::code_editor_automerge::CodeEditor> {
         self.to_shared()
     }
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
-pub(super) struct ComputeConfigSingle {
+pub(super) struct ComputeConfigQuery {
     commit: Commit,
     config: Config,
     len: usize,
 }
 
-impl Default for ComputeConfigSingle {
+impl Default for ComputeConfigQuery {
     fn default() -> Self {
-        // let rt = Default::default();
-        // // let quote = Default::default();
-        // let ws = None;
-        // let doc_db = None;
         Self {
-            commit: From::from(&example_scripts::EXAMPLES[0].commit),
-            config: example_scripts::EXAMPLES[0].config,
+            commit: From::from(&example_queries::EXAMPLES[0].commit),
+            config: example_queries::EXAMPLES[0].config,
             // commit: "4acedc53a13a727be3640fe234f7e261d2609d58".into(),
-            len: example_scripts::EXAMPLES[0].commits,
-            // rt,
-            // ws,
-            // doc_db,
+            len: example_queries::EXAMPLES[0].commits,
         }
     }
 }
 
-// pub(super) type RemoteResult =
-//     Promise<ehttp::Result<Resource<Result<ComputeResults, ScriptingError>>>>;
-
-type ScriptingContext = super::EditingContext<
-    super::types::CodeEditors,
-    super::types::CodeEditors<code_editor_automerge::CodeEditor>,
+type QueryingContext = super::EditingContext<
+    super::types::QueryEditor,
+    super::types::QueryEditor<code_editor_automerge::CodeEditor>,
 >;
 
-pub(super) fn remote_compute_single(
+pub(super) fn remote_compute_query(
     ctx: &egui::Context,
     api_addr: &str,
-    single: &mut ComputeConfigSingle,
-    code_editors: &mut ScriptingContext,
-) -> Promise<Result<Resource<Result<ComputeResults, ScriptingError>>, String>> {
+    single: &mut Sharing<ComputeConfigQuery>,
+    query_editors: &mut QueryingContext,
+) -> Promise<Result<Resource<Result<ComputeResults, QueryingError>>, String>> {
     // TODO multi requests from client
     // if single.len > 1 {
     //     let parents = fetch_commit_parents(&ctx, &single.commit, single.len);
@@ -170,33 +132,40 @@ pub(super) fn remote_compute_single(
     let ctx = ctx.clone();
     let (sender, promise) = Promise::new();
     let url = format!(
-        "http://{}/script-depth/github/{}/{}/{}",
-        api_addr, &single.commit.repo.user, &single.commit.repo.name, &single.commit.id,
+        "http://{}/query/github/{}/{}/{}",
+        api_addr,
+        &single.content.commit.repo.user,
+        &single.content.commit.repo.name,
+        &single.content.commit.id,
     );
     #[derive(serde::Serialize)]
-    struct ScriptContent {
-        init: String,
-        filter: String,
-        accumulate: String,
+    struct QueryContent {
+        language: String,
+        query: String,
         commits: usize,
     }
-    impl ScriptContent {
-        fn new(
-            code_editors: &mut super::types::CodeEditors<impl AsRef<str>>,
-            single: &ComputeConfigSingle,
-        ) -> Self {
-            ScriptContent {
-                init: code_editors.init.as_ref().to_string(),
-                filter: code_editors.filter.as_ref().to_string(),
-                accumulate: code_editors.accumulate.as_ref().to_string(),
-                commits: single.len,
+    let language = match single.content.config {
+        Config::Any => "",
+        Config::MavenJava => "Java",
+        Config::MakeCpp => "Cpp",
+    }
+    .to_string();
+    let script = match &mut query_editors.current {
+        super::EditStatus::Shared(_, shared_script) | super::EditStatus::Sharing(shared_script) => {
+            let code_editors = shared_script.lock().unwrap();
+            QueryContent {
+                language,
+                query: code_editors.query.code().to_string(),
+                commits: single.content.len,
             }
         }
-    }
-    let script = code_editors.map(
-        |code_editors| ScriptContent::new(code_editors, single),
-        |code_editors| ScriptContent::new(&mut code_editors.lock().unwrap(), single),
-    );
+        super::EditStatus::Local { name: _, content }
+        | super::EditStatus::Example { i: _, content } => QueryContent {
+            language,
+            query: content.query.code().to_string(),
+            commits: single.content.len,
+        },
+    };
 
     let mut request = ehttp::Request::post(&url, serde_json::to_vec(&script).unwrap());
     request.headers.insert(
@@ -207,7 +176,7 @@ pub(super) fn remote_compute_single(
     ehttp::fetch(request, move |response| {
         ctx.request_repaint(); // wake up UI thread
         let resource = response.and_then(|response| {
-            Resource::<Result<ComputeResults, ScriptingError>>::from_response(&ctx, response)
+            Resource::<Result<ComputeResults, QueryingError>>::from_response(&ctx, response)
         });
         sender.send(resource);
     });
@@ -215,78 +184,57 @@ pub(super) fn remote_compute_single(
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
-pub enum ScriptingError {
-    AtCompilation(String),
-    AtEvaluation(String),
-    Other(String),
+pub enum QueryingError {
+    MissingLanguage(String),
 }
 
-pub(super) fn show_single_repo(
+pub(super) fn show_querying(
     ui: &mut egui::Ui,
     api_addr: &str,
-    single: &mut Sharing<ComputeConfigSingle>,
-    code_editors: &mut ScriptingContext,
+    query: &mut Sharing<ComputeConfigQuery>,
+    query_editors: &mut QueryingContext,
     trigger_compute: &mut bool,
-    compute_single_result: &mut Option<
+    querying_result: &mut Option<
         poll_promise::Promise<
-            Result<super::types::Resource<Result<ComputeResults, ScriptingError>>, String>,
+            Result<super::types::Resource<Result<ComputeResults, QueryingError>>, String>,
         >,
     >,
 ) {
-    let api_endpoint = &format!("{}/sharing-scripts", api_addr);
-    update_shared_editors(ui, single, api_endpoint, code_editors);
+    let api_endpoint = &format!("{}/sharing-queries", api_addr);
+    update_shared_editors(ui, query, api_endpoint, query_editors);
     let is_portrait = ui.available_rect_before_wrap().aspect_ratio() < 1.0;
     if is_portrait {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            show_scripts_edition(ui, api_endpoint, code_editors, single);
-            handle_interactions(
-                ui,
-                code_editors,
-                compute_single_result,
-                single,
-                trigger_compute,
-            );
-            utils_results_batched::show_long_result(&*compute_single_result, ui);
+            show_scripts_edition(ui, api_endpoint, query_editors, query);
+            handle_interactions(ui, query_editors, querying_result, query, trigger_compute);
+            show_long_result(&*querying_result, ui);
         });
     } else {
         InteractiveSplitter::vertical()
             .ratio(0.7)
             .show(ui, |ui1, ui2| {
                 ui1.push_id(ui1.id().with("input"), |ui| {
-                    show_scripts_edition(ui, api_endpoint, code_editors, single);
+                    show_scripts_edition(ui, api_endpoint, query_editors, query);
                 });
                 let ui = ui2;
-                handle_interactions(
-                    ui,
-                    code_editors,
-                    compute_single_result,
-                    single,
-                    trigger_compute,
-                );
-                utils_results_batched::show_long_result(&*compute_single_result, ui);
+                handle_interactions(ui, query_editors, querying_result, query, trigger_compute);
+                show_long_result(&*querying_result, ui);
             });
     }
 }
 
 fn handle_interactions(
     ui: &mut egui::Ui,
-    code_editors: &mut super::EditingContext<
-        CodeEditors,
-        CodeEditors<code_editor_automerge::CodeEditor>,
+    code_editors: &mut QueryingContext,
+    querying_result: &mut Option<
+        Promise<Result<Resource<Result<ComputeResults, QueryingError>>, String>>,
     >,
-    compute_single_result: &mut Option<
-        Promise<Result<Resource<Result<ComputeResults, ScriptingError>>, String>>,
-    >,
-    single: &mut Sharing<ComputeConfigSingle>,
+    single: &mut Sharing<ComputeConfigQuery>,
     trigger_compute: &mut bool,
 ) {
-    let interaction = show_interactions(
-        ui,
-        code_editors,
-        &single.doc_db,
-        compute_single_result,
-        |i| EXAMPLES[i].name.to_string(),
-    );
+    let interaction = show_interactions(ui, code_editors, &single.doc_db, querying_result, |i| {
+        EXAMPLES[i].name.to_string()
+    });
     if interaction.share_button.map_or(false, |x| x.clicked()) {
         let (name, content) = interaction.editor.unwrap();
         let content = content.clone().to_shared();
@@ -298,7 +246,7 @@ fn handle_interactions(
         db.create_doc_atempt(&single.rt, name, content.deref_mut());
     } else if interaction.save_button.map_or(false, |x| x.clicked()) {
         let (name, content) = interaction.editor.unwrap();
-        log::warn!("saving script: {:#?}", content.clone());
+        log::warn!("saving query: {:#?}", content.clone());
         let name = name.to_string();
         let content = content.clone();
         code_editors
@@ -313,40 +261,41 @@ fn handle_interactions(
 fn show_scripts_edition(
     ui: &mut egui::Ui,
     api_endpoint: &str,
-    scripting_context: &mut ScriptingContext,
-    single: &mut Sharing<ComputeConfigSingle>,
+    querying_context: &mut QueryingContext,
+    single: &mut Sharing<ComputeConfigQuery>,
 ) {
     egui::warn_if_debug_build(ui);
     egui::CollapsingHeader::new("Examples")
         .default_open(true)
         .show(ui, |ui| {
-            show_examples(ui, &mut single.content, scripting_context)
+            show_examples(ui, &mut single.content, querying_context)
         });
-    if !scripting_context.local_scripts.is_empty() {
+    if !querying_context.local_scripts.is_empty() {
         egui::CollapsingHeader::new("Local Queries")
             .default_open(true)
             .show(ui, |ui| {
-                show_locals_and_interact(ui, scripting_context, single);
+                show_locals_and_interact(ui, querying_context, single);
             });
     }
-    show_available_remote_docs(ui, api_endpoint, single, scripting_context);
-    let local = scripting_context
-        .when_local(|code_editors| code_editors.into_iter().for_each(|e| e.ui(ui)));
-    let shared = scripting_context
-        .when_shared(|code_editors| show_shared_code_edition(ui, code_editors, single));
+    show_available_remote_docs(ui, api_endpoint, single, querying_context);
+    let local =
+        querying_context.when_local(|code_editors| code_editors.into_iter().for_each(|c| c.ui(ui)));
+    let shared = querying_context.when_shared(|query_editors| {
+        utils_edition::show_shared_code_edition(ui, query_editors, single)
+    });
     assert!(local.or(shared).is_some());
 }
 
 fn show_examples(
     ui: &mut egui::Ui,
-    single: &mut ComputeConfigSingle,
-    scripting_context: &mut ScriptingContext,
+    single: &mut ComputeConfigQuery,
+    querying_context: &mut QueryingContext,
 ) {
     ui.horizontal_wrapped(|ui| {
         let mut j = 0;
         for ex in EXAMPLES {
             let mut text = egui::RichText::new(ex.name);
-            if let super::EditStatus::Example { i, .. } = &scripting_context.current {
+            if let super::EditStatus::Example { i, .. } = &querying_context.current {
                 if &j == i {
                     text = text.strong();
                 }
@@ -356,14 +305,14 @@ fn show_examples(
                 single.commit = (&ex.commit).into();
                 single.config = ex.config;
                 single.len = ex.commits;
-                scripting_context.current = super::EditStatus::Example {
+                querying_context.current = super::EditStatus::Example {
                     i: j,
-                    content: (&ex.scripts).into(),
+                    content: (&ex.query).into(),
                 };
             }
             if button.hovered() {
                 egui::show_tooltip(ui.ctx(), button.id.with("tooltip"), |ui| {
-                    let desc = ex.scripts.description;
+                    let desc = ex.query.description;
                     egui_demo_lib::easy_mark::easy_mark(ui, desc);
                 });
             }
@@ -372,7 +321,7 @@ fn show_examples(
     });
 }
 
-impl Resource<Result<ComputeResults, ScriptingError>> {
+impl Resource<Result<ComputeResults, QueryingError>> {
     pub(super) fn from_response(
         _ctx: &egui::Context,
         response: ehttp::Response,
@@ -392,7 +341,7 @@ impl Resource<Result<ComputeResults, ScriptingError>> {
                 wasm_rs_dbg::dbg!();
                 return Err("".to_string());
             };
-            let Ok(json) = serde_json::from_str::<ScriptingError>(text) else {
+            let Ok(json) = serde_json::from_str::<QueryingError>(text) else {
                 wasm_rs_dbg::dbg!();
                 return Err("".to_string());
             };
@@ -407,7 +356,7 @@ impl Resource<Result<ComputeResults, ScriptingError>> {
         let text = text.and_then(|text| {
             serde_json::from_str(text)
                 .inspect_err(|err| {
-                    dbg!(&err);
+                    wasm_rs_dbg::dbg!(&err);
                 })
                 .ok()
         });
@@ -419,13 +368,13 @@ impl Resource<Result<ComputeResults, ScriptingError>> {
     }
 }
 
-pub(super) fn show_single_repo_menu(
+pub(super) fn show_querying_menu(
     ui: &mut egui::Ui,
     selected: &mut SelectedConfig,
-    single: &mut Sharing<ComputeConfigSingle>,
+    single: &mut Sharing<ComputeConfigQuery>,
 ) {
-    let title = "Single Repository";
-    let wanted = SelectedConfig::Single;
+    let title = "Querying";
+    let wanted = SelectedConfig::Querying;
     let id = ui.make_persistent_id(title);
     let add_body = |ui: &mut egui::Ui| {
         show_repo_menu(ui, &mut single.content.commit.repo);
@@ -462,20 +411,16 @@ pub(super) fn show_single_repo_menu(
     radio_collapsing(ui, id, title, selected, &wanted, add_body);
 }
 
-impl utils_results_batched::ComputeError for ScriptingError {
+impl utils_results_batched::ComputeError for QueryingError {
     fn head(&self) -> &str {
         match self {
-            ScriptingError::AtCompilation(_) => "Error at compilation:",
-            ScriptingError::AtEvaluation(_) => "Error at evaluation:",
-            ScriptingError::Other(_) => "Error somewhere else:",
+            QueryingError::MissingLanguage(_) => "Missing Language:",
         }
     }
 
     fn content(&self) -> &str {
         match self {
-            ScriptingError::AtCompilation(err) => err,
-            ScriptingError::AtEvaluation(err) => err,
-            ScriptingError::Other(err) => err,
+            QueryingError::MissingLanguage(err) => err,
         }
     }
 }

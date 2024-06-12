@@ -53,3 +53,8 @@ pub use tnode::TNode;
 
 #[cfg(feature = "legion")]
 pub mod iter;
+
+#[cfg(feature = "impl")]
+pub fn language() -> tree_sitter::Language {
+    tree_sitter_cpp::language()
+}

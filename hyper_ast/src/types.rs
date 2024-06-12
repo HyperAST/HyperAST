@@ -1106,17 +1106,14 @@ pub trait TypeStore<T> {
 
 pub trait SpecializedTypeStore<T: Typed>: TypeStore<T> {}
 
-pub trait RoleStore {
-    type IdF: 'static + Copy;
+pub trait RoleStore<T>: TypeStore<T> {
+    type IdF: 'static + Copy + Default + PartialEq;
     type Role: 'static + Copy + PartialEq + std::marker::Sync + std::marker::Send;
-    fn resolve_field(&self, field_id: Self::IdF) -> Self::Role;
-    fn intern_role(&self, role: Self::Role) -> Self::IdF;
+    fn resolve_field(&self, lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role;
+    fn intern_role(&self, lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF;
 }
 
-pub trait HyperAST<'store> {
-    type IdN: NodeId<IdN = Self::IdN>;
-    type Idx: PrimInt;
-    type Label;
+pub trait HyperAST<'store>: HyperASTShared {
     type T: Tree<Label = Self::Label, TreeId = Self::IdN, ChildIdx = Self::Idx>;
     type NS: 'store + NodeStore<Self::IdN, R<'store> = Self::T>;
     fn node_store(&self) -> &Self::NS;
@@ -1167,7 +1164,7 @@ pub trait HyperAST<'store> {
 }
 
 pub trait HyperASTShared {
-    type IdN: NodeId;
+    type IdN: NodeId<IdN = Self::IdN>;
     type Idx: PrimInt;
     type Label;
 }
@@ -1435,11 +1432,6 @@ where
     NS: 'store + NodeStore<T::TreeId, R<'store> = T>,
     LS: LabelStore<str, I = T::Label>,
 {
-    type IdN = T::TreeId;
-
-    type Idx = T::ChildIdx;
-
-    type Label = T::Label;
 
     type T = T;
 
@@ -1465,6 +1457,7 @@ where
 impl<'store, T, TS, NS, LS> HyperASTShared for SimpleHyperAST<T, TS, NS, LS>
 where
     T: Tree,
+    T::TreeId: NodeId<IdN = T::TreeId>,
 {
     type IdN = T::TreeId;
 
@@ -1475,7 +1468,7 @@ where
 impl<T, TS, NS, LS> HyperASTAsso for SimpleHyperAST<T, TS, NS, LS>
 where
     T: Tree,
-    T::TreeId: NodeId,
+    T::TreeId: NodeId<IdN = T::TreeId>,
     TS: TypeStore<T>,
     for<'s> NS: 's + NodeStore<T::TreeId, R<'s> = T>,
     LS: LabelStore<str, I = T::Label>,

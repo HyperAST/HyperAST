@@ -783,6 +783,7 @@ dependencies = [
  "hyper_ast_cvs_git",
  "hyper_ast_gen_ts_cpp",
  "hyper_ast_gen_ts_java",
+ "hyper_ast_gen_ts_tsquery",
  "hyper_diff",
  "log",
  "nohash-hasher",
@@ -794,6 +795,7 @@ dependencies = [
  "serde",
  "serde-aux",
  "serde_json",
+ "stack-graphs",
  "syn 2.0.60",
  "tokio",
  "tower",
@@ -803,6 +805,8 @@ dependencies = [
  "tracing-subscriber",
  "tree-sitter 0.22.5",
  "tree-sitter-cli",
+ "tree-sitter-graph 0.12.2",
+ "tree-sitter-stack-graphs",
 ]
 
 [[package]]

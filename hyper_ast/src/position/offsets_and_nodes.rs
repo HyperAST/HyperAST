@@ -46,7 +46,11 @@ impl<IdN: std::cmp::Eq, Idx: PrimInt> Ord for StructuralPosition<IdN, Idx> {
             SharedPath::Exact(_) => unreachable!(),
             SharedPath::Remain(_) => Less,
             SharedPath::Submatch(_) => Greater,
-            SharedPath::Different(a) => self.offsets[a.len()].cmp(&other.offsets[a.len()]),
+            SharedPath::Different(a) => {
+                let c = self.offsets[a.len()+1].cmp(&other.offsets[a.len()+1]);
+                assert_ne!(c, std::cmp::Ordering::Equal);
+                c
+            },
         }
     }
 }

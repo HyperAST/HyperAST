@@ -47,7 +47,6 @@ mod tnode {
     }
 }
 
-use hyper_ast::types::HyperAST;
 use search::Captured;
 #[cfg(feature = "legion")]
 pub use tnode::TNode;
@@ -81,8 +80,8 @@ impl<'a, HAST, It: Iterator, TIdN> Iterator
     for IterMatched<&crate::search::PreparedMatcher<TIdN::Ty>, &'a HAST, It, TIdN>
 where
     HAST: hyper_ast::types::HyperAST<'a> + hyper_ast::types::TypedHyperAST<'a, TIdN>,
-    TIdN: 'static + hyper_ast::types::TypedNodeId<IdN = <HAST as HyperAST<'a>>::IdN>,
-    It::Item: hyper_ast::position::TreePath<TIdN::IdN, <HAST as HyperAST<'a>>::Idx>,
+    TIdN: 'static + hyper_ast::types::TypedNodeId<IdN = <HAST as hyper_ast::types::HyperASTShared>::IdN>,
+    It::Item: hyper_ast::position::TreePath<TIdN::IdN, <HAST as hyper_ast::types::HyperASTShared>::Idx>,
     for<'b> &'b str: Into<<TIdN as hyper_ast::types::TypedNodeId>::Ty>,
     TIdN::IdN: Copy,
 {
@@ -187,8 +186,8 @@ impl<'a, HAST, It: Iterator, TIdN> Iterator
     >
 where
     HAST: hyper_ast::types::HyperAST<'a> + hyper_ast::types::TypedHyperAST<'a, TIdN>,
-    TIdN: 'static + hyper_ast::types::TypedNodeId<IdN = <HAST as HyperAST<'a>>::IdN>,
-    It::Item: hyper_ast::position::TreePath<TIdN::IdN, <HAST as HyperAST<'a>>::Idx> + Clone,
+    TIdN: 'static + hyper_ast::types::TypedNodeId<IdN = <HAST as hyper_ast::types::HyperASTShared>::IdN>,
+    It::Item: hyper_ast::position::TreePath<TIdN::IdN, <HAST as hyper_ast::types::HyperASTShared>::Idx> + Clone,
     for<'b> &'b str: Into<<TIdN as hyper_ast::types::TypedNodeId>::Ty>,
     TIdN::IdN: Copy + std::fmt::Debug,
 {

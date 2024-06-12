@@ -1,3 +1,8 @@
+// began from tree-sitter 0.22.5
+// TODO integrate that to my fork of tree-sitter,
+// it will be cleaner and then I can access private stuff easily.
+use crate::search::steped::Status;
+
 use super::{
     Node, QueryCursor, Symbol, TreeCursorStep, NONE, PATTERN_DONE_MARKER, WILDCARD_SYMBOL,
 };
@@ -6,7 +11,10 @@ use super::{
 // If one or more patterns finish, return `true` and store their states in the
 // `finished_states` array. Multiple patterns can finish on the same node. If
 // there are no more matches, return `false`.
-impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
+impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node>
+where
+    <Cursor::Status as Status>::IdF: Into<u16> + From<u16>,
+{
     #[allow(unused)]
     pub(crate) fn advance(&mut self, stop_on_definite_step: bool) -> bool {
         let mut did_match = false;
@@ -24,6 +32,7 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
 
             // Exit the current node.
             if self.ascending {
+                // dbg!();
                 did_match |= self.when_ascending();
                 // Leave this node by stepping to its next sibling or to its parent.
                 match self.cursor.goto_next_sibling_internal() {
@@ -53,6 +62,7 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
             }
             // Enter a new node.
             else {
+                // dbg!();
                 let (m, node_intersects_range) = self.when_entering(stop_on_definite_step);
                 did_match |= m;
 
@@ -84,7 +94,7 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
                 self.depth,
                 self.cursor.current_node().str_symbol()
             );
-            let steps = unsafe { &(*self.query).steps };
+            let steps = unsafe { &(*self.query.q).steps };
             // After leaving a node, remove any states that cannot make further progress.
             self.states = std::mem::take(&mut self.states)
                 .into_iter()
@@ -124,7 +134,7 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
     }
 
     pub(crate) fn when_entering(&mut self, stop_on_definite_step: bool) -> (bool, bool) {
-        let query = unsafe { self.query.as_ref().unwrap() };
+        let query = unsafe { self.query.q.as_ref().unwrap() };
         let mut did_match = false;
         // Get the properties of the current node.
         let node = self.cursor.current_node();
@@ -165,7 +175,7 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
               "enter node. depth:{}, type:{}, field:{}, row:{} state_count:{}, finished_state_count:{}",
               self.depth,
               node.str_symbol(),
-              query.field_name(status.field_id),
+              query.field_name(status.field_id().into()),
               node.start_point().row,
               self.states.len(),
               self.finished_states.len()
@@ -188,9 +198,9 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
                     } else {
                         parent_intersects_range && !parent_is_error
                     };
-                    should_add &= (!step.field > 0 || status.field_id == step.field)
+                    should_add &= (!step.field > 0 || status.field_id().into() == step.field)
                         && (Symbol::from(step.supertype_symbol) == Symbol::NONE
-                            || !status.supertypes.is_empty())
+                            || status.has_supertypes())
                         && (start_depth <= self.max_start_depth);
                     if should_add {
                         self.add_state(pattern);
@@ -209,13 +219,13 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
                     // state at the start of this pattern.
                     if pattern.is_rooted {
                         if node_intersects_range
-                            && (!step.field > 0 || status.field_id == step.field)
+                            && (!step.field > 0 || status.field_id().into() == step.field)
                             && (start_depth <= self.max_start_depth)
                         {
                             self.add_state(pattern);
                         }
                     } else if (parent_intersects_range && !parent_is_error)
-                        && (!step.field > 0 || status.field_id == step.field)
+                        && (!step.field > 0 || status.field_id().into() == step.field)
                         && (start_depth <= self.max_start_depth)
                     {
                         self.add_state(pattern);
@@ -287,11 +297,11 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
                     // ));
                     node_does_match = symbol == Symbol::from(state!(@step).symbol);
                 }
-                let mut later_sibling_can_match = status.has_later_siblings;
+                let mut later_sibling_can_match = status.has_later_siblings();
                 if (state!(@step).is_immediate() && is_named) || state!().seeking_immediate_match {
                     later_sibling_can_match = false;
                 }
-                if state!(@step).is_last_child() && status.has_later_named_siblings {
+                if state!(@step).is_last_child() && status.has_later_named_siblings() {
                     node_does_match = false;
                 }
                 let ss = state!(@step).supertype_symbol;
@@ -301,14 +311,15 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
                     //     ss
                     // ));
                     self.cursor.current_status();
-                    let has_supertype = status.supertypes.contains(&state!(@step).supertype_symbol.into());
+                    let has_supertype =
+                        status.contains_supertype(state!(@step).supertype_symbol.into());
                     if !has_supertype {
                         node_does_match = false
                     };
                 }
                 if state!(@step).field > 0 {
-                    if state!(@step).field == status.field_id {
-                        if !status.can_have_later_siblings_with_this_field {
+                    if state!(@step).field == status.field_id().into() {
+                        if !status.can_have_later_siblings_with_this_field() {
                             later_sibling_can_match = false;
                         }
                     } else {
@@ -320,7 +331,9 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
                     let negated_field_ids =
                         &query.negated_fields[state!(@step).negated_field_list_id as usize..];
                     for negated_field_id in negated_field_ids {
-                        if node.child_by_field_id(*negated_field_id).is_some() { // .id() > 0 // TODO make a more specialized accessor -> better opt and simple to impl
+                        // if node.child_by_field_id(*negated_field_id).is_some() { // .id() > 0 // TODO make a more specialized accessor -> better opt and simple to impl
+                        if node.has_child_with_field_id((*negated_field_id).into()) {
+                            // .id() > 0 // TODO make a more specialized accessor -> better opt and simple to impl
                             node_does_match = false;
                             break;
                         }
@@ -356,9 +369,12 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
                     if self.copy_state(&mut state!(@index)).is_some() {
                         // TODO check if it properly passes a double pointer
                         log::trace!(
-                            "  split state for capture. pattern:{}, step:{}",
+                            "  split state for capture. pattern:{}, step:{} {} {} {}",
                             state!().pattern_index,
-                            state!().step_index
+                            state!().step_index,
+                            later_sibling_can_match,
+                            state!(@step).contains_captures(),
+                            query.step_is_fallible(state!().step_index),
                         );
                         copy_count += 1;
                     }
@@ -593,6 +609,7 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
 
     pub fn next_match(&mut self) -> Option<QueryMatch<Cursor::Node>> {
         if self.finished_states.len() == 0 {
+            dbg!();
             if !self.advance(false) {
                 return None;
             }
@@ -614,9 +631,98 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
     }
 }
 
-pub struct QueryMatch<Node> {
-    pub pattern_index: usize,
-    pub captures: Vec<super::Capture<Node>>,
+pub struct QueryMatch<Node, P = usize, I = u32> {
+    pub pattern_index: P,
+    pub captures: Vec<super::Capture<Node, I>>,
     // id of state
     id: u32,
+}
+
+#[derive(Debug)]
+/// The first item is the capture index
+/// The next is capture specific, depending on what item is expected
+/// The first bool is if the capture is positive
+/// The last item is a bool signifying whether or not it's meant to match
+/// any or all captures
+pub enum TextPredicateCapture<N = u32, T = Box<str>> {
+    EqString(TextPred<N, T>),
+    EqCapture(TextPred<N, N>),
+    // MatchString(N, regex::bytes::Regex, bool, bool),
+    // AnyString(N, Box<[T]>, bool),
+}
+
+#[derive(Debug)]
+pub struct TextPred<L, R> {
+    pub left: L,
+    pub right: R,
+    pub is_positive: bool,
+    pub match_all_nodes: bool,
+}
+
+impl<Node: super::Node, P, I: std::cmp::PartialEq> QueryMatch<Node, P, I> {
+    pub(crate) fn satisfies_text_predicates<'a, 'b, T: 'a + AsRef<str>>(
+        &self,
+        text_provider: Node::TP<'b>,
+        mut text_predicates: impl Iterator<Item = &'a TextPredicateCapture<I, T>>,
+    ) -> bool
+    where
+        I: 'a + Copy,
+    {
+        text_predicates.all(|predicate| match predicate {
+            TextPredicateCapture::EqCapture(TextPred {
+                left,
+                right,
+                is_positive,
+                match_all_nodes,
+            }) => {
+                // WARN sligntly different sem as we compare nodes structurally and not textually
+                // bad for comparing the name of a type ref with the name of a variable ref
+                let mut nodes_1 = self.nodes_for_capture_index(*left);
+                let mut nodes_2 = self.nodes_for_capture_index(*right);
+                while let (Some(node1), Some(node2)) = (nodes_1.next(), nodes_2.next()) {
+                    let comp = node1.equal(node2);
+                    if comp != *is_positive && *match_all_nodes {
+                        return false;
+                    }
+                    if comp == *is_positive && !*match_all_nodes {
+                        return true;
+                    }
+                }
+                nodes_1.next().is_none() && nodes_2.next().is_none()
+            }
+            TextPredicateCapture::EqString(TextPred {
+                left,
+                right,
+                is_positive,
+                match_all_nodes,
+            }) => {
+                let nodes = self.nodes_for_capture_index(*left);
+                let s = right.as_ref().as_bytes();
+                for node in nodes {
+                    let comp = node.text_equal(text_provider, s.iter().copied());
+                    if comp != *is_positive && *match_all_nodes {
+                        return false;
+                    }
+                    if comp == *is_positive && !*match_all_nodes {
+                        return true;
+                    }
+                }
+                true
+            }
+        })
+    }
+
+    pub fn nodes_for_capture_index<'a>(&'a self, index: I) -> impl Iterator<Item = &'a Node> {
+        self.captures
+            .iter()
+            .filter(move |x| x.index == index)
+            .map(|x| &x.node)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct QueryProperty {
+    pub key: Box<str>,
+    pub value: Option<Box<str>>,
+    pub capture_id: Option<usize>,
 }

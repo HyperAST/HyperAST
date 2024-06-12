@@ -11,12 +11,28 @@ use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 
 use crate::{
-    commit, fetch, file,
+    commit, fetch, file, querying,
     scripting::{self, ScriptContent, ScriptContentDepth, ScriptingError, ScriptingParam},
-    track, view, SharedState,
+    track, tsg, view, SharedState,
 };
 
 impl IntoResponse for ScriptingError {
+    fn into_response(self) -> Response {
+        let mut resp = Json(self).into_response();
+        *resp.status_mut() = StatusCode::BAD_REQUEST;
+        resp
+    }
+}
+
+impl IntoResponse for querying::QueryingError {
+    fn into_response(self) -> Response {
+        let mut resp = Json(self).into_response();
+        *resp.status_mut() = StatusCode::BAD_REQUEST;
+        resp
+    }
+}
+
+impl IntoResponse for tsg::QueryingError {
     fn into_response(self) -> Response {
         let mut resp = Json(self).into_response();
         *resp.status_mut() = StatusCode::BAD_REQUEST;
@@ -61,24 +77,93 @@ pub fn scripting_app(_st: SharedState) -> Router<SharedState> {
     Router::new()
         .route(
             "/script/github/:user/:name/:commit",
-            post(scripting).layer(scripting_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+            post(scripting).layer(scripting_service_config.clone()),
         )
         .route(
             "/script-depth/github/:user/:name/:commit",
-            post(scripting_depth).layer(scripting_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+            post(scripting_depth).layer(scripting_service_config.clone()),
         )
+        .route("/sharing-scripts/shared-db", get(crate::ws::connect_db))
         .route(
-            "/shared-scripts-db",
-            get(crate::ws::connect_db), // .with_state(Arc::clone(&shared_state)),
-        )
-        .route(
-            "/shared-script/:session",
-            get(crate::ws::connect_doc), // .with_state(Arc::clone(&shared_state)),
+            "/sharing-scripts/shared/:session",
+            get(crate::ws::connect_doc),
         )
     // .route(
     //     "/script/gitlab/:user/:name/:commit",
-    //     post(scripting).layer(scripting_service_config), // .with_state(Arc::clone(&shared_state)),
+    //     post(scripting).layer(scripting_service_config),
     // )
+}
+
+async fn querying(
+    axum::extract::Path(path): axum::extract::Path<querying::Param>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+    axum::extract::Json(script): axum::extract::Json<querying::Content>,
+) -> axum::response::Result<Json<querying::ComputeResults>> {
+    let r = querying::simple(script, state, path)?;
+    Ok(r)
+}
+
+pub fn querying_app(_st: SharedState) -> Router<SharedState> {
+    let querying_service_config = ServiceBuilder::new()
+        .layer(HandleErrorLayer::new(|e: BoxError| async move {
+            dbg!(e);
+        }))
+        .load_shed()
+        .concurrency_limit(16)
+        .buffer(200)
+        .rate_limit(10, Duration::from_secs(5))
+        // .request_body_limit(1024 * 5_000 /* ~5mb */)
+        .timeout(Duration::from_secs(10))
+        .layer(TraceLayer::new_for_http());
+    Router::new()
+        .route(
+            "/query/github/:user/:name/:commit",
+            post(querying).layer(querying_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/sharing-queries/shared-db",
+            get(crate::ws::connect_db), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/sharing-queries/shared/:session",
+            get(crate::ws::connect_doc), // .with_state(Arc::clone(&shared_state)),
+        )
+}
+
+async fn tsg(
+    axum::extract::Path(path): axum::extract::Path<tsg::Param>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+    axum::extract::Json(script): axum::extract::Json<tsg::Content>,
+) -> axum::response::Result<Json<tsg::ComputeResults>> {
+    let r = tsg::simple(script, state, path)?;
+    Ok(r)
+}
+
+pub fn tsg_app(_st: SharedState) -> Router<SharedState> {
+    let tsg_service_config = ServiceBuilder::new()
+        .layer(HandleErrorLayer::new(|e: BoxError| async move {
+            dbg!(e);
+        }))
+        .load_shed()
+        .concurrency_limit(16)
+        .buffer(200)
+        .rate_limit(10, Duration::from_secs(5))
+        // .request_body_limit(1024 * 5_000 /* ~5mb */)
+        .timeout(Duration::from_secs(10))
+        .layer(TraceLayer::new_for_http());
+    Router::new()
+        .route(
+            "/tsg/github/:user/:name/:commit",
+            post(tsg).layer(tsg_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/sharing-tsg/shared-db",
+            get(crate::ws::connect_db), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/sharing-tsg/shared/:session",
+            get(crate::ws::connect_doc), // .with_state(Arc::clone(&shared_state)),
+        )
 }
 
 pub fn fetch_git_file(_st: SharedState) -> Router<SharedState> {

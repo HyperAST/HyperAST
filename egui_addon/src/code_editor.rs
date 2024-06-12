@@ -143,6 +143,12 @@ impl<L:Default + Languages> From<&str> for CodeEditor<L> {
     }
 }
 
+impl<L:Default + Languages> AsRef<str> for CodeEditor<L> {
+    fn as_ref(&self) -> &str {
+        self.code()
+    }
+}
+
 impl<L:Default> CodeEditor<L> {
     pub fn code(&self) -> &str {
         self.code.as_str()

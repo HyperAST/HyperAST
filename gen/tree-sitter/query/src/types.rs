@@ -21,7 +21,7 @@ mod legion_impls {
         }
     }
 
-    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::TypeIndex};
+    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::{LangWrapper, TypeIndex}};
 
     impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         type Ty = Type;
@@ -53,6 +53,29 @@ mod legion_impls {
             n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
         }
     }
+
+    impl<'a> RoleStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
+        type IdF = u16;
+
+        type Role = hyper_ast::types::Role;
+
+        fn resolve_field(&self, _lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
+            let s = tree_sitter_query::language()
+                .field_name_for_id(field_id)
+                .ok_or_else(|| format!("{}", field_id))
+                .unwrap();
+            hyper_ast::types::Role::try_from(s).expect(s)
+        }
+        
+        fn intern_role(&self, _lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
+            let field_name = role.to_string();
+            tree_sitter_query::language()
+                .field_id_for_name(field_name)
+                .unwrap()
+                .into()
+        }
+    }
+
     impl<'a> TsQueryEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         const LANG: TypeInternalSize = Self::Ts as u16;
 
@@ -166,28 +189,6 @@ pub enum TStore {
 impl Default for TStore {
     fn default() -> Self {
         Self::Ts
-    }
-}
-
-impl RoleStore for TStore {
-    type IdF = u16;
-
-    type Role = hyper_ast::types::Role;
-
-    fn resolve_field(&self, field_id: Self::IdF) -> Self::Role {
-        let s = tree_sitter_query::language()
-            .field_name_for_id(field_id)
-            .ok_or_else(|| format!("{}", field_id))
-            .unwrap();
-        hyper_ast::types::Role::try_from(s).expect(s)
-    }
-    
-    fn intern_role(&self, role: Self::Role) -> Self::IdF {
-        let field_name = role.to_string();
-        tree_sitter_query::language()
-            .field_id_for_name(field_name)
-            .unwrap()
-            .into()
     }
 }
 

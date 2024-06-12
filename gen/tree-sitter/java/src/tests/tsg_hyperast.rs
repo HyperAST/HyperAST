@@ -88,7 +88,11 @@ fn tsg_hyperast_stepped_query() {
     let full_node = java_tree_gen.generate_file(b"", text.as_bytes(), tree.walk());
 
     // parsing tsg query
-    let tsg = impls::QueryMatcher::from_str(language.clone(), tsg_source).unwrap();
+    let tsg = impls::QueryMatcher::<SimpleStores<crate::types::TStore>>::from_str(
+        language.clone(),
+        tsg_source,
+    )
+    .unwrap();
     type Graph<'a> =
         tree_sitter_graph::graph::Graph<impls::Node<'a, SimpleStores<crate::types::TStore>>>;
 
@@ -100,11 +104,11 @@ fn tsg_hyperast_stepped_query() {
     let mut config = configure(&globals, &functions);
     let cancellation_flag = tree_sitter_graph::NoCancellation;
 
-    let tree = impls::Node::new(
-        &stores,
-        hyper_ast::position::StructuralPosition::new(full_node.local.compressed_node),
-    );
+    let pos = hyper_ast::position::StructuralPosition::new(full_node.local.compressed_node);
+    let tree: impls::Node<_> = impls::Node::new(&stores, pos);
 
+    // SAFETY: just circumventing a limitation in the borrow checker
+    let tree = unsafe { std::mem::transmute(tree) };
     if let Err(err) = tsg.execute_lazy_into2(&mut graph, tree, &mut config, &cancellation_flag) {
         println!("{}", graph.pretty_print());
         let source_path = std::path::Path::new("./src/tests/AAA.java");

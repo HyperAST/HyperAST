@@ -100,3 +100,28 @@ impl From<std::str::Utf8Error> for ParseErr {
         ParseErr::NotUtf8(value)
     }
 }
+
+#[cfg(feature = "cpp")]
+fn ts_lang_cpp() -> Option<tree_sitter::Language> {
+    Some(hyper_ast_gen_ts_cpp::language())
+}
+#[cfg(not(feature = "cpp"))]
+fn ts_lang_cpp() -> Option<tree_sitter::Language> {
+    None
+}
+#[cfg(feature = "java")]
+fn ts_lang_java() -> Option<tree_sitter::Language> {
+    Some(hyper_ast_gen_ts_java::language())
+}
+#[cfg(not(feature = "java"))]
+fn ts_lang_java() -> Option<tree_sitter::Language> {
+    None
+}
+
+pub fn resolve_language(language: &str) -> Option<tree_sitter::Language> {
+    match language {
+        "Java" | "java" => ts_lang_java(),
+        "Cpp" | "cpp" => ts_lang_cpp(),
+        _ => None
+    }
+}

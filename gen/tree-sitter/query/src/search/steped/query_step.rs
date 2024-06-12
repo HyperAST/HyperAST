@@ -1,5 +1,3 @@
-use super::FieldId;
-
 use super::NONE;
 
 use super::PATTERN_DONE_MARKER;
@@ -36,9 +34,36 @@ struct CaptureQuantifiers;
 #[repr(C)]
 struct QueryPattern;
 #[repr(C)]
-struct SymbolTable {
+pub(super) struct SymbolTable {
     characters: Array<std::ffi::c_char>,
     slices: Array<Slice>,
+}
+
+impl SymbolTable {
+    pub(super) fn symbol_table_id_for_name(&self, name: &[std::ffi::c_char]) -> Option<usize> {
+        for i in 0..self.slices.len() {
+            let slice = &self.slices[i];
+            if slice.length as usize == name.len() {
+                if unsafe {
+                    libc::strncmp(
+                        &self.characters[slice.offset as usize],
+                        name.as_ptr(),
+                        name.len(),
+                    ) != 0
+                } {
+                    return Some(i);
+                }
+            }
+        }
+        None
+    }
+
+    pub(super) fn symbol_table_name_for_id(&self, id: u16) -> &[std::ffi::c_char] {
+        let slice = &self.slices[id as usize];
+        let o0 = slice.offset;
+        let o1 = o0 + slice.length;
+        return &self.characters[o0 as usize..o1 as usize];
+    }
 }
 #[repr(C)]
 struct Slice {
@@ -103,14 +128,54 @@ impl TSQuery {
             && !next_step.parent_pattern_guaranteed();
     }
 
-    pub(super) fn field_name(&self, field_id: FieldId) -> &str {
+    pub(super) fn field_name(&self, field_id: tree_sitter::ffi::TSFieldId) -> &str {
         super::query_step::field_name(self, field_id).unwrap_or("")
     }
-    pub(super) fn pattern_count(&self) -> usize {
-        self.patterns.len()
+    pub(super) fn pattern_count(query: *const TSQuery) -> usize {
+        unsafe { &(*query).patterns }.len()
     }
-    pub(super) fn capture_count(&self) -> usize {
-        self.captures.slices.len()
+    pub(super) fn capture_count(query: *const TSQuery) -> usize {
+        unsafe { &(*query).captures }.slices.len()
+    }
+
+    // warn return value has probably the livness of Query
+    pub fn capture_name(query: *const TSQuery, i: u32) -> &'static str {
+        let name = unsafe {
+            let mut length = 0u32;
+            let name = tree_sitter::ffi::ts_query_capture_name_for_id(
+                std::mem::transmute(query),
+                i,
+                std::ptr::addr_of_mut!(length),
+            )
+            .cast::<u8>();
+            let name = std::slice::from_raw_parts(name, length as usize);
+            std::str::from_utf8_unchecked(name)
+        };
+        name
+    }
+
+    pub fn quantifiers_at_pattern(
+        query: *const TSQuery,
+        i: usize,
+    ) -> Vec<tree_sitter::CaptureQuantifier> {
+        let capture_count = Self::capture_count(query);
+        let mut capture_quantifiers = Vec::with_capacity(capture_count as usize);
+        for j in 0..capture_count {
+            unsafe {
+                let quantifier = tree_sitter::ffi::ts_query_capture_quantifier_for_id(
+                    std::mem::transmute(query),
+                    i as u32,
+                    j as u32,
+                );
+                capture_quantifiers.push(quantifier.into());
+            }
+        }
+        capture_quantifiers.into()
+    }
+    
+    pub(crate) fn string_count(query: *mut TSQuery) -> usize {
+        // ts_query_string_value_for_id // TODO compare with ffi call
+        unsafe { &(*query).predicate_values }.slices.len()
     }
 }
 
@@ -140,10 +205,10 @@ pub(crate) struct TSQueryStep {
 
 impl TSQueryStep {
     pub(crate) fn is_named(&self) -> bool {
-        // (for_statement 
-        //      init: (expression) @init 
-        //      condition: (_) @condition 
-        //      update: (_) @update 
+        // (for_statement
+        //      init: (expression) @init
+        //      condition: (_) @condition
+        //      update: (_) @update
         //      body: (_) @body) @stmt @__tsg__full_match
         // query steps:
         //   0: {symbol: for_statement, contains_captures} bitfield: 1000000,
@@ -187,6 +252,11 @@ pub(crate) fn print_query_step(
 ) -> std::fmt::Result {
     const WILDCARD_SYMBOL: u16 = 0;
     write!(f, "{{")?;
+    if step.depth == PATTERN_DONE_MARKER {
+        write!(f, "   ")?;
+    } else {
+        write!(f, "{:>2} ", step.depth)?;
+    }
     if step.depth == PATTERN_DONE_MARKER {
         write!(f, "DONE")?;
     } else if step.is_dead_end() {
@@ -261,7 +331,10 @@ pub(crate) fn symbol_name<'a>(
     }
 }
 
-pub(crate) fn field_name<'a>(query: &'a TSQuery, field: FieldId) -> Option<&'a str> {
+pub(crate) fn field_name<'a>(
+    query: &'a TSQuery,
+    field: tree_sitter::ffi::TSFieldId,
+) -> Option<&'a str> {
     let ptr = unsafe { tree_sitter::ffi::ts_language_field_name_for_id(query.language, field) };
     if !ptr.is_null() {
         Some(unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str().unwrap())
