@@ -203,7 +203,7 @@ fn prep_stepped<'store>(
 #[cfg(test)]
 fn run_stepped2(query: &str, text: &[u8]) -> usize {
     let (query, tree) = prep_stepped2(query, text);
-    let cursor = hyper_ast_gen_ts_tsquery::search::steped::TSTreeCucursor::new(
+    let cursor = hyper_ast_gen_ts_tsquery::search::steped::TSTreeCursor::new(
         text,
         tree.root_node().walk(),
     );

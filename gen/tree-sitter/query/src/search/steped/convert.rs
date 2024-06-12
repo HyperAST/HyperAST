@@ -1,4 +1,4 @@
-use crate::search::steped::{Query, TSTreeCucursor};
+use crate::search::steped::{Query, TSTreeCursor};
 
 struct SimpleLogger;
 
@@ -54,7 +54,7 @@ fn convert() {
     }";
     let tree = parser.parse(text, None).unwrap();
 
-    let cursor = TSTreeCucursor::new(text.as_bytes(), tree.root_node().walk());
+    let cursor = TSTreeCursor::new(text.as_bytes(), tree.root_node().walk());
 
     let mut qcursor = super::QueryCursor::<'_> {
         halted: false,

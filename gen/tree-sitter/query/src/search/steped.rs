@@ -669,18 +669,18 @@ pub trait Cursor {
     fn text_provider(&self) -> <Self::Node as Node>::TP<'_>;
 }
 
-pub struct TSTreeCucursor<'a> {
+pub struct TSTreeCursor<'a> {
     text: &'a [u8],
     cursor: tree_sitter::TreeCursor<'a>,
 }
 
-impl<'a> TSTreeCucursor<'a> {
+impl<'a> TSTreeCursor<'a> {
     pub fn new(text: &'a [u8], cursor: tree_sitter::TreeCursor<'a>) -> Self {
         Self { text, cursor }
     }
 }
 
-impl<'a> Cursor for TSTreeCucursor<'a> {
+impl<'a> Cursor for TSTreeCursor<'a> {
     type Node = tree_sitter::Node<'a>;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep {
