@@ -9,7 +9,7 @@ mod tests;
 
 use std::ops::{Deref, DerefMut};
 
-use hyper_ast::types::HyperAST;
+use hyper_ast::types::{HyperAST, HyperASTShared};
 
 use crate::matchers::mapping_store::MappingStore;
 
@@ -88,7 +88,7 @@ impl<'a, Dsrc, Ddst, M: MappingStore> Mapping<Dsrc, Ddst, M> {
     }
 }
 
-impl<'store, HAST: HyperAST<'store>, Dsrc, Ddst, M> HyperAST<'store>
+impl<'store, HAST: HyperASTShared, Dsrc, Ddst, M> HyperASTShared
     for Mapper<'store, HAST, Dsrc, Ddst, M>
 {
     type IdN = HAST::IdN;
@@ -96,7 +96,11 @@ impl<'store, HAST: HyperAST<'store>, Dsrc, Ddst, M> HyperAST<'store>
     type Idx = HAST::Idx;
 
     type Label = HAST::Label;
+}
 
+impl<'store, HAST: HyperAST<'store>, Dsrc, Ddst, M> HyperAST<'store>
+    for Mapper<'store, HAST, Dsrc, Ddst, M>
+{
     type T = HAST::T;
 
     type NS = HAST::NS;

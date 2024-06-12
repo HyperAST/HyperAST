@@ -462,11 +462,6 @@ mod stores_impl {
             Ty = AnyType,
         >,
     {
-        type IdN = nodes::DefaultNodeIdentifier;
-
-        type Idx = u16;
-        type Label = labels::DefaultLabelIdentifier;
-
         type T = self::nodes::legion::HashedNodeRef<'store, Self::IdN>;
 
         type NS = nodes::legion::NodeStore;
