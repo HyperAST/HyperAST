@@ -166,14 +166,9 @@ where
     type Item = query_cursor::QueryMatch<Cursor::Node>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let n = self.0.query.capture_index_for_name("name").unwrap();
         loop {
-            dbg!();
             let result = self.0.next_match()?;
-            dbg!(result.captures.len());
-            for n in result.nodes_for_capture_index(n) {
-                dbg!(n.text(self.0.text_provider()));
-            }
+            //
             if result.satisfies_text_predicates(
                 self.0.text_provider(),
                 self.0
@@ -616,6 +611,7 @@ pub struct Capture<Node, I = u32> {
 }
 
 #[derive(Clone)]
+#[repr(C)]
 struct State {
     id: u32,
     capture_list_id: u32,
@@ -629,6 +625,7 @@ struct State {
     needs_parent: bool,
 }
 
+#[repr(C)]
 struct PatternEntry {
     step_index: u16,
     pattern_index: u16,
@@ -883,7 +880,7 @@ impl<'a> Node for tree_sitter::Node<'a> {
     }
 
     fn has_child_with_field_id(&self, field_id: tree_sitter::ffi::TSFieldId) -> bool {
-        self.has_child_with_field_id(field_id)
+        self.child_by_field_id(field_id).is_some()
     }
 
     fn equal(&self, other: &Self) -> bool {

@@ -149,6 +149,7 @@ impl<Idx: ToPrimitive> From<&[Idx]> for CompressedTreePath<Idx> {
         }
     }
 }
+
 impl<Idx: PrimInt> From<Vec<Idx>> for CompressedTreePath<Idx> {
     fn from(x: Vec<Idx>) -> Self {
         x.as_slice().into()

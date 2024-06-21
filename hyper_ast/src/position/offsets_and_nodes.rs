@@ -1,9 +1,11 @@
+use std::fmt::Debug;
+
 use super::{tags, TreePath, TreePathMut};
 use crate::types::{HyperAST, NodeId, NodeStore, Tree, WithChildren};
 use crate::PrimInt;
 
 /// BottomUp content
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct StructuralPosition<IdN, Idx, Config = tags::TopDownFull> {
     pub(super) parents: Vec<IdN>, //parents? // most likely parents
     pub(super) offsets: Vec<Idx>,
@@ -11,6 +13,18 @@ pub struct StructuralPosition<IdN, Idx, Config = tags::TopDownFull> {
 }
 
 impl<IdN, C, Idx> super::node_filter_traits::Full for StructuralPosition<IdN, Idx, C> {}
+
+impl<IdN: Debug, Idx: Debug> std::fmt::Debug for StructuralPosition<IdN, Idx, tags::TopDownFull> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SP{{{:?} {:?} TopDown}}", &self.parents, &self.offsets)
+    }
+}
+
+impl<IdN: Debug, Idx: Debug> std::fmt::Debug for StructuralPosition<IdN, Idx, tags::BottomUpFull> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SP{{{:?} {:?} BottomUp}}", &self.parents, &self.offsets)
+    }
+}
 
 impl<IdN: std::hash::Hash, C, Idx: std::hash::Hash> std::hash::Hash
     for StructuralPosition<IdN, Idx, C>
@@ -47,21 +61,27 @@ impl<IdN: std::cmp::Eq, Idx: PrimInt> Ord for StructuralPosition<IdN, Idx> {
             SharedPath::Remain(_) => Less,
             SharedPath::Submatch(_) => Greater,
             SharedPath::Different(a) => {
-                let c = self.offsets[a.len()+1].cmp(&other.offsets[a.len()+1]);
+                let c = self.offsets[a.len() + 1].cmp(&other.offsets[a.len() + 1]);
                 assert_ne!(c, std::cmp::Ordering::Equal);
                 c
-            },
+            }
         }
     }
 }
 
 impl<IdN, Idx, C> StructuralPosition<IdN, Idx, C> {
-    pub(crate) fn empty() -> Self {
+    pub fn empty() -> Self {
         Self {
             parents: vec![],
             offsets: vec![],
             _phantom: Default::default(),
         }
+    }
+    pub fn _set_first_node(&mut self, n: IdN, o: Idx) {
+        assert!(self.parents.is_empty());
+        assert!(self.offsets.len() == 1);
+        self.parents.push(n);
+        self.offsets[0] = o;
     }
     pub(crate) fn solved(self, node: IdN) -> SolvedStructuralPosition<IdN, Idx, C> {
         SolvedStructuralPosition {
@@ -457,12 +477,16 @@ mod impl_c_p_p_receivers {
             self
         }
     }
-    impl<IdN, Idx: PrimInt, IdO, C> building::ReceiveRows<IdO, Self> for StructuralPosition<IdN, Idx, C> {
+    impl<IdN, Idx: PrimInt, IdO, C> building::ReceiveRows<IdO, Self>
+        for StructuralPosition<IdN, Idx, C>
+    {
         fn push(self, _row: IdO) -> Self {
             self
         }
     }
-    impl<IdN, Idx: PrimInt, IdO, C> building::ReceiveColumns<IdO, Self> for StructuralPosition<IdN, Idx, C> {
+    impl<IdN, Idx: PrimInt, IdO, C> building::ReceiveColumns<IdO, Self>
+        for StructuralPosition<IdN, Idx, C>
+    {
         fn push(self, _col: IdO) -> Self {
             self
         }

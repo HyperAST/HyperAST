@@ -43,6 +43,15 @@ impl<'a> PendingInsert<'a> {
             _ => None,
         }
     }
+    pub fn stash(
+        self,
+    ) -> (
+        crate::compat::hash_map::RawVacantEntryMut<'a, legion::Entity, (), ()>,
+        (u64,),
+    ) {
+        let vacant = self.vacant();
+        (vacant.0, (vacant.1 .0,))
+    }
     pub fn resolve<T>(&self, id: NodeIdentifier) -> HashedNodeRef<T> {
         self.1
              .1
@@ -91,7 +100,7 @@ impl<'a> PendingInsert<'a> {
 impl NodeStore {
     pub fn prepare_insertion<'a, Eq: Fn(EntryRef) -> bool, V: Hash>(
         &'a mut self,
-        hashable: &'a V,
+        hashable: &V,
         eq: Eq,
     ) -> PendingInsert {
         let Self {
@@ -223,6 +232,22 @@ impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
             .map(|x| HashedNodeRef::new(x))
             .unwrap()
     }
+}
+
+impl crate::types::NodeStore<NodeIdentifier> for legion::World {
+    type R<'a> = HashedNodeRef<'a, NodeIdentifier> where Self: 'a;
+    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+        self.entry_ref(id.clone())
+            .map(|x| HashedNodeRef::new(x))
+            .unwrap()
+    }
+}
+
+pub fn _resolve<'a, T>(
+    slf: &'a legion::World,
+    id: &NodeIdentifier,
+) -> Result<HashedNodeRef<'a, T>, legion::world::EntityAccessError> {
+    slf.entry_ref(*id).map(|x| HashedNodeRef::new(x))
 }
 
 impl<'a> crate::types::NodeStoreLean<NodeIdentifier> for &'a NodeStore {
@@ -373,6 +398,13 @@ mod stores_impl {
     };
 
     impl<TS> HyperASTShared for SimpleStores<TS, nodes::DefaultNodeStore> {
+        type IdN = nodes::DefaultNodeIdentifier;
+
+        type Idx = u16;
+        type Label = labels::DefaultLabelIdentifier;
+    }
+
+    impl<TS, LS> HyperASTShared for SimpleStores<&TS, &legion::World, &LS> {
         type IdN = nodes::DefaultNodeIdentifier;
 
         type Idx = u16;

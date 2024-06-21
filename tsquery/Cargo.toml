@@ -1,0 +1,55 @@
+[package]
+name = "hyper_ast_tsquery"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tree-sitter = { version = "0.22.2" }
+tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "f09e4a7bd49893b3859fd35446a81314968d665b", version = "0.12", optional = true }
+tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev="d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true }
+stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev="d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true}
+# tree-sitter-graph = { path = "../../../../tree-sitter-graph", optional = true }
+# tree-sitter-stack-graphs = { path = "../../../../stack-graphs/tree-sitter-stack-graphs", optional = true }
+# stack-graphs = { path = "../../../../stack-graphs/stack-graphs", optional = true}
+
+# tree-sitter-query = { git = "https://github.com/tree-sitter-grammars/tree-sitter-query", rev = "d25e8d183f319497b8b22a2a1585975b020da722", version = "0.3.0", optional = true }
+# atomic-counter = "1.0.1"
+# bitvec = "1.0.1"
+# controlled-option = "0.4.1"
+# string-interner = "0.14.0"
+# cfg-if = "1.0"
+# hashbrown = { version = "0.13.2", default-features = false, optional = true }
+log = { version = "0.4.6" }                                                                                                                                                     #, features = ["max_level_debug", "release_max_level_warn"] }
+
+hyper_ast = { path = "../hyper_ast" }
+num = "0.4.0"
+
+# libc = "0.2"
+
+# legion = { version = "0.4.0", optional = true }
+# tuples = "=1.4.1"
+
+# enumset = "1.0.8"
+
+# serde = { version = "1.0.130" }
+
+regex = "1.10.5"
+
+# [build-dependencies]
+# cc = "*"
+
+[dev-dependencies]
+# pretty_assertions = "1.0.0"
+# env_logger = "0.9.0"
+# hyper_ast_gen_ts_cpp = { path = "../cpp", version = "0.1.0" }
+# tree-sitter-java = { git = "https://github.com/quentinLeDilavrec/tree-sitter-java", version = "0.21.0", rev = "7699d4a296ca27fc14511bc75a1a899327f483fc" }
+# hyper_ast_gen_ts_xml = { path = "../xml", version = "0.1.0" }
+# criterion = { version = "0.4", features = ["rayon", "plotters", "cargo_bench_support", "html_reports", "real_blackbox"] }
+
+[features]
+default = ["tsg"]
+tsg = [
+    "dep:tree-sitter-graph",
+    "dep:stack-graphs",
+    "dep:tree-sitter-stack-graphs",
+]

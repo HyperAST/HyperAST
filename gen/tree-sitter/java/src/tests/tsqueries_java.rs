@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, time::Instant};
 
 use hyper_ast::store::{defaults::NodeIdentifier, SimpleStores};
 
@@ -70,11 +70,7 @@ fn prep_recursive<'store>(
         node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = legion_with_refs::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
 
     let tree = match legion_with_refs::tree_sitter_parse(text) {
         Ok(t) => t,
@@ -136,12 +132,10 @@ fn prep_baseline<'query, 'tree>(
 #[cfg(test)]
 fn run_stepped(query: &str, text: &[u8]) -> usize {
     let (query, stores, code) = prep_stepped(query, text);
-    let qcursor = query.matches(
-        hyper_ast_gen_ts_tsquery::search::steped::hyperast::TreeCursor::new(
-            &stores,
-            hyper_ast::position::StructuralPosition::new(code),
-        ),
-    );
+    let qcursor = query.matches(hyper_ast_tsquery::hyperast::TreeCursor::new(
+        &stores,
+        hyper_ast::position::StructuralPosition::new(code),
+    ));
 
     let mut count = 0;
     for m in qcursor {
@@ -166,13 +160,12 @@ fn prep_stepped<'store>(
     query: &str,
     text: &[u8],
 ) -> (
-    hyper_ast_gen_ts_tsquery::search::steped::Query,
+    hyper_ast_tsquery::Query,
     SimpleStores<crate::types::TStore>,
     NodeIdentifier,
 ) {
     use crate::legion_with_refs;
-    use hyper_ast_gen_ts_tsquery::search::steped;
-    let query = steped::Query::new(query, tree_sitter_java::language()).unwrap();
+    let query = hyper_ast_tsquery::Query::new(query, tree_sitter_java::language()).unwrap();
 
     let mut stores = hyper_ast::store::SimpleStores {
         label_store: hyper_ast::store::labels::LabelStore::new(),
@@ -180,11 +173,7 @@ fn prep_stepped<'store>(
         node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = legion_with_refs::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
 
     let tree = match legion_with_refs::tree_sitter_parse(text) {
         Ok(t) => t,
@@ -203,10 +192,7 @@ fn prep_stepped<'store>(
 #[cfg(test)]
 fn run_stepped2(query: &str, text: &[u8]) -> usize {
     let (query, tree) = prep_stepped2(query, text);
-    let cursor = hyper_ast_gen_ts_tsquery::search::steped::TSTreeCursor::new(
-        text,
-        tree.root_node().walk(),
-    );
+    let cursor = hyper_ast_tsquery::default_impls::TreeCursor::new(text, tree.root_node().walk());
     let qcursor = query.matches(cursor);
 
     let mut count = 0;
@@ -229,12 +215,8 @@ fn run_stepped2(query: &str, text: &[u8]) -> usize {
 fn prep_stepped2<'store>(
     query: &str,
     text: &[u8],
-) -> (
-    hyper_ast_gen_ts_tsquery::search::steped::Query,
-    tree_sitter::Tree,
-) {
-    use hyper_ast_gen_ts_tsquery::search::steped;
-    let query = steped::Query::new(query, tree_sitter_java::language()).unwrap();
+) -> (hyper_ast_tsquery::Query, tree_sitter::Tree) {
+    let query = hyper_ast_tsquery::Query::new(query, tree_sitter_java::language()).unwrap();
 
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&tree_sitter_java::language()).unwrap();
@@ -309,12 +291,12 @@ fn compare_all(
             //     )
             // };
             let h_res = prep_stepped(query, text);
-            let h_matches = h_res.0.matches(
-                hyper_ast_gen_ts_tsquery::search::steped::hyperast::TreeCursor::new(
+            let h_matches = h_res
+                .0
+                .matches(hyper_ast_tsquery::hyperast::TreeCursor::new(
                     &h_res.1,
                     hyper_ast::position::StructuralPosition::new(h_res.2),
-                ),
-            );
+                ));
             let g_c = g_matches.into_iter().count();
             let f_c = 0;
             // let f_c = f_matches.into_iter().count();
@@ -838,3 +820,315 @@ fn bl_155_spoon() {
     run_baseline(query, text);
 }
 
+#[test]
+// provoke an infinite loop or is very slow
+//
+fn test_immediate_pred() {
+    log::set_logger(&LOGGER)
+        .map(|()| log::set_max_level(log::LevelFilter::Trace))
+        .unwrap();
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let query = r#"
+(program
+    (declaration 
+      name: (_) @name
+      body: (_
+        [
+        (method_declaration
+            (modifiers
+              (marker_annotation 
+                name: (_) (#EQ? "Override")
+              )
+            )
+            name: (_)@meth_name
+        )
+        (_)
+        ]+
+      )
+    )
+)"#; // ;(#MATCH? "^test")
+    let text = r#"
+class C {
+    @Test
+    @A
+    @B
+    @Override
+    void t() {
+
+    }
+    @Test
+    void t2() {
+
+    }
+    @AA
+    @Test
+    @Override
+    void t3() {
+
+    }
+    @Override
+    void f() {
+
+    }
+}
+    "#;
+    // let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
+    let text = text.as_bytes();
+    // let (query, tree) = prep_stepped2(query, text);
+    dbg!(run_stepped2(query, text));
+}
+
+#[test]
+fn test_precomputed() {
+    log::set_logger(&LOGGER)
+        .map(|()| log::set_max_level(log::LevelFilter::Trace))
+        .unwrap();
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let precomp = [
+        //         //         r#"
+        //         // (marker_annotation
+        //         //     name: (_) (#EQ? "Override")
+        //         // )"#,
+        r#"
+(method_declaration
+    (modifiers
+        (marker_annotation 
+            name: (_) (#EQ? "Override")
+        )
+    )
+)"#,
+        //         //         r#"
+        //         // (method_declaration
+        //         //     (modifiers
+        //         //         (marker_annotation)
+        //         //     )
+        //         // )"#,
+        //         r#"
+        // (class_declaration
+        //     name: (_) @name
+        //     body: (_
+        //         (method_declaration)
+        //     )
+        // )"#,
+    ];
+    let query = r#"
+(program
+(class_declaration 
+  name: (_) @name
+  body: (_
+    (method_declaration
+        (modifiers
+          (marker_annotation 
+            name: (_) (#EQ? "Override")
+          )
+        )
+        name: (_)@meth_name
+    )
+  )
+)
+)"#;
+    let text = r#" class C {
+    @Override
+    void f() {
+
+    }
+    @Test
+    @A
+    @B
+    @Override
+    void t() {
+
+    }
+    @Test
+    void t2() {
+
+    }
+    @AA
+    @Test
+    @Override
+    void t3() {
+
+    }
+    @Override
+    void g() {
+        return;
+        return;
+        return;
+        return;
+        return;
+    }
+}
+    "#;
+    let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
+    let text = text.as_bytes();
+    // let query =
+    //     hyper_ast_tsquery::Query::with_precomputed(query, tree_sitter_java::language(), &precomp)
+    //         .unwrap();
+    use crate::legion_with_refs;
+    let now = Instant::now();
+    let (precomp, query) =
+        hyper_ast_tsquery::Query::with_precomputed(query, tree_sitter_java::language(), &precomp)
+            .unwrap();
+    let mut stores = hyper_ast::store::SimpleStores {
+        label_store: hyper_ast::store::labels::LabelStore::new(),
+        type_store: crate::types::TStore::default(),
+        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
+    };
+    let mut md_cache = Default::default();
+    let mut java_tree_gen = legion_with_refs::JavaTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+        more: precomp,
+        // more: (),
+    };
+    let tree = match legion_with_refs::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    log::trace!("sexp:\n{}", tree.root_node().to_sexp());
+    let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
+    log::trace!(
+        "syntax ser:\n{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
+    );
+    let pre_processing = now.elapsed();
+    let now = Instant::now();
+    let (query, stores, code) = (query, stores, full_node.local.compressed_node);
+    let qcursor = query.matches(hyper_ast_tsquery::hyperast::TreeCursor::new(
+        &stores,
+        hyper_ast::position::StructuralPosition::new(code),
+    ));
+    let mut count = 0;
+    for m in qcursor {
+        count += 1;
+        dbg!(m.pattern_index);
+        dbg!(m.captures.len());
+        for c in &m.captures {
+            let i = c.index;
+            dbg!(i);
+            let name = query.capture_name(i);
+            dbg!(name);
+            use hyper_ast::position::TreePath;
+            let n = c.node.pos.node().unwrap();
+            let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, *n);
+            dbg!(n.to_string());
+        }
+    }
+    dbg!(count);
+    let post_processing = now.elapsed();
+    dbg!(pre_processing, post_processing);
+}
+
+#[test]
+fn test_precomputed2() {
+    log::set_logger(&LOGGER)
+        .map(|()| log::set_max_level(log::LevelFilter::Trace))
+        .unwrap();
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let precomp = [
+        //         r#"
+        // (marker_annotation
+        //     name: (_) (#EQ? "Override")
+        // )"#,
+        r#"
+(method_declaration
+    (modifiers
+        (marker_annotation 
+            name: (_) (#EQ? "Override")
+        )
+    )
+)"#,
+        //         r#"
+        // (method_declaration
+        //     (modifiers
+        //         (marker_annotation)
+        //     )
+        // )"#,
+        r#"
+(class_declaration 
+    name: (_)
+    body: (_
+        (method_declaration)
+    )
+)"#,
+    ];
+    let query = r#"
+(program
+(class_declaration 
+  name: (_) @name
+  body: (_
+    (method_declaration
+        (modifiers
+          (marker_annotation 
+            name: (_) (#EQ? "Override")
+          )
+        )
+        name: (_)@meth_name
+    )
+  )
+)
+)"#;
+    let text = r#"
+class C {
+    @Test
+    @A
+    @B
+    @Override
+    void t() {
+
+    }
+    @Test
+    void t2() {
+
+    }
+    @AA
+    @Test
+    @Override
+    void t3() {
+
+    }
+    @Override
+    void f() {
+
+    }
+}
+    "#;
+    let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
+    let text = text.as_bytes();
+    // let query =
+    //     hyper_ast_tsquery::Query::with_precomputed(query, tree_sitter_java::language(), &precomp)
+    //         .unwrap();
+    let (query, tree) = {
+        let query: &str = query;
+        let (precomp, query) = hyper_ast_tsquery::Query::with_precomputed(
+            query,
+            tree_sitter_java::language(),
+            &precomp,
+        )
+        .unwrap();
+
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(&tree_sitter_java::language()).unwrap();
+        let tree = parser.parse(text, None).unwrap();
+
+        (query, tree)
+    };
+    let cursor = hyper_ast_tsquery::default_impls::TreeCursor::new(text, tree.root_node().walk());
+    let qcursor = query.matches(cursor);
+    let mut count = 0;
+    for m in qcursor {
+        count += 1;
+        dbg!(m.pattern_index);
+        dbg!(m.captures.len());
+        for c in &m.captures {
+            let i = c.index;
+            dbg!(i);
+            let name = query.capture_name(i);
+            dbg!(name);
+            let n = c.node;
+            dbg!(n.utf8_text(text).unwrap());
+        }
+    }
+    dbg!(count);
+}

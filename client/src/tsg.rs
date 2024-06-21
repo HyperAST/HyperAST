@@ -1,7 +1,7 @@
 use crate::SharedState;
 use axum::Json;
 use hyper_ast_cvs_git::SimpleStores;
-use hyper_ast_gen_ts_java::tsg::stepped_query::{Node, QueryMatcher};
+use hyper_ast_tsquery::stepped_query::{Node, QueryMatcher};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use tree_sitter_graph::GenQuery;

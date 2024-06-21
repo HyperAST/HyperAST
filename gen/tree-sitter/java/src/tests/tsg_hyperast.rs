@@ -75,11 +75,7 @@ fn tsg_hyperast_stepped_query() {
         node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = legion_with_refs::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
     let tree = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
         Ok(t) => t,
         Err(t) => t,
@@ -149,11 +145,7 @@ fn tsg_hyperast_recursive_query() {
         node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = legion_with_refs::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
     let tree = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
         Ok(t) => t,
         Err(t) => t,

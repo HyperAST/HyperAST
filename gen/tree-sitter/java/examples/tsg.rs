@@ -1,7 +1,10 @@
 use std::fmt::Display;
 
 use hyper_ast::store::SimpleStores;
-use hyper_ast_gen_ts_java::tsg::{configure, init_globals, Functions, It};
+use hyper_ast_gen_ts_java::{
+    legion_with_refs,
+    tsg::{configure, init_globals, Functions, It},
+};
 
 fn main() {
     use std::path::Path;
@@ -56,7 +59,7 @@ fn tsg_hyperast_stepped_loop(
         type_store: hyper_ast_gen_ts_java::types::TStore::default(),
         node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
     };
-    let mut md_cache  = Default::default();
+    let mut md_cache = Default::default();
     for code in codes {
         for query in queries {
             tsg_hyperast_stepped(&code.0, code.1.as_ref(), &query, &mut stores, &mut md_cache);
@@ -69,14 +72,14 @@ fn tsg_hyperast_stepped<'a, 'c, 'd>(
     code_text: &'a str,
     query: &(impl Display, impl AsRef<str>),
     stores: &'a mut SimpleStores<hyper_ast_gen_ts_java::types::TStore>,
-    md_cache: &'c mut std::collections::HashMap<legion::Entity, hyper_ast_gen_ts_java::legion_with_refs::MD>,
+    md_cache: &'c mut std::collections::HashMap<legion::Entity, legion_with_refs::MD>,
 ) -> tree_sitter_graph::graph::Graph<
     hyper_ast_gen_ts_java::tsg::stepped_query::Node<
         'a,
         SimpleStores<hyper_ast_gen_ts_java::types::TStore>,
     >,
 > {
-    unsafe { hyper_ast_gen_ts_java::legion_with_refs::HIDDEN_NODES = true };
+    unsafe { legion_with_refs::HIDDEN_NODES = true };
     let language = tree_sitter_java::language();
 
     let code_name = &code_name.to_string();
@@ -90,16 +93,12 @@ fn tsg_hyperast_stepped<'a, 'c, 'd>(
     // choose the stepped query implementation (like the treesitter one)
     use hyper_ast_gen_ts_java::tsg::stepped_query as impls;
 
-    let tree = match hyper_ast_gen_ts_java::legion_with_refs::tree_sitter_parse(text.as_bytes()) {
+    let tree = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
         Ok(t) => t,
         Err(t) => t,
     };
 
-    let mut java_tree_gen = hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores,
-        md_cache,
-    };
+    let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(stores, md_cache);
 
     // println!("{}", tree.root_node().to_sexp());
     let full_node = java_tree_gen.generate_file(code_name.as_bytes(), text.as_bytes(), tree.walk());

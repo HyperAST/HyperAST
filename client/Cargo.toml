@@ -16,6 +16,8 @@ hyper_ast_cvs_git = { path = "../cvs/git" }
 hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
 hyper_ast_gen_ts_cpp = { path = "../gen/tree-sitter/cpp" }
 hyper_ast_gen_ts_tsquery = { path = "../gen/tree-sitter/query" }
+hyper_ast_tsquery = { path = "../tsquery" }
+
 env_logger = "0.9.0"
 log = { version = "0.4.6", features = [
     # "max_level_debug",
@@ -98,6 +100,3 @@ stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev 
 
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["blocking"] }
-
-[profile.release]
-debug = 1

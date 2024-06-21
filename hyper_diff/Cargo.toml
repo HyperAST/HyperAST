@@ -30,6 +30,3 @@ bench = false
 [[bench]]
 name = "compressed_path_iter"
 harness = false
-
-[profile.test]
-opt-level = 3

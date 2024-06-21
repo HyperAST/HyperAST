@@ -31,6 +31,7 @@ stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev=
 # tree-sitter-stack-graphs = { path = "../../../../stack-graphs/tree-sitter-stack-graphs", optional = true }
 # stack-graphs = { path = "../../../../stack-graphs/stack-graphs", optional = true}
 hyper_ast_gen_ts_tsquery = { path = "../query", optional = true }
+hyper_ast_tsquery = { path = "../../../tsquery", optional = true }
 
 libc = "0.2"
 
@@ -53,6 +54,7 @@ cc = "*"
 [dev-dependencies]
 pretty_assertions = "1.0.0"
 env_logger = "0.9.0"
+criterion = { version = "0.5.1", features = ["rayon", "plotters", "cargo_bench_support", "html_reports", "real_blackbox"] }
 
 [[example]]
 name = "querying"
@@ -61,6 +63,26 @@ required-features = ["impl", "tsg", "all_examples"]
 [[example]]
 name = "tsg"
 required-features = ["impl", "tsg", "all_examples"]
+
+[[example]]
+name = "querying_immediate_pred"
+required-features = ["impl", "tsg", "all_examples"]
+
+[[example]]
+name = "querying_precompute"
+required-features = ["impl", "tsg", "all_examples"]
+
+[[bench]]
+name = "querying_precompute"
+harness = false
+
+[[bench]]
+name = "querying_precompute_repeat"
+harness = false
+
+[[bench]]
+name = "querying_precompute_repeat2"
+harness = false
 
 [features]
 default = ["impl", "tsg"]
@@ -79,5 +101,6 @@ tsg = [
     "dep:stack-graphs",
     "dep:tree-sitter-stack-graphs",
     "dep:hyper_ast_gen_ts_tsquery",
+    "dep:hyper_ast_tsquery",
 ]
 all_examples=[]

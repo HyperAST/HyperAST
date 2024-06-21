@@ -1,7 +1,7 @@
 use super::{Cursor, Status, Symbol, TreeCursorStep};
 use hyper_ast::position::TreePath;
 use hyper_ast::types::{
-    HyperASTShared, HyperType, LabelStore, Labeled, RoleStore, Tree, WithRoles,
+    HyperASTShared, HyperType, LabelStore, Labeled, RoleStore, Tree, WithPrecompQueries, WithRoles
 };
 use hyper_ast::{
     position::TreePathMut,
@@ -79,6 +79,7 @@ where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore<HAST::T>,
     HAST::T: WithRoles,
+    HAST::T: WithPrecompQueries,
 {
     type Node = self::Node<'hast, HAST>;
 
@@ -197,6 +198,17 @@ where
     fn text_provider(&self) -> <Self::Node as super::Node>::TP<'_> {
         ()
     }
+
+    fn is_visible_at_root(&self) -> bool {
+        assert!(self.pos.parent().is_none());
+        self.is_visible()
+    }
+
+    fn wont_match(&self, actives: u8) -> bool {
+        use hyper_ast::types::NodeStore;
+        let n = self.stores.node_store().resolve(self.pos.node().unwrap());
+        n.wont_match_given_precomputed_queries(actives)
+    }
 }
 
 impl<'hast, HAST: HyperAST<'hast>> self::TreeCursor<'hast, HAST>
@@ -204,6 +216,7 @@ where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore<HAST::T>,
     HAST::T: WithRoles,
+    HAST::T: WithPrecompQueries,
 {
     fn role(&self) -> Option<<HAST::TS as RoleStore<HAST::T>>::Role> {
         use hyper_ast::types::NodeStore;
@@ -267,6 +280,7 @@ where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore<HAST::T>,
     HAST::T: WithRoles,
+    HAST::T: WithPrecompQueries,
 {
     fn symbol(&self) -> Symbol {
         // TODO make something more efficient
@@ -367,6 +381,7 @@ where
     HAST::IdN: std::fmt::Debug + Copy,
     HAST::TS: RoleStore<HAST::T>,
     HAST::T: WithRoles,
+    HAST::T: WithPrecompQueries,
 {
     fn child_by_role(&mut self, role: <HAST::TS as RoleStore<HAST::T>>::Role) -> Option<()> {
         // TODO what about multiple children with same role?

@@ -1,5 +1,6 @@
 use crate::SharedState;
 use axum::Json;
+use hyper_ast_gen_ts_tsquery::search::steped;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
@@ -83,12 +84,17 @@ pub fn simple(
         .unwrap()
         .pre_process_with_limit(&mut repo, "", &commit, commits)
         .unwrap();
-    let prepare_time = now.elapsed().as_secs_f64();
     log::info!("done construction of {commits:?} in  {}", repo.spec);
+    let language: tree_sitter::Language = language.clone();
+    let query = hyper_ast_tsquery::Query::new(&query, language)
+        .map_err(|e| QueryingError::ParsingError(e.to_string()))?;
+    // let query = steped::Query::new(&query, language)
+    //     .map_err(|e| QueryingError::ParsingError(e.to_string()))?;
+    log::info!("done query construction");
+    let prepare_time = now.elapsed().as_secs_f64();
     let mut results = vec![];
     for commit_oid in &commits {
-        let language: tree_sitter::Language = language.clone();
-        let result = simple_aux(&state, &repo, commit_oid, &query, language)
+        let result = simple_aux(&state, &repo, commit_oid, &query)
             .map(|inner| ComputeResultIdentified {
                 commit: commit_oid.to_string(),
                 inner,
@@ -107,27 +113,21 @@ fn simple_aux(
     state: &crate::AppState,
     repo: &hyper_ast_cvs_git::processing::ConfiguredRepo2,
     commit_oid: &hyper_ast_cvs_git::git::Oid,
-    query: &str,
-    language: tree_sitter::Language,
+    query: &hyper_ast_tsquery::Query,
 ) -> Result<ComputeResult, QueryingError> {
-    use hyper_ast_gen_ts_tsquery::search::steped;
-    let query = steped::Query::new(query, language).map_err(|e|QueryingError::ParsingError(e.to_string()))?;
-
     let repositories = state.repositories.read().unwrap();
     let commit = repositories.get_commit(&repo.config, commit_oid).unwrap();
     let code = commit.ast_root;
     let stores = &repositories.processor.main_stores;
 
-    let qcursor = query.matches(
-        hyper_ast_gen_ts_tsquery::search::steped::hyperast::TreeCursor::new(
-            stores,
-            hyper_ast::position::StructuralPosition::new(code),
-        ),
-    );
+    let qcursor = query.matches(hyper_ast_tsquery::hyperast::TreeCursor::new(
+        stores,
+        hyper_ast::position::StructuralPosition::new(code),
+    ));
     let now = Instant::now();
     let mut result = vec![0; query.pattern_count()];
     for m in qcursor {
-        result[m.pattern_index] += 1;
+        result[m.pattern_index.to_usize()] += 1;
         // dbg!(m.pattern_index);
         // dbg!(m.captures.len());
         // for c in &m.captures {

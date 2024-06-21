@@ -19,7 +19,7 @@ mod legion_impls {
         }
     }
 
-    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::{LangWrapper, TypeIndex}};
+    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::{LangWrapper, TypeIndex, Typed}};
 
     // impl<'a> TypeStore<HashedNodeRef<'a, AnyType>> for Single {
     //     type Ty = Type;
@@ -61,7 +61,7 @@ mod legion_impls {
         const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
 
         fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
-            todo!("{:?}", n)
+            n.get_type()
         }
 
         fn resolve_lang(
@@ -212,7 +212,8 @@ mod legion_impls {
 }
 #[cfg(feature = "legion")]
 pub use legion_impls::as_any;
-pub trait JavaEnabledTypeStore<T>: TypeStore<T> {}
+pub trait JavaEnabledTypeStore<T>: TypeStore<T> {
+}
 
 #[cfg(feature = "impl")]
 fn id_for_node_kind(kind: &str, named: bool) -> u16 {
@@ -225,7 +226,7 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
 
 #[repr(u8)]
 pub enum TStore {
-    Java = 0,
+    Java = 0
 }
 
 impl Default for TStore {

@@ -94,4 +94,35 @@ pub(super) const EXAMPLES: &[Example] = &[
 )"#,
         },
         ..BASE_SPOON_EX
+    },Example {
+        name: "example 2 (Java)",
+        query: Query {
+            description: "Count the number of public class with a superclass and interfaces and that starts with a method.
+    ",
+            query: r#"(program
+  (package_declaration (_)@pkg)
+  (class_declaration 
+    (modifiers "public")
+    name: (_) @name
+    body: (_
+        [
+          (method_declaration
+            (modifiers
+              . ; this is very important otherwise the complexity explodes
+              [
+                (marker_annotation 
+                  name: (_)@_anot (#any-eq? @_anot "Test")
+                )
+                (_)
+              ]+
+            )
+            name: (_)@meth
+          )
+          (_)
+        ]+
+    )
+  )
+)"#,
+        },
+        ..BASE_SPOON_EX
     }];

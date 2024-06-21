@@ -175,7 +175,7 @@ Indeed, the semantic of the query is actually to produce a different match for e
               . ; this is very important otherwise the complexity explodes
               [
                 (marker_annotation 
-                  name: (_)@_anot (#eq? @_anot "Test")
+                  name: (_)@_anot (#any-eq? @_anot "Test")
                 )
                 (_)
               ]+
@@ -183,7 +183,7 @@ Indeed, the semantic of the query is actually to produce a different match for e
             name: (_)@meth
           )
           (_)
-        ]*
+        ]+
     )
   )
 ) {

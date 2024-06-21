@@ -1,5 +1,96 @@
 use hyper_ast_gen_ts_java::tsg::It;
 
+pub const QUERIES: &[(&[&str], &str)] = &[
+// (
+//     &[
+//         //         r#"
+//         // (marker_annotation
+//         //     name: (_) (#EQ? "Override")
+//         // )"#,
+//         r#"
+// (method_declaration
+//     (modifiers
+//         (marker_annotation 
+//             name: (_) (#EQ? "Override")
+//         )
+//     )
+// )"#,
+//         //         r#"
+//         // (method_declaration
+//         //     (modifiers
+//         //         (marker_annotation)
+//         //     )
+//         // )"#,
+//         r#"
+// (class_declaration 
+//     name: (_) @name
+//     body: (_
+//         (method_declaration)
+//     )
+// )"#,
+//     ],
+//     r#"(program
+// (class_declaration 
+//   name: (_) @name
+//   body: (_
+//     (method_declaration
+//       (modifiers
+//         (marker_annotation 
+//           name: (_) (#EQ? "Override")
+//         )
+//       )
+//       name: (_)@meth_name
+//     )
+//   )
+// )
+//   )"#,
+// ),
+(
+    &[
+        //         r#"
+        // (marker_annotation
+        //     name: (_) (#EQ? "Override")
+        // )"#,
+        r#"
+(method_declaration
+    (modifiers
+      "public"
+      "static"
+    )
+    type: (void_type)
+    name: (_) (#EQ? "main")
+)"#,
+        //         r#"
+        // (method_declaration
+        //     (modifiers
+        //         (marker_annotation)
+        //     )
+        // )"#,
+//         r#"
+// (class_declaration 
+//     name: (_) @name
+//     body: (_
+//         (method_declaration)
+//     )
+// )"#,
+    ],
+    r#"(program
+(class_declaration 
+  name: (_) @name
+  body: (_
+    (method_declaration
+      (modifiers
+        "public"
+        "static"
+      )
+      type: (void_type)
+      name: (_) (#EQ? "main")
+    )
+  )
+)
+  )"#,
+)];
+
 fn main() {
     use std::path::Path;
     log::set_logger(&LOGGER)
@@ -9,7 +100,7 @@ fn main() {
     args.next().unwrap();
     let Some(codes) = args.next() else {
         let codes = hyper_ast_gen_ts_java::tsg::CODES.iter().enumerate();
-        let queries: Vec<_> = hyper_ast_gen_ts_java::tsg::QUERIES
+        let queries: Vec<_> = QUERIES
             .iter()
             .enumerate()
             .collect();
@@ -25,30 +116,28 @@ fn main() {
         (x, text)
     });
     let Some(queries) = args.next() else {
-        let queries: Vec<_> = hyper_ast_gen_ts_java::tsg::QUERIES
-            .iter()
-            .enumerate()
-            .collect();
+        let queries: Vec<_> = QUERIES.iter().enumerate().collect();
         compare_all(codes, &queries);
         return;
     };
-    let queries: Vec<_> = It::new(Path::new(&queries).to_owned())
-        .map(|x| {
-            let text = std::fs::read_to_string(&x).expect(&format!(
-                "{:?} in not a file of treesitter queries of a dir containing such files",
-                x
-            ));
-            (x, text)
-        })
-        .collect();
-    compare_all(codes, &queries);
+    todo!()
+    // let queries: Vec<_> = It::new(Path::new(&queries).to_owned())
+    //     .map(|x| {
+    //         let text = std::fs::read_to_string(&x).expect(&format!(
+    //             "{:?} in not a file of treesitter queries of a dir containing such files",
+    //             x
+    //         ));
+    //         (x, text)
+    //     })
+    //     .collect();
+    // compare_all(codes, &queries);
 }
 
 fn compare_all(
     codes: impl Iterator<Item = (impl std::fmt::Debug + Clone, impl AsRef<str>)>,
     queries: &[(
         impl std::fmt::Debug + Clone + Eq + std::hash::Hash,
-        impl AsRef<str>,
+        &(&[&str], impl AsRef<str>),
     )],
 ) {
     unsafe { hyper_ast_gen_ts_java::legion_with_refs::HIDDEN_NODES = true };
@@ -59,7 +148,8 @@ fn compare_all(
     for (i, text) in codes {
         codes_count += 1;
         for (j, query) in queries.iter() {
-            let query = query.as_ref();
+            let precomp = query.0;
+            let query = query.1.as_ref();
             dbg!(&i, &j);
             let text = text.as_ref().as_bytes();
             let mut cursor = tree_sitter::QueryCursor::default();
@@ -74,9 +164,9 @@ fn compare_all(
             //         &f_res.1, f_res.2,
             //     )
             // };
-            let h_res = prep_stepped(query, text);
+            let h_res = prep_stepped(precomp, query, text);
             let h_matches = h_res.0.matches(
-                hyper_ast_gen_ts_tsquery::search::steped::hyperast::TreeCursor::new(
+                hyper_ast_tsquery::hyperast::TreeCursor::new(
                     &h_res.1,
                     hyper_ast::position::StructuralPosition::new(h_res.2),
                 ),
@@ -151,16 +241,16 @@ fn prep_baseline<'query, 'tree>(
 }
 
 fn prep_stepped<'store>(
+    precomp: &[&str],
     query: &str,
     text: &[u8],
 ) -> (
-    hyper_ast_gen_ts_tsquery::search::steped::Query,
+    hyper_ast_tsquery::Query,
     hyper_ast::store::SimpleStores<hyper_ast_gen_ts_java::types::TStore>,
     hyper_ast::store::defaults::NodeIdentifier,
 ) {
     use hyper_ast_gen_ts_java::legion_with_refs;
-    use hyper_ast_gen_ts_tsquery::search::steped;
-    let query = steped::Query::new(query, tree_sitter_java::language()).unwrap();
+    let (precomp, query) = hyper_ast_tsquery::Query::with_precomputed(query, tree_sitter_java::language(), precomp).unwrap();
 
     let mut stores = hyper_ast::store::SimpleStores {
         label_store: hyper_ast::store::labels::LabelStore::new(),
@@ -168,7 +258,14 @@ fn prep_stepped<'store>(
         node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
+    let mut java_tree_gen = {
+        legion_with_refs::JavaTreeGen {
+            line_break: "\n".as_bytes().to_vec(),
+            stores: &mut stores,
+            md_cache: &mut md_cache,
+            more: precomp,
+        }
+    };
 
     let tree = match legion_with_refs::tree_sitter_parse(text) {
         Ok(t) => t,

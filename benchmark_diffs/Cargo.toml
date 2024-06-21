@@ -46,28 +46,6 @@ jemallocator = "0.5.0"
 [dev-dependencies]
 hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
 
-# [profile.release]
-# debug = 1
-
-[profile.release]
-## release optimizations
-# debug = 0
-# lto = "fat"
-# codegen-units = 1
-rustflags = ["-C target-cpu=native"]
-# panic = "abort"
-
-[profile.test]
-opt-level = 3
-debug = 1
-debug-assertions = false
-overflow-checks = false
-lto = "fat"
-panic = 'abort'
-incremental = true
-codegen-units = 1
-rpath = true
-
 # [[bin]]
 # name = "window_combination"
 # path = "binwindow_combination.rs"

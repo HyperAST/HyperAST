@@ -27,11 +27,7 @@ fn run(text: &[u8]) {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
 
     let tree = match legion_with_refs::tree_sitter_parse(text) {
         Ok(t) => t,
@@ -143,11 +139,7 @@ fn test_equals() {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let tree = match legion_with_refs::tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
@@ -221,11 +213,7 @@ fn test_special() {
     };
 
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
 
     let text = {
         let source_code1 = "package p.y;
@@ -444,11 +432,7 @@ fn test_offset_computation() {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let tree = match legion_with_refs::tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
@@ -523,11 +507,7 @@ fn test_offset_computation2() {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let tree = match legion_with_refs::tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,

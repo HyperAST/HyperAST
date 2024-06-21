@@ -607,7 +607,10 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     }
 
 impl<'a, T> crate::types::WithRoles for HashedNodeRef<'a, T> {
-    fn role_at<Role: 'static + Copy + std::marker::Sync + std::marker::Send>(&self, at: Self::ChildIdx) -> Option<Role> {
+    fn role_at<Role: 'static + Copy + std::marker::Sync + std::marker::Send>(
+        &self,
+        at: Self::ChildIdx,
+    ) -> Option<Role> {
         let ro = self.0.get_component::<compo::RoleOffsets>().ok()?;
         let r = self.0.get_component::<Box<[Role]>>().ok()?;
         let mut i = 0;
@@ -620,6 +623,15 @@ impl<'a, T> crate::types::WithRoles for HashedNodeRef<'a, T> {
             i += 1;
         }
         None
+    }
+}
+
+impl<'a, T> crate::types::WithPrecompQueries for HashedNodeRef<'a, T> {
+    fn wont_match_given_precomputed_queries(&self, active: u8) -> bool {
+        let Ok(v) = self.get_component::<compo::Precomp>() else {
+            return self.get_component::<compo::PrecompFlag>().is_ok();
+        };
+        v.0 & active == 0
     }
 }
 

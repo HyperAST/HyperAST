@@ -667,6 +667,13 @@ pub trait WithRoles: WithChildren {
     ) -> Option<Role>;
 }
 
+pub trait WithPrecompQueries {
+    fn wont_match_given_precomputed_queries(
+        &self,
+        active: u8,
+    ) -> bool;
+}
+
 pub trait WithChildrenSameLang: WithChildren {
     type TChildren<'a>: Children<Self::ChildIdx, Self::TreeId> + ?Sized
     where
