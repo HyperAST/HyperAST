@@ -886,16 +886,14 @@ impl Query {
                     .as_ref()
                     .unwrap()
                     .matches(&query, j);
-                // dbg!(j.0, &r);
                 for r in &r {
                     let r = r.to_usize();
                     assert!(r < 8);
-                    query.used_precomputed &= 1 << r as u8;
+                    query.used_precomputed |= 1 << r as u8;
                 }
                 res.extend(r.into_iter().map(|x| (x, j)));
                 j.inc();
             }
-            let mut j = 0;
             if let Some(m_pat) = &mut query
                 .pattern_map
                 .iter_mut()
@@ -904,7 +902,7 @@ impl Query {
                 for r in &res {
                     let r = r.0.to_usize();
                     assert!(r < 8);
-                    m_pat.precomputed &= 1 << r as u8;
+                    m_pat.precomputed |= 1 << r as u8;
                     // m_pat.precomputed = r.0.to_usize();
                 }
             }

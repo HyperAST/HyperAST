@@ -383,7 +383,7 @@ pub use computing_path::resolve_range;
 
 // advanced optimization, uses a dag StructuralPositionStore to share parent paths
 
-mod structural_pos;
+pub mod structural_pos;
 pub use structural_pos::{
     ExploreStructuralPositions, Scout, SpHandle, StructuralPositionStore, TypedScout,
 };

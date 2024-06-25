@@ -77,6 +77,7 @@ where
     HAST::T: WithPrecompQueries,
 {
     type Node = Self;
+    type NodeRef<'a> = &'a Self where Self:'a;
 
     fn goto_next_sibling_internal(
         &mut self,
@@ -94,13 +95,29 @@ where
         self.0.goto_parent()
     }
 
-    fn current_node(&self) -> Self::Node {
-        Self(self.0.current_node())
+    fn current_node(&self) -> &Self {
+        self
     }
 
-    fn parent_node(&self) -> Option<Self::Node> {
-        Some(Self(self.0.parent_node()?))
+    fn parent_is_error(&self) -> bool {
+        self.0.parent_is_error()
     }
+
+    fn has_parent(&self) -> bool {
+        let mut node = self.clone();
+        node.goto_parent()
+    }
+
+    fn persist(&mut self) -> Self::Node {
+        self.clone()
+    }
+
+    fn persist_parent(&mut self) -> Option<Self::Node> {
+        let mut node = self.clone();
+        node.goto_parent();
+        Some(node)
+    }
+
 
     type Status = crate::hyperast::CursorStatus<<Self as crate::Node>::IdF>;
 

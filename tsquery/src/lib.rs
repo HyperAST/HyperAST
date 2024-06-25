@@ -20,6 +20,7 @@ mod ts_private_bypass;
 
 pub mod default_impls;
 pub mod hyperast;
+pub mod hyperast_opt;
 pub mod stepped_query;
 pub mod tsg;
 
@@ -73,10 +74,7 @@ struct Slice<I> {
 
 impl<I> Slice<I> {
     fn new(offset: I, length: I) -> Self {
-        Self {
-            offset,
-            length,
-        }
+        Self { offset, length }
     }
 }
 
@@ -152,27 +150,23 @@ pub enum TreeCursorStep {
 }
 
 pub trait Cursor {
-    type Node: Node;
+    type Node: Node + Clone;
+    type NodeRef<'a>: Node<IdF = <Self::Node as Node>::IdF, TP<'a> = <Self::Node as Node>::TP<'a>>
+    where
+        Self: 'a;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep;
 
     fn goto_first_child_internal(&mut self) -> TreeCursorStep;
 
     fn goto_parent(&mut self) -> bool;
-    fn current_node(&self) -> Self::Node;
+    fn current_node(&self) -> Self::NodeRef<'_>;
 
-    fn parent_node(&self) -> Option<Self::Node>;
+    fn parent_is_error(&self) -> bool;
 
     type Status: Status<IdF = <Self::Node as Node>::IdF>;
 
     fn current_status(&self) -> Self::Status;
-
-    // fn is_subtree_repetition(&self) -> bool {
-    //     unimplemented!("related to query analysis, don't know how to handle that for now")
-    // }
-    // fn subtree_symbol(&self) -> tree_sitter::ffi::TSSymbol {
-    //     unimplemented!("related to query analysis, don't know how to handle that for now")
-    // }
 
     fn text_provider(&self) -> <Self::Node as Node>::TP<'_>;
 
@@ -182,6 +176,9 @@ pub trait Cursor {
     fn is_visible_at_root(&self) -> bool {
         true
     }
+    fn has_parent(&self) -> bool;
+    fn persist(&mut self) -> Self::Node;
+    fn persist_parent(&mut self) -> Option<Self::Node>;
 }
 
 pub trait Status {
@@ -194,7 +191,7 @@ pub trait Status {
     fn contains_supertype(&self, sym: Symbol) -> bool;
 }
 
-pub trait Node: Clone {
+pub trait Node {
     type IdF;
 
     fn symbol(&self) -> Symbol;
@@ -204,12 +201,10 @@ pub trait Node: Clone {
 
     fn start_point(&self) -> crate::Point;
 
-    // fn child_by_field_id(&self, field_id: FieldId) -> Option<Self>;
     fn has_child_with_field_id(&self, field_id: Self::IdF) -> bool;
 
     fn equal(&self, other: &Self) -> bool;
     fn compare(&self, other: &Self) -> std::cmp::Ordering;
-    // fn id(&self) -> usize;
     type TP<'a>: Copy;
     fn text(&self, text_provider: Self::TP<'_>) -> std::borrow::Cow<str>;
     fn text_equal(&self, text_provider: Self::TP<'_>, other: impl Iterator<Item = u8>) -> bool {
@@ -219,10 +214,46 @@ pub trait Node: Clone {
             .copied()
             .eq(other)
     }
-    // access precomputed query results in metadata,
-    // returns true if might match any descendant, false otherwise
-    fn could_match(&self, patid: PatternId) -> bool {
-        true // default value
+}
+
+impl<T> Node for &T
+where
+    T: Node,
+{
+    type IdF = T::IdF;
+
+    fn symbol(&self) -> Symbol {
+        (*self).symbol()
+    }
+
+    fn is_named(&self) -> bool {
+        (*self).is_named()
+    }
+
+    fn str_symbol(&self) -> &str {
+        (*self).str_symbol()
+    }
+
+    fn start_point(&self) -> crate::Point {
+        (*self).start_point()
+    }
+
+    fn has_child_with_field_id(&self, field_id: Self::IdF) -> bool {
+        (*self).has_child_with_field_id(field_id)
+    }
+
+    fn equal(&self, other: &Self) -> bool {
+        (*self).equal(other)
+    }
+
+    fn compare(&self, other: &Self) -> std::cmp::Ordering {
+        (*self).compare(other)
+    }
+
+    type TP<'a> = T::TP<'a>;
+
+    fn text(&self, text_provider: Self::TP<'_>) -> std::borrow::Cow<str> {
+        (*self).text(text_provider)
     }
 }
 
@@ -234,15 +265,12 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            // dbg!();
             let result = self.next_match()?;
-            // dbg!(result.captures.len());
             if result.satisfies_text_predicates(
                 self.cursor.text_provider(),
                 self.query
                     .text_predicates_for_pattern_id(result.pattern_index),
             ) {
-                // dbg!();
                 return Some(result);
             }
         }
@@ -314,7 +342,10 @@ impl<Node: self::Node> QueryMatch<Node> {
         })
     }
 
-    pub fn nodes_for_capture_index<'a>(&'a self, index: CaptureId) -> impl Iterator<Item = &'a Node> {
+    pub fn nodes_for_capture_index<'a>(
+        &'a self,
+        index: CaptureId,
+    ) -> impl Iterator<Item = &'a Node> {
         self.captures.nodes_for_capture_index(index)
     }
 }

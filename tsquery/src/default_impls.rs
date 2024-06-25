@@ -15,6 +15,7 @@ impl<'a> TreeCursor<'a> {
 
 impl<'a> Cursor for TreeCursor<'a> {
     type Node = tree_sitter::Node<'a>;
+    type NodeRef<'b> = tree_sitter::Node<'a> where Self: 'b;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep {
         extern "C" {
@@ -44,11 +45,11 @@ impl<'a> Cursor for TreeCursor<'a> {
         self.cursor.goto_parent()
     }
 
-    fn current_node(&self) -> Self::Node {
+    fn current_node(&self) -> Self::NodeRef<'_> {
         self.cursor.node()
     }
 
-    fn parent_node(&self) -> Option<Self::Node> {
+    fn parent_is_error(&self) -> bool {
         extern "C" {
             pub fn ts_tree_cursor_parent_node(self_: *const ffi::TSTreeCursor) -> ffi::TSNode;
         }
@@ -56,11 +57,23 @@ impl<'a> Cursor for TreeCursor<'a> {
             let s: *const ffi::TSTreeCursor = std::mem::transmute(&self.cursor);
             let n = ts_tree_cursor_parent_node(s);
             if ffi::ts_node_is_null(n) {
-                return None;
+                return false;
             }
             let n: tree_sitter::Node = std::mem::transmute(n);
-            Some(n)
+            n.is_error()
         }
+    }
+
+    fn has_parent(&self) -> bool {
+        todo!()
+    }
+
+    fn persist(&mut self) -> Self::Node {
+        self.cursor.node()
+    }
+
+    fn persist_parent(&mut self) -> Option<Self::Node> {
+        self.cursor.node().parent()
     }
 
     type Status = TSStatus;

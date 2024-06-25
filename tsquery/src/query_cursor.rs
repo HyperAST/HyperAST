@@ -4,7 +4,7 @@ use super::Capture;
 use super::Node;
 use super::{QueryCursor, QueryMatch, Status, TreeCursorStep};
 use crate::indexed::StepId;
-use crate::indexed::{CaptureId, PatternId, Symbol};
+use crate::indexed::{CaptureId, PatternId};
 use crate::Depth;
 
 #[derive(Clone)]
@@ -231,12 +231,13 @@ where
     pub(crate) fn when_entering(&mut self, stop_on_definite_step: bool) -> (bool, bool) {
         let query = self.query;
         let mut did_match = false;
-        // Get the properties of the current node.
-        let node = self.cursor.current_node();
-        let parent_node = self.cursor.parent_node();
         let node_intersects_range;
         let parent_intersects_range;
         {
+            // // Get the properties of the current node.
+            // let node = self.cursor.current_node();
+            // let parent_node = self.cursor.parent_node();
+
             let parent_precedes_range = false;
             // !ts_node_is_null(parent_node) && (
             //   ts_node_end_byte(parent_node) <= self->start_byte ||
@@ -263,6 +264,8 @@ where
         };
 
         if self.on_visible_node {
+            // Get the properties of the current node.
+            let node = self.cursor.current_node();
             let symbol = node.symbol();
             let is_named = node.is_named();
             let status = self.cursor.current_status();
@@ -276,8 +279,10 @@ where
               self.finished_states.len()
             );
 
-            let node_is_error = symbol == Symbol::ERROR;
-            let parent_is_error = parent_node.map_or(false, |s| s.symbol() == Symbol::ERROR);
+            let node_is_error = symbol.is_error();
+            let parent_is_error = self.cursor.parent_is_error();
+
+            drop(node);
 
             // Add new states for any patterns whose root node is a wildcard.
             if !node_is_error {
@@ -372,6 +377,9 @@ where
                     continue;
                 }
 
+                // Get the properties of the current node.
+                let node = self.cursor.current_node();
+
                 // Determine if this node matches this step of the pattern, and also
                 // if this node can have later siblings that match this step of the
                 // pattern.
@@ -391,7 +399,6 @@ where
                     node_does_match = false;
                 }
                 if let Some(ss) = state!(@step).supertype_symbol() {
-                    self.cursor.current_status();
                     let has_supertype = status.contains_supertype(ss);
                     if !has_supertype {
                         node_does_match = false
@@ -428,9 +435,7 @@ where
                                 assert!(is_positive);
                                 let current_node = &self.cursor.current_node();
                                 let t = current_node.text(self.cursor.text_provider());
-                                // dbg!(&t, &str);
                                 if t.as_bytes() != str.as_bytes() {
-                                    // dbg!();
                                     node_does_match = false;
                                 }
                             }
@@ -442,6 +447,7 @@ where
                         }
                     }
                 }
+                drop(node);
 
                 // Remove states immediately if it is ever clear that they cannot match.
                 if !node_does_match {
@@ -487,7 +493,7 @@ where
                 // actually points to the *second* step of the pattern, then check
                 // that the node has a parent, and capture the parent node if necessary.
                 if state!().does_need_parent() {
-                    if let Some(parent) = self.cursor.parent_node() {
+                    if self.cursor.has_parent() {
                         state!().no_need_parent();
                         let mut skipped_wildcard = state!().step_index;
                         while skipped_wildcard.dec() {
@@ -499,7 +505,7 @@ where
                             }
                             if query.steps[skipped_wildcard].has_capture_ids() {
                                 log::trace!("  capture wildcard parent");
-                                self.capture(state!(@index), skipped_wildcard, &parent);
+                                self.capture(state!(@index), skipped_wildcard, true);
                             }
                             break;
                         }
@@ -511,7 +517,7 @@ where
 
                 // If the current node is captured in this pattern, add it to the capture list.
                 if state!(@step).has_capture_ids() {
-                    self.capture(state!(@index), state!().step_index, &node);
+                    self.capture(state!(@index), state!().step_index, false);
                 }
 
                 if state!().dead() {
@@ -760,21 +766,21 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
     fn should_descend(&self, node_intersects_range: bool) -> bool {
         if node_intersects_range && self.depth < self.max_start_depth {
             if self.cursor.wont_match(self.query.used_precomputed) {
-                // dbg!();
                 for i in 0..self.states.len() {
                     let state = &self.states[i];
                     let next_step = &self.query.steps[state.step_index];
                     if !next_step.done() && state.start_depth() + next_step.depth() > self.depth {
-                        // dbg!();
                         return true;
                     }
                 }
-                log::trace!("skip subtree. type:{}", self.cursor.current_node().str_symbol());
+                log::trace!(
+                    "skip subtree. type:{}",
+                    self.cursor.current_node().str_symbol()
+                );
                 return false;
             }
             return true;
         }
-        // dbg!();
         // If there are in-progress matches whose remaining steps occur
         // deeper in the tree, then descend.
         for i in 0..self.states.len() {
@@ -784,14 +790,11 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
                 return true;
             }
         }
-        // dbg!();
         if self.depth >= self.max_start_depth {
             // dbg!(self.depth, self.max_start_depth);
             return false;
         }
-        // dbg!();
         if self.cursor.wont_match(self.query.used_precomputed) {
-            // dbg!();
             return false;
         }
 
@@ -824,7 +827,6 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
         copy.capture_list_id = super::indexed::CaptureListId::MAX;
 
         self.states.insert(*state_index + 1, copy);
-        // dbg!(capture_list_id);
         // If the state has captures, copy its capture list.
         if capture_list_id != super::indexed::CaptureListId::MAX {
             let new_captures = self.prepare_to_capture(*state_index + 1, *state_index as u32)?;
@@ -978,7 +980,7 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
         Some(state.capture_list_id)
     }
 
-    fn capture(&mut self, state_id: usize, step_id: super::indexed::StepId, node: &Cursor::Node) {
+    fn capture(&mut self, state_id: usize, step_id: super::indexed::StepId, parent: bool) {
         let state = &mut self.states[state_id];
         if state.dead() {
             return;
@@ -991,17 +993,22 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
         let state = &self.states[state_id];
         let step = &self.query.steps[step_id];
         for capture_id in step.capture_ids() {
-            self.capture_list_pool[capture_list_id].push(Capture {
-                node: node.clone(),
-                index: capture_id,
-            });
+            let node = if parent {
+                self.cursor.persist_parent().unwrap()
+            } else {
+                self.cursor.persist()
+            };
             log::trace!(
                 "  capture node. type:{}, pattern:{}, capture_id:{}, capture_count:{}",
                 node.str_symbol(),
                 state.pattern_index,
                 capture_id,
-                self.capture_list_pool[capture_list_id].len()
+                self.capture_list_pool[capture_list_id].len() + 1
             );
+            self.capture_list_pool[capture_list_id].push(Capture {
+                node,
+                index: capture_id,
+            });
         }
     }
 

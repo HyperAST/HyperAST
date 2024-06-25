@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration};
 
 pub const QUERY_MAIN_METH: (&str, &str) = (
     r#"(program
@@ -124,6 +124,15 @@ pub const QUERY_OVERRIDES_SUBS: &[&str] = &[
     )"#,
 ];
 
+pub const QUERY_RET_NULL: (&str, &str) = (
+    r#"(return_statement (null_literal))"#,
+    r#"(return_statement (null_literal))"#,
+);
+
+pub const QUERY_RET_NULL_SUBS: &[&str] = &[
+    r#"(return_statement (null_literal))"#,
+];
+
 pub const QUERIES: &[(&[&str], &str, &str, &str)] = &[
     (
         &[QUERY_OVERRIDES_SUBS[1]],
@@ -136,6 +145,12 @@ pub const QUERIES: &[(&[&str], &str, &str, &str)] = &[
         QUERY_MAIN_METH.0,
         QUERY_MAIN_METH.1,
         "main_meth",
+    ),
+    (
+        &[QUERY_RET_NULL_SUBS[0]],
+        QUERY_RET_NULL.0,
+        QUERY_RET_NULL.1,
+        "ret_null",
     ),
 ];
 
@@ -201,8 +216,11 @@ fn prep_default<'store>(
 }
 
 fn compare_querying_group(c: &mut Criterion) {
-    let mut group = c.benchmark_group("QueryingRepeat2Spoon");
+    let mut group = c.benchmark_group("QueryingRepeat2.1Spoon");
     group.sample_size(10);
+    let plot_config = PlotConfiguration::default()
+        .summary_scale(AxisScale::Logarithmic);
+    group.plot_config(plot_config);
 
     let codes = "../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test";
     let codes = "../../../../spoon/src/main/java";
@@ -218,28 +236,6 @@ fn compare_querying_group(c: &mut Criterion) {
     // let queries: Vec<_> = QUERIES.iter().enumerate().collect();
 
     for p in QUERIES.into_iter().map(|x| (x, codes.as_ref())) {
-        let pp: Box<[_]> =
-            p.1.into_iter()
-                .map(|(name, text)| {
-                    (
-                        prep_baseline(p.0 .2, name.to_str().unwrap(), text.as_bytes()),
-                        text,
-                    )
-                })
-                .collect();
-        group.bench_with_input(
-            BenchmarkId::new(format!("baseline-{}", p.0 .3), 0),
-            &pp,
-            |b, f| {
-                b.iter(|| {
-                    for ((q, t), text) in f.into_iter() {
-                        let mut cursor = tree_sitter::QueryCursor::default();
-                        black_box(cursor.matches(&q, t.root_node(), text.as_bytes()).count());
-                    }
-                })
-            },
-        );
-
         let pp: Box<[_]> =
             p.1.into_iter()
                 .map(|(name, text)| {
@@ -267,9 +263,7 @@ fn compare_querying_group(c: &mut Criterion) {
 
         let pp: Box<[_]> =
             p.1.into_iter()
-                .map(|(name, text)| {
-                        prep_default(p.0 .2, name.to_str().unwrap(), text.as_bytes())
-                })
+                .map(|(name, text)| prep_default(p.0 .2, name.to_str().unwrap(), text.as_bytes()))
                 .collect();
         group.bench_with_input(
             BenchmarkId::new(format!("default-{}", p.0 .3), 0),
@@ -332,6 +326,22 @@ fn compare_querying_group(c: &mut Criterion) {
                 })
             },
         );
+        group.bench_with_input(
+            BenchmarkId::new(format!("sharing_default_opt-{}", p.0 .3), 0),
+            &pp,
+            |b, p| {
+                b.iter(|| {
+                    let (query, stores, roots) = p;
+                    for &n in roots {
+                        let pos =
+                            hyper_ast::position::structural_pos::CursorWithPersistance::new(n);
+                        let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(stores, pos);
+                        let matches = query.matches(cursor);
+                        black_box(matches.count());
+                    }
+                })
+            },
+        );
         let pp = {
             let (q, f) = p;
             let (precomp, query) =
@@ -379,6 +389,44 @@ fn compare_querying_group(c: &mut Criterion) {
                         let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
                         let matches = query.matches(cursor);
                         black_box(matches.count());
+                    }
+                })
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new(format!("sharing_precomputed_opt-{}", p.0 .3), 0),
+            &pp,
+            |b, p| {
+                b.iter(|| {
+                    let (query, stores, roots) = p;
+                    for &n in roots {
+                        let pos =
+                            hyper_ast::position::structural_pos::CursorWithPersistance::new(n);
+                        let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(stores, pos);
+                        let matches = query.matches(cursor);
+                        black_box(matches.count());
+                    }
+                })
+            },
+        );
+
+        let pp: Box<[_]> =
+            p.1.into_iter()
+                .map(|(name, text)| {
+                    (
+                        prep_baseline(p.0 .2, name.to_str().unwrap(), text.as_bytes()),
+                        text,
+                    )
+                })
+                .collect();
+        group.bench_with_input(
+            BenchmarkId::new(format!("baseline-{}", p.0 .3), 0),
+            &pp,
+            |b, f| {
+                b.iter(|| {
+                    for ((q, t), text) in f.into_iter() {
+                        let mut cursor = tree_sitter::QueryCursor::default();
+                        black_box(cursor.matches(&q, t.root_node(), text.as_bytes()).count());
                     }
                 })
             },

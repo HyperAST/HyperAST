@@ -1,7 +1,7 @@
-use super::{Cursor, Status, Symbol, TreeCursorStep};
+use super::{Cursor, Node as _, Status, Symbol, TreeCursorStep};
 use hyper_ast::position::TreePath;
 use hyper_ast::types::{
-    HyperASTShared, HyperType, LabelStore, Labeled, RoleStore, Tree, WithPrecompQueries, WithRoles
+    HyperASTShared, HyperType, LabelStore, Labeled, RoleStore, Tree, WithPrecompQueries, WithRoles,
 };
 use hyper_ast::{
     position::TreePathMut,
@@ -82,6 +82,7 @@ where
     HAST::T: WithPrecompQueries,
 {
     type Node = self::Node<'hast, HAST>;
+    type NodeRef<'a> = &'a self::Node<'hast, HAST> where Self: 'a;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep {
         use hyper_ast::types::NodeStore;
@@ -146,14 +147,32 @@ where
         }
     }
 
-    fn current_node(&self) -> Self::Node {
+    fn current_node(&self) -> Self::NodeRef<'_> {
+        self
+    }
+
+    fn parent_is_error(&self) -> bool {
+        // NOTE: maybe more efficient impl
+        let mut s = self.clone();
+        if !s.goto_parent() {
+            return false;
+        }
+        s.symbol() == Symbol::ERROR
+    }
+
+    fn has_parent(&self) -> bool {
+        let mut node = self.clone();
+        node.goto_parent()
+    }
+
+    fn persist(&mut self) -> Self::Node {
         self.clone()
     }
 
-    fn parent_node(&self) -> Option<Self::Node> {
-        // NOTE: maybe more efficient impl
-        let mut s = self.clone();
-        s.goto_parent().then_some(s.current_node())
+    fn persist_parent(&mut self) -> Option<Self::Node> {
+        let mut node = self.clone();
+        node.goto_parent();
+        Some(node)
     }
 
     type Status = CursorStatus<<<HAST as HyperAST<'hast>>::TS as RoleStore<HAST::T>>::IdF>;
@@ -169,7 +188,6 @@ where
             if let TreeCursorStep::TreeCursorStepNone = s.goto_next_sibling_internal() {
                 break;
             }
-            // dbg!(s.str_symbol());
             if role.is_some() && s.role() == role {
                 can_have_later_siblings_with_this_field = true;
             }
@@ -205,6 +223,9 @@ where
     }
 
     fn wont_match(&self, actives: u8) -> bool {
+        if actives == 0 {
+            return false
+        }
         use hyper_ast::types::NodeStore;
         let n = self.stores.node_store().resolve(self.pos.node().unwrap());
         n.wont_match_given_precomputed_queries(actives)
@@ -302,26 +323,6 @@ where
     }
 
     type IdF = <HAST::TS as RoleStore<HAST::T>>::IdF;
-
-    // fn child_by_field_id(&self, field_id: FieldId) -> Option<Self> {
-    //     if field_id == 0 {
-    //         return None;
-    //     }
-    //     let role = self.stores.type_store().resolve_field(field_id);
-    //     let mut slf = self.clone();
-    //     loop {
-    //         if slf.kind().is_supertype() {
-    //             match slf.goto_first_child_internal() {
-    //                 TreeCursorStep::TreeCursorStepNone => panic!(),
-    //                 TreeCursorStep::TreeCursorStepHidden => (),
-    //                 TreeCursorStep::TreeCursorStepVisible => break,
-    //             }
-    //         } else {
-    //             break;
-    //         }
-    //     }
-    //     slf.child_by_role(role).and_then(|_| Some(slf))
-    // }
 
     fn has_child_with_field_id(&self, field_id: Self::IdF) -> bool {
         if field_id == Default::default() {

@@ -450,6 +450,9 @@ impl Symbol {
     pub(crate) fn to_usize(&self) -> usize {
         self.0 as usize
     }
+    pub fn is_error(&self) -> bool {
+        self == &Self::ERROR
+    }
 }
 
 impl From<u16> for Symbol {

@@ -400,8 +400,8 @@ where
                     })
                     .sum();
 
-                use building::{ReceiveRows, ReceiveColumns};
                 use bottom_up::{ReceiveIdx, ReceiveOffset};
+                use building::{ReceiveColumns, ReceiveRows};
                 builder = builder.push(prev_x).push(c).push(row).push(col).push(o);
                 prev_x = x;
 
@@ -687,5 +687,517 @@ impl<TIdN: TypedNodeId, Idx> From<TypedScout<TIdN, Idx>> for Scout<TIdN::IdN, Id
             ancestors: value.ancestors,
             path: value.path,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Handle(usize);
+
+struct StructuralPositionStore2<IdN = NodeIdentifier, Idx = u16> {
+    persisted: Handle,
+    nodes: Vec<IdN>,
+    parents: Vec<Handle>,
+    offsets: Vec<Idx>,
+}
+
+impl<IdN, Idx> Debug for StructuralPositionStore2<IdN, Idx> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StructuralPositionStore")
+            .field("persisted", &self.persisted)
+            .field("nodes", &self.nodes.len())
+            .field("parents", &self.parents.len())
+            .field("offsets", &self.offsets.len())
+            .finish()
+    }
+}
+
+impl<IdN, Idx> StructuralPositionStore2<IdN, Idx> {
+    fn persist(&mut self, h: Handle) {
+        if self.persisted.0 <= h.0 - 1 {
+            self.persisted.0 = h.0;
+        }
+    }
+    fn parent(&self, h: Handle) -> Option<Handle> {
+        if h.0 == 0 {
+            panic!();
+        }
+        if h.0 == 1 {
+            return None;
+        }
+        assert!(self.parents[h.0 - 1].0 < h.0);
+        Some(self.parents[h.0 - 1])
+    }
+    fn node(&self, h: Handle) -> IdN
+    where
+        IdN: Copy,
+    {
+        if h.0 == 0 {
+            panic!();
+        }
+        self.nodes[h.0 - 1]
+    }
+    fn offset(&self, h: Handle) -> Idx
+    where
+        Idx: Copy,
+    {
+        if h.0 == 0 {
+            panic!();
+        }
+        self.offsets[h.0 - 1]
+    }
+
+    fn inc(&mut self, h: Handle, node: IdN) -> Handle
+    where
+        Idx: PrimInt,
+    {
+        if h.0 == 0 {
+            panic!();
+        }
+        if self.persisted.0 < h.0 {
+            self.nodes[h.0 - 1] = node;
+            self.offsets[h.0 - 1] += num::one();
+            h
+        } else if let Some(p) = self.parent(h) {
+            if self.persisted.0 == self.nodes.len() {
+                self.nodes.push(node);
+                self.offsets.push(self.offsets[h.0 - 1] + num::one());
+                self.parents.push(p);
+                let mut h = self.persisted;
+                h.0 += 1;
+                h
+            } else {
+                assert!(self.nodes.len() > self.persisted.0);
+                self.nodes[self.persisted.0] = node;
+                self.offsets[self.persisted.0] = self.offsets[h.0 - 1] + num::one();
+                self.parents[self.persisted.0] = p;
+                let mut h = self.persisted;
+                h.0 += 1;
+                h
+            }
+        } else {
+            unreachable!()
+        }
+    }
+
+    fn down(&mut self, h: Handle, node: IdN, offset: Idx) -> Handle {
+        if self.persisted.0 <= h.0 {
+            let mut c = h;
+            c.0 += 1;
+            if self.nodes.len() == c.0 - 1 {
+                assert_eq!(self.offsets.len(), c.0 - 1);
+                self.nodes.push(node);
+                self.offsets.push(offset);
+                self.parents.push(h);
+            } else if self.nodes.len() < c.0 - 1 {
+                dbg!(self.nodes.len());
+                dbg!(self.offsets.len());
+                dbg!(self.persisted.0);
+                dbg!(c.0);
+                panic!()
+            } else {
+                self.nodes[c.0 - 1] = node;
+                self.offsets[c.0 - 1] = offset;
+                self.parents[c.0 - 1] = h;
+            }
+            c
+        } else {
+            let mut h = h;
+            h.0 -= 1;
+            self.nodes[self.persisted.0] = node;
+            self.offsets[self.persisted.0] = offset;
+            self.parents[self.persisted.0] = h;
+            let mut r = self.persisted;
+            r.0 += 1;
+            r
+        }
+    }
+}
+
+pub trait AAA<IdN, Idx> {
+    fn node(&self) -> IdN;
+    fn offset(&self) -> Idx;
+    fn parent(&self) -> Option<IdN>;
+    fn up(&mut self) -> bool;
+}
+pub trait BBB<IdN, Idx>: AAA<IdN, Idx> {
+    fn inc(&mut self, node: IdN);
+    fn down(&mut self, node: IdN, offset: Idx);
+}
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+/// Cursor backed by a store, thus allowing to efficiently yield nodes, while sharing the shared sub path between all nodes.
+/// As long as a node is not persisted, this cursor reuses and mutate to update itself.
+// only tags::BottomUpFull is possible for efficiency
+pub struct CursorWithPersistance<IdN, Idx = u16> {
+    s: Rc<RefCell<StructuralPositionStore2<IdN, Idx>>>,
+    h: Handle,
+}
+
+impl<IdN, Idx> PartialEq for CursorWithPersistance<IdN, Idx> {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.s, &other.s) && self.h.0 == other.h.0
+    }
+}
+
+impl<IdN, Idx> Eq for CursorWithPersistance<IdN, Idx> {}
+
+impl<IdN, Idx> CursorWithPersistance<IdN, Idx> {
+    pub fn new(node: IdN) -> Self
+    where
+        Idx: PrimInt,
+    {
+        let mut n = Self::default();
+        n.h = n.s.borrow_mut().down(n.h, node, num::zero());
+        n
+    }
+    pub fn default() -> Self {
+        let s = StructuralPositionStore2 {
+            persisted: Handle(0),
+            nodes: vec![],
+            parents: vec![],
+            offsets: vec![],
+        };
+        let s = Rc::new(RefCell::new(s));
+        Self { s, h: Handle(0) }
+    }
+    pub fn persist(&mut self) -> PersistedNode<IdN, Idx> {
+        self.s.borrow_mut().persist(self.h);
+        PersistedNode {
+            s: self.s.clone(),
+            h: self.h,
+        }
+    }
+    pub fn persist_parent(&mut self) -> Option<PersistedNode<IdN, Idx>> {
+        let p = self.s.borrow().parent(self.h)?;
+        self.s.borrow_mut().persist(p);
+        Some(PersistedNode {
+            s: self.s.clone(),
+            h: p,
+        })
+    }
+    pub fn ref_node(&self) -> RefNode<IdN, Idx> {
+        let s = self.s.borrow();
+        RefNode { s, h: self.h }
+    }
+    pub fn ref_parent(&self) -> Option<RefNode<IdN, Idx>> {
+        let p = self.s.borrow().parent(self.h)?;
+        let s = self.s.borrow();
+        Some(RefNode { s, h: p })
+    }
+    pub fn ext(&self) -> ExtRefNode<IdN, Idx> {
+        let s = self.s.borrow();
+        ExtRefNode::new(s, self.h)
+    }
+}
+
+impl<IdN, Idx> BBB<IdN, Idx> for CursorWithPersistance<IdN, Idx>
+where
+    IdN: Copy,
+    Idx: PrimInt,
+{
+    fn inc(&mut self, node: IdN) {
+        self.h = self.s.borrow_mut().inc(self.h, node);
+    }
+
+    fn down(&mut self, node: IdN, offset: Idx) {
+        self.h = self.s.borrow_mut().down(self.h, node, offset);
+    }
+}
+
+impl<IdN, Idx> AAA<IdN, Idx> for CursorWithPersistance<IdN, Idx>
+where
+    IdN: Copy,
+    Idx: Copy,
+{
+    fn node(&self) -> IdN {
+        self.s.borrow().node(self.h)
+    }
+    fn offset(&self) -> Idx {
+        self.s.borrow().offset(self.h)
+    }
+    fn up(&mut self) -> bool {
+        if let Some(p) = self.s.borrow().parent(self.h) {
+            self.h = p;
+            return true;
+        }
+        false
+    }
+    fn parent(&self) -> Option<IdN> {
+        let p = self.s.borrow().parent(self.h)?;
+        Some(self.s.borrow().node(p))
+    }
+}
+
+/// Node that was persited i.e. mutating the cursor guarantee that this node observable values won't change.
+#[derive(Clone)]
+pub struct PersistedNode<IdN, Idx = u16> {
+    s: Rc<RefCell<StructuralPositionStore2<IdN, Idx>>>,
+    h: Handle,
+}
+
+impl<IdN, Idx> PartialEq for PersistedNode<IdN, Idx> {
+    fn eq(&self, other: &Self) -> bool {
+        // TODO check
+        Rc::ptr_eq(&self.s, &other.s) && self.h.0 == other.h.0
+    }
+}
+
+impl<IdN, Idx> Eq for PersistedNode<IdN, Idx> {}
+
+impl<IdN, Idx> PartialOrd for PersistedNode<IdN, Idx> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        if !Rc::ptr_eq(&self.s, &other.s) {
+            return None;
+        }
+        self.h.0.partial_cmp(&other.h.0)
+    }
+}
+
+impl<IdN, Idx> Ord for PersistedNode<IdN, Idx> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if !Rc::ptr_eq(&self.s, &other.s) {
+            panic!()
+        }
+        self.h.0.cmp(&other.h.0)
+    }
+}
+
+impl<IdN, Idx> PersistedNode<IdN, Idx>
+where
+    IdN: Copy,
+    Idx: Copy,
+{
+    pub fn ext(&self) -> ExtRefNode<IdN, Idx> {
+        let s = self.s.borrow();
+        ExtRefNode::new(s, self.h)
+    }
+}
+
+impl<IdN, Idx> AAA<IdN, Idx> for PersistedNode<IdN, Idx>
+where
+    IdN: Copy,
+    Idx: Copy,
+{
+    fn node(&self) -> IdN {
+        self.s.borrow().node(self.h)
+    }
+    fn offset(&self) -> Idx {
+        self.s.borrow().offset(self.h)
+    }
+    fn up(&mut self) -> bool {
+        if let Some(p) = self.s.borrow().parent(self.h) {
+            self.h = p;
+            return true;
+        }
+        false
+    }
+    fn parent(&self) -> Option<IdN> {
+        let p = self.s.borrow().parent(self.h)?;
+        Some(self.s.borrow().node(p))
+    }
+}
+/// Node that is possibly not persited i.e. cannot safely mutate the cursor at the same time.
+/// If you need to read a node and modify the cursor at the same time, make a [`PersistedNode`].
+pub struct RefNode<'a, IdN, Idx = u16> {
+    s: std::cell::Ref<'a, StructuralPositionStore2<IdN, Idx>>,
+    h: Handle,
+}
+
+impl<'a, IdN, Idx> Clone for RefNode<'a, IdN, Idx> {
+    fn clone(&self) -> Self {
+        Self {
+            s: std::cell::Ref::clone(&self.s),
+            h: self.h.clone(),
+        }
+    }
+}
+
+impl<'a, IdN, Idx> PartialOrd for RefNode<'a, IdN, Idx> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        if !std::ptr::eq(&self.s, &other.s) {
+            return None;
+        }
+        self.h.0.partial_cmp(&other.h.0)
+    }
+}
+
+impl<'a, IdN, Idx> Ord for RefNode<'a, IdN, Idx> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if !std::ptr::eq(&self.s, &other.s) {
+            panic!()
+        }
+        self.h.0.cmp(&other.h.0)
+    }
+}
+
+impl<'a, IdN, Idx> RefNode<'a, IdN, Idx>
+where
+    IdN: Copy,
+    Idx: Copy,
+{
+    pub fn ext(&self) -> ExtRefNode<'a, IdN, Idx> {
+        let s = std::cell::Ref::clone(&self.s);
+        ExtRefNode::new(s, self.h)
+    }
+}
+
+impl<'a, IdN, Idx> AAA<IdN, Idx> for RefNode<'a, IdN, Idx>
+where
+    IdN: Copy,
+    Idx: Copy,
+{
+    fn node(&self) -> IdN {
+        self.s.node(self.h)
+    }
+    fn offset(&self) -> Idx {
+        self.s.offset(self.h)
+    }
+    fn up(&mut self) -> bool {
+        if let Some(p) = self.s.parent(self.h) {
+            self.h = p;
+            return true;
+        }
+        false
+    }
+    fn parent(&self) -> Option<IdN> {
+        let p = self.s.parent(self.h)?;
+        Some(self.s.node(p))
+    }
+}
+
+impl<'a, IdN, Idx> PartialEq for RefNode<'a, IdN, Idx> {
+    fn eq(&self, other: &Self) -> bool {
+        // TODO check
+        std::ptr::eq(&self.s, &other.s) && self.h.0 == other.h.0
+    }
+}
+
+impl<'a, IdN, Idx> Eq for RefNode<'a, IdN, Idx> {}
+
+pub struct ExtRefNode<'a, IdN, Idx = u16> {
+    s: std::cell::Ref<'a, StructuralPositionStore2<IdN, Idx>>,
+    h: Handle,
+    ext_nodes: Vec<IdN>,
+    ext_offsets: Vec<Idx>,
+}
+impl<'a, IdN: Clone, Idx: Clone> Clone for ExtRefNode<'a, IdN, Idx> {
+    fn clone(&self) -> Self {
+        Self {
+            s: std::cell::Ref::clone(&self.s),
+            h: self.h.clone(),
+            ext_nodes: self.ext_nodes.clone(),
+            ext_offsets: self.ext_offsets.clone(),
+        }
+    }
+}
+impl<'a, IdN, Idx> ExtRefNode<'a, IdN, Idx> {
+    fn new(s: std::cell::Ref<'a, StructuralPositionStore2<IdN, Idx>>, h: Handle) -> Self {
+        ExtRefNode {
+            s,
+            h,
+            ext_nodes: vec![],
+            ext_offsets: vec![],
+        }
+    }
+}
+
+impl<'a, IdN, Idx> BBB<IdN, Idx> for ExtRefNode<'a, IdN, Idx>
+where
+    IdN: Copy,
+    Idx: PrimInt,
+{
+    fn inc(&mut self, node: IdN) {
+        if self.ext_nodes.is_empty() {
+            let o = self.s.offset(self.h);
+            if let Some(p) = self.s.parent(self.h) {
+                self.h = p;
+            } else {
+                todo!()
+            }
+            self.ext_nodes.push(node);
+            self.ext_offsets.push(o + num::one());
+        } else {
+            *self.ext_nodes.last_mut().unwrap() = node;
+            *self.ext_offsets.last_mut().unwrap() += num::one();
+        }
+    }
+
+    fn down(&mut self, node: IdN, offset: Idx) {
+        self.ext_nodes.push(node);
+        self.ext_offsets.push(offset);
+    }
+}
+
+impl<'a, IdN, Idx> AAA<IdN, Idx> for ExtRefNode<'a, IdN, Idx>
+where
+    IdN: Copy,
+    Idx: Copy,
+{
+    fn node(&self) -> IdN {
+        if let Some(n) = self.ext_nodes.last() {
+            *n
+        } else {
+            self.s.node(self.h)
+        }
+    }
+    fn offset(&self) -> Idx {
+        if let Some(o) = self.ext_offsets.last() {
+            *o
+        } else {
+            self.s.offset(self.h)
+        }
+    }
+    fn up(&mut self) -> bool {
+        if self.ext_nodes.pop().is_some() {
+            assert!(self.ext_offsets.pop().is_some());
+            return true;
+        } else if let Some(p) = self.s.parent(self.h) {
+            self.h = p;
+            return true;
+        }
+        false
+    }
+    fn parent(&self) -> Option<IdN> {
+        if self.ext_nodes.len() > 1 {
+            self.ext_nodes.get(self.ext_nodes.len() - 2).copied()
+        } else if self.ext_nodes.len() == 1 {
+            Some(self.s.node(self.h))
+        } else {
+            let p = self.s.parent(self.h)?;
+            Some(self.s.node(p))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple2() {
+        let mut c = CursorWithPersistance::default();
+        c.down(0u32, 0u32);
+        assert_eq!(c.node(), 0);
+        assert_eq!(c.offset(), 0);
+        c.inc(1u32);
+        assert_eq!(c.node(), 1);
+        assert_eq!(c.offset(), 1);
+        let n = c.persist();
+        assert_eq!(n.node(), 1);
+        assert_eq!(n.offset(), 1);
+        c.down(2u32, 0u32);
+        assert_eq!(c.node(), 2);
+        assert_eq!(c.offset(), 0);
+        assert!(c.up());
+        assert_eq!(c.node(), 1);
+        assert_eq!(c.offset(), 1);
+        c.down(2u32, 0u32);
+        assert_eq!(c.node(), 2);
+        assert_eq!(c.offset(), 0);
+        assert!(c.up());
+        assert_eq!(c.node(), 1);
+        assert_eq!(c.offset(), 1);
     }
 }

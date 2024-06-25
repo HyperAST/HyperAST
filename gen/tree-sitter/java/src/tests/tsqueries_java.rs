@@ -225,6 +225,50 @@ fn prep_stepped2<'store>(
     (query, tree)
 }
 
+fn prep_prepro<'store>(
+    query: &str,
+    subqueries: &[&str],
+    text: &[u8],
+) -> (
+    hyper_ast_tsquery::Query,
+    SimpleStores<crate::types::TStore>,
+    NodeIdentifier,
+) {
+    use crate::legion_with_refs;
+    let (precomp, query) = hyper_ast_tsquery::Query::with_precomputed(
+        query,
+        tree_sitter_java::language(),
+        &subqueries,
+    )
+    .unwrap();
+    let mut stores = hyper_ast::store::SimpleStores {
+        label_store: hyper_ast::store::labels::LabelStore::new(),
+        type_store: crate::types::TStore::default(),
+        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
+    };
+    let mut md_cache = Default::default();
+    let mut java_tree_gen = legion_with_refs::JavaTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+        more: precomp,
+        // more: (),
+    };
+
+    let tree = match legion_with_refs::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    println!("{}", tree.root_node().to_sexp());
+    let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
+    eprintln!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
+    );
+
+    (query, stores, full_node.local.compressed_node)
+}
+
 #[test]
 fn all_run_recursive() {
     for (i, text) in CODES.iter().enumerate() {
@@ -268,6 +312,13 @@ fn compare_all(
     queries: &[&str],
     codes: impl Iterator<Item = (impl std::fmt::Debug + Clone, impl AsRef<str>)>,
 ) {
+    _compare_all(queries, codes)
+}
+
+fn _compare_all<'a>(
+    queries: impl IntoIterator<Item = &'a &'a str> + Clone,
+    codes: impl Iterator<Item = (impl std::fmt::Debug + Clone, impl AsRef<str>)>,
+) {
     unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
     let mut good = vec![];
     let mut bad = vec![];
@@ -275,7 +326,7 @@ fn compare_all(
     let mut used = std::collections::HashSet::<usize>::new();
     for (i, text) in codes {
         codes_count += 1;
-        for (j, query) in queries.iter().enumerate() {
+        for (j, query) in queries.clone().into_iter().enumerate() {
             dbg!(&i, &j);
             let text = text.as_ref().as_bytes();
             let mut cursor = tree_sitter::QueryCursor::default();
@@ -297,6 +348,163 @@ fn compare_all(
                     &h_res.1,
                     hyper_ast::position::StructuralPosition::new(h_res.2),
                 ));
+            let g_c = g_matches.into_iter().count();
+            let f_c = 0;
+            // let f_c = f_matches.into_iter().count();
+            let h_c = h_matches.into_iter().count();
+            if g_c > 0 {
+                used.insert(j);
+            }
+            if g_c != 0 || f_c != 0 || h_c != 0 {
+                // if g_c != f_c {
+                //     bad.push(((i.clone(), j), (g_c, f_c)));
+                //     dbg!(g_res.1.root_node().to_sexp());
+                //     dbg!(g_c, f_c);
+                // }
+                if g_c != h_c {
+                    bad.push(((i.clone(), j), (g_c, h_c)));
+                    if g_c == f_c {
+                        dbg!(g_res.1.root_node().to_sexp());
+                    }
+                    dbg!(g_c, h_c);
+                }
+                // g_c == f_c &&
+                if g_c == h_c {
+                    good.push(((i.clone(), j), g_c));
+                }
+            }
+        }
+    }
+    println!("good:");
+    for good in &good {
+        println!("{:?}", good);
+    }
+    println!("bads:");
+    for bad in &bad {
+        println!("{:?}", bad);
+    }
+    eprintln!("bad    : {}", bad.len()); // should be zero
+    eprintln!("good   : {}", good.len());
+    eprintln!(
+        "ratio  : {:.2}%",
+        bad.len() as f64 / good.len() as f64 * 100.
+    );
+    let total = QUERIES.len() * codes_count;
+    eprintln!("total  : {}", total);
+    let active = good.len() + bad.len();
+    eprintln!("activ  : {:.2}%", active as f64 / total as f64 * 100.); // should reach 0 for matching coverage
+    eprintln!("queries: {}", QUERIES.len()); // should reach 0 for matching coverage
+    eprintln!("used   : {}", used.len()); // should reach 0 for matching coverage
+    eprintln!(
+        "used%  : {:.2}%",
+        used.len() as f64 / QUERIES.len() as f64 * 100.
+    ); // should reach 0 for matching coverage
+    assert_eq!(bad.len(), 0)
+}
+
+#[test]
+fn compare_prepro() {
+    log::set_logger(&LOGGER)
+        .map(|()| log::set_max_level(log::LevelFilter::Trace))
+        .unwrap();
+    let codes = ["class A {B f(){return null;}}"].iter().enumerate();
+    // NOTE Uncomment and set the path to a directory containing java files you want to test querying on.
+    let codes = crate::tsg::It::new(
+        Path::new("../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test")
+            .to_owned(),
+    )
+    .map(|x| {
+        let text = std::fs::read_to_string(&x).expect("Find a dir containing java files");
+        (x, text)
+    });
+    let q = &[
+        (
+            r#"(return_statement (null_literal))"#,
+            r#"(return_statement (null_literal))"#,
+        ),
+        (
+            r#"(program
+    (class_declaration 
+    name: (_) @name
+    body: (_
+      (method_declaration
+        (modifiers
+          "public"
+          "static"
+        )
+        type: (void_type)
+        name: (_) (#EQ? "main")
+      )
+    )
+    )
+    )"#,
+            r#"(program
+    (class_declaration 
+    name: (_) @name
+    body: (_
+      (method_declaration
+        (modifiers
+          "public"
+          "static"
+        )
+        type: (void_type)
+        name: (_) @main (#eq? @main "main")
+      )
+    )
+    )
+    )"#,
+        ),
+    ];
+    let s: &[&[&str]] = &[];
+    let s: &[&[&str]] = &[
+        &[r#"(return_statement (null_literal))"#],
+        &[r#"
+    (method_declaration
+      (modifiers
+        "public"
+        "static"
+      )
+      type: (void_type)
+      name: (_) (#EQ? "main")
+    )"#],
+    ];
+
+    _compare_all_prepro(q, s, codes)
+    // _compare_all(q, codes)
+}
+
+fn _compare_all_prepro<'a>(
+    queries: impl IntoIterator<Item = &'a (&'a str, &'a str)> + Clone,
+    subqueries: impl IntoIterator<Item = &'a &'a [&'a str]> + Clone,
+    codes: impl Iterator<Item = (impl std::fmt::Debug + Clone, impl AsRef<str>)>,
+) {
+    unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
+    let mut good = vec![];
+    let mut bad = vec![];
+    let mut codes_count = 0;
+    let mut used = std::collections::HashSet::<usize>::new();
+    for (i, text) in codes {
+        codes_count += 1;
+        let mut subqueries = subqueries.clone().into_iter();
+        for (j, query) in queries.clone().into_iter().enumerate() {
+            dbg!(&i, &j);
+            let text = text.as_ref().as_bytes();
+            let mut cursor = tree_sitter::QueryCursor::default();
+            let g_res = prep_baseline(query.1, text);
+            let g_matches = { cursor.matches(&g_res.0, g_res.1.root_node(), text) };
+            // let f_res = f_aux(query, text);
+            // let f_matches = {
+            //     type It<'a, HAST> =
+            //         crate::iter::IterAll<'a, hyper_ast::position::StructuralPosition, HAST>;
+            //     f_res.0
+            //     .apply_matcher::<SimpleStores<crate::types::TStore>, It<_>, crate::types::TIdN<_>>(
+            //         &f_res.1, f_res.2,
+            //     )
+            // };
+            let h_res = prep_prepro(query.0, subqueries.next().unwrap(), text);
+            let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(h_res.2);
+            let tree_cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&h_res.1, pos);
+            let h_matches = h_res.0.matches(tree_cursor);
             let g_c = g_matches.into_iter().count();
             let f_c = 0;
             // let f_c = f_matches.into_iter().count();
@@ -927,6 +1135,8 @@ fn test_precomputed() {
   )
 )
 )"#;
+    let precomp = [r#"(null_literal)"#];
+    let query = r#"(return_statement (null_literal))"#;
     let text = r#" class C {
     @Override
     void f() {
@@ -959,7 +1169,8 @@ fn test_precomputed() {
     }
 }
     "#;
-    let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
+    let text = "class A {B f(){return null;}}";
+    // let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
     let text = text.as_bytes();
     // let query =
     //     hyper_ast_tsquery::Query::with_precomputed(query, tree_sitter_java::language(), &precomp)
@@ -995,10 +1206,11 @@ fn test_precomputed() {
     let pre_processing = now.elapsed();
     let now = Instant::now();
     let (query, stores, code) = (query, stores, full_node.local.compressed_node);
-    let qcursor = query.matches(hyper_ast_tsquery::hyperast::TreeCursor::new(
-        &stores,
-        hyper_ast::position::StructuralPosition::new(code),
-    ));
+    let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
+    let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
+    // let pos = hyper_ast::position::StructuralPosition::new(code);
+    // let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(&stores, pos);
+    let qcursor = query.matches(cursor);
     let mut count = 0;
     for m in qcursor {
         count += 1;
@@ -1010,8 +1222,11 @@ fn test_precomputed() {
             let name = query.capture_name(i);
             dbg!(name);
             use hyper_ast::position::TreePath;
-            let n = c.node.pos.node().unwrap();
-            let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, *n);
+            use hyper_ast::position::structural_pos::AAA;
+            let n = c.node.pos.node();
+            let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, n);
+            // let n = c.node.pos.node().unwrap();
+            // let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, *n);
             dbg!(n.to_string());
         }
     }
@@ -1069,6 +1284,8 @@ fn test_precomputed2() {
   )
 )
 )"#;
+    let precomp = [r#"(return_statement (null_literal))"#];
+    let query = r#"(return_statement (null_literal))"#;
     let text = r#"
 class C {
     @Test
@@ -1090,10 +1307,12 @@ class C {
     }
     @Override
     void f() {
-
+        return null;
     }
 }
     "#;
+    let text = "class A {B f(){return null;}}";
+
     let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
     let text = text.as_bytes();
     // let query =

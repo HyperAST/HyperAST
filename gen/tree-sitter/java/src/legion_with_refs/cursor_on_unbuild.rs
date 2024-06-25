@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use hyper_ast::position::TreePath;
 use hyper_ast::store::labels::LabelStore;
 use hyper_ast::store::nodes::legion::{HashedNodeRef, NodeIdentifier};
@@ -7,12 +5,10 @@ use hyper_ast::types::{
     HyperASTShared, HyperType, LabelStore as _, Labeled, NodeStore, Role, RoleStore, Tree,
     WithRoles,
 };
-use hyper_ast::{
-    position::TreePathMut,
-    types::TypeStore,
-};
-use hyper_ast_tsquery::{Cursor, Status, Symbol, TreeCursorStep};
+use hyper_ast::{position::TreePathMut, types::TypeStore};
+use hyper_ast_tsquery::{Cursor, Node as _, Status, Symbol, TreeCursorStep};
 use num::ToPrimitive;
+use std::marker::PhantomData;
 
 use crate::types::{TIdN, Type};
 
@@ -113,6 +109,7 @@ where
         + hyper_ast::types::RoleStore<T<'hast>, IdF = IdF, Role = Role>,
 {
     type Node = self::Node<'hast, 'acc, HAST<'hast, 'acc, TS>>;
+    type NodeRef<'a> = &'a self::Node<'hast, 'acc, HAST<'hast, 'acc, TS>> where Self: 'a;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep {
         // log::trace!(
@@ -168,10 +165,11 @@ where
             let o = self.offset;
             let Some(node) = self.acc.simple.children.get(o.to_usize().unwrap()) else {
                 return TreeCursorStep::TreeCursorStepNone;
-            };//dbg!(node);
+            }; //dbg!(node);
             self.pos.goto(*node, o);
         }
-        if self.kind().is_spaces() {//dbg!();
+        if self.kind().is_spaces() {
+            //dbg!();
             return self.goto_next_sibling_internal();
         }
         if self.is_visible() {
@@ -244,14 +242,32 @@ where
         }
     }
 
-    fn current_node(&self) -> Self::Node {
+    fn current_node(&self) -> Self::NodeRef<'_> {
+        self
+    }
+
+    fn parent_is_error(&self) -> bool {
+        // NOTE: maybe more efficient impl
+        let mut s = self.clone();
+        if !s.goto_parent() {
+            return false;
+        }
+        s.symbol().is_error()
+    }
+
+    fn has_parent(&self) -> bool {
+        let mut node = self.clone();
+        node.goto_parent()
+    }
+
+    fn persist(&mut self) -> Self::Node {
         self.clone()
     }
 
-    fn parent_node(&self) -> Option<Self::Node> {
-        // NOTE: maybe more efficient impl
-        let mut s = self.clone();
-        s.goto_parent().then_some(s.current_node())
+    fn persist_parent(&mut self) -> Option<Self::Node> {
+        let mut node = self.clone();
+        node.goto_parent();
+        Some(node)
     }
 
     type Status = CursorStatus<IdF>;

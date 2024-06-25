@@ -628,6 +628,9 @@ impl<'a, T> crate::types::WithRoles for HashedNodeRef<'a, T> {
 
 impl<'a, T> crate::types::WithPrecompQueries for HashedNodeRef<'a, T> {
     fn wont_match_given_precomputed_queries(&self, active: u8) -> bool {
+        if active == 0 {
+            return false
+        }
         let Ok(v) = self.get_component::<compo::Precomp>() else {
             return self.get_component::<compo::PrecompFlag>().is_ok();
         };
