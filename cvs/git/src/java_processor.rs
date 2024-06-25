@@ -225,7 +225,8 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
             metrics,
             ana: Some(ana),
             mcc: Mcc::new(&Type::Directory),
-            role: None
+            role: None,
+            precomp_queries: Default::default(),
         };
     }
 
@@ -249,7 +250,8 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
         metrics,
         ana: Some(ana.clone()),
         mcc: Mcc::new(&Type::Directory),
-        role: None
+        role: None,
+        precomp_queries: Default::default(),
     };
     full_node
 }
@@ -463,6 +465,7 @@ impl RepositoryProcessor {
                 .mut_or_default::<JavaProcessorHolder>()
                 .get_caches_mut()
                 .md_cache, //java_md_cache,
+            more: (),
         }
     }
 
@@ -501,6 +504,7 @@ impl RepositoryProcessor {
                             .mut_or_default::<JavaProcessorHolder>()
                             .get_caches_mut()
                             .md_cache, //java_md_cache,
+                        more: (),
                     },
                     n,
                     t,

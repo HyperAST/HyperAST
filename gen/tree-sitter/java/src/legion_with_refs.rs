@@ -68,7 +68,7 @@ pub type LabelIdentifier = DefaultSymbol;
 // SPC: consider spaces ie. add them to the HyperAST,
 // NOTE there is a big issue with the byteLen of subtree then.
 // just provide a view abstracting spaces (see attempt in hyper_diff)
-pub struct JavaTreeGen<'stores, 'cache, TS, More> {
+pub struct JavaTreeGen<'stores, 'cache, TS, More = ()> {
     pub line_break: Vec<u8>,
     pub stores: &'stores mut SimpleStores<TS>,
     pub md_cache: &'cache mut MDCache,

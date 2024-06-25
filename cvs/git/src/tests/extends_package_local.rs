@@ -34,11 +34,7 @@ fn run(text: &[u8]) {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 }
 
@@ -49,11 +45,7 @@ fn run1(text: &[u8]) {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
@@ -244,11 +236,7 @@ fn run2(text: &[u8]) {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
@@ -476,11 +464,7 @@ fn run3(text: &[u8]) {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
@@ -650,11 +634,7 @@ fn run3_1(text: &[u8]) {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
@@ -810,11 +790,7 @@ fn run6(text: &[u8]) {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
@@ -917,11 +893,7 @@ fn run7(text: &[u8]) {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
@@ -1093,11 +1065,7 @@ fn run8(text: &[u8]) {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
@@ -1230,11 +1198,7 @@ fn run10(text: &[u8]) {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
@@ -1443,11 +1407,7 @@ fn run11(text: &[u8]) {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
@@ -1839,11 +1799,7 @@ fn run12(text: &[u8]) {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
@@ -1902,11 +1858,7 @@ fn run13(text: &[u8]) {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);

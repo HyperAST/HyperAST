@@ -26,6 +26,7 @@ fn run(text: &[u8]) {
         line_break: "\n".as_bytes().to_vec(),
         stores: &mut stores,
         md_cache: &mut md_cache,
+        more: (),
     };
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 
