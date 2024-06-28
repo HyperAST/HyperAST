@@ -85,6 +85,7 @@ impl JavaPreprocessFileSys {
             line_break,
             stores: &mut self.main_stores,
             md_cache: &mut self.java_md_cache,
+            more: ()
         }
     }
 
@@ -461,6 +462,7 @@ fn make(
             ana: Some(ana),
             mcc: Mcc::new(&Type::Directory),
             role: None,
+            precomp_queries: Default::default()
         };
     }
 
@@ -485,6 +487,7 @@ fn make(
         ana: Some(ana.clone()),
         mcc: Mcc::new(&Type::Directory),
         role: None,
+        precomp_queries: Default::default()
     };
     full_node
 }

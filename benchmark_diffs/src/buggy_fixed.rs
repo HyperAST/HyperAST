@@ -24,11 +24,7 @@ fn test_simple_1() {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
 
     let aaa = hyper_ast_gen_ts_java::types::TStore::default();
@@ -65,11 +61,7 @@ fn test_crash1() {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     print!("{:?} len={}: ", buggy_path, buggy.len());
     let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
     let len = algorithms::gumtree::diff(
@@ -104,11 +96,7 @@ mod examples {
             node_store: NodeStore::new(),
         };
         let mut md_cache = Default::default();
-        let mut java_tree_gen = JavaTreeGen {
-            line_break: "\n".as_bytes().to_vec(),
-            stores: &mut stores,
-            md_cache: &mut md_cache,
-        };
+        let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
         print!("len={}: ", buggy.len());
         let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
         let len = algorithms::gumtree::diff(
@@ -155,11 +143,7 @@ mod examples {
             node_store: NodeStore::new(),
         };
         let mut md_cache = Default::default();
-        let mut java_tree_gen = JavaTreeGen {
-            line_break: "\n".as_bytes().to_vec(),
-            stores: &mut stores,
-            md_cache: &mut md_cache,
-        };
+        let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
         print!("len={}: ", buggy.len());
         let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
         let len = algorithms::gumtree::diff(
@@ -243,11 +227,7 @@ mod examples {
             node_store: NodeStore::new(),
         };
         let mut md_cache = Default::default();
-        let mut java_tree_gen = JavaTreeGen {
-            line_break: "\n".as_bytes().to_vec(),
-            stores: &mut stores,
-            md_cache: &mut md_cache,
-        };
+        let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
         let now = Instant::now();
 
         println!("{} len={}", "buggy", buggy.len());
@@ -1166,11 +1146,7 @@ fn compare_perfs() {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let now = Instant::now();
 
     println!("{:?} len={}", buggy_path, buggy.len());
@@ -1249,11 +1225,7 @@ pub fn bad_perfs() {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let now = Instant::now();
 
     println!("{:?} len={}", buggy_path, buggy.len());
@@ -1311,11 +1283,7 @@ pub fn bad_perfs2() {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let now = Instant::now();
 
     println!("{:?} len={}", buggy_path, buggy.len());
@@ -1463,11 +1431,7 @@ fn bad_perfs_helper(buggy_path: std::path::PathBuf, fixed_path: std::path::PathB
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
     let buggy_s = src_tr.local.metrics.size;
     let fixed_s = dst_tr.local.metrics.size;
@@ -1579,11 +1543,7 @@ fn test_all() {
                 node_store: NodeStore::new(),
             };
             let mut md_cache = Default::default();
-            let mut java_tree_gen = JavaTreeGen {
-                line_break: "\n".as_bytes().to_vec(),
-                stores: &mut stores,
-                md_cache: &mut md_cache,
-            };
+            let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
             let now = Instant::now();
 
             println!("{:?} len={}", buggy_path, buggy.len());
@@ -1711,11 +1671,7 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     println!("{:?} len={}", name, buggy.len());
     let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
     let buggy_s = src_tr.local.metrics.size;
