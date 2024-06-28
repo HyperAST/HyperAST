@@ -46,6 +46,7 @@ pub struct Query {
     // capture_quantifiers: utils::Array<CaptureQuantifiers>,
     steps: indexed::Steps,
     pattern_map: Vec<query::PatternEntry>,
+    pattern_map2: Vec<query::PatternEntry>,
     // predicate_steps: utils::Array<ffi::TSQueryPredicateStep>,
     patterns: indexed::Patterns,
     step_offsets: Vec<query::StepOffset>,
@@ -109,6 +110,19 @@ impl Query {
         qcursor.set_max_start_depth(0);
         qcursor
     }
+
+    pub fn _check_preprocessed(&self, pattern_id: usize, precomp: usize) {
+        if pattern_id == 0 && self.pattern_map.len() == 1 {
+            assert_eq!(
+                self.used_precomputed.count_ones() as usize,
+                precomp,
+                "{:b}",
+                self.used_precomputed
+            );
+        } else {
+            todo!()
+        }
+    }
 }
 
 pub struct QueryCursor<'query, Cursor, Node> {
@@ -170,7 +184,7 @@ pub trait Cursor {
 
     fn text_provider(&self) -> <Self::Node as Node>::TP<'_>;
 
-    fn wont_match(&self, _actives: u8) -> bool {
+    fn wont_match(&self, _needed: u8) -> bool {
         false
     }
     fn is_visible_at_root(&self) -> bool {

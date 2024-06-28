@@ -1221,8 +1221,8 @@ fn test_precomputed() {
             dbg!(i);
             let name = query.capture_name(i);
             dbg!(name);
-            use hyper_ast::position::TreePath;
             use hyper_ast::position::structural_pos::AAA;
+            use hyper_ast::position::TreePath;
             let n = c.node.pos.node();
             let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, n);
             // let n = c.node.pos.node().unwrap();
@@ -1350,4 +1350,365 @@ class C {
         }
     }
     dbg!(count);
+}
+
+fn f(q: &str, p: &[&str], f: &str) {
+    log::set_logger(&LOGGER)
+        .map(|()| log::set_max_level(log::LevelFilter::Trace))
+        .unwrap();
+    let (precomp, query) =
+        hyper_ast_tsquery::Query::with_precomputed(q, tree_sitter_java::language(), p).unwrap();
+    query._check_preprocessed(0, p.len());
+}
+
+#[test]
+fn test_subquery_detection() {
+    f(
+        r#"(method_declaration
+    type: (void_type)
+    name: (_) (#EQ? "main")
+)"#,
+        &[r#"(method_declaration
+    name: (_) (#EQ? "main")
+)"#],
+        "",
+    );
+}
+
+#[test]
+fn test_subquery_detection2() {
+    pub const QUERY_MAIN_METH: (&str, &str) = (
+        r#"(program
+  (class_declaration 
+    name: (_) @name
+    body: (_
+      (method_declaration
+        (modifiers
+          "public"
+          "static"
+        )
+        type: (void_type)
+        name: (_) (#EQ? "main")
+      )
+    )
+  )
+)"#,
+        r#"(program
+  (class_declaration 
+    name: (_) @name
+    body: (_
+      (method_declaration
+        (modifiers
+          "public"
+          "static"
+        )
+        type: (void_type)
+        name: (_) @main (#eq? @main "main")
+      )
+    )
+  )
+)"#,
+    );
+
+    pub const QUERY_MAIN_METH_SUBS: &[&str] = &[
+        r#"(method_declaration
+    (modifiers
+      "public"
+      "static"
+    )
+    type: (void_type)
+    name: (_) (#EQ? "main")
+)"#,
+        r#"(method_declaration
+    name: (_) (#EQ? "main")
+)"#,
+        r#"(class_declaration
+    body: (_
+        (method_declaration)
+    )
+)"#,
+        r#"(method_declaration)"#,
+        r#"(class_declaration)"#,
+        r#"(method_declaration
+    (modifiers
+      "static"
+    )
+)"#,
+        r#"(_ 
+  name: (identifier) (#EQ? "main")
+)"#,
+    ];
+
+    let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
+    g(QUERY_MAIN_METH.0, &[QUERY_MAIN_METH_SUBS[2]], &text);
+}
+
+#[test]
+fn test_subquery_detection3() {
+    f(
+        r#"(program
+  (class_declaration 
+    name: (_) @name
+    body: (_
+      (method_declaration
+        (modifiers
+          "public"
+          "static"
+        )
+        type: (void_type)
+        name: (_) (#EQ? "main")
+      )
+    )
+  )
+)"#,
+        &[r#"(_
+    name: (_) (#EQ? "main")
+)"#],
+        "",
+    );
+}
+
+
+#[test]
+fn test_subquery_detection4() {
+    f(
+        r#"(program
+  (class_declaration 
+    name: (_) @name
+    body: (_
+      (method_declaration
+        (modifiers
+          "public"
+          "static"
+        )
+        type: (void_type)
+        name: (_) (#EQ? "main")
+      )
+    )
+  )
+)"#,
+        &[r#"(method_declaration
+    name: (_) (#EQ? "main")
+)"#],
+        "",
+    );
+}
+
+#[test]
+fn test_prepro_main_meth() {
+    let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
+    g(
+        r#"(class_declaration
+        body: (_
+            (method_declaration)
+        )
+    )"#,
+        &[r#"(class_declaration
+        body: (_
+            (method_declaration)
+        )
+    )"#],
+        &text,
+    );
+}
+#[test]
+fn test_prepro_main_meth2() {
+    let text =
+        std::fs::read_to_string("../../../../spoon/src/main/java/spoon/Launcher.java").unwrap();
+
+    // let text = r#"class A {
+    //     /**
+    //      */
+    //     public static void main(String[] args) {
+    //             new Launcher().run(args);
+    //     }
+    // }
+    // "#;
+    g(
+        r#"(program
+  (class_declaration 
+    name: (_) @name
+    body: (_
+      (method_declaration
+        (modifiers
+          "public"
+          "static"
+        )
+        type: (void_type)
+        name: (_) (#EQ? "main")
+      )
+    )
+  )
+)"#,
+        &[r#"(_
+            name: (_) (#EQ? "main")
+        )"#],
+        &text,
+    );
+}
+#[test]
+fn test_prepro_try_catch_in_test() {
+    let text = r#"import static org.junit.Assert.fail;
+class A {
+  @Test
+  public void testDuplicateLabel() {
+    RuntimeTypeAdapterFactory<BillingInstrument> rta =
+        RuntimeTypeAdapterFactory.of(BillingInstrument.class);
+    rta.registerSubtype(CreditCard.class, "CC");
+    try {
+      rta.registerSubtype(BankTransfer.class, "CC");
+      fail();
+    } catch (IllegalArgumentException expected) {
+    }
+  }
+}
+"#;
+    g(
+        r#"(program
+  (import_declaration 
+    "static" 
+    (scoped_absolute_identifier 
+        scope: (scoped_absolute_identifier 
+            scope: (scoped_absolute_identifier 
+                scope: (identifier) (#EQ? "org")
+                name: (identifier) (#EQ? "junit")
+            )
+            name: (identifier) (#EQ? "Assert")
+        )
+        name: (identifier) (#EQ? "fail")
+    )
+  )
+  (class_declaration 
+    name: (_) @name
+    body: (_
+      (method_declaration
+        (modifiers
+          (marker_annotation 
+            name: (_) (#EQ? "Test")
+          )
+        )
+        name: (_) @meth
+        body: (_
+            (try_statement
+                body: (_
+                    (expression_statement
+                        (method_invocation
+                            !object
+                            name: (identifier) (#EQ? "fail")
+                        )
+                    )
+                )
+            )
+        )
+      )
+    )
+  )
+)"#,
+        &[
+            r#"(method_invocation
+    !object
+    name: (identifier) (#EQ? "fail")
+)"#,
+            r#"
+(import_declaration 
+  "static" 
+  (scoped_absolute_identifier 
+      scope: (scoped_absolute_identifier 
+          scope: (scoped_absolute_identifier 
+              scope: (identifier) (#EQ? "org")
+              name: (identifier) (#EQ? "junit")
+          )
+          name: (identifier) (#EQ? "Assert")
+      )
+      name: (identifier) (#EQ? "fail")
+  )
+)"#,
+        ],
+        &text,
+    );
+}
+
+#[test]
+fn test_prepro_ret_null_x() {
+    let text = std::fs::read_to_string(
+        "../../../../spoon/src/test/java/spoon/test/ctType/testclasses/X.java",
+    )
+    .unwrap();
+
+    // let text = r#"class A {
+    //     /**
+    //      */
+    //     public static void main(String[] args) {
+    //             new Launcher().run(args);
+    //     }
+    // }
+    // "#;
+    g(
+        r#"(return_statement (null_literal))"#,
+        &[r#"(return_statement (null_literal))"#],
+        &text,
+    );
+}
+
+/// upstream issue in tree-sitter
+#[test]
+fn test_prepro_firsts() {
+    let text = r#"class A {
+        void main(String[] args) {}
+    }
+    "#;
+    let count = g(r#"(_ . (identifier) @name)"#, &[], &text);
+    // let count = g(r#"(_ . (_) @name)"#, &[], &text); // this one works properly
+    assert_eq!(count, 1)
+}
+
+fn g(q: &str, p: &[&str], text: &str) -> usize {
+    log::set_logger(&LOGGER)
+        .map(|()| log::set_max_level(log::LevelFilter::Trace))
+        .unwrap();
+    let (precomp, query) =
+        hyper_ast_tsquery::Query::with_precomputed(q, tree_sitter_java::language(), p).unwrap();
+    query._check_preprocessed(0, p.len());
+    let mut stores = hyper_ast::store::SimpleStores {
+        label_store: hyper_ast::store::labels::LabelStore::new(),
+        type_store: crate::types::TStore::default(),
+        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
+    };
+    let mut md_cache = Default::default();
+    let mut java_tree_gen = crate::legion_with_refs::JavaTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+        more: precomp,
+    };
+    let tree = match crate::legion_with_refs::tree_sitter_parse(text.as_bytes()) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    println!("{}", tree.root_node().to_sexp());
+    let full_node = java_tree_gen.generate_file(b"", text.as_bytes(), tree.walk());
+    let code = full_node.local.compressed_node;
+    // let n = hyper_ast::nodes::SyntaxWithFieldsSerializer::new(&stores, code);
+    // dbg!(n.to_string());
+    let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
+    let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
+    dbg!();
+    let qcursor = query.matches(cursor);
+    let mut count = 0;
+    for m in qcursor {
+        count += 1;
+        dbg!(m.pattern_index);
+        dbg!(m.captures.len());
+        for c in &m.captures {
+            let i = c.index;
+            dbg!(i);
+            let name = query.capture_name(i);
+            dbg!(name);
+            use hyper_ast::position::structural_pos::AAA;
+            let n = c.node.pos.node();
+            let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, n);
+            dbg!(n.to_string());
+        }
+    }
+    dbg!(count)
 }

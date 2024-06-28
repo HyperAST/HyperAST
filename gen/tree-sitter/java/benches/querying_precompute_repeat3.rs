@@ -1,6 +1,5 @@
-//! Compare query matching performances
-//! 
-
+//! further benchmarks query matching,
+//! here focuses on impact of using different precomputed queries
 use std::path::{Path, PathBuf};
 
 use criterion::{
@@ -13,11 +12,32 @@ use shared::*;
 
 pub const QUERIES: &[BenchQuery] = &[
     (
-        &[QUERY_OVERRIDES_SUBS[1]],
-        QUERY_OVERRIDES.0,
-        QUERY_OVERRIDES.1,
-        "overrides",
-        3229, // matches on spoon
+        &[QUERY_RET_NULL_SUBS[0]],
+        QUERY_RET_NULL.0,
+        QUERY_RET_NULL.1,
+        "ret_null",
+        297, // matches on spoon
+    ),
+    (
+        &[QUERY_RET_NULL_SUBS[1], QUERY_RET_NULL_SUBS[2]],
+        QUERY_RET_NULL.0,
+        QUERY_RET_NULL.1,
+        "ret_null_1+2",
+        297, // matches on spoon
+    ),
+    (
+        &[QUERY_RET_NULL_SUBS[1]],
+        QUERY_RET_NULL.0,
+        QUERY_RET_NULL.1,
+        "ret_null_1",
+        297, // matches on spoon
+    ),
+    (
+        &[QUERY_RET_NULL_SUBS[2]],
+        QUERY_RET_NULL.0,
+        QUERY_RET_NULL.1,
+        "ret_null_2",
+        297, // matches on spoon
     ),
     (
         &[QUERY_MAIN_METH_SUBS[0]],
@@ -27,14 +47,48 @@ pub const QUERIES: &[BenchQuery] = &[
         1, // matches on spoon
     ),
     (
-        &[QUERY_RET_NULL_SUBS[0]],
-        QUERY_RET_NULL.0,
-        QUERY_RET_NULL.1,
-        "ret_null",
-        297, // matches on spoon
+        &[QUERY_MAIN_METH_SUBS[1]],
+        QUERY_MAIN_METH.0,
+        QUERY_MAIN_METH.1,
+        "main_meth_1",
+        1, // matches on spoon
+    ),
+    (
+        &[QUERY_MAIN_METH_SUBS[2]],
+        QUERY_MAIN_METH.0,
+        QUERY_MAIN_METH.1,
+        "main_meth_2",
+        1, // matches on spoon
+    ),
+    (
+        &[QUERY_MAIN_METH_SUBS[3]],
+        QUERY_MAIN_METH.0,
+        QUERY_MAIN_METH.1,
+        "main_meth_3",
+        1, // matches on spoon
+    ),
+    (
+        &[QUERY_MAIN_METH_SUBS[1],QUERY_MAIN_METH_SUBS[2]],
+        QUERY_MAIN_METH.0,
+        QUERY_MAIN_METH.1,
+        "main_meth_1+2",
+        1, // matches on spoon
+    ),
+    (
+        &[QUERY_MAIN_METH_SUBS[6]],
+        QUERY_MAIN_METH.0,
+        QUERY_MAIN_METH.1,
+        "main_meth_6",
+        1, // matches on spoon
+    ),
+    (
+        &[QUERY_MAIN_METH_SUBS[4],QUERY_MAIN_METH_SUBS[5],QUERY_MAIN_METH_SUBS[6]],
+        QUERY_MAIN_METH.0,
+        QUERY_MAIN_METH.1,
+        "main_meth_4+5+6",
+        1, // matches on spoon
     ),
 ];
-
 
 fn prep_baseline<'query, 'tree>(
     query: &'query str,
@@ -106,12 +160,14 @@ fn preps_precomputed(
     hyper_ast::store::SimpleStores<hyper_ast_gen_ts_java::types::TStore>,
     Vec<legion::Entity>,
 ) {
+    // dbg!(bench_param);
     let (precomp, query) = hyper_ast_tsquery::Query::with_precomputed(
         bench_param.1,
         tree_sitter_java::language(),
         bench_param.0,
     )
     .unwrap();
+    query._check_preprocessed(0,bench_param.0.len());
     let mut stores = hyper_ast::store::SimpleStores {
         label_store: hyper_ast::store::labels::LabelStore::new(),
         type_store: hyper_ast_gen_ts_java::types::TStore::default(),
@@ -127,28 +183,35 @@ fn preps_precomputed(
     let roots: Vec<_> = f
         .into_iter()
         .map(|(name, text)| {
+            let name = &name.to_str().unwrap();
             let tree =
                 match hyper_ast_gen_ts_java::legion_with_refs::tree_sitter_parse(text.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
+            log::trace!("preprocess file: {}", name);
             let full_node = java_tree_gen.generate_file(
-                name.to_str().unwrap().as_bytes(),
+                name.as_bytes(),
                 text.as_bytes(),
                 tree.walk(),
             );
             full_node.local.compressed_node
         })
         .collect();
+    log::trace!("finished preprocessing");
     (query, stores, roots)
 }
 
 fn compare_querying_group(c: &mut Criterion) {
-    let mut group = c.benchmark_group("QueryingRepeat2.2Spoon");
+    // log::set_logger(&LOGGER)
+    //     .map(|()| log::set_max_level(log::LevelFilter::Trace))
+    //     .unwrap();
+    let mut group = c.benchmark_group("QueryingRepeat3Spoon");
     group.sample_size(10);
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     group.plot_config(plot_config);
 
+    let codes = "../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test";
     let codes = "../../../../spoon/src/main/java"; // spoon dataset (only source code to avoid including resources), could add tests if necessary
     let codes = Path::new(&codes).to_owned();
     let codes = It::new(codes).map(|x| {
@@ -160,28 +223,26 @@ fn compare_querying_group(c: &mut Criterion) {
     });
     let codes: Box<[_]> = codes.collect();
     for parameter in QUERIES.into_iter().map(|x| (x, codes.as_ref())) {
-        group.throughput(criterion::Throughput::Elements(parameter.0 .4));
-
-        bench_baseline(&mut group, parameter);
-        bench_rust_baseline(&mut group, parameter);
+        // bench_baseline(&mut group, parameter);
+        // bench_rust_baseline(&mut group, parameter);
 
         let pp = preps_default(parameter);
-        group.bench_with_input(
-            BenchmarkId::new("default", parameter.0 .3),
-            &pp,
-            |b, (query, stores, roots)| {
-                b.iter(|| {
-                    let mut count = 0;
-                    for &n in roots {
-                        let pos = hyper_ast::position::StructuralPosition::new(n);
-                        let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
-                        let matches = query.matches(cursor);
-                        count += black_box(matches.count());
-                    }
-                    debug_assert_eq!(count as u64, parameter.0 .4);
-                })
-            },
-        );
+        // group.bench_with_input(
+        //     BenchmarkId::new("default", parameter.0 .3),
+        //     &pp,
+        //     |b, (query, stores, roots)| {
+        //         b.iter(|| {
+        //             let mut count = 0;
+        //             for &n in roots {
+        //                 let pos = hyper_ast::position::StructuralPosition::new(n);
+        //                 let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
+        //                 let matches = query.matches(cursor);
+        //                 count += black_box(matches.count());
+        //             }
+        //             assert_eq!(count as u64, parameter.0 .4);
+        //         })
+        //     },
+        // );
         group.bench_with_input(
             BenchmarkId::new("default_opt", parameter.0 .3),
             &pp,
@@ -195,14 +256,14 @@ fn compare_querying_group(c: &mut Criterion) {
                         let matches = query.matches(cursor);
                         count += black_box(matches.count());
                     }
-                    debug_assert_eq!(count as u64, parameter.0 .4);
+                    assert_eq!(count as u64, parameter.0 .4);
                 })
             },
         );
 
         let pp = preps_precomputed(parameter);
         group.bench_with_input(
-            BenchmarkId::new("sharing_precomputed", parameter.0 .3),
+            BenchmarkId::new("precomputed", parameter.0 .3),
             &pp,
             |b, (query, stores, roots)| {
                 b.iter(|| {
@@ -213,12 +274,12 @@ fn compare_querying_group(c: &mut Criterion) {
                         let matches = query.matches(cursor);
                         count += black_box(matches.count());
                     }
-                    debug_assert_eq!(count as u64, parameter.0 .4);
+                    assert_eq!(count as u64, parameter.0 .4);
                 })
             },
         );
         group.bench_with_input(
-            BenchmarkId::new("sharing_precomputed_opt", parameter.0 .3),
+            BenchmarkId::new("precomputed_opt", parameter.0 .3),
             &pp,
             |b, (query, stores, roots)| {
                 b.iter(|| {
@@ -230,7 +291,7 @@ fn compare_querying_group(c: &mut Criterion) {
                         let matches = query.matches(cursor);
                         count += black_box(matches.count());
                     }
-                    debug_assert_eq!(count as u64, parameter.0 .4);
+                    assert_eq!(count as u64, parameter.0 .4);
                 })
             },
         );
@@ -255,7 +316,7 @@ fn bench_baseline(
                 let mut cursor = tree_sitter::QueryCursor::default();
                 count += black_box(cursor.matches(&q, t.root_node(), text.as_bytes()).count());
             }
-            debug_assert_eq!(count as u64, parameter.0 .4);
+            assert_eq!(count as u64, parameter.0 .4);
         })
     });
 }
@@ -282,7 +343,7 @@ fn bench_rust_baseline(
                     );
                     count += black_box(q.matches(cursor).count());
                 }
-                debug_assert_eq!(count as u64, parameter.0 .4)
+                assert_eq!(count as u64, parameter.0 .4)
             })
         },
     );
@@ -332,4 +393,26 @@ impl Iterator for It {
         };
         Some(p)
     }
+}
+
+static LOGGER: SimpleLogger = SimpleLogger;
+
+struct SimpleLogger;
+
+impl log::Log for SimpleLogger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= log::Level::Trace
+    }
+
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            if let (Some(file), Some(line)) = (record.file(), record.line()) {
+                eprintln!("{}:{} {} - {}", file, line, record.level(), record.args());
+            } else {
+                eprintln!("{} - {}", record.level(), record.args());
+            }
+        }
+    }
+
+    fn flush(&self) {}
 }

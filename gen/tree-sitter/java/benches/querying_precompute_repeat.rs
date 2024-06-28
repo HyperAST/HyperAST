@@ -2,127 +2,8 @@ use std::path::Path;
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
-pub const QUERY_MAIN_METH: (&str, &str) = (
-    r#"(program
-(class_declaration 
-name: (_) @name
-body: (_
-  (method_declaration
-    (modifiers
-      "public"
-      "static"
-    )
-    type: (void_type)
-    name: (_) (#EQ? "main")
-  )
-)
-)
-)"#,
-    r#"(program
-(class_declaration 
-name: (_) @name
-body: (_
-  (method_declaration
-    (modifiers
-      "public"
-      "static"
-    )
-    type: (void_type)
-    name: (_) @main (#eq? @main "main")
-  )
-)
-)
-)"#,
-);
-
-pub const QUERY_MAIN_METH_SUBS: &[&str] = &[
-    r#"
-    (marker_annotation
-        name: (_) (#EQ? "Override")
-    )"#,
-    r#"
-(method_declaration
-  (modifiers
-    "public"
-    "static"
-  )
-  type: (void_type)
-  name: (_) (#EQ? "main")
-)"#,
-    r#"
-(method_declaration
-    (modifiers
-        (marker_annotation)
-    )
-)"#,
-    r#"
-(class_declaration
-    name: (_) @name
-    body: (_
-        (method_declaration)
-    )
-)"#,
-];
-pub const QUERY_OVERRIDES: (&str, &str) = (
-    r#"(program
-(class_declaration
-  name: (_) @name
-  body: (_
-    (method_declaration
-      (modifiers
-        (marker_annotation
-          name: (_) (#EQ? "Override")
-        )
-      )
-      name: (_)@meth_name
-    )
-  )
-)
-  )"#,
-    r#"(program
-    (class_declaration
-      name: (_) @name
-      body: (_
-        (method_declaration
-          (modifiers
-            (marker_annotation
-              name: (_)@anot (#eq? @anot "Override")
-            )
-          )
-          name: (_)@meth_name
-        )
-      )
-    )
-)"#,
-);
-
-pub const QUERY_OVERRIDES_SUBS: &[&str] = &[
-    r#"
-            (marker_annotation
-                name: (_) (#EQ? "Override")
-            )"#,
-    r#"
-    (method_declaration
-        (modifiers
-            (marker_annotation
-                name: (_) (#EQ? "Override")
-            )
-        )
-    )"#,
-    r#"
-            (method_declaration
-                (modifiers
-                    (marker_annotation)
-                )
-            )"#,
-    r#"
-    (class_declaration
-        name: (_) @name
-        body: (_
-            (method_declaration)
-        )
-    )"#,
-];
+mod shared;
+use shared::*;
 
 pub const QUERIES: &[(&[&str], &str, &str, &str, usize)] = &[
     (
@@ -140,21 +21,21 @@ pub const QUERIES: &[(&[&str], &str, &str, &str, usize)] = &[
         2,
     ),
     (
-        &[QUERY_MAIN_METH_SUBS[1]],
+        &[QUERY_MAIN_METH_SUBS[0]],
         QUERY_MAIN_METH.0,
         QUERY_MAIN_METH.1,
         "main_meth",
         1,
     ),
     (
-        &[QUERY_MAIN_METH_SUBS[1]],
+        &[QUERY_MAIN_METH_SUBS[0]],
         QUERY_MAIN_METH.0,
         QUERY_MAIN_METH.1,
         "main_meth",
         2,
     ),
     (
-        &[QUERY_MAIN_METH_SUBS[1]],
+        &[QUERY_MAIN_METH_SUBS[0]],
         QUERY_MAIN_METH.0,
         QUERY_MAIN_METH.1,
         "main_meth",

@@ -191,15 +191,44 @@ impl std::hash::Hash for PosedQueryStep {
 }
 
 #[derive(Default, Debug, Clone)]
-pub(crate) struct PrecomputedPatterns(Vec<(u64, PatternId)>);
+pub(crate) struct PrecomputedPatterns {
+    map: Vec<(u64, PatternId)>,
+    intermediate_hashes: Vec<u64>,
+    max_sub_len: u16,
+}
+
+/// WIP genericise PrecomputedPatterns for testing purposes
+struct SubFinder<I, T> {
+    map: Vec<(T, I)>,
+    intermediate_hashes: Vec<u64>,
+    max_sub_len: u16,
+}
+
+struct PrecomputedPatterns2 (SubFinder<PatternId, u64>);
+
+
+#[derive(Clone)]
+struct IncHasher(std::hash::DefaultHasher, u16);
 
 impl PrecomputedPatterns {
+    const INTERM: u16 = 1; // TODO the other numbers do not always works, need some unit tests for a generic PrecomputedSlices
     pub(crate) fn add_precomputed_pattern(&mut self, query: &Query, patternid: PatternId) {
         let pattern = &query.patterns[patternid];
         let stepid = pattern.steps.offset;
         let endstepid = pattern.steps.offset + pattern.steps.length;
         assert!(query.steps.contains(endstepid));
-        let hasher = &mut std::hash::DefaultHasher::new();
+        impl IncHasher {
+            fn maybe_inc<'a>(&'a mut self, inc_v: &mut Vec<u64>) -> &'a mut std::hash::DefaultHasher {
+                if self.1 == PrecomputedPatterns::INTERM {
+                    self.1 = Default::default();
+                    inc_v.push(self.0.clone().finish());
+                } else {
+                    self.1 += 1;
+                }
+                &mut self.0
+            }
+        }
+        let mut hasher = IncHasher(std::hash::DefaultHasher::new(), 0);
         let mut id = stepid;
         loop {
             let step = &query.steps[id];
@@ -212,6 +241,7 @@ impl PrecomputedPatterns {
                 // - forward is a ? or * quant
                 // - backward is a + or * quant
                 let hasher2 = hasher.clone();
+                let hasher = hasher.maybe_inc(&mut self.intermediate_hashes);
                 hash_single_step(query, id, hasher);
                 if alt < stepid {
                     // before start step
@@ -241,31 +271,75 @@ impl PrecomputedPatterns {
                     unreachable!()
                 }
             } else {
+                let hasher = hasher.maybe_inc(&mut self.intermediate_hashes);
                 hash_single_step(query, id, hasher);
             }
             id.inc();
         }
-        let k = hasher.finish();
-        self.0.push((k, patternid))
+        let k = hasher.0.finish();
+        self.map.push((k, patternid));
+        self.max_sub_len = self.max_sub_len.max(pattern.steps.length.0);
     }
 
     pub(crate) fn matches(&self, query: &Query, stepid: StepId) -> Vec<PatternId> {
-        let hasher = &mut std::hash::DefaultHasher::new();
         let mut res = vec![];
-        let mut id = stepid;
+        let hasher = IncHasher(std::hash::DefaultHasher::new(), 0);
+        self.matches_aux(stepid, stepid, query, hasher, &mut res);
+        // TODO add eq impl to avoid collisions
+        res
+    }
+
+    fn matches_aux(
+        &self,
+        stepid: StepId,
+        mut id: StepId,
+        query: &Query,
+        mut hasher: IncHasher,
+        res: &mut Vec<PatternId>,
+    ) {
+        impl IncHasher {
+            fn div(&self) -> Self {
+                let mut s = self.clone();
+                s.1 += 1;
+                s
+            }
+        }
+        if hasher.1 % PrecomputedPatterns::INTERM == 1 {
+            if !self
+                .intermediate_hashes
+                .contains(&hasher.0.clone().finish())
+            {
+                return;
+            }
+        }
+
+        if id != stepid {
+            let k = hasher.0.clone().finish();
+            let iter = self.map.iter().filter_map(|(h, p)| (k == *h).then_some(p));
+            res.extend(iter);
+        }
         loop {
             let step = &query.steps[id];
-            if step.done() {
-                // nothing to do
-                let k = hasher.clone().finish();
-                // dbg!(id.0, k);
-                let iter = self.0.iter().filter_map(|(h, p)| (k == *h).then_some(p));
+            if hasher.1 >= stepid.0 + self.max_sub_len + 5 {
+                // TODO every x steps check if there is a sub that will be matched,
+                // need to do this preparation in the add step
+                return;
+            } else if step.done() {
+                // finished
+                let k = hasher.0.finish();
+                let iter = self.map.iter().filter_map(|(h, p)| (k == *h).then_some(p));
                 res.extend(iter);
-                break;
+                return;
+            } else if id != stepid && step.depth <= query.steps[stepid].depth {
+                // should stop to avoid matching more than expected
+                let k = hasher.0.finish();
+                let iter = self.map.iter().filter_map(|(h, p)| (k == *h).then_some(p));
+                res.extend(iter);
+                return;
             } else if let Some(alt) = step.alternative_index() {
                 // branch
                 // WIP for now skip complex queries
-                return vec![];
+                return;
                 // TODO handle complex queries
                 if alt < stepid {
                     // should probably break
@@ -274,17 +348,37 @@ impl PrecomputedPatterns {
                 } else {
                 }
             } else {
-                hash_single_step(query, id, hasher);
-                let k = hasher.clone().finish();
-                // dbg!(id.0, k);
-                let iter = self.0.iter().filter_map(|(h, p)| (k == *h).then_some(p));
-                res.extend(iter);
+                if id != stepid {
+                    // prevents skiping first step
+                    let mut id = id.clone();
+                    id.inc();
+                    self.matches_aux(stepid, id, query, hasher.clone(), res);
+                }
+                if step.field != 0 {
+                    let mut hasher = hasher.div();
+                    hash_single_step1(query, id, &mut hasher.0);
+                    let mut id = id.clone();
+                    id.inc();
+                    self.matches_aux(stepid, id, query, hasher, res);
+                }
+                if step.symbol != 0 {
+                    let mut hasher = hasher.div();
+                    hash_single_step2(query, id, &mut hasher.0);
+                    let mut id = id.clone();
+                    id.inc();
+                    self.matches_aux(stepid, id, query, hasher, res);
+                }
+                if step.symbol != 0 {
+                    let mut hasher = hasher.div();
+                    hash_single_step12(query, id, &mut hasher.0);
+                    let mut id = id.clone();
+                    id.inc();
+                    self.matches_aux(stepid, id, query, hasher, res);
+                }
+                hash_single_step(query, id, &mut hasher.0);
             }
             id.inc();
         }
-
-        // TODO add eq impl to avoid collisions
-        res
     }
 }
 
@@ -302,6 +396,53 @@ fn hash_single_step(query: &Query, stepid: StepId, hasher: &mut std::hash::Defau
         step.capture_ids[1].0.hash(hasher);
     }
     step.is_named().hash(hasher);
+}
+
+fn hash_single_step1(query: &Query, stepid: StepId, hasher: &mut std::hash::DefaultHasher) {
+    let step = &query.steps[stepid];
+    step.is_dead_end().hash(hasher);
+    step.is_immediate().hash(hasher);
+    step.is_pass_through().hash(hasher);
+    step.is_last_child().hash(hasher);
+    0u16.hash(hasher);
+    step.normed_alternative_index(stepid).hash(hasher);
+    step.supertype_symbol().hash(hasher);
+    step.symbol.hash(hasher);
+    if step.has_immediate_pred() {
+        step.capture_ids[1].0.hash(hasher);
+    }
+    step.is_named().hash(hasher);
+}
+
+fn hash_single_step2(query: &Query, stepid: StepId, hasher: &mut std::hash::DefaultHasher) {
+    let step = &query.steps[stepid];
+    step.is_dead_end().hash(hasher);
+    step.is_immediate().hash(hasher);
+    step.is_pass_through().hash(hasher);
+    step.is_last_child().hash(hasher);
+    step.field().hash(hasher);
+    step.normed_alternative_index(stepid).hash(hasher);
+    step.supertype_symbol().hash(hasher);
+    0u16.hash(hasher);
+    if step.has_immediate_pred() {
+        step.capture_ids[1].0.hash(hasher);
+    }
+    true.hash(hasher);
+}
+fn hash_single_step12(query: &Query, stepid: StepId, hasher: &mut std::hash::DefaultHasher) {
+    let step = &query.steps[stepid];
+    step.is_dead_end().hash(hasher);
+    step.is_immediate().hash(hasher);
+    step.is_pass_through().hash(hasher);
+    step.is_last_child().hash(hasher);
+    0u16.hash(hasher);
+    step.normed_alternative_index(stepid).hash(hasher);
+    step.supertype_symbol().hash(hasher);
+    0u16.hash(hasher);
+    if step.has_immediate_pred() {
+        step.capture_ids[1].0.hash(hasher);
+    }
+    true.hash(hasher);
 }
 
 impl QueryStep {
@@ -819,14 +960,35 @@ impl Query {
 
         let step_offsets = unsafe { &(*query).step_offsets }.into();
         // log::trace!("{}", ptr);
+        let steps: indexed::Steps = unsafe { &(*query).steps }.into();
+        let patterns: indexed::Patterns = unsafe { &(*query).patterns }.into();
+        let pattern_map: Vec<PatternEntry> = unsafe { &(*query).pattern_map }.into();
+        let pattern_map2 = pattern_map
+            .iter()
+            .filter_map(|x| {
+                if steps[x.step_index].depth > 0 {
+                    let step_index = patterns[x.pattern_index].steps.offset;
+                    assert_eq!(steps[step_index].depth, 0);
+                    Some(PatternEntry {
+                        step_index,
+                        pattern_index: x.pattern_index,
+                        is_rooted: x.is_rooted,
+                        precomputed: x.precomputed,
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect();
         let mut query = Query {
             // captures: todo!(),
             // predicate_values: todo!(),
             // capture_quantifiers: todo!(),
-            steps: unsafe { &(*query).steps }.into(),
-            pattern_map: unsafe { &(*query).pattern_map }.into(),
+            steps,
+            pattern_map,
+            pattern_map2,
             // predicate_steps: todo!(),
-            patterns: unsafe { &(*query).patterns }.into(),
+            patterns,
             step_offsets,
             negated_fields: unsafe { &(*query).negated_fields }.into(),
             // string_buffer: todo!(),
@@ -857,8 +1019,17 @@ impl Query {
         language: Language,
         precomputeds: &[&str],
     ) -> Result<(Self, Self), QueryError> {
-        let source = &(format!("{}\n\n\n{}", precomputeds.concat(), query));
+        let source = &(format!(
+            "{}\n\n{}",
+            precomputeds
+                .into_iter()
+                .map(|x| format!("{}\n", x))
+                .collect::<String>(),
+            query
+        ));
+        log::trace!("parse query");
         let query = Self::new(source, language)?;
+        log::trace!("prepare subqueries");
 
         let mut precomputed_patterns = PrecomputedPatterns::default();
 
@@ -867,7 +1038,7 @@ impl Query {
         }
 
         // dbg!(&precomputed_patterns);
-
+        let max_sub_len = precomputed_patterns.max_sub_len;
         let mut query = query;
         query.precomputed_patterns = Some(precomputed_patterns);
 
@@ -875,37 +1046,8 @@ impl Query {
         //     let r = query.precomputed_patterns.as_ref().unwrap().get(&query, query.patterns[PatternId::new(i)].steps.offset);
         //     dbg!(r);
         // }
-        for i in precomputeds.len()..query.patterns.len() {
-            let patid = PatternId::new(i);
-            let slice = &query.patterns[patid].steps;
-            let mut j = slice.offset;
-            let mut res = vec![];
-            while j < slice.offset + slice.length {
-                let r = query
-                    .precomputed_patterns
-                    .as_ref()
-                    .unwrap()
-                    .matches(&query, j);
-                for r in &r {
-                    let r = r.to_usize();
-                    assert!(r < 8);
-                    query.used_precomputed |= 1 << r as u8;
-                }
-                res.extend(r.into_iter().map(|x| (x, j)));
-                j.inc();
-            }
-            if let Some(m_pat) = &mut query
-                .pattern_map
-                .iter_mut()
-                .find(|x| x.pattern_index == patid)
-            {
-                for r in &res {
-                    let r = r.0.to_usize();
-                    assert!(r < 8);
-                    m_pat.precomputed |= 1 << r as u8;
-                    // m_pat.precomputed = r.0.to_usize();
-                }
-            }
+        if max_sub_len > 0 {
+            find_precomputed_uses(&mut query, precomputeds);
         }
         // let hasher = &mut std::hash::DefaultHasher::new();
         // hash_single_step(&query, StepId::new(1), hasher);
@@ -922,11 +1064,20 @@ impl Query {
             // dbg!(i);
             precomp.disable_pattern(PatternId::new(i));
         }
+        log::trace!("finished query building");
 
         Ok((precomp, query))
     }
 
     fn disable_pattern(&mut self, pattern_index: PatternId) {
+        for (i, pattern) in self.pattern_map.iter().enumerate() {
+            if pattern.pattern_index == pattern_index {
+                if i < self.wildcard_root_pattern_count as usize {
+                    self.wildcard_root_pattern_count -= 1;
+                    break;
+                }
+            }
+        }
         // Remove the given pattern from the pattern map. Its steps will still
         // be in the `steps` array, but they will never be read.
         self.pattern_map
@@ -1088,6 +1239,41 @@ impl Query {
                 row,
                 format!("Invalid arguments to {function_name} predicate. Missing key argument",),
             ))
+        }
+    }
+}
+
+fn find_precomputed_uses(query: &mut Query, precomputeds: &[&str]) {
+    for i in precomputeds.len()..query.patterns.len() {
+        let patid = PatternId::new(i);
+        let slice = &query.patterns[patid].steps;
+        let mut j = slice.offset;
+        let mut res = vec![];
+        while j < slice.offset + slice.length {
+            let r = query
+                .precomputed_patterns
+                .as_ref()
+                .unwrap()
+                .matches(&*query, j);
+            for r in &r {
+                let r = r.to_usize();
+                assert!(r < 8);
+                query.used_precomputed |= 1 << r as u8;
+            }
+            res.extend(r.into_iter().map(|x| (x, j)));
+            j.inc();
+        }
+        if let Some(m_pat) = &mut query
+            .pattern_map
+            .iter_mut()
+            .find(|x| x.pattern_index == patid)
+        {
+            for r in &res {
+                let r = r.0.to_usize();
+                assert!(r < 8);
+                m_pat.precomputed |= 1 << r as u8;
+                // m_pat.precomputed = r.0.to_usize();
+            }
         }
     }
 }

@@ -166,13 +166,16 @@ where
                 let (m, node_intersects_range) = self.when_entering(stop_on_definite_step);
                 did_match |= m;
                 if self.should_descend(node_intersects_range) {
+                    // dbg!(self.cursor.current_node().str_symbol());
                     match self.cursor.goto_first_child_internal() {
                         TreeCursorStep::TreeCursorStepVisible => {
+                            // dbg!(self.cursor.current_node().str_symbol());
                             self.depth += 1;
                             self.on_visible_node = true;
                             continue;
                         }
                         TreeCursorStep::TreeCursorStepHidden => {
+                            // dbg!(self.cursor.current_node().str_symbol());
                             self.on_visible_node = false;
                             continue;
                         }
@@ -299,20 +302,26 @@ where
                         parent_intersects_range && !parent_is_error
                     };
                     should_add &= step.constrained(status.field_id().into())
-                        && (step.supertype_symbol().is_some() || status.has_supertypes())
+                        && (step.supertype_symbol().is_some()
+                            || status.has_supertypes()
+                            || self.max_start_depth == 0)
                         && (start_depth <= self.max_start_depth);
                     if should_add {
                         self.add_state(pattern);
                     }
                 }
             }
-
+            if self.max_start_depth == 0 {
+                for pattern in &query.pattern_map2 {
+                    self.add_state(pattern);
+                }
+            }
             // Add new states for any patterns whose root node matches this node.
             if let Some(mut i) = query.pattern_map_search(symbol) {
                 let mut pattern = &query.pattern_map[i];
                 let mut pat = &query.patterns[pattern.pattern_index];
                 let mut step = &query.steps[pattern.step_index];
-                let start_depth = self.depth - step.depth();
+                let start_depth = self.depth.wrapping_sub(step.depth());
                 loop {
                     // If this node matches the first step of the pattern, then add a new
                     // state at the start of this pattern.
@@ -743,7 +752,7 @@ where
         cursor: &Cursor,
         pat: &crate::query::QueryPattern,
     ) -> bool {
-        let Some(precomp) = pattern.precomputed() else {
+        let Some(needed) = pattern.precomputed() else {
             return false;
         };
         // if !node.could_match(precomp) {
@@ -752,7 +761,7 @@ where
         // let Some(precomp) = pat.precomputed() else {
         //     return true;
         // };
-        cursor.wont_match(precomp)
+        cursor.wont_match(needed)
     }
 }
 
@@ -772,6 +781,11 @@ impl<'query, Cursor: super::Cursor> QueryCursor<'query, Cursor, Cursor::Node> {
                     if !next_step.done() && state.start_depth() + next_step.depth() > self.depth {
                         return true;
                     }
+                }
+                // not sound to skip an hidden node just under root
+                // TODO find a way of making it sound
+                if self.depth == 0 {
+                    return true;
                 }
                 log::trace!(
                     "skip subtree. type:{}",

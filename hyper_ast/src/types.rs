@@ -670,7 +670,7 @@ pub trait WithRoles: WithChildren {
 pub trait WithPrecompQueries {
     fn wont_match_given_precomputed_queries(
         &self,
-        active: u8,
+        needed: u8,
     ) -> bool;
 }
 

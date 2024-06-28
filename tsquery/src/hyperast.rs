@@ -222,13 +222,13 @@ where
         self.is_visible()
     }
 
-    fn wont_match(&self, actives: u8) -> bool {
-        if actives == 0 {
+    fn wont_match(&self, needed: u8) -> bool {
+        if needed == 0 {
             return false
         }
         use hyper_ast::types::NodeStore;
         let n = self.stores.node_store().resolve(self.pos.node().unwrap());
-        n.wont_match_given_precomputed_queries(actives)
+        n.wont_match_given_precomputed_queries(needed)
     }
 }
 

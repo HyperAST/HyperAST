@@ -84,6 +84,14 @@ harness = false
 name = "querying_precompute_repeat2"
 harness = false
 
+[[bench]]
+name = "querying_precompute_repeat3"
+harness = false
+
+[[bench]]
+name = "querying_precompute_repeat4"
+harness = false
+
 [features]
 default = ["impl", "tsg"]
 legion = ["hyper_ast/legion", "dep:legion"]

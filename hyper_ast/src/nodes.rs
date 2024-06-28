@@ -497,7 +497,7 @@ pub type SyntaxSerializer<'a, 'b, IdN, HAST, const SPC: bool = false> =
 pub type SyntaxWithIdsSerializer<'a, 'b, IdN, HAST, const SPC: bool = false> =
     SimpleSerializer<'a, IdN, HAST, true, true, true, SPC, false>;
 pub type SyntaxWithFieldsSerializer<'a, 'b, IdN, HAST, const SPC: bool = false> =
-    SimpleSerializer<'a, IdN, HAST, true, true, true, SPC, true>;
+    SimpleSerializer<'a, IdN, HAST, true, true, true, false, true>;
 
 pub struct SimpleSerializer<
     'a,
@@ -513,8 +513,8 @@ pub struct SimpleSerializer<
     root: IdN,
 }
 
-impl<'store, IdN, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool>
-    SimpleSerializer<'store, IdN, HAST, TY, LABELS, IDS, SPC>
+impl<'store, IdN, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool,const ROLES: bool>
+    SimpleSerializer<'store, IdN, HAST, TY, LABELS, IDS, SPC, ROLES>
 {
     pub fn new(stores: &'store HAST, root: IdN) -> Self {
         Self { stores, root }

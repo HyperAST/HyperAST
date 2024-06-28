@@ -377,23 +377,38 @@ where
     }
 
     fn compute_current_role(&self) -> (Option<Role>, IdF) {
-        let mut p = self.clone();
         let lang;
-        let role = loop {
-            let Some((_, o)) = p.pos.pop() else {
-                return (None, Default::default());
-            };
-            let Some(n) = p.pos.node() else {
-                return (None, Default::default());
-            };
-            let n = self.stores.node_store.resolve(n);
-            // dbg!(p.kind());
-            if p.kind().is_supertype() {
-                continue;
+        let role = if self.pos.node().is_none() {
+            lang = self.acc.simple.kind.get_lang();
+            // self.acc.role
+            None // actually should not provide role as it is not part of identifying data
+        } else if self.pos.parent().is_none() {
+            lang = self.acc.simple.kind.get_lang();
+            let o = self.pos.o().unwrap();
+            self.acc
+                .role_offsets
+                .iter()
+                .position(|x| *x as u16 == o)
+                .and_then(|x| self.acc.roles.get(x))
+                .cloned()
+        } else {
+            let mut p = self.clone();
+            loop {
+                let Some((_, o)) = p.pos.pop() else {
+                    return (None, Default::default());
+                };
+                let Some(n) = p.pos.node() else {
+                    return (None, Default::default());
+                };
+                let n = self.stores.node_store.resolve(n);
+                // dbg!(p.kind());
+                if p.kind().is_supertype() {
+                    continue;
+                }
+                lang = p.kind().get_lang();
+                use num::One;
+                break n.role_at::<Role>(o - Idx::one());
             }
-            lang = p.kind().get_lang();
-            use num::One;
-            break n.role_at::<Role>(o - Idx::one());
         };
         let field_id = if let Some(role) = role {
             RoleStore::<HashedNodeRef<TIdN<_>>>::intern_role(self.stores.type_store, lang, role)
