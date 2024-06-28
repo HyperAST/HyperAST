@@ -8,7 +8,9 @@ use hyper_ast::{
         nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert},
     },
     tree_gen::{
-        parser::{Node, TreeCursor, Visibility}, BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics, TextedGlobalData, TotalBytesGlobalData, TreeGen, WithByteRange
+        parser::{Node, TreeCursor, Visibility},
+        BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics,
+        TextedGlobalData, TotalBytesGlobalData, TreeGen, WithByteRange,
     },
     types::{self, AnyType, NodeStoreExt, Role, TypeStore, TypeTrait, WithHashs, WithStats},
     utils,
@@ -363,7 +365,7 @@ where
         //     stores,
         //     hyper_ast::position::StructuralPosition::new(todo!()),
         // );
-        let qcursor = self.matches_immediate(cursor);// TODO filter on height (and visibility?)
+        let qcursor = self.matches_immediate(cursor); // TODO filter on height (and visibility?)
         let mut r = Default::default();
         for m in qcursor {
             assert!(m.pattern_index.to_usize() < 7);
@@ -478,6 +480,13 @@ where
         let type_store = &mut self.stores().type_store;
         let parent_indentation = &stack.parent().unwrap().indentation();
         let kind = node.obtain_type(type_store);
+        assert!(
+            global.sum_byte_length() <= node.start_byte(),
+            "{}: {} <= {}",
+            kind,
+            global.sum_byte_length(),
+            node.start_byte()
+        );
         let indent = compute_indentation(
             &self.line_break,
             text,
@@ -663,7 +672,7 @@ impl<
             text,
             init.indentation(),
         );
-        if let Some(spacing) = spacing {dbg!(init.padding_start, init.start_byte);
+        if let Some(spacing) = spacing {
             global.down();
             // init.start_byte = 0;
             global.set_sum_byte_length(init.start_byte);

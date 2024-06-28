@@ -460,7 +460,7 @@ where
                         global.up();
                         is_visible = true;
                         is_parent_hidden = false;
-                        global.set_sum_byte_length(acc.end_byte());
+                        //global.set_sum_byte_length(acc.end_byte());
                         stack.push(P::Visible(acc));
                         None
                     }
