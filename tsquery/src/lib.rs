@@ -19,7 +19,9 @@ mod ffi_extra;
 mod ts_private_bypass;
 
 pub mod default_impls;
+#[cfg(feature = "hyper_ast")]
 pub mod hyperast;
+#[cfg(feature = "hyper_ast")]
 pub mod hyperast_opt;
 pub mod stepped_query;
 pub mod tsg;

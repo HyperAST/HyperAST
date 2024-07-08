@@ -21,7 +21,7 @@ stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev=
 # hashbrown = { version = "0.13.2", default-features = false, optional = true }
 log = { version = "0.4.6" }                                                                                                                                                     #, features = ["max_level_debug", "release_max_level_warn"] }
 
-hyper_ast = { path = "../hyper_ast" }
+hyper_ast = { path = "../hyper_ast", optional = true }
 num = "0.4.0"
 
 # libc = "0.2"
@@ -47,9 +47,12 @@ regex = "1.10.5"
 # criterion = { version = "0.4", features = ["rayon", "plotters", "cargo_bench_support", "html_reports", "real_blackbox"] }
 
 [features]
-default = ["tsg"]
+default = ["tsg", "hyper_ast"]
 tsg = [
     "dep:tree-sitter-graph",
     "dep:stack-graphs",
     "dep:tree-sitter-stack-graphs",
+]
+Hyper_ast = [
+    "dep:hyper_ast",
 ]
