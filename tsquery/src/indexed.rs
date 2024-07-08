@@ -22,7 +22,7 @@ impl StateId {
 #[repr(transparent)]
 #[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Debug, Hash)]
 pub(crate) struct StepId(pub(crate) u16);
-#[derive(Clone)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub(crate) struct PredStepId(u16);
 impl PredStepId {
     pub(super) fn new(i: u16) -> Self {
@@ -94,6 +94,28 @@ impl Steps {
 
     pub(crate) fn set_immediate_pred(&mut self, s: StepId, i: u32) {
         self.0[s.0 as usize].set_immediate_pred(i)
+    }
+
+    pub(crate) fn extend(&mut self, steps: Steps) {
+        let mut i = StepId::new(0);
+        let mut j = StepId::new(num::cast(self.0.len()).unwrap());
+        for s in steps.0 {
+            dbg!(i,j, s.alternative_index());
+            let s = s.adapt(i, j);
+            self.0.push(s);
+            i.inc();
+            j.inc();
+        }
+    }
+
+    pub(crate) fn iter_mut<'a>(
+        &'a mut self,
+    ) -> impl Iterator<Item = &'a mut crate::query::QueryStep> {
+        self.0.iter_mut()
+    }
+
+    pub(crate) fn count(&self) -> StepId {
+        StepId(num::cast(self.0.len()).unwrap())
     }
 }
 
@@ -396,6 +418,13 @@ impl Patterns {
     pub(crate) fn len(&self) -> usize {
         self.0.len()
     }
+
+    pub(crate) fn extend(&mut self, patterns: Patterns, offset: StepId, byte_offset: u32) {
+        for p in patterns.0 {
+            let p = p.adapt(offset, byte_offset);
+            self.0.push(p);
+        }
+    }
 }
 impl Index<PatternId> for Patterns {
     type Output = crate::query::QueryPattern;
@@ -427,6 +456,18 @@ impl NegatedFields {
             .iter()
             .take_while(|i| **i != 0)
             .map(|x| *x)
+    }
+
+    pub(crate) fn extend(&self, negated_fields: NegatedFields) -> Vec<u16> {
+        let mut map = vec![];
+        for n in negated_fields.0 {
+            if n == 0 {
+                continue;
+            }
+            dbg!(n);
+            todo!()
+        }
+        map
     }
 }
 

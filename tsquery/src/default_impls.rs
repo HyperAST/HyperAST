@@ -65,7 +65,7 @@ impl<'a> Cursor for TreeCursor<'a> {
     }
 
     fn has_parent(&self) -> bool {
-        todo!()
+        self.cursor.node().parent().is_some()
     }
 
     fn persist(&mut self) -> Self::Node {

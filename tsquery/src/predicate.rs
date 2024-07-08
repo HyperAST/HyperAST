@@ -60,6 +60,14 @@ impl<P> PerPattern<P> {
     ) -> impl Iterator<Item = &'a P> {
         self.0[id.to_usize()].iter()
     }
+
+    pub(crate) fn extend(&mut self, property_predicates: PerPattern<P>) {
+        let mut r = std::mem::take(&mut self.0).into_vec();
+        // TODO
+        property_predicates.0.iter().for_each(|x|assert!(x.is_empty()));
+        r.extend(property_predicates.0.into_vec());
+        self.0 = r.into();
+    }
 }
 
 impl Clone for PerPattern<TextPredicateCapture> {

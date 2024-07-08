@@ -1,6 +1,9 @@
 use std::fmt::Display;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::ops::AddAssign;
+use std::ops::Index;
+use std::ops::SubAssign;
 
 use tree_sitter::QueryProperty;
 
@@ -11,6 +14,7 @@ use super::TextPredicateCapture;
 use super::MAX_STEP_CAPTURE_COUNT;
 use crate::ffi;
 use crate::indexed;
+use crate::indexed::PredStepId;
 use crate::predicate::PerPatternBuilder;
 use crate::predicate_error;
 use crate::utils::SafeUpcast;
@@ -29,6 +33,16 @@ pub(crate) struct QueryPattern {
     predicate_steps: crate::Slice<indexed::PredStepId>,
     start_byte: u32,
     is_non_local: bool,
+}
+impl QueryPattern {
+    pub(crate) fn adapt(mut self, offset: StepId, byte_offset: u32) -> QueryPattern {
+        self.steps.offset += offset;
+        self.start_byte += byte_offset;
+        if self.predicate_steps.length != PredStepId::new(0) {
+            todo!()
+        }
+        self
+    }
 }
 
 impl From<&crate::ffi_extra::QueryPattern> for QueryPattern {
@@ -173,6 +187,35 @@ impl QueryStep {
     fn normed_alternative_index(&self, stepid: StepId) -> Option<i16> {
         self.alternative_index().map(|x| x.sub(stepid))
     }
+
+    fn remap_negative_fields(&mut self, neg_map: &[u16]) {
+        let Some(i) = self.negated_field_list_id() else {
+            return;
+        };
+        todo!();
+    }
+}
+
+impl QueryStep {
+    pub fn adapt(mut self, old: StepId, new: StepId) -> QueryStep {
+        if self.alternative_index().is_some() {
+            self.alternative_index.sub_assign(old);
+            self.alternative_index.add_assign(new);
+        }
+        if self.has_immediate_pred() {
+            todo!()
+        }
+        self
+    }
+
+    fn remap_captures(&mut self, map: &[CaptureId]) {
+        for c in &mut self.capture_ids {
+            if *c == CaptureId::NONE {
+                break;
+            }
+            *c = map[c.to_usize()];
+        }
+    }
 }
 
 impl StepId {
@@ -198,17 +241,64 @@ pub(crate) struct PrecomputedPatterns {
 }
 
 /// WIP genericise PrecomputedPatterns for testing purposes
-struct SubFinder<I, T> {
+struct SubFinder<I, T, const INTERM: u16> {
     map: Vec<(T, I)>,
     intermediate_hashes: Vec<u64>,
     max_sub_len: u16,
 }
 
-struct PrecomputedPatterns2 (SubFinder<PatternId, u64>);
+impl<I, T, const INTERM: u16> SubFinder<I, T, INTERM> {
+    pub(crate) fn register_subs<Q, SId, F>(&mut self, query: &Q, subid: I, get_sid: F)
+    where
+        Q: Index<I> + Index<SId>,
+        F: Fn(&<Q as Index<I>>::Output) -> SId,
+    {
+        let pattern = &query[subid];
+        let hasher = IncHasher(std::hash::DefaultHasher::new(), 0);
 
+        let mut stack = vec![(hasher, get_sid(pattern))];
 
+        loop {
+            let Some((hasher, id)) = stack.pop() else {
+                return;
+            };
+            let step = &query[id];
+
+            let k = todo!();
+            let len = todo!(); //pattern.steps.length.0
+
+            self.map.push((k, subid));
+            self.max_sub_len = self.max_sub_len.max(len);
+        }
+    }
+
+    pub(crate) fn matches<Q, SId>(&self, query: &Q, sid: SId) -> Vec<PatternId> {
+        let mut res = vec![];
+        let hasher = IncHasher(std::hash::DefaultHasher::new(), 0);
+        let mut stack = vec![(hasher, sid)];
+        loop {}
+        res
+    }
+}
+
+struct PrecomputedPatterns2(SubFinder<PatternId, u64, { PrecomputedPatterns2::INTERM }>);
+impl PrecomputedPatterns2 {
+    const INTERM: u16 = 1;
+}
 #[derive(Clone)]
 struct IncHasher(std::hash::DefaultHasher, u16);
+
+impl IncHasher {
+    fn maybe_inc<'a>(&'a mut self, inc_v: &mut Vec<u64>) -> &'a mut std::hash::DefaultHasher {
+        if self.1 == PrecomputedPatterns::INTERM {
+            self.1 = Default::default();
+            inc_v.push(self.0.clone().finish());
+        } else {
+            self.1 += 1;
+        }
+        &mut self.0
+    }
+}
 
 impl PrecomputedPatterns {
     const INTERM: u16 = 1; // TODO the other numbers do not always works, need some unit tests for a generic PrecomputedSlices
@@ -217,17 +307,6 @@ impl PrecomputedPatterns {
         let stepid = pattern.steps.offset;
         let endstepid = pattern.steps.offset + pattern.steps.length;
         assert!(query.steps.contains(endstepid));
-        impl IncHasher {
-            fn maybe_inc<'a>(&'a mut self, inc_v: &mut Vec<u64>) -> &'a mut std::hash::DefaultHasher {
-                if self.1 == PrecomputedPatterns::INTERM {
-                    self.1 = Default::default();
-                    inc_v.push(self.0.clone().finish());
-                } else {
-                    self.1 += 1;
-                }
-                &mut self.0
-            }
-        }
         let mut hasher = IncHasher(std::hash::DefaultHasher::new(), 0);
         let mut id = stepid;
         loop {
@@ -593,6 +672,109 @@ impl Query {
 }
 
 impl Query {
+    pub fn big(source: &[&str], language: Language) -> Result<Self, QueryError> {
+        let mut source = source.into_iter();
+        let s = source.next().unwrap_or(&"");
+        let mut byte_offset = s.as_bytes().len();
+        let mut query = Self::new(s, language.clone())?;
+        for source in source {
+            let step_offset = query.steps.count();
+            let mut q = Self::new(source, language.clone())?;
+            let mut capture_map = vec![];
+            for c in q.capture_names {
+                if let Some(i) = query.capture_names.iter().position(|x| x == &c) {
+                    capture_map.push(CaptureId::new(num::cast(i).unwrap()));
+                } else {
+                    capture_map.push(CaptureId::new(
+                        num::cast(query.capture_names.len()).unwrap(),
+                    ));
+                    query.capture_names.push(c);
+                }
+            }
+            let neg_map = query.negated_fields.extend(q.negated_fields);
+            for s in q.steps.iter_mut() {
+                s.remap_captures(&capture_map);
+            }
+            for s in q.steps.iter_mut() {
+                s.remap_negative_fields(&neg_map);
+            }
+            query.steps.extend(q.steps);
+            for quant in q.capture_quantifiers_vec {
+                let mut q = vec![CaptureQuantifier::Zero; query.capture_names.len()];
+                for (i, quant) in quant.into_iter().enumerate() {
+                    q[capture_map[i].0 as usize] = quant;
+                }
+                query.capture_quantifiers_vec.push(q);
+            }
+            query
+                .patterns
+                .extend(q.patterns, step_offset, num::cast(byte_offset).unwrap());
+
+            {
+                let pat_offset = query.pattern_count() - 1;
+                for (i, mut p) in q.pattern_map.into_iter().enumerate() {
+                    if p.precomputed != 0 {
+                        todo!()
+                    }
+                    p.pattern_index =
+                        PatternId::new(p.pattern_index.to_usize() + pat_offset.to_usize());
+                    p.step_index += step_offset;
+                    if i < q.wildcard_root_pattern_count as usize {
+                        query
+                            .pattern_map
+                            .insert(i + query.wildcard_root_pattern_count as usize, p);
+                    } else {
+                        query.pattern_map.push(p);
+                    }
+                }
+            }
+
+            for mut o in q.step_offsets {
+                o.byte_offset += byte_offset.to_u32().unwrap();
+                o.step_index.add_assign(step_offset);
+                query.step_offsets.push(o);
+            }
+
+            query.wildcard_root_pattern_count += q.wildcard_root_pattern_count;
+
+            if !q.pattern_map2.is_empty() {
+                todo!()
+            }
+            if q.precomputed_patterns.is_some() {
+                todo!()
+            }
+            query.property_predicates.extend(q.property_predicates);
+            query.text_predicates.extend(q.text_predicates);
+            query.general_predicates.extend(q.general_predicates);
+            query.property_settings.extend(q.property_settings);
+            query.immediate_predicates.extend(q.immediate_predicates);
+            if q.used_precomputed != 0 {
+                todo!()
+            }
+
+            byte_offset = source.as_bytes().len();
+            // Query {
+            //     steps: todo!(),
+            //     patterns: todo!(),
+            //     wildcard_root_pattern_count: todo!(),
+            //     pattern_map2: todo!(),
+            //     capture_names: todo!(),
+            //     text_predicates: todo!(),
+            //     property_predicates: todo!(),
+            //     general_predicates: todo!(),
+            //     immediate_predicates: todo!(),
+            //     used_precomputed: todo!(),
+            //     property_settings: todo!(),
+            //     step_offsets: todo!(),
+            //     precomputed_patterns: todo!(),
+            //     capture_quantifiers_vec: todo!(),
+            //     pattern_map: todo!(),
+            //     negated_fields: todo!(),
+            //     language: todo!(),
+            // }
+        }
+        Ok(query)
+    }
     pub fn new(source: &str, language: Language) -> Result<Self, QueryError> {
         let ptr: *mut ffi::TSQuery = Self::init_tsquery(source, language)?;
         let query: *mut super::ffi_extra::TSQuery = unsafe { std::mem::transmute(ptr) };
@@ -1047,7 +1229,9 @@ impl Query {
         //     dbg!(r);
         // }
         if max_sub_len > 0 {
+            log::trace!("started searching for subqueries");
             find_precomputed_uses(&mut query, precomputeds);
+            log::trace!("finished searching for subqueries");
         }
         // let hasher = &mut std::hash::DefaultHasher::new();
         // hash_single_step(&query, StepId::new(1), hasher);

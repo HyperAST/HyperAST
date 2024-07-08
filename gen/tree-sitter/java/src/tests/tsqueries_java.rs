@@ -1712,3 +1712,55 @@ fn g(q: &str, p: &[&str], text: &str) -> usize {
     }
     dbg!(count)
 }
+
+/// concat queries
+#[test]
+fn test_concat_queries() {
+    let text = r#"class A {
+        void main(String[] args) {}
+    }
+    "#;
+    let count = h(
+        &[
+            r#"(_ . (identifier) @name)"#,
+            r#"(return_statement (null_literal))"#,
+        ],
+        &text,
+    );
+    // let count = g(r#"(_ . (_) @name)"#, &[], &text); // this one works properly
+    assert_eq!(count, 1)
+}
+
+fn h(q: &[&str], text: &str) -> usize {
+    log::set_logger(&LOGGER)
+        .map(|()| log::set_max_level(log::LevelFilter::Trace))
+        .unwrap();
+    let query = hyper_ast_tsquery::Query::big(q, tree_sitter_java::language()).unwrap();
+    let mut stores = hyper_ast::store::SimpleStores {
+        label_store: hyper_ast::store::labels::LabelStore::new(),
+        type_store: crate::types::TStore::default(),
+        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
+    };
+    let tree = match crate::legion_with_refs::tree_sitter_parse(text.as_bytes()) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    println!("{}", tree.root_node().to_sexp());
+    dbg!();
+    let cursor =
+        hyper_ast_tsquery::default_impls::TreeCursor::new(text.as_bytes(), tree.root_node().walk());
+    let qcursor = query.matches(cursor);
+    let mut count = 0;
+    for m in qcursor {
+        count += 1;
+        dbg!(m.pattern_index);
+        dbg!(m.captures.len());
+        for c in &m.captures {
+            let i = c.index;
+            dbg!(i);
+            let name = query.capture_name(i);
+            dbg!(name);
+        }
+    }
+    dbg!(count)
+}
