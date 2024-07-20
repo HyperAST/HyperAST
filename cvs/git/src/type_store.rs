@@ -21,9 +21,55 @@ pub enum TStore {
     Cpp = 2,
 }
 
+impl<'a> From<&'a str> for MultiType {
+    fn from(value: &'a str) -> Self {
+        MultiType::Java(value.into())
+    }
+}
+
 impl Default for TStore {
     fn default() -> Self {
         Self::Maven
+    }
+}
+
+impl<'a> TypeStore<NoSpaceWrapper<'a, NodeIdentifier>> for hyper_ast_gen_ts_java::types::TStore {
+    type Ty = AnyType;
+    const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
+
+    fn resolve_type(&self, n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Ty {
+        n.inner.get_type()
+    }
+
+    fn resolve_lang(
+        &self,
+        n: &NoSpaceWrapper<'a, NodeIdentifier>,
+    ) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        todo!()
+    }
+
+    type Marshaled = TypeIndex;
+
+    fn marshal_type(&self, n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Marshaled {
+        todo!()
+        // hyper_ast_gen_ts_java::types::TStore::Java::marshal_type
+        // TypeIndex {
+        //     lang: LangRef::<hyper_ast_gen_ts_java::types::Type>::name(&hyper_ast_gen_ts_java::types::Lang),
+        //     ty: *n.get_component::<hyper_ast_gen_ts_java::types::Type>().unwrap() as u16,
+        // }
+    }
+    fn type_eq(
+        &self,
+        n: &NoSpaceWrapper<'a, NodeIdentifier>,
+        m: &NoSpaceWrapper<'a, NodeIdentifier>,
+    ) -> bool {
+        todo!()
+        // use hecs::entity_ref::ComponentRef;
+        // n.get_component::<hyper_ast_gen_ts_java::types::Type>().unwrap() == m.get_component::<hyper_ast_gen_ts_java::types::Type>().unwrap()
+    }
+    fn type_to_u16(&self, t: Self::Ty) -> u16 {
+        todo!()
+        // hyper_ast_gen_ts_java::types::id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 
@@ -127,6 +173,34 @@ impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
     }
 }
 
+impl<'a>
+    hyper_ast::types::RoleStore<
+        HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
+    > for TStore
+{
+    type IdF = u16;
+
+    type Role = hyper_ast::types::Role;
+
+    fn resolve_field(&self, lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
+        hyper_ast::types::RoleStore::<
+            hyper_ast::store::nodes::legion::HashedNodeRef<
+                'a,
+                hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>,
+            >,
+        >::resolve_field(&hyper_ast_gen_ts_java::types::TStore::Java, lang, field_id)
+    }
+
+    fn intern_role(&self, lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
+        hyper_ast::types::RoleStore::<
+            hyper_ast::store::nodes::legion::HashedNodeRef<
+                'a,
+                hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>,
+            >,
+        >::intern_role(&hyper_ast_gen_ts_java::types::TStore::Java, lang, role)
+    }
+}
+
 impl<'a> hyper_ast::types::RoleStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
     type IdF = u16;
 
@@ -146,7 +220,7 @@ impl<'a> hyper_ast::types::RoleStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
             ),
             "Cpp" => hyper_ast_gen_ts_cpp::types::TStore::Cpp.resolve_field(lang, field_id),
             "Xml" => hyper_ast_gen_ts_xml::types::TStore::Xml.resolve_field(lang, field_id),
-            x => panic!("{}",x)
+            x => panic!("{}", x),
         }
         // TODO fix that
 
@@ -160,14 +234,20 @@ impl<'a> hyper_ast::types::RoleStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
     fn intern_role(&self, lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
         // TODO fix that
         match lang.name() {
-            "hyper_ast_gen_ts_java::types::Lang" => hyper_ast::types::RoleStore::<
-                hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
-            >::intern_role(
-                &hyper_ast_gen_ts_java::types::TStore::Java, lang, role
-            ),
-            "hyper_ast_gen_ts_cpp::types::Lang" => hyper_ast_gen_ts_cpp::types::TStore::Cpp.intern_role(lang, role),
-            "hyper_ast_gen_ts_xml::types::Lang" => hyper_ast_gen_ts_xml::types::TStore::Xml.intern_role(lang, role),
-            x => panic!("{}",x)
+            "hyper_ast_gen_ts_java::types::Lang" => {
+                hyper_ast::types::RoleStore::<
+                    hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
+                >::intern_role(
+                    &hyper_ast_gen_ts_java::types::TStore::Java, lang, role
+                )
+            }
+            "hyper_ast_gen_ts_cpp::types::Lang" => {
+                hyper_ast_gen_ts_cpp::types::TStore::Cpp.intern_role(lang, role)
+            }
+            "hyper_ast_gen_ts_xml::types::Lang" => {
+                hyper_ast_gen_ts_xml::types::TStore::Xml.intern_role(lang, role)
+            }
+            x => panic!("{}", x),
         }
         // let field_name = role.to_string();
         // tree_sitter_java::language()
@@ -422,7 +502,7 @@ impl<'a> TypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIden
         &self,
         n: &HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
     ) -> Self::Ty {
-        todo!("{:?}", n)
+        n.get_type()
     }
 
     fn resolve_lang(
@@ -438,7 +518,14 @@ impl<'a> TypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIden
         &self,
         n: &HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
     ) -> Self::Marshaled {
-        todo!("{:?}", n)
+        TypeIndex {
+            lang: LangRef::<hyper_ast_gen_ts_java::types::Type>::name(
+                &hyper_ast_gen_ts_java::types::Lang,
+            ),
+            ty: *n
+                .get_component::<hyper_ast_gen_ts_java::types::Type>()
+                .unwrap() as u16,
+        }
     }
 
     fn type_eq(
@@ -446,7 +533,10 @@ impl<'a> TypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIden
         n: &HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
         m: &HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
     ) -> bool {
-        todo!("{:?} {:?}", n, m)
+        n.get_component::<hyper_ast_gen_ts_java::types::Type>()
+            .unwrap()
+            == m.get_component::<hyper_ast_gen_ts_java::types::Type>()
+                .unwrap()
     }
     fn type_to_u16(&self, t: Self::Ty) -> u16 {
         t.get_lang().ts_symbol(t)

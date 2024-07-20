@@ -341,7 +341,9 @@ impl<HAST> More<HAST> for () {
     }
 }
 
-impl<'a, 'b, 'c, TS> More<SimpleStores<&'a TS, &'b legion::World, &'c LabelStore>>
+pub type MoreStore<'a, 'b, 'c, TS> = SimpleStores<&'a TS, &'b legion::World, &'c LabelStore>;
+
+impl<'a, 'b, 'c, TS> More<MoreStore<'a, 'b, 'c, TS>>
     for hyper_ast_tsquery::Query
 where
     TS: JavaEnabledTypeStore<HashedNodeRef<'b, TIdN<NodeIdentifier>>, Ty = Type>

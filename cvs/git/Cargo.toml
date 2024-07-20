@@ -12,6 +12,7 @@ hyper_ast_gen_ts_cpp = { path = "../../gen/tree-sitter/cpp", optional = true }
 hyper_ast_gen_ts_java = { path = "../../gen/tree-sitter/java", optional = true }
 hyper_ast_gen_ts_xml = { path = "../../gen/tree-sitter/xml", optional = true }
 hyper_ast = { path = "../../hyper_ast" }
+hyper_ast_tsquery = { path = "../../tsquery" }
 log = { version = "0.4.6", features = [
     "max_level_trace",
     "release_max_level_warn",

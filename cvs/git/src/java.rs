@@ -12,11 +12,16 @@ use hyper_ast_gen_ts_java::{impact::partial_analysis::PartialAnalysis, types::Ty
 
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
 
-pub(crate) fn handle_java_file<'stores, 'cache, 'b: 'stores>(
-    tree_gen: &mut java_tree_gen::JavaTreeGen<'stores, 'cache, TStore>,
+pub(crate) fn handle_java_file<'stores, 'cache, 'b: 'stores, More>(
+    tree_gen: &mut java_tree_gen::JavaTreeGen<'stores, 'cache, TStore, More>,
     name: &ObjectName,
     text: &'b [u8],
-) -> Result<java_tree_gen::FNode, ()> {
+) -> Result<java_tree_gen::FNode, ()>
+where
+    More: for<'a, 'c> hyper_ast_gen_ts_java::legion_with_refs::More<
+        hyper_ast_gen_ts_java::legion_with_refs::MoreStore<'a, 'c, 'a, TStore>,
+    >,
+{
     let tree = match java_tree_gen::JavaTreeGen::<TStore>::tree_sitter_parse(text) {
         Ok(tree) => tree,
         Err(tree) => {

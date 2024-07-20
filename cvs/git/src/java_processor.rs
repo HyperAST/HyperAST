@@ -442,21 +442,39 @@ impl CacheHolding<crate::processing::caches::Java> for JavaProcessorHolder {
     }
 }
 
+pub const SUB_QUERIES: &[&str] = &[
+    r#"(method_invocation
+    (identifier) (#EQ? "fail")
+)"#,
+    r#"(try_statement
+    (block)
+    (catch_clause)
+)"#,
+];
+
 impl RepositoryProcessor {
     pub(crate) fn handle_java_file(
         &mut self,
         name: &ObjectName,
         text: &[u8],
     ) -> Result<java_tree_gen::FNode, ()> {
-        crate::java::handle_java_file(&mut self.java_generator(text), name, text)
+        todo!() // not used much anyway apart from  check_random_files_reserialization
+        // crate::java::handle_java_file(&mut self.java_generator(text), name, text)
     }
 
-    fn java_generator(&mut self, text: &[u8]) -> java_tree_gen::JavaTreeGen<crate::TStore> {
+    fn java_generator(&mut self, text: &[u8]) -> java_tree_gen::JavaTreeGen<crate::TStore, hyper_ast_tsquery::Query> {
         let line_break = if text.contains(&b'\r') {
             "\r\n".as_bytes().to_vec()
         } else {
             "\n".as_bytes().to_vec()
         };
+
+        let (precomp, _) = hyper_ast_tsquery::Query::with_precomputed(
+            "(_)",
+            hyper_ast_gen_ts_java::language(),
+            SUB_QUERIES,
+        )
+        .unwrap();
         java_tree_gen::JavaTreeGen {
             line_break,
             stores: &mut self.main_stores,
@@ -465,7 +483,7 @@ impl RepositoryProcessor {
                 .mut_or_default::<JavaProcessorHolder>()
                 .get_caches_mut()
                 .md_cache, //java_md_cache,
-            more: (),
+            more: precomp,
         }
     }
 
@@ -496,6 +514,12 @@ impl RepositoryProcessor {
                 } else {
                     "\n".as_bytes().to_vec()
                 };
+                let (precomp, _) = hyper_ast_tsquery::Query::with_precomputed(
+                    "(_)",
+                    hyper_ast_gen_ts_java::language(),
+                    SUB_QUERIES,
+                )
+                .unwrap();
                 crate::java::handle_java_file(
                     &mut java_tree_gen::JavaTreeGen {
                         line_break,
@@ -504,7 +528,7 @@ impl RepositoryProcessor {
                             .mut_or_default::<JavaProcessorHolder>()
                             .get_caches_mut()
                             .md_cache, //java_md_cache,
-                        more: (),
+                        more: precomp,
                     },
                     n,
                     t,

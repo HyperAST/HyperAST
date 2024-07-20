@@ -355,7 +355,7 @@ impl<NS> From<&NS> for &NoSpaceNodeStore<NS> {
 
 #[repr(transparent)]
 pub struct NoSpaceWrapper<'a, T> {
-    inner: HashedNodeRef<'a, T>,
+    pub(crate) inner: HashedNodeRef<'a, T>,
 }
 
 impl<'a, T> NoSpaceMarker for NoSpaceWrapper<'a, T> {}
