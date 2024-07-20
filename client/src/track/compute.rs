@@ -266,7 +266,7 @@ where
         path_ids
     };
     assert_eq!(path_no_spaces.len(), path_ids.len());
-    let (path,) = path_with_spaces(
+    let (path, _) = path_with_spaces(
         other_tr,
         &mut path_no_spaces.iter().copied(),
         with_spaces_stores,
@@ -491,7 +491,7 @@ where
                         .iter()
                         .map(|x| {
                             let path_dst = dst_tree.path_rooted(x);
-                            let (path_dst,) = path_with_spaces(
+                            let (path_dst, _) = path_with_spaces(
                                 other_tr,
                                 &mut path_dst.iter().copied(),
                                 with_spaces_stores,
@@ -531,7 +531,7 @@ where
                         .map(|x| {
                             let mut path_dst = dst_tree.path_rooted(x);
                             path_dst.extend(path); // WARN with similarity it might not be possible to simply concat path...
-                            let (path_dst,) = path_with_spaces(
+                            let (path_dst, _) = path_with_spaces(
                                 other_tr,
                                 &mut path_dst.iter().copied(),
                                 with_spaces_stores,
@@ -562,7 +562,7 @@ where
                         .map(|x| {
                             let mut path_dst = dst_tree.path_rooted(x);
                             path_dst.extend(path); // WARN with similarity it might not be possible to simply concat path...
-                            let (path_dst,) = path_with_spaces(
+                            let (path_dst, _) = path_with_spaces(
                                 other_tr,
                                 &mut path_dst.iter().copied(),
                                 with_spaces_stores,

@@ -973,6 +973,17 @@ where
         let s = self.s.borrow();
         ExtRefNode::new(s, self.h)
     }
+
+    pub fn offsets(mut self) -> Vec<Idx> {
+        let mut r = vec![];
+        loop {
+            r.push(self.offset());
+            if !self.up() {
+                break;
+            }
+        }
+        r
+    }
 }
 
 impl<IdN, Idx> AAA<IdN, Idx> for PersistedNode<IdN, Idx>

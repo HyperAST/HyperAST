@@ -16,7 +16,7 @@ pub fn path_with_spaces<'store, HAST, It: Iterator>(
     root: HAST::IdN,
     no_spaces: &mut It,
     stores: &'store HAST,
-) -> (Vec<It::Item>,)
+) -> (Vec<It::Item>, HAST::IdN)
 where
     It::Item: Clone + PrimInt,
     HAST::IdN: Clone,
@@ -87,7 +87,7 @@ where
         path.push(l);
     }
     path_ids.reverse();
-    (with_spaces,)
+    (with_spaces, x)
 }
 
 impl<'store, 'src, 'a, Idx: PrimInt, HAST>
