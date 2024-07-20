@@ -1,4 +1,5 @@
 #[repr(C)]
+#[derive(Debug)]
 pub(crate) struct Array<T> {
     pub(crate) contents: *mut T,
     pub(crate) size: u32,
@@ -72,6 +73,7 @@ pub(super) struct SymbolTable {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub(super) struct Slice {
     pub(super) offset: u32,
     pub(super) length: u32,

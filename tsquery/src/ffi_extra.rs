@@ -5,6 +5,7 @@ const MAX_STEP_CAPTURE_COUNT: usize = 3;
 pub(crate) struct CaptureQuantifiers(Vec<u8>);
 
 #[repr(C)]
+#[derive(Debug)]
 pub(crate) struct QueryPattern {
     pub(crate) steps: super::utils::Slice,
     pub(crate) predicate_steps: super::utils::Slice,
@@ -113,6 +114,7 @@ impl TSQueryStep {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub(crate) struct TSStepOffset {
     pub(crate) byte_offset: u32,
     pub(crate) step_index: u16,

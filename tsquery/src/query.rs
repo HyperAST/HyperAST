@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -5,6 +6,7 @@ use std::ops::AddAssign;
 use std::ops::Index;
 use std::ops::SubAssign;
 
+use num::ToPrimitive;
 use tree_sitter::QueryProperty;
 
 use super::indexed::CaptureId;
@@ -27,7 +29,7 @@ use crate::PATTERN_DONE_MARKER;
 
 type SmallDepth = u16;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct QueryPattern {
     steps: crate::Slice<StepId>,
     predicate_steps: crate::Slice<indexed::PredStepId>,
@@ -39,9 +41,13 @@ impl QueryPattern {
         self.steps.offset += offset;
         self.start_byte += byte_offset;
         if self.predicate_steps.length != PredStepId::new(0) {
-            todo!()
+            todo!() // Not even sure if predicate_steps matter at this point
         }
         self
+    }
+
+    fn is_empty(&self) -> bool {
+        self.steps.length == StepId::new(1)
     }
 }
 
@@ -63,7 +69,7 @@ impl From<&crate::ffi_extra::QueryPattern> for QueryPattern {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct PatternEntry {
     pub(crate) step_index: StepId,
     pub(crate) pattern_index: PatternId,
@@ -86,7 +92,7 @@ impl From<&crate::ffi_extra::TSPatternEntry> for PatternEntry {
         }
     }
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct QueryStep {
     // optional when done variant
     symbol: ffi::TSSymbol,
@@ -101,7 +107,7 @@ pub(crate) struct QueryStep {
     // optional, madatory when dead_end or pass_through
     alternative_index: StepId,
     // optional
-    negated_field_list_id: u16,
+    negated_field_list_id: u16, // TODO use a custom id
     /// bitfield corresponding to the 9 following flags
     bit_field: u16,
     // is_named: bool,
@@ -176,12 +182,16 @@ impl QueryStep {
         )
     }
 
-    pub(crate) fn set_immediate_pred(&mut self, i: u32) {
+    pub(crate) fn set_immediate_pred(&mut self, i: u32) -> bool {
+        if self.has_immediate_pred() {
+            return true;
+        }
         assert_eq!(self.capture_ids[1], CaptureId::NONE);
         self.capture_ids[2] = CaptureId::new(i);
         self.bit_field |= StepFlags::is_immediate_pred;
         self.bit_field &=
             !(StepFlags::root_pattern_guaranteed | StepFlags::parent_pattern_guaranteed);
+        false
     }
 
     fn normed_alternative_index(&self, stepid: StepId) -> Option<i16> {
@@ -194,6 +204,21 @@ impl QueryStep {
         };
         todo!();
     }
+
+    fn remap_imm_pred(&mut self, imm_pred_offset: usize) {
+        if !self.has_immediate_pred() {
+            return;
+        }
+        if self.capture_ids[1] == super::indexed::CaptureId::NONE {
+            assert!(imm_pred_offset < u16::MAX as usize);
+            self.capture_ids[2].0 = self.capture_ids[2]
+                .0
+                .checked_add(imm_pred_offset as u16)
+                .unwrap();
+        } else {
+            unreachable!()
+        }
+    }
 }
 
 impl QueryStep {
@@ -201,9 +226,6 @@ impl QueryStep {
         if self.alternative_index().is_some() {
             self.alternative_index.sub_assign(old);
             self.alternative_index.add_assign(new);
-        }
-        if self.has_immediate_pred() {
-            todo!()
         }
         self
     }
@@ -259,7 +281,7 @@ impl<I, T, const INTERM: u16> SubFinder<I, T, INTERM> {
         let mut stack = vec![(hasher, get_sid(pattern))];
 
         loop {
-            let Some((hasher, id)) = stack.pop() else {
+            let Some((mut hasher, id)) = stack.pop() else {
                 return;
             };
             let step = &query[id];
@@ -299,6 +321,20 @@ impl IncHasher {
         &mut self.0
     }
 }
+impl IncHasher {
+    fn inc<'a>(&'a mut self, inc_v: &mut Vec<u64>) -> &'a mut std::hash::DefaultHasher {
+        if self.1 % PrecomputedPatterns::INTERM == 1 {
+            inc_v.push(self.0.clone().finish());
+        }
+        self.1 += 1;
+        &mut self.0
+    }
+    fn div(&self) -> Self {
+        let mut s = self.clone();
+        s.1 += 1;
+        s
+    }
+}
 
 impl PrecomputedPatterns {
     const INTERM: u16 = 1; // TODO the other numbers do not always works, need some unit tests for a generic PrecomputedSlices
@@ -307,65 +343,124 @@ impl PrecomputedPatterns {
         let stepid = pattern.steps.offset;
         let endstepid = pattern.steps.offset + pattern.steps.length;
         assert!(query.steps.contains(endstepid));
-        let mut hasher = IncHasher(std::hash::DefaultHasher::new(), 0);
-        let mut id = stepid;
+        let hasher = IncHasher(std::hash::DefaultHasher::new(), 0);
+        let mut stack = vec![(hasher, stepid)];
         loop {
+            let Some((mut hasher, id)) = stack.pop() else {
+                return;
+            };
+            if hasher.1 % PrecomputedPatterns::INTERM == 0 {
+                self.intermediate_hashes.push(hasher.0.clone().finish());
+            }
             let step = &query.steps[id];
             if step.done() {
-                // nothing to do
-                break;
-            } else if let Some(alt) = step.alternative_index() {
+                // finish current
+                let k = hasher.0.finish();
+                self.map.push((k, patternid));
+                self.max_sub_len = self.max_sub_len.max(hasher.1);
+                continue;
+            }
+            if let Some(alt) = step.alternative_index() {
                 unimplemented!("WIP just simple precomputing for now, no quantifiers");
                 // branch
                 // - forward is a ? or * quant
                 // - backward is a + or * quant
-                let hasher2 = hasher.clone();
-                let hasher = hasher.maybe_inc(&mut self.intermediate_hashes);
-                hash_single_step(query, id, hasher);
-                if alt < stepid {
-                    // before start step
-                    panic!()
-                } else if alt < id {
-                    // backward
-                    // should branch also to do as if no quant
-                    if step.is_pass_through() {
-                        todo!()
-                    } else if step.is_dead_end() {
-                        todo!()
-                    } else {
-                        todo!()
-                    }
-                } else if alt > id {
-                    // forward
-                    // should branch also to do as if no quant
-                    if step.is_pass_through() {
-                        todo!()
-                    } else if step.is_dead_end() {
-                        todo!()
-                    } else {
-                    }
-                } else if alt == id {
-                    unreachable!()
-                } else {
-                    unreachable!()
-                }
             } else {
-                let hasher = hasher.maybe_inc(&mut self.intermediate_hashes);
-                hash_single_step(query, id, hasher);
+                hash_single_step(query, id, &mut hasher.0);
+                hasher.1 += 1;
+                dbg!(hasher.0.clone().finish());
             }
+            let mut id = id;
             id.inc();
+            stack.push((hasher, id));
         }
-        let k = hasher.0.finish();
-        self.map.push((k, patternid));
-        self.max_sub_len = self.max_sub_len.max(pattern.steps.length.0);
+    }
+
+    pub(crate) fn finish_preparation(&mut self) {
+        self.intermediate_hashes.sort();
+        self.intermediate_hashes.dedup();
     }
 
     pub(crate) fn matches(&self, query: &Query, stepid: StepId) -> Vec<PatternId> {
         let mut res = vec![];
         let hasher = IncHasher(std::hash::DefaultHasher::new(), 0);
-        self.matches_aux(stepid, stepid, query, hasher, &mut res);
+        let mut stack = vec![(hasher, stepid)];
+        loop {
+            let Some((mut hasher, id)) = stack.pop() else {
+                return res;
+            };
+            if hasher.1 >= self.max_sub_len {
+                // TODO every x steps check if there is a sub that will be matched,
+                // need to do this preparation in the add step
+                continue;
+            }
+            if hasher.1 % PrecomputedPatterns::INTERM == 0 {
+                if !self
+                    .intermediate_hashes
+                    .binary_search(&hasher.0.clone().finish())
+                    .is_ok()
+                {
+                    continue;
+                }
+            }
+            if id != stepid {
+                let k = hasher.0.clone().finish();
+                let iter = self.map.iter().filter_map(|(h, p)| (k == *h).then_some(p));
+                res.extend(iter);
+            }
+            let step = &query.steps[id];
+            if step.done() {
+                // finished
+                let k = hasher.0.finish();
+                let iter = self.map.iter().filter_map(|(h, p)| (k == *h).then_some(p));
+                res.extend(iter);
+                continue;
+            }
+            if id != stepid && step.depth <= query.steps[stepid].depth {
+                // should stop to avoid matching more than expected
+                let k = hasher.0.finish();
+                let iter = self.map.iter().filter_map(|(h, p)| (k == *h).then_some(p));
+                res.extend(iter);
+                continue;
+            }
+            if id != stepid {
+                // prevents skiping first step
+                let mut id = id.clone();
+                id.inc();
+                stack.push((hasher.clone(), id));
+            }
+            if step.field != 0 {
+                let mut hasher = hasher.clone();
+                hasher.1 += 1;
+                hash_single_step1(query, id, &mut hasher.0);
+                let mut id = id.clone();
+                id.inc();
+                stack.push((hasher, id));
+            }
+            if step.symbol != 0 {
+                let mut hasher = hasher.clone();
+                hasher.1 += 1;
+                hash_single_step2(query, id, &mut hasher.0);
+                let mut id = id.clone();
+                id.inc();
+                stack.push((hasher, id));
+            }
+            if step.symbol != 0 {
+                let mut hasher = hasher.clone();
+                hasher.1 += 1;
+                hash_single_step12(query, id, &mut hasher.0);
+                let mut id = id.clone();
+                id.inc();
+                stack.push((hasher, id));
+            }
+            hash_single_step(query, id, &mut hasher.0);
+            let mut id = id;
+            id.inc();
+            stack.push((hasher, id));
+        }
+
+        // self.matches_aux(stepid, stepid, query, hasher, &mut res);
         // TODO add eq impl to avoid collisions
-        res
     }
 
     fn matches_aux(
@@ -376,13 +471,6 @@ impl PrecomputedPatterns {
         mut hasher: IncHasher,
         res: &mut Vec<PatternId>,
     ) {
-        impl IncHasher {
-            fn div(&self) -> Self {
-                let mut s = self.clone();
-                s.1 += 1;
-                s
-            }
-        }
         if hasher.1 % PrecomputedPatterns::INTERM == 1 {
             if !self
                 .intermediate_hashes
@@ -557,6 +645,13 @@ impl QueryStep {
     pub(crate) fn has_immediate_pred(&self) -> bool {
         self.bit_field & StepFlags::is_immediate_pred != 0
     }
+    // pub(crate) fn is_neg(&self) -> bool {
+    //     self.bit_field & StepFlags::is_neg != 0
+    // }
+    // pub(crate) fn set_neg(&mut self) {
+    //     assert!(!self.is_neg());
+    //     self.bit_field |= StepFlags::is_neg
+    // }
 }
 
 #[repr(packed)]
@@ -583,6 +678,7 @@ impl StepFlags {
     const root_pattern_guaranteed: u16 = 1 << 7;
     const parent_pattern_guaranteed: u16 = 1 << 8;
     const is_immediate_pred: u16 = 1 << 9;
+    // const is_neg: u16 = 1 << 10;
 
     // const is_special: u8 = 1 << 3;
     // const alternative_is_immediate: u8 = 1 << 4;
@@ -698,6 +794,13 @@ impl Query {
             for s in q.steps.iter_mut() {
                 s.remap_negative_fields(&neg_map);
             }
+            let imm_pred_offset = query.immediate_predicates.len();
+            query.immediate_predicates.extend(q.immediate_predicates);
+            // TODO dedup imm preds
+
+            for s in q.steps.iter_mut() {
+                s.remap_imm_pred(imm_pred_offset);
+            }
             query.steps.extend(q.steps);
             for quant in q.capture_quantifiers_vec {
                 let mut q = vec![CaptureQuantifier::Zero; query.capture_names.len()];
@@ -738,40 +841,28 @@ impl Query {
             query.wildcard_root_pattern_count += q.wildcard_root_pattern_count;
 
             if !q.pattern_map2.is_empty() {
-                todo!()
+                todo!() // NOTE probably better to process precomputeds after Self::big
             }
             if q.precomputed_patterns.is_some() {
-                todo!()
+                todo!()  // NOTE probably better to process precomputeds after Self::big
             }
-            query.property_predicates.extend(q.property_predicates);
+            for p in q.text_predicates.iter_mut() {
+                for p in p {
+                    p.remap(&capture_map);
+                }
+            }
             query.text_predicates.extend(q.text_predicates);
+            q.property_predicates.check_empty();
+            query.property_predicates.extend(q.property_predicates);
+            q.general_predicates.check_empty();
             query.general_predicates.extend(q.general_predicates);
+            q.property_settings.check_empty();
             query.property_settings.extend(q.property_settings);
-            query.immediate_predicates.extend(q.immediate_predicates);
             if q.used_precomputed != 0 {
-                todo!()
+                todo!()  // NOTE probably better to process precomputeds after Self::big
             }
 
             byte_offset = source.as_bytes().len();
-            // Query {
-            //     steps: todo!(),
-            //     patterns: todo!(),
-            //     wildcard_root_pattern_count: todo!(),
-            //     pattern_map2: todo!(),
-            //     capture_names: todo!(),
-            //     text_predicates: todo!(),
-            //     property_predicates: todo!(),
-            //     general_predicates: todo!(),
-            //     immediate_predicates: todo!(),
-            //     used_precomputed: todo!(),
-            //     property_settings: todo!(),
-            //     step_offsets: todo!(),
-            //     precomputed_patterns: todo!(),
-            //     capture_quantifiers_vec: todo!(),
-            //     pattern_map: todo!(),
-            //     negated_fields: todo!(),
-            //     language: todo!(),
-            // }
         }
         Ok(query)
     }
@@ -791,7 +882,9 @@ impl Query {
         let string_count = unsafe { ffi::ts_query_string_count(ptr.0) };
         let capture_count = unsafe { ffi::ts_query_capture_count(ptr.0) };
         let pattern_count = unsafe { ffi::ts_query_pattern_count(ptr.0) as usize };
-
+        dbg!(string_count, capture_count, pattern_count, unsafe {
+            (*query).steps.len()
+        });
         let mut capture_names = Vec::with_capacity(capture_count as usize);
         let mut capture_quantifiers_vec = Vec::with_capacity(pattern_count as usize);
         let mut text_predicates_vec = PerPatternBuilder::with_patt_count(pattern_count);
@@ -1037,99 +1130,26 @@ impl Query {
                     }),
                 }
             }
-            {
-                let b = if i + 1 < pattern_count {
-                    let b = unsafe { ffi::ts_query_start_byte_for_pattern(ptr.0, (i + 1) as u32) };
-                    (b + 1) as usize
-                } else {
-                    source.len()
-                };
-                let mut aaa = 0;
-                // dbg!(&source[byte_offset as usize..b]);
-                let slice = &unsafe { &(*query).patterns }[i].steps;
-                // dbg!(slice.offset, slice.length);
-                let mut step_id = slice.offset;
-                while (step_id as usize) < unsafe { (*query).step_offsets.len() }
-                    && aaa < immediate_matches_calls.len()
-                {
-                    let stpid = step_id as usize;
-                    let so = &unsafe { &(*query).step_offsets }[stpid];
-                    // dbg!(so.step_index as usize, stpid);
-                    // assert_eq!(so.step_index as usize, step_id);
-                    let re = regex::Regex::new("^[(]#(EQ|NOT-EQ|MATCH|ANY)[?]").unwrap();
-                    let cap = re.captures(&source[so.byte_offset as usize..]);
-                    if let Some(cap) = cap {
-                        // source[so.byte_offset as usize..].starts_with("(#EQ?")
-                        let op = cap.get(1).unwrap().as_str();
-                        // dbg!(op, so.byte_offset);
-                        let so2 = if stpid as usize + 1 < unsafe { &(*query).step_offsets }.len() {
-                            let x = unsafe { &(*query).step_offsets }[stpid + 1].byte_offset;
-                            x as usize
-                        } else {
-                            b
-                        };
-                        let mut quoted = false;
-                        let mut escaped = false;
-                        let mut j = so.byte_offset as usize + 1;
-                        for (i, c) in source[so.byte_offset as usize + 1..so2].char_indices() {
-                            if quoted {
-                                if escaped {
-                                    escaped = false
-                                } else if c == '"' {
-                                    quoted = false
-                                } else if c == '\\' {
-                                    escaped = true
-                                }
-                            } else if c == ')' {
-                                j += i + 1;
-                                break;
-                            } else if c == '\"' {
-                                quoted = true
-                            }
-                        }
-                        // dbg!(&source[so.byte_offset as usize..j]);
-                        let so2 = &unsafe { &(*query).step_offsets }[stpid - 1];
-                        // dbg!(&source[so2.byte_offset as usize..so.byte_offset as usize]);
-                        // dbg!(so2.step_index, stpid - 1);
-                        let s = &unsafe { &(*query).steps }[so2.step_index as usize];
-                        // dbg!(s);
-                        assert_eq!(immediate_matches_calls[aaa].0, &format!("{}?", op));
-                        let value = if op == "EQ" || op == "NOT-EQ" {
-                            crate::predicate::ImmediateTextPredicate::EqString {
-                                is_named: s.is_named(),
-                                str: immediate_matches_calls[aaa].1.clone().into(),
-                                is_positive: op == "EQ",
-                            }
-                        } else if op == "MATCH" {
-                            let regex = &immediate_matches_calls[aaa].1;
-                            if s.is_named() {
-                                crate::predicate::ImmediateTextPredicate::MatchString {
-                                    re: regex::bytes::Regex::new(regex).map_err(|_| {
-                                        predicate_error(row, format!("Invalid regex '{regex}'"))
-                                    })?,
-                                }
-                            } else {
-                                crate::predicate::ImmediateTextPredicate::MatchStringUnamed {
-                                    re: regex::bytes::Regex::new(regex).map_err(|_| {
-                                        predicate_error(row, format!("Invalid regex '{regex}'"))
-                                    })?,
-                                }
-                            }
-                        } else {
-                            todo!("{}", op)
-                        };
-                        if let Some(i) = immediate_predicates.iter().position(|x| x == &value) {
-                            immediate_pred_steps.push((StepId::new(so2.step_index), i));
-                        } else {
-                            immediate_pred_steps
-                                .push((StepId::new(so2.step_index), immediate_predicates.len()));
-                            immediate_predicates.push(value);
-                        }
-                        aaa += 1;
-                    }
-                    step_id += 1;
-                }
-            }
+
+            let next_pat_index = i + 1;
+            let max_pattern_byte = if next_pat_index < pattern_count {
+                let b =
+                    unsafe { ffi::ts_query_start_byte_for_pattern(ptr.0, next_pat_index as u32) };
+                (b + 1) as usize
+            } else {
+                source.len()
+            };
+            Self::compute_immediate_preds(
+                i,
+                max_pattern_byte,
+                source,
+                query,
+                immediate_matches_calls,
+                row,
+                &mut immediate_predicates,
+                &mut immediate_pred_steps,
+                pattern_count,
+            )?;
             // property_predicates_vec.push(property_predicates.into());
             // property_settings_vec.push(property_settings.into());
             // general_predicates_vec.push(general_predicates.into());
@@ -1148,20 +1168,36 @@ impl Query {
         let pattern_map2 = pattern_map
             .iter()
             .filter_map(|x| {
-                if steps[x.step_index].depth > 0 {
-                    let step_index = patterns[x.pattern_index].steps.offset;
-                    assert_eq!(steps[step_index].depth, 0);
-                    Some(PatternEntry {
-                        step_index,
-                        pattern_index: x.pattern_index,
-                        is_rooted: x.is_rooted,
-                        precomputed: x.precomputed,
-                    })
+                if steps[x.step_index].done() {
+                    None
+                } else if steps[x.step_index].depth > 0 {
+                    None
+                    // let step_index = patterns[x.pattern_index].steps.offset;
+                    // assert_eq!(steps[step_index].depth, 0);
+                    // Some(PatternEntry {
+                    //     step_index,
+                    //     pattern_index: x.pattern_index,
+                    //     is_rooted: x.is_rooted,
+                    //     precomputed: x.precomputed,
+                    // })
                 } else {
                     None
                 }
             })
             .collect();
+        // dbg!(&patterns);
+        let mut enabled_pattern_map = vec![];
+        let mut enabled_pattern_count = 0;
+        for i in 0..patterns.len() {
+            let i = PatternId::new(i);
+            assert_ne!(patterns[i].steps.length, StepId::new(0));
+            if patterns[i].is_empty() {
+                enabled_pattern_map.push(u16::MAX);
+                continue;
+            }
+            enabled_pattern_map.push(enabled_pattern_count);
+            enabled_pattern_count += 1;
+        }
         let mut query = Query {
             // captures: todo!(),
             // predicate_values: todo!(),
@@ -1187,9 +1223,20 @@ impl Query {
             immediate_predicates,
             precomputed_patterns: Default::default(),
             used_precomputed: Default::default(),
+            enabled_pattern_map,
+            enabled_pattern_count,
         };
         for (s, i) in immediate_pred_steps {
-            query.steps.set_immediate_pred(s, i as u32);
+            if query.steps.set_immediate_pred(s, i as u32) {
+                // TODO allow multiple predicates ?
+                // return Err(QueryError {
+                //     row: 0,
+                //     column: 0,
+                //     offset: 0,
+                //     message: "Only one immediate predicate per step".into(),
+                //     kind: QueryErrorKind::Structure,
+                // });
+            }
         }
         std::mem::forget(ptr);
         log::trace!("\n{}", query);
@@ -1218,6 +1265,8 @@ impl Query {
         for i in 0..precomputeds.len() {
             precomputed_patterns.add_precomputed_pattern(&query, PatternId::new(i));
         }
+
+        precomputed_patterns.finish_preparation();
 
         // dbg!(&precomputed_patterns);
         let max_sub_len = precomputed_patterns.max_sub_len;
@@ -1250,15 +1299,27 @@ impl Query {
         }
         log::trace!("finished query building");
 
+        dbg!(query.wildcard_root_pattern_count);
+        dbg!(&query.pattern_map);
+
         Ok((precomp, query))
     }
 
-    fn disable_pattern(&mut self, pattern_index: PatternId) {
+    pub fn disable_pattern(&mut self, pattern_index: PatternId) {
         for (i, pattern) in self.pattern_map.iter().enumerate() {
             if pattern.pattern_index == pattern_index {
                 if i < self.wildcard_root_pattern_count as usize {
                     self.wildcard_root_pattern_count -= 1;
                     break;
+                }
+            }
+        }
+        if self.enabled_pattern_map[pattern_index.to_usize()] != u16::MAX {
+            self.enabled_pattern_count -= 1;
+            self.enabled_pattern_map[pattern_index.to_usize()] = u16::MAX;
+            for m in &mut self.enabled_pattern_map[pattern_index.to_usize()..] {
+                if *m != u16::MAX {
+                    *m -= 1;
                 }
             }
         }
@@ -1350,11 +1411,27 @@ impl Query {
         self.patterns.len()
     }
 
-    pub fn capture_index_for_name(&self, name: &str) -> Option<u32> {
+    pub fn enabled_pattern_count(&self) -> usize {
+        self.enabled_pattern_count as usize
+    }
+    pub fn enabled_pattern_index(&self, pid: PatternId) -> Option<u16> {
+        let i = self.enabled_pattern_map[pid.to_usize()];
+        (i != u16::MAX).then_some(i)
+    }
+    pub fn get_each_pat_start_byte(&self) -> Vec<usize> {
+        let mut r = vec![];
+        for (i, j) in self.enabled_pattern_map.iter().enumerate() {
+            if *j != u16::MAX {
+                r.push(self.patterns[PatternId::new(i)].start_byte as usize);
+            }
+        }
+        r
+    }
+    pub fn capture_index_for_name(&self, name: &str) -> Option<CaptureId> {
         self.capture_names
             .iter()
             .position(|x| *x == name)
-            .map(|i| i as u32)
+            .map(|i| CaptureId::new(i as u32))
     }
 
     pub fn capture_quantifiers(
@@ -1425,9 +1502,210 @@ impl Query {
             ))
         }
     }
+
+    fn compute_immediate_preds(
+        i: usize,
+        max_pattern_byte: usize,
+        source: &str,
+        query: *mut crate::ffi_extra::TSQuery,
+        immediate_matches_calls: Vec<(&str, String)>,
+        row: usize,
+        immediate_predicates: &mut Vec<crate::predicate::ImmediateTextPredicate>,
+        immediate_pred_steps: &mut Vec<(StepId, usize)>,
+        pattern_count: usize,
+    ) -> Result<(), QueryError> {
+        let start_byte = unsafe { &(*query).patterns }[i].start_byte as usize;
+        let re = regex::Regex::new("[(]#(EQ|NOT-EQ|MATCH|ANY)[?]").unwrap();
+        let haystack = &source[start_byte..max_pattern_byte];
+        let glob_caps = re.find_iter(haystack);
+        let glob_caps_count = glob_caps.count();
+        assert_eq!(immediate_matches_calls.len(), glob_caps_count);
+        let step_id = {
+            let mut i = i;
+            let mut step_id = unsafe { &(*query).patterns }[i].steps.offset;
+            while unsafe { &(*query).patterns }[i].steps.length == 1 {
+                // dbg!(&immediate_matches_calls);
+                if step_id == 0 {
+                    return Err(QueryError {
+                        row: 0,
+                        column: 0,
+                        offset: 0,
+                        message: "Predicates have to be applied on something".into(),
+                        kind: QueryErrorKind::Structure,
+                    });
+                }
+                step_id -= 1;
+                assert_ne!(i, 0);
+                i -= 1;
+            }
+            step_id
+        };
+        let limit_step_id = {
+            let slice = &unsafe { &(*query).patterns }[i].steps;
+            // dbg!(&slice);
+            let mut limit_step_id = slice.offset + slice.length;
+            let mut i = i + 1;
+            while i < unsafe { (*query).patterns.len() } {
+                let length = unsafe { &(*query).patterns }[i].steps.length;
+                assert_eq!(limit_step_id, unsafe { &(*query).patterns }[i].steps.offset);
+                limit_step_id += length;
+                if length > 1 {
+                    break;
+                }
+                i += 1;
+            }
+            limit_step_id as usize
+        };
+        // if pattern_count > 10 && i > 30 {
+        //     dbg!(&glob_caps.count());
+        //     panic!()
+        // }
+        let step_offsets = &unsafe { &(*query).step_offsets }[..];
+        let mut stp_id = 0;
+        loop {
+            if (step_offsets[stp_id].step_index as u32) < step_id {
+                stp_id += 1;
+            } else {
+                break;
+            }
+        }
+        // dbg!(limit_step_id);
+        let step_offsets = step_offsets;
+        assert_eq!(glob_caps_count, immediate_matches_calls.len(), "{}", i);
+        // dbg!(&step_offsets[stp_id..]);
+        // dbg!(
+        //     step_offsets[stp_id].step_index,
+        //     immediate_matches_calls.len()
+        // );
+        let mut aaa = 0;
+        while stp_id < step_offsets.len()
+            && (step_offsets[stp_id].step_index as usize) < limit_step_id
+            && aaa < immediate_matches_calls.len()
+        {
+            // dbg!(stp_id);
+            let stpid = stp_id;
+            let so = &step_offsets[stpid];
+            // dbg!(so.step_index as usize, stpid);
+            // assert_eq!(so.step_index as usize, step_id);
+            let re = regex::Regex::new("^[(]#(EQ|NOT-EQ|MATCH|ANY)[?]").unwrap();
+            let haystack = &source[so.byte_offset as usize..];
+            // if pattern_count > 10 {
+            //     dbg!(stpid, so.step_index, &haystack[..10]);
+            // }
+            let cap = re.captures(haystack);
+            if let Some(cap) = &cap {
+                // source[so.byte_offset as usize..].starts_with("(#EQ?")
+                let op = cap.get(1).unwrap().as_str();
+                // dbg!(op, so.byte_offset);
+                let so2 = if stpid as usize + 1 < step_offsets.len() {
+                    let x = step_offsets[stpid + 1].byte_offset;
+                    x as usize
+                } else {
+                    max_pattern_byte
+                };
+                let mut quoted = false;
+                let mut escaped = false;
+                let mut j = so.byte_offset as usize + 1;
+                for (i, c) in source[so.byte_offset as usize + 1..so2].char_indices() {
+                    if quoted {
+                        if escaped {
+                            escaped = false
+                        } else if c == '"' {
+                            quoted = false
+                        } else if c == '\\' {
+                            escaped = true
+                        }
+                    } else if c == ')' {
+                        j += i + 1;
+                        break;
+                    } else if c == '\"' {
+                        quoted = true
+                    }
+                }
+                if stpid == 0 {
+                    return Err(QueryError {
+                        row: 0,
+                        column: 0,
+                        offset: 0,
+                        message: "You cannot use a single predicate as a query".into(),
+                        kind: QueryErrorKind::Structure,
+                    });
+                }
+                let so2 = &step_offsets[stpid - 1];
+                let s = &unsafe { &(*query).steps }[so2.step_index as usize];
+                assert_eq!(immediate_matches_calls[aaa].0, &format!("{}?", op));
+                let value = if op == "EQ" || op == "NOT-EQ" {
+                    // dbg!(immediate_matches_calls[aaa].1.clone());
+                    crate::predicate::ImmediateTextPredicate::EqString {
+                        is_named: s.is_named(),
+                        str: immediate_matches_calls[aaa].1.clone().into(),
+                        is_positive: op == "EQ",
+                    }
+                } else if op == "MATCH" {
+                    let regex = &immediate_matches_calls[aaa].1;
+                    if s.is_named() {
+                        crate::predicate::ImmediateTextPredicate::MatchString {
+                            re: regex::bytes::Regex::new(regex).map_err(|_| {
+                                predicate_error(row, format!("Invalid regex '{regex}'"))
+                            })?,
+                        }
+                    } else {
+                        crate::predicate::ImmediateTextPredicate::MatchStringUnamed {
+                            re: regex::bytes::Regex::new(regex).map_err(|_| {
+                                predicate_error(row, format!("Invalid regex '{regex}'"))
+                            })?,
+                        }
+                    }
+                } else {
+                    todo!("{}", op)
+                };
+                let sym = symbol_name(unsafe { &(*query).language }, s.symbol);
+                // if pattern_count > 10 {
+                //     dbg!(sym, so2.step_index);
+                // }
+                // if pattern_count > 10 && s.symbol != 0 && sym != Some("identifier") {
+                //     dbg!(sym);
+                //     panic!()
+                // }
+                if let Some(i) = immediate_predicates.iter().position(|x| x == &value) {
+                    immediate_pred_steps.push((StepId::new(so2.step_index), i));
+                } else {
+                    immediate_pred_steps
+                        .push((StepId::new(so2.step_index), immediate_predicates.len()));
+                    immediate_predicates.push(value);
+                }
+                aaa += 1;
+            } else if pattern_count > 10 {
+                // dbg!(cap, &haystack[..10]);
+                // let s = &unsafe { &(*query).steps }[step_id as usize];
+                // let sym = symbol_name(unsafe { &(*query).language }, s.symbol);
+                // if s.symbol != 0 && sym == Some("identifier") {
+                //     dbg!(i, sym);
+                //     panic!()
+                // }
+            }
+            stp_id += 1;
+        }
+        pub(crate) fn symbol_name(
+            lang: &*const tree_sitter::ffi::TSLanguage,
+            symbol: tree_sitter::ffi::TSSymbol,
+        ) -> Option<&str> {
+            let ptr = unsafe { tree_sitter::ffi::ts_language_symbol_name(*lang, symbol) };
+            if !ptr.is_null() {
+                Some(unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str().unwrap())
+            } else {
+                None
+            }
+        }
+        // dbg!(step_id, step_offsets);
+        // assert_eq!(aaa, immediate_matches_calls.len(), "{}", i);
+        // assert_eq!(glob_caps_count, aaa);
+        Ok(())
+    }
 }
 
 fn find_precomputed_uses(query: &mut Query, precomputeds: &[&str]) {
+    query.used_precomputed = u8::MAX;
     for i in precomputeds.len()..query.patterns.len() {
         let patid = PatternId::new(i);
         let slice = &query.patterns[patid].steps;
@@ -1439,11 +1717,6 @@ fn find_precomputed_uses(query: &mut Query, precomputeds: &[&str]) {
                 .as_ref()
                 .unwrap()
                 .matches(&*query, j);
-            for r in &r {
-                let r = r.to_usize();
-                assert!(r < 8);
-                query.used_precomputed |= 1 << r as u8;
-            }
             res.extend(r.into_iter().map(|x| (x, j)));
             j.inc();
         }
@@ -1458,7 +1731,37 @@ fn find_precomputed_uses(query: &mut Query, precomputeds: &[&str]) {
                 m_pat.precomputed |= 1 << r as u8;
                 // m_pat.precomputed = r.0.to_usize();
             }
+            query.used_precomputed &= m_pat.precomputed;
         }
+    }
+}
+
+impl Debug for Query {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Query")
+            // .field("steps", &self.steps)
+            .field("pattern_map", &self.pattern_map)
+            .field("pattern_map2", &self.pattern_map2)
+            .field("patterns", &self.patterns)
+            // .field("step_offsets", &self.step_offsets)
+            // .field("negated_fields", &self.negated_fields)
+            .field("language", &self.language)
+            .field(
+                "wildcard_root_pattern_count",
+                &self.wildcard_root_pattern_count,
+            )
+            .field("capture_names", &self.capture_names)
+            .field("capture_quantifiers_vec", &self.capture_quantifiers_vec)
+            .field("text_predicates", &self.text_predicates)
+            .field("property_predicates", &self.property_predicates)
+            .field("property_settings", &self.property_settings)
+            .field("general_predicates", &self.general_predicates)
+            .field("immediate_predicates", &self.immediate_predicates)
+            .field("precomputed_patterns", &self.precomputed_patterns)
+            .field("used_precomputed", &self.used_precomputed)
+            .field("enabled_pattern_map", &self.enabled_pattern_map)
+            .field("enabled_pattern_count", &self.enabled_pattern_count)
+            .finish()
     }
 }
 
@@ -1522,6 +1825,9 @@ impl Display for Query {
             if step.parent_pattern_guaranteed() {
                 write!(f, ", parent_pattern_guaranteed")?;
             }
+            // if step.is_neg() {
+            //     write!(f, ", neg")?;
+            // }
             if let Some(imm) = step.immediate_pred() {
                 write!(f, ", imm:{}", imm)?;
             }
@@ -1538,7 +1844,7 @@ impl Display for Query {
             }
             write!(f, "}}")?;
             // NOTE C is not always zerowing the 7 unused bits so lets mask them
-            write!(f, " bitfield: {:b}", step.bit_field & 0b111111111)
+            write!(f, " bitfield: {:b}", step.bit_field)
         }
 
         pub(crate) fn symbol_name<'a>(
@@ -1648,6 +1954,59 @@ impl Into<Vec<StepOffset>> for &crate::utils::Array<crate::ffi_extra::TSStepOffs
             })
             .collect()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_immediate_preds() {
+        // TODO make a bigger query with many steps
+        // TODO each pattern should be identica excl. `alternative_index`
+        let q = |s: &str| format!("(identifier) (#EQ? \"{}\")\n", s);
+        let ts_query =
+            tree_sitter::Query::new(&tree_sitter_java::language(), &q("a").repeat(100)).unwrap();
+        assert_eq!(ts_query.pattern_count(), 200);
+        let query = Query::new(&q("a").repeat(100), tree_sitter_java::language()).unwrap();
+        println!("{}", query);
+        dbg!(&query.pattern_map[0]);
+        dbg!(&query.pattern_map[1]);
+        assert_eq!(query.pattern_map.len(), 200);
+        assert_eq!(query.patterns.len(), 200);
+        assert_eq!(query.pattern_count(), 200);
+        assert_eq!(query.enabled_pattern_count(), 100);
+        dbg!(query.pattern_map[0].pattern_index);
+        assert_eq!(
+            query.enabled_pattern_index(query.pattern_map[0].pattern_index),
+            Some(0)
+        );
+        for s in query.steps.iter() {
+            if s.done() {
+                continue;
+            }
+            if s.symbol == 0 {
+                continue;
+            }
+            dbg!(s);
+            if symbol_name(&query, s.symbol) == Some("identifier") {
+                // in combination to adding imm pred to every identifier in the textual query format
+                assert!(s.has_immediate_pred());
+            }
+        }
+        pub(crate) fn symbol_name<'a>(
+            query: &'a Query,
+            symbol: tree_sitter::ffi::TSSymbol,
+        ) -> Option<&'a str> {
+            let ptr = unsafe { tree_sitter::ffi::ts_language_symbol_name(query.language, symbol) };
+            if !ptr.is_null() {
+                Some(unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str().unwrap())
+            } else {
+                None
+            }
+        }
+    }
+
 }
 
 #[allow(unused)]

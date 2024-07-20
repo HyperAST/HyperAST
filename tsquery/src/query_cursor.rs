@@ -295,6 +295,11 @@ where
                     // If this node matches the first step of the pattern, then add a new
                     // state at the start of this pattern.
                     let step = &query.steps[pattern.step_index];
+                    if step.done() {
+                        // to level predicates are kind of considered as patterns...
+                        // for now this mitigation is fine and avoid further deviation from ref. impl.
+                        continue;
+                    }
                     let start_depth = self.depth - step.depth();
                     let mut should_add = if pattern.is_rooted {
                         node_intersects_range
@@ -431,6 +436,17 @@ where
                         }
                     }
                 }
+
+                // TODO is_empty but would need to know if there are named children/descendants
+                // NOTE is_neg would also be useful in other cases but lets first make some test with alternative ways ie enumerate exhaustively the positive cases
+                // if state!(@step).is_neg() {
+                    
+                //     dbg!(&state!(@step), node_does_match, is_named);
+                //     if is_named {
+                //         node_does_match = !node_does_match;
+                //     }
+                //     // dbg!(symbol);
+                // }
 
                 if node_does_match {
                     if let Some(pred_id) = state!(@step).immediate_pred() {

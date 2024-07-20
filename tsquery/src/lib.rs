@@ -67,9 +67,11 @@ pub struct Query {
     immediate_predicates: Vec<predicate::ImmediateTextPredicate>,
     precomputed_patterns: Option<query::PrecomputedPatterns>,
     used_precomputed: u8,
+    enabled_pattern_map: Vec<u16>,
+    enabled_pattern_count: u16
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Slice<I> {
     offset: I,
     length: I,
@@ -124,6 +126,10 @@ impl Query {
         } else {
             todo!()
         }
+    }
+    
+    pub fn capture_count(&self) -> usize {
+        self.capture_names.len()
     }
 }
 

@@ -203,7 +203,7 @@ impl<HAST> GenQuery for QueryMatcher<HAST>
 
     fn capture_index_for_name(&self, name: &str) -> Option<u32> {
         // dbg!(&self.capture_names);
-        self.query.capture_index_for_name(name)
+        self.query.capture_index_for_name(name).map(|x|x.to_usize() as u32)
     }
 
     fn capture_quantifiers(

@@ -22,7 +22,7 @@ impl StateId {
 #[repr(transparent)]
 #[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Debug, Hash)]
 pub(crate) struct StepId(pub(crate) u16);
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub(crate) struct PredStepId(u16);
 impl PredStepId {
     pub(super) fn new(i: u16) -> Self {
@@ -92,7 +92,7 @@ impl Steps {
         self.0.iter()
     }
 
-    pub(crate) fn set_immediate_pred(&mut self, s: StepId, i: u32) {
+    pub(crate) fn set_immediate_pred(&mut self, s: StepId, i: u32) -> bool {
         self.0[s.0 as usize].set_immediate_pred(i)
     }
 
@@ -100,7 +100,7 @@ impl Steps {
         let mut i = StepId::new(0);
         let mut j = StepId::new(num::cast(self.0.len()).unwrap());
         for s in steps.0 {
-            dbg!(i,j, s.alternative_index());
+            dbg!(i, j, s.alternative_index());
             let s = s.adapt(i, j);
             self.0.push(s);
             i.inc();
@@ -117,6 +117,10 @@ impl Steps {
     pub(crate) fn count(&self) -> StepId {
         StepId(num::cast(self.0.len()).unwrap())
     }
+    
+    // pub(crate) fn set_neg(&mut self, sid: StepId) {
+    //     self.0[sid.0 as usize].set_neg()
+    // }
 }
 
 impl From<&crate::utils::Array<super::ffi_extra::TSQueryStep>> for Steps {
@@ -192,7 +196,7 @@ impl std::fmt::Display for CaptureId {
 }
 
 #[repr(transparent)]
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub(crate) struct CaptureListId(usize);
 
 impl CaptureListId {
@@ -216,8 +220,8 @@ impl<Node> Default for CaptureListPool<Node> {
     fn default() -> Self {
         Self {
             list: Default::default(),
-            // max_list_count: u32::MAX,
-            max_list_count: 20,
+            max_list_count: u32::MAX,
+            // max_list_count: 20,
             free_list_count: Default::default(),
         }
     }
@@ -412,7 +416,7 @@ impl Display for PatternId {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct Patterns(Vec<crate::query::QueryPattern>);
 impl Patterns {
     pub(crate) fn len(&self) -> usize {

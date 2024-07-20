@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use super::TextPredicateCapture;
 
 /// [`PerPattern`] Builder
@@ -53,7 +55,7 @@ pub struct QueryPredicate {
     pub args: Box<[QueryPredicateArg]>,
 }
 
-impl<P> PerPattern<P> {
+impl<P: Debug> PerPattern<P> {
     pub fn preds_for_patern_id<'a>(
         &'a self,
         id: crate::indexed::PatternId,
@@ -61,12 +63,18 @@ impl<P> PerPattern<P> {
         self.0[id.to_usize()].iter()
     }
 
-    pub(crate) fn extend(&mut self, property_predicates: PerPattern<P>) {
+    pub(crate) fn extend(&mut self, preds: PerPattern<P>) {
         let mut r = std::mem::take(&mut self.0).into_vec();
-        // TODO
-        property_predicates.0.iter().for_each(|x|assert!(x.is_empty()));
-        r.extend(property_predicates.0.into_vec());
+        r.extend(preds.0.into_vec());
         self.0 = r.into();
+    }
+
+    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = std::slice::IterMut<P>> + '_ {
+        self.0.iter_mut().map(|x|x.iter_mut())
+    }
+
+    pub(crate) fn check_empty(&mut self) {
+        self.0.iter_mut().for_each(|x|assert!(x.is_empty(), "{:?}", x))
     }
 }
 

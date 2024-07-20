@@ -39,6 +39,7 @@ regex = "1.10.5"
 # cc = "*"
 
 [dev-dependencies]
+tree-sitter-java = { git = "https://github.com/quentinLeDilavrec/tree-sitter-java", version = "0.21.0", rev = "7699d4a296ca27fc14511bc75a1a899327f483fc" }
 # pretty_assertions = "1.0.0"
 # env_logger = "0.9.0"
 # hyper_ast_gen_ts_cpp = { path = "../cpp", version = "0.1.0" }
@@ -53,6 +54,6 @@ tsg = [
     "dep:stack-graphs",
     "dep:tree-sitter-stack-graphs",
 ]
-Hyper_ast = [
+hyper_ast = [
     "dep:hyper_ast",
 ]
