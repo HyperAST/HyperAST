@@ -1165,3 +1165,22 @@ where
         <LazyPostOrder<T, IdD>>::slice_po(self, store, x)
     }
 }
+
+impl<T: WithChildren, IdD: PrimInt> LazyPostOrder<T, IdD> {
+    pub(crate) fn _compute_kr_bitset(&self) -> bitvec::boxed::BitBox {
+        // use bitvec::prelude::Lsb0;
+        let node_count = self.id_compressed.len();
+        let mut kr = bitvec::bitbox!(0;node_count);
+        // let mut kr = Vec::with_capacity(node_count);
+        let mut visited = bitvec::bitbox!(0; node_count);
+        for i in (1..node_count).rev() {
+            if !visited[self._lld(i).to_usize().unwrap()] {
+                kr.set(i, true);
+                // kr.push(cast(i + 1).unwrap());
+                visited.set(self._lld(i).to_usize().unwrap(), true);
+            }
+        }
+        // kr.into_boxed_slice()
+        kr
+    }
+}
