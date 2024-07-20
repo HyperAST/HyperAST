@@ -65,7 +65,7 @@ pub(super) fn remote_fetch_file(
     api_addr: &str,
     commit: &types::Commit,
     file_path: &str,
-) -> Promise<Result<Resource<FetchedFile>, String>> {
+) -> RemoteFile {
     let ctx = ctx.clone();
     let (sender, promise) = Promise::new();
     let url = format!(

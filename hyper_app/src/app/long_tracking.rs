@@ -494,7 +494,7 @@ pub(crate) fn show_results(
                     }
                     painter.rect(
                         rect,
-                        egui::Rounding::none(),
+                        egui::Rounding::ZERO,
                         fill_color,
                         egui::Stroke::new(1.0, egui::Color32::DARK_GRAY),
                     );
@@ -518,7 +518,7 @@ pub(crate) fn show_results(
                                 .layer_id_at(pointer)
                                 .map_or(true, |top_layer_id| top_layer_id == ui.layer_id());
                             let mouse_over_resize_line = we_are_on_top
-                                && rect.y_range().contains(&pointer.y)
+                                && rect.y_range().contains(pointer.y)
                                 && (rect.left() - pointer.x).abs()
                                     <= ui.style().interaction.resize_grab_radius_side;
 
@@ -590,7 +590,7 @@ pub(crate) fn show_results(
                                 .layer_id_at(pointer)
                                 .map_or(true, |top_layer_id| top_layer_id == ui.layer_id());
                             let mouse_over_resize_line = we_are_on_top
-                                && rect.y_range().contains(&pointer.y)
+                                && rect.y_range().contains(pointer.y)
                                 && (rect.right() - pointer.x).abs()
                                     <= ui.style().interaction.resize_grab_radius_side;
 
@@ -663,11 +663,11 @@ pub(crate) fn show_results(
         for col in col_range {
             attacheds.push((Default::default(), Default::default()));
             let x_range = ui.available_rect_before_wrap().x_range();
-            let x_start = *x_range.start() + col_width_with_spacing * (col - min_col) as f32;
+            let x_start = x_range.min + col_width_with_spacing * (col - min_col) as f32;
             let x_end = x_start + col_width;
             let max_rect = egui::Rect::from_x_y_ranges(x_start..=x_end, ui.max_rect().y_range());
-            let x_start = timeline_window.x_range().start().max(x_start - spacing.x);
-            let x_end = timeline_window.x_range().end().min(x_end);
+            let x_start = timeline_window.x_range().min.max(x_start - spacing.x);
+            let x_end = timeline_window.x_range().max.min(x_end);
             let clip_rect = egui::Rect::from_x_y_ranges(x_start..=x_end, ui.max_rect().y_range());
             let ui = &mut egui::Ui::new(
                 ui.ctx().clone(),
@@ -994,7 +994,10 @@ pub(crate) fn show_results(
                             }
                         }
                     }
-                    Err(err) => panic!("{}", err),
+                    Err(err) => {
+                        log::error!("{}", err);
+                        ui.colored_label(ui.visuals().error_fg_color, err);
+                    }
                 }
             } else if long_tracking.ser_view {
                 if let Some(te) = show_code_view(ui, api_addr, &mut curr_view, fetched_files) {
@@ -1936,7 +1939,7 @@ fn show_detached_element(
             extra: options.extra ^ inp.consume_key(egui::Modifiers::NONE, egui::Key::Y),
         });
         ui.memory_mut(|mem| mem.data.insert_temp::<O>(id, options));
-        egui::Area::new("full")
+        egui::Area::new("full".into())
             .fixed_pos(p)
             .anchor(egui::Align2::LEFT_BOTTOM, (0.0, 0.0))
             .show(ui.ctx(), |ui| {
@@ -1977,7 +1980,7 @@ fn show_code_view(
     curr_view: &mut ColView<'_>,
     fetched_files: &mut HashMap<
         types::FileIdentifier,
-        Promise<Result<Resource<code_tracking::FetchedFile>, String>>,
+        RemoteFile,
     >,
 ) -> Option<egui::text_edit::TextEditOutput> {
     let curr_file = {

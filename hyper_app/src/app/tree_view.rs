@@ -261,19 +261,19 @@ where
     type NS = Self;
 
     fn node_store(&self) -> &Self::NS {
-        todo!()
+        self
     }
 
     type LS = Self;
 
     fn label_store(&self) -> &Self::LS {
-        todo!()
+        self
     }
 
     type TS = Self;
 
     fn type_store(&self) -> &Self::TS {
-        todo!()
+        self
     }
 }
 
@@ -407,7 +407,7 @@ impl<'a> FetchedViewImpl<'a> {
         ui.style_mut().spacing.item_spacing.y = 0.0;
 
         let node_store = self.store.node_store.read().unwrap();
-        wasm_rs_dbg::dbg!(root);
+        // wasm_rs_dbg::dbg!(root);
         let action = if let Some(r) = node_store.try_resolve::<NodeIdentifier>(*root) {
             // let lang = r.get_lang();
             // gen::types::Type::Lang;
@@ -418,7 +418,7 @@ impl<'a> FetchedViewImpl<'a> {
             self.global_pos = Some(size as u32);
             if let (Some(label), Some(cs)) = (l, cs) {
                 let cs = cs.0.to_vec();
-                wasm_rs_dbg::dbg!(&cs);
+                // wasm_rs_dbg::dbg!(&cs);
                 if let Some(label) = self.store.label_store.read().unwrap().try_resolve(&label) {
                     assert_eq!("", label, "{:?} {:?} {:?}", root, cs.len(), node_store);
                 }
@@ -1379,7 +1379,7 @@ impl<'a> FetchedViewImpl<'a> {
         }
         let rect = rect;
         //.expand(3.0);
-        ui.painter_at(rect.expand(1.0)).galley(min, galley);
+        ui.painter_at(rect.expand(1.0)).galley(min, galley, egui::Color32::RED);
         // rect.max.x += 10.0;
 
         prefill.head = ui.available_rect_before_wrap().min.y - min.y;

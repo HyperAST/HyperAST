@@ -6,10 +6,9 @@ use std::{
 use poll_promise::Promise;
 
 use crate::app::{
-    utils_edition::{
+    types::EditorHolder, utils_edition::{
         show_available_remote_docs, show_locals_and_interact, show_shared_code_edition,
-    },
-    utils_results_batched::ComputeResults,
+    }, utils_results_batched::ComputeResults
 };
 
 use self::example_scripts::EXAMPLES;
@@ -81,12 +80,10 @@ where
     }
 }
 
-impl<'a, T> IntoIterator for &'a mut CodeEditors<T> {
-    type Item = &'a mut T;
+impl<T> super::types::EditorHolder for CodeEditors<T> {
+    type Item = T;
 
-    type IntoIter = std::array::IntoIter<&'a mut T, 4>;
-
-    fn into_iter(self) -> Self::IntoIter {
+    fn iter_editors_mut(&mut self) -> impl Iterator<Item = &mut Self::Item> {
         [
             &mut self.description,
             &mut self.init,
@@ -331,7 +328,7 @@ fn show_scripts_edition(
     }
     show_available_remote_docs(ui, api_endpoint, single, scripting_context);
     let local = scripting_context
-        .when_local(|code_editors| code_editors.into_iter().for_each(|e| e.ui(ui)));
+        .when_local(|code_editors| code_editors.iter_editors_mut().for_each(|e| e.ui(ui)));
     let shared = scripting_context
         .when_shared(|code_editors| show_shared_code_edition(ui, code_editors, single));
     assert!(local.or(shared).is_some());
@@ -450,13 +447,7 @@ pub(super) fn show_single_repo_menu(
             // show_wip(ui, Some("only process one commit"));
         });
         let selected = &mut single.content.config;
-        egui::ComboBox::from_label("Repo Config")
-            .selected_text(format!("{:?}", selected))
-            .show_ui(ui, |ui| {
-                ui.selectable_value(selected, Config::Any, "Any");
-                ui.selectable_value(selected, Config::MavenJava, "Java");
-                ui.selectable_value(selected, Config::MakeCpp, "Cpp");
-            });
+        selected.show_combo_box(ui, "Repo Config");
     };
 
     radio_collapsing(ui, id, title, selected, &wanted, add_body);

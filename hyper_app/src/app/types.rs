@@ -121,7 +121,7 @@ impl Default for ComputeConfigAspectViews {
 pub(crate) struct FileIdentifier {
     #[serde(flatten)]
     pub(crate) commit: Commit,
-    #[serde(alias = "file")]
+    #[serde(rename = "file")]
     pub(crate) file_path: String,
 }
 
@@ -139,7 +139,7 @@ impl Default for FileIdentifier {
 pub(crate) struct Commit {
     #[serde(flatten)]
     pub(crate) repo: Repo,
-    #[serde(alias = "commit")]
+    #[serde(rename = "commit")]
     pub(crate) id: CommitId,
 }
 
@@ -162,10 +162,11 @@ pub enum SelectedConfig {
     Single,
     Querying,
     Tsg,
+    #[default]
+    Smells,
     Multi,
     Diff,
     Tracking,
-    #[default]
     LongTracking,
     Aspects,
 }
@@ -227,6 +228,11 @@ pub(crate) struct QueryEditor<T = code_editor::CodeEditor<Languages>> {
     pub(crate) query: T,
 }
 
+pub trait EditorHolder {
+    type Item;
+    fn iter_editors_mut(&mut self) -> impl Iterator<Item = &mut Self::Item>;
+}
+
 #[derive(
     serde::Deserialize, serde::Serialize, autosurgeon::Hydrate, autosurgeon::Reconcile, Clone, Debug,
 )]
@@ -260,4 +266,19 @@ pub(crate) enum Config {
     Any,
     MavenJava,
     MakeCpp,
+}
+impl Config {
+    pub(crate) fn show_combo_box(
+        &mut self,
+        ui: &mut egui::Ui,
+        label: impl Into<egui::WidgetText>,
+    ) -> egui::InnerResponse<std::option::Option<()>> {
+        egui::ComboBox::from_label(label)
+            .selected_text(format!("{:?}", self))
+            .show_ui(ui, |ui| {
+                ui.selectable_value(self, super::types::Config::Any, "Any");
+                ui.selectable_value(self, super::types::Config::MavenJava, "Java");
+                ui.selectable_value(self, super::types::Config::MakeCpp, "Cpp");
+            })
+    }
 }

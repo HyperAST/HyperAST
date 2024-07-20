@@ -3,6 +3,7 @@ use self::{
     tree_view::FetchedHyperAST,
     types::{Commit, Repo},
 };
+use code_tracking::FetchedFile;
 use egui_addon::{
     code_editor::{self, generic_text_buffer::byte_index_from_char_index},
     egui_utils::{radio_collapsing, show_wip},
@@ -24,6 +25,7 @@ pub(crate) mod crdt_over_ws;
 mod long_tracking;
 mod querying;
 mod single_repo;
+mod smells;
 mod tree_view;
 mod ts_highlight;
 mod tsg;
@@ -55,6 +57,7 @@ pub struct HyperApp {
     >,
     tsg_context:
         EditingContext<self::types::TsgEditor, types::TsgEditor<code_editor_automerge::CodeEditor>>,
+    smells_context: smells::Context,
 
     #[serde(skip)]
     languages: Languages,
@@ -63,6 +66,7 @@ pub struct HyperApp {
     single: Sharing<ComputeConfigSingle>,
     query: Sharing<querying::ComputeConfigQuery>,
     tsg: Sharing<tsg::ComputeConfigQuery>,
+    smells: smells::Config,
     multi: types::ComputeConfigMulti,
     diff: types::ComputeConfigDiff,
     tracking: types::ComputeConfigTracking,
@@ -74,6 +78,10 @@ pub struct HyperApp {
     querying_result: Option<utils_results_batched::RemoteResult<querying::QueryingError>>,
     #[serde(skip)]
     tsg_result: Option<utils_results_batched::RemoteResult<tsg::QueryingError>>,
+    #[serde(skip)]
+    smells_result: Option<smells::RemoteResult>,
+    #[serde(skip)]
+    smells_diffs_result: Option<smells::RemoteResultDiffs>,
 
     #[serde(skip)]
     fetched_files: HashMap<types::FileIdentifier, code_tracking::RemoteFile>,
@@ -343,10 +351,12 @@ impl Default for HyperApp {
             scripting_context: Default::default(),
             querying_context: Default::default(),
             tsg_context: Default::default(),
+            smells_context: Default::default(),
             languages: Default::default(),
             single: Default::default(),
             query: Default::default(),
             tsg: Default::default(),
+            smells: Default::default(),
             selected: Default::default(),
             diff: Default::default(),
             multi: Default::default(),
@@ -354,6 +364,8 @@ impl Default for HyperApp {
             compute_single_result: Default::default(),
             querying_result: Default::default(),
             tsg_result: Default::default(),
+            smells_result: Default::default(),
+            smells_diffs_result: Default::default(),
             fetched_files: Default::default(),
             tracking_result: Default::default(),
             aspects: Default::default(),
@@ -409,6 +421,21 @@ impl HyperApp {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
         dbg!();
+        let mut font_definitions = egui::FontDefinitions::default();
+        let font_data = &mut font_definitions.font_data;
+        font_data.get_mut("Hack").unwrap().tweak.baseline_offset_factor = 100.0;
+        let font_data = &mut font_definitions.font_data;
+        font_data.get_mut("Ubuntu-Light").unwrap().tweak.baseline_offset_factor = 100.0;
+        let font_data = &mut font_definitions.font_data;
+        font_data
+            .get_mut("NotoEmoji-Regular")
+            .unwrap()
+            .tweak
+            .baseline_offset_factor = 100.0;
+        let font_data = &mut font_definitions.font_data;
+        font_data.get_mut("emoji-icon-font").unwrap().tweak.baseline_offset_factor = 100.0;
+
+        _cc.egui_ctx.set_fonts(font_definitions);
 
         // // Load previous app state (if any).
         // // Note that you must enable the `persistence` feature for this to work.
@@ -422,6 +449,7 @@ impl HyperApp {
         //     }
         //     return r;
         // }
+        platform::init_nat_menu();
 
         let mut r = HyperApp::default();
         r.api_addr = api_addr;
@@ -449,11 +477,13 @@ impl eframe::App for HyperApp {
             scripting_context,
             querying_context,
             tsg_context,
+            smells_context,
             languages,
             selected,
             single,
             query,
             tsg,
+            smells,
             multi,
             diff,
             tracking,
@@ -461,6 +491,8 @@ impl eframe::App for HyperApp {
             compute_single_result,
             querying_result,
             tsg_result,
+            smells_result,
+            smells_diffs_result,
             fetched_files,
             tracking_result,
             aspects_result,
@@ -469,17 +501,7 @@ impl eframe::App for HyperApp {
         } = self;
         let mut trigger_compute = false;
 
-        #[cfg(not(target_arch = "wasm32"))] // no File->Quit on web pages!
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
-            egui::menu::bar(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui.button("Quit").clicked() {
-                        _frame.close();
-                    }
-                });
-            });
-        });
+        platform::show_nat_menu(ctx, _frame);
 
         egui::SidePanel::left("side_panel")
             .width_range(ctx.available_rect().width() * 0.1..=ctx.available_rect().width() * 0.9)
@@ -501,21 +523,28 @@ impl eframe::App for HyperApp {
                     ui.separator();
                     tsg::show_querying_menu(ui, selected, tsg);
                     ui.separator();
+                    smells::show_menu(ui, selected, smells);
 
-                    ui.add_enabled_ui(false, |ui| {
-                        show_multi_repo(ui, selected, multi);
-                        show_wip(ui, Some(" soon available"));
-                    });
-                    ui.separator();
-                    ui.add_enabled_ui(false, |ui| {
-                        show_diff(ui, selected, diff);
-                        show_wip(ui, Some(" soon available"));
-                    });
-                    ui.separator();
-                    // ui.add_enabled_ui(false, |ui| {
-                    code_tracking::show_code_tracking_menu(ui, selected, tracking, tracking_result);
-                    // show_wip(ui, Some(" soon available"));
-                    // });
+                        ui.separator();
+                        ui.add_enabled_ui(false, |ui| {
+                            show_multi_repo(ui, selected, multi);
+                            show_wip(ui, Some(" soon available"));
+                        });
+                        ui.separator();
+                        ui.add_enabled_ui(false, |ui| {
+                            show_diff(ui, selected, diff);
+                            show_wip(ui, Some(" soon available"));
+                        });
+                        ui.separator();
+                        // ui.add_enabled_ui(false, |ui| {
+                        code_tracking::show_code_tracking_menu(
+                            ui,
+                            selected,
+                            tracking,
+                            tracking_result,
+                        );
+                        // show_wip(ui, Some(" soon available"));
+                        // });
                     ui.separator();
                     long_tracking::show_menu(ui, selected, long_tracking);
                     ui.separator();
@@ -576,6 +605,19 @@ impl eframe::App for HyperApp {
                     tsg_context,
                     &mut trigger_compute,
                     tsg_result,
+                );
+            });
+        } else if *selected == types::SelectedConfig::Smells {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                smells::show_central_panel(
+                    ui,
+                    api_addr,
+                    smells,
+                    smells_context,
+                    &mut trigger_compute,
+                    smells_result,
+                    smells_diffs_result,
+                    fetched_files,
                 );
             });
         } else if *selected == types::SelectedConfig::Tracking {
@@ -648,17 +690,18 @@ impl eframe::App for HyperApp {
                     querying_context,
                 ));
             } else if *selected == types::SelectedConfig::Tsg {
-                self.tsg_result =
-                    Some(tsg::remote_compute_query(ctx, api_addr, tsg, tsg_context));
+                self.tsg_result = Some(tsg::remote_compute_query(ctx, api_addr, tsg, tsg_context));
             }
         }
     }
 }
 
+mod platform;
+
 fn show_remote_code(
     ui: &mut egui::Ui,
     api_addr: &str,
-    commit: &mut types::Commit,
+    commit: &types::Commit,
     file_path: &mut String,
     file_result: hash_map::Entry<'_, types::FileIdentifier, code_tracking::RemoteFile>,
     // ctx: &egui::Context,
@@ -689,8 +732,8 @@ fn show_remote_code(
 fn show_remote_code1(
     ui: &mut egui::Ui,
     api_addr: &str,
-    commit: &mut types::Commit,
-    mut file_path: &mut String,
+    commit: &types::Commit,
+    file_path: &mut String,
     file_result: hash_map::Entry<'_, types::FileIdentifier, code_tracking::RemoteFile>,
     desired_width: f32,
     wrap: bool,
@@ -719,35 +762,14 @@ fn show_remote_code1(
     })
     .body_unindented(|ui| {
         ui.add_space(4.0);
-        if let hash_map::Entry::Occupied(promise) = &file_result {
-            let promise = promise.get();
-            let resp = if let Some(result) = promise.ready() {
-                match result {
-                    Ok(resource) => {
-                        // ui_resource(ui, resource);
-                        if let Some(text) = &resource.content {
-                            let code: &str = &text.content;
-                            let language = "java";
-                            // show_code_scrolled(ui, language, wrap, code, desired_width)
-                            show_code_scrolled(ui, language, wrap, code, desired_width)
-                        } else {
-                            None
-                        }
-                    }
-                    Err(error) => {
-                        // This should only happen if the fetch API isn't available or something similar.
-                        ui.colored_label(
-                            ui.visuals().error_fg_color,
-                            if error.is_empty() { "Error" } else { error },
-                        );
-                        None
-                    }
-                }
-            } else {
-                ui.spinner();
-                None
-            };
-            if upd_src {
+        let r = try_fetch_remote_file(&file_result, |file| {
+            let code: &str = &file.content;
+            let language = "java";
+            // show_code_scrolled(ui, language, wrap, code, desired_width)
+            show_code_scrolled(ui, language, wrap, code, desired_width)
+        });
+        if upd_src || r.is_none() {
+            if let std::collections::hash_map::Entry::Vacant(_) = file_result {
                 file_result.insert_entry(code_tracking::remote_fetch_file(
                     ui.ctx(),
                     &api_addr,
@@ -755,17 +777,83 @@ fn show_remote_code1(
                     file_path,
                 ));
             }
-            resp
+        }
+        match r {
+            None => None,
+            Some(Ok(r)) => r,
+            Some(Err(error)) => {
+                ui.colored_label(
+                    ui.visuals().error_fg_color,
+                    if error.is_empty() { "Error" } else { &error },
+                );
+                None
+            }
+        }
+        // if let hash_map::Entry::Occupied(promise) = &file_result {
+        //     let promise = promise.get();
+        //     let resp = if let Some(result) = promise.ready() {
+        //         match result {
+        //             Ok(resource) => {
+        //                 // ui_resource(ui, resource);
+        //                 if let Some(text) = &resource.content {
+        //                     let code: &str = &text.content;
+        //                     let language = "java";
+        //                     // show_code_scrolled(ui, language, wrap, code, desired_width)
+        //                     show_code_scrolled(ui, language, wrap, code, desired_width)
+        //                 } else {
+        //                     None
+        //                 }
+        //             }
+        //             Err(error) => {
+        //                 // This should only happen if the fetch API isn't available or something similar.
+        //                 ui.colored_label(
+        //                     ui.visuals().error_fg_color,
+        //                     if error.is_empty() { "Error" } else { error },
+        //                 );
+        //                 None
+        //             }
+        //         }
+        //     } else {
+        //         ui.spinner();
+        //         None
+        //     };
+        //     resp
+        // } else {
+        //     file_result.insert_entry(code_tracking::remote_fetch_file(
+        //         ui.ctx(),
+        //         &api_addr,
+        //         commit,
+        //         file_path,
+        //     ));
+        //     None
+        // }
+    })
+}
+
+fn try_fetch_remote_file<R>(
+    file_result: &hash_map::Entry<'_, types::FileIdentifier, code_tracking::RemoteFile>,
+    mut f: impl FnMut(&FetchedFile) -> R,
+) -> Option<Result<R, String>> {
+    if let hash_map::Entry::Occupied(promise) = file_result {
+        let promise = promise.get();
+        if let Some(result) = promise.ready() {
+            match result {
+                Ok(resource) => {
+                    // ui_resource(ui, resource);
+                    if let Some(text) = &resource.content {
+                        Some(Ok(f(text)))
+                    } else {
+                        None
+                    }
+                }
+                Err(error) => Some(Err(error.to_string())),
+            }
         } else {
-            file_result.insert_entry(code_tracking::remote_fetch_file(
-                ui.ctx(),
-                &api_addr,
-                commit,
-                file_path,
-            ));
             None
         }
-    })
+    } else {
+        None
+    }
 }
 
 fn show_code_scrolled(
@@ -903,10 +991,10 @@ fn show_code_scrolled2(
     line_breaks: &[usize],
     desired_width: f32,
 ) -> Option<egui::scroll_area::ScrollAreaOutput<(SkipedBytes, egui::text_edit::TextEditOutput)>> {
-    let theme = egui_demo_lib::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+    let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
     let mut layouter = |ui: &egui::Ui, code: &str, wrap_width: f32| {
         let mut layout_job =
-            egui_demo_lib::syntax_highlighting::highlight(ui.ctx(), &theme, code, language);
+            egui_extras::syntax_highlighting::highlight(ui.ctx(), &theme, code, language);
         if wrap {
             panic!();
             // layout_job.wrap.max_width = wrap_width;

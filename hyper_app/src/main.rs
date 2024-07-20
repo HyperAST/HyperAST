@@ -16,12 +16,13 @@ fn main() -> eframe::Result<()> {
     tracing_subscriber::fmt::init();
 
     let languages = hyper_app::Languages::default();
-    // let mut parser = tree_sitter::Parser::new().unwrap();
-    // parser.set_language(&lang.into()).expect("Error loading Java grammar");
-    // let parsed = parser.parse("function f() {}", None).unwrap().unwrap();
-    // parsed.walk().node().kind();
-    dbg!();
-    let native_options = eframe::NativeOptions::default();
+    let mut native_options = eframe::NativeOptions::default();
+    native_options.follow_system_theme = true;
+    static ICON: &[u8] = include_bytes!("coevolution.png");
+    native_options.viewport = native_options
+        .viewport
+        .with_maximized(true)
+        .with_icon(eframe::icon_data::from_png_bytes(ICON).unwrap());
     eframe::run_native(
         "HyperAST",
         native_options,
@@ -45,35 +46,41 @@ fn main() {
     // Redirect tracing to console.log and friends:
     tracing_wasm::set_as_global_default();
 
+    // Redirect `log` message to `console.log` and friends:
+    eframe::WebLogger::init(log::LevelFilter::Debug).ok();
+
     let web_options = eframe::WebOptions::default();
 
     wasm_bindgen_futures::spawn_local(async {
-        // use eframe::web_sys::console;
         tree_sitter::TreeSitter::init()
             .await
             .map_err(JsValue::from)
             .unwrap();
-        // let mut parser = tree_sitter::Parser::new().unwrap();
-        // let lang = web_tree_sitter_sg::Language::load_path("./tree-sitter-javascript.wasm")
-        //     .await
-        //     .unwrap()
-        //     .into();
-        // let name = "JavaScript".to_string();
         let mut languages: hyper_app::Languages = Default::default();
-        // languages.insert(name.clone(), Lang { name, lang });
-        // panic!("lang");
-        // parser.set_language(&lang.into()).expect("Error loading Java grammar");
-        // let parsed = parser.parse("function f() {}", None).unwrap().unwrap();
-        // console::log_1(&"42".into());
-        // console::log_1(&parsed.walk().node().kind().as_ref().into());
-        // dbg!("{:?}", parsed);
-
-        eframe::start_web(
-            "the_canvas_id", // hardcode it
-            web_options,
-            Box::new(move |cc| Box::new(hyper_app::HyperApp::new(cc, languages, api_addr, ADDR))),
-        )
-        .await
-        .expect("failed to start eframe");
+        let start_result = eframe::WebRunner::new()
+            .start(
+                "the_canvas_id", // hardcode it
+                web_options,
+                Box::new(move |cc| {
+                    Box::new(hyper_app::HyperApp::new(cc, languages, api_addr, ADDR))
+                }),
+            )
+            .await;
+        let loading_text = eframe::web_sys::window()
+            .and_then(|w| w.document())
+            .and_then(|d| d.get_element_by_id("loading_text"));
+        match start_result {
+            Ok(_) => {
+                loading_text.map(|e| e.remove());
+            }
+            Err(e) => {
+                loading_text.map(|e| {
+                    e.set_inner_html(
+                        "<p> The app has crashed. See the developer console for details. </p>",
+                    )
+                });
+                panic!("failed to start eframe: {e:?}");
+            }
+        }
     });
 }

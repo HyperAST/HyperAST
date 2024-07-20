@@ -125,7 +125,7 @@ fn show_long_result_compute_failure<'a>(error: &impl ComputeError, ui: &mut egui
 pub(crate) fn show_long_result_success(ui: &mut egui::Ui, content: &ComputeResults) {
     if content.results.len() > 5 {
         egui::ScrollArea::horizontal()
-            .always_show_scroll(true)
+            .scroll_bar_visibility(egui::containers::scroll_area::ScrollBarVisibility::AlwaysVisible)
             .auto_shrink([false, false])
             .show(ui, |ui| show_long_result_table(content, ui));
     } else {
@@ -133,7 +133,7 @@ pub(crate) fn show_long_result_success(ui: &mut egui::Ui, content: &ComputeResul
             .default_open(true)
             .show(ui, |ui| {
                 egui::ScrollArea::vertical()
-                    .always_show_scroll(false)
+                    .scroll_bar_visibility(egui::containers::scroll_area::ScrollBarVisibility::AlwaysHidden)
                     .auto_shrink([false, false])
                     .show(ui, |ui| show_long_result_list(content, ui));
             });
@@ -146,9 +146,9 @@ pub(crate) fn show_long_result_list(content: &ComputeResults, ui: &mut egui::Ui)
             Ok(cont) => {
                 let mut code: &str = &serde_json::to_string_pretty(&cont.inner.result).unwrap();
                 let language = "json";
-                let theme = egui_demo_lib::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+                let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
                 let mut layouter = |ui: &egui::Ui, string: &str, _wrap_width: f32| {
-                    let layout_job = egui_demo_lib::syntax_highlighting::highlight(
+                    let layout_job = egui_extras::syntax_highlighting::highlight(
                         ui.ctx(),
                         &theme,
                         string,

@@ -5,7 +5,10 @@ use std::{
 
 use poll_promise::Promise;
 
-use crate::app::utils_edition::{self, show_available_remote_docs, show_locals_and_interact};
+use crate::app::{
+    types::EditorHolder,
+    utils_edition::{self, show_available_remote_docs, show_locals_and_interact},
+};
 
 use self::example_queries::EXAMPLES;
 
@@ -16,7 +19,7 @@ use egui_addon::{
 
 use super::{
     code_editor_automerge, show_repo_menu,
-    types::{Commit, Config, TsgEditor, Resource, SelectedConfig, WithDesc},
+    types::{Commit, Config, Resource, SelectedConfig, TsgEditor, WithDesc},
     utils_edition::{show_interactions, update_shared_editors},
     utils_results_batched::{self, show_long_result, ComputeResults},
     Sharing,
@@ -67,12 +70,10 @@ impl<T> WithDesc<T> for TsgEditor<T> {
     }
 }
 
-impl<'a, T> IntoIterator for &'a mut TsgEditor<T> {
-    type Item = &'a mut T;
+impl<T> super::types::EditorHolder for TsgEditor<T> {
+    type Item = T;
 
-    type IntoIter = std::array::IntoIter<&'a mut T, 2>;
-
-    fn into_iter(self) -> Self::IntoIter {
+    fn iter_editors_mut(&mut self) -> impl Iterator<Item = &mut Self::Item> {
         [&mut self.description, &mut self.query].into_iter()
     }
 }
@@ -279,8 +280,8 @@ fn show_scripts_edition(
             });
     }
     show_available_remote_docs(ui, api_endpoint, single, querying_context);
-    let local =
-        querying_context.when_local(|code_editors| code_editors.into_iter().for_each(|c| c.ui(ui)));
+    let local = querying_context
+        .when_local(|code_editors| code_editors.iter_editors_mut().for_each(|c| c.ui(ui)));
     let shared = querying_context.when_shared(|query_editors| {
         utils_edition::show_shared_code_edition(ui, query_editors, single)
     });
@@ -400,13 +401,7 @@ pub(super) fn show_querying_menu(
             // show_wip(ui, Some("only process one commit"));
         });
         let selected = &mut single.content.config;
-        egui::ComboBox::from_label("Repo Config")
-            .selected_text(format!("{:?}", selected))
-            .show_ui(ui, |ui| {
-                ui.selectable_value(selected, Config::Any, "Any");
-                ui.selectable_value(selected, Config::MavenJava, "Java");
-                ui.selectable_value(selected, Config::MakeCpp, "Cpp");
-            });
+        selected.show_combo_box(ui, "Repo Config");
     };
 
     radio_collapsing(ui, id, title, selected, &wanted, add_body);
