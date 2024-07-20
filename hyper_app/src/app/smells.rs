@@ -23,12 +23,12 @@
 //!
 //! Note: The temporal analysis (~ searching for the patterns throughout the history of dev)
 //! provide confidence and facts about the significance of code quality issues
-//! 
-//! 
+//!
+//!
 //! https://github.com/INRIA/spoon/commit/8f967893e5441dbf95b842350234c3185bcaeed7
 //! test: Migrate support and testing tests to Junit5
 //! @Test(expected = ...)
-//! 
+//!
 //! https://github.com/google/gson/commit/99cc4cb11f73a6d672aa6381013d651b7921e00f
 //! more specifically:
 //! https://github.com/Marcono1234/gson/commit/3d241ca0a6435cbf1fa1cdaed2af8480b99fecde
@@ -998,8 +998,18 @@ pub(super) fn fetch_results(
     let examples = ExamplesValues {
         meta_gen: &smells.meta_gen,
         meta_simp: &smells.meta_simp,
-        examples: &examples.examples,
-        moves: &examples.moves,
+        examples: examples
+            .examples
+            .iter()
+            .map(|x| ExamplesValue {
+                before: x.before.clone(),
+                after: x.after.clone(),
+                inserts: vec![],
+                deletes: vec![],
+                moves: vec![],
+            })
+            .collect::<Vec<_>>(),
+        moves: (),
         simple_matching: smells.simple_matching,
         prepro_matching: smells.prepro_matching,
     };
