@@ -6,6 +6,7 @@
 //! - [ ] low compute cost extend
 use std::{fmt::Debug, marker::PhantomData};
 
+use hyper_ast::position::position_accessors::SharedPath;
 use hyper_ast::PrimInt;
 use num_traits::{cast, ToPrimitive};
 
@@ -67,6 +68,29 @@ pub use indexed::IntoIter;
 pub mod slicing;
 
 pub mod indexed;
+
+
+pub(crate) fn shared_ancestors<Idx: PartialEq>(
+    curr: impl Iterator<Item = Idx>,
+    mut other: impl Iterator<Item = Idx>,
+) -> SharedPath<Vec<Idx>> {
+    let mut r = vec![];
+    for s in curr {
+        if let Some(other) = other.next() {
+            if s != other {
+                return SharedPath::Different(r);
+            }
+            r.push(s);
+        } else {
+            return SharedPath::Submatch(r);
+        }
+    }
+    if other.next().is_some() {
+        SharedPath::Remain(r)
+    } else {
+        SharedPath::Exact(r)
+    }
+}
 
 #[cfg(test)]
 #[allow(unused)]

@@ -1,5 +1,9 @@
 /// inspired by the implementation in gumtree
-use std::{collections::HashSet, fmt::Debug, hash::Hash};
+use std::{
+    collections::HashSet,
+    fmt::{Debug, Display},
+    hash::Hash,
+};
 
 use hyper_ast::PrimInt;
 use num_traits::{cast, ToPrimitive};
@@ -18,6 +22,7 @@ use hyper_ast::types::{HyperAST, Labeled, NodeStore, Stored, Tree, WithChildren}
 
 use super::action_vec::ActionsVec;
 
+#[derive(Clone)]
 pub struct ApplicablePath<P> {
     pub ori: P,
     pub mid: P,
@@ -39,6 +44,7 @@ impl<P: Debug> Debug for ApplicablePath<P> {
     }
 }
 
+#[derive(Clone)]
 pub enum Act<L, P, I> {
     Delete {},
     Update { new: L },
@@ -69,6 +75,7 @@ impl<L: PartialEq, Idx: PartialEq, I: PartialEq> PartialEq for Act<L, Idx, I> {
 }
 impl<L: Eq, P: Eq, I: Eq> Eq for Act<L, P, I> {}
 
+#[derive(Clone)]
 pub struct SimpleAction<L, P, I> {
     pub path: ApplicablePath<P>,
     pub action: Act<L, P, I>,
@@ -92,10 +99,71 @@ impl<L: Debug, P: Debug, I: Debug> Debug for SimpleAction<L, P, I> {
     }
 }
 
+impl<L: Debug, P: Debug, I: Debug> super::action_tree::NodeSummary
+    for super::action_tree::Node<SimpleAction<L, P, I>>
+{
+    fn pretty(&self) -> impl std::fmt::Display + '_ {
+        struct D<'a, L: Debug, P: Debug, I: Debug>(
+            &'a super::action_tree::Node<SimpleAction<L, P, I>>,
+        );
+        impl<'a, L: Debug, P: Debug, I: Debug> Display for D<'a, L, P, I> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let t = aux(self.0);
+                let a = match self.0.action.action {
+                    Act::Delete {} => "Delete",
+                    Act::Update { .. } => "Update",
+                    Act::Move { .. } => "Move",
+                    Act::MovUpd { .. } => "MovUpd",
+                    Act::Insert { .. } => "Insert",
+                };
+                let ori = &self.0.action.path.ori;
+                write!(
+                    f,
+                    "{} {:?} d:{} u:{} m:{} M:{} i:{}",
+                    a, ori, t.0, t.1, t.2, t.3, t.4
+                )
+            }
+        }
+        struct T(usize, usize, usize, usize, usize);
+        impl std::ops::Add for T {
+            type Output = T;
+
+            fn add(self, rhs: Self) -> Self::Output {
+                T(
+                    self.0 + rhs.0,
+                    self.1 + rhs.1,
+                    self.2 + rhs.2,
+                    self.3 + rhs.3,
+                    self.4 + rhs.4,
+                )
+            }
+        }
+        impl std::iter::Sum for T {
+            fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+                iter.fold(T(0, 0, 0, 0, 0), std::ops::Add::add)
+            }
+        }
+        fn aux<L: Debug, P: Debug, I: Debug>(
+            s: &super::action_tree::Node<SimpleAction<L, P, I>>,
+        ) -> T {
+            let t = match &s.action.action {
+                Act::Delete {} => T(1, 0, 0, 0, 0),
+                Act::Update { .. } => T(0, 1, 0, 0, 0),
+                Act::Move { .. } => T(0, 0, 1, 0, 0),
+                Act::MovUpd { .. } => T(0, 0, 0, 1, 0),
+                Act::Insert { .. } => T(0, 0, 0, 0, 1),
+            };
+            t + s.children.iter().map(|x| aux(x)).sum()
+        }
+        D(self)
+    }
+}
+
 struct InOrderNodes<IdD: Hash + PartialEq + Eq>(Option<Vec<IdD>>, HashSet<IdD>);
 
 /// FEATURE: share parents
 static COMPRESSION: bool = false;
+static SUBTREE_DEL: bool = true;
 
 struct MidNode<IdC, IdD> {
     parent: IdD,
@@ -126,7 +194,8 @@ where
     pub store: &'store S,
     src_arena_dont_use: &'a1 SS,
     cpy2ori: Vec<IdD>,
-    #[allow(unused)] // TODO remove it after making sure it is not needed to construct an action_tree
+    #[allow(unused)]
+    // TODO remove it after making sure it is not needed to construct an action_tree
     ori2cpy: Vec<usize>,
     mid_arena: Vec<MidNode<T::TreeId, IdD>>, //SuperTreeStore<T::TreeId>,
     mid_root: Vec<IdD>,
@@ -135,6 +204,7 @@ where
     ori_mappings: Option<&'m M>,
     cpy_mappings: M,
     // moved: bitvec::vec::BitVec,
+    dirty: bitvec::vec::BitVec,
     pub actions: ActionsVec<SimpleAction<T::Label, P, T::TreeId>>,
 
     src_in_order: InOrderNodes<IdD>,
@@ -166,7 +236,7 @@ impl<
 where
     S: NodeStore<T::TreeId, R<'store> = T>,
     T::Label: Debug + Copy,
-    T::TreeId: Debug,
+    T::TreeId: Debug + Clone,
     P: From<Vec<T::ChildIdx>> + Debug,
 {
     pub fn compute_actions<'a: 'a1 + 'a2, HAST: HyperAST<'store, NS = S>>(
@@ -184,7 +254,137 @@ where
                 .actions,
         )
     }
-
+}
+// TODO split IdD in 2 to help typecheck ids
+impl<
+        'store: 'a1 + 'a2 + 'm,
+        'a1: 'm,
+        'a2: 'm,
+        'm,
+        IdD: 'store + PrimInt + Debug + Hash + PartialEq + Eq,
+        T: 'store + Tree,
+        SS: DecompressedTreeStore<'a1, T, IdD>
+            + DecompressedWithParent<'a1, T, IdD>
+            + PostOrder<'a1, T, IdD>
+            + PostOrderIterable<'a1, T, IdD>
+            + Debug,
+        SD: DecompressedTreeStore<'a2, T, IdD>
+            + DecompressedWithParent<'a2, T, IdD>
+            + BreadthFirstIterable<'a2, T, IdD>,
+        S,
+        M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
+        P: TreePath<Item = T::ChildIdx>,
+    > ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M, P>
+where
+    T::Label: Debug + Copy,
+    T::TreeId: Debug,
+    P: From<Vec<T::ChildIdx>> + Debug,
+{
+    pub fn new(store: &'store S, src_arena: &'a1 SS, dst_arena: &'a2 SD) -> Self {
+        Self {
+            store,
+            src_arena_dont_use: src_arena,
+            cpy2ori: vec![],
+            ori2cpy: vec![],
+            mid_arena: vec![],
+            mid_root: vec![],
+            dst_arena,
+            ori_mappings: None,
+            cpy_mappings: Default::default(),
+            dirty: Default::default(),
+            actions: ActionsVec::new(),
+            src_in_order: InOrderNodes(None, Default::default()),
+            dst_in_order: InOrderNodes(None, Default::default()),
+            // moved: bitvec::bitvec![],
+        }
+    }
+}
+// TODO split IdD in 2 to help typecheck ids
+impl<
+        'store: 'a1 + 'a2 + 'm,
+        'a1: 'm,
+        'a2: 'm,
+        'm,
+        IdD: 'store + PrimInt + Debug + Hash + PartialEq + Eq,
+        T: 'store + Tree,
+        SS: DecompressedTreeStore<'a1, T, IdD>
+            + DecompressedWithParent<'a1, T, IdD>
+            + PostOrder<'a1, T, IdD>
+            + PostOrderIterable<'a1, T, IdD>
+            + Debug,
+        SD: DecompressedTreeStore<'a2, T, IdD>
+            + DecompressedWithParent<'a2, T, IdD>
+            + BreadthFirstIterable<'a2, T, IdD>,
+        S,
+        M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
+        P: TreePath<Item = T::ChildIdx>,
+    > ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M, P>
+where
+    S: NodeStore<T::TreeId, R<'store> = T>,
+    T::Label: Debug + Copy,
+    T::TreeId: Debug,
+    P: From<Vec<T::ChildIdx>> + Debug,
+{
+    pub fn init_cpy(mut self, ms: &'m M) -> Self {
+        // copy mapping
+        // let now = Instant::now();
+        self.ori_mappings = Some(ms);
+        self.cpy_mappings = ms.clone();
+        // dbg!(&self.src_arena_dont_use);
+        // dbg!("aaaaaaaaaaaa");
+        // let len = self.src_arena_dont_use.len();
+        let root = self.src_arena_dont_use.root();
+        // self.moved.resize(len, false);
+        for x in self.src_arena_dont_use.iter_df_post::<true>() {
+            let children = self.src_arena_dont_use.children(self.store, &x);
+            let children = if children.len() > 0 {
+                Some(children)
+            } else {
+                None
+            };
+            self.mid_arena.push(MidNode {
+                parent: self.src_arena_dont_use.parent(&x).unwrap_or(root),
+                compressed: self.src_arena_dont_use.original(&x),
+                children,
+                action: None,
+            });
+            self.dirty.push(false);
+        }
+        // self.mid_arena[self.src_arena_dont_use.root().to_usize().unwrap()].parent =
+        // self.src_arena_dont_use.root();
+        self.mid_root = vec![root];
+        // dbg!(&self.mid_arena);
+        // let t = now.elapsed().as_secs_f64();
+        // dbg!(t);
+        self
+    }
+}
+// TODO split IdD in 2 to help typecheck ids
+impl<
+        'store: 'a1 + 'a2 + 'm,
+        'a1: 'm,
+        'a2: 'm,
+        'm,
+        IdD: 'store + PrimInt + Debug + Hash + PartialEq + Eq,
+        T: 'store + Tree,
+        SS: DecompressedTreeStore<'a1, T, IdD>
+            + DecompressedWithParent<'a1, T, IdD>
+            + PostOrder<'a1, T, IdD>
+            + PostOrderIterable<'a1, T, IdD>
+            + Debug,
+        SD: DecompressedTreeStore<'a2, T, IdD>
+            + DecompressedWithParent<'a2, T, IdD>
+            + BreadthFirstIterable<'a2, T, IdD>,
+        S,
+        M: MonoMappingStore<Src = IdD, Dst = IdD> + Default + Clone,
+        P: TreePath<Item = T::ChildIdx>,
+    > ScriptGenerator<'store, 'a1, 'a2, 'm, IdD, T, SS, SD, S, M, P>
+where
+    S: NodeStore<T::TreeId, R<'store> = T>,
+    T::Label: Debug + Copy,
+    T::TreeId: Debug + Clone,
+    P: From<Vec<T::ChildIdx>> + Debug,
+{
     pub fn _compute_actions(
         store: &'store S,
         src_arena: &'a1 SS,
@@ -210,57 +410,6 @@ where
         Self::new(store, src_arena, dst_arena).init_cpy(ms)
     }
 
-    fn new(store: &'store S, src_arena: &'a1 SS, dst_arena: &'a2 SD) -> Self {
-        Self {
-            store,
-            src_arena_dont_use: src_arena,
-            cpy2ori: vec![],
-            ori2cpy: vec![],
-            mid_arena: vec![],
-            mid_root: vec![],
-            dst_arena,
-            ori_mappings: None,
-            cpy_mappings: Default::default(),
-            actions: ActionsVec::new(),
-            src_in_order: InOrderNodes(None, Default::default()),
-            dst_in_order: InOrderNodes(None, Default::default()),
-            // moved: bitvec::bitvec![],
-        }
-    }
-
-    fn init_cpy(mut self, ms: &'m M) -> Self {
-        // copy mapping
-        // let now = Instant::now();
-        self.ori_mappings = Some(ms);
-        self.cpy_mappings = ms.clone();
-        // dbg!(&self.src_arena_dont_use);
-        // dbg!("aaaaaaaaaaaa");
-        // let len = self.src_arena_dont_use.len();
-        let root = self.src_arena_dont_use.root();
-        // self.moved.resize(len, false);
-        for x in self.src_arena_dont_use.iter_df_post::<true>() {
-            let children = self.src_arena_dont_use.children(self.store, &x);
-            let children = if children.len() > 0 {
-                Some(children)
-            } else {
-                None
-            };
-            self.mid_arena.push(MidNode {
-                parent: self.src_arena_dont_use.parent(&x).unwrap_or(root),
-                compressed: self.src_arena_dont_use.original(&x),
-                children,
-                action: None,
-            });
-        }
-        // self.mid_arena[self.src_arena_dont_use.root().to_usize().unwrap()].parent =
-        // self.src_arena_dont_use.root();
-        self.mid_root = vec![root];
-        // dbg!(&self.mid_arena);
-        // let t = now.elapsed().as_secs_f64();
-        // dbg!(t);
-        self
-    }
-
     pub fn generate(mut self) -> Result<Self, String> {
         // fake root ?
         // fake root link ?
@@ -279,12 +428,12 @@ where
         if COMPRESSION {
             todo!()
         }
-        self.auxilary_ins_mov_upd()
+        self.auxilary_ins_mov_upd(&|_,_|())
     }
 
-    fn auxilary_ins_mov_upd(&mut self) -> Result<(), String> {
+    pub fn auxilary_ins_mov_upd(&mut self, f: &impl Fn(&T::TreeId,&T::TreeId)) -> Result<(), String> {
         for x in self.dst_arena.iter_bf() {
-            log::trace!("{:?}", self.actions);
+            // log::trace!("{:?}", self.actions);
             let w;
             let y = self.dst_arena.parent(&x);
             let z = y.map(|y| self.cpy_mappings.get_src_unchecked(&y));
@@ -368,14 +517,19 @@ where
                         Some(v)
                     }
                 };
+                let w_t;
+                let x_t;
                 let w_l = {
-                    let c = &self.mid_arena[w.to_usize().unwrap()].compressed;
-                    self.store.resolve(c).try_get_label().cloned()
+                    let c = self.mid_arena[w.to_usize().unwrap()].compressed.clone();
+                    w_t = c.clone();
+                    self.store.resolve(&c).try_get_label().cloned()
                 };
                 let x_l = {
-                    let c = &self.dst_arena.original(&x);
-                    self.store.resolve(c).try_get_label().cloned()
+                    let c = self.dst_arena.original(&x).clone();
+                    x_t = c.clone();
+                    self.store.resolve(&c).try_get_label().cloned()
                 };
+                f(&w_t, &x_t);
 
                 if z != v {
                     // move
@@ -407,12 +561,12 @@ where
                     // remove moved node
                     // TODO do not mutate existing node
                     if let Some(v) = v {
-                        let cs = self.mid_arena[v.to_usize().unwrap()]
-                            .children
-                            .as_mut()
-                            .unwrap();
+                        let _v: &mut MidNode<T::TreeId, IdD> =
+                            &mut self.mid_arena[v.to_usize().unwrap()];
+                        let cs = _v.children.as_mut().unwrap();
                         let idx = cs.iter().position(|x| x == &w).unwrap();
                         cs.remove(idx);
+                        self.dirty.set(v.to_usize().unwrap(), true);
                     }
                     if let Some(z) = z {
                         assert!({
@@ -521,66 +675,117 @@ where
         Ok(())
     }
 
-    fn del(&mut self) {
+    pub fn del(&mut self) {
         let root = *self.mid_root.last().unwrap();
-        let mut parent: Vec<(IdD, usize)> = vec![(root, num_traits::zero())];
-        // let mut it = Self::iter_mid_in_post_order(*self.mid_root.last().unwrap(), &mut self.mid_arena);
+        struct Ele<IdD, Idx, W> {
+            // id in arena
+            id: IdD,
+            // curent child offset
+            idx: Idx,
+            // true if not only deletes
+            // TODO use a bitset to reduce mem.
+            w: Vec<W>,
+        }
+        impl<IdD, Idx: num_traits::Zero, W> Ele<IdD, Idx, W> {
+            fn new(id: IdD) -> Self {
+                let idx = num_traits::zero();
+                let b = false;
+                let w = vec![];
+                Self { id, idx, w }
+            }
+        }
+        impl<IdD, Idx: num_traits::PrimInt, W> Ele<IdD, Idx, W> {
+            fn inc(mut self) -> Self {
+                self.idx = self.idx + num_traits::one();
+                self
+            }
+        }
+        let mut parent: Vec<Ele<IdD, usize, _>> = vec![Ele::new(root)];
         loop {
-            let mut next = None;
+            let next;
+            let waiting;
             loop {
-                let (id, idx) = if let Some(id) = parent.pop() {
-                    id
-                } else {
+                let Some(ele) = parent.pop() else {
+                    next = None;
+                    waiting = vec![];
                     break;
                 };
-                let curr = &self.mid_arena[id.to_usize().unwrap()];
-                if let Some(cs) = &curr.children {
-                    if cs.len() == idx {
-                        next = Some(id);
-                        break;
-                    } else {
-                        parent.push((id, idx + 1));
-                        parent.push((cs[idx], 0));
+                let id = ele.id.to_usize().unwrap();
+                let curr: &MidNode<T::TreeId, IdD> = &self.mid_arena[id];
+                let Some(cs) = &curr.children else {
+                    next = Some(ele.id);
+                    waiting = ele.w;
+                    if curr.action.is_some() {
+                        dbg!(curr.action);
                     }
-                } else {
-                    next = Some(id);
+                    break;
+                };
+                if cs.len() == ele.idx {
+                    next = Some(ele.id);
+                    waiting = ele.w;
+                    if curr.action.is_some() {
+                        dbg!(curr.action);
+                    }
                     break;
                 }
+                let child = cs[ele.idx];
+                parent.push(ele.inc());
+                parent.push(Ele::new(child));
             }
-            let w = if let Some(w) = next {
-                w
-            } else {
+            let Some(w) = next else {
                 break;
             };
+            if self.dirty[w.to_usize().unwrap()] {
+                dbg!(w);
+            }
             if !self.cpy_mappings.is_src(&w) {
                 //todo mutate mid arena ?
                 let ori = self.orig_src(w);
-                let path = ApplicablePath {
-                    ori,
-                    mid: self.path(w),
-                };
-                let v = self.mid_arena[w.to_usize().unwrap()].parent;
+                let mid = self.path(w);
+                dbg!(&mid);
+                let path = ApplicablePath { ori, mid };
+                let _w: &mut MidNode<T::TreeId, IdD> = &mut self.mid_arena[w.to_usize().unwrap()];
+                let v = _w.parent;
+                let _v: &mut MidNode<T::TreeId, IdD> = &mut self.mid_arena[v.to_usize().unwrap()];
                 if v != w {
-                    let cs = self.mid_arena[v.to_usize().unwrap()]
-                        .children
-                        .as_mut()
-                        .unwrap();
+                    let cs = _v.children.as_mut().unwrap();
                     let idx = cs.iter().position(|x| x == &w).unwrap();
                     cs.remove(idx);
                     let i = parent.len() - 1;
-                    parent[i].1 -= 1;
+                    parent[i].idx -= 1;
                 } // TODO how to materialize nothing ?
-                self.mid_arena[v.to_usize().unwrap()].action = Some(self.actions.len());
+                _v.action = Some(self.actions.len());
+                // TODO self.apply_action(&action, &w);
                 let action = SimpleAction {
                     path,
-                    action: Act::Delete {
-                        // tree: self.copy_to_orig(w),
-                    },
+                    action: Act::Delete {},
                 };
-                // TODO self.apply_action(&action, &w);
-                self.actions.push(action);
-                log::trace!("{:?}", self.actions);
+                if SUBTREE_DEL {
+                    if self.dirty[w.to_usize().unwrap()] {
+                        // non uniform del.
+                        dbg!(waiting.len());
+                        self.actions.extend(waiting);
+                        log::trace!("{:?}", action);
+                        self.actions.push(action);
+                        // transitively
+                        self.dirty.set(v.to_usize().unwrap(), true);
+                    } else if let Some(i) = parent.len().checked_sub(1) {
+                        dbg!(waiting.len());
+                        // uniform, so wait in parent
+                        parent[i].w.push(action);
+                    } else {
+                        dbg!(waiting.len());
+                        log::trace!("{:?}", action);
+                        self.actions.push(action);
+                    }
+                } else {
+                    log::trace!("{:?}", action);
+                    self.actions.push(action);
+                }
             } else {
+                if SUBTREE_DEL {
+                    self.actions.extend(waiting);
+                }
                 // not modified
                 // all parents were not modified
                 // maybe do the resources sharing now
@@ -759,6 +964,7 @@ where
             action: None,
         });
         // self.moved.push(false);
+        self.dirty.push(false);
         let (src_to_dst_l, dst_to_src_l) = self.cpy_mappings.capacity();
         self.cpy_mappings.topit(src_to_dst_l, dst_to_src_l);
         self.cpy_mappings.link(w, *x);

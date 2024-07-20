@@ -200,6 +200,9 @@ impl<L: Debug, P: TreePath, I: Debug> ActionsVec<SimpleAction<L, P, I>> {
     pub(crate) fn new() -> Self {
         Self(Default::default())
     }
+    pub(crate) fn extend<II: IntoIterator<Item = SimpleAction<L, P, I>>>(&mut self, action: II) {
+        self.0.extend(action)
+    }
 }
 
 // // pub trait BuildableTree<T: Tree> {
