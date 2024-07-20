@@ -178,4 +178,10 @@ mk_langs!(
     //     lang: language,
     //     n_types: NODE_TYPES,
     // },
+    TsQuery {
+        tree_sitter_query,
+        hi: HIGHLIGHTS_QUERY,
+        injects: INJECTIONS_QUERY,
+        n_types: NODE_TYPES,
+    },
 );
