@@ -43,6 +43,8 @@ pub struct ComputeResult {
     pub result: Vec<u64>,
 }
 
+const INCREMENTAL_QUERIES: bool = true;
+
 pub fn simple(
     query: Content,
     state: SharedState,
@@ -86,20 +88,33 @@ pub fn simple(
         .unwrap();
     log::info!("done construction of {commits:?} in  {}", repo.spec);
     let language: tree_sitter::Language = language.clone();
-    let query = hyper_ast_tsquery::Query::new(&query, language)
-        .map_err(|e| QueryingError::ParsingError(e.to_string()))?;
-    // let query = steped::Query::new(&query, language)
-    //     .map_err(|e| QueryingError::ParsingError(e.to_string()))?;
+
+    let query = if INCREMENTAL_QUERIES {
+        hyper_ast_tsquery::Query::with_precomputed(
+            &query,
+            hyper_ast_gen_ts_java::language(),
+            &hyper_ast_cvs_git::java_processor::SUB_QUERIES[0..1],
+        )
+        .map(|x| x.1)
+    } else {
+        hyper_ast_tsquery::Query::new(&query, language)
+    }
+    .map_err(|e| QueryingError::ParsingError(e.to_string()))?;
+
     log::info!("done query construction");
     let prepare_time = now.elapsed().as_secs_f64();
     let mut results = vec![];
     for commit_oid in &commits {
+        let mut oid = commit_oid.to_string();
+        oid.truncate(6);
+        log::info!("start querying {}", oid );
         let result = simple_aux(&state, &repo, commit_oid, &query)
             .map(|inner| ComputeResultIdentified {
                 commit: commit_oid.to_string(),
                 inner,
             })
             .map_err(|err| format!("{:?}", err));
+        log::info!("done querying {}", oid );
         results.push(result);
     }
     log::info!("done querying of {commits:?} in  {}", repo.spec);

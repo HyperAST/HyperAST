@@ -1,6 +1,5 @@
-use hyper_ast::types::LabelStore;
-use hyper_ast_cvs_git::{git::fetch_github_repository, preprocessed::child_at_path};
-use serde::{Deserialize, Serialize};
+use hyper_ast_cvs_git::preprocessed::child_at_path;
+use serde::Deserialize;
 use tokio::time::Instant;
 
 use crate::SharedState;

@@ -7,7 +7,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use app::{querying_app, tsg_app};
+use app::{querying_app, smells_app, tsg_app};
 use dashmap::DashMap;
 use hyper_ast_cvs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories};
 use hyper_diff::{decompressed_tree_store::PersistedNode, matchers::mapping_store::VecStore};
@@ -32,9 +32,10 @@ mod fetch;
 mod file;
 mod matching;
 mod querying;
-mod tsg;
 mod scripting;
+mod smells;
 mod track;
+mod tsg;
 mod utils;
 mod view;
 mod ws;
@@ -100,6 +101,7 @@ pub(crate) type MappingAloneCacheRef<'a> =
 pub(crate) enum MappingStage {
     Subtree,
     Bottomup,
+    Decls,
 }
 
 type DS<T> = hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<T, u32>;
@@ -112,12 +114,16 @@ type SharedState = Arc<AppState>;
 #[tokio::main]
 async fn main() {
     let opts = crate::cli::parse();
-
     let shared_state = SharedState::default();
     {
         use hyper_ast_cvs_git::processing::RepoConfig;
         let mut repos = shared_state.repositories.write().unwrap();
         repos.register_config(Forge::Github.repo("INRIA", "spoon"), RepoConfig::JavaMaven);
+        repos.register_config(Forge::Github.repo("google", "gson"), RepoConfig::JavaMaven);
+        repos.register_config(
+            Forge::Github.repo("Marcono1234", "gson"),
+            RepoConfig::JavaMaven,
+        );
         repos.register_config(
             Forge::Github.repo("official-stockfish", "Stockfish"),
             RepoConfig::CppMake,
@@ -134,6 +140,7 @@ async fn main() {
         .merge(scripting_app(Arc::clone(&shared_state)))
         .merge(querying_app(Arc::clone(&shared_state)))
         .merge(tsg_app(Arc::clone(&shared_state)))
+        .merge(smells_app(Arc::clone(&shared_state)))
         .merge(fetch_git_file(Arc::clone(&shared_state)))
         .merge(track_code_route(Arc::clone(&shared_state)))
         .merge(view_code_route(Arc::clone(&shared_state)))

@@ -13,7 +13,7 @@ use tower_http::trace::TraceLayer;
 use crate::{
     commit, fetch, file, querying,
     scripting::{self, ScriptContent, ScriptContentDepth, ScriptingError, ScriptingParam},
-    track, tsg, view, SharedState,
+    smells, track, tsg, view, SharedState,
 };
 
 impl IntoResponse for ScriptingError {
@@ -163,6 +163,46 @@ pub fn tsg_app(_st: SharedState) -> Router<SharedState> {
         .route(
             "/sharing-tsg/shared/:session",
             get(crate::ws::connect_doc), // .with_state(Arc::clone(&shared_state)),
+        )
+}
+
+async fn smells(
+    axum::extract::Path(path): axum::extract::Path<smells::Param>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+    axum::extract::Json(examples): axum::extract::Json<smells::Examples>,
+) -> axum::response::Result<Json<smells::SearchResults>> {
+    let r = smells::smells(examples, state, path)?;
+    Ok(r)
+}
+
+async fn smells_ex_from_diffs(
+    axum::extract::Path(path): axum::extract::Path<smells::Diffs>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+) -> axum::response::Result<Json<smells::ExamplesResults>> {
+    let r = smells::smells_ex_from_diffs(state, path)?;
+    Ok(r)
+}
+
+pub fn smells_app(_st: SharedState) -> Router<SharedState> {
+    let smells_service_config = ServiceBuilder::new()
+        .layer(HandleErrorLayer::new(|e: BoxError| async move {
+            dbg!(e);
+        }))
+        .load_shed()
+        .concurrency_limit(16)
+        .buffer(200)
+        .rate_limit(10, Duration::from_secs(5))
+        // .request_body_limit(1024 * 5_000 /* ~5mb */)
+        .timeout(Duration::from_secs(10))
+        .layer(TraceLayer::new_for_http());
+    Router::new()
+        .route(
+            "/smells/github/:user/:name/:commit/:len",
+            post(smells).layer(smells_service_config.clone()),
+        )
+        .route(
+            "/smells_ex_from_diffs/github/:user/:name/:commit/:len",
+            post(smells_ex_from_diffs).layer(smells_service_config.clone()),
         )
 }
 

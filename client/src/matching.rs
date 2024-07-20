@@ -131,11 +131,56 @@ pub fn bottom_up_hiding<'store, 'a, 'b, HAST: HyperAST<'store>>(
                 mappings,
             },
         };
-        GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(
+        GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 1000, 1, 100>::execute(
             &mut mapper,
             hyperast.label_store(),
         );
     }
+}
+
+pub fn bottom_up<'store, 'a, 'b, HAST: HyperAST<'store>>(
+    hyperast: &'store HAST,
+    mm: &hyper_diff::matchers::mapping_store::MultiVecStore<u32>,
+    mapper: &'b mut Mapper<
+        'store,
+        HAST,
+        &'a mut LazyPostOrder<HAST::T, u32>,
+        &'a mut LazyPostOrder<HAST::T, u32>,
+        VecStore<u32>,
+    >,
+) where
+    HAST::IdN: Clone + Debug + Eq,
+    HAST::Label: Clone + Copy + Eq + Debug,
+    <HAST::T as types::WithChildren>::ChildIdx: Debug,
+    HAST::T: 'store + types::WithHashs + types::WithStats,
+{
+    LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::filter_mappings(mapper, mm);
+
+    GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(
+        mapper,
+        hyperast.label_store(),
+    );
+}
+
+pub fn leveraging_method_headers<'store, 'a, 'b, HAST: HyperAST<'store>>(
+    hyperast: &'store HAST,
+    mapper: &'b mut Mapper<
+        'store,
+        HAST,
+        &'a mut LazyPostOrder<HAST::T, u32>,
+        &'a mut LazyPostOrder<HAST::T, u32>,
+        VecStore<u32>,
+    >,
+) where
+    HAST::IdN: Clone + Debug + Eq,
+    HAST::Label: Clone + Copy + Eq + Debug,
+    <HAST::T as types::WithChildren>::ChildIdx: Debug,
+    HAST::T: 'store + types::WithHashs + types::WithStats,
+{
+    GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 2000, 1, 100>::execute(
+        mapper,
+        hyperast.label_store(),
+    );
 }
 
 pub fn full2<'store, 'a, 'b, HAST: HyperAST<'store>>(
@@ -168,6 +213,38 @@ pub fn full2<'store, 'a, 'b, HAST: HyperAST<'store>>(
     bottom_up_hiding(hyperast, &mm, mapper);
     let bottom_up_hiding_t = now.elapsed().as_secs_f64();
     dbg!(bottom_up_hiding_t);
+}
+
+pub fn full3<'store, 'a, 'b, HAST: HyperAST<'store>>(
+    hyperast: &'store HAST,
+    mapper: &'b mut Mapper<
+        'store,
+        HAST,
+        &'a mut LazyPostOrder<HAST::T, u32>,
+        &'a mut LazyPostOrder<HAST::T, u32>,
+        VecStore<u32>,
+    >,
+) where
+    HAST::IdN: Clone + Debug + Eq,
+    HAST::Label: Clone + Copy + Eq + Debug,
+    <HAST::T as types::WithChildren>::ChildIdx: Debug,
+    HAST::T: 'store + types::WithHashs + types::WithStats,
+{
+    let mut mm: DefaultMultiMappingStore<_> = Default::default();
+    mm.topit(mapper.src_arena.len(), mapper.dst_arena.len());
+    let now = std::time::Instant::now();
+    Mapper::<HAST, _, _, VecStore<u32>>::compute_multimapping::<_, 1>(
+        mapper.hyperast,
+        &mut mapper.mapping.src_arena,
+        &mut mapper.mapping.dst_arena,
+        &mut mm,
+    );
+    let compute_multimapping_t = now.elapsed().as_secs_f64();
+    dbg!(compute_multimapping_t);
+    let now = std::time::Instant::now();
+    bottom_up(hyperast, &mm, mapper);
+    let bottom_up_t = now.elapsed().as_secs_f64();
+    dbg!(bottom_up_t);
 }
 
 // There is, I believe a performance regression after having replaced the get_type by TStore::resolve_type

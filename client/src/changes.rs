@@ -11,7 +11,7 @@ use hyper_diff::{decompressed_tree_store::ShallowDecompressedTreeStore, matchers
 
 use crate::{matching, no_space, utils::get_pair_simp};
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct SrcChanges {
     user: String,
     name: String,
@@ -19,7 +19,7 @@ pub struct SrcChanges {
     /// Global position of deleted elements
     deletions: Vec<u32>, // TODO diff encode
 }
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct DstChanges {
     user: String,
     name: String,

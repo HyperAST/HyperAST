@@ -9,7 +9,6 @@ use hyper_ast::{
         TypeStore, WithChildren,
     },
 };
-use hyper_ast_cvs_git::{git::fetch_github_repository, processing::ConfiguredRepoTrait};
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
