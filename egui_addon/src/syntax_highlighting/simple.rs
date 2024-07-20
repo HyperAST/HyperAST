@@ -44,7 +44,7 @@ impl CodeTheme {
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_top(|ui| {
-            let selected_id = egui::Id::null();
+            let selected_id = egui::Id::NULL;
             let mut selected_tt: TokenType =
                 ui.data_mut(|d| *d.get_persisted_mut_or(selected_id, TokenType::Comment));
 

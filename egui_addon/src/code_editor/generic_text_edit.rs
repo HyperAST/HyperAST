@@ -5,7 +5,7 @@ use epaint::text::{cursor::*, Galley, LayoutJob};
 use egui::{output::OutputEvent, *};
 
 use crate::code_editor::generic_text_buffer::AsText;
-use egui::text_edit::{CCursorRange, CursorRange};
+use egui::text_selection::{CCursorRange, CursorRange};
 
 use self::output::TextEditOutput;
 
@@ -374,6 +374,8 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
                         // fill: ui.visuals().selection.bg_fill,
                         fill: ui.visuals().extreme_bg_color,
                         stroke: ui.visuals().selection.stroke,
+                        fill_texture_id: egui::TextureId::Managed(0),
+                        uv: epaint::Rect::ZERO,
                     }
                 } else {
                     epaint::RectShape {
@@ -381,6 +383,8 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
                         rounding: visuals.rounding,
                         fill: ui.visuals().extreme_bg_color,
                         stroke: visuals.bg_stroke, // TODO(emilk): we want to show something here, or a text-edit field doesn't "pop".
+                        fill_texture_id: egui::TextureId::Managed(0),
+                        uv: epaint::Rect::ZERO,
                     }
                 }
             } else {
@@ -392,6 +396,8 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
                     // fill: visuals.bg_fill,
                     fill: Color32::TRANSPARENT,
                     stroke: visuals.bg_stroke, // TODO(emilk): we want to show something here, or a text-edit field doesn't "pop".
+                    fill_texture_id: egui::TextureId::Managed(0),
+                    uv: epaint::Rect::ZERO,
                 }
             };
 
@@ -572,7 +578,9 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
         let mut cursor_range = None;
         let prev_cursor_range = state.cursor_range(&galley);
         if interactive && ui.memory(|mem| mem.has_focus(id)) {
-            ui.memory_mut(|mem| mem.lock_focus(id, lock_focus));
+            if lock_focus {
+                ui.memory_mut(|mem| mem.request_focus(id));
+            }
 
             let default_cursor_range = if cursor_at_end {
                 CursorRange::one(galley.end())
@@ -642,7 +650,7 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
         };
 
         if ui.is_rect_visible(rect) {
-            painter.galley(text_draw_pos, galley.clone());
+            painter.galley(text_draw_pos, galley.clone(), ui.visuals().text_color());
 
             if text.as_str().is_empty() && !hint_text.is_empty() {
                 let hint_text_color = ui.visuals().weak_text_color();
@@ -651,7 +659,8 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
                 } else {
                     hint_text.into_galley(ui, Some(false), f32::INFINITY, font_id)
                 };
-                galley.paint_with_fallback_color(&painter, response.rect.min, hint_text_color);
+                painter.galley(response.rect.min, galley, hint_text_color)
+                // galley.paint_with_fallback_color(&painter, response.rect.min, hint_text_color);
             }
 
             if ui.memory(|mem| mem.has_focus(id)) {
@@ -670,26 +679,21 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
                             &cursor_range.primary,
                         );
 
+                        let primary_cursor_rect =
+                            cursor_rect(text_draw_pos, &galley, &cursor_range.primary, row_height);
+
                         let is_fully_visible = ui.clip_rect().contains_rect(rect); // TODO: remove this HACK workaround for https://github.com/emilk/egui/issues/1531
                         if (response.changed || selection_changed) && !is_fully_visible {
                             ui.scroll_to_rect(cursor_pos, None); // keep cursor in view
                         }
 
-                        if interactive {
-                            // eframe web uses `text_cursor_pos` when showing IME,
-                            // so only set it when text is editable and visible!
-                            // But `winit` and `egui_web` differs in how to set the
-                            // position of IME.
-                            if cfg!(target_arch = "wasm32") {
-                                ui.ctx().output_mut(|o| {
-                                    o.text_cursor_pos = Some(cursor_pos.left_top());
-                                });
-                            } else {
-                                ui.ctx().output_mut(|o| {
-                                    o.text_cursor_pos = Some(cursor_pos.left_bottom());
-                                });
-                            }
-                        }
+                        // For IME, so only set it when text is editable and visible!
+                        ui.ctx().output_mut(|o| {
+                            o.ime = Some(egui::output::IMEOutput {
+                                rect,
+                                cursor_rect: primary_cursor_rect,
+                            });
+                        });
                     }
                 }
             }
@@ -985,7 +989,7 @@ fn events<TB: TextBuffer>(
                 modifiers,
                 ..
             } => {
-                if multiline && ui.memory(|mem| mem.has_lock_focus(id)) {
+                if multiline && ui.memory(|mem| mem.has_focus(id)) {
                     let mut ccursor = delete_selected(text, &cursor_range);
                     if modifiers.shift {
                         // TODO(emilk): support removing indentation over a selection?
@@ -1183,7 +1187,7 @@ fn paint_cursor_end(
 
     painter.line_segment(
         [top, bottom],
-        (ui.visuals().text_cursor_width, stroke.color),
+        (ui.visuals().text_cursor.width, stroke.color),
     );
 
     if false {
@@ -1684,4 +1688,16 @@ fn decrease_identation<TB: TextBuffer>(ccursor: &mut CCursor, text: &mut TB) {
             *ccursor -= len;
         }
     }
+}
+
+/// The thin rectangle of one end of the selection, e.g. the primary cursor.
+pub fn cursor_rect(galley_pos: Pos2, galley: &Galley, cursor: &Cursor, row_height: f32) -> Rect {
+    let mut cursor_pos = galley
+        .pos_from_cursor(cursor)
+        .translate(galley_pos.to_vec2());
+    cursor_pos.max.y = cursor_pos.max.y.at_least(cursor_pos.min.y + row_height);
+    // Handle completely empty galleys
+    cursor_pos = cursor_pos.expand(1.5);
+    // slightly above/below row
+    cursor_pos
 }
