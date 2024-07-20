@@ -8,6 +8,7 @@ use hyper_ast::{
     store::{defaults::NodeIdentifier, SimpleStores},
     types::HyperAST,
 };
+use hyper_ast_gen_ts_tsquery::auto::tsq_ser_meta::Conv;
 use tree_sitter_graph::GenQuery;
 
 use crate::types::TStore;
@@ -245,7 +246,7 @@ impl<'query, 'cursor: 'query, 'tree: 'cursor> Iterator for MyQMatches<'query, 'c
     }
 }
 
-pub struct QueryMatcher<Ty>(pub hyper_ast_gen_ts_tsquery::search::PreparedMatcher<Ty>);
+pub struct QueryMatcher<Ty, C = Conv<Ty>>(pub hyper_ast_gen_ts_tsquery::search::PreparedMatcher<Ty, C>);
 
 impl<Ty: Debug> Debug for QueryMatcher<Ty> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

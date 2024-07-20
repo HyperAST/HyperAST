@@ -1468,7 +1468,6 @@ fn test_subquery_detection3() {
     );
 }
 
-
 #[test]
 fn test_subquery_detection4() {
     f(
@@ -1495,6 +1494,35 @@ fn test_subquery_detection4() {
 }
 
 #[test]
+fn test_subquery_detection5() {
+    f(
+        r#"(try_statement
+  (block
+    (expression_statement)
+    (expression_statement
+      (method_invocation
+        (identifier) (#EQ? "fail")
+        (argument_list
+        )
+      )
+    )
+  )
+  (catch_clause)
+)"#,
+        &[
+            r#"(method_invocation
+            (identifier) (#EQ? "fail")
+        )"#,
+            r#"(try_statement
+    (block)
+    (catch_clause)
+)"#,
+        ],
+        "",
+    );
+}
+
+#[test]
 fn test_prepro_main_meth() {
     let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
     g(
@@ -1510,6 +1538,223 @@ fn test_prepro_main_meth() {
     )"#],
         &text,
     );
+}
+
+#[test]
+fn test_prepro_imp() {
+    let text = r#"package com.google.gson;
+
+import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.fail;
+
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
+import java.io.IOException;
+import java.io.StringReader;
+import org.junit.Test;
+
+public class TypeAdapterTest {
+  @Test
+  public void testNullSafe() throws IOException {
+    TypeAdapter<String> adapter = new TypeAdapter<String>() {
+      @Override public void write(JsonWriter out, String value) {
+        throw new AssertionError("unexpected call");
+      }
+
+      @Override public String read(JsonReader in) {
+        throw new AssertionError("unexpected call");
+      }
+    }.nullSafe();
+
+    assertThat(adapter.toJson(null)).isEqualTo("null");
+    assertThat(adapter.fromJson("null")).isNull();
+  }
+
+  /**
+   * Tests behavior when {@link TypeAdapter#write(JsonWriter, Object)} manually throws
+   * {@link IOException} which is not caused by writer usage.
+   */
+  @Test
+  public void testToJson_ThrowingIOException() {
+    final IOException exception = new IOException("test");
+    TypeAdapter<Integer> adapter = new TypeAdapter<Integer>() {
+      @Override public void write(JsonWriter out, Integer value) throws IOException {
+        throw exception;
+      }
+
+      @Override public Integer read(JsonReader in) {
+        throw new AssertionError("not needed by this test");
+      }
+    };
+
+    try {
+      adapter.toJson(1);
+      fail();
+    } catch (JsonIOException e) {
+      assertThat(e.getCause()).isEqualTo(exception);
+    }
+
+    try {
+      adapter.toJsonTree(1);
+      fail();
+    } catch (JsonIOException e) {
+      assertThat(e.getCause()).isEqualTo(exception);
+    }
+  }
+
+  private static final TypeAdapter<String> adapter = new TypeAdapter<String>() {
+    @Override public void write(JsonWriter out, String value) throws IOException {
+      out.value(value);
+    }
+
+    @Override public String read(JsonReader in) throws IOException {
+      return in.nextString();
+    }
+  };
+
+  // Note: This test just verifies the current behavior; it is a bit questionable
+  // whether that behavior is actually desired
+  @Test
+  public void testFromJson_Reader_TrailingData() throws IOException {
+    assertThat(adapter.fromJson(new StringReader("\"a\"1"))).isEqualTo("a");
+  }
+
+  // Note: This test just verifies the current behavior; it is a bit questionable
+  // whether that behavior is actually desired
+  @Test
+  public void testFromJson_String_TrailingData() throws IOException {
+    assertThat(adapter.fromJson("\"a\"1")).isEqualTo("a");
+  }
+}"#;
+    let q = r#"
+
+(import_declaration
+    "static"
+    (scoped_absolute_identifier
+      (scoped_absolute_identifier
+        (scoped_absolute_identifier
+          (identifier) (#EQ? "org")
+          (identifier) (#EQ? "junit")
+        )
+        (identifier) (#EQ? "Assert")
+      )
+      (identifier) (#EQ? "fail")
+    )
+) @a2
+
+(try_statement
+    (block
+      (expression_statement
+        (method_invocation
+          (field_access
+            (identifier) (#EQ? "ToNumberPolicy")
+            (identifier) (#EQ? "BIG_DECIMAL")
+          )
+          (identifier) (#EQ? "readNumber")
+          (argument_list
+            (method_invocation
+              (identifier) (#EQ? "fromString")
+              (argument_list
+                (string_literal)
+              )
+            )
+          )
+        )
+      )
+      (expression_statement
+        (method_invocation
+          (identifier) (#EQ? "fail")
+          (argument_list
+          )
+        )
+      )
+    )
+    (catch_clause
+      (catch_formal_parameter
+        (catch_type
+          (type_identifier)
+        )
+        (identifier) @p0
+      )
+      (block
+        (expression_statement
+          (method_invocation
+            (method_invocation
+              (method_invocation
+                (identifier) (#EQ? "assertThat")
+                (argument_list
+                  (identifier) @p1
+                )
+              )
+              (identifier) (#EQ? "hasMessageThat")
+              (argument_list
+              )
+            )
+            (identifier) (#EQ? "isEqualTo")
+            (argument_list
+              (binary_expression
+                (string_literal)
+                "+"
+                (string_literal)
+              )
+            )
+          )
+        )
+      )
+    )
+) @a3 "#;
+    let p = &[
+        r#"(method_invocation
+        (identifier) (#EQ? "fail")
+    )"#,
+    ];
+    log::set_logger(&LOGGER)
+        .map(|()| log::set_max_level(log::LevelFilter::Trace))
+        .unwrap();
+    let (precomp, query) =
+        hyper_ast_tsquery::Query::with_precomputed(q, tree_sitter_java::language(), p).unwrap();
+    // query._check_preprocessed(0, 0);
+    log::trace!("\n{}", query);
+    let mut stores = hyper_ast::store::SimpleStores {
+        label_store: hyper_ast::store::labels::LabelStore::new(),
+        type_store: crate::types::TStore::default(),
+        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
+    };
+    let mut md_cache = Default::default();
+    let mut java_tree_gen = crate::legion_with_refs::JavaTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores: &mut stores,
+        md_cache: &mut md_cache,
+        more: precomp,
+    };
+    let tree = match crate::legion_with_refs::tree_sitter_parse((&text).as_bytes()) {
+        Ok(t) => t,
+        Err(t) => t,
+    };
+    println!("{}", tree.root_node().to_sexp());
+    let full_node = java_tree_gen.generate_file(b"", (&text).as_bytes(), tree.walk());
+    let code = full_node.local.compressed_node;
+    let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
+    let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
+    dbg!();
+    let qcursor = query.matches(cursor);
+    let mut count = 0;
+    for m in qcursor {
+        count += 1;
+        dbg!(m.pattern_index);
+        dbg!(m.captures.len());
+        for c in &m.captures {
+            let i = c.index;
+            dbg!(i);
+            let name = query.capture_name(i);
+            dbg!(name);
+            use hyper_ast::position::structural_pos::AAA;
+            let n = c.node.pos.node();
+            let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, n);
+            dbg!(n.to_string());
+        }
+    }
+    assert_eq!(1, count);
 }
 #[test]
 fn test_prepro_main_meth2() {
@@ -1629,6 +1874,159 @@ class A {
 }
 
 #[test]
+fn test_prepro_empty_block() {
+    let text = r#"import static org.junit.Assert.fail;
+class A {
+  @Test
+  public void testDuplicateLabel() {
+    RuntimeTypeAdapterFactory<BillingInstrument> rta =
+        RuntimeTypeAdapterFactory.of(BillingInstrument.class);
+    rta.registerSubtype(CreditCard.class, "CC");
+    try {
+      rta.registerSubtype(BankTransfer.class, "CC");
+      fail();
+    } catch (IllegalArgumentException expected) {
+    }
+  }
+}
+"#;
+    let c = g(
+        r#"(program
+  (import_declaration 
+    "static" 
+    (scoped_absolute_identifier 
+        scope: (scoped_absolute_identifier 
+            scope: (scoped_absolute_identifier 
+                scope: (identifier) (#EQ? "org")
+                name: (identifier) (#EQ? "junit")
+            )
+            name: (identifier) (#EQ? "Assert")
+        )
+        name: (identifier) (#EQ? "fail")
+    )
+  )
+  (class_declaration 
+    name: (_) @name
+    body: (_
+      (method_declaration
+        (modifiers
+          (marker_annotation 
+            name: (_) (#EQ? "Test")
+          )
+        )
+        name: (_) @meth
+        body: (_
+            (try_statement
+                body: (_
+                    (expression_statement
+                        (method_invocation
+                            !object
+                            name: (identifier) (#EQ? "fail")
+                        )
+                    )
+                )
+                (catch_clause (block "{" . "}" ))
+            )
+        )
+      )
+    )
+  )
+)"#,
+        &[
+            r#"(method_invocation
+    !object
+    name: (identifier) (#EQ? "fail")
+)"#,
+            r#"
+(import_declaration 
+  "static" 
+  (scoped_absolute_identifier 
+      scope: (scoped_absolute_identifier 
+          scope: (scoped_absolute_identifier 
+              scope: (identifier) (#EQ? "org")
+              name: (identifier) (#EQ? "junit")
+          )
+          name: (identifier) (#EQ? "Assert")
+      )
+      name: (identifier) (#EQ? "fail")
+  )
+)"#,
+        ],
+        &text,
+    );
+    assert_eq!(c, 0);
+}
+
+#[test]
+fn test_neg() {
+    let text = r#"
+class A {
+  @Test
+  public void f() {
+    try {
+    } catch (E e) {
+    }
+  }
+}
+"#;
+    let text2 = r#"
+class A {
+  @Test
+  public void f() {
+    try {
+    } catch (E e) {
+        a;
+    }
+  }
+}
+"#;
+    let q = r#"(program
+      (class_declaration 
+    body: (_
+      (method_declaration
+        body: (_
+            (try_statement
+                (catch_clause (block (_) (#NEG?) ))
+            )
+        )
+      )
+    )
+      )
+    )"#;
+    let q2 = r#"(program
+      (class_declaration 
+    body: (_
+      (method_declaration
+        body: (_
+            (try_statement
+                (catch_clause (block) (#MTY?))
+            )
+        )
+      )
+    )
+      )
+    )"#;
+    let q3 = r#"(program
+      (class_declaration 
+    body: (_
+      (method_declaration
+        body: (_
+            (try_statement
+                (catch_clause (block (_)? @a) (#empty? @a))
+            )
+        )
+      )
+    )
+      )
+    )"#;
+    // let c = g(q, &[], &text);
+    // assert_eq!(c, 1);
+    let c = g(q, &[], &text2);
+    assert_eq!(c, 0);
+    // (block (_) (#CONT? 1))
+}
+
+#[test]
 fn test_prepro_ret_null_x() {
     let text = std::fs::read_to_string(
         "../../../../spoon/src/test/java/spoon/test/ctType/testclasses/X.java",
@@ -1662,6 +2060,234 @@ fn test_prepro_firsts() {
     assert_eq!(count, 1)
 }
 
+#[test]
+fn test_prepro_try_catch_pat() {
+    let text = r#"/*
+    * Copyright (C) 2021 Google Inc.
+    *
+    * Licensed under the Apache License, Version 2.0 (the "License");
+    * you may not use this file except in compliance with the License.
+    * You may obtain a copy of the License at
+    *
+    * http://www.apache.org/licenses/LICENSE-2.0
+    *
+    * Unless required by applicable law or agreed to in writing, software
+    * distributed under the License is distributed on an "AS IS" BASIS,
+    * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    * See the License for the specific language governing permissions and
+    * limitations under the License.
+    */
+   
+   package com.google.gson;
+   
+   import static com.google.common.truth.Truth.assertThat;
+   import static org.junit.Assert.fail;
+   
+   import com.google.gson.internal.LazilyParsedNumber;
+   import com.google.gson.stream.JsonReader;
+   import com.google.gson.stream.MalformedJsonException;
+   import java.io.IOException;
+   import java.io.StringReader;
+   import java.math.BigDecimal;
+   import org.junit.Test;
+   
+   public class ToNumberPolicyTest {
+     @Test
+     public void testDouble() throws IOException {
+       ToNumberStrategy strategy = ToNumberPolicy.DOUBLE;
+       assertThat(strategy.readNumber(fromString("10.1"))).isEqualTo(10.1);
+       assertThat(strategy.readNumber(fromString("3.141592653589793238462643383279"))).isEqualTo(3.141592653589793D);
+       try {
+         strategy.readNumber(fromString("1e400"));
+         fail();
+       } catch (MalformedJsonException expected) {
+         assertThat(expected).hasMessageThat().isEqualTo(
+             "JSON forbids NaN and infinities: Infinity at line 1 column 6 path $"
+             + "\nSee https://github.com/google/gson/blob/main/Troubleshooting.md#malformed-json");
+       }
+       try {
+         strategy.readNumber(fromString("\"not-a-number\""));
+         fail();
+       } catch (NumberFormatException expected) {
+       }
+     }
+   
+     @Test
+     public void testLazilyParsedNumber() throws IOException {
+       ToNumberStrategy strategy = ToNumberPolicy.LAZILY_PARSED_NUMBER;
+       assertThat(strategy.readNumber(fromString("10.1"))).isEqualTo(new LazilyParsedNumber("10.1"));
+       assertThat(strategy.readNumber(fromString("3.141592653589793238462643383279"))).isEqualTo(new LazilyParsedNumber("3.141592653589793238462643383279"));
+       assertThat(strategy.readNumber(fromString("1e400"))).isEqualTo(new LazilyParsedNumber("1e400"));
+     }
+   
+     @Test
+     public void testLongOrDouble() throws IOException {
+       ToNumberStrategy strategy = ToNumberPolicy.LONG_OR_DOUBLE;
+       assertThat(strategy.readNumber(fromString("10"))).isEqualTo(10L);
+       assertThat(strategy.readNumber(fromString("10.1"))).isEqualTo(10.1);
+       assertThat(strategy.readNumber(fromString("3.141592653589793238462643383279"))).isEqualTo(3.141592653589793D);
+       try {
+         strategy.readNumber(fromString("1e400"));
+         fail();
+       } catch (MalformedJsonException expected) {
+         assertThat(expected).hasMessageThat().isEqualTo("JSON forbids NaN and infinities: Infinity; at path $");
+       }
+       try {
+         strategy.readNumber(fromString("\"not-a-number\""));
+         fail();
+       } catch (JsonParseException expected) {
+         assertThat(expected).hasMessageThat().isEqualTo("Cannot parse not-a-number; at path $");
+       }
+
+       assertThat(strategy.readNumber(fromStringLenient("NaN"))).isEqualTo(Double.NaN);
+       assertThat(strategy.readNumber(fromStringLenient("Infinity"))).isEqualTo(Double.POSITIVE_INFINITY);
+       assertThat(strategy.readNumber(fromStringLenient("-Infinity"))).isEqualTo(Double.NEGATIVE_INFINITY);
+       try {
+         strategy.readNumber(fromString("NaN"));
+         fail();
+       } catch (MalformedJsonException expected) {
+         assertThat(expected).hasMessageThat().isEqualTo(
+             "Use JsonReader.setLenient(true) to accept malformed JSON at line 1 column 1 path $"
+             + "\nSee https://github.com/google/gson/blob/main/Troubleshooting.md#malformed-json");
+       }
+       try {
+         strategy.readNumber(fromString("Infinity"));
+         fail();
+       } catch (MalformedJsonException expected) {
+         assertThat(expected).hasMessageThat().isEqualTo(
+             "Use JsonReader.setLenient(true) to accept malformed JSON at line 1 column 1 path $"
+             + "\nSee https://github.com/google/gson/blob/main/Troubleshooting.md#malformed-json");
+       }
+       try {
+         strategy.readNumber(fromString("-Infinity"));
+         fail();
+       } catch (MalformedJsonException expected) {
+         assertThat(expected).hasMessageThat().isEqualTo(
+             "Use JsonReader.setLenient(true) to accept malformed JSON at line 1 column 1 path $"
+             + "\nSee https://github.com/google/gson/blob/main/Troubleshooting.md#malformed-json");
+       }
+     }
+   
+     @Test
+     public void testBigDecimal() throws IOException {
+       ToNumberStrategy strategy = ToNumberPolicy.BIG_DECIMAL;
+       assertThat(strategy.readNumber(fromString("10.1"))).isEqualTo(new BigDecimal("10.1"));
+       assertThat(strategy.readNumber(fromString("3.141592653589793238462643383279"))).isEqualTo(new BigDecimal("3.141592653589793238462643383279"));
+       assertThat(strategy.readNumber(fromString("1e400"))).isEqualTo(new BigDecimal("1e400"));
+   
+       try {
+         strategy.readNumber(fromString("\"not-a-number\""));
+         fail();
+       } catch (JsonParseException expected) {
+         assertThat(expected).hasMessageThat().isEqualTo("Cannot parse not-a-number; at path $");
+       }
+     }
+   
+     @Test
+     public void testNullsAreNeverExpected() throws IOException {
+       try {
+         ToNumberPolicy.DOUBLE.readNumber(fromString("null"));
+         fail();
+       } catch (IllegalStateException expected) {
+         assertThat(expected).hasMessageThat().isEqualTo("Expected a double but was NULL at line 1 column 5 path $"
+             + "\nSee https://github.com/google/gson/blob/main/Troubleshooting.md#adapter-not-null-safe");
+       }
+       try {
+         ToNumberPolicy.LAZILY_PARSED_NUMBER.readNumber(fromString("null"));
+         fail();
+       } catch (IllegalStateException expected) {
+         assertThat(expected).hasMessageThat().isEqualTo("Expected a string but was NULL at line 1 column 5 path $"
+             + "\nSee https://github.com/google/gson/blob/main/Troubleshooting.md#adapter-not-null-safe");
+       }
+       try {
+         ToNumberPolicy.LONG_OR_DOUBLE.readNumber(fromString("null"));
+         fail();
+       } catch (IllegalStateException expected) {
+         assertThat(expected).hasMessageThat().isEqualTo("Expected a string but was NULL at line 1 column 5 path $"
+             + "\nSee https://github.com/google/gson/blob/main/Troubleshooting.md#adapter-not-null-safe");
+       }
+       try {
+         ToNumberPolicy.BIG_DECIMAL.readNumber(fromString("null"));
+         fail();
+       } catch (IllegalStateException expected) {
+         assertThat(expected).hasMessageThat().isEqualTo("Expected a string but was NULL at line 1 column 5 path $"
+             + "\nSee https://github.com/google/gson/blob/main/Troubleshooting.md#adapter-not-null-safe");
+       }
+     }
+   
+     private static JsonReader fromString(String json) {
+       return new JsonReader(new StringReader(json));
+     }
+   
+     private static JsonReader fromStringLenient(String json) {
+       JsonReader jsonReader = fromString(json);
+       jsonReader.setLenient(true);
+       return jsonReader;
+     }
+   }
+   "#;
+    let count = g(
+        r#"(try_statement
+        (block
+          (expression_statement
+            (method_invocation
+              (identifier) (#EQ? "strategy")
+              (identifier) (#EQ? "readNumber")
+              (argument_list
+                (method_invocation
+                  (identifier) (#EQ? "fromString")
+                  (argument_list
+                    (string_literal)
+                  )
+                )
+              )
+            )
+          )
+          (expression_statement
+            (method_invocation
+              (identifier) (#EQ? "fail")
+              (argument_list
+              )
+            )
+          )
+        )
+        (catch_clause
+          (catch_formal_parameter
+            (catch_type
+              (type_identifier) (#EQ? "MalformedJsonException")
+            )
+            (identifier) @p0
+          )
+          (block
+            (expression_statement
+              (method_invocation
+                (method_invocation
+                  (method_invocation
+                    (identifier) (#EQ? "assertThat")
+                    (argument_list
+                      (identifier) @p1
+                    )
+                  )
+                  (identifier) (#EQ? "hasMessageThat")
+                  (argument_list
+                  )
+                )
+                (identifier) (#EQ? "isEqualTo")
+                (argument_list
+                  (string_literal)
+                )
+              )
+            )
+          )
+        )
+      )"#,
+        &[],
+        &text,
+    );
+    // let count = g(r#"(_ . (_) @name)"#, &[], &text); // this one works properly
+    assert_eq!(count, 1)
+}
+
 fn g(q: &str, p: &[&str], text: &str) -> usize {
     log::set_logger(&LOGGER)
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
@@ -1669,6 +2295,7 @@ fn g(q: &str, p: &[&str], text: &str) -> usize {
     let (precomp, query) =
         hyper_ast_tsquery::Query::with_precomputed(q, tree_sitter_java::language(), p).unwrap();
     query._check_preprocessed(0, p.len());
+    log::trace!("\n{}", query);
     let mut stores = hyper_ast::store::SimpleStores {
         label_store: hyper_ast::store::labels::LabelStore::new(),
         type_store: crate::types::TStore::default(),

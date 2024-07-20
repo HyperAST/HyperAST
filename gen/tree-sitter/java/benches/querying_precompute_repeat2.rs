@@ -1,5 +1,5 @@
 //! Compare query matching performances
-//! 
+//!
 
 use std::path::{Path, PathBuf};
 
@@ -34,34 +34,6 @@ pub const QUERIES: &[BenchQuery] = &[
         297, // matches on spoon
     ),
 ];
-
-
-fn prep_baseline<'query, 'tree>(
-    query: &'query str,
-) -> impl Fn(&'tree (PathBuf, String)) -> (tree_sitter::Query, tree_sitter::Tree, &'tree str) + 'query
-{
-    |(_, text)| {
-        let language = tree_sitter_java::language();
-        let query = tree_sitter::Query::new(&language, query).unwrap();
-        let mut parser = tree_sitter::Parser::new();
-        parser.set_language(&language).unwrap();
-        let tree = parser.parse(text, None).unwrap();
-        (query, tree, text)
-    }
-}
-
-fn prep_baseline_query_cursor(
-    query: &str,
-) -> impl Fn(&(PathBuf, String)) -> (hyper_ast_tsquery::Query, tree_sitter::Tree, &str) + '_ {
-    |(_, text)| {
-        let language = tree_sitter_java::language();
-        let query = hyper_ast_tsquery::Query::new(query, tree_sitter_java::language()).unwrap();
-        let mut parser = tree_sitter::Parser::new();
-        parser.set_language(&language).unwrap();
-        let tree = parser.parse(text, None).unwrap();
-        (query, tree, text)
-    }
-}
 
 fn preps_default(
     p: (&BenchQuery, &[(std::path::PathBuf, String)]),
@@ -242,13 +214,13 @@ fn bench_baseline(
     group: &mut criterion::BenchmarkGroup<criterion::measurement::WallTime>,
     parameter: (&BenchQuery, &[(PathBuf, String)]),
 ) {
-    let p: Box<[_]> = parameter
-        .1
-        .into_iter()
-        .map(prep_baseline(parameter.0 .2))
-        .collect();
     let id = BenchmarkId::new("baseline", parameter.0 .3);
-    group.bench_with_input(id, &p, |b, f| {
+    group.bench_with_input(id, &parameter, |b, parameter| {
+        let f: Box<[_]> = parameter
+            .1
+            .into_iter()
+            .map(prep_baseline(parameter.0 .2))
+            .collect();
         b.iter(|| {
             let mut count = 0;
             for (q, t, text) in f.into_iter() {
@@ -290,46 +262,3 @@ fn bench_rust_baseline(
 
 criterion_group!(querying, compare_querying_group);
 criterion_main!(querying);
-
-/// Iterates al files in provided directory
-pub struct It {
-    inner: Option<Box<It>>,
-    outer: Option<std::fs::ReadDir>,
-    p: Option<std::path::PathBuf>,
-}
-
-impl It {
-    pub fn new(p: std::path::PathBuf) -> Self {
-        Self {
-            inner: None,
-            outer: None,
-            p: Some(p),
-        }
-    }
-}
-
-impl Iterator for It {
-    type Item = std::path::PathBuf;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let Some(p) = &mut self.inner else {
-            let Some(d) = &mut self.outer else {
-                if let Ok(d) = self.p.as_mut()?.read_dir() {
-                    self.outer = Some(d);
-                    return self.next();
-                } else {
-                    return Some(self.p.take()?);
-                }
-            };
-            let p = d.next()?.ok()?.path();
-            self.inner = Some(Box::new(It::new(p)));
-            return self.next();
-        };
-        let Some(p) = p.next() else {
-            let p = self.outer.as_mut().unwrap().next()?.ok()?.path();
-            self.inner = Some(Box::new(It::new(p)));
-            return self.next();
-        };
-        Some(p)
-    }
-}

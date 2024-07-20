@@ -50,28 +50,10 @@ pub const QUERIES: &[(&[&str], &str, &str, &str, usize)] = &[
     // ),
 ];
 
-
-fn prep_baseline<'query, 'tree>(
-    query: &'query str,
-    name: &str,
-    text: &'tree [u8],
-) -> (tree_sitter::Query, tree_sitter::Tree) {
-    let language = tree_sitter_java::language();
-
-    let query = tree_sitter::Query::new(&language, query).unwrap();
-
-    let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&language).unwrap();
-    let tree = parser.parse(text, None).unwrap();
-
-    (query, tree)
-}
-
 fn compare_querying_group(c: &mut Criterion) {
     let mut group = c.benchmark_group("QueryingRepeatSpoon");
     group.sample_size(10);
 
-    let codes = "../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test";
     let codes = "../../../../spoon/src/main/java";
     let codes = Path::new(&codes).to_owned();
     let codes = It::new(codes).map(|x| {
@@ -93,9 +75,8 @@ fn compare_querying_group(c: &mut Criterion) {
             |b, (q, f)| {
                 b.iter(|| {
                     for _ in 0..p.0 .4 {
-                        for (name, text) in f.into_iter() {
-                            let (q, t) =
-                                prep_baseline(q.2, name.to_str().unwrap(), text.as_bytes());
+                        for p in f.into_iter() {
+                            let (q, t, text) = prep_baseline(q.2)(p);
                             let mut cursor = tree_sitter::QueryCursor::default();
                             black_box(cursor.matches(&q, t.root_node(), text.as_bytes()).count());
                         }
@@ -208,46 +189,3 @@ fn compare_querying_group(c: &mut Criterion) {
 
 criterion_group!(querying, compare_querying_group);
 criterion_main!(querying);
-
-/// Iterates al files in provided directory
-pub struct It {
-    inner: Option<Box<It>>,
-    outer: Option<std::fs::ReadDir>,
-    p: Option<std::path::PathBuf>,
-}
-
-impl It {
-    pub fn new(p: std::path::PathBuf) -> Self {
-        Self {
-            inner: None,
-            outer: None,
-            p: Some(p),
-        }
-    }
-}
-
-impl Iterator for It {
-    type Item = std::path::PathBuf;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let Some(p) = &mut self.inner else {
-            let Some(d) = &mut self.outer else {
-                if let Ok(d) = self.p.as_mut()?.read_dir() {
-                    self.outer = Some(d);
-                    return self.next();
-                } else {
-                    return Some(self.p.take()?);
-                }
-            };
-            let p = d.next()?.ok()?.path();
-            self.inner = Some(Box::new(It::new(p)));
-            return self.next();
-        };
-        let Some(p) = p.next() else {
-            let p = self.outer.as_mut().unwrap().next()?.ok()?.path();
-            self.inner = Some(Box::new(It::new(p)));
-            return self.next();
-        };
-        Some(p)
-    }
-}
