@@ -21,7 +21,10 @@ mod legion_impls {
         }
     }
 
-    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::{LangWrapper, TypeIndex}};
+    use hyper_ast::{
+        store::nodes::legion::HashedNodeRef,
+        types::{LangWrapper, TypeIndex},
+    };
 
     impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         type Ty = Type;
@@ -66,7 +69,29 @@ mod legion_impls {
                 .unwrap();
             hyper_ast::types::Role::try_from(s).expect(s)
         }
-        
+
+        fn intern_role(&self, _lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
+            let field_name = role.to_string();
+            tree_sitter_query::language()
+                .field_id_for_name(field_name)
+                .unwrap()
+                .into()
+        }
+    }
+
+    impl<'a> RoleStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
+        type IdF = u16;
+
+        type Role = hyper_ast::types::Role;
+
+        fn resolve_field(&self, _lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
+            let s = tree_sitter_query::language()
+                .field_name_for_id(field_id)
+                .ok_or_else(|| format!("{}", field_id))
+                .unwrap();
+            hyper_ast::types::Role::try_from(s).expect(s)
+        }
+
         fn intern_role(&self, _lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
             let field_name = role.to_string();
             tree_sitter_query::language()
@@ -303,15 +328,15 @@ impl HyperType for Type {
     }
 
     fn is_hidden(&self) -> bool {
-        todo!()
+        self.is_hidden()
     }
 
     fn is_supertype(&self) -> bool {
-        todo!()
+        self.is_supertype()
     }
 
     fn is_named(&self) -> bool {
-        todo!()
+        self.is_named()
     }
 
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
@@ -321,7 +346,7 @@ impl HyperType for Type {
         From::<&'static (dyn LangRef<Self>)>::from(&TsQuery)
     }
     fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
-        todo!()
+        hyper_ast::types::LangWrapper::from(&TsQuery as &(dyn LangRef<AnyType> + 'static))
     }
 }
 
@@ -638,6 +663,53 @@ impl Type {
             Type::Spaces => "Spaces",
             Type::Directory => "Directory",
             Type::ERROR => "ERROR",
+        }
+    }
+
+    pub fn is_hidden(&self) -> bool {
+        match self {
+            Type::End => true,
+            Type::_StringToken1 => true,
+            Type::_Definition => true,
+            Type::_GroupExpression => true,
+            Type::_NamedNodeExpression => true,
+            Type::_String => true,
+            Type::_ImmediateIdentifier => true,
+            Type::_NodeIdentifier => true,
+            Type::_FieldName => true,
+            Type::ProgramRepeat1 => true,
+            Type::_StringRepeat1 => true,
+            Type::ParametersRepeat1 => true,
+            Type::ListRepeat1 => true,
+            Type::GroupingRepeat1 => true,
+            Type::NamedNodeRepeat1 => true,
+            _ => false,
+        }
+    }
+    pub fn is_supertype(&self) -> bool {
+        match self {
+            _ => false,
+        }
+    }
+    pub fn is_named(&self) -> bool {
+        match self {
+            Type::EscapeSequence => true,
+            Type::Identifier => true,
+            Type::Comment => true,
+            Type::PredicateType => true,
+            Type::Program => true,
+            Type::Quantifier => true,
+            Type::Capture => true,
+            Type::String => true,
+            Type::Parameters => true,
+            Type::List => true,
+            Type::Grouping => true,
+            Type::AnonymousNode => true,
+            Type::NamedNode => true,
+            Type::FieldDefinition => true,
+            Type::NegatedField => true,
+            Type::Predicate => true,
+            _ => false,
         }
     }
 }

@@ -1,9 +1,10 @@
 use std::collections::VecDeque;
 use std::ops::Deref;
 
+use crate::auto::tsq_ser_meta::Conv;
+
 use super::{CaptureRes, Captured, MatchingRes, Pattern, Predicate, PreparedMatcher};
 
-use hyper_ast::types::HyperAST;
 use tree_sitter::CaptureQuantifier as Quant;
 
 use hyper_ast::types::HyperType;
@@ -14,7 +15,7 @@ pub struct MatchingIter<
     'store,
     HAST: TypedHyperAST<'store, TIdN>,
     TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN>,
-    PM: Deref<Target = PreparedMatcher<TIdN::Ty>>,
+    PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
 > {
     slf: PM,
     code_store: &'store HAST,
@@ -28,7 +29,7 @@ impl<
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN>,
-        PM: Deref<Target = PreparedMatcher<TIdN::Ty>>,
+        PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
     > MatchingIter<'store, HAST, TIdN, PM>
 {
     pub fn new(slf: PM, code_store: &'store HAST, root: HAST::IdN) -> Self {
@@ -46,7 +47,7 @@ impl<
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN>,
-        PM: Deref<Target = PreparedMatcher<TIdN::Ty>>,
+        PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
     > Iterator for MatchingIter<'store, HAST, TIdN, PM>
 where
     HAST::IdN: std::fmt::Debug,
@@ -71,7 +72,7 @@ impl<
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN>,
-        PM: Deref<Target = PreparedMatcher<TIdN::Ty>>,
+        PM: Deref<Target = PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>>,
     > MatchingIter<'store, HAST, TIdN, PM>
 where
     HAST::IdN: std::fmt::Debug,

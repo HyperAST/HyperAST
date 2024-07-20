@@ -16,6 +16,7 @@ hashbrown = { version = "0.13.2", default-features = false, optional = true }
 log = { version = "0.4.6" }                                                                                                                                                     #, features = ["max_level_debug", "release_max_level_warn"] }
 
 hyper_ast = { path = "../../../hyper_ast", default-features = false }
+hyper_ast_tsquery = { path = "../../../tsquery", optional = true }
 
 libc = "0.2"
 
@@ -56,4 +57,5 @@ impl = [
     "hashbrown?/ahash",
     "dep:tree-sitter",
     "dep:tree-sitter-query",
+    "dep:hyper_ast_tsquery",
 ]

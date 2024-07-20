@@ -47,6 +47,7 @@ mod tnode {
     }
 }
 
+use auto::tsq_ser_meta::Conv;
 use search::Captured;
 #[cfg(feature = "legion")]
 pub use tnode::TNode;
@@ -58,14 +59,15 @@ pub mod iter;
 
 pub mod auto;
 
-pub fn prepare_matcher<Ty>(query: &str) -> crate::search::PreparedMatcher<Ty>
+pub fn prepare_matcher<Ty>(query: &str) -> crate::search::PreparedMatcher<Ty, Conv<Ty>>
 where
     Ty: std::fmt::Debug,
     Ty: for<'a> TryFrom<&'a str>,
     for<'a> <Ty as TryFrom<&'a str>>::Error: std::fmt::Debug,
 {
     let (query_store, query) = crate::search::ts_query(query.as_bytes());
-    let prepared_matcher = crate::search::PreparedMatcher::<Ty>::new(&query_store, query);
+    let prepared_matcher =
+        crate::search::PreparedMatcher::<Ty, Conv<Ty>>::new(&query_store, query);
     prepared_matcher
 }
 
@@ -77,11 +79,13 @@ pub struct IterMatched<M, HAST, It, TIdN> {
 }
 
 impl<'a, HAST, It: Iterator, TIdN> Iterator
-    for IterMatched<&crate::search::PreparedMatcher<TIdN::Ty>, &'a HAST, It, TIdN>
+    for IterMatched<&crate::search::PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>, &'a HAST, It, TIdN>
 where
     HAST: hyper_ast::types::HyperAST<'a> + hyper_ast::types::TypedHyperAST<'a, TIdN>,
-    TIdN: 'static + hyper_ast::types::TypedNodeId<IdN = <HAST as hyper_ast::types::HyperASTShared>::IdN>,
-    It::Item: hyper_ast::position::TreePath<TIdN::IdN, <HAST as hyper_ast::types::HyperASTShared>::Idx>,
+    TIdN: 'static
+        + hyper_ast::types::TypedNodeId<IdN = <HAST as hyper_ast::types::HyperASTShared>::IdN>,
+    It::Item:
+        hyper_ast::position::TreePath<TIdN::IdN, <HAST as hyper_ast::types::HyperASTShared>::Idx>,
     for<'b> &'b str: Into<<TIdN as hyper_ast::types::TypedNodeId>::Ty>,
     TIdN::IdN: Copy,
 {
@@ -126,7 +130,7 @@ where
 //     }
 // }
 
-impl<Ty> crate::search::PreparedMatcher<Ty> {
+impl<Ty> crate::search::PreparedMatcher<Ty, Conv<Ty>> {
     pub fn apply_matcher<'a, HAST, It, TIdN>(
         &self,
         hast: &'a HAST,
@@ -136,7 +140,7 @@ impl<Ty> crate::search::PreparedMatcher<Ty> {
             'a,
             HAST,
             TIdN,
-            &crate::search::PreparedMatcher<TIdN::Ty>,
+            &crate::search::PreparedMatcher<TIdN::Ty, Conv<Ty>>,
         >,
         &'a HAST,
         It,
@@ -178,7 +182,7 @@ impl<'a, HAST, It: Iterator, TIdN> Iterator
             'a,
             HAST,
             TIdN,
-            &crate::search::PreparedMatcher<TIdN::Ty>,
+            &crate::search::PreparedMatcher<TIdN::Ty, Conv<TIdN::Ty>>,
         >,
         &'a HAST,
         It,
@@ -186,8 +190,10 @@ impl<'a, HAST, It: Iterator, TIdN> Iterator
     >
 where
     HAST: hyper_ast::types::HyperAST<'a> + hyper_ast::types::TypedHyperAST<'a, TIdN>,
-    TIdN: 'static + hyper_ast::types::TypedNodeId<IdN = <HAST as hyper_ast::types::HyperASTShared>::IdN>,
-    It::Item: hyper_ast::position::TreePath<TIdN::IdN, <HAST as hyper_ast::types::HyperASTShared>::Idx> + Clone,
+    TIdN: 'static
+        + hyper_ast::types::TypedNodeId<IdN = <HAST as hyper_ast::types::HyperASTShared>::IdN>,
+    It::Item: hyper_ast::position::TreePath<TIdN::IdN, <HAST as hyper_ast::types::HyperASTShared>::Idx>
+        + Clone,
     for<'b> &'b str: Into<<TIdN as hyper_ast::types::TypedNodeId>::Ty>,
     TIdN::IdN: Copy + std::fmt::Debug,
 {
@@ -204,4 +210,9 @@ where
         }
         None
     }
+}
+
+#[cfg(feature = "impl")]
+pub fn language() -> tree_sitter::Language {
+    tree_sitter_query::language()
 }

@@ -9,16 +9,18 @@ use hyper_ast::types::{HyperAST, IterableChildren, Labeled, TypeStore, Typed, Wi
 
 use tree_sitter::CaptureQuantifier as Quant;
 
+use crate::auto::tsq_ser_meta::Converter;
 use crate::types::TStore;
 
-pub struct PreparingMatcher<Ty> {
+pub struct PreparingMatcher<Ty, C> {
     root_types: Vec<Ty>,
     patterns: Vec<Pattern<Ty>>,
     captures: Vec<Capture>,
     quantifiers: Vec<HashMap<usize, tree_sitter::CaptureQuantifier>>,
+    converter: C,
 }
 
-impl<Ty> PreparingMatcher<Ty> {
+impl<Ty, C> PreparingMatcher<Ty, C> {
     fn add_or_insert_capture(&mut self, capture: &str) -> u32 {
         let p = self.captures.iter().position(|x| x.name == capture);
         let Some(p) = p else {
@@ -38,19 +40,20 @@ impl<Ty> PreparingMatcher<Ty> {
     }
 }
 
-impl<Ty> Default for PreparingMatcher<Ty> {
+impl<Ty, C: Default> Default for PreparingMatcher<Ty, C> {
     fn default() -> Self {
         Self {
             root_types: Default::default(),
             patterns: Default::default(),
             captures: Default::default(),
             quantifiers: Default::default(),
+            converter: Default::default(),
         }
     }
 }
 
-impl<Ty> From<PreparingMatcher<Ty>> for PreparedMatcher<Ty> {
-    fn from(value: PreparingMatcher<Ty>) -> Self {
+impl<Ty, C> From<PreparingMatcher<Ty, C>> for PreparedMatcher<Ty, C> {
+    fn from(value: PreparingMatcher<Ty, C>) -> Self {
         assert_eq!(value.patterns.len(), value.quantifiers.len());
         dbg!(&value.quantifiers);
         Self {
@@ -60,16 +63,16 @@ impl<Ty> From<PreparingMatcher<Ty>> for PreparedMatcher<Ty> {
             patterns: value.patterns.into(),
             captures: value.captures.into(),
             quantifiers: value.quantifiers.into(),
+            converter: value.converter,
         }
     }
 }
 
-impl<'a, Ty> PreparedMatcher<Ty>
-where
-    Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
-    for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
-{
-    pub fn new(query_store: &'a SimpleStores<crate::types::TStore>, query: NodeIdentifier) -> Self {
+impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
+    pub fn new(
+        query_store: &'a SimpleStores<crate::types::TStore>,
+        query: NodeIdentifier,
+    ) -> Self {
         let preparing = Self::new_aux(query_store, query);
 
         preparing.into()
@@ -78,10 +81,7 @@ where
     pub(crate) fn new_aux(
         query_store: &'a SimpleStores<TStore>,
         query: legion::Entity,
-    ) -> PreparingMatcher<Ty>
-    where
-        Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
-    {
+    ) -> PreparingMatcher<Ty, C> {
         use crate::types::TIdN;
         use crate::types::Type;
         use hyper_ast::types::LabelStore;
@@ -93,7 +93,10 @@ where
             .0;
         let t = n.get_type();
         assert_eq!(t, Type::Program);
-        for rule_id in n.children().unwrap().iter_children() {
+        let Some(cs) = n.children() else {
+            return res
+        };
+        for rule_id in cs.iter_children() {
             let rule = query_store
                 .node_store
                 .try_resolve_typed::<TIdN<NodeIdentifier>>(&rule_id)
@@ -111,7 +114,7 @@ where
                 assert_eq!(ty.get_type(), Type::Identifier);
                 let l = ty.try_get_label();
                 let l = query_store.label_store.resolve(&l.unwrap());
-                let l = Ty::try_from(l).expect("the node type does not exist");
+                let l = C::conv(l).expect("the node type does not exist");
                 let patt = Self::process_named_node(query_store, *rule_id, &mut res).into();
                 res.root_types.push(l);
                 res.patterns.push(patt);
@@ -176,7 +179,7 @@ where
                         assert_eq!(ty.get_type(), Type::Identifier);
                         let l = ty.try_get_label();
                         let l = query_store.label_store.resolve(&l.unwrap());
-                        let l = Ty::try_from(l).expect("the node type does not exist");
+                        let l = C::conv(l).expect("the node type does not exist");
                         let patt = Self::process_named_node(query_store, *id, &mut res);
                         res.root_types.push(l);
                         patterns.push(patt);
@@ -223,7 +226,7 @@ where
     pub(crate) fn process_named_node(
         query_store: &'a SimpleStores<crate::types::TStore>,
         rule: NodeIdentifier,
-        preparing: &mut PreparingMatcher<Ty>,
+        preparing: &mut PreparingMatcher<Ty, C>,
     ) -> Pattern<Ty> {
         use crate::types::TIdN;
         use crate::types::Type;
@@ -251,7 +254,7 @@ where
             assert_eq!(Type::Identifier, ty.get_type());
             let l = ty.try_get_label();
             let l = query_store.label_store.resolve(&l.unwrap());
-            let l = Ty::try_from(l).expect("the node type does not exist");
+            let l = C::conv(l).expect("the node type does not exist");
             Some(l)
         };
         loop {
@@ -323,7 +326,7 @@ where
                 l = {
                     let l = ty.try_get_label();
                     let l = query_store.label_store.resolve(&l.unwrap());
-                    let l = Ty::try_from(l).expect("the node type does not exist");
+                    let l = C::conv(l).expect("the node type does not exist");
                     Some(l)
                 };
             } else {
@@ -376,10 +379,11 @@ where
                 dbg!(name);
                 let capture_id = preparing.add_or_insert_capture(name);
                 dbg!(capture_id);
-                dbg!(&res);
+                // dbg!(&res);
                 match &res {
-                    Pattern::SupNamedNode { .. } |
-                    Pattern::NamedNode { .. } | Pattern::AnyNode { .. } => {
+                    Pattern::SupNamedNode { .. }
+                    | Pattern::NamedNode { .. }
+                    | Pattern::AnyNode { .. } => {
                         preparing.insert_quantifier_for_capture_id(capture_id, Quant::One)
                     }
                     Pattern::Predicated { .. } => panic!(),
@@ -457,7 +461,7 @@ where
     pub(crate) fn process_field_definition(
         query_store: &'a SimpleStores<crate::types::TStore>,
         rule: NodeIdentifier,
-        preparing: &mut PreparingMatcher<Ty>,
+        preparing: &mut PreparingMatcher<Ty, C>,
     ) -> Pattern<Ty> {
         use crate::types::TIdN;
         use crate::types::Type;
@@ -523,7 +527,7 @@ where
     pub(crate) fn process_anonymous_node(
         query_store: &SimpleStores<TStore>,
         rule: NodeIdentifier,
-        preparing: &mut PreparingMatcher<Ty>,
+        preparing: &mut PreparingMatcher<Ty, C>,
     ) -> Pattern<Ty> {
         use crate::types::TIdN;
         use crate::types::Type;
@@ -555,7 +559,7 @@ where
                     dbg!(l);
                     let l = &l[1..l.len() - 1];
                     dbg!(l);
-                    let l = Ty::try_from(l).unwrap();
+                    let l = C::conv(l).unwrap();
                     break l;
                 } else {
                     todo!()

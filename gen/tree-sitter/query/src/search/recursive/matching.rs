@@ -1,3 +1,6 @@
+use crate::auto::tsq_ser_meta::Conv;
+use crate::auto::tsq_ser_meta::Converter;
+
 use super::{CaptureRes, Captured, MatchingRes, Pattern, Predicate, PreparedMatcher};
 
 use tree_sitter::CaptureQuantifier as Quant;
@@ -6,10 +9,7 @@ use hyper_ast::types::HyperType;
 use hyper_ast::types::TypedHyperAST;
 use hyper_ast::types::{IterableChildren, Typed, TypedNodeStore, WithChildren};
 
-impl<'a, Ty: for<'b> TryFrom<&'b str> + HyperType> PreparedMatcher<Ty>
-where
-    for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
-{
+impl<'a, Ty: HyperType, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
     pub fn is_matching<'store, HAST, TIdN>(&self, code_store: &'store HAST, id: HAST::IdN) -> bool
     where
         HAST: TypedHyperAST<'store, TIdN>,
@@ -152,7 +152,7 @@ impl<Ty> Pattern<Ty> {
         match self {
             Pattern::SupNamedNode { sup, ty, children } => {
                 todo!()
-            },
+            }
             Pattern::NamedNode { ty, children } => {
                 if t.is_hidden() && *ty != t {
                     dbg!(ty);
@@ -471,11 +471,7 @@ impl<Ty> Pattern<Ty> {
         }
     }
 
-    pub(crate) fn named(ty: Option<Ty>, patterns: Vec<Pattern<Ty>>) -> Pattern<Ty>
-    where
-        Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
-        for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
-    {
+    pub(crate) fn named(ty: Option<Ty>, patterns: Vec<Pattern<Ty>>) -> Pattern<Ty> {
         if let Some(ty) = ty {
             Self::NamedNode {
                 ty,

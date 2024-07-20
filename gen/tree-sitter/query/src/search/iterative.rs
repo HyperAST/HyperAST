@@ -1,3 +1,5 @@
+use crate::auto::tsq_ser_meta::Converter;
+
 use super::*;
 use hyper_ast::types::{
     HyperType, IterableChildren, NodeStore, TypeStore, Typed, TypedHyperAST, TypedNodeStore,
@@ -9,8 +11,9 @@ pub(crate) struct MatchingIter<
     'store,
     HAST: TypedHyperAST<'store, TIdN>,
     TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore<HAST::T>>::Ty>,
+    C: Converter,
 > {
-    slf: &'a PreparedMatcher<TIdN::Ty>,
+    slf: &'a PreparedMatcher<TIdN::Ty, C>,
     code_store: &'store HAST,
     stack: Vec<State<HAST::IdN, HAST::Idx, TIdN::Ty>>,
 }
@@ -37,7 +40,8 @@ impl<
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore<HAST::T>>::Ty>,
-    > Iterator for MatchingIter<'a, 'store, HAST, TIdN>
+        C: Converter,
+    > Iterator for MatchingIter<'a, 'store, HAST, TIdN, C>
 {
     type Item = MatchingRes<HAST::IdN, HAST::Idx>;
 
@@ -80,7 +84,8 @@ impl<
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore<HAST::T>>::Ty>,
-    > MatchingIter<'a, 'store, HAST, TIdN>
+        C: Converter,
+    > MatchingIter<'a, 'store, HAST, TIdN, C>
 {
     fn is_matching_anonymous_node(
         &mut self,
@@ -291,9 +296,10 @@ impl<
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore<HAST::T>>::Ty>,
-    > MatchingIter<'a, 'store, HAST, TIdN>
+        C: Converter
+        > MatchingIter<'a, 'store, HAST, TIdN, C>
 {
-    fn new(slf: &'a PreparedMatcher<TIdN::Ty>, code_store: &'store HAST, id: HAST::IdN) -> Self {
+    fn new(slf: &'a PreparedMatcher<TIdN::Ty, C>, code_store: &'store HAST, id: HAST::IdN) -> Self {
         Self {
             slf,
             code_store,
@@ -302,8 +308,8 @@ impl<
     }
 }
 
-pub fn is_matching<'a, 'store, HAST, TIdN, Ty>(
-    slf: &PreparedMatcher<Ty>,
+pub fn is_matching<'a, 'store, HAST, TIdN, Ty, C:Converter>(
+    slf: &PreparedMatcher<Ty, C>,
     code_store: &'store HAST,
     id: HAST::IdN,
 ) -> bool

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use tree_sitter::CaptureQuantifier as Quant;
 
+use crate::auto::tsq_ser_meta::Conv;
 use crate::legion::TsQueryTreeGen;
 use crate::types::TStore;
 
@@ -29,11 +30,12 @@ pub(crate) struct QuickTrigger<T> {
     pub(crate) root_types: Arc<[T]>,
 }
 
-pub struct PreparedMatcher<Ty> {
+pub struct PreparedMatcher<Ty, C = Conv<Ty>> {
     pub(crate) quick_trigger: QuickTrigger<Ty>,
     pub(crate) patterns: Arc<[Pattern<Ty>]>,
     pub captures: Arc<[Capture]>,
     pub(crate) quantifiers: Arc<[HashMap<usize, tree_sitter::CaptureQuantifier>]>,
+    converter: C
 }
 
 #[derive(Debug)]
@@ -41,7 +43,7 @@ pub struct Capture {
     pub name: String,
 }
 
-impl<Ty: std::fmt::Debug> std::fmt::Debug for PreparedMatcher<Ty> {
+impl<Ty: std::fmt::Debug, C> std::fmt::Debug for PreparedMatcher<Ty,C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PreparedMatcher")
             .field("quick_trigger", &self.quick_trigger.root_types)
@@ -49,7 +51,7 @@ impl<Ty: std::fmt::Debug> std::fmt::Debug for PreparedMatcher<Ty> {
             .finish()
     }
 }
-impl<Ty> PreparedMatcher<Ty> {
+impl<Ty, C> PreparedMatcher<Ty, C> {
     pub fn pattern_count(&self) -> usize {
         self.patterns.len()
     }
@@ -288,17 +290,22 @@ impl<IdN, Idx> CaptureRes<IdN, Idx> {
     }
 }
 
-pub(crate) fn ts_query(text: &[u8]) -> (SimpleStores<crate::types::TStore>, legion::Entity) {
-    let mut stores = SimpleStores {
+pub fn ts_query_store() -> SimpleStores<crate::types::TStore> {
+    let stores = SimpleStores {
         label_store: LabelStore::new(),
         type_store: TStore::default(),
         node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
     };
+    stores
+}
+
+pub fn ts_query(text: &[u8]) -> (SimpleStores<crate::types::TStore>, legion::Entity) {
+    let mut stores = ts_query_store();
     let query = ts_query2(&mut stores, text);
     (stores, query)
 }
 
-pub(crate) fn ts_query2(stores: &mut SimpleStores<TStore>, text: &[u8]) -> legion::Entity {
+pub fn ts_query2(stores: &mut SimpleStores<TStore>, text: &[u8]) -> legion::Entity {
     let mut md_cache = Default::default();
     let mut query_tree_gen = TsQueryTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -320,4 +327,29 @@ pub(crate) fn ts_query2(stores: &mut SimpleStores<TStore>, text: &[u8]) -> legio
         hyper_ast::nodes::SyntaxSerializer::new(stores, full_node.local.compressed_node)
     );
     full_node.local.compressed_node
+}
+
+pub fn ts_query2_with_label_hash(stores: &mut SimpleStores<TStore>, text: &[u8]) -> Option<(legion::Entity, u32)> {
+    let mut md_cache = Default::default();
+    let mut query_tree_gen = TsQueryTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores,
+        md_cache: &mut md_cache,
+    };
+
+    let tree = match crate::legion::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => {
+            dbg!(t.root_node().to_sexp());
+            return None
+        }
+    };
+    // dbg!(tree.root_node().to_sexp());
+    let full_node = query_tree_gen.generate_file(b"", text, tree.walk());
+    // eprintln!(
+    //     "{}",
+    //     hyper_ast::nodes::SyntaxSerializer::new(stores, full_node.local.compressed_node)
+    // );
+    let r = (full_node.local.compressed_node, full_node.local.metrics.hashs.label);
+    Some(r)
 }
