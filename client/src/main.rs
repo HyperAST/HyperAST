@@ -11,7 +11,7 @@ use app::{querying_app, smells_app, tsg_app};
 use dashmap::DashMap;
 use hyper_ast_cvs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories};
 use hyper_diff::{decompressed_tree_store::PersistedNode, matchers::mapping_store::VecStore};
-use tower_http::cors::CorsLayer;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use crate::{
     app::{
@@ -148,6 +148,7 @@ async fn main() {
         .merge(commit_metadata_route(Arc::clone(&shared_state)))
         .merge(example_app())
         .layer(CorsLayer::permissive()) // WARN unwanted for deployment
+        .layer(TraceLayer::new_for_http())
         .with_state(Arc::clone(&shared_state));
     // TODOs auth admin to list pending constructions,
     // all repositories are blacklised by default

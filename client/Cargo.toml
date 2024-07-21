@@ -18,7 +18,7 @@ hyper_ast_gen_ts_cpp = { path = "../gen/tree-sitter/cpp" }
 hyper_ast_gen_ts_tsquery = { path = "../gen/tree-sitter/query" }
 hyper_ast_tsquery = { path = "../tsquery" }
 
-env_logger = "0.9.0"
+# env_logger = "0.9.0"
 log = { version = "0.4.6", features = [
     # "max_level_debug",
     # "release_max_level_warn",
@@ -98,5 +98,15 @@ tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-gr
 tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d" }
 stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d" }
 
+rerun = { version = "0.10.0", default-features = false, features = [
+    "log",
+    "sdk",
+], optional = true }
+
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["blocking"] }
+
+
+[features]
+default = ["rerun"]
+rerun = ["dep:rerun"]
