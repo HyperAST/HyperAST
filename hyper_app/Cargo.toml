@@ -107,7 +107,7 @@ default = ["serde"]
 serde = ["egui/serde", "dep:serde"]
 syntect = []
 
-[patch.crates-io]
+# [patch.crates-io]
 
 # If you want to use the bleeding edge version of egui and eframe:
 # egui = { git = "https://github.com/emilk/egui", branch = "master" }
