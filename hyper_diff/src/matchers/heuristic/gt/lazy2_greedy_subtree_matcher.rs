@@ -14,7 +14,7 @@ use hyper_ast::types::{
     DecompressedSubtree, HashKind, HyperAST, IterableChildren, Labeled, NodeStore, Stored, Tree,
     TypeStore, WithChildren, WithHashs, WithStats,
 };
-use logging_timer::time;
+
 use num_traits::{PrimInt, ToPrimitive};
 
 pub struct LazyGreedySubtreeMatcher<'a, HAST, Dsrc, Ddst, M, const MIN_HEIGHT: usize = 1> {

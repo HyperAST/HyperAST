@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use hyper_ast_gen_ts_tsquery::search::utils;
 
 fn compare_capture_names_group(c: &mut Criterion) {
@@ -13,7 +13,6 @@ fn compare_capture_names_group(c: &mut Criterion) {
     ];
 
     for (i, p) in INPUTS.into_iter().enumerate() {
-        // group.throughput(Throughput::Bytes((p.0.len() + p.1.len()) as u64));
         group.bench_with_input(BenchmarkId::new("simple", i), &p, |b, p| {
             b.iter(|| {
                 let mut capture_names = utils::CaptureNames::default();

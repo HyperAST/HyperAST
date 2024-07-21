@@ -191,10 +191,6 @@ impl<'a, Idx: 'a + PrimInt> Iterator for Iter<'a, Idx> {
 
 #[cfg(test)]
 mod tests {
-    use crate::actions::{
-        action_vec::ActionsVec,
-        script_generator2::{Act, ApplicablePath},
-    };
 
     use super::*;
 
@@ -253,7 +249,7 @@ mod tests {
         let a1 = SimpleTreePath::from(vec![0, 1, 2, 3, 4]);
         let b1 = SimpleTreePath::from(vec![0, 1, 2, 3]);
         let sh = a.shared_ancestors(&b);
-        let sh1 = a1.shared_ancestors(&b1);
+        let _sh1 = a1.shared_ancestors(&b1);
         dbg!(&sh);
         match sh {
             SharedPath::Submatch(_) => (),

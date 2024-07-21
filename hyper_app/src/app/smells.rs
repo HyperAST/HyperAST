@@ -313,8 +313,8 @@ pub(super) fn show_result(
     smells: &mut ComputeConfigQuery,
     examples: &ExamplesValues,
     promise: &mut Option<RemoteResult>,
-    mut cols: std::ops::Range<usize>,
-    id: egui::Id,
+    _cols: std::ops::Range<usize>,
+    _id: egui::Id,
 ) {
     let Some(promise) = promise else {
         ui.spinner();
@@ -375,17 +375,17 @@ pub(super) fn show_central_panel(
     ui: &mut egui::Ui,
     api_addr: &str,
     smells: &mut Config,
-    smells_editors: &mut Context,
-    trigger_compute: &mut bool,
+    _smells_editors: &mut Context,
+    _trigger_compute: &mut bool,
     smells_result: &mut Option<RemoteResult>,
     smells_diffs_result: &mut Option<RemoteResultDiffs>,
     fetched_files: &mut HashMap<types::FileIdentifier, RemoteFile>,
 ) {
-    if let Some(x) = &mut smells.stats {
+    if let Some(_x) = &mut smells.stats {
         todo!();
         return;
     }
-    if let Some(examples) = &mut smells.queries {
+    if let Some(_examples) = &mut smells.queries {
         todo!();
         return;
     }
@@ -642,7 +642,7 @@ fn show_query_with_example(
                         ui.fonts(|f| f.layout_job(layout_job))
                     };
                     // dbg!(&code);
-                    let scroll_resp = egui::scroll_area::ScrollArea::both().show(ui, |ui| {
+                    let _scroll_resp = egui::scroll_area::ScrollArea::both().show(ui, |ui| {
                         egui_addon::code_editor::generic_text_edit::TextEdit::multiline(&mut code)
                             .layouter(&mut layouter)
                             .desired_width(f32::MAX)
@@ -979,7 +979,7 @@ pub(super) fn fetch_results(
         query: String,
         commits: usize,
     }
-    let language = match smells.config {
+    let _language = match smells.config {
         types::Config::Any => "",
         types::Config::MavenJava => "Java",
         types::Config::MakeCpp => "Cpp",
@@ -1108,7 +1108,7 @@ pub(super) fn fetch_examples_at_commits(
         query: String,
         commits: usize,
     }
-    let language = match smells.config {
+    let _language = match smells.config {
         types::Config::Any => "",
         types::Config::MavenJava => "Java",
         types::Config::MakeCpp => "Cpp",

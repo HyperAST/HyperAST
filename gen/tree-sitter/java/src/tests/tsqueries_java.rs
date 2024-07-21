@@ -408,15 +408,15 @@ fn compare_prepro() {
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
     let codes = ["class A {B f(){return null;}}"].iter().enumerate();
-    // NOTE Uncomment and set the path to a directory containing java files you want to test querying on.
-    let codes = crate::tsg::It::new(
-        Path::new("../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test")
-            .to_owned(),
-    )
-    .map(|x| {
-        let text = std::fs::read_to_string(&x).expect("Find a dir containing java files");
-        (x, text)
-    });
+    // // NOTE Uncomment and set the path to a directory containing java files you want to test querying on.
+    // let codes = crate::tsg::It::new(
+    //     Path::new("../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test")
+    //         .to_owned(),
+    // )
+    // .map(|x| {
+    //     let text = std::fs::read_to_string(&x).expect("Find a dir containing java files");
+    //     (x, text)
+    // });
     let q = &[
         (
             r#"(return_statement (null_literal))"#,
@@ -455,7 +455,7 @@ fn compare_prepro() {
     )"#,
         ),
     ];
-    let s: &[&[&str]] = &[];
+    let _s: &[&[&str]] = &[];
     let s: &[&[&str]] = &[
         &[r#"(return_statement (null_literal))"#],
         &[r#"
@@ -929,27 +929,27 @@ fn st_issue_infinit() {
     //     .map(|()| log::set_max_level(log::LevelFilter::Trace))
     //     .unwrap();
     let codes = CODES.iter().enumerate();
-    // NOTE Uncomment and set the path to a directory containing java files you want to test querying on.
-    let codes = crate::tsg::It::new(
-        // Path::new("../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test")
-        //     .to_owned(),
-        Path::new("../../../../spoon").to_owned(),
-    )
-    .filter(|x| x.is_dir() || x.extension().map_or(false, |e| e.eq("java")))
-    .filter(|x| !x.starts_with("../../../../spoon/src/test/resources"))
-    .filter_map(|x| {
-        let text = match std::fs::read_to_string(&x) {
-            Ok(x) => x,
-            Err(e) => {
-                match e.kind() {
-                    // std::io::ErrorKind::NotFound => todo!(),
-                    std::io::ErrorKind::InvalidData => return None,
-                    _ => panic!("{}", e),
-                }
-            }
-        };
-        Some((x, text))
-    });
+    // // NOTE Uncomment and set the path to a directory containing java files you want to test querying on.
+    // let codes = crate::tsg::It::new(
+    //     // Path::new("../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test")
+    //     //     .to_owned(),
+    //     Path::new("../../../../spoon").to_owned(),
+    // )
+    // .filter(|x| x.is_dir() || x.extension().map_or(false, |e| e.eq("java")))
+    // .filter(|x| !x.starts_with("../../../../spoon/src/test/resources"))
+    // .filter_map(|x| {
+    //     let text = match std::fs::read_to_string(&x) {
+    //         Ok(x) => x,
+    //         Err(e) => {
+    //             match e.kind() {
+    //                 // std::io::ErrorKind::NotFound => todo!(),
+    //                 std::io::ErrorKind::InvalidData => return None,
+    //                 _ => panic!("{}", e),
+    //             }
+    //         }
+    //     };
+    //     Some((x, text))
+    // });
 
     compare_all(&[crate::tsg::A155], codes)
 }
@@ -962,7 +962,6 @@ fn st_155_spoon() {
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
     unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
-    let query = crate::tsg::A155;
     let query = r#"
 (program
   (package_declaration (_)@pkg)
@@ -1000,7 +999,7 @@ fn st_155_spoon() {
 // Might be an issue of type of used collection.
 fn bl_155_spoon() {
     unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
-    let query = crate::tsg::A155;
+    let _query = crate::tsg::A155;
     let query = r#"
 (program
   (package_declaration (_)@pkg)
@@ -1092,7 +1091,7 @@ fn test_precomputed() {
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
     unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
-    let precomp = [
+    let _precomp = [
         //         //         r#"
         //         // (marker_annotation
         //         //     name: (_) (#EQ? "Override")
@@ -1119,7 +1118,7 @@ fn test_precomputed() {
         //     )
         // )"#,
     ];
-    let query = r#"
+    let _query = r#"
 (program
 (class_declaration 
   name: (_) @name
@@ -1137,7 +1136,7 @@ fn test_precomputed() {
 )"#;
     let precomp = [r#"(null_literal)"#];
     let query = r#"(return_statement (null_literal))"#;
-    let text = r#" class C {
+    let _text = r#" class C {
     @Override
     void f() {
 
@@ -1241,7 +1240,7 @@ fn test_precomputed2() {
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
     unsafe { crate::legion_with_refs::HIDDEN_NODES = true };
-    let precomp = [
+    let _precomp = [
         //         r#"
         // (marker_annotation
         //     name: (_) (#EQ? "Override")
@@ -1268,7 +1267,7 @@ fn test_precomputed2() {
     )
 )"#,
     ];
-    let query = r#"
+    let _query = r#"
 (program
 (class_declaration 
   name: (_) @name
@@ -1286,7 +1285,7 @@ fn test_precomputed2() {
 )"#;
     let precomp = [r#"(return_statement (null_literal))"#];
     let query = r#"(return_statement (null_literal))"#;
-    let text = r#"
+    let _text = r#"
 class C {
     @Test
     @A
@@ -1311,7 +1310,7 @@ class C {
     }
 }
     "#;
-    let text = "class A {B f(){return null;}}";
+    let _text = "class A {B f(){return null;}}";
 
     let text = std::fs::read_to_string("../../../../spoon/src/main/java/spoon/support/reflect/declaration/CtAnonymousExecutableImpl.java").unwrap();
     let text = text.as_bytes();
@@ -1320,7 +1319,7 @@ class C {
     //         .unwrap();
     let (query, tree) = {
         let query: &str = query;
-        let (precomp, query) = hyper_ast_tsquery::Query::with_precomputed(
+        let (_precomp, query) = hyper_ast_tsquery::Query::with_precomputed(
             query,
             tree_sitter_java::language(),
             &precomp,
@@ -1352,11 +1351,11 @@ class C {
     dbg!(count);
 }
 
-fn f(q: &str, p: &[&str], f: &str) {
+fn f(q: &str, p: &[&str], _f: &str) {
     log::set_logger(&LOGGER)
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
-    let (precomp, query) =
+    let (_precomp, query) =
         hyper_ast_tsquery::Query::with_precomputed(q, tree_sitter_java::language(), p).unwrap();
     query._check_preprocessed(0, p.len());
 }
@@ -1957,7 +1956,7 @@ class A {
 
 #[test]
 fn test_neg() {
-    let text = r#"
+    let _text = r#"
 class A {
   @Test
   public void f() {
@@ -1991,7 +1990,7 @@ class A {
     )
       )
     )"#;
-    let q2 = r#"(program
+    let _q2 = r#"(program
       (class_declaration 
     body: (_
       (method_declaration
@@ -2004,7 +2003,7 @@ class A {
     )
       )
     )"#;
-    let q3 = r#"(program
+    let _q3 = r#"(program
       (class_declaration 
     body: (_
       (method_declaration
@@ -2361,11 +2360,6 @@ fn h(q: &[&str], text: &str) -> usize {
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
     let query = hyper_ast_tsquery::Query::big(q, tree_sitter_java::language()).unwrap();
-    let mut stores = hyper_ast::store::SimpleStores {
-        label_store: hyper_ast::store::labels::LabelStore::new(),
-        type_store: crate::types::TStore::default(),
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
     let tree = match crate::legion_with_refs::tree_sitter_parse(text.as_bytes()) {
         Ok(t) => t,
         Err(t) => t,

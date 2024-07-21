@@ -215,8 +215,8 @@ impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdent
         if node.0.is_missing() {
             return PreResult::Skip;
         }
-        let kind = node.obtain_type(type_store);
-        let mut acc = self.pre(text, &node, stack, global);
+        let _kind = node.obtain_type(type_store);
+        let acc = self.pre(text, &node, stack, global);
         PreResult::Ok(acc)
     }
     fn pre(
@@ -331,7 +331,7 @@ impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdent
                 height: 1,
                 hashs,
                 size_no_spaces: 0,
-                line_count: todo!(),
+                line_count: 0,
             },
         }
     }

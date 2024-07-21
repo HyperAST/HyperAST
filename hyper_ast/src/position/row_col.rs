@@ -37,12 +37,12 @@ impl<T: PrimInt> Debug for RowCol<T> {
 }
 
 impl<T: PrimInt + Display> Display for RowCol<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         todo!()
     }
 }
 
-use super::spaces_related::{NoSpacePrepareParams, SealedFileTopDownPosBuilder, TopDownPosBuilder};
+use super::spaces_related::{SealedFileTopDownPosBuilder, TopDownPosBuilder};
 
 // impl<IdN, Idx: PrimInt, IdO: PrimInt + Default>
 //     TopDownPosBuilder<IdN, Idx, IdO, NoSpacePrepareParams<Idx>> for Position<PathBuf, IdO>

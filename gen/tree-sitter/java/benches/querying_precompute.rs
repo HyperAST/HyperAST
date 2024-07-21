@@ -89,7 +89,7 @@ fn prep_precomputed<'store>(
 fn compare_querying_group(c: &mut Criterion) {
     let mut group = c.benchmark_group("QueryingSpoon");
 
-    let codes = "../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test";
+    // let codes = "../../../../stack-graphs/languages/tree-sitter-stack-graphs-java/test";
     let codes = "../../../../spoon/src/main/java";
     let codes = Path::new(&codes).to_owned();
     let codes = It::new(codes).map(|x| {
@@ -102,7 +102,7 @@ fn compare_querying_group(c: &mut Criterion) {
     let codes: Box<[_]> = codes.collect();
     // let queries: Vec<_> = QUERIES.iter().enumerate().collect();
 
-    for (i, p) in QUERIES.into_iter().map(|x| (x, codes.as_ref())).enumerate() {
+    for (_i, p) in QUERIES.into_iter().map(|x| (x, codes.as_ref())).enumerate() {
         let i = p.0 .3;
         // group.throughput(Throughput::Bytes((p.0.len() + p.1.len()) as u64));
         group.bench_with_input(BenchmarkId::new("baseline", i), &p, |b, (q, f)| {

@@ -221,13 +221,13 @@ mod impl_receivers {
     }
 
     impl<IdO: PrimInt, T> building::ReceiveRows<T, Self> for super::Position<PathBuf, IdO> {
-        fn push(self, row: T) -> Self {
+        fn push(self, _row: T) -> Self {
             self
         }
     }
 
     impl<IdO: PrimInt, T> building::ReceiveColumns<T, Self> for super::Position<PathBuf, IdO> {
-        fn push(self, col: T) -> Self {
+        fn push(self, _col: T) -> Self {
             self
         }
     }

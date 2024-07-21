@@ -472,7 +472,7 @@ impl HyperApp {
 
 impl eframe::App for HyperApp {
     /// Called by the frame work to save state before shutdown.
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
         // eframe::set_value(storage, eframe::APP_KEY, self);
     }
 
@@ -490,7 +490,7 @@ impl eframe::App for HyperApp {
             querying_context,
             tsg_context,
             smells_context,
-            languages,
+            languages: _,
             selected,
             single,
             query,
@@ -903,7 +903,7 @@ fn show_remote_code2(
     ui: &mut egui::Ui,
     api_addr: &str,
     commit: &mut types::Commit,
-    mut file_path: &mut String,
+    file_path: &mut String,
     file_result: hash_map::Entry<'_, types::FileIdentifier, code_tracking::RemoteFile>,
     desired_width: f32,
     wrap: bool,
@@ -999,8 +999,8 @@ fn show_code_scrolled2(
     desired_width: f32,
 ) -> Option<egui::scroll_area::ScrollAreaOutput<(SkipedBytes, egui::text_edit::TextEditOutput)>> {
     let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
-    let mut layouter = |ui: &egui::Ui, code: &str, wrap_width: f32| {
-        let mut layout_job =
+    let mut layouter = |ui: &egui::Ui, code: &str, _wrap_width: f32| {
+        let layout_job =
             egui_extras::syntax_highlighting::highlight(ui.ctx(), &theme, code, language);
         if wrap {
             panic!();
@@ -1026,9 +1026,9 @@ fn show_code_scrolled2(
                 };
                 ui.painter()
                     .debug_rect(ui.max_rect(), egui::Color32::RED, "text");
-                let desired_height_rows = ui.available_height() / row_height_sans_spacing
+                let _desired_height_rows = ui.available_height() / row_height_sans_spacing
                     * (rows.end - rows.start) as f32;
-                let mut te = egui::TextEdit::multiline(
+                let te = egui::TextEdit::multiline(
                     &mut code[start..line_breaks[(rows.end).min(total_rows - 1)]].to_string(),
                 )
                 .font(font_id) // for cursor height
@@ -1045,7 +1045,7 @@ fn show_code_scrolled2(
         )
     } else {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            let mut te = egui::TextEdit::multiline(&mut code.to_string())
+            let te = egui::TextEdit::multiline(&mut code.to_string())
                 .font(font_id) // for cursor height
                 .code_editor()
                 // .desired_rows(desired_height_rows as usize)
@@ -1063,7 +1063,7 @@ fn show_code_scrolled2(
 fn show_multi_repo(
     ui: &mut egui::Ui,
     selected: &mut types::SelectedConfig,
-    multi: &mut types::ComputeConfigMulti,
+    _multi: &mut types::ComputeConfigMulti,
 ) {
     let title = "Multi Repo";
     let wanted = types::SelectedConfig::Multi;
@@ -1078,7 +1078,7 @@ fn show_multi_repo(
 fn show_diff(
     ui: &mut egui::Ui,
     selected: &mut types::SelectedConfig,
-    diff: &mut types::ComputeConfigDiff,
+    _diff: &mut types::ComputeConfigDiff,
 ) {
     let title = "Semantic Diff";
     let wanted = types::SelectedConfig::Diff;
@@ -1266,7 +1266,7 @@ impl<'a, 'b, 'c> code_editor::generic_text_buffer::TextBuffer for CommitTextBuff
         text.chars().count()
     }
 
-    fn delete_char_range(&mut self, char_range: Range<usize>) {
+    fn delete_char_range(&mut self, _char_range: Range<usize>) {
         // assert!(char_range.start <= char_range.end);
 
         // // Get both byte indices
@@ -1328,7 +1328,7 @@ impl<'a, 'b, 'c> code_editor::generic_text_buffer::TextBuffer for CommitTextBuff
         // self.clear()
     }
 
-    fn replace(&mut self, text: &str) {
+    fn replace(&mut self, _text: &str) {
         // *self = text.to_owned();
     }
 

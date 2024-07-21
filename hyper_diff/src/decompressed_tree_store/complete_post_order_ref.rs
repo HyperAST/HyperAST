@@ -13,18 +13,17 @@ use num_traits::{cast, PrimInt, ToPrimitive, Zero};
 use hyper_ast::{
     position::Position,
     types::{
-        self, HyperAST, HyperType, LabelStore, NodeId, NodeStore, Stored, Tree, TypeStore,
-        WithChildren, WithSerialization,
+        HyperAST, HyperType, NodeId, NodeStore, Stored, Tree, TypeStore, WithChildren,
+        WithSerialization,
     },
 };
 
 use super::{
     lazy_post_order::LazyPostOrder,
     pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
-    simple_post_order::{SimplePOSlice, SimplePostOrder},
-    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings,
-    FullyDecompressedTreeStore, Iter, IterKr, POBorrowSlice, PostOrder, PostOrderIterable,
-    PostOrderKeyRoots, ShallowDecompressedTreeStore,
+    DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings,
+    FullyDecompressedTreeStore, Iter, IterKr, PostOrder, PostOrderIterable, PostOrderKeyRoots,
+    ShallowDecompressedTreeStore,
 };
 
 use logging_timer::time;

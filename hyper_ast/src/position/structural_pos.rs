@@ -423,7 +423,7 @@ where
             x = aaa.1;
             o = aaa.0;
             let b = stores.node_store().resolve(x.as_id());
-            let t = stores.type_store().resolve_type(&b);
+            let _t = stores.type_store().resolve_type(&b);
 
             // dbg!(t);
             // let v = &b.children().unwrap();

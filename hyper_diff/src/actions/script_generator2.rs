@@ -692,7 +692,7 @@ where
         impl<IdD, Idx: num_traits::Zero, W> Ele<IdD, Idx, W> {
             fn new(id: IdD) -> Self {
                 let idx = num_traits::zero();
-                let b = false;
+                let _b = false;
                 let w = vec![];
                 Self { id, idx, w }
             }

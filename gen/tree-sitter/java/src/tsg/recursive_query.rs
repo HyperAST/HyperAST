@@ -134,7 +134,7 @@ where
 
     fn named_children<'cursor>(
         &self,
-        cursor: &'cursor mut Self::Cursor,
+        _cursor: &'cursor mut Self::Cursor,
     ) -> impl ExactSizeIterator<Item = Self> + 'cursor
     where
         'tree: 'cursor,
@@ -370,7 +370,7 @@ impl tree_sitter_graph::ExtendedableQuery
 
     fn make_query(
         &mut self,
-        language: &Self::Lang,
+        _language: &Self::Lang,
         source: &str,
     ) -> Result<Self::Query, tree_sitter::QueryError> {
         self.acc += source;
@@ -380,7 +380,7 @@ impl tree_sitter_graph::ExtendedableQuery
         Ok(QueryMatcher(matcher))
     }
 
-    fn make_main_query(&self, language: &Self::Lang) -> Self::Query {
+    fn make_main_query(&self, _language: &Self::Lang) -> Self::Query {
         let matcher = hyper_ast_gen_ts_tsquery::prepare_matcher::<crate::types::Type>(&self.acc);
         QueryMatcher(matcher)
     }

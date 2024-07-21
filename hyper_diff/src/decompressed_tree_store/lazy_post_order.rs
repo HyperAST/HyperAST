@@ -17,7 +17,6 @@ use hyper_ast::{
         Stored, Tree, TypeStore, WithChildren, WithSerialization, WithStats,
     },
 };
-use logging_timer::time;
 
 pub struct LazyPostOrder<T: Stored, IdD> {
     pub(super) id_compressed: Box<[T::TreeId]>,

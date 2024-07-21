@@ -26,8 +26,6 @@ use super::{
     PostOrderKeyRoots, ShallowDecompressedTreeStore,
 };
 
-use logging_timer::time;
-
 /// made for TODO
 /// - post order
 /// - key roots
