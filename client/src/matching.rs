@@ -131,10 +131,14 @@ pub fn bottom_up_hiding<'store, 'a, 'b, HAST: HyperAST<'store>>(
                 mappings,
             },
         };
-        GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 1000, 1, 100>::execute(
+        GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 500, 1, 3>::execute(
             &mut mapper,
             hyperast.label_store(),
         );
+        // GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>, 1000, 1, 100>::execute(
+        //     &mut mapper,
+        //     hyperast.label_store(),
+        // );
     }
 }
 

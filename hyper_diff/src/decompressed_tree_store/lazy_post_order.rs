@@ -322,7 +322,7 @@ where
             q.extend(self.children(store, &x));
         }
     }
-    #[time("warn")]
+    // #[time("warn")]
     pub fn complete<S>(mut self, store: &'a S) -> SimplePostOrder<T, IdD>
     where
         T::TreeId: Eq,

@@ -65,7 +65,7 @@ impl<T: WithChildren, IdD: PrimInt> From<SimplePostOrder<T, IdD>> for CompletePo
 where
     T::TreeId: Clone,
 {
-    #[time("warn")]
+    // #[time("warn")]
     fn from(simple: SimplePostOrder<T, IdD>) -> Self {
         let kr = simple.compute_kr_bitset();
         Self { simple, kr }

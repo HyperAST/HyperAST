@@ -170,7 +170,7 @@ where
     //     matcher
     // }
 
-    #[time("warn")]
+    // #[time("warn")]
     pub fn filter_mappings<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>>(
         // &mut self,
         mapper: &mut Mapper<'a, HAST, Dsrc, Ddst, M>,
@@ -486,7 +486,7 @@ where
     M::Src: Debug + Copy,
     M::Dst: Debug + Copy,
 {
-    #[time("warn")]
+    // #[time("warn")]
     pub fn compute_multimapping<
         MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>,
         const MIN_HEIGHT: usize,
