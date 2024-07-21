@@ -242,58 +242,6 @@ impl<IdN: Copy, Idx: PrimInt> TreePath<IdN, Idx> for StructuralPosition<IdN, Idx
         Ok(())
     }
 
-    fn iter(&self) -> impl crate::position::StepedIterator<Item = (IdN, Idx), SecondItem = IdN> {
-        dbg!(self.parents.len());
-        dbg!(self.offsets.len());
-        struct Iter<'a, IdN, Idx> {
-            i: usize,
-            path: &'a StructuralPosition<IdN, Idx>,
-        }
-        struct IterId<'a, IdN> {
-            p: &'a [IdN],
-        }
-
-        impl<'a, IdN: Copy, Idx: PrimInt> Iterator for Iter<'a, IdN, Idx> {
-            type Item = (IdN, Idx);
-
-            fn next(&mut self) -> Option<Self::Item> {
-                if self.i == 0 {
-                    return None;
-                }
-                self.i -= 1;
-                let p = self.path.parents[self.i - 1];
-                let i = self.path.offsets[self.i];
-                Some((p, i))
-            }
-        }
-
-        impl<'a, IdN: Copy, Idx> Into<IterId<'a, IdN>> for Iter<'a, IdN, Idx> {
-            fn into(self) -> IterId<'a, IdN> {
-                IterId {
-                    p: &self.path.parents[0..self.i],
-                }
-            }
-        }
-        impl<'a, IdN: Copy, Idx: PrimInt> crate::position::StepedIterator for Iter<'a, IdN, Idx> {
-            type SecondItem = IdN;
-            type SecondIter = IterId<'a, IdN>;
-        }
-
-        impl<'a, IdN: Copy> Iterator for IterId<'a, IdN> {
-            type Item = IdN;
-
-            fn next(&mut self) -> Option<Self::Item> {
-                let r = self.p.last()?;
-                self.p = &self.p[0..self.p.len() - 1];
-                Some(*r)
-            }
-        }
-
-        Iter {
-            i: self.offsets.len(),
-            path: &self,
-        }
-    }
 }
 
 impl<IdN: Copy, Idx: PrimInt> TreePathMut<IdN, Idx> for StructuralPosition<IdN, Idx> {
