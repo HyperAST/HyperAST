@@ -1703,11 +1703,9 @@ public class TypeAdapterTest {
       )
     )
 ) @a3 "#;
-    let p = &[
-        r#"(method_invocation
+    let p = &[r#"(method_invocation
         (identifier) (#EQ? "fail")
-    )"#,
-    ];
+    )"#];
     log::set_logger(&LOGGER)
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();

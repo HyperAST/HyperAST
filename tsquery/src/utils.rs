@@ -107,7 +107,6 @@ impl SymbolTable {
     }
 }
 
-
 pub(crate) trait SafeUpcast<T>: Copy {
     fn to(self) -> T;
     fn to_usize(self) -> usize;

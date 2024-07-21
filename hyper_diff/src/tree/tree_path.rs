@@ -69,7 +69,6 @@ pub mod slicing;
 
 pub mod indexed;
 
-
 pub(crate) fn shared_ancestors<Idx: PartialEq>(
     curr: impl Iterator<Item = Idx>,
     mut other: impl Iterator<Item = Idx>,

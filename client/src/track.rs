@@ -10,9 +10,7 @@ use hyper_ast::{
         resolve_range,
     },
     store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef, SimpleStores},
-    types::{
-        self, HyperAST, IterableChildren, NodeStore, WithChildren, WithHashs, WithStats,
-    },
+    types::{self, HyperAST, IterableChildren, NodeStore, WithChildren, WithHashs, WithStats},
     PrimInt,
 };
 use hyper_ast_cvs_git::{
@@ -21,8 +19,7 @@ use hyper_ast_cvs_git::{
 };
 use hyper_diff::{
     decompressed_tree_store::{
-        DecompressedWithParent, LazyDecompressedTreeStore,
-        ShallowDecompressedTreeStore,
+        DecompressedWithParent, LazyDecompressedTreeStore, ShallowDecompressedTreeStore,
     },
     matchers::{
         mapping_store::{self, MonoMappingStore, MultiMappingStore},

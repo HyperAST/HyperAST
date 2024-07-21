@@ -70,11 +70,13 @@ impl<P: Debug> PerPattern<P> {
     }
 
     pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = std::slice::IterMut<P>> + '_ {
-        self.0.iter_mut().map(|x|x.iter_mut())
+        self.0.iter_mut().map(|x| x.iter_mut())
     }
 
     pub(crate) fn check_empty(&mut self) {
-        self.0.iter_mut().for_each(|x|assert!(x.is_empty(), "{:?}", x))
+        self.0
+            .iter_mut()
+            .for_each(|x| assert!(x.is_empty(), "{:?}", x))
     }
 }
 

@@ -287,7 +287,7 @@ impl HyperType for Type {
     fn is_hidden(&self) -> bool {
         todo!()
     }
-    
+
     fn is_supertype(&self) -> bool {
         todo!()
     }

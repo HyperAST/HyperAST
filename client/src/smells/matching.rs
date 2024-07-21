@@ -49,7 +49,6 @@ pub(crate) fn matches_default<'a>(
             let bb = collect[prev_b..b].split("@_root").next().unwrap().trim();
             prev_b = b;
             eprintln!("////{}/////\n{}\n=====/////=======", i, bb);
-
         }
         dbg!(count);
         return Err("different number of patterns".to_string());

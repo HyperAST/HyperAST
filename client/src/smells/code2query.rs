@@ -353,7 +353,8 @@ fn generate_query(
             })
             .collect(),
     );
-    let query = hyper_ast::nodes::TextSerializer::<_, _>::new(&query_store, query_bis.unwrap()).to_string();
+    let query =
+        hyper_ast::nodes::TextSerializer::<_, _>::new(&query_store, query_bis.unwrap()).to_string();
     let query = format!("{} {}", query, PerLabel(per_label.clone()));
     println!("\nThe generified query:\n{}", query);
     let query = hyper_ast_gen_ts_tsquery::search::ts_query2(&mut query_store, query.as_bytes());
@@ -409,7 +410,8 @@ fn simp_rms(
 ) -> Option<(NodeIdentifier, LableH)> {
     let rms = simp_search_rm(&query_store, query, meta_simp);
     let query = apply_rms(query_store, query, &rms, f);
-    let query = hyper_ast::nodes::TextSerializer::<_, _>::new(&*query_store, query.unwrap()).to_string();
+    let query =
+        hyper_ast::nodes::TextSerializer::<_, _>::new(&*query_store, query.unwrap()).to_string();
     hyper_ast_gen_ts_tsquery::search::ts_query2_with_label_hash(query_store, query.as_bytes())
 }
 
@@ -421,7 +423,8 @@ fn simp_rms2<'a>(
     let rms = simp_search_rm(&query_store, query, meta_simp);
     rms.into_iter().filter_map(move |path| {
         let query = apply_rms_aux(query_store, query, &path);
-        let query = hyper_ast::nodes::TextSerializer::<_, _>::new(&*query_store, query.unwrap()).to_string();
+        let query = hyper_ast::nodes::TextSerializer::<_, _>::new(&*query_store, query.unwrap())
+            .to_string();
         hyper_ast_gen_ts_tsquery::search::ts_query2_with_label_hash(query_store, query.as_bytes())
     })
 }

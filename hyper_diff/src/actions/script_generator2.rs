@@ -428,10 +428,13 @@ where
         if COMPRESSION {
             todo!()
         }
-        self.auxilary_ins_mov_upd(&|_,_|())
+        self.auxilary_ins_mov_upd(&|_, _| ())
     }
 
-    pub fn auxilary_ins_mov_upd(&mut self, f: &impl Fn(&T::TreeId,&T::TreeId)) -> Result<(), String> {
+    pub fn auxilary_ins_mov_upd(
+        &mut self,
+        f: &impl Fn(&T::TreeId, &T::TreeId),
+    ) -> Result<(), String> {
         for x in self.dst_arena.iter_bf() {
             // log::trace!("{:?}", self.actions);
             let w;

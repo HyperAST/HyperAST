@@ -1379,7 +1379,8 @@ impl<'a> FetchedViewImpl<'a> {
         }
         let rect = rect;
         //.expand(3.0);
-        ui.painter_at(rect.expand(1.0)).galley(min, galley, egui::Color32::RED);
+        ui.painter_at(rect.expand(1.0))
+            .galley(min, galley, egui::Color32::RED);
         // rect.max.x += 10.0;
 
         prefill.head = ui.available_rect_before_wrap().min.y - min.y;

@@ -69,10 +69,7 @@ impl<Ty, C> From<PreparingMatcher<Ty, C>> for PreparedMatcher<Ty, C> {
 }
 
 impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
-    pub fn new(
-        query_store: &'a SimpleStores<crate::types::TStore>,
-        query: NodeIdentifier,
-    ) -> Self {
+    pub fn new(query_store: &'a SimpleStores<crate::types::TStore>, query: NodeIdentifier) -> Self {
         let preparing = Self::new_aux(query_store, query);
 
         preparing.into()
@@ -93,9 +90,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
             .0;
         let t = n.get_type();
         assert_eq!(t, Type::Program);
-        let Some(cs) = n.children() else {
-            return res
-        };
+        let Some(cs) = n.children() else { return res };
         for rule_id in cs.iter_children() {
             let rule = query_store
                 .node_store

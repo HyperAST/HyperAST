@@ -417,7 +417,7 @@ impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Typed
                 let t: &'static dyn HyperType = t.as_static();
                 t.into()
             }
-            Err(e@ComponentError::NotFound { .. }) => {
+            Err(e @ ComponentError::NotFound { .. }) => {
                 todo!("{:?}", e)
             }
             e => {
@@ -604,7 +604,7 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     fn children(&self) -> Option<&Self::Children<'_>> {
         self.cs().ok()
     }
-    }
+}
 
 impl<'a, T> crate::types::WithRoles for HashedNodeRef<'a, T> {
     fn role_at<Role: 'static + Copy + std::marker::Sync + std::marker::Send>(
@@ -629,7 +629,7 @@ impl<'a, T> crate::types::WithRoles for HashedNodeRef<'a, T> {
 impl<'a, T> crate::types::WithPrecompQueries for HashedNodeRef<'a, T> {
     fn wont_match_given_precomputed_queries(&self, needed: u8) -> bool {
         if needed == 0 {
-            return false
+            return false;
         }
         let Ok(v) = self.get_component::<compo::Precomp>() else {
             return self.get_component::<compo::PrecompFlag>().is_ok();

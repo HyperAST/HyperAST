@@ -1,57 +1,57 @@
 use hyper_ast_gen_ts_java::tsg::It;
 
 pub const QUERIES: &[(&[&str], &str)] = &[
-// (
-//     &[
-//         //         r#"
-//         // (marker_annotation
-//         //     name: (_) (#EQ? "Override")
-//         // )"#,
-//         r#"
-// (method_declaration
-//     (modifiers
-//         (marker_annotation 
-//             name: (_) (#EQ? "Override")
-//         )
-//     )
-// )"#,
-//         //         r#"
-//         // (method_declaration
-//         //     (modifiers
-//         //         (marker_annotation)
-//         //     )
-//         // )"#,
-//         r#"
-// (class_declaration 
-//     name: (_) @name
-//     body: (_
-//         (method_declaration)
-//     )
-// )"#,
-//     ],
-//     r#"(program
-// (class_declaration 
-//   name: (_) @name
-//   body: (_
-//     (method_declaration
-//       (modifiers
-//         (marker_annotation 
-//           name: (_) (#EQ? "Override")
-//         )
-//       )
-//       name: (_)@meth_name
-//     )
-//   )
-// )
-//   )"#,
-// ),
-(
-    &[
-        //         r#"
-        // (marker_annotation
-        //     name: (_) (#EQ? "Override")
-        // )"#,
-        r#"
+    // (
+    //     &[
+    //         //         r#"
+    //         // (marker_annotation
+    //         //     name: (_) (#EQ? "Override")
+    //         // )"#,
+    //         r#"
+    // (method_declaration
+    //     (modifiers
+    //         (marker_annotation
+    //             name: (_) (#EQ? "Override")
+    //         )
+    //     )
+    // )"#,
+    //         //         r#"
+    //         // (method_declaration
+    //         //     (modifiers
+    //         //         (marker_annotation)
+    //         //     )
+    //         // )"#,
+    //         r#"
+    // (class_declaration
+    //     name: (_) @name
+    //     body: (_
+    //         (method_declaration)
+    //     )
+    // )"#,
+    //     ],
+    //     r#"(program
+    // (class_declaration
+    //   name: (_) @name
+    //   body: (_
+    //     (method_declaration
+    //       (modifiers
+    //         (marker_annotation
+    //           name: (_) (#EQ? "Override")
+    //         )
+    //       )
+    //       name: (_)@meth_name
+    //     )
+    //   )
+    // )
+    //   )"#,
+    // ),
+    (
+        &[
+            //         r#"
+            // (marker_annotation
+            //     name: (_) (#EQ? "Override")
+            // )"#,
+            r#"
 (method_declaration
     (modifiers
       "public"
@@ -60,21 +60,21 @@ pub const QUERIES: &[(&[&str], &str)] = &[
     type: (void_type)
     name: (_) (#EQ? "main")
 )"#,
-        //         r#"
-        // (method_declaration
-        //     (modifiers
-        //         (marker_annotation)
-        //     )
-        // )"#,
-//         r#"
-// (class_declaration 
-//     name: (_) @name
-//     body: (_
-//         (method_declaration)
-//     )
-// )"#,
-    ],
-    r#"(program
+            //         r#"
+            // (method_declaration
+            //     (modifiers
+            //         (marker_annotation)
+            //     )
+            // )"#,
+            //         r#"
+            // (class_declaration
+            //     name: (_) @name
+            //     body: (_
+            //         (method_declaration)
+            //     )
+            // )"#,
+        ],
+        r#"(program
 (class_declaration 
   name: (_) @name
   body: (_
@@ -89,7 +89,8 @@ pub const QUERIES: &[(&[&str], &str)] = &[
   )
 )
   )"#,
-)];
+    ),
+];
 
 fn main() {
     use std::path::Path;
@@ -100,10 +101,7 @@ fn main() {
     args.next().unwrap();
     let Some(codes) = args.next() else {
         let codes = hyper_ast_gen_ts_java::tsg::CODES.iter().enumerate();
-        let queries: Vec<_> = QUERIES
-            .iter()
-            .enumerate()
-            .collect();
+        let queries: Vec<_> = QUERIES.iter().enumerate().collect();
         compare_all(codes, &queries);
         return;
     };
@@ -165,12 +163,12 @@ fn compare_all(
             //     )
             // };
             let h_res = prep_stepped(precomp, query, text);
-            let h_matches = h_res.0.matches(
-                hyper_ast_tsquery::hyperast::TreeCursor::new(
+            let h_matches = h_res
+                .0
+                .matches(hyper_ast_tsquery::hyperast::TreeCursor::new(
                     &h_res.1,
                     hyper_ast::position::StructuralPosition::new(h_res.2),
-                ),
-            );
+                ));
             let g_c = g_matches.into_iter().count();
             let f_c = 0;
             // let f_c = f_matches.into_iter().count();
@@ -250,7 +248,9 @@ fn prep_stepped<'store>(
     hyper_ast::store::defaults::NodeIdentifier,
 ) {
     use hyper_ast_gen_ts_java::legion_with_refs;
-    let (precomp, query) = hyper_ast_tsquery::Query::with_precomputed(query, tree_sitter_java::language(), precomp).unwrap();
+    let (precomp, query) =
+        hyper_ast_tsquery::Query::with_precomputed(query, tree_sitter_java::language(), precomp)
+            .unwrap();
 
     let mut stores = hyper_ast::store::SimpleStores {
         label_store: hyper_ast::store::labels::LabelStore::new(),

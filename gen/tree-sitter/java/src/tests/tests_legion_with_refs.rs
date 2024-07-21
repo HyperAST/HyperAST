@@ -386,7 +386,8 @@ public class A {
             &*java_tree_gen.stores,
             full_node.local.compressed_node
         )
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(std::str::from_utf8(text).unwrap(), out.buff);
 
     println!("{:?}", java_tree_gen.stores.node_store);

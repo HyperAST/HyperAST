@@ -165,7 +165,7 @@ impl<
         'store,
         HAST: types::TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
-        F: Converter<Ty=TIdN::Ty>,
+        F: Converter<Ty = TIdN::Ty>,
         const PP: bool,
     > Display for TreeToQuery<'store, HAST, TIdN, F, PP>
 where
@@ -180,7 +180,7 @@ impl<
         'store,
         HAST: types::TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
-        F: Converter<Ty=TIdN::Ty>,
+        F: Converter<Ty = TIdN::Ty>,
         const PP: bool,
     > TreeToQuery<'store, HAST, TIdN, F, PP>
 where

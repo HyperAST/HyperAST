@@ -71,7 +71,7 @@ pub(crate) fn example_move_action() -> (ST<u8>, ST<u8>) {
 /// example of simple delete
 ///
 /// 0:f is removed
-/// 
+///
 /// note added g compared to other delete example
 pub(crate) fn example_subdelete_action() -> (ST<u8>, ST<u8>) {
     let src = tree!(
@@ -95,7 +95,7 @@ pub(crate) fn example_subdelete_action() -> (ST<u8>, ST<u8>) {
 /// example of delete with move
 ///
 /// 0:f is removed
-/// 
+///
 /// note added g compared to other delete example
 pub(crate) fn example_subdelete_action2() -> (ST<u8>, ST<u8>) {
     let src = tree!(

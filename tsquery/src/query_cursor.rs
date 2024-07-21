@@ -440,7 +440,7 @@ where
                 // TODO is_empty but would need to know if there are named children/descendants
                 // NOTE is_neg would also be useful in other cases but lets first make some test with alternative ways ie enumerate exhaustively the positive cases
                 // if state!(@step).is_neg() {
-                    
+
                 //     dbg!(&state!(@step), node_does_match, is_named);
                 //     if is_named {
                 //         node_does_match = !node_does_match;

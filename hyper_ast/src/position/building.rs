@@ -91,7 +91,8 @@ pub mod top_down {
         T: ReceiveParent<IdN, T>
             + SetNode<IdN, O>
             + ReceiveOffset<IdO, T>
-            + ReceiveRows<IdO, T> // TODO should not be possible to add rows after having added columns
+            + ReceiveRows<IdO, T>
+            // TODO should not be possible to add rows after having added columns
             + ReceiveColumns<IdO, T>
             + ReceiveIdx<Idx, T>
             + SetLen<IdO, T>
@@ -174,7 +175,8 @@ pub mod bottom_up {
             + SetRoot<IdN, O>
             + ReceiveOffset<IdO, T>
             + ReceiveColumns<IdO, T>
-            + ReceiveRows<IdO, T> // TODO should not be possible to add rows after having added columns
+            + ReceiveRows<IdO, T>
+            // TODO should not be possible to add rows after having added columns
             + ReceiveIdx<Idx, T>
             + ReceiveDirName<T>
             + SetLen<IdO, T>,
@@ -373,16 +375,16 @@ mod impl_c_p_p_receivers2 {
         }
     }
 
-    impl<T: Copy, A: super::ReceiveRows<T, A>, B: super::ReceiveRows<T, B>> super::ReceiveRows<T, Self>
-        for CompoundPositionPreparer<A, B>
+    impl<T: Copy, A: super::ReceiveRows<T, A>, B: super::ReceiveRows<T, B>>
+        super::ReceiveRows<T, Self> for CompoundPositionPreparer<A, B>
     {
         fn push(self, row: T) -> Self {
             Self(self.0.push(row), self.1.push(row))
         }
     }
 
-    impl<T: Copy, A: super::ReceiveColumns<T, A>, B: super::ReceiveColumns<T, B>> super::ReceiveColumns<T, Self>
-        for CompoundPositionPreparer<A, B>
+    impl<T: Copy, A: super::ReceiveColumns<T, A>, B: super::ReceiveColumns<T, B>>
+        super::ReceiveColumns<T, Self> for CompoundPositionPreparer<A, B>
     {
         fn push(self, col: T) -> Self {
             Self(self.0.push(col), self.1.push(col))

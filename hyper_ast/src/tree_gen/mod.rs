@@ -83,7 +83,7 @@ pub struct SubTreeMetrics<U: NodeHashs> {
     pub height: u32,
 
     pub size_no_spaces: u32,
-    pub line_count: u16, 
+    pub line_count: u16,
 }
 
 impl<U: NodeHashs> SubTreeMetrics<U> {

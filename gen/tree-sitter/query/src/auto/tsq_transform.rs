@@ -66,7 +66,7 @@ pub fn regen_query(
                                 low = mid + 1;
                             }
                         }
-                    },
+                    }
                     Action::Replace { mut path, new } => {
                         let ActionTree::Children(cs) = s else {
                             panic!()
@@ -104,7 +104,6 @@ pub fn regen_query(
                                 low = mid + 1;
                             }
                         }
-
                     }
                 }
             }
@@ -117,7 +116,7 @@ pub fn regen_query(
                     Action::Replace { mut path, new } => {
                         path.reverse();
                         Action::Replace { path, new }
-                    },
+                    }
                 };
                 insert(&mut res, a);
             }
@@ -157,11 +156,7 @@ pub fn regen_query(
         let mut cs: Vec<NodeIdentifier> = vec![];
         use hyper_ast::types::WithChildren;
 
-        let cs_nodes = n
-            .children()?
-            .iter_children()
-            .copied()
-            .collect::<Vec<_>>();
+        let cs_nodes = n.children()?.iter_children().copied().collect::<Vec<_>>();
         let mut cs_nodes = cs_nodes.iter();
         drop(n);
 

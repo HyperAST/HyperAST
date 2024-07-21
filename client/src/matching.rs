@@ -160,10 +160,7 @@ pub fn bottom_up<'store, 'a, 'b, HAST: HyperAST<'store>>(
 {
     LazyGreedySubtreeMatcher::<_, _, _, VecStore<_>>::filter_mappings(mapper, mm);
 
-    GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(
-        mapper,
-        hyperast.label_store(),
-    );
+    GreedyBottomUpMatcher::<_, _, _, _, VecStore<_>>::execute(mapper, hyperast.label_store());
 }
 
 pub fn leveraging_method_headers<'store, 'a, 'b, HAST: HyperAST<'store>>(

@@ -89,9 +89,8 @@ pub fn simple(
         .unwrap()
         .pre_process_with_limit(&mut repo, "", &commit, commits)
         .unwrap();
-    let tsg = QueryMatcher::<SimpleStores>::from_str(language.clone(), &query).map_err(|e|
-        QueryingError::TsgParsing(e.to_string())
-    )?;
+    let tsg = QueryMatcher::<SimpleStores>::from_str(language.clone(), &query)
+        .map_err(|e| QueryingError::TsgParsing(e.to_string()))?;
     let prepare_time = now.elapsed().as_secs_f64();
     log::info!("done construction of {commits:?} in  {}", repo.spec);
     let mut results = vec![];
@@ -172,8 +171,7 @@ fn configure<'a, 'g, Node>(
                 .concat()
                 .as_str()
                 .into(),
-        )
-        ;
+        );
     config
 }
 

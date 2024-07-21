@@ -6,7 +6,8 @@ use crate::{
     position::TreePath,
     store::defaults::LabelIdentifier,
     types::{
-        self, AnyType, HyperAST, NodeId, NodeStore, Tree, Typed, WithChildren, WithSerialization, WithStats,
+        self, AnyType, HyperAST, NodeId, NodeStore, Tree, Typed, WithChildren, WithSerialization,
+        WithStats,
     },
     PrimInt,
 };

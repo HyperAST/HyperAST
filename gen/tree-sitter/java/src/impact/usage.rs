@@ -8,7 +8,9 @@ use hyper_ast::{
     },
     store::defaults::LabelIdentifier,
     types::{
-        Children, HyperAST, HyperASTShared, IterableChildren, LabelStore, Labeled, NodeId, Tree, TypeStore, TypeTrait, Typed, TypedHyperAST, TypedNodeStore, TypedTree, WithChildren, WithSerialization
+        Children, HyperAST, HyperASTShared, IterableChildren, LabelStore, Labeled, NodeId, Tree,
+        TypeStore, TypeTrait, Typed, TypedHyperAST, TypedNodeStore, TypedTree, WithChildren,
+        WithSerialization,
     },
 };
 use num::{cast, one, zero, ToPrimitive, Zero};
@@ -45,7 +47,6 @@ impl<'a, IdN, HAST: HyperAST<'a>> Debug for RefsFinder<'a, IdN, HAST> {
             .field("refs", &self.refs.len())
             .finish()
     }
-
 }
 
 impl<'a, IdN, HAST: HyperAST<'a>> RefsFinder<'a, IdN, HAST> {
@@ -203,7 +204,12 @@ where
     ) -> Vec<SpHandle> {
         // let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
         // let this = self.ana.solver.intern(RefsEnum::This(mm));
-        todo!("need a TypedScout for find constructors {:?} {} {:?}", self, package, scout);
+        todo!(
+            "need a TypedScout for find constructors {:?} {} {:?}",
+            self,
+            package,
+            scout
+        );
         // self.find_constructors(scout.clone());
         // self.sp_store.check_with(self.stores, &scout).expect("find_all_is_this before");
         // self.find_refs_with_this(package, this, &mut scout);

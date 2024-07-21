@@ -218,8 +218,7 @@ pub struct MyQMatches<'query, 'cursor: 'query, 'tree: 'cursor> {
         crate::iter::IterAll<'tree, StructuralPosition<NodeIdentifier, u16>, SimpleStores<TStore>>,
         crate::types::TIdN<NodeIdentifier>,
     >,
-    node:
-        Node<'tree, SimpleStores<crate::types::TStore>, hyper_ast::position::StructuralPosition>,
+    node: Node<'tree, SimpleStores<crate::types::TStore>, hyper_ast::position::StructuralPosition>,
 }
 
 impl<'query, 'cursor: 'query, 'tree: 'cursor> Iterator for MyQMatches<'query, 'cursor, 'tree> {
@@ -246,7 +245,9 @@ impl<'query, 'cursor: 'query, 'tree: 'cursor> Iterator for MyQMatches<'query, 'c
     }
 }
 
-pub struct QueryMatcher<Ty, C = Conv<Ty>>(pub hyper_ast_gen_ts_tsquery::search::PreparedMatcher<Ty, C>);
+pub struct QueryMatcher<Ty, C = Conv<Ty>>(
+    pub hyper_ast_gen_ts_tsquery::search::PreparedMatcher<Ty, C>,
+);
 
 impl<Ty: Debug> Debug for QueryMatcher<Ty> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -346,7 +347,11 @@ impl<Ty, Q, L> Default for ExtendingStringQuery<Ty, Q, L> {
 }
 
 impl tree_sitter_graph::ExtendedableQuery
-    for ExtendingStringQuery<crate::types::Type, QueryMatcher<crate::types::Type>, tree_sitter::Language>
+    for ExtendingStringQuery<
+        crate::types::Type,
+        QueryMatcher<crate::types::Type>,
+        tree_sitter::Language,
+    >
 {
     type Query = QueryMatcher<crate::types::Type>;
     type Lang = tree_sitter::Language;

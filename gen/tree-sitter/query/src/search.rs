@@ -35,7 +35,7 @@ pub struct PreparedMatcher<Ty, C = Conv<Ty>> {
     pub(crate) patterns: Arc<[Pattern<Ty>]>,
     pub captures: Arc<[Capture]>,
     pub(crate) quantifiers: Arc<[HashMap<usize, tree_sitter::CaptureQuantifier>]>,
-    converter: C
+    converter: C,
 }
 
 #[derive(Debug)]
@@ -43,7 +43,7 @@ pub struct Capture {
     pub name: String,
 }
 
-impl<Ty: std::fmt::Debug, C> std::fmt::Debug for PreparedMatcher<Ty,C> {
+impl<Ty: std::fmt::Debug, C> std::fmt::Debug for PreparedMatcher<Ty, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PreparedMatcher")
             .field("quick_trigger", &self.quick_trigger.root_types)
@@ -329,7 +329,10 @@ pub fn ts_query2(stores: &mut SimpleStores<TStore>, text: &[u8]) -> legion::Enti
     full_node.local.compressed_node
 }
 
-pub fn ts_query2_with_label_hash(stores: &mut SimpleStores<TStore>, text: &[u8]) -> Option<(legion::Entity, u32)> {
+pub fn ts_query2_with_label_hash(
+    stores: &mut SimpleStores<TStore>,
+    text: &[u8],
+) -> Option<(legion::Entity, u32)> {
     let mut md_cache = Default::default();
     let mut query_tree_gen = TsQueryTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -341,7 +344,7 @@ pub fn ts_query2_with_label_hash(stores: &mut SimpleStores<TStore>, text: &[u8])
         Ok(t) => t,
         Err(t) => {
             dbg!(t.root_node().to_sexp());
-            return None
+            return None;
         }
     };
     // dbg!(tree.root_node().to_sexp());
@@ -350,6 +353,9 @@ pub fn ts_query2_with_label_hash(stores: &mut SimpleStores<TStore>, text: &[u8])
     //     "{}",
     //     hyper_ast::nodes::SyntaxSerializer::new(stores, full_node.local.compressed_node)
     // );
-    let r = (full_node.local.compressed_node, full_node.local.metrics.hashs.label);
+    let r = (
+        full_node.local.compressed_node,
+        full_node.local.metrics.hashs.label,
+    );
     Some(r)
 }

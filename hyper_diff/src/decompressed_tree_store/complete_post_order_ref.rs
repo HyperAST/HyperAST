@@ -19,7 +19,12 @@ use hyper_ast::{
 };
 
 use super::{
-    lazy_post_order::LazyPostOrder, pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper}, simple_post_order::{SimplePOSlice, SimplePostOrder}, ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings, FullyDecompressedTreeStore, Iter, IterKr, POBorrowSlice, PostOrder, PostOrderIterable, PostOrderKeyRoots, ShallowDecompressedTreeStore
+    lazy_post_order::LazyPostOrder,
+    pre_order_wrapper::{DisplaySimplePreOrderMapper, SimplePreOrderMapper},
+    simple_post_order::{SimplePOSlice, SimplePostOrder},
+    ContiguousDescendants, DecompressedTreeStore, DecompressedWithParent, DecompressedWithSiblings,
+    FullyDecompressedTreeStore, Iter, IterKr, POBorrowSlice, PostOrder, PostOrderIterable,
+    PostOrderKeyRoots, ShallowDecompressedTreeStore,
 };
 
 use logging_timer::time;
@@ -68,7 +73,8 @@ impl<'a, T: Stored, IdD: PrimInt> CompletePostOrder<'a, T, IdD> {
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> From<&'a LazyPostOrder<T, IdD>> for CompletePostOrder<'a, T, IdD>
+impl<'a, T: WithChildren, IdD: PrimInt> From<&'a LazyPostOrder<T, IdD>>
+    for CompletePostOrder<'a, T, IdD>
 where
     T::TreeId: Clone,
 {
@@ -233,7 +239,8 @@ where
     }
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt> PostOrderIterable<'a, T, IdD> for CompletePostOrder<'a, T, IdD>
+impl<'a, T: WithChildren, IdD: PrimInt> PostOrderIterable<'a, T, IdD>
+    for CompletePostOrder<'a, T, IdD>
 where
     T::TreeId: Clone + Eq + Debug + NodeId<IdN = T::TreeId>,
 {
@@ -388,7 +395,8 @@ pub struct RecCachedPositionProcessor<'a, T: WithChildren, IdD: Hash + Eq> {
     cache: HashMap<IdD, Position>,
 }
 
-impl<'a, T: WithChildren, IdD: PrimInt + Hash + Eq> From<(&'a CompletePostOrder<'a, T, IdD>, T::TreeId)>
+impl<'a, T: WithChildren, IdD: PrimInt + Hash + Eq>
+    From<(&'a CompletePostOrder<'a, T, IdD>, T::TreeId)>
     for RecCachedPositionProcessor<'a, T, IdD>
 {
     fn from((ds, root): (&'a CompletePostOrder<'a, T, IdD>, T::TreeId)) -> Self {

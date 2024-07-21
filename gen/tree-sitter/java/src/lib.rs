@@ -16,10 +16,10 @@ pub mod types_exp;
 
 #[cfg(feature = "impl")]
 pub mod impact;
+#[cfg(all(feature = "impl", feature = "tsg"))]
+pub mod tsg;
 #[cfg(feature = "impl")]
 pub mod usage;
-#[cfg(all(feature = "impl",feature = "tsg"))]
-pub mod tsg;
 
 #[cfg(feature = "impl")]
 #[cfg(test)]

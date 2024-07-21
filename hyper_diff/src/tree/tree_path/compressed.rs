@@ -189,8 +189,6 @@ impl<'a, Idx: 'a + PrimInt> Iterator for Iter<'a, Idx> {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use crate::actions::{

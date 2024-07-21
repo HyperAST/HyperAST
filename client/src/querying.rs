@@ -107,14 +107,14 @@ pub fn simple(
     for commit_oid in &commits {
         let mut oid = commit_oid.to_string();
         oid.truncate(6);
-        log::info!("start querying {}", oid );
+        log::info!("start querying {}", oid);
         let result = simple_aux(&state, &repo, commit_oid, &query)
             .map(|inner| ComputeResultIdentified {
                 commit: commit_oid.to_string(),
                 inner,
             })
             .map_err(|err| format!("{:?}", err));
-        log::info!("done querying {}", oid );
+        log::info!("done querying {}", oid);
         results.push(result);
     }
     log::info!("done querying of {commits:?} in  {}", repo.spec);

@@ -89,10 +89,7 @@ mod pred {
     pub type TextPredicateCaptures<C = u32> = Predicates<TextPredicateCapture<C>>;
 
     impl<P> Predicates<P> {
-        pub fn preds_for_patern_id<'a>(
-            &'a self,
-            id: usize,
-        ) -> impl Iterator<Item = &'a P> {
+        pub fn preds_for_patern_id<'a>(&'a self, id: usize) -> impl Iterator<Item = &'a P> {
             self.0[id].iter()
         }
     }

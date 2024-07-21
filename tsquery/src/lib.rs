@@ -68,7 +68,7 @@ pub struct Query {
     precomputed_patterns: Option<query::PrecomputedPatterns>,
     used_precomputed: u8,
     enabled_pattern_map: Vec<u16>,
-    enabled_pattern_count: u16
+    enabled_pattern_count: u16,
 }
 
 #[derive(Clone, Debug)]
@@ -127,7 +127,7 @@ impl Query {
             todo!()
         }
     }
-    
+
     pub fn capture_count(&self) -> usize {
         self.capture_names.len()
     }

@@ -150,8 +150,7 @@ where
                         }
                         self.serialize(&id, count, ind, out)?;
                     }
-                } else 
-                if !children.is_empty() {
+                } else if !children.is_empty() {
                     let it = children.iter_children();
                     write!(out, "(")?;
                     write!(out, "{}", kind.to_string())?;

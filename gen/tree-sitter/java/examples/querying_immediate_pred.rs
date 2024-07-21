@@ -15,21 +15,21 @@ pub const QUERIES: &[&str] = &[
     )
   )
 )"#,
-// r#"(program
-// (class_declaration 
-// name: (_) @name
-// body: (_
-//   (method_declaration
-//     (modifiers
-//       (marker_annotation 
-//         name: (_) (#EQ? "Override")
-//       )
-//     )
-//     name: (_)@meth_name
-//   )
-// )
-// )
-// )"#,
+    // r#"(program
+    // (class_declaration
+    // name: (_) @name
+    // body: (_
+    //   (method_declaration
+    //     (modifiers
+    //       (marker_annotation
+    //         name: (_) (#EQ? "Override")
+    //       )
+    //     )
+    //     name: (_)@meth_name
+    //   )
+    // )
+    // )
+    // )"#,
 ];
 // TODO make par of queries due to extending original syntax
 fn main() {
@@ -41,10 +41,7 @@ fn main() {
     args.next().unwrap();
     let Some(codes) = args.next() else {
         let codes = hyper_ast_gen_ts_java::tsg::CODES.iter().enumerate();
-        let queries: Vec<_> = QUERIES
-            .iter()
-            .enumerate()
-            .collect();
+        let queries: Vec<_> = QUERIES.iter().enumerate().collect();
         compare_all(codes, &queries);
         return;
     };
@@ -57,10 +54,7 @@ fn main() {
         (x, text)
     });
     let Some(queries) = args.next() else {
-        let queries: Vec<_> = QUERIES
-            .iter()
-            .enumerate()
-            .collect();
+        let queries: Vec<_> = QUERIES.iter().enumerate().collect();
         compare_all(codes, &queries);
         return;
     };
@@ -99,12 +93,12 @@ fn compare_all(
             let g_res = prep_baseline(query, text);
             let g_matches = { cursor.matches(&g_res.0, g_res.1.root_node(), text) };
             let h_res = prep_stepped(query, text);
-            let h_matches = h_res.0.matches(
-                hyper_ast_tsquery::hyperast::TreeCursor::new(
+            let h_matches = h_res
+                .0
+                .matches(hyper_ast_tsquery::hyperast::TreeCursor::new(
                     &h_res.1,
                     hyper_ast::position::StructuralPosition::new(h_res.2),
-                ),
-            );
+                ));
             let g_c = g_matches.into_iter().count();
             let f_c = 0;
             // let f_c = f_matches.into_iter().count();

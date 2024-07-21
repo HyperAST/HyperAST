@@ -19,7 +19,10 @@ mod legion_impls {
         }
     }
 
-    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::{LangWrapper, RoleStore, TypeIndex}};
+    use hyper_ast::{
+        store::nodes::legion::HashedNodeRef,
+        types::{LangWrapper, RoleStore, TypeIndex},
+    };
 
     impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         type Ty = Type;

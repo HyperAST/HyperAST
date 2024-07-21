@@ -104,10 +104,7 @@ where
     r
 }
 
-pub fn extract_position_it_rec<'store, HAST, It, It2>(
-    stores: &'store HAST,
-    mut it: It,
-) -> Position
+pub fn extract_position_it_rec<'store, HAST, It, It2>(stores: &'store HAST, mut it: It) -> Position
 where
     HAST: HyperAST<'store, IdN = NodeIdentifier, Idx = u16>,
     HAST::TS: TypeStore<HAST::T, Ty = AnyType>,
@@ -171,10 +168,7 @@ where
     r
 }
 
-pub fn extract_position_it<'store, HAST, It, It2>(
-    stores: &'store HAST,
-    mut it: It,
-) -> Position
+pub fn extract_position_it<'store, HAST, It, It2>(stores: &'store HAST, mut it: It) -> Position
 where
     HAST: HyperAST<'store, IdN = NodeIdentifier>,
     HAST::T: WithSerialization,

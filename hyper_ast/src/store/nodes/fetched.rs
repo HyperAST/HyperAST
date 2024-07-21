@@ -4,9 +4,9 @@ use std::{
     marker::PhantomData,
 };
 
-use string_interner::{Symbol};
 #[cfg(feature = "native")]
 use string_interner::DefaultHashBuilder;
+use string_interner::Symbol;
 
 use crate::{
     store::defaults,
@@ -271,8 +271,7 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     }
 }
 
-impl<'a, T: TypedNodeId> crate::types::Tree for HashedNodeRef<'a, T>
-{
+impl<'a, T: TypedNodeId> crate::types::Tree for HashedNodeRef<'a, T> {
     fn has_children(&self) -> bool {
         match self.s_ref {
             VariantRef::Typed { .. } => false,

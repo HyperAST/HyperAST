@@ -513,8 +513,16 @@ pub struct SimpleSerializer<
     root: IdN,
 }
 
-impl<'store, IdN, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool,const ROLES: bool>
-    SimpleSerializer<'store, IdN, HAST, TY, LABELS, IDS, SPC, ROLES>
+impl<
+        'store,
+        IdN,
+        HAST,
+        const TY: bool,
+        const LABELS: bool,
+        const IDS: bool,
+        const SPC: bool,
+        const ROLES: bool,
+    > SimpleSerializer<'store, IdN, HAST, TY, LABELS, IDS, SPC, ROLES>
 {
     pub fn new(stores: &'store HAST, root: IdN) -> Self {
         Self { stores, root }
@@ -528,8 +536,8 @@ where
     HAST: crate::types::NodeStore<IdN>,
     HAST: crate::types::LabelStore<str>,
     HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
-        + crate::types::WithChildren<TreeId = IdN>
+    HAST::R<'store>:
+        crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, f)
@@ -561,8 +569,8 @@ where
     HAST: crate::types::NodeStore<IdN>,
     HAST: crate::types::LabelStore<str>,
     HAST: crate::types::TypeStore<HAST::R<'store>>,
-    HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
-        + crate::types::WithChildren<TreeId = IdN>,
+    HAST::R<'store>:
+        crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
 {
     // pub fn tree_syntax_with_ids(
     fn serialize(

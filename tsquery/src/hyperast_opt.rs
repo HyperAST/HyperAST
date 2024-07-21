@@ -200,7 +200,7 @@ where
 
     fn wont_match(&self, needed: u8) -> bool {
         if needed == 0 {
-            return false
+            return false;
         }
         use hyper_ast::types::NodeStore;
         let id = self.pos.node();
@@ -526,7 +526,7 @@ where
     let n = stores.node_store().resolve(&p);
     use hyper_ast::types::Children;
     use hyper_ast::types::WithChildren;
-    let Some(node) = n.children().and_then(|x| x.get(pos.offset()+num::one())) else {
+    let Some(node) = n.children().and_then(|x| x.get(pos.offset() + num::one())) else {
         if stores.resolve_type(&p).is_hidden() {
             pos.up();
             return goto_next_sibling_internal(stores, pos);

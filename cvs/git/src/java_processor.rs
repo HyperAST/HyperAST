@@ -459,10 +459,13 @@ impl RepositoryProcessor {
         text: &[u8],
     ) -> Result<java_tree_gen::FNode, ()> {
         todo!() // not used much anyway apart from  check_random_files_reserialization
-        // crate::java::handle_java_file(&mut self.java_generator(text), name, text)
+                // crate::java::handle_java_file(&mut self.java_generator(text), name, text)
     }
 
-    fn java_generator(&mut self, text: &[u8]) -> java_tree_gen::JavaTreeGen<crate::TStore, hyper_ast_tsquery::Query> {
+    fn java_generator(
+        &mut self,
+        text: &[u8],
+    ) -> java_tree_gen::JavaTreeGen<crate::TStore, hyper_ast_tsquery::Query> {
         let line_break = if text.contains(&b'\r') {
             "\r\n".as_bytes().to_vec()
         } else {

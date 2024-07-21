@@ -172,7 +172,7 @@ impl TSQuery {
         }
         capture_quantifiers.into()
     }
-    
+
     pub(crate) fn string_count(query: *mut TSQuery) -> usize {
         // ts_query_string_value_for_id // TODO compare with ffi call
         unsafe { &(*query).predicate_values }.slices.len()

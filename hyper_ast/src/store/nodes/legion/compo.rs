@@ -29,4 +29,3 @@ impl<'a, T: Eq, const N: usize> From<&'a CS0<T, N>> for &'a [T] {
 pub struct RoleOffsets(pub Box<[u8]>);
 pub struct Precomp(pub u8);
 pub struct PrecompFlag;
-

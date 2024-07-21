@@ -117,7 +117,7 @@ impl Steps {
     pub(crate) fn count(&self) -> StepId {
         StepId(num::cast(self.0.len()).unwrap())
     }
-    
+
     // pub(crate) fn set_neg(&mut self, sid: StepId) {
     //     self.0[sid.0 as usize].set_neg()
     // }

@@ -423,9 +423,17 @@ impl HyperApp {
         dbg!();
         let mut font_definitions = egui::FontDefinitions::default();
         let font_data = &mut font_definitions.font_data;
-        font_data.get_mut("Hack").unwrap().tweak.baseline_offset_factor = 100.0;
+        font_data
+            .get_mut("Hack")
+            .unwrap()
+            .tweak
+            .baseline_offset_factor = 100.0;
         let font_data = &mut font_definitions.font_data;
-        font_data.get_mut("Ubuntu-Light").unwrap().tweak.baseline_offset_factor = 100.0;
+        font_data
+            .get_mut("Ubuntu-Light")
+            .unwrap()
+            .tweak
+            .baseline_offset_factor = 100.0;
         let font_data = &mut font_definitions.font_data;
         font_data
             .get_mut("NotoEmoji-Regular")
@@ -433,7 +441,11 @@ impl HyperApp {
             .tweak
             .baseline_offset_factor = 100.0;
         let font_data = &mut font_definitions.font_data;
-        font_data.get_mut("emoji-icon-font").unwrap().tweak.baseline_offset_factor = 100.0;
+        font_data
+            .get_mut("emoji-icon-font")
+            .unwrap()
+            .tweak
+            .baseline_offset_factor = 100.0;
 
         _cc.egui_ctx.set_fonts(font_definitions);
 
@@ -525,26 +537,21 @@ impl eframe::App for HyperApp {
                     ui.separator();
                     smells::show_menu(ui, selected, smells);
 
-                        ui.separator();
-                        ui.add_enabled_ui(false, |ui| {
-                            show_multi_repo(ui, selected, multi);
-                            show_wip(ui, Some(" soon available"));
-                        });
-                        ui.separator();
-                        ui.add_enabled_ui(false, |ui| {
-                            show_diff(ui, selected, diff);
-                            show_wip(ui, Some(" soon available"));
-                        });
-                        ui.separator();
-                        // ui.add_enabled_ui(false, |ui| {
-                        code_tracking::show_code_tracking_menu(
-                            ui,
-                            selected,
-                            tracking,
-                            tracking_result,
-                        );
-                        // show_wip(ui, Some(" soon available"));
-                        // });
+                    ui.separator();
+                    ui.add_enabled_ui(false, |ui| {
+                        show_multi_repo(ui, selected, multi);
+                        show_wip(ui, Some(" soon available"));
+                    });
+                    ui.separator();
+                    ui.add_enabled_ui(false, |ui| {
+                        show_diff(ui, selected, diff);
+                        show_wip(ui, Some(" soon available"));
+                    });
+                    ui.separator();
+                    // ui.add_enabled_ui(false, |ui| {
+                    code_tracking::show_code_tracking_menu(ui, selected, tracking, tracking_result);
+                    // show_wip(ui, Some(" soon available"));
+                    // });
                     ui.separator();
                     long_tracking::show_menu(ui, selected, long_tracking);
                     ui.separator();

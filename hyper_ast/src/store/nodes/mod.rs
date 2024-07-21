@@ -1,9 +1,9 @@
+pub mod boxed_components;
 pub mod fetched;
 #[cfg(feature = "hecs")]
 pub mod hecs;
 #[cfg(feature = "legion")]
 pub mod legion;
-pub mod boxed_components;
 
 #[cfg(feature = "legion")]
 pub type DefaultNodeStore = legion::NodeStore;

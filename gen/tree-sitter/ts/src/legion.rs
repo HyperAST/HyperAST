@@ -20,7 +20,11 @@ use hyper_ast::{
         SimpleStores,
     },
     tree_gen::{
-        compute_indentation, get_spacing, has_final_space, parser::{Node as _, TreeCursor}, AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange, ZippedTreeGen
+        compute_indentation, get_spacing, has_final_space,
+        parser::{Node as _, TreeCursor},
+        AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
+        PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen,
+        WithByteRange, ZippedTreeGen,
     },
     types::LabelStore as _,
 };
@@ -200,21 +204,20 @@ impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdent
         }
     }
     fn pre_skippable(
-            &mut self,
-            text: &Self::Text,
-            cursor: &Self::TreeCursor<'_>,
-            stack: &Parents<Self::Acc>,
-            global: &mut Self::Global,
-        ) -> hyper_ast::tree_gen::PreResult<<Self as TreeGen>::Acc> {
-        
-            let type_store = &mut self.stores().type_store;
-            let node = cursor.node();
-            if node.0.is_missing() {
-                return PreResult::Skip;
-            }
-            let kind = node.obtain_type(type_store);
-            let mut acc = self.pre(text, &node, stack, global);
-            PreResult::Ok(acc)
+        &mut self,
+        text: &Self::Text,
+        cursor: &Self::TreeCursor<'_>,
+        stack: &Parents<Self::Acc>,
+        global: &mut Self::Global,
+    ) -> hyper_ast::tree_gen::PreResult<<Self as TreeGen>::Acc> {
+        let type_store = &mut self.stores().type_store;
+        let node = cursor.node();
+        if node.0.is_missing() {
+            return PreResult::Skip;
+        }
+        let kind = node.obtain_type(type_store);
+        let mut acc = self.pre(text, &node, stack, global);
+        PreResult::Ok(acc)
     }
     fn pre(
         &mut self,
@@ -515,7 +518,7 @@ impl<'stores, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIde
                 height,
                 hashs,
                 size_no_spaces,
-                line_count
+                line_count,
             };
             Local {
                 compressed_node,

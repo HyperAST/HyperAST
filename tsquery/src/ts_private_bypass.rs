@@ -33,12 +33,12 @@ impl TextPredicateCapture {
             | TextPredicateCapture::MatchString(a, _, _, _)
             | TextPredicateCapture::AnyString(a, _, _) => {
                 *a = capture_map[a.to_usize()];
-            },
+            }
         };
         match self {
             TextPredicateCapture::EqCapture(_, a, _, _) => {
                 *a = capture_map[a.to_usize()];
-            },
+            }
             _ => (),
         };
     }

@@ -514,7 +514,9 @@ pub trait HyperType: Display + Debug {
     fn is_hidden(&self) -> bool;
     fn is_named(&self) -> bool;
     fn is_supertype(&self) -> bool;
-    fn get_lang(&self) -> LangWrapper<Self> where Self: Sized;
+    fn get_lang(&self) -> LangWrapper<Self>
+    where
+        Self: Sized;
     fn lang_ref(&self) -> LangWrapper<AnyType>;
 }
 
@@ -668,10 +670,7 @@ pub trait WithRoles: WithChildren {
 }
 
 pub trait WithPrecompQueries {
-    fn wont_match_given_precomputed_queries(
-        &self,
-        needed: u8,
-    ) -> bool;
+    fn wont_match_given_precomputed_queries(&self, needed: u8) -> bool;
 }
 
 pub trait WithChildrenSameLang: WithChildren {
@@ -1439,7 +1438,6 @@ where
     NS: 'store + NodeStore<T::TreeId, R<'store> = T>,
     LS: LabelStore<str, I = T::Label>,
 {
-
     type T = T;
 
     type NS = NS;

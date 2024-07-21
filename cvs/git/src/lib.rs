@@ -122,6 +122,6 @@ pub fn resolve_language(language: &str) -> Option<tree_sitter::Language> {
     match language {
         "Java" | "java" => ts_lang_java(),
         "Cpp" | "cpp" => ts_lang_cpp(),
-        _ => None
+        _ => None,
     }
 }

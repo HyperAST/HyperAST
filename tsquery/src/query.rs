@@ -844,7 +844,7 @@ impl Query {
                 todo!() // NOTE probably better to process precomputeds after Self::big
             }
             if q.precomputed_patterns.is_some() {
-                todo!()  // NOTE probably better to process precomputeds after Self::big
+                todo!() // NOTE probably better to process precomputeds after Self::big
             }
             for p in q.text_predicates.iter_mut() {
                 for p in p {
@@ -859,7 +859,7 @@ impl Query {
             q.property_settings.check_empty();
             query.property_settings.extend(q.property_settings);
             if q.used_precomputed != 0 {
-                todo!()  // NOTE probably better to process precomputeds after Self::big
+                todo!() // NOTE probably better to process precomputeds after Self::big
             }
 
             byte_offset = source.as_bytes().len();
@@ -2006,7 +2006,6 @@ mod tests {
             }
         }
     }
-
 }
 
 #[allow(unused)]

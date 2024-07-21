@@ -8,7 +8,11 @@ use hyper_ast_gen_ts_cpp::iter::IterAll as CppIter;
 use hyper_ast_gen_ts_xml::iter::IterAll as XmlIter;
 
 use crate::{
-    auto::{tsq_ser, tsq_ser_meta::{self, Conv}, tsq_transform},
+    auto::{
+        tsq_ser,
+        tsq_ser_meta::{self, Conv},
+        tsq_transform,
+    },
     search::PreparedMatcher,
     tests::{cpp_tree, xml_tree},
 };
@@ -132,8 +136,12 @@ fn gen_match_xml() {
     );
     println!();
     println!("{}", TextSerializer::new(&code_store, pat));
-    let q0 = tsq_ser_meta::TreeToQuery::<_, XmlTIdN, Conv<Xml>, true>::with_pred(&code_store, pat, "(Name)")
-        .to_string();
+    let q0 = tsq_ser_meta::TreeToQuery::<_, XmlTIdN, Conv<Xml>, true>::with_pred(
+        &code_store,
+        pat,
+        "(Name)",
+    )
+    .to_string();
     println!("{}", q0);
     // let q0 = format!("(document (element (content (element {}))))", q0);
     // let q0 = format!("(element (STag (Name) @id (#eq? @id \"artifactId\")))");
@@ -281,12 +289,33 @@ fn gen_match_named() {
             )
         {
             dbg!(&capts);
-            let l_l = prepared_matcher.captures.iter().position(|x|&x.name=="label").unwrap() as u32;
-            let l_i = prepared_matcher.captures.iter().position(|x|&x.name=="label").unwrap() as u32;
-            let k = capts.by_capture_id(l_l).unwrap().clone().try_label(&code_store).unwrap();
-            let v = capts.by_capture_id(l_i).unwrap().clone().try_label(&code_store).unwrap();
+            let l_l = prepared_matcher
+                .captures
+                .iter()
+                .position(|x| &x.name == "label")
+                .unwrap() as u32;
+            let l_i = prepared_matcher
+                .captures
+                .iter()
+                .position(|x| &x.name == "label")
+                .unwrap() as u32;
+            let k = capts
+                .by_capture_id(l_l)
+                .unwrap()
+                .clone()
+                .try_label(&code_store)
+                .unwrap();
+            let v = capts
+                .by_capture_id(l_i)
+                .unwrap()
+                .clone()
+                .try_label(&code_store)
+                .unwrap();
             let p = e;
-            per_label.entry(k.to_string()).or_insert(vec![]).push((v.to_string(), p));
+            per_label
+                .entry(k.to_string())
+                .or_insert(vec![])
+                .push((v.to_string(), p));
         }
     }
     assert_eq!(1, per_label.len());

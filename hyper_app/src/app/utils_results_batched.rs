@@ -125,7 +125,9 @@ fn show_long_result_compute_failure<'a>(error: &impl ComputeError, ui: &mut egui
 pub(crate) fn show_long_result_success(ui: &mut egui::Ui, content: &ComputeResults) {
     if content.results.len() > 5 {
         egui::ScrollArea::horizontal()
-            .scroll_bar_visibility(egui::containers::scroll_area::ScrollBarVisibility::AlwaysVisible)
+            .scroll_bar_visibility(
+                egui::containers::scroll_area::ScrollBarVisibility::AlwaysVisible,
+            )
             .auto_shrink([false, false])
             .show(ui, |ui| show_long_result_table(content, ui));
     } else {
@@ -133,7 +135,9 @@ pub(crate) fn show_long_result_success(ui: &mut egui::Ui, content: &ComputeResul
             .default_open(true)
             .show(ui, |ui| {
                 egui::ScrollArea::vertical()
-                    .scroll_bar_visibility(egui::containers::scroll_area::ScrollBarVisibility::AlwaysHidden)
+                    .scroll_bar_visibility(
+                        egui::containers::scroll_area::ScrollBarVisibility::AlwaysHidden,
+                    )
                     .auto_shrink([false, false])
                     .show(ui, |ui| show_long_result_list(content, ui));
             });

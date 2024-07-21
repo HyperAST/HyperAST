@@ -249,7 +249,9 @@ where
         Self::Dst: num_traits::PrimInt,
         Self: Sized,
     {
-        crate::matchers::similarity_metrics::number_of_common_descendants_ranges(src, dst, self.back)
+        crate::matchers::similarity_metrics::number_of_common_descendants_ranges(
+            src, dst, self.back,
+        )
 
         // (src.start.to_usize().unwrap()..src.end.to_usize().unwrap())
         //         .into_iter()

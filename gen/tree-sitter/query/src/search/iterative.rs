@@ -296,8 +296,8 @@ impl<
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore<HAST::T>>::Ty>,
-        C: Converter
-        > MatchingIter<'a, 'store, HAST, TIdN, C>
+        C: Converter,
+    > MatchingIter<'a, 'store, HAST, TIdN, C>
 {
     fn new(slf: &'a PreparedMatcher<TIdN::Ty, C>, code_store: &'store HAST, id: HAST::IdN) -> Self {
         Self {
@@ -308,7 +308,7 @@ impl<
     }
 }
 
-pub fn is_matching<'a, 'store, HAST, TIdN, Ty, C:Converter>(
+pub fn is_matching<'a, 'store, HAST, TIdN, Ty, C: Converter>(
     slf: &PreparedMatcher<Ty, C>,
     code_store: &'store HAST,
     id: HAST::IdN,

@@ -6,9 +6,11 @@ use std::{
 use poll_promise::Promise;
 
 use crate::app::{
-    types::EditorHolder, utils_edition::{
+    types::EditorHolder,
+    utils_edition::{
         show_available_remote_docs, show_locals_and_interact, show_shared_code_edition,
-    }, utils_results_batched::ComputeResults
+    },
+    utils_results_batched::ComputeResults,
 };
 
 use self::example_scripts::EXAMPLES;

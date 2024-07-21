@@ -45,22 +45,16 @@ pub struct RootedOffsets<IdN, Idx> {
 
 impl<IdN, Idx> super::node_filter_traits::Full for RootedOffsets<IdN, Idx> {}
 
-impl<IdN: Copy, Idx> position_accessors::RootedPosition<IdN>
-    for RootedOffsets<IdN, Idx>
-{
+impl<IdN: Copy, Idx> position_accessors::RootedPosition<IdN> for RootedOffsets<IdN, Idx> {
     fn root(&self) -> IdN {
         self.root
     }
 }
-impl<IdN: Copy, Idx: PrimInt> position_accessors::WithOffsets
-    for RootedOffsets<IdN, Idx>
-{
+impl<IdN: Copy, Idx: PrimInt> position_accessors::WithOffsets for RootedOffsets<IdN, Idx> {
     type Idx = Idx;
 }
 
-impl<IdN: Copy, Idx: PrimInt> position_accessors::WithPreOrderOffsets
-    for RootedOffsets<IdN, Idx>
-{
+impl<IdN: Copy, Idx: PrimInt> position_accessors::WithPreOrderOffsets for RootedOffsets<IdN, Idx> {
     type It<'b> = std::iter::Copied<std::slice::Iter<'b, Idx>> where Self: 'b, Idx: 'b;
 
     fn iter_offsets(&self) -> Self::It<'_> {
@@ -182,9 +176,7 @@ mod impl_receivers {
         type InFile<O> = Self;
     }
 
-    impl<Idx: PrimInt, IdO: PrimInt, C> top_down::ReceiveOffset<IdO, Self>
-        for Offsets<Idx, C>
-    {
+    impl<Idx: PrimInt, IdO: PrimInt, C> top_down::ReceiveOffset<IdO, Self> for Offsets<Idx, C> {
         fn push(self, _bytes: IdO) -> Self {
             self
         }

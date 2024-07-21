@@ -224,7 +224,7 @@ where
 
     fn wont_match(&self, needed: u8) -> bool {
         if needed == 0 {
-            return false
+            return false;
         }
         use hyper_ast::types::NodeStore;
         let n = self.stores.node_store().resolve(self.pos.node().unwrap());

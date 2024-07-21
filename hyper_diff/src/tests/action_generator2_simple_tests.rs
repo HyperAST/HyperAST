@@ -453,7 +453,6 @@ fn test_move_actions_1() {
     assert_eq!(then, s_dst);
 }
 
-
 #[test]
 fn test_subdelete_actions_1() {
     let (label_store, node_store, s_src, s_dst) = vpair_to_stores(example_subdelete_action());
@@ -538,7 +537,6 @@ fn test_subdelete_actions_1() {
 
     assert_eq!(then, s_dst);
 }
-
 
 #[test]
 fn test_subdelete_actions_2() {

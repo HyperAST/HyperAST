@@ -1978,10 +1978,7 @@ fn show_code_view(
     ui: &mut egui::Ui,
     api_addr: &str,
     curr_view: &mut ColView<'_>,
-    fetched_files: &mut HashMap<
-        types::FileIdentifier,
-        RemoteFile,
-    >,
+    fetched_files: &mut HashMap<types::FileIdentifier, RemoteFile>,
 ) -> Option<egui::text_edit::TextEditOutput> {
     let curr_file = {
         let curr = if curr_view.matcheds.get(0).is_some() {

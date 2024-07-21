@@ -21,7 +21,6 @@ pub(crate) fn show_nat_menu(ctx: &egui::Context, _frame: &mut eframe::Frame) {
     });
 }
 
-
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn show_nat_menu(ctx: &egui::Context, _frame: &mut eframe::Frame) {}
 

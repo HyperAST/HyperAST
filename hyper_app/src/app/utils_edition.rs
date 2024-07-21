@@ -694,8 +694,10 @@ impl<'a, 'b, MH: MakeHighlights, G: AsRef<std::sync::Arc<egui::Galley>>>
             colors.push(x.0);
             let color: egui::Color32 = x.0.into();
             for (start, end) in x.1 {
-                let cursor_range =
-                    egui_addon::egui_utils::compute_cursor_range(galley, &std::ops::Range { start, end });
+                let cursor_range = egui_addon::egui_utils::compute_cursor_range(
+                    galley,
+                    &std::ops::Range { start, end },
+                );
                 let row_range = cursor_range.map(|c| c.rcursor.row);
                 if row_range[0] + 1 < row_range[1] {
                     let mut mid_rect =
