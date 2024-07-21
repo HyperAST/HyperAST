@@ -1,5 +1,5 @@
 use crate::{
-    preprocessed::IsSkippedAna, processing::ObjectName, Accumulator, TStore, MAX_REFS,
+    preprocessed::IsSkippedAna, processing::ObjectName, Accumulator, TStore,
     PROPAGATE_ERROR_ON_BAD_CST_NODE,
 };
 

@@ -42,7 +42,7 @@ impl<T: PrimInt + Display> Display for RowCol<T> {
     }
 }
 
-use super::spaces_related::{SealedFileTopDownPosBuilder, TopDownPosBuilder};
+// use super::spaces_related::{SealedFileTopDownPosBuilder, TopDownPosBuilder};
 
 // impl<IdN, Idx: PrimInt, IdO: PrimInt + Default>
 //     TopDownPosBuilder<IdN, Idx, IdO, NoSpacePrepareParams<Idx>> for Position<PathBuf, IdO>

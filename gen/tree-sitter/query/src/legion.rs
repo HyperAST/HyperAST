@@ -28,7 +28,6 @@ use hyper_ast::{
     },
     types::LabelStore as _,
 };
-use tuples::CombinConcat;
 
 use crate::types::{TsQueryEnabledTypeStore, Type};
 

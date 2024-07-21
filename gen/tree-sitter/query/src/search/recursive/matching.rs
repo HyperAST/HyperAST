@@ -1,4 +1,3 @@
-use crate::auto::tsq_ser_meta::Conv;
 use crate::auto::tsq_ser_meta::Converter;
 
 use super::{CaptureRes, Captured, MatchingRes, Pattern, Predicate, PreparedMatcher};

@@ -1,13 +1,7 @@
-use std::{fmt::Display, rc::Rc};
-
-use axum::{body::HttpBody, Json};
+use axum::Json;
 // use hyper_ast::types::LabelStore;
-use hyper_ast_cvs_git::{
-    git::{fetch_github_repository, retrieve_commit},
-    preprocessed::child_at_path,
-};
+use hyper_ast_cvs_git::git::{fetch_github_repository, retrieve_commit};
 use serde::{Deserialize, Serialize};
-use tokio::time::Instant;
 
 use crate::SharedState;
 

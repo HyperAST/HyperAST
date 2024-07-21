@@ -5,8 +5,8 @@ use hyper_ast::{
     compat::HashMap,
     store::defaults::{LabelIdentifier, NodeIdentifier},
     types::{
-        self, Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeStore, Tree,
-        TypeStore, WithChildren,
+        self, Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeStore, TypeStore,
+        WithChildren,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -206,8 +206,6 @@ where
     };
 
     while let Some((curr, advance)) = queue.pop() {
-        // dbg!(curr);
-        use hyper_ast::types::Typed;
         let mut id = EntityHasher::default();
         curr.hash(&mut id);
         let nid = id.finish();

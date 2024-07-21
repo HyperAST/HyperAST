@@ -1037,7 +1037,6 @@ fn track_aux2(
         // NOTE trying stuff
         // TODO use this version
         use hyper_ast::position;
-        use position::file_and_offset;
         use position::offsets;
         use position::offsets_and_nodes;
         let src = offsets::OffsetsRef::from(path_to_target.as_slice());
@@ -1083,4 +1082,5 @@ fn track_aux2(
 
 mod compute;
 mod more;
+#[cfg(feature = "experimental")]
 mod my_dash;

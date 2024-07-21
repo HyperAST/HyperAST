@@ -1,6 +1,6 @@
 use rhai::Dynamic;
 
-use super::{estimate::Estimate, finalize::Finalize};
+use super::finalize::Finalize;
 
 #[derive(Clone)]
 pub(super) struct FsContainer<T> {

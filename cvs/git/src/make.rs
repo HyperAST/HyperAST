@@ -1,12 +1,7 @@
-use std::{
-    fmt::{self, Debug},
-    ops::AddAssign,
-    path::PathBuf,
-};
+use std::{fmt::Debug, path::PathBuf};
 
 use hyper_ast::{
-    hashed::SyntaxNodeHashs,
-    position::{StructuralPosition, TreePath},
+    position::TreePath,
     store::defaults::{LabelIdentifier, NodeIdentifier},
     tree_gen::SubTreeMetrics,
 };
