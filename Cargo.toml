@@ -1,4 +1,5 @@
 [workspace]
+resolver = "2"
 members = [
     "hyper_diff",
     "hyper_ast",
