@@ -719,16 +719,13 @@ where
                     next = Some(ele.id);
                     waiting = ele.w;
                     if curr.action.is_some() {
-                        dbg!(curr.action);
+                        // dbg!(curr.action);
                     }
                     break;
                 };
                 if cs.len() == ele.idx {
                     next = Some(ele.id);
                     waiting = ele.w;
-                    if curr.action.is_some() {
-                        dbg!(curr.action);
-                    }
                     break;
                 }
                 let child = cs[ele.idx];
@@ -739,13 +736,13 @@ where
                 break;
             };
             if self.dirty[w.to_usize().unwrap()] {
-                dbg!(w);
+                // dbg!(w);
             }
             if !self.cpy_mappings.is_src(&w) {
                 //todo mutate mid arena ?
                 let ori = self.orig_src(w);
                 let mid = self.path(w);
-                dbg!(&mid);
+                // dbg!(&mid);
                 let path = ApplicablePath { ori, mid };
                 let _w: &mut MidNode<T::TreeId, IdD> = &mut self.mid_arena[w.to_usize().unwrap()];
                 let v = _w.parent;
@@ -766,18 +763,18 @@ where
                 if SUBTREE_DEL {
                     if self.dirty[w.to_usize().unwrap()] {
                         // non uniform del.
-                        dbg!(waiting.len());
+                        // dbg!(waiting.len());
                         self.actions.extend(waiting);
                         log::trace!("{:?}", action);
                         self.actions.push(action);
                         // transitively
                         self.dirty.set(v.to_usize().unwrap(), true);
                     } else if let Some(i) = parent.len().checked_sub(1) {
-                        dbg!(waiting.len());
+                        // dbg!(waiting.len());
                         // uniform, so wait in parent
                         parent[i].w.push(action);
                     } else {
-                        dbg!(waiting.len());
+                        // dbg!(waiting.len());
                         log::trace!("{:?}", action);
                         self.actions.push(action);
                     }

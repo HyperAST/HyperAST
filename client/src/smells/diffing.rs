@@ -261,7 +261,7 @@ pub(crate) fn extract_moves<'a>(
             a_tree.merge_ori(a);
         }
     }
-    eprintln!("{:?}", a_tree.inspect());
+    // eprintln!("{:?}", a_tree.inspect());
     use hyper_ast::types::HyperType;
     use hyper_ast::types::TypeStore;
     go_to_files(
@@ -335,8 +335,11 @@ pub(crate) fn extract_moves2<'a>(
     actions: &'a ActionsVec<A>,
 ) -> impl Iterator<Item = (Pos, Pos)> + 'a {
     actions.0.iter().filter_map(move |a| {
-        let Act::Move { from } = &a.action else {
-            return None;
+        let from = match &a.action {
+            Act::Move { from } => from,
+            Act::MovUpd { from, .. } => from,
+            // Act::Insert { sub } => todo!(),
+            _ => return None
         };
         let (from_path, w) =
             hyper_ast::position::path_with_spaces(src_tr, &mut from.ori.iter(), with_spaces_stores);
@@ -370,7 +373,7 @@ pub(crate) fn extract_moves2<'a>(
             &mut to_path.iter().copied(),
             with_spaces_stores,
         );
-        dbg!(_to);
+        // dbg!(_to);
         assert_eq!(x, _to);
 
         let t_f = hyper_ast::types::HyperAST::resolve_type(stores, &_from);
@@ -379,7 +382,7 @@ pub(crate) fn extract_moves2<'a>(
             dbg!(t_f.as_static_str(), t_t.as_static_str());
             return None;
         }
-        dbg!(t_f.as_static_str());
+        // dbg!(t_f.as_static_str());
         Some(((to, to_path), (from, from_path)))
     })
 }
@@ -398,7 +401,7 @@ pub(crate) fn extract_updates<'a>(
             a_tree.merge_ori(a);
         }
     }
-    eprintln!("{:?}", a_tree.inspect());
+    // eprintln!("{:?}", a_tree.inspect());
     use hyper_ast::types::HyperType;
     use hyper_ast::types::TypeStore;
     go_to_files(
@@ -449,7 +452,7 @@ pub(crate) fn extract_inserts<'a>(
             a_tree.merge_ori(a);
         }
     }
-    eprintln!("{:?}", a_tree.inspect());
+    // eprintln!("{:?}", a_tree.inspect());
     use hyper_ast::types::HyperType;
     use hyper_ast::types::TypeStore;
     go_to_files(
@@ -458,7 +461,7 @@ pub(crate) fn extract_inserts<'a>(
         hyper_ast::position::StructuralPosition::new(dst_tr),
         &mut |p, nn, n| {
             let t = stores.type_store.resolve_type(nn);
-            dbg!(t.as_static_str(), p);
+            // dbg!(t.as_static_str(), p);
             result.push(p.clone());
             false
         },
@@ -500,7 +503,7 @@ pub(crate) fn extract_deletes<'a>(
             a_tree.merge_ori(a);
         }
     }
-    eprintln!("{:?}", a_tree.inspect());
+    // eprintln!("{:?}", a_tree.inspect());
     use hyper_ast::types::HyperType;
     use hyper_ast::types::TypeStore;
     go_to_files(
@@ -564,7 +567,7 @@ pub(crate) fn extract_focuses<'a>(
             a_tree.merge_ori(a);
         }
     }
-    eprintln!("{:?}", a_tree.inspect());
+    // eprintln!("{:?}", a_tree.inspect());
     use hyper_ast::types::HyperType;
     use hyper_ast::types::TypeStore;
     go_to_files(
@@ -574,11 +577,11 @@ pub(crate) fn extract_focuses<'a>(
         &mut |p, nn, n| {
             let t = stores.type_store.resolve_type(nn);
             if t.as_static_str() == "try_statement" {
-                dbg!(t.as_static_str(), p);
+                // dbg!(t.as_static_str(), p);
                 result.push(p.clone());
                 true
             } else if t.as_static_str() == "import_declaration" {
-                dbg!(t.as_static_str(), p);
+                // dbg!(t.as_static_str(), p);
                 result.push(p.clone());
                 true
             } else {
@@ -642,7 +645,7 @@ pub(crate) fn go_to_files<F>(
         //     dbg!();
         //     continue;
         // }
-        dbg!(&n.action.path.ori);
+        // dbg!(&n.action.path.ori);
         let mut p_it = n.action.path.ori.iter();
         loop {
             let Some(p) = p_it.next() else {
@@ -653,7 +656,7 @@ pub(crate) fn go_to_files<F>(
             use hyper_ast::types::TypeStore;
             let t = stores.type_store.resolve_type(&nn);
             use hyper_ast::types::HyperType;
-            dbg!(t.as_static_str());
+            // dbg!(t.as_static_str());
             if t.is_file() {
                 got_through(stores, n, path.clone(), p, p_it, 0, result);
                 // got_through_file(stores, n, path.clone(), p, p_it, 0, result);

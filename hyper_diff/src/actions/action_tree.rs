@@ -110,7 +110,7 @@ impl<L: Clone, Idx: PrimInt, I: Clone> ActionsTree<SimpleAction<L, CompressedTre
         )
     }
     pub fn merge_ori(&mut self, action: &SimpleAction<L, CompressedTreePath<Idx>, I>) {
-        dbg!(&action.path.ori);
+        // dbg!(&action.path.ori);
         Self::merge_aux(
             action.path.ori.iter(),
             &mut self.atomics,
@@ -170,12 +170,12 @@ impl<L: Clone, Idx: PrimInt, I: Clone> ActionsTree<SimpleAction<L, CompressedTre
             loop {
                 let Some(x) = r.get_mut(i) else { break };
                 use hyper_ast::position::position_accessors::SharedPath;
-                dbg!(f(&mut x.action.path));
+                // dbg!(f(&mut x.action.path));
                 let sh = crate::tree::tree_path::shared_ancestors(
                     path.iter().copied(),
                     f(&mut x.action.path).iter(),
                 );
-                dbg!(&sh);
+                // dbg!(&sh);
                 match sh {
                     SharedPath::Exact(_) => panic!(),
                     SharedPath::Remain(_s) => {
@@ -197,7 +197,7 @@ impl<L: Clone, Idx: PrimInt, I: Clone> ActionsTree<SimpleAction<L, CompressedTre
                     SharedPath::Submatch(s) => {
                         r = &mut r[i].children;
                         path = path[s.len()..].to_vec();
-                        dbg!(&path);
+                        // dbg!(&path);
                         continue 'aaa;
                     }
                     SharedPath::Different(_) => (),
