@@ -15,10 +15,10 @@ use hyper_ast::{
 use pretty_assertions::assert_eq;
 
 use crate::{
-    impact::element::{IdentifierFormat, LabelPtr, RefsEnum},
     legion_with_refs::{self, JavaTreeGen, NodeIdentifier},
     types::{TIdN, TStore},
 };
+use crate::impact::element::{IdentifierFormat, LabelPtr, RefsEnum};
 
 fn run(text: &[u8]) {
     let mut stores = SimpleStores {

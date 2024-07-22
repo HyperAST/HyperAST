@@ -676,6 +676,7 @@ pub(crate) fn show_results(
                 // w_id.with(col),
                 max_rect,
                 clip_rect,
+                ui.stack().info.clone()
             );
             // let ui = &mut ui.child_ui_with_id_source(
             //     rect,
@@ -1083,14 +1084,18 @@ pub(crate) fn show_results(
     use egui::NumExt;
     let viewport =
         egui::Rect::from_x_y_ranges(viewport_x, ui.available_rect_before_wrap().y_range());
-    let ui = &mut ui.child_ui(viewport, egui::Layout::left_to_right(egui::Align::BOTTOM));
+    let ui = &mut ui.child_ui(
+        viewport,
+        egui::Layout::left_to_right(egui::Align::BOTTOM),
+        None,
+    );
     ui.set_clip_rect(timeline_window);
 
     let x_min = ui.max_rect().left() + min_col as f32 * col_width_with_spacing + spacing.x / 3.0;
     let x_max =
         ui.max_rect().left() + max_col as f32 * col_width_with_spacing - spacing.x * 2.0 / 3.0;
     let rect = egui::Rect::from_x_y_ranges(x_min..=x_max, ui.max_rect().y_range());
-    let mut cui = ui.child_ui(rect, egui::Layout::left_to_right(egui::Align::BOTTOM));
+    let mut cui = ui.child_ui(rect, egui::Layout::left_to_right(egui::Align::BOTTOM), None);
     // cui.skip_ahead_auto_ids(min_col);
     // cui.set_clip_rect(timeline_window);
     let attacheds = (add_contents)(&mut cui, min_col..max_col);
@@ -2308,7 +2313,7 @@ fn show_commitid_info(
         } else {
             let label = ui.label(format!("commit {}", &id[..8]));
             if label.hovered() {
-                egui::show_tooltip(ui.ctx(), label.id.with("tooltip"), |ui| {
+                egui::show_tooltip(ui.ctx(), ui.layer_id(), label.id.with("tooltip"), |ui| {
                     ui.label(id);
                     ui.label("CTRL+C to copy (and send in the debug console)");
                 });

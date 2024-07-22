@@ -32,17 +32,17 @@ tree-sitter-xml = "0.6.2"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.79"
 
-hecs = "0.9.1"
+hecs = "0.10.5"
 # hecs-hierarchy = "0.11.7"
 
 derive_deref = "1.1.1"
 
 quote = "1.0.10"
-syn = "1.0.0"
+syn = "2.0.71"
 proc-macro2 = "1.0.0"
-heck = "0.3.3"
-prettyplease = "0.1.24"
+heck = "0.5.0"
+prettyplease = "0.2.20"
 
 # TODO use types from hyper_ast crate
-strum = "0.23.0"
-strum_macros = "0.23.1"
+strum = "0.24"
+strum_macros = "0.24" # issue on later version with serialization of curly braces

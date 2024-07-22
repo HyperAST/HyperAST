@@ -5,7 +5,7 @@ use crate::preprocess::{DChildren, Fields, Hidden, MultipleChildren, RequiredChi
 use crate::preprocess::{Named, SubTypes};
 
 use super::*;
-use heck::CamelCase;
+use heck::ToUpperCamelCase;
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 // use syn::{parse_macro_input, DeriveInput};
@@ -16,7 +16,7 @@ pub trait BijectiveFormatedIdentifier: ToOwned {
 }
 impl BijectiveFormatedIdentifier for str {
     fn try_format_ident(&self) -> Option<Self::Owned> {
-        let mut camel_case = heck::CamelCase::to_camel_case(self);
+        let mut camel_case = heck::ToUpperCamelCase::to_upper_camel_case(self);
         let trimmed = self.trim_start_matches(|c| c == '_');
         if camel_case.is_empty() {
             if trimmed.is_empty() && !self.is_empty() {
@@ -29,7 +29,7 @@ impl BijectiveFormatedIdentifier for str {
         if u_count > 0 {
             camel_case.insert_str(0, &"_".repeat(u_count));
         }
-        heck::SnakeCase::to_snake_case(&camel_case as &str)
+        heck::ToSnakeCase::to_snake_case(&camel_case as &str)
             .eq(trimmed)
             .then_some(camel_case)
     }
@@ -88,7 +88,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             let camel_case = t.try_format_ident();
             let raw = t.clone();
             let (q, kind) = if let Some(camel_case) = &camel_case {
-                assert!(!camel_case.is_empty(), "{},{}", t, t.to_camel_case());
+                assert!(!camel_case.is_empty(), "{},{}", t, t.to_upper_camel_case());
                 let kind = if camel_case == "0" {
                     let camel_case = leafs.fmt(&t, |k| format!("TS{}", &k));
                     format_ident!("{}", &camel_case)
@@ -103,7 +103,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
                     kind,
                 )
             } else {
-                let k = leafs.fmt(&t, |k| format!("TS{}", &k.to_camel_case()));
+                let k = leafs.fmt(&t, |k| format!("TS{}", &k.to_upper_camel_case()));
                 let kind = format_ident!("{}", &k);
 
                 (
@@ -153,7 +153,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             let camel_case = t.try_format_ident();
             let kind = format_ident!(
                 "{}",
-                &camel_case.clone().unwrap_or_else(|| t.to_camel_case())
+                &camel_case.clone().unwrap_or_else(|| t.to_upper_camel_case())
             );
             let raw = t.clone();
             let mut sub_toks = quote! {};
@@ -169,10 +169,10 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
                     });
                 } else {
                     let kind = if !v.get::<&Named>().is_some() {
-                        let k = leafs.fmt(t, |k| format!("TS{}", &k.to_camel_case()));
+                        let k = leafs.fmt(t, |k| format!("TS{}", &k.to_upper_camel_case()));
                         format_ident!("{}", &k)
                     } else {
-                        format_ident!("{}", &t.to_camel_case())
+                        format_ident!("{}", &t.to_upper_camel_case())
                     };
                     sub_toks.extend(quote! {
                         // #[strum(serialize = #raw)]
@@ -223,7 +223,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             let camel_case = t.try_format_ident();
             let kind = format_ident!(
                 "{}",
-                &camel_case.clone().unwrap_or_else(|| t.to_camel_case())
+                &camel_case.clone().unwrap_or_else(|| t.to_upper_camel_case())
             );
             let raw = t.clone();
             let mut fields_toks = quote! {};
@@ -247,10 +247,10 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
                         });
                     } else {
                         let kind = if !v.get::<&Named>().is_some() {
-                            let k = leafs.fmt(t, |k| format!("TS{}", &k.to_camel_case()));
+                            let k = leafs.fmt(t, |k| format!("TS{}", &k.to_upper_camel_case()));
                             format_ident!("{}", &k)
                         } else {
-                            format_ident!("{}", &t.to_camel_case())
+                            format_ident!("{}", &t.to_upper_camel_case())
                         };
                         cs_toks.extend(quote! {
                             #kind,
@@ -290,10 +290,10 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
                         });
                     } else {
                         let kind = if !v.get::<&Named>().is_some() {
-                            let k = leafs.fmt(t, |k| format!("TS{}", &k.to_camel_case()));
+                            let k = leafs.fmt(t, |k| format!("TS{}", &k.to_upper_camel_case()));
                             format_ident!("{}", &k)
                         } else {
-                            format_ident!("{}", &t.to_camel_case())
+                            format_ident!("{}", &t.to_upper_camel_case())
                         };
                         cs_toks.extend(quote! {
                             #kind,
@@ -361,7 +361,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             let camel_case = t.try_format_ident();
             let kind = format_ident!(
                 "{}",
-                &camel_case.clone().unwrap_or_else(|| t.to_camel_case())
+                &camel_case.clone().unwrap_or_else(|| t.to_upper_camel_case())
             );
             let raw = t.clone();
             let mut cs_toks = quote! {};
@@ -376,10 +376,10 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
                     });
                 } else {
                     let kind = if !v.get::<&Named>().is_some() {
-                        let k = leafs.fmt(t, |k| format!("TS{}", &k.to_camel_case()));
+                        let k = leafs.fmt(t, |k| format!("TS{}", &k.to_upper_camel_case()));
                         format_ident!("{}", &k)
                     } else {
-                        format_ident!("{}", &t.to_camel_case())
+                        format_ident!("{}", &t.to_upper_camel_case())
                     };
                     cs_toks.extend(quote! {
                         #kind,
@@ -442,7 +442,7 @@ pub(crate) fn process_types_into_tokens(typesys: &TypeSys) -> proc_macro2::Token
             let camel_case = t.try_format_ident();
             let kind = format_ident!(
                 "{}",
-                &camel_case.clone().unwrap_or_else(|| t.to_camel_case())
+                &camel_case.clone().unwrap_or_else(|| t.to_upper_camel_case())
             );
             let raw = t.clone();
             if camel_case.is_none() {
@@ -628,7 +628,7 @@ pub fn serialize_types2(typesys: &TypeSys) {
 
         if !v.get::<&Named>().is_some() {
             // leaf/token
-            let k = leafs.fmt(t, |k| format!("cpp_TS{}", &k.to_camel_case()));
+            let k = leafs.fmt(t, |k| format!("cpp_TS{}", &k.to_upper_camel_case()));
             let kind = format_ident!("{}", &k);
             let raw = t.clone();
 
@@ -644,13 +644,13 @@ pub fn serialize_types2(typesys: &TypeSys) {
                 #raw => #kind,
             });
         } else if let Some(st) = v.get::<&SubTypes>() {
-            let kind = format_ident!("cpp_{}", &t.to_camel_case());
+            let kind = format_ident!("cpp_{}", &t.to_upper_camel_case());
             let raw = t.clone();
             let mut sub_toks = quote! {};
             for e in &st.0 {
                 let v = typesys.types.entity(*e).unwrap();
                 let t = &v.get::<&preprocess::T>().unwrap().0;
-                let kind = format_ident!("{}", &t.to_camel_case());
+                let kind = format_ident!("{}", &t.to_upper_camel_case());
                 let raw = t.clone();
                 sub_toks.extend(quote! {
                     #[strum(serialize = #raw)]
@@ -671,7 +671,7 @@ pub fn serialize_types2(typesys: &TypeSys) {
                 #raw => #kind,
             });
         } else {
-            let kind = format_ident!("cpp_{}", &t.to_camel_case());
+            let kind = format_ident!("cpp_{}", &t.to_upper_camel_case());
             let raw = t.clone();
             concrete_types_toks.extend(quote! {
                 #[strum(serialize = #raw)]

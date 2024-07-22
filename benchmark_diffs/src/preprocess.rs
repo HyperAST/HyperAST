@@ -5,6 +5,7 @@ use hyper_ast::{
     filter::{Bloom, BloomSize, BF},
     full::FullNode,
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
+    impact::BulkHasher,
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
         nodes::legion::{compo, compo::CS, EntryRef, NodeStore, PendingInsert},
@@ -15,7 +16,7 @@ use hyper_ast::{
 };
 use hyper_ast_gen_ts_java::{
     impact::partial_analysis::PartialAnalysis,
-    legion_with_refs::{BulkHasher, JavaTreeGen, Local, MDCache, MD},
+    legion_with_refs::{JavaTreeGen, Local, MDCache, MD},
     types::Type,
 };
 // use hyper_ast_gen_ts_java::types::TStore;

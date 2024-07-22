@@ -4,8 +4,7 @@ use hyper_ast::{
     full::FullNode,
     hashed::{HashedNode, IndexingHashBuilder, MetaDataHashsBuilder},
     store::{
-        labels::LabelStore,
-        nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert},
+        defaults::LabelIdentifier, labels::LabelStore, nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert}
     },
     tree_gen::{
         parser::{Node, TreeCursor, Visibility},
@@ -19,7 +18,6 @@ use legion::world::EntryRef;
 use num::ToPrimitive;
 ///! fully compress all subtrees from a Java CST
 use std::{collections::HashMap, fmt::Debug, hash::Hash, vec};
-use string_interner::DefaultSymbol;
 use tuples::CombinConcat;
 
 use hyper_ast::{
@@ -45,12 +43,12 @@ use hyper_ast::{
 };
 // use hyper_ast::nodes::SimpleNode1;
 
-use crate::{
-    impact::partial_analysis::PartialAnalysis,
-    types::{JavaEnabledTypeStore, Type},
-};
+use crate::types::{JavaEnabledTypeStore, Type};
 
-pub use crate::impact::element::BulkHasher;
+#[cfg(feature="impact")]
+use crate::impact::partial_analysis::PartialAnalysis;
+#[cfg(feature="impact")]
+use hyper_ast::impact::BulkHasher;
 
 pub fn hash32<T: ?Sized + Hash>(t: &T) -> u32 {
     utils::clamp_u64_to_u32(&utils::hash(t))
@@ -63,8 +61,6 @@ pub type NodeIdentifier = legion::Entity;
 // pub struct HashedNodeRef<'a>(EntryRef<'a>);
 
 pub type FNode = FullNode<BasicGlobalData, Local>;
-
-pub type LabelIdentifier = DefaultSymbol;
 
 // TODO try to use a const generic for space less generation ?
 // SPC: consider spaces ie. add them to the HyperAST,

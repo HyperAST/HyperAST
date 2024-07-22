@@ -313,7 +313,7 @@ fn show_examples(
                 };
             }
             if button.hovered() {
-                egui::show_tooltip(ui.ctx(), button.id.with("tooltip"), |ui| {
+                egui::show_tooltip(ui.ctx(),ui.layer_id(), button.id.with("tooltip"), |ui| {
                     let desc = ex.query.description;
                     egui_demo_lib::easy_mark::easy_mark(ui, desc);
                 });

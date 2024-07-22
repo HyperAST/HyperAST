@@ -1849,18 +1849,24 @@ fn node_menu(ui: &mut egui::Ui, interact: egui::Response, kind: AnyType) -> Opti
     if interact.secondary_clicked() || interact.double_clicked() || interact.drag_released() {
         ui.memory_mut(|mem| mem.open_popup(popup_id));
     }
-    egui::popup_below_widget(ui, popup_id, &interact, |ui| {
-        if ui.button("hide kind").clicked() {
-            act = Some(Action::HideKind(kind));
-            ui.memory_mut(|mem| mem.close_popup());
-        } else if ui.button("serialize kind").clicked() {
-            act = Some(Action::SerializeKind(kind));
-            ui.memory_mut(|mem| mem.close_popup());
-        } else if ui.button("close menu").clicked() {
-            ui.memory_mut(|mem| mem.close_popup());
-            // ui.close_menu();
-        }
-    });
+    egui::popup_below_widget(
+        ui,
+        popup_id,
+        &interact,
+        egui::PopupCloseBehavior::CloseOnClick,
+        |ui| {
+            if ui.button("hide kind").clicked() {
+                act = Some(Action::HideKind(kind));
+                ui.memory_mut(|mem| mem.close_popup());
+            } else if ui.button("serialize kind").clicked() {
+                act = Some(Action::SerializeKind(kind));
+                ui.memory_mut(|mem| mem.close_popup());
+            } else if ui.button("close menu").clicked() {
+                ui.memory_mut(|mem| mem.close_popup());
+                // ui.close_menu();
+            }
+        },
+    );
     // interact.context_menu(|ui: &mut egui::Ui| {
     //     if ui
     //         .button("hide kind")

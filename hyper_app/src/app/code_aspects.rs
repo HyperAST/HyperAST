@@ -213,6 +213,7 @@ pub(crate) fn show(
                 let ui = &mut ui.child_ui(
                     ui.available_rect_before_wrap(), //.shrink2((0.0, 250.0).into())
                     ui.layout().clone(),
+                    None,
                 );
                 // ui.painter()
                 //     .debug_rect(ui.available_rect_before_wrap(), egui::Color32::GREEN, "");

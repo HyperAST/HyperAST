@@ -9,12 +9,10 @@ use hyper_ast::{
     },
     types::{LabelStore as _, Typed},
     types::{NodeId, TypedNodeStore, WithChildren},
+    impact::BulkHasher,
 };
 
-use hyper_ast_gen_ts_java::{
-    legion_with_refs::BulkHasher,
-    types::{TIdN, Type},
-};
+use hyper_ast_gen_ts_java::types::{TIdN, Type};
 
 use crate::{java::handle_java_file, TStore};
 

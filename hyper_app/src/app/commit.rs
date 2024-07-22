@@ -42,7 +42,7 @@ impl CommitMetadata {
             let label = ui.label(format!("Parents: {}", text));
             if label.hovered() {
                 let text = self.parents.join(" + ");
-                egui::show_tooltip(ui.ctx(), label.id.with("tooltip"), |ui| {
+                egui::show_tooltip(ui.ctx(), ui.layer_id(), label.id.with("tooltip"), |ui| {
                     ui.label(&text);
                     ui.label("CTRL+C to copy (and send in the debug console)");
                 });
@@ -62,7 +62,7 @@ impl CommitMetadata {
                     egui::RichText::new(head).background_color(ui.style().visuals.extreme_bg_color);
                 let label = ui.label(head);
                 if label0.hovered() || label.hovered() {
-                    egui::show_tooltip(ui.ctx(), label.id.with("tooltip"), |ui| {
+                    egui::show_tooltip(ui.ctx(), ui.layer_id(), label.id.with("tooltip"), |ui| {
                         ui.text_edit_multiline(&mut msg.to_string());
                     });
                 }

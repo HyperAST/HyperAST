@@ -482,7 +482,7 @@ pub(super) fn show_locals_and_interact<T, U, L, S>(
         // res = Some(ex);
         context.current = super::EditStatus::Local { name, content };
     } else if button.hovered() {
-        egui::show_tooltip(ui.ctx(), button.id.with("tooltip"), |ui| {
+        egui::show_tooltip(ui.ctx(), ui.layer_id(), button.id.with("tooltip"), |ui| {
             let desc = content.desc().as_ref();
             egui_demo_lib::easy_mark::easy_mark(ui, desc);
         });

@@ -26,7 +26,9 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "HyperAST",
         native_options,
-        Box::new(move |cc| Box::new(hyper_app::HyperApp::new(cc, languages, api_addr))),
+        Box::new(move |cc| {
+            Ok(Box::new(hyper_app::HyperApp::new(cc, languages, api_addr)))
+        }),
     )
 }
 
@@ -62,7 +64,9 @@ fn main() {
                 "the_canvas_id", // hardcode it
                 web_options,
                 Box::new(move |cc| {
-                    Box::new(hyper_app::HyperApp::new(cc, languages, api_addr, ADDR))
+                    Ok(Box::new(hyper_app::HyperApp::new(
+                        cc, languages, api_addr, ADDR,
+                    )))
                 }),
             )
             .await;

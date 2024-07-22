@@ -2,7 +2,7 @@ use super::interactive_splitter_orientation::{
     InteractiveSplitterOrientation, InteractiveSplitterResponse,
 };
 use crate::interactive_split::interactive_split_state::InteractiveSplitState;
-use egui::{egui_assert, lerp, Align, CursorIcon, Frame, Layout, Sense, Ui};
+use egui::{lerp, Align, CursorIcon, Frame, Layout, Sense, Ui};
 use epaint::Stroke;
 
 /// A splitter which can separate the UI into 2 parts either vertically or horizontally.
@@ -74,7 +74,7 @@ impl InteractiveSplitter {
             resizable,
         } = self;
 
-        egui_assert!((0.0..=1.0).contains(&ratio));
+        debug_assert!((0.0..=1.0).contains(&ratio));
 
         let (rect, splitter_response) =
             ui.allocate_exact_size(ui.available_size_before_wrap(), Sense::hover());
@@ -185,8 +185,8 @@ impl InteractiveSplitter {
             }
         }
 
-        let mut first_ui = ui.child_ui(first_rect, Layout::top_down(Align::Min));
-        let mut second_ui = ui.child_ui(second_rect, Layout::top_down(Align::Min));
+        let mut first_ui = ui.child_ui(first_rect, Layout::top_down(Align::Min), None);
+        let mut second_ui = ui.child_ui(second_rect, Layout::top_down(Align::Min), None);
 
         // panel_ui.expand_to_include_rect(panel_rect);
         // let frame = frame.unwrap_or_else(|| Frame::side_top_panel(ui.style()));

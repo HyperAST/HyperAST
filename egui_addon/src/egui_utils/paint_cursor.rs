@@ -98,7 +98,7 @@ pub fn paint_cursor_end(
 
     painter.line_segment(
         [top, bottom],
-        (ui.visuals().text_cursor.width, stroke.color),
+        (ui.visuals().text_cursor.stroke.width, stroke.color),
     );
 
     if false {

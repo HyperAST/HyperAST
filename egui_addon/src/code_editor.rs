@@ -253,6 +253,7 @@ fn checkbox_heading(
         response.widget_info(|| {
             egui::WidgetInfo::selected(
                 egui::WidgetType::Checkbox,
+                true,
                 *checked,
                 text.as_ref().map_or("", |x| x.text()),
             )

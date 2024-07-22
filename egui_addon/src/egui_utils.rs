@@ -99,7 +99,7 @@ pub fn first_ws_x(row: &epaint::text::Row) -> Option<f32> {
         .iter()
         .find(|x| !x.chr.is_ascii_whitespace())
         .map(|g| {
-            dbg!(g);
+            // dbg!(g);
             g.pos.x
         })
 }

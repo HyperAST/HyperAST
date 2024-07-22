@@ -14,7 +14,7 @@ pub mod types;
 #[cfg(feature = "impl")]
 pub mod types_exp;
 
-#[cfg(feature = "impl")]
+#[cfg(all(feature = "impl", feature = "impact"))]
 pub mod impact;
 #[cfg(all(feature = "impl", feature = "tsg"))]
 pub mod tsg;

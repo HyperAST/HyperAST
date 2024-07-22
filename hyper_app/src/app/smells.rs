@@ -456,8 +456,11 @@ pub(super) fn show_central_panel(
                                     ui.visuals().window_stroke(),
                                 );
                                 rect.bottom_mut().sub_assign(B);
-                                let mut ui =
-                                    ui.child_ui(rect, egui::Layout::top_down(egui::Align::Min));
+                                let mut ui = ui.child_ui(
+                                    rect,
+                                    egui::Layout::top_down(egui::Align::Min),
+                                    None,
+                                );
                                 ui.set_clip_rect(rect);
                                 ui.push_id(
                                     id.with(i)
@@ -599,7 +602,7 @@ fn show_examples(
                 ui.painter()
                     .line_segment([line_pos_1, line_pos_2], ui.visuals().window_stroke());
                 rect.bottom_mut().sub_assign(B);
-                let mut ui = ui.child_ui(rect, egui::Layout::top_down(egui::Align::Min));
+                let mut ui = ui.child_ui(rect, egui::Layout::top_down(egui::Align::Min), None);
                 ui.set_clip_rect(rect);
                 ui.push_id(id.with(i), |ui| {
                     let example = &examples.examples[i];
@@ -917,7 +920,7 @@ fn show_either_side<MH: MakeHighlights>(
             ui.painter().set(noop, egui::Shape::Vec(shapes));
         }
         if let Some(selected_node) = &code.range {
-            let ui = &mut ui.child_ui(aa.inner_rect, *ui.layout());
+            let ui = &mut ui.child_ui(aa.inner_rect, *ui.layout(), None);
             ui.set_clip_rect(aa.inner_rect);
             let mut rect = egui_addon::egui_utils::highlight_byte_range_aux(
                 ui,
