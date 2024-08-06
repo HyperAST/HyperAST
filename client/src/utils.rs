@@ -129,3 +129,32 @@ fn bi_sharding<'a>(
     };
     (shard1, shard2)
 }
+
+
+/// Ensures the range is preprocessed --doing it if needed-- while avoiding to lock global state
+pub(crate) fn handle_pre_processing(
+    state: &std::sync::Arc<crate::AppState>,
+    repo: &mut hyper_ast_cvs_git::processing::ConfiguredRepo2,
+    before: &str,
+    after: &str,
+    limit: usize,
+) -> Result<Vec<hyper_ast_cvs_git::git::Oid>, String> {
+    // NOTE the read with a fallback on a write ensures that we are not waiting to, in the end, not writing anything
+    // TODO later start processing the commit subset and schedule the remaining range for processing
+    // NOTE a sceduling approach would be much cleaner than the current lock approach
+    if let Ok(commits) = state
+        .repositories
+        .read()
+        .unwrap()
+        .ensure_pre_processed_with_limit(repo, before, after, limit)
+        .map_err(|x| x.to_string())?
+    {
+        return Ok(commits);
+    }
+    state
+        .repositories
+        .write()
+        .unwrap()
+        .pre_process_with_limit(repo, before, after, limit)
+        .map_err(|x| x.to_string())
+}

@@ -26,8 +26,12 @@ pub struct Metadata {
     timezone: i32,
     /// seconds
     time: i64,
+    /// (opt) ancestors in powers of 2; [2,4,8,16,32]
+    /// important to avoid linear loading time
+    pub(crate) ancestors: Vec<String>,
 }
 
+// TODO prefetch a list of parent ids in power of 2 [2,4,8,16,32]
 pub fn commit_metadata(_state: SharedState, path: Param) -> Result<Json<Metadata>, String> {
     let Param {
         user,
@@ -37,9 +41,11 @@ pub fn commit_metadata(_state: SharedState, path: Param) -> Result<Json<Metadata
     let repo = fetch_github_repository(&format!("{}/{}", user, name));
     log::warn!("done cloning {user}/{name}");
     let commit = retrieve_commit(&repo, &version);
+    if let Err(err) = &commit {
+        log::error!("{}", err.to_string());
+    }
     let commit = commit.map_err(|err| err.to_string())?;
     log::warn!("done retrieving version {version}");
-
     let time = commit.time();
     let timezone = time.offset_minutes();
     let time = time.seconds();
@@ -47,12 +53,32 @@ pub fn commit_metadata(_state: SharedState, path: Param) -> Result<Json<Metadata
     let parents = commit.parent_ids().map(|x| x.to_string()).collect();
     let message = commit.message().map(|s| s.to_string());
 
+    let mut ancestors = vec![commit.id().to_string()];
+    let mut c = commit;
+    loop {
+        if ancestors.len() > 32 {
+            break;
+        }
+        if let Ok(p) = c.parent(0) {
+            ancestors.push(p.id().to_string());
+            c = p;
+        } else {
+            break;
+        }
+    }
+
+    let ancestors = (1..5)
+        .map(|i| i * i)
+        .map_while(|i| ancestors.get(i).cloned())
+        .collect();
+
     Ok(Json(Metadata {
         message,
         parents,
         tree,
         timezone,
         time,
+        ancestors,
     }))
 }
 

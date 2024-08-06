@@ -80,7 +80,7 @@ pub(crate) fn matches_with_precomputeds<'a>(
             })
             .collect::<String>(),
         hyper_ast_gen_ts_java::language(),
-        &SUB_QUERIES[0..1],
+        &SUB_QUERIES,
     )
     .map_err(|e| e.to_string())?;
     if qqq.enabled_pattern_count() != len {

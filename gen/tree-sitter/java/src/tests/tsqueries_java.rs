@@ -2383,3 +2383,52 @@ fn h(q: &[&str], text: &str) -> usize {
     }
     dbg!(count)
 }
+
+fn f2(q: &str, p: &[&str]) -> hyper_ast_tsquery::Query {
+    log::set_logger(&LOGGER)
+        .map(|()| log::set_max_level(log::LevelFilter::Trace))
+        .unwrap();
+    let (_precomp, query) =
+        hyper_ast_tsquery::Query::with_precomputed(q, tree_sitter_java::language(), p).unwrap();
+
+    query
+}
+
+/// concat queries
+#[test]
+fn test_precomp_pos() {
+    let query = f2(
+        r#"(method_invocation
+    (identifier) (#EQ? "fail")
+)
+(class_declaration
+  body: (_
+      (method_declaration
+          (modifiers
+              (marker_annotation 
+                  name: (_) (#EQ? "Test")
+              )
+          )
+      )
+
+  )
+)"#,
+        &[
+            // r#"(identifier) (#EQ? "Test")"#,
+            r#"(method_invocation
+    (identifier) (#EQ? "fail")
+)"#,
+            r#"(try_statement
+    (block)
+    (catch_clause)
+)"#,
+            r#"(class_declaration)"#,
+            r#"(method_declaration)"#,
+            r#"(marker_annotation 
+    name: (identifier) (#EQ? "Test")
+)"#,
+        ],
+    );
+    query._check_preprocessed(0, 1);
+    query._check_preprocessed(1, 3);
+}

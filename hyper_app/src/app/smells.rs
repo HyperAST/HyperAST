@@ -40,7 +40,6 @@ use std::{
 };
 
 use egui_addon::{
-    egui_utils::radio_collapsing,
     interactive_split::interactive_splitter::InteractiveSplitter,
     multi_split::{
         multi_splitter::MultiSplitter, multi_splitter_orientation::MultiSplitterOrientation,
@@ -131,10 +130,10 @@ impl Default for ComputeConfigQuery {
 // pub(crate) type Config = Sharing<ComputeConfigQuery>;
 #[derive(serde::Deserialize, serde::Serialize)]
 pub(crate) struct Config {
-    commits: Option<ComputeConfigQuery>,
-    diffs: Option<ExamplesValues>,
-    queries: Option<Vec<(String, String)>>,
-    stats: Option<Vec<(types::CodeRange, types::CodeRange)>>,
+    pub(crate) commits: Option<ComputeConfigQuery>,
+    pub(crate) diffs: Option<ExamplesValues>,
+    pub(crate) queries: Option<SearchResults>,
+    pub(crate) stats: Option<Vec<(types::CodeRange, types::CodeRange)>>,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -188,7 +187,7 @@ pub struct SearchResults {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 pub struct ExamplesValues {
-    examples: Vec<ExamplesValue>,
+    pub(crate) examples: Vec<ExamplesValue>,
     moves: Vec<(CodeRange, CodeRange)>,
 }
 
@@ -231,80 +230,75 @@ pub enum DiffsError {
     Error(String),
 }
 
-pub(super) fn show_menu(ui: &mut egui::Ui, selected: &mut SelectedConfig, smells: &mut Config) {
-    let title = "Interactive Finder"; //ℹ //🗖
-    let wanted = SelectedConfig::Smells;
-    let id = ui.make_persistent_id(title);
-    let add_body = |ui: &mut egui::Ui| {
-        match &mut smells.commits {
-            Some(conf) => {
-                ui.label("Source of inital Examples:");
-                show_repo_menu(ui, &mut conf.commit.repo);
-                ui.push_id(ui.id().with("commit"), |ui| {
-                    egui::TextEdit::singleline(&mut conf.commit.id)
-                        .clip_text(true)
-                        .desired_width(150.0)
-                        .desired_rows(1)
-                        .hint_text("commit")
-                        .interactive(true)
-                        .show(ui)
-                });
+pub(crate) const WANTED: SelectedConfig = SelectedConfig::Smells;
 
-                ui.add_enabled_ui(true, |ui| {
-                    ui.add(
-                        egui::Slider::new(&mut conf.len, 1..=200)
-                            .text("commits")
-                            .clamp_to_range(false)
-                            .integer()
-                            .logarithmic(true),
-                    );
-                    // show_wip(ui, Some("only process one commit"));
-                });
-                let selected = &mut conf.config;
-                selected.show_combo_box(ui, "Repo Config");
+pub(crate) fn show_config(smells: &mut Config, ui: &mut egui::Ui) {
+    match &mut smells.commits {
+        Some(conf) => {
+            ui.label("Source of inital Examples:");
+            show_repo_menu(ui, &mut conf.commit.repo);
+            ui.push_id(ui.id().with("commit"), |ui| {
+                egui::TextEdit::singleline(&mut conf.commit.id)
+                    .clip_text(true)
+                    .desired_width(150.0)
+                    .desired_rows(1)
+                    .hint_text("commit")
+                    .interactive(true)
+                    .show(ui)
+            });
 
-                if ui
-                    .add(egui::Button::new("🗖 Open Advanced Settings").selected(conf.advanced_open))
-                    .clicked()
-                {
-                    conf.advanced_open ^= true;
-                }
+            ui.add_enabled_ui(true, |ui| {
+                ui.add(
+                    egui::Slider::new(&mut conf.len, 1..=200)
+                        .text("commits")
+                        .clamp_to_range(false)
+                        .integer()
+                        .logarithmic(true),
+                );
+                // show_wip(ui, Some("only process one commit"));
+            });
+            let selected = &mut conf.config;
+            selected.show_combo_box(ui, "Repo Config");
 
-                egui::Window::new("Interactive Finder's Advanced Settings")
-                    .open(&mut conf.advanced_open)
-                    .show(ui.ctx(), |ui| {
-                        ui.label("Query Generation:");
-                        egui::TextEdit::multiline(&mut conf.meta_gen)
-                            // .clip_text(true)
-                            // .desired_width(150.0)
-                            .desired_rows(1)
-                            .hint_text("the query configuring the query generation")
-                            .interactive(true)
-                            .show(ui);
-
-                        ui.label("Query Simplification:");
-                        egui::TextEdit::multiline(&mut conf.meta_simp)
-                            // .clip_text(true)
-                            // .desired_width(150.0)
-                            .desired_rows(1)
-                            .hint_text(
-                                "the query used to direct the simplification of generated queries",
-                            )
-                            .interactive(true)
-                            .show(ui);
-
-                        ui.checkbox(&mut conf.simple_matching, "Simple Matching");
-                        ui.checkbox(&mut conf.prepro_matching, "Incr. Matching");
-                    });
-
-                ui.checkbox(&mut conf.simple_matching, "Simple Matching");
-                ui.checkbox(&mut conf.prepro_matching, "Incr. Matching");
+            if ui
+                .add(egui::Button::new("🗖 Open Advanced Settings").selected(conf.advanced_open))
+                .clicked()
+            {
+                conf.advanced_open ^= true;
             }
-            None => (),
-        }
-    };
 
-    radio_collapsing(ui, id, title, selected, &wanted, add_body);
+            egui::Window::new("Interactive Finder's Advanced Settings")
+                .open(&mut conf.advanced_open)
+                .show(ui.ctx(), |ui| {
+                    ui.label("Query Generation:");
+                    egui::TextEdit::multiline(&mut conf.meta_gen)
+                        // .clip_text(true)
+                        // .desired_width(150.0)
+                        .desired_rows(1)
+                        .hint_text("the query configuring the query generation")
+                        .interactive(true)
+                        .show(ui);
+
+                    ui.label("Query Simplification:");
+                    egui::TextEdit::multiline(&mut conf.meta_simp)
+                        // .clip_text(true)
+                        // .desired_width(150.0)
+                        .desired_rows(1)
+                        .hint_text(
+                            "the query used to direct the simplification of generated queries",
+                        )
+                        .interactive(true)
+                        .show(ui);
+
+                    ui.checkbox(&mut conf.simple_matching, "Simple Matching");
+                    ui.checkbox(&mut conf.prepro_matching, "Incr. Matching");
+                });
+
+            ui.checkbox(&mut conf.simple_matching, "Simple Matching");
+            ui.checkbox(&mut conf.prepro_matching, "Incr. Matching");
+        }
+        None => (),
+    }
 }
 
 pub(super) fn show_result(
@@ -573,7 +567,7 @@ pub(super) fn show_central_panel(
     }
 }
 
-fn show_examples(
+pub(crate) fn show_examples(
     ui: &mut egui::Ui,
     api_addr: &str,
     examples: &mut ExamplesValues,
@@ -603,10 +597,10 @@ fn show_examples(
                     .line_segment([line_pos_1, line_pos_2], ui.visuals().window_stroke());
                 rect.bottom_mut().sub_assign(B);
                 let mut ui = ui.child_ui(rect, egui::Layout::top_down(egui::Align::Min), None);
-                ui.set_clip_rect(rect);
+                ui.set_clip_rect(rect.intersect(ui.clip_rect()));
                 ui.push_id(id.with(i), |ui| {
                     let example = &examples.examples[i];
-                    show_example(ui, api_addr, example, fetched_files);
+                    show_diff(ui, api_addr, example, fetched_files);
                 });
             }
         });
@@ -625,41 +619,7 @@ fn show_query_with_example(
             ui1.push_id(
                 ui1.id().with("query_bad_smell").with(&bad_query.query),
                 |ui| {
-                    let mut code: &str = &bad_query.query;
-                    let language = "clojure";
-                    // use super::syntax_highlighting::syntax_highlighting_async as syntax_highlighter;
-                    // let theme = super::syntax_highlighting::syntect::CodeTheme::from_memory(ui.ctx());
-                    let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
-
-                    let mut layouter = |ui: &egui::Ui, code: &str, wrap_width: f32| {
-                        let mut layout_job = egui_extras::syntax_highlighting::highlight(
-                            ui.ctx(),
-                            &theme,
-                            code,
-                            language,
-                        );
-                        // syntax_highlighter::highlight(ui.ctx(), &theme, code, language);
-                        if false {
-                            layout_job.wrap.max_width = wrap_width;
-                        }
-                        ui.fonts(|f| f.layout_job(layout_job))
-                    };
-                    // dbg!(&code);
-                    let _scroll_resp = egui::scroll_area::ScrollArea::both().show(ui, |ui| {
-                        egui_addon::code_editor::generic_text_edit::TextEdit::multiline(&mut code)
-                            .layouter(&mut layouter)
-                            .desired_width(f32::MAX)
-                            .show(ui)
-                    });
-                    let mut font_id = egui::TextStyle::Heading.resolve(ui.style());
-                    font_id.size *= 3.0;
-                    ui.painter().text(
-                        ui.available_rect_before_wrap().right_top(),
-                        egui::Align2::RIGHT_BOTTOM,
-                        bad_query.matches,
-                        font_id,
-                        matches_color(ui),
-                    );
+                    show_query(bad_query, ui);
                 },
             );
             MultiSplitter::with_orientation(MultiSplitterOrientation::Horizontal)
@@ -679,7 +639,7 @@ fn show_query_with_example(
                     for (i, ui) in uis.iter_mut().enumerate() {
                         let example = &examples.examples[bad_query.examples[i]];
                         ui.push_id(ui1.id().with(i), |ui| {
-                            show_example(ui, api_addr, example, fetched_files)
+                            show_diff(ui, api_addr, example, fetched_files)
                         });
                         // ui.label(format!(
                         //     "query[{}] prep={:3} search={:3} matches={}",
@@ -689,6 +649,46 @@ fn show_query_with_example(
                     }
                 });
         });
+}
+
+pub(crate) fn show_query(
+    bad_query: &SearchResult,
+    ui: &mut egui::Ui,
+) -> egui::scroll_area::ScrollAreaOutput<
+    egui_addon::code_editor::generic_text_edit::output::TextEditOutput,
+> {
+    let mut code: &str = &bad_query.query;
+    let language = "clojure";
+    // use super::syntax_highlighting::syntax_highlighting_async as syntax_highlighter;
+    // let theme = super::syntax_highlighting::syntect::CodeTheme::from_memory(ui.ctx());
+    let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+
+    let mut layouter = |ui: &egui::Ui, code: &str, wrap_width: f32| {
+        let mut layout_job =
+            egui_extras::syntax_highlighting::highlight(ui.ctx(), &theme, code, language);
+        // syntax_highlighter::highlight(ui.ctx(), &theme, code, language);
+        if false {
+            layout_job.wrap.max_width = wrap_width;
+        }
+        ui.fonts(|f| f.layout_job(layout_job))
+    };
+    // dbg!(&code);
+    let scroll_resp = egui::scroll_area::ScrollArea::both().show(ui, |ui| {
+        egui_addon::code_editor::generic_text_edit::TextEdit::multiline(&mut code)
+            .layouter(&mut layouter)
+            .desired_width(f32::MAX)
+            .show(ui)
+    });
+    let mut font_id = egui::TextStyle::Heading.resolve(ui.style());
+    font_id.size *= 3.0;
+    ui.painter().text(
+        ui.available_rect_before_wrap().right_top(),
+        egui::Align2::RIGHT_BOTTOM,
+        bad_query.matches,
+        font_id,
+        matches_color(ui),
+    );
+    scroll_resp
 }
 
 fn matches_color(ui: &egui::Ui) -> egui::Color32 {
@@ -702,14 +702,17 @@ fn matches_color(ui: &egui::Ui) -> egui::Color32 {
 const B: f32 = 15.;
 const H: f32 = 800.;
 
-pub(super) fn show_example(
+pub(crate) fn show_diff(
     ui: &mut egui::Ui,
     api_addr: &str,
     example: &ExamplesValue,
     fetched_files: &mut HashMap<types::FileIdentifier, RemoteFile>,
 ) {
+    let rect = ui.clip_rect();
     let mov_col = move_color(ui);
     InteractiveSplitter::vertical().show(ui, |ui1, ui2| {
+        ui1.set_clip_rect(ui1.max_rect().intersect(rect));
+        ui2.set_clip_rect(ui2.max_rect().intersect(rect));
         ui2.push_id(ui2.id().with("second"), |ui| {
             let color = insert_color(ui);
             let ma = MH::<false> {
@@ -806,7 +809,7 @@ fn show_either_side<MH: MakeHighlights>(
 ) {
     let file_result = fetched_files.entry(code.file.clone());
     let id_scroll = ui.id().with("off_scrolled");
-    let r = super::try_fetch_remote_file(&file_result, |file| {
+    let r = super::utils_poll::try_fetch_remote_file(&file_result, |file| {
         let mut code: &str = &file.content;
         let language = "java";
         use egui::text::LayoutJob;
@@ -921,7 +924,7 @@ fn show_either_side<MH: MakeHighlights>(
         }
         if let Some(selected_node) = &code.range {
             let ui = &mut ui.child_ui(aa.inner_rect, *ui.layout(), None);
-            ui.set_clip_rect(aa.inner_rect);
+            ui.set_clip_rect(aa.inner_rect.intersect(ui.clip_rect()));
             let mut rect = egui_addon::egui_utils::highlight_byte_range_aux(
                 ui,
                 &aa.inner.galley,

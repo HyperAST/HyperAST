@@ -1,5 +1,6 @@
 use egui_addon::code_editor;
 use hyper_ast::store::nodes::fetched::NodeIdentifier;
+use re_ui::UiExt;
 
 use std::{collections::HashSet, hash::Hash, ops::Range};
 
@@ -8,7 +9,7 @@ pub(crate) struct Repo {
     pub(crate) user: String,
     pub(crate) name: String,
 }
-
+// TODO uuse [u8;20]
 pub(crate) type CommitId = String;
 
 #[derive(serde::Deserialize, serde::Serialize, Default)]
@@ -143,32 +144,95 @@ pub(crate) struct Commit {
     pub(crate) id: CommitId,
 }
 
-impl Default for Commit {
-    fn default() -> Self {
-        Self {
-            repo: Default::default(),
-            // id: "cd339e2c5f0e5c1e42c66b890f02bc282c3a0ea1".into(), // 61074989324d20e7d9cd387cee830a31a7e68aca // 4acedc53a13a727be3640fe234f7e261d2609d58
-            id: "7f2eb10e93879bc569c7ddf6fb51d6f812cc477c".into(),
-            // # stockfish
-            // * long 7f2eb10e93879bc569c7ddf6fb51d6f812cc477c
-            // * more in past "587bc647d7d14b53d8625c4446006e23a4acd82a".into()
-            // * close to first b8e487ff9caffb5061f680b1919ab2fe442bc0a1
+impl Repo {
+    pub fn with(self, id: impl Into<String>) -> Commit {
+        Commit {
+            repo: self,
+            id: id.into(),
         }
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Default, PartialEq, Eq, Clone, Copy)]
+impl Default for Commit {
+    fn default() -> Self {
+        Repo::default().with("7f2eb10e93879bc569c7ddf6fb51d6f812cc477c")
+        // id: "cd339e2c5f0e5c1e42c66b890f02bc282c3a0ea1".into(), // 61074989324d20e7d9cd387cee830a31a7e68aca // 4acedc53a13a727be3640fe234f7e261d2609d58
+        // id: "7f2eb10e93879bc569c7ddf6fb51d6f812cc477c".into(),
+        // # stockfish
+        // * long 7f2eb10e93879bc569c7ddf6fb51d6f812cc477c
+        // * more in past "587bc647d7d14b53d8625c4446006e23a4acd82a".into()
+        // * close to first b8e487ff9caffb5061f680b1919ab2fe442bc0a1
+    }
+}
+
+#[derive(
+    serde::Deserialize,
+    serde::Serialize,
+    Default,
+    PartialEq,
+    Eq,
+    Clone,
+    Copy,
+    strum_macros::EnumIter,
+)]
 pub enum SelectedConfig {
     Single,
+    #[default]
     Querying,
     Tsg,
-    #[default]
     Smells,
     Multi,
     Diff,
     Tracking,
     LongTracking,
     Aspects,
+}
+
+impl SelectedConfig {
+    pub const fn title(&self) -> impl Into<String> + AsRef<str> {
+        match self {
+            SelectedConfig::Single => "Single Repository",
+            SelectedConfig::Querying => "Querying",
+            SelectedConfig::Tsg => "TSG",
+            SelectedConfig::Smells => "Interactive Finder", //ℹ //🗖
+            SelectedConfig::Multi => "Multi Repo",
+            SelectedConfig::Diff => "Tree Diff",
+            SelectedConfig::Tracking => "Code Tracking",
+            SelectedConfig::LongTracking => "Long Tracking",
+            SelectedConfig::Aspects => "Aspects Views",
+        }
+    }
+
+    pub(crate) const fn enabled(&self) -> bool {
+        match self {
+            SelectedConfig::Single => true,
+            SelectedConfig::Querying => true,
+            SelectedConfig::Tsg => true,
+            SelectedConfig::Smells => true,
+            SelectedConfig::Multi => false,
+            SelectedConfig::Diff => true,
+            SelectedConfig::Tracking => false,
+            SelectedConfig::LongTracking => true,
+            SelectedConfig::Aspects => true,
+        }
+    }
+
+    pub(crate) fn on_hover_show(&self, ui: &mut egui::Ui) {
+        ui.markdown_ui(ui.id().with(self.title().as_ref()),
+        match self {
+            SelectedConfig::Single =>"TODO",
+            SelectedConfig::Querying => "TODO",
+            SelectedConfig::Tsg => 
+                r#"Compute a graph using the [tree-sitter-graph DSL](https://docs.rs/tree-sitter-graph/latest/tree_sitter_graph/reference/index.html)"#,
+            SelectedConfig::Smells => 
+                "Search for problematic code patterns",
+            SelectedConfig::Multi => "TODO",
+            SelectedConfig::Diff => "TODO",
+            SelectedConfig::Tracking => "TODO",
+            SelectedConfig::LongTracking => "TODO",
+            SelectedConfig::Aspects => "TODO",
+        })
+    }
 }
 
 impl Default for Repo {
@@ -179,6 +243,13 @@ impl Default for Repo {
             user: "official-stockfish".to_string(),
             name: "Stockfish".to_string(),
         }
+    }
+}
+
+impl From<[&str;2]> for Repo {
+    fn from(value: [&str;2]) -> Self {
+        let [user, name] = value.map(|s|s.to_string());
+        Self { user, name }
     }
 }
 
@@ -266,6 +337,16 @@ pub(crate) enum Config {
     Any,
     MavenJava,
     MakeCpp,
+}
+
+impl Config {
+    pub fn language(&self) -> &'static str {
+        match self {
+            Config::Any => "",
+            Config::MavenJava => "Java",
+            Config::MakeCpp => "Cpp",
+        }
+    }
 }
 impl Config {
     pub(crate) fn show_combo_box(

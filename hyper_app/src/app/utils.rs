@@ -1,18 +1,42 @@
 #[cfg(target_arch = "wasm32")]
-pub(crate) fn file_save(content: &str) {
+pub(crate) fn file_save(name: &str, ext: &str, content: &str) -> bool {
     use wasm_bindgen::prelude::wasm_bindgen;
     #[wasm_bindgen]
     extern "C" {
         fn alert(s: &str);
     }
-    eframe::web_sys::console::log_1(&content.into());
-    alert("(WIP) Look a the debug console to copy the file :)");
+
+    #[wasm_bindgen]
+    extern "C" {
+        fn download(data: &str, filename: &str, ext: &str, r#type: &str);
+    }
+    download(content, name, ext, "text/plain");
+    
+    // need to handle it async on JS side
+    if false {
+        eframe::web_sys::console::log_1(&content.into());
+        alert("(WIP) download failed, the content was logged in the debug console as a fallback :)");
+    }
+    true
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn file_save(_content: &str) {
+pub(crate) fn file_save(_name: &str, _ext: &str, _content: &str) -> bool {
     // TODO
-    println!("TODO save file")
+    println!("TODO save file");
+    false
+}
+
+pub fn join<Item: ToString>(mut it: impl Iterator<Item = Item>, sep: &str) -> impl ToString {
+    let mut res = String::default();
+    if let Some(e) = it.next() {
+        res.push_str(&e.to_string());
+    }
+    while let Some(e) = it.next() {
+        res.push_str(sep);
+        res.push_str(&e.to_string());
+    }
+    res
 }
 
 pub(crate) struct SecFmt(pub f64);
@@ -97,4 +121,63 @@ fn seconde_formating_test() {
     assert_eq!(format!("{:.3}", SecFmt(10.43333)), "10.4 s");
     assert_eq!(format!("{:.2}", SecFmt(10.43333)), "10 s");
     assert_eq!(format!("{:3e}", 10.43333), "1.043333e1");
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn prepare_paste(
+    ui: &mut egui::Ui,
+    trigger: bool,
+    await_response: &mut bool,
+) -> Option<String> {
+    if *await_response {
+        let paste = ui.input(|i| {
+            i.events
+                .iter()
+                .find(|e| matches!(e, egui::Event::Paste(_)))
+                .cloned()
+        });
+        if let Some(egui::Event::Paste(paste)) = paste {
+            return Some(paste);
+        }
+    }
+    if trigger {
+        ui.ctx()
+            .send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+        *await_response = true;
+    }
+    None
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn prepare_paste(
+    ui: &mut egui::Ui,
+    trigger: bool,
+    await_response: &mut bool,
+) -> Option<String> {
+    static mut B: Option<String> = None;
+
+    if *await_response {
+        let paste = unsafe { B.take() };
+        return paste;
+    } else if trigger {
+        use wasm_bindgen_futures::spawn_local;
+        let _task = spawn_local(async move {
+            let window = web_sys::window().expect("window");
+            let nav = window.navigator().clipboard();
+            match nav {
+                Some(a) => {
+                    let p = a.read_text();
+                    let result = wasm_bindgen_futures::JsFuture::from(p)
+                        .await
+                        .expect("clipboard read");
+                    unsafe { B = Some(result.as_string().unwrap()) };
+                }
+                None => {
+                    log::warn!("failed to copy clipboard");
+                }
+            };
+        });
+        *await_response = true;
+    }
+    None
 }

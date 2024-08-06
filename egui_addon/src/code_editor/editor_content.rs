@@ -40,6 +40,12 @@ fn default_bool() -> AtomicBool {
     AtomicBool::new(false)
 }
 
+// impl AsMut for EditAwareString {
+//     fn as_mut(&mut self) -> &mut T {
+//         self.string
+//     }
+// }
+
 impl Clone for EditAwareString {
     fn clone(&self) -> Self {
         let reset = &self.reset.load(Ordering::Relaxed);
@@ -164,7 +170,7 @@ impl TextBuffer for EditAwareString {
             inserted_text: &[],
         };
 
-        assert!(self.edit.get_mut().is_none());
+        // assert!(self.edit.get_mut().is_none(), "{:?}", self.edit);
         self.edit = Some(process_edit(unsafe { self.string.as_mut_vec() }, &edit)).into();
 
         // // Then drain all characters within this range

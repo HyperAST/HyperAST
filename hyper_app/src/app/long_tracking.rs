@@ -21,7 +21,7 @@ use crate::app::{
     code_aspects::{self, HightLightHandle},
     code_tracking::TrackingResultWithChanges,
     commit::fetch_commit,
-    show_remote_code1, tree_view,
+    tree_view,
     types::Resource,
 };
 
@@ -30,9 +30,10 @@ use super::{
     code_tracking::{self, RemoteFile, TrackingResult},
     commit::CommitMetadata,
     show_commit_menu,
-    tree_view::FetchedHyperAST,
+    tree_view::store::FetchedHyperAST,
     types::{self, CodeRange, Commit, ComputeConfigAspectViews},
-    AccumulableResult, Buffered, MultiBuffered,
+    utils_egui::MyUiExt as _,
+    utils_poll::{self, AccumulableResult, Buffered, MultiBuffered},
 };
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -66,14 +67,15 @@ pub(crate) struct LongTacking {
     pub(crate) origin_index: usize,
     #[serde(skip)] // TODO remove that
     pub(crate) results: VecDeque<(
-        Buffered<Result<CommitMetadata, String>>,
-        MultiBuffered<
-            AccumulableResult<code_tracking::TrackingResultsWithChanges, Vec<String>>,
+        utils_poll::Buffered<Result<CommitMetadata, String>>,
+        utils_poll::MultiBuffered<
+            utils_poll::AccumulableResult<code_tracking::TrackingResultsWithChanges, Vec<String>>,
             Result<code_tracking::TrackingResultWithChanges, String>,
         >,
     )>,
     #[serde(skip)]
-    pub(crate) tree_viewer: HashMap<Commit, Buffered<Result<Resource<FetchedView>, String>>>,
+    pub(crate) tree_viewer:
+        HashMap<Commit, utils_poll::Buffered<Result<Resource<FetchedView>, String>>>,
     #[serde(skip)]
     pub(crate) additionnal_links: Vec<[CodeRange; 2]>,
 }
@@ -116,80 +118,70 @@ pub(crate) struct Flags {
     pub(crate) declaration: bool,
 }
 
-pub(super) fn show_menu(
-    ui: &mut egui::Ui,
-    selected: &mut types::SelectedConfig,
-    tracking: &mut LongTacking,
-) {
-    let title = "Long Tracking";
-    let wanted = types::SelectedConfig::LongTracking;
-    let id = ui.make_persistent_id(title);
+pub(crate) const WANTED: types::SelectedConfig = types::SelectedConfig::LongTracking;
 
-    let add_body = |ui: &mut egui::Ui| {
-        show_commit_menu(ui, &mut tracking.origins[0].file.commit);
-        // let repo_changed = show_repo_menu(ui, &mut tracking.origins[0].file.commit.repo);
-        // let old = tracking.origins[0].file.commit.id.clone();
-        // let commit_te = egui::TextEdit::singleline(&mut tracking.origins[0].file.commit.id)
-        //     .clip_text(true)
-        //     .desired_width(150.0)
-        //     .desired_rows(1)
-        //     .hint_text("commit")
-        //     .id(ui.id().with("commit"))
-        //     .interactive(true)
-        //     .show(ui);
-        // if repo_changed || commit_te.response.changed() {
-        //     // todo!()
-        // } else {
-        //     assert_eq!(old, tracking.origins[0].file.commit.id.clone());
-        // };
-        ui.checkbox(&mut tracking.tree_view, "tree view");
-        ui.checkbox(&mut tracking.ser_view, "serialized view");
-        ui.checkbox(&mut tracking.detatched_view, "detatched view");
-        if tracking.detatched_view {
-            ui.indent("detached_options", |ui| {
-                ui.checkbox(&mut tracking.detatched_view_options.bezier, "bezier");
-                ui.checkbox(&mut tracking.detatched_view_options.meta, "meta");
-                ui.checkbox(&mut tracking.detatched_view_options.three, "three");
-                ui.checkbox(&mut tracking.detatched_view_options.cable, "cable");
-            });
-        }
-        ui.add(egui::Label::new(
-            egui::RichText::from("Triggers").font(egui::FontId::proportional(16.0)),
-        ));
-        let flags = &mut tracking.flags;
-        ui.checkbox(&mut flags.upd, "updated");
-        ui.checkbox(&mut flags.child, "children changed");
-        ui.checkbox(&mut flags.parent, "parent changed");
-
-        ui.add_enabled_ui(false, |ui| {
-            ui.checkbox(&mut flags.exact_child, "children changed formatting");
-            ui.checkbox(&mut flags.exact_parent, "parent changed formatting");
-            ui.checkbox(&mut flags.sim_child, "children changed structure");
-            ui.checkbox(&mut flags.sim_parent, "parent changed structure");
-            ui.checkbox(&mut flags.meth, "method changed");
-            ui.checkbox(&mut flags.typ, "type changed");
-            ui.checkbox(&mut flags.top, "top-lvl type changed");
-            ui.checkbox(&mut flags.file, "file changed");
-            ui.checkbox(&mut flags.pack, "package changed");
-            ui.checkbox(&mut flags.dependency, "dependency changed");
-            ui.checkbox(&mut flags.dependent, "dependent changed");
-            ui.checkbox(&mut flags.references, "references changed");
-            ui.checkbox(&mut flags.declaration, "declaration changed");
-            // ui.add(
-            //     egui::Slider::new(&mut tracking.len, 0..=200)
-            //         .text("commits")
-            //         .clamp_to_range(false)
-            //         .integer()
-            //         .logarithmic(true),
-            // );
-            show_wip(ui, Some("need more parameters ?"));
+pub(crate) fn show_config(ui: &mut egui::Ui, tracking: &mut LongTacking) {
+    show_commit_menu(ui, &mut tracking.origins[0].file.commit);
+    // let repo_changed = show_repo_menu(ui, &mut tracking.origins[0].file.commit.repo);
+    // let old = tracking.origins[0].file.commit.id.clone();
+    // let commit_te = egui::TextEdit::singleline(&mut tracking.origins[0].file.commit.id)
+    //     .clip_text(true)
+    //     .desired_width(150.0)
+    //     .desired_rows(1)
+    //     .hint_text("commit")
+    //     .id(ui.id().with("commit"))
+    //     .interactive(true)
+    //     .show(ui);
+    // if repo_changed || commit_te.response.changed() {
+    //     // todo!()
+    // } else {
+    //     assert_eq!(old, tracking.origins[0].file.commit.id.clone());
+    // };
+    ui.checkbox(&mut tracking.tree_view, "tree view");
+    ui.checkbox(&mut tracking.ser_view, "serialized view");
+    ui.checkbox(&mut tracking.detatched_view, "detatched view");
+    if tracking.detatched_view {
+        ui.indent("detached_options", |ui| {
+            ui.checkbox(&mut tracking.detatched_view_options.bezier, "bezier");
+            ui.checkbox(&mut tracking.detatched_view_options.meta, "meta");
+            ui.checkbox(&mut tracking.detatched_view_options.three, "three");
+            ui.checkbox(&mut tracking.detatched_view_options.cable, "cable");
         });
-    };
+    }
+    ui.add(egui::Label::new(
+        egui::RichText::from("Triggers").font(egui::FontId::proportional(16.0)),
+    ));
+    let flags = &mut tracking.flags;
+    ui.checkbox(&mut flags.upd, "updated");
+    ui.checkbox(&mut flags.child, "children changed");
+    ui.checkbox(&mut flags.parent, "parent changed");
 
-    radio_collapsing(ui, id, title, selected, &wanted, add_body);
+    ui.add_enabled_ui(false, |ui| {
+        ui.checkbox(&mut flags.exact_child, "children changed formatting");
+        ui.checkbox(&mut flags.exact_parent, "parent changed formatting");
+        ui.checkbox(&mut flags.sim_child, "children changed structure");
+        ui.checkbox(&mut flags.sim_parent, "parent changed structure");
+        ui.checkbox(&mut flags.meth, "method changed");
+        ui.checkbox(&mut flags.typ, "type changed");
+        ui.checkbox(&mut flags.top, "top-lvl type changed");
+        ui.checkbox(&mut flags.file, "file changed");
+        ui.checkbox(&mut flags.pack, "package changed");
+        ui.checkbox(&mut flags.dependency, "dependency changed");
+        ui.checkbox(&mut flags.dependent, "dependent changed");
+        ui.checkbox(&mut flags.references, "references changed");
+        ui.checkbox(&mut flags.declaration, "declaration changed");
+        // ui.add(
+        //     egui::Slider::new(&mut tracking.len, 0..=200)
+        //         .text("commits")
+        //         .clamp_to_range(false)
+        //         .integer()
+        //         .logarithmic(true),
+        // );
+        ui.wip(Some("need more parameters ?"));
+    });
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(serde::Deserialize, serde::Serialize, Clone, Copy, Debug)]
 // #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 // #[cfg_attr(feature = "serde", serde(default))]
 pub struct State {
@@ -282,7 +274,10 @@ pub(crate) fn show_results(
         .show_inside(ui, |ui| {
             ui.set_clip_rect(ui.max_rect().expand2((1.0, 0.0).into()));
             let mut add_content = |ui: &mut egui::Ui, col: usize| {
-                let mut aaa = (Buffered::Empty, MultiBuffered::default());
+                let mut aaa = (
+                    utils_poll::Buffered::Empty,
+                    utils_poll::MultiBuffered::default(),
+                );
                 let (md, tracking_result) = if long_tracking.results.is_empty() {
                     &mut aaa //&long_tracking.target
                 } else {
@@ -676,7 +671,7 @@ pub(crate) fn show_results(
                 // w_id.with(col),
                 max_rect,
                 clip_rect,
-                ui.stack().info.clone()
+                ui.stack().info.clone(),
             );
             // let ui = &mut ui.child_ui_with_id_source(
             //     rect,
@@ -881,11 +876,11 @@ pub(crate) fn show_results(
             if long_tracking.tree_view {
                 // let ui = &mut ui.child_ui_with_id_source(ui.max_rect(), ui.layout().clone(), col);
                 let tree_viewer = long_tracking.tree_viewer.entry(curr_commit.clone());
-                let tree_viewer = tree_viewer.or_insert_with(|| Buffered::default());
+                let tree_viewer = tree_viewer.or_insert_with(|| utils_poll::Buffered::default());
                 let trigger = tree_viewer.try_poll();
                 let Some(tree_viewer) = tree_viewer.get_mut() else {
                     if !tree_viewer.is_waiting() {
-                        tree_viewer.buffer(code_aspects::remote_fetch_node(
+                        tree_viewer.buffer(code_aspects::remote_fetch_node_old(
                             ui.ctx(),
                             api_addr,
                             store.clone(),
@@ -1582,7 +1577,7 @@ fn color_gr_shift(color: epaint::Color32, step: f32) -> epaint::Color32 {
 
 fn show_detached_element(
     ui: &mut egui::Ui,
-    store: &Arc<FetchedHyperAST>,
+    store: &Arc<tree_view::store::FetchedHyperAST>,
     global_opt: &DetatchedViewOptions,
     x: &CodeRange,
     id: egui::Id,
@@ -1999,16 +1994,16 @@ fn show_code_view(
     };
 
     let file_result = fetched_files.entry(curr_file.clone());
-    let te = show_remote_code1(
-        ui,
-        api_addr,
-        &mut curr_file.commit,
-        &mut curr_file.file_path,
-        file_result,
-        f32::INFINITY,
-        false,
-    )
-    .2;
+    let te = ui
+        .show_remote_code1(
+            api_addr,
+            &mut curr_file.commit,
+            &mut curr_file.file_path,
+            file_result,
+            f32::INFINITY,
+            false,
+        )
+        .2;
     if let Some(egui::InnerResponse {
         inner: Some(aa), ..
     }) = te

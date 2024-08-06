@@ -3,7 +3,7 @@ use std::{
     ops::Range,
 };
 
-use crate::app::{code_editor::generic_text_buffer::byte_index_from_char_index, show_remote_code};
+use crate::app::code_editor::generic_text_buffer::byte_index_from_char_index;
 use egui::Id;
 use egui_addon::{
     egui_utils::{highlight_byte_range, radio_collapsing, show_wip},
@@ -13,9 +13,9 @@ use poll_promise::Promise;
 
 use super::{
     show_repo_menu,
-    types::CodeRange,
-    types::{self, Commit, Resource},
-    Accumulable, Buffered,
+    types::{self, CodeRange, Commit, Resource},
+    utils_egui::MyUiExt as _,
+    utils_poll::{self, Accumulable, Buffered},
 };
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -268,55 +268,48 @@ impl Resource<TrackingResultWithChanges> {
     }
 }
 
-pub(super) fn show_code_tracking_menu(
+pub(crate) const WANTED: types::SelectedConfig = types::SelectedConfig::Tracking;
+
+pub(crate) fn show_config(
     ui: &mut egui::Ui,
-    selected: &mut types::SelectedConfig,
     tracking: &mut types::ComputeConfigTracking,
     tracking_result: &mut Buffered<Result<Resource<TrackingResult>, String>>,
 ) {
-    let title = "Code Tracking";
-    let wanted = types::SelectedConfig::Tracking;
-    let id = ui.make_persistent_id(title);
-
-    let add_body = |ui: &mut egui::Ui| {
-        let repo_changed = show_repo_menu(ui, &mut tracking.target.file.commit.repo);
-        let old = tracking.target.file.commit.id.clone();
-        let commit_te = egui::TextEdit::singleline(&mut tracking.target.file.commit.id)
-            .clip_text(true)
-            .desired_width(150.0)
-            .desired_rows(1)
-            .hint_text("commit")
-            .id(ui.id().with("commit"))
-            .interactive(true)
-            .show(ui);
-        if repo_changed || commit_te.response.changed() {
-            tracking_result.take();
-            *tracking_result = Default::default();
-            tracking.target.range.take();
-        } else {
-            assert_eq!(old, tracking.target.file.commit.id.clone());
-        };
-
-        ui.add_enabled_ui(false, |ui| {
-            // ui.add(
-            //     egui::Slider::new(&mut tracking.len, 0..=200)
-            //         .text("commits")
-            //         .clamp_to_range(false)
-            //         .integer()
-            //         .logarithmic(true),
-            // );
-            show_wip(ui, Some("need more parameters ?"));
-        });
+    let repo_changed = show_repo_menu(ui, &mut tracking.target.file.commit.repo);
+    let old = tracking.target.file.commit.id.clone();
+    let commit_te = egui::TextEdit::singleline(&mut tracking.target.file.commit.id)
+        .clip_text(true)
+        .desired_width(150.0)
+        .desired_rows(1)
+        .hint_text("commit")
+        .id(ui.id().with("commit"))
+        .interactive(true)
+        .show(ui);
+    if repo_changed || commit_te.response.changed() {
+        tracking_result.take();
+        *tracking_result = Default::default();
+        tracking.target.range.take();
+    } else {
+        assert_eq!(old, tracking.target.file.commit.id.clone());
     };
 
-    radio_collapsing(ui, id, title, selected, &wanted, add_body);
+    ui.add_enabled_ui(false, |ui| {
+        // ui.add(
+        //     egui::Slider::new(&mut tracking.len, 0..=200)
+        //         .text("commits")
+        //         .clamp_to_range(false)
+        //         .integer()
+        //         .logarithmic(true),
+        // );
+        ui.wip(Some("need more parameters ?"));
+    });
 }
 
 pub(super) fn show_code_tracking_results(
     ui: &mut egui::Ui,
     api_addr: &str,
     tracking: &mut types::ComputeConfigTracking,
-    tracking_result: &mut Buffered<RemoteResult>,
+    tracking_result: &mut utils_poll::Buffered<RemoteResult>,
     fetched_files: &mut HashMap<types::FileIdentifier, RemoteFile>,
     ctx: &egui::Context,
 ) {
@@ -334,15 +327,15 @@ pub(super) fn show_code_tracking_results(
                 assert!(selected_node.is_none())
             }
 
-            let te = show_remote_code(
-                ui,
-                api_addr,
-                &mut tracking.target.file.commit,
-                &mut tracking.target.file.file_path,
-                file_result,
-                // ctx,
-            )
-            .2;
+            let te = ui
+                .show_remote_code(
+                    api_addr,
+                    &mut tracking.target.file.commit,
+                    &mut tracking.target.file.file_path,
+                    file_result,
+                    // ctx,
+                )
+                .2;
             if let Some(egui::InnerResponse {
                 inner: Some(aa), ..
             }) = te
@@ -415,15 +408,15 @@ pub(super) fn show_code_tracking_results(
                                     mem.data.insert_temp(Id::new(&matched.file), pos_ratio)
                                 });
                             }
-                            let te = show_remote_code(
-                                ui,
-                                api_addr,
-                                &mut matched.file.commit.clone(),
-                                &mut matched.file.file_path.clone(),
-                                file_result,
-                                // ctx,
-                            )
-                            .2;
+                            let te = ui
+                                .show_remote_code(
+                                    api_addr,
+                                    &mut matched.file.commit.clone(),
+                                    &mut matched.file.file_path.clone(),
+                                    file_result,
+                                    // ctx,
+                                )
+                                .2;
                             if let Some(egui::InnerResponse {
                                 inner: Some(mut aa),
                                 ..

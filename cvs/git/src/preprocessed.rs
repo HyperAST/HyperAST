@@ -169,10 +169,40 @@ impl RepositoryProcessor {
         Ok(r)
     }
 
+    /// If `before` and `after` are unrelated then only one commit will be retrieved.
+    pub fn ensure_pre_processed_with_limit(
+        &self,
+        repository: &ConfiguredRepo2,
+        before: &str,
+        after: &str,
+        limit: usize,
+    ) -> Result<Result<Vec<git2::Oid>, Vec<git2::Oid>>, git2::Error> {
+        log::info!(
+            "commits to retrieve: {:?}",
+            all_commits_between(&repository.repo, before, after).map(|x| x.count())
+        );
+        let rw = all_commits_between(&repository.repo, before, after)?;
+        let mut r = vec![];
+        for oid in rw.take(limit) {
+            let oid = oid.unwrap();
+            let commit_processor = self
+                .processing_systems
+                .by_id(&repository.config.0)
+                .unwrap()
+                .get(repository.config.1);
+            if let Some(c) = commit_processor.get_commit(oid) {
+                r.push(oid);
+            } else {
+                return Ok(Err(r));
+            }
+        }
+        Ok(Ok(r))
+    }
+
     /// If `before` and `after` are unrelated then only one commit will be processed.
     pub fn pre_process_with_limit(
         &mut self,
-        repository: &mut ConfiguredRepo2,
+        repository: &ConfiguredRepo2,
         before: &str,
         after: &str,
         limit: usize,

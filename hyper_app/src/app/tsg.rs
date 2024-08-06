@@ -1,28 +1,22 @@
-use std::{
-    ops::DerefMut,
-    sync::{Arc, Mutex},
-};
-
-use poll_promise::Promise;
-
-use crate::app::{
-    types::EditorHolder,
-    utils_edition::{self, show_available_remote_docs, show_locals_and_interact},
-};
-
 use self::example_queries::EXAMPLES;
-
-use egui_addon::{
-    code_editor::EditorInfo, egui_utils::radio_collapsing,
-    interactive_split::interactive_splitter::InteractiveSplitter,
-};
-
 use super::{
     code_editor_automerge, show_repo_menu,
     types::{Commit, Config, Resource, SelectedConfig, TsgEditor, WithDesc},
     utils_edition::{show_interactions, update_shared_editors},
     utils_results_batched::{self, show_long_result, ComputeResults},
     Sharing,
+};
+use crate::app::{
+    types::EditorHolder as _,
+    utils_edition::{self, show_available_remote_docs, show_locals_and_interact},
+};
+use egui_addon::{
+    code_editor::EditorInfo, interactive_split::interactive_splitter::InteractiveSplitter,
+};
+use poll_promise::Promise;
+use std::{
+    ops::DerefMut as _,
+    sync::{Arc, Mutex},
 };
 mod example_queries;
 
@@ -40,6 +34,34 @@ const INFO_DESCRIPTION: EditorInfo<&'static str> = EditorInfo {
         "WIP rendering the markdown, there is already an egui helper for that."
     ),
 };
+
+pub(crate) const WANTED: SelectedConfig = SelectedConfig::Tsg;
+
+pub(crate) fn show_config(ui: &mut egui::Ui, single: &mut Sharing<ComputeConfigQuery>) {
+    show_repo_menu(ui, &mut single.content.commit.repo);
+    ui.push_id(ui.id().with("commit"), |ui| {
+        egui::TextEdit::singleline(&mut single.content.commit.id)
+            .clip_text(true)
+            .desired_width(150.0)
+            .desired_rows(1)
+            .hint_text("commit")
+            .interactive(true)
+            .show(ui)
+    });
+
+    ui.add_enabled_ui(true, |ui| {
+        ui.add(
+            egui::Slider::new(&mut single.content.len, 1..=200)
+                .text("commits")
+                .clamp_to_range(false)
+                .integer()
+                .logarithmic(true),
+        );
+        // show_wip(ui, Some("only process one commit"));
+    });
+    let selected = &mut single.content.config;
+    selected.show_combo_box(ui, "Repo Config");
+}
 
 impl<C> From<&example_queries::Query> for TsgEditor<C>
 where
@@ -96,6 +118,9 @@ impl Into<TsgEditor<super::code_editor_automerge::CodeEditor>> for TsgEditor {
     }
 }
 
+pub(super) type TsgContext =
+    utils_edition::EditingContext<TsgEditor, TsgEditor<code_editor_automerge::CodeEditor>>;
+
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 pub(super) struct ComputeConfigQuery {
@@ -115,7 +140,7 @@ impl Default for ComputeConfigQuery {
     }
 }
 
-type QueryingContext = super::EditingContext<
+type QueryingContext = utils_edition::EditingContext<
     super::types::TsgEditor,
     super::types::TsgEditor<code_editor_automerge::CodeEditor>,
 >;
@@ -152,7 +177,8 @@ pub(super) fn remote_compute_query(
     }
     .to_string();
     let script = match &mut query_editors.current {
-        super::EditStatus::Shared(_, shared_script) | super::EditStatus::Sharing(shared_script) => {
+        utils_edition::EditStatus::Shared(_, shared_script)
+        | utils_edition::EditStatus::Sharing(shared_script) => {
             let code_editors = shared_script.lock().unwrap();
             QueryContent {
                 language,
@@ -160,8 +186,8 @@ pub(super) fn remote_compute_query(
                 commits: single.content.len,
             }
         }
-        super::EditStatus::Local { name: _, content }
-        | super::EditStatus::Example { i: _, content } => QueryContent {
+        utils_edition::EditStatus::Local { name: _, content }
+        | utils_edition::EditStatus::Example { i: _, content } => QueryContent {
             language,
             query: content.query.code().to_string(),
             commits: single.content.len,
@@ -242,7 +268,7 @@ fn handle_interactions(
         let content = content.clone().to_shared();
         let content = Arc::new(Mutex::new(content));
         let name = name.to_string();
-        code_editors.current = super::EditStatus::Sharing(content.clone());
+        code_editors.current = utils_edition::EditStatus::Sharing(content.clone());
         let mut content = content.lock().unwrap();
         let db = &mut single.doc_db.as_mut().unwrap();
         db.create_doc_atempt(&single.rt, name, content.deref_mut());
@@ -254,7 +280,7 @@ fn handle_interactions(
         code_editors
             .local_scripts
             .insert(name.to_string(), content.clone());
-        code_editors.current = super::EditStatus::Local { name, content };
+        code_editors.current = utils_edition::EditStatus::Local { name, content };
     } else if interaction.compute_button.clicked() {
         *trigger_compute |= true;
     }
@@ -297,7 +323,7 @@ fn show_examples(
         let mut j = 0;
         for ex in EXAMPLES {
             let mut text = egui::RichText::new(ex.name);
-            if let super::EditStatus::Example { i, .. } = &querying_context.current {
+            if let utils_edition::EditStatus::Example { i, .. } = &querying_context.current {
                 if &j == i {
                     text = text.strong();
                 }
@@ -307,13 +333,13 @@ fn show_examples(
                 single.commit = (&ex.commit).into();
                 single.config = ex.config;
                 single.len = ex.commits;
-                querying_context.current = super::EditStatus::Example {
+                querying_context.current = utils_edition::EditStatus::Example {
                     i: j,
                     content: (&ex.query).into(),
                 };
             }
             if button.hovered() {
-                egui::show_tooltip(ui.ctx(),ui.layer_id(), button.id.with("tooltip"), |ui| {
+                egui::show_tooltip(ui.ctx(), ui.layer_id(), button.id.with("tooltip"), |ui| {
                     let desc = ex.query.description;
                     egui_demo_lib::easy_mark::easy_mark(ui, desc);
                 });
@@ -368,43 +394,6 @@ impl Resource<Result<ComputeResults, QueryingError>> {
             content: text.map(|x| Ok(x)),
         })
     }
-}
-
-pub(super) fn show_querying_menu(
-    ui: &mut egui::Ui,
-    selected: &mut SelectedConfig,
-    single: &mut Sharing<ComputeConfigQuery>,
-) {
-    let title = "TSG";
-    let wanted = SelectedConfig::Tsg;
-    let id = ui.make_persistent_id(title);
-    let add_body = |ui: &mut egui::Ui| {
-        show_repo_menu(ui, &mut single.content.commit.repo);
-        ui.push_id(ui.id().with("commit"), |ui| {
-            egui::TextEdit::singleline(&mut single.content.commit.id)
-                .clip_text(true)
-                .desired_width(150.0)
-                .desired_rows(1)
-                .hint_text("commit")
-                .interactive(true)
-                .show(ui)
-        });
-
-        ui.add_enabled_ui(true, |ui| {
-            ui.add(
-                egui::Slider::new(&mut single.content.len, 1..=200)
-                    .text("commits")
-                    .clamp_to_range(false)
-                    .integer()
-                    .logarithmic(true),
-            );
-            // show_wip(ui, Some("only process one commit"));
-        });
-        let selected = &mut single.content.config;
-        selected.show_combo_box(ui, "Repo Config");
-    };
-
-    radio_collapsing(ui, id, title, selected, &wanted, add_body);
 }
 
 impl utils_results_batched::ComputeError for QueryingError {

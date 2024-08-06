@@ -124,7 +124,11 @@ impl Query {
                 self.used_precomputed
             );
         } else {
-            todo!()
+            for p in &self.pattern_map {
+                if p.pattern_index == PatternId::new(pattern_id) {
+                    assert_eq!(p.precomputed.count_ones() as usize, precomp);
+                }
+            }
         }
     }
 

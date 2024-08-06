@@ -13,14 +13,13 @@ use crate::app::{
 use self::example_queries::EXAMPLES;
 
 use egui_addon::{
-    code_editor::EditorInfo, egui_utils::radio_collapsing,
-    interactive_split::interactive_splitter::InteractiveSplitter,
+    code_editor::EditorInfo, interactive_split::interactive_splitter::InteractiveSplitter,
 };
 
 use super::{
     code_editor_automerge, show_repo_menu,
     types::{Commit, Config, QueryEditor, Resource, SelectedConfig, WithDesc},
-    utils_edition::{show_interactions, update_shared_editors},
+    utils_edition::{show_interactions, update_shared_editors, EditStatus},
     utils_results_batched::{self, show_long_result, ComputeResults},
     Sharing,
 };
@@ -99,9 +98,9 @@ impl Into<QueryEditor<super::code_editor_automerge::CodeEditor>> for QueryEditor
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 pub(super) struct ComputeConfigQuery {
-    commit: Commit,
-    config: Config,
-    len: usize,
+    pub(super) commit: Commit,
+    pub(super) config: Config,
+    pub(super) len: usize,
 }
 
 impl Default for ComputeConfigQuery {
@@ -115,7 +114,7 @@ impl Default for ComputeConfigQuery {
     }
 }
 
-type QueryingContext = super::EditingContext<
+pub(crate) type QueryingContext = super::utils_edition::EditingContext<
     super::types::QueryEditor,
     super::types::QueryEditor<code_editor_automerge::CodeEditor>,
 >;
@@ -123,8 +122,57 @@ type QueryingContext = super::EditingContext<
 pub(super) fn remote_compute_query(
     ctx: &egui::Context,
     api_addr: &str,
-    single: &mut Sharing<ComputeConfigQuery>,
+    single: &Sharing<ComputeConfigQuery>,
     query_editors: &mut QueryingContext,
+) -> Promise<Result<Resource<Result<ComputeResults, QueryingError>>, String>> {
+    let language = match single.content.config {
+        Config::Any => "",
+        Config::MavenJava => "Java",
+        Config::MakeCpp => "Cpp",
+    }
+    .to_string();
+    let script = match &mut query_editors.current {
+        EditStatus::Shared(_, shared_script) | EditStatus::Sharing(shared_script) => {
+            let code_editors = shared_script.lock().unwrap();
+            QueryContent {
+                language,
+                query: code_editors.query.code().to_string(),
+                commits: single.content.len,
+                max_matches: u64::MAX,
+                timeout: u64::MAX,
+            }
+        }
+        EditStatus::Local { name: _, content } | EditStatus::Example { i: _, content } => {
+            QueryContent {
+                language,
+                query: content.query.code().to_string(),
+                commits: single.content.len,
+                max_matches: u64::MAX,
+                timeout: u64::MAX,
+            }
+        }
+    };
+    remote_compute_query_aux(ctx, api_addr, &single.content, script)
+}
+
+#[derive(serde::Serialize, Debug)]
+pub(crate) struct QueryContent {
+    pub(crate) language: String,
+    pub(crate) query: String,
+    pub(crate) commits: usize,
+    /// checked per individual match
+    /// if triggered on first search (ie. first commit searched) it return directly
+    /// if triggered later, divide the numer of commits remaining to analyze by 2 each time (ie. `commits`` field)
+    pub(crate) max_matches: u64,
+    /// checked each match (in milli seconds)
+    pub(crate) timeout: u64,
+}
+
+pub(crate) fn remote_compute_query_aux(
+    ctx: &egui::Context,
+    api_addr: &str,
+    single: &ComputeConfigQuery,
+    script: QueryContent,
 ) -> Promise<Result<Resource<Result<ComputeResults, QueryingError>>, String>> {
     // TODO multi requests from client
     // if single.len > 1 {
@@ -134,39 +182,9 @@ pub(super) fn remote_compute_query(
     let (sender, promise) = Promise::new();
     let url = format!(
         "http://{}/query/github/{}/{}/{}",
-        api_addr,
-        &single.content.commit.repo.user,
-        &single.content.commit.repo.name,
-        &single.content.commit.id,
+        api_addr, &single.commit.repo.user, &single.commit.repo.name, &single.commit.id,
     );
-    #[derive(serde::Serialize)]
-    struct QueryContent {
-        language: String,
-        query: String,
-        commits: usize,
-    }
-    let language = match single.content.config {
-        Config::Any => "",
-        Config::MavenJava => "Java",
-        Config::MakeCpp => "Cpp",
-    }
-    .to_string();
-    let script = match &mut query_editors.current {
-        super::EditStatus::Shared(_, shared_script) | super::EditStatus::Sharing(shared_script) => {
-            let code_editors = shared_script.lock().unwrap();
-            QueryContent {
-                language,
-                query: code_editors.query.code().to_string(),
-                commits: single.content.len,
-            }
-        }
-        super::EditStatus::Local { name: _, content }
-        | super::EditStatus::Example { i: _, content } => QueryContent {
-            language,
-            query: content.query.code().to_string(),
-            commits: single.content.len,
-        },
-    };
+    wasm_rs_dbg::dbg!(&url, &script);
 
     let mut request = ehttp::Request::post(&url, serde_json::to_vec(&script).unwrap());
     request.headers.insert(
@@ -186,7 +204,16 @@ pub(super) fn remote_compute_query(
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub enum QueryingError {
+    NetworkError(String),
+    ProcessingError(String),
     MissingLanguage(String),
+    ParsingError(String),
+    MatchingErrOnFirst(MatchingError),
+}
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub enum MatchingError {
+    TimeOut(utils_results_batched::ComputeResultIdentified),
+    MaxMatches(utils_results_batched::ComputeResultIdentified),
 }
 
 pub(super) fn show_querying(
@@ -201,7 +228,7 @@ pub(super) fn show_querying(
         >,
     >,
 ) {
-    let api_endpoint = &format!("{}/sharing-queries", api_addr);
+    let api_endpoint = &end_point(api_addr);
     update_shared_editors(ui, query, api_endpoint, query_editors);
     let is_portrait = ui.available_rect_before_wrap().aspect_ratio() < 1.0;
     if is_portrait {
@@ -224,7 +251,11 @@ pub(super) fn show_querying(
     }
 }
 
-fn handle_interactions(
+pub(crate) fn end_point(api_addr: &str) -> String {
+    format!("{}/sharing-queries", api_addr)
+}
+
+pub(crate) fn handle_interactions(
     ui: &mut egui::Ui,
     code_editors: &mut QueryingContext,
     querying_result: &mut Option<
@@ -241,7 +272,7 @@ fn handle_interactions(
         let content = content.clone().to_shared();
         let content = Arc::new(Mutex::new(content));
         let name = name.to_string();
-        code_editors.current = super::EditStatus::Sharing(content.clone());
+        code_editors.current = EditStatus::Sharing(content.clone());
         let mut content = content.lock().unwrap();
         let db = &mut single.doc_db.as_mut().unwrap();
         db.create_doc_atempt(&single.rt, name, content.deref_mut());
@@ -253,13 +284,13 @@ fn handle_interactions(
         code_editors
             .local_scripts
             .insert(name.to_string(), content.clone());
-        code_editors.current = super::EditStatus::Local { name, content };
+        code_editors.current = EditStatus::Local { name, content };
     } else if interaction.compute_button.clicked() {
         *trigger_compute |= true;
     }
 }
 
-fn show_scripts_edition(
+pub(crate) fn show_scripts_edition(
     ui: &mut egui::Ui,
     api_endpoint: &str,
     querying_context: &mut QueryingContext,
@@ -296,7 +327,7 @@ fn show_examples(
         let mut j = 0;
         for ex in EXAMPLES {
             let mut text = egui::RichText::new(ex.name);
-            if let super::EditStatus::Example { i, .. } = &querying_context.current {
+            if let EditStatus::Example { i, .. } = &querying_context.current {
                 if &j == i {
                     text = text.strong();
                 }
@@ -306,7 +337,7 @@ fn show_examples(
                 single.commit = (&ex.commit).into();
                 single.config = ex.config;
                 single.len = ex.commits;
-                querying_context.current = super::EditStatus::Example {
+                querying_context.current = EditStatus::Example {
                     i: j,
                     content: (&ex.query).into(),
                 };
@@ -342,9 +373,11 @@ impl Resource<Result<ComputeResults, QueryingError>> {
                 wasm_rs_dbg::dbg!();
                 return Err("".to_string());
             };
-            let Ok(json) = serde_json::from_str::<QueryingError>(text) else {
-                wasm_rs_dbg::dbg!();
-                return Err("".to_string());
+            let json = match serde_json::from_str::<QueryingError>(text) {
+                Ok(json) => json,
+                Err(err) => {
+                    log::error!("error converting QueryError: {}", err);
+                    return Err(text.to_string())},
             };
             return Ok(Self {
                 response,
@@ -369,53 +402,54 @@ impl Resource<Result<ComputeResults, QueryingError>> {
     }
 }
 
-pub(super) fn show_querying_menu(
-    ui: &mut egui::Ui,
-    selected: &mut SelectedConfig,
-    single: &mut Sharing<ComputeConfigQuery>,
-) {
-    let title = "Querying";
-    let wanted = SelectedConfig::Querying;
-    let id = ui.make_persistent_id(title);
-    let add_body = |ui: &mut egui::Ui| {
-        show_repo_menu(ui, &mut single.content.commit.repo);
-        ui.push_id(ui.id().with("commit"), |ui| {
-            egui::TextEdit::singleline(&mut single.content.commit.id)
-                .clip_text(true)
-                .desired_width(150.0)
-                .desired_rows(1)
-                .hint_text("commit")
-                .interactive(true)
-                .show(ui)
-        });
+pub(crate) const WANTED: SelectedConfig = SelectedConfig::Querying;
 
-        ui.add_enabled_ui(true, |ui| {
-            ui.add(
-                egui::Slider::new(&mut single.content.len, 1..=200)
-                    .text("commits")
-                    .clamp_to_range(false)
-                    .integer()
-                    .logarithmic(true),
-            );
-            // show_wip(ui, Some("only process one commit"));
-        });
-        let selected = &mut single.content.config;
-        selected.show_combo_box(ui, "Repo Config");
-    };
+pub(crate) fn show_config(ui: &mut egui::Ui, single: &mut Sharing<ComputeConfigQuery>) {
+    show_repo_menu(ui, &mut single.content.commit.repo);
+    ui.push_id(ui.id().with("commit"), |ui| {
+        egui::TextEdit::singleline(&mut single.content.commit.id)
+            .clip_text(true)
+            .desired_width(150.0)
+            .desired_rows(1)
+            .hint_text("commit")
+            .interactive(true)
+            .show(ui)
+    });
 
-    radio_collapsing(ui, id, title, selected, &wanted, add_body);
+    ui.add_enabled_ui(true, |ui| {
+        ui.add(
+            egui::Slider::new(&mut single.content.len, 1..=200)
+                .text("commits")
+                .clamp_to_range(false)
+                .integer()
+                .logarithmic(true),
+        );
+        // show_wip(ui, Some("only process one commit"));
+    });
+    let selected = &mut single.content.config;
+    selected.show_combo_box(ui, "Repo Config");
 }
 
 impl utils_results_batched::ComputeError for QueryingError {
     fn head(&self) -> &str {
         match self {
+            QueryingError::NetworkError(_) => "Network Error:",
             QueryingError::MissingLanguage(_) => "Missing Language:",
+            QueryingError::ProcessingError(_) => "Processing Error:",
+            QueryingError::ParsingError(_) => "Parsing Error:",
+            QueryingError::MatchingErrOnFirst(MatchingError::TimeOut(_)) => "Timed out on first commit:",
+            QueryingError::MatchingErrOnFirst(MatchingError::MaxMatches(_)) => "Too many matches on first commit:",
         }
     }
 
     fn content(&self) -> &str {
         match self {
+            QueryingError::NetworkError(err) => err,
             QueryingError::MissingLanguage(err) => err,
+            QueryingError::ProcessingError(err) => err,
+            QueryingError::ParsingError(err) => err,
+            QueryingError::MatchingErrOnFirst(MatchingError::TimeOut(res)) => "",
+            QueryingError::MatchingErrOnFirst(MatchingError::MaxMatches(res)) => "",
         }
     }
 }

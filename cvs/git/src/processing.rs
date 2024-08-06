@@ -244,6 +244,8 @@ impl<'a> TryInto<String> for ObjectName {
 }
 
 pub(crate) mod caches {
+    use std::ops::Deref;
+
     use hyper_ast::store::defaults::NodeIdentifier;
 
     use crate::preprocessed::IsSkippedAna;
@@ -253,8 +255,29 @@ pub(crate) mod caches {
     pub(crate) type OidMap<T> = std::collections::BTreeMap<git2::Oid, T>;
     pub(crate) type NamedMap<T> = std::collections::BTreeMap<(git2::Oid, ObjectName), T>;
 
+    pub(crate) struct Query(pub(crate) std::sync::Arc<hyper_ast_tsquery::Query>);
+    impl From<hyper_ast_tsquery::Query>  for Query {
+        fn from(value: hyper_ast_tsquery::Query) -> Self {
+            Self(value.into())
+        }
+    }
+    unsafe impl Send for Query {}
+    unsafe impl Sync for Query {}
+
+    impl Default for Query {
+        fn default() -> Self {
+            let (precomp, _) = hyper_ast_tsquery::Query::with_precomputed(
+                "(_)",
+                hyper_ast_gen_ts_java::language(),
+                crate::java_processor::SUB_QUERIES,
+            )
+            .unwrap();
+            precomp.into()
+        }
+    }
     #[derive(Default)]
     pub struct Java {
+        pub(crate) query: Query,
         pub(crate) md_cache: hyper_ast_gen_ts_java::legion_with_refs::MDCache,
         pub object_map: NamedMap<(hyper_ast_gen_ts_java::legion_with_refs::Local, IsSkippedAna)>,
     }

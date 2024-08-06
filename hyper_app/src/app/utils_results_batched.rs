@@ -4,7 +4,9 @@ use crate::app::types;
 use crate::app::utils;
 use crate::app::utils::SecFmt;
 
+use super::types::CommitId;
 use super::types::Resource;
+use super::ProjectId;
 
 pub(crate) trait ComputeError {
     fn head(&self) -> &str;
@@ -33,9 +35,13 @@ pub(super) fn show_short_result(
     };
     if ui.add(egui::Button::new("Export")).clicked() {
         if let Ok(text) = serde_json::to_string_pretty(content) {
-            utils::file_save(&text)
+            utils::file_save("query_results", ".json", &text);
         }
     };
+    show_short_result_aux(content, ui);
+}
+
+pub(crate) fn show_short_result_aux(content: &ComputeResults, ui: &mut egui::Ui) {
     if content.results.len() == 1 {
         if let Ok(res) = &content.results[0] {
             ui.label(format!(
@@ -61,7 +67,7 @@ pub(super) fn show_short_result(
 pub(super) type Remote<R> = Promise<ehttp::Result<Resource<R>>>;
 pub(super) type RemoteResult<E> = Remote<Result<ComputeResults, E>>;
 
-pub(super) fn show_long_result(
+pub(crate) fn show_long_result(
     promise: &Option<RemoteResult<impl ComputeError + Send + Sync>>,
     ui: &mut egui::Ui,
 ) {
@@ -79,7 +85,7 @@ pub(super) fn show_long_result(
                 show_long_result_success(ui, content);
             }
             Some(Err(error)) => {
-                show_long_result_compute_failure(error, ui);
+                show_long_result_compute_failure(ui, error);
             }
             _ => (),
         },
@@ -100,20 +106,32 @@ pub struct ComputeResults {
     pub results: Vec<Result<ComputeResultIdentified, String>>,
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+impl std::hash::Hash for ComputeResults {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.results.hash(state);
+    }
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, Hash)]
 pub struct ComputeResultIdentified {
     pub commit: types::CommitId,
     #[serde(flatten)]
     pub inner: ComputeResult,
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct ComputeResult {
     pub compute_time: f64,
     pub result: serde_json::Value,
 }
 
-fn show_long_result_compute_failure<'a>(error: &impl ComputeError, ui: &mut egui::Ui) {
+impl std::hash::Hash for ComputeResult {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.result.hash(state);
+    }
+}
+
+fn show_long_result_compute_failure<'a>(ui: &mut egui::Ui, error: &impl ComputeError) {
     ui.label(
         egui::RichText::new(error.head())
             .heading()
@@ -129,7 +147,7 @@ pub(crate) fn show_long_result_success(ui: &mut egui::Ui, content: &ComputeResul
                 egui::containers::scroll_area::ScrollBarVisibility::AlwaysVisible,
             )
             .auto_shrink([false, false])
-            .show(ui, |ui| show_long_result_table(content, ui));
+            .show(ui, |ui| show_long_result_table(ui, content, &mut None));
     } else {
         egui::CollapsingHeader::new("Results (JSON)")
             .default_open(true)
@@ -139,12 +157,12 @@ pub(crate) fn show_long_result_success(ui: &mut egui::Ui, content: &ComputeResul
                         egui::containers::scroll_area::ScrollBarVisibility::AlwaysHidden,
                     )
                     .auto_shrink([false, false])
-                    .show(ui, |ui| show_long_result_list(content, ui));
+                    .show(ui, |ui| show_long_result_list(ui, content));
             });
     }
 }
 
-pub(crate) fn show_long_result_list(content: &ComputeResults, ui: &mut egui::Ui) {
+pub(crate) fn show_long_result_list(ui: &mut egui::Ui, content: &ComputeResults) {
     for cont in &content.results {
         match cont {
             Ok(cont) => {
@@ -183,7 +201,11 @@ pub(crate) fn show_long_result_list(content: &ComputeResults, ui: &mut egui::Ui)
     }
 }
 
-pub(crate) fn show_long_result_table(content: &ComputeResults, ui: &mut egui::Ui) {
+pub(crate) fn show_long_result_table(
+    ui: &mut egui::Ui,
+    content: &ComputeResults,
+    selected_commit: &mut Option<usize>,
+) {
     // header
     let header = content.results.iter().find(|x| x.is_ok());
     let Some(header) = header.as_ref() else {
@@ -200,19 +222,24 @@ pub(crate) fn show_long_result_table(content: &ComputeResults, ui: &mut egui::Ui
     } else {
         panic!()
     };
-    TableBuilder::new(ui)
+    let mut table = TableBuilder::new(ui);
+    if let Some(row) = selected_commit {
+        table = table.scroll_to_row(*row, None);
+    } 
+    table
         .striped(true)
         .resizable(true)
-        .auto_shrink([true, true])
+        // .auto_shrink([true, true])
         .column(Column::auto().resizable(true).clip(false))
         // .column(Column::remainder())
         .columns(Column::auto().resizable(true), count)
-        .column(Column::auto().resizable(true).clip(false))
+        // .column(Column::auto().resizable(true).clip(false))
+        .column(Column::remainder())
         .header(20.0, |head| {
             show_table_header(head, header);
         })
         .body(|body| {
-            show_table_body(body, content);
+            show_table_body(body, content, selected_commit);
         });
 }
 
@@ -225,7 +252,9 @@ fn show_table_header(mut head: egui_extras::TableRow<'_, '_>, header: &ComputeRe
         )
     };
     head.col(|ui| {
-        hf(ui, " commit");
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            hf(ui, " commit")
+        });
     });
     use serde_json::Value;
     let f = |head: &mut egui_extras::TableRow<'_, '_>, name: &str, v: &Value| {
@@ -258,7 +287,11 @@ fn show_table_header(mut head: egui_extras::TableRow<'_, '_>, header: &ComputeRe
     });
 }
 
-fn show_table_body(mut body: egui_extras::TableBody<'_>, content: &ComputeResults) {
+fn show_table_body(
+    body: egui_extras::TableBody<'_>,
+    content: &ComputeResults,
+    selected_index: &mut Option<usize>,
+) {
     use serde_json::Value;
     let f = |row: &mut egui_extras::TableRow<'_, '_>, v: &Value| {
         row.col(|ui| {
@@ -275,8 +308,22 @@ fn show_table_body(mut body: egui_extras::TableBody<'_>, content: &ComputeResult
         }
     };
     let show_ok = |row: &mut egui_extras::TableRow<'_, '_>, cont: &ComputeResultIdentified| {
+        // if let Some((_, c)) = &selected_commit {
+        //     row.set_selected(c == &cont.commit);
+        // }
+        let i = row.index();
         row.col(|ui| {
-            ui.label(&cont.commit[..8]);
+            // if let Some((_, c)) = &selected_commit {
+            //     // if c == &cont.commit {
+            //     //     ui.scroll_to_rect(ui.min_rect(), Some(egui::Align::Center));
+            //     // }
+            // }
+            if selected_index == &Some(i) {
+                ui.scroll_to_rect(ui.min_rect(), Some(egui::Align::Center));
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                ui.label(&cont.commit[..8])
+            });
         });
         if let Some(result) = cont.inner.result.as_object() {
             for (_, v) in result {
@@ -293,16 +340,17 @@ fn show_table_body(mut body: egui_extras::TableBody<'_>, content: &ComputeResult
             ui.label(format!("{:.3}", SecFmt(cont.inner.compute_time)));
         });
     };
-    for cont in &content.results {
-        match cont {
-            Ok(cont) => body.row(30.0, |mut row| show_ok(&mut row, cont)),
+    body.rows(20.0, content.results.len(), |mut row| {
+        if selected_index == &Some(row.index()) {
+            row.set_selected(true);
+        }
+        match &content.results[row.index()] {
+            Ok(cont) => show_ok(&mut row, cont),
             Err(err) => {
-                body.row(30.0, |mut row| {
-                    row.col(|ui| {
-                        ui.colored_label(ui.visuals().error_fg_color, err);
-                    });
+                row.col(|ui| {
+                    ui.colored_label(ui.visuals().error_fg_color, err);
                 });
             }
         }
-    }
+    });
 }

@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, u16};
 
 use hyper_ast::{
     store::defaults::NodeIdentifier,
@@ -802,6 +802,7 @@ impl Type {
             143u16 => Type::ContentRepeat1,
             144u16 => Type::TS61,
             145u16 => Type::ERROR,
+            u16::MAX => Type::ERROR,
             x => panic!("{}", x),
         }
     }

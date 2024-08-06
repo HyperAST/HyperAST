@@ -5,13 +5,13 @@ use hyper_ast::{
     cyclomatic::Mcc,
     filter::{Bloom, BloomSize, BF},
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
+    impact::BulkHasher,
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
         nodes::legion::{compo, compo::CS, NodeStore, PendingInsert},
     },
     tree_gen::SubTreeMetrics,
     types::LabelStore,
-    impact::BulkHasher,
 };
 use hyper_ast_gen_ts_java::types::Type;
 use hyper_ast_gen_ts_java::{
@@ -451,6 +451,11 @@ pub const SUB_QUERIES: &[&str] = &[
     (block)
     (catch_clause)
 )"#,
+    r#"(class_declaration)"#,
+    r#"(method_declaration)"#,
+    r#"(marker_annotation 
+    name: (identifier) (#EQ? "Test")
+)"#,
 ];
 
 impl RepositoryProcessor {
@@ -518,27 +523,21 @@ impl RepositoryProcessor {
                 } else {
                     "\n".as_bytes().to_vec()
                 };
-                let (precomp, _) = hyper_ast_tsquery::Query::with_precomputed(
-                    "(_)",
-                    hyper_ast_gen_ts_java::language(),
-                    SUB_QUERIES,
-                )
-                .unwrap();
-                crate::java::handle_java_file(
-                    &mut java_tree_gen::JavaTreeGen {
-                        line_break,
-                        stores: &mut self.main_stores,
-                        md_cache: &mut c
-                            .mut_or_default::<JavaProcessorHolder>()
-                            .get_caches_mut()
-                            .md_cache, //java_md_cache,
-                        more: precomp,
-                    },
-                    n,
-                    t,
-                )
-                .map_err(|_| crate::ParseErr::IllFormed)
-                .map(|x| (x.local.clone(), false))
+
+                let caches = c.mut_or_default::<JavaProcessorHolder>().get_caches_mut();
+
+                let precomp = caches.query.0.clone();
+                let mut java_tree_gen = java_tree_gen::JavaTreeGen {
+                    line_break,
+                    stores: &mut self.main_stores,
+                    md_cache: &mut caches.md_cache, //java_md_cache,
+                    more: precomp,
+                };
+                let r = crate::java::handle_java_file(&mut java_tree_gen, n, t)
+                    .map_err(|_| crate::ParseErr::IllFormed)
+                    .map(|x| (x.local.clone(), false));
+
+                r
             })
     }
 

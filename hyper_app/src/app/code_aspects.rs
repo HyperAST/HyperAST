@@ -1,8 +1,8 @@
-use super::show_repo_menu;
 use super::tree_view::FetchedViewImpl;
-use super::tree_view::{Action, FetchedHyperAST, NodeIdentifier, PrefillCache};
+use super::tree_view::{store::FetchedHyperAST, Action, NodeIdentifier, PrefillCache};
 use super::types;
 use super::types::Resource;
+use super::utils_egui::MyUiExt as _;
 use egui_addon::egui_utils::{radio_collapsing, show_wip};
 use hyper_ast::store::nodes::fetched;
 use hyper_ast::store::nodes::fetched::LabelIdentifier;
@@ -11,119 +11,110 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-pub(crate) fn show_aspects_views_menu(
+pub(crate) const WANTED: types::SelectedConfig = types::SelectedConfig::Aspects;
+
+pub(crate) fn show_config(
     ui: &mut egui::Ui,
-    api_addr: &str,
-    selected: &mut types::SelectedConfig,
     aspects: &mut types::ComputeConfigAspectViews,
-    store: Arc<FetchedHyperAST>,
     aspects_result: &mut Option<Promise<Result<Resource<FetchedView>, String>>>,
+    api_addr: &str,
+    store: Arc<FetchedHyperAST>,
 ) {
-    let title = "Aspects Views";
-    // WARN Wtf ?
-    let wanted = (&*aspects).into();
-    let id = ui.make_persistent_id(title);
-    let add_body = |ui: &mut egui::Ui| {
-        show_repo_menu(ui, &mut aspects.commit.repo);
-        ui.push_id(ui.id().with("commit"), |ui| {
-            egui::TextEdit::singleline(&mut aspects.commit.id)
-                .clip_text(true)
-                .desired_width(150.0)
-                .desired_rows(1)
-                .hint_text("commit")
-                .interactive(true)
-                .show(ui)
-        });
-        ui.push_id(ui.id().with("path"), |ui| {
-            if egui::TextEdit::singleline(&mut aspects.path)
-                .clip_text(true)
-                .desired_width(150.0)
-                .desired_rows(1)
-                .hint_text("path")
-                .interactive(true)
-                .show(ui)
-                .response
-                .changed()
-            {
-                *aspects_result = Some(remote_fetch_node(
-                    ui.ctx(),
-                    api_addr,
-                    store.clone(),
-                    &aspects.commit,
-                    &aspects.path,
-                ));
-                // *aspects_result = Some(remote_fetch_tree(ui.ctx(), &aspects.commit, &aspects.path));
-            }
-            egui::TextEdit::singleline(&mut aspects.hightlight)
-                .clip_text(true)
-                .desired_width(150.0)
-                .desired_rows(1)
-                .hint_text("hightlight")
-                .interactive(true)
-                .show(ui)
-        });
-        ui.checkbox(&mut aspects.spacing, "Spacing");
-        ui.checkbox(&mut aspects.syntax, "Syntax");
-        ui.checkbox(&mut aspects.cst, "CST");
-        ui.add_enabled_ui(false, |ui| {
-            ui.checkbox(&mut aspects.ast, "AST");
-            show_wip(ui, Some(" soon available"));
-            ui.checkbox(&mut aspects.type_decls, "Type Decls");
-            show_wip(ui, Some(" soon available"));
-            ui.checkbox(&mut aspects.licence, "Licence");
-            show_wip(ui, Some(" soon available"));
-            ui.checkbox(&mut aspects.doc, "Doc");
-            show_wip(ui, Some(" soon available"));
-        });
-        ui.label("serialized Java:");
-        let mut rm = None;
-        for x in &aspects.ser_opt_java {
-            let button = &ui.button(x.to_str());
-            if button.clicked() {
-                rm = Some(x.clone());
-            }
+    super::show_repo_menu(ui, &mut aspects.commit.repo);
+    ui.push_id(ui.id().with("commit"), |ui| {
+        egui::TextEdit::singleline(&mut aspects.commit.id)
+            .clip_text(true)
+            .desired_width(150.0)
+            .desired_rows(1)
+            .hint_text("commit")
+            .interactive(true)
+            .show(ui)
+    });
+    ui.push_id(ui.id().with("path"), |ui| {
+        if egui::TextEdit::singleline(&mut aspects.path)
+            .clip_text(true)
+            .desired_width(150.0)
+            .desired_rows(1)
+            .hint_text("path")
+            .interactive(true)
+            .show(ui)
+            .response
+            .changed()
+        {
+            *aspects_result = Some(remote_fetch_node_old(
+                ui.ctx(),
+                api_addr,
+                store.clone(),
+                &aspects.commit,
+                &aspects.path,
+            ));
+            // *aspects_result = Some(remote_fetch_tree(ui.ctx(), &aspects.commit, &aspects.path));
         }
-        if let Some(rm) = rm {
-            aspects.ser_opt_java.remove(&rm);
+        egui::TextEdit::singleline(&mut aspects.hightlight)
+            .clip_text(true)
+            .desired_width(150.0)
+            .desired_rows(1)
+            .hint_text("hightlight")
+            .interactive(true)
+            .show(ui)
+    });
+    ui.checkbox(&mut aspects.spacing, "Spacing");
+    ui.checkbox(&mut aspects.syntax, "Syntax");
+    ui.checkbox(&mut aspects.cst, "CST");
+    ui.add_enabled_ui(false, |ui| {
+        ui.checkbox(&mut aspects.ast, "AST");
+        ui.wip(Some(" soon available"));
+        ui.checkbox(&mut aspects.type_decls, "Type Decls");
+        ui.wip(Some(" soon available"));
+        ui.checkbox(&mut aspects.licence, "Licence");
+        ui.wip(Some(" soon available"));
+        ui.checkbox(&mut aspects.doc, "Doc");
+        ui.wip(Some(" soon available"));
+    });
+    ui.label("serialized Java:");
+    let mut rm = None;
+    for x in &aspects.ser_opt_java {
+        let button = &ui.button(x.to_str());
+        if button.clicked() {
+            rm = Some(x.clone());
         }
-        ui.label("serialized Cpp:");
-        let mut rm = None;
-        for x in &aspects.ser_opt_cpp {
-            let button = &ui.button(x.to_str());
-            if button.clicked() {
-                rm = Some(x.clone());
-            }
+    }
+    if let Some(rm) = rm {
+        aspects.ser_opt_java.remove(&rm);
+    }
+    ui.label("serialized Cpp:");
+    let mut rm = None;
+    for x in &aspects.ser_opt_cpp {
+        let button = &ui.button(x.to_str());
+        if button.clicked() {
+            rm = Some(x.clone());
         }
-        if let Some(rm) = rm {
-            aspects.ser_opt_cpp.remove(&rm);
+    }
+    if let Some(rm) = rm {
+        aspects.ser_opt_cpp.remove(&rm);
+    }
+    ui.label("hidden Java:");
+    let mut rm = None;
+    for x in &aspects.hide_opt_java {
+        let button = &ui.button(x.to_str());
+        if button.clicked() {
+            rm = Some(x.clone());
         }
-        ui.label("hidden Java:");
-        let mut rm = None;
-        for x in &aspects.hide_opt_java {
-            let button = &ui.button(x.to_str());
-            if button.clicked() {
-                rm = Some(x.clone());
-            }
+    }
+    if let Some(rm) = rm {
+        aspects.hide_opt_java.remove(&rm);
+    }
+    ui.label("hidden Cpp:");
+    let mut rm = None;
+    for x in &aspects.hide_opt_cpp {
+        let button = &ui.button(x.to_str());
+        if button.clicked() {
+            rm = Some(x.clone());
         }
-        if let Some(rm) = rm {
-            aspects.hide_opt_java.remove(&rm);
-        }
-        ui.label("hidden Cpp:");
-        let mut rm = None;
-        for x in &aspects.hide_opt_cpp {
-            let button = &ui.button(x.to_str());
-            if button.clicked() {
-                rm = Some(x.clone());
-            }
-        }
-        if let Some(rm) = rm {
-            aspects.hide_opt_cpp.remove(&rm);
-        }
-
-        // ui.text_edit_singleline(&mut "github.com/INRIA/spoon");
-    };
-
-    radio_collapsing(ui, id, title, selected, &wanted, add_body);
+    }
+    if let Some(rm) = rm {
+        aspects.hide_opt_cpp.remove(&rm);
+    }
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -131,7 +122,7 @@ pub struct FetchedView {
     #[serde(skip)]
     store: Arc<FetchedHyperAST>,
     #[serde(serialize_with = "ser_node_id", deserialize_with = "de_node_id")]
-    root: NodeIdentifier,
+    pub(crate) root: NodeIdentifier,
     #[serde(skip)]
     /// WARN reset it on changes of state that can affect layout
     prefill_cache: Option<PrefillCache>,
@@ -210,13 +201,8 @@ pub(crate) fn show(
     if let Some(aspects_result) = aspects_result.ready_mut() {
         match aspects_result {
             Ok(aspects_result) => {
-                let ui = &mut ui.child_ui(
-                    ui.available_rect_before_wrap(), //.shrink2((0.0, 250.0).into())
-                    ui.layout().clone(),
-                    None,
-                );
-                // ui.painter()
-                //     .debug_rect(ui.available_rect_before_wrap(), egui::Color32::GREEN, "");
+                let ui =
+                    &mut ui.child_ui(ui.available_rect_before_wrap(), ui.layout().clone(), None);
                 let _scroll = egui::ScrollArea::both()
                     .auto_shrink([false, false])
                     .show_viewport(ui, |ui, _viewport| {
@@ -419,7 +405,7 @@ pub(super) fn remote_fetch_tree(
     promise
 }
 
-pub(super) fn remote_fetch_node(
+pub(super) fn remote_fetch_node_old(
     ctx: &egui::Context,
     api_addr: &str,
     store: Arc<FetchedHyperAST>,
@@ -455,6 +441,41 @@ pub(super) fn remote_fetch_node(
                     prefill_cache: Default::default(),
                 }),
             }
+        });
+
+        sender.send(resource);
+    });
+    promise
+}
+
+pub(super) fn remote_fetch_node(
+    ctx: &egui::Context,
+    api_addr: &str,
+    store: Arc<FetchedHyperAST>,
+    commit: &types::Commit,
+    path: &str,
+) -> Promise<Result<NodeIdentifier, String>> {
+    let ctx = ctx.clone();
+    let (sender, promise) = Promise::new();
+    let url = format!(
+        "http://{}/fetch/github/{}/{}/{}/{}",
+        api_addr, &commit.repo.user, &commit.repo.name, &commit.id, &path,
+    );
+
+    wasm_rs_dbg::dbg!(&url);
+    let request = ehttp::Request::get(&url);
+
+    ehttp::fetch(request, move |response| {
+        ctx.request_repaint(); // wake up UI thread
+        let resource = response.map(|response| {
+            let res = Resource::<FetchedNode>::from_response(&ctx, response);
+            let fetched_node = res.content.unwrap();
+            store
+                .node_store
+                .write()
+                .unwrap()
+                .extend(fetched_node.node_store);
+            fetched_node.root[0]
         });
 
         sender.send(resource);

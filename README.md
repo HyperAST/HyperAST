@@ -74,3 +74,26 @@ If you use HyperAST in an academic purpose, please cite the following paper:
 }
 ```
 
+## Cool crates that could be used
+
+- controlled-option = "0.4.1"
+- pretty_assertions = "1.0.0"
+
+- atomic-counter = "1.0.1"
+- fasthash = "0.4.0"
+- self_cell = "0.10.2"
+- nohash-hasher = "0.2.0"
+- comfy-table = "6.0.0"
+- document-features = "0.2.10"
+
+to help store subtrees efficiently
+- zerocopy="0.6.1"
+- tuples = "=1.4.1"
+- enumset = "1.0.8"
+
+look at tests from getrandom and indexmap
+
+
+for xml / maven
+- pommes = "0.0.2"
+- serde-xml-rs = "0.5.1"

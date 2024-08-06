@@ -1,9 +1,11 @@
 use crate::Languages;
 
-use self::{editor_content::EditAwareString, generic_text_buffer::TextBuffer};
+use self::generic_text_buffer::TextBuffer;
 use super::Lang;
+pub use editor_content::EditAwareString;
 use egui::{Response, WidgetText};
 use egui_demo_lib::easy_mark::easy_mark;
+use generic_text_edit::TextEdit;
 use serde::Deserialize;
 use std::fmt::Debug;
 
@@ -67,6 +69,17 @@ impl<L: Default + Languages, C: From<String>> From<(EditorInfo<String>, String)>
     for CodeEditor<L, C>
 {
     fn from((info, code): (EditorInfo<String>, String)) -> Self {
+        let code = code.into();
+        Self {
+            info,
+            code,
+            ..Default::default()
+        }
+    }
+}
+
+impl<L: Default + Languages, C: From<String>> CodeEditor<L, C> {
+    pub fn new(info: EditorInfo<String>, code: String) -> Self {
         let code = code.into();
         Self {
             info,
@@ -190,31 +203,35 @@ impl<L: Default> CodeEditor<L> {
                         ui.fonts(|f| f.layout_job(layout_job))
                     };
                 } else {
-                    let language = "rs";
-                    let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
-
-                    let mut layouter = |ui: &egui::Ui, string: &str, _wrap_width: f32| {
-                        let layout_job = egui_extras::syntax_highlighting::highlight(
-                            ui.ctx(),
-                            &theme,
-                            string,
-                            language,
-                        );
-                        ui.fonts(|f| f.layout_job(layout_job))
-                    };
-
-                    ui.add(
-                        egui::TextEdit::multiline(&mut code.string)
-                            .font(egui::TextStyle::Monospace) // for cursor height
-                            .code_editor()
-                            .desired_rows(1)
-                            .lock_focus(true)
-                            .layouter(&mut layouter),
-                    );
+                    show_edit_syntect(ui, code);
                 }
             });
         });
     }
+}
+
+pub fn show_edit_syntect(ui: &mut egui::Ui, code: &mut EditAwareString) {
+    let language = "rs";
+    let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+
+    let mut layouter = |ui: &egui::Ui, string: &EditAwareString, _wrap_width: f32| {
+        let layout_job = egui_extras::syntax_highlighting::highlight(
+            ui.ctx(),
+            &theme,
+            string.as_str(),
+            language,
+        );
+        ui.fonts(|f| f.layout_job(layout_job))
+    };
+
+    ui.add(
+        TextEdit::multiline(code)
+            .font(egui::TextStyle::Monospace) // for cursor height
+            .code_editor()
+            .desired_rows(1)
+            .lock_focus(true)
+            .layouter(&mut layouter),
+    );
 }
 
 fn checkbox_heading(

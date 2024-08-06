@@ -3,38 +3,6 @@ use std::ops::Range;
 
 mod paint_cursor;
 
-pub fn highlight_byte_range(
-    ui: &mut egui::Ui,
-    te: &egui::text_edit::TextEditOutput,
-    selected_node: &Range<usize>,
-    color: egui::Color32,
-) -> egui::Rect {
-    highlight_byte_range_aux(ui, &te.galley, te.galley_pos, selected_node, color)
-}
-
-pub fn highlight_byte_range_aux(
-    ui: &mut egui::Ui,
-    galley: &egui::Galley,
-    galley_pos: egui::Pos2,
-    selected_node: &Range<usize>,
-    color: egui::Color32,
-) -> egui::Rect {
-    let cursor_range = compute_cursor_range(galley, selected_node);
-    let bounding_rect = compute_bounding_rect(galley, cursor_range);
-
-    let p = ui.painter().clone();
-    // p.set_clip_rect(aa.inner_rect);
-    paint_cursor_selection2(
-        ui,
-        &p,
-        galley_pos,
-        &galley,
-        &cursor_range.map(|x| x.rcursor),
-        color,
-    );
-    bounding_rect
-}
-
 pub fn compute_bounding_rect(
     galley: &egui::Galley,
     cursor_range: [epaint::text::cursor::Cursor; 2],
@@ -115,10 +83,40 @@ pub fn compute_cursor_range(
     ]
 }
 
-use egui::{CollapsingResponse, Id};
-use wasm_rs_dbg::dbg;
+pub fn highlight_byte_range(
+    ui: &mut egui::Ui,
+    te: &egui::text_edit::TextEditOutput,
+    selected_node: &Range<usize>,
+    color: egui::Color32,
+) -> egui::Rect {
+    highlight_byte_range_aux(ui, &te.galley, te.galley_pos, selected_node, color)
+}
+
+pub fn highlight_byte_range_aux(
+    ui: &mut egui::Ui,
+    galley: &egui::Galley,
+    galley_pos: egui::Pos2,
+    selected_node: &Range<usize>,
+    color: egui::Color32,
+) -> egui::Rect {
+    let cursor_range = compute_cursor_range(galley, selected_node);
+    let bounding_rect = compute_bounding_rect(galley, cursor_range);
+
+    let p = ui.painter().clone();
+    // p.set_clip_rect(aa.inner_rect);
+    paint_cursor_selection2(
+        ui,
+        &p,
+        galley_pos,
+        &galley,
+        &cursor_range.map(|x| x.rcursor),
+        color,
+    );
+    bounding_rect
+}
 
 use self::paint_cursor::paint_cursor_selection2;
+use egui::{CollapsingResponse, Id};
 
 pub fn show_wip(ui: &mut egui::Ui, short: Option<&str>) {
     ui.vertical_centered(|ui| {
@@ -133,7 +131,7 @@ pub fn show_wip(ui: &mut egui::Ui, short: Option<&str>) {
 pub fn radio_collapsing<R, S: PartialEq + Clone>(
     ui: &mut egui::Ui,
     id: Id,
-    title: &str,
+    title: impl Into<String>,
     selected: &mut S,
     wanted: &S,
     add_body: impl FnOnce(&mut egui::Ui) -> R,

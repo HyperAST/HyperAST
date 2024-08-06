@@ -162,7 +162,7 @@ impl PreProcessedRepositories {
         r
     }
 
-    pub fn get_config(&mut self, repo: Repo) -> Option<ConfiguredRepoHandle2> {
+    pub fn get_config(&self, repo: Repo) -> Option<ConfiguredRepoHandle2> {
         // let proc = self
         //     .processor.processing_systems
         //     .by_id(&repository.config.0)
@@ -177,7 +177,7 @@ impl PreProcessedRepositories {
 
     pub fn pre_process_with_limit(
         &mut self,
-        repository: &mut ConfiguredRepo2,
+        repository: &ConfiguredRepo2,
         before: &str,
         after: &str,
         // dir_path: &str,
@@ -185,6 +185,18 @@ impl PreProcessedRepositories {
     ) -> Result<Vec<git2::Oid>, git2::Error> {
         self.processor
             .pre_process_with_limit(repository, before, after, limit)
+    }
+
+    pub fn ensure_pre_processed_with_limit(
+        &self,
+        repository: &ConfiguredRepo2,
+        before: &str,
+        after: &str,
+        // dir_path: &str,
+        limit: usize,
+    ) -> Result<Result<Vec<git2::Oid>, Vec<git2::Oid>>, git2::Error> {
+        self.processor
+            .ensure_pre_processed_with_limit(repository, before, after, limit)
     }
 
     pub fn pre_process_with_config2(

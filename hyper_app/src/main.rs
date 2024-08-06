@@ -16,17 +16,30 @@ fn main() -> eframe::Result<()> {
     tracing_subscriber::fmt::init();
 
     let languages = hyper_app::Languages::default();
-    let mut native_options = eframe::NativeOptions::default();
-    native_options.follow_system_theme = true;
     static ICON: &[u8] = include_bytes!("coevolution.png");
-    native_options.viewport = native_options
-        .viewport
-        .with_maximized(true)
-        .with_icon(eframe::icon_data::from_png_bytes(ICON).unwrap());
+    let native_options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_app_id("hyperast")
+            // .with_maximized(true)
+            .with_icon(eframe::icon_data::from_png_bytes(ICON).unwrap())
+            .with_decorations(!re_ui::CUSTOM_WINDOW_DECORATIONS) // Maybe hide the OS-specific "chrome" around the window
+            .with_fullsize_content_view(re_ui::FULLSIZE_CONTENT)
+            .with_inner_size([1200.0, 800.0])
+            .with_title_shown(!re_ui::FULLSIZE_CONTENT)
+            .with_titlebar_buttons_shown(!re_ui::CUSTOM_WINDOW_DECORATIONS)
+            .with_titlebar_shown(!re_ui::FULLSIZE_CONTENT)
+            .with_transparent(re_ui::CUSTOM_WINDOW_DECORATIONS), // To have rounded corners without decorations we need transparency
+
+        follow_system_theme: false,
+        default_theme: eframe::Theme::Dark,
+
+        ..Default::default()
+    };
     eframe::run_native(
         "HyperAST",
         native_options,
         Box::new(move |cc| {
+            re_ui::apply_style_and_install_loaders(&cc.egui_ctx);
             Ok(Box::new(hyper_app::HyperApp::new(cc, languages, api_addr)))
         }),
     )
@@ -64,6 +77,7 @@ fn main() {
                 "the_canvas_id", // hardcode it
                 web_options,
                 Box::new(move |cc| {
+                    re_ui::apply_style_and_install_loaders(&cc.egui_ctx);
                     Ok(Box::new(hyper_app::HyperApp::new(
                         cc, languages, api_addr, ADDR,
                     )))

@@ -7,6 +7,7 @@ use super::{
 use crate::app::code_editor_automerge;
 use automerge::sync::SyncDoc;
 use futures_util::SinkExt;
+use serde::{Deserialize, Serialize};
 use std::{
     ops::DerefMut,
     sync::{Arc, Mutex, RwLock},
@@ -18,6 +19,68 @@ pub type SharedCodeEditors<T> = std::sync::Arc<std::sync::Mutex<T>>;
 pub(crate) const USER: &str = "web";
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) const USER: &str = "native";
+
+
+#[derive(Default, Serialize, Deserialize)]
+pub(crate) struct EditingContext<L, S> {
+    pub(crate) current: EditStatus<L, S>,
+    pub(crate) local_scripts: std::collections::HashMap<String, L>,
+    // shared_script: Option<Arc<std::sync::Mutex<S>>>,
+    // shared_script: Arc<std::sync::RwLock<Vec<Option<Arc<std::sync::Mutex<S>>>>>>,
+    // shared_scripts: DashMap<String, Arc<std::sync::Mutex<S>>>,
+}
+
+impl<L, S> EditingContext<L, S> {
+    pub(crate) fn map<R>(
+        &mut self,
+        f: impl Fn(&mut L) -> R,
+        g: impl Fn(&mut Arc<std::sync::Mutex<S>>) -> R,
+    ) -> R {
+        match &mut self.current {
+            EditStatus::Shared(_, shared) | EditStatus::Sharing(shared) => {
+                // let mut code_editors = shared.lock().unwrap();
+                g(shared)
+                // ScriptContent::new(&mut code_editors, single)
+            }
+            EditStatus::Local { name: _, content } | EditStatus::Example { i: _, content } => {
+                f(content)
+            } // ScriptContent::new(content, single),
+        }
+    }
+    pub(crate) fn when_shared<R>(
+        &mut self,
+        mut g: impl FnMut(&mut Arc<std::sync::Mutex<S>>) -> R,
+    ) -> Option<R> {
+        match &mut self.current {
+            EditStatus::Shared(_, shared) | EditStatus::Sharing(shared) => Some(g(shared)),
+            _ => None,
+        }
+    }
+    pub(crate) fn when_local<R>(&mut self, mut f: impl FnMut(&mut L) -> R) -> Option<R> {
+        match &mut self.current {
+            EditStatus::Local { name: _, content } | EditStatus::Example { i: _, content } => {
+                Some(f(content))
+            }
+            _ => None,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) enum EditStatus<L, S> {
+    Sharing(Arc<std::sync::Mutex<S>>),       //(Id)
+    Shared(usize, Arc<std::sync::Mutex<S>>), //(Id)
+    Local { name: String, content: L },
+    Example { i: usize, content: L },
+}
+impl<L: Default, S> Default for EditStatus<L, S> {
+    fn default() -> Self {
+        Self::Example {
+            i: 0,
+            content: Default::default(),
+        }
+    }
+}
 
 pub(crate) fn show_shared_code_edition<T, U>(
     ui: &mut egui::Ui,
@@ -171,7 +234,6 @@ pub(super) async fn db_update_handler(
     data: Arc<RwLock<(Option<usize>, Vec<Option<SharedDocView>>)>>,
 ) {
     use futures_util::StreamExt;
-    use serde::{Deserialize, Serialize};
     type User = String;
 
     #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -247,7 +309,7 @@ pub(super) fn update_shared_editors<T, L, S: 'static + autosurgeon::Hydrate + st
     ui: &mut egui::Ui,
     single: &mut Sharing<T>,
     api_endpoint: &str,
-    code_editors: &mut super::EditingContext<L, S>,
+    code_editors: &mut EditingContext<L, S>,
 ) {
     if let Some(doc_db) = &mut single.doc_db {
         let ctx = ui.ctx().clone();
@@ -270,7 +332,7 @@ pub(super) fn update_shared_editors<T, L, S: 'static + autosurgeon::Hydrate + st
             }
         }
         match &mut code_editors.current {
-            super::EditStatus::Sharing(shared_script) => {
+            EditStatus::Sharing(shared_script) => {
                 let ctx = ui.ctx().clone();
                 let rt = single.rt.clone();
                 let db = doc_db;
@@ -284,10 +346,10 @@ pub(super) fn update_shared_editors<T, L, S: 'static + autosurgeon::Hydrate + st
                         let url = format!("ws://{}/shared/{}", api_endpoint, i);
                         single.ws = Some(crdt_over_ws::WsDoc::new(&rt, USER.to_string(), ctx, url));
                     }
-                    code_editors.current = super::EditStatus::Shared(i, shared_script.clone());
+                    code_editors.current = EditStatus::Shared(i, shared_script.clone());
                 }
             }
-            super::EditStatus::Shared(_, shared_script) => {
+            EditStatus::Shared(_, shared_script) => {
                 if let Some(ws) = &mut single.ws {
                     wasm_rs_dbg::dbg!();
                     let ctx = ui.ctx().clone();
@@ -328,14 +390,14 @@ pub(super) fn show_shared<T, L, S: std::default::Default>(
     ui: &mut egui::Ui,
     api_endpoint: &str,
     single: &mut Sharing<T>,
-    context: &mut super::EditingContext<L, S>,
+    context: &mut EditingContext<L, S>,
     names: Vec<(String, usize)>,
 ) {
     let mut r = None;
     ui.horizontal_wrapped(|ui| {
         for (name, i) in names.iter() {
             let mut text = egui::RichText::new(name);
-            if let super::EditStatus::Shared(j, _) = &context.current {
+            if let EditStatus::Shared(j, _) = &context.current {
                 if j == i {
                     text = text.strong();
                 }
@@ -346,7 +408,7 @@ pub(super) fn show_shared<T, L, S: std::default::Default>(
         }
     });
     if let Some(i) = r {
-        context.current = super::EditStatus::Shared(*i, Default::default());
+        context.current = EditStatus::Shared(*i, Default::default());
         let doc_db = single.doc_db.as_ref().unwrap();
         let doc_views = doc_db.data.write().unwrap();
         let id = doc_views.1.get(*i).unwrap().as_ref().unwrap().id;
@@ -361,14 +423,14 @@ pub(super) fn show_shared<T, L, S: std::default::Default>(
 
 pub(super) fn show_locals<L: Clone, S>(
     ui: &mut egui::Ui,
-    context: &mut super::EditingContext<L, S>,
+    context: &mut EditingContext<L, S>,
 ) -> Option<(egui::Response, L, String)> {
     ui.horizontal_wrapped(|ui| {
         let mut resp = None;
         // let mut n = None;
         for (name, s) in &context.local_scripts {
             let mut text = egui::RichText::new(name);
-            if let super::EditStatus::Local {
+            if let EditStatus::Local {
                 name: n,
                 content: _,
             } = &context.current
@@ -388,9 +450,9 @@ pub(super) fn show_locals<L: Clone, S>(
     .inner
 }
 
-pub(super) fn show_interactions<'a, L, S>(
+pub(crate) fn show_interactions<'a, L, S>(
     ui: &mut egui::Ui,
-    context: &'a mut super::EditingContext<L, S>,
+    context: &'a mut EditingContext<L, S>,
     docs_db: &Option<crdt_over_ws::WsDocsDb>,
     compute_result: &mut Option<RemoteResult<impl ComputeError + Send + Sync>>,
     examples_names: impl Fn(usize) -> String,
@@ -399,13 +461,13 @@ pub(super) fn show_interactions<'a, L, S>(
     let mut share_button = None;
     let mut editor: Option<(String, &L)> = None;
     ui.horizontal(|ui| match &mut context.current {
-        super::EditStatus::Example { i, content } => {
+        EditStatus::Example { i, content } => {
             save_button = Some(ui.add(egui::Button::new("Save Script")));
             // let name = &EXAMPLES[*i].name;
             let name = examples_names(*i);
             editor = Some((name, &*content));
         }
-        super::EditStatus::Local { name, content } => {
+        EditStatus::Local { name, content } => {
             if let Some(doc_db) = docs_db {
                 if doc_db.is_connected() {
                     share_button = Some(ui.add(egui::Button::new("Share Script")));
@@ -444,7 +506,7 @@ pub(super) fn show_available_remote_docs<T, L, S: std::default::Default>(
     ui: &mut egui::Ui,
     api_endpoint: &str,
     single: &mut Sharing<T>,
-    context: &mut super::EditingContext<L, S>,
+    context: &mut EditingContext<L, S>,
 ) {
     if let Some(doc_db) = &single.doc_db {
         let names: Vec<_> = doc_db
@@ -468,7 +530,7 @@ pub(super) fn show_available_remote_docs<T, L, S: std::default::Default>(
 
 pub(super) fn show_locals_and_interact<T, U, L, S>(
     ui: &mut egui::Ui,
-    context: &mut super::EditingContext<L, S>,
+    context: &mut EditingContext<L, S>,
     docs: &mut Sharing<T>,
 ) where
     U: AsRef<str>,
@@ -480,7 +542,7 @@ pub(super) fn show_locals_and_interact<T, U, L, S>(
     };
     if button.clicked() {
         // res = Some(ex);
-        context.current = super::EditStatus::Local { name, content };
+        context.current = EditStatus::Local { name, content };
     } else if button.hovered() {
         egui::show_tooltip(ui.ctx(), ui.layer_id(), button.id.with("tooltip"), |ui| {
             let desc = content.desc().as_ref();
@@ -491,7 +553,7 @@ pub(super) fn show_locals_and_interact<T, U, L, S>(
             if ui.button("share").clicked() {
                 let content = content.into();
                 let content = Arc::new(Mutex::new(content));
-                context.current = super::EditStatus::Shared(usize::MAX, content.clone());
+                context.current = EditStatus::Shared(usize::MAX, content.clone());
                 let mut content = content.lock().unwrap();
                 docs.doc_db.as_mut().unwrap().create_doc_atempt(
                     &docs.rt,

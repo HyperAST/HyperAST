@@ -896,6 +896,9 @@ name = "bitflags"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b048fb63fd8b5923fc5aa7b340d8e156aec7ec02f0c78fa8a6ddc2613f6f71de"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bitvec"
@@ -1228,15 +1231,6 @@ name = "cfg_aliases"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
-
-[[package]]
-name = "cgl"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ced0551234e87afee12411d535648dd89d2e7f34c78b753395567aff3d447ff"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "chrono"
@@ -2112,6 +2106,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "directories"
+version = "5.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a49173b84e034382284f27f1af4dcbbd231ffa358c0fe316541a7337f376a35"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
 name = "dirs"
 version = "5.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2203,14 +2206,12 @@ checksum = "6490ef800b2e41ee129b1f32f9ac15f713233fe3bc18e241a1afe1e4fb6811e0"
 dependencies = [
  "ahash 0.8.11",
  "bytemuck",
+ "directories",
  "document-features",
  "egui",
  "egui-wgpu",
  "egui-winit",
  "egui_glow",
- "glow",
- "glutin",
- "glutin-winit",
  "image",
  "js-sys",
  "log",
@@ -2221,8 +2222,9 @@ dependencies = [
  "percent-encoding",
  "pollster",
  "puffin",
- "raw-window-handle 0.5.2",
  "raw-window-handle 0.6.2",
+ "ron",
+ "serde",
  "static_assertions",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -2247,6 +2249,7 @@ dependencies = [
  "log",
  "nohash-hasher",
  "puffin",
+ "ron",
  "serde",
 ]
 
@@ -2283,6 +2286,7 @@ dependencies = [
  "log",
  "puffin",
  "raw-window-handle 0.6.2",
+ "serde",
  "smithay-clipboard",
  "web-time",
  "webbrowser",
@@ -2299,6 +2303,7 @@ dependencies = [
  "egui",
  "egui_demo_lib",
  "egui_extras",
+ "emath",
  "enum-map",
  "enumset",
  "epaint",
@@ -3115,62 +3120,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "glutin"
-version = "0.31.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18fcd4ae4e86d991ad1300b8f57166e5be0c95ef1f63f3f5b827f8a164548746"
-dependencies = [
- "bitflags 2.6.0",
- "cfg_aliases",
- "cgl",
- "core-foundation",
- "dispatch",
- "glutin_egl_sys",
- "glutin_glx_sys",
- "glutin_wgl_sys",
- "icrate",
- "libloading 0.8.5",
- "objc2 0.4.1",
- "once_cell",
- "raw-window-handle 0.5.2",
- "wayland-sys",
- "windows-sys 0.48.0",
- "x11-dl",
-]
-
-[[package]]
-name = "glutin-winit"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ebcdfba24f73b8412c5181e56f092b5eff16671c514ce896b258a0a64bd7735"
-dependencies = [
- "cfg_aliases",
- "glutin",
- "raw-window-handle 0.5.2",
- "winit",
-]
-
-[[package]]
-name = "glutin_egl_sys"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77cc5623f5309ef433c3dd4ca1223195347fe62c413da8e2fdd0eb76db2d9bcd"
-dependencies = [
- "gl_generator",
- "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "glutin_glx_sys"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a165fd686c10dcc2d45380b35796e577eacfd43d4660ee741ec8ebe2201b3b4f"
-dependencies = [
- "gl_generator",
- "x11-dl",
-]
-
-[[package]]
 name = "glutin_wgl_sys"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3672,8 +3621,10 @@ dependencies = [
  "eframe",
  "egui",
  "egui_addon",
+ "egui_commonmark",
  "egui_demo_lib",
  "egui_extras",
+ "egui_plot",
  "egui_tiles",
  "ehttp 0.2.0",
  "enum-map",
@@ -3717,6 +3668,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-logger",
  "wasm-rs-dbg",
+ "web-sys",
  "web-tree-sitter-sg",
 ]
 
@@ -3776,6 +3728,34 @@ dependencies = [
  "hyper_ast_cvs_git",
  "hyper_ast_gen_ts_java",
  "hyper_ast_gen_ts_xml",
+ "hyper_diff",
+ "jemallocator",
+ "log",
+ "md5",
+ "num-traits",
+ "pprof",
+ "rayon",
+ "serde",
+ "serde_json",
+ "tree-sitter 0.22.6",
+ "tuples",
+]
+
+[[package]]
+name = "hyper_ast_benchmark_smells"
+version = "0.1.0"
+dependencies = [
+ "bitvec",
+ "byteorder",
+ "cfg-if",
+ "env_logger 0.11.3",
+ "hashbrown 0.13.2",
+ "hyper_ast",
+ "hyper_ast_cvs_git",
+ "hyper_ast_gen_ts_java",
+ "hyper_ast_gen_ts_tsquery",
+ "hyper_ast_gen_ts_xml",
+ "hyper_ast_tsquery",
  "hyper_diff",
  "jemallocator",
  "log",
@@ -4787,7 +4767,6 @@ dependencies = [
  "log",
  "ndk-sys",
  "num_enum",
- "raw-window-handle 0.5.2",
  "raw-window-handle 0.6.2",
  "thiserror",
 ]
@@ -6856,6 +6835,18 @@ dependencies = [
  "byteorder",
  "rmp",
  "serde",
+]
+
+[[package]]
+name = "ron"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b91f7eff05f748767f183df4320a63d6936e9c6107d97c9e6bdd9784f4289c94"
+dependencies = [
+ "base64 0.21.7",
+ "bitflags 2.6.0",
+ "serde",
+ "serde_derive",
 ]
 
 [[package]]
@@ -9677,7 +9668,6 @@ dependencies = [
  "once_cell",
  "orbclient",
  "percent-encoding",
- "raw-window-handle 0.5.2",
  "raw-window-handle 0.6.2",
  "redox_syscall 0.3.5",
  "rustix 0.38.34",

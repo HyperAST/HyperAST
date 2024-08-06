@@ -18,6 +18,82 @@
     </script>
     <script src="/tree-sitter.js"></script>
     <script>TreeSitter.init();</script>
+    <script>
+        // Function to download data to a file
+        function download(data, name, ext, type) {
+            async function getNewFileHandle() {
+                const opts = {
+                    suggestedName: name,
+                    types: [
+                        {
+                            description: "Save as plain text",
+                            accept: { [type]: [ext] },
+                        },
+                    ],
+                };
+                console.log(opts);
+                return await window.showSaveFilePicker(opts);
+            }
+            async function writeFile(fileHandle, contents) {
+                // TODO change content formating depending on file extension
+                console.log(fileHandle);
+
+                // Create a FileSystemWritableFileStream to write to.
+                const writable = await fileHandle.createWritable();
+
+                // Write the contents of the file to the stream.
+                await writable.write(contents);
+
+                // Close the file and write the contents to disk.
+                await writable.close();
+            }
+            getNewFileHandle().then(fileHandle => writeFile(fileHandle, data))
+
+            // // Get handle to draft file
+            // const root = await navigator.storage.getDirectory();
+            // const draftHandle = await root.getFileHandle("draft.txt", { create: true });
+            // // Get sync access handle
+            // const accessHandle = await draftHandle.createSyncAccessHandle();
+
+            // // Get size of the file.
+            // const fileSize = accessHandle.getSize();
+            // // Read file content to a buffer.
+            // const buffer = new DataView(new ArrayBuffer(fileSize));
+            // const readBuffer = accessHandle.read(buffer, { at: 0 });
+
+            // // Write the message to the end of the file.
+            // const encoder = new TextEncoder();
+            // const encodedMessage = encoder.encode(message);
+            // const writeBuffer = accessHandle.write(encodedMessage, { at: readBuffer });
+
+            // // Persist changes to disk.
+            // accessHandle.flush();
+
+            // // Always close FileSystemSyncAccessHandle if done.
+            // accessHandle.close();
+
+            function fallback() {
+                var file = new Blob([data], { type: type });
+                if (window.navigator.msSaveOrOpenBlob) // IE10+
+                    window.navigator.msSaveOrOpenBlob(file, filename);
+                else { // Others
+                    var a = document.createElement("a"),
+                        url = URL.createObjectURL(file);
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(function () {
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                    }, 0);
+                }
+            }
+        }
+        window.download = download;
+    </script>
+
+
     <!-- config for our rust wasm binary. go to https://trunkrs.dev/assets/#rust for more customization -->
     <link data-trunk rel="rust" data-wasm-opt="2" />
     <!-- this is the base url relative to which other urls will be constructed. trunk will insert this from the public-url option -->

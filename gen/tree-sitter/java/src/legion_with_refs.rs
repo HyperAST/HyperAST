@@ -339,6 +339,40 @@ impl<HAST> More<HAST> for () {
 
 pub type MoreStore<'a, 'b, 'c, TS> = SimpleStores<&'a TS, &'b legion::World, &'c LabelStore>;
 
+impl<'a, 'b, 'c, TS> More<MoreStore<'a, 'b, 'c, TS>> for std::sync::Arc<hyper_ast_tsquery::Query>
+where
+    TS: JavaEnabledTypeStore<HashedNodeRef<'b, TIdN<NodeIdentifier>>, Ty = Type>
+        + hyper_ast::types::RoleStore<HashedNodeRef<'b, TIdN<NodeIdentifier>>, IdF = u16, Role = Role>,
+{
+    const ENABLED: bool = true;
+    fn match_precomp_queries(
+        &self,
+        stores: &SimpleStores<&'a TS, &'b legion::World, &'c LabelStore>,
+        acc: &Acc,
+        label: &Option<String>,
+    ) -> PrecompQueries {
+        let cursor = cursor_on_unbuild::TreeCursor::new(
+            stores,
+            acc,
+            label,
+            hyper_ast::position::StructuralPosition::empty(),
+        );
+        // dbg!(acc.simple.kind);
+        // let cursor = aaa::TreeCursor::new(
+        //     stores,
+        //     hyper_ast::position::StructuralPosition::new(todo!()),
+        // );
+        let qcursor = self.matches_immediate(cursor); // TODO filter on height (and visibility?)
+        let mut r = Default::default();
+        for m in qcursor {
+            assert!(m.pattern_index.to_usize() < 7);
+            r |= 1 << m.pattern_index.to_usize() as u8;
+            // dbg!(m.pattern_index.to_usize());
+        }
+        r
+    }
+}
+
 impl<'a, 'b, 'c, TS> More<MoreStore<'a, 'b, 'c, TS>> for hyper_ast_tsquery::Query
 where
     TS: JavaEnabledTypeStore<HashedNodeRef<'b, TIdN<NodeIdentifier>>, Ty = Type>

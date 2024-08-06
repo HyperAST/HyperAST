@@ -9,14 +9,17 @@ egui = { version = "0.28.1", default-features = false }
 eframe = { version = "0.28.1", default-features = false, features = [
     # "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
-    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
-    # "persistence",   # Enable restoring app state when restarting the app.
+    "wgpu",          # Use the glow rendering backend. Alternative: "wgpu".
+    # "glow",          # Use the glow rendering backend. Alternative: "wgpu".
+    "persistence",   # Enable restoring app state when restarting the app.
 ] }
 epaint = { version = "0.28.1", default-features = false }
 egui_demo_lib = { version = "0.28.1", default-features = false, features = ["syntect"] }
 egui_extras = { version = "0.28.1", default-features = false, features = ["http", "file","image", "svg"] }
 re_ui = "0.17.0"
 egui_tiles = "0.9.0"
+egui_commonmark = "0.17.0"
+egui_plot = "0.28.1"
 
 # You only need serde if you want app persistence:
 serde = { version = "1", optional = true, features = ["derive"] }
@@ -103,6 +106,8 @@ wasm-logger = "0.2.0"
 syntect = { version = "5", features = [
     "default-fancy",
 ], default-features = false }
+web-sys = "0.3.69"
+
 [target.'cfg(all(target_os = "macos", not(target_arch = "wasm32")))'.dependencies]
 cocoa = "0.25.0"
 objc = "0.2.7"

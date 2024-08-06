@@ -14,6 +14,7 @@ members = [
     "egui_addon",
     "polyglote",
     "tsquery",
+    "benchmark_smells",
 ]
 exclude = ["gen/tree-sitter/java/tree-sitter-java"]
 default-members = [
@@ -29,6 +30,8 @@ default-members = [
     "hyperast_wasm",
     "ref-mining-evaluation",
     "benchmark_diffs",
+    "egui_addon",
     "polyglote",
     "tsquery",
+    "benchmark_smells",
 ]

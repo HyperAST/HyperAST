@@ -16,14 +16,13 @@ use crate::app::{
 use self::example_scripts::EXAMPLES;
 
 use egui_addon::{
-    code_editor::EditorInfo, egui_utils::radio_collapsing,
-    interactive_split::interactive_splitter::InteractiveSplitter,
+    code_editor::EditorInfo, interactive_split::interactive_splitter::InteractiveSplitter,
 };
 
 use super::{
     code_editor_automerge, show_repo_menu,
     types::{CodeEditors, Commit, Config, Resource, SelectedConfig, WithDesc},
-    utils_edition::{show_interactions, update_shared_editors},
+    utils_edition::{self, show_interactions, update_shared_editors, EditStatus, EditingContext},
     utils_results_batched, Sharing,
 };
 mod example_scripts;
@@ -122,6 +121,9 @@ impl Into<CodeEditors<super::code_editor_automerge::CodeEditor>> for CodeEditors
     }
 }
 
+pub(super) type ScriptingContext =
+    utils_edition::EditingContext<CodeEditors, CodeEditors<code_editor_automerge::CodeEditor>>;
+
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 pub(super) struct ComputeConfigSingle {
@@ -150,11 +152,6 @@ impl Default for ComputeConfigSingle {
 
 // pub(super) type RemoteResult =
 //     Promise<ehttp::Result<Resource<Result<ComputeResults, ScriptingError>>>>;
-
-type ScriptingContext = super::EditingContext<
-    super::types::CodeEditors,
-    super::types::CodeEditors<code_editor_automerge::CodeEditor>,
->;
 
 pub(super) fn remote_compute_single(
     ctx: &egui::Context,
@@ -269,10 +266,7 @@ pub(super) fn show_single_repo(
 
 fn handle_interactions(
     ui: &mut egui::Ui,
-    code_editors: &mut super::EditingContext<
-        CodeEditors,
-        CodeEditors<code_editor_automerge::CodeEditor>,
-    >,
+    code_editors: &mut EditingContext<CodeEditors, CodeEditors<code_editor_automerge::CodeEditor>>,
     compute_single_result: &mut Option<
         Promise<Result<Resource<Result<ComputeResults, ScriptingError>>, String>>,
     >,
@@ -291,7 +285,7 @@ fn handle_interactions(
         let content = content.clone().to_shared();
         let content = Arc::new(Mutex::new(content));
         let name = name.to_string();
-        code_editors.current = super::EditStatus::Sharing(content.clone());
+        code_editors.current = EditStatus::Sharing(content.clone());
         let mut content = content.lock().unwrap();
         let db = &mut single.doc_db.as_mut().unwrap();
         db.create_doc_atempt(&single.rt, name, content.deref_mut());
@@ -303,7 +297,7 @@ fn handle_interactions(
         code_editors
             .local_scripts
             .insert(name.to_string(), content.clone());
-        code_editors.current = super::EditStatus::Local { name, content };
+        code_editors.current = EditStatus::Local { name, content };
     } else if interaction.compute_button.clicked() {
         *trigger_compute |= true;
     }
@@ -345,7 +339,7 @@ fn show_examples(
         let mut j = 0;
         for ex in EXAMPLES {
             let mut text = egui::RichText::new(ex.name);
-            if let super::EditStatus::Example { i, .. } = &scripting_context.current {
+            if let EditStatus::Example { i, .. } = &scripting_context.current {
                 if &j == i {
                     text = text.strong();
                 }
@@ -355,7 +349,7 @@ fn show_examples(
                 single.commit = (&ex.commit).into();
                 single.config = ex.config;
                 single.len = ex.commits;
-                scripting_context.current = super::EditStatus::Example {
+                scripting_context.current = EditStatus::Example {
                     i: j,
                     content: (&ex.scripts).into(),
                 };
@@ -418,41 +412,32 @@ impl Resource<Result<ComputeResults, ScriptingError>> {
     }
 }
 
-pub(super) fn show_single_repo_menu(
-    ui: &mut egui::Ui,
-    selected: &mut SelectedConfig,
-    single: &mut Sharing<ComputeConfigSingle>,
-) {
-    let title = "Single Repository";
-    let wanted = SelectedConfig::Single;
-    let id = ui.make_persistent_id(title);
-    let add_body = |ui: &mut egui::Ui| {
-        show_repo_menu(ui, &mut single.content.commit.repo);
-        ui.push_id(ui.id().with("commit"), |ui| {
-            egui::TextEdit::singleline(&mut single.content.commit.id)
-                .clip_text(true)
-                .desired_width(150.0)
-                .desired_rows(1)
-                .hint_text("commit")
-                .interactive(true)
-                .show(ui)
-        });
+pub(crate) const WANTED: SelectedConfig = SelectedConfig::Single;
 
-        ui.add_enabled_ui(true, |ui| {
-            ui.add(
-                egui::Slider::new(&mut single.content.len, 1..=200)
-                    .text("commits")
-                    .clamp_to_range(false)
-                    .integer()
-                    .logarithmic(true),
-            );
-            // show_wip(ui, Some("only process one commit"));
-        });
-        let selected = &mut single.content.config;
-        selected.show_combo_box(ui, "Repo Config");
-    };
+pub(crate) fn show_config(ui: &mut egui::Ui, single: &mut Sharing<ComputeConfigSingle>) {
+    show_repo_menu(ui, &mut single.content.commit.repo);
+    ui.push_id(ui.id().with("commit"), |ui| {
+        egui::TextEdit::singleline(&mut single.content.commit.id)
+            .clip_text(true)
+            .desired_width(150.0)
+            .desired_rows(1)
+            .hint_text("commit")
+            .interactive(true)
+            .show(ui)
+    });
 
-    radio_collapsing(ui, id, title, selected, &wanted, add_body);
+    ui.add_enabled_ui(true, |ui| {
+        ui.add(
+            egui::Slider::new(&mut single.content.len, 1..=200)
+                .text("commits")
+                .clamp_to_range(false)
+                .integer()
+                .logarithmic(true),
+        );
+        // show_wip(ui, Some("only process one commit"));
+    });
+    let selected = &mut single.content.config;
+    selected.show_combo_box(ui, "Repo Config");
 }
 
 impl utils_results_batched::ComputeError for ScriptingError {

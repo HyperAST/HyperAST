@@ -413,7 +413,7 @@ pub fn commit_metadata_route(_st: SharedState) -> Router<SharedState> {
         .load_shed()
         .concurrency_limit(8)
         .buffer(20)
-        .rate_limit(2, Duration::from_secs(5))
+        .rate_limit(10, Duration::from_secs(1))
         // .request_body_limit(1024 * 5_000 /* ~5mb */)
         .timeout(Duration::from_secs(10))
         .layer(TraceLayer::new_for_http());

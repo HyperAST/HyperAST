@@ -368,7 +368,7 @@ impl PrecomputedPatterns {
             } else {
                 hash_single_step(query, id, &mut hasher.0);
                 hasher.1 += 1;
-                dbg!(hasher.0.clone().finish());
+                // dbg!(hasher.0.clone().finish());
             }
             let mut id = id;
             id.inc();
@@ -882,9 +882,9 @@ impl Query {
         let string_count = unsafe { ffi::ts_query_string_count(ptr.0) };
         let capture_count = unsafe { ffi::ts_query_capture_count(ptr.0) };
         let pattern_count = unsafe { ffi::ts_query_pattern_count(ptr.0) as usize };
-        dbg!(string_count, capture_count, pattern_count, unsafe {
-            (*query).steps.len()
-        });
+        // dbg!(string_count, capture_count, pattern_count, unsafe {
+        //     (*query).steps.len()
+        // });
         let mut capture_names = Vec::with_capacity(capture_count as usize);
         let mut capture_quantifiers_vec = Vec::with_capacity(pattern_count as usize);
         let mut text_predicates_vec = PerPatternBuilder::with_patt_count(pattern_count);
@@ -1299,8 +1299,8 @@ impl Query {
         }
         log::trace!("finished query building");
 
-        dbg!(query.wildcard_root_pattern_count);
-        dbg!(&query.pattern_map);
+        // dbg!(query.wildcard_root_pattern_count);
+        // dbg!(&query.pattern_map);
 
         Ok((precomp, query))
     }
@@ -1725,6 +1725,7 @@ fn find_precomputed_uses(query: &mut Query, precomputeds: &[&str]) {
             .iter_mut()
             .find(|x| x.pattern_index == patid)
         {
+            log::warn!("found subpatts {:?} for pattern {}", res, i);
             for r in &res {
                 let r = r.0.to_usize();
                 assert!(r < 8);

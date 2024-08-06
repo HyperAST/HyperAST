@@ -7,7 +7,7 @@ use hyper_ast::{
             fetched::{self, NodeIdentifier},
         },
     },
-    types::WithChildren,
+    types::{IterableChildren, WithChildren, WithSerialization, WithStats},
 };
 use hyper_ast_cvs_git::TStore;
 use serde::{Deserialize, Serialize};
@@ -62,39 +62,155 @@ pub fn fetch(mut state: SharedState, path: Parameters) -> Result<FetchedNodes, S
     let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
     let repo = state
         .repositories
-        .write()
+        .read()
         .unwrap()
         .get_config(repo_spec)
         .ok_or_else(|| "missing config for repository".to_string())?;
     let mut repo = repo.fetch();
     log::warn!("done cloning {}", repo.spec);
-    let commits = state
-        .repositories
-        .write()
-        .unwrap()
-        .pre_process_with_limit(&mut repo, "", &commit, 2)
-        .map_err(|e| e.to_string())?;
+
+    let commits = crate::utils::handle_pre_processing(&state, &mut repo, "", &commit, 2)?;
     log::warn!("done construction of {commits:?} in {}", repo.spec);
     let repositories = state.repositories.read().unwrap();
     let commit_src = repositories.get_commit(&repo.config, &commits[0]).unwrap();
     let src_tr = commit_src.ast_root;
     dbg!(src_tr);
-    let node_store = &repositories.processor.main_stores.node_store;
+    let stores = &repositories.processor.main_stores;
+    let node_store = &stores.node_store;
 
     log::error!("searching for {path:?}");
-    let curr = resolve_path(src_tr, path, node_store);
-    dbg!(curr);
+    let curr = if let Some(path) = path {
+        if let Some((path, rest)) = path.split_once(":") {
+            resolve_file_path(stores, src_tr, path.split("/"))
+                .and_then(|d| resolve_in_file(stores, d, rest))
+        } else {
+            resolve_path(node_store, src_tr, path.split("/"))
+        }
+    } else {
+        Ok(src_tr)
+    };
+    let curr = match curr {
+        Ok(x) => dbg!(x),
+        Err(x) => dbg!(x),
+    };
     let ids = vec![curr];
-    let node_store = extract_nodes(
-        &ids,
-        &repositories.processor.main_stores, //label_store
-    );
+    let node_store = extract_nodes(&ids, &repositories.processor.main_stores);
     dbg!(&ids);
     let ids = ids.into_iter().map(|x| x.into()).collect();
     Ok(FetchedNodes {
         node_store,
         root: ids,
     })
+}
+
+fn resolve_file_path<'a>(
+    stores: &hyper_ast::store::SimpleStores<TStore>,
+    root: defaults::NodeIdentifier,
+    mut path: impl Iterator<Item = &'a str>,
+) -> Result<defaults::NodeIdentifier, defaults::NodeIdentifier> {
+    use hyper_ast::types::LabelStore;
+    let mut d = root;
+    loop {
+        let Some(l) = path.next() else {
+            break Ok(d);
+        };
+        let n = stores.node_store.resolve(d);
+        let Some(l) = stores.label_store.get(l) else {
+            break Err(d);
+        };
+        let Some(n) = n.get_child_by_name(&l) else {
+            break Err(d);
+        };
+        d = n
+    }
+}
+
+fn resolve_in_file(
+    stores: &hyper_ast::store::SimpleStores<TStore>,
+    root: defaults::NodeIdentifier,
+    rest: &str,
+) -> Result<defaults::NodeIdentifier, defaults::NodeIdentifier> {
+    let mut d = root;
+    if rest.is_empty() {
+        return Ok(d);
+    }
+    let byte_r: Vec<_> = rest.split("-").collect();
+    if let Ok(range) = TryInto::<[&str; 2]>::try_into(byte_r) {
+        // start-end
+        // TODO use try_map when stable
+        let [Ok(start), Ok(end)] = [range[0].parse::<usize>(), range[1].parse::<usize>()] else {
+            return Err(d);
+        };
+        if end > start {
+            return Err(d);
+        }
+        let mut b = 0;
+        loop {
+            let n = stores.node_store.resolve(d);
+            let Some(n) = n.children() else {
+                if b <= start
+                    && start <= b + n.try_bytes_len().unwrap_or_default()
+                    && b <= end
+                    && end <= b + n.try_bytes_len().unwrap_or_default()
+                {
+                    return Ok(d);
+                }
+                return Err(d);
+            };
+            // TODO debug all that garbage
+            for i in n.iter_children() {
+                let n = stores.node_store.resolve(d);
+                let l = n.try_bytes_len().unwrap_or_default();
+                if start < b {
+                    b += l;
+                    d = *i;
+                    continue;
+                }
+                d = *i;
+                return Err(d);
+            }
+        }
+    }
+    let byte_r: Vec<_> = rest.split(":").collect();
+    let (row, col) = if let Ok(row_col) = TryInto::<[&str; 2]>::try_into(byte_r) {
+        // row:col
+        let [Ok(row), Ok(col)] = [row_col[0].parse::<usize>(), row_col[1].parse::<usize>()] else {
+            return Err(d);
+        };
+        (row, Some(col))
+    } else if let Ok(row) = rest.parse::<usize>() {
+        (row, None)
+    } else {
+        return Err(d);
+    };
+    let n = stores.node_store.resolve(d);
+    if row > n.line_count() {
+        return Err(d);
+    }
+    let mut l = 0;
+    'l: loop {
+        let Some(n) = n.children() else {
+            return Err(d);
+        };
+        // TODO debug all that garbage
+        for i in n.iter_children() {
+            let n = stores.node_store.resolve(*i);
+            if n.line_count() == 0 && l == row {
+                d = *i;
+                break 'l;
+            }
+            if l < row && row < l + n.line_count() {
+                l += n.line_count();
+                d = *i;
+            }
+        }
+        return Err(d);
+    }
+    let Some(col) = col else {
+        return Ok(d);
+    };
+    // TODO also use the col
+    Err(d)
 }
 
 pub fn fetch_with_node_ids<'a>(
@@ -161,22 +277,22 @@ pub fn fetch_labels<'a>(
     })
 }
 
-fn resolve_path(
-    root: defaults::NodeIdentifier,
-    path: Option<String>,
+fn resolve_path<'a>(
     node_store: &hyper_ast::store::nodes::legion::NodeStore,
-) -> defaults::NodeIdentifier {
+    root: defaults::NodeIdentifier,
+    mut path: impl Iterator<Item = &'a str>,
+) -> Result<defaults::NodeIdentifier, defaults::NodeIdentifier> {
     let mut curr = root;
-    for i in path.unwrap_or_default().split("/") {
-        dbg!(i);
-        let i = i.parse();
-        let Ok(i) = i else { break };
+    while let Some(i) = path.next() {
+        let Ok(i) = i.parse() else {
+            return Err(curr);
+        };
         let Some(n) = node_store.resolve(curr).child(&i) else {
-            break;
+            return Err(curr);
         };
         curr = n;
     }
-    curr
+    Ok(curr)
 }
 
 /// ids would better be deduplicated

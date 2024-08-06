@@ -5,7 +5,7 @@ use std::{
 
 pub use git2::Oid;
 use git2::{RemoteCallbacks, Repository, Revwalk, TreeEntry};
-use hyper_ast::position::Position;
+use hyper_ast::{position::Position, utils::Url};
 
 use crate::processing::ObjectName;
 
@@ -90,37 +90,6 @@ pub fn all_commits_from_head(repository: &Repository) -> Revwalk {
     // }
     // walk.setRevFilter(commitsFilter);
     // return walk;
-}
-
-pub struct Url {
-    protocol: String,
-    domain: String,
-    path: String,
-}
-
-impl TryFrom<String> for Url {
-    type Error = ();
-
-    fn try_from(s: String) -> Result<Self, Self::Error> {
-        let (protocol, rest) = match s.split_once("://") {
-            Some((protocol, rest)) => (protocol, rest),
-            None => ("https", s.as_ref()),
-        };
-
-        let (domain, path) = rest.split_once("/").ok_or(())?;
-
-        Ok(Self {
-            protocol: protocol.to_string(),
-            domain: domain.to_string(),
-            path: path.to_string(),
-        })
-    }
-}
-
-impl Display for Url {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}://{}/{}", self.protocol, self.domain, self.path)
-    }
 }
 
 pub fn fetch_repository<'a, T: TryInto<Url>, U: Into<PathBuf>>(url: T, path: U) -> Repository

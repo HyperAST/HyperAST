@@ -838,7 +838,7 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
     }
 }
 
-mod output {
+pub mod output {
     use std::sync::Arc;
 
     /// The output from a [`TextEdit`](crate::TextEdit).
