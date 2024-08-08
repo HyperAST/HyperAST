@@ -4,7 +4,9 @@ use hyper_ast::{
     full::FullNode,
     hashed::{HashedNode, IndexingHashBuilder, MetaDataHashsBuilder},
     store::{
-        defaults::LabelIdentifier, labels::LabelStore, nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert}
+        defaults::LabelIdentifier,
+        labels::LabelStore,
+        nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert},
     },
     tree_gen::{
         parser::{Node, TreeCursor, Visibility},
@@ -45,9 +47,9 @@ use hyper_ast::{
 
 use crate::types::{JavaEnabledTypeStore, Type};
 
-#[cfg(feature="impact")]
+#[cfg(feature = "impact")]
 use crate::impact::partial_analysis::PartialAnalysis;
-#[cfg(feature="impact")]
+#[cfg(feature = "impact")]
 use hyper_ast::impact::BulkHasher;
 
 pub fn hash32<T: ?Sized + Hash>(t: &T) -> u32 {
@@ -666,7 +668,7 @@ impl<
                 height: 0,
                 size_no_spaces: 0,
                 hashs,
-                line_count: 0,
+                line_count,
             },
             ana: Default::default(),
             mcc: Mcc::new(&Type::Spaces),
@@ -826,7 +828,10 @@ where
         let interned_kind = acc.simple.kind;
         // let interned_kind = JavaEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
         let hashs = acc.metrics.hashs;
-        let line_count = acc.metrics.line_count;
+        let own_line_count = label.as_ref().map_or(0, |l| {
+            l.matches("\n").count().to_u16().expect("too many newlines")
+        });
+        let line_count = acc.metrics.line_count + own_line_count;
         acc.metrics.size += 1;
         let size = acc.metrics.size;
         acc.metrics.height += 1;

@@ -1,5 +1,7 @@
-
-use hyper_ast::store::defaults::NodeIdentifier;
+use hyper_ast::{
+    position::{position_accessors::WithPostOrderPath, row_col, PositionConverter},
+    store::defaults::NodeIdentifier, types::{HyperAST, WithStats},
+};
 
 type GithubUrl = Vec<String>;
 
@@ -18,13 +20,26 @@ pub fn compute_ranges(
         let i = query.enabled_pattern_index(i).unwrap();
         let mut roots = m.nodes_for_capture_index(cid);
         let root = roots.next().expect("a node captured by @root");
+        // for (o, p) in root.pos.iter_offsets_and_parents() {
+        //     let t = stores.resolve_type(&p);
+        //     dbg!(t);
+        //     let n = stores.node_store.resolve(p);
+        //     dbg!(n.line_count());
+        // }
+
         let position = &root.pos.make_file_line_range(root.stores);
+        // let position: row_col::RowCol<usize> = PositionConverter::new(&root.pos)
+        //     .with_stores(root.stores)
+        //     .compute_pos_post_order::<_, row_col::RowCol<usize>, _>();
+        // let position = (&_position.0, position.row(), 0);
         let value = if position.2 == 0 {
-            format!("{}#L{}", position.0, position.1)
+            format!("{}#L{}", position.0, position.1 + 1)
         } else {
             let end = position.1 + position.2;
-            format!("{}#L{}-#L{}", position.0, position.1, end)
+            // NOTE the `+ 1` is a standard thing with editors starting at line one and not line zero
+            format!("{}#L{}-#L{}", position.0, position.1 + 1, end + 1)
         };
+        // dbg!(&value);
         result[i as usize].push(value);
         assert!(roots.next().is_none());
     }

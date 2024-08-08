@@ -3,6 +3,7 @@ use std::{collections::HashMap, fmt::Debug, vec};
 
 use crate::{types::TIdN, TNode};
 use legion::world::EntryRef;
+use num::ToPrimitive as _;
 use tuples::CombinConcat;
 
 use hyper_ast::{
@@ -386,6 +387,11 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
     ) -> Local {
         let bytes_len = spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
+        let line_count = spacing
+            .matches("\n")
+            .count()
+            .to_u16()
+            .expect("too many newlines");
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
         let hbuilder: hashed::Builder<SyntaxNodeHashs<u32>> =
             hashed::Builder::new(Default::default(), &Type::Spaces, &spacing, 1);
@@ -427,7 +433,7 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
                 height: 1,
                 hashs,
                 size_no_spaces: 0,
-                line_count: 0,
+                line_count,
             },
             ana: Default::default(),
         }
@@ -560,7 +566,10 @@ impl<'stores, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeId
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
         let interned_kind = CppEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
-        let line_count = acc.metrics.line_count;
+        let own_line_count = label.as_ref().map_or(0, |l| {
+            l.matches("\n").count().to_u16().expect("too many newlines")
+        });
+        let line_count = acc.metrics.line_count + own_line_count;
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
