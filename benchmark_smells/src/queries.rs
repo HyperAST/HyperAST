@@ -9,7 +9,7 @@ fn test_method_body(body: &str) -> String {
         body: (_
         {body}
         )
-)"#)
+) @root"#)
 }
 
 // query for a method with two assertThat invocations

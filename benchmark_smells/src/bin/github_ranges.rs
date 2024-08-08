@@ -103,3 +103,14 @@ fn print_positions() {
     print!("{}", s);
     dbg!(s);
 }
+
+
+#[test]
+fn assertion_roulette() {
+    let repo_name =  "INRIA/spoon";
+    let commit = "7c7f094bb22a350fa64289a94880cc3e7231468f";
+    let limit = 6;
+    let query = hyper_ast_benchmark_smells::queries::assertion_roulette();
+    print!("{}", query);
+    print_pos(repo_name, commit, limit, &query);
+}

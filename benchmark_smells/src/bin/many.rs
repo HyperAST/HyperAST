@@ -75,8 +75,15 @@ fn many(repo_name: &str, commit: &str, limit: usize, query: &str) {
     let stores = &preprocessed.processor.main_stores;
 
     println!(
-        "commit_sha, ast_size, memory_used, processing_time, matches"
+        "commit_sha, ast_size, memory_used, processing_time, matches_count"
     );
+    println!(
+        "matches_links"
+    );
+
+    let mut old_matches_count = vec![];
+    let mut old_matches_links = vec![];
+    let mut first_round = true;
 
     for oid in oids {
         let commit = preprocessed.commits.get_key_value(&oid).unwrap();
@@ -85,21 +92,79 @@ fn many(repo_name: &str, commit: &str, limit: usize, query: &str) {
         use hyper_ast::types::WithStats;
         let s = stores.node_store.resolve(tr).size();
 
-        let matches = count_matches(stores, tr, &query);
-        let matches = matches
+        let matches = hyper_ast_benchmark_smells::github_ranges::compute_ranges(stores, tr, &query);
+        let matches_count: Vec<usize> = matches.clone()
             .into_iter()
-            .map(|x| format!(",{}", x))
+            .map(|x| x.0)
+            .collect();
+
+        let matches_count_print = matches.clone()
+            .into_iter()
+            .map(|x| format!(",{}", x.0))
             .collect::<String>();
+
+        let matches_links: Vec<String> = matches
+            .into_iter()
+            .map(|x| {
+                let x: String = x.1
+                    .into_iter()
+                    .map(|x| format!("https://github.com/{repo_name}/blob/{oid}/{},", x))
+                    .collect();
+                x
+                // format!(",[{:?}]", x)
+            })
+            .collect();
+
+        // let matches_links_print = matches
+        //     .into_iter()
+        //     .map(|x| {
+        //         let x: String = x.1
+        //             .into_iter()
+        //             .map(|x| format!("https://github.com/{repo_name}/blob/{oid}/{},", x))
+        //             .collect();
+        //         format!(",[{:?}]", x)
+        //     })
+        //     .collect::<String>();
+
 
         let mu = memusage_linux();
         // TODO
-        println!(
-            "{oid},{},{},{}{}",
-            s,
-            Into::<isize>::into(&commit.1.memory_used()),
-            time,
-            matches,
-        );
+        if old_matches_count != matches_count {
+            old_matches_count = matches_count;
+
+            // FIXME: this does not actually work because the links contain the oid and are therefore never the same :) also the lines are different :)
+            // TODO: ask Quentin how to identify which query matches disappeared over the versions
+            let mut difference = vec![];
+            if !first_round {
+                    for i in old_matches_links {
+                        if !matches_links.contains(&i) {
+                            difference.push(i);
+                        }
+                    }
+            }
+            else {
+                difference = matches_links.clone();
+                first_round = false;
+            }
+            old_matches_links = matches_links;
+
+            let print_difference = difference
+                .into_iter()
+                .map(|x| format!(",{}", x))
+                .collect::<String>();
+
+            println!(
+                "{oid},{},{},{}{}",
+                s,
+                Into::<isize>::into(&commit.1.memory_used()),
+                time,
+                matches_count_print,
+            );
+            println!(
+                "Removed occurrences: {}",
+                print_difference,
+            );
+        }
     }
 }
 
@@ -122,7 +187,7 @@ fn conditional_test_logic() {
 fn assertion_roulette() {
     let repo_name =  "INRIA/spoon";
     let commit = "7c7f094bb22a350fa64289a94880cc3e7231468f";
-    let limit = 2;
+    let limit = 600;
     let query = hyper_ast_benchmark_smells::queries::assertion_roulette();
     print!("{}", query);
     many(repo_name, commit, limit, &query);
