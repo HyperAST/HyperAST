@@ -16,15 +16,15 @@ tree-sitter-graph = "0.11.2"        # { path = "../tree-sitter-graph" }
 tree-sitter-typescript = { git = "https://github.com/quentinLeDilavrec/tree-sitter-typescript", rev = "eee64b9ea005d2641cfce5b0a81404a9c8877740", version = "0.20.5" }
 
 # tree-sitter-java = "0.21.0"
-# tree-sitter-java = { git = "https://github.com/quentinLeDilavrec/tree-sitter-java", version = "0.20" }
-tree-sitter-java = { path="../../tree-sitter-java", version = "0.21.0" }
+tree-sitter-java = { git = "https://github.com/quentinLeDilavrec/tree-sitter-java", version = "0.21.0", rev = "7699d4a296ca27fc14511bc75a1a899327f483fc" }
+# tree-sitter-java = { path="../../tree-sitter-java", version = "0.21.0" }
 
 tree-sitter-python = "0.21.0"
 # tree-sitter-rust = "=0.20.3"
 # tree-sitter-mozcpp = "0.20.2"
 # tree-sitter-cpp = "0.22.0"
-tree-sitter-cpp = { path="../../tree-sitter-cpp", version="0.22" }
-# tree-sitter-cpp = { git = "https://github.com/quentinLeDilavrec/tree-sitter-cpp", version = "0.20" }
+# tree-sitter-cpp = { path="../../tree-sitter-cpp", version="0.22" }
+tree-sitter-cpp = { git = "https://github.com/quentinLeDilavrec/tree-sitter-cpp", version = "0.22", rev = "e0a743cf117b28f1ed86f205b4c722e02f5035e1"}
 tree-sitter-kotlin = "0.3.5"
 tree-sitter-xml = "0.6.2"
 # tree-sitter-xml = { git = "https://github.com/quentinLeDilavrec/tree-sitter-xml", version = "0.20" }
