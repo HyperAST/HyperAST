@@ -55,7 +55,7 @@ fn many(repo_name: &str, commit: &str, limit: usize, query: &str) {
             &query,
             hyper_ast_gen_ts_java::language(),
             unsafe { hyper_ast_cvs_git::java_processor::SUB_QUERIES },
-        )
+        ).map_err(|x | x.to_string())
         .unwrap()
         .1
     } else {
@@ -116,4 +116,14 @@ fn conditional_test_logic() {
     ))"#;
     many(repo_name, commit, limit, query);
     eprintln!("conditional_test_logic done!")
+}
+
+#[test]
+fn assertion_roulette() {
+    let repo_name =  "INRIA/spoon";
+    let commit = "7c7f094bb22a350fa64289a94880cc3e7231468f";
+    let limit = 2;
+    let query = hyper_ast_benchmark_smells::queries::assertion_roulette();
+    print!("{}", query);
+    many(repo_name, commit, limit, &query);
 }

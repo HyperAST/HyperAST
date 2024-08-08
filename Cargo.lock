@@ -3807,7 +3807,7 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "tree-sitter 0.22.6",
- "tree-sitter-cpp 0.22.0 (git+https://github.com/quentinLeDilavrec/tree-sitter-cpp?rev=e0a743cf117b28f1ed86f205b4c722e02f5035e1)",
+ "tree-sitter-cpp",
  "tuples",
 ]
 
@@ -3838,7 +3838,7 @@ dependencies = [
  "string-interner 0.17.0",
  "tree-sitter 0.22.6",
  "tree-sitter-graph 0.12.2",
- "tree-sitter-java 0.21.0 (git+https://github.com/quentinLeDilavrec/tree-sitter-java?rev=7699d4a296ca27fc14511bc75a1a899327f483fc)",
+ "tree-sitter-java",
  "tree-sitter-stack-graphs",
  "tuples",
 ]
@@ -3889,7 +3889,7 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "tree-sitter 0.22.6",
- "tree-sitter-java 0.21.0 (git+https://github.com/quentinLeDilavrec/tree-sitter-java?rev=7699d4a296ca27fc14511bc75a1a899327f483fc)",
+ "tree-sitter-java",
  "tree-sitter-query",
  "tuples",
 ]
@@ -3920,7 +3920,7 @@ dependencies = [
  "stack-graphs",
  "tree-sitter 0.22.6",
  "tree-sitter-graph 0.12.2",
- "tree-sitter-java 0.21.0 (git+https://github.com/quentinLeDilavrec/tree-sitter-java?rev=7699d4a296ca27fc14511bc75a1a899327f483fc)",
+ "tree-sitter-java",
  "tree-sitter-stack-graphs",
 ]
 
@@ -5645,9 +5645,9 @@ dependencies = [
  "strum_macros 0.24.3",
  "syn 2.0.72",
  "tree-sitter 0.22.6",
- "tree-sitter-cpp 0.22.0 (git+https://github.com/quentinLeDilavrec/tree-sitter-cpp)",
+ "tree-sitter-cpp",
  "tree-sitter-graph 0.11.3",
- "tree-sitter-java 0.21.0 (git+https://github.com/quentinLeDilavrec/tree-sitter-java)",
+ "tree-sitter-java",
  "tree-sitter-kotlin",
  "tree-sitter-loader",
  "tree-sitter-python",
@@ -8390,15 +8390,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tree-sitter-cpp"
-version = "0.22.0"
-source = "git+https://github.com/quentinLeDilavrec/tree-sitter-cpp#e0a743cf117b28f1ed86f205b4c722e02f5035e1"
-dependencies = [
- "cc",
- "tree-sitter 0.22.6",
-]
-
-[[package]]
 name = "tree-sitter-facade-sg"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8469,15 +8460,6 @@ dependencies = [
 name = "tree-sitter-java"
 version = "0.21.0"
 source = "git+https://github.com/quentinLeDilavrec/tree-sitter-java?rev=7699d4a296ca27fc14511bc75a1a899327f483fc#7699d4a296ca27fc14511bc75a1a899327f483fc"
-dependencies = [
- "cc",
- "tree-sitter 0.22.6",
-]
-
-[[package]]
-name = "tree-sitter-java"
-version = "0.21.0"
-source = "git+https://github.com/quentinLeDilavrec/tree-sitter-java#7699d4a296ca27fc14511bc75a1a899327f483fc"
 dependencies = [
  "cc",
  "tree-sitter 0.22.6",
