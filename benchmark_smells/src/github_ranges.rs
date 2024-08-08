@@ -1,30 +1,13 @@
 
 use hyper_ast::store::defaults::NodeIdentifier;
 
-pub fn count_matches(
+type GithubUrl = Vec<String>;
+
+pub fn compute_ranges(
     stores: &hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
     code: NodeIdentifier,
     query: &hyper_ast_tsquery::Query,
-) -> Vec<usize> {
-    let pos = hyper_ast::position::StructuralPosition::new(code);
-    let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
-    let qcursor = query.matches(cursor);
-    let mut result = vec![0; query.enabled_pattern_count()];
-    for m in qcursor {
-        let i = m.pattern_index;
-        let i = query.enabled_pattern_index(i).unwrap();
-        result[i as usize] += 1;
-    }
-    result
-}
-
-type Positions = Vec<String>;
-
-pub fn output_positions(
-    stores: &hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
-    code: NodeIdentifier,
-    query: &hyper_ast_tsquery::Query,
-) -> Vec<Positions> {
+) -> Vec<GithubUrl> {
     let pos = hyper_ast::position::StructuralPosition::new(code);
     let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
     let qcursor = query.matches(cursor);
@@ -35,8 +18,13 @@ pub fn output_positions(
         let i = query.enabled_pattern_index(i).unwrap();
         let mut roots = m.nodes_for_capture_index(cid);
         let root = roots.next().expect("a node captured by @root");
-        let position = &root.pos.make_position(root.stores);
-        let value = position.to_string();
+        let position = &root.pos.make_file_line_range(root.stores);
+        let value = if position.2 == 0 {
+            format!("{}#L{}", position.0, position.1)
+        } else {
+            let end = position.1 + position.2;
+            format!("{}#L{}-#L{}", position.0, position.1, end)
+        };
         result[i as usize].push(value);
         assert!(roots.next().is_none());
     }

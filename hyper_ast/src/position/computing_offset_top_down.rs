@@ -3,7 +3,7 @@
 use num::ToPrimitive;
 
 use super::{Position, StructuralPosition, TreePath};
-use crate::PrimInt;
+use crate::{types::WithStats, PrimInt};
 use std::path::PathBuf;
 
 use crate::{
@@ -331,5 +331,105 @@ impl StructuralPosition<NodeIdentifier, u16> {
 
         let file = PathBuf::from_iter(path.iter().rev());
         Position::new(file, offset, len)
+    }
+
+    pub fn make_file_line_range<'store, HAST>(&self, stores: &'store HAST) -> (String, usize, usize)
+    where
+        HAST: HyperAST<
+            'store,
+            T = HashedNodeRef<'store>,
+            IdN = NodeIdentifier,
+            Label = LabelIdentifier,
+        >,
+        HAST::TS: TypeStore<HashedNodeRef<'store>, Ty = AnyType>,
+        // HAST::Types: 'static + TypeTrait + Debug,
+    {
+        self.check(stores).unwrap();
+        // let parents = self.parents.iter().peekable();
+        let mut from_file = false;
+        // let mut len = 0;
+        let x = *self.node().unwrap();
+        let b = stores.node_store().resolve(&x);
+
+        let t = stores.type_store().resolve_type(&b);
+        // println!("t0:{:?}", t);
+
+        if !t.is_file() {
+            from_file = true;
+        }
+
+        let len = b.line_count();
+        let mut offset = 0;
+        let mut path = vec![];
+        if self.parents.is_empty() {
+            let file = PathBuf::from_iter(path.iter().rev()).to_string_lossy().to_string();
+            return (file, offset, len);
+        }
+        let mut i = self.parents.len() - 1;
+        if from_file {
+            while i > 0 {
+                let p = self.parents[i - 1];
+                let b = stores.node_store().resolve(&p);
+
+                let t = stores.type_store().resolve_type(&b);
+                // println!("t1:{:?}", t);
+                let o = self.offsets[i];
+                let c: usize = {
+                    let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
+                    v.iter()
+                        .map(|x| {
+                            let b = stores.node_store().resolve(x);
+
+                            // println!("{:?}", b.get_type());
+                            b.line_count()
+                        })
+                        .sum()
+                };
+                offset += c;
+                if t.is_file() {
+                    from_file = false;
+                    i -= 1;
+                    break;
+                } else {
+                    i -= 1;
+                }
+            }
+        }
+        if self.parents.is_empty() {
+        } else if !from_file
+        // || (i == 0 && stores.node_store().resolve(self.nodes[i]).get_type() == Type::Program)
+        {
+            loop {
+                let n = self.parents[i];
+                let b = stores.node_store().resolve(&n);
+                // println!("t2:{:?}", b.get_type());
+                let l = stores.label_store().resolve(b.get_label_unchecked());
+                path.push(l);
+                if i == 0 {
+                    break;
+                } else {
+                    i -= 1;
+                }
+            }
+        } else {
+            let p = self.parents[i - 1];
+            let b = stores.node_store().resolve(&p);
+            let o = self.offsets[i];
+            let c: usize = {
+                let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
+                v.iter()
+                    .map(|x| {
+                        let b = stores.node_store().resolve(x);
+
+                        // println!("{:?}", b.get_type());
+                        b.try_bytes_len().unwrap() as usize
+                    })
+                    .sum()
+            };
+            offset += c;
+        }
+
+        let file = PathBuf::from_iter(path.iter().rev()).to_string_lossy().to_string();
+        (file, offset, len)
     }
 }

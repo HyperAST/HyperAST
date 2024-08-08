@@ -14,6 +14,8 @@
 
 
 pub mod simple;
+pub mod github_ranges;
+pub mod positions;
 
 use std::{env, fs, io, path, time};
 
