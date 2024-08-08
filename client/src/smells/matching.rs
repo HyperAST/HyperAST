@@ -1,8 +1,7 @@
-use hyper_ast_cvs_git::java_processor::SUB_QUERIES;
-
 use super::SearchResult;
 
 use hyper_ast::store::defaults::NodeIdentifier;
+use hyper_ast_cvs_git::java_processor::sub_queries;
 
 pub(crate) fn matches_default<'a>(
     with_spaces_stores: &hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
@@ -80,7 +79,7 @@ pub(crate) fn matches_with_precomputeds<'a>(
             })
             .collect::<String>(),
         hyper_ast_gen_ts_java::language(),
-        &SUB_QUERIES,
+        &sub_queries(),
     )
     .map_err(|e| e.to_string())?;
     if qqq.enabled_pattern_count() != len {
@@ -108,10 +107,10 @@ pub(crate) fn matches_with_precomputed(
     let (_, qqq) = hyper_ast_tsquery::Query::with_precomputed(
         &result.query,
         hyper_ast_gen_ts_java::language(),
-        SUB_QUERIES,
+        sub_queries(),
     )
     .map_err(|e| e.to_string())?;
-    if qqq.pattern_count() != 1 + SUB_QUERIES.len() {
+    if qqq.pattern_count() != 1 + sub_queries().len() {
         dbg!(qqq.pattern_count());
         return Err("different number of patterns".to_string());
     }

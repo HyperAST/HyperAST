@@ -443,7 +443,10 @@ impl CacheHolding<crate::processing::caches::Java> for JavaProcessorHolder {
     }
 }
 
-pub const SUB_QUERIES: &[&str] = &[
+/// WARN be cautious about mutating that
+/// TODO make something safer
+#[doc(hidden)]
+pub static mut SUB_QUERIES: &[&str] = &[
     r#"(method_invocation
     (identifier) (#EQ? "fail")
 )"#,
@@ -451,12 +454,17 @@ pub const SUB_QUERIES: &[&str] = &[
     (block)
     (catch_clause)
 )"#,
-    r#"(class_declaration)"#,
-    r#"(method_declaration)"#,
+    "(class_declaration)",
+    "(method_declaration)",
     r#"(marker_annotation 
     name: (identifier) (#EQ? "Test")
 )"#,
+    "(constructor_declaration)",
 ];
+
+pub fn sub_queries() -> &'static [&'static str] {
+    unsafe { SUB_QUERIES }
+}
 
 impl RepositoryProcessor {
     pub(crate) fn handle_java_file(
@@ -481,7 +489,7 @@ impl RepositoryProcessor {
         let (precomp, _) = hyper_ast_tsquery::Query::with_precomputed(
             "(_)",
             hyper_ast_gen_ts_java::language(),
-            SUB_QUERIES,
+            unsafe { SUB_QUERIES },
         )
         .unwrap();
         java_tree_gen::JavaTreeGen {

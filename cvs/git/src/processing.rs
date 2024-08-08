@@ -269,7 +269,7 @@ pub(crate) mod caches {
             let (precomp, _) = hyper_ast_tsquery::Query::with_precomputed(
                 "(_)",
                 hyper_ast_gen_ts_java::language(),
-                crate::java_processor::SUB_QUERIES,
+                unsafe { crate::java_processor::SUB_QUERIES },
             )
             .unwrap();
             precomp.into()

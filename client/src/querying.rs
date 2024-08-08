@@ -138,7 +138,7 @@ pub fn simple(
         hyper_ast_tsquery::Query::with_precomputed(
             &query,
             hyper_ast_gen_ts_java::language(),
-            hyper_ast_cvs_git::java_processor::SUB_QUERIES,
+            hyper_ast_cvs_git::java_processor::sub_queries(),
         )
         .map(|x| x.1)
     } else {

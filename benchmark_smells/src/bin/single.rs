@@ -30,7 +30,7 @@ fn single(repo_name: &str, commit: &str, query: &str) {
         hyper_ast_tsquery::Query::with_precomputed(
             &query,
             hyper_ast_gen_ts_java::language(),
-            hyper_ast_cvs_git::java_processor::SUB_QUERIES,
+            unsafe { hyper_ast_cvs_git::java_processor::SUB_QUERIES },
         ).unwrap().1
     } else {
         hyper_ast_tsquery::Query::new(&query, hyper_ast_gen_ts_java::language()).unwrap()

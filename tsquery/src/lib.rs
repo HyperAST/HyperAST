@@ -71,6 +71,9 @@ pub struct Query {
     enabled_pattern_count: u16,
 }
 
+unsafe impl Send for Query {}
+unsafe impl Sync for Query {}
+
 #[derive(Clone, Debug)]
 struct Slice<I> {
     offset: I,

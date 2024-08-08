@@ -20,6 +20,27 @@ fn main() {
     let commit = args.get(2).map_or("", |x| x);
     let limit = args.get(3).map_or(2, |x| x.parse().expect("a number"));
     let query = args.get(4).map_or("", |x| x);
+
+    // WARN not to be mutated is some places, here is fine, change it at will
+    // NOTE there is a upper limit for the number of usable subqueries
+    unsafe {
+        hyper_ast_cvs_git::java_processor::SUB_QUERIES = &[
+            r#"(method_invocation
+        (identifier) (#EQ? "fail")
+    )"#,
+            r#"(try_statement
+        (block)
+        (catch_clause)
+    )"#,
+            "(class_declaration)",
+            "(method_declaration)",
+            r#"(marker_annotation 
+        name: (identifier) (#EQ? "Test")
+    )"#,
+            "(constructor_declaration)",
+        ]
+    };
+
     many(repo_name, commit, limit, query);
 }
 
@@ -30,7 +51,7 @@ fn many(repo_name: &str, commit: &str, limit: usize, query: &str) {
         hyper_ast_tsquery::Query::with_precomputed(
             &query,
             hyper_ast_gen_ts_java::language(),
-            hyper_ast_cvs_git::java_processor::SUB_QUERIES,
+            unsafe { hyper_ast_cvs_git::java_processor::SUB_QUERIES },
         )
         .unwrap()
         .1
@@ -56,13 +77,13 @@ fn many(repo_name: &str, commit: &str, limit: usize, query: &str) {
         let tr = commit.1.ast_root;
         use hyper_ast::types::WithStats;
         let s = stores.node_store.resolve(tr).size();
-    
+
         let matches = count_matches(stores, tr, &query);
         let matches = matches
             .into_iter()
             .map(|x| format!(",{}", x))
             .collect::<String>();
-    
+
         let mu = memusage_linux();
         // TODO
         println!(
