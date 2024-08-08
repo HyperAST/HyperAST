@@ -32,10 +32,17 @@ fn print_pos(repo_name: &str, commit: &str, limit: usize, query: &str) {
             hyper_ast_gen_ts_java::language(),
             unsafe { hyper_ast_cvs_git::java_processor::SUB_QUERIES },
         )
-        .unwrap()
-        .1
+        .map(|x| x.1)
     } else {
-        hyper_ast_tsquery::Query::new(&query, hyper_ast_gen_ts_java::language()).unwrap()
+        hyper_ast_tsquery::Query::new(&query, hyper_ast_gen_ts_java::language())
+    };
+
+    let query = match query {
+        Ok(query) => query,
+        Err(err) => {
+            eprintln!("{}", err);
+            panic!("there is an error in the query");
+        },
     };
 
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
@@ -86,10 +93,13 @@ fn print_positions() {
     let repo_name = "INRIA/spoon";
     let commit = "56e12a0c0e0e69ea70863011b4f4ca3305e0542b";
     let limit = 3;
-    let query = r#"(try_statement
+    let query = r#"(if_statement
         (block)
         (catch_clause)
     ) @root"#;
 
     print_pos(repo_name, commit, limit, query);
+    let s = format!("aaa");
+    print!("{}", s);
+    dbg!(s);
 }
