@@ -67,3 +67,14 @@ fn single(repo_name: &str, commit: &str, query: &str) {
         matches,
     );
 }
+
+#[test]
+fn aaa() {
+    println!("hello!")
+}
+
+
+#[test]
+fn bbb() {
+    println!("hello!   bbb")
+}
