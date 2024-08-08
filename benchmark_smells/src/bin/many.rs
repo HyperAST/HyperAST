@@ -25,15 +25,18 @@ fn main() {
     // NOTE there is a upper limit for the number of usable subqueries
     unsafe {
         hyper_ast_cvs_git::java_processor::SUB_QUERIES = &[
+            // invocation of the method "fail", surrounding string with r# makes that we don't have to escape the '"' in the string
             r#"(method_invocation
         (identifier) (#EQ? "fail")
     )"#,
+    // a try block with a catch clause (does not match if there is no catch clause present)
             r#"(try_statement
         (block)
         (catch_clause)
     )"#,
             "(class_declaration)",
             "(method_declaration)",
+    // an "@Test" annotation without parameters
             r#"(marker_annotation 
         name: (identifier) (#EQ? "Test")
     )"#,
@@ -71,6 +74,10 @@ fn many(repo_name: &str, commit: &str, limit: usize, query: &str) {
 
     let stores = &preprocessed.processor.main_stores;
 
+    println!(
+        "commit_sha, ast_size, memory_used, processing_time, matches"
+    );
+
     for oid in oids {
         let commit = preprocessed.commits.get_key_value(&oid).unwrap();
         let time = commit.1.processing_time();
@@ -94,4 +101,19 @@ fn many(repo_name: &str, commit: &str, limit: usize, query: &str) {
             matches,
         );
     }
+}
+
+// !!! query is currently incorrect but it is running :)
+#[test]
+fn conditional_test_logic() {
+    let repo_name =  "INRIA/spoon";
+    let commit = "7c7f094bb22a350fa64289a94880cc3e7231468f";
+    let limit = 2;
+    let query = r#"(if_statement consequence: (_ 
+    (_ (method_invocation 
+         name: (identifier) (#EQ? "assertEquals") 
+  ))
+    ))"#;
+    many(repo_name, commit, limit, query);
+    eprintln!("conditional_test_logic done!")
 }
