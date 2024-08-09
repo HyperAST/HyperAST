@@ -372,15 +372,12 @@ impl StructuralPosition<NodeIdentifier, u16> {
                 let b = stores.node_store().resolve(&p);
 
                 let t = stores.type_store().resolve_type(&b);
-                // println!("t1:{:?}", t);
                 let o = self.offsets[i];
                 let c: usize = {
                     let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
                     v.iter()
                         .map(|x| {
                             let b = stores.node_store().resolve(x);
-
-                            // println!("{:?}", b.get_type());
                             b.line_count()
                         })
                         .sum()

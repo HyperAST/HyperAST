@@ -30,7 +30,7 @@ thiserror = "1.0.38"
 
 lazy_static = "1.4.0"
 
-ehttp = { version = "0.2.0" }
+ehttp = { version = "0.5.0", features = ["streaming"] }
 image = { version = "0.25.2", default-features = false, features = [
   "jpeg",
   "png",

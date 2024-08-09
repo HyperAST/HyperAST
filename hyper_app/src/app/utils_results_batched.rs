@@ -100,7 +100,7 @@ pub(crate) fn show_long_result(
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct ComputeResults {
     pub prepare_time: f64,
     pub results: Vec<Result<ComputeResultIdentified, String>>,
@@ -142,12 +142,34 @@ fn show_long_result_compute_failure<'a>(ui: &mut egui::Ui, error: &impl ComputeE
 
 pub(crate) fn show_long_result_success(ui: &mut egui::Ui, content: &ComputeResults) {
     if content.results.len() > 5 {
+        let header = content.results.iter().find(|x| x.is_ok());
+        let Some(header) = header.as_ref() else {
+            wasm_rs_dbg::dbg!("issue with header");
+            return;
+        };
+        let header = header.as_ref().unwrap();
+        // TODO
+        let header = if let Some(result) = header.inner.result.as_object() {
+            // for (name, v) in result {
+            //     f(&mut head, name, v)
+            // }
+            (todo!(), Some(todo!()))
+        } else if let Some(result) = header.inner.result.as_array() {
+            // for (i, v) in result.iter().enumerate() {
+            //     f(&mut head, &i.to_string(), v)
+            // }
+            (todo!(), None)
+        } else {
+            panic!()
+        };
         egui::ScrollArea::horizontal()
             .scroll_bar_visibility(
                 egui::containers::scroll_area::ScrollBarVisibility::AlwaysVisible,
             )
             .auto_shrink([false, false])
-            .show(ui, |ui| show_long_result_table(ui, content, &mut None));
+            .show(ui, |ui| {
+                show_long_result_table(ui, (header.0, header.1, &content.results[1..]), &mut None)
+            });
     } else {
         egui::CollapsingHeader::new("Results (JSON)")
             .default_open(true)
@@ -201,31 +223,46 @@ pub(crate) fn show_long_result_list(ui: &mut egui::Ui, content: &ComputeResults)
     }
 }
 
+pub trait PartialError<T> {
+    fn error(&self) -> impl ToString;
+    fn try_partial(&self) -> Option<&T>;
+}
+
+impl<T> PartialError<T> for String {
+    fn error(&self) -> impl ToString {
+        self
+    }
+
+    fn try_partial(&self) -> Option<&T> {
+        None
+    }
+}
+
 pub(crate) fn show_long_result_table(
     ui: &mut egui::Ui,
-    content: &ComputeResults,
+    content: (
+        &[String],
+        Option<&[String]>,
+        &[Result<ComputeResultIdentified, impl PartialError<ComputeResultIdentified>>],
+    ),
     selected_commit: &mut Option<usize>,
 ) {
     // header
-    let header = content.results.iter().find(|x| x.is_ok());
-    let Some(header) = header.as_ref() else {
-        wasm_rs_dbg::dbg!("issue with header");
-        return;
-    };
-    let header = header.as_ref().unwrap();
+    let header = content.0;
+    // let len = |v: &serde_json::Value| v.as_object().map_or(1, |x| x.len());
+    // let count = if let Some(result) = header.inner.result.as_object() {
+    //     result.iter().map(|(_, v)| len(v)).sum()
+    // } else if let Some(result) = header.inner.result.as_array() {
+    //     result.iter().map(|v| len(v)).sum()
+    // } else {
+    //     panic!()
+    // };
+    let count = content.1.map_or(content.0.len(), |x| x.len());
     use egui_extras::{Column, TableBuilder};
-    let len = |v: &serde_json::Value| v.as_object().map_or(1, |x| x.len());
-    let count = if let Some(result) = header.inner.result.as_object() {
-        result.iter().map(|(_, v)| len(v)).sum()
-    } else if let Some(result) = header.inner.result.as_array() {
-        result.iter().map(|v| len(v)).sum()
-    } else {
-        panic!()
-    };
     let mut table = TableBuilder::new(ui);
     if let Some(row) = selected_commit {
         table = table.scroll_to_row(*row, None);
-    } 
+    }
     table
         .striped(true)
         .resizable(true)
@@ -236,14 +273,18 @@ pub(crate) fn show_long_result_table(
         // .column(Column::auto().resizable(true).clip(false))
         .column(Column::remainder())
         .header(20.0, |head| {
-            show_table_header(head, header);
+            show_table_header(head, header, None);
         })
         .body(|body| {
-            show_table_body(body, content, selected_commit);
+            show_table_body(body, content.2, selected_commit);
         });
 }
 
-fn show_table_header(mut head: egui_extras::TableRow<'_, '_>, header: &ComputeResultIdentified) {
+fn show_table_header(
+    mut head: egui_extras::TableRow<'_, '_>,
+    header: &[String],
+    sub_header: Option<&[String]>,
+) {
     let hf = |ui: &mut egui::Ui, name: &str| {
         ui.label(
             egui::RichText::new(name)
@@ -256,32 +297,36 @@ fn show_table_header(mut head: egui_extras::TableRow<'_, '_>, header: &ComputeRe
             hf(ui, " commit")
         });
     });
-    use serde_json::Value;
-    let f = |head: &mut egui_extras::TableRow<'_, '_>, name: &str, v: &Value| {
-        if let Some(obj) = v.as_object() {
-            for (n, _) in obj {
-                let name = format!("{}_{}", name, n);
-                head.col(move |ui| {
-                    hf(ui, &name);
-                });
-            }
-        } else {
-            head.col(|ui| {
-                hf(ui, name);
-            });
-        }
-    };
-    if let Some(result) = header.inner.result.as_object() {
-        for (name, v) in result {
-            f(&mut head, name, v)
-        }
-    } else if let Some(result) = header.inner.result.as_array() {
-        for (i, v) in result.iter().enumerate() {
-            f(&mut head, &i.to_string(), v)
-        }
-    } else {
-        panic!()
-    };
+    // use serde_json::Value;
+    // let f = |head: &mut egui_extras::TableRow<'_, '_>, name: &str, v: &Value| {
+    //     if let Some(obj) = v.as_object() {
+    //         for (n, _) in obj {
+    //             let name = format!("{}_{}", name, n);
+    //             head.col(move |ui| {
+    //                 hf(ui, &name);
+    //             });
+    //         }
+    //     } else {
+    //         head.col(|ui| {
+    //             hf(ui, name);
+    //         });
+    //     }
+    // };
+
+    // if let Some(result) = header.inner.result.as_object() {
+    //     for (name, v) in result {
+    //         f(&mut head, name, v)
+    //     }
+    // } else if let Some(result) = header.inner.result.as_array() {
+    //     for (i, v) in result.iter().enumerate() {
+    //         f(&mut head, &i.to_string(), v)
+    //     }
+    // } else {
+    //     panic!()
+    // };
+    for h in header {
+        head.col(|ui| { hf(ui, h); });
+    }
     head.col(|ui| {
         hf(ui, "compute time");
     });
@@ -289,7 +334,7 @@ fn show_table_header(mut head: egui_extras::TableRow<'_, '_>, header: &ComputeRe
 
 fn show_table_body(
     body: egui_extras::TableBody<'_>,
-    content: &ComputeResults,
+    content: &[Result<ComputeResultIdentified, impl PartialError<ComputeResultIdentified>>],
     selected_index: &mut Option<usize>,
 ) {
     use serde_json::Value;
@@ -307,7 +352,7 @@ fn show_table_body(
             f(row, v);
         }
     };
-    let show_ok = |row: &mut egui_extras::TableRow<'_, '_>, cont: &ComputeResultIdentified| {
+    let show_row = |row: &mut egui_extras::TableRow<'_, '_>, cont: &ComputeResultIdentified, err: Option<String>| {
         // if let Some((_, c)) = &selected_commit {
         //     row.set_selected(c == &cont.commit);
         // }
@@ -318,11 +363,18 @@ fn show_table_body(
             //     //     ui.scroll_to_rect(ui.min_rect(), Some(egui::Align::Center));
             //     // }
             // }
-            if selected_index == &Some(i) {
-                ui.scroll_to_rect(ui.min_rect(), Some(egui::Align::Center));
-            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                
+            if err.is_some() {
+                ui.colored_label(egui::Color32::RED, &cont.commit[..8])
+            } else {
                 ui.label(&cont.commit[..8])
+            }
+                .on_hover_ui(|ui| if let Some(err) = err {
+                    ui.colored_label(ui.visuals().error_fg_color, err);
+                } else {
+                    ui.label(&cont.commit);
+                })
             });
         });
         if let Some(result) = cont.inner.result.as_object() {
@@ -340,16 +392,16 @@ fn show_table_body(
             ui.label(format!("{:.3}", SecFmt(cont.inner.compute_time)));
         });
     };
-    body.rows(20.0, content.results.len(), |mut row| {
+    body.rows(20.0, content.len(), |mut row| {
         if selected_index == &Some(row.index()) {
             row.set_selected(true);
         }
-        match &content.results[row.index()] {
-            Ok(cont) => show_ok(&mut row, cont),
+        match &content[row.index()] {
+            Ok(cont) => show_row(&mut row, cont, None),
             Err(err) => {
-                row.col(|ui| {
-                    ui.colored_label(ui.visuals().error_fg_color, err);
-                });
+                if let Some(cont) = err.try_partial() {
+                    show_row(&mut row, cont, Some(err.error().to_string()))
+                }
             }
         }
     });

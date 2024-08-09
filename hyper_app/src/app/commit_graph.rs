@@ -1,13 +1,17 @@
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
-    ops::Mul,
+    ops::{Add, Mul, Shl},
 };
 
 use crate::app::commit;
 
 use lazy_static::lazy_static;
 
-use super::{ProjectId, QueryId};
+use super::{
+    querying::{MatchingError, StreamedDataTable},
+    utils_results_batched::ComputeResultIdentified,
+    ProjectId, QueryId,
+};
 
 lazy_static! {
     static ref RES_PER_COMMIT: std::sync::Arc<
@@ -37,7 +41,11 @@ impl
     egui::util::cache::ComputerMut<
         (
             (ProjectId, QueryId, ResHash),
-            &crate::app::utils_results_batched::ComputeResults,
+            // &crate::app::utils_results_batched::ComputeResults,
+            &StreamedDataTable<
+                Vec<String>,
+                std::result::Result<ComputeResultIdentified, MatchingError>,
+            >,
         ),
         super::ResultsPerCommit,
     > for ComputeResPerCommit
@@ -46,7 +54,11 @@ impl
         &mut self,
         ((pid, qid, _), r): (
             (ProjectId, QueryId, ResHash),
-            &crate::app::utils_results_batched::ComputeResults,
+            // &crate::app::utils_results_batched::ComputeResults,
+            &StreamedDataTable<
+                Vec<String>,
+                std::result::Result<ComputeResultIdentified, MatchingError>,
+            >,
         ),
     ) -> super::ResultsPerCommit {
         let mut res = super::ResultsPerCommit::default();
@@ -100,7 +112,8 @@ impl crate::HyperApp {
                 if let Some(r) = self.data.queries_results.iter().find(|x| x.0 == repo_id) {
                     let qid = r.1;
                     if let Some(Ok(r)) = r.2.get() {
-                        Some(res_per_commit.get2((repo_id, qid, r.h()), r))
+                        let key = { (repo_id, qid, r.rows.lock().unwrap().0) };
+                        Some(res_per_commit.get2(key, r))
                     } else {
                         None
                     }
@@ -127,287 +140,55 @@ impl crate::HyperApp {
                 )
             };
 
-            // { // TODO now use egui_plot, it will handle interation properly and should not be difficult to migrate I think.
-            //     use egui_plot::*;
-            //     let sin: PlotPoints = (0..1000)
-            //         .map(|i| {
-            //             let x = i as f64 * 0.01;
-            //             [x, x.sin()]
-            //         })
-            //         .collect();
-            //     let line = Line::new(sin);
-            //     Plot::new("my_plot")
-            //         .view_aspect(2.0)
-            //         .show(ui, |plot_ui| plot_ui.line(line));
-            // }
-
-            let max_time = cached
-                .min_time
-                .max(cached.max_time - self.data.offset_fetch);
-            let min_time = cached.min_time.max(max_time - self.data.max_fetch);
-            // cached.min_time = cached.min_time.max(cached.max_time - self.data.max_fetch);
-            let cached = cached;
-            let width = ui.available_width() - 120.0;
-            let _time_norm = |t: i64| t as f32 / (max_time - min_time).max(1) as f32;
-            let _time_scaling = |t: i64| _time_norm(t) * width;
-            assert!(cached.max_delta >= 0);
-            let time_scaling = |t: i64| _time_scaling(t - min_time);
-            let time_scaling_y = |t: i64| {
-                _time_norm(t)
-                    .clamp(0.0, 1.0)
-                    .sqrt()
-                    .mul((width / 4.0).min(300.0))
-                    .max(0.0)
-            };
-
-            assert!(cached.max_delta < i64::MAX);
-            let desired_size = egui::vec2(
-                ui.available_width(),
-                if cached.max_delta <= 0 {
-                    0.0
-                } else {
-                    time_scaling_y(cached.max_delta)
-                },
-            ) + egui::vec2(0.0, 60.0);
-            let (_rect, resp) = ui.allocate_exact_size(desired_size, egui::Sense::click());
-            let rect = _rect.shrink(30.0);
-            let min = rect.min;
-
-            // background
-            ui.painter().rect_filled(
-                _rect
-                    .shrink2(egui::vec2(55.0, 0.0))
-                    .translate(egui::vec2(-30.0, 0.0)),
-                ui.visuals().window_rounding,
-                ui.visuals().extreme_bg_color,
-            );
-
-            let parent_rel_color = if ui.visuals().dark_mode {
-                egui::Color32::WHITE
-            } else {
-                egui::Color32::BLACK
-            };
-
-            // region:   --- Ticks
-            const SECONDS_PER_DAY: i64 = 60 * 60 * 24;
-            let day_count = (max_time - min_time) / (SECONDS_PER_DAY);
-            let day_width = _time_scaling(SECONDS_PER_DAY);
-            let day_offset = min.x + _time_scaling(min_time % (SECONDS_PER_DAY));
-            for d in 0..day_count {
-                let x = day_offset + d as f32 * day_width;
-                ui.painter().line_segment(
-                    [egui::pos2(x, _rect.min.y), egui::pos2(x, _rect.min.y + 5.0)],
-                    egui::Stroke::new(2.0, egui::Color32::GRAY),
-                );
-            }
-            // endregion --- Ticks
-
             let mut to_fetch = vec![];
             let mut to_poll = vec![];
-            assert!(cached.branches.len() <= 1);
-            'subs: for commit::SubsTimed {
-                prev,
-                prev_sub,
-                start,
-                end,
-                succ,
-                succ_sub,
-                delta_time,
-            } in &cached.subs
-            {
-                let mut prev_p = min
-                    + egui::vec2(
-                        if cached.times[*prev] == -1 {
-                            0.0
-                        } else {
-                            time_scaling(cached.times[*prev])
-                        },
-                        time_scaling_y(cached.subs[*prev_sub].delta_time),
-                    );
-                let curr_y = min.y + time_scaling_y(*delta_time);
-                for i in *start..*end {
-                    let t = cached.times[i];
-                    if t == -1 {
-                        if self
-                            .data
-                            .fetched_commit_metadata
-                            .is_absent(&cached.commits[i])
-                        {
-                            to_fetch.push(&cached.commits[i]);
-                        } else if self
-                            .data
-                            .fetched_commit_metadata
-                            .get(&cached.commits[i])
-                            .is_none()
-                        {
-                            to_poll.push(&cached.commits[i]);
-                        }
-                        break;
-                    }
-                    let center = egui::pos2(min.x + time_scaling(t), curr_y);
 
-                    let commit = &cached.commits[i];
-
-                    // region: painter queried values when there is a change
-                    let before = if i != *start {
-                        Some(cached.commits[i - 1].as_str())
-                    } else if *prev != usize::MAX {
-                        Some(cached.commits[*prev].as_str())
-                    } else {
-                        None
-                    };
-                    let after = if i + 1 < *end {
-                        Some(cached.commits[i + 1].as_str())
-                    } else if *succ != usize::MAX {
-                        Some(cached.commits[*succ].as_str())
-                    } else {
-                        None
-                    };
-
-                    let circle_fill_color = if results_per_commit
-                        .and_then(|x| x._get_offset(commit))
-                        .is_some()
-                    {
-                        egui::Color32::DARK_GREEN
-                    } else {
-                        egui::Color32::GREEN
-                    };
-
-                    let diff = results_per_commit
-                        .zip(before)
-                        .and_then(|(x, c2)| x.try_diff_as_string(commit, c2));
-
-                    if i == *start {
-                        let corner_p = egui::pos2(prev_p.x.max(center.x - 10.0), center.y);
-                        let parent_rel_color = egui::Color32::LIGHT_GRAY;
-                        let stroke = egui::Stroke::new(2.0, parent_rel_color);
-                        ui.painter().line_segment([prev_p, corner_p], stroke);
-                        ui.painter().line_segment([corner_p, center], stroke);
-                    } else {
-                        ui.painter().line_segment(
-                            [prev_p, center],
-                            egui::Stroke::new(2.0, parent_rel_color),
-                        );
-                        if let Some(text) = diff {
-                            let pos = egui::Rect::from_min_max(prev_p, center).center();
-                            // let text_color = ui.style().visuals.text_color();
-                            let text_color = egui::Color32::YELLOW;
-                            let font_id = egui::TextStyle::Body.resolve(ui.style());
-                            let anchor = egui::Align2::RIGHT_BOTTOM;
-                            ui.painter().text(pos, anchor, text, font_id, text_color);
-                        }
-                    }
-
-                    // stop rendering when reached limit
-                    if max_time - t > self.data.max_fetch {
-                        let fill_color = egui::Color32::RED;
-                        ui.painter().circle_filled(center, 10.0, fill_color);
-                        continue 'subs;
-                    }
-
-                    ui.painter().circle_filled(center, 4.0, circle_fill_color);
-
-                    let resp = ui.interact(
-                        egui::Rect::from_center_size(center, egui::Vec2::splat(8.0)),
-                        ui.id().with(&cached.commits[i]),
-                        egui::Sense::click(),
-                    );
-                    let vals_offset = results_per_commit
-                        .and_then(|x| x.offset_with_variation(commit.as_str(), before, after));
-                    if let Some(offset) = vals_offset {
-                        let pos = center + (0.0, -10.0).into();
-                        let text_color = ui.style().visuals.text_color();
-                        let text = results_per_commit.unwrap().vals_to_string(offset);
-                        let font_id = egui::TextStyle::Body.resolve(ui.style());
-                        let anchor = egui::Align2::RIGHT_BOTTOM;
-                        // let rect = egui::Align2::RIGHT_BOTTOM.anchor_size(pos, galley.size());
-                        // ui.painter().galley(rect.min, galley.clone(), text_color);
-                        ui.painter().text(pos, anchor, text, font_id, text_color);
-                    }
-                    // endregion
-
-                    // similar to a tooltip
-                    let resp = resp.on_hover_ui(|ui| {
-                        let vals_offset =
-                            results_per_commit.and_then(|x| x.offset(commit.as_str()));
-                        let text = if let Some(v) = vals_offset {
-                            format!(
-                                "{}\n{}",
-                                commit,
-                                results_per_commit.unwrap().vals_to_string(v)
-                            )
-                        } else {
-                            format!("{}", commit)
-                        };
-                        ui.label(text);
-                    });
-                    const SC_COPY: egui::KeyboardShortcut =
-                        egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::C);
-                    if resp.hovered() {
-                        if ui.input_mut(|mem| mem.consume_shortcut(&SC_COPY)) {
-                            ui.output_mut(|mem| mem.copied_text = commit.to_string());
-                        }
-                    }
-                    if resp.clicked() {
-                        log::debug!("");
-                        self.selected_commit = Some((repo_id, commit.to_string()));
-                    }
-                    // if let Some(pos) = resp.hover_pos() {
-                    //     let vals_offset =
-                    //         results_per_commit.and_then(|x| x.offset(commit.as_str()));
-                    //     let text = if let Some(v) = vals_offset {
-                    //         format!(
-                    //             "{}\n{}",
-                    //             commit,
-                    //             results_per_commit.unwrap().vals_to_string(v)
-                    //         )
-                    //     } else {
-                    //         format!("{}", commit)
-                    //     };
-                    //     let font_id = egui::TextStyle::Button.resolve(ui.style());
-                    //     ui.painter().text(
-                    //         pos + (20.0, 0.0).into(),
-                    //         egui::Align2::RIGHT_BOTTOM,
-                    //         text,
-                    //         font_id,
-                    //         ui.style().visuals.text_color(),
-                    //     );
-                    // }
-                    prev_p = center;
-                }
-
-                if *succ < usize::MAX {
-                    let y = min.y + time_scaling_y(cached.subs[*succ_sub].delta_time);
-                    let x = min.x + time_scaling(cached.times[*succ]);
-                    let succ_p = egui::pos2(x, y);
-                    let mid_p = egui::pos2(prev_p.x.min(x + 5.0), prev_p.y);
-                    ui.painter()
-                        .line_segment([prev_p, mid_p], egui::Stroke::new(2.0, parent_rel_color));
-                    ui.painter()
-                        .line_segment([mid_p, succ_p], egui::Stroke::new(2.0, parent_rel_color));
-                }
-            }
-            for &b in &cached.branches {
-                let b = cached.subs[b].prev;
-                let p = (
-                    cached.times[b],
-                    min.y + time_scaling_y(cached.subs[b].delta_time),
+            if true {
+                let resp = show_commit_graph_timed_egui_plot(
+                    ui,
+                    self.data.max_fetch,
+                    &self.data.fetched_commit_metadata,
+                    results_per_commit,
+                    cached,
+                    repo_id,
+                    &mut to_fetch,
+                    &mut to_poll,
                 );
-                let center = egui::pos2(time_scaling(p.0), p.1);
-                let font_id = egui::TextStyle::Button.resolve(ui.style());
-                let pos = center + (70.0, -10.0).into();
-                let text = &cached.commits[b];
-                let text_color = ui.style().visuals.text_color();
-                let galley = ui
-                    .painter()
-                    .layout(text.to_string(), font_id, text_color, 100.0);
-                let angle = 0.9;
-                let rect = egui::Rect::from_min_size(pos, galley.size());
-                if !galley.is_empty() {
-                    let shape = epaint::TextShape::new(rect.min, galley, text_color);
-                    ui.painter().add(shape.with_angle(angle));
-                };
+
+                if let Some(i) = resp.inner {
+                    if resp.response.clicked() {
+                        self.selected_commit = Some((repo_id, cached.commits[i].to_string()));
+                    } else if resp.response.secondary_clicked() {
+                        let commit = format!(
+                            "https://github.com/{}/{}/commit/{}",
+                            r.user, r.name, cached.commits[i]
+                        );
+                        ui.output_mut(|r| r.copied_text = commit.to_string());
+                        self.toasts.add(re_ui::toasts::Toast {
+                            kind: re_ui::toasts::ToastKind::Success,
+                            text: format!(
+                                "Copied address of github commit to clipboard\n{}",
+                                commit
+                            ),
+                            options: re_ui::toasts::ToastOptions::with_ttl_in_seconds(4.0),
+                        });
+                    }
+                }
+            } else {
+                show_commit_graph_timed_custom(
+                    ui,
+                    self.data.offset_fetch,
+                    self.data.max_fetch,
+                    &self.data.fetched_commit_metadata,
+                    results_per_commit,
+                    cached,
+                    repo_id,
+                    &mut to_fetch,
+                    &mut to_poll,
+                    &mut self.selected_commit,
+                );
             }
+
             for id in to_fetch {
                 if !self.data.fetched_commit_metadata.is_absent(id) {
                     continue;
@@ -421,36 +202,579 @@ impl crate::HyperApp {
             for id in to_poll {
                 if self.data.fetched_commit_metadata.try_poll_with(id, |x| x) {}
             }
-            if let Some(pos) = resp.hover_pos() {
-                let top = egui::pos2(pos.x, _rect.top());
-                let bot = egui::pos2(pos.x, _rect.bottom());
-                ui.painter()
-                    .line_segment([top, bot], egui::Stroke::new(2.0, parent_rel_color));
-                let Some(x_ratio) = egui::emath::inverse_lerp(rect.x_range().into(), pos.x) else {
-                    continue;
-                };
-                if min_time == i64::MAX {
-                    continue;
-                }
-                let timestamp = min_time + (x_ratio * (max_time - min_time) as f32) as i64;
-                let Some(naive_datetime) = chrono::DateTime::from_timestamp(timestamp, 0) else {
-                    continue;
-                };
-                let datetime_again = naive_datetime.to_utc();
-                let text = format!("{}", datetime_again);
-                let font_id = egui::TextStyle::Button.resolve(ui.style());
-                ui.painter().text(
-                    pos + (20.0, 0.0).into(),
-                    egui::Align2::LEFT_TOP,
-                    text,
-                    font_id,
-                    ui.style().visuals.text_color(),
-                );
-            }
         }
         ui.add_space(20.0);
         res_per_commit.evice_cache();
         layout_cache.evice_cache();
+    }
+}
+
+fn show_commit_graph_timed_egui_plot<'a>(
+    ui: &mut egui::Ui,
+    max_fetch: i64,
+    fetched_commit_metadata: &super::utils_poll::MultiBuffered2<
+        String,
+        Result<commit::CommitMetadata, String>,
+    >,
+    results_per_commit: Option<&super::ResultsPerCommit>,
+    cached: &'a commit::CommitsLayoutTimed,
+    repo_id: ProjectId,
+    to_fetch: &mut Vec<&'a String>,
+    to_poll: &mut Vec<&'a String>,
+) -> egui_plot::PlotResponse<Option<usize>> {
+    const DIFF_VALS: bool = true;
+    const LEFT_VALS: bool = false;
+    const RIGHT_VALS: bool = false;
+    egui::Frame::none()
+        .inner_margin(egui::vec2(50.0, 10.0))
+        .show(ui, |ui| {
+            // TODO now use egui_plot, it will handle interation properly and should not be difficult to migrate I think.
+            use egui_plot::*;
+            let resp = Plot::new(repo_id)
+                .view_aspect(8.0)
+                .show_axes([true, false])
+                .allow_zoom([true, false])
+                .x_axis_formatter(|m, _range| {
+                    let v = m.value as i64 - cached.max_time;
+                    if v == 0 {
+                        format!("0")
+                    } else if m.step_size as i64 > 60 * 60 * 24 * 20 {
+                        format!("{:+}M", v / (60 * 60 * 24 * 30))
+                    } else if m.step_size as i64 > 60 * 60 * 24 * 6 {
+                        format!("{:+}w", v / (60 * 60 * 24 * 7))
+                    } else if m.step_size as i64 > 60 * 60 * 20 {
+                        format!("{:+}d", v / (60 * 60 * 24))
+                    } else {
+                        format!("{:+}h", v / (60 * 60))
+                    }
+                })
+                // .x_axis_label("time")
+                .x_grid_spacer(with_egui_plot::compute_multi_x_marks)
+                .show_y(false)
+                .y_axis_formatter(|m, _| Default::default())
+                .show_grid([true, false])
+                .set_margin_fraction(egui::vec2(0.1, 0.3))
+                .allow_scroll([true, false])
+                // .coordinates_formatter(
+                //     Corner::RightBottom,
+                //     CoordinatesFormatter::new(|p, b| format!("42")),
+                // )
+                .label_formatter(|name, value| {
+                    if name == "_" {
+                        let i = value.x.to_bits() as usize;
+                        let c = &cached.commits[i];
+                        let s = results_per_commit
+                            .and_then(|x| x.offset(c.as_str()).map(|o| x.vals_to_string(o)));
+                        format!("{}\n{}", &c[..6], s.unwrap_or_default())
+                    } else {
+                        name.to_string()
+                    }
+                })
+                .show(ui, |plot_ui| {
+                    let mut offsets = vec![];
+                    let mut points_with_data = vec![];
+                    let mut points = vec![];
+                    'subs: for sub @ commit::SubsTimed {
+                        prev,
+                        prev_sub,
+                        start,
+                        end,
+                        succ,
+                        succ_sub,
+                        delta_time,
+                    } in &cached.subs
+                    {
+                        const CORNER: bool = true;
+                        let mut line = vec![];
+                        let prev_p = [
+                            if cached.times[*prev] == -1 {
+                                -1
+                            } else {
+                                cached.times[*prev]
+                            },
+                            with_egui_plot::transform_y(cached.subs[*prev_sub].delta_time),
+                        ];
+                        line.push(prev_p.map(|x| x as f64));
+                        for i in *start..*end {
+                            let t = cached.times[i];
+                            if t == -1 {
+                                if fetched_commit_metadata.is_absent(&cached.commits[i]) {
+                                    to_fetch.push(&cached.commits[i]);
+                                } else if fetched_commit_metadata.get(&cached.commits[i]).is_none()
+                                {
+                                    to_poll.push(&cached.commits[i]);
+                                }
+                                break;
+                            }
+                            let commit = &cached.commits[i];
+
+                            let before = if i != *start {
+                                Some(cached.commits[i - 1].as_str())
+                            } else if *prev != usize::MAX {
+                                Some(cached.commits[*prev].as_str())
+                            } else {
+                                None
+                            };
+                            let after = if i + 1 < *end {
+                                Some(cached.commits[i + 1].as_str())
+                            } else if *succ != usize::MAX {
+                                Some(cached.commits[*succ].as_str())
+                            } else {
+                                None
+                            };
+
+                            let diff = results_per_commit
+                                .zip(before)
+                                .and_then(|(x, c1)| x.try_diff_as_string(c1, commit));
+
+                            let y = with_egui_plot::transform_y(*delta_time);
+                            let p = [t, y];
+                            if *start == i {
+                                let corner = [
+                                    (p[0] as f64).max(
+                                        line.last().unwrap()[0]
+                                            - plot_ui.transform().dvalue_dpos()[0] * 10.0,
+                                    ),
+                                    p[1] as f64,
+                                ];
+                                line.push(corner);
+                                if let Some(text) = DIFF_VALS.then_some(()).and(diff) {
+                                    plot_ui.text(
+                                        Text::new(corner.into(), text)
+                                            .anchor(egui::Align2::RIGHT_BOTTOM)
+                                            .color(egui::Color32::YELLOW),
+                                    );
+                                }
+                            } else {
+                                let a = line.last().unwrap().clone();
+                                let b = p.map(|x| x as f64);
+                                let position = with_egui_plot::center(a, b);
+                                if let Some(text) = DIFF_VALS.then_some(()).and(diff) {
+                                    plot_ui.text(
+                                        Text::new(position, text)
+                                            .anchor(egui::Align2::RIGHT_BOTTOM)
+                                            .color(egui::Color32::YELLOW),
+                                    );
+                                }
+                            }
+                            line.push(p.map(|x| x as f64));
+
+                            // stop rendering when reached limit
+                            if cached.max_time - t > max_fetch {
+                                let line = Line::new(line).allow_hover(false);
+                                plot_ui.line(line);
+                                continue 'subs;
+                            }
+
+                            if i == 1 {
+                                let text = results_per_commit.and_then(|x| {
+                                    x.offset(commit).map(|offset| x.vals_to_string(offset))
+                                });
+                                if let Some(text) = text {
+                                    plot_ui.text(
+                                        Text::new(p.map(|x| x as f64).into(), text)
+                                            .anchor(egui::Align2::RIGHT_BOTTOM)
+                                            .color(egui::Color32::GRAY),
+                                    );
+                                }
+                            }
+
+                            let vals_offset = results_per_commit.and_then(|x| {
+                                x.offset_with_variation(
+                                    commit.as_str(),
+                                    before,
+                                    Some(commit.as_str()),
+                                )
+                            });
+                            if let Some(offset) = LEFT_VALS.then_some(()).and(vals_offset) {
+                                let text = results_per_commit.unwrap().vals_to_string(offset);
+                                plot_ui.text(
+                                    Text::new(p.map(|x| x as f64).into(), text)
+                                        .anchor(egui::Align2::RIGHT_BOTTOM)
+                                        .color(egui::Color32::GRAY),
+                                );
+                            }
+
+                            if results_per_commit
+                                .and_then(|x| x._get_offset(commit))
+                                .is_some()
+                            {
+                                points_with_data.push(p.map(|x| x as f64));
+                                offsets.push(i as u32);
+                            } else {
+                                points.push(p.map(|x| x as f64));
+                            }
+                        }
+
+                        if *succ < usize::MAX {
+                            let y = cached.subs[*succ_sub].delta_time;
+                            let y = with_egui_plot::transform_y(y);
+                            let x = cached.times[*succ];
+                            if x == -1 {
+                            } else if CORNER {
+                                let prev = line.last().unwrap();
+                                let p = [x, y].map(|x| x as f64);
+                                let corner = [
+                                    prev[0].min(p[0] + plot_ui.transform().dvalue_dpos()[0] * 10.0),
+                                    prev[1],
+                                ];
+                                line.push(corner);
+                                line.push(p);
+                            } else {
+                                let p = [x, y];
+                                line.push(p.map(|x| x as f64));
+                            }
+                        }
+
+                        let line = Line::new(line).allow_hover(false);
+                        plot_ui.line(line);
+                    }
+
+                    let points = Points::new(points)
+                        .radius(2.0)
+                        .color(egui::Color32::GREEN)
+                        .name("Commit");
+                    plot_ui.points(points);
+                    let points = Points::new(points_with_data)
+                        .radius(2.0)
+                        .color(egui::Color32::DARK_GREEN)
+                        .name("Commit with data");
+                    let item = with_egui_plot::CommitPoints { offsets, points };
+                    let mut ouput = None;
+                    if plot_ui.response().clicked {
+                        if let Some(x) = item.find_closest(
+                            plot_ui.response().hover_pos().unwrap(),
+                            plot_ui.transform(),
+                        ) {
+                            if x.dist_sq < 10.0 {
+                                let i = item.offsets[x.index] as usize;
+                                ouput = Some(i);
+                                // *selected_commit = Some((repo_id, cached.commits[i].to_string()));
+                                // plot_ui
+                                //     .ctx()
+                                //     .output_mut(|r| r.copied_text = cached.commits[i].to_string());
+                            }
+                        }
+                    }
+                    plot_ui.add(item);
+
+                    for &b in &cached.branches {
+                        let b = cached.subs[b].prev;
+                        let y = cached.subs[b].delta_time;
+                        let y = with_egui_plot::transform_y(y);
+                        let position = [cached.times[b] as f64, y as f64].into();
+                        let text = &cached.commits[b];
+                        let text = Text::new(position, text).anchor(egui::Align2::LEFT_TOP);
+                        plot_ui.text(text);
+                    }
+                    ouput
+                });
+
+            // if let Some(id) = &resp.hovered_plot_item {
+            //     if resp.response.clicked() {}
+            // }
+            resp
+        })
+        .inner
+}
+
+fn show_commit_graph_timed_custom<'a>(
+    ui: &mut egui::Ui,
+    offset_fetch: i64,
+    max_fetch: i64,
+    fetched_commit_metadata: &super::utils_poll::MultiBuffered2<
+        String,
+        Result<commit::CommitMetadata, String>,
+    >,
+    results_per_commit: Option<&super::ResultsPerCommit>,
+    cached: &'a commit::CommitsLayoutTimed,
+    repo_id: ProjectId,
+    to_fetch: &mut Vec<&'a String>,
+    to_poll: &mut Vec<&'a String>,
+    selected_commit: &mut Option<(ProjectId, String)>,
+) {
+    let parent_rel_color = if ui.visuals().dark_mode {
+        egui::Color32::WHITE
+    } else {
+        egui::Color32::BLACK
+    };
+    let max_time = cached.min_time.max(cached.max_time - offset_fetch);
+    let min_time = cached.min_time.max(max_time - max_fetch);
+    let cached = cached;
+    let width = ui.available_width() - 120.0;
+    let _time_norm = |t: i64| t as f32 / (max_time - min_time).max(1) as f32;
+    let _time_scaling = |t: i64| _time_norm(t) * width;
+    assert!(cached.max_delta >= 0);
+    let time_scaling = |t: i64| _time_scaling(t - min_time);
+    let time_scaling_y = |t: i64| {
+        _time_norm(t)
+            .clamp(0.0, 1.0)
+            .sqrt()
+            .mul((width / 6.0).min(200.0))
+            .max(0.0)
+    };
+
+    assert!(cached.max_delta < i64::MAX);
+    let desired_size = egui::vec2(
+        ui.available_width(),
+        if cached.max_delta <= 0 {
+            0.0
+        } else {
+            time_scaling_y(cached.max_delta)
+        },
+    ) + egui::vec2(0.0, 60.0);
+    let (_rect, resp) = ui.allocate_exact_size(desired_size, egui::Sense::click());
+    let rect = _rect.shrink(30.0);
+    let min = rect.min;
+
+    // background
+    ui.painter().rect_filled(
+        _rect
+            .shrink2(egui::vec2(55.0, 0.0))
+            .translate(egui::vec2(-30.0, 0.0)),
+        ui.visuals().window_rounding,
+        ui.visuals().extreme_bg_color,
+    );
+
+    // region:   --- Ticks
+    const SECONDS_PER_DAY: i64 = 60 * 60 * 24;
+    let day_count = (max_time - min_time) / (SECONDS_PER_DAY);
+    let day_width = _time_scaling(SECONDS_PER_DAY);
+    let day_offset = min.x + _time_scaling(min_time % (SECONDS_PER_DAY));
+    for d in 0..day_count {
+        let x = day_offset + d as f32 * day_width;
+        ui.painter().line_segment(
+            [egui::pos2(x, _rect.min.y), egui::pos2(x, _rect.min.y + 5.0)],
+            egui::Stroke::new(2.0, egui::Color32::GRAY),
+        );
+    }
+    // endregion --- Ticks
+
+    assert!(cached.branches.len() <= 1);
+    'subs: for commit::SubsTimed {
+        prev,
+        prev_sub,
+        start,
+        end,
+        succ,
+        succ_sub,
+        delta_time,
+    } in &cached.subs
+    {
+        let mut prev_p = min
+            + egui::vec2(
+                if cached.times[*prev] == -1 {
+                    0.0
+                } else {
+                    time_scaling(cached.times[*prev])
+                },
+                time_scaling_y(cached.subs[*prev_sub].delta_time),
+            );
+        let curr_y = min.y + time_scaling_y(*delta_time);
+        for i in *start..*end {
+            let t = cached.times[i];
+            if t == -1 {
+                if fetched_commit_metadata.is_absent(&cached.commits[i]) {
+                    to_fetch.push(&cached.commits[i]);
+                } else if fetched_commit_metadata.get(&cached.commits[i]).is_none() {
+                    to_poll.push(&cached.commits[i]);
+                }
+                break;
+            }
+            let center = egui::pos2(min.x + time_scaling(t), curr_y);
+
+            let commit = &cached.commits[i];
+
+            // region: painter queried values when there is a change
+            let before = if i != *start {
+                Some(cached.commits[i - 1].as_str())
+            } else if *prev != usize::MAX {
+                Some(cached.commits[*prev].as_str())
+            } else {
+                None
+            };
+            let after = if i + 1 < *end {
+                Some(cached.commits[i + 1].as_str())
+            } else if *succ != usize::MAX {
+                Some(cached.commits[*succ].as_str())
+            } else {
+                None
+            };
+
+            let circle_fill_color = if results_per_commit
+                .and_then(|x| x._get_offset(commit))
+                .is_some()
+            {
+                egui::Color32::DARK_GREEN
+            } else {
+                egui::Color32::GREEN
+            };
+
+            let diff = results_per_commit
+                .zip(before)
+                .and_then(|(x, c2)| x.try_diff_as_string(commit, c2));
+
+            if i == *start {
+                let corner_p = egui::pos2(prev_p.x.max(center.x - 10.0), center.y);
+                let parent_rel_color = egui::Color32::LIGHT_GRAY;
+                let stroke = egui::Stroke::new(2.0, parent_rel_color);
+                ui.painter().line_segment([prev_p, corner_p], stroke);
+                ui.painter().line_segment([corner_p, center], stroke);
+                if let Some(text) = diff {
+                    let pos = corner_p;
+                    // let text_color = ui.style().visuals.text_color();
+                    let text_color = egui::Color32::YELLOW;
+                    let font_id = egui::TextStyle::Body.resolve(ui.style());
+                    let anchor = egui::Align2::RIGHT_BOTTOM;
+                    ui.painter().text(pos, anchor, text, font_id, text_color);
+                }
+            } else {
+                ui.painter()
+                    .line_segment([prev_p, center], egui::Stroke::new(2.0, parent_rel_color));
+                if let Some(text) = diff {
+                    let pos = egui::Rect::from_min_max(prev_p, center).center();
+                    // let text_color = ui.style().visuals.text_color();
+                    let text_color = egui::Color32::YELLOW;
+                    let font_id = egui::TextStyle::Body.resolve(ui.style());
+                    let anchor = egui::Align2::RIGHT_BOTTOM;
+                    ui.painter().text(pos, anchor, text, font_id, text_color);
+                }
+            }
+
+            // stop rendering when reached limit
+            if max_time - t > max_fetch {
+                let fill_color = egui::Color32::RED;
+                ui.painter().circle_filled(center, 10.0, fill_color);
+                continue 'subs;
+            }
+
+            ui.painter().circle_filled(center, 4.0, circle_fill_color);
+
+            let resp = ui.interact(
+                egui::Rect::from_center_size(center, egui::Vec2::splat(8.0)),
+                ui.id().with(&cached.commits[i]),
+                egui::Sense::click(),
+            );
+            let vals_offset = results_per_commit
+                .and_then(|x| x.offset_with_variation(commit.as_str(), before, after));
+            if let Some(offset) = vals_offset {
+                let pos = center + (0.0, -10.0).into();
+                let text_color = ui.style().visuals.text_color();
+                let text = results_per_commit.unwrap().vals_to_string(offset);
+                let font_id = egui::TextStyle::Body.resolve(ui.style());
+                let anchor = egui::Align2::RIGHT_BOTTOM;
+                // let rect = egui::Align2::RIGHT_BOTTOM.anchor_size(pos, galley.size());
+                // ui.painter().galley(rect.min, galley.clone(), text_color);
+                ui.painter().text(pos, anchor, text, font_id, text_color);
+            }
+            // endregion
+
+            // similar to a tooltip
+            let resp = resp.on_hover_ui(|ui| {
+                let vals_offset = results_per_commit.and_then(|x| x.offset(commit.as_str()));
+                let text = if let Some(v) = vals_offset {
+                    format!(
+                        "{}\n{}",
+                        commit,
+                        results_per_commit.unwrap().vals_to_string(v)
+                    )
+                } else {
+                    format!("{}", commit)
+                };
+                ui.label(text);
+            });
+            const SC_COPY: egui::KeyboardShortcut =
+                egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::C);
+            if resp.hovered() {
+                if ui.input_mut(|mem| mem.consume_shortcut(&SC_COPY)) {
+                    ui.output_mut(|mem| mem.copied_text = commit.to_string());
+                }
+            }
+            if resp.clicked() {
+                log::debug!("");
+                *selected_commit = Some((repo_id, commit.to_string()));
+            }
+            // if let Some(pos) = resp.hover_pos() {
+            //     let vals_offset =
+            //         results_per_commit.and_then(|x| x.offset(commit.as_str()));
+            //     let text = if let Some(v) = vals_offset {
+            //         format!(
+            //             "{}\n{}",
+            //             commit,
+            //             results_per_commit.unwrap().vals_to_string(v)
+            //         )
+            //     } else {
+            //         format!("{}", commit)
+            //     };
+            //     let font_id = egui::TextStyle::Button.resolve(ui.style());
+            //     ui.painter().text(
+            //         pos + (20.0, 0.0).into(),
+            //         egui::Align2::RIGHT_BOTTOM,
+            //         text,
+            //         font_id,
+            //         ui.style().visuals.text_color(),
+            //     );
+            // }
+            prev_p = center;
+        }
+
+        if *succ < usize::MAX {
+            let y = min.y + time_scaling_y(cached.subs[*succ_sub].delta_time);
+            let x = min.x + time_scaling(cached.times[*succ]);
+            let succ_p = egui::pos2(x, y);
+            let mid_p = egui::pos2(prev_p.x.min(x + 5.0), prev_p.y);
+            ui.painter()
+                .line_segment([prev_p, mid_p], egui::Stroke::new(2.0, parent_rel_color));
+            ui.painter()
+                .line_segment([mid_p, succ_p], egui::Stroke::new(2.0, parent_rel_color));
+        }
+    }
+    for &b in &cached.branches {
+        let b = cached.subs[b].prev;
+        let p = (
+            cached.times[b],
+            min.y + time_scaling_y(cached.subs[b].delta_time),
+        );
+        let center = egui::pos2(time_scaling(p.0), p.1);
+        let font_id = egui::TextStyle::Button.resolve(ui.style());
+        let pos = center + (70.0, -10.0).into();
+        let text = &cached.commits[b];
+        let text_color = ui.style().visuals.text_color();
+        let galley = ui
+            .painter()
+            .layout(text.to_string(), font_id, text_color, 100.0);
+        let angle = 0.9;
+        let rect = egui::Rect::from_min_size(pos, galley.size());
+        if !galley.is_empty() {
+            let shape = epaint::TextShape::new(rect.min, galley, text_color);
+            ui.painter().add(shape.with_angle(angle));
+        };
+    }
+    if let Some(pos) = resp.hover_pos() {
+        let top = egui::pos2(pos.x, _rect.top());
+        let bot = egui::pos2(pos.x, _rect.bottom());
+        ui.painter()
+            .line_segment([top, bot], egui::Stroke::new(2.0, parent_rel_color));
+        let Some(x_ratio) = egui::emath::inverse_lerp(rect.x_range().into(), pos.x) else {
+            panic!("TODO just continue with next plot");
+        };
+        if min_time == i64::MAX {
+            panic!("TODO just continue with next plot");
+        }
+        let timestamp = min_time + (x_ratio * (max_time - min_time) as f32) as i64;
+        let Some(naive_datetime) = chrono::DateTime::from_timestamp(timestamp, 0) else {
+            panic!("TODO just continue with next plot");
+        };
+        let datetime_again = naive_datetime.to_utc();
+        let text = format!("{}", datetime_again);
+        let font_id = egui::TextStyle::Button.resolve(ui.style());
+        ui.painter().text(
+            pos + (20.0, 0.0).into(),
+            egui::Align2::LEFT_TOP,
+            text,
+            font_id,
+            ui.style().visuals.text_color(),
+        );
     }
 }
 
@@ -546,28 +870,32 @@ impl crate::HyperApp {
 
 fn update_results_per_commit(
     results_per_commit: &mut super::ResultsPerCommit,
-    r: &super::utils_results_batched::ComputeResults,
+    r: &StreamedDataTable<
+        Vec<std::string::String>,
+        std::result::Result<ComputeResultIdentified, MatchingError>,
+    >,
 ) {
-    let header = r.results.iter().find(|x| x.is_ok());
-    let Some(header) = header.as_ref() else {
-        wasm_rs_dbg::dbg!("issue with header");
-        panic!("issue with header");
-    };
-    // let font_id = egui::TextStyle::Body.resolve(ui.style());
-    // let text_color = ui.style().visuals.text_color();
-    let header = header.as_ref().unwrap();
-    let h: Vec<String> = header
-        .inner
-        .result
-        .as_array()
-        .unwrap()
-        .into_iter()
-        .enumerate()
-        .map(|(i, h)| i.to_string())
-        .collect();
-    let mut vals = vec![0; h.len()];
-    results_per_commit.set_cols(&h);
-    for r in &r.results {
+    let header = &r.head; //.results.iter().find(|x| x.is_ok());
+                          // let Some(header) = header.as_ref() else {
+                          //     wasm_rs_dbg::dbg!("issue with header");
+                          //     panic!("issue with header");
+                          // };
+                          // let font_id = egui::TextStyle::Body.resolve(ui.style());
+                          // let text_color = ui.style().visuals.text_color();
+                          // let header = header.as_ref().unwrap();
+                          // let h =
+                          // header
+                          //     .inner
+                          //     .result
+                          //     .as_array()
+                          //     .unwrap()
+                          //     .into_iter()
+                          //     .enumerate()
+                          //     .map(|(i, h)| i.to_string())
+                          //     .collect();
+    let mut vals = vec![0; header.len()];
+    results_per_commit.set_cols(header);
+    for r in &r.rows.lock().unwrap().1 {
         if let Ok(r) = r {
             // let c: [u8;8] = r.commit.as_bytes().as_chunks::<8>().0[0];
             // let mut c: [u8; 8] = [0; 8];
@@ -597,4 +925,160 @@ fn update_results_per_commit(
         }
     }
     log::debug!("{:?}", results_per_commit);
+}
+
+mod with_egui_plot {
+    use egui_plot::*;
+
+    pub(crate) fn transform_y(y: i64) -> i64 {
+        assert_ne!(y, i64::MIN);
+        assert_ne!(y, i64::MAX);
+        assert!(y > -1);
+        if y == 0 {
+            0
+        } else {
+            -((y as f64).sqrt() as i64) - 1
+        }
+    }
+
+    pub fn center(a: [f64; 2], b: [f64; 2]) -> PlotPoint {
+        fn apply(a: [f64; 2], b: [f64; 2], f: impl Fn(f64, f64) -> f64) -> [f64; 2] {
+            [f(a[0], b[0]), f(a[1], b[1])]
+        }
+        let position = apply(a, b, |a, b| (a + b) / 2.0).into();
+        position
+    }
+
+    /// from egui_plot
+    /// Fill in all values between [min, max] which are a multiple of `step_size`
+    fn fill_marks_between(
+        step_size: f64,
+        (min, max): (f64, f64),
+    ) -> impl Iterator<Item = GridMark> {
+        debug_assert!(min <= max, "Bad plot bounds: min: {min}, max: {max}");
+        let first = (min / step_size).ceil() as i64;
+        let last = (max / step_size).ceil() as i64;
+
+        (first..last).map(move |i| {
+            let value = (i as f64) * step_size;
+            GridMark { value, step_size }
+        })
+    }
+
+    pub(crate) fn compute_multi_x_marks(i: GridInput) -> Vec<GridMark> {
+        // TODO use proper rounded year convention
+        let year = 60 * 60 * 24 * 365 + 60 * 60 * 6;
+        let years = fill_marks_between(year as f64, i.bounds);
+        let month = 60 * 60 * 24 * 30;
+        let months = fill_marks_between(month as f64, i.bounds);
+        let week = 60 * 60 * 24 * 7;
+        let weeks = fill_marks_between(week as f64, i.bounds);
+        let day = 60 * 60 * 24;
+        let days = fill_marks_between(day as f64, i.bounds);
+        years.chain(months).chain(weeks).chain(days).collect()
+    }
+    pub struct CommitPoints {
+        pub offsets: Vec<u32>,
+        pub points: Points,
+    }
+    impl PlotItem for CommitPoints {
+        fn shapes(&self, ui: &egui::Ui, transform: &PlotTransform, shapes: &mut Vec<egui::Shape>) {
+            self.points.shapes(ui, transform, shapes)
+        }
+
+        fn initialize(&mut self, x_range: std::ops::RangeInclusive<f64>) {
+            self.points.initialize(x_range)
+        }
+
+        fn name(&self) -> &str {
+            PlotItem::name(&self.points)
+        }
+
+        fn color(&self) -> egui::Color32 {
+            PlotItem::color(&self.points)
+        }
+
+        fn highlight(&mut self) {
+            PlotItem::highlight(&mut self.points)
+        }
+
+        fn highlighted(&self) -> bool {
+            self.points.highlighted()
+        }
+
+        fn allow_hover(&self) -> bool {
+            PlotItem::allow_hover(&self.points)
+        }
+
+        fn geometry(&self) -> PlotGeometry<'_> {
+            self.points.geometry()
+        }
+
+        fn bounds(&self) -> PlotBounds {
+            self.points.bounds()
+        }
+
+        fn id(&self) -> Option<egui::Id> {
+            PlotItem::id(&self.points)
+        }
+
+        fn on_hover(
+            &self,
+            elem: ClosestElem,
+            shapes: &mut Vec<egui::Shape>,
+            cursors: &mut Vec<Cursor>,
+            plot: &PlotConfig<'_>,
+            label_formatter: &LabelFormatter<'_>,
+        ) {
+            let points = match self.geometry() {
+                PlotGeometry::Points(points) => points,
+                PlotGeometry::None => {
+                    panic!("If the PlotItem has no geometry, on_hover() must not be called")
+                }
+                PlotGeometry::Rects => {
+                    panic!("If the PlotItem is made of rects, it should implement on_hover()")
+                }
+            };
+
+            // let line_color = if plot.ui.visuals().dark_mode {
+            //     Color32::from_gray(100).additive()
+            // } else {
+            //     Color32::from_black_alpha(180)
+            // };
+
+            // this method is only called, if the value is in the result set of find_closest()
+            let value = points[elem.index];
+            let pointer = plot.transform.position_from_point(&value);
+            // shapes.push(Shape::circle_filled(pointer, 3.0, line_color));
+
+            let offset = self.offsets[elem.index];
+
+            // rulers_at_value(
+            //     pointer,
+            //     value,
+            //     self.name(),
+            //     plot,
+            //     shapes,
+            //     cursors,
+            //     label_formatter,
+            // );
+            let font_id = egui::TextStyle::Body.resolve(plot.ui.style());
+            // WARN big hack passing an index as a f64...
+            let text = label_formatter.as_ref().unwrap()(
+                "_",
+                &PlotPoint {
+                    x: f64::from_bits(offset as u64),
+                    y: 0.0,
+                },
+            );
+            plot.ui.painter().text(
+                pointer + egui::vec2(3.0, -2.0),
+                egui::Align2::LEFT_BOTTOM,
+                text,
+                font_id,
+                plot.ui.visuals().text_color(),
+            );
+            log::debug!("{}", label_formatter.is_some());
+        }
+    }
 }

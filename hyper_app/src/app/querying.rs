@@ -1,4 +1,5 @@
 use std::{
+    hash::{DefaultHasher, Hash, Hasher},
     ops::DerefMut,
     sync::{Arc, Mutex},
 };
@@ -8,6 +9,7 @@ use poll_promise::Promise;
 use crate::app::{
     types::EditorHolder,
     utils_edition::{self, show_available_remote_docs, show_locals_and_interact},
+    utils_results_batched::ComputeResultIdentified,
 };
 
 use self::example_queries::EXAMPLES;
@@ -152,7 +154,7 @@ pub(super) fn remote_compute_query(
             }
         }
     };
-    remote_compute_query_aux(ctx, api_addr, &single.content, script)
+    remote_compute_query_aux_old(ctx, api_addr, &single.content, script)
 }
 
 #[derive(serde::Serialize, Debug)]
@@ -168,7 +170,134 @@ pub(crate) struct QueryContent {
     pub(crate) timeout: u64,
 }
 
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+pub(crate) struct StreamedDataTable<H, R> {
+    pub head: H,
+    pub commits: usize,
+    pub rows: Arc<Mutex<(u64, Vec<R>, bool)>>,
+}
+
+pub(crate) type StreamedComputeResults =
+    StreamedDataTable<Vec<String>, Result<ComputeResultIdentified, MatchingError>>;
+
 pub(crate) fn remote_compute_query_aux(
+    ctx: &egui::Context,
+    api_addr: &str,
+    single: &ComputeConfigQuery,
+    script: QueryContent,
+) -> Promise<Result<StreamedComputeResults, QueryingError>> {
+    // TODO multi requests from client
+    // if single.len > 1 {
+    //     let parents = fetch_commit_parents(&ctx, &single.commit, single.len);
+    // }
+    let ctx = ctx.clone();
+    let (header_sender, promise) = Promise::<Result<_, QueryingError>>::new();
+    let tabl_body: Arc<Mutex<(u64, Vec<Result<ComputeResultIdentified, MatchingError>>, _)>> =
+        Arc::default();
+
+    let move_once = std::cell::Cell::new(Some((header_sender, tabl_body.clone())));
+    let url = format!(
+        "http://{}/query-st/github/{}/{}/{}",
+        api_addr, &single.commit.repo.user, &single.commit.repo.name, &single.commit.id,
+    );
+    wasm_rs_dbg::dbg!(&url, &script);
+
+    let mut request = ehttp::Request::post(&url, serde_json::to_vec(&script).unwrap());
+    request.headers.insert(
+        "Content-Type".to_string(),
+        "application/json; charset=utf-8".to_string(),
+    );
+    ehttp::streaming::fetch(request, move |response| {
+        match response {
+            Ok(ehttp::streaming::Part::Response(s)) => {
+                log::debug!("{:?}", s);
+                // TODO parse the headers
+                let (header_sender, rows) = move_once.take().unwrap();
+                if 200 <= s.status && s.status < 400 {
+                    let commits = s.headers.get("commits").unwrap().parse().unwrap();
+                    header_sender.send(Ok(StreamedDataTable {
+                        head: s
+                            .headers
+                            .get("table_head")
+                            .map_or(vec![], |x| serde_json::from_str(x).unwrap()),
+                        rows,
+                        commits,
+                    }));
+                    std::ops::ControlFlow::Continue(())
+                } else {
+                    log::debug!("{:?}", s.headers.get("error_query"));
+                    log::debug!("{:?}", s.headers.get("error_parsing"));
+                    if let Some(e) = s.headers.get("error_query") {
+                        header_sender.send(Err(serde_json::from_str(e).unwrap()));
+                    } else if let Some(e) = s.headers.get("error_parsing") {
+                        header_sender.send(Err(serde_json::from_str(e).unwrap()));
+                    } else {
+                        header_sender.send(Err(QueryingError::NetworkError("Unknown".into())));
+                    }
+                    std::ops::ControlFlow::Break(())
+                }
+            }
+            Ok(ehttp::streaming::Part::Chunk(chunk)) if chunk.is_empty() => {
+                log::debug!("{:?}", chunk);
+                let mut l = tabl_body.lock().unwrap();
+                log::debug!("{:?}", l);
+                l.2 = true;
+                let mut hasher = DefaultHasher::new();
+                l.0.hash(&mut hasher);
+                0.hash(&mut hasher);
+                l.0 = hasher.finish();
+                std::ops::ControlFlow::Break(())
+            }
+            Ok(ehttp::streaming::Part::Chunk(chunk)) => {
+                ctx.request_repaint(); // wake up UI thread
+                match std::str::from_utf8(&chunk) {
+                    Ok(a) => {
+                        #[derive(Debug, serde::Deserialize, serde::Serialize)]
+                        #[serde(untagged)]
+                        enum R {
+                            Resp(ComputeResultIdentified),
+                            Err(MatchingError),
+                        }
+                        log::debug!("{}", a);
+
+                        let s = serde_json::Deserializer::from_str(a);
+                        let it = s.into_iter::<R>();
+                        let mut l = tabl_body.lock().unwrap();
+                        let mut hasher = DefaultHasher::new();
+                        l.0.hash(&mut hasher);
+                        let it = it
+                            .filter_map(|x| x.inspect_err(|err| log::error!("{:?}", err)).ok())
+                            .map(|x| match x {
+                                R::Resp(r) => {
+                                    r.hash(&mut hasher);
+                                    log::debug!("{:?}", r);
+                                    Ok(r)
+                                }
+                                R::Err(err) => {
+                                    log::debug!("{:?}", err);
+                                    err.hash(&mut hasher);
+                                    Err(err)
+                                }
+                            });
+                        l.1.extend(it);
+                        l.0 = hasher.finish();
+                    }
+                    _ => panic!(),
+                }
+                std::ops::ControlFlow::Continue(())
+            }
+            Err(err) => {
+                log::error!("{}", err);
+                let (header_sender, _) = move_once.take().unwrap();
+                header_sender.send(Err(QueryingError::NetworkError(err)));
+                std::ops::ControlFlow::Break(())
+            }
+        }
+    });
+    promise
+}
+
+pub(crate) fn remote_compute_query_aux_old(
     ctx: &egui::Context,
     api_addr: &str,
     single: &ComputeConfigQuery,
@@ -210,10 +339,35 @@ pub enum QueryingError {
     ParsingError(String),
     MatchingErrOnFirst(MatchingError),
 }
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, Hash)]
 pub enum MatchingError {
     TimeOut(utils_results_batched::ComputeResultIdentified),
     MaxMatches(utils_results_batched::ComputeResultIdentified),
+}
+
+impl utils_results_batched::PartialError<utils_results_batched::ComputeResultIdentified>
+    for MatchingError
+{
+    fn error(&self) -> impl ToString {
+        match self {
+            MatchingError::TimeOut(_) => "time out",
+            MatchingError::MaxMatches(_) => "max matches",
+        }
+    }
+
+    fn try_partial(&self) -> Option<&utils_results_batched::ComputeResultIdentified> {
+        match self {
+            MatchingError::TimeOut(x) => Some(x),
+            MatchingError::MaxMatches(x) => Some(x),
+        }
+    }
+}
+
+impl std::fmt::Display for MatchingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self) // TODO something better
+    }
 }
 
 pub(super) fn show_querying(
@@ -377,7 +531,8 @@ impl Resource<Result<ComputeResults, QueryingError>> {
                 Ok(json) => json,
                 Err(err) => {
                     log::error!("error converting QueryError: {}", err);
-                    return Err(text.to_string())},
+                    return Err(text.to_string());
+                }
             };
             return Ok(Self {
                 response,
@@ -437,8 +592,12 @@ impl utils_results_batched::ComputeError for QueryingError {
             QueryingError::MissingLanguage(_) => "Missing Language:",
             QueryingError::ProcessingError(_) => "Processing Error:",
             QueryingError::ParsingError(_) => "Parsing Error:",
-            QueryingError::MatchingErrOnFirst(MatchingError::TimeOut(_)) => "Timed out on first commit:",
-            QueryingError::MatchingErrOnFirst(MatchingError::MaxMatches(_)) => "Too many matches on first commit:",
+            QueryingError::MatchingErrOnFirst(MatchingError::TimeOut(_)) => {
+                "Timed out on first commit:"
+            }
+            QueryingError::MatchingErrOnFirst(MatchingError::MaxMatches(_)) => {
+                "Too many matches on first commit:"
+            }
         }
     }
 

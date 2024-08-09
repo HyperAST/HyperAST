@@ -288,6 +288,7 @@ impl SelectedProjects {
             commits: vec![],
         }
     }
+
     pub(crate) fn add_with_commit_slice(
         &mut self,
         repo: Repo,
@@ -295,6 +296,7 @@ impl SelectedProjects {
     ) -> ProjectId {
         self.add(repo, commits.into_iter().map(|x| x.to_string()).collect())
     }
+
     pub(crate) fn add(&mut self, repo: Repo, commits: Vec<CommitId>) -> ProjectId {
         if let Some(i) = self.repositories.iter().position(|x| x == &repo) {
             let i = ProjectId(i);
@@ -351,6 +353,13 @@ impl SelectedProjects {
         (0..self.repositories.len()).into_iter().map(ProjectId)
     }
 
+    pub(crate) fn get<'a>(
+        &'a mut self,
+        ProjectId(i): ProjectId,
+    ) -> Option<&'a Repo> {
+        self.repositories.get(i)
+    }
+
     pub(crate) fn get_mut<'a>(
         &'a mut self,
         ProjectId(i): ProjectId,
@@ -364,7 +373,7 @@ impl SelectedProjects {
         };
         let end = c_range.end;
         Some((
-            &mut self.repositories[i],
+            self.repositories.get_mut(i)?,
             CommitSlice {
                 end,
                 commits: &mut self.commits,

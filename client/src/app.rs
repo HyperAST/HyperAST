@@ -103,6 +103,15 @@ async fn querying(
     Ok(r)
 }
 
+#[axum_macros::debug_handler]
+async fn querying_streamed(
+    axum::extract::Path(path): axum::extract::Path<querying::Param>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+    axum::extract::Json(script): axum::extract::Json<querying::Content>,
+) -> impl IntoResponse {
+    querying::streamed(state, path, script)
+}
+
 pub fn querying_app(_st: SharedState) -> Router<SharedState> {
     let querying_service_config = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|e: BoxError| async move {
@@ -119,6 +128,10 @@ pub fn querying_app(_st: SharedState) -> Router<SharedState> {
         .route(
             "/query/github/:user/:name/:commit",
             post(querying).layer(querying_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/query-st/github/:user/:name/:commit",
+            post(querying_streamed).layer(querying_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
         )
         .route(
             "/sharing-queries/shared-db",

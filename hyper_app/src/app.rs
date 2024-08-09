@@ -352,7 +352,13 @@ impl ResultsPerCommit {
 struct QueryResults(
     ProjectId,
     QueryId,
-    Buffered5<utils_results_batched::ComputeResults, querying::QueryingError>,
+    utils_poll::Buffered2<
+        Result<querying::StreamedComputeResults, querying::QueryingError>,
+        Result<querying::StreamedComputeResults, querying::QueryingError>,
+    >,
+    // Buffered5<,
+    // utils_results_batched::ComputeResults, querying::QueryingError
+    // >,
     TabId,
 );
 
@@ -834,24 +840,50 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                 let language = "rs";
                 let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
 
-                ui.add(
-                    egui_addon::code_editor::generic_text_edit::TextEdit::multiline(code)
-                        .font(egui::TextStyle::Monospace) // for cursor height
-                        .frame(false)
-                        .code_editor()
-                        .desired_width(f32::INFINITY)
-                        // .desired_rows(1)
-                        .lock_focus(true)
-                        .layouter(&mut |ui, string, _wrap_width| {
-                            let layout_job = egui_extras::syntax_highlighting::highlight(
-                                ui.ctx(),
-                                &theme,
-                                string.as_str(),
-                                language,
+                const EDIT_AWARE: bool = false;
+                egui::ScrollArea::both()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        if EDIT_AWARE {
+                            // some issues on cursor behavior, like lising focus on arrow key press
+                            use egui_addon::code_editor::generic_text_edit::TextEdit;
+                            ui.add_sized(
+                                ui.available_size(),
+                                TextEdit::multiline(code)
+                                    .code_editor()
+                                    .frame(false)
+                                    .desired_width(f32::INFINITY)
+                                    .layouter(&mut |ui, string, _wrap_width| {
+                                        let layout_job =
+                                            egui_extras::syntax_highlighting::highlight(
+                                                ui.ctx(),
+                                                &theme,
+                                                string.as_str(),
+                                                language,
+                                            );
+                                        ui.fonts(|f| f.layout_job(layout_job))
+                                    }),
                             );
-                            ui.fonts(|f| f.layout_job(layout_job))
-                        }),
-                );
+                        } else {
+                            ui.add_sized(
+                                ui.available_size(),
+                                egui::TextEdit::multiline(&mut code.string)
+                                    .code_editor()
+                                    .frame(false)
+                                    .desired_width(f32::INFINITY)
+                                    .layouter(&mut |ui, string, _wrap_width| {
+                                        let layout_job =
+                                            egui_extras::syntax_highlighting::highlight(
+                                                ui.ctx(),
+                                                &theme,
+                                                string.as_str(),
+                                                language,
+                                            );
+                                        ui.fonts(|f| f.layout_job(layout_job))
+                                    }),
+                            );
+                        }
+                    });
 
                 // egui_addon::code_editor::show_edit_syntect(ui, &mut query.query.code);
 
@@ -1026,7 +1058,8 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                 };
                 let Some(res) = res.get_mut() else {
                     if res.try_poll_with(|x| {
-                        x.expect("TODO").content.expect("TODO").map(|x| x.into())
+                        todo!()
+                        // x.expect("TODO").content.expect("TODO").map(|x| x.into())
                     }) {
                         // TODO is there something to do ?
                     } else {
@@ -1077,12 +1110,16 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                                     if m.0.as_ref() != Some(selected) {
                                         m.0 = Some(selected.clone());
                                         m.1 = res
-                                            .results
+                                            // .results
+                                            .rows
+                                            .lock()
+                                            .unwrap()
+                                            .1
                                             .iter()
                                             .position(|x| {
                                                 x.as_ref().map_or(false, |r| r.commit == selected.1)
                                             })
-                                            .unwrap();
+                                            .unwrap_or(usize::MAX);
                                     }
                                     log::debug!("{:?}", m);
                                     m.1.clone()
@@ -1093,13 +1130,14 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                         ui.push_id("table", |ui| {
                             utils_results_batched::show_long_result_table(
                                 ui,
-                                res,
+                                (&res.head, None, res.rows.lock().unwrap().1.as_slice()),
                                 &mut selected_commit,
                             )
                         });
                     }
                     ResultFormat::List => {
-                        utils_results_batched::show_long_result_list(ui, res);
+                        todo!()
+                        // utils_results_batched::show_long_result_list(ui, res);
                     }
                     ResultFormat::Json => todo!(),
                 }

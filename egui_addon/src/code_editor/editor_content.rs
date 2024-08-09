@@ -14,7 +14,8 @@ use super::generic_text_buffer::{AsText, TextBuffer};
 pub struct EditAwareString {
     pub(crate) id: u64,
     pub(crate) generation: u64,
-    pub(crate) string: String,
+    #[doc(hidden)]
+    pub string: String,
     #[serde(skip)]
     #[serde(default = "default_bool")]
     pub(crate) reset: AtomicBool,

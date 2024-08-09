@@ -69,10 +69,9 @@ impl crate::HyperApp {
         }
     }
     fn show_local_query_left_panel(&mut self, ui: &mut egui::Ui, id: u16) {
-        let compute_button = ui.add_enabled(false, egui::Button::new("Compute All"));
         let query = &mut self.data.queries[id as usize];
         egui::Slider::new(&mut query.commits, 1..=100)
-            .text("commit limit")
+            .text("#commits")
             .clamp_to_range(false)
             .ui(ui)
             .on_hover_text("Maximum number of commits that will be processed.");
@@ -82,10 +81,18 @@ impl crate::HyperApp {
             .ui(ui)
             .on_hover_text("Maximum number of match per commit\n, for any of the patterns.");
         egui::Slider::new(&mut query.timeout, 1..=5000)
-            .text("match timeout")
+            .text("commit timeout")
             .clamp_to_range(false)
             .ui(ui)
             .on_hover_text("Maximum time to match each commit.");
+        ui.add_enabled(
+            false,
+            egui::Slider::new(&mut query.timeout, 1..=5000)
+                .text("commit timeout")
+                .clamp_to_range(false),
+        )
+        .on_hover_text("Maximum time to match all commit.");
+        let compute_button = ui.add_enabled(false, egui::Button::new("Compute All"));
         let q_res_ids = &mut query.results;
         if self.data.selected_code_data.len() != q_res_ids.len() {
             // TODO update on new commit
@@ -129,6 +136,7 @@ impl crate::HyperApp {
             *q_res_ids = r;
         }
         let q_res_ids = &self.data.queries[id as usize].results;
+        ui.style_mut().spacing.item_spacing = egui::vec2(3.0, 2.0);
         for q_res_id in q_res_ids {
             if *q_res_id == u16::MAX {
                 continue;
@@ -158,18 +166,67 @@ impl crate::HyperApp {
             }
             let compute_button = ui
                 .horizontal(|ui| {
+                    ui.style_mut().spacing.button_padding = egui::vec2(3.0, 2.0);
+                    let d = egui::Color32::DARK_GREEN;
+                    let n = egui::Color32::GREEN;
+                    let w = &mut ui.style_mut().visuals.widgets;
+                    w.open.weak_bg_fill = d;
+                    w.active.weak_bg_fill = d;
+                    w.hovered.weak_bg_fill = n;
+                    w.inactive.weak_bg_fill = d;
                     let q_res = &mut self.data.queries_results[*q_res_id as usize];
                     let compute_button;
                     if let Some(content) = q_res.2.get() {
                         match content {
                             Ok(content) => {
-                                compute_button = ui.add(egui::Button::new("↺")).on_hover_ui(|ui| {
-                                    crate::app::utils_results_batched::show_short_result_aux(
-                                        content, ui,
-                                    )
-                                });
+                                let rows = content.rows.lock().unwrap();
+                                if rows.2 {
+                                    if let [Err(err)] = rows.1.as_slice() {
+                                        let d = egui::Color32::DARK_RED;
+                                        let n = egui::Color32::RED;
+                                        let w = &mut ui.style_mut().visuals.widgets;
+                                        w.open.weak_bg_fill = d;
+                                        w.active.weak_bg_fill = d;
+                                        w.hovered.weak_bg_fill = n;
+                                        w.inactive.weak_bg_fill = d;
+                                        compute_button =
+                                            ui.add(egui::Button::new("⚠")).on_hover_ui(|ui| {
+                                                ui.label(format!(
+                                                    "streamed results {}/{}",
+                                                    rows.1.len(),
+                                                    content.commits
+                                                ));
+                                                ui.label(format!("{:?}", err));
+                                            });
+                                    } else {
+                                        compute_button =
+                                            ui.add(egui::Button::new("↺")).on_hover_ui(|ui| {
+                                                ui.label(format!(
+                                                    "streamed results {}/{}",
+                                                    rows.1.len(),
+                                                    content.commits
+                                                ));
+                                                // crate::app::utils_results_batched::show_short_result_aux(
+                                                //     content, ui,
+                                                // )
+                                            });
+                                    }
+                                } else {
+                                    compute_button = ui.spinner().on_hover_text(format!(
+                                        "waiting for the rest of the entries: {}/{}",
+                                        rows.1.len(),
+                                        content.commits
+                                    ));
+                                }
                             }
                             Err(err) => {
+                                let d = egui::Color32::DARK_RED;
+                                let n = egui::Color32::RED;
+                                let w = &mut ui.style_mut().visuals.widgets;
+                                w.open.weak_bg_fill = d;
+                                w.active.weak_bg_fill = d;
+                                w.hovered.weak_bg_fill = n;
+                                w.inactive.weak_bg_fill = d;
                                 compute_button = ui
                                     .add(egui::Button::new("⚠"))
                                     .on_hover_text(format!("{}\n{}", err.head(), err.content()));
@@ -195,6 +252,13 @@ impl crate::HyperApp {
                         let q_res = &mut self.data.queries_results[*q_res_id as usize];
                         let synced = Self::sync_query_results(q_res);
                         if let Err(Some(err)) = &synced {
+                            let d = egui::Color32::DARK_RED;
+                            let n = egui::Color32::RED;
+                            let w = &mut ui.style_mut().visuals.widgets;
+                            w.open.weak_bg_fill = d;
+                            w.active.weak_bg_fill = d;
+                            w.hovered.weak_bg_fill = n;
+                            w.inactive.weak_bg_fill = d;
                             compute_button = ui.add(egui::Button::new("⚠")).on_hover_text(err);
                         } else if let Err(None) = &synced {
                             compute_button = ui.spinner();
@@ -274,11 +338,13 @@ impl crate::HyperApp {
     ) -> Result<bool, Option<String>> {
         if q_res.2.is_waiting() {
             if q_res.2.try_poll_with(|x| {
-                x.map_err(|x| querying::QueryingError::NetworkError(x))?
-                    .content
-                    .ok_or(querying::QueryingError::NetworkError(
-                        "content was not deserialized or empty".to_string(),
-                    ))?.map(|x|x.into())
+                // x.map_err(|x| querying::QueryingError::NetworkError(x))?
+                //     .content
+                //     .ok_or(querying::QueryingError::NetworkError(
+                //         "content was not deserialized or empty".to_string(),
+                //     ))?
+                //     .map(|x| x.into())
+                x
             }) {
                 Ok(true)
             } else {

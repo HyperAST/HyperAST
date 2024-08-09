@@ -51,7 +51,16 @@ impl std::fmt::Display for SecFmt {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // f.precision()
         let x = self.0;
-        let (t, n) = if x > 60.0 {
+        let (t, n) = if x > 60.0 * 60.0 {
+            let n = if f.alternate() { "minutes" } else { "m" };
+            (x / 60.0, n)
+        } else if x > 60.0 * 60.0 * 24.0 {
+            let n = if f.alternate() { "minutes" } else { "d" };
+            (x / 60.0, n)
+        } else if x > 60.0 * 60.0 {
+            let n = if f.alternate() { "minutes" } else { "m" };
+            (x / 60.0, n)
+        } else if x > 60.0 {
             let n = if f.alternate() { "minutes" } else { "m" };
             (x / 60.0, n)
         } else if x == 0.0 {
