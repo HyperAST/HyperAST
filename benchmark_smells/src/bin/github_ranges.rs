@@ -64,15 +64,17 @@ fn print_pos(repo_name: &str, commit: &str, limit: usize, query: &str) {
         use hyper_ast::types::WithStats;
         let s = stores.node_store.resolve(tr).size();
 
-        let matches = hyper_ast_benchmark_smells::github_ranges::compute_ranges(stores, tr, &query);
+        let matches = hyper_ast_benchmark_smells::github_ranges::compute_formated_ranges(
+            stores,
+            tr,
+            &query,
+            repo_name,
+            &oid.to_string(),
+        );
         let matches = matches
             .into_iter()
             .map(|x| {
-                let x: String = x
-                    .into_iter()
-                    .take(10)
-                    .map(|x| format!("https://github.com/{repo_name}/blob/{oid}/{},", x))
-                    .collect();
+                let x: String = x.into_iter().take(10).map(|x| format!("{},", x)).collect();
                 format!(",[{:?}]", x)
             })
             .collect::<String>();
@@ -134,10 +136,9 @@ fn bench_conditional_logic() {
     print_pos(repo_name, commit, limit, query);
 }
 
-
 #[test]
 fn assertion_roulette() {
-    let repo_name =  "INRIA/spoon";
+    let repo_name = "INRIA/spoon";
     let commit = "7c7f094bb22a350fa64289a94880cc3e7231468f";
     let limit = 6;
     let query = hyper_ast_benchmark_smells::queries::assertion_roulette();

@@ -27,3 +27,10 @@ pub fn assertion_roulette() -> String {
     )"#
   )
 }
+
+pub fn exception_handling() -> String {
+    r#"(try_statement
+      (block)
+      (catch_clause)
+  )"#.to_string()
+}

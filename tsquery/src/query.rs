@@ -339,7 +339,7 @@ impl IncHasher {
 impl PrecomputedPatterns {
     const INTERM: u16 = 1; // TODO the other numbers do not always works, need some unit tests for a generic PrecomputedSlices
     pub(crate) fn add_precomputed_pattern(&mut self, query: &Query, patternid: PatternId) {
-        dbg!(patternid);
+        // dbg!(patternid);
         let pattern = &query.patterns[patternid];
         let stepid = pattern.steps.offset;
         let endstepid = pattern.steps.offset + pattern.steps.length;
@@ -348,7 +348,7 @@ impl PrecomputedPatterns {
         let mut stack = vec![(hasher, stepid)];
         loop {
             let Some((mut hasher, id)) = stack.pop() else {
-                dbg!(&self.intermediate_hashes);
+                // dbg!(&self.intermediate_hashes);
                 return;
             };
             if hasher.1 % PrecomputedPatterns::INTERM == 0 {
@@ -399,7 +399,7 @@ impl PrecomputedPatterns {
             }
             if hasher.1 % PrecomputedPatterns::INTERM == 0 && hasher.1 > 0 {
                 let hash = hasher.0.clone().finish();
-                dbg!(&hash);
+                // dbg!(&hash);
                 if !self
                     .intermediate_hashes
                     .binary_search(&hash)
