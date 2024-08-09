@@ -116,11 +116,12 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
             }
         }
     }
+    
     fn post(&mut self, oid: Oid, acc: JavaAcc) -> Option<(legion_with_refs::Local, IsSkippedAna)> {
         let skiped_ana = acc.skiped_ana;
         let name = &acc.name;
         let key = (oid, name.as_bytes().into());
-        let name = self.prepro.intern_label(name);
+        let name = self.prepro.get_or_insert_label(name);
         let full_node = make(acc, self.prepro.main_stores_mut());
         self.prepro
             .processing_systems

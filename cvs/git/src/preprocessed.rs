@@ -67,7 +67,7 @@ impl RepositoryProcessor {
     }
 
     pub fn intern_label(&mut self, name: &str) -> LabelIdentifier {
-        self.main_stores.label_store.get(name).unwrap()
+        self.main_stores.label_store.get_or_insert(name)
     }
 
     pub fn get_or_insert_label(
