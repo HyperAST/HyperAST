@@ -213,13 +213,13 @@ impl<'a> hyper_ast::types::RoleStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
         //     TStore::Cpp => todo!(),
         // }
         match lang.name() {
-            "Java" => hyper_ast::types::RoleStore::<
+            "hyper_ast_gen_ts_java::types::Lang" => hyper_ast::types::RoleStore::<
                 hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
             >::resolve_field(
                 &hyper_ast_gen_ts_java::types::TStore::Java, lang, field_id
             ),
-            "Cpp" => hyper_ast_gen_ts_cpp::types::TStore::Cpp.resolve_field(lang, field_id),
-            "Xml" => hyper_ast_gen_ts_xml::types::TStore::Xml.resolve_field(lang, field_id),
+            "hyper_ast_gen_ts_cpp::types::Lang" => hyper_ast_gen_ts_cpp::types::TStore::Cpp.resolve_field(lang, field_id),
+            "hyper_ast_gen_ts_xml::types::Lang" => hyper_ast_gen_ts_xml::types::TStore::Xml.resolve_field(lang, field_id),
             x => panic!("{}", x),
         }
         // TODO fix that
