@@ -42,7 +42,7 @@ fn print_pos(repo_name: &str, commit: &str, limit: usize, query: &str) {
         Err(err) => {
             eprintln!("{}", err);
             panic!("there is an error in the query");
-        },
+        }
     };
 
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
@@ -70,6 +70,7 @@ fn print_pos(repo_name: &str, commit: &str, limit: usize, query: &str) {
             .map(|x| {
                 let x: String = x
                     .into_iter()
+                    .take(10)
                     .map(|x| format!("https://github.com/{repo_name}/blob/{oid}/{},", x))
                     .collect();
                 format!(",[{:?}]", x)
@@ -89,17 +90,46 @@ fn print_pos(repo_name: &str, commit: &str, limit: usize, query: &str) {
 }
 
 #[test]
-fn print_positions() {
+fn bench_conditional_logic() {
     let repo_name = "INRIA/spoon";
     let commit = "56e12a0c0e0e69ea70863011b4f4ca3305e0542b";
-    let limit = 3;
-    let query = r#"(if_statement
-        (block)
-        (catch_clause)
-    ) @root"#;
+    let limit = 4000;
+    let around = |s| {
+        format!(
+            r#"(if_statement 
+        consequence: (_
+            (expression_statement
+                (method_invocation
+                    name: (identifier) (#EQ? "{s}")
+                )
+            )
+        )
+        !alternative
+    ) @root"#
+        )
+    };
+    let query = &format!(
+        // "{}\n{}\n{}\n{}\n{}",
+        // "{}\n{}",
+        "{}",
+        around("assertThat"),
+        // around("assertEquals"),
+        // around("assertSame"),
+        // around("assertTrue"),
+        // around("assertNull"),
+    );
+
+    // WARN not to be mutated is some places, here is fine, change it at will
+    // NOTE there is a upper limit for the number of usable subqueries
+    unsafe {
+        hyper_ast_cvs_git::java_processor::SUB_QUERIES = &[
+            "(if_statement)",
+            "(if_statement !alternative)",
+            r#"(identifier) (#EQ? "assertThat")"#,
+            // r#"(identifier) (#EQ? "assertEquals")"#,
+            // r#"(identifier) (#EQ? "assertNotEquals")"#,
+        ]
+    };
 
     print_pos(repo_name, commit, limit, query);
-    let s = format!("aaa");
-    print!("{}", s);
-    dbg!(s);
 }
