@@ -51,14 +51,10 @@ pub fn assertion_roulette() -> String {
 pub fn exception_handling() -> String {
     let tc = |s| {
         format!(
-            r#"(try_statement
-    (block
+            r#"
       (try_statement
         (block
           {s}
-        )
-        (catch_clause)
-      )
     )
     (catch_clause)
 )"#
