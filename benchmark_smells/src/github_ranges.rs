@@ -3,7 +3,7 @@ use hyper_ast::{
     store::defaults::NodeIdentifier, types::{HyperAST, WithStats},
 };
 
-type GithubUrl = Vec<String>;
+type GithubUrl = (usize, Vec<String>);
 
 pub fn compute_ranges(
     stores: &hyper_ast::store::SimpleStores<hyper_ast_cvs_git::TStore>,
@@ -13,7 +13,7 @@ pub fn compute_ranges(
     let pos = hyper_ast::position::StructuralPosition::new(code);
     let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(stores, pos);
     let qcursor = query.matches(cursor);
-    let mut result = vec![vec![]; query.enabled_pattern_count()];
+    let mut result = vec![(0, vec![]); query.enabled_pattern_count()];
     let cid = query.capture_index_for_name("root").expect(r#"you should put a capture named "root" on the pattern you can to capture (can be something else that the root pattern btw)"#);
     for m in qcursor {
         let i = m.pattern_index;
@@ -40,7 +40,8 @@ pub fn compute_ranges(
             format!("{}#L{}-#L{}", position.0, position.1 + 1, end + 1)
         };
         // dbg!(&value);
-        result[i as usize].push(value);
+        result[i as usize].0  += 1;
+        result[i as usize].1.push(value);
         assert!(roots.next().is_none());
     }
     result
