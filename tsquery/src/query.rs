@@ -339,6 +339,7 @@ impl IncHasher {
 impl PrecomputedPatterns {
     const INTERM: u16 = 1; // TODO the other numbers do not always works, need some unit tests for a generic PrecomputedSlices
     pub(crate) fn add_precomputed_pattern(&mut self, query: &Query, patternid: PatternId) {
+        dbg!(patternid);
         let pattern = &query.patterns[patternid];
         let stepid = pattern.steps.offset;
         let endstepid = pattern.steps.offset + pattern.steps.length;
@@ -347,6 +348,7 @@ impl PrecomputedPatterns {
         let mut stack = vec![(hasher, stepid)];
         loop {
             let Some((mut hasher, id)) = stack.pop() else {
+                dbg!(&self.intermediate_hashes);
                 return;
             };
             if hasher.1 % PrecomputedPatterns::INTERM == 0 {
@@ -382,6 +384,7 @@ impl PrecomputedPatterns {
     }
 
     pub(crate) fn matches(&self, query: &Query, stepid: StepId) -> Vec<PatternId> {
+        dbg!(stepid);
         let mut res = vec![];
         let hasher = IncHasher(std::hash::DefaultHasher::new(), 0);
         let mut stack = vec![(hasher, stepid)];
@@ -394,10 +397,12 @@ impl PrecomputedPatterns {
                 // need to do this preparation in the add step
                 continue;
             }
-            if hasher.1 % PrecomputedPatterns::INTERM == 0 {
+            if hasher.1 % PrecomputedPatterns::INTERM == 0 && hasher.1 > 0 {
+                let hash = hasher.0.clone().finish();
+                dbg!(&hash);
                 if !self
                     .intermediate_hashes
-                    .binary_search(&hasher.0.clone().finish())
+                    .binary_search(&hash)
                     .is_ok()
                 {
                     continue;
@@ -1262,7 +1267,15 @@ impl Query {
 
         let mut precomputed_patterns = PrecomputedPatterns::default();
 
-        for i in 0..precomputeds.len() {
+        dbg!(&query.enabled_pattern_map);
+        for i in query
+            .enabled_pattern_map
+            .iter()
+            .copied()
+            .filter(|x| *x != u16::MAX)
+            .take(precomputeds.len())
+        {
+            let i = i as usize;
             precomputed_patterns.add_precomputed_pattern(&query, PatternId::new(i));
         }
 
@@ -1289,11 +1302,27 @@ impl Query {
         // hash_single_step(&query, StepId::new(24), hasher);
         // dbg!(hasher.finish());
         let mut precomp = query.clone();
-        for i in 0..precomputeds.len() {
+        for i in query
+            .enabled_pattern_map
+            .iter()
+            .copied()
+            .filter(|x| *x != u16::MAX)
+            .take(precomputeds.len())
+            .collect::<Vec<_>>()
+        {
+            let i = i as usize;
             // dbg!(i);
             query.disable_pattern(PatternId::new(i));
         }
-        for i in precomputeds.len()..precomp.patterns.len() {
+        for i in query
+            .enabled_pattern_map
+            .iter()
+            .copied()
+            .filter(|x| *x != u16::MAX)
+            .skip(precomputeds.len())
+            .collect::<Vec<_>>()
+        {
+            let i = i as usize;
             // dbg!(i);
             precomp.disable_pattern(PatternId::new(i));
         }
@@ -1706,7 +1735,15 @@ impl Query {
 
 fn find_precomputed_uses(query: &mut Query, precomputeds: &[&str]) {
     query.used_precomputed = u8::MAX;
-    for i in precomputeds.len()..query.patterns.len() {
+    for i in query
+        .enabled_pattern_map
+        .iter()
+        .copied()
+        .filter(|x| *x != u16::MAX)
+        .skip(precomputeds.len())
+    {
+        let i = i as usize;
+        dbg!(i);
         let patid = PatternId::new(i);
         let slice = &query.patterns[patid].steps;
         let mut j = slice.offset;
@@ -1725,13 +1762,14 @@ fn find_precomputed_uses(query: &mut Query, precomputeds: &[&str]) {
             .iter_mut()
             .find(|x| x.pattern_index == patid)
         {
-            log::warn!("found subpatts {:?} for pattern {}", res, i);
+            assert_eq!(m_pat.precomputed, 0);
             for r in &res {
                 let r = r.0.to_usize();
                 assert!(r < 8);
                 m_pat.precomputed |= 1 << r as u8;
                 // m_pat.precomputed = r.0.to_usize();
             }
+            log::warn!("found subpatts {:b} for pattern {}", m_pat.precomputed, i);
             query.used_precomputed &= m_pat.precomputed;
         }
     }

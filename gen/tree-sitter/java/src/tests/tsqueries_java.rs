@@ -2432,3 +2432,45 @@ fn test_precomp_pos() {
     query._check_preprocessed(0, 1);
     query._check_preprocessed(1, 3);
 }
+
+#[test]
+fn test_multiple_pred_subs() {
+    let around = |s| {
+        format!(
+            r#"(if_statement 
+  consequence: (_
+      (expression_statement
+          (method_invocation
+              name: (identifier) (#EQ? "{s}")
+          )
+      )
+  )
+  !alternative
+) @root"#
+        )
+    };
+    let query = &format!(
+        // "{}\n{}\n{}\n{}\n{}",
+        // "{}\n{}",
+        "{}",
+        around("assertThat"),
+        // around("assertEquals"),
+        // around("assertSame"),
+        // around("assertTrue"),
+        // around("assertNull"),
+    );
+    dbg!(query);
+    let query = f2(
+        &query,
+        &[
+            r#"(method_invocation
+              name: (identifier) (#EQ? "assertThat"))"#,
+            // "(if_statement)",
+            // "(if_statement !alternative)",
+            r#"(method_invocation
+              name: (identifier) (#EQ? "assertEquals"))"#,
+        ],
+    );
+    query._check_preprocessed(0, 3);
+    query._check_preprocessed(1, 3);
+}
