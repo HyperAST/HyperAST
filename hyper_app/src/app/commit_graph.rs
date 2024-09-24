@@ -440,6 +440,9 @@ enum GraphInteration {
     ClickErrorFetch(Vec<usize>),
 }
 
+const CUSTOM_LABEL_FORMAT_MARK_WITH_DATA: &str = "_d";
+const CUSTOM_LABEL_FORMAT_MARK_NO_DATA: &str = "_";
+
 fn show_commit_graph_timed_egui_plot<'a>(
     ui: &mut egui::Ui,
     max_fetch: i64,
@@ -479,7 +482,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
                     }
                 })
                 // .x_axis_label("time")
-                .x_grid_spacer(with_egui_plot::compute_multi_x_marks)
+                .x_grid_spacer(|i| with_egui_plot::compute_multi_x_marks(i, cached.max_time))
                 .show_y(false)
                 .y_axis_formatter(|m, _| Default::default())
                 .show_grid([true, false])
@@ -490,12 +493,29 @@ fn show_commit_graph_timed_egui_plot<'a>(
                 //     CoordinatesFormatter::new(|p, b| format!("42")),
                 // )
                 .label_formatter(|name, value| {
-                    if name == "_" {
+                    fn msg(x: Option<&Result<commit::CommitMetadata, String>>) -> Option<&str> {
+                        x?.as_ref().ok()?.message.as_ref().map(|s| s.as_str())
+                    }
+                    if name == CUSTOM_LABEL_FORMAT_MARK_WITH_DATA {
                         let i = value.x.to_bits() as usize;
                         let c = &cached.commits[i];
                         let s = results_per_commit
                             .and_then(|x| x.offset(c.as_str()).map(|o| x.vals_to_string(o)));
-                        format!("{}\n{}", &c[..6], s.unwrap_or_default())
+
+                        format!(
+                            "{}\n{}\n\n{}",
+                            &c[..6],
+                            s.unwrap_or_default(),
+                            msg(fetched_commit_metadata.get(c)).unwrap_or_default()
+                        )
+                    } else if name == CUSTOM_LABEL_FORMAT_MARK_NO_DATA {
+                        let i = value.x.to_bits() as usize;
+                        let c = &cached.commits[i];
+                        format!(
+                            "{}\n\n{}",
+                            &c[..6],
+                            msg(fetched_commit_metadata.get(c)).unwrap_or_default()
+                        )
                     } else {
                         name.to_string()
                     }
@@ -638,6 +658,10 @@ fn show_commit_graph_timed_egui_plot<'a>(
                                     }
                                 }
                             } else {
+                                if t > cached.times[i - 1] {
+                                    p[1] += 100;
+                                }
+                                let color = egui::Color32::YELLOW;
                                 let a = line.last().unwrap().clone();
                                 let b = p.map(|x| x as f64);
                                 let position = with_egui_plot::center(a, b);
@@ -645,6 +669,8 @@ fn show_commit_graph_timed_egui_plot<'a>(
                                     plot_ui.text(
                                         Text::new(position, text)
                                             .anchor(egui::Align2::RIGHT_BOTTOM)
+                                            .color(color),
+                                    );
                                     if plot_ui.response().clicked {
                                         let point = plot_ui.response().hover_pos().unwrap();
                                         let pos =
@@ -707,21 +733,40 @@ fn show_commit_graph_timed_egui_plot<'a>(
                             }
                         }
 
-                        if *succ < usize::MAX {
+                        if *succ < usize::MAX && cached.times[*succ] != -1 {
                             let y = cached.subs[*succ_sub].delta_time;
                             let y = with_egui_plot::transform_y(y);
                             let x = cached.times[*succ];
-                            if x == -1 {
-                            } else if CORNER {
+                            let position: PlotPoint;
+                            let p = [x, y].map(|x| x as f64);
+                            if CORNER {
                                 let prev = line.last().unwrap();
-                                let p = [x, y].map(|x| x as f64);
-                                let corner = [
-                                    prev[0].min(p[0] + plot_ui.transform().dvalue_dpos()[0] * 10.0),
-                                    prev[1],
-                                ];
+                                let x = p[0];
+                                let x = x + plot_ui.transform().dvalue_dpos()[0] * 10.0;
+                                let x = prev[0].min(x);
+                                // let y = prev[1];
+                                let y = prev[1];
+                                let y = if (y - p[1]).abs() < 1.0 {
+                                    y - 1000.0 // + plot_ui.transform().dvalue_dpos()[1] * 2.0 * (y - p[1]).signum()
+                                } else if y < p[1] {
+                                    y - plot_ui.transform().dvalue_dpos()[1] * 5.0
+                                } else {
+                                    y + plot_ui.transform().dvalue_dpos()[1] * 5.0
+                                };
+                                // let y = p[1].min(y);
+                                // let y = if (p[1] - prev[1]).abs() < 1.0 {
+                                // } else {
+                                //     prev[1] + plot_ui.transform().dvalue_dpos()[1] * 10.0
+                                // };
+                                let corner = [x, y];
+                                position = corner.into();
                                 line.push(corner);
                                 line.push(p);
                             } else {
+                                position = with_egui_plot::center(*line.last().unwrap(), p);
+                                line.push(p);
+                            }
+
                             let c1 = if start == end { *prev } else { *end - 1 };
                             let diff = results_per_commit.and_then(|x| {
                                 x.try_diff_as_string(&cached.commits[c1], &cached.commits[*succ])
@@ -765,6 +810,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
                         .radius(2.0)
                         .color(egui::Color32::GREEN)
                         .name("Commit");
+
                     let item = with_egui_plot::CommitPoints {
                         offsets: offsets2,
                         points,
@@ -1305,33 +1351,38 @@ mod with_egui_plot {
     fn fill_marks_between(
         step_size: f64,
         (min, max): (f64, f64),
+        ori: i64,
     ) -> impl Iterator<Item = GridMark> {
         debug_assert!(min <= max, "Bad plot bounds: min: {min}, max: {max}");
+        let (min, max) = (min - ori as f64, max - ori as f64);
         let first = (min / step_size).ceil() as i64;
         let last = (max / step_size).ceil() as i64;
 
         (first..last).map(move |i| {
-            let value = (i as f64) * step_size;
+            let value = (i as f64) * step_size + ori as f64;
             GridMark { value, step_size }
         })
     }
 
-    pub(crate) fn compute_multi_x_marks(i: GridInput) -> Vec<GridMark> {
+    pub(crate) fn compute_multi_x_marks(i: GridInput, ori: i64) -> Vec<GridMark> {
         // TODO use proper rounded year convention
         let year = 60 * 60 * 24 * 365 + 60 * 60 * 6;
-        let years = fill_marks_between(year as f64, i.bounds);
+        let years = fill_marks_between(year as f64, i.bounds, ori);
         let month = 60 * 60 * 24 * 30;
-        let months = fill_marks_between(month as f64, i.bounds);
+        let months = fill_marks_between(month as f64, i.bounds, ori);
         let week = 60 * 60 * 24 * 7;
-        let weeks = fill_marks_between(week as f64, i.bounds);
+        let weeks = fill_marks_between(week as f64, i.bounds, ori);
         let day = 60 * 60 * 24;
-        let days = fill_marks_between(day as f64, i.bounds);
+        let days = fill_marks_between(day as f64, i.bounds, ori);
         years.chain(months).chain(weeks).chain(days).collect()
     }
+
     pub struct CommitPoints {
         pub offsets: Vec<u32>,
         pub points: Points,
+        pub with_data: bool,
     }
+
     impl PlotItem for CommitPoints {
         fn shapes(&self, ui: &egui::Ui, transform: &PlotTransform, shapes: &mut Vec<egui::Shape>) {
             self.points.shapes(ui, transform, shapes)
@@ -1415,8 +1466,13 @@ mod with_egui_plot {
             // );
             let font_id = egui::TextStyle::Body.resolve(plot.ui.style());
             // WARN big hack passing an index as a f64...
+            let mark = if self.with_data {
+                super::CUSTOM_LABEL_FORMAT_MARK_WITH_DATA
+            } else {
+                super::CUSTOM_LABEL_FORMAT_MARK_NO_DATA
+            };
             let text = label_formatter.as_ref().unwrap()(
-                "_",
+                mark,
                 &PlotPoint {
                     x: f64::from_bits(offset as u64),
                     y: 0.0,
