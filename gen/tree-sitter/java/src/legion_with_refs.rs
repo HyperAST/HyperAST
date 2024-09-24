@@ -104,7 +104,7 @@ impl From<Local> for MD {
 
 pub type Global<'a> = SpacedGlobalData<'a>;
 
-type PrecompQueries = u8;
+type PrecompQueries = u16;
 
 #[derive(Debug, Clone)]
 pub struct Local {
@@ -367,8 +367,8 @@ where
         let qcursor = self.matches_immediate(cursor); // TODO filter on height (and visibility?)
         let mut r = Default::default();
         for m in qcursor {
-            assert!(m.pattern_index.to_usize() < 7);
-            r |= 1 << m.pattern_index.to_usize() as u8;
+            assert!(m.pattern_index.to_usize() < 16);
+            r |= 1 << m.pattern_index.to_usize() as u16;
             // dbg!(m.pattern_index.to_usize());
         }
         r

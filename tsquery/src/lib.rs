@@ -40,6 +40,8 @@ pub use indexed::Symbol;
 use std::{collections::VecDeque, usize};
 
 type Depth = u32;
+type Precomps = u16;
+// type Precomps = u16;
 
 #[derive(Clone)]
 pub struct Query {
@@ -66,7 +68,7 @@ pub struct Query {
     general_predicates: predicate::GeneralPredicates,
     immediate_predicates: Vec<predicate::ImmediateTextPredicate>,
     precomputed_patterns: Option<query::PrecomputedPatterns>,
-    used_precomputed: u8,
+    used_precomputed: Precomps,
     enabled_pattern_map: Vec<u16>,
     enabled_pattern_count: u16,
 }
@@ -199,7 +201,7 @@ pub trait Cursor {
 
     fn text_provider(&self) -> <Self::Node as Node>::TP<'_>;
 
-    fn wont_match(&self, _needed: u8) -> bool {
+    fn wont_match(&self, _needed: Precomps) -> bool {
         false
     }
     fn is_visible_at_root(&self) -> bool {

@@ -455,12 +455,32 @@ pub static mut SUB_QUERIES: &[&str] = &[
     (block)
     (catch_clause)
 )"#,
-    "(class_declaration)",
-    "(method_declaration)",
     r#"(marker_annotation 
     name: (identifier) (#EQ? "Test")
 )"#,
     "(constructor_declaration)",
+    "(class_declaration)",
+    "(interface_declaration)",
+    r#"(method_invocation
+    name: (identifier) (#EQ? "sleep")
+)"#,
+    r#"(marker_annotation
+    name: (identifier) (#EQ? "Ignored")
+)"#,
+    r#"(block
+    "{"
+    .
+    "}"
+)"#,
+    r#"(method_invocation
+    (identifier) (#EQ? "assertEquals")
+)"#,
+    r#"(method_invocation
+    (identifier) (#EQ? "assertSame")
+)"#,
+    r#"(method_invocation
+    (identifier) (#EQ? "assertThat")
+)"#,
 ];
 
 pub fn sub_queries() -> &'static [&'static str] {

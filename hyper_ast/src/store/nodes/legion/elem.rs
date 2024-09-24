@@ -627,11 +627,11 @@ impl<'a, T> crate::types::WithRoles for HashedNodeRef<'a, T> {
 }
 
 impl<'a, T> crate::types::WithPrecompQueries for HashedNodeRef<'a, T> {
-    fn wont_match_given_precomputed_queries(&self, needed: u8) -> bool {
-        if needed == 0 {
+    fn wont_match_given_precomputed_queries(&self, needed: u16) -> bool {
+        if needed == num::zero() {
             return false;
         }
-        let Ok(v) = self.get_component::<compo::Precomp>() else {
+        let Ok(v) = self.get_component::<compo::Precomp<u16>>() else {
             return self.get_component::<compo::PrecompFlag>().is_ok();
         };
         v.0 & needed != needed

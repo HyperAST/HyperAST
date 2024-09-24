@@ -23,6 +23,7 @@ use crate::utils::SafeUpcast;
 use crate::CaptureQuantifier;
 use crate::Language;
 use crate::PatternId;
+use crate::Precomps;
 use crate::QueryError;
 use crate::QueryErrorKind;
 use crate::PATTERN_DONE_MARKER;
@@ -74,10 +75,10 @@ pub(crate) struct PatternEntry {
     pub(crate) step_index: StepId,
     pub(crate) pattern_index: PatternId,
     pub(crate) is_rooted: bool,
-    pub(crate) precomputed: u8,
+    pub(crate) precomputed: Precomps,
 }
 impl PatternEntry {
-    pub(crate) fn precomputed(&self) -> Option<u8> {
+    pub(crate) fn precomputed(&self) -> Option<Precomps> {
         (self.precomputed != 0).then_some(self.precomputed)
     }
 }
@@ -1734,7 +1735,7 @@ impl Query {
 }
 
 fn find_precomputed_uses(query: &mut Query, precomputeds: &[&str]) {
-    query.used_precomputed = u8::MAX;
+    query.used_precomputed = Precomps::MAX;
     for i in query
         .enabled_pattern_map
         .iter()
@@ -1765,8 +1766,8 @@ fn find_precomputed_uses(query: &mut Query, precomputeds: &[&str]) {
             assert_eq!(m_pat.precomputed, 0);
             for r in &res {
                 let r = r.0.to_usize();
-                assert!(r < 8);
-                m_pat.precomputed |= 1 << r as u8;
+                assert!(r < 16);
+                m_pat.precomputed |= 1 << r as Precomps;
                 // m_pat.precomputed = r.0.to_usize();
             }
             log::warn!("found subpatts {:b} for pattern {}", m_pat.precomputed, i);

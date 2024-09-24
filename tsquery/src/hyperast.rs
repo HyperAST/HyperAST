@@ -222,7 +222,7 @@ where
         self.is_visible()
     }
 
-    fn wont_match(&self, needed: u8) -> bool {
+    fn wont_match(&self, needed: crate::Precomps) -> bool {
         if needed == 0 {
             return false;
         }

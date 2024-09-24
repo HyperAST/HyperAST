@@ -670,7 +670,12 @@ pub trait WithRoles: WithChildren {
 }
 
 pub trait WithPrecompQueries {
-    fn wont_match_given_precomputed_queries(&self, needed: u8) -> bool;
+    fn wont_match_given_precomputed_queries<
+        // U: num::PrimInt + std::marker::Send + std::marker::Sync + 'static,
+    >(
+        &self,
+        needed: u16,
+    ) -> bool;
 }
 
 pub trait WithChildrenSameLang: WithChildren {

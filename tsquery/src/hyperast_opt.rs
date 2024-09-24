@@ -198,7 +198,7 @@ where
         is_visible(self.stores, &self.pos)
     }
 
-    fn wont_match(&self, needed: u8) -> bool {
+    fn wont_match(&self, needed: crate::Precomps) -> bool {
         if needed == 0 {
             return false;
         }
