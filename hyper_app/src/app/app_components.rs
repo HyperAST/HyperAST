@@ -417,9 +417,35 @@ impl super::HyperApp {
                         resp
                     };
                     let content = list_item::LabelContent::new(text).with_buttons(buttons);
-                    list_item::ListItem::new()
+                    let resp = list_item::ListItem::new()
                         .with_height(10.0)
                         .show_flat(ui, content);
+                    let popup_id = ui.make_persistent_id(format!("change_commit {i}"));
+                    if resp.clicked() {
+                        ui.memory_mut(|mem| mem.open_popup(popup_id))
+                    }
+
+                    let mut close_menu = false;
+                    egui::popup::popup_above_or_below_widget(
+                        ui,
+                        popup_id,
+                        &resp,
+                        egui::AboveOrBelow::Below,
+                        egui::popup::PopupCloseBehavior::CloseOnClickOutside,
+                        |ui| {
+                            let singleline = &ui.text_edit_singleline(oid);
+                            if resp.clicked() {
+                                singleline.request_focus()
+                            }
+                            if singleline.lost_focus() {
+                                ui.memory_mut(|mem| mem.close_popup());
+                                close_menu = true;
+                            }
+                        },
+                    );
+                    if close_menu {
+                        ui.close_menu();
+                    }
                 }
                 if let Some(j) = rm {
                     ui.memory_mut(|mem| mem.close_popup());
