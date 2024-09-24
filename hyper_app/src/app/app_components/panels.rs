@@ -515,7 +515,7 @@ impl crate::HyperApp {
                     let resp = &egui::widgets::Slider::new(&mut self.data.max_fetch, MIN..=MAX)
                         .clamp_to_range(false)
                         .custom_formatter(|n, _| {
-                            let n = n as i32;
+                            let n = n as i64;
                             let days = n / (60 * 60 * 24);
                             let hours = (n / (60 * 60)) % 24;
                             let mins = (n / 60) % 60;
@@ -526,11 +526,11 @@ impl crate::HyperApp {
                             let parts: Vec<&str> = s.split(':').collect();
                             if parts.len() == 4 {
                                 parts[0]
-                                    .parse::<i32>()
+                                    .parse::<i64>()
                                     .and_then(|d| {
-                                        parts[1].parse::<i32>().and_then(|h| {
-                                            parts[2].parse::<i32>().and_then(|m| {
-                                                parts[3].parse::<i32>().map(|s| {
+                                        parts[1].parse::<i64>().and_then(|h| {
+                                            parts[2].parse::<i64>().and_then(|m| {
+                                                parts[3].parse::<i64>().map(|s| {
                                                     ((d * 60 * 60 * 24)
                                                         + (h * 60 * 60)
                                                         + (m * 60)
