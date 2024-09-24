@@ -69,7 +69,8 @@ pub fn fetch(mut state: SharedState, path: Parameters) -> Result<FetchedNodes, S
     let mut repo = repo.fetch();
     log::warn!("done cloning {}", repo.spec);
 
-    let commits = crate::utils::handle_pre_processing(&state, &mut repo, "", &commit, 2)?;
+    let commits = crate::utils::handle_pre_processing(&state, &mut repo, "", &commit, 2)
+        .map_err(|e| e.to_string())?;
     log::warn!("done construction of {commits:?} in {}", repo.spec);
     let repositories = state.repositories.read().unwrap();
     let commit_src = repositories.get_commit(&repo.config, &commits[0]).unwrap();
