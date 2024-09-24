@@ -145,7 +145,7 @@ async fn querying_streamed(
     axum::extract::Path(path): axum::extract::Path<querying::Param>,
     axum::extract::State(state): axum::extract::State<SharedState>,
     axum::extract::Json(script): axum::extract::Json<querying::Content>,
-) -> impl IntoResponse {
+) -> axum::response::Response {
     querying::streamed(state, path, script)
 }
 
@@ -176,7 +176,7 @@ pub fn querying_app(_st: SharedState) -> Router<SharedState> {
             post(querying).layer(querying_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
         )
         .route(
-            "/query-st/github/:user/:name/:commit",
+            "/query-st/github/:user/:name/*commit",
             post(querying_streamed).layer(querying_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
         )
         .route(

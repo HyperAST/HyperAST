@@ -201,18 +201,33 @@ pub fn simple(
     })
 }
 
-pub fn streamed(mut state: SharedState, path: Param, content: Content) -> axum::response::Response {
+pub fn streamed(
+    mut state: SharedState,
+    path: Param,
+    content: Content,
+) -> axum::response::Response {
     let now = Instant::now();
 
     let mut headers = HeaderMap::new();
 
+    let language: tree_sitter::Language =
+        match hyper_ast_cvs_git::resolve_language(&content.language) {
+            Some(x) => x,
+            None => {
+                let err = QueryingError::MissingLanguage(content.language);
+                headers.insert(
+                    "error_parsing",
+                    serde_json::to_string(&err).unwrap().try_into().unwrap(),
+                );
+
+                return (StatusCode::BAD_REQUEST, headers, "").into_response();
+            }
+        };
+
     let (repo, commits) = match pre_repo(&mut state, &path, &content) {
         Ok((x, y)) => (x, y),
         Err(err) => {
-            headers.insert(
-                "error_parsing",
-                serde_json::to_string(&err).unwrap().try_into().unwrap(),
-            );
+            headers.insert("error_parsing", err.to_string().try_into().unwrap());
 
             return (StatusCode::BAD_REQUEST, headers, "").into_response();
         }
@@ -255,7 +270,7 @@ pub fn streamed(mut state: SharedState, path: Param, content: Content) -> axum::
     );
 
     let it = commits
-        .into_iter()
+        .into_iter() // TODO use chunks to reduce presure on state.repositories' lock, need some bench before doing this opt ;)
         .enumerate()
         .map_while(move |(i, commit_oid)| {
             if proc_commit_limit == 0 {
@@ -295,19 +310,19 @@ pub fn streamed(mut state: SharedState, path: Param, content: Content) -> axum::
             Some(result)
         });
 
-    let st_vals = futures::stream::iter(it.map(|x| {
-        match x {
-            Ok(x) => serde_json::to_string(&x).map_err(|e| e.to_string()),
-            Err(x) => serde_json::to_string(&x).map_err(|e| e.to_string()),
-        }
-        // x.map(|x| serde_json::to_string(&x).unwrap())
-        //     .map_err(|x| serde_json::to_string(&x).unwrap())
-    }));
-
+        let st_vals = futures::stream::iter(it.map(|x| {
+            match x {
+                Ok(x) => serde_json::to_string(&x).map_err(|e| e.to_string()),
+                Err(x) => serde_json::to_string(&x).map_err(|e| e.to_string()),
+            }
+            // x.map(|x| serde_json::to_string(&x).unwrap())
+            //     .map_err(|x| serde_json::to_string(&x).unwrap())
+        }));
+        
     (
         StatusCode::OK,
         headers,
-        axum::body::StreamBody::new(st_vals),
+        axum::body::Body::from_stream(st_vals),
     )
         .into_response()
 }
@@ -316,8 +331,11 @@ fn pre_repo(
     state: &mut SharedState,
     path: &Param,
     content: &Content,
-) -> Result<(hyper_ast_cvs_git::processing::ConfiguredRepo2, Vec<Oid>), QueryingError> {
+) -> Result<(hyper_ast_cvs_git::processing::ConfiguredRepo2, Vec<Oid>), Box<dyn std::error::Error>>
+{
     let Param { user, name, commit } = path.clone();
+    let mut additional = commit.split("/");
+    let commit = additional.next().unwrap();
     let Content {
         language,
         query,
@@ -332,8 +350,6 @@ fn pre_repo(
     } else {
         hyper_ast_cvs_git::processing::RepoConfig::Any
     };
-    let language: tree_sitter::Language = hyper_ast_cvs_git::resolve_language(&language)
-        .ok_or_else(|| QueryingError::MissingLanguage(language))?;
     let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
     let repo = state
         .repositories
@@ -349,12 +365,13 @@ fn pre_repo(
             configs.get_config(repo_spec.clone()).unwrap()
         }
     };
-    let mut repo = repo.fetch();
+    let repo = repo.fetch();
     log::warn!("done cloning {}", &repo.spec);
-    let commits = crate::utils::handle_pre_processing(&state, &mut repo, "", &commit, commits)
-        .map_err(|x| QueryingError::ProcessingError(x))?;
+    let afters = [commit].into_iter().chain(additional.into_iter());
+    let rw = crate::utils::walk_commits_multi(&repo, afters)?.take(commits);
+    assert!(state.repositories.try_write().is_ok());
+    let commits = crate::utils::handle_pre_processing_aux(state, &repo, rw);
     log::info!("done construction of {commits:?} in  {}", repo.spec);
-    let language: tree_sitter::Language = language.clone();
 
     Ok((repo, commits))
 }
@@ -365,6 +382,8 @@ fn pre_query(
     content: &Content,
 ) -> Result<hyper_ast_tsquery::Query, QueryingError> {
     let Param { user, name, commit } = path.clone();
+    let mut additional = commit.split("/");
+    let commit = additional.next().unwrap();
     let Content {
         language,
         query,
