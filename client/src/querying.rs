@@ -49,6 +49,7 @@ pub enum QueryingError {
     MissingLanguage(String),
     ParsingError(String),
     MatchingErrOnFirst(MatchingError<ComputeResultIdentified>),
+    MatchingError(MatchingError<ComputeResult>),
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -99,9 +100,11 @@ pub fn simple(
     query: Content,
     state: SharedState,
     path: Param,
-) -> Result<Json<ComputeResults>, QueryingError> {
+) -> Result<ComputeResults, QueryingError> {
     let now = Instant::now();
     let Param { user, name, commit } = path.clone();
+    let mut additional = commit.split("/");
+    let commit = additional.next().unwrap();
     let Content {
         language,
         query,
@@ -138,7 +141,7 @@ pub fn simple(
     let mut repo = repo.fetch();
     log::warn!("done cloning {}", &repo.spec);
     let commits = crate::utils::handle_pre_processing(&state, &mut repo, "", &commit, commits)
-        .map_err(|x| QueryingError::ProcessingError(x))?;
+        .map_err(|x| QueryingError::ProcessingError(x.to_string()))?;
     log::info!("done construction of {commits:?} in  {}", repo.spec);
     let language: tree_sitter::Language = language.clone();
 
@@ -160,11 +163,11 @@ pub fn simple(
     let mut matching_error_count = 0;
     for commit_oid in &commits {
         if results.len() > proc_commit_limit {
-            return Ok(Json(ComputeResults {
+            return Ok(ComputeResults {
                 prepare_time,
                 matching_error_count,
                 results,
-            }));
+            });
         }
         let mut oid = commit_oid.to_string();
         oid.truncate(6);
@@ -191,11 +194,11 @@ pub fn simple(
         results.push(result);
     }
     log::info!("done querying of {commits:?} in  {}", repo.spec);
-    Ok(Json(ComputeResults {
+    Ok(ComputeResults {
         prepare_time,
         matching_error_count,
         results,
-    }))
+    })
 }
 
 pub fn streamed(mut state: SharedState, path: Param, content: Content) -> axum::response::Response {

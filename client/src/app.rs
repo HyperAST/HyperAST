@@ -95,12 +95,49 @@ pub fn scripting_app(_st: SharedState) -> Router<SharedState> {
 }
 
 async fn querying(
+    headers: http::HeaderMap,
     axum::extract::Path(path): axum::extract::Path<querying::Param>,
     axum::extract::State(state): axum::extract::State<SharedState>,
     axum::extract::Json(script): axum::extract::Json<querying::Content>,
-) -> axum::response::Result<Json<querying::ComputeResults>> {
-    let r = querying::simple(script, state, path)?;
-    Ok(r)
+) -> axum::response::Response {
+    let accept = headers
+        .get(http::header::ACCEPT)
+        .map_or("", |x| x.to_str().unwrap_or_default());
+
+    let r = querying::simple(script, state, path);
+    if accept.contains("csv") {
+        match r {
+            Ok(x) => {
+                let r = x.results.into_iter().filter_map(|x| x.ok()).map(|x| {
+                    format!(
+                        "{},{},{}\n",
+                        &x.commit[..8],
+                        x.inner.result[0],
+                        x.inner.compute_time
+                    )
+                });
+                let mut r = Some("id,result0,compute_time\n".to_string())
+                    .into_iter()
+                    .chain(r)
+                    .collect::<String>()
+                    .into_response();
+                r.headers_mut()
+                    .insert("prepare_time", x.prepare_time.to_string().parse().unwrap());
+                r.headers_mut().insert(
+                    "matching_error_count",
+                    x.matching_error_count.to_string().parse().unwrap(),
+                );
+                r
+            }
+            Err(err) => {
+                let mut r = err.into_response();
+                *r.status_mut() = http::StatusCode::BAD_REQUEST;
+                r
+            }
+        }
+    } else {
+        Json(r).into_response()
+    }
 }
 
 #[axum_macros::debug_handler]
@@ -135,7 +172,7 @@ pub fn querying_app(_st: SharedState) -> Router<SharedState> {
         .layer(TraceLayer::new_for_http());
     Router::new()
         .route(
-            "/query/github/:user/:name/:commit",
+            "/query/github/:user/:name/*commit",
             post(querying).layer(querying_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
         )
         .route(
