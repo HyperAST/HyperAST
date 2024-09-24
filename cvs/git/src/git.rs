@@ -1,5 +1,6 @@
 use std::{
     fmt::{Debug, Display},
+    fs,
     path::{Path, PathBuf},
 };
 
@@ -8,6 +9,50 @@ use git2::{RemoteCallbacks, Repository, Revwalk, TreeEntry};
 use hyper_ast::{position::Position, utils::Url};
 
 use crate::processing::ObjectName;
+
+pub struct Builder<'a>(git2::Revwalk<'a>, &'a git2::Repository, bool);
+
+impl<'a> Builder<'a> {
+    pub fn new(repository: &'a Repository) -> Result<Self, git2::Error> {
+        let mut rw = repository.revwalk()?;
+        rw.set_sorting(git2::Sort::TOPOLOGICAL & git2::Sort::TIME)?;
+        Ok(Self(rw, repository, false))
+    }
+    pub fn before(mut self, before: &str) -> Result<Self, git2::Error> {
+        if before.is_empty() {
+            return Ok(self)
+        }
+        let c = retrieve_commit(self.1, before)?;
+        for c in c.parents() {
+            self.0.hide(c.id())?;
+        }
+        Ok(self)
+    }
+
+    pub fn after(mut self, after: &str) -> Result<Self, git2::Error> {
+        if after.is_empty() {
+            return Ok(self)
+        }
+        let c = retrieve_commit(self.1, after)?;
+        self.0.push(c.id())?;
+        self.2 = true;
+        Ok(self)
+    }
+
+    pub fn first_parents(mut self) -> Result<Self, git2::Error> {
+        self.0.simplify_first_parent()?;
+        Ok(self)
+    }
+
+
+
+    pub fn walk(mut self) -> Result<Revwalk<'a>, git2::Error> {
+        if !self.2 {
+            self.0.push_head()?;
+        }
+        Ok(self.0)
+    }
+}
 
 /// Initialize a [git2::revwalk::Revwalk] to explore commits between before and after.
 ///
@@ -31,11 +76,9 @@ pub(crate) fn all_commits_between<'a>(
 ) -> Result<Revwalk<'a>, git2::Error> {
     use git2::*;
     let mut rw = repository.revwalk()?;
-    if !before.is_empty() {
-        let c = retrieve_commit(repository, before)?;
-        for c in c.parents() {
-            rw.hide(c.id())?;
-        }
+    let c = retrieve_commit(repository, before)?;
+    for c in c.parents() {
+        rw.hide(c.id())?;
     }
     if after.is_empty() {
         rw.push_head()?;
@@ -47,6 +90,41 @@ pub(crate) fn all_commits_between<'a>(
     Ok(rw)
 }
 
+pub(crate) fn all_commits_between_multi<'a>(
+    repository: &'a Repository,
+    before: &[impl AsRef<str>],
+    after: &[impl AsRef<str>],
+) -> Result<Revwalk<'a>, git2::Error> {
+    use git2::*;
+    let mut rw = repository.revwalk()?;
+    for before in before {
+        let c = retrieve_commit(repository, before.as_ref())?;
+        for c in c.parents() {
+            rw.hide(c.id())?;
+        }
+    }
+    if after.is_empty() {
+        rw.push_head()?;
+    } else {
+        for after in after {
+            let c = retrieve_commit(repository, after.as_ref())?;
+            rw.push(c.id())?;
+        }
+    }
+    rw.set_sorting(Sort::TOPOLOGICAL)?;
+    Ok(rw)
+}
+
+pub(crate) fn all_first_parents_between<'a>(
+    repository: &'a Repository,
+    before: &str,
+    after: &str,
+) -> Result<Revwalk<'a>, git2::Error> {
+    let mut rw = all_commits_between(repository, before, after)?;
+    rw.simplify_first_parent()?;
+    Ok(rw)
+}
+
 pub fn retrieve_commit<'a>(
     repository: &'a Repository,
     s: &str,
@@ -55,10 +133,14 @@ pub fn retrieve_commit<'a>(
     match repository.find_reference(&format!("refs/tags/{}", s)) {
         Ok(c) => match c.peel_to_commit() {
             Ok(c) => Ok(c),
-            Err(err) => repository.find_commit(Oid::from_str(s)?),
+            Err(err) => {
+                log::warn!("{}", err);
+                repository.find_commit(Oid::from_str(s)?)},
         },
         Err(err) => {
-            let oid = Oid::from_str(s).map_err(|_| err)?;
+            let oid = Oid::from_str(s).map_err(|e| {
+                log::warn!("{}", e);
+                err})?;
             repository.find_commit(oid)
         }
     }
@@ -206,11 +288,40 @@ pub fn fetch_github_repository(repo_name: &str) -> Repository {
     fetch_repository(url, path)
 }
 
+pub fn fetch_fork(mut x: git2::Remote, head: &str) -> Result<(), git2::Error> {
+    let mut callbacks = RemoteCallbacks::new();
+
+    callbacks.transfer_progress(|x| {
+        log::info!(
+            "fork transfer {}/{}",
+            x.received_objects(),
+            x.total_objects()
+        );
+        true
+    });
+
+    let mut fo = git2::FetchOptions::new();
+
+    fo.remote_callbacks(callbacks);
+    x.fetch(&[head], Some(&mut fo), None)
+}
+
 /// avoid mixing providers
 pub fn up_to_date_repo(path: &Path, mut fo: git2::FetchOptions, url: Url) -> Repository {
     if path.join(".git").exists() {
         let repository = match Repository::open(path) {
             Ok(repo) => repo,
+            Err(e) if e.code() == git2::ErrorCode::NotFound => {
+                if path.starts_with("/tmp") {
+                    if let Err(e) = fs::remove_dir_all(path.join(".git")) {
+                        panic!("failed to remove currupted clone: {}", e)
+                    } else {
+                        return clone_helper(url, path, fo);
+                    }
+                } else {
+                    panic!("failed to open: {}", e)
+                }
+            }
             Err(e) => panic!("failed to open: {}", e),
         };
         log::info!("fetch: {:?}", path);
@@ -224,26 +335,30 @@ pub fn up_to_date_repo(path: &Path, mut fo: git2::FetchOptions, url: Url) -> Rep
     } else if path.exists() && path.read_dir().map_or(true, |mut x| x.next().is_some()) {
         todo!()
     } else {
-        let mut builder = git2::build::RepoBuilder::new();
+        clone_helper(url, path, fo)
+    }
+}
 
-        builder.bare(true);
+fn clone_helper(url: Url, path: &Path, fo: git2::FetchOptions) -> Repository {
+    let mut builder = git2::build::RepoBuilder::new();
 
-        builder.fetch_options(fo);
+    builder.bare(true);
 
-        log::info!("clone {} in {:?}", url, path);
-        let repository = match builder.clone(&url.to_string(), path.join(".git").as_path()) {
-            Ok(repo) => repo,
-            Err(e) if e.code() == git2::ErrorCode::Locked => match builder
-                .clone(&url.to_string(), path.join(".git").as_path())
-            {
+    builder.fetch_options(fo);
+
+    log::info!("clone {} in {:?}", url, path);
+    let repository = match builder.clone(&url.to_string(), path.join(".git").as_path()) {
+        Ok(repo) => repo,
+        Err(e) if e.code() == git2::ErrorCode::Locked => {
+            match builder.clone(&url.to_string(), path.join(".git").as_path()) {
                 Ok(repo) => repo,
                 Err(e) if e.code() == git2::ErrorCode::Locked => panic!("failed to clone: {}", e),
                 Err(e) => panic!("failed to clone: {}", e),
-            },
-            Err(e) => panic!("failed to clone: {}", e),
-        };
-        repository
-    }
+            }
+        }
+        Err(e) => panic!("failed to clone: {}", e),
+    };
+    repository
 }
 
 pub(crate) enum BasicGitObject {

@@ -46,7 +46,7 @@ fn print_pos(repo_name: &str, commit: &str, limit: usize, query: &str) {
     };
 
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
-    let oids = preprocessed.pre_process_with_limit(
+    let oids = preprocessed.pre_process_first_parents_with_limit(
         &mut hyper_ast_cvs_git::git::fetch_github_repository(&preprocessed.name),
         "",
         commit,

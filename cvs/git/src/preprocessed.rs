@@ -16,7 +16,7 @@ use hyper_ast_gen_ts_java::impact::partial_analysis::PartialAnalysis;
 use log::info;
 
 use crate::{
-    git::{all_commits_between, retrieve_commit},
+    git::{all_commits_between, all_first_parents_between, retrieve_commit},
     make::MakeModuleAcc,
     make_processor::MakeProcessor,
     maven::MavenModuleAcc,
@@ -151,21 +151,8 @@ impl RepositoryProcessor {
             all_commits_between(&repository.repo, before, after).map(|x| x.count())
         );
         let rw = all_commits_between(&repository.repo, before, after)?;
-        let r = rw
-            .map(|oid| {
-                let oid = oid.unwrap();
-                let builder = crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
-                let get = &self
-                    .processing_systems
-                    .by_id_mut(&repository.config.0)
-                    .unwrap()
-                    .get_mut(repository.config.1);
-                let _id = get
-                    .prepare_processing(&repository.repo, builder)
-                    .process(self);
-                oid
-            })
-            .collect();
+        let mut rw = rw.map(|x| x.unwrap());
+        let r = self.pre_pro(&mut rw, repository);
         Ok(r)
     }
 
@@ -182,21 +169,34 @@ impl RepositoryProcessor {
             all_commits_between(&repository.repo, before, after).map(|x| x.count())
         );
         let rw = all_commits_between(&repository.repo, before, after)?;
+        let mut rw = rw.map(|x| x.unwrap()).take(limit).peekable();
+        let r = self.ensure_prepro(&mut rw, repository);
+        Ok(r)
+    }
+
+    pub fn ensure_prepro(
+        &self,
+        rw: &mut Peekable<impl Iterator<Item = git2::Oid>>,
+        repository: &ConfiguredRepo2,
+    ) -> Result<Vec<Oid>, Vec<Oid>> {
         let mut r = vec![];
-        for oid in rw.take(limit) {
-            let oid = oid.unwrap();
+        loop {
+            let Some(&oid) = rw.peek() else {
+                break
+            };
             let commit_processor = self
                 .processing_systems
                 .by_id(&repository.config.0)
                 .unwrap()
                 .get(repository.config.1);
             if let Some(c) = commit_processor.get_commit(oid) {
+                rw.next();
                 r.push(oid);
             } else {
-                return Ok(Err(r));
+                return Err(r);
             }
         }
-        Ok(Ok(r))
+        Ok(r)
     }
 
     /// If `before` and `after` are unrelated then only one commit will be processed.
@@ -212,23 +212,29 @@ impl RepositoryProcessor {
             all_commits_between(&repository.repo, before, after).map(|x| x.count())
         );
         let rw = all_commits_between(&repository.repo, before, after)?;
-        let r = rw
-            .take(limit)
-            .map(|oid| {
-                let oid = oid.unwrap();
-                let builder = crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
-                let commit_processor = self
-                    .processing_systems
-                    .by_id_mut(&repository.config.0)
-                    .unwrap()
-                    .get_mut(repository.config.1);
-                let _id = commit_processor
-                    .prepare_processing(&repository.repo, builder)
-                    .process(self);
-                oid
-            })
-            .collect();
+        let mut rw = rw.take(limit).map(|x| x.unwrap());
+        let r = self.pre_pro(&mut rw, repository);
         Ok(r)
+    }
+
+    pub fn pre_pro(
+        &mut self,
+        rw: &mut impl Iterator<Item = git2::Oid>,
+        repository: &ConfiguredRepo2,
+    ) -> Vec<Oid> {
+        rw.map(|oid| {
+            let builder = crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
+            let commit_processor = self
+                .processing_systems
+                .by_id_mut(&repository.config.0)
+                .unwrap()
+                .get_mut(repository.config.1);
+            let _id = commit_processor
+                .prepare_processing(&repository.repo, builder)
+                .process(self);
+            oid
+        })
+        .collect()
     }
 }
 #[cfg(feature = "maven_java")]
@@ -370,6 +376,36 @@ impl PreProcessedRepository {
         log::info!("commits to process: {:?}", count);
         let mut processing_ordered_commits = vec![];
         let rw = all_commits_between(&repository, before, after);
+        let Ok(rw) = rw else {
+            dbg!(rw.err());
+            return vec![];
+        };
+        rw.take(limit).for_each(|oid| {
+            let oid = oid.unwrap();
+            let c = CommitProcessor::<file_sys::Maven>::handle_commit::<true>(
+                &mut self.processor,
+                &repository,
+                dir_path,
+                oid,
+            );
+            processing_ordered_commits.push(oid.clone());
+            self.commits.insert(oid.clone(), c);
+        });
+        processing_ordered_commits
+    }
+
+    pub fn pre_process_first_parents_with_limit(
+        &mut self,
+        repository: &mut Repository,
+        before: &str,
+        after: &str,
+        dir_path: &str,
+        limit: usize,
+    ) -> Vec<git2::Oid> {
+        let count = all_first_parents_between(&repository, before, after).map(|x| x.count());
+        log::info!("commits to process: {:?}", count);
+        let mut processing_ordered_commits = vec![];
+        let rw = all_first_parents_between(&repository, before, after);
         let Ok(rw) = rw else {
             dbg!(rw.err());
             return vec![];

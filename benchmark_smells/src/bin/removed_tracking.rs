@@ -86,7 +86,7 @@ fn removed_tracking(repo_name: &str, commit: &str, limit: usize, query: &str) {
     assert!(query.enabled_pattern_count() > 0);
 
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
-    let oids = preprocessed.pre_process_with_limit(
+    let oids = preprocessed.pre_process_first_parents_with_limit(
         &mut hyper_ast_cvs_git::git::fetch_github_repository(&preprocessed.name),
         "",
         commit,
