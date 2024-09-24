@@ -957,7 +957,21 @@ impl<'cache, Sys> CachingBlobWrapper2<'cache, Sys> {
             oid
         );
         let blob = repository.find_blob(oid).unwrap();
-        std::str::from_utf8(blob.content())?;
+        if let Err(err) = std::str::from_utf8(blob.content()) {
+            log::warn!("non utf8 char in blob content {}", err);
+        }
+
+        // TODO make a proper test later when attempting to be more resilient to ill-formating, ...
+        // for ref on dubbo because of chinese chars vscode detects GB 2312
+        // [2024-08-27T11:22:37Z INFO  hyper_ast_cvs_git::preprocessed] handle commit: f8cb608c1eb242544be640f3ae994391729b2175
+        // [2024-08-27T11:22:37Z INFO  hyper_ast_cvs_git::java_processor] tree Ok("com")
+        // [2024-08-27T11:22:37Z INFO  hyper_ast_cvs_git::java_processor] tree Ok("alibaba")
+        // [2024-08-27T11:22:37Z INFO  hyper_ast_cvs_git::java_processor] tree Ok("dubbo")
+        // [2024-08-27T11:22:37Z INFO  hyper_ast_cvs_git::java_processor] tree Ok("config")
+        // [2024-08-27T11:22:37Z INFO  hyper_ast_cvs_git::java_processor] tree Ok("utils")
+        // [2024-08-27T11:22:37Z INFO  hyper_ast_cvs_git::preprocessed] blob "ReferenceConfigCacheTest.java" 3452c2ebc75e77ccf23a5c6cd7c1823f77096aa3
+        // thread 'tokio-runtime-worker' panicked at cvs/git/src/java_processor.rs:112:26:
+
         let text = blob.content();
         let full_node = wrapped(self.processors, &name, text);
         if let Ok(x) = &full_node {
