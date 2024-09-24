@@ -156,11 +156,14 @@ async fn main() {
     // to whitelist repositories either for all past commits or also all future commits
     // manage users and quota
     tracing::debug!("listening on {}", opts.address);
-    axum::Server::bind(&opts.address)
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind(&opts.address).await.unwrap();
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .unwrap();
 }
 pub(crate) use hyper_ast_cvs_git::no_space;
 /// axum handler for any request that fails to match the router routes.

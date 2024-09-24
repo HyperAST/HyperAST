@@ -369,11 +369,13 @@ async fn main() {
 
     // Run our application as a hyper server on http://localhost:8080.
     // axum::Server::bind(&"127.0.0.1:8080".parse().unwrap())
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .unwrap();
 }
 
 mod book {

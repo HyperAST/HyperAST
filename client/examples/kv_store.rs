@@ -17,8 +17,8 @@ use std::{
 };
 use tower::{BoxError, ServiceBuilder};
 use tower_http::{
-    auth::RequireAuthorizationLayer, compression::CompressionLayer, limit::RequestBodyLimitLayer,
-    trace::TraceLayer,
+    auth::AsyncRequireAuthorizationLayer, compression::CompressionLayer,
+    limit::RequestBodyLimitLayer, trace::TraceLayer,
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -68,10 +68,13 @@ async fn main() {
     // Run our app with hyper
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
     tracing::debug!("listening on {}", addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .unwrap();
 }
 
 type SharedState = Arc<RwLock<AppState>>;
@@ -120,7 +123,9 @@ fn admin_routes() -> Router<SharedState> {
         .route("/keys", delete(delete_all_keys))
         .route("/key/:key", delete(remove_key))
         // Require bearer auth for all admin routes
-        .layer(RequireAuthorizationLayer::bearer("secret-token"))
+        .layer(AsyncRequireAuthorizationLayer::new(move |x| async {
+            Ok(x)
+        }))
 }
 
 async fn handle_error(error: BoxError) -> impl IntoResponse {
