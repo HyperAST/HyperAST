@@ -401,11 +401,7 @@ impl PrecomputedPatterns {
             if hasher.1 % PrecomputedPatterns::INTERM == 0 && hasher.1 > 0 {
                 let hash = hasher.0.clone().finish();
                 // dbg!(&hash);
-                if !self
-                    .intermediate_hashes
-                    .binary_search(&hash)
-                    .is_ok()
-                {
+                if !self.intermediate_hashes.binary_search(&hash).is_ok() {
                     continue;
                 }
             }
@@ -464,7 +460,6 @@ impl PrecomputedPatterns {
             id.inc();
             stack.push((hasher, id));
         }
-
         // self.matches_aux(stepid, stepid, query, hasher, &mut res);
         // TODO add eq impl to avoid collisions
     }
@@ -565,9 +560,7 @@ fn hash_single_step(query: &Query, stepid: StepId, hasher: &mut std::hash::Defau
     step.normed_alternative_index(stepid).hash(hasher);
     step.supertype_symbol().hash(hasher);
     step.symbol.hash(hasher);
-    if step.has_immediate_pred() {
-        step.capture_ids[1].0.hash(hasher);
-    }
+    step.immediate_pred().hash(hasher);
     step.is_named().hash(hasher);
 }
 
@@ -581,9 +574,7 @@ fn hash_single_step1(query: &Query, stepid: StepId, hasher: &mut std::hash::Defa
     step.normed_alternative_index(stepid).hash(hasher);
     step.supertype_symbol().hash(hasher);
     step.symbol.hash(hasher);
-    if step.has_immediate_pred() {
-        step.capture_ids[1].0.hash(hasher);
-    }
+    step.immediate_pred().hash(hasher);
     step.is_named().hash(hasher);
 }
 
@@ -597,9 +588,7 @@ fn hash_single_step2(query: &Query, stepid: StepId, hasher: &mut std::hash::Defa
     step.normed_alternative_index(stepid).hash(hasher);
     step.supertype_symbol().hash(hasher);
     0u16.hash(hasher);
-    if step.has_immediate_pred() {
-        step.capture_ids[1].0.hash(hasher);
-    }
+    step.immediate_pred().hash(hasher);
     true.hash(hasher);
 }
 fn hash_single_step12(query: &Query, stepid: StepId, hasher: &mut std::hash::DefaultHasher) {
@@ -612,9 +601,7 @@ fn hash_single_step12(query: &Query, stepid: StepId, hasher: &mut std::hash::Def
     step.normed_alternative_index(stepid).hash(hasher);
     step.supertype_symbol().hash(hasher);
     0u16.hash(hasher);
-    if step.has_immediate_pred() {
-        step.capture_ids[1].0.hash(hasher);
-    }
+    step.immediate_pred().hash(hasher);
     true.hash(hasher);
 }
 
@@ -1245,7 +1232,7 @@ impl Query {
             }
         }
         std::mem::forget(ptr);
-        log::trace!("\n{}", query);
+        log::info!("\n{}", query);
         Ok(query)
     }
 
