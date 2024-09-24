@@ -11,7 +11,7 @@ use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 
 use crate::{
-    commit, fetch, file, querying,
+    commit, fetch, file, pull_requests, querying,
     scripting::{self, ScriptContent, ScriptContentDepth, ScriptingError, ScriptingParam},
     smells, track, tsg, view, SharedState,
 };
@@ -423,17 +423,26 @@ pub fn commit_metadata_route(_st: SharedState) -> Router<SharedState> {
         .layer(HandleErrorLayer::new(|e: BoxError| async move {
             dbg!(e);
         }))
-        .load_shed()
-        .concurrency_limit(8)
-        .buffer(20)
-        .rate_limit(10, Duration::from_secs(1))
+        // .load_shed()
+        .concurrency_limit(16)
+        .buffer(64)
+        .rate_limit(60, Duration::from_secs(1))
         // .request_body_limit(1024 * 5_000 /* ~5mb */)
         .timeout(Duration::from_secs(10))
         .layer(TraceLayer::new_for_http());
-    Router::new().route(
-        "/commit/github/:user/:name/:version",
-        get(commit_metadata).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
-    )
+    Router::new()
+        .route(
+            "/commit/github/:user/:name/:version",
+            get(commit_metadata).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/pr/github/:user/:name/:version",
+            get(pull_requests::pr_commits).layer(service_config.clone()),
+        )
+        .route(
+            "/fork/github/:user/:name/:other_user/:other_name/:head",
+            post(add_remote).layer(service_config.clone()),
+        )
 }
 
 #[axum_macros::debug_handler]
@@ -445,6 +454,14 @@ async fn commit_metadata(
     commit::commit_metadata(state, path).map_err(|err| err.into())
 }
 
+#[axum_macros::debug_handler]
+async fn add_remote(
+    axum::extract::Path(path): axum::extract::Path<commit::ParamRemote>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+) -> axum::response::Result<()> {
+    dbg!(&path);
+    commit::add_remote(state, path).map_err(|err| err.into())
+}
 pub struct Timed<T> {
     pub(crate) time: f64,
     pub(crate) content: T,

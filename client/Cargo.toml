@@ -98,6 +98,12 @@ rerun = { version = "0.17.0", default-features = false, features = [
     "sdk",
 ], optional = true }
 
+
+graphql_client = { version = "0.14.0" }
+hyper-rustls = "0.27.2"
+hyper-util = { version = "0.1", default-features = false, features = ["client-legacy", "tokio"] }
+rustls = { version = "0.23"}
+http-body-util = "0.1.2"
 [dev-dependencies]
 reqwest = { version = "0.12.5", features = ["blocking"] }
 

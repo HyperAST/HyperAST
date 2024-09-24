@@ -31,6 +31,7 @@ mod examples;
 mod fetch;
 mod file;
 mod matching;
+mod pull_requests;
 mod querying;
 mod scripting;
 mod smells;
@@ -59,6 +60,7 @@ pub struct AppState {
     )>,
     // Multiple shared docs
     doc2: ws::SharedDocs,
+    pr_cache: RwLock<std::collections::HashMap<commit::Param, pull_requests::RawPrData>>
 }
 
 impl Default for AppState {
@@ -75,6 +77,7 @@ impl Default for AppState {
                 Default::default(),
             )),
             doc2: Default::default(),
+            pr_cache: Default::default()
         }
     }
 }
