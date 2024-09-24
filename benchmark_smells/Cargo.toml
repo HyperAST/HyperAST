@@ -40,6 +40,9 @@ md5 = "0.7.0"
 
 pprof = { version = "0.10", features = ["prost-codec", "flamegraph"] }
 
+sha2 = { version = "0.10", default-features = false }
+base16ct = "0.2.0"
+
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.0"
 

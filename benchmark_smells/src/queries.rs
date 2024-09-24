@@ -48,20 +48,19 @@ pub fn assertion_roulette() -> String {
     )
 }
 
-pub fn exception_handling() -> String {
+pub fn exception_handling() -> [String; 2] {
     let tc = |s| {
         format!(
             r#"
       (try_statement
         (block
           {s}
-    )
-    (catch_clause)
-)"#
+        )
+        (catch_clause)
+      )"#
         )
     };
-    format!(
-        "{}\n{}",
+    [
         tc(r#"(expression_statement 
       (method_invocation
         (identifier) (#EQ? "fail")
@@ -72,8 +71,8 @@ pub fn exception_handling() -> String {
         (identifier) (#EQ? "fail")
       )
     )
-    ."#)
-    )
+    ."#),
+    ]
 }
 
 pub fn conditional_logic() -> String {
@@ -156,7 +155,7 @@ pub fn duplicated_assert() -> String {
     ))
 }
 
-fn ignored_test() -> String {
+pub fn ignored_test() -> String {
     format!(
         r#"(method_declaration
   (modifiers
@@ -202,36 +201,40 @@ pub fn magic_number_test() -> String {
 }
 
 pub fn mistery_guest() -> String {
-  test_method_body(r#"(expression_statement (assignment_expression
+    test_method_body(
+        r#"(expression_statement (assignment_expression
     right: (method_invocation
         object: (identifier) (#EQ? "File")
         name:   (identifier) (#EQ? "createTempFile")
     )
-  ))"#)
+  ))"#,
+    )
 }
 
 pub fn redundant_print() -> String {
-  test_method_body(r#"(expression_statement
+    test_method_body(
+        r#"(expression_statement
     right: (method_invocation
         name:   (identifier) (#EQ? "println")
     )
-  )"#)
+  )"#,
+    )
 }
 
 pub fn redundant_assertion() -> String {
-  test_method_body(
-      r#"(expression_statement
+    test_method_body(
+        r#"(expression_statement
       (method_invocation
           name: (identifier) (#EQ? "assertThat")
           (argument_list (_)@a (_)@b) (#eq? @a @b)
       )
   )"#,
-  )
+    )
 }
 
 pub fn sensitive_equality() -> String {
-  test_method_body(
-      r#"(expression_statement
+    test_method_body(
+        r#"(expression_statement
       (method_invocation
           name: (identifier) (#EQ? "assertEquals")
           (argument_list (method_invocation 
@@ -239,16 +242,16 @@ pub fn sensitive_equality() -> String {
           )
       )
   )"#,
-  )
+    )
 }
 
 pub fn sleepy_test() -> String {
-  test_method_body(
-      r#"(expression_statement
-      (method_invocation
+    test_method_body(
+        r#"(expression_statement
+    (method_invocation
         object: (identifier) (#EQ? "Thread")
         name: (identifier) (#EQ? "sleep")
-      )
-  )"#,
-  )
+    )
+)"#,
+    )
 }

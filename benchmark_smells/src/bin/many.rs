@@ -1,9 +1,14 @@
 use std::collections::HashSet;
 
-use hyper_ast::{position, utils::memusage_linux};
-use hyper_ast_benchmark_smells::{github_ranges::format_pos_as_github_url, simple::count_matches};
+use hyper_ast::{position, types::DecompressedSubtree as _, utils::memusage_linux};
+use hyper_ast_benchmark_smells::{
+    diffing,
+    github_ranges::{format_pos_as_github_diff_url, format_pos_as_github_url, PositionWithContext},
+    simple::count_matches, DATASET,
+};
 use hyper_ast_cvs_git::preprocessed::PreProcessedRepository;
 
+use hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder;
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 
@@ -87,7 +92,8 @@ fn many(repo_name: &str, commit: &str, limit: usize, query: &str) {
     }
 
     let mut old_matches_count = vec![];
-    let mut old_matches_positions: Vec<HashSet<(String, usize, usize)>> = vec![Default::default(); query.enabled_pattern_count()];
+    let mut old_matches_positions: Vec<HashSet<_>> =
+        vec![Default::default(); query.enabled_pattern_count()];
     let mut no_change_commits = vec![];
     for oid in oids {
         let commit = preprocessed.commits.get_key_value(&oid).unwrap();
@@ -96,7 +102,9 @@ fn many(repo_name: &str, commit: &str, limit: usize, query: &str) {
         use hyper_ast::types::WithStats;
         let s = stores.node_store.resolve(tr).size();
 
-        let matches = hyper_ast_benchmark_smells::github_ranges::compute_ranges(stores, tr, &query);
+        let matches = hyper_ast_benchmark_smells::github_ranges::compute_postions_with_context(
+            stores, tr, &query,
+        );
         let matches_count: Vec<usize> = matches.iter().map(|x| x.len()).collect();
 
         let matches_count_print = matches_count
@@ -116,7 +124,11 @@ fn many(repo_name: &str, commit: &str, limit: usize, query: &str) {
                     .map(|position| {
                         format!(
                             "{},",
-                            format_pos_as_github_url(repo_name, &oid.to_string(), &position)
+                            format_pos_as_github_url(
+                                repo_name,
+                                &oid.to_string(),
+                                &(position.file, position.start, position.end)
+                            )
                         )
                     })
                     .collect();
@@ -125,42 +137,33 @@ fn many(repo_name: &str, commit: &str, limit: usize, query: &str) {
             })
             .collect();
 
-        // let matches_links_print = matches
-        //     .into_iter()
-        //     .map(|x| {
-        //         let x: String = x.1
-        //             .into_iter()
-        //             .map(|x| format!("https://github.com/{repo_name}/blob/{oid}/{},", x))
-        //             .collect();
-        //         format!(",[{:?}]", x)
-        //     })
-        //     .collect::<String>();
-
         let mu = memusage_linux();
         // TODO
         if old_matches_count != matches_count {
-            eprintln!("following commits did not show a change: {:?}", no_change_commits);
+            eprintln!(
+                "following commits did not show a change: {:?}",
+                no_change_commits
+            );
             old_matches_count = matches_count.clone();
 
-            let removed: Vec<HashSet<_>> = old_matches_positions
-                .iter()
-                .zip(matches_positions.iter())
-                .map(|(old, new)| old.difference(new).collect())
-                .collect();
-            let added: Vec<HashSet<_>> = old_matches_positions
-                .iter()
-                .zip(matches_positions.iter())
-                .map(|(old, new)| new.difference(old).collect())
-                .collect();
+            let (removed, added): (Vec<_>, Vec<_>) = old_matches_positions
+                .into_iter()
+                .zip(matches_positions.clone().into_iter())
+                .map(|(old, new)| {
+                    let (old, new) = track_heuristic1_bis(old, new);
+                    let (old, new) = track_heuristic2(old, new);
+                    (old, new)
+                })
+                .unzip();
 
             let print_removed = removed.into_iter().map(|x| {
                 x.into_iter()
-                    .map(|x| format_pos_as_github_url(repo_name, &oid.to_string(), &x))
+                    .map(|x| format_pos_as_github_diff_url(repo_name, &oid.to_string(), &x))
             });
 
             let print_added = added.into_iter().map(|x| {
                 x.into_iter()
-                    .map(|x| format_pos_as_github_url(repo_name, &oid.to_string(), &x))
+                    .map(|x| format_pos_as_github_diff_url(repo_name, &oid.to_string(), &x))
             });
 
             if CSV_FORMATING {
@@ -193,7 +196,11 @@ fn many(repo_name: &str, commit: &str, limit: usize, query: &str) {
                     matches_count_print,
                 );
 
-                for (i, ((added, removed), count)) in print_added.zip(print_removed).zip(matches_count.iter()).enumerate() {
+                for (i, ((added, removed), count)) in print_added
+                    .zip(print_removed)
+                    .zip(matches_count.iter())
+                    .enumerate()
+                {
                     println!("\tremoved ({i}): {}", removed.len());
                     for dif in removed {
                         println!("\t\t{}", dif)
@@ -213,9 +220,42 @@ fn many(repo_name: &str, commit: &str, limit: usize, query: &str) {
             no_change_commits.push(oid.to_string());
         }
     }
-    eprintln!("\nFollowing commits did not show a change: {:?}", no_change_commits);
+    eprintln!(
+        "\nFollowing commits did not show a change: {:?}",
+        no_change_commits
+    );
 
     eprintln!("TODO summary")
+}
+
+fn track_heuristic1_bis<T: std::hash::Hash + Eq>(
+    mut old_a: HashSet<T>,
+    old_b: HashSet<T>,
+) -> (HashSet<T>, Vec<T>) {
+    // (old.difference(new).collect(), new.difference(old).collect()) // NOTE same
+    let mut new_b = Vec::new();
+    for x in old_b.into_iter() {
+        if old_a.contains(&x) {
+            old_a.remove(&x);
+            new_b.push(x); // no copying here
+        }
+    }
+    (old_a, new_b)
+}
+
+fn track_heuristic2(
+    mut old_a: HashSet<PositionWithContext>,
+    old_b: Vec<PositionWithContext>,
+) -> (HashSet<PositionWithContext>, Vec<PositionWithContext>) {
+    // (old.difference(new).collect(), new.difference(old).collect()) // NOTE same
+    let mut new_b = Vec::new();
+    for b in old_b.into_iter() {
+        if let Some(i) = old_a.iter().find(|a| a.id == b.id && &a.file == &b.file) {
+            old_a.remove(&i.clone());
+            new_b.push(b); // no copying here
+        }
+    }
+    (old_a, new_b)
 }
 
 // !!! query is currently incorrect but it is running :)
@@ -234,22 +274,51 @@ fn conditional_test_logic() {
 }
 
 #[test]
-fn assertion_roulette() {
-    let repo_name = "INRIA/spoon";
-    let commit = "7c7f094bb22a350fa64289a94880cc3e7231468f";
-    let limit = 6;
+fn assertion_roulette_dubbo() {
+    let data = DATASET.iter().find(|x| x.0 == "dubbo").unwrap();
+    let repo_name = data.1;
+    eprintln!("{}:", repo_name);
+    let commit = data.2;
+    let limit = 2000;
     let query = hyper_ast_benchmark_smells::queries::assertion_roulette();
-    print!("{}", query);
+    eprint!("{}", query);
+    unsafe {
+        hyper_ast_cvs_git::java_processor::SUB_QUERIES = &[
+            r#"(method_invocation
+                name: (identifier) (#EQ? "assertThat")
+            )"#,
+            "(class_declaration)",
+            "(method_declaration)",
+            r#"(marker_annotation 
+        name: (identifier) (#EQ? "Test")
+    )"#,
+        ]
+    };
     many(repo_name, commit, limit, &query);
 }
 
 #[test]
-fn exeption_handling() {
-    let repo_name = "INRIA/spoon";
+fn exception_handling() {
+    let repo_name = "dubbo/dubbo";
     let commit = "7c7f094bb22a350fa64289a94880cc3e7231468f";
-    let limit = 6;
+    let limit = 2000;
     let query = hyper_ast_benchmark_smells::queries::exception_handling();
-    let query = format!("{} @root", query);
+    let query = format!("{} @root\n{} @root", query[0], query[1]);
+    println!("{}:", repo_name);
+    println!("{}", query);
+    many(repo_name, commit, limit, &query);
+}
+
+#[test]
+fn exception_handling_graphhopper() {
+    let data = DATASET.iter().find(|x| x.0 == "graphhopper").unwrap();
+    let repo_name = data.1;
+    eprintln!("{}:", repo_name);
+    let commit = data.2;
+    let limit = 1000;
+    let query = hyper_ast_benchmark_smells::queries::exception_handling();
+    let query = format!("{} @root", query[0]);
+    println!("{}:", repo_name);
     println!("{}", query);
     many(repo_name, commit, limit, &query);
 }
