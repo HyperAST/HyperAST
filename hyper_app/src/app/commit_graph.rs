@@ -466,6 +466,8 @@ fn show_commit_graph_timed_egui_plot<'a>(
                     let v = m.value as i64 - cached.max_time;
                     if v == 0 {
                         format!("0")
+                    } else if m.step_size as i64 > 60 * 60 * 24 * 364 {
+                        format!("{:+}y", v / (60 * 60 * 24 * 364))
                     } else if m.step_size as i64 > 60 * 60 * 24 * 20 {
                         format!("{:+}M", v / (60 * 60 * 24 * 30))
                     } else if m.step_size as i64 > 60 * 60 * 24 * 6 {
