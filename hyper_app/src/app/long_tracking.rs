@@ -20,7 +20,7 @@ use poll_promise::Promise;
 use crate::app::{
     code_aspects::{self, HightLightHandle},
     code_tracking::TrackingResultWithChanges,
-    commit::fetch_commit,
+    commit::{fetch_commit, fetch_commit0},
     tree_view,
     types::Resource,
 };
@@ -295,7 +295,7 @@ pub(crate) fn show_results(
                         if !md.is_waiting() {
                             let code_range = &mut long_tracking.origins[0];
                             // wasm_rs_dbg::dbg!(&code_range);
-                            md.buffer(fetch_commit(ui.ctx(), api_addr, &code_range.file.commit));
+                            md.buffer(fetch_commit0(ui.ctx(), api_addr, &code_range.file.commit));
                         }
                         return;
                     }
@@ -384,13 +384,13 @@ pub(crate) fn show_results(
                         let track = tracking_result.content.track.results.get(0).unwrap();
                         if let Some(code_range) = &track.intermediary {
                             // wasm_rs_dbg::dbg!(&code_range);
-                            md.buffer(fetch_commit(ui.ctx(), api_addr, &code_range.file.commit));
+                            md.buffer(fetch_commit0(ui.ctx(), api_addr, &code_range.file.commit));
                         } else if let Some(code_range) = track.matched.get(0) {
                             // wasm_rs_dbg::dbg!(&code_range);
-                            md.buffer(fetch_commit(ui.ctx(), api_addr, &code_range.file.commit));
+                            md.buffer(fetch_commit0(ui.ctx(), api_addr, &code_range.file.commit));
                         } else if let Some(code_range) = &track.fallback {
                             // wasm_rs_dbg::dbg!(&code_range);
-                            md.buffer(fetch_commit(ui.ctx(), api_addr, &code_range.file.commit));
+                            md.buffer(fetch_commit0(ui.ctx(), api_addr, &code_range.file.commit));
                         } else {
                             unreachable!("should have been matched or been given a fallback")
                         }

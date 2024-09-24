@@ -113,6 +113,13 @@ impl<Value, Computer> BorrowFrameCache<Value, Computer> {
         let hash = egui::util::hash(&key);
         &self.cache.get(&hash).unwrap().1
     }
+    pub fn remove<Key>(&mut self, key: Key) -> Option<Value>
+    where
+        Key: std::hash::Hash,
+    {
+        let hash = egui::util::hash(&key);
+        self.cache.remove(&hash).map(|x|x.1)
+    }
 }
 
 #[derive(Default)]

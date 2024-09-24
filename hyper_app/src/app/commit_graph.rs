@@ -90,14 +90,15 @@ impl crate::HyperApp {
     pub(crate) fn print_commit_graph_timed(&mut self, ui: &mut egui::Ui) {
         let res_per_commit = &mut RES_PER_COMMIT.lock().unwrap();
         let layout_cache = &mut LAYOUT.lock().unwrap();
+        let mut caches_to_clear = vec![];
         ui.add_space(20.0);
         let ready_count = self.data.fetched_commit_metadata.len_local();
         for repo_id in self.data.selected_code_data.project_ids() {
-            let Some((r, mut c)) = self.data.selected_code_data.get_mut(repo_id) else {
+            let Some((r, mut commit_slice)) = self.data.selected_code_data.get_mut(repo_id) else {
                 continue;
             };
-            let commit_slice = &mut c.iter_mut();
             let Some(branch) = commit_slice
+                .iter_mut()
                 .next()
                 .map(|c| (format!("{}/{}", r.user, r.name), c.clone()))
             else {
@@ -153,24 +154,112 @@ impl crate::HyperApp {
                     &mut to_poll,
                 );
 
-                if let Some(i) = resp.inner {
-                    if resp.response.clicked() {
-                        self.selected_commit = Some((repo_id, cached.commits[i].to_string()));
-                    } else if resp.response.secondary_clicked() {
+                match resp.inner {
+                    GraphInteration::ClickCommit(i) => {
+                        if resp.response.secondary_clicked() && ui.input(|i| i.modifiers.command) {
+                            let mut it = commit_slice.iter_mut();
+                            *it.next().unwrap() = cached.commits[i].clone();
+                            for _ in 0..it.count() {
+                                commit_slice.pop();
+                            }
+                        } else if resp.response.clicked() {
+                            self.selected_commit = Some((repo_id, cached.commits[i].to_string()));
+                            self.selected_baseline = None;
+                            let tabid = self
+                                .data
+                                .queries_results
+                                .iter()
+                                .find(|x| x.0 == repo_id && x.1 == 0)
+                                .unwrap()
+                                .3;
+                            if let super::Tab::QueryResults { id, format } =
+                                &mut self.tabs[tabid as usize]
+                            {
+                                *format = crate::app::ResultFormat::Table
+                            } else {
+                                panic!()
+                            }
+                        } else if resp.response.secondary_clicked() {
+                            let commit = format!(
+                                "https://github.com/{}/{}/commit/{}",
+                                r.user, r.name, cached.commits[i]
+                            );
+                            ui.output_mut(|r| r.copied_text = commit.to_string());
+                            self.toasts.add(re_ui::toasts::Toast {
+                                kind: re_ui::toasts::ToastKind::Success,
+                                text: format!(
+                                    "Copied address of github commit to clipboard\n{}",
+                                    commit
+                                ),
+                                options: re_ui::toasts::ToastOptions::with_ttl_in_seconds(4.0),
+                            });
+                            let id = &cached.commits[i];
+                            let repo = r.clone();
+                            let id = id.clone();
+                            let commit = crate::app::types::Commit { repo, id };
+                            let md = self.data.fetched_commit_metadata.remove(&commit.id);
+                            let waiting = commit::fetch_merge_pr2(
+                                ui.ctx(),
+                                &self.data.api_addr,
+                                &commit,
+                                md.unwrap().unwrap().clone(),
+                                repo_id,
+                            );
+                            self.data.fetched_commit_metadata.insert(commit.id, waiting);
+                        }
+                    }
+                    GraphInteration::ClickErrorFetch(i) => {
+                        for i in i {
+                            let id = &cached.commits[i];
+                            let repo = r.clone();
+                            let id = id.clone();
+                            let commit = crate::app::types::Commit { repo, id };
+                            let v = commit::fetch_commit(ui.ctx(), &self.data.api_addr, &commit);
+                            self.data.fetched_commit_metadata.insert(commit.id, v);
+                        }
+                    }
+                    GraphInteration::ClickChange(i, after) => {
                         let commit = format!(
                             "https://github.com/{}/{}/commit/{}",
-                            r.user, r.name, cached.commits[i]
+                            r.user, r.name, cached.commits[after]
                         );
-                        ui.output_mut(|r| r.copied_text = commit.to_string());
                         self.toasts.add(re_ui::toasts::Toast {
-                            kind: re_ui::toasts::ToastKind::Success,
-                            text: format!(
-                                "Copied address of github commit to clipboard\n{}",
-                                commit
-                            ),
+                            kind: re_ui::toasts::ToastKind::Info,
+                            text: format!("Selected\n{} vs {}", commit, cached.commits[i]),
                             options: re_ui::toasts::ToastOptions::with_ttl_in_seconds(4.0),
                         });
+                        if resp.response.clicked() {
+                            self.selected_baseline = Some(cached.commits[i].to_string());
+                            self.selected_commit =
+                                Some((repo_id, cached.commits[after].to_string()));
+                            assert_eq!(self.data.queries.len(), 1); // need to retieve current query if multiple
+                            let tabid = self
+                                .data
+                                .queries_results
+                                .iter()
+                                .find(|x| x.0 == repo_id && x.1 == 0)
+                                .unwrap()
+                                .3;
+                            if let super::Tab::QueryResults { id, format } =
+                                &mut self.tabs[tabid as usize]
+                            {
+                                *format = crate::app::ResultFormat::Hunks
+                            } else {
+                                panic!()
+                            }
+                        } else if resp.response.secondary_clicked() {
+                            ui.output_mut(|r| r.copied_text = commit.to_string());
+                            self.toasts.add(re_ui::toasts::Toast {
+                                kind: re_ui::toasts::ToastKind::Success,
+                                text: format!(
+                                    "Copied address of github commit to clipboard\n{}",
+                                    commit
+                                ),
+                                options: re_ui::toasts::ToastOptions::with_ttl_in_seconds(4.0),
+                            });
+                        }
                     }
+                    _ => (),
                 }
             } else {
                 show_commit_graph_timed_custom(
@@ -344,19 +433,23 @@ impl crate::HyperApp {
     }
 }
 
+enum GraphInteration {
+    None,
+    ClickCommit(usize),
+    ClickChange(usize, usize),
+    ClickErrorFetch(Vec<usize>),
+}
+
 fn show_commit_graph_timed_egui_plot<'a>(
     ui: &mut egui::Ui,
     max_fetch: i64,
-    fetched_commit_metadata: &super::utils_poll::MultiBuffered2<
-        String,
-        Result<commit::CommitMetadata, String>,
-    >,
+    fetched_commit_metadata: &CommitMdStore,
     results_per_commit: Option<&super::ResultsPerCommit>,
     cached: &'a commit::CommitsLayoutTimed,
     repo_id: ProjectId,
     to_fetch: &mut Vec<&'a String>,
     to_poll: &mut Vec<&'a String>,
-) -> egui_plot::PlotResponse<Option<usize>> {
+) -> egui_plot::PlotResponse<GraphInteration> {
     const DIFF_VALS: bool = true;
     const LEFT_VALS: bool = false;
     const RIGHT_VALS: bool = false;
@@ -406,7 +499,9 @@ fn show_commit_graph_timed_egui_plot<'a>(
                     }
                 })
                 .show(ui, |plot_ui| {
+                    let mut ouput = GraphInteration::None;
                     let mut offsets = vec![];
+                    let mut offsets2 = vec![];
                     let mut points_with_data = vec![];
                     let mut points = vec![];
                     'subs: for sub @ commit::SubsTimed {
@@ -421,11 +516,16 @@ fn show_commit_graph_timed_egui_plot<'a>(
                     {
                         const CORNER: bool = true;
                         let mut line = vec![];
+
                         let prev_p = [
                             if cached.times[*prev] == -1 {
                                 -1
                             } else {
-                                cached.times[*prev]
+                                let t = cached.times[*prev];
+                                if cached.max_time - t > max_fetch {
+                                    continue 'subs;
+                                }
+                                t
                             },
                             with_egui_plot::transform_y(cached.subs[*prev_sub].delta_time),
                         ];
@@ -435,8 +535,52 @@ fn show_commit_graph_timed_egui_plot<'a>(
                             if t == -1 {
                                 if fetched_commit_metadata.is_absent(&cached.commits[i]) {
                                     to_fetch.push(&cached.commits[i]);
-                                } else if fetched_commit_metadata.get(&cached.commits[i]).is_none()
+                                } else if let Some(a) =
+                                    fetched_commit_metadata.get(&cached.commits[i])
                                 {
+                                    match a {
+                                        Err(e) => {
+                                            to_poll.push(&cached.commits[i]);
+                                            let plot_point = [
+                                                cached.times[*prev] as f64,
+                                                with_egui_plot::transform_y(*delta_time) as f64
+                                                    + 30.0,
+                                            ];
+                                            if plot_ui.response().clicked {
+                                                let point = plot_ui.response().hover_pos().unwrap();
+                                                let pos = plot_ui
+                                                    .transform()
+                                                    .position_from_point(&plot_point.into());
+                                                let dist_sq = point.distance_sq(pos);
+                                                if dist_sq < 100.0 {
+                                                    log::error!("should reload");
+                                                    if let GraphInteration::None = ouput {
+                                                        ouput =
+                                                            GraphInteration::ClickErrorFetch(vec![
+                                                                i,
+                                                            ]);
+                                                    } else if let GraphInteration::ClickErrorFetch(
+                                                        v,
+                                                    ) = &mut ouput
+                                                    {
+                                                        v.push(i)
+                                                    }
+                                                }
+                                            }
+                                            let series: Vec<[f64; 2]> = vec![plot_point];
+                                            let points = Points::new(series)
+                                                .radius(4.0)
+                                                .color(egui::Color32::RED)
+                                                .name(format!(
+                                                    "Error getting {}:\n{e}",
+                                                    cached.commits[i]
+                                                ));
+                                            plot_ui.add(points);
+                                            // to_fetch.push(cached.commits[i]);
+                                        }
+                                        _ => (),
+                                    }
+                                } else {
                                     to_poll.push(&cached.commits[i]);
                                 }
                                 break;
@@ -457,13 +601,12 @@ fn show_commit_graph_timed_egui_plot<'a>(
                             } else {
                                 None
                             };
-
                             let diff = results_per_commit
                                 .zip(before)
                                 .and_then(|(x, c1)| x.try_diff_as_string(c1, commit));
 
                             let y = with_egui_plot::transform_y(*delta_time);
-                            let p = [t, y];
+                            let mut p = [t, y];
                             if *start == i {
                                 let corner = [
                                     (p[0] as f64).max(
@@ -479,6 +622,18 @@ fn show_commit_graph_timed_egui_plot<'a>(
                                             .anchor(egui::Align2::RIGHT_BOTTOM)
                                             .color(egui::Color32::YELLOW),
                                     );
+
+                                    if plot_ui.response().clicked {
+                                        let point = plot_ui.response().hover_pos().unwrap();
+                                        let plot_point = PlotPoint::new(corner[0], corner[1]);
+                                        let pos =
+                                            plot_ui.transform().position_from_point(&plot_point);
+                                        let dist_sq = point.distance_sq(pos);
+                                        if dist_sq < 100.0 {
+                                            log::error!("clicked");
+                                            ouput = GraphInteration::ClickChange(i, *prev);
+                                        }
+                                    }
                                 }
                             } else {
                                 let a = line.last().unwrap().clone();
@@ -488,8 +643,16 @@ fn show_commit_graph_timed_egui_plot<'a>(
                                     plot_ui.text(
                                         Text::new(position, text)
                                             .anchor(egui::Align2::RIGHT_BOTTOM)
-                                            .color(egui::Color32::YELLOW),
-                                    );
+                                    if plot_ui.response().clicked {
+                                        let point = plot_ui.response().hover_pos().unwrap();
+                                        let pos =
+                                            plot_ui.transform().position_from_point(&position);
+                                        let dist_sq = point.distance_sq(pos);
+                                        if dist_sq < 100.0 {
+                                            log::error!("clicked");
+                                            ouput = GraphInteration::ClickChange(i, i - 1);
+                                        }
+                                    }
                                 }
                             }
                             line.push(p.map(|x| x as f64));
@@ -538,6 +701,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
                                 offsets.push(i as u32);
                             } else {
                                 points.push(p.map(|x| x as f64));
+                                offsets2.push(i as u32);
                             }
                         }
 
@@ -556,8 +720,38 @@ fn show_commit_graph_timed_egui_plot<'a>(
                                 line.push(corner);
                                 line.push(p);
                             } else {
-                                let p = [x, y];
-                                line.push(p.map(|x| x as f64));
+                            let c1 = if start == end { *prev } else { *end - 1 };
+                            let diff = results_per_commit.and_then(|x| {
+                                x.try_diff_as_string(&cached.commits[c1], &cached.commits[*succ])
+                            });
+                            if let Some(text) = DIFF_VALS.then_some(()).and(diff) {
+                                plot_ui.text(
+                                    Text::new(position, text)
+                                        .anchor(egui::Align2::RIGHT_BOTTOM)
+                                        .color(egui::Color32::RED),
+                                );
+
+                                if plot_ui.response().clicked {
+                                    let point = plot_ui.response().hover_pos().unwrap();
+                                    let plot_point = position;
+                                    let pos = plot_ui.transform().position_from_point(&plot_point);
+                                    let dist_sq = point.distance_sq(pos);
+                                    if dist_sq < 100.0 {
+                                        log::error!("clicked");
+                                        log::error!(
+                                            "{} {} {} {}\n{} {} {} {}",
+                                            cached.commits[*prev],
+                                            cached.commits[end - 1],
+                                            cached.commits[*start],
+                                            cached.commits[*succ],
+                                            prev,
+                                            end,
+                                            start,
+                                            succ,
+                                        );
+                                        ouput = GraphInteration::ClickChange(*succ, c1);
+                                    }
+                                }
                             }
                         }
 
@@ -569,13 +763,11 @@ fn show_commit_graph_timed_egui_plot<'a>(
                         .radius(2.0)
                         .color(egui::Color32::GREEN)
                         .name("Commit");
-                    plot_ui.points(points);
-                    let points = Points::new(points_with_data)
-                        .radius(2.0)
-                        .color(egui::Color32::DARK_GREEN)
-                        .name("Commit with data");
-                    let item = with_egui_plot::CommitPoints { offsets, points };
-                    let mut ouput = None;
+                    let item = with_egui_plot::CommitPoints {
+                        offsets: offsets2,
+                        points,
+                        with_data: false,
+                    };
                     if plot_ui.response().clicked {
                         if let Some(x) = item.find_closest(
                             plot_ui.response().hover_pos().unwrap(),
@@ -583,7 +775,32 @@ fn show_commit_graph_timed_egui_plot<'a>(
                         ) {
                             if x.dist_sq < 10.0 {
                                 let i = item.offsets[x.index] as usize;
-                                ouput = Some(i);
+                                ouput = GraphInteration::ClickCommit(i);
+                                // *selected_commit = Some((repo_id, cached.commits[i].to_string()));
+                                // plot_ui
+                                //     .ctx()
+                                //     .output_mut(|r| r.copied_text = cached.commits[i].to_string());
+                            }
+                        }
+                    }
+                    plot_ui.add(item);
+                    let points = Points::new(points_with_data)
+                        .radius(2.0)
+                        .color(egui::Color32::DARK_GREEN)
+                        .name("Commit with data");
+                    let item = with_egui_plot::CommitPoints {
+                        offsets,
+                        points,
+                        with_data: true,
+                    };
+                    if plot_ui.response().clicked {
+                        if let Some(x) = item.find_closest(
+                            plot_ui.response().hover_pos().unwrap(),
+                            plot_ui.transform(),
+                        ) {
+                            if x.dist_sq < 10.0 {
+                                let i = item.offsets[x.index] as usize;
+                                ouput = GraphInteration::ClickCommit(i);
                                 // *selected_commit = Some((repo_id, cached.commits[i].to_string()));
                                 // plot_ui
                                 //     .ctx()

@@ -98,11 +98,17 @@ impl Into<QueryEditor<super::code_editor_automerge::CodeEditor>> for QueryEditor
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
-#[serde(default)]
 pub(super) struct ComputeConfigQuery {
     pub(super) commit: Commit,
     pub(super) config: Config,
     pub(super) len: usize,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+pub(super) struct ComputeConfigQueryDifferential {
+    pub(super) commit: Commit,
+    pub(super) config: Config,
+    pub(super) baseline: Commit,
 }
 
 impl Default for ComputeConfigQuery {
@@ -174,7 +180,22 @@ pub(crate) struct QueryContent {
 pub(crate) struct StreamedDataTable<H, R> {
     pub head: H,
     pub commits: usize,
-    pub rows: Arc<Mutex<(u64, Vec<R>, bool)>>,
+    pub rows: Arc<Mutex<Rows<R>>>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+pub(crate) struct Rows<R>(
+    pub(crate) u64,
+    pub(crate) Vec<R>,
+    #[serde(skip)]
+    #[serde(default)]
+    pub(crate) bool,
+);
+
+impl<R> Default for Rows<R> {
+    fn default() -> Self {
+        Self(Default::default(), Default::default(), Default::default())
+    }
 }
 
 pub(crate) type StreamedComputeResults =
@@ -185,6 +206,7 @@ pub(crate) fn remote_compute_query_aux(
     api_addr: &str,
     single: &ComputeConfigQuery,
     script: QueryContent,
+    additional_commits: impl Iterator<Item = super::types::CommitId>,
 ) -> Promise<Result<StreamedComputeResults, QueryingError>> {
     // TODO multi requests from client
     // if single.len > 1 {
@@ -192,13 +214,13 @@ pub(crate) fn remote_compute_query_aux(
     // }
     let ctx = ctx.clone();
     let (header_sender, promise) = Promise::<Result<_, QueryingError>>::new();
-    let tabl_body: Arc<Mutex<(u64, Vec<Result<ComputeResultIdentified, MatchingError>>, _)>> =
-        Arc::default();
+    let tabl_body: Arc<Mutex<Rows<_>>> = Arc::default();
 
     let move_once = std::cell::Cell::new(Some((header_sender, tabl_body.clone())));
+    let addi = crate::app::utils::join(additional_commits, "/").to_string();
     let url = format!(
-        "http://{}/query-st/github/{}/{}/{}",
-        api_addr, &single.commit.repo.user, &single.commit.repo.name, &single.commit.id,
+        "http://{}/query-st/github/{}/{}/{}/{}",
+        api_addr, &single.commit.repo.user, &single.commit.repo.name, &single.commit.id, addi,
     );
     wasm_rs_dbg::dbg!(&url, &script);
 
@@ -213,6 +235,7 @@ pub(crate) fn remote_compute_query_aux(
                 log::debug!("{:?}", s);
                 // TODO parse the headers
                 let (header_sender, rows) = move_once.take().unwrap();
+                rows.lock().unwrap().2 = true;
                 if 200 <= s.status && s.status < 400 {
                     let commits = s.headers.get("commits").unwrap().parse().unwrap();
                     header_sender.send(Ok(StreamedDataTable {
@@ -241,7 +264,7 @@ pub(crate) fn remote_compute_query_aux(
                 log::debug!("{:?}", chunk);
                 let mut l = tabl_body.lock().unwrap();
                 log::debug!("{:?}", l);
-                l.2 = true;
+                // l.2 = true;
                 let mut hasher = DefaultHasher::new();
                 l.0.hash(&mut hasher);
                 0.hash(&mut hasher);
@@ -270,7 +293,7 @@ pub(crate) fn remote_compute_query_aux(
                             .map(|x| match x {
                                 R::Resp(r) => {
                                     r.hash(&mut hasher);
-                                    log::debug!("{:?}", r);
+                                    // log::debug!("{:?}", r);
                                     Ok(r)
                                 }
                                 R::Err(err) => {
@@ -288,8 +311,8 @@ pub(crate) fn remote_compute_query_aux(
             }
             Err(err) => {
                 log::error!("{}", err);
-                let (header_sender, _) = move_once.take().unwrap();
-                header_sender.send(Err(QueryingError::NetworkError(err)));
+                // let (header_sender, _) = move_once.take().unwrap();
+                // header_sender.send(Err(QueryingError::NetworkError(err)));
                 std::ops::ControlFlow::Break(())
             }
         }
@@ -325,6 +348,41 @@ pub(crate) fn remote_compute_query_aux_old(
         ctx.request_repaint(); // wake up UI thread
         let resource = response.and_then(|response| {
             Resource::<Result<ComputeResults, QueryingError>>::from_response(&ctx, response)
+        });
+        sender.send(resource);
+    });
+    promise
+}
+
+pub(crate) fn remote_compute_query_differential(
+    ctx: &egui::Context,
+    api_addr: &str,
+    single: &ComputeConfigQueryDifferential,
+    script: QueryContent,
+) -> Promise<Result<Resource<Result<DetailsResults, QueryingError>>, String>> {
+    let ctx = ctx.clone();
+    let (sender, promise) = Promise::new();
+    assert_eq!(single.baseline.repo, single.commit.repo);
+    let url = format!(
+        "http://{}/query-differential/github/{}/{}/{}/{}",
+        api_addr,
+        &single.commit.repo.user,
+        &single.commit.repo.name,
+        &single.commit.id,
+        &single.baseline.id,
+    );
+    wasm_rs_dbg::dbg!(&url, &script);
+
+    let mut request = ehttp::Request::post(&url, serde_json::to_vec(&script).unwrap());
+    request.headers.insert(
+        "Content-Type".to_string(),
+        "application/json; charset=utf-8".to_string(),
+    );
+
+    ehttp::fetch(request, move |response| {
+        ctx.request_repaint(); // wake up UI thread
+        let resource = response.and_then(|response| {
+            Resource::<Result<DetailsResults, QueryingError>>::from_response(&ctx, response)
         });
         sender.send(resource);
     });
@@ -508,6 +566,68 @@ fn show_examples(
 }
 
 impl Resource<Result<ComputeResults, QueryingError>> {
+    pub(super) fn from_response(
+        _ctx: &egui::Context,
+        response: ehttp::Response,
+    ) -> Result<Self, String> {
+        wasm_rs_dbg::dbg!(&response);
+        let content_type = response.content_type().unwrap_or_default();
+        if !content_type.starts_with("application/json") {
+            return Err(format!("Wrong content type: {}", content_type));
+        }
+        // let image = if content_type.starts_with("image/") {
+        //     RetainedImage::from_image_bytes(&response.url, &response.bytes).ok()
+        // } else {
+        //     None
+        // };
+        if response.status != 200 {
+            let Some(text) = response.text() else {
+                wasm_rs_dbg::dbg!();
+                return Err("".to_string());
+            };
+            let json = match serde_json::from_str::<QueryingError>(text) {
+                Ok(json) => json,
+                Err(err) => {
+                    log::error!("error converting QueryError: {}", err);
+                    return Err(text.to_string());
+                }
+            };
+            return Ok(Self {
+                response,
+                content: Some(Err(json)),
+            });
+        }
+
+        let text = response.text();
+        // let colored_text = text.and_then(|text| syntax_highlighting(ctx, &response, text));
+        let text = text.and_then(|text| {
+            serde_json::from_str(text)
+                .inspect_err(|err| {
+                    wasm_rs_dbg::dbg!(&err);
+                })
+                .ok()
+        });
+
+        Ok(Self {
+            response,
+            content: text.map(|x| Ok(x)),
+        })
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+pub struct DetailsResults {
+    pub prepare_time: f64,
+    pub results: Vec<(super::types::CodeRange, super::types::CodeRange)>,
+}
+
+impl std::hash::Hash for DetailsResults {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.results.hash(state);
+    }
+}
+
+impl Resource<Result<DetailsResults, QueryingError>> {
     pub(super) fn from_response(
         _ctx: &egui::Context,
         response: ehttp::Response,
