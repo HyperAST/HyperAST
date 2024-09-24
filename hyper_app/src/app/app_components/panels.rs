@@ -94,7 +94,7 @@ impl crate::HyperApp {
         .on_hover_text("Maximum time to match all commit.");
         let compute_button = ui.add_enabled(false, egui::Button::new("Compute All"));
         let q_res_ids = &mut query.results;
-        if self.data.selected_code_data.len() != q_res_ids.len() {
+        if self.data.selected_code_data.commit_count() != q_res_ids.len() {
             // TODO update on new commit
             // TODO update list instead of recreating it
             let mut l = self.data.selected_code_data.project_ids().filter_map(|i| {

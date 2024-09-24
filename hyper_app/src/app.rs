@@ -361,8 +361,13 @@ struct QueryResults(
     // >,
     TabId,
 );
+type CommitMdPayload = (commit::CommitMetadata, Option<(Commit, ProjectId)>);
 
-type CommitMdStore = MultiBuffered2<types::CommitId, Result<commit::CommitMetadata, String>>;
+type CommitMdStore = MultiBuffered2<
+    types::CommitId,
+    Result<CommitMdPayload, String>,
+    Result<commit::CommitMetadata, String>,
+>;
 
 #[derive(Deserialize, Serialize)]
 #[serde(default)]
@@ -1457,13 +1462,6 @@ impl<'a> MyTileTreeBehavior<'a> {
                 );
 
                 for id in to_fetch {
-                    if self
-                        .data
-                        .fetched_commit_metadata
-                        .try_poll_all_waiting(|x| x)
-                    {
-                        //
-                    }
                     let repo = r.clone();
                     let commit = Commit { repo, id };
                     let v = fetch_commit(ui.ctx(), &self.data.api_addr, &commit);
@@ -1471,7 +1469,48 @@ impl<'a> MyTileTreeBehavior<'a> {
                 }
             }
         }
+        // if self.data.fetched_commit_metadata.try_poll_all_waiting(|x| {
+        //     x.map(|x| {
+        //         let selected_projects = &mut self.data.selected_code_data;
+        //         poll_md_with_pr(x, selected_projects)
+        //     })
+        // }) {
+        //     //
+        // }
     }
+}
+
+fn poll_md_with_pr(
+    (mut md, head_commit): (commit::CommitMetadata, Option<(Commit, ProjectId)>),
+    selected_projects: &mut SelectedProjects,
+) -> commit::CommitMetadata {
+    if let Some((head_commit, i)) = head_commit {
+        if !md.parents.contains(&head_commit.id) {
+            if let Some((r, mut c)) = selected_projects.get_mut(i) {
+                todo!()
+            }
+            md.parents.push(head_commit.id.clone());
+        }
+    }
+    md
+}
+
+fn poll_md_with_pr2(
+    (mut md, head_commit): (commit::CommitMetadata, Option<(Commit, ProjectId)>),
+    rid: ProjectId,
+    c: &mut CommitSlice<'_>,
+) -> commit::CommitMetadata {
+    if let Some((head_commit, i)) = head_commit {
+        if !md.parents.contains(&head_commit.id) {
+            if rid == i {
+                c.push(head_commit.id.clone())
+            } else {
+                log::error!("{:?} {:?}", rid, i)
+            }
+            md.parents.push(head_commit.id.clone());
+        }
+    }
+    md
 }
 
 pub(crate) fn show_projects_actions(ui: &mut egui::Ui, data: &mut AppData) {

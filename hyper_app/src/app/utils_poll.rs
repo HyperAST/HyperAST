@@ -317,7 +317,7 @@ impl Accumulable<String> for Vec<String> {
     }
 }
 
-pub struct MultiBuffered2<K: Eq + std::hash::Hash, V2: std::marker::Send + 'static, V = V2> {
+pub struct MultiBuffered2<K, V2: std::marker::Send + 'static, V = V2> {
     pub(crate) content: HashMap<K, V>,
     pub(crate) waiting: HashMap<K, poll_promise::Promise<V2>>,
 }
@@ -397,14 +397,35 @@ impl<K: Eq + std::hash::Hash, V2: std::marker::Send + 'static, V> MultiBuffered2
         b
     }
 
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+}
+
+impl<K: Eq + std::hash::Hash, V2: std::marker::Send + 'static, V> MultiBuffered2<K, V2, V> {
+    pub fn get_mut<Q: ?Sized>(&mut self, key: &Q) -> Option<&mut V>
+    where
+        K: std::borrow::Borrow<Q>,
+        Q: Eq + std::hash::Hash {
         self.content.get_mut(key)
     }
 
-    pub fn get(&self, key: &K) -> Option<&V> {
+    pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
+    where
+        K: std::borrow::Borrow<Q>,
+        Q: Eq + std::hash::Hash
+    {
         self.content.get(key)
     }
 
+    pub fn remove<Q: ?Sized>(&mut self, key: &Q) -> Option<V>
+    where
+        K: std::borrow::Borrow<Q>,
+        Q: Eq + std::hash::Hash
+    {
+        self.content.remove(key)
+    }
+
+}
+
+impl<K: Eq + std::hash::Hash, V2: std::marker::Send + 'static, V> MultiBuffered2<K, V2, V> {
     #[allow(unused)]
     pub fn is_waiting(&self, k: &K) -> bool {
         self.waiting.contains_key(k)

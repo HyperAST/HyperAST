@@ -141,6 +141,7 @@ pub(crate) struct Commit {
     #[serde(flatten)]
     pub(crate) repo: Repo,
     #[serde(rename = "commit")]
+    #[serde(alias = "id")]
     pub(crate) id: CommitId,
 }
 

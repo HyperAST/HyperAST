@@ -1,16 +1,14 @@
-use std::{
-    hash::{DefaultHasher, Hash, Hasher},
-    ops::{Add, Mul, Shl},
-};
+use std::ops::Mul as _;
 
 use crate::app::commit;
 
 use lazy_static::lazy_static;
 
 use super::{
+    poll_md_with_pr2,
     querying::{MatchingError, StreamedDataTable},
     utils_results_batched::ComputeResultIdentified,
-    ProjectId, QueryId,
+    CommitMdStore, ProjectId, QueryId,
 };
 
 lazy_static! {
@@ -199,9 +197,146 @@ impl crate::HyperApp {
                 let v = commit::fetch_commit(ui.ctx(), &self.data.api_addr, &commit);
                 self.data.fetched_commit_metadata.insert(commit.id, v);
             }
+            let max_time = cached.max_time;
             for id in to_poll {
-                if self.data.fetched_commit_metadata.try_poll_with(id, |x| x) {}
+                let was_err = self
+                    .data
+                    .fetched_commit_metadata
+                    .get(id)
+                    .map_or(false, |x| x.is_err());
+
+                if self.data.fetched_commit_metadata.try_poll_with(id, |x| {
+                    x.map(|x| poll_md_with_pr2(x, repo_id, &mut commit_slice))
+                }) {
+                    if let Some(Ok(md)) = self.data.fetched_commit_metadata.get(id) {
+                        let md = md.clone();
+                        if was_err {
+                            caches_to_clear.push(repo_id);
+                        }
+                        if md.forth_timestamp == i64::MAX {
+                            continue;
+                        }
+                        if md.ancestors.is_empty() {
+                            continue;
+                        }
+                        let id1 = md.ancestors[0].clone();
+                        let id2 = md.ancestors.get(1).cloned();
+                        let forth_timestamp = md.forth_timestamp;
+                        if max_time - forth_timestamp < self.data.max_fetch
+                            && self.data.fetched_commit_metadata.is_absent(&id1)
+                        {
+                            let id = id1;
+                            if self.data.fetched_commit_metadata.is_waiting(&id) {
+                                if self.data.fetched_commit_metadata.try_poll_with(&id, |x| {
+                                    x.map(|x| poll_md_with_pr2(x, repo_id, &mut commit_slice))
+                                }) {
+                                    let repo = r.clone();
+                                    let commit = crate::app::types::Commit {
+                                        repo,
+                                        id: id.clone(),
+                                    };
+                                    let waiting = commit::fetch_merge_pr2(
+                                        ui.ctx(),
+                                        &self.data.api_addr,
+                                        &commit,
+                                        md.clone(),
+                                        repo_id,
+                                    );
+                                    self.data
+                                        .fetched_commit_metadata
+                                        .insert(id.to_string(), waiting);
+                                }
+                            } else {
+                                let repo = r.clone();
+                                let commit = crate::app::types::Commit {
+                                    repo,
+                                    id: id.clone(),
+                                };
+                                let v =
+                                    commit::fetch_commit(ui.ctx(), &self.data.api_addr, &commit);
+                                self.data.fetched_commit_metadata.insert(id, v);
+                            }
+                        }
+                        let Some(id2) = id2 else {
+                            continue;
+                        };
+                        if max_time - forth_timestamp < self.data.max_fetch
+                            && self.data.fetched_commit_metadata.is_absent(&id2)
+                        {
+                            let id = id2;
+                            if self.data.fetched_commit_metadata.is_waiting(&id) {
+                                if self.data.fetched_commit_metadata.try_poll_with(&id, |x| {
+                                    x.map(|x| poll_md_with_pr2(x, repo_id, &mut commit_slice))
+                                }) {
+                                    let repo = r.clone();
+                                    let commit = crate::app::types::Commit {
+                                        repo,
+                                        id: id.clone(),
+                                    };
+                                    let waiting = commit::fetch_merge_pr2(
+                                        ui.ctx(),
+                                        &self.data.api_addr,
+                                        &commit,
+                                        md.clone(),
+                                        repo_id,
+                                    );
+                                    self.data
+                                        .fetched_commit_metadata
+                                        .insert(id.to_string(), waiting);
+                                }
+                            } else {
+                                let repo = r.clone();
+                                let commit = crate::app::types::Commit {
+                                    repo,
+                                    id: id.clone(),
+                                };
+                                let v =
+                                    commit::fetch_commit(ui.ctx(), &self.data.api_addr, &commit);
+                                self.data.fetched_commit_metadata.insert(id, v);
+                            }
+                        }
+                        let repo = r.clone();
+                        let commit = crate::app::types::Commit {
+                            repo,
+                            id: id.clone(),
+                        };
+                        let waiting = commit::fetch_merge_pr2(
+                            ui.ctx(),
+                            &self.data.api_addr,
+                            &commit,
+                            md.clone(),
+                            repo_id,
+                        );
+                        self.data
+                            .fetched_commit_metadata
+                            .insert(id.to_string(), waiting);
+                    }
+                }
             }
+        }
+        for repo_id in caches_to_clear {
+            let Some((r, mut c)) = self.data.selected_code_data.get_mut(repo_id) else {
+                continue;
+            };
+            let commit_slice = &mut c.iter_mut();
+            let Some(branch) = commit_slice
+                .next()
+                .map(|c| (format!("{}/{}", r.user, r.name), c.clone()))
+            else {
+                continue;
+            };
+            if let Some(r) = self.data.queries_results.iter().find(|x| x.0 == repo_id) {
+                let qid = r.1;
+                if let Some(Ok(r)) = r.2.get() {
+                    let key = { (repo_id, qid, r.rows.lock().unwrap().0) };
+                    res_per_commit.remove(key);
+                }
+            }
+            layout_cache.remove((
+                &branch.0,
+                &branch.1,
+                ready_count, // TODO find something more reliable
+            ));
         }
         ui.add_space(20.0);
         res_per_commit.evice_cache();
@@ -482,10 +617,7 @@ fn show_commit_graph_timed_custom<'a>(
     ui: &mut egui::Ui,
     offset_fetch: i64,
     max_fetch: i64,
-    fetched_commit_metadata: &super::utils_poll::MultiBuffered2<
-        String,
-        Result<commit::CommitMetadata, String>,
-    >,
+    fetched_commit_metadata: &CommitMdStore,
     results_per_commit: Option<&super::ResultsPerCommit>,
     cached: &'a commit::CommitsLayoutTimed,
     repo_id: ProjectId,

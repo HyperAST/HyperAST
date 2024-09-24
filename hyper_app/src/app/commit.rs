@@ -11,7 +11,7 @@ use crate::app::types::Resource;
 
 use super::types::{Commit, CommitId, Repo};
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CommitMetadata {
     /// commit message
     pub(crate) message: Option<String>,
@@ -27,6 +27,7 @@ pub struct CommitMetadata {
     /// (opt) ancestors in powers of 2; [2,4,8,16,32]
     /// important to avoid linear loading time
     pub(crate) ancestors: Vec<String>,
+    pub(crate) forth_timestamp: i64,
 }
 
 impl CommitMetadata {
@@ -86,6 +87,35 @@ pub(super) fn fetch_commit(
     ctx: &egui::Context,
     api_addr: &str,
     commit: &Commit,
+) -> Promise<Result<super::CommitMdPayload, String>> {
+    let ctx = ctx.clone();
+    let (sender, promise) = Promise::new();
+    let url = format!(
+        "http://{}/commit/github/{}/{}/{}",
+        api_addr, &commit.repo.user, &commit.repo.name, &commit.id,
+    );
+
+    // wasm_rs_dbg::dbg!(&url);
+    let request = ehttp::Request::get(&url);
+    // request
+    //     .headers
+    //     .insert("Content-Type".to_string(), "text".to_string());
+
+    ehttp::fetch(request, move |response| {
+        ctx.request_repaint(); // wake up UI thread
+        let resource = response
+            .and_then(|response| Resource::<CommitMetadata>::from_response(&ctx, response))
+            .and_then(|x| x.content.ok_or("No content".into()))
+            .map(|x| (x, None));
+        sender.send(resource);
+    });
+    promise
+}
+
+pub(super) fn fetch_commit0(
+    ctx: &egui::Context,
+    api_addr: &str,
+    commit: &Commit,
 ) -> Promise<Result<CommitMetadata, String>> {
     let ctx = ctx.clone();
     let (sender, promise) = Promise::new();
@@ -124,6 +154,100 @@ impl Resource<CommitMetadata> {
         })
     }
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct MergePr {
+    pub(crate) merge_commit: Option<Commit>,
+    pub(crate) head_commit: Commit,
+    pub(crate) title: String,
+    pub(crate) number: i64,
+}
+
+pub(super) fn fetch_merge_pr(
+    ctx: &egui::Context,
+    api_addr: &str,
+    commit: &Commit,
+) -> Promise<Result<MergePr, String>> {
+    let ctx = ctx.clone();
+    let (sender, promise) = Promise::new();
+    let url = format!(
+        "http://{}/pr/github/{}/{}/{}",
+        api_addr, &commit.repo.user, &commit.repo.name, &commit.id,
+    );
+
+    wasm_rs_dbg::dbg!(&url);
+    let request = ehttp::Request::get(&url);
+
+    ehttp::fetch(request, move |response| {
+        ctx.request_repaint(); // wake up UI thread
+        let resource = response
+            .and_then(|response| Resource::<MergePr>::from_response(&ctx, response))
+            .and_then(|x| x.content.ok_or("No content".into()));
+        sender.send(resource);
+    });
+    promise
+}
+
+impl Resource<MergePr> {
+    fn from_response(_ctx: &egui::Context, response: ehttp::Response) -> Result<Self, String> {
+        let text = response.text();
+        let text = text.ok_or("nothing in response")?.to_string();
+        let text = serde_json::from_str(&text).map_err(|x| x.to_string())?;
+
+        Ok(Self {
+            response,
+            content: text,
+        })
+    }
+}
+
+pub(super) fn fetch_merge_pr2(
+    ctx: &egui::Context,
+    api_addr: &str,
+    commit: &Commit,
+    md: CommitMetadata,
+    pid: ProjectId,
+) -> Promise<Result<super::CommitMdPayload, String>> {
+    let ctx = ctx.clone();
+    let (sender, promise) = Promise::new();
+    let url = format!(
+        "http://{}/pr/github/{}/{}/{}",
+        api_addr, &commit.repo.user, &commit.repo.name, &commit.id,
+    );
+    let url_fork = format!(
+        "http://{}/fork/github/{}/{}",
+        api_addr, &commit.repo.user, &commit.repo.name,
+    );
+
+    wasm_rs_dbg::dbg!(&url);
+    let request = ehttp::Request::get(&url);
+
+    ehttp::fetch(request, move |response| {
+        let mut md = md;
+        ctx.request_repaint(); // wake up UI thread
+        let resource = response
+            .and_then(|response| Resource::<MergePr>::from_response(&ctx, response))
+            .and_then(|x| x.content.ok_or("No content".into()));
+
+        let resource = resource.map(|x| {
+
+            let request = ehttp::Request::post(&format!(
+                "{}/{}/{}/{}",
+                url_fork, x.head_commit.repo.user, x.head_commit.repo.name, x.head_commit.id,
+            ), Default::default());
+            ehttp::fetch(request, |x| log::info!("{:?}", x));
+
+            log::error!("{:?}", x);
+            // if !md.parents.contains(&x.head_commit.id) {
+            //     md.parents.push(x.head_commit.id.clone());
+            // }
+            (md, Some((x.head_commit, pid)))
+        });
+        sender.send(resource);
+    });
+    promise
+}
+
 #[allow(unused)]
 pub(super) fn fetch_commit_parents(
     ctx: &egui::Context,
@@ -349,14 +473,15 @@ impl SelectedProjects {
         self.len
     }
 
+    pub(crate) fn commit_count(&self) -> usize {
+        self.commits.len()
+    }
+
     pub(crate) fn project_ids(&self) -> impl Iterator<Item = ProjectId> {
         (0..self.repositories.len()).into_iter().map(ProjectId)
     }
 
-    pub(crate) fn get<'a>(
-        &'a mut self,
-        ProjectId(i): ProjectId,
-    ) -> Option<&'a Repo> {
+    pub(crate) fn get<'a>(&'a mut self, ProjectId(i): ProjectId) -> Option<&'a Repo> {
         self.repositories.get(i)
     }
 
@@ -381,6 +506,20 @@ impl SelectedProjects {
                 i,
             },
         ))
+    }
+
+    fn _get_mut<'a>(&'a mut self, ProjectId(i): ProjectId) -> (&'a mut Repo, CommitSlice<'a>) {
+        let c_range = self.c_range(i);
+        let end = c_range.end;
+        (
+            self.repositories.get_mut(i).unwrap(),
+            CommitSlice {
+                end,
+                commits: &mut self.commits,
+                offsets: &mut self.offsets,
+                i,
+            },
+        )
     }
 
     // pub(crate) fn get<'a>(&'a self, i: usize) -> Option<(&'a Repo, CommitSlice<'a>)> {
