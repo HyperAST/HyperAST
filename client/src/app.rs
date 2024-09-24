@@ -112,6 +112,15 @@ async fn querying_streamed(
     querying::streamed(state, path, script)
 }
 
+async fn querying_differential(
+    axum::extract::Path(path): axum::extract::Path<querying::ParamDifferential>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+    axum::extract::Json(script): axum::extract::Json<querying::Content>,
+) -> axum::response::Result<Json<querying::ComputeResultsDifferential>> {
+    let r = querying::differential(script, state, path)?;
+    Ok(r)
+}
+
 pub fn querying_app(_st: SharedState) -> Router<SharedState> {
     let querying_service_config = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|e: BoxError| async move {
@@ -132,6 +141,10 @@ pub fn querying_app(_st: SharedState) -> Router<SharedState> {
         .route(
             "/query-st/github/:user/:name/:commit",
             post(querying_streamed).layer(querying_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/query-differential/github/:user/:name/:commit/:baseline",
+            post(querying_differential).layer(querying_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
         )
         .route(
             "/sharing-queries/shared-db",

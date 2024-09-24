@@ -101,7 +101,7 @@ pub struct ExamplesValue {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
-struct CodeRange {
+pub(crate) struct CodeRange {
     user: String,
     name: String,
     commit: String,
@@ -369,7 +369,7 @@ pub(crate) fn smells_ex_from_diffs(
     }))
 }
 
-fn globalize(
+pub(crate) fn globalize(
     repository: &hyper_ast_cvs_git::processing::ConfiguredRepo2,
     oid: hyper_ast_cvs_git::git::Oid,
     p: Pos,
