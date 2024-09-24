@@ -496,12 +496,18 @@ where
                         if !acc.has_children() {
                             global.set_sum_byte_length(acc.end_byte());
                         }
-                        if is_parent_hidden && parent.end_byte() <= acc.begin_byte() {
-                            panic!()
+                        if is_parent_hidden && parent.end_byte() < acc.begin_byte() {
+                            panic!("{} {}", parent.end_byte(), acc.begin_byte());
+                        } else if is_parent_hidden && parent.end_byte() == acc.begin_byte() {
+                            log::error!("{} {}", parent.end_byte(), acc.begin_byte());
+                            assert!(!acc.has_children());
+                            global.up();
+                            None
+                        } else {
+                            global.up();
+                            let full_node = self.post(parent, global, text, acc);
+                            Some(full_node)
                         }
-                        global.up();
-                        let full_node = self.post(parent, global, text, acc);
-                        Some(full_node)
                     }
                 };
 
