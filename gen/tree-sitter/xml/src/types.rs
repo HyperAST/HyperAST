@@ -1253,6 +1253,7 @@ const S_T_L: &'static [Type] = &[
     Type::ContentRepeat1,
     Type::TS61,
     Type::Spaces,
+    Type::MavenDirectory, // NOTE maven specific
     Type::Directory,
     Type::ERROR,
 ];
