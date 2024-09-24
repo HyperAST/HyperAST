@@ -73,15 +73,15 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                     return;
                 }
                 if crate::processing::file_sys::Pom::matches(&name) {
-                    self.prepro
-                        .handle_pom(
-                            oid,
-                            &mut self.stack.last_mut().unwrap().2,
-                            name,
-                            &self.repository,
-                            self.handle.into(),
-                        )
-                        .unwrap()
+                    if let Err(err) = self.prepro.handle_pom(
+                        oid,
+                        &mut self.stack.last_mut().unwrap().2,
+                        name,
+                        &self.repository,
+                        self.handle.into(),
+                    ) {
+                        log::debug!("{:?}", err);
+                    }
                 }
             }
         }
