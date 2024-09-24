@@ -1,16 +1,10 @@
-use core::f32;
-use std::{ops::Mul, usize};
-
-use chrono::Duration;
 use egui::Widget;
 use re_ui::{DesignTokens, UiExt};
 
 use crate::app::{
-    commit,
     querying::{self, ComputeConfigQuery},
     show_projects_actions,
     types::{self, Commit, Config},
-    LocalOrRemote,
 };
 
 use super::utils_results_batched::ComputeError;
@@ -24,8 +18,10 @@ impl crate::HyperApp {
                 ..Default::default()
             })
             .show_animated(ctx, self.show_left_panel, |ui| {
-                self.show_left_panel_views_props(ui);
-                // self.show_left_panel_custom_contents(ui);
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    self.show_left_panel_views_props(ui);
+                    // self.show_left_panel_custom_contents(ui);
+                })
             });
     }
 
@@ -123,7 +119,7 @@ impl crate::HyperApp {
                             u16::MAX,
                         ));
                     }
-                    (None, Some(&id)) => {
+                    (None, Some(&_id)) => {
                         // nothing to do ProjectIds are valid for the duration of the session
                         // self.data.queries_results[id as usize].0 = u16::MAX;
                     }
