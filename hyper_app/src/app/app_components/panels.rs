@@ -198,7 +198,7 @@ impl crate::HyperApp {
                                                 ));
                                                 ui.label(format!("{:?}", err));
                                             });
-                                    } else {
+                                    } else if rows.1.len() == content.commits {
                                         compute_button =
                                             ui.add(egui::Button::new("↺")).on_hover_ui(|ui| {
                                                 ui.label(format!(
@@ -206,17 +206,46 @@ impl crate::HyperApp {
                                                     rows.1.len(),
                                                     content.commits
                                                 ));
-                                                // crate::app::utils_results_batched::show_short_result_aux(
-                                                //     content, ui,
-                                                // )
                                             });
+                                    } else {
+                                        let rect = ui.spinner().rect;
+                                        compute_button = ui
+                                            .interact(
+                                                rect,
+                                                ui.id().with(q_res.0),
+                                                egui::Sense::click(),
+                                            )
+                                            .on_hover_text(format!(
+                                                "waiting for the rest of the entries: {}/{}",
+                                                rows.1.len(),
+                                                content.commits
+                                            ));
                                     }
+                                } else if rows.1.len() == content.commits {
+                                    compute_button =
+                                        ui.add(egui::Button::new("↺")).on_hover_ui(|ui| {
+                                            ui.label(format!(
+                                                "streamed results {}/{}",
+                                                rows.1.len(),
+                                                content.commits
+                                            ));
+                                        });
                                 } else {
-                                    compute_button = ui.spinner().on_hover_text(format!(
-                                        "waiting for the rest of the entries: {}/{}",
-                                        rows.1.len(),
-                                        content.commits
-                                    ));
+                                    let d = egui::Color32::DARK_GRAY;
+                                    let n = egui::Color32::GRAY;
+                                    let w = &mut ui.style_mut().visuals.widgets;
+                                    w.open.weak_bg_fill = d;
+                                    w.active.weak_bg_fill = d;
+                                    w.hovered.weak_bg_fill = n;
+                                    w.inactive.weak_bg_fill = d;
+                                    compute_button =
+                                        ui.add(egui::Button::new("⚠")).on_hover_ui(|ui| {
+                                            ui.label(format!(
+                                                "interupted at {}/{}",
+                                                rows.1.len(),
+                                                content.commits
+                                            ));
+                                        });
                                 }
                             }
                             Err(err) => {
@@ -286,7 +315,8 @@ impl crate::HyperApp {
             let q_res = &mut self.data.queries_results[*q_res_id as usize];
 
             if compute_button.clicked() {
-                let (repo, mut c) = self.data.selected_code_data.get_mut(q_res.0).unwrap();
+                let (repo, mut commit_slice) =
+                    self.data.selected_code_data.get_mut(q_res.0).unwrap();
                 let query = self.data.queries[q_res.1 as usize]
                     .query
                     .as_ref()
@@ -297,7 +327,7 @@ impl crate::HyperApp {
                 let commits = self.data.queries[q_res.1 as usize].commits as usize;
                 let commit = Commit {
                     repo: repo.clone(),
-                    id: c.iter_mut().next().cloned().unwrap(),
+                    id: commit_slice.iter_mut().next().cloned().unwrap(),
                 };
                 let max_matches = self.data.queries[q_res.1 as usize].max_matches;
                 let timeout = self.data.queries[q_res.1 as usize].timeout;
@@ -316,6 +346,7 @@ impl crate::HyperApp {
                         max_matches,
                         timeout,
                     },
+                    commit_slice.iter_mut().skip(1).map(|x| x.to_string()),
                 );
                 q_res.2.buffer(prom);
             }

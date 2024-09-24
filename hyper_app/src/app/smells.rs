@@ -193,11 +193,11 @@ pub struct ExamplesValues {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 pub struct ExamplesValue {
-    before: CodeRange,
-    after: CodeRange,
-    inserts: Vec<Range<usize>>,
-    deletes: Vec<Range<usize>>,
-    moves: Vec<(Range<usize>, Range<usize>)>,
+    pub(crate) before: CodeRange,
+    pub(crate) after: CodeRange,
+    pub(crate) inserts: Vec<Range<usize>>,
+    pub(crate) deletes: Vec<Range<usize>>,
+    pub(crate) moves: Vec<(Range<usize>, Range<usize>)>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
