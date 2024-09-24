@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    i64,
-    process::Output,
-};
+use std::{collections::HashMap, i64};
 
 use poll_promise::Promise;
 use serde::{Deserialize, Serialize};
@@ -345,7 +341,7 @@ pub(crate) fn validate_pasted_project_url(
 ///     Each project is identified by main repository.
 ///     Each project contains a selection of other repositories considered as forks,
 ///     and a set of commits (not branches)
-#[derive(serde::Deserialize, serde::Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub(crate) struct SelectedProjects {
     len: usize,
     repositories: Vec<Repo>,
@@ -380,7 +376,7 @@ impl Default for SelectedProjects {
             &["90acd4972610ded0f1581143f043eb4653a4c691"],
         );
         s.add_with_commit_slice(
-            ["dubbo", "dubbo"].into(),
+            ["apache", "dubbo"].into(),
             &["aaafad80bec93ddb167ec613eb930749f5ec90ec"],
         );
         s
@@ -399,7 +395,7 @@ impl Default for SelectedProjects {
 }
 
 /// Id of each project, ie. a repository and a selection of other repositories considered as forks
-#[derive(serde::Deserialize, serde::Serialize, Copy, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[repr(transparent)]
 pub(crate) struct ProjectId(usize);
 
@@ -424,7 +420,7 @@ impl SelectedProjects {
     pub(crate) fn add(&mut self, repo: Repo, commits: Vec<CommitId>) -> ProjectId {
         if let Some(i) = self.repositories.iter().position(|x| x == &repo) {
             let i = ProjectId(i);
-            let (_, mut cs) = self.get_mut(i).unwrap();
+            let (_, mut cs) = self._get_mut(i);
             // TODO opti extend on empty set of commits
             for c in commits {
                 cs.push(c);
@@ -796,7 +792,7 @@ pub(crate) fn compute_commit_layout_timed(
                 index.insert(current.clone(), (r.times.len(), r.subs.len()));
                 if let Some(commit) = commits(&current) {
                     // universal time then ?
-                    let time = commit.time + commit.timezone as i64 * 60;
+                    let time = commit.time;// + commit.timezone as i64 * 60;
                     r.min_time = time.min(r.min_time);
                     r.max_time = time.max(r.max_time);
                     r.commits.push(format!("{current}"));
@@ -825,21 +821,26 @@ pub(crate) fn compute_commit_layout_timed(
                     delta_time = (r.times[prev] - r.times[succ.0]).abs();
                     r.max_delta = r.max_delta.max(delta_time);
                 } else {
-                    delta_time = 0;
+                    delta_time = 100;
                 }
                 succ
             } else {
-                if r.times[prev] == -1 {
+                if r.subs.is_empty() {
                     delta_time = 0;
+                } else if r.times[prev] == -1 {
+                    delta_time = 100;
                 } else if r.times[end - 1] != -1 {
                     delta_time = (r.times[prev] - r.times[end - 1]).abs();
+                    r.max_delta = r.max_delta.max(delta_time);
+                } else if let Some(t) = r.times[start..end - 1].iter().rev().find(|x|**x!=-1) {
+                    delta_time = (r.times[prev] - t).abs();
                     r.max_delta = r.max_delta.max(delta_time);
                 // } else if r.times[end - 2] != -1 {
                 //     delta_time = r.times[prev] - r.times[end - 2];
                 //     debug_assert!(delta_time >= 0);
                 //     r.max_delta = r.max_delta.max(delta_time);
                 } else {
-                    delta_time = 0;
+                    delta_time = 100;
                 }
                 (usize::MAX, usize::MAX)
             };
