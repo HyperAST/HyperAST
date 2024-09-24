@@ -168,7 +168,12 @@ pub(crate) fn show_long_result_success(ui: &mut egui::Ui, content: &ComputeResul
             )
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                show_long_result_table(ui, (header.0, header.1, &content.results[1..]), &mut None)
+                show_long_result_table(
+                    ui,
+                    (header.0, header.1, &content.results[1..]),
+                    &mut None,
+                    |_| None,
+                )
             });
     } else {
         egui::CollapsingHeader::new("Results (JSON)")
@@ -246,6 +251,7 @@ pub(crate) fn show_long_result_table(
         &[Result<ComputeResultIdentified, impl PartialError<ComputeResultIdentified>>],
     ),
     selected_commit: &mut Option<usize>,
+    commit_info: impl Fn(&str) -> Option<String>,
 ) {
     // header
     let header = content.0;
@@ -276,7 +282,7 @@ pub(crate) fn show_long_result_table(
             show_table_header(head, header, None);
         })
         .body(|body| {
-            show_table_body(body, content.2, selected_commit);
+            show_table_body(body, content.2, selected_commit, commit_info);
         });
 }
 
@@ -325,7 +331,9 @@ fn show_table_header(
     //     panic!()
     // };
     for h in header {
-        head.col(|ui| { hf(ui, h); });
+        head.col(|ui| {
+            hf(ui, h);
+        });
     }
     head.col(|ui| {
         hf(ui, "compute time");
@@ -336,6 +344,7 @@ fn show_table_body(
     body: egui_extras::TableBody<'_>,
     content: &[Result<ComputeResultIdentified, impl PartialError<ComputeResultIdentified>>],
     selected_index: &mut Option<usize>,
+    commit_info: impl Fn(&str) -> Option<String>,
 ) {
     use serde_json::Value;
     let f = |row: &mut egui_extras::TableRow<'_, '_>, v: &Value| {
@@ -352,7 +361,9 @@ fn show_table_body(
             f(row, v);
         }
     };
-    let show_row = |row: &mut egui_extras::TableRow<'_, '_>, cont: &ComputeResultIdentified, err: Option<String>| {
+    let show_row = |row: &mut egui_extras::TableRow<'_, '_>,
+                    cont: &ComputeResultIdentified,
+                    err: Option<String>| {
         // if let Some((_, c)) = &selected_commit {
         //     row.set_selected(c == &cont.commit);
         // }
@@ -364,18 +375,26 @@ fn show_table_body(
             //     // }
             // }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                
-            if err.is_some() {
-                ui.colored_label(egui::Color32::RED, &cont.commit[..8])
-            } else {
-                ui.label(&cont.commit[..8])
-            }
-                .on_hover_ui(|ui| if let Some(err) = err {
-                    ui.colored_label(ui.visuals().error_fg_color, err);
+                if err.is_some() {
+                    ui.colored_label(egui::Color32::RED, &cont.commit[..8])
                 } else {
-                    ui.label(&cont.commit);
+                    ui.label(&cont.commit[..8])
+                }
+                .on_hover_ui(|ui| {
+                    if let Some(err) = err {
+                        ui.colored_label(ui.visuals().error_fg_color, err);
+                    } else {
+                        ui.label(&cont.commit);
+                    }
                 })
             });
+        })
+        .1
+        .on_hover_ui(|ui| {
+            if let Some(text) = commit_info(&cont.commit) {
+                ui.label("commit message:");
+                ui.label(text);
+            }
         });
         if let Some(result) = cont.inner.result.as_object() {
             for (_, v) in result {
