@@ -28,6 +28,37 @@ pub trait LanguageCompo {
     }
 }
 
+pub struct Lang {
+    pub language: tree_sitter::Language,
+    pub name: &'static str,
+    pub node_types: &'static str,
+    pub highlights: &'static str,
+    pub tags: &'static str,
+    pub injects: &'static str,
+}
+
+impl LanguageCompo for Lang {
+    fn language(&self) -> tree_sitter::Language {
+        self.language.clone()
+    }
+
+    fn name(&self) -> &str {
+        self.name
+    }
+    fn node_types(&self) -> &str {
+        self.node_types
+    }
+    fn highlights(&self) -> &str {
+        self.highlights
+    }
+    fn tags(&self) -> &str {
+        self.tags
+    }
+    fn injects(&self) -> &str {
+        self.injects
+    }
+}
+
 pub fn preprocess_aux(lang: &impl LanguageCompo) -> Result<TypeSys, std::io::Error> {
     dbg!(lang.name());
     let tags = lang.tags();

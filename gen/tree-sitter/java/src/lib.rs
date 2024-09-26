@@ -75,3 +75,10 @@ pub mod iter;
 pub fn language() -> tree_sitter::Language {
     tree_sitter_java::language()
 }
+
+#[cfg(feature = "impl")]
+pub fn node_types() -> &'static str {
+    tree_sitter_java::NODE_TYPES
+}
+
+

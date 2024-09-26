@@ -60,7 +60,7 @@ pub struct AppState {
     )>,
     // Multiple shared docs
     doc2: ws::SharedDocs,
-    pr_cache: RwLock<std::collections::HashMap<commit::Param, pull_requests::RawPrData>>
+    pr_cache: RwLock<std::collections::HashMap<commit::Param, pull_requests::RawPrData>>,
 }
 
 impl Default for AppState {
@@ -77,7 +77,7 @@ impl Default for AppState {
                 Default::default(),
             )),
             doc2: Default::default(),
-            pr_cache: Default::default()
+            pr_cache: Default::default(),
         }
     }
 }
@@ -117,6 +117,12 @@ type SharedState = Arc<AppState>;
 #[tokio::main]
 async fn main() {
     let opts = crate::cli::parse();
+    #[cfg(feature = "rerun")]
+    {
+        if let Err(e) = log_languages::log_languages() {
+            log::error!("error logging languages: {}", e)
+        };
+    }
     let shared_state = SharedState::default();
     {
         use hyper_ast_cvs_git::processing::RepoConfig;
@@ -233,3 +239,237 @@ async fn shutdown_signal() {
 static CASE_BIG1: &'static str = r#"class A{class C{}class B{{while(1){if(1){}else{}};}}}class D{class E{}class F{{while(2){if(2){}else{}};}}}"#;
 
 static CASE_BIG2: &'static str = r#"class A{class C{}}class B{{while(1){if(1){}else{}};}}class D{class E{}}class F{{while(2){if(2){}else{}};}}"#;
+
+#[cfg(feature = "rerun")]
+mod log_languages {
+    //! Log the grammar of corresponding language to rerun.
+
+    use core::f32;
+    use std::ops::Mul;
+
+    use rerun::external::{arrow2, re_types};
+    pub(super) fn log_languages() -> Result<(), Box<dyn std::error::Error>> {
+        let rec = rerun::RecordingStream::global(rerun::StoreKind::Recording).unwrap();
+
+        let lang = polyglote::Lang {
+            language: hyper_ast_gen_ts_java::language(),
+            name: "java",
+            node_types: hyper_ast_gen_ts_java::node_types(),
+            highlights: "",
+            tags: "",
+            injects: "",
+        };
+        let types = polyglote::preprocess_aux(&lang)?;
+
+        eprintln!("{}", types);
+
+        log_language(&rec, lang, types)?;
+
+        let lang = polyglote::Lang {
+            language: hyper_ast_gen_ts_cpp::language(),
+            name: "cpp",
+            node_types: hyper_ast_gen_ts_cpp::node_types(),
+            highlights: "",
+            tags: "",
+            injects: "",
+        };
+        let types = polyglote::preprocess_aux(&lang)?;
+
+        eprintln!("{}", types);
+
+        log_language(&rec, lang, types)?;
+
+        let lang = polyglote::Lang {
+            language: hyper_ast_gen_ts_tsquery::language(),
+            name: "tsquery",
+            node_types: hyper_ast_gen_ts_tsquery::node_types(),
+            highlights: "",
+            tags: "",
+            injects: "",
+        };
+        let types = polyglote::preprocess_aux(&lang)?;
+
+        eprintln!("{}", types);
+
+        log_language(&rec, lang, types)?;
+
+        Ok(())
+    }
+
+    fn log_language(
+        rec: &rerun::RecordingStream,
+        lang: polyglote::Lang,
+        types: polyglote::preprocess::TypeSys,
+    ) -> rerun::RecordingStreamResult<()> {
+        let mut map = Map {
+            map: std::collections::HashMap::default(),
+            rec: rec,
+            name: lang.name,
+        };
+        let leafs: (Vec<_>, Vec<_>) = types.leafs().fold((vec![], vec![]), |mut acc, x| {
+            if x.1 { &mut acc.0 } else { &mut acc.1 }.push(x.0);
+            acc
+        });
+        map.log(leafs.1, "leaf", "unnamed", 0.0)?;
+        map.log(leafs.0, "leaf", "named", 5.0)?;
+        let concrete: (Vec<_>, Vec<_>) = types.concrete().fold((vec![], vec![]), |mut acc, x| {
+            if x.1 { &mut acc.0 } else { &mut acc.1 }.push(x.0);
+            acc
+        });
+        map.log(concrete.0, "concrete", "with_fields", 10.0)?;
+        map.log(concrete.1, "concrete", "named", 15.0)?;
+        let r#abstract = types.r#abstract().collect();
+        map.log(r#abstract, "abstract", "", 20.0)?;
+        let r#abstract = types.r#abstract_subtypes();
+        rec.log(
+            format!("language/{}/subtyping", lang.name),
+            &map.arrows(r#abstract),
+        )?;
+        let concrete_children = types.concrete_children();
+        rec.log(
+            format!("language/{}/children", lang.name),
+            &map.arrows(concrete_children),
+        )?;
+        let concrete_fields: Vec<_> = types.concrete_fields().collect();
+        rec.log(
+            format!("language/{}/fields", lang.name),
+            &map.arrows(
+                concrete_fields
+                    .iter()
+                    .map(|(x, v)| (x.clone(), v.iter().map(|x| x.1.clone()).collect::<Vec<_>>())),
+            )
+            .with_labels(
+                concrete_fields
+                    .iter()
+                    .map(|x| x.1.iter().map(|x| x.0.clone()))
+                    .flatten(),
+            ),
+        )?;
+        Ok(())
+    }
+    struct Map<'a, 'b> {
+        map: std::collections::HashMap<String, [f32; 3]>,
+        rec: &'a rerun::RecordingStream,
+        name: &'b str,
+    }
+    impl<'a, 'b> Map<'a, 'b> {
+        fn points(&mut self, v: Vec<String>, n: impl AsRef<str>, o: f32) -> CustomPoints3D {
+            CustomPoints3D {
+                log: rerun::TextLog::new(n.as_ref()),
+                cat: n.as_ref().into(),
+                points3d: rerun::Points3D::new((0..v.len()).map(|i| {
+                    let rad = (i as f32 / v.len() as f32).mul(f32::consts::TAU);
+                    let l = (v.len() as f32) / f32::consts::TAU;
+                    let p = [rad.sin() * l, o, rad.cos() * l];
+                    self.map.insert(v[i].clone(), p.clone());
+                    p
+                }))
+                .with_labels(v.into_iter().map(|x| x)),
+            }
+        }
+        fn arrows(&self, v: impl Iterator<Item = (String, Vec<String>)>) -> rerun::Arrows3D {
+            let translate = |x: &[f32; 3], y: &[f32; 3]| [y[0] - x[0], y[1] - x[1], y[2] - x[2]];
+            let (ori, dest): (Vec<&[f32; 3]>, Vec<[f32; 3]>) = v
+                .map(|(t, cs)| {
+                    let x = self.map.get(&t).unwrap();
+                    cs.into_iter()
+                        .filter_map(|t| self.map.get(&t))
+                        .map(|y| (x, translate(x, y)))
+                        .collect::<Vec<_>>()
+                })
+                .flatten()
+                .unzip();
+            rerun::Arrows3D::from_vectors(dest).with_origins(ori)
+        }
+
+        fn log(
+            &mut self,
+            v: Vec<String>,
+            t: &str,
+            adj: &str,
+            o: f32,
+        ) -> rerun::RecordingStreamResult<()> {
+            let nn = format!("{adj} {t}");
+            let path = ["language", self.name, t, adj].map(|x| x.into());
+            let path = if adj.is_empty() {
+                &path[..path.len() - 1]
+            } else {
+                &path[..]
+            };
+            self.rec.log(path, &self.points(v, nn, o))
+        }
+    }
+
+    struct CustomPoints3D {
+        points3d: rerun::Points3D,
+        log: rerun::TextLog,
+        cat: Cat,
+    }
+
+    impl rerun::AsComponents for CustomPoints3D {
+        fn as_component_batches(&self) -> Vec<rerun::MaybeOwnedComponentBatch<'_>> {
+            let indicator = rerun::NamedIndicatorComponent("user.CustomPoints3DIndicator".into());
+            self.log
+                .as_component_batches()
+                .into_iter()
+                .chain(self.points3d.as_component_batches().into_iter())
+                .chain(
+                    [
+                        Some(indicator.to_batch()),
+                        Some((&self.cat as &dyn rerun::ComponentBatch).into()),
+                    ]
+                    .into_iter()
+                    .flatten(),
+                )
+                .collect()
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct Cat(rerun::Text);
+
+    impl From<String> for Cat {
+        fn from(v: String) -> Self {
+            Self(rerun::Text(v.into()))
+        }
+    }
+    impl From<&str> for Cat {
+        fn from(v: &str) -> Self {
+            v.to_string().into()
+        }
+    }
+
+    impl rerun::SizeBytes for Cat {
+        #[inline]
+        fn heap_size_bytes(&self) -> u64 {
+            0
+        }
+    }
+
+    impl rerun::Loggable for Cat {
+        type Name = rerun::ComponentName;
+
+        #[inline]
+        fn name() -> Self::Name {
+            "lang.Cat".into()
+        }
+
+        #[inline]
+        fn arrow_datatype() -> arrow2::datatypes::DataType {
+            rerun::Text::arrow_datatype()
+        }
+
+        #[inline]
+        fn to_arrow_opt<'a>(
+            data: impl IntoIterator<Item = Option<impl Into<std::borrow::Cow<'a, Self>>>>,
+        ) -> re_types::SerializationResult<Box<dyn arrow2::array::Array>>
+        where
+            Self: 'a,
+        {
+            rerun::Text::to_arrow_opt(
+                data.into_iter()
+                    .map(|opt| opt.map(Into::into).map(|c| c.as_ref().0.clone())),
+            )
+        }
+    }
+}

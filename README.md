@@ -97,3 +97,11 @@ look at tests from getrandom and indexmap
 for xml / maven
 - pommes = "0.0.2"
 - serde-xml-rs = "0.5.1"
+
+- readonly = "0.2"
+  about visibility for benches/tests
+
+- [ref-cast = "1.0"](https://github.com/dtolnay/ref-cast)
+ to replace Children slicing stuff in hyper_ast
+
+- [linkme = "0.3.28"](https://crates.io/crates/linkme)

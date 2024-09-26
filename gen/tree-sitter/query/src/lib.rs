@@ -215,3 +215,8 @@ where
 pub fn language() -> tree_sitter::Language {
     tree_sitter_query::language()
 }
+
+#[cfg(feature = "impl")]
+pub fn node_types() -> &'static str {
+    tree_sitter_query::NODE_TYPES
+}
