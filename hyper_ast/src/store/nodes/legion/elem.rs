@@ -22,6 +22,7 @@ use super::compo::{self, NoSpacesCS, CS};
 
 pub type NodeIdentifier = legion::Entity;
 pub type EntryRef<'a> = legion::world::EntryRef<'a>;
+#[derive(ref_cast::RefCast)]
 #[repr(transparent)]
 pub struct HashedNodeRef<'a, T = NodeIdentifier>(pub(super) EntryRef<'a>, PhantomData<T>);
 
@@ -35,6 +36,13 @@ impl<'a, T> HashedNodeRef<'a, T> {
     }
     pub(super) fn new(e: EntryRef<'a>) -> Self {
         Self(e, PhantomData)
+    }
+}
+impl<'a, T> From<&'a EntryRef<'a>> for &'a HashedNodeRef<'a, T> {
+    fn from(value: &'a EntryRef<'a>) -> Self {
+        use ref_cast::RefCast;
+        // NOTE it makes compile time layout assertions
+        HashedNodeRef::ref_cast(value)
     }
 }
 

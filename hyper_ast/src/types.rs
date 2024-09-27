@@ -762,12 +762,15 @@ where
     }
 }
 
+#[derive(ref_cast::RefCast)]
 #[repr(transparent)]
 pub struct MySlice<T>(pub [T]);
 
 impl<'a, T> From<&'a [T]> for &'a MySlice<T> {
     fn from(value: &'a [T]) -> Self {
-        unsafe { std::mem::transmute(value) }
+        use ref_cast::RefCast;
+        // NOTE it makes compile time layout assertions
+        MySlice::ref_cast(value)
     }
 }
 

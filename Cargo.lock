@@ -3821,6 +3821,7 @@ dependencies = [
  "libc",
  "log",
  "num",
+ "ref-cast",
  "serde",
  "string-interner 0.17.0",
  "strum 0.25.0",
@@ -4048,6 +4049,7 @@ dependencies = [
  "hyper_ast",
  "log",
  "num",
+ "ref-cast",
  "regex",
  "stack-graphs",
  "tree-sitter 0.22.6",
@@ -6729,6 +6731,26 @@ dependencies = [
  "getrandom",
  "libredox 0.1.3",
  "thiserror",
+]
+
+[[package]]
+name = "ref-cast"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ccf0a6f84d5f1d581da8b41b47ec8600871962f2a528115b542b362d4b744931"
+dependencies = [
+ "ref-cast-impl",
+]
+
+[[package]]
+name = "ref-cast-impl"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcc303e793d3734489387d205e9b186fac9c6cfacedd98cbb2e8a5943595f3e6"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.72",
 ]
 
 [[package]]

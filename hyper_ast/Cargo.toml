@@ -32,6 +32,8 @@ indexmap = "2.2.6" # https://github.com/tkaitchuck/aHash/issues/95#issuecomment-
 
 hecs = { version = "0.10.5", features = [], optional = true }
 
+ref-cast = "1.0" # help with transparent unit structs, it makes proper layout assertions
+
 [dev-dependencies]
 env_logger = "0.11.3"
 

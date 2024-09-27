@@ -254,14 +254,14 @@ impl<Node> std::ops::Deref for Captures<Node> {
 
     fn deref(&self) -> &Self::Target {
         let src: &[Capture<Node>] = self.0.as_slice();
-        unsafe { std::mem::transmute(src) }
+        CaptureSlice::conv(src)
     }
 }
 
 impl<Node> std::borrow::Borrow<CaptureSlice<Node>> for Captures<Node> {
     fn borrow(&self) -> &CaptureSlice<Node> {
         let src: &[Capture<Node>] = self.0.as_slice();
-        unsafe { std::mem::transmute(src) }
+        CaptureSlice::conv(src)
     }
 }
 
@@ -284,13 +284,16 @@ impl<'a, Node: Clone> IntoIterator for &'a Captures<Node> {
     }
 }
 
+#[derive(ref_cast::RefCastCustom)]
 #[repr(transparent)]
 pub struct CaptureSlice<Node>([Capture<Node>]);
 
 impl<Node> CaptureSlice<Node> {
+    #[ref_cast::ref_cast_custom]
+    pub(crate) const fn conv(bytes: &[Capture<Node>]) -> &Self;
+
     const fn empty<'a>() -> &'a Self {
-        let src: &[Capture<Node>] = &[];
-        unsafe { std::mem::transmute(src) }
+        CaptureSlice::conv(&[])
     }
     pub fn len(&self) -> usize {
         self.0.len()
