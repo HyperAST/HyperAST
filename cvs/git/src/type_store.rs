@@ -14,12 +14,7 @@ use hyper_ast_gen_ts_xml::types::XmlEnabledTypeStore;
 
 use crate::no_space::{MIdN, NoSpaceWrapper};
 
-#[repr(u8)]
-pub enum TStore {
-    Maven = 0,
-    Java = 1,
-    Cpp = 2,
-}
+pub struct TStore;
 
 impl<'a> From<&'a str> for MultiType {
     fn from(value: &'a str) -> Self {
@@ -29,14 +24,12 @@ impl<'a> From<&'a str> for MultiType {
 
 impl Default for TStore {
     fn default() -> Self {
-        Self::Maven
+        Self
     }
 }
 
 impl<'a> TypeStore<NoSpaceWrapper<'a, NodeIdentifier>> for hyper_ast_gen_ts_java::types::TStore {
     type Ty = AnyType;
-    const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
     fn resolve_type(&self, n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Ty {
         n.inner.get_type()
     }
@@ -48,16 +41,6 @@ impl<'a> TypeStore<NoSpaceWrapper<'a, NodeIdentifier>> for hyper_ast_gen_ts_java
         todo!()
     }
 
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(&self, n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Marshaled {
-        todo!()
-        // hyper_ast_gen_ts_java::types::TStore::Java::marshal_type
-        // TypeIndex {
-        //     lang: LangRef::<hyper_ast_gen_ts_java::types::Type>::name(&hyper_ast_gen_ts_java::types::Lang),
-        //     ty: *n.get_component::<hyper_ast_gen_ts_java::types::Type>().unwrap() as u16,
-        // }
-    }
     fn type_eq(
         &self,
         n: &NoSpaceWrapper<'a, NodeIdentifier>,
@@ -66,10 +49,6 @@ impl<'a> TypeStore<NoSpaceWrapper<'a, NodeIdentifier>> for hyper_ast_gen_ts_java
         todo!()
         // use hecs::entity_ref::ComponentRef;
         // n.get_component::<hyper_ast_gen_ts_java::types::Type>().unwrap() == m.get_component::<hyper_ast_gen_ts_java::types::Type>().unwrap()
-    }
-    fn type_to_u16(&self, t: Self::Ty) -> u16 {
-        todo!()
-        // hyper_ast_gen_ts_java::types::id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 
@@ -91,8 +70,6 @@ macro_rules! on_multi {
 
 impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
     type Ty = AnyType;
-    const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
     fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
         on_multi!(n, [
                 hyper_ast_gen_ts_java,
@@ -124,28 +101,6 @@ impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
         )
     }
 
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-        on_multi!(n, [
-                hyper_ast_gen_ts_java,
-                hyper_ast_gen_ts_cpp,
-                hyper_ast_gen_ts_xml
-            ],
-            (t, u) => {
-                let ty = <u::types::Lang as hyper_ast::types::Lang<_>>::to_u16(*t);
-                let lang = hyper_ast::types::LangRef::<u::types::Type>::name(
-                    &u::types::Lang,
-                );
-                TypeIndex { lang, ty }
-            },
-            {
-                dbg!(n, n.archetype().layout().component_types());
-                panic!()
-            }
-        )
-    }
-
     fn type_eq(
         &self,
         n: &HashedNodeRef<'a, NodeIdentifier>,
@@ -168,9 +123,6 @@ impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
             }
         )
     }
-    fn type_to_u16(&self, t: Self::Ty) -> u16 {
-        t.get_lang().ts_symbol(t)
-    }
 }
 
 impl<'a>
@@ -188,7 +140,7 @@ impl<'a>
                 'a,
                 hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>,
             >,
-        >::resolve_field(&hyper_ast_gen_ts_java::types::TStore::Java, lang, field_id)
+        >::resolve_field(&hyper_ast_gen_ts_java::types::TStore, lang, field_id)
     }
 
     fn intern_role(&self, lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
@@ -197,7 +149,7 @@ impl<'a>
                 'a,
                 hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>,
             >,
-        >::intern_role(&hyper_ast_gen_ts_java::types::TStore::Java, lang, role)
+        >::intern_role(&hyper_ast_gen_ts_java::types::TStore, lang, role)
     }
 }
 
@@ -213,13 +165,19 @@ impl<'a> hyper_ast::types::RoleStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
         //     TStore::Cpp => todo!(),
         // }
         match lang.name() {
-            "hyper_ast_gen_ts_java::types::Lang" => hyper_ast::types::RoleStore::<
-                hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
-            >::resolve_field(
-                &hyper_ast_gen_ts_java::types::TStore::Java, lang, field_id
-            ),
-            "hyper_ast_gen_ts_cpp::types::Lang" => hyper_ast_gen_ts_cpp::types::TStore::Cpp.resolve_field(lang, field_id),
-            "hyper_ast_gen_ts_xml::types::Lang" => hyper_ast_gen_ts_xml::types::TStore::Xml.resolve_field(lang, field_id),
+            "hyper_ast_gen_ts_java::types::Lang" => {
+                hyper_ast::types::RoleStore::<
+                    hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
+                >::resolve_field(
+                    &hyper_ast_gen_ts_java::types::TStore, lang, field_id
+                )
+            }
+            "hyper_ast_gen_ts_cpp::types::Lang" => {
+                hyper_ast_gen_ts_cpp::types::TStore.resolve_field(lang, field_id)
+            }
+            "hyper_ast_gen_ts_xml::types::Lang" => {
+                hyper_ast_gen_ts_xml::types::TStore.resolve_field(lang, field_id)
+            }
             x => panic!("{}", x),
         }
         // TODO fix that
@@ -238,14 +196,14 @@ impl<'a> hyper_ast::types::RoleStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
                 hyper_ast::types::RoleStore::<
                     hyper_ast::store::nodes::legion::HashedNodeRef<'a, NodeIdentifier>,
                 >::intern_role(
-                    &hyper_ast_gen_ts_java::types::TStore::Java, lang, role
+                    &hyper_ast_gen_ts_java::types::TStore, lang, role
                 )
             }
             "hyper_ast_gen_ts_cpp::types::Lang" => {
-                hyper_ast_gen_ts_cpp::types::TStore::Cpp.intern_role(lang, role)
+                hyper_ast_gen_ts_cpp::types::TStore.intern_role(lang, role)
             }
             "hyper_ast_gen_ts_xml::types::Lang" => {
-                hyper_ast_gen_ts_xml::types::TStore::Xml.intern_role(lang, role)
+                hyper_ast_gen_ts_xml::types::TStore.intern_role(lang, role)
             }
             x => panic!("{}", x),
         }
@@ -260,7 +218,6 @@ impl<'a> hyper_ast::types::RoleStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
 #[allow(unused)] // TODO find a better way of declaring type stores
 impl<'a> TypeStore<HashedNodeRef<'a, MIdN<NodeIdentifier>>> for TStore {
     type Ty = MultiType;
-    const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
 
     fn resolve_type(&self, n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>) -> Self::Ty {
         use hyper_ast::types::Typed;
@@ -284,11 +241,6 @@ impl<'a> TypeStore<HashedNodeRef<'a, MIdN<NodeIdentifier>>> for TStore {
         // }
     }
 
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(&self, n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>) -> Self::Marshaled {
-        todo!()
-    }
     fn type_eq(
         &self,
         n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>,
@@ -296,31 +248,22 @@ impl<'a> TypeStore<HashedNodeRef<'a, MIdN<NodeIdentifier>>> for TStore {
     ) -> bool {
         todo!("{:?} {:?}", n, m)
     }
-    fn type_to_u16(&self, t: Self::Ty) -> u16 {
-        t.get_lang().ts_symbol(t)
-    }
 }
 
 // impl<I: AsRef<HashedNodeRef<'static, NodeIdentifier>>> TypeStore<I> for TStore {
 //     type Ty = AnyType;
-//     const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
 //     fn resolve_type(&self, n: &I) -> Self::Ty {
 //         todo!()
 //     }
 // }
 // impl<'a, I: Deref<Target=HashedNodeRef<'a, NodeIdentifier>>> TypeStore<I> for TStore {
 //     type Ty = AnyType;
-//     const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
 //     fn resolve_type(&self, n: &I) -> Self::Ty {
 //         todo!()
 //     }
 // }
 impl<'a> TypeStore<NoSpaceWrapper<'a, NodeIdentifier>> for TStore {
     type Ty = AnyType;
-    const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
     fn resolve_type(&self, n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Ty {
         self.resolve_type(n.as_ref())
     }
@@ -332,11 +275,6 @@ impl<'a> TypeStore<NoSpaceWrapper<'a, NodeIdentifier>> for TStore {
         todo!()
     }
 
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(&self, _n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Marshaled {
-        todo!()
-    }
     fn type_eq(
         &self,
         _n: &NoSpaceWrapper<'a, NodeIdentifier>,
@@ -344,14 +282,9 @@ impl<'a> TypeStore<NoSpaceWrapper<'a, NodeIdentifier>> for TStore {
     ) -> bool {
         todo!()
     }
-    fn type_to_u16(&self, t: Self::Ty) -> u16 {
-        t.get_lang().ts_symbol(t)
-    }
 }
 // impl<'a, I: AsRef<HashedNodeRef<'a, NodeIdentifier>>> TypeStore<I> for &TStore {
 //     type Ty = AnyType;
-//     const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
 //     fn resolve_type(&self, n: &I) -> Self::Ty {
 //         let n = n.as_ref();
 //         <TStore as TypeStore<HashedNodeRef<'a, NodeIdentifier>>>::resolve_type(self, n)
@@ -361,8 +294,6 @@ impl<'a> TypeStore<NoSpaceWrapper<'a, NodeIdentifier>> for TStore {
 //         todo!()
 //     }
 
-//     type Marshaled = TypeIndex;
-
 //     fn marshal_type(&self, n: &I) -> Self::Marshaled {
 //         todo!()
 //     }
@@ -370,8 +301,6 @@ impl<'a> TypeStore<NoSpaceWrapper<'a, NodeIdentifier>> for TStore {
 
 impl<'a> TypeStore<HashedNodeRef<'a, MIdN<NodeIdentifier>>> for &TStore {
     type Ty = MultiType;
-    const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
     fn resolve_type(&self, n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>) -> Self::Ty {
         let n = n.as_ref();
         n.get_type()
@@ -384,11 +313,6 @@ impl<'a> TypeStore<HashedNodeRef<'a, MIdN<NodeIdentifier>>> for &TStore {
         todo!("{:?}", n)
     }
 
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(&self, _n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>) -> Self::Marshaled {
-        todo!()
-    }
     fn type_eq(
         &self,
         n: &HashedNodeRef<'a, MIdN<NodeIdentifier>>,
@@ -396,15 +320,10 @@ impl<'a> TypeStore<HashedNodeRef<'a, MIdN<NodeIdentifier>>> for &TStore {
     ) -> bool {
         todo!("{:?} {:?}", n, m)
     }
-    fn type_to_u16(&self, t: Self::Ty) -> u16 {
-        t.get_lang().ts_symbol(t)
-    }
 }
 
 impl<'a> TypeStore<NoSpaceWrapper<'a, MIdN<NodeIdentifier>>> for &TStore {
     type Ty = MultiType;
-    const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
     fn resolve_type(&self, n: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>) -> Self::Ty {
         let n = n.as_ref();
         n.get_type()
@@ -417,12 +336,6 @@ impl<'a> TypeStore<NoSpaceWrapper<'a, MIdN<NodeIdentifier>>> for &TStore {
         todo!()
     }
 
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(&self, _n: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>) -> Self::Marshaled {
-        todo!()
-    }
-
     fn type_eq(
         &self,
         _n: &NoSpaceWrapper<'a, MIdN<NodeIdentifier>>,
@@ -430,15 +343,10 @@ impl<'a> TypeStore<NoSpaceWrapper<'a, MIdN<NodeIdentifier>>> for &TStore {
     ) -> bool {
         todo!()
     }
-    fn type_to_u16(&self, t: Self::Ty) -> u16 {
-        t.get_lang().ts_symbol(t)
-    }
 }
 
 impl<'a> TypeStore<NoSpaceWrapper<'a, NodeIdentifier>> for &TStore {
     type Ty = MultiType;
-    const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
     fn resolve_type(&self, n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Ty {
         n.get_type()
         // on_multi!(n.as_ref(), [
@@ -458,12 +366,6 @@ impl<'a> TypeStore<NoSpaceWrapper<'a, NodeIdentifier>> for &TStore {
         &self,
         _n: &NoSpaceWrapper<'a, NodeIdentifier>,
     ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        todo!()
-    }
-
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(&self, _n: &NoSpaceWrapper<'a, NodeIdentifier>) -> Self::Marshaled {
         todo!()
     }
 
@@ -496,8 +398,6 @@ impl<'a> TypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIden
     for TStore
 {
     type Ty = hyper_ast_gen_ts_java::types::Type;
-    const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
     fn resolve_type(
         &self,
         n: &HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
@@ -512,22 +412,6 @@ impl<'a> TypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIden
         todo!("{:?}", n)
     }
 
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(
-        &self,
-        n: &HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
-    ) -> Self::Marshaled {
-        TypeIndex {
-            lang: LangRef::<hyper_ast_gen_ts_java::types::Type>::name(
-                &hyper_ast_gen_ts_java::types::Lang,
-            ),
-            ty: *n
-                .get_component::<hyper_ast_gen_ts_java::types::Type>()
-                .unwrap() as u16,
-        }
-    }
-
     fn type_eq(
         &self,
         n: &HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>,
@@ -538,21 +422,25 @@ impl<'a> TypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIden
             == m.get_component::<hyper_ast_gen_ts_java::types::Type>()
                 .unwrap()
     }
-    fn type_to_u16(&self, t: Self::Ty) -> u16 {
-        t.get_lang().ts_symbol(t)
-    }
 }
 impl<'a> JavaEnabledTypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_java::types::TIdN<NodeIdentifier>>>
     for TStore
 {
+    fn intern(&self, t: hyper_ast_gen_ts_java::types::Type) -> Self::Ty {
+        *<hyper_ast_gen_ts_java::types::Java as hyper_ast::types::Lang<
+            hyper_ast_gen_ts_java::types::Type,
+        >>::make(t as u16)
+    }
+
+    fn resolve(&self, t: Self::Ty) -> hyper_ast_gen_ts_java::types::Type {
+        t
+    }
 }
 
 impl<'a> TypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>>>
     for TStore
 {
     type Ty = hyper_ast_gen_ts_xml::types::Type;
-    const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
     fn resolve_type(
         &self,
         n: &HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>>,
@@ -564,15 +452,6 @@ impl<'a> TypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdent
         &self,
         n: &HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>>,
     ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        todo!("{:?}", n)
-    }
-
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(
-        &self,
-        n: &HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>>,
-    ) -> Self::Marshaled {
         todo!("{:?}", n)
     }
 
@@ -583,21 +462,16 @@ impl<'a> TypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdent
     ) -> bool {
         todo!("{:?} {:?}", n, m)
     }
-    fn type_to_u16(&self, t: Self::Ty) -> u16 {
-        t.get_lang().ts_symbol(t)
-    }
 }
 impl<'a> XmlEnabledTypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>>>
     for TStore
 {
-    const LANG: u16 = 0;
-
-    fn _intern(l: u16, t: u16) -> Self::Ty {
-        unimplemented!("remove _intern {} {}", l, t)
+    fn intern(&self, t: hyper_ast_gen_ts_xml::types::Type) -> Self::Ty {
+        t
     }
 
     fn resolve(&self, t: Self::Ty) -> hyper_ast_gen_ts_xml::types::Type {
-        todo!("{:?}", t)
+        t
     }
 }
 
@@ -605,8 +479,6 @@ impl<'a> TypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdent
     for TStore
 {
     type Ty = hyper_ast_gen_ts_cpp::types::Type;
-    const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
     fn resolve_type(
         &self,
         n: &HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>,
@@ -618,15 +490,6 @@ impl<'a> TypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdent
         &self,
         n: &HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>,
     ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        todo!("{:?}", n)
-    }
-
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(
-        &self,
-        n: &HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>,
-    ) -> Self::Marshaled {
         todo!("{:?}", n)
     }
 
@@ -641,12 +504,10 @@ impl<'a> TypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdent
 impl<'a> CppEnabledTypeStore<HashedNodeRef<'a, hyper_ast_gen_ts_cpp::types::TIdN<NodeIdentifier>>>
     for TStore
 {
-    const LANG: u16 = 0;
-
-    fn _intern(l: u16, t: u16) -> Self::Ty {
+    fn intern(&self, t: hyper_ast_gen_ts_cpp::types::Type) -> Self::Ty {
         *<hyper_ast_gen_ts_cpp::types::Cpp as hyper_ast::types::Lang<
             hyper_ast_gen_ts_cpp::types::Type,
-        >>::make(t)
+        >>::make(t as u16)
     }
 
     fn resolve(&self, t: Self::Ty) -> hyper_ast_gen_ts_cpp::types::Type {

@@ -1,7 +1,8 @@
 use super::{Cursor, Node as _, Status, Symbol, TreeCursorStep};
 use hyper_ast::position::TreePath;
 use hyper_ast::types::{
-    HyperASTShared, HyperType, LabelStore, Labeled, RoleStore, Tree, WithPrecompQueries, WithRoles,
+    HyperASTShared, HyperType, LabelStore, Labeled, NodeStore, RoleStore, Tree, WithPrecompQueries,
+    WithRoles,
 };
 use hyper_ast::{
     position::TreePathMut,
@@ -305,7 +306,11 @@ where
 {
     fn symbol(&self) -> Symbol {
         // TODO make something more efficient
-        let id = self.stores.type_store().type_to_u16(self.kind());
+        let n = self.pos.node().unwrap();
+        let t = self.stores.resolve_type(n);
+        let n = self.stores.node_store().resolve(n);
+        use hyper_ast::types::LangRef;
+        let id = self.stores.type_store().resolve_lang(&n).ts_symbol(t);
         id.into()
     }
 

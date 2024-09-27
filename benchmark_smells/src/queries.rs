@@ -255,3 +255,14 @@ pub fn sleepy_test() -> String {
 )"#,
     )
 }
+
+pub fn last_line() -> &'static str {
+    r#"(block
+  (expr_statement
+    (assignment_expr
+      name: (identifier) (#EQ? "x")
+      op: "+="
+      name: (identifier) (#EQ? "sleep")
+  )
+)"#
+}

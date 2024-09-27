@@ -11,7 +11,7 @@ use string_interner::Symbol;
 use crate::{
     store::defaults,
     types::{
-        AnyType, Children, IterableChildren, MySlice, NodeId, TypeIndex, TypeStore, TypeTrait,
+        AnyType, Children, IterableChildren, LangRef, MySlice, NodeId, TypeStore, TypeTrait,
         TypedNodeId,
     },
 };
@@ -610,14 +610,13 @@ impl Default for SimplePackedBuilder {
 impl SimplePackedBuilder {
     pub fn add<TS, T>(&mut self, type_store: &TS, id: NodeIdentifier, node: T)
     where
-        TS: TypeStore<T, Marshaled = TypeIndex>,
+        TS: TypeStore<T>,
         T: crate::types::Tree<Label = defaults::LabelIdentifier> + crate::types::WithStats,
         <T::TreeId as NodeId>::IdN: Copy + Into<NodeIdentifier>,
     {
-        let TypeIndex {
-            lang: lang_name,
-            ty: type_id,
-        } = type_store.marshal_type(&node);
+        let lang = type_store.resolve_lang(&node);
+        let lang_name = lang.name();
+        let type_id = lang.to_u16(type_store.resolve_type(&node));
         if let Some(children) = node.children() {
             let children = children.iter_children().map(|x| (*x).into()).collect();
             if node.has_label() {

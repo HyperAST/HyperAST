@@ -1,6 +1,6 @@
 use super::{Status, Symbol, TreeCursorStep};
 use hyper_ast::position::structural_pos::{self, AAA, BBB};
-use hyper_ast::types::{HyperAST, TypeStore};
+use hyper_ast::types::{HyperAST, LangRef, TypeStore};
 use hyper_ast::types::{
     HyperASTShared, HyperType, LabelStore, Labeled, RoleStore, Tree, WithPrecompQueries, WithRoles,
 };
@@ -253,8 +253,11 @@ where
     HAST::T: WithPrecompQueries,
 {
     fn symbol(&self) -> Symbol {
-        // TODO make something more efficient
-        let id = self.stores.type_store().type_to_u16(self.kind());
+        let n = self.pos.node();
+        let t = self.stores.resolve_type(&n);
+        use hyper_ast::types::NodeStore;
+        let n = self.stores.node_store().resolve(&n);
+        let id = self.stores.type_store().resolve_lang(&n).ts_symbol(t);
         id.into()
     }
 
@@ -325,9 +328,11 @@ where
     HAST::T: WithPrecompQueries,
 {
     fn symbol(&self) -> Symbol {
-        // TODO make something more efficient
-        let t = kind(self.stores, &self.pos);
-        let id = self.stores.type_store().type_to_u16(t);
+        let n = self.pos.node();
+        let t = self.stores.resolve_type(&n);
+        use hyper_ast::types::NodeStore;
+        let n = self.stores.node_store().resolve(&n);
+        let id = self.stores.type_store().resolve_lang(&n).ts_symbol(t);
         id.into()
     }
 
@@ -427,8 +432,11 @@ fn symbol<'hast, HAST: HyperAST<'hast>>(
     stores: &'hast HAST,
     pos: &impl AAA<HAST::IdN, HAST::Idx>,
 ) -> Symbol {
-    // TODO make something more efficient
-    let id = stores.type_store().type_to_u16(kind(stores, pos));
+    let n = pos.node();
+    let t = stores.resolve_type(&n);
+    use hyper_ast::types::NodeStore;
+    let n = stores.node_store().resolve(&n);
+    let id = stores.type_store().resolve_lang(&n).ts_symbol(t);
     id.into()
 }
 

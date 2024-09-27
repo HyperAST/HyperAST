@@ -1,7 +1,7 @@
 pub use hyper_ast::store::nodes::fetched::{FetchedLabels, NodeIdentifier, NodeStore};
 use hyper_ast::{
     store::nodes::fetched::{HashedNodeRef, LabelIdentifier},
-    types::{AnyType, HyperType, Lang, LangRef, TypeIndex, TypeStore as _},
+    types::{AnyType, HyperType, Lang, LangRef},
 };
 use std::{
     borrow::Borrow,
@@ -14,8 +14,6 @@ pub(crate) struct TStore;
 
 impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
     type Ty = AnyType;
-
-    const MASK: u16 = 42;
 
     fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
         let lang = n.get_lang();
@@ -82,12 +80,6 @@ impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TSto
             x => panic!("{}", x),
         };
         t
-    }
-
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(&self, _n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-        todo!()
     }
 
     fn type_eq(
@@ -210,8 +202,6 @@ impl<'a, 'b> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>>
 {
     type Ty = AnyType;
 
-    const MASK: u16 = 42;
-
     fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
         self.type_store.resolve_type(n)
     }
@@ -221,12 +211,6 @@ impl<'a, 'b> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>>
         n: &HashedNodeRef<'a, NodeIdentifier>,
     ) -> hyper_ast::types::LangWrapper<Self::Ty> {
         self.type_store.resolve_lang(n)
-    }
-
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-        self.type_store.marshal_type(n)
     }
 
     fn type_eq(

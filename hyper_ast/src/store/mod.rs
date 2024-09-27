@@ -122,8 +122,6 @@ where
 {
     type Ty = TS::Ty;
 
-    const MASK: u16 = TS::MASK;
-
     fn resolve_type(&self, n: &T) -> Self::Ty {
         self.type_store.resolve_type(n)
     }
@@ -131,16 +129,8 @@ where
         self.type_store.resolve_lang(n)
     }
 
-    type Marshaled = TS::Marshaled;
-
-    fn marshal_type(&self, n: &T) -> Self::Marshaled {
-        self.type_store.marshal_type(n)
-    }
     fn type_eq(&self, n: &T, m: &T) -> bool {
         self.type_store.type_eq(n, m)
-    }
-    fn type_to_u16(&self, t: Self::Ty) -> u16 {
-        self.type_store.type_to_u16(t)
     }
 }
 

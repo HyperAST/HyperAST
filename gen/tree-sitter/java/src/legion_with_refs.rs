@@ -825,8 +825,7 @@ where
         mut acc: <Self as TreeGen>::Acc,
         label: Option<String>,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
-        let interned_kind = acc.simple.kind;
-        // let interned_kind = JavaEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
+        let interned_kind = JavaEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
         let hashs = acc.metrics.hashs;
         let own_line_count = label.as_ref().map_or(0, |l| {
             l.matches("\n").count().to_u16().expect("too many newlines")
@@ -1489,7 +1488,7 @@ where
                 let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte) as u32);
                 let base = (interned_kind, hashs, bytes_len);
 
-                let mcc = Mcc::new(&acc.simple.kind);
+                let mcc = Mcc::new(&interned_kind);
 
                 let compressed_node = compress(
                     label_id,

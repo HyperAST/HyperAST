@@ -21,12 +21,11 @@ mod legion_impls {
 
     use hyper_ast::{
         store::nodes::legion::HashedNodeRef,
-        types::{LangWrapper, RoleStore, TypeIndex},
+        types::{LangWrapper, RoleStore},
     };
 
     impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         type Ty = Type;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
         fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
             n.get_component::<Type>().unwrap().clone()
         }
@@ -38,14 +37,6 @@ mod legion_impls {
             From::<&'static (dyn LangRef<Type>)>::from(&Lang)
         }
 
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&Lang),
-                ty: self.resolve_type(n) as u16,
-            }
-        }
         fn type_eq(
             &self,
             n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
@@ -55,12 +46,6 @@ mod legion_impls {
         }
     }
     impl<'a> XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        const LANG: TypeInternalSize = Self::Xml as u16;
-
-        fn _intern(_l: u16, _t: u16) -> Self::Ty {
-            // T((u16::MAX - l as u16) | t)
-            todo!()
-        }
         fn intern(&self, t: Type) -> Self::Ty {
             t
         }
@@ -74,7 +59,6 @@ mod legion_impls {
     }
     impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
         type Ty = AnyType;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
 
         fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
             as_any(n.get_component::<Type>().unwrap())
@@ -87,23 +71,12 @@ mod legion_impls {
             todo!()
         }
 
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&Lang),
-                ty: *n.get_component::<Type>().unwrap() as u16,
-            }
-        }
         fn type_eq(
             &self,
             _n: &HashedNodeRef<'a, NodeIdentifier>,
             _m: &HashedNodeRef<'a, NodeIdentifier>,
         ) -> bool {
             todo!()
-        }
-        fn type_to_u16(&self, t: Self::Ty) -> u16 {
-            id_for_node_kind(t.as_static_str(), t.is_named())
         }
     }
 
@@ -146,27 +119,15 @@ pub fn as_any(t: &Type) -> AnyType {
     t.into()
 }
 pub trait XmlEnabledTypeStore<T>: TypeStore<T> {
-    const LANG: u16;
-    // fn obtain(&self, n: &TNode) -> Type {
-    //     let t = n.kind_id();
-    //     Type::from_u16(t)
-    // }
-    fn intern(&self, t: Type) -> Self::Ty {
-        let t = t as u16;
-        Self::_intern(Self::LANG, t)
-    }
-    fn _intern(l: u16, t: u16) -> Self::Ty;
+    fn intern(&self, t: Type) -> Self::Ty;
     fn resolve(&self, t: Self::Ty) -> Type;
 }
 
-#[repr(u8)]
-pub enum TStore {
-    Xml = 0,
-}
+pub struct TStore;
 
 impl Default for TStore {
     fn default() -> Self {
-        Self::Xml
+        Self
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

@@ -21,79 +21,27 @@ mod legion_impls {
 
     use hyper_ast::{
         store::nodes::legion::HashedNodeRef,
-        types::{LangWrapper, TypeIndex, Typed},
+        types::{LangWrapper, Typed},
     };
 
-    // impl<'a> TypeStore<HashedNodeRef<'a, AnyType>> for Single {
-    //     type Ty = Type;
-    //     const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
+    type HNRef<'a> = HashedNodeRef<'a, TIdN<NodeIdentifier>>;
 
-    //     fn resolve_type(&self, n: &HashedNodeRef<'a, AnyType>) -> Self::Ty {
-    //         n.get_component::<Type>().unwrap().clone()
-    //     }
-
-    //     fn resolve_lang(&self, n: &HashedNodeRef<'a, AnyType>) -> hyper_ast::types::LangWrapper<Self::Ty> {
-    //         From::<&'static (dyn LangRef<Type>)>::from(&Java)
-    //     }
-
-    //     type Marshaled = TypeIndex;
-
-    //     fn marshal(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Marshaled {
-    //         TypeIndex {
-    //             lang: LangRef::<Type>::name(&Java),
-    //             ty: *n.get_component::<Type>().unwrap() as u16,
-    //         }
-    //     }
-    // }
-    // impl<'a> JavaEnabledTypeStore<HashedNodeRef<'a, AnyType>> for Single {
-    //     // fn intern(&self, t: Type) -> Self::Ty {
-    //     //     // T((u16::MAX - self.lang) | t as u16)
-    //     //     t
-    //     // }
-
-    //     // fn resolve(&self, t: Self::Ty) -> Type {
-    //     //     t
-    //     //     // let t = t.0 as u16;
-    //     //     // let t = t & !self.mask;
-    //     //     // Type::resolve(t)
-    //     // }
-    // }
-
-    impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
+    impl<'a> TypeStore<HNRef<'a>> for TStore {
         type Ty = Type;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
 
-        fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
+        fn resolve_type(&self, n: &HNRef<'a>) -> Self::Ty {
             n.get_type()
         }
 
-        fn resolve_lang(
-            &self,
-            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        fn resolve_lang(&self, n: &HNRef<'a>) -> hyper_ast::types::LangWrapper<Self::Ty> {
             todo!("{:?}", n)
         }
 
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&Lang),
-                ty: *n.get_component::<Type>().unwrap() as u16,
-            }
-        }
-        fn type_eq(
-            &self,
-            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-            m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        ) -> bool {
+        fn type_eq(&self, n: &HNRef<'a>, m: &HNRef<'a>) -> bool {
             n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
         }
-        fn type_to_u16(&self, t: Self::Ty) -> u16 {
-            id_for_node_kind(t.as_static_str(), t.is_named())
-        }
     }
-    impl<'a> RoleStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
+    impl<'a> RoleStore<HNRef<'a>> for TStore {
         type IdF = u16;
 
         type Role = hyper_ast::types::Role;
@@ -116,7 +64,6 @@ mod legion_impls {
     }
     impl<'a, R> TypeStore<R> for &TStore {
         type Ty = Type;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
 
         fn resolve_type(&self, _n: &R) -> Self::Ty {
             todo!()
@@ -126,36 +73,22 @@ mod legion_impls {
             todo!()
         }
 
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, _n: &R) -> Self::Marshaled {
-            todo!()
-        }
         fn type_eq(&self, _n: &R, _m: &R) -> bool {
             todo!()
         }
-
-        fn type_to_u16(&self, t: Self::Ty) -> u16 {
-            id_for_node_kind(t.as_static_str(), t.is_named())
-        }
     }
-    impl<'a> JavaEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        // fn intern(&self, t: Type) -> Self::Ty {
-        //     // T((u16::MAX - Self::Cpp as u16) | t as u16)
-        //     t
-        // }
+    impl<'a> JavaEnabledTypeStore<HNRef<'a>> for TStore {
+        fn intern(&self, t: Type) -> Self::Ty {
+            t
+        }
 
-        // fn resolve(&self, t: Self::Ty) -> Type {
-        //     // let t = t.0 as u16;
-        //     // let t = t & !TStore::MASK;
-        //     // Type::resolve(t)
-        //     t
-        // }
+        fn resolve(&self, t: Self::Ty) -> Type {
+            t
+        }
     }
 
     impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
         type Ty = AnyType;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
 
         fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
             let t = n.get_component::<Type>().unwrap();
@@ -167,15 +100,6 @@ mod legion_impls {
             n: &HashedNodeRef<'a, NodeIdentifier>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
             todo!("{:?}", n)
-        }
-
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&Lang),
-                ty: *n.get_component::<Type>().unwrap() as u16,
-            }
         }
         fn type_eq(
             &self,
@@ -215,7 +139,10 @@ mod legion_impls {
 }
 #[cfg(feature = "legion")]
 pub use legion_impls::as_any;
-pub trait JavaEnabledTypeStore<T>: TypeStore<T> {}
+pub trait JavaEnabledTypeStore<T>: TypeStore<T> {
+    fn intern(&self, t: Type) -> Self::Ty;
+    fn resolve(&self, t: Self::Ty) -> Type;
+}
 
 #[cfg(feature = "impl")]
 fn id_for_node_kind(kind: &str, named: bool) -> u16 {
@@ -226,14 +153,11 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
     unimplemented!("need treesitter grammar")
 }
 
-#[repr(u8)]
-pub enum TStore {
-    Java = 0,
-}
+pub struct TStore;
 
 impl Default for TStore {
     fn default() -> Self {
-        Self::Java
+        Self
     }
 }
 

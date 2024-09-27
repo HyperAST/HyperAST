@@ -21,14 +21,10 @@ mod legion_impls {
         }
     }
 
-    use hyper_ast::{
-        store::nodes::legion::HashedNodeRef,
-        types::{LangWrapper, TypeIndex},
-    };
+    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::LangWrapper};
 
     impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         type Ty = Type;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
         fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
             n.get_component::<Type>().unwrap().clone()
         }
@@ -40,14 +36,6 @@ mod legion_impls {
             From::<&'static (dyn LangRef<Type>)>::from(&TsQuery)
         }
 
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&TsQuery),
-                ty: *n.get_component::<Type>().unwrap() as u16,
-            }
-        }
         fn type_eq(
             &self,
             n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
@@ -102,26 +90,16 @@ mod legion_impls {
     }
 
     impl<'a> TsQueryEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        const LANG: TypeInternalSize = Self::Ts as u16;
-
-        fn _intern(l: u16, t: u16) -> Self::Ty {
-            // T((u16::MAX - l as u16) | t)
-            todo!("{} {}", l, t)
-        }
         fn intern(&self, t: Type) -> Self::Ty {
             t
         }
 
         fn resolve(&self, t: Self::Ty) -> Type {
             t
-            // let t = t.0 as u16;
-            // let t = t & !TStore::MASK;
-            // Type::resolve(t)
         }
     }
     impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
         type Ty = AnyType;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
         fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
             From::<&'static (dyn HyperType)>::from(LangRef::<Type>::make(
                 &TsQuery,
@@ -136,14 +114,6 @@ mod legion_impls {
             From::<&'static (dyn LangRef<AnyType>)>::from(&TsQuery)
         }
 
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&TsQuery),
-                ty: *n.get_component::<Type>().unwrap() as u16,
-            }
-        }
         fn type_eq(
             &self,
             n: &HashedNodeRef<'a, NodeIdentifier>,
@@ -167,12 +137,7 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
 }
 
 pub trait TsQueryEnabledTypeStore<T>: TypeStore<T> {
-    const LANG: u16;
-    fn intern(&self, t: Type) -> Self::Ty {
-        let t = t as u16;
-        Self::_intern(Self::LANG, t)
-    }
-    fn _intern(l: u16, t: u16) -> Self::Ty;
+    fn intern(&self, t: Type) -> Self::Ty;
     fn resolve(&self, t: Self::Ty) -> Type;
 }
 
@@ -206,14 +171,11 @@ impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
     type Ty = Type;
 }
 
-#[repr(u8)]
-pub enum TStore {
-    Ts = 0,
-}
+pub struct TStore;
 
 impl Default for TStore {
     fn default() -> Self {
-        Self::Ts
+        Self
     }
 }
 

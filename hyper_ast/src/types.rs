@@ -460,14 +460,14 @@ pub enum Shared {
 }
 
 pub trait Lang<T>: LangRef<T> {
-    fn make(t: u16) -> &'static T;
-    fn to_u16(t: T) -> u16;
+    fn make(t: TypeInternalSize) -> &'static T;
+    fn to_u16(t: T) -> TypeInternalSize;
 }
 
 pub trait LangRef<T> {
     fn name(&self) -> &'static str;
-    fn make(&self, t: u16) -> &'static T;
-    fn to_u16(&self, t: T) -> u16;
+    fn make(&self, t: TypeInternalSize) -> &'static T;
+    fn to_u16(&self, t: T) -> TypeInternalSize;
     fn ts_symbol(&self, t: T) -> u16;
 }
 
@@ -480,11 +480,11 @@ impl<T> From<&'static (dyn LangRef<T> + 'static)> for LangWrapper<T> {
 }
 
 impl<T> LangRef<T> for LangWrapper<T> {
-    fn make(&self, t: u16) -> &'static T {
+    fn make(&self, t: TypeInternalSize) -> &'static T {
         self.0.make(t)
     }
 
-    fn to_u16(&self, t: T) -> u16 {
+    fn to_u16(&self, t: T) -> TypeInternalSize {
         self.0.to_u16(t)
     }
 
@@ -1099,6 +1099,7 @@ pub trait LabelStore<L: ?Sized> {
 }
 
 type TypeInternalSize = u16;
+
 pub trait TypeStore<T> {
     type Ty: 'static
         + HyperType
@@ -1107,14 +1108,11 @@ pub trait TypeStore<T> {
         + Copy
         + std::marker::Send
         + std::marker::Sync;
-    const MASK: TypeInternalSize;
     fn resolve_type(&self, n: &T) -> Self::Ty;
     fn resolve_lang(&self, n: &T) -> LangWrapper<Self::Ty>;
-    type Marshaled;
-    fn marshal_type(&self, n: &T) -> Self::Marshaled;
     fn type_eq(&self, n: &T, m: &T) -> bool;
-    fn type_to_u16(&self, t: Self::Ty) -> u16 {
-        t.get_lang().ts_symbol(t)
+    fn type_to_u16(&self, t: Self::Ty) -> TypeInternalSize {
+        t.get_lang().to_u16(t)
     }
 }
 
@@ -1409,33 +1407,22 @@ where
 {
     type Ty = TS::Ty;
 
-    const MASK: u16 = TS::MASK;
-
-    fn resolve_type(&self, n: &T) -> Self::Ty {
-        self.type_store.resolve_type(n)
-    }
-
     fn resolve_lang(&self, n: &T) -> LangWrapper<Self::Ty> {
         self.type_store.resolve_lang(n)
     }
 
-    type Marshaled = TS::Marshaled;
-
-    fn marshal_type(&self, n: &T) -> Self::Marshaled {
-        self.type_store.marshal_type(n)
-    }
     fn type_eq(&self, n: &T, m: &T) -> bool {
         self.type_store.type_eq(n, m)
     }
-
-    fn type_to_u16(&self, t: Self::Ty) -> u16 {
-        self.type_store.type_to_u16(t)
+    
+    fn resolve_type(&self, n: &T) -> Self::Ty {
+        self.type_store.resolve_type(n)
     }
 }
 
 pub struct TypeIndex {
     pub lang: &'static str,
-    pub ty: u16,
+    pub ty: TypeInternalSize,
 }
 
 impl<'store, T, TS, NS, LS> HyperAST<'store> for SimpleHyperAST<T, TS, NS, LS>

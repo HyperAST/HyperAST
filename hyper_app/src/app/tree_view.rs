@@ -41,8 +41,6 @@ pub(crate) mod store {
     impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
         type Ty = AnyType;
 
-        const MASK: u16 = 42;
-
         fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
             let lang = n.get_lang();
             let t: &'static (dyn HyperType + 'static) = match lang {
@@ -105,12 +103,6 @@ pub(crate) mod store {
                 x => panic!("{}", x),
             };
             t
-        }
-
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, _n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-            todo!()
         }
 
         fn type_eq(
@@ -227,8 +219,6 @@ pub(crate) mod store {
     {
         type Ty = AnyType;
 
-        const MASK: u16 = 42;
-
         fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
             self.type_store.resolve_type(n)
         }
@@ -238,12 +228,6 @@ pub(crate) mod store {
             n: &HashedNodeRef<'a, NodeIdentifier>,
         ) -> hyper_ast::types::LangWrapper<Self::Ty> {
             self.type_store.resolve_lang(n)
-        }
-
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-            self.type_store.marshal_type(n)
         }
 
         fn type_eq(
