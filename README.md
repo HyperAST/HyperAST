@@ -46,17 +46,17 @@ nix run .#hyperast-webapi // similar to the prev. mentioned cargo run
 nix run github:HyperAST/HyperAST#hyperast-webapi // here nix handles everything, no need to clone!
 ```
 This will download all dependencies and build locally. 
-This will work on any *NIX system (Linux, WSL, MACOSX, ...).
+It can work on any *NIX system (Linux, WSL, MACOSX, ...), but the CPU architecture can be a problem e.g. I could not make it work on an M1.
 
-There is also a devShell provided with all the necessary dependencies installed in a healthy environment to develop and build the project. You can enter the environement with:
+There is also a development shell provided with all the necessary dependencies installed in a healthy environment to develop and build the project. You can enter the environment with:
 ```sh
 nix develop # from the project root dir
 ```
-### Launch server with Cargo (You have to handle depencies such as rustc, openssl, ... yourself)
+### Launch server with Cargo (You have to handle system dependencies yourself, such as, `rustc`, `openssl` )
 ```sh
 cargo run -p client --release # from the project root dir, after having cloned the repository
 ```
-Note: Currently HyperAST uses features from the nightly channel, so you should definetly use [rustup](https://rust-lang.github.io/rustup/overrides.html#the-toolchain-file), the Rust version manager.
+Note: Currently HyperAST uses features from the nightly channel, so you should definitely use [rustup](https://rust-lang.github.io/rustup/overrides.html#the-toolchain-file), the Rust version manager.
 
 ## How to Cite
 
@@ -75,33 +75,33 @@ If you use HyperAST in an academic purpose, please cite the following paper:
 ```
 
 ## Cool crates that could be used
+- [controlled-option = "0.4.1"](https://github.com/dcreager/controlled-option)
+- [pretty_assertions = "1.0.0"](https://github.com/rust-pretty-assertions/rust-pretty-assertions)
 
-- controlled-option = "0.4.1"
-- pretty_assertions = "1.0.0"
+- [atomic-counter = "1.0.1"](https://github.com/kosta/atomic-counter)
+- [fasthash = "0.4.0"](https://github.com/flier/rust-fasthash.git)
+- [self_cell = "0.10.2"](https://github.com/Voultapher/self_cell)
+- [nohash-hasher = "0.2.0"](https://github.com/paritytech/nohash-hasher)
+- [comfy-table = "6.0.0"](https://github.com/nukesor/comfy-table)
+- [document-features = "0.2.10"](https://github.com/slint-ui/document-features)
 
-- atomic-counter = "1.0.1"
-- fasthash = "0.4.0"
-- self_cell = "0.10.2"
-- nohash-hasher = "0.2.0"
-- comfy-table = "6.0.0"
-- document-features = "0.2.10"
-
-to help store subtrees efficiently
-- zerocopy="0.6.1"
-- tuples = "=1.4.1"
-- enumset = "1.0.8"
+- [zerocopy = "0.6.1"](https://github.com/google/zerocopy)
+  to help store subtrees efficiently
+- [tuples = "=1.4.1"](https://github.com/libsugar/tuplers)
+- [enumset = "1.0.8"](https://github.com/Lymia/enumset)
 
 look at tests from getrandom and indexmap
 
 
-for xml / maven
-- pommes = "0.0.2"
-- serde-xml-rs = "0.5.1"
+- [pommes = "0.0.2"](https://pagure.io/ironthree/pommes)
+  for xml / maven
 
-- readonly = "0.2"
+- [serde-xml-rs = "0.5.1"](https://github.com/RReverser/serde-xml-rs)
+
+- [readonly = "0.2"](https://github.com/dtolnay/readonly)
   about visibility for benches/tests
 
 - [ref-cast = "1.0"](https://github.com/dtolnay/ref-cast)
- to replace Children slicing stuff in hyper_ast
+  - [x] to replace Children slicing stuff in hyper_ast
 
 - [linkme = "0.3.28"](https://crates.io/crates/linkme)
