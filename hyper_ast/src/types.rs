@@ -19,103 +19,63 @@ pub trait HashKind {
 }
 
 /// TODO handle roles in a polyglote way
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum Role {
-    Name,
-    Scope,
-    Body,
-    SuperType,
-    Interfaces,
-    Constructor,
-    Object,
-    Arguments,
-    TypeArguments,
-    Type,
-    Declarator,
-    Value,
-    TypeParameters,
-    Parameters,
-    Condition,
-    Init,
-    Update,
-    Alternative,
-    Resources,
-    Field,
-    Left,
-    Right,
-    Superclass,
-    Element,
-    Consequence,
-    Key,
-}
-impl<'a> TryFrom<&'a str> for Role {
-    type Error = ();
-
-    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        match value {
-            "name" => Ok(Role::Name),
-            "scope" => Ok(Role::Scope),
-            "body" => Ok(Role::Body),
-            "super_type" => Ok(Role::SuperType),
-            "interfaces" => Ok(Role::Interfaces),
-            "constructor" => Ok(Role::Constructor),
-            "object" => Ok(Role::Object),
-            "arguments" => Ok(Role::Arguments),
-            "type_arguments" => Ok(Role::TypeArguments),
-            "type" => Ok(Role::Type),
-            "declarator" => Ok(Role::Declarator),
-            "value" => Ok(Role::Value),
-            "type_parameters" => Ok(Role::TypeParameters),
-            "parameters" => Ok(Role::Parameters),
-            "condition" => Ok(Role::Condition),
-            "init" => Ok(Role::Init),
-            "update" => Ok(Role::Update),
-            "alternative" => Ok(Role::Alternative),
-            "resources" => Ok(Role::Resources),
-            "field" => Ok(Role::Field),
-            "left" => Ok(Role::Left),
-            "right" => Ok(Role::Right),
-            "superclass" => Ok(Role::Superclass),
-            "element" => Ok(Role::Element),
-            "consequence" => Ok(Role::Consequence),
-            "key" => Ok(Role::Key),
-            _ => Err(()),
+macro_rules! role_impl {
+    (
+        $( $t:ident => $s:expr, )+
+    ) => {
+        #[derive(PartialEq, Eq, Clone, Copy, Debug)]
+        pub enum Role {
+            $( $t, )+
         }
-    }
+
+        impl<'a> TryFrom<&'a str> for Role {
+            type Error = ();
+            fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+                match value {
+                    $( $s => Ok(Self::$t), )*
+                    _ => Err(()),
+                }
+            }
+        }
+        
+        impl Display for Role {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str(match self {
+                    $( Self::$t => $s, )*
+                })
+            }
+        }
+    };
 }
 
-impl Display for Role {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Role::Name => "name",
-            Role::Scope => "scope",
-            Role::Body => "body",
-            Role::SuperType => "super_type",
-            Role::Interfaces => "interfaces",
-            Role::Constructor => "constructor",
-            Role::Object => "object",
-            Role::Arguments => "arguments",
-            Role::TypeArguments => "type_arguments",
-            Role::Type => "type",
-            Role::Declarator => "declarator",
-            Role::Value => "value",
-            Role::TypeParameters => "type_parameters",
-            Role::Parameters => "parameters",
-            Role::Condition => "condition",
-            Role::Init => "init",
-            Role::Update => "update",
-            Role::Alternative => "alternative",
-            Role::Resources => "resources",
-            Role::Field => "field",
-            Role::Left => "left",
-            Role::Right => "right",
-            Role::Superclass => "superclass",
-            Role::Element => "element",
-            Role::Consequence => "consequence",
-            Role::Key => "key",
-        })
-    }
-}
+role_impl!(
+    Name => "name",
+    Scope => "scope",
+    Body => "body",
+    SuperType => "super_type",
+    Interfaces => "interfaces",
+    Constructor => "constructor",
+    Object => "object",
+    Arguments => "arguments",
+    TypeArguments => "type_arguments",
+    Type => "type",
+    Declarator => "declarator",
+    Value => "value",
+    TypeParameters => "type_parameters",
+    Parameters => "parameters",
+    Condition => "condition",
+    Init => "init",
+    Update => "update",
+    Alternative => "alternative",
+    Resources => "resources",
+    Field => "field",
+    Left => "left",
+    Right => "right",
+    Superclass => "superclass",
+    Element => "element",
+    Consequence => "consequence",
+    Key => "key",
+);
 
 #[allow(unused)]
 mod exp {
