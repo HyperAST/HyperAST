@@ -11,13 +11,6 @@ pub enum BuildSystem {
     None,
 }
 
-enum Language {
-    Java,
-    Cpp,
-    Ts,
-    Xml,
-}
-
 pub enum ProcessingConfig<P> {
     JavaMaven { limit: usize, dir_path: P },
     CppMake { limit: usize, dir_path: P },
@@ -86,7 +79,8 @@ pub struct ConfiguredRepoHandle {
     pub spec: Repo,
     pub config: RepoConfig,
 }
-// NOTE could have impl deref bug it is a bad idea (see book), related to ownership
+
+// NOTE could have impl deref but it is a bad idea (see rust book, related to ownership)
 impl ConfiguredRepoTrait for ConfiguredRepoHandle {
     fn spec(&self) -> &Repo {
         &self.spec
@@ -113,7 +107,7 @@ pub struct ConfiguredRepoHandle2 {
     pub config: ParametrizedCommitProcessorHandle,
 }
 
-// NOTE could have impl deref bug it is a bad idea (see book), related to ownership
+// NOTE could have impl deref but it is a bad idea (see rust book, related to ownership)
 impl ConfiguredRepoTrait for ConfiguredRepoHandle2 {
     fn spec(&self) -> &Repo {
         &self.spec
@@ -173,15 +167,18 @@ pub trait CachesHolding {
 
     // fn mut_or_default(&mut self) -> &mut Self::Caches;
 }
+
 pub trait CacheHolding<Caches> {
     fn get_caches_mut(&mut self) -> &mut Caches;
     fn get_caches(&self) -> &Caches;
 }
+
 pub trait HoldedCache {
     type Holder: CacheHolding<Self>
     where
         Self: Sized;
 }
+
 pub trait InFiles {
     fn matches(name: &ObjectName) -> bool;
 }
@@ -244,7 +241,6 @@ impl<'a> TryInto<String> for ObjectName {
 }
 
 pub(crate) mod caches {
-    use std::ops::Deref;
 
     use hyper_ast::store::defaults::NodeIdentifier;
 
@@ -255,29 +251,8 @@ pub(crate) mod caches {
     pub(crate) type OidMap<T> = std::collections::BTreeMap<git2::Oid, T>;
     pub(crate) type NamedMap<T> = std::collections::BTreeMap<(git2::Oid, ObjectName), T>;
 
-    pub(crate) struct Query(pub(crate) std::sync::Arc<hyper_ast_tsquery::Query>);
-    impl From<hyper_ast_tsquery::Query>  for Query {
-        fn from(value: hyper_ast_tsquery::Query) -> Self {
-            Self(value.into())
-        }
-    }
-    unsafe impl Send for Query {}
-    unsafe impl Sync for Query {}
-
-    impl Default for Query {
-        fn default() -> Self {
-            let (precomp, _) = hyper_ast_tsquery::Query::with_precomputed(
-                "(_)",
-                hyper_ast_gen_ts_java::language(),
-                unsafe { crate::java_processor::SUB_QUERIES },
-            )
-            .unwrap();
-            precomp.into()
-        }
-    }
     #[derive(Default)]
     pub struct Java {
-        pub(crate) query: Query,
         pub(crate) md_cache: hyper_ast_gen_ts_java::legion_with_refs::MDCache,
         pub object_map: NamedMap<(hyper_ast_gen_ts_java::legion_with_refs::Local, IsSkippedAna)>,
     }

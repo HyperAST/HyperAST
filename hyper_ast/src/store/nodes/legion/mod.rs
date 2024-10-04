@@ -25,6 +25,7 @@ pub struct NodeStore {
     // roots: HashMap<(u8, u8, u8), NodeIdentifier>,
     dedup: hashbrown::HashMap<NodeIdentifier, (), ()>,
     internal: legion::World,
+    // TODO intern lists of [`NodeIdentifier`]s, e.g. children, no space children, ...
     hasher: DefaultHashBuilder, //fasthash::city::Hash64,//fasthash::RandomState<fasthash::>,
                                 // internal: VecMapStore<HashedNode, NodeIdentifier, legion::World>,
 }
@@ -529,5 +530,39 @@ mod stores_impl {
         fn typed_node_store(&self) -> &Self::TNS {
             &self.node_store
         }
+    }
+}
+
+
+pub fn eq_node<'a, K, L, I>(
+    kind: &'a K,
+    label_id: Option<&'a L>,
+    children: &'a [I],
+) -> impl Fn(EntryRef) -> bool + 'a
+where
+    K: 'static + Eq + Copy + std::marker::Send + std::marker::Sync,
+    L: 'static + Eq + Copy + std::marker::Send + std::marker::Sync,
+    I: 'static + Eq + Copy + std::marker::Send + std::marker::Sync,
+{
+    move |x: EntryRef| {
+        let t = x.get_component::<K>();
+        if t != Ok(kind) {
+            return false;
+        }
+        let l = x.get_component::<L>().ok();
+        if l != label_id {
+            return false;
+        } else {
+            use crate::store::nodes::legion::compo::CS; // FIXME not 
+            let cs = x.get_component::<CS<I>>();
+            let r = match cs {
+                Ok(CS(cs)) => cs.as_ref() == children,
+                Err(_) => children.is_empty(),
+            };
+            if !r {
+                return false;
+            }
+        }
+        true
     }
 }

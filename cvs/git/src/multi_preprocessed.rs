@@ -101,18 +101,6 @@ impl<'prepro, 'repo, Sys, CP: CommitProcessor<Sys>> CommitBuilder<'prepro, 'repo
 }
 
 impl PreProcessedRepositories {
-    // pub fn commit_builder<'prepro, 'repo, Sys, CP:CommitProcessor<Sys>>(
-    //     &'prepro mut self,
-    //     repository: &'repo mut ConfiguredRepo,
-    // ) -> CommitBuilder<'prepro, 'repo, Sys, CP> {
-    //     todo!()
-    //     // CommitBuilder {
-    //     //     commits: self.commits.get_mut(&repository.config).unwrap(),
-    //     //     processor: &mut self.processor,
-    //     //     repository: repository,
-    //     //     phantom: PhantomData,
-    //     // }
-    // }
 
     pub fn purge_caches(&mut self) {
         self.processor.purge_caches()
@@ -163,13 +151,6 @@ impl PreProcessedRepositories {
     }
 
     pub fn get_config(&self, repo: Repo) -> Option<ConfiguredRepoHandle2> {
-        // let proc = self
-        //     .processor.processing_systems
-        //     .by_id(&repository.config.0)
-        //     .unwrap()
-        //     .get(repository.config.1);
-        // proc.get_commit(*commit_oid)
-        // self
         self.configs
             .get(&repo)
             .map(|&config| ConfiguredRepoHandle2 { config, spec: repo })

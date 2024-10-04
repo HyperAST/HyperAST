@@ -17,7 +17,7 @@ pub type TreeCursor<'hast, 'acc, HAST> = Node<'hast, 'acc, HAST>;
 pub struct Node<'hast, 'acc, HAST: HyperASTShared> {
     pub stores: &'acc HAST,
     acc: &'acc super::Acc,
-    label: &'acc Option<String>,
+    label: Option<&'acc str>,
     offset: Idx,
     pub pos: hyper_ast::position::StructuralPosition<HAST::IdN, HAST::Idx>,
     _p: PhantomData<&'hast ()>,
@@ -37,7 +37,7 @@ impl<'hast, 'acc, TS> Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
     pub fn new(
         stores: &'acc HAST<'hast, 'acc, TS>,
         acc: &'acc super::Acc,
-        label: &'acc Option<String>,
+        label: Option<&'acc str>,
         pos: hyper_ast::position::StructuralPosition<IdN, Idx>,
     ) -> Self {
         Self {
@@ -109,7 +109,10 @@ where
         + hyper_ast::types::RoleStore<T<'hast>, IdF = IdF, Role = Role>,
 {
     type Node = self::Node<'hast, 'acc, HAST<'hast, 'acc, TS>>;
-    type NodeRef<'a> = &'a self::Node<'hast, 'acc, HAST<'hast, 'acc, TS>> where Self: 'a;
+    type NodeRef<'a>
+        = &'a self::Node<'hast, 'acc, HAST<'hast, 'acc, TS>>
+    where
+        Self: 'a;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep {
         // log::trace!(
@@ -330,8 +333,8 @@ where
             n.role_at::<Role>(self.pos.o().unwrap())
         } else {
             let at = self.pos.o().unwrap();
-            let ro = &self.acc.role_offsets;
-            let r = &self.acc.roles;
+            let ro = &self.acc.role.offsets;
+            let r = &self.acc.role.roles;
             let mut i = 0;
             for &ro in ro {
                 if ro as u16 > at {
@@ -386,10 +389,11 @@ where
             lang = self.acc.simple.kind.get_lang();
             let o = self.pos.o().unwrap();
             self.acc
-                .role_offsets
+                .role
+                .offsets
                 .iter()
                 .position(|x| *x as u16 == o)
-                .and_then(|x| self.acc.roles.get(x))
+                .and_then(|x| self.acc.role.roles.get(x))
                 .cloned()
         } else {
             let mut p = self.clone();

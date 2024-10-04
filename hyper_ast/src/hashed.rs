@@ -45,14 +45,14 @@ pub struct SyntaxNodeHashs<T: PrimInt> {
 }
 
 pub trait IndexingHashBuilder<H: NodeHashs> {
-    fn new<K: ?Sized + Hash, L: ?Sized + Hash>(hashs: H, k: &K, l: &L, size: H::Hash) -> Self;
+    fn new<K: ?Sized + Hash, L: ?Sized + Hash>(hashs: H, k: &K, l: &L, size: impl PrimInt) -> Self;
     fn most_discriminating(&self) -> H::Hash;
 }
 pub trait MetaDataHashsBuilder<H: NodeHashs>: IndexingHashBuilder<H> {
-    fn build(&self) -> H;
+    fn build(self) -> H;
 }
 
-pub struct Builder<H: NodeHashs> {
+pub struct HashesBuilder<H: NodeHashs> {
     h0: H::Hash,
     k: H::Hash,
     l: H::Hash,
@@ -60,10 +60,13 @@ pub struct Builder<H: NodeHashs> {
     hashs: H,
 }
 
-impl<H: ComputableNodeHashs> IndexingHashBuilder<H> for Builder<H> {
-    fn new<K: ?Sized + Hash, L: ?Sized + Hash>(hashs: H, k: &K, l: &L, size: H::Hash) -> Self {
+impl<H: ComputableNodeHashs> IndexingHashBuilder<H> for HashesBuilder<H> {
+    /// use size ignoring spaces to stay consistent with other AST approaches, i.e. those not tracking spaces
+    fn new<K: ?Sized + Hash, L: ?Sized + Hash>(hashs: H, k: &K, l: &L, size: impl PrimInt) -> Self {
+        // TODO redo a better builder
         let k = H::prepare(k);
         let l = H::prepare(l);
+        let size = H::prepare(&size.to_usize().unwrap());
         let h0 = hashs.compute(&Default::default(), k, l, size);
         Self {
             h0,
@@ -79,30 +82,8 @@ impl<H: ComputableNodeHashs> IndexingHashBuilder<H> for Builder<H> {
     }
 }
 
-// impl SyntaxNodeHashs<u32> {
-//     pub fn most_discriminating(
-//         hashed_kind: u32,
-//         hashed_label: u32,
-//         hashs: SyntaxNodeHashs<u32>,
-//         size: u32,
-//     ) -> u32 {
-//         inner_node_hash(hashed_kind, hashed_label, size, hashs.label)
-//     }
-//     pub fn with_most_disriminating(
-//         hashed_kind: u32,
-//         hashed_label: u32,
-//         hashs: SyntaxNodeHashs<u32>,
-//         size: u32,
-//         hsyntax: u32,
-//     ) -> SyntaxNodeHashs<u32> {
-//         SyntaxNodeHashs {
-//             structt: inner_node_hash(hashed_kind, 0, size, hashs.structt),
-//             label: inner_node_hash(hashed_kind, hashed_label, size, hashs.label),
-//             syntax: hsyntax,
-//         }
-//     }
-// }
-
+/// TODO use some compile time macro/lib to make it ieasy to extend.
+/// Moreover, only Syntax variant is possibly mandatory anyway
 pub enum SyntaxNodeHashsKinds {
     Struct,
     Label,
@@ -178,14 +159,20 @@ impl ComputableNodeHashs for SyntaxNodeHashs<u32> {
     }
 }
 
-impl MetaDataHashsBuilder<SyntaxNodeHashs<u32>> for Builder<SyntaxNodeHashs<u32>> {
-    fn build(&self) -> SyntaxNodeHashs<u32> {
+impl MetaDataHashsBuilder<SyntaxNodeHashs<u32>> for HashesBuilder<SyntaxNodeHashs<u32>> {
+    fn build(self) -> SyntaxNodeHashs<u32> {
         type K = SyntaxNodeHashsKinds;
         SyntaxNodeHashs {
             structt: self.hashs.compute(&K::Struct, self.k, 0, self.size),
             label: self.hashs.compute(&K::Label, self.k, self.l, self.size),
             syntax: self.h0,
         }
+    }
+}
+
+impl SyntaxNodeHashs<u32> {
+    pub fn persist(self, dyn_builder: &mut impl crate::store::nodes::EntityBuilder) {
+        dyn_builder.add(self);
     }
 }
 
@@ -254,7 +241,10 @@ where
     N::IdN: Copy + Eq,
 {
     type ChildIdx = u16;
-    type Children<'a> = MySlice<N::IdN> where Self: 'a;
+    type Children<'a>
+        = MySlice<N::IdN>
+    where
+        Self: 'a;
 
     fn child_count(&self) -> u16 {
         self.node.child_count()
@@ -350,6 +340,7 @@ static LEAVE: u32 = {
 };
 static BASE: &u32 = &33u32;
 
+/// hash from GumtreeDiff
 pub fn inner_node_hash(kind: u32, label: u32, size: u32, middle_hash: u32) -> u32 {
     let mut left = 1u32;
     left = 31 * left + kind;

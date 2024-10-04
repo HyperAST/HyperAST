@@ -14,10 +14,9 @@ use hyper_ast::{
     store::{
         nodes::{
             legion::{
-                compo::{self, NoSpacesCS, CS},
-                HashedNodeRef, NodeIdentifier, PendingInsert,
+                compo::{self, NoSpacesCS, CS}, eq_node, HashedNodeRef, NodeIdentifier, PendingInsert
             },
-            DefaultNodeStore as NodeStore,
+            DefaultNodeStore as NodeStore, EntityBuilder,
         },
         SimpleStores,
     },
@@ -393,8 +392,8 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
             .to_u16()
             .expect("too many newlines");
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
-        let hbuilder: hashed::Builder<SyntaxNodeHashs<u32>> =
-            hashed::Builder::new(Default::default(), &Type::Spaces, &spacing, 1);
+        let hbuilder: hashed::HashesBuilder<SyntaxNodeHashs<u32>> =
+            hashed::HashesBuilder::new(Default::default(), &Type::Spaces, &spacing, 1);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
@@ -522,36 +521,6 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
     }
 }
 
-pub fn eq_node<'a, K>(
-    kind: &'a K,
-    label_id: Option<&'a LabelIdentifier>,
-    children: &'a [NodeIdentifier],
-) -> impl Fn(EntryRef) -> bool + 'a
-where
-    K: 'static + Eq + std::hash::Hash + Copy + std::marker::Send + std::marker::Sync,
-{
-    move |x: EntryRef| {
-        let t = x.get_component::<K>();
-        if t != Ok(kind) {
-            return false;
-        }
-        let l = x.get_component::<LabelIdentifier>().ok();
-        if l != label_id {
-            return false;
-        } else {
-            let cs = x.get_component::<CS<legion::Entity>>();
-            let r = match cs {
-                Ok(CS(cs)) => cs.as_ref() == children,
-                Err(_) => children.is_empty(),
-            };
-            if !r {
-                return false;
-            }
-        }
-        true
-    }
-}
-
 impl<'stores, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> TreeGen
     for CppTreeGen<'stores, 'cache, TS>
 {
@@ -574,7 +543,7 @@ impl<'stores, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeId
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
         let size_no_spaces = acc.metrics.size_no_spaces + 1;
-        let hbuilder = hashed::Builder::new(hashs, &interned_kind, &label, size_no_spaces);
+        let hbuilder = hashed::HashesBuilder::new(hashs, &interned_kind, &label, size_no_spaces);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 

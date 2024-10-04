@@ -293,8 +293,8 @@ impl<'a, TS: XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>>> XmlTr
             .to_u16()
             .expect("too many newlines");
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
-        let hbuilder: hashed::Builder<SyntaxNodeHashs<u32>> =
-            hashed::Builder::new(Default::default(), &Type::Spaces, &spacing, 1);
+        let hbuilder: hashed::HashesBuilder<SyntaxNodeHashs<u32>> =
+            hashed::HashesBuilder::new(Default::default(), &Type::Spaces, &spacing, 1);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
@@ -459,7 +459,7 @@ impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
         let size_no_spaces = acc.metrics.size_no_spaces + 1;
-        let hbuilder = hashed::Builder::new(hashs, &acc.simple.kind, &label, size_no_spaces);
+        let hbuilder = hashed::HashesBuilder::new(hashs, &acc.simple.kind, &label, size_no_spaces);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 

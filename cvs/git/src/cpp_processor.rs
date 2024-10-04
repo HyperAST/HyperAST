@@ -1,20 +1,3 @@
-use std::{iter::Peekable, path::Components};
-
-use git2::{Oid, Repository};
-use hyper_ast::{
-    hashed::SyntaxNodeHashs,
-    store::{
-        defaults::{LabelIdentifier, NodeIdentifier},
-        nodes::legion::PendingInsert,
-    },
-    types::LabelStore,
-};
-use hyper_ast_gen_ts_cpp::{
-    legion::{self as cpp_gen, eq_node},
-    types::Type,
-};
-use tuples::CombinConcat;
-
 use crate::{
     cpp::CppAcc,
     git::BasicGitObject,
@@ -23,6 +6,10 @@ use crate::{
     processing::{erased::CommitProcExt, CacheHolding, InFiles, ObjectName},
     Processor, SimpleStores,
 };
+use git2::{Oid, Repository};
+use hyper_ast::{store::nodes::legion::eq_node, types::LabelStore};
+use hyper_ast_gen_ts_cpp::{legion as cpp_gen, types::Type};
+use std::{iter::Peekable, path::Components};
 
 pub(crate) fn prepare_dir_exploration(tree: git2::Tree) -> Vec<BasicGitObject> {
     tree.iter()
@@ -63,8 +50,6 @@ impl<'repo, 'b, 'd, 'c, Acc: From<String>> CppProcessor<'repo, 'b, 'd, 'c, Acc> 
     }
 }
 
-type Caches = <crate::processing::file_sys::Cpp as crate::processing::CachesHolding>::Caches;
-
 impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, CppAcc> {
     fn pre(&mut self, current_object: BasicGitObject) {
         match current_object {
@@ -90,7 +75,7 @@ impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, Cp
     }
     fn post(&mut self, oid: Oid, acc: CppAcc) -> Option<(cpp_gen::Local, IsSkippedAna)> {
         let skiped_ana = true;
-        let name = acc.name.clone();
+        let name = acc.primary.name.clone();
         let key = (oid, name.as_bytes().into());
         let full_node = make(acc, self.prepro.main_stores_mut());
         self.prepro
@@ -105,9 +90,9 @@ impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, Cp
         } else {
             let w = &mut self.stack.last_mut().unwrap().2;
             assert!(
-                !w.children_names.contains(&name),
+                !w.primary.children_names.contains(&name),
                 "{:?} {:?}",
-                w.children_names,
+                w.primary.children_names,
                 name
             );
             w.push(name, full_node.clone(), skiped_ana);
@@ -138,7 +123,7 @@ impl<'repo, 'prepro, 'd, 'c> CppProcessor<'repo, 'prepro, 'd, 'c, CppAcc> {
             // let skiped_ana = *skiped_ana;
             let w = &mut self.stack.last_mut().unwrap().2;
             let name = self.prepro.intern_object_name(&name);
-            assert!(!w.children_names.contains(&name));
+            assert!(!w.primary.children_names.contains(&name));
             hyper_ast::tree_gen::Accumulator::push(w, (name, full_node));
             // w.push(name, full_node, skiped_ana);
         } else {
@@ -187,20 +172,12 @@ impl crate::processing::erased::Parametrized for CppProcessorHolder {
     }
 }
 impl crate::processing::erased::CommitProc for CppProc {
-    fn process_root_tree(
-        &mut self,
-        repository: &git2::Repository,
-        tree_oid: &git2::Oid,
-    ) -> hyper_ast::store::defaults::NodeIdentifier {
-        todo!()
-    }
-
     fn prepare_processing(
         &self,
-        repository: &git2::Repository,
-        tree_oid: crate::preprocessed::CommitBuilder,
+        _repository: &git2::Repository,
+        _builder: crate::preprocessed::CommitBuilder,
     ) -> Box<dyn crate::processing::erased::PreparedCommitProc> {
-        todo!()
+        unimplemented!("required for processing cpp at the root of a project")
     }
 
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
@@ -291,7 +268,7 @@ impl RepositoryProcessor {
     ) -> Result<(), crate::ParseErr> {
         let (full_node, skiped_ana) = self.handle_cpp_blob(oid, name, repository, parameters)?;
         let name = self.intern_object_name(name);
-        assert!(!parent.children_names.contains(&name));
+        assert!(!parent.primary.children_names.contains(&name));
 
         parent.push(name, full_node, skiped_ana);
         Ok(())
@@ -308,7 +285,7 @@ impl RepositoryProcessor {
         let name = self.intern_object_name(name);
         // assert!(!parent_acc.children_names.contains(&name));
         // parent_acc.push_pom(name, x);
-        assert!(!parent.children_names.contains(&name));
+        assert!(!parent.primary.children_names.contains(&name));
 
         parent.push_source_file(name, full_node, skiped_ana);
         Ok(())
@@ -343,41 +320,27 @@ impl RepositoryProcessor {
 }
 
 fn make(acc: CppAcc, stores: &mut SimpleStores) -> cpp_gen::Local {
-    use hyper_ast::{
-        hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder},
-        tree_gen::SubTreeMetrics,
-    };
+    use hyper_ast::hashed::{IndexingHashBuilder, MetaDataHashsBuilder};
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
+    let interned_kind = Type::Directory;
+    let label_id = label_store.get_or_insert(acc.primary.name.clone());
 
-    let hashs = acc.metrics.hashs;
-    let size = acc.metrics.size + 1;
-    let height = acc.metrics.height + 1;
-    let size_no_spaces = acc.metrics.size_no_spaces + 1;
-    let hbuilder = hashed::Builder::new(hashs, &Type::Directory, &acc.name, size_no_spaces);
-    let hashable = &hbuilder.most_discriminating();
-    let label_id = label_store.get_or_insert(acc.name.clone());
-
-    let eq = eq_node(&Type::Directory, Some(&label_id), &acc.children);
-
+    let primary = acc
+        .primary
+        .map_metrics(|m| m.finalize(&interned_kind, &label_id, 0));
+    let hashable = primary.metrics.hashs.most_discriminating();
+    let eq = eq_node(&Type::Directory, Some(&label_id), &primary.children);
     let insertion = node_store.prepare_insertion(&hashable, eq);
 
-    let compute_md = || {
-        let hashs = hbuilder.build();
-
-        let metrics = SubTreeMetrics {
-            size,
-            height,
-            size_no_spaces,
-            hashs,
-            line_count: 0,
-        };
-
-        (None, metrics)
-    };
-
     if let Some(id) = insertion.occupied_id() {
-        let (ana, metrics) = compute_md();
+        // NOTE this cituation should not happen often, due to cache based on oids, so there is no point caching md.
+        // If git objects are changed but ignored, then it goes through this branch.
+        // TODO bench
+        // TODO in the oid cache the values could be NodeIdentifiers, then current cache would be used with an indirection.
+
+        let metrics = primary.metrics.map_hashs(|h| h.build());
+        let ana = None;
         return cpp_gen::Local {
             compressed_node: id,
             metrics,
@@ -385,19 +348,21 @@ fn make(acc: CppAcc, stores: &mut SimpleStores) -> cpp_gen::Local {
         };
     }
 
-    let (ana, metrics) = compute_md();
-    let hashs = hbuilder.build();
-    let node_id = compress(
-        insertion,
-        label_id,
-        acc.children,
-        acc.children_names,
-        size,
-        height,
-        size_no_spaces,
-        hashs,
-        true,
-        &Default::default(),
+    let mut dyn_builder = hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+
+    let ana = None;
+
+    let children_is_empty = primary.children.is_empty();
+
+    let metrics = primary.persist(&mut dyn_builder, interned_kind, label_id);
+    let metrics = metrics.map_hashs(|h| h.build());
+    let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
+    hashs.persist(&mut dyn_builder);
+
+    let vacant = insertion.vacant();
+    let node_id = hyper_ast::store::nodes::legion::NodeStore::insert_built_after_prepare(
+        vacant,
+        dyn_builder.build(),
     );
 
     let full_node = cpp_gen::Local {
@@ -406,168 +371,4 @@ fn make(acc: CppAcc, stores: &mut SimpleStores) -> cpp_gen::Local {
         ana,
     };
     full_node
-}
-
-fn compress(
-    insertion: PendingInsert,
-    label_id: LabelIdentifier,
-    children: Vec<NodeIdentifier>,
-    children_names: Vec<LabelIdentifier>,
-    size: u32,
-    height: u32,
-    size_no_spaces: u32,
-    hashs: SyntaxNodeHashs<u32>,
-    skiped_ana: bool,
-    ana: &cpp_gen::PartialAnalysis,
-) -> NodeIdentifier {
-    use hyper_ast::{
-        filter::BloomSize,
-        store::nodes::legion::{compo, compo::CS, NodeStore},
-    };
-    let vacant = insertion.vacant();
-    macro_rules! insert {
-        ( $c0:expr, $($c:expr),* $(,)? ) => {{
-            let c = $c0;
-            $(
-                let c = c.concat($c);
-            )*
-            NodeStore::insert_after_prepare(vacant, c)
-        }};
-    }
-    match children.len() {
-        0 => insert!((Type::Directory, label_id, hashs, BloomSize::None),),
-        _ => {
-            assert_eq!(children_names.len(), children.len());
-            let c = (
-                Type::Directory,
-                label_id,
-                compo::Size(size),
-                compo::Height(height),
-                compo::SizeNoSpaces(size_no_spaces),
-                hashs,
-                CS(children_names.into_boxed_slice()),
-                CS(children.into_boxed_slice()),
-            );
-            insert!(c, (BloomSize::Much,))
-        }
-    }
-}
-
-// TODO try to separate processing from caching from git
-#[cfg(test)]
-#[allow(unused)]
-mod experiments {
-    use crate::{
-        git::{NamedObject, ObjectType, TypedObject, UniqueObject},
-        processing::InFiles,
-        Accumulator,
-    };
-
-    use super::*;
-
-    pub(crate) struct GitProcessorMiddleWare<'repo, 'prepro, 'd, 'c> {
-        repository: &'repo Repository,
-        prepro: &'prepro mut RepositoryProcessor,
-        dir_path: &'d mut Peekable<Components<'c>>,
-    }
-
-    impl<'repo, 'b, 'd, 'c> GitProcessorMiddleWare<'repo, 'b, 'd, 'c> {
-        pub(crate) fn prepare_dir_exploration<It>(&self, current_object: It::Item) -> Vec<It::Item>
-        where
-            It: Iterator,
-            It::Item: NamedObject + UniqueObject<Id = Oid>,
-        {
-            let tree = self.repository.find_tree(*current_object.id()).unwrap();
-            tree.iter()
-                .rev()
-                .map(|_| todo!())
-                // .filter_map(|x| x.ok())
-                .collect()
-        }
-    }
-
-    impl<'repo, 'b, 'd, 'c> CppProcessor<'repo, 'b, 'd, 'c, CppAcc> {
-        pub(crate) fn prepare_dir_exploration<T>(&self, current_object: &T) -> Vec<T>
-        where
-            T: NamedObject + UniqueObject<Id = git2::Oid>,
-        {
-            let tree = self.repository.find_tree(*current_object.id()).unwrap();
-            todo!()
-        }
-        pub(crate) fn stack(
-            &mut self,
-            current_object: BasicGitObject,
-            prepared: Vec<BasicGitObject>,
-            acc: CppAcc,
-        ) {
-            let tree = self.repository.find_tree(*current_object.id()).unwrap();
-            self.stack.push((*current_object.id(), prepared, acc));
-        }
-        pub(crate) fn help_handle_cpp_file(&mut self, current_object: BasicGitObject) {
-            self.prepro
-                .help_handle_cpp_file(
-                    *current_object.id(),
-                    &mut self.stack.last_mut().unwrap().2,
-                    current_object.name(),
-                    self.repository,
-                    *self.parameters,
-                )
-                .unwrap();
-        }
-        fn pre(
-            &mut self,
-            current_object: BasicGitObject,
-            already: Option<<CppAcc as Accumulator>::Unlabeled>,
-        ) -> Option<<CppAcc as Accumulator>::Unlabeled> {
-            match current_object.r#type() {
-                ObjectType::Dir => {
-                    if let Some(already) = already {
-                        let full_node = already.clone();
-                        return Some(full_node);
-                    }
-                    log::info!("tree {:?}", current_object.name().try_str());
-                    let prepared: Vec<BasicGitObject> =
-                        self.prepare_dir_exploration(&current_object);
-                    let acc = CppAcc::new(current_object.name().try_into().unwrap());
-                    self.stack(current_object, prepared, acc);
-                    None
-                }
-                ObjectType::File => {
-                    if crate::processing::file_sys::Cpp::matches(current_object.name()) {
-                        self.help_handle_cpp_file(current_object)
-                    } else {
-                        log::debug!("not cpp source file {:?}", current_object.name().try_str());
-                    }
-                    None
-                }
-            }
-        }
-        fn post(&mut self, oid: Oid, acc: CppAcc) -> Option<(cpp_gen::Local, IsSkippedAna)> {
-            let skiped_ana = true;
-            let name = &acc.name;
-            let key = (oid, name.as_bytes().into());
-            let name = self.prepro.intern_label(name);
-            let full_node = make(acc, self.prepro.main_stores_mut());
-            let full_node = (full_node, skiped_ana);
-            self.prepro
-                .processing_systems
-                .mut_or_default::<CppProcessorHolder>()
-                .get_caches_mut()
-                .object_map
-                .insert(key, full_node.clone());
-            if self.stack.is_empty() {
-                Some(full_node)
-            } else {
-                let w = &mut self.stack.last_mut().unwrap().2;
-                assert!(
-                    !w.children_names.contains(&name),
-                    "{:?} {:?}",
-                    w.children_names,
-                    name
-                );
-                hyper_ast::tree_gen::Accumulator::push(w, (name, full_node));
-                None
-            }
-        }
-    }
 }

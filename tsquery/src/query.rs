@@ -2267,6 +2267,7 @@ mod exp_union {
     use super::*;
 
     #[repr(u8)]
+    #[allow(non_camel_case_types)]
     pub(crate) enum Flags {
         is_named = 1,
         is_immediate = 1 << 1,

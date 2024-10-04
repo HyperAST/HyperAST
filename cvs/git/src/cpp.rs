@@ -1,5 +1,5 @@
 use crate::{
-    preprocessed::IsSkippedAna, processing::ObjectName, Accumulator, TStore,
+    preprocessed::IsSkippedAna, processing::ObjectName, Accumulator, BasicDirAcc, TStore,
     PROPAGATE_ERROR_ON_BAD_CST_NODE,
 };
 
@@ -32,20 +32,14 @@ pub(crate) fn handle_cpp_file<'stores, 'cache, 'b: 'stores>(
 }
 
 pub struct CppAcc {
-    pub(crate) name: String,
-    pub(crate) children: Vec<NodeIdentifier>,
-    pub(crate) children_names: Vec<LabelIdentifier>,
-    pub(crate) metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
+    pub(crate) primary:
+        BasicDirAcc<NodeIdentifier, LabelIdentifier, SubTreeMetrics<SyntaxNodeHashs<u32>>>,
 }
 
 impl CppAcc {
     pub(crate) fn new(name: String) -> Self {
         Self {
-            name,
-            children_names: Default::default(),
-            children: Default::default(),
-            // simple: BasicAccumulator::new(kind),
-            metrics: Default::default(),
+            primary: BasicDirAcc::new(name),
         }
     }
 }
@@ -90,18 +84,16 @@ impl CppAcc {
         full_node: cpp_tree_gen::Local,
         skiped_ana: bool,
     ) {
-        self.children.push(full_node.compressed_node);
-        self.children_names.push(name);
-        self.metrics.acc(full_node.metrics);
+        self.primary
+            .push(name, full_node.compressed_node, full_node.metrics);
     }
 }
 
 impl hyper_ast::tree_gen::Accumulator for CppAcc {
     type Node = (LabelIdentifier, (cpp_tree_gen::Local, IsSkippedAna));
     fn push(&mut self, (name, (full_node, skiped_ana)): Self::Node) {
-        self.children.push(full_node.compressed_node);
-        self.children_names.push(name);
-        self.metrics.acc(full_node.metrics);
+        self.primary
+            .push(name, full_node.compressed_node, full_node.metrics);
     }
 }
 

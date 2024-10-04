@@ -15,7 +15,7 @@ use hyper_ast::{
                 compo::{self, NoSpacesCS, CS},
                 HashedNodeRef, NodeIdentifier,
             },
-            DefaultNodeStore as NodeStore,
+            DefaultNodeStore as NodeStore, EntityBuilder,
         },
         SimpleStores,
     },
@@ -320,8 +320,8 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
             .to_u16()
             .expect("too many newlines");
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
-        let hbuilder: hashed::Builder<SyntaxNodeHashs<u32>> =
-            hashed::Builder::new(Default::default(), &Type::Spaces, &spacing, 1);
+        let hbuilder: hashed::HashesBuilder<SyntaxNodeHashs<u32>> =
+            hashed::HashesBuilder::new(Default::default(), &Type::Spaces, &spacing, 1);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
@@ -485,7 +485,7 @@ impl<
         let height = acc.metrics.height + 1;
         let line_count = acc.metrics.line_count;
         let size_no_spaces = acc.metrics.size_no_spaces + 1;
-        let hbuilder = hashed::Builder::new(hashs, &interned_kind, &label, size_no_spaces);
+        let hbuilder = hashed::HashesBuilder::new(hashs, &interned_kind, &label, size_no_spaces);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
@@ -634,7 +634,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
         let size_no_spaces = acc.metrics.size_no_spaces + 1;
 
         let label = l.map(|l| label_store.resolve(&l));
-        let hbuilder = hashed::Builder::new(hashs, &interned_kind, &label, size_no_spaces);
+        let hbuilder = hashed::HashesBuilder::new(hashs, &interned_kind, &label, size_no_spaces);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 

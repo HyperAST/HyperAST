@@ -237,6 +237,7 @@ impl RepositoryProcessor {
         .collect()
     }
 }
+
 #[cfg(feature = "maven_java")]
 impl PreProcessedRepository {
     /// If `before` and `after` are unrelated then only one commit will be processed.
@@ -895,16 +896,6 @@ impl<'cache, Sys> CachingBlobWrapper2<'cache, Sys> {
     ) -> Result<<Sys::Caches as crate::processing::ObjectMapper>::V, E>
     where
         for<'a> &'a N: TryInto<&'a str>,
-        // T: crate::processing::erased_processor_collection::CommitProcExt,
-        // T::Holder: 'static + crate::processing::erased_processor_collection::ErasableProcessor + Default + Send + Sync,
-        // T: crate::processing::CachesHolder,
-        // T::Caches: 'static + crate::processing::ObjectMapper<K = Oid> + Send + Sync + Default,
-
-        // Sys::Holder: 'static + crate::processing::erased::ErasableProcessor + Default + Send + Sync,
-        // Sys::Holder: crate::processing::CacheHolding<Sys::Caches>,
-        // Sys: crate::processing::CachesHolding,
-        // Sys::Caches: 'static + crate::processing::ObjectMapper<K = Oid> + Send + Sync + Default,
-        // <Sys::Caches as crate::processing::ObjectMapper>::V: Clone,
         Sys: crate::processing::CachesHolding,
         Sys::Caches: 'static + crate::processing::ObjectMapper<K = Oid> + Send + Sync + Default,
         <Sys::Caches as crate::processing::ObjectMapper>::V: Clone,
@@ -914,13 +905,11 @@ impl<'cache, Sys> CachingBlobWrapper2<'cache, Sys> {
             crate::processing::CacheHolding<Sys::Caches>,
     {
         use crate::processing::erased::ParametrizedCommitProc2;
-        // let caches = self.processors.mut_or_default::<Sys::Holder>().get_caches_mut();
         let caches = self.processors.mut_or_default::<T::Holder>();
         let caches = caches.with_parameters_mut(parameters.0);
         let caches = caches.get_caches_mut();
         use crate::processing::ObjectMapper;
         if let Some(already) = caches.get(&oid) {
-            //.object_map_pom.get(&oid) {
             // TODO reinit already computed node for post order
             let full_node = already.clone();
             return Ok(full_node);
@@ -963,9 +952,6 @@ impl<'cache, Sys> CachingBlobWrapper2<'cache, Sys> {
     ) -> Result<<Sys::Caches as crate::processing::ObjectMapper>::V, E>
     where
         for<'a> &'a N: TryInto<&'a str>,
-        // Sys::Holder: 'static + crate::processing::erased_processor_collection::ErasableProcessor + Default + Send + Sync,
-        // Sys::Holder: crate::processing::erased_processor_collection::ParametrizedCommitProc2,
-        // <Sys::Holder as crate::processing::erased_processor_collection::ParametrizedCommitProc2>::Proc: crate::processing::CacheHolding<Sys::Caches>,
         Sys: crate::processing::CachesHolding,
         Sys::Caches:
             'static + crate::processing::ObjectMapper<K = (Oid, N)> + Send + Sync + Default,
@@ -976,13 +962,11 @@ impl<'cache, Sys> CachingBlobWrapper2<'cache, Sys> {
             crate::processing::CacheHolding<Sys::Caches>,
     {
         use crate::processing::erased::ParametrizedCommitProc2;
-        // let caches = self.processors.mut_or_default::<Sys::Holder>();
         let caches = self.processors.mut_or_default::<T::Holder>();
         let caches = caches.with_parameters_mut(parameters.0);
         let caches = caches.get_caches_mut();
         use crate::processing::ObjectMapper;
         if let Some(already) = caches.get(&(oid, name.clone())) {
-            //.object_map_pom.get(&oid) {
             // TODO reinit already computed node for post order
             let full_node = already.clone();
             return Ok(full_node);
