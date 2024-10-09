@@ -2,6 +2,8 @@ pub mod boxed_components;
 pub mod fetched;
 #[cfg(feature = "hecs")]
 pub mod hecs;
+#[cfg(feature = "bevy_ecs")]
+pub mod bevy_ecs;
 #[cfg(feature = "legion")]
 pub mod legion;
 

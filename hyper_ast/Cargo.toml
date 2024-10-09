@@ -31,8 +31,11 @@ getrandom = { version = "^0.2.7" }
 indexmap = "2.2.6" # https://github.com/tkaitchuck/aHash/issues/95#issuecomment-903560879
 
 hecs = { version = "0.10.5", features = [], optional = true }
+bevy_ecs = { version = "0.14.2", default-features = false, optional = true }
 
 ref-cast = "1.0" # help with transparent unit structs, it makes proper layout assertions
+
+frunk = { version = "0.4.3", optional = true }
 
 [dev-dependencies]
 env_logger = "0.11.3"
@@ -47,6 +50,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 default = ["jemalloc", "legion", "hecs", "native"]
 legion = ["dep:legion"]
 hecs = ["dep:hecs"]
+bevy_ecs = ["dep:bevy_ecs", "dep:frunk"]
 web = ["getrandom/js", "dep:string-interner", "dep:hashbrown"]
 native = ["dep:string-interner", "dep:hashbrown", "hashbrown?/ahash"]
 jemalloc = ["jemallocator", "jemalloc-ctl"]
