@@ -37,7 +37,7 @@ macro_rules! role_impl {
                 }
             }
         }
-        
+
         impl Display for Role {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.write_str(match self {
@@ -630,12 +630,7 @@ pub trait WithRoles: WithChildren {
 }
 
 pub trait WithPrecompQueries {
-    fn wont_match_given_precomputed_queries<
-        // U: num::PrimInt + std::marker::Send + std::marker::Sync + 'static,
-    >(
-        &self,
-        needed: u16,
-    ) -> bool;
+    fn wont_match_given_precomputed_queries(&self, needed: u16) -> bool;
 }
 
 pub trait WithChildrenSameLang: WithChildren {
@@ -675,7 +670,10 @@ pub trait Children<IdX, T>: std::ops::Index<IdX, Output = T> + IterableChildren<
 // }
 
 impl<T> IterableChildren<T> for [T] {
-    type ChildrenIter<'a> = core::slice::Iter<'a, T> where T: 'a;
+    type ChildrenIter<'a>
+        = core::slice::Iter<'a, T>
+    where
+        T: 'a;
 
     fn iter_children(&self) -> Self::ChildrenIter<'_> {
         <[T]>::iter(&self)
@@ -778,7 +776,10 @@ impl<T: Debug> Default for &MySlice<T> {
 }
 
 impl<T> IterableChildren<T> for MySlice<T> {
-    type ChildrenIter<'a> = core::slice::Iter<'a, T> where T: 'a;
+    type ChildrenIter<'a>
+        = core::slice::Iter<'a, T>
+    where
+        T: 'a;
 
     fn iter_children(&self) -> Self::ChildrenIter<'_> {
         <[T]>::iter(&self.0)
@@ -1067,13 +1068,249 @@ pub trait TypeStore<T> {
         + std::hash::Hash
         + Copy
         + std::marker::Send
-        + std::marker::Sync;
-    fn resolve_type(&self, n: &T) -> Self::Ty;
-    fn resolve_lang(&self, n: &T) -> LangWrapper<Self::Ty>;
-    fn type_eq(&self, n: &T, m: &T) -> bool;
+        + std::marker::Sync
+        + Compo;
+    // fn resolve_type(&self, n: &T) -> Self::Ty;
+    // fn resolve_lang(&self, n: &T) -> LangWrapper<Self::Ty>;
+    // fn type_eq(&self, n: &T, m: &T) -> bool;
     fn type_to_u16(&self, t: Self::Ty) -> TypeInternalSize {
         t.get_lang().to_u16(t)
     }
+    fn decompress_type(&self, erazed: impl ErasedCompo, tid: std::any::TypeId) -> Self::Ty {
+        *unsafe {
+            erazed
+                .unerase_ref::<Self::Ty>(tid)
+                .unwrap_or_else(|| unimplemented!("override 'decompress_type'"))
+        }
+    }
+}
+
+pub trait LLang<T> {
+    type I;
+    type E: 'static + Copy + Display + Into<Self::I> + Into<T> + From<Self::I>;
+    const TE: &[Self::E];
+}
+
+struct LLangTest;
+
+#[derive(Clone, Copy, Display, strum_macros::EnumCount)]
+#[repr(u8)]
+enum TyTest {
+    A,
+    B,
+    C,
+}
+
+impl Into<TypeU16<LLangTest>> for TyTest {
+    fn into(self) -> TypeU16<LLangTest> {
+        TypeU16::new(self)
+    }
+}
+
+impl Into<u16> for TyTest {
+    fn into(self) -> u16 {
+        self as u8 as u16
+    }
+}
+
+impl From<u16> for TyTest {
+    fn from(value: u16) -> Self {
+        LLangTest::TE[value as usize]
+    }
+}
+
+impl LLang<TypeU16<Self>> for LLangTest {
+    type I = u16;
+
+    type E = TyTest;
+
+    const TE: &[Self::E] = &[TyTest::A, TyTest::B, TyTest::C];
+}
+
+pub trait SizedIndex<I> {
+    fn len(&self) -> I;
+}
+
+impl<T> SizedIndex<u16> for [T] {
+    fn len(&self) -> u16 {
+        self.len().to_u16().unwrap()
+    }
+}
+
+#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
+pub struct TypeU16<L: LLang<Self, I = u16>>(u16, std::marker::PhantomData<L>);
+
+impl<L: LLang<Self, I = u16>> Debug for TypeU16<L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("TypeU16").field(&self.0).field(&self.1).finish()
+    }
+}
+
+impl<L: LLang<Self, I = u16>> PartialEq for TypeU16<L> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<L: LLang<Self, I = u16>> Eq for TypeU16<L> {}
+
+impl<L: LLang<Self, I = u16>> Copy for TypeU16<L> {}
+
+impl<L: LLang<Self, I = u16>> Clone for TypeU16<L> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), self.1.clone())
+    }
+}
+
+impl<L: LLang<Self, I = u16>> Hash for TypeU16<L> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+        self.1.hash(state);
+    }
+}
+impl<L: LLang<Self, I = u16>> Display for TypeU16<L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.e())
+    }
+}
+
+impl<L: LLang<Self, I = u16>> TypeU16<L> {
+    pub fn e(&self) -> L::E {
+        debug_assert!(L::TE.len() <= u16::MAX as usize);
+        L::TE[self.0 as usize]
+    }
+    pub fn new(e: L::E) -> Self {
+        Self(e.into(), std::marker::PhantomData)
+    }
+}
+
+impl<L: LLang<Self, I = u16> + std::fmt::Debug> HyperType for TypeU16<L> {
+    fn as_shared(&self) -> Shared {
+        todo!()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        todo!()
+    }
+
+    fn as_static(&self) -> &'static dyn HyperType {
+        todo!()
+    }
+
+    fn as_static_str(&self) -> &'static str {
+        todo!()
+    }
+
+    fn generic_eq(&self, other: &dyn HyperType) -> bool
+    where
+        Self: 'static + Sized,
+    {
+        todo!()
+    }
+
+    fn is_file(&self) -> bool {
+        todo!()
+    }
+
+    fn is_directory(&self) -> bool {
+        todo!()
+    }
+
+    fn is_spaces(&self) -> bool {
+        todo!()
+    }
+
+    fn is_syntax(&self) -> bool {
+        todo!()
+    }
+
+    fn is_hidden(&self) -> bool {
+        todo!()
+    }
+
+    fn is_named(&self) -> bool {
+        todo!()
+    }
+
+    fn is_supertype(&self) -> bool {
+        todo!()
+    }
+
+    fn get_lang(&self) -> LangWrapper<Self>
+    where
+        Self: Sized,
+    {
+        todo!()
+    }
+
+    fn lang_ref(&self) -> LangWrapper<AnyType> {
+        todo!()
+    }
+}
+
+#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
+pub struct TypeU8<L: LLang<Self>>(u8, std::marker::PhantomData<L>);
+
+#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
+pub enum TypeEnumCommon<J: Lang<Self>, X: Lang<Self>, C: Lang<Self>, M: Lang<Self>> {
+    Java(u16, std::marker::PhantomData<J>),
+    Xml(u16, std::marker::PhantomData<X>),
+    C(u16, std::marker::PhantomData<C>),
+    Make(u16, std::marker::PhantomData<M>),
+}
+
+pub trait CompressedCompo<E: ErasedCompo> {
+    fn decomp(ptr: E, tid: std::any::TypeId) -> Self
+    where
+        Self: Sized;
+
+    // fn compressed_insert(self, e: &mut EntityWorldMut<'_>);
+    // fn components(world: &mut World) -> Vec<ComponentId>;
+}
+
+pub trait ErasedCompo {
+    /// made unsafe because mixed-up args could return corrupted memory for certain impls
+    unsafe fn unerase_ref<T: 'static + Compo>(&self, tid: std::any::TypeId) -> Option<&T>;
+}
+
+impl ErasedCompo for &dyn std::any::Any {
+    /// NOTE this impl is totaly safe, Any is checked internally
+    unsafe fn unerase_ref<T: 'static + Compo>(&self, tid: std::any::TypeId) -> Option<&T> {
+        if tid == std::any::TypeId::of::<T>() {
+            self.downcast_ref()
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(all(feature = "bevy_ecs", feature = "legion"))]
+pub trait Compo: bevy_ecs::component::Component + legion::storage::Component {}
+
+#[cfg(all(feature = "bevy_ecs", feature = "legion"))]
+impl<T> Compo for T where T: bevy_ecs::component::Component + legion::storage::Component {}
+
+
+#[cfg(all(not(feature = "bevy_ecs"), feature = "legion"))]
+pub trait Compo: legion::storage::Component {}
+
+#[cfg(all(not(feature = "bevy_ecs"), feature = "legion"))]
+impl<T> Compo for T where T: legion::storage::Component {}
+
+
+#[cfg(all(not(feature = "bevy_ecs"), not(feature = "legion")))]
+pub trait Compo {}
+
+#[cfg(all(not(feature = "bevy_ecs"), not(feature = "legion")))]
+impl<T> Compo for T where {}
+
+pub trait ErasedInserter {
+    fn insert<T: 'static + Compo>(&mut self, t: T);
+}
+
+pub trait CompoRegister {
+    type Id;
+    fn register_compo<T: 'static + Compo>(&mut self) -> Self::Id;
 }
 
 pub trait SpecializedTypeStore<T: Typed>: TypeStore<T> {}
@@ -1131,7 +1368,15 @@ pub trait HyperAST<'store>: HyperASTShared {
     fn resolve_type(&'store self, id: &Self::IdN) -> <Self::TS as TypeStore<Self::T>>::Ty {
         let ns = self.node_store();
         let n = ns.resolve(id);
-        self.type_store().resolve_type(&n).clone()
+        // self.type_store().resolve_type(&n).clone()
+        todo!()
+    }
+    // fn resolve_type(&self, n: &T) -> Self::Ty {todo!()}
+    fn resolve_lang(&self, n: &Self::T) -> LangWrapper<<Self::TS as TypeStore<Self::T>>::Ty> {
+        todo!()
+    }
+    fn type_eq(&self, n: &Self::T, m: &Self::T) -> bool {
+        todo!()
     }
 }
 
@@ -1170,7 +1415,8 @@ pub trait HyperASTLean: HyperASTShared {
     {
         let ns = self.node_store();
         let n = ns.resolve(id);
-        self.type_store().resolve_type(&n).clone()
+        todo!()
+        // self.type_store().resolve_type(&n).clone()
     }
 }
 
@@ -1202,7 +1448,8 @@ pub trait HyperASTAsso: HyperASTShared {
     fn resolve_type(&self, id: &Self::IdN) -> <Self::TS<'_> as TypeStore<Self::T<'_>>>::Ty {
         let ns = self.node_store();
         let n = ns.resolve(id);
-        self.type_store().resolve_type(&n).clone()
+        todo!()
+        // self.type_store().resolve_type(&n).clone()
     }
 }
 
@@ -1314,7 +1561,8 @@ where
     T::TreeId: NodeId<IdN = T::TreeId>,
     NS: NodeStore<T::TreeId>,
 {
-    type R<'a> = NS::R<'a>
+    type R<'a>
+        = NS::R<'a>
     where
         Self: 'a;
 
@@ -1360,24 +1608,25 @@ where
 
 impl<'store, T, TS, NS, LS> TypeStore<T> for SimpleHyperAST<T, TS, NS, LS>
 where
-    T: TypedTree,
+    T: TypedTree<Type = TS::Ty>,
     T::TreeId: NodeId<IdN = T::TreeId>,
-    T::Type: 'static + std::hash::Hash,
-    TS: TypeStore<T, Ty = T::Type>,
+    TS::Ty: 'static + std::hash::Hash,
+    TS: TypeStore<T>,
+    // TS::Ty:CompressedCompo,
 {
     type Ty = TS::Ty;
 
-    fn resolve_lang(&self, n: &T) -> LangWrapper<Self::Ty> {
-        self.type_store.resolve_lang(n)
-    }
+    // fn resolve_lang(&self, n: &T) -> LangWrapper<Self::Ty> {
+    //     self.type_store.resolve_lang(n)
+    // }
 
-    fn type_eq(&self, n: &T, m: &T) -> bool {
-        self.type_store.type_eq(n, m)
-    }
-    
-    fn resolve_type(&self, n: &T) -> Self::Ty {
-        self.type_store.resolve_type(n)
-    }
+    // fn type_eq(&self, n: &T, m: &T) -> bool {
+    //     self.type_store.type_eq(n, m)
+    // }
+
+    // fn resolve_type(&self, n: &T) -> Self::Ty {
+    //     self.type_store.resolve_type(n)
+    // }
 }
 
 pub struct TypeIndex {
@@ -1433,9 +1682,15 @@ where
     for<'s> NS: 's + NodeStore<T::TreeId, R<'s> = T>,
     LS: LabelStore<str, I = T::Label>,
 {
-    type T<'s> = T where Self:'s;
+    type T<'s>
+        = T
+    where
+        Self: 's;
 
-    type NS<'s> = NS where Self:'s;
+    type NS<'s>
+        = NS
+    where
+        Self: 's;
 
     fn node_store(&self) -> &Self::NS<'_> {
         &self.node_store
@@ -1447,7 +1702,10 @@ where
         &self.label_store
     }
 
-    type TS<'s> = TS where Self:'s;
+    type TS<'s>
+        = TS
+    where
+        Self: 's;
 
     fn type_store(&self) -> &Self::TS<'_> {
         &self.type_store
@@ -1455,6 +1713,7 @@ where
 }
 
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
 pub struct AnyType(&'static dyn HyperType);
 
 unsafe impl Send for AnyType {}

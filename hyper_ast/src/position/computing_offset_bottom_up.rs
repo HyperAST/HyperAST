@@ -66,7 +66,7 @@ where
             })
             .sum()
     };
-    if stores.type_store().resolve_type(&b).is_file() {
+    if stores.resolve_type(&p).is_file() {
         let mut r = extract_file_postion(stores, parents);
         r.inc_offset(c);
         r
@@ -134,7 +134,7 @@ where
             })
             .sum()
     };
-    if stores.type_store().resolve_type(&b).is_file() {
+    if stores.resolve_type(&p).is_file() {
         let mut r = extract_file_postion_it_rec(stores, it.into());
         {
             let l = stores.label_store().resolve(b.get_label_unchecked());
@@ -195,7 +195,7 @@ where
                 .sum()
         };
         offset += c;
-        if stores.type_store().resolve_type(&b).is_file() {
+        if stores.resolve_type(&p).is_file() {
             let mut r = extract_file_postion_it(stores, it.into());
             {
                 let l = stores.label_store().resolve(b.get_label_unchecked());

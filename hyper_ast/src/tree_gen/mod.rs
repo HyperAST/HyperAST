@@ -54,6 +54,7 @@ impl<T, Id> BasicAccumulator<T, Id> {
         }
     }
 
+    #[cfg(feature = "legion")]
     pub fn add_primary<L>(
         self,
         dyn_builder: &mut impl crate::store::nodes::EntityBuilder,
@@ -130,6 +131,7 @@ impl<U> SubTreeMetrics<U> {
     }
 
     #[must_use]
+    #[cfg(feature = "legion")]
     pub fn add_md_metrics(
         self,
         dyn_builder: &mut impl crate::store::nodes::EntityBuilder,

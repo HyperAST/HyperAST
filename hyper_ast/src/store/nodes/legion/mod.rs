@@ -3,11 +3,11 @@ use std::{fmt::Debug, hash::Hash};
 use hashbrown::hash_map::DefaultHashBuilder;
 use legion::{
     storage::{Component, IntoComponentSource},
-    EntityStore,
+    EntityStore, World,
 };
 
 use crate::{
-    types::{NodeId, Typed, TypedNodeId},
+    types::{Compo, CompoRegister, ErasedCompo, ErasedInserter, NodeId, Typed, TypedNodeId},
     utils::make_hash,
 };
 
@@ -564,5 +564,30 @@ where
             }
         }
         true
+    }
+}
+
+
+impl ErasedCompo for legion::world::Entry<'_> {
+    unsafe fn unerase_ref<T: 'static + Compo>(&self, tid: std::any::TypeId) -> Option<&T> {
+        if tid == std::any::TypeId::of::<T>() {
+            self.get_component().ok()
+        } else {
+            None
+        }
+    }
+}
+
+impl ErasedInserter for legion::world::Entry<'_> {
+    fn insert<T: 'static + Compo>(&mut self, t: T) {
+        self.add_component(t);
+    }
+}
+
+impl CompoRegister for World {
+    type Id = legion::storage::ComponentTypeId;
+
+    fn register_compo<T: 'static + Compo>(&mut self) -> Self::Id {
+        legion::storage::ComponentTypeId::of::<T>()
     }
 }

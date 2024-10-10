@@ -138,10 +138,10 @@ where
         //     return 0.;
         // }
         let n1 = self.stores.node_store().resolve(r1);
-        let t1 = self.stores.type_store().resolve_type(&n1);
+        let t1 = self.stores.resolve_type(r1);
         let l1 = n1.try_get_label();
         let n2 = self.stores.node_store().resolve(r2);
-        let t2 = self.stores.type_store().resolve_type(&n2);
+        let t2 = self.stores.resolve_type(r2);
         if t1 != t2 {
             return f64::MAX;
         }
@@ -813,8 +813,9 @@ mod tests {
     use crate::decompressed_tree_store::{ShallowDecompressedTreeStore, SimpleZsTree as ZsTree};
 
     use crate::matchers::mapping_store::DefaultMappingStore;
-    use crate::tree::TStore;
-    use crate::{tests::examples::example_zs_paper, tree::simple_tree::vpair_to_stores};
+    use crate::tree::simple_tree::TStore;
+    use hyper_ast::test_utils::simple_tree::vpair_to_stores;
+    use crate::tests::examples::example_zs_paper;
 
     #[test]
     fn test_zs_paper_for_initial_layout() {

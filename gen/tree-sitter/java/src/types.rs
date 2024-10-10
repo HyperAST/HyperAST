@@ -3,7 +3,7 @@ use std::fmt::Display;
 use hyper_ast::{
     store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
-    types::{AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypedNodeId},
+    types::{AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypeU16, TypedNodeId},
 };
 
 #[cfg(feature = "legion")]
@@ -21,25 +21,25 @@ mod legion_impls {
 
     use hyper_ast::{
         store::nodes::legion::HashedNodeRef,
-        types::{LangWrapper, Typed},
+        types::{LangWrapper, TypeU16, Typed},
     };
 
     type HNRef<'a> = HashedNodeRef<'a, TIdN<NodeIdentifier>>;
 
     impl<'a> TypeStore<HNRef<'a>> for TStore {
-        type Ty = Type;
+        type Ty = TypeU16<Java>;
 
-        fn resolve_type(&self, n: &HNRef<'a>) -> Self::Ty {
-            n.get_type()
-        }
+        // fn resolve_type(&self, n: &HNRef<'a>) -> Self::Ty {
+        //     n.get_type()
+        // }
 
-        fn resolve_lang(&self, n: &HNRef<'a>) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            todo!("{:?}", n)
-        }
+        // fn resolve_lang(&self, n: &HNRef<'a>) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        //     todo!("{:?}", n)
+        // }
 
-        fn type_eq(&self, n: &HNRef<'a>, m: &HNRef<'a>) -> bool {
-            n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
-        }
+        // fn type_eq(&self, n: &HNRef<'a>, m: &HNRef<'a>) -> bool {
+        //     n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
+        // }
     }
     impl<'a> RoleStore<HNRef<'a>> for TStore {
         type IdF = u16;
@@ -63,51 +63,51 @@ mod legion_impls {
         }
     }
     impl<'a, R> TypeStore<R> for &TStore {
-        type Ty = Type;
+        type Ty = TypeU16<Java>;
 
-        fn resolve_type(&self, _n: &R) -> Self::Ty {
-            todo!()
-        }
+        // fn resolve_type(&self, _n: &R) -> Self::Ty {
+        //     todo!()
+        // }
 
-        fn resolve_lang(&self, _n: &R) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            todo!()
-        }
+        // fn resolve_lang(&self, _n: &R) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        //     todo!()
+        // }
 
-        fn type_eq(&self, _n: &R, _m: &R) -> bool {
-            todo!()
-        }
+        // fn type_eq(&self, _n: &R, _m: &R) -> bool {
+        //     todo!()
+        // }
     }
     impl<'a> JavaEnabledTypeStore<HNRef<'a>> for TStore {
         fn intern(&self, t: Type) -> Self::Ty {
-            t
+            t.into()
         }
 
         fn resolve(&self, t: Self::Ty) -> Type {
-            t
+            t.e()
         }
     }
 
     impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
         type Ty = AnyType;
 
-        fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-            let t = n.get_component::<Type>().unwrap();
-            as_any(t)
-        }
+        // fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
+        //     let t = n.get_component::<Type>().unwrap();
+        //     as_any(t)
+        // }
 
-        fn resolve_lang(
-            &self,
-            n: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            todo!("{:?}", n)
-        }
-        fn type_eq(
-            &self,
-            n: &HashedNodeRef<'a, NodeIdentifier>,
-            m: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> bool {
-            todo!("{:?} {:?}", n, m)
-        }
+        // fn resolve_lang(
+        //     &self,
+        //     n: &HashedNodeRef<'a, NodeIdentifier>,
+        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        //     todo!("{:?}", n)
+        // }
+        // fn type_eq(
+        //     &self,
+        //     n: &HashedNodeRef<'a, NodeIdentifier>,
+        //     m: &HashedNodeRef<'a, NodeIdentifier>,
+        // ) -> bool {
+        //     todo!("{:?} {:?}", n, m)
+        // }
     }
     impl<'a> RoleStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
         type IdF = u16;
@@ -188,6 +188,8 @@ type TypeInternalSize = u16;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct T(TypeInternalSize);
+
+#[derive(Debug)]
 pub struct Lang;
 pub type Java = Lang;
 
@@ -700,6 +702,34 @@ impl Display for Type {
 impl<'a> From<&'a str> for Type {
     fn from(value: &'a str) -> Self {
         Type::from_str(value).unwrap()
+    }
+}
+
+impl hyper_ast::types::LLang<TypeU16<Self>> for Java {
+    type I = u16;
+
+    type E = Type;
+
+    const TE: &[Self::E] = S_T_L;
+}
+
+pub type TType = TypeU16<Lang>;
+
+impl From<u16> for Type {
+    fn from(value: u16) -> Self {
+        debug_assert_eq!(Self::from_u16(value), S_T_L[value as usize]);
+        S_T_L[value as usize]
+    }
+}
+impl Into<TypeU16<Java>> for Type {
+    fn into(self) -> TypeU16<Java> {
+        TypeU16::new(self)
+    }
+}
+
+impl Into<u16> for Type {
+    fn into(self) -> u16 {
+        self as u8 as u16
     }
 }
 

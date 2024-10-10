@@ -1,12 +1,13 @@
 use std::ops::Deref;
 
-use crate::{MultiType, TStore};
+use crate::{TStore};
+// use crate::MultiType;
 use hyper_ast::{
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
         nodes::legion::{HashedNodeRef, NodeStore},
     },
-    types::{self, Children, MySlice, NodeId, SimpleHyperAST, TypedNodeId},
+    types::{self, AnyType, Children, MySlice, NodeId, SimpleHyperAST, TypedNodeId},
 };
 
 // pub trait NoSpaceNodeStoreContainer: types::HyperASTAsso {
@@ -400,70 +401,73 @@ impl<IdN: Clone + Eq + NodeId> NodeId for MIdN<IdN> {
 }
 
 impl<IdN: Clone + Eq + NodeId> TypedNodeId for MIdN<IdN> {
-    type Ty = MultiType;
+    type Ty = AnyType;
 }
 
 impl<'a> types::Typed for NoSpaceWrapper<'a, MIdN<NodeIdentifier>> {
-    type Type = MultiType;
+    type Type = AnyType;
 
-    fn get_type(&self) -> MultiType {
+    fn get_type(&self) -> AnyType {
+        self.inner.get_type()
+        // todo!()
         // self.inner.get_type()
 
-        if let Ok(t) = self
-            .inner
-            .get_component::<hyper_ast_gen_ts_java::types::Type>()
-        {
-            let t = *t as u16;
-            let t = <hyper_ast_gen_ts_java::types::Java as hyper_ast::types::Lang<_>>::make(t);
-            MultiType::Java(*t)
-        } else if let Ok(t) = self
-            .inner
-            .get_component::<hyper_ast_gen_ts_cpp::types::Type>()
-        {
-            let t = *t as u16;
-            let t = <hyper_ast_gen_ts_cpp::types::Cpp as hyper_ast::types::Lang<_>>::make(t);
-            MultiType::Cpp(*t)
-        } else if let Ok(t) = self
-            .inner
-            .get_component::<hyper_ast_gen_ts_xml::types::Type>()
-        {
-            let t = *t as u16;
-            let t = <hyper_ast_gen_ts_xml::types::Xml as hyper_ast::types::Lang<_>>::make(t);
-            MultiType::Xml(*t)
-        } else {
-            panic!()
-        }
+        // if let Ok(t) = self
+        //     .inner
+        //     .get_component::<hyper_ast_gen_ts_java::types::Type>()
+        // {
+        //     let t = *t as u16;
+        //     let t = <hyper_ast_gen_ts_java::types::Java as hyper_ast::types::Lang<_>>::make(t);
+        //     MultiType::Java(*t)
+        // } else if let Ok(t) = self
+        //     .inner
+        //     .get_component::<hyper_ast_gen_ts_cpp::types::Type>()
+        // {
+        //     let t = *t as u16;
+        //     let t = <hyper_ast_gen_ts_cpp::types::Cpp as hyper_ast::types::Lang<_>>::make(t);
+        //     MultiType::Cpp(*t)
+        // } else if let Ok(t) = self
+        //     .inner
+        //     .get_component::<hyper_ast_gen_ts_xml::types::Type>()
+        // {
+        //     let t = *t as u16;
+        //     let t = <hyper_ast_gen_ts_xml::types::Xml as hyper_ast::types::Lang<_>>::make(t);
+        //     MultiType::Xml(*t)
+        // } else {
+        //     panic!()
+        // }
     }
 }
 
 impl<'a> types::Typed for NoSpaceWrapper<'a, NodeIdentifier> {
-    type Type = MultiType;
+    type Type = AnyType;
 
-    fn get_type(&self) -> MultiType {
-        if let Ok(t) = self
-            .inner
-            .get_component::<hyper_ast_gen_ts_java::types::Type>()
-        {
-            let t = *t as u16;
-            let t = <hyper_ast_gen_ts_java::types::Java as hyper_ast::types::Lang<_>>::make(t);
-            MultiType::Java(*t)
-        } else if let Ok(t) = self
-            .inner
-            .get_component::<hyper_ast_gen_ts_cpp::types::Type>()
-        {
-            let t = *t as u16;
-            let t = <hyper_ast_gen_ts_cpp::types::Cpp as hyper_ast::types::Lang<_>>::make(t);
-            MultiType::Cpp(*t)
-        } else if let Ok(t) = self
-            .inner
-            .get_component::<hyper_ast_gen_ts_xml::types::Type>()
-        {
-            let t = *t as u16;
-            let t = <hyper_ast_gen_ts_xml::types::Xml as hyper_ast::types::Lang<_>>::make(t);
-            MultiType::Xml(*t)
-        } else {
-            panic!()
-        }
+    fn get_type(&self) -> AnyType {
+        todo!()
+        // if let Ok(t) = self
+        //     .inner
+        //     .get_component::<hyper_ast_gen_ts_java::types::Type>()
+        // {
+        //     let t = *t as u16;
+        //     let t = <hyper_ast_gen_ts_java::types::Java as hyper_ast::types::Lang<_>>::make(t);
+        //     MultiType::Java(*t)
+        // } else if let Ok(t) = self
+        //     .inner
+        //     .get_component::<hyper_ast_gen_ts_cpp::types::Type>()
+        // {
+        //     let t = *t as u16;
+        //     let t = <hyper_ast_gen_ts_cpp::types::Cpp as hyper_ast::types::Lang<_>>::make(t);
+        //     MultiType::Cpp(*t)
+        // } else if let Ok(t) = self
+        //     .inner
+        //     .get_component::<hyper_ast_gen_ts_xml::types::Type>()
+        // {
+        //     let t = *t as u16;
+        //     let t = <hyper_ast_gen_ts_xml::types::Xml as hyper_ast::types::Lang<_>>::make(t);
+        //     MultiType::Xml(*t)
+        // } else {
+        //     panic!()
+        // }
     }
 }
 

@@ -313,12 +313,12 @@ where
             let (t, l) = {
                 let o = mapper.src_arena.original(a);
                 let n = mapper.hyperast.node_store().resolve(&o);
-                let t = mapper.hyperast.type_store().resolve_type(&n);
+                let t = mapper.hyperast.resolve_type(&o);
                 (t, n.try_get_label().cloned())
             };
             let o = mapper.dst_arena.original(b);
             let n = mapper.hyperast.node_store().resolve(&o);
-            let t2 = mapper.hyperast.type_store().resolve_type(&n);
+            let t2 = mapper.hyperast.resolve_type(&o);
             t == t2 && l.as_ref() == n.try_get_label()
         });
         (2 * common.len()).to_f64().unwrap() / (s1.len() + s2.len()).to_f64().unwrap()
@@ -591,7 +591,7 @@ where
                 return false;
             }
         };
-        if !stores.type_store().type_eq(&src, &dst) {
+        if !stores.type_eq(&src, &dst) {
             return false;
         }
         if dst.has_label() && src.has_label() {

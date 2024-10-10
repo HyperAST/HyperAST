@@ -77,14 +77,13 @@ where
         out: &mut std::fmt::Formatter<'_>,
     ) -> Result<(), std::fmt::Error> {
         const LABELS0: bool = false;
-        use hyper_ast::types::TypeStore;
         use types::LabelStore;
         use types::Labeled;
         use types::NodeStore;
         use types::WithChildren;
-        let b = NodeStore::resolve(self.stores.node_store(), id);
+        let b = self.stores.node_store().resolve(id);
         // let kind = (self.stores.type_store(), b);
-        let kind = self.stores.type_store().resolve_type(&b);
+        let kind = self.stores.resolve_type(&id);
         let label = b.try_get_label();
         let children = b.children();
 
@@ -144,8 +143,7 @@ where
                     write!(out, "(")?;
                     w_kind(out)?;
                     for id in it {
-                        let b = self.stores.node_store().resolve(id);
-                        let kind = self.stores.type_store().resolve_type(&b);
+                        let kind = self.stores.resolve_type(id);
                         if !kind.is_spaces() {
                             write!(out, " ")?;
                         }

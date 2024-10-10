@@ -412,7 +412,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                     .unwrap()
                     .0;
 
-                let quantifier = query_store.type_store().resolve_type(&n);
+                let quantifier = n.get_type();//query_store.resolve_type(&n);
                 assert!(cs.next().is_none());
 
                 let quantifier = match quantifier {
@@ -581,7 +581,7 @@ impl<'a, Ty, C: Converter<Ty = Ty>> PreparedMatcher<Ty, C> {
                         .try_resolve_typed::<TIdN<NodeIdentifier>>(&cs.next().unwrap())
                         .unwrap()
                         .0;
-                    let quantifier = query_store.type_store().resolve_type(&n);
+                    let quantifier = n.get_type();//query_store.resolve_type(&n);
                     assert!(cs.next().is_none());
                     let quantifier = match quantifier {
                         Type::QMark => Quant::ZeroOrOne,

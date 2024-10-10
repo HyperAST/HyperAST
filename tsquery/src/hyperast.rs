@@ -310,7 +310,7 @@ where
         let t = self.stores.resolve_type(n);
         let n = self.stores.node_store().resolve(n);
         use hyper_ast::types::LangRef;
-        let id = self.stores.type_store().resolve_lang(&n).ts_symbol(t);
+        let id = self.stores.resolve_lang(&n).ts_symbol(t);
         id.into()
     }
 

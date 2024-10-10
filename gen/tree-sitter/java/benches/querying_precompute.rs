@@ -81,7 +81,7 @@ fn prep_precomputed<'store>(
         Ok(t) => t,
         Err(t) => t,
     };
-    let full_node = java_tree_gen.generate_file(name.as_bytes(), text, tree.walk());
+    let full_node = java_tree_gen._generate_file(name.as_bytes(), text, tree.walk());
 
     (query, stores, full_node.local.compressed_node)
 }
@@ -241,7 +241,7 @@ fn compare_querying_group(c: &mut Criterion) {
                                     Ok(t) => t,
                                     Err(t) => t,
                                 };
-                            let full_node = java_tree_gen.generate_file(
+                            let full_node = java_tree_gen._generate_file(
                                 name.to_str().unwrap().as_bytes(),
                                 text.as_bytes(),
                                 tree.walk(),

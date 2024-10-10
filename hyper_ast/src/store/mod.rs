@@ -114,24 +114,24 @@ where
 
 impl<'store, T, TS, NS, LS> crate::types::TypeStore<T> for SimpleStores<TS, NS, LS>
 where
-    T: crate::types::TypedTree,
+    T: crate::types::TypedTree<Type = TS::Ty>,
     T::TreeId: crate::types::NodeId<IdN = T::TreeId>,
-    T::Type: 'static + std::hash::Hash,
-    TS: TypeStore<T, Ty = T::Type>,
+    TS::Ty: 'static + std::hash::Hash,
+    TS: TypeStore<T>,
     NS: crate::types::NodeStore<T::TreeId>,
 {
     type Ty = TS::Ty;
 
-    fn resolve_type(&self, n: &T) -> Self::Ty {
-        self.type_store.resolve_type(n)
-    }
-    fn resolve_lang(&self, n: &T) -> crate::types::LangWrapper<Self::Ty> {
-        self.type_store.resolve_lang(n)
-    }
+    // fn resolve_type(&self, n: &T) -> Self::Ty {
+    //     self.type_store.resolve_type(n)
+    // }
+    // fn resolve_lang(&self, n: &T) -> crate::types::LangWrapper<Self::Ty> {
+    //     self.type_store.resolve_lang(n)
+    // }
 
-    fn type_eq(&self, n: &T, m: &T) -> bool {
-        self.type_store.type_eq(n, m)
-    }
+    // fn type_eq(&self, n: &T, m: &T) -> bool {
+    //     self.type_store.type_eq(n, m)
+    // }
 }
 
 pub mod defaults {

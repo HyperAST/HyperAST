@@ -13,7 +13,7 @@ use egui_addon::{
 use epaint::{ahash::HashSet, Pos2};
 use hyper_ast::{
     store::nodes::fetched::NodeIdentifier,
-    types::{HyperType, Labeled, TypeStore},
+    types::{AnyType, HyperType, Labeled, TypeStore},
 };
 use poll_promise::Promise;
 
@@ -1646,10 +1646,10 @@ fn show_detached_element(
                 if options.id {
                     cui.label(format!("{:?}", id));
                 }
-                if let Some(r) = store.node_store.read().unwrap().try_resolve(*id) {
+                if let Some(r) = store.node_store.read().unwrap().try_resolve::<AnyType>(*id) {
                     use hyper_ast::types::{Tree, Typed, WithStats};
                     if options.kind {
-                        let kind = store.type_store.resolve_type(&r);
+                        let kind = store.resolve_type(id);
                         cui.label(format!("{}", kind));
                     }
                     if options.label {
@@ -1673,12 +1673,12 @@ fn show_detached_element(
                         }
                         let mut value = None;
                         let mut name = None;
-                        while let Some(r) = q.pop_front() {
+                        while let Some(r_id) = q.pop_front() {
                             if value.is_some() && name.is_some() {
                                 break;
                             }
-                            if let Some(r) = store.node_store.read().unwrap().try_resolve(r) {
-                                let t = store.type_store.resolve_type(&r);
+                            if let Some(r) = store.node_store.read().unwrap().try_resolve::<AnyType>(r_id) {
+                                let t = store.resolve_type(&r_id);
                                 // wasm_rs_dbg::dbg!(t);
                                 if t.generic_eq(&hyper_ast_gen_ts_cpp::types::Type::NumberLiteral) {
                                     if value.is_none() {
@@ -1739,14 +1739,14 @@ fn show_detached_element(
                                     .lock()
                                     .unwrap()
                                     .iter()
-                                    .any(|x| x.contains(&r))
+                                    .any(|x| x.contains(&r_id))
                                 {
                                     store
                                         .nodes_waiting
                                         .lock()
                                         .unwrap()
                                         .get_or_insert(Default::default())
-                                        .insert(r);
+                                        .insert(r_id);
                                 }
                             }
                         }

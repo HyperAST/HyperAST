@@ -258,6 +258,7 @@ struct Names(pub L);
 struct HLabel(pub u64);
 
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
+#[repr(transparent)]
 struct ByteLen(usize);
 
 impl ByteLen {

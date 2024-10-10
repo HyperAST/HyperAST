@@ -164,7 +164,7 @@ fn compare_querying_group(c: &mut Criterion) {
                                     Ok(t) => t,
                                     Err(t) => t,
                                 };
-                            let full_node = java_tree_gen.generate_file(
+                            let full_node = java_tree_gen._generate_file(
                                 name.to_str().unwrap().as_bytes(),
                                 text.as_bytes(),
                                 tree.walk(),

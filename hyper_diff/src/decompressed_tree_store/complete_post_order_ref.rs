@@ -533,15 +533,16 @@ where
 {
     pub fn position<'b, S>(&mut self, store: &'b S, c: &IdD) -> &U
     where
-        S: NodeStore<T::TreeId, R<'b> = T> + TypeStore<T>,
+        S: HyperAST<'b, T = T, IdN = T::TreeId>,
         T::TreeId: Clone + Debug,
         T: Tree + WithSerialization,
     {
         if self.cache.contains_key(&c) {
             return self.cache.get(&c).unwrap();
         } else if let Some(p) = self.ds.parent(c) {
-            let p_r = store.resolve(&self.ds.original(&p));
-            let p_t = store.resolve_type(&p_r);
+            let id = self.ds.original(&p);
+            let p_r = store.node_store().resolve(&id);
+            let p_t = store.resolve_type(&id);
             if p_t.is_directory() {
                 let ori = self.ds.original(&c);
                 if self.root == ori {

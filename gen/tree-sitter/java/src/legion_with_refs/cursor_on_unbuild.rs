@@ -2,7 +2,7 @@ use hyper_ast::position::TreePath;
 use hyper_ast::store::labels::LabelStore;
 use hyper_ast::store::nodes::legion::{HashedNodeRef, NodeIdentifier};
 use hyper_ast::types::{
-    HyperASTShared, HyperType, LabelStore as _, Labeled, NodeStore, Role, RoleStore, Tree,
+    HyperASTShared, HyperType, LabelStore as _, Labeled, NodeStore, Role, RoleStore, Tree, Typed,
     WithRoles,
 };
 use hyper_ast::{position::TreePathMut, types::TypeStore};
@@ -596,7 +596,8 @@ where
         let node =
             hyper_ast::store::nodes::legion::_resolve::<TIdN<IdN>>(self.stores.node_store, n)
                 .unwrap();
-        self.stores.type_store.resolve_type(&node)
+        node.get_type()
+        // self.stores.resolve_type(n)
     }
 }
 

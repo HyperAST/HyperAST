@@ -238,8 +238,7 @@ fn removed_tracking(repo_name: &str, commit: &str, limit: usize, query: &str) {
                                                         line_offset += n.line_count();
                                                         use hyper_ast::types::TypeStore;
                                                         if !stores
-                                                            .type_store
-                                                            .resolve_type(n)
+                                                            .resolve_type(child)
                                                             .is_spaces()
                                                         {
                                                             curr_off += 1;

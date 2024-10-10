@@ -228,7 +228,7 @@ impl<'a, IdN, Idx> ExploreStructuralPositions<'a, IdN, Idx> {
 //     //     let sss: ExploreStructuralPositions<'_, IdN, Idx> = self.src.clone();
 //     //     let len = if let Some(x) = sss.peek_node() {
 //     //         let b = self.stores.node_store().resolve(x.as_id());
-//     //         let t = self.stores.type_store().resolve_type(&b);
+//     //         let t = self.stores.resolve_type(x.as_id());
 //     //         if let Some(y) = b.try_bytes_len() {
 //     //             if t.is_file() {
 //     //                 from_file = true;
@@ -263,7 +263,7 @@ impl<'a, IdN, Idx> ExploreStructuralPositions<'a, IdN, Idx> {
 //     //     if from_file {
 //     //         while let Some(p) = sss.peek_parent_node() {
 //     //             let b = stores.node_store().resolve(p.as_id());
-//     //             let t = stores.type_store().resolve_type(&b);
+//     //             let t = stores.resolve_type(p.as_id());
 //     //             let o = sss.peek_offset().unwrap();
 //     //             let o: <HAST::T as WithChildren>::ChildIdx =
 //     //                 num::cast(o).expect("failed to cast, cannot put value of Idx in ChildIdx");
@@ -322,7 +322,7 @@ where
         let mut o;
         let len = {
             let b = stores.node_store().resolve(x.as_id());
-            let t = stores.type_store().resolve_type(&b);
+            let t = stores.resolve_type(x.as_id());
             // dbg!(t);
             let len = b.try_bytes_len();
             assert!(len.is_some() || t.is_directory());
@@ -340,7 +340,7 @@ where
                 x = aaa.1;
                 o = aaa.0;
                 let b = stores.node_store().resolve(x.as_id());
-                let t = stores.type_store().resolve_type(&b);
+                let t = stores.resolve_type(x.as_id());
                 // dbg!(&prev_x);
                 // dbg!(&x);
                 // dbg!(o);
@@ -423,7 +423,7 @@ where
             x = aaa.1;
             o = aaa.0;
             let b = stores.node_store().resolve(x.as_id());
-            let _t = stores.type_store().resolve_type(&b);
+            let _t = stores.resolve_type(x.as_id());
 
             // dbg!(t);
             // let v = &b.children().unwrap();
@@ -484,7 +484,7 @@ impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, I
         // let mut len = 0;
         let len = if let Some(x) = self.peek_node() {
             let b = stores.node_store().resolve(x.as_id());
-            let t = stores.type_store().resolve_type(&b);
+            let t = stores.resolve_type(x.as_id());
             if let Some(y) = b.try_bytes_len() {
                 if t.is_file() {
                     from_file = true;
@@ -530,7 +530,7 @@ impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, I
                 assert_eq!(self.peek_node().unwrap(), self.sps.nodes[self.i - 1]);
                 // println!("nodes: {}, parents:{}, offsets:{}",it.sps.nodes.len(),it.sps.parents.len(),it.sps.offsets.len());
                 let b = stores.node_store().resolve(p.as_id());
-                let t = stores.type_store().resolve_type(&b);
+                let t = stores.resolve_type(p.as_id());
                 // println!("T0:{:?}", t);
                 // let o = it.sps.offsets[it]
                 // println!("nodes: ({})", it.sps.nodes.len());
@@ -611,7 +611,7 @@ impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, I
 //         let mut from_file = false;
 //         let len = if let Some(x) = self.peek_node() {
 //             let b = stores.node_store().resolve(x.as_id());
-//             let t = stores.type_store().resolve_type(&b);
+//             let t = stores.resolve_type(x.as_id());
 //             if let Some(y) = b.try_bytes_len() {
 //                 if t.is_file() {
 //                     from_file = true;
@@ -645,7 +645,7 @@ impl<'a, IdN: NodeId + Eq + Copy, Idx: PrimInt> ExploreStructuralPositions<'a, I
 //         if from_file {
 //             while let Some(p) = self.peek_parent_node() {
 //                 let b = stores.node_store().resolve(p.as_id());
-//                 let t = stores.type_store().resolve_type(&b);
+//                 let t = stores.resolve_type(p.as_id());
 //                 let o = self
 //                     .peek_offset()
 //                     .expect("there should be an offset if there is a parent");

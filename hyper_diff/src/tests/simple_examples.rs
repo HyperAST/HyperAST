@@ -1,5 +1,5 @@
-use crate::tree::simple_tree::{tree, SimpleTree};
-
+use hyper_ast::test_utils::simple_tree::SimpleTree;
+use super::tree;
 type ST<K> = SimpleTree<K>;
 
 /// example of simple delete

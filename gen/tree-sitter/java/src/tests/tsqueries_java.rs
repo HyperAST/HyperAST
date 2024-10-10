@@ -260,13 +260,14 @@ fn prep_prepro<'store>(
         Err(t) => t,
     };
     println!("{}", tree.root_node().to_sexp());
-    let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
-    eprintln!(
-        "{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
-    );
+    todo!("handle Type inconsistencies");
+    // let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
+    // eprintln!(
+    //     "{}",
+    //     hyper_ast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
+    // );
 
-    (query, stores, full_node.local.compressed_node)
+    // (query, stores, full_node.local.compressed_node)
 }
 
 #[test]
@@ -1197,41 +1198,42 @@ fn test_precomputed() {
         Err(t) => t,
     };
     log::trace!("sexp:\n{}", tree.root_node().to_sexp());
-    let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
-    log::trace!(
-        "syntax ser:\n{}",
-        hyper_ast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
-    );
-    let pre_processing = now.elapsed();
-    let now = Instant::now();
-    let (query, stores, code) = (query, stores, full_node.local.compressed_node);
-    let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
-    let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
-    // let pos = hyper_ast::position::StructuralPosition::new(code);
-    // let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(&stores, pos);
-    let qcursor = query.matches(cursor);
-    let mut count = 0;
-    for m in qcursor {
-        count += 1;
-        dbg!(m.pattern_index);
-        dbg!(m.captures.len());
-        for c in &m.captures {
-            let i = c.index;
-            dbg!(i);
-            let name = query.capture_name(i);
-            dbg!(name);
-            use hyper_ast::position::structural_pos::AAA;
-            use hyper_ast::position::TreePath;
-            let n = c.node.pos.node();
-            let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, n);
-            // let n = c.node.pos.node().unwrap();
-            // let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, *n);
-            dbg!(n.to_string());
-        }
-    }
-    dbg!(count);
-    let post_processing = now.elapsed();
-    dbg!(pre_processing, post_processing);
+    todo!("handle type inconsistences")
+    // let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
+    // log::trace!(
+    //     "syntax ser:\n{}",
+    //     hyper_ast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
+    // );
+    // let pre_processing = now.elapsed();
+    // let now = Instant::now();
+    // let (query, stores, code) = (query, stores, full_node.local.compressed_node);
+    // let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
+    // let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
+    // // let pos = hyper_ast::position::StructuralPosition::new(code);
+    // // let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(&stores, pos);
+    // let qcursor = query.matches(cursor);
+    // let mut count = 0;
+    // for m in qcursor {
+    //     count += 1;
+    //     dbg!(m.pattern_index);
+    //     dbg!(m.captures.len());
+    //     for c in &m.captures {
+    //         let i = c.index;
+    //         dbg!(i);
+    //         let name = query.capture_name(i);
+    //         dbg!(name);
+    //         use hyper_ast::position::structural_pos::AAA;
+    //         use hyper_ast::position::TreePath;
+    //         let n = c.node.pos.node();
+    //         let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, n);
+    //         // let n = c.node.pos.node().unwrap();
+    //         // let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, *n);
+    //         dbg!(n.to_string());
+    //     }
+    // }
+    // dbg!(count);
+    // let post_processing = now.elapsed();
+    // dbg!(pre_processing, post_processing);
 }
 
 #[test]
@@ -1729,29 +1731,30 @@ public class TypeAdapterTest {
         Err(t) => t,
     };
     println!("{}", tree.root_node().to_sexp());
-    let full_node = java_tree_gen.generate_file(b"", (&text).as_bytes(), tree.walk());
-    let code = full_node.local.compressed_node;
-    let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
-    let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
-    dbg!();
-    let qcursor = query.matches(cursor);
-    let mut count = 0;
-    for m in qcursor {
-        count += 1;
-        dbg!(m.pattern_index);
-        dbg!(m.captures.len());
-        for c in &m.captures {
-            let i = c.index;
-            dbg!(i);
-            let name = query.capture_name(i);
-            dbg!(name);
-            use hyper_ast::position::structural_pos::AAA;
-            let n = c.node.pos.node();
-            let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, n);
-            dbg!(n.to_string());
-        }
-    }
-    assert_eq!(1, count);
+    todo!("handle type inconsistences")
+    // let full_node = java_tree_gen.generate_file(b"", (&text).as_bytes(), tree.walk());
+    // let code = full_node.local.compressed_node;
+    // let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
+    // let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
+    // dbg!();
+    // let qcursor = query.matches(cursor);
+    // let mut count = 0;
+    // for m in qcursor {
+    //     count += 1;
+    //     dbg!(m.pattern_index);
+    //     dbg!(m.captures.len());
+    //     for c in &m.captures {
+    //         let i = c.index;
+    //         dbg!(i);
+    //         let name = query.capture_name(i);
+    //         dbg!(name);
+    //         use hyper_ast::position::structural_pos::AAA;
+    //         let n = c.node.pos.node();
+    //         let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, n);
+    //         dbg!(n.to_string());
+    //     }
+    // }
+    // assert_eq!(1, count);
 }
 #[test]
 fn test_prepro_main_meth2() {
@@ -2310,31 +2313,32 @@ fn g(q: &str, p: &[&str], text: &str) -> usize {
         Err(t) => t,
     };
     println!("{}", tree.root_node().to_sexp());
-    let full_node = java_tree_gen.generate_file(b"", text.as_bytes(), tree.walk());
-    let code = full_node.local.compressed_node;
-    // let n = hyper_ast::nodes::SyntaxWithFieldsSerializer::new(&stores, code);
-    // dbg!(n.to_string());
-    let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
-    let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
-    dbg!();
-    let qcursor = query.matches(cursor);
-    let mut count = 0;
-    for m in qcursor {
-        count += 1;
-        dbg!(m.pattern_index);
-        dbg!(m.captures.len());
-        for c in &m.captures {
-            let i = c.index;
-            dbg!(i);
-            let name = query.capture_name(i);
-            dbg!(name);
-            use hyper_ast::position::structural_pos::AAA;
-            let n = c.node.pos.node();
-            let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, n);
-            dbg!(n.to_string());
-        }
-    }
-    dbg!(count)
+    todo!("handle type inconsistences")
+    // let full_node = java_tree_gen.generate_file(b"", text.as_bytes(), tree.walk());
+    // let code = full_node.local.compressed_node;
+    // // let n = hyper_ast::nodes::SyntaxWithFieldsSerializer::new(&stores, code);
+    // // dbg!(n.to_string());
+    // let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
+    // let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
+    // dbg!();
+    // let qcursor = query.matches(cursor);
+    // let mut count = 0;
+    // for m in qcursor {
+    //     count += 1;
+    //     dbg!(m.pattern_index);
+    //     dbg!(m.captures.len());
+    //     for c in &m.captures {
+    //         let i = c.index;
+    //         dbg!(i);
+    //         let name = query.capture_name(i);
+    //         dbg!(name);
+    //         use hyper_ast::position::structural_pos::AAA;
+    //         let n = c.node.pos.node();
+    //         let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, n);
+    //         dbg!(n.to_string());
+    //     }
+    // }
+    // dbg!(count)
 }
 
 /// concat queries

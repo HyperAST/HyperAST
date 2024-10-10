@@ -33,7 +33,7 @@ where
         // dbg!(b.get_type());
         // dbg!(o.to_usize().unwrap());
 
-        let t = stores.type_store().resolve_type(&b);
+        let t = stores.resolve_type(&x);
 
         if t.is_directory() || t.is_file() {
             let l = stores.label_store().resolve(b.get_label_unchecked());
@@ -44,7 +44,7 @@ where
             if !t.is_directory() {
                 for y in cs.iter_children() {
                     let b = stores.node_store().resolve(y);
-                    if !stores.type_store().resolve_type(&b).is_spaces() {
+                    if !stores.resolve_type(y).is_spaces() {
                         if o == zero() {
                             break;
                         }
@@ -81,7 +81,7 @@ where
         panic!()
     }
     let b = stores.node_store().resolve(&x);
-    let t = stores.type_store().resolve_type(&b);
+    let t = stores.resolve_type(&x);
     if t.is_directory() || t.is_file() {
         let l = stores.label_store().resolve(b.get_label_unchecked());
         path.push(l);
@@ -189,7 +189,7 @@ where
         // dbg!(b.get_type());
         // dbg!(o.to_usize().unwrap());
 
-        let t = stores.type_store().resolve_type(&b);
+        let t = stores.resolve_type(&x);
 
         if t.is_directory() || t.is_file() {
             let l = stores.label_store().resolve(b.get_label_unchecked());
@@ -200,7 +200,7 @@ where
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
                     let b = stores.node_store().resolve(y);
-                    if !stores.type_store().resolve_type(&b).is_spaces() {
+                    if !stores.resolve_type(y).is_spaces() {
                         no_s_idx = no_s_idx + one();
                     }
                     offset += b.try_bytes_len().unwrap().to_usize().unwrap();
@@ -230,7 +230,7 @@ where
     }
     assert!(offsets.next().is_none());
     let b = stores.node_store().resolve(&x);
-    let t = stores.type_store().resolve_type(&b);
+    let t = stores.resolve_type(&x);
     if t.is_directory() || t.is_file() {
         let l = stores.label_store().resolve(b.get_label_unchecked());
         path.push(l);
@@ -307,7 +307,7 @@ where
         let mut offsets_iter = self.src.iter_offsets();
         loop {
             let b = stores.node_store().resolve(&x);
-            let t = stores.type_store().resolve_type(&b);
+            let t = stores.resolve_type(&x);
 
             // handle name of file or directory
             if t.is_directory() || t.is_file() {
@@ -325,7 +325,7 @@ where
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
                     let b = stores.node_store().resolve(y);
-                    if !stores.type_store().resolve_type(&b).is_spaces() {
+                    if !stores.resolve_type(y).is_spaces() {
                         no_s_idx = no_s_idx + one();
                     }
                     offset += b.try_bytes_len().unwrap().to_usize().unwrap();
@@ -344,7 +344,7 @@ where
         }
         // construct output
         let b = stores.node_store().resolve(&x);
-        let t = stores.type_store().resolve_type(&b);
+        let t = stores.resolve_type(&x);
         let len = if !t.is_directory() {
             b.try_bytes_len().unwrap().to_usize().unwrap()
         } else {
@@ -381,7 +381,7 @@ where
         let mut bbb: FileAndOffsetPositionBuilder<_, usize> = {
             let (b, t) = loop {
                 let b = stores.node_store().resolve(&x);
-                let t = stores.type_store().resolve_type(&b);
+                let t = stores.resolve_type(&x);
                 // handle name of directory
                 if t.is_directory() {
                     let l = stores.label_store().resolve(b.get_label_unchecked());
@@ -412,7 +412,7 @@ where
         };
         let (b, t) = loop {
             let b = stores.node_store().resolve(&x);
-            let t = stores.type_store().resolve_type(&b);
+            let t = stores.resolve_type(&x);
             // handle name of file or directory
             assert!(!t.is_directory());
 
@@ -426,7 +426,7 @@ where
             if !t.is_directory() {
                 for y in cs.before(o.clone()).iter_children() {
                     let b = stores.node_store().resolve(y);
-                    if !stores.type_store().resolve_type(&b).is_spaces() {
+                    if !stores.resolve_type(y).is_spaces() {
                         no_s_idx = no_s_idx + one();
                     }
                     let len = b.try_bytes_len().unwrap().to_usize().unwrap();
@@ -479,7 +479,7 @@ where
         let mut builder = {
             loop {
                 let b = stores.node_store().resolve(&x);
-                let t = stores.type_store().resolve_type(&b);
+                let t = stores.resolve_type(&x);
                 // handle name of directory
                 let l = if t.is_directory() {
                     stores.label_store().resolve(b.get_label_unchecked())
@@ -506,7 +506,7 @@ where
         };
         let (b, t) = loop {
             let b = stores.node_store().resolve(&x);
-            let t = stores.type_store().resolve_type(&b);
+            let t = stores.resolve_type(&x);
             // handle name of file or directory
             assert!(!t.is_directory());
 
@@ -520,7 +520,7 @@ where
             let mut byte_offset = 0;
             for y in cs.before(idx.clone()).iter_children() {
                 let b = stores.node_store().resolve(y);
-                if !stores.type_store().resolve_type(&b).is_spaces() {
+                if !stores.resolve_type(y).is_spaces() {
                     no_s_idx = no_s_idx + one();
                 }
                 let len = b.try_bytes_len().unwrap().to_usize().unwrap();
@@ -574,7 +574,7 @@ where
         let mut builder: B::SB1<O> = {
             loop {
                 let b = stores.node_store().resolve(&x);
-                let t = stores.type_store().resolve_type(&b);
+                let t = stores.resolve_type(&x);
                 // handle name of directory
                 let l = if t.is_directory() {
                     stores.label_store().resolve(b.get_label_unchecked())
@@ -602,7 +602,7 @@ where
         };
         let (b, t) = loop {
             let b = stores.node_store().resolve(&x);
-            let t = stores.type_store().resolve_type(&b);
+            let t = stores.resolve_type(&x);
             // handle name of file or directory
             assert!(!t.is_directory());
 
@@ -616,7 +616,7 @@ where
             let mut byte_offset = 0;
             for y in cs.before(idx.clone()).iter_children() {
                 let b = stores.node_store().resolve(y);
-                if !stores.type_store().resolve_type(&b).is_spaces() {
+                if !stores.resolve_type(y).is_spaces() {
                     no_s_idx = no_s_idx + one();
                 }
                 let len = b.try_bytes_len().unwrap().to_usize().unwrap();

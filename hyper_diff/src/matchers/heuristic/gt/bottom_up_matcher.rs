@@ -180,12 +180,7 @@ where
         let mut src_histogram: HashMap<<HAST::TS as TypeStore<T>>::Ty, Vec<M::Src>> =
             HashMap::new(); //Map<Type, List<ITree>>
         for c in self.src_arena.children(self.stores.node_store(), src) {
-            let t = &self.stores.type_store().resolve_type(
-                &self
-                    .stores
-                    .node_store()
-                    .resolve(&self.src_arena.original(&c)),
-            );
+            let t = &self.stores.resolve_type(&self.src_arena.original(&c));
             if !src_histogram.contains_key(t) {
                 src_histogram.insert(*t, vec![]);
             }

@@ -77,7 +77,7 @@ where
         // dbg!(b.get_type());
         // dbg!(o.to_usize().unwrap());
 
-        let t = stores.type_store().resolve_type(&b);
+        let t = stores.resolve_type(&x);
 
         if t.is_directory() || t.is_file() {
             let l = stores.label_store().resolve(b.get_label_unchecked());
@@ -110,7 +110,7 @@ where
     }
     assert!(offsets.next().is_none());
     let b = stores.node_store().resolve(&x);
-    let t = stores.type_store().resolve_type(&b);
+    let t = stores.resolve_type(&x);
     if t.is_directory() || t.is_file() {
         let l = stores.label_store().resolve(b.get_label_unchecked());
         path.push(l);
@@ -146,7 +146,7 @@ where
         // dbg!(b.get_type());
         // dbg!(o.to_usize().unwrap());
 
-        let t = stores.type_store().resolve_type(&b);
+        let t = stores.resolve_type(&x);
 
         if t.is_directory() || t.is_file() {
             let l = stores.label_store().resolve(b.get_label_unchecked());
@@ -180,7 +180,7 @@ where
     }
     assert!(offsets.next().is_none());
     let b = stores.node_store().resolve(&x);
-    let t = stores.type_store().resolve_type(&b);
+    let t = stores.resolve_type(&x);
     if t.is_directory() || t.is_file() {
         let l = stores.label_store().resolve(b.get_label_unchecked());
         path.push(l);
@@ -247,7 +247,7 @@ impl StructuralPosition<NodeIdentifier, u16> {
         let x = *self.node().unwrap();
         let b = stores.node_store().resolve(&x);
 
-        let t = stores.type_store().resolve_type(&b);
+        let t = stores.resolve_type(&x);
         // println!("t0:{:?}", t);
         let len = if let Some(y) = b.try_bytes_len() {
             if !t.is_file() {
@@ -271,7 +271,7 @@ impl StructuralPosition<NodeIdentifier, u16> {
                 let p = self.parents[i - 1];
                 let b = stores.node_store().resolve(&p);
 
-                let t = stores.type_store().resolve_type(&b);
+                let t = stores.resolve_type(&p);
                 // println!("t1:{:?}", t);
                 let o = self.offsets[i];
                 let c: usize = {
@@ -351,7 +351,7 @@ impl StructuralPosition<NodeIdentifier, u16> {
         let x = *self.node().unwrap();
         let b = stores.node_store().resolve(&x);
 
-        let t = stores.type_store().resolve_type(&b);
+        let t = stores.resolve_type(&x);
         // println!("t0:{:?}", t);
 
         if !t.is_file() {
@@ -362,7 +362,9 @@ impl StructuralPosition<NodeIdentifier, u16> {
         let mut offset = 0;
         let mut path = vec![];
         if self.parents.is_empty() {
-            let file = PathBuf::from_iter(path.iter().rev()).to_string_lossy().to_string();
+            let file = PathBuf::from_iter(path.iter().rev())
+                .to_string_lossy()
+                .to_string();
             return (file, offset, len);
         }
         let mut i = self.parents.len() - 1;
@@ -371,7 +373,7 @@ impl StructuralPosition<NodeIdentifier, u16> {
                 let p = self.parents[i - 1];
                 let b = stores.node_store().resolve(&p);
 
-                let t = stores.type_store().resolve_type(&b);
+                let t = stores.resolve_type(&p);
                 let o = self.offsets[i];
                 let c: usize = {
                     let v: Vec<_> = b.children().unwrap().before(o.to_u16().unwrap() - 1).into();
@@ -426,7 +428,9 @@ impl StructuralPosition<NodeIdentifier, u16> {
             offset += c;
         }
 
-        let file = PathBuf::from_iter(path.iter().rev()).to_string_lossy().to_string();
+        let file = PathBuf::from_iter(path.iter().rev())
+            .to_string_lossy()
+            .to_string();
         (file, offset, len)
     }
 }

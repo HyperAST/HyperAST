@@ -242,7 +242,7 @@ where
             return self.find_refs2::<IM>(package, target, current, b, scout);
         }
         let b = hyper_ast::types::NodeStore::resolve(self.stores.node_store(), &current);
-        let t = self.stores.type_store().resolve_type(&b);
+        let t = self.stores.resolve_type(&current);
         if !IM && !has_children {
             log::debug!("d=1 {:?}", "'Not Java'");
             return vec![];

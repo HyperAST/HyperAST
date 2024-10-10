@@ -1,4 +1,6 @@
-use crate::tree::simple_tree::{tree, SimpleTree};
+use hyper_ast::test_utils::simple_tree::SimpleTree;
+
+use crate::tests::tree;
 
 type ST<K> = SimpleTree<K>;
 

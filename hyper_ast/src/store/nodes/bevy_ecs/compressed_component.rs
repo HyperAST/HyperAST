@@ -1,5 +1,8 @@
+use crate::types::{CompoRegister, ErasedCompo, ErasedInserter, Compo};
+
 use super::ByteLen;
 use bevy_ecs::archetype::ArchetypeGeneration;
+use bevy_ecs::bundle::Bundle;
 use bevy_ecs::component::{Component, ComponentId};
 use bevy_ecs::ptr::Ptr;
 use bevy_ecs::storage::SparseSet;
@@ -8,12 +11,36 @@ use num::ToPrimitive;
 use std::any::TypeId;
 
 trait CompressedCompo {
-    fn decomp(ptr: Ptr<'_>, tid: TypeId) -> Self
+    fn decomp(ptr: impl ErasedCompo, tid: TypeId) -> Self
     where
         Self: Sized;
 
-    fn compressed_insert(self, e: &mut EntityWorldMut<'_>);
-    fn components(world: &mut World) -> Vec<ComponentId>;
+    fn compressed_insert(self, e: &mut impl ErasedInserter);
+    fn components<R: CompoRegister>(backend: &mut R) -> Vec<R::Id>;
+}
+
+impl ErasedCompo for Ptr<'_> {
+    unsafe fn unerase_ref<T: 'static + Compo>(&self, tid: std::any::TypeId) -> Option<&T> {
+        if tid == std::any::TypeId::of::<T>() {
+            Some(unsafe { self.deref() })
+        } else {
+            None
+        }
+    }
+}
+
+impl ErasedInserter for EntityWorldMut<'_> {
+    fn insert<T: 'static + Compo>(&mut self, t: T) {
+        self.insert(t);
+    }
+}
+
+impl CompoRegister for World {
+    type Id = ComponentId;
+
+    fn register_compo<T: 'static + Compo>(&mut self) -> ComponentId {
+        self.init_component::<T>()
+    }
 }
 
 fn precompute_md_compressed<T: Component + CompressedCompo>(
@@ -82,16 +109,20 @@ impl CompressionRegistry {
     }
 
     pub fn add_components(&mut self, components: Vec<ComponentId>) {
-        assert!(self.compressed.iter().find(|x| components[0] == x[0]).is_none());
+        assert!(self
+            .compressed
+            .iter()
+            .find(|x| components[0] == x[0])
+            .is_none());
         self.arch_generation = ArchetypeGeneration::initial();
         self.compressed.push(components);
     }
 }
 
-
 // # trying on byte_len
 
 #[derive(Component)]
+#[repr(transparent)]
 struct ByteLenU8(u8);
 impl ByteLenU8 {
     fn decompresses(&self) -> ByteLen {
@@ -99,6 +130,7 @@ impl ByteLenU8 {
     }
 }
 #[derive(Component)]
+#[repr(transparent)]
 struct ByteLenU16(u16);
 impl ByteLenU16 {
     fn decompresses(&self) -> ByteLen {
@@ -106,6 +138,7 @@ impl ByteLenU16 {
     }
 }
 #[derive(Component)]
+#[repr(transparent)]
 struct ByteLenU32(u32);
 impl ByteLenU32 {
     fn decompresses(&self) -> ByteLen {
@@ -114,24 +147,30 @@ impl ByteLenU32 {
 }
 
 impl CompressedCompo for ByteLen {
-    fn decomp(ptr: Ptr<'_>, tid: TypeId) -> Self
+    fn decomp(ptr: impl ErasedCompo, tid: TypeId) -> Self
     where
         Self: Sized,
     {
-        if tid == TypeId::of::<ByteLenU8>() {
-            unsafe { ptr.deref::<ByteLenU8>() }.decompresses()
-        } else if tid == TypeId::of::<ByteLenU16>() {
-            unsafe { ptr.deref::<ByteLenU16>() }.decompresses()
-        } else if tid == TypeId::of::<ByteLenU32>() {
-            unsafe { ptr.deref::<ByteLenU32>() }.decompresses()
-        } else if tid == TypeId::of::<ByteLen>() {
-            unsafe { ptr.deref::<ByteLen>() }.clone()
-        } else {
-            unreachable!()
-        }
+        unsafe { ptr.unerase_ref::<ByteLen>(tid) }
+            .cloned()
+            .or_else(|| unsafe { ptr.unerase_ref::<ByteLenU8>(tid) }.map(ByteLenU8::decompresses))
+            .or_else(|| unsafe { ptr.unerase_ref::<ByteLenU32>(tid) }.map(ByteLenU32::decompresses))
+            .or_else(|| unsafe { ptr.unerase_ref::<ByteLenU16>(tid) }.map(ByteLenU16::decompresses))
+            .unwrap_or_else(|| unreachable!())
+        // if tid == TypeId::of::<ByteLenU8>() {
+        //     unsafe { ptr.deref::<ByteLenU8>() }.decompresses()
+        // } else if tid == TypeId::of::<ByteLenU16>() {
+        //     unsafe { ptr.deref::<ByteLenU16>() }.decompresses()
+        // } else if tid == TypeId::of::<ByteLenU32>() {
+        //     unsafe { ptr.deref::<ByteLenU32>() }.decompresses()
+        // } else if tid == TypeId::of::<ByteLen>() {
+        //     unsafe { ptr.deref::<ByteLen>() }.clone()
+        // } else {
+        //     unreachable!()
+        // }
     }
 
-    fn compressed_insert(self, e: &mut EntityWorldMut<'_>) {
+    fn compressed_insert(self, e: &mut impl ErasedInserter) {
         if let Some(x) = self.0.to_u8() {
             e.insert(ByteLenU8(x));
         } else {
@@ -139,12 +178,12 @@ impl CompressedCompo for ByteLen {
         }
     }
 
-    fn components(world: &mut World) -> Vec<ComponentId> {
+    fn components<R: CompoRegister>(register: &mut R) -> Vec<R::Id> {
         vec![
-            world.init_component::<ByteLen>(),
-            world.init_component::<ByteLenU8>(),
-            world.init_component::<ByteLenU16>(),
-            world.init_component::<ByteLenU32>(),
+            register.register_compo::<ByteLen>(),
+            register.register_compo::<ByteLenU8>(),
+            register.register_compo::<ByteLenU16>(),
+            register.register_compo::<ByteLenU32>(),
         ]
     }
 }

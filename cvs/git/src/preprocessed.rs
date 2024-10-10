@@ -816,6 +816,7 @@ pub fn child_by_name_with_idx(
     let i = n.get_child_idx_by_name(&stores.label_store.get(name)?);
     i.map(|i| (n.child(&i).unwrap(), i))
 }
+
 pub fn child_by_type(
     stores: &SimpleStores,
     d: NodeIdentifier,
@@ -829,8 +830,8 @@ pub fn child_by_type(
         .enumerate()
         .find(|(_, x)| {
             let n = stores.node_store.resolve(**x);
-            use hyper_ast::types::TypeStore;
-            stores.type_store.resolve_type(&n).eq(t)
+            use hyper_ast::types::HyperAST;
+            stores.resolve_type(x).eq(t)
         })
         .map(|(i, x)| (*x, i as u16));
     s

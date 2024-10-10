@@ -3,7 +3,7 @@ use std::cell::Ref;
 use std::hash::Hash;
 use std::str::FromStr;
 
-use num_traits::PrimInt;
+use num::PrimInt;
 use strum_macros::EnumString;
 use strum_macros::ToString;
 

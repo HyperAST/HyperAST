@@ -252,7 +252,10 @@ impl<'a, T> HashedNodeRef<'a, T> {
 
 impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     type ChildIdx = u16;
-    type Children<'b> = MySlice<<Self::TreeId as NodeId>::IdN> where Self: 'b;
+    type Children<'b>
+        = MySlice<<Self::TreeId as NodeId>::IdN>
+    where
+        Self: 'b;
 
     fn child_count(&self) -> Self::ChildIdx {
         self.children().map_or(0, |x| x.child_count())
@@ -614,88 +617,89 @@ impl SimplePackedBuilder {
         T: crate::types::Tree<Label = defaults::LabelIdentifier> + crate::types::WithStats,
         <T::TreeId as NodeId>::IdN: Copy + Into<NodeIdentifier>,
     {
-        let lang = type_store.resolve_lang(&node);
-        let lang_name = lang.name();
-        let type_id = lang.to_u16(type_store.resolve_type(&node));
-        if let Some(children) = node.children() {
-            let children = children.iter_children().map(|x| (*x).into()).collect();
-            if node.has_label() {
-                match self
-                    .stockages
-                    .entry(Arch(lang_name, RawVariantDiscriminants::Both))
-                    .or_insert_with(|| RawVariant::Both {
-                        entities: variants::Both::lang(lang_name),
-                    }) {
-                    RawVariant::Both {
-                        entities: a @ variants::Both { .. },
-                    } => {
-                        a.rev.push(id);
-                        a.kind.push(type_id);
+        // let lang = type_store.resolve_lang(&node);
+        // let lang_name = lang.name();
+        // let type_id = lang.to_u16(type_store.resolve_type(&node));
+        todo!("TODO just get the hyperast and the id...")
+        // if let Some(children) = node.children() {
+        //     let children = children.iter_children().map(|x| (*x).into()).collect();
+        //     if node.has_label() {
+        //         match self
+        //             .stockages
+        //             .entry(Arch(lang_name, RawVariantDiscriminants::Both))
+        //             .or_insert_with(|| RawVariant::Both {
+        //                 entities: variants::Both::lang(lang_name),
+        //             }) {
+        //             RawVariant::Both {
+        //                 entities: a @ variants::Both { .. },
+        //             } => {
+        //                 a.rev.push(id);
+        //                 a.kind.push(type_id);
 
-                        a.children.push(children);
-                        a.label.push(node.get_label_unchecked().into());
+        //                 a.children.push(children);
+        //                 a.label.push(node.get_label_unchecked().into());
 
-                        a.size.push(node.size());
-                    }
-                    _ => unreachable!("SimplePackedBuilder::add variant Both"),
-                }
-            } else {
-                match self
-                    .stockages
-                    .entry(Arch(lang_name, RawVariantDiscriminants::Children))
-                    .or_insert_with(|| RawVariant::Children {
-                        entities: variants::Children::lang(lang_name),
-                    }) {
-                    RawVariant::Children {
-                        entities: a @ variants::Children { .. },
-                    } => {
-                        a.rev.push(id);
-                        a.kind.push(type_id);
+        //                 a.size.push(node.size());
+        //             }
+        //             _ => unreachable!("SimplePackedBuilder::add variant Both"),
+        //         }
+        //     } else {
+        //         match self
+        //             .stockages
+        //             .entry(Arch(lang_name, RawVariantDiscriminants::Children))
+        //             .or_insert_with(|| RawVariant::Children {
+        //                 entities: variants::Children::lang(lang_name),
+        //             }) {
+        //             RawVariant::Children {
+        //                 entities: a @ variants::Children { .. },
+        //             } => {
+        //                 a.rev.push(id);
+        //                 a.kind.push(type_id);
 
-                        a.children.push(children);
+        //                 a.children.push(children);
 
-                        a.size.push(node.size());
-                    }
-                    _ => unreachable!("SimplePackedBuilder::add variant Children"),
-                }
-            }
-        } else if node.has_label() {
-            match self
-                .stockages
-                .entry(Arch(lang_name, RawVariantDiscriminants::Labeled))
-                .or_insert_with(|| RawVariant::Labeled {
-                    entities: variants::Labeled::lang(lang_name),
-                }) {
-                RawVariant::Labeled {
-                    entities: a @ variants::Labeled { .. },
-                } => {
-                    a.rev.push(id);
-                    a.kind.push(type_id);
+        //                 a.size.push(node.size());
+        //             }
+        //             _ => unreachable!("SimplePackedBuilder::add variant Children"),
+        //         }
+        //     }
+        // } else if node.has_label() {
+        //     match self
+        //         .stockages
+        //         .entry(Arch(lang_name, RawVariantDiscriminants::Labeled))
+        //         .or_insert_with(|| RawVariant::Labeled {
+        //             entities: variants::Labeled::lang(lang_name),
+        //         }) {
+        //         RawVariant::Labeled {
+        //             entities: a @ variants::Labeled { .. },
+        //         } => {
+        //             a.rev.push(id);
+        //             a.kind.push(type_id);
 
-                    a.label.push(node.get_label_unchecked().into());
+        //             a.label.push(node.get_label_unchecked().into());
 
-                    a.size.push(node.size());
-                }
-                _ => unreachable!("SimplePackedBuilder::add variant Labeled"),
-            }
-        } else {
-            match self
-                .stockages
-                .entry(Arch(lang_name, RawVariantDiscriminants::Typed))
-                .or_insert_with(|| RawVariant::Typed {
-                    entities: variants::Typed::lang(lang_name),
-                }) {
-                RawVariant::Typed {
-                    entities: a @ variants::Typed { .. },
-                } => {
-                    a.rev.push(id);
-                    a.kind.push(type_id);
+        //             a.size.push(node.size());
+        //         }
+        //         _ => unreachable!("SimplePackedBuilder::add variant Labeled"),
+        //     }
+        // } else {
+        //     match self
+        //         .stockages
+        //         .entry(Arch(lang_name, RawVariantDiscriminants::Typed))
+        //         .or_insert_with(|| RawVariant::Typed {
+        //             entities: variants::Typed::lang(lang_name),
+        //         }) {
+        //         RawVariant::Typed {
+        //             entities: a @ variants::Typed { .. },
+        //         } => {
+        //             a.rev.push(id);
+        //             a.kind.push(type_id);
 
-                    a.size.push(node.size());
-                }
-                _ => unreachable!("SimplePackedBuilder::add variant Typed"),
-            }
-        };
+        //             a.size.push(node.size());
+        //         }
+        //         _ => unreachable!("SimplePackedBuilder::add variant Typed"),
+        //     }
+        // };
     }
     #[cfg(feature = "single-indirection")]
     pub fn add<T>(&mut self, id: NodeIdentifier, node: T)

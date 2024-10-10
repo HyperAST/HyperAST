@@ -8,7 +8,7 @@ use std::{
 use hyper_ast::{
     position::Position,
     types::{
-        self, HyperAST, HyperType, LabelStore, NodeStore, Stored, Tree, TypeStore, WithChildren,
+        self, HyperAST, HyperType, LabelStore, NodeStore, Stored, Tree, WithChildren,
         WithSerialization,
     },
 };
@@ -524,7 +524,7 @@ impl SimpleJsonPostProcess {
         use hyper_ast::types::Labeled;
         let with_p = |mut pos: Position, ori| {
             let r = stores.node_store().resolve(&ori);
-            let t = stores.type_store().resolve_type(&r);
+            let t = stores.resolve_type(&ori);
             if t.is_directory() || t.is_file() {
                 pos.inc_path(stores.label_store().resolve(&r.get_label_unchecked()));
             }
@@ -750,7 +750,7 @@ impl<'store, 'a, S, T: WithChildren, D, U, F: Clone, G: Clone>
 impl<'store: 'a, 'a, S, T: Tree + WithSerialization, D, U: Clone + Default, F, G>
     FormatCached<'store, 'a, S, T, D, U, F, G>
 where
-    S: 'store + NodeStore<T::TreeId, R<'store> = T> + types::TypeStore<T>,
+    S: HyperAST<'store, T = T, IdN = T::TreeId>,
     T::TreeId: Clone + Debug,
     D: ShallowDecompressedTreeStore<'a, T, u32>
         + PostOrder<'a, T, u32>

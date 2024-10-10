@@ -257,7 +257,7 @@ where
         let t = self.stores.resolve_type(&n);
         use hyper_ast::types::NodeStore;
         let n = self.stores.node_store().resolve(&n);
-        let id = self.stores.type_store().resolve_lang(&n).ts_symbol(t);
+        let id = self.stores.resolve_lang(&n).ts_symbol(t);
         id.into()
     }
 
@@ -332,7 +332,7 @@ where
         let t = self.stores.resolve_type(&n);
         use hyper_ast::types::NodeStore;
         let n = self.stores.node_store().resolve(&n);
-        let id = self.stores.type_store().resolve_lang(&n).ts_symbol(t);
+        let id = self.stores.resolve_lang(&n).ts_symbol(t);
         id.into()
     }
 
@@ -436,7 +436,7 @@ fn symbol<'hast, HAST: HyperAST<'hast>>(
     let t = stores.resolve_type(&n);
     use hyper_ast::types::NodeStore;
     let n = stores.node_store().resolve(&n);
-    let id = stores.type_store().resolve_lang(&n).ts_symbol(t);
+    let id = stores.resolve_lang(&n).ts_symbol(t);
     id.into()
 }
 

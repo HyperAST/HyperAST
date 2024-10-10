@@ -1,5 +1,8 @@
 ///! fully compress all subtrees from a Java CST
-use crate::{types::TIdN, TNode};
+use crate::{
+    types::{Java, TIdN, Type},
+    TNode,
+};
 use hyper_ast::{
     cyclomatic::Mcc,
     full::FullNode,
@@ -17,7 +20,9 @@ use hyper_ast::{
         BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics,
         TextedGlobalData, TotalBytesGlobalData, TreeGen, WithByteRange,
     },
-    types::{self, AnyType, NodeStoreExt, Role, TypeStore, TypeTrait, WithHashs, WithStats},
+    types::{
+        self, AnyType, NodeStoreExt, Role, TypeStore, TypeTrait, TypeU16, WithHashs, WithStats,
+    },
 };
 use legion::world::EntryRef;
 use num::ToPrimitive;
@@ -43,7 +48,8 @@ use hyper_ast::{
 };
 // use hyper_ast::nodes::SimpleNode1;
 
-use crate::types::{JavaEnabledTypeStore, Type};
+use crate::types::JavaEnabledTypeStore;
+// type Type = TypeU16<Java>;
 
 #[cfg(feature = "impact")]
 use crate::impact::partial_analysis::PartialAnalysis;
@@ -629,6 +635,16 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
     }
 }
 
+impl<'stores, 'cache, TS, More> JavaTreeGen<'stores, 'cache, TS, More> {
+    pub fn _generate_file<'b: 'stores>(
+        &mut self,
+        name: &[u8],
+        text: &'b [u8],
+        cursor: tree_sitter::TreeCursor,
+    ) -> FullNode<BasicGlobalData, Local> {
+        todo!("handle Type inconsistences")
+    }
+}
 impl<
         'stores,
         'cache,

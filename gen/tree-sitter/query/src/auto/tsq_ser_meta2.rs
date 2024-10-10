@@ -83,10 +83,10 @@ where
         ind: usize,
         out: &mut std::fmt::Formatter<'_>,
     ) -> Result<(), std::fmt::Error> {
-        use types::{LabelStore, Labeled, NodeStore, TypeStore, WithChildren};
-        let b = NodeStore::resolve(self.stores.node_store(), id);
+        use types::{LabelStore, Labeled, NodeStore, WithChildren};
+        let b = self.stores.node_store().resolve(id);
         // let kind = (self.stores.type_store(), b);
-        let kind = self.stores.type_store().resolve_type(&b);
+        let kind = self.stores.resolve_type(&id);
         let label = b.try_get_label();
         let children = b.children();
 
@@ -113,8 +113,7 @@ where
                         if self.should_skip(id) {
                             continue;
                         }
-                        let b = self.stores.node_store().resolve(id);
-                        let kind = self.stores.type_store().resolve_type(&b);
+                        let kind = self.stores.resolve_type(id);
                         if !kind.is_spaces() && !kind.is_hidden() {
                             if PP {
                                 if f {
@@ -135,8 +134,7 @@ where
                         if self.should_skip(id) {
                             continue;
                         }
-                        let b = self.stores.node_store().resolve(id);
-                        let kind = self.stores.type_store().resolve_type(&b);
+                        let kind = self.stores.resolve_type(id);
                         if !kind.is_spaces() && !kind.is_hidden() {
                             if PP {
                                 if f {
@@ -158,9 +156,8 @@ where
                         if self.should_skip(id) {
                             continue;
                         }
-                        let b = self.stores.node_store().resolve(id);
 
-                        let kind = self.stores.type_store().resolve_type(&b);
+                        let kind = self.stores.resolve_type(id);
                         if !kind.is_spaces() {
                             if PP {
                                 write!(out, "\n{}", "  ".repeat(ind + 1))?;

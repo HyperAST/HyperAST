@@ -25,7 +25,8 @@ impl hyper_ast::types::Stored for T {
 impl hyper_ast::types::WithChildren for T {
     type ChildIdx = u16;
 
-    type Children<'a> = hyper_ast::types::MySlice<NodeIdentifier>
+    type Children<'a>
+        = hyper_ast::types::MySlice<NodeIdentifier>
     where
         Self: 'a;
 
@@ -263,13 +264,12 @@ pub(crate) fn extract_moves<'a>(
     }
     // eprintln!("{:?}", a_tree.inspect());
     use hyper_ast::types::HyperType;
-    use hyper_ast::types::TypeStore;
     go_to_files(
         stores,
         &a_tree.atomics,
         hyper_ast::position::StructuralPosition::new(dst_tr),
-        &mut |p, nn, n| {
-            let t = stores.type_store.resolve_type(nn);
+        &mut |p, nn, n, id| {
+            let t = stores.resolve_type(&id);
             // dbg!(t.as_static_str(), p);
             // if t.is_hidden() {
             //     return false
@@ -339,7 +339,7 @@ pub(crate) fn extract_moves2<'a>(
             Act::Move { from } => from,
             Act::MovUpd { from, .. } => from,
             // Act::Insert { sub } => todo!(),
-            _ => return None
+            _ => return None,
         };
         let (from_path, w) =
             hyper_ast::position::path_with_spaces(src_tr, &mut from.ori.iter(), with_spaces_stores);
@@ -403,13 +403,12 @@ pub(crate) fn extract_updates<'a>(
     }
     // eprintln!("{:?}", a_tree.inspect());
     use hyper_ast::types::HyperType;
-    use hyper_ast::types::TypeStore;
     go_to_files(
         stores,
         &a_tree.atomics,
         hyper_ast::position::StructuralPosition::new(dst_tr),
-        &mut |p, nn, n| {
-            let t = stores.type_store.resolve_type(nn);
+        &mut |p, nn, n, id| {
+            let t = stores.resolve_type(&id);
             dbg!(t.as_static_str(), p);
             result.push(p.clone());
             false
@@ -454,13 +453,12 @@ pub(crate) fn extract_inserts<'a>(
     }
     // eprintln!("{:?}", a_tree.inspect());
     use hyper_ast::types::HyperType;
-    use hyper_ast::types::TypeStore;
     go_to_files(
         stores,
         &a_tree.atomics,
         hyper_ast::position::StructuralPosition::new(dst_tr),
-        &mut |p, nn, n| {
-            let t = stores.type_store.resolve_type(nn);
+        &mut |p, nn, n, id| {
+            let t = stores.resolve_type(&id);
             // dbg!(t.as_static_str(), p);
             result.push(p.clone());
             false
@@ -505,18 +503,17 @@ pub(crate) fn extract_deletes<'a>(
     }
     // eprintln!("{:?}", a_tree.inspect());
     use hyper_ast::types::HyperType;
-    use hyper_ast::types::TypeStore;
     go_to_files(
         stores,
         &a_tree.atomics, // , &mapping
         hyper_ast::position::StructuralPosition::new(src_tr),
-        &mut |p, nn, n| {
-            let t = stores.type_store.resolve_type(nn);
+        &mut |p, nn, n, id| {
+            let t = stores.resolve_type(&id);
             if !t.is_hidden() {
                 result.push(p.clone());
             }
             false
-            // let t = stores.type_store.resolve_type(nn);
+            // let t = stores.resolve_type(id);
             // if t.as_static_str() == "try_statement" {
             //     dbg!(t.as_static_str(), p);
             //     result.push(p.clone());
@@ -569,13 +566,12 @@ pub(crate) fn extract_focuses<'a>(
     }
     // eprintln!("{:?}", a_tree.inspect());
     use hyper_ast::types::HyperType;
-    use hyper_ast::types::TypeStore;
     go_to_files(
         stores,
         &a_tree.atomics, // , &mapping
         hyper_ast::position::StructuralPosition::new(src_tr),
-        &mut |p, nn, n| {
-            let t = stores.type_store.resolve_type(nn);
+        &mut |p, nn, n, id| {
+            let t = stores.resolve_type(&id);
             if t.as_static_str() == "try_statement" {
                 // dbg!(t.as_static_str(), p);
                 result.push(p.clone());
@@ -634,13 +630,13 @@ pub(crate) fn go_to_files<F>(
     path: P,
     result: &mut F,
 ) where
-    F: FnMut(&P, &NoSpaceWrapper<NodeIdentifier>, &N) -> bool,
+    F: FnMut(&P, &NoSpaceWrapper<NodeIdentifier>, &N, NodeIdentifier) -> bool,
 {
     't: for n in cs {
         // n.action;
         let mut path = path.clone();
         // use hyper_ast::types::TypeStore;
-        // let t = stores.type_store.resolve_type(nn);
+        // let t = stores.resolve_type(nn);
         // if t.is_file() {
         //     dbg!();
         //     continue;
@@ -654,7 +650,7 @@ pub(crate) fn go_to_files<F>(
             let id = path.node();
             let nn = stores.node_store.resolve(id);
             use hyper_ast::types::TypeStore;
-            let t = stores.type_store.resolve_type(&nn);
+            let t = stores.resolve_type(&id);
             use hyper_ast::types::HyperType;
             // dbg!(t.as_static_str());
             if t.is_file() {
@@ -681,11 +677,12 @@ pub(crate) fn got_through<F>(
     mut d: usize,
     result: &mut F,
 ) where
-    F: FnMut(&P, &NoSpaceWrapper<NodeIdentifier>, &N) -> bool,
+    F: FnMut(&P, &NoSpaceWrapper<NodeIdentifier>, &N, NodeIdentifier) -> bool,
 {
-    let mut nn = stores.node_store.resolve(path.node());
+    let mut id = path.node();
+    let mut nn = stores.node_store.resolve(id);
     loop {
-        if result(&path, &nn, &n) {
+        if result(&path, &nn, &n, id) {
             return;
         }
         // if t.as_static_str() == "try_statement" {
@@ -704,6 +701,7 @@ pub(crate) fn got_through<F>(
         path.goto(*node, p);
         d += 1;
 
+        id = *node;
         nn = stores.node_store.resolve(*node);
 
         let Some(_p) = p_it.next() else {
@@ -711,7 +709,7 @@ pub(crate) fn got_through<F>(
         };
         p = _p;
     }
-    if result(&path, &nn, &n) {
+    if result(&path, &nn, &n, id) {
         return;
     }
     for n in &n.children {

@@ -305,6 +305,7 @@ fn extract_nodes(
     let mut builder = fetched::SimplePackedBuilder::default();
     for id in ids {
         let node = store.node_store.resolve(*id);
+        // TODO just pass the hyperast and the id...
         builder.add(&store.type_store, id.clone().into(), node);
     }
     // dbg!(&ids);

@@ -41,77 +41,77 @@ pub(crate) mod store {
     impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
         type Ty = AnyType;
 
-        fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-            let lang = n.get_lang();
-            let t: &'static (dyn HyperType + 'static) = match lang {
-                "hyper_ast_gen_ts_cpp::types::Lang" => {
-                    let raw = n.get_raw_type();
-                    let t: &'static (dyn HyperType + 'static) =
-                        <hyper_ast_gen_ts_cpp::types::Cpp as Lang<_>>::make(raw);
-                    t
-                }
-                "hyper_ast_gen_ts_java::types::Lang" => {
-                    let raw = n.get_raw_type();
-                    let t: &'static (dyn HyperType + 'static) =
-                        <hyper_ast_gen_ts_java::types::Java as Lang<_>>::make(raw);
-                    t
-                }
-                "hyper_ast_gen_ts_xml::types::Lang" => {
-                    let raw = n.get_raw_type();
-                    let t: &'static (dyn HyperType + 'static) =
-                        <hyper_ast_gen_ts_xml::types::Xml as Lang<_>>::make(raw);
-                    t
-                }
-                "" => {
-                    let t: &'static (dyn HyperType + 'static) =
-                        <hyper_ast_gen_ts_java::types::Java as Lang<_>>::make(
-                            hyper_ast_gen_ts_java::types::Type::Dot as u16,
-                        );
-                    t
-                }
-                // "xml" => LangRef::<AnyType>::make(&hyper_ast_gen_ts_xml::types::Xml, raw),
-                x => panic!("{}", x),
-            };
-            t.into()
-        }
+        // fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
+        //     let lang = n.get_lang();
+        //     let t: &'static (dyn HyperType + 'static) = match lang {
+        //         "hyper_ast_gen_ts_cpp::types::Lang" => {
+        //             let raw = n.get_raw_type();
+        //             let t: &'static (dyn HyperType + 'static) =
+        //                 <hyper_ast_gen_ts_cpp::types::Cpp as Lang<_>>::make(raw);
+        //             t
+        //         }
+        //         "hyper_ast_gen_ts_java::types::Lang" => {
+        //             let raw = n.get_raw_type();
+        //             let t: &'static (dyn HyperType + 'static) =
+        //                 <hyper_ast_gen_ts_java::types::Java as Lang<_>>::make(raw);
+        //             t
+        //         }
+        //         "hyper_ast_gen_ts_xml::types::Lang" => {
+        //             let raw = n.get_raw_type();
+        //             let t: &'static (dyn HyperType + 'static) =
+        //                 <hyper_ast_gen_ts_xml::types::Xml as Lang<_>>::make(raw);
+        //             t
+        //         }
+        //         "" => {
+        //             let t: &'static (dyn HyperType + 'static) =
+        //                 <hyper_ast_gen_ts_java::types::Java as Lang<_>>::make(
+        //                     hyper_ast_gen_ts_java::types::Type::Dot as u16,
+        //                 );
+        //             t
+        //         }
+        //         // "xml" => LangRef::<AnyType>::make(&hyper_ast_gen_ts_xml::types::Xml, raw),
+        //         x => panic!("{}", x),
+        //     };
+        //     t.into()
+        // }
 
-        fn resolve_lang(
-            &self,
-            n: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            let lang = n.get_lang();
-            let t = match lang {
-                "hyper_ast_gen_ts_cpp::types::Lang" => {
-                    From::<&'static (dyn LangRef<AnyType>)>::from(
-                        &hyper_ast_gen_ts_cpp::types::Lang,
-                    )
-                }
-                "hyper_ast_gen_ts_java::types::Lang" => {
-                    From::<&'static (dyn LangRef<AnyType>)>::from(
-                        &hyper_ast_gen_ts_java::types::Lang,
-                    )
-                }
-                "hyper_ast_gen_ts_xml::types::Lang" => {
-                    From::<&'static (dyn LangRef<AnyType>)>::from(
-                        &hyper_ast_gen_ts_xml::types::Lang,
-                    )
-                }
-                "" => From::<&'static (dyn LangRef<AnyType>)>::from(
-                    &hyper_ast_gen_ts_java::types::Lang,
-                ),
-                // "xml" => From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_xml::types::Xml),
-                x => panic!("{}", x),
-            };
-            t
-        }
+        // fn resolve_lang(
+        //     &self,
+        //     n: &HashedNodeRef<'a, NodeIdentifier>,
+        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        //     let lang = n.get_lang();
+        //     let t = match lang {
+        //         "hyper_ast_gen_ts_cpp::types::Lang" => {
+        //             From::<&'static (dyn LangRef<AnyType>)>::from(
+        //                 &hyper_ast_gen_ts_cpp::types::Lang,
+        //             )
+        //         }
+        //         "hyper_ast_gen_ts_java::types::Lang" => {
+        //             From::<&'static (dyn LangRef<AnyType>)>::from(
+        //                 &hyper_ast_gen_ts_java::types::Lang,
+        //             )
+        //         }
+        //         "hyper_ast_gen_ts_xml::types::Lang" => {
+        //             From::<&'static (dyn LangRef<AnyType>)>::from(
+        //                 &hyper_ast_gen_ts_xml::types::Lang,
+        //             )
+        //         }
+        //         "" => From::<&'static (dyn LangRef<AnyType>)>::from(
+        //             &hyper_ast_gen_ts_java::types::Lang,
+        //         ),
+        //         // "xml" => From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_xml::types::Xml),
+        //         x => panic!("{}", x),
+        //     };
+        //     t
+        // }
 
-        fn type_eq(
-            &self,
-            _n: &HashedNodeRef<'a, NodeIdentifier>,
-            _m: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> bool {
-            todo!()
-        }
+        // fn type_eq(
+        //     &self,
+        //     _n: &HashedNodeRef<'a, NodeIdentifier>,
+        //     _m: &HashedNodeRef<'a, NodeIdentifier>,
+        // ) -> bool {
+        //     todo!()
+        // }
     }
 
     #[derive(Default)]
@@ -150,6 +150,9 @@ pub(crate) mod store {
                 labels_waiting: std::cell::RefCell::new(self.labels_waiting.lock().unwrap()),
             }
         }
+        pub fn resolve_type(&self, n: &NodeIdentifier) -> AnyType {
+            todo!()
+        }
     }
 
     pub(crate) struct AcessibleFetchedHyperAST<'a> {
@@ -165,7 +168,8 @@ pub(crate) mod store {
     }
 
     impl<'b> hyper_ast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
-        type R<'a> = HashedNodeRef<'a, NodeIdentifier>
+        type R<'a>
+            = HashedNodeRef<'a, NodeIdentifier>
         where
             Self: 'a;
 
@@ -219,24 +223,24 @@ pub(crate) mod store {
     {
         type Ty = AnyType;
 
-        fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-            self.type_store.resolve_type(n)
-        }
+        // fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
+        //     self.type_store.resolve_type(n)
+        // }
 
-        fn resolve_lang(
-            &self,
-            n: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            self.type_store.resolve_lang(n)
-        }
+        // fn resolve_lang(
+        //     &self,
+        //     n: &HashedNodeRef<'a, NodeIdentifier>,
+        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        //     self.type_store.resolve_lang(n)
+        // }
 
-        fn type_eq(
-            &self,
-            n: &HashedNodeRef<'a, NodeIdentifier>,
-            m: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> bool {
-            self.type_store.type_eq(n, m)
-        }
+        // fn type_eq(
+        //     &self,
+        //     n: &HashedNodeRef<'a, NodeIdentifier>,
+        //     m: &HashedNodeRef<'a, NodeIdentifier>,
+        // ) -> bool {
+        //     self.type_store.type_eq(n, m)
+        // }
     }
 
     impl<'a, 'b: 'a> hyper_ast::types::HyperASTShared for AcessibleFetchedHyperAST<'a>
@@ -248,6 +252,29 @@ pub(crate) mod store {
         type Idx = u16;
 
         type Label = LabelIdentifier;
+    }
+
+    impl<'a> hyper_ast::types::HyperASTAsso for AcessibleFetchedHyperAST<'a>
+    {
+        type T<'store> = HashedNodeRef<'store, NodeIdentifier> where Self: 'store;
+
+        type NS<'store> = Self where Self: 'store;
+
+        fn node_store<'c>(&'c self) -> &'c Self::NS<'c> {
+            self
+        }
+
+        type LS = Self;
+
+        fn label_store(&self) -> &Self::LS {
+            self
+        }
+
+        type TS<'store> = Self where Self: 'store;
+
+        fn type_store(&self) -> &Self::TS<'_> {
+            self
+        }
     }
 
     impl<'a, 'b: 'a> hyper_ast::types::HyperAST<'b> for AcessibleFetchedHyperAST<'a>
@@ -407,7 +434,7 @@ impl<'a> FetchedViewImpl<'a> {
         let action = if let Some(r) = node_store.try_resolve::<NodeIdentifier>(*root) {
             // let lang = r.get_lang();
             // gen::types::Type::Lang;
-            let kind = self.store.type_store.resolve_type(&r);
+            let kind = self.store.resolve_type(&root);
             let l = r.try_get_label().copied();
             let cs = r.children();
             let size = r.size();
@@ -1636,7 +1663,7 @@ impl<'a> FetchedViewImpl<'a> {
             .unwrap()
             .try_resolve::<NodeIdentifier>(*c)
         {
-            let kind = self.store.type_store.resolve_type(&r); //r.get_type();
+            let kind = self.store.resolve_type(c); //r.get_type();
             let l = r.try_get_label().copied();
             let cs = r.children();
             let size = r.size();
@@ -1854,6 +1881,7 @@ fn subtree_to_layout(
     theme: &syntax_highlighter::simple::CodeTheme,
     nid: NodeIdentifier,
 ) -> (usize, Vec<LayoutSection>) {
+    // let read = store.read();
     match hyper_ast_layouter::Layouter::<_, _>::new(&store.read(), nid, theme).compute() {
         Err(IndentedAlt::FmtError) => panic!(),
         Err(IndentedAlt::NoIndent) => panic!(),
@@ -1904,14 +1932,17 @@ mod hyper_ast_layouter {
         });
     }
 
-    use hyper_ast::types::{self, HyperType, IterableChildren};
+    use hyper_ast::types::{
+        self, HyperAST, HyperASTAsso, HyperASTShared, HyperType, IterableChildren,
+    };
     impl<'store, 'b, IdN, HAST, const SPC: bool> Layouter<'store, 'b, IdN, HAST, SPC>
     where
+        HAST: HyperASTAsso<IdN = IdN>,
         IdN: NodeId<IdN = IdN>,
         HAST: types::NodeStore<IdN>,
         HAST: types::LabelStore<str>,
         HAST: types::TypeStore<HAST::R<'store>>,
-        HAST::R<'store>: types::Labeled<Label = HAST::I> + types::WithChildren<TreeId = IdN>,
+        // HAST::R<'store>: types::Labeled<Label = HAST::I> + types::WithChildren<TreeId = IdN>,
     {
         pub fn compute(&self) -> Result<(usize, Vec<LayoutSection>), IndentedAlt> {
             let mut layout = vec![];
@@ -1923,7 +1954,7 @@ mod hyper_ast_layouter {
         }
         fn _compute(
             &self,
-            id: &IdN,
+            id: &HAST::IdN,
             parent_indent: &str,
             out: &mut Vec<LayoutSection>,
             offset: &mut usize,
@@ -1932,15 +1963,15 @@ mod hyper_ast_layouter {
             use types::Labeled;
             use types::NodeStore;
             use types::WithChildren;
-            let b = NodeStore::resolve(self.stores, id);
+            let b = self.stores.node_store().resolve(id);
             // let kind = (self.stores.type_store(), b);
-            let kind = self.stores.resolve_type(&b);
+            let kind = self.stores.resolve_type(id);
             let label = b.try_get_label();
             let children = b.children();
 
             if kind.is_spaces() {
                 let indent = if let Some(label) = label {
-                    let s = LabelStore::resolve(self.stores, label);
+                    let s = self.stores.label_store().resolve(label);
                     let b: String = Space::format_indentation(s.as_bytes())
                         .iter()
                         .map(|x| x.to_string())
@@ -1974,7 +2005,7 @@ mod hyper_ast_layouter {
                 }
                 (label, Some(children)) => {
                     if let Some(label) = label {
-                        let s = LabelStore::resolve(self.stores, label);
+                        let s = self.stores.label_store().resolve(label);
                         dbg!(s);
                     }
                     if !children.is_empty() {
@@ -1997,7 +2028,7 @@ mod hyper_ast_layouter {
                     Err(IndentedAlt::NoIndent)
                 }
                 (Some(label), None) => {
-                    let s = LabelStore::resolve(self.stores, label);
+                    let s = self.stores.label_store().resolve(label);
                     // out.write_str(&s).unwrap();
                     let len = s.len();
                     let end = *offset + len;

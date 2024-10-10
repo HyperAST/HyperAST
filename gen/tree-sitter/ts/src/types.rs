@@ -3,7 +3,7 @@ use std::fmt::Display;
 use hyper_ast::{
     store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
-    types::{AnyType, HyperType, Lang, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
+    types::{AnyType, HyperType, Lang, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId},
 };
 
 #[cfg(feature = "legion")]
@@ -22,58 +22,58 @@ mod legion_impls {
     use hyper_ast::store::nodes::legion::HashedNodeRef;
 
     impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        type Ty = Type;
+        type Ty = TypeU16<Ts>;
 
-        fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
-            n.get_component::<Type>().unwrap().clone()
-        }
+        // fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
+        //     n.get_component::<Type>().unwrap().clone()
+        // }
 
-        fn resolve_lang(
-            &self,
-            _n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            From::<&'static (dyn LangRef<Type>)>::from(&Ts)
-        }
+        // fn resolve_lang(
+        //     &self,
+        //     _n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
+        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        //     From::<&'static (dyn LangRef<Type>)>::from(&Ts)
+        // }
 
-        fn type_eq(
-            &self,
-            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-            m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        ) -> bool {
-            n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
-        }
+        // fn type_eq(
+        //     &self,
+        //     n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
+        //     m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
+        // ) -> bool {
+        //     n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
+        // }
     }
     impl<'a> TsEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
         fn intern(&self, t: Type) -> Self::Ty {
-            t
+            t.into()
         }
         fn resolve(&self, t: Self::Ty) -> Type {
-            t
+            t.e()
         }
     }
     impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
         type Ty = AnyType;
-        fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-            From::<&'static (dyn HyperType)>::from(LangRef::<Type>::make(
-                &Ts,
-                *n.get_component::<Type>().unwrap() as u16,
-            ))
-        }
+        // fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
+        //     From::<&'static (dyn HyperType)>::from(LangRef::<Type>::make(
+        //         &Ts,
+        //         *n.get_component::<Type>().unwrap() as u16,
+        //     ))
+        // }
 
-        fn resolve_lang(
-            &self,
-            _n: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            From::<&'static (dyn LangRef<AnyType>)>::from(&Ts)
-        }
+        // fn resolve_lang(
+        //     &self,
+        //     _n: &HashedNodeRef<'a, NodeIdentifier>,
+        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
+        //     From::<&'static (dyn LangRef<AnyType>)>::from(&Ts)
+        // }
 
-        fn type_eq(
-            &self,
-            _n: &HashedNodeRef<'a, NodeIdentifier>,
-            _m: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> bool {
-            todo!()
-        }
+        // fn type_eq(
+        //     &self,
+        //     _n: &HashedNodeRef<'a, NodeIdentifier>,
+        //     _m: &HashedNodeRef<'a, NodeIdentifier>,
+        // ) -> bool {
+        //     todo!()
+        // }
     }
 }
 
@@ -134,6 +134,7 @@ type TypeInternalSize = u16;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct T(TypeInternalSize);
 
+#[derive(Debug)]
 pub struct Ts;
 
 impl LangRef<AnyType> for Ts {
@@ -361,8 +362,35 @@ impl Display for Type {
     }
 }
 
+impl hyper_ast::types::LLang<hyper_ast::types::TypeU16<Self>> for Ts {
+    type I = u16;
+
+    type E = Type;
+
+    const TE: &[Self::E] = S_T_L;
+}
+
+impl From<u16> for Type {
+    fn from(value: u16) -> Self {
+        debug_assert_eq!(Self::from_u16(value), S_T_L[value as usize]);
+        S_T_L[value as usize]
+    }
+}
+impl Into<TypeU16<Ts>> for Type {
+    fn into(self) -> TypeU16<Ts> {
+        TypeU16::new(self)
+    }
+}
+
+impl Into<u16> for Type {
+    fn into(self) -> u16 {
+        self as u8 as u16
+    }
+}
+
 #[repr(u16)]
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+#[cfg_attr(feature = "bevy_ecs", derive(Component))]
 pub enum Type {
     End,
     Identifier,

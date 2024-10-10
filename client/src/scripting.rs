@@ -12,9 +12,10 @@ mod stats;
 use crate::SharedState;
 use average::Merge;
 use axum::Json;
+use hyper_ast::types::HyperAST;
 use hyper_ast::{
     store::defaults::NodeIdentifier,
-    types::{HyperType, LabelStore, Labeled, TypeStore, WithChildren, WithStats},
+    types::{HyperType, LabelStore, Labeled, WithChildren, WithStats},
 };
 use num::ToPrimitive;
 use rhai::{
@@ -316,38 +317,26 @@ fn simple_aux(
             let s = state.clone();
             filter_engine.register_fn("type", move || {
                 let stores = &stores!(s);
-                let node_store = &stores.node_store;
-                let type_store = &stores.type_store;
-                let n = node_store.resolve(current);
-                let t = type_store.resolve_type(&n);
+                let t = stores.resolve_type(&current);
                 t.to_string()
             });
             let s = state.clone();
             filter_engine.register_fn("is_directory", move || {
                 let stores = &stores!(s);
-                let node_store = &stores.node_store;
-                let type_store = &stores.type_store;
-                let n = node_store.resolve(current);
-                let t = type_store.resolve_type(&n);
+                let t = stores.resolve_type(&current);
                 t.is_directory()
             });
             let s = state.clone();
             filter_engine.register_fn("is_type_decl", move || {
                 let stores = &stores!(s);
-                let node_store = &stores.node_store;
-                let type_store = &stores.type_store;
-                let n = node_store.resolve(current);
-                let t = type_store.resolve_type(&n);
+                let t = stores.resolve_type(&current);
                 let s = t.as_shared();
                 s == hyper_ast::types::Shared::TypeDeclaration
             });
             let s = state.clone();
             filter_engine.register_fn("is_file", move || {
                 let stores = &stores!(s);
-                let node_store = &stores.node_store;
-                let type_store = &stores.type_store;
-                let n = node_store.resolve(current);
-                let t = type_store.resolve_type(&n);
+                let t = stores.resolve_type(&current);
                 t.is_file()
             });
             let s = state.clone();
@@ -364,9 +353,8 @@ fn simple_aux(
             filter_engine.register_fn("is_java_file", move || {
                 let stores = &stores!(s);
                 let node_store = &stores.node_store;
-                let type_store = &stores.type_store;
                 let n = node_store.resolve(current);
-                let t = type_store.resolve_type(&n);
+                let t = stores.resolve_type(&current);
                 t.is_file()
                     && stores
                         .label_store
@@ -377,9 +365,8 @@ fn simple_aux(
             filter_engine.register_fn("file_name", move || {
                 let stores = &stores!(s);
                 let node_store = &stores.node_store;
-                let type_store = &stores.type_store;
                 let n = node_store.resolve(current);
-                let t = type_store.resolve_type(&n);
+                let t = stores.resolve_type(&current);
                 if t.is_file() || t.is_directory() {
                     Ok(stores
                         .label_store
@@ -462,47 +449,34 @@ fn simple_aux(
         let s = state.clone();
         acc_engine.register_fn("type", move || {
             let stores = &stores!(s);
-            let node_store = &stores.node_store;
-            let type_store = &stores.type_store;
-            let n = node_store.resolve(current);
-            let t = type_store.resolve_type(&n);
+            let t = stores.resolve_type(&current);
             t.to_string()
         });
         let s = state.clone();
         acc_engine.register_fn("is_type_decl", move || {
             let stores = &stores!(s);
-            let node_store = &stores.node_store;
-            let type_store = &stores.type_store;
-            let n = node_store.resolve(current);
-            let t = type_store.resolve_type(&n);
+            let t = stores.resolve_type(&current);
             let s = t.as_shared();
             s == hyper_ast::types::Shared::TypeDeclaration
         });
         let s = state.clone();
         acc_engine.register_fn("is_directory", move || {
             let stores = &stores!(s);
-            let node_store = &stores.node_store;
-            let type_store = &stores.type_store;
-            let n = node_store.resolve(current);
-            let t = type_store.resolve_type(&n);
+            let t = stores.resolve_type(&current);
             t.is_directory()
         });
         let s = state.clone();
         acc_engine.register_fn("is_file", move || {
             let stores = &stores!(s);
-            let node_store = &stores.node_store;
-            let type_store = &stores.type_store;
-            let n = node_store.resolve(current);
-            let t = type_store.resolve_type(&n);
+            let t = stores.resolve_type(&current);
             t.is_file()
         });
         let s = state.clone();
         acc_engine.register_fn("is_java_file", move || {
             let stores = &stores!(s);
             let node_store = &stores.node_store;
-            let type_store = &stores.type_store;
             let n = node_store.resolve(current);
-            let t = type_store.resolve_type(&n);
+            let t = stores.resolve_type(&current);
             t.is_file()
                 && stores
                     .label_store
@@ -513,9 +487,8 @@ fn simple_aux(
         acc_engine.register_fn("file_name", move || {
             let stores = &stores!(s);
             let node_store = &stores.node_store;
-            let type_store = &stores.type_store;
             let n = node_store.resolve(current);
-            let t = type_store.resolve_type(&n);
+            let t = stores.resolve_type(&current);
             if t.is_file() || t.is_directory() {
                 Ok(stores
                     .label_store

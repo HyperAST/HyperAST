@@ -499,7 +499,7 @@ impl RepositoryProcessor {
                     more: precomp,
                 };
 
-                crate::java::handle_java_file(&mut java_tree_gen, n, t)
+                crate::java::_handle_java_file(&mut java_tree_gen, n, t)
                     .map_err(|_| crate::ParseErr::IllFormed)
                     .map(|x| (x.local.clone(), false))
             })
