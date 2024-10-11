@@ -40,13 +40,13 @@ pub fn commit_metadata(_state: SharedState, path: Param) -> Result<Json<Metadata
         version,
     } = path.clone();
     let repo = fetch_github_repository(&format!("{}/{}", user, name));
-    log::warn!("done cloning {user}/{name}");
+    log::debug!("done cloning {user}/{name}");
     let commit = retrieve_commit(&repo, &version);
     if let Err(err) = &commit {
         log::error!("{}", err.to_string());
     }
     let commit = commit.map_err(|err| err.to_string())?;
-    log::warn!("done retrieving version {version}");
+    log::debug!("done retrieving commit {version}");
     let time = commit.time();
     let timezone = time.offset_minutes();
     let time = time.seconds();
@@ -78,6 +78,8 @@ pub fn commit_metadata(_state: SharedState, path: Param) -> Result<Json<Metadata
         .map(|i| i * i)
         .map_while(|i| ancestors.get(i).cloned())
         .collect();
+
+    log::debug!("sending metadata of commit {version}");
 
     Ok(Json(Metadata {
         message,
