@@ -1,5 +1,4 @@
 #![feature(array_chunks)]
-#![feature(core_intrinsics)]
 #![feature(map_many_mut)]
 #![feature(iter_collect_into)]
 use std::{
