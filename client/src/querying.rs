@@ -523,7 +523,7 @@ pub fn differential(
         }
     };
     let mut repo = repo.fetch();
-    log::warn!("done cloning {}", &repo.spec);
+    log::info!("done cloning {}", &repo.spec);
     let commit = crate::utils::handle_pre_processing(&state, &mut repo, "", &commit, 1)
         .map_err(|x| QueryingError::ProcessingError(x.to_string()))?[0];
     let baseline = crate::utils::handle_pre_processing(&state, &mut repo, "", &baseline, 1)
@@ -587,7 +587,7 @@ pub fn differential(
     );
     if results.len() == baseline_results.len() {}
     log::info!(
-        "lens results/baseline_results: {}/{}",
+        "lengths results/baseline_results: {}/{}",
         results.len(),
         baseline_results.len()
     );
@@ -617,7 +617,7 @@ pub fn differential(
     let baseline_results: Vec<_> = baseline_results
         .iter()
         .filter(|x| {
-            log::info!("filtering");
+            log::debug!("filtering");
             let (_, _, no_spaces_path_to_target) =
                 hyper_ast::position::compute_position_with_no_spaces(
                     current_tr,
@@ -634,7 +634,7 @@ pub fn differential(
                         baseline,
                         (x.make_position(stores), x.iter_offsets().collect()),
                     );
-                    log::info!("mapped: {a:?}");
+                    log::debug!("mapped: {a:?}");
                     return false;
                 }
                 use hyper_diff::decompressed_tree_store::LazyDecompressedTreeStore;
@@ -642,7 +642,7 @@ pub fn differential(
                     .src_arena
                     .decompress_children(&hyperast.node_store, &src);
                 if cs.is_empty() {
-                    log::info!("empty");
+                    log::debug!("empty");
                     return true;
                 }
                 // Gracefully handling possibly wrong param
@@ -671,16 +671,16 @@ pub fn differential(
                 };
                 src = *s;
             }
-            log::info!("mapped = {}", subtree_mappings.get_dsts(&src).is_empty());
+            log::debug!("mapped = {}", subtree_mappings.get_dsts(&src).is_empty());
             subtree_mappings.get_dsts(&src).is_empty()
         })
         .collect();
-    log::info!("done filtering");
+    log::info!("done filtering evolutions");
 
     let results = baseline_results
         .into_iter()
         .map(|p| {
-            log::info!("globalizing");
+            log::debug!("globalizing");
             (
                 globalize(
                     &repo,
@@ -695,7 +695,11 @@ pub fn differential(
             )
         })
         .collect();
-    log::info!("done globalizing");
+
+    log::info!(
+        "done finding evolutions of {commit:?} and {baseline:?} in  {}",
+        repo.spec
+    );
 
     Ok(Json(ComputeResultsDifferential {
         prepare_time,

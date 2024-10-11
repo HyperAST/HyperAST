@@ -385,7 +385,7 @@ impl PrecomputedPatterns {
     }
 
     pub(crate) fn matches(&self, query: &Query, stepid: StepId) -> Vec<PatternId> {
-        dbg!(stepid);
+        log::debug!("matching subpatts for stepid {}", stepid);
         let mut res = vec![];
         let hasher = IncHasher(std::hash::DefaultHasher::new(), 0);
         let mut stack = vec![(hasher, stepid)];
@@ -1740,9 +1740,8 @@ fn find_precomputed_uses(query: &mut Query, precomputeds: &[&str]) {
                 let r = r.0.to_usize();
                 assert!(r < 16);
                 m_pat.precomputed |= 1 << r as Precomps;
-                // m_pat.precomputed = r.0.to_usize();
             }
-            log::warn!("found subpatts {:b} for pattern {}", m_pat.precomputed, i);
+            log::debug!("found subpatts [{:0>16b}] for pattern {}", m_pat.precomputed, i);
             query.used_precomputed &= m_pat.precomputed;
         }
     }

@@ -93,14 +93,14 @@ pub fn view(state: SharedState, path: Parameters) -> Result<Json<ViewRes>, Strin
         .get_config(repo_spec)
         .ok_or_else(|| "missing config for repository".to_string())?;
     let mut repo = repo.fetch();
-    log::warn!("done cloning {}", repo.spec);
+    log::info!("done cloning {}", repo.spec);
     let commits = state
         .repositories
         .write()
         .unwrap()
         .pre_process_with_limit(&mut repo, "", &commit, 2)
         .map_err(|e| e.to_string())?;
-    log::warn!("done construction of {commits:?} in {}", repo.spec);
+    log::info!("done construction of {commits:?} in {}", repo.spec);
     let repositories = state.repositories.read().unwrap();
     let commit_src = repositories.get_commit(&repo.config, &commits[0]).unwrap();
     let src_tr = commit_src.ast_root;
@@ -108,7 +108,7 @@ pub fn view(state: SharedState, path: Parameters) -> Result<Json<ViewRes>, Strin
     let node_store = &repositories.processor.main_stores.node_store;
     let label_store = &repositories.processor.main_stores.label_store;
 
-    log::error!("searching for {path:?}");
+    log::info!("searching for {path:?}");
     let curr = resolve_path(src_tr, path, node_store);
     todo!("should deprecate or accomodate changes in type repr ie. lang + type btw. could allow paking as u16 like before");
     // let type_sys = TypeSys(types::Type::it().map(|x| x.to_string()).collect());
