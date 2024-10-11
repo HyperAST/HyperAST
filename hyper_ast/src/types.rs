@@ -554,6 +554,20 @@ impl HyperType for u8 {
     }
 }
 
+// blanket impl for all TStore such that TypeTrait can be implemented on TypeU16
+// impl<L> Lang<TypeU16<L>> for L
+// where
+//     L: LangRef<TypeU16<L>>, //for L
+//     L: LLang<TypeU16<L>, I = u16>
+// {
+//     fn make(t: u16) -> &'static TypeU16<L> {
+//         <L as Lang<L::E>>::make(t)
+//     }
+//     fn to_u16(t: TypeU16<L>) -> u16 {
+//         <L as Lang<L::E>>::to_u16(t)
+//     }
+// }
+
 pub trait TypeTrait: HyperType + Hash + Copy + Eq + Send + Sync {
     type Lang: Lang<Self>;
     fn is_fork(&self) -> bool;
@@ -1156,9 +1170,15 @@ impl<T> SizedIndex<u16> for [T] {
 #[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
 pub struct TypeU16<L: LLang<Self, I = u16>>(u16, std::marker::PhantomData<L>);
 
+unsafe impl<L: LLang<Self, I = u16>> Send for TypeU16<L> {}
+unsafe impl<L: LLang<Self, I = u16>> Sync for TypeU16<L> {}
+
 impl<L: LLang<Self, I = u16>> Debug for TypeU16<L> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("TypeU16").field(&self.0).field(&self.1).finish()
+        f.debug_tuple("TypeU16")
+            .field(&self.0)
+            .field(&self.1)
+            .finish()
     }
 }
 
@@ -1204,7 +1224,10 @@ impl<L: LLang<Self, I = u16>> TypeU16<L> {
     }
 }
 
-impl<L: LLang<Self, I = u16> + std::fmt::Debug> HyperType for TypeU16<L> where L::E: HyperType {
+impl<L: LLang<Self, I = u16> + std::fmt::Debug> HyperType for TypeU16<L>
+where
+    L::E: HyperType,
+{
     fn as_shared(&self) -> Shared {
         self.e().as_shared()
     }
@@ -1268,6 +1291,15 @@ impl<L: LLang<Self, I = u16> + std::fmt::Debug> HyperType for TypeU16<L> where L
     }
 }
 
+// impl<L: LLang<Self, I = u16> + std::fmt::Debug> TypeTrait for TypeU16<L>
+// where
+//     L::E: TypeTrait<Lang = L>,
+//     L: Lang<Self>,
+// {
+//     type Lang = L;
+
+// }
+
 #[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
 pub struct TypeU8<L: LLang<Self>>(u8, std::marker::PhantomData<L>);
 
@@ -1311,19 +1343,17 @@ pub trait Compo: bevy_ecs::component::Component + legion::storage::Component {}
 #[cfg(all(feature = "bevy_ecs", feature = "legion"))]
 impl<T> Compo for T where T: bevy_ecs::component::Component + legion::storage::Component {}
 
-
 #[cfg(all(not(feature = "bevy_ecs"), feature = "legion"))]
 pub trait Compo: legion::storage::Component {}
 
 #[cfg(all(not(feature = "bevy_ecs"), feature = "legion"))]
 impl<T> Compo for T where T: legion::storage::Component {}
 
-
 #[cfg(all(not(feature = "bevy_ecs"), not(feature = "legion")))]
 pub trait Compo {}
 
 #[cfg(all(not(feature = "bevy_ecs"), not(feature = "legion")))]
-impl<T> Compo for T where {}
+impl<T> Compo for T {}
 
 pub trait ErasedInserter {
     fn insert<T: 'static + Compo>(&mut self, t: T);
@@ -1389,15 +1419,23 @@ pub trait HyperAST<'store>: HyperASTShared {
     fn resolve_type(&'store self, id: &Self::IdN) -> <Self::TS as TypeStore>::Ty {
         let ns = self.node_store();
         let n = ns.resolve(id);
-        self.type_store().decompress_type(&n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+        self.type_store()
+            .decompress_type(&n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
     }
     // fn resolve_type(&self, n: &T) -> Self::Ty {todo!()}
     fn resolve_lang(&self, n: &Self::T) -> LangWrapper<<Self::TS as TypeStore>::Ty> {
-        self.type_store().decompress_type(n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>()).get_lang()
+        self.type_store()
+            .decompress_type(n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+            .get_lang()
     }
     fn type_eq(&self, n: &Self::T, m: &Self::T) -> bool {
-        self.type_store().decompress_type(n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>()).generic_eq(
-            self.type_store().decompress_type(m, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>()).as_static())
+        self.type_store()
+            .decompress_type(n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+            .generic_eq(
+                self.type_store()
+                    .decompress_type(m, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+                    .as_static(),
+            )
     }
 }
 
