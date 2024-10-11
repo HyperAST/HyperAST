@@ -3,6 +3,7 @@ use std::{iter::Peekable, path::Components};
 use git2::{Oid, Repository};
 use hyper_ast::hashed::{IndexingHashBuilder, MetaDataHashsBuilder};
 use hyper_ast_gen_ts_java::legion_with_refs::{self, add_md_ref_ana};
+use hyper_ast_gen_ts_java::types::JavaEnabledTypeStore;
 use hyper_ast_gen_ts_java::{legion_with_refs::add_md_precomp_queries, types::Type};
 
 use crate::{
@@ -10,7 +11,7 @@ use crate::{
     java::JavaAcc,
     preprocessed::{IsSkippedAna, RepositoryProcessor},
     processing::{erased::CommitProcExt, CacheHolding, InFiles, ObjectName},
-    Processor, SimpleStores,
+    Processor,
 };
 
 pub(crate) fn prepare_dir_exploration(tree: git2::Tree) -> Vec<BasicGitObject> {
@@ -20,6 +21,8 @@ pub(crate) fn prepare_dir_exploration(tree: git2::Tree) -> Vec<BasicGitObject> {
         .filter_map(|x| x.ok())
         .collect()
 }
+
+pub type SimpleStores = hyper_ast::store::SimpleStores<hyper_ast_gen_ts_java::types::TStore>;
 
 pub struct JavaProcessor<'repo, 'prepro, 'd, 'c, Acc> {
     repository: &'repo Repository,
@@ -106,7 +109,7 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
         let name = &acc.primary.name;
         let key = (oid, name.as_bytes().into());
         let name = self.prepro.get_or_insert_label(name);
-        let full_node = make(acc, self.prepro.main_stores_mut());
+        let full_node = make(acc, self.prepro.main_stores_mut().mut_with_ts());
         self.prepro
             .processing_systems
             .mut_or_default::<JavaProcessorHolder>()
@@ -141,7 +144,8 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
     };
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
-    let interned_kind = Type::Directory;
+    let kind = Type::Directory;
+    let interned_kind = stores.type_store.intern(kind);
     let label_id = label_store.get_or_insert(acc.primary.name.clone());
 
     let primary = acc
@@ -236,7 +240,7 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
         compressed_node: node_id.clone(),
         metrics,
         ana,
-        mcc: Mcc::new(&interned_kind),
+        mcc: Mcc::new(&kind),
         role: None,
         precomp_queries: acc.precomp_queries,
     };
@@ -632,7 +636,7 @@ mod experiments {
             let name = &acc.primary.name;
             let key = (oid, name.as_bytes().into());
             let name = self.prepro.intern_label(name);
-            let full_node = make(acc, self.prepro.main_stores_mut());
+            let full_node = make(acc, self.prepro.main_stores_mut().mut_with_ts());
             let full_node = (full_node, skiped_ana);
             self.prepro
                 .processing_systems

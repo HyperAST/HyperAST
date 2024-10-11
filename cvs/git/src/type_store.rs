@@ -141,23 +141,6 @@ impl TypeStore for &TStore {
             }
             .map(|t| t.as_static().into())
         })
-        // TODO remove dead code, i.e., the following 2 'Type's should not be components
-        .or_else(|| {
-            unsafe {
-                erazed.unerase_ref::<hyper_ast_gen_ts_java::types::Type>(std::any::TypeId::of::<
-                    hyper_ast_gen_ts_java::types::Type,
-                >())
-            }
-            .map(|t| t.as_static().into())
-        })
-        .or_else(|| {
-            unsafe {
-                erazed.unerase_ref::<hyper_ast_gen_ts_xml::types::Type>(std::any::TypeId::of::<
-                    hyper_ast_gen_ts_xml::types::Type,
-                >())
-            }
-            .map(|t| t.as_static().into())
-        })
         .unwrap_or_else(|| {
             dbg!(tid);
             dbg!(std::any::type_name::<Self::Ty>());

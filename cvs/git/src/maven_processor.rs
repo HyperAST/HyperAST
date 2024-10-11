@@ -4,7 +4,7 @@ use crate::{
     maven::{MavenModuleAcc, MD},
     preprocessed::RepositoryProcessor,
     processing::{erased::ParametrizedCommitProc2, CacheHolding, InFiles, ObjectName},
-    Processor, SimpleStores,
+    Processor,
 };
 use git2::{Oid, Repository};
 use hyper_ast::{
@@ -13,12 +13,13 @@ use hyper_ast::{
     tree_gen::Accumulator,
     types::LabelStore,
 };
-use hyper_ast_gen_ts_xml::types::Type;
+use hyper_ast_gen_ts_xml::types::{Type, XmlEnabledTypeStore as _};
 use std::{
     iter::Peekable,
     marker::PhantomData,
     path::{Components, PathBuf},
 };
+pub type SimpleStores = hyper_ast::store::SimpleStores<hyper_ast_gen_ts_xml::types::TStore>;
 
 /// RMS: Resursive Module Search
 /// FFWD: Fast ForWarD to java directories without looking at maven stuff
@@ -86,7 +87,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
     }
     fn post(&mut self, oid: Oid, acc: MavenModuleAcc) -> Option<(NodeIdentifier, MD)> {
         let name = acc.primary.name.clone();
-        let full_node = Self::make(acc, self.prepro.main_stores_mut());
+        let full_node = Self::make(acc, self.prepro.main_stores_mut().mut_with_ts());
         self.prepro
             .processing_systems
             .mut_or_default::<MavenProcessorHolder>()
@@ -231,7 +232,8 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
     use hyper_ast::store::nodes::legion::eq_node;
-    let interned_kind = Type::MavenDirectory;
+    let kind = Type::MavenDirectory;
+    let interned_kind = stores.type_store.intern(kind);
     let label_id = label_store.get_or_insert(acc.primary.name.clone());
 
     let primary = acc

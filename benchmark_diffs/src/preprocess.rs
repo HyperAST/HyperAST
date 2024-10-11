@@ -9,7 +9,7 @@ use hyper_ast::{
 use hyper_ast_cvs_git::java::JavaAcc;
 use hyper_ast_gen_ts_java::{
     legion_with_refs::{JavaTreeGen, Local, MDCache, MD},
-    types::{TStore, Type},
+    types::{JavaEnabledTypeStore as _, TStore, Type},
 };
 use std::path::{Path, PathBuf};
 
@@ -319,7 +319,8 @@ fn make(
 ) -> hyper_ast_gen_ts_java::legion_with_refs::Local {
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
-    let interned_kind = Type::Directory;
+    let kind = Type::Directory;
+    let interned_kind = stores.type_store.intern(kind);
     let label_id = label_store.get_or_insert(acc.primary.name.clone());
 
     let primary = acc
@@ -340,7 +341,7 @@ fn make(
             compressed_node: id,
             metrics,
             ana,
-            mcc: Mcc::new(&interned_kind),
+            mcc: Mcc::new(&kind),
             role: None,
             precomp_queries: Default::default(),
         };
@@ -374,7 +375,7 @@ fn make(
         compressed_node: node_id.clone(),
         metrics,
         ana,
-        mcc: Mcc::new(&interned_kind),
+        mcc: Mcc::new(&kind),
         role: None,
         precomp_queries: Default::default(),
     };

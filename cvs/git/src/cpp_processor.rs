@@ -4,12 +4,17 @@ use crate::{
     make::MakeModuleAcc,
     preprocessed::{IsSkippedAna, RepositoryProcessor},
     processing::{erased::CommitProcExt, CacheHolding, InFiles, ObjectName},
-    Processor, SimpleStores,
+    Processor,
 };
 use git2::{Oid, Repository};
 use hyper_ast::{store::nodes::legion::eq_node, types::LabelStore};
-use hyper_ast_gen_ts_cpp::{legion as cpp_gen, types::Type};
+use hyper_ast_gen_ts_cpp::{
+    legion as cpp_gen,
+    types::{CppEnabledTypeStore as _, Type},
+};
 use std::{iter::Peekable, path::Components};
+
+pub type SimpleStores = hyper_ast::store::SimpleStores<hyper_ast_gen_ts_cpp::types::TStore>;
 
 pub(crate) fn prepare_dir_exploration(tree: git2::Tree) -> Vec<BasicGitObject> {
     tree.iter()
@@ -77,7 +82,7 @@ impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, Cp
         let skiped_ana = true;
         let name = acc.primary.name.clone();
         let key = (oid, name.as_bytes().into());
-        let full_node = make(acc, self.prepro.main_stores_mut());
+        let full_node = make(acc, self.prepro.main_stores_mut().mut_with_ts());
         self.prepro
             .processing_systems
             .mut_or_default::<CppProcessorHolder>()
@@ -323,7 +328,8 @@ fn make(acc: CppAcc, stores: &mut SimpleStores) -> cpp_gen::Local {
     use hyper_ast::hashed::{IndexingHashBuilder, MetaDataHashsBuilder};
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
-    let interned_kind = Type::Directory;
+    let kind = Type::Directory;
+    let interned_kind = stores.type_store.intern(kind);
     let label_id = label_store.get_or_insert(acc.primary.name.clone());
 
     let primary = acc

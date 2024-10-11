@@ -3,7 +3,7 @@ use crate::{
     make::{MakeModuleAcc, MakePartialAnalysis, MD},
     preprocessed::RepositoryProcessor,
     processing::{erased::ParametrizedCommitProc2, CacheHolding, InFiles, ObjectName},
-    Processor, SimpleStores,
+    Processor,
 };
 use git2::{Oid, Repository};
 use hyper_ast::{
@@ -11,11 +11,13 @@ use hyper_ast::{
     store::{defaults::NodeIdentifier, nodes::legion::eq_node},
     types::LabelStore,
 };
-use hyper_ast_gen_ts_cpp::types::Type;
+use hyper_ast_gen_ts_xml::types::Type;
 use std::{
     iter::Peekable,
     path::{Components, PathBuf},
 };
+
+pub type SimpleStores = hyper_ast::store::SimpleStores<hyper_ast_gen_ts_xml::types::TStore>;
 
 pub struct MakeProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
     prepro: &'b mut RepositoryProcessor,
@@ -198,7 +200,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
     }
     fn post(&mut self, oid: Oid, acc: MakeModuleAcc) -> Option<(NodeIdentifier, MD)> {
         let name = acc.primary.name.clone();
-        let full_node = Self::make(acc, self.prepro.main_stores_mut());
+        let full_node = Self::make(acc, self.prepro.main_stores_mut().mut_with_ts());
         self.prepro
             .processing_systems
             .mut_or_default::<MakeProcessorHolder>()
@@ -236,7 +238,8 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
 }
 
 pub(crate) fn make(acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
-    let interned_kind = Type::Directory;
+    let kind = Type::Directory;
+    let interned_kind = stores.type_store.intern(kind);
     let label_id = stores.label_store.get_or_insert(acc.primary.name.clone());
 
     let primary = acc
@@ -279,7 +282,7 @@ pub(crate) fn make(acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeIdenti
     full_node
 }
 
-use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
+use hyper_ast_gen_ts_xml::{legion::XmlTreeGen, types::XmlEnabledTypeStore as _};
 impl RepositoryProcessor {
     fn help_handle_makefile(
         &mut self,

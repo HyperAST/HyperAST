@@ -283,6 +283,6 @@ impl PreProcessedRepositories {
         acc: MavenModuleAcc,
         stores: &mut SimpleStores,
     ) -> (NodeIdentifier, crate::maven::MD) {
-        make(acc, stores)
+        make(acc, stores.mut_with_ts())
     }
 }

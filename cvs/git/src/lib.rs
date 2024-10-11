@@ -174,7 +174,7 @@ impl<Id, L, M> BasicDirAcc<Id, L, M> {
         label_id: L,
     ) -> M
     where
-        K: 'static + Sized + hyper_ast::types::TypeTrait,
+        K: 'static + Sized + std::marker::Send + std::marker::Sync,
         L: 'static + std::marker::Send + std::marker::Sync,
         Id: 'static + std::marker::Send + std::marker::Sync,
     {

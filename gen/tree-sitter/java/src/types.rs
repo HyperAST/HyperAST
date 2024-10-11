@@ -5,6 +5,7 @@ use hyper_ast::{
     types::{AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypedNodeId},
 };
 
+
 #[cfg(feature = "legion")]
 mod legion_impls {
     use hyper_ast::types::LangWrapper;
