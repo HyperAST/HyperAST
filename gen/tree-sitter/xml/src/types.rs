@@ -1,7 +1,6 @@
 use std::{fmt::Display, u16};
 
 use hyper_ast::{
-    store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
     types::{AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId},
 };
@@ -13,74 +12,32 @@ mod legion_impls {
     use crate::TNode;
 
     impl<'a> TNode<'a> {
-        pub fn obtain_type<T>(&self, _: &mut impl XmlEnabledTypeStore<T>) -> Type {
+        pub fn obtain_type(&self, _: &mut impl XmlEnabledTypeStore) -> Type {
             let t = self.kind_id();
             Type::from_u16(t)
         }
     }
 
-    use hyper_ast::{
-        store::nodes::legion::HashedNodeRef,
-        types::{LangWrapper, RoleStore},
-    };
+    use hyper_ast::types::{LangWrapper, RoleStore};
 
-    impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
+    impl TypeStore for TStore {
         type Ty = TypeU16<Xml>;
-        // fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
-        //     n.get_component::<Type>().unwrap().clone()
-        // }
-
-        // fn resolve_lang(
-        //     &self,
-        //     _n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        //     From::<&'static (dyn LangRef<Type>)>::from(&Lang)
-        // }
-
-        // fn type_eq(
-        //     &self,
-        //     n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        //     m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        // ) -> bool {
-        //     n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
-        // }
     }
-    impl<'a> XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
+    impl TypeStore for &TStore {
+        type Ty = TypeU16<Xml>;
+    }
+    
+    impl XmlEnabledTypeStore for TStore {
         fn intern(&self, t: Type) -> Self::Ty {
             t.into()
         }
 
         fn resolve(&self, t: Self::Ty) -> Type {
             t.e()
-            // let t = t.0 as u16;
-            // let t = t & !TStore::MASK;
-            // Type::resolve(t)
         }
     }
-    impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
-        type Ty = AnyType;
 
-        // fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-        //     as_any(n.get_component::<Type>().unwrap())
-        // }
-
-        // fn resolve_lang(
-        //     &self,
-        //     _n: &HashedNodeRef<'a, NodeIdentifier>,
-        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        //     todo!()
-        // }
-
-        // fn type_eq(
-        //     &self,
-        //     _n: &HashedNodeRef<'a, NodeIdentifier>,
-        //     _m: &HashedNodeRef<'a, NodeIdentifier>,
-        // ) -> bool {
-        //     todo!()
-        // }
-    }
-
-    impl<'a> RoleStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
+    impl RoleStore for TStore {
         type IdF = u16;
 
         type Role = hyper_ast::types::Role;
@@ -118,7 +75,8 @@ pub fn as_any(t: &Type) -> AnyType {
     let t: &'static dyn HyperType = t;
     t.into()
 }
-pub trait XmlEnabledTypeStore<T>: TypeStore<T> {
+
+pub trait XmlEnabledTypeStore: TypeStore {
     fn intern(&self, t: Type) -> Self::Ty;
     fn resolve(&self, t: Self::Ty) -> Type;
 }
@@ -207,6 +165,25 @@ impl LangRef<AnyType> for Xml {
         id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
+
+impl LangRef<hyper_ast::types::TypeU16<Self>> for Lang {
+    fn make(&self, t: u16) -> &'static TType {
+        // TODO could make one safe, but not priority
+        unsafe { std::mem::transmute(&S_T_L[t as usize]) }
+    }
+    fn to_u16(&self, t: TType) -> u16 {
+        t.e() as u16
+    }
+
+    fn name(&self) -> &'static str {
+        std::any::type_name::<Lang>()
+    }
+
+    fn ts_symbol(&self, t: TType) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
+}
+
 impl HyperType for Type {
     fn generic_eq(&self, other: &dyn HyperType) -> bool
     where
@@ -435,29 +412,6 @@ impl Display for Type {
     }
 }
 
-// #[repr(u16)]
-// #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-// pub enum Type {
-//     Spaces,
-//     SourceFile,
-//     MavenDirectory,
-//     Directory,
-//     ERROR,
-// }
-// impl Type {
-//     pub fn from_u16(t: u16) -> Type {
-//         todo!()
-//     }
-// }
-
-// const S_T_L: &'static [Type] = &[
-//     Type::Spaces,
-//     Type::SourceFile,
-//     Type::MavenDirectory,
-//     Type::Directory,
-//     Type::ERROR,
-// ];
-
 impl TryFrom<&str> for Type {
     type Error = String;
 
@@ -472,7 +426,12 @@ impl hyper_ast::types::LLang<hyper_ast::types::TypeU16<Self>> for Xml {
     type E = Type;
 
     const TE: &[Self::E] = S_T_L;
+
+    fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<hyper_ast::types::TypeU16<Self>> {
+        From::<&'static (dyn LangRef<_>)>::from(&Lang)
+    }
 }
+
 pub type TType = TypeU16<Lang>;
 
 impl From<u16> for Type {
@@ -495,7 +454,6 @@ impl Into<u16> for Type {
 
 #[repr(u16)]
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-#[cfg_attr(feature = "bevy_ecs", derive(Component))]
 pub enum Type {
     End,
     Name,

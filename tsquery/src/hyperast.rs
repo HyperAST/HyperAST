@@ -78,7 +78,7 @@ impl<IdF: Copy> Status for CursorStatus<IdF> {
 impl<'hast, HAST: HyperAST<'hast>> super::Cursor for self::TreeCursor<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<HAST::T>,
+    HAST::TS: RoleStore,
     HAST::T: WithRoles,
     HAST::T: WithPrecompQueries,
 {
@@ -176,7 +176,7 @@ where
         Some(node)
     }
 
-    type Status = CursorStatus<<<HAST as HyperAST<'hast>>::TS as RoleStore<HAST::T>>::IdF>;
+    type Status = CursorStatus<<<HAST as HyperAST<'hast>>::TS as RoleStore>::IdF>;
 
     #[inline]
     fn current_status(&self) -> Self::Status {
@@ -236,14 +236,14 @@ where
 impl<'hast, HAST: HyperAST<'hast>> self::TreeCursor<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<HAST::T>,
+    HAST::TS: RoleStore,
     HAST::T: WithRoles,
     HAST::T: WithPrecompQueries,
 {
-    fn role(&self) -> Option<<HAST::TS as RoleStore<HAST::T>>::Role> {
+    fn role(&self) -> Option<<HAST::TS as RoleStore>::Role> {
         use hyper_ast::types::NodeStore;
         let n = self.stores.node_store().resolve(self.pos.parent().unwrap());
-        n.role_at::<<HAST::TS as RoleStore<HAST::T>>::Role>(self.pos.o().unwrap())
+        n.role_at::<<HAST::TS as RoleStore>::Role>(self.pos.o().unwrap())
     }
 
     fn super_types(mut self) -> Vec<Symbol> {
@@ -267,8 +267,8 @@ where
     fn compute_current_role(
         &self,
     ) -> (
-        Option<<<HAST as HyperAST<'hast>>::TS as RoleStore<HAST::T>>::Role>,
-        <<HAST as HyperAST<'hast>>::TS as RoleStore<HAST::T>>::IdF,
+        Option<<<HAST as HyperAST<'hast>>::TS as RoleStore>::Role>,
+        <<HAST as HyperAST<'hast>>::TS as RoleStore>::IdF,
     ) {
         use hyper_ast::types::NodeStore;
         let mut p = self.clone();
@@ -286,7 +286,7 @@ where
                 continue;
             }
             lang = p.kind().get_lang();
-            break n.role_at::<<HAST::TS as RoleStore<HAST::T>>::Role>(o - num::one());
+            break n.role_at::<<HAST::TS as RoleStore>::Role>(o - num::one());
         };
         let field_id = if let Some(role) = role {
             self.stores.type_store().intern_role(lang, role)
@@ -300,7 +300,7 @@ where
 impl<'hast, HAST: HyperAST<'hast>> super::Node for self::Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<HAST::T>,
+    HAST::TS: RoleStore,
     HAST::T: WithRoles,
     HAST::T: WithPrecompQueries,
 {
@@ -327,7 +327,7 @@ where
         tree_sitter::Point { row: 0, column: 0 }
     }
 
-    type IdF = <HAST::TS as RoleStore<HAST::T>>::IdF;
+    type IdF = <HAST::TS as RoleStore>::IdF;
 
     fn has_child_with_field_id(&self, field_id: Self::IdF) -> bool {
         if field_id == Default::default() {
@@ -385,11 +385,11 @@ where
 impl<'hast, HAST: HyperAST<'hast>> Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<HAST::T>,
+    HAST::TS: RoleStore,
     HAST::T: WithRoles,
     HAST::T: WithPrecompQueries,
 {
-    fn child_by_role(&mut self, role: <HAST::TS as RoleStore<HAST::T>>::Role) -> Option<()> {
+    fn child_by_role(&mut self, role: <HAST::TS as RoleStore>::Role) -> Option<()> {
         // TODO what about multiple children with same role?
         // NOTE treesitter uses a bin tree for repeats
         let visible = self.is_visible();
@@ -430,7 +430,7 @@ impl<'hast, HAST: HyperAST<'hast>> Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
 {
-    fn kind(&self) -> <HAST::TS as TypeStore<HAST::T>>::Ty {
+    fn kind(&self) -> <HAST::TS as TypeStore>::Ty {
         self.stores.resolve_type(self.pos.node().unwrap())
     }
 }

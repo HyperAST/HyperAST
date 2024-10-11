@@ -1192,18 +1192,12 @@ impl Query {
             enabled_pattern_count += 1;
         }
         let mut query = Query {
-            // captures: todo!(),
-            // predicate_values: todo!(),
-            // capture_quantifiers: todo!(),
             steps,
             pattern_map,
             pattern_map2,
-            // predicate_steps: todo!(),
             patterns,
             step_offsets,
             negated_fields: unsafe { &(*query).negated_fields }.into(),
-            // string_buffer: todo!(),
-            // repeat_symbols_with_rootless_patterns: todo!(),
             language: unsafe { ffi::ts_language_copy((*query).language) },
             wildcard_root_pattern_count: unsafe { (*query).wildcard_root_pattern_count },
 
@@ -1221,14 +1215,6 @@ impl Query {
         };
         for (s, i) in immediate_pred_steps {
             if query.steps.set_immediate_pred(s, i as u32) {
-                // TODO allow multiple predicates ?
-                // return Err(QueryError {
-                //     row: 0,
-                //     column: 0,
-                //     offset: 0,
-                //     message: "Only one immediate predicate per step".into(),
-                //     kind: QueryErrorKind::Structure,
-                // });
             }
         }
         std::mem::forget(ptr);
@@ -1255,7 +1241,6 @@ impl Query {
 
         let mut precomputed_patterns = PrecomputedPatterns::default();
 
-        dbg!(&query.enabled_pattern_map);
         for i in query
             .enabled_pattern_map
             .iter()

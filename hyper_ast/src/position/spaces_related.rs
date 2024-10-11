@@ -186,7 +186,6 @@ where
     for o in &mut *offsets {
         // dbg!(offset);
         let b = stores.node_store().resolve(&x);
-        // dbg!(b.get_type());
         // dbg!(o.to_usize().unwrap());
 
         let t = stores.resolve_type(&x);

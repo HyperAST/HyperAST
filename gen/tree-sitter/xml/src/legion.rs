@@ -12,8 +12,7 @@ use hyper_ast::{
     store::{
         nodes::{
             legion::{
-                compo::{self, NoSpacesCS, CS},
-                HashedNodeRef, NodeIdentifier, PendingInsert,
+                compo::{self, NoSpacesCS, CS}, eq_node, HashedNodeRef, NodeIdentifier, PendingInsert
             },
             DefaultNodeStore as NodeStore,
         },
@@ -30,13 +29,13 @@ use hyper_ast::{
 };
 
 use crate::{
-    types::{TIdN, Type, XmlEnabledTypeStore},
+    types::{TStore, Type, XmlEnabledTypeStore},
     TNode,
 };
 
 pub type LabelIdentifier = hyper_ast::store::labels::DefaultLabelIdentifier;
 
-pub struct XmlTreeGen<'stores, TS> {
+pub struct XmlTreeGen<'stores, TS = TStore> {
     pub line_break: Vec<u8>,
     pub stores: &'stores mut SimpleStores<TS>,
 }
@@ -138,9 +137,7 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 }
 
-impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> ZippedTreeGen
-    for XmlTreeGen<'stores, TS>
-{
+impl<'stores, TS: XmlEnabledTypeStore> ZippedTreeGen for XmlTreeGen<'stores, TS> {
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores<TS>;
     type Text = [u8];
@@ -279,11 +276,26 @@ pub fn tree_sitter_parse_xml(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitt
     }
 }
 
-impl<'a, TS: XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>>> XmlTreeGen<'a, TS> {
+impl<'a, TS> XmlTreeGen<'a, TS> {
+    pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
+        let mut parser = tree_sitter::Parser::new();
+        let language = tree_sitter_xml::language_xml();
+        parser.set_language(&language).unwrap();
+        let tree = parser.parse(text, None).unwrap();
+        if tree.root_node().has_error() {
+            Err(tree)
+        } else {
+            Ok(tree)
+        }
+    }
+}
+impl<'a, TS: XmlEnabledTypeStore> XmlTreeGen<'a, TS> {
     fn make_spacing(
         &mut self,
         spacing: Vec<u8>, //Space>,
     ) -> Local {
+        let kind = Type::Spaces;
+        let interned_kind = self.stores.type_store.intern(kind);
         let bytes_len = spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
         use num::ToPrimitive;
@@ -294,13 +306,13 @@ impl<'a, TS: XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>>> XmlTr
             .expect("too many newlines");
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
         let hbuilder: hashed::HashesBuilder<SyntaxNodeHashs<u32>> =
-            hashed::HashesBuilder::new(Default::default(), &Type::Spaces, &spacing, 1);
+            hashed::HashesBuilder::new(Default::default(), &interned_kind, &spacing, 1);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
         let eq = |x: EntryRef| {
-            let t = x.get_component::<Type>();
-            if t != Ok(&Type::Spaces) {
+            let t = x.get_component::<_>();
+            if t != Ok(&interned_kind) {
                 return false;
             }
             let l = x.get_component::<LabelIdentifier>();
@@ -323,7 +335,7 @@ impl<'a, TS: XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>>> XmlTr
             let bytes_len = compo::BytesLen(bytes_len.try_into().unwrap());
             NodeStore::insert_after_prepare(
                 vacant,
-                (Type::Spaces, spacing_id, bytes_len, hashs, BloomSize::None),
+                (interned_kind, spacing_id, bytes_len, hashs, BloomSize::None),
             )
         };
         Local {
@@ -343,18 +355,6 @@ impl<'a, TS: XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>>> XmlTr
         XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores,
-        }
-    }
-
-    pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
-        let mut parser = tree_sitter::Parser::new();
-        let language = tree_sitter_xml::language_xml();
-        parser.set_language(&language).unwrap();
-        let tree = parser.parse(text, None).unwrap();
-        if tree.root_node().has_error() {
-            Err(tree)
-        } else {
-            Ok(tree)
         }
     }
 
@@ -414,36 +414,7 @@ impl<'a, TS: XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>>> XmlTr
     }
 }
 
-pub fn eq_node<'a>(
-    kind: &'a Type,
-    label_id: Option<&'a LabelIdentifier>,
-    children: &'a [NodeIdentifier],
-) -> impl Fn(EntryRef) -> bool + 'a {
-    move |x: EntryRef| {
-        let t = x.get_component::<Type>();
-        if t != Ok(kind) {
-            return false;
-        }
-        let l = x.get_component::<LabelIdentifier>().ok();
-        if l != label_id {
-            return false;
-        } else {
-            let cs = x.get_component::<CS<legion::Entity>>();
-            let r = match cs {
-                Ok(CS(cs)) => cs.as_ref() == children,
-                Err(_) => children.is_empty(),
-            };
-            if !r {
-                return false;
-            }
-        }
-        true
-    }
-}
-
-impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> TreeGen
-    for XmlTreeGen<'stores, TS>
-{
+impl<'stores, TS: XmlEnabledTypeStore> TreeGen for XmlTreeGen<'stores, TS> {
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;
     fn make(
@@ -452,6 +423,8 @@ impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier
         acc: <Self as TreeGen>::Acc,
         label: Option<String>,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
+
+        let interned_kind = self.stores.type_store.intern(acc.simple.kind);
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
         let line_count = acc.metrics.line_count;
@@ -459,14 +432,14 @@ impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
         let size_no_spaces = acc.metrics.size_no_spaces + 1;
-        let hbuilder = hashed::HashesBuilder::new(hashs, &acc.simple.kind, &label, size_no_spaces);
+        let hbuilder = hashed::HashesBuilder::new(hashs, &interned_kind, &label, size_no_spaces);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
         let label_id = label
             .as_ref()
             .map(|label| label_store.get_or_insert(label.as_str()));
-        let eq = eq_node(&acc.simple.kind, label_id.as_ref(), &acc.simple.children);
+        let eq = eq_node(&interned_kind, label_id.as_ref(), &acc.simple.children);
 
         let insertion = node_store.prepare_insertion(&hashable, eq);
 
@@ -499,6 +472,7 @@ impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier
             let compressed_node = compress(
                 label_id,
                 &ana,
+                interned_kind,
                 acc.simple,
                 acc.no_space,
                 bytes_len,
@@ -531,9 +505,10 @@ impl<'stores, TS: XmlEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier
     }
 }
 
-fn compress(
+fn compress<Ty: std::marker::Send + std::marker::Sync + 'static>(
     label_id: Option<LabelIdentifier>,
     _ana: &Option<PartialAnalysis>,
+    interned_kind: Ty,
     simple: BasicAccumulator<Type, NodeIdentifier>,
     no_space: Vec<NodeIdentifier>,
     bytes_len: compo::BytesLen,
@@ -582,7 +557,7 @@ fn compress(
             }}
         };
     }
-    let base = (simple.kind.clone(), hashs, bytes_len);
+    let base = (interned_kind, hashs, bytes_len);
     match (label_id, 0) {
         (None, _) => children_dipatch!(base,),
         (Some(label), _) => children_dipatch!(base, (label,),),

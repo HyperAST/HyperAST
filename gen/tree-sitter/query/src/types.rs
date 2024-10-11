@@ -24,51 +24,12 @@ mod legion_impls {
 
     use hyper_ast::{store::nodes::legion::HashedNodeRef, types::LangWrapper};
 
-    impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
+    impl TypeStore for TStore {
         type Ty = TypeU16<TsQuery>;
-        // fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
-        //     n.get_component::<Type>().unwrap().clone()
-        // }If we use a right-to-left postorder numbering for tree nodes
-
-        // fn resolve_lang(
-        //     &self,
-        //     _n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        //     From::<&'static (dyn LangRef<Type>)>::from(&TsQuery)
-        // }
-
-        // fn type_eq(
-        //     &self,
-        //     n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        //     m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        // ) -> bool {
-        //     n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
-        // }
+      
     }
 
-    impl<'a> RoleStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        type IdF = u16;
-
-        type Role = hyper_ast::types::Role;
-
-        fn resolve_field(&self, _lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
-            let s = tree_sitter_query::language()
-                .field_name_for_id(field_id)
-                .ok_or_else(|| format!("{}", field_id))
-                .unwrap();
-            hyper_ast::types::Role::try_from(s).expect(s)
-        }
-
-        fn intern_role(&self, _lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
-            let field_name = role.to_string();
-            tree_sitter_query::language()
-                .field_id_for_name(field_name)
-                .unwrap()
-                .into()
-        }
-    }
-
-    impl<'a> RoleStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
+    impl RoleStore for TStore {
         type IdF = u16;
 
         type Role = hyper_ast::types::Role;
@@ -99,33 +60,6 @@ mod legion_impls {
             t.e()
         }
     }
-    impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
-        type Ty = AnyType;
-        // fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-        //     From::<&'static (dyn HyperType)>::from(LangRef::<Type>::make(
-        //         &TsQuery,
-        //         *n.get_component::<Type>().unwrap() as u16,
-        //     ))
-        // }
-
-        // fn resolve_lang(
-        //     &self,
-        //     _n: &HashedNodeRef<'a, NodeIdentifier>,
-        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        //     From::<&'static (dyn LangRef<AnyType>)>::from(&TsQuery)
-        // }
-
-        // fn type_eq(
-        //     &self,
-        //     n: &HashedNodeRef<'a, NodeIdentifier>,
-        //     m: &HashedNodeRef<'a, NodeIdentifier>,
-        // ) -> bool {
-        //     todo!("{:?} {:?}", n, m)
-        // }
-        fn type_to_u16(&self, t: Self::Ty) -> u16 {
-            id_for_node_kind(t.as_static_str(), t.is_named())
-        }
-    }
 }
 
 #[cfg(feature = "impl")]
@@ -137,7 +71,7 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
     unimplemented!("need treesitter grammar")
 }
 
-pub trait TsQueryEnabledTypeStore<T>: TypeStore<T> {
+pub trait TsQueryEnabledTypeStore<T>: TypeStore {
     fn intern(&self, t: Type) -> Self::Ty;
     fn resolve(&self, t: Self::Ty) -> Type;
 }
@@ -222,6 +156,26 @@ impl LangRef<Type> for TsQuery {
     }
 
     fn ts_symbol(&self, t: Type) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
+}
+
+type TType = hyper_ast::types::TypeU16<Lang>;
+
+impl LangRef<TType> for TsQuery {
+    fn make(&self, t: u16) -> &'static TType {
+        // TODO could make one safe, but not priority
+        unsafe { std::mem::transmute(&S_T_L[t as usize]) }
+    }
+    fn to_u16(&self, t: TType) -> u16 {
+        t.e() as u16
+    }
+
+    fn name(&self) -> &'static str {
+        std::any::type_name::<TsQuery>()
+    }
+
+    fn ts_symbol(&self, t: TType) -> u16 {
         id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
@@ -422,6 +376,10 @@ impl hyper_ast::types::LLang<hyper_ast::types::TypeU16<Self>> for TsQuery {
     type E = Type;
 
     const TE: &[Self::E] = S_T_L;
+    
+    fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<hyper_ast::types::TypeU16<Self>> {
+        From::<&'static (dyn LangRef<_>)>::from(&Lang)
+    }
 }
 
 impl From<u16> for Type {
@@ -444,7 +402,6 @@ impl Into<u16> for Type {
 
 #[repr(u16)]
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-#[cfg_attr(feature = "bevy_ecs", derive(Component))]
 pub enum Type {
     End,
     Dot,

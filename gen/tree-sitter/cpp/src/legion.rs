@@ -14,7 +14,8 @@ use hyper_ast::{
     store::{
         nodes::{
             legion::{
-                compo::{self, NoSpacesCS, CS}, eq_node, HashedNodeRef, NodeIdentifier, PendingInsert
+                compo::{self, NoSpacesCS, CS},
+                eq_node, HashedNodeRef, NodeIdentifier, PendingInsert,
             },
             DefaultNodeStore as NodeStore, EntityBuilder,
         },
@@ -240,9 +241,7 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 }
 
-impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>>
-    ZippedTreeGen for CppTreeGen<'store, 'cache, TS>
-{
+impl<'store, 'cache, TS: CppEnabledTypeStore> ZippedTreeGen for CppTreeGen<'store, 'cache, TS> {
     type Stores = SimpleStores<TS>;
     type Text = [u8];
     type Node<'b> = TNode<'b>;
@@ -377,13 +376,15 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
     }
 }
 
-impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>>
-    CppTreeGen<'store, 'cache, TS>
-{
+impl<'store, 'cache, TS: CppEnabledTypeStore> CppTreeGen<'store, 'cache, TS> {
     fn make_spacing(
         &mut self,
         spacing: Vec<u8>, //Space>,
     ) -> Local {
+        let kind = Type::Spaces;
+        let interned_kind = self.stores.type_store.intern(kind);
+        debug_assert_eq!(kind, self.stores.type_store.resolve(interned_kind));
+        
         let bytes_len = spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
         let line_count = spacing
@@ -393,13 +394,13 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
             .expect("too many newlines");
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
         let hbuilder: hashed::HashesBuilder<SyntaxNodeHashs<u32>> =
-            hashed::HashesBuilder::new(Default::default(), &Type::Spaces, &spacing, 1);
+            hashed::HashesBuilder::new(Default::default(), &interned_kind, &spacing, 1);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
         let eq = |x: EntryRef| {
-            let t = x.get_component::<Type>();
-            if t != Ok(&Type::Spaces) {
+            let t = x.get_component::<TS::Ty>();
+            if t != Ok(&interned_kind) {
                 return false;
             }
             let l = x.get_component::<LabelIdentifier>();
@@ -422,7 +423,7 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
             let bytes_len = compo::BytesLen(bytes_len.try_into().unwrap());
             NodeStore::insert_after_prepare(
                 vacant,
-                (Type::Spaces, spacing_id, bytes_len, hashs, BloomSize::None),
+                (interned_kind, spacing_id, bytes_len, hashs, BloomSize::None),
             )
         };
         Local {
@@ -521,9 +522,7 @@ impl<'store, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIden
     }
 }
 
-impl<'stores, 'cache, TS: CppEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> TreeGen
-    for CppTreeGen<'stores, 'cache, TS>
-{
+impl<'stores, 'cache, TS: CppEnabledTypeStore> TreeGen for CppTreeGen<'stores, 'cache, TS> {
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;
     fn make(

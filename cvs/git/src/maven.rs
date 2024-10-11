@@ -1,6 +1,6 @@
 use crate::{
     processing::ObjectName, Accumulator, BasicDirAcc, DefaultMetrics, ParseErr, SimpleStores,
-    TStore, PROPAGATE_ERROR_ON_BAD_CST_NODE,
+    PROPAGATE_ERROR_ON_BAD_CST_NODE,
 };
 use enumset::EnumSet;
 use hyper_ast::{
@@ -10,7 +10,10 @@ use hyper_ast::{
     types::{IterableChildren, LabelStore as _, Labeled, Tree, Typed, WithChildren},
 };
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
-use hyper_ast_gen_ts_xml::{legion::XmlTreeGen, types::Type};
+use hyper_ast_gen_ts_xml::{
+    legion::XmlTreeGen,
+    types::{TStore, Type},
+};
 use num::ToPrimitive;
 use std::{
     fmt::{self, Debug},

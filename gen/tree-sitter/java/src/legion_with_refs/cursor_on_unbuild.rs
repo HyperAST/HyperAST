@@ -2,7 +2,7 @@ use hyper_ast::position::TreePath;
 use hyper_ast::store::labels::LabelStore;
 use hyper_ast::store::nodes::legion::{HashedNodeRef, NodeIdentifier};
 use hyper_ast::types::{
-    HyperASTShared, HyperType, LabelStore as _, Labeled, NodeStore, Role, RoleStore, Tree, Typed,
+    HyperASTShared, HyperType, LabelStore as _, Labeled, NodeStore, Role, RoleStore, Tree,
     WithRoles,
 };
 use hyper_ast::{position::TreePathMut, types::TypeStore};
@@ -10,11 +10,11 @@ use hyper_ast_tsquery::{Cursor, Node as _, Status, Symbol, TreeCursorStep};
 use num::ToPrimitive;
 use std::marker::PhantomData;
 
-use crate::types::{TIdN, Type};
+use crate::types::TIdN;
 
 pub type TreeCursor<'hast, 'acc, HAST> = Node<'hast, 'acc, HAST>;
 
-pub struct Node<'hast, 'acc, HAST: HyperASTShared> {
+pub struct Node<'hast, 'acc, HAST: HyperASTShared + TypeStore> {
     pub stores: &'acc HAST,
     acc: &'acc super::Acc,
     label: Option<&'acc str>,
@@ -23,7 +23,7 @@ pub struct Node<'hast, 'acc, HAST: HyperASTShared> {
     _p: PhantomData<&'hast ()>,
 }
 
-impl<'hast, 'acc, TS> PartialEq for Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
+impl<'hast, 'acc, TS: TypeStore> PartialEq for Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
     fn eq(&self, other: &Self) -> bool {
         self.pos == other.pos
     }
@@ -33,7 +33,7 @@ type IdN = NodeIdentifier;
 type Idx = u16;
 type T<'a> = HashedNodeRef<'a, TIdN<NodeIdentifier>>;
 
-impl<'hast, 'acc, TS> Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
+impl<'hast, 'acc, TS: TypeStore> Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
     pub fn new(
         stores: &'acc HAST<'hast, 'acc, TS>,
         acc: &'acc super::Acc,
@@ -51,7 +51,7 @@ impl<'hast, 'acc, TS> Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
     }
 }
 
-impl<'hast, 'acc, TS> Clone for Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
+impl<'hast, 'acc, TS: TypeStore> Clone for Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
     fn clone(&self) -> Self {
         Self {
             stores: self.stores,
@@ -100,13 +100,12 @@ impl<IdF: Copy> Status for CursorStatus<IdF> {
     }
 }
 
-type HAST<'hast, 'acc, TS> = super::SimpleStores<&'acc TS, &'hast legion::World, &'acc LabelStore>;
+type HAST<'hast, 'acc, TS> = super::SimpleStores<TS, &'hast legion::World, &'acc LabelStore>;
 
 impl<'hast, 'acc, TS> hyper_ast_tsquery::Cursor
     for self::TreeCursor<'hast, 'acc, HAST<'hast, 'acc, TS>>
 where
-    TS: super::JavaEnabledTypeStore<T<'hast>, Ty = Type>
-        + hyper_ast::types::RoleStore<T<'hast>, IdF = IdF, Role = Role>,
+    TS: super::JavaEnabledTypeStore + hyper_ast::types::RoleStore<IdF = IdF, Role = Role>,
 {
     type Node = self::Node<'hast, 'acc, HAST<'hast, 'acc, TS>>;
     type NodeRef<'a>
@@ -324,8 +323,7 @@ where
 
 impl<'hast, 'acc, TS> self::TreeCursor<'hast, 'acc, HAST<'hast, 'acc, TS>>
 where
-    TS: super::JavaEnabledTypeStore<T<'hast>, Ty = Type>
-        + hyper_ast::types::RoleStore<T<'hast>, IdF = IdF, Role = Role>,
+    TS: super::JavaEnabledTypeStore + hyper_ast::types::RoleStore<IdF = IdF, Role = Role>,
 {
     fn role(&self) -> Option<Role> {
         if let Some(p) = self.pos.parent() {
@@ -382,11 +380,19 @@ where
     fn compute_current_role(&self) -> (Option<Role>, IdF) {
         let lang;
         let role = if self.pos.node().is_none() {
-            lang = self.acc.simple.kind.get_lang();
+            lang = self
+                .stores
+                .type_store
+                .intern(self.acc.simple.kind)
+                .get_lang();
             // self.acc.role
             None // actually should not provide role as it is not part of identifying data
         } else if self.pos.parent().is_none() {
-            lang = self.acc.simple.kind.get_lang();
+            lang = self
+                .stores
+                .type_store
+                .intern(self.acc.simple.kind)
+                .get_lang();
             let o = self.pos.o().unwrap();
             self.acc
                 .role
@@ -415,7 +421,7 @@ where
             }
         };
         let field_id = if let Some(role) = role {
-            RoleStore::<HashedNodeRef<TIdN<_>>>::intern_role(self.stores.type_store, lang, role)
+            RoleStore::intern_role(self.stores, lang, role)
         } else {
             Default::default()
         };
@@ -425,14 +431,14 @@ where
 
 type IdF = u16;
 
-impl<'hast, 'acc, TS> hyper_ast_tsquery::Node for self::Node<'hast, 'acc, HAST<'hast, 'acc, TS>>
+impl<'hast, 'acc, TS: TypeStore> hyper_ast_tsquery::Node
+    for self::Node<'hast, 'acc, HAST<'hast, 'acc, TS>>
 where
-    TS: super::JavaEnabledTypeStore<T<'hast>, Ty = Type>
-        + hyper_ast::types::RoleStore<T<'hast>, IdF = IdF, Role = Role>,
+    TS: super::JavaEnabledTypeStore + hyper_ast::types::RoleStore<IdF = IdF, Role = Role>,
 {
     fn symbol(&self) -> Symbol {
         // TODO make something more efficient
-        let id = TypeStore::<T>::type_to_u16(self.stores.type_store, self.kind());
+        let id = TypeStore::type_to_u16(self.stores, self.kind());
         id.into()
     }
 
@@ -475,8 +481,7 @@ where
         if field_id == IdF::default() {
             return false;
         }
-        let role =
-            RoleStore::<T>::resolve_field(self.stores.type_store, self.kind().get_lang(), field_id);
+        let role = RoleStore::resolve_field(self.stores, self.kind().get_lang(), field_id);
         let mut slf = self.clone();
         loop {
             if slf.kind().is_supertype() {
@@ -532,8 +537,7 @@ where
 
 impl<'hast, 'acc, TS> Node<'hast, 'acc, HAST<'hast, 'acc, TS>>
 where
-    TS: super::JavaEnabledTypeStore<T<'hast>, Ty = Type>
-        + hyper_ast::types::RoleStore<T<'hast>, IdF = IdF, Role = Role>,
+    TS: super::JavaEnabledTypeStore + hyper_ast::types::RoleStore<IdF = IdF, Role = Role>,
 {
     fn child_by_role(&mut self, role: Role) -> Option<()> {
         // TODO what about multiple children with same role?
@@ -572,47 +576,30 @@ where
     }
 }
 
-impl<'hast, 'acc, TS: super::JavaEnabledTypeStore<T<'hast>, Ty = Type>>
-    Node<'hast, 'acc, HAST<'hast, 'acc, TS>>
-where
-//     HAST::IdN: std::fmt::Debug + Copy,
-//     HAST::TS: TypeStore<HashedNodeRef<'hast, TIdN<NodeIdentifier>>, Ty = crate::types::Type>,
-//     HAST: HyperAST<
-//         'hast,
-//         IdN = NodeIdentifier,
-//         // TS = crate::types::TStore,
-//         T = HashedNodeRef<'hast, TIdN<NodeIdentifier>>,
-//     >,
-{
-    fn kind(&self) -> crate::types::Type {
+impl<'hast, 'acc, TS: super::JavaEnabledTypeStore> Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
+    fn kind(&self) -> TS::Ty {
         if let Some(n) = self.pos.node() {
             self.resolve_type(n)
         } else {
-            self.acc.simple.kind
+            self.stores.type_store.intern(self.acc.simple.kind)
         }
     }
 
-    fn resolve_type(&self, n: &legion::Entity) -> Type {
-        let node =
-            hyper_ast::store::nodes::legion::_resolve::<TIdN<IdN>>(self.stores.node_store, n)
-                .unwrap();
-        node.get_type()
-        // self.stores.resolve_type(n)
+    fn resolve_type(&self, n: &legion::Entity) -> TS::Ty {
+        // TODO une a more generic accessor
+        // TODO do not use the raw world, wrap it with the max fields, dissalowing just insertion
+        // WARN migth have issues if using compressed components
+        // dbg!(self.stores.node_store.resolve(n).get_component::<crate::types::Type>());
+        *self
+            .stores
+            .node_store
+            .resolve(n)
+            .get_component::<TS::Ty>()
+            .unwrap()
     }
 }
 
-impl<'hast, 'acc, TS: super::JavaEnabledTypeStore<T<'hast>, Ty = Type>>
-    Node<'hast, 'acc, HAST<'hast, 'acc, TS>>
-where
-// HAST::IdN: std::fmt::Debug + Copy,
-// HAST::TS: TypeStore<HashedNodeRef<'hast, TIdN<NodeIdentifier>>, Ty = crate::types::Type>,
-// HAST: HyperAST<
-//     'hast,
-//     IdN = NodeIdentifier,
-//     // TS = crate::types::TStore,
-//     T = HashedNodeRef<'hast, TIdN<NodeIdentifier>>,
-// >,
-{
+impl<'hast, 'acc, TS: super::JavaEnabledTypeStore> Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
     fn is_visible(&self) -> bool {
         !self.kind().is_hidden()
     }

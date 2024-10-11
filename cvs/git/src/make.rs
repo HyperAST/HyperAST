@@ -6,10 +6,10 @@ use hyper_ast::{
     tree_gen::SubTreeMetrics,
 };
 use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
-use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
+use hyper_ast_gen_ts_xml::{legion::XmlTreeGen, types::TStore};
 
 use crate::{
-    processing::ObjectName, Accumulator, BasicDirAcc, DefaultMetrics, SimpleStores, TStore,
+    processing::ObjectName, Accumulator, BasicDirAcc, DefaultMetrics, SimpleStores,
     PROPAGATE_ERROR_ON_BAD_CST_NODE,
 };
 
@@ -18,7 +18,7 @@ pub(crate) fn handle_makefile_file<'a>(
     name: &ObjectName,
     text: &'a [u8],
 ) -> Result<MakeFile, ()> {
-    let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(b"<proj></proj>") {
+    let tree = match hyper_ast_gen_ts_xml::legion::tree_sitter_parse_xml(b"<proj></proj>") {
         Ok(tree) => tree,
         Err(tree) => {
             log::warn!("bad CST");

@@ -658,6 +658,21 @@ impl<'a, T> crate::types::WithHashs for HashedNodeRef<'a, T> {
     }
 }
 
+impl<'a, Id> crate::types::ErasedHolder
+    for HashedNodeRef<'a, Id>
+{
+    unsafe fn unerase_ref<T: 'static + crate::types::Compo>(
+        &self,
+        tid: std::any::TypeId,
+    ) -> Option<&T> {
+        if tid == std::any::TypeId::of::<T>() {
+            self.get_component().ok()
+        } else {
+            None
+        }
+    }
+}
+
 impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Tree
     for HashedNodeRef<'a, Id>
 {

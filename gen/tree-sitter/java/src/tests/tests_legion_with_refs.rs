@@ -14,11 +14,11 @@ use hyper_ast::{
 };
 use pretty_assertions::assert_eq;
 
+use crate::impact::element::{IdentifierFormat, LabelPtr, RefsEnum};
 use crate::{
     legion_with_refs::{self, JavaTreeGen, NodeIdentifier},
     types::{TIdN, TStore},
 };
-use crate::impact::element::{IdentifierFormat, LabelPtr, RefsEnum};
 
 fn run(text: &[u8]) {
     let mut stores = SimpleStores {
@@ -52,15 +52,6 @@ fn run(text: &[u8]) {
         )
     );
     stdout().flush().unwrap();
-
-    // let mut out = IoOut { stream: stdout() };
-    // serialize(
-    //     &java_tree_gen.stores.node_store,
-    //     &java_tree_gen.stores.label_store,
-    //     &full_node.local.compressed_node,
-    //     &mut out,
-    //     &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
-    // );
     println!(
         "{}",
         hyper_ast::nodes::TextSerializer::new(

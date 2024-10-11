@@ -296,7 +296,7 @@ impl RepositoryProcessor {
                 crate::make::handle_makefile_file(
                     &mut XmlTreeGen {
                         line_break: "\n".as_bytes().to_vec(),
-                        stores: &mut self.main_stores,
+                        stores: self.main_stores.mut_with_ts(),
                     },
                     n,
                     t,

@@ -244,7 +244,7 @@ impl RepositoryProcessor {
                 crate::cpp::handle_cpp_file(
                     &mut cpp_gen::CppTreeGen {
                         line_break,
-                        stores: &mut self.main_stores,
+                        stores: self.main_stores.mut_with_ts(),
                         md_cache: &mut c
                             .mut_or_default::<CppProcessorHolder>()
                             .get_caches_mut()

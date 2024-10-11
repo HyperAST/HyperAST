@@ -1,7 +1,5 @@
 use std::ops::Deref;
 
-use crate::{TStore};
-// use crate::MultiType;
 use hyper_ast::{
     store::{
         defaults::{LabelIdentifier, NodeIdentifier},
@@ -295,11 +293,11 @@ where
 //     }
 // }
 
-pub fn as_nospaces<'a>(
-    stores: &'a hyper_ast::store::SimpleStores<TStore>,
+pub fn as_nospaces<'a, TS>(
+    stores: &'a hyper_ast::store::SimpleStores<TS>,
 ) -> SimpleHyperAST<
     NoSpaceWrapper<'a, NodeIdentifier>,
-    &'a TStore,
+    &'a TS,
     NoSpaceNodeStoreWrapper<'a>,
     &'a hyper_ast::store::labels::LabelStore,
 > {
@@ -615,6 +613,15 @@ impl<'a, T> types::WithHashs for NoSpaceWrapper<'a, T> {
     }
 }
 
+impl<'a> hyper_ast::types::ErasedHolder for NoSpaceWrapper<'a, MIdN<NodeIdentifier>> {
+    unsafe fn unerase_ref<T: 'static + hyper_ast::types::Compo>(
+        &self,
+        tid: std::any::TypeId,
+    ) -> Option<&T> {
+        self.inner.unerase_ref(tid)
+    }
+}
+
 impl<'a> types::Tree for NoSpaceWrapper<'a, MIdN<NodeIdentifier>> {
     fn has_children(&self) -> bool {
         self.inner.has_children()
@@ -622,6 +629,15 @@ impl<'a> types::Tree for NoSpaceWrapper<'a, MIdN<NodeIdentifier>> {
 
     fn has_label(&self) -> bool {
         self.inner.has_label()
+    }
+}
+
+impl<'a> hyper_ast::types::ErasedHolder for NoSpaceWrapper<'a, NodeIdentifier> {
+    unsafe fn unerase_ref<T: 'static + hyper_ast::types::Compo>(
+        &self,
+        tid: std::any::TypeId,
+    ) -> Option<&T> {
+        self.inner.unerase_ref(tid)
     }
 }
 

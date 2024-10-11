@@ -257,7 +257,7 @@ fn lazy_subtree_mapping<'a, 'b>(
 pub fn child_by_type<'store, HAST: HyperAST<'store, IdN = NodeIdentifier>>(
     stores: &'store HAST,
     d: NodeIdentifier,
-    t: &<HAST::TS as types::TypeStore<HAST::T>>::Ty,
+    t: &<HAST::TS as types::TypeStore>::Ty,
 ) -> Option<(NodeIdentifier, usize)> {
     let n = stores.node_store().resolve(&d);
     let s = n

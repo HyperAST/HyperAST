@@ -26,6 +26,20 @@ impl<TS, NS, LS> SimpleStores<TS, NS, LS> {
     }
 }
 
+/// guaranty we can convert from Self to T,
+/// e.g. using std::mem::transmute
+/// TODO should use a marker for 'TypeStore'....
+pub unsafe trait TyDown<T> {}
+
+impl<TS, NS, LS> SimpleStores<TS, NS, LS> {
+    pub fn mut_with_ts<TS2>(&mut self) -> &mut SimpleStores<TS2, NS, LS>
+    where
+        TS: TyDown<TS2>,
+    {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
 impl<TS: Default, NS: Default, LS: Default> Default for SimpleStores<TS, NS, LS> {
     fn default() -> Self {
         Self {
@@ -36,14 +50,9 @@ impl<TS: Default, NS: Default, LS: Default> Default for SimpleStores<TS, NS, LS>
     }
 }
 
-impl<'store, T, TS, NS, LS> crate::types::RoleStore<T> for SimpleStores<TS, NS, LS>
+impl<'store, TS, NS, LS> crate::types::RoleStore for SimpleStores<TS, NS, LS>
 where
-    T: crate::types::TypedTree,
-    T::TreeId: crate::types::NodeId<IdN = T::TreeId>,
-    T::Type: 'static + std::hash::Hash,
-    TS: TypeStore<T, Ty = T::Type>,
-    NS: crate::types::NodeStore<T::TreeId>,
-    TS: crate::types::RoleStore<T>,
+    TS: crate::types::RoleStore,
 {
     type IdF = TS::IdF;
 
@@ -71,7 +80,8 @@ where
     IdN: crate::types::NodeId<IdN = IdN>,
     NS: crate::types::NodeStore<IdN>,
 {
-    type R<'a> = NS::R<'a>
+    type R<'a>
+        = NS::R<'a>
     where
         Self: 'a;
 
@@ -112,26 +122,12 @@ where
     }
 }
 
-impl<'store, T, TS, NS, LS> crate::types::TypeStore<T> for SimpleStores<TS, NS, LS>
+impl<'store, TS, NS, LS> crate::types::TypeStore for SimpleStores<TS, NS, LS>
 where
-    T: crate::types::TypedTree<Type = TS::Ty>,
-    T::TreeId: crate::types::NodeId<IdN = T::TreeId>,
     TS::Ty: 'static + std::hash::Hash,
-    TS: TypeStore<T>,
-    NS: crate::types::NodeStore<T::TreeId>,
+    TS: TypeStore,
 {
     type Ty = TS::Ty;
-
-    // fn resolve_type(&self, n: &T) -> Self::Ty {
-    //     self.type_store.resolve_type(n)
-    // }
-    // fn resolve_lang(&self, n: &T) -> crate::types::LangWrapper<Self::Ty> {
-    //     self.type_store.resolve_lang(n)
-    // }
-
-    // fn type_eq(&self, n: &T, m: &T) -> bool {
-    //     self.type_store.type_eq(n, m)
-    // }
 }
 
 pub mod defaults {

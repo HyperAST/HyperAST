@@ -474,7 +474,7 @@ impl SimpleJsonPostProcess {
     where
         HAST: HyperAST<'store>
             + NodeStore<HAST::IdN, R<'store> = HAST::T>
-            + types::TypeStore<HAST::T>,
+            + types::TypeStore,
         HAST::IdN: Clone + Debug + Eq,
         HAST::T: types::Tree + WithSerialization,
         SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
@@ -511,7 +511,7 @@ impl SimpleJsonPostProcess {
     where
         HAST: HyperAST<'store>
             + NodeStore<HAST::IdN, R<'store> = HAST::T>
-            + types::TypeStore<HAST::T>,
+            + types::TypeStore,
         HAST::IdN: Clone + Debug,
         HAST::T: WithSerialization,
         SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
@@ -976,7 +976,7 @@ mod tests {
 
         let stores = SimpleStores {
             label_store: LabelStore::new(),
-            type_store: TStore::default(),
+            type_store: Default::default(),
             node_store: NodeStore::new(),
         };
         let md_cache = Default::default();

@@ -31,10 +31,7 @@ use hyper_ast::{store::defaults::LabelIdentifier, utils::Bytes};
 
 mod type_store;
 
-mod type_store2;
-
-// pub use type_store2::MultiType;
-pub use type_store2::TStore;
+pub use type_store::TStore;
 
 pub type SimpleStores = hyper_ast::store::SimpleStores<TStore>;
 

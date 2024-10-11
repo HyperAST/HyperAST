@@ -45,7 +45,7 @@ pub fn extract_position<'store, HAST>(
 ) -> Position
 where
     HAST: HyperAST<'store, IdN = NodeIdentifier, T = HashedNodeRef<'store>>,
-    HAST::TS: TypeStore<HashedNodeRef<'store>, Ty = AnyType>,
+    HAST::TS: TypeStore<Ty = AnyType>,
 {
     if parents.is_empty() {
         return Position::default();
@@ -107,7 +107,7 @@ where
 pub fn extract_position_it_rec<'store, HAST, It, It2>(stores: &'store HAST, mut it: It) -> Position
 where
     HAST: HyperAST<'store, IdN = NodeIdentifier, Idx = u16>,
-    HAST::TS: TypeStore<HAST::T, Ty = AnyType>,
+    HAST::TS: TypeStore<Ty = AnyType>,
     HAST::T: WithSerialization,
     It: Iterator<Item = (HAST::IdN, usize)> + Into<It2>, //Iterator<Item = ParentWithChildOffset<HAST::IdN>>,
     It2: Iterator<Item = HAST::IdN>,

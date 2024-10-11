@@ -55,16 +55,19 @@ impl<T, Id> BasicAccumulator<T, Id> {
     }
 
     #[cfg(feature = "legion")]
-    pub fn add_primary<L>(
+    pub fn add_primary<L, K>(
         self,
         dyn_builder: &mut impl crate::store::nodes::EntityBuilder,
+        interned_kind: K,
         label_id: Option<L>,
     ) where
-        T: 'static + Sized + crate::types::TypeTrait,
+        K: 'static + std::marker::Send + std::marker::Sync,
         L: 'static + std::marker::Send + std::marker::Sync,
         Id: 'static + std::marker::Send + std::marker::Sync,
     {
-        dyn_builder.add(self.kind);
+        // TODO better handle the interneds
+        // TODO the "staatic" interning should be hanled more specifically
+        dyn_builder.add(interned_kind);
         if let Some(label_id) = label_id {
             dyn_builder.add(label_id);
         }

@@ -292,6 +292,24 @@ impl crate::types::Tree for Tree {
     }
 }
 
+impl crate::types::ErasedHolder for Tree {
+    unsafe fn unerase_ref<T: 'static + crate::types::Compo>(
+        &self,
+        tid: std::any::TypeId,
+    ) -> Option<&T> {
+        todo!()
+    }
+}
+
+impl<'a, T> crate::types::ErasedHolder for TreeRef<'_, T> {
+    unsafe fn unerase_ref<TT: 'static + crate::types::Compo>(
+        &self,
+        tid: std::any::TypeId,
+    ) -> Option<&TT> {
+        todo!()
+    }
+}
+
 impl<T: crate::types::Tree> crate::types::Tree for TreeRef<'_, T>
 where
     T::TreeId: Clone + NodeId<IdN = T::TreeId>,
@@ -754,36 +772,6 @@ impl HyperType for Ty {
     }
 }
 
-impl crate::types::TypeStore<Tree> for TStore {
+impl crate::types::TypeStore for TStore {
     type Ty = self::Ty;
-
-    // fn resolve_type(&self, n: &Tree) -> Self::Ty {
-    //     use crate::types::Typed;
-    //     n.get_type()
-    // }
-
-    // fn resolve_lang(&self, _n: &Tree) -> crate::types::LangWrapper<Self::Ty> {
-    //     todo!()
-    // }
-
-    // fn type_eq(&self, _n: &Tree, _m: &Tree) -> bool {
-    //     todo!()
-    // }
-}
-
-impl<'a> crate::types::TypeStore<TreeRef<'a, Tree>> for TStore {
-    type Ty = self::Ty;
-
-    // fn resolve_type(&self, n: &TreeRef<'a, Tree>) -> Self::Ty {
-    //     use crate::types::Typed;
-    //     n.get_type()
-    // }
-
-    // fn resolve_lang(&self, _n: &TreeRef<'a, Tree>) -> crate::types::LangWrapper<Self::Ty> {
-    //     todo!()
-    // }
-
-    // fn type_eq(&self, _n: &TreeRef<'a, Tree>, _m: &TreeRef<'a, Tree>) -> bool {
-    //     todo!()
-    // }
 }

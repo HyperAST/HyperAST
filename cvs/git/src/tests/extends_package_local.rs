@@ -28,7 +28,7 @@ use hyper_ast_gen_ts_java::{
 fn run(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -39,7 +39,7 @@ fn run(text: &[u8]) {
 fn run1(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -230,7 +230,7 @@ interface I {
 fn run2(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -458,7 +458,7 @@ static AA: &'static str = r#"
 fn run3(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -628,7 +628,7 @@ public class SpoonFile<T extends SpoonFile<T>> implements SpoonResource {
 fn run3_1(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -784,7 +784,7 @@ fn test_case5() {
 fn run6(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -887,7 +887,7 @@ public class PatternBuiler {
 fn run7(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -998,7 +998,7 @@ fn test_hashing() {
         .init();
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: hyper_ast_gen_ts_java::types::TStore::default(),
         node_store: NodeStore::new(),
     };
     let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
@@ -1059,7 +1059,7 @@ fn test_hashing() {
 fn run8(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -1192,7 +1192,7 @@ fn test_case9() {
 fn run10(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -1401,7 +1401,7 @@ public class Tacos<K, V extends String> implements ITacos<V> {
 fn run11(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -1793,7 +1793,7 @@ fn test_case_11_bis() {
 fn run12(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
@@ -1852,7 +1852,7 @@ public class A {
 fn run13(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();

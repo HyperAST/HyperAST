@@ -315,7 +315,7 @@ impl RepositoryProcessor {
                 crate::maven::handle_pom_file(
                     &mut XmlTreeGen {
                         line_break: "\n".as_bytes().to_vec(),
-                        stores: &mut self.main_stores,
+                        stores: self.main_stores.mut_with_ts(),
                     },
                     n,
                     t,
@@ -335,10 +335,10 @@ impl RepositoryProcessor {
         crate::maven::handle_pom_file(&mut self.xml_generator(), name, text)
     }
 
-    pub(crate) fn xml_generator(&mut self) -> XmlTreeGen<crate::TStore> {
+    pub(crate) fn xml_generator(&mut self) -> XmlTreeGen<hyper_ast_gen_ts_xml::types::TStore> {
         XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
-            stores: &mut self.main_stores,
+            stores: self.main_stores.mut_with_ts(),
         }
     }
 }

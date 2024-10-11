@@ -52,10 +52,10 @@ impl<
     > Display for TreeToQuery<'hast, HAST, TIdN, V, PP>
 where
     HAST::IdN: Debug + Copy,
-    HAST::TS: hyper_ast::types::RoleStore<HAST::T>,
+    HAST::TS: hyper_ast::types::RoleStore,
     HAST::T: WithRoles,
     HAST::T: WithPrecompQueries,
-    <HAST::TS as hyper_ast::types::RoleStore<HAST::T>>::IdF: Into<u16> + From<u16>,
+    <HAST::TS as hyper_ast::types::RoleStore>::IdF: Into<u16> + From<u16>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, &mut 0, 0, f).map(|_| ())
@@ -71,10 +71,10 @@ impl<
     > TreeToQuery<'hast, HAST, TIdN, V, PP>
 where
     HAST::IdN: Debug + Copy,
-    HAST::TS: hyper_ast::types::RoleStore<HAST::T>,
+    HAST::TS: hyper_ast::types::RoleStore,
     HAST::T: WithRoles,
     HAST::T: WithPrecompQueries,
-    <HAST::TS as hyper_ast::types::RoleStore<HAST::T>>::IdF: Into<u16> + From<u16>,
+    <HAST::TS as hyper_ast::types::RoleStore>::IdF: Into<u16> + From<u16>,
 {
     fn serialize(
         &self,

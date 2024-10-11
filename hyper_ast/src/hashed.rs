@@ -275,6 +275,17 @@ where
     }
 }
 
+impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N, L, T> crate::types::ErasedHolder
+    for HashedCompressedNode<U, N, L, T>
+{
+    unsafe fn unerase_ref<TT: 'static + crate::types::Compo>(
+        &self,
+        tid: std::any::TypeId,
+    ) -> Option<&TT> {
+        todo!("should also be depr")
+    }
+}
+
 impl<
         H: Hash + PrimInt,
         U: NodeHashs<Hash = H>,

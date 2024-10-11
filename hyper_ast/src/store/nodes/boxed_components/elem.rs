@@ -171,6 +171,17 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithHashs for Hash
     }
 }
 
+impl<'a, Id> crate::types::ErasedHolder
+    for HashedNodeRef<'a, Id>
+{
+    unsafe fn unerase_ref<T: 'static + crate::types::Compo>(
+        &self,
+        tid: std::any::TypeId,
+    ) -> Option<&T> {
+        todo!()
+    }
+}
+
 impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Tree
     for HashedNodeRef<'a, Id>
 where

@@ -274,6 +274,17 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     }
 }
 
+impl<'a, Id> crate::types::ErasedHolder
+    for HashedNodeRef<'a, Id>
+{
+    unsafe fn unerase_ref<T: 'static + crate::types::Compo>(
+        &self,
+        tid: std::any::TypeId,
+    ) -> Option<&T> {
+        todo!()
+    }
+}
+
 impl<'a, T: TypedNodeId> crate::types::Tree for HashedNodeRef<'a, T> {
     fn has_children(&self) -> bool {
         match self.s_ref {
@@ -613,7 +624,7 @@ impl Default for SimplePackedBuilder {
 impl SimplePackedBuilder {
     pub fn add<TS, T>(&mut self, type_store: &TS, id: NodeIdentifier, node: T)
     where
-        TS: TypeStore<T>,
+        TS: TypeStore,
         T: crate::types::Tree<Label = defaults::LabelIdentifier> + crate::types::WithStats,
         <T::TreeId as NodeId>::IdN: Copy + Into<NodeIdentifier>,
     {

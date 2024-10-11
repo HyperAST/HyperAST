@@ -38,80 +38,8 @@ pub(crate) mod store {
     #[derive(Default)]
     pub(crate) struct TStore;
 
-    impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
+    impl<'a> hyper_ast::types::TypeStore for TStore {
         type Ty = AnyType;
-
-        // fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-        //     let lang = n.get_lang();
-        //     let t: &'static (dyn HyperType + 'static) = match lang {
-        //         "hyper_ast_gen_ts_cpp::types::Lang" => {
-        //             let raw = n.get_raw_type();
-        //             let t: &'static (dyn HyperType + 'static) =
-        //                 <hyper_ast_gen_ts_cpp::types::Cpp as Lang<_>>::make(raw);
-        //             t
-        //         }
-        //         "hyper_ast_gen_ts_java::types::Lang" => {
-        //             let raw = n.get_raw_type();
-        //             let t: &'static (dyn HyperType + 'static) =
-        //                 <hyper_ast_gen_ts_java::types::Java as Lang<_>>::make(raw);
-        //             t
-        //         }
-        //         "hyper_ast_gen_ts_xml::types::Lang" => {
-        //             let raw = n.get_raw_type();
-        //             let t: &'static (dyn HyperType + 'static) =
-        //                 <hyper_ast_gen_ts_xml::types::Xml as Lang<_>>::make(raw);
-        //             t
-        //         }
-        //         "" => {
-        //             let t: &'static (dyn HyperType + 'static) =
-        //                 <hyper_ast_gen_ts_java::types::Java as Lang<_>>::make(
-        //                     hyper_ast_gen_ts_java::types::Type::Dot as u16,
-        //                 );
-        //             t
-        //         }
-        //         // "xml" => LangRef::<AnyType>::make(&hyper_ast_gen_ts_xml::types::Xml, raw),
-        //         x => panic!("{}", x),
-        //     };
-        //     t.into()
-        // }
-
-        // fn resolve_lang(
-        //     &self,
-        //     n: &HashedNodeRef<'a, NodeIdentifier>,
-        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        //     let lang = n.get_lang();
-        //     let t = match lang {
-        //         "hyper_ast_gen_ts_cpp::types::Lang" => {
-        //             From::<&'static (dyn LangRef<AnyType>)>::from(
-        //                 &hyper_ast_gen_ts_cpp::types::Lang,
-        //             )
-        //         }
-        //         "hyper_ast_gen_ts_java::types::Lang" => {
-        //             From::<&'static (dyn LangRef<AnyType>)>::from(
-        //                 &hyper_ast_gen_ts_java::types::Lang,
-        //             )
-        //         }
-        //         "hyper_ast_gen_ts_xml::types::Lang" => {
-        //             From::<&'static (dyn LangRef<AnyType>)>::from(
-        //                 &hyper_ast_gen_ts_xml::types::Lang,
-        //             )
-        //         }
-        //         "" => From::<&'static (dyn LangRef<AnyType>)>::from(
-        //             &hyper_ast_gen_ts_java::types::Lang,
-        //         ),
-        //         // "xml" => From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_xml::types::Xml),
-        //         x => panic!("{}", x),
-        //     };
-        //     t
-        // }
-
-        // fn type_eq(
-        //     &self,
-        //     _n: &HashedNodeRef<'a, NodeIdentifier>,
-        //     _m: &HashedNodeRef<'a, NodeIdentifier>,
-        // ) -> bool {
-        //     todo!()
-        // }
     }
 
     #[derive(Default)]
@@ -218,29 +146,8 @@ pub(crate) mod store {
         }
     }
 
-    impl<'a, 'b> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>>
-        for AcessibleFetchedHyperAST<'b>
-    {
+    impl<'a, 'b> hyper_ast::types::TypeStore for AcessibleFetchedHyperAST<'b> {
         type Ty = AnyType;
-
-        // fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-        //     self.type_store.resolve_type(n)
-        // }
-
-        // fn resolve_lang(
-        //     &self,
-        //     n: &HashedNodeRef<'a, NodeIdentifier>,
-        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        //     self.type_store.resolve_lang(n)
-        // }
-
-        // fn type_eq(
-        //     &self,
-        //     n: &HashedNodeRef<'a, NodeIdentifier>,
-        //     m: &HashedNodeRef<'a, NodeIdentifier>,
-        // ) -> bool {
-        //     self.type_store.type_eq(n, m)
-        // }
     }
 
     impl<'a, 'b: 'a> hyper_ast::types::HyperASTShared for AcessibleFetchedHyperAST<'a>
@@ -254,11 +161,16 @@ pub(crate) mod store {
         type Label = LabelIdentifier;
     }
 
-    impl<'a> hyper_ast::types::HyperASTAsso for AcessibleFetchedHyperAST<'a>
-    {
-        type T<'store> = HashedNodeRef<'store, NodeIdentifier> where Self: 'store;
+    impl<'a> hyper_ast::types::HyperASTAsso for AcessibleFetchedHyperAST<'a> {
+        type T<'store>
+            = HashedNodeRef<'store, NodeIdentifier>
+        where
+            Self: 'store;
 
-        type NS<'store> = Self where Self: 'store;
+        type NS<'store>
+            = Self
+        where
+            Self: 'store;
 
         fn node_store<'c>(&'c self) -> &'c Self::NS<'c> {
             self
@@ -270,7 +182,10 @@ pub(crate) mod store {
             self
         }
 
-        type TS<'store> = Self where Self: 'store;
+        type TS<'store>
+            = Self
+        where
+            Self: 'store;
 
         fn type_store(&self) -> &Self::TS<'_> {
             self
@@ -1941,8 +1856,7 @@ mod hyper_ast_layouter {
         IdN: NodeId<IdN = IdN>,
         HAST: types::NodeStore<IdN>,
         HAST: types::LabelStore<str>,
-        HAST: types::TypeStore<HAST::R<'store>>,
-        // HAST::R<'store>: types::Labeled<Label = HAST::I> + types::WithChildren<TreeId = IdN>,
+        HAST: types::TypeStore,
     {
         pub fn compute(&self) -> Result<(usize, Vec<LayoutSection>), IndentedAlt> {
             let mut layout = vec![];

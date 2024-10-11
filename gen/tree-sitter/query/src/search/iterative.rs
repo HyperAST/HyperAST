@@ -10,7 +10,7 @@ pub(crate) struct MatchingIter<
     'a,
     'store,
     HAST: TypedHyperAST<'store, TIdN>,
-    TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore<HAST::T>>::Ty>,
+    TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
     C: Converter,
 > {
     slf: &'a PreparedMatcher<TIdN::Ty, C>,
@@ -39,7 +39,7 @@ impl<
         'a,
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore<HAST::T>>::Ty>,
+        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
         C: Converter,
     > Iterator for MatchingIter<'a, 'store, HAST, TIdN, C>
 {
@@ -83,7 +83,7 @@ impl<
         'a,
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore<HAST::T>>::Ty>,
+        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
         C: Converter,
     > MatchingIter<'a, 'store, HAST, TIdN, C>
 {
@@ -295,7 +295,7 @@ impl<
         'a,
         'store,
         HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore<HAST::T>>::Ty>,
+        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN, Ty = <HAST::TS as TypeStore>::Ty>,
         C: Converter,
     > MatchingIter<'a, 'store, HAST, TIdN, C>
 {

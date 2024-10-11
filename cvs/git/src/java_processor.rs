@@ -494,12 +494,14 @@ impl RepositoryProcessor {
                 let caches = holder.get_caches_mut();
                 let mut java_tree_gen = java_tree_gen::JavaTreeGen {
                     line_break,
-                    stores: &mut self.main_stores,
+                    stores: self
+                        .main_stores
+                        .mut_with_ts::<hyper_ast_gen_ts_java::types::TStore>(),
                     md_cache: &mut caches.md_cache,
                     more: precomp,
                 };
 
-                crate::java::_handle_java_file(&mut java_tree_gen, n, t)
+                crate::java::handle_java_file(&mut java_tree_gen, n, t)
                     .map_err(|_| crate::ParseErr::IllFormed)
                     .map(|x| (x.local.clone(), false))
             })

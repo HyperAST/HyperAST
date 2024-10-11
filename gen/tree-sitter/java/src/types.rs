@@ -1,47 +1,32 @@
 use std::fmt::Display;
 
 use hyper_ast::{
-    store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
-    types::{AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypeU16, TypedNodeId},
+    types::{AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypedNodeId},
 };
 
 #[cfg(feature = "legion")]
 mod legion_impls {
+    use hyper_ast::types::LangWrapper;
+
     use super::*;
 
     use crate::TNode;
 
     impl<'a> TNode<'a> {
-        pub fn obtain_type<T>(&self, _: &mut impl JavaEnabledTypeStore<T>) -> Type {
+        pub fn obtain_type(&self, _: &mut impl JavaEnabledTypeStore) -> Type {
             let t = self.kind_id();
             Type::from_u16(t)
         }
     }
 
-    use hyper_ast::{
-        store::nodes::legion::HashedNodeRef,
-        types::{LangWrapper, TypeU16, Typed},
-    };
-
-    type HNRef<'a> = HashedNodeRef<'a, TIdN<NodeIdentifier>>;
-
-    impl<'a> TypeStore<HNRef<'a>> for TStore {
-        type Ty = TypeU16<Java>;
-
-        // fn resolve_type(&self, n: &HNRef<'a>) -> Self::Ty {
-        //     n.get_type()
-        // }
-
-        // fn resolve_lang(&self, n: &HNRef<'a>) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        //     todo!("{:?}", n)
-        // }
-
-        // fn type_eq(&self, n: &HNRef<'a>, m: &HNRef<'a>) -> bool {
-        //     n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
-        // }
+    impl TypeStore for TStore {
+        type Ty = TType;
     }
-    impl<'a> RoleStore<HNRef<'a>> for TStore {
+    impl TypeStore for &TStore {
+        type Ty = TType;
+    }
+    impl RoleStore for TStore {
         type IdF = u16;
 
         type Role = hyper_ast::types::Role;
@@ -62,72 +47,13 @@ mod legion_impls {
                 .into()
         }
     }
-    impl<'a, R> TypeStore<R> for &TStore {
-        type Ty = TypeU16<Java>;
-
-        // fn resolve_type(&self, _n: &R) -> Self::Ty {
-        //     todo!()
-        // }
-
-        // fn resolve_lang(&self, _n: &R) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        //     todo!()
-        // }
-
-        // fn type_eq(&self, _n: &R, _m: &R) -> bool {
-        //     todo!()
-        // }
-    }
-    impl<'a> JavaEnabledTypeStore<HNRef<'a>> for TStore {
+    impl<'a> JavaEnabledTypeStore for TStore {
         fn intern(&self, t: Type) -> Self::Ty {
-            t.into()
+            TType::new(t)
         }
 
         fn resolve(&self, t: Self::Ty) -> Type {
             t.e()
-        }
-    }
-
-    impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
-        type Ty = AnyType;
-
-        // fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-        //     let t = n.get_component::<Type>().unwrap();
-        //     as_any(t)
-        // }
-
-        // fn resolve_lang(
-        //     &self,
-        //     n: &HashedNodeRef<'a, NodeIdentifier>,
-        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        //     todo!("{:?}", n)
-        // }
-        // fn type_eq(
-        //     &self,
-        //     n: &HashedNodeRef<'a, NodeIdentifier>,
-        //     m: &HashedNodeRef<'a, NodeIdentifier>,
-        // ) -> bool {
-        //     todo!("{:?} {:?}", n, m)
-        // }
-    }
-    impl<'a> RoleStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
-        type IdF = u16;
-
-        type Role = hyper_ast::types::Role;
-
-        fn resolve_field(&self, _lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
-            let s = tree_sitter_java::language()
-                .field_name_for_id(field_id)
-                .ok_or_else(|| format!("{}", field_id))
-                .unwrap();
-            hyper_ast::types::Role::try_from(s).expect(s)
-        }
-
-        fn intern_role(&self, _lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
-            let field_name = role.to_string();
-            tree_sitter_java::language()
-                .field_id_for_name(field_name)
-                .unwrap()
-                .into()
         }
     }
     pub fn as_any(t: &Type) -> AnyType {
@@ -139,7 +65,7 @@ mod legion_impls {
 }
 #[cfg(feature = "legion")]
 pub use legion_impls::as_any;
-pub trait JavaEnabledTypeStore<T>: TypeStore<T> {
+pub trait JavaEnabledTypeStore: TypeStore + Clone {
     fn intern(&self, t: Type) -> Self::Ty;
     fn resolve(&self, t: Self::Ty) -> Type;
 }
@@ -153,6 +79,7 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
     unimplemented!("need treesitter grammar")
 }
 
+#[derive(Clone, Copy)]
 pub struct TStore;
 
 impl Default for TStore {
@@ -232,6 +159,24 @@ impl LangRef<AnyType> for Java {
     }
 
     fn ts_symbol(&self, t: AnyType) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
+}
+
+impl LangRef<TType> for Lang {
+    fn make(&self, t: u16) -> &'static TType {
+        // TODO could make one safe, but not priority
+        unsafe { std::mem::transmute(&S_T_L[t as usize]) }
+    }
+    fn to_u16(&self, t: TType) -> u16 {
+        t.e() as u16
+    }
+
+    fn name(&self) -> &'static str {
+        std::any::type_name::<Lang>()
+    }
+
+    fn ts_symbol(&self, t: TType) -> u16 {
         id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
@@ -400,7 +345,7 @@ impl HyperType for Type {
     }
 
     fn as_static(&self) -> &'static dyn HyperType {
-        todo!()
+        LangRef::<Type>::make(&Lang, *self as u16)
     }
 
     fn as_static_str(&self) -> &'static str {
@@ -705,31 +650,17 @@ impl<'a> From<&'a str> for Type {
     }
 }
 
-impl hyper_ast::types::LLang<TypeU16<Self>> for Java {
+pub type TType = hyper_ast::types::TypeU16<Lang>;
+
+impl hyper_ast::types::LLang<TType> for Java {
     type I = u16;
 
     type E = Type;
 
     const TE: &[Self::E] = S_T_L;
-}
 
-pub type TType = TypeU16<Lang>;
-
-impl From<u16> for Type {
-    fn from(value: u16) -> Self {
-        debug_assert_eq!(Self::from_u16(value), S_T_L[value as usize]);
-        S_T_L[value as usize]
-    }
-}
-impl Into<TypeU16<Java>> for Type {
-    fn into(self) -> TypeU16<Java> {
-        TypeU16::new(self)
-    }
-}
-
-impl Into<u16> for Type {
-    fn into(self) -> u16 {
-        self as u8 as u16
+    fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<TType> {
+        From::<&'static (dyn LangRef<_>)>::from(&Lang)
     }
 }
 

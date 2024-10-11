@@ -56,11 +56,7 @@ impl<'a, TS> types::HyperASTShared for QStoreRef<'a, TS, store::nodes::DefaultNo
 
 impl<'store, 'a, TS> types::HyperAST<'store> for QStoreRef<'a, TS, store::nodes::DefaultNodeStore>
 where
-    // <TS as TypeStore>::Ty: HyperType + Send + Sync,
-    TS: types::TypeStore<
-        store::nodes::legion::HashedNodeRef<'store, store::nodes::DefaultNodeIdentifier>,
-        Ty = types::AnyType,
-    >,
+    TS: types::TypeStore<Ty = types::AnyType>,
 {
     type T = store::nodes::legion::HashedNodeRef<'store, Self::IdN>;
 

@@ -1,7 +1,7 @@
 ///! fully compress all subtrees from a typescript CST
 use std::{collections::HashMap, fmt::Debug};
 
-use crate::{types::TIdN, TNode};
+use crate::TNode;
 use legion::world::EntryRef;
 
 use hyper_ast::{
@@ -13,7 +13,7 @@ use hyper_ast::{
         nodes::{
             legion::{
                 compo::{self, NoSpacesCS, CS},
-                HashedNodeRef, NodeIdentifier,
+                NodeIdentifier,
             },
             DefaultNodeStore as NodeStore,
         },
@@ -164,9 +164,7 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 }
 
-impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>>
-    ZippedTreeGen for TsTreeGen<'store, 'cache, TS>
-{
+impl<'store, 'cache, TS: TsEnabledTypeStore> ZippedTreeGen for TsTreeGen<'store, 'cache, TS> {
     type Stores = SimpleStores<TS>;
     type Text = [u8];
     type Node<'b> = TNode<'b>;
@@ -281,9 +279,7 @@ impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdent
     }
 }
 
-impl<'store, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>>
-    TsTreeGen<'store, 'cache, TS>
-{
+impl<'store, 'cache, TS: TsEnabledTypeStore> TsTreeGen<'store, 'cache, TS> {
     fn make_spacing(
         &mut self,
         spacing: Vec<u8>, //Space>,
@@ -441,9 +437,7 @@ where
     }
 }
 
-impl<'stores, 'cache, TS: TsEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>> TreeGen
-    for TsTreeGen<'stores, 'cache, TS>
-{
+impl<'stores, 'cache, TS: TsEnabledTypeStore> TreeGen for TsTreeGen<'stores, 'cache, TS> {
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;
     fn make(

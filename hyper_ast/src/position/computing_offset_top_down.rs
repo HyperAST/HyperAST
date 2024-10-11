@@ -237,7 +237,7 @@ impl StructuralPosition<NodeIdentifier, u16> {
             IdN = NodeIdentifier,
             Label = LabelIdentifier,
         >,
-        HAST::TS: TypeStore<HashedNodeRef<'store>, Ty = AnyType>,
+        HAST::TS: TypeStore<Ty = AnyType>,
         // HAST::Types: 'static + TypeTrait + Debug,
     {
         self.check(stores).unwrap();
@@ -341,7 +341,7 @@ impl StructuralPosition<NodeIdentifier, u16> {
             IdN = NodeIdentifier,
             Label = LabelIdentifier,
         >,
-        HAST::TS: TypeStore<HashedNodeRef<'store>, Ty = AnyType>,
+        HAST::TS: TypeStore<Ty = AnyType>,
         // HAST::Types: 'static + TypeTrait + Debug,
     {
         self.check(stores).unwrap();

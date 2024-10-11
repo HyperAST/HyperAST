@@ -26,7 +26,7 @@ impl<'tree, HAST: HyperAST<'tree>> PartialEq for Node<'tree, HAST> {
 impl<'tree, HAST: HyperAST<'tree>> steped::Node for Node<'tree, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<HAST::T>,
+    HAST::TS: RoleStore,
     HAST::T: WithRoles,
 {
     fn symbol(&self) -> steped::Symbol {
@@ -45,7 +45,7 @@ where
         self.0.start_point()
     }
 
-    type IdF = <HAST::TS as RoleStore<HAST::T>>::IdF;
+    type IdF = <HAST::TS as RoleStore>::IdF;
 
     // fn child_by_field_id(&self, field_id: Self::IdF) -> Option<Self> {
     //     // self.0.child_by_field_id(field_id).map(|x| Self(x))
@@ -72,7 +72,7 @@ where
 impl<'tree, HAST: HyperAST<'tree>> steped::Cursor for Node<'tree, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<HAST::T>,
+    HAST::TS: RoleStore,
     HAST::T: WithRoles,
 {
     type Node = Self;
@@ -166,10 +166,11 @@ impl<HAST> Debug for QueryMatcher<HAST> {
 }
 
 impl<HAST> GenQuery for QueryMatcher<HAST>
-        where
+where
     HAST: 'static + hyper_ast::types::HyperASTShared + for<'tree> hyper_ast::types::HyperAST<'tree>,
-    for<'tree> <HAST as HyperAST<'tree>>::TS: hyper_ast::types::RoleStore<<HAST as HyperAST<'tree>>::T>,
-    for<'tree> <<HAST as HyperAST<'tree>>::TS as hyper_ast::types::RoleStore<<HAST as HyperAST<'tree>>::T>>::IdF: From<u16> + Into<u16>,
+    for<'tree> <HAST as HyperAST<'tree>>::TS: hyper_ast::types::RoleStore,
+    for<'tree> <<HAST as HyperAST<'tree>>::TS as hyper_ast::types::RoleStore>::IdF:
+        From<u16> + Into<u16>,
     for<'tree> <HAST as HyperAST<'tree>>::T: WithSerialization + WithStats + WithRoles,
     <HAST as HyperASTShared>::IdN: std::fmt::Debug + Copy + std::hash::Hash,
     <HAST as HyperASTShared>::Idx: Copy + std::hash::Hash,
@@ -211,16 +212,19 @@ impl<HAST> GenQuery for QueryMatcher<HAST>
 
     type Cursor = Vec<u16>;
 
-    type Match<'cursor, 'tree: 'cursor> = self::MyQMatch<'cursor, 'tree, HAST>
+    type Match<'cursor, 'tree: 'cursor>
+        = self::MyQMatch<'cursor, 'tree, HAST>
     where
         Self: 'cursor;
 
-    type Matches<'query, 'cursor: 'query, 'tree: 'cursor> =
-    self::MyQMatches<'query, 'cursor, 'tree,
-        steped::MatchIt<'query,
-            Self::Node<'tree>,
-            Self::Node<'tree>>,
-        HAST>
+    type Matches<'query, 'cursor: 'query, 'tree: 'cursor>
+        = self::MyQMatches<
+        'query,
+        'cursor,
+        'tree,
+        steped::MatchIt<'query, Self::Node<'tree>, Self::Node<'tree>>,
+        HAST,
+    >
     where
         Self: 'tree,
         Self: 'query,
@@ -262,13 +266,14 @@ impl<Q, L> Default for ExtendingStringQuery<Q, L> {
 
 impl<HAST> tree_sitter_graph::ExtendedableQuery
     for ExtendingStringQuery<QueryMatcher<HAST>, tree_sitter::Language>
-    where
+where
     HAST: 'static + hyper_ast::types::HyperASTShared + for<'tree> hyper_ast::types::HyperAST<'tree>,
-    for<'tree> <HAST as HyperAST<'tree>>::T: WithSerialization + WithStats+WithRoles,
+    for<'tree> <HAST as HyperAST<'tree>>::T: WithSerialization + WithStats + WithRoles,
     <HAST as HyperASTShared>::IdN: std::fmt::Debug + Copy + std::hash::Hash,
     <HAST as HyperASTShared>::Idx: Copy + std::hash::Hash,
-    for<'tree> <HAST as HyperAST<'tree>>::TS: hyper_ast::types::RoleStore<<HAST as HyperAST<'tree>>::T>,
-    for<'tree> <<HAST as HyperAST<'tree>>::TS as hyper_ast::types::RoleStore<<HAST as HyperAST<'tree>>::T>>::IdF: From<u16> + Into<u16>,
+    for<'tree> <HAST as HyperAST<'tree>>::TS: hyper_ast::types::RoleStore,
+    for<'tree> <<HAST as HyperAST<'tree>>::TS as hyper_ast::types::RoleStore>::IdF:
+        From<u16> + Into<u16>,
 {
     type Query = QueryMatcher<HAST>;
     type Lang = tree_sitter::Language;
@@ -395,9 +400,10 @@ where
         vec![].iter().cloned()
     }
 
-    type QM<'cursor> = MyQMatch<'cursor, 'tree, HAST>
-where
-    Self: 'cursor;
+    type QM<'cursor>
+        = MyQMatch<'cursor, 'tree, HAST>
+    where
+        Self: 'cursor;
 }
 
 pub struct MyQMatch<'cursor, 'tree, HAST: HyperAST<'tree>> {

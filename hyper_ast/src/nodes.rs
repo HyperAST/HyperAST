@@ -229,22 +229,6 @@ impl<N: Eq + Clone + NodeId<IdN = N>, L, T> crate::types::WithChildren for Compr
         }
     }
 
-    // fn children_unchecked<'a>(&'a self) -> &[N] {
-    //     match self {
-    //         CompressedNode::Children2 { children, kind: _ } => &*children,
-    //         CompressedNode::Children { children, kind: _ } => &*children,
-    //         _ => &[],
-    //     }
-    // }
-
-    // fn get_children_cpy<'a>(&'a self) -> Vec<N> {
-    //     match self {
-    //         CompressedNode::Children2 { children, kind: _ } => children.to_vec(),
-    //         CompressedNode::Children { children, kind: _ } => children.to_vec(),
-    //         _ => vec![],
-    //     }
-    // }
-
     fn children<'a>(&'a self) -> Option<&'a <Self as crate::types::WithChildren>::Children<'a>> {
         fn f<'a, N, L, T>(x: &'a CompressedNode<N, L, T>) -> &'a [N] {
             match x {
@@ -261,6 +245,15 @@ impl<N: Eq + Clone + NodeId<IdN = N>, L, T> crate::types::WithChildren for Compr
 impl<N, L, T> crate::types::Node for CompressedNode<N, L, T> {}
 impl<N: NodeId + Eq, L, T> crate::types::Stored for CompressedNode<N, L, T> {
     type TreeId = N;
+}
+
+impl<N, L, T> crate::types::ErasedHolder for CompressedNode<N, L, T> {
+    unsafe fn unerase_ref<U: 'static + crate::types::Compo>(
+        &self,
+        tid: std::any::TypeId,
+    ) -> Option<&U> {
+        unimplemented!("CompressedNode should be deprecated anyway")
+    }
 }
 
 impl<N: NodeId<IdN = N> + Eq + Clone, L: Eq, T: Copy + Hash + Eq + HyperType + Send + Sync>
@@ -535,14 +528,8 @@ impl<
 impl<'store, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool> Display
     for SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, false>
 where
-    // IdN: NodeId<IdN = IdN> + Debug,
     HAST: HyperAST<'store>,
     HAST::IdN: std::fmt::Debug,
-    // HAST: crate::types::NodeStore<IdN>,
-    // HAST: crate::types::LabelStore<str>,
-    // HAST: crate::types::TypeStore<HAST::R<'store>>,
-    // HAST::R<'store>:
-    //     crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, f)
@@ -552,20 +539,11 @@ where
 impl<'store, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool> Display
     for SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, true>
 where
-    // IdN: NodeId<IdN = IdN> + Debug,
     HAST: HyperAST<'store>,
-    HAST::TS: RoleStore<HAST::T>,
+    HAST::TS: RoleStore,
     HAST::IdN: std::fmt::Debug,
-    <HAST::TS as RoleStore<HAST::T>>::Role: std::fmt::Display,
+    <HAST::TS as RoleStore>::Role: std::fmt::Display,
     HAST::T: crate::types::WithRoles,
-    // HAST: crate::types::NodeStore<IdN>,
-    // HAST: crate::types::LabelStore<str>,
-    // HAST: crate::types::TypeStore<HAST::R<'store>>,
-    // HAST: crate::types::RoleStore<HAST::R<'store>>,
-    // HAST::Role: Display,
-    // HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
-    //     + crate::types::WithChildren<TreeId = IdN>
-    //     + crate::types::WithRoles,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, f)
@@ -575,16 +553,9 @@ where
 impl<'store, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SPC: bool>
     SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, false>
 where
-    // IdN: NodeId<IdN = IdN> + Debug,
     HAST: HyperAST<'store>,
     HAST::IdN: std::fmt::Debug,
-    // HAST: crate::types::NodeStore<IdN>,
-    // HAST: crate::types::LabelStore<str>,
-    // HAST: crate::types::TypeStore<HAST::R<'store>>,
-    // HAST::R<'store>:
-    //     crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
 {
-    // pub fn tree_syntax_with_ids(
     fn serialize(
         &self,
         id: &HAST::IdN,
@@ -677,17 +648,9 @@ impl<'store, HAST, const TY: bool, const LABELS: bool, const IDS: bool, const SP
     SimpleSerializer<'store, HAST::IdN, HAST, TY, LABELS, IDS, SPC, true>
 where
     HAST: HyperAST<'store>,
-    HAST::TS: RoleStore<HAST::T>,
+    HAST::TS: RoleStore,
     HAST::IdN: std::fmt::Debug,
-    <HAST::TS as RoleStore<HAST::T>>::Role: std::fmt::Display,
-    // IdN: NodeId<IdN = IdN> + Debug,
-    // HAST: crate::types::NodeStore<IdN>,
-    // HAST: crate::types::LabelStore<str>,
-    // HAST: crate::types::TypeStore<HAST::R<'store>>,
-    // HAST: crate::types::RoleStore<HAST::R<'store>>,
-    // HAST::Role: Display,
-    // HAST::R<'store>: crate::types::Labeled<Label = HAST::I>
-    //     + crate::types::WithChildren<TreeId = IdN>
+    <HAST::TS as RoleStore>::Role: std::fmt::Display,
     HAST::T: crate::types::WithRoles,
 {
     // pub fn tree_syntax_with_ids(
@@ -757,7 +720,7 @@ where
                     let mut i = num::zero();
                     for id in it {
                         use crate::types::WithRoles;
-                        if let Some(r) = b.role_at::<<HAST::TS as RoleStore<HAST::T>>::Role>(i) {
+                        if let Some(r) = b.role_at::<<HAST::TS as RoleStore>::Role>(i) {
                             write!(out, " {}:", r)?;
                         }
                         write!(out, " ")?;
@@ -1073,12 +1036,6 @@ impl<'store, IdN, HAST, Fmt: Format, const SPC: bool> PrettyPrinter<'store, IdN,
 impl<'store, HAST, const SPC: bool> Display for PrettyPrinter<'store, HAST::IdN, HAST, Text, SPC>
 where
     HAST: HyperAST<'store>,
-    // IdN: NodeId<IdN = IdN>,
-    // HAST: crate::types::NodeStore<IdN>,
-    // HAST: crate::types::LabelStore<str>,
-    // HAST: crate::types::TypeStore<HAST::R<'store>>,
-    // HAST::R<'store>:
-    //     crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, 0, f)
@@ -1088,12 +1045,6 @@ where
 impl<'store, HAST, const SPC: bool> Display for PrettyPrinter<'store, HAST::IdN, HAST, Sexp, SPC>
 where
     HAST: HyperAST<'store>,
-    // IdN: NodeId<IdN = IdN>,
-    // HAST: crate::types::NodeStore<IdN>,
-    // HAST: crate::types::LabelStore<str>,
-    // HAST: crate::types::TypeStore<HAST::R<'store>>,
-    // HAST::R<'store>:
-    //     crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, 0, f)
@@ -1103,12 +1054,6 @@ where
 impl<'store, HAST, const SPC: bool> PrettyPrinter<'store, HAST::IdN, HAST, Text, SPC>
 where
     HAST: HyperAST<'store>,
-    // IdN: NodeId<IdN = IdN>,
-    // HAST: crate::types::NodeStore<IdN>,
-    // HAST: crate::types::LabelStore<str>,
-    // HAST: crate::types::TypeStore<HAST::R<'store>>,
-    // HAST::R<'store>:
-    //     crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
 {
     fn serialize(
         &self,
@@ -1156,12 +1101,6 @@ where
 impl<'store, HAST, const SPC: bool> PrettyPrinter<'store, HAST::IdN, HAST, Sexp, SPC>
 where
     HAST: HyperAST<'store>,
-    // IdN: NodeId<IdN = IdN>,
-    // HAST: crate::types::NodeStore<IdN>,
-    // HAST: crate::types::LabelStore<str>,
-    // HAST: crate::types::TypeStore<HAST::R<'store>>,
-    // HAST::R<'store>:
-    //     crate::types::Labeled<Label = HAST::I> + crate::types::WithChildren<TreeId = IdN>,
 {
     fn serialize(
         &self,

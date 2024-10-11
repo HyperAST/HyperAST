@@ -1,5 +1,5 @@
 use crate::{
-    preprocessed::IsSkippedAna, processing::ObjectName, Accumulator, BasicDirAcc, TStore,
+    preprocessed::IsSkippedAna, processing::ObjectName, Accumulator, BasicDirAcc,
     PROPAGATE_ERROR_ON_BAD_CST_NODE,
 };
 
@@ -9,7 +9,7 @@ use hyper_ast::{
     tree_gen::SubTreeMetrics,
 };
 
-use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
+use hyper_ast_gen_ts_cpp::{legion as cpp_tree_gen, types::TStore};
 
 pub(crate) fn handle_cpp_file<'stores, 'cache, 'b: 'stores>(
     tree_gen: &mut cpp_tree_gen::CppTreeGen<'stores, 'cache, TStore>,

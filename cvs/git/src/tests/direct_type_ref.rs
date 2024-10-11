@@ -24,7 +24,7 @@ fn run(text: &[u8]) {
     let mut md_cache = Default::default();
     let mut java_tree_gen = java_tree_gen::JavaTreeGen {
         line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
+        stores: stores.mut_with_ts(),
         md_cache: &mut md_cache,
         more: (),
     };

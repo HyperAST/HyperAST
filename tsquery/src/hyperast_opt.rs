@@ -88,12 +88,15 @@ impl<IdF: Copy> Status for CursorStatus<IdF> {
 impl<'hast, HAST: HyperAST<'hast>> super::Cursor for self::TreeCursor<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<HAST::T>,
+    HAST::TS: RoleStore,
     HAST::T: WithRoles,
     HAST::T: WithPrecompQueries,
 {
     type Node = self::Node<'hast, HAST>;
-    type NodeRef<'a> = self::NodeRef<'a, 'hast, HAST> where Self: 'a;
+    type NodeRef<'a>
+        = self::NodeRef<'a, 'hast, HAST>
+    where
+        Self: 'a;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep {
         goto_next_sibling_internal(self.stores, &mut self.pos)
@@ -142,7 +145,7 @@ where
         })
     }
 
-    type Status = CursorStatus<<<HAST as HyperAST<'hast>>::TS as RoleStore<HAST::T>>::IdF>;
+    type Status = CursorStatus<<<HAST as HyperAST<'hast>>::TS as RoleStore>::IdF>;
 
     #[inline]
     fn current_status(&self) -> Self::Status {
@@ -212,15 +215,15 @@ where
 impl<'a, 'hast, HAST: HyperAST<'hast>> self::NodeRef<'a, 'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<HAST::T>,
+    HAST::TS: RoleStore,
     HAST::T: WithRoles,
     HAST::T: WithPrecompQueries,
 {
     fn compute_current_role(
         mut self,
     ) -> (
-        Option<<<HAST as HyperAST<'hast>>::TS as RoleStore<HAST::T>>::Role>,
-        <<HAST as HyperAST<'hast>>::TS as RoleStore<HAST::T>>::IdF,
+        Option<<<HAST as HyperAST<'hast>>::TS as RoleStore>::Role>,
+        <<HAST as HyperAST<'hast>>::TS as RoleStore>::IdF,
     ) {
         let lang;
         let role = loop {
@@ -234,7 +237,7 @@ where
                 continue;
             }
             lang = kind(self.stores, &self.pos).get_lang();
-            break n.role_at::<<HAST::TS as RoleStore<HAST::T>>::Role>(o);
+            break n.role_at::<<HAST::TS as RoleStore>::Role>(o);
         };
         let field_id = if let Some(role) = role {
             self.stores.type_store().intern_role(lang, role)
@@ -248,7 +251,7 @@ where
 impl<'hast, HAST: HyperAST<'hast>> super::Node for self::Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<HAST::T>,
+    HAST::TS: RoleStore,
     HAST::T: WithRoles,
     HAST::T: WithPrecompQueries,
 {
@@ -274,7 +277,7 @@ where
         tree_sitter::Point { row: 0, column: 0 }
     }
 
-    type IdF = <HAST::TS as RoleStore<HAST::T>>::IdF;
+    type IdF = <HAST::TS as RoleStore>::IdF;
 
     fn has_child_with_field_id(&self, field_id: Self::IdF) -> bool {
         if field_id == Default::default() {
@@ -323,7 +326,7 @@ where
 impl<'a, 'hast, HAST: HyperAST<'hast>> super::Node for self::NodeRef<'a, 'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<HAST::T>,
+    HAST::TS: RoleStore,
     HAST::T: WithRoles,
     HAST::T: WithPrecompQueries,
 {
@@ -349,7 +352,7 @@ where
         tree_sitter::Point { row: 0, column: 0 }
     }
 
-    type IdF = <HAST::TS as RoleStore<HAST::T>>::IdF;
+    type IdF = <HAST::TS as RoleStore>::IdF;
 
     fn has_child_with_field_id(&self, field_id: Self::IdF) -> bool {
         if field_id == Default::default() {
@@ -399,7 +402,7 @@ impl<'hast, HAST: HyperAST<'hast>> Node<'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
 {
-    fn kind(&self) -> <HAST::TS as TypeStore<HAST::T>>::Ty {
+    fn kind(&self) -> <HAST::TS as TypeStore>::Ty {
         kind(self.stores, &self.pos)
     }
 }
@@ -407,7 +410,7 @@ where
 fn kind<'hast, HAST: HyperAST<'hast>>(
     stores: &'hast HAST,
     pos: &impl AAA<HAST::IdN, HAST::Idx>,
-) -> <HAST::TS as TypeStore<HAST::T>>::Ty {
+) -> <HAST::TS as TypeStore>::Ty {
     stores.resolve_type(&pos.node())
 }
 
@@ -461,10 +464,10 @@ fn text<'a, 'hast, HAST: HyperAST<'hast>>(
 fn role<'hast, HAST: HyperAST<'hast>>(
     stores: &'hast HAST,
     pos: &mut impl AAA<HAST::IdN, HAST::Idx>,
-) -> Option<<HAST::TS as RoleStore<HAST::T>>::Role>
+) -> Option<<HAST::TS as RoleStore>::Role>
 where
     // HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<HAST::T>,
+    HAST::TS: RoleStore,
     HAST::T: WithRoles,
 {
     let at = pos.offset();
@@ -472,7 +475,7 @@ where
         return None;
     }
     let n = resolve(stores, pos);
-    n.role_at::<<HAST::TS as RoleStore<HAST::T>>::Role>(at)
+    n.role_at::<<HAST::TS as RoleStore>::Role>(at)
 }
 
 struct SuperTypeIter<'a, 'hast, HAST: HyperASTShared> {
@@ -483,7 +486,7 @@ struct SuperTypeIter<'a, 'hast, HAST: HyperASTShared> {
 impl<'a, 'hast, HAST: HyperAST<'hast>> Iterator for SuperTypeIter<'a, 'hast, HAST>
 where
     HAST::IdN: std::fmt::Debug + Copy,
-    HAST::TS: RoleStore<HAST::T>,
+    HAST::TS: RoleStore,
     HAST::T: WithRoles,
     HAST::T: WithPrecompQueries,
 {
@@ -581,12 +584,12 @@ where
 fn child_by_role<'hast, HAST: HyperAST<'hast>>(
     stores: &'hast HAST,
     pos: &mut (impl BBB<HAST::IdN, HAST::Idx> + Clone),
-    _role: <HAST::TS as RoleStore<HAST::T>>::Role,
+    _role: <HAST::TS as RoleStore>::Role,
 ) -> Option<()>
 where
-    <HAST as HyperAST<'hast>>::TS: RoleStore<<HAST as HyperAST<'hast>>::T>,
+    <HAST as HyperAST<'hast>>::TS: RoleStore,
     <HAST as HyperASTShared>::IdN: Copy,
-    HAST::TS: RoleStore<HAST::T>,
+    HAST::TS: RoleStore,
     HAST::T: WithRoles,
 {
     // TODO what about multiple children with same role?

@@ -6,10 +6,10 @@ use hyper_ast::{
     tree_gen::BasicGlobalData,
     types::LabelStore as _,
 };
-use hyper_ast_cvs_git::{java::JavaAcc, TStore};
+use hyper_ast_cvs_git::java::JavaAcc;
 use hyper_ast_gen_ts_java::{
     legion_with_refs::{JavaTreeGen, Local, MDCache, MD},
-    types::Type,
+    types::{TStore, Type},
 };
 use std::path::{Path, PathBuf};
 

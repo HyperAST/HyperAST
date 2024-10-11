@@ -1,8 +1,7 @@
-use crate::types::{CompoRegister, ErasedCompo, ErasedInserter, Compo};
+use crate::types::{CompoRegister, ErasedHolder, ErasedInserter, Compo};
 
 use super::ByteLen;
 use bevy_ecs::archetype::ArchetypeGeneration;
-use bevy_ecs::bundle::Bundle;
 use bevy_ecs::component::{Component, ComponentId};
 use bevy_ecs::ptr::Ptr;
 use bevy_ecs::storage::SparseSet;
@@ -11,7 +10,7 @@ use num::ToPrimitive;
 use std::any::TypeId;
 
 trait CompressedCompo {
-    fn decomp(ptr: impl ErasedCompo, tid: TypeId) -> Self
+    fn decomp(ptr: impl ErasedHolder, tid: TypeId) -> Self
     where
         Self: Sized;
 
@@ -19,7 +18,7 @@ trait CompressedCompo {
     fn components<R: CompoRegister>(backend: &mut R) -> Vec<R::Id>;
 }
 
-impl ErasedCompo for Ptr<'_> {
+impl ErasedHolder for Ptr<'_> {
     unsafe fn unerase_ref<T: 'static + Compo>(&self, tid: std::any::TypeId) -> Option<&T> {
         if tid == std::any::TypeId::of::<T>() {
             Some(unsafe { self.deref() })
@@ -147,7 +146,7 @@ impl ByteLenU32 {
 }
 
 impl CompressedCompo for ByteLen {
-    fn decomp(ptr: impl ErasedCompo, tid: TypeId) -> Self
+    fn decomp(ptr: impl ErasedHolder, tid: TypeId) -> Self
     where
         Self: Sized,
     {

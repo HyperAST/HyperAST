@@ -168,7 +168,7 @@ fn make_view<'a, HAST>(
 ) -> View
 where
     HAST::IdN: Hash,
-    <HAST::TS as types::TypeStore<HAST::T>>::Ty: Into<u16>,
+    <HAST::TS as types::TypeStore>::Ty: Into<u16>,
     HAST: NodeStore<HAST::IdN, R<'a> = HAST::T> + LabelStore<str, I = HAST::Label>,
     HAST: 'a + HyperAST<'a, Label = LabelIdentifier>,
 {

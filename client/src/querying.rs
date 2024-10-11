@@ -2,7 +2,9 @@ use crate::{smells::globalize, SharedState};
 use axum::{response::IntoResponse, Json};
 use http::{HeaderMap, StatusCode};
 use hyper_ast::{
-    position::position_accessors::WithPreOrderOffsets, store::defaults::NodeIdentifier,
+    position::position_accessors::WithPreOrderOffsets,
+    store::defaults::NodeIdentifier,
+    types::{Children, HyperAST, IterableChildren, Typed, WithChildren, WithStats},
 };
 use hyper_ast_cvs_git::git::Oid;
 use hyper_diff::{
@@ -201,11 +203,7 @@ pub fn simple(
     })
 }
 
-pub fn streamed(
-    mut state: SharedState,
-    path: Param,
-    content: Content,
-) -> axum::response::Response {
+pub fn streamed(mut state: SharedState, path: Param, content: Content) -> axum::response::Response {
     let now = Instant::now();
 
     let mut headers = HeaderMap::new();
@@ -310,15 +308,15 @@ pub fn streamed(
             Some(result)
         });
 
-        let st_vals = futures::stream::iter(it.map(|x| {
-            match x {
-                Ok(x) => serde_json::to_string(&x).map_err(|e| e.to_string()),
-                Err(x) => serde_json::to_string(&x).map_err(|e| e.to_string()),
-            }
-            // x.map(|x| serde_json::to_string(&x).unwrap())
-            //     .map_err(|x| serde_json::to_string(&x).unwrap())
-        }));
-        
+    let st_vals = futures::stream::iter(it.map(|x| {
+        match x {
+            Ok(x) => serde_json::to_string(&x).map_err(|e| e.to_string()),
+            Err(x) => serde_json::to_string(&x).map_err(|e| e.to_string()),
+        }
+        // x.map(|x| serde_json::to_string(&x).unwrap())
+        //     .map_err(|x| serde_json::to_string(&x).unwrap())
+    }));
+
     (
         StatusCode::OK,
         headers,
@@ -647,7 +645,31 @@ pub fn differential(
                     log::info!("empty");
                     return true;
                 }
-                src = cs[i as usize];
+                // Gracefully handling possibly wrong param
+                // before: // src = cs[i as usize];
+                let Some(s) = cs.get(i as usize) else {
+                    let a = globalize(
+                        &repo,
+                        baseline,
+                        (x.make_position(stores), x.iter_offsets().collect()),
+                    );
+                    let id = mapper.src_arena.original(&src);
+                    let t = hyperast.resolve_type(&id);
+                    let (_, _, no_spaces_path_to_target) =
+                        hyper_ast::position::compute_position_with_no_spaces(
+                            current_tr,
+                            &mut x.iter_offsets(),
+                            stores,
+                        );
+                    log::error!(
+                        "no such child: {a:?} {t:?} {} {} {:?}",
+                        cs.len(),
+                        i,
+                        no_spaces_path_to_target
+                    );
+                    return true;
+                };
+                src = *s;
             }
             log::info!("mapped = {}", subtree_mappings.get_dsts(&src).is_empty());
             subtree_mappings.get_dsts(&src).is_empty()

@@ -1,9 +1,8 @@
 use std::fmt::Display;
 
 use hyper_ast::{
-    store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
-    types::{AnyType, HyperType, Lang, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId},
+    types::{AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId},
 };
 
 #[cfg(feature = "legion")]
@@ -13,37 +12,16 @@ mod legion_impls {
     use crate::TNode;
 
     impl<'a> TNode<'a> {
-        pub fn obtain_type<T>(&self, _: &mut impl TsEnabledTypeStore<T>) -> Type {
+        pub fn obtain_type(&self, _: &mut impl TsEnabledTypeStore) -> Type {
             let t = self.kind_id();
             Type::from_u16(t)
         }
     }
 
-    use hyper_ast::store::nodes::legion::HashedNodeRef;
-
-    impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
+    impl TypeStore for TStore {
         type Ty = TypeU16<Ts>;
-
-        // fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
-        //     n.get_component::<Type>().unwrap().clone()
-        // }
-
-        // fn resolve_lang(
-        //     &self,
-        //     _n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        //     From::<&'static (dyn LangRef<Type>)>::from(&Ts)
-        // }
-
-        // fn type_eq(
-        //     &self,
-        //     n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        //     m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        // ) -> bool {
-        //     n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
-        // }
     }
-    impl<'a> TsEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
+    impl TsEnabledTypeStore for TStore {
         fn intern(&self, t: Type) -> Self::Ty {
             t.into()
         }
@@ -51,33 +29,9 @@ mod legion_impls {
             t.e()
         }
     }
-    impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
-        type Ty = AnyType;
-        // fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-        //     From::<&'static (dyn HyperType)>::from(LangRef::<Type>::make(
-        //         &Ts,
-        //         *n.get_component::<Type>().unwrap() as u16,
-        //     ))
-        // }
-
-        // fn resolve_lang(
-        //     &self,
-        //     _n: &HashedNodeRef<'a, NodeIdentifier>,
-        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        //     From::<&'static (dyn LangRef<AnyType>)>::from(&Ts)
-        // }
-
-        // fn type_eq(
-        //     &self,
-        //     _n: &HashedNodeRef<'a, NodeIdentifier>,
-        //     _m: &HashedNodeRef<'a, NodeIdentifier>,
-        // ) -> bool {
-        //     todo!()
-        // }
-    }
 }
 
-pub trait TsEnabledTypeStore<T>: TypeStore<T> {
+pub trait TsEnabledTypeStore: TypeStore {
     fn intern(&self, t: Type) -> Self::Ty;
     fn resolve(&self, t: Self::Ty) -> Type;
 }
@@ -135,7 +89,8 @@ type TypeInternalSize = u16;
 pub struct T(TypeInternalSize);
 
 #[derive(Debug)]
-pub struct Ts;
+pub struct Lang;
+pub type Ts = Lang;
 
 impl LangRef<AnyType> for Ts {
     fn make(&self, _t: u16) -> &'static AnyType {
@@ -174,12 +129,30 @@ impl LangRef<Type> for Ts {
     }
 }
 
-impl Lang<Type> for Ts {
+impl LangRef<TType> for Lang {
+    fn make(&self, t: u16) -> &'static TType {
+        // TODO could make one safe, but not priority
+        unsafe { std::mem::transmute(&S_T_L[t as usize]) }
+    }
+    fn to_u16(&self, t: TType) -> u16 {
+        t.e() as u16
+    }
+
+    fn name(&self) -> &'static str {
+        std::any::type_name::<Lang>()
+    }
+
+    fn ts_symbol(&self, t: TType) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
+}
+
+impl hyper_ast::types::Lang<Type> for Ts {
     fn make(t: u16) -> &'static Type {
-        Ts.make(t)
+        Lang.make(t)
     }
     fn to_u16(t: Type) -> u16 {
-        Ts.to_u16(t)
+        Lang.to_u16(t)
     }
 }
 
@@ -238,8 +211,8 @@ impl HyperType for Type {
     }
 
     fn as_static(&self) -> &'static dyn HyperType {
-        let t = <Ts as Lang<Type>>::to_u16(*self);
-        let t = <Ts as Lang<Type>>::make(t);
+        let t = <Ts as hyper_ast::types::Lang<Type>>::to_u16(*self);
+        let t = <Ts as hyper_ast::types::Lang<Type>>::make(t);
         t
     }
 
@@ -263,7 +236,7 @@ impl HyperType for Type {
     where
         Self: Sized,
     {
-        From::<&'static (dyn LangRef<Self>)>::from(&Ts)
+        From::<&'static (dyn LangRef<Self>)>::from(&Lang)
     }
     fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
         todo!()
@@ -362,12 +335,18 @@ impl Display for Type {
     }
 }
 
-impl hyper_ast::types::LLang<hyper_ast::types::TypeU16<Self>> for Ts {
+type TType = hyper_ast::types::TypeU16<Lang>;
+
+impl hyper_ast::types::LLang<TType> for Ts {
     type I = u16;
 
     type E = Type;
 
     const TE: &[Self::E] = S_T_L;
+
+    fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<TType> {
+        From::<&'static (dyn LangRef<_>)>::from(&Lang)
+    }
 }
 
 impl From<u16> for Type {
@@ -390,7 +369,6 @@ impl Into<u16> for Type {
 
 #[repr(u16)]
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-#[cfg_attr(feature = "bevy_ecs", derive(Component))]
 pub enum Type {
     End,
     Identifier,

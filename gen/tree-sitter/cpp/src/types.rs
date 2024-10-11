@@ -13,39 +13,18 @@ mod legion_impls {
     use crate::TNode;
 
     impl<'a> TNode<'a> {
-        pub fn obtain_type<T>(&self, _: &mut impl CppEnabledTypeStore<T>) -> Type {
+        pub fn obtain_type(&self, _: &mut impl CppEnabledTypeStore) -> Type {
             let t = self.kind_id();
             Type::from_u16(t)
         }
     }
 
-    use hyper_ast::{
-        store::nodes::legion::HashedNodeRef,
-        types::{LangWrapper, RoleStore},
-    };
+    use hyper_ast::types::{LangWrapper, RoleStore};
 
-    impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
+    impl TypeStore for TStore {
         type Ty = TypeU16<Cpp>;
-
-        // fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
-        //     n.get_component::<Type>().unwrap().clone()
-        // }
-
-        // fn resolve_lang(
-        //     &self,
-        //     _n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        //     From::<&'static (dyn LangRef<Type>)>::from(&Lang)
-        // }
-        // fn type_eq(
-        //     &self,
-        //     n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        //     m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        // ) -> bool {
-        //     n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
-        // }
     }
-    impl<'a> CppEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
+    impl<'a> CppEnabledTypeStore for TStore {
         fn intern(&self, t: Type) -> Self::Ty {
             t.into()
         }
@@ -54,30 +33,8 @@ mod legion_impls {
             t.e()
         }
     }
-    impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
-        type Ty = AnyType;
 
-        // fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-        //     as_any(n.get_component::<Type>().unwrap())
-        // }
-
-        // fn resolve_lang(
-        //     &self,
-        //     _n: &HashedNodeRef<'a, NodeIdentifier>,
-        // ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        //     From::<&'static (dyn LangRef<AnyType>)>::from(&Lang)
-        // }
-
-        // fn type_eq(
-        //     &self,
-        //     _n: &HashedNodeRef<'a, NodeIdentifier>,
-        //     _m: &HashedNodeRef<'a, NodeIdentifier>,
-        // ) -> bool {
-        //     todo!()
-        // }
-    }
-
-    impl<'a> RoleStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
+    impl RoleStore for TStore {
         type IdF = u16;
 
         type Role = hyper_ast::types::Role;
@@ -109,7 +66,7 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
     unimplemented!("need treesitter grammar")
 }
 
-pub trait CppEnabledTypeStore<T>: TypeStore<T> {
+pub trait CppEnabledTypeStore: TypeStore {
     fn intern(&self, t: Type) -> Self::Ty;
     fn resolve(&self, t: Self::Ty) -> Type;
 }
@@ -297,6 +254,24 @@ impl LangRef<Type> for Cpp {
     }
 
     fn ts_symbol(&self, t: Type) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
+}
+
+impl LangRef<TType> for Lang {
+    fn make(&self, t: u16) -> &'static TType {
+        // TODO could make one safe, but not priority
+        unsafe { std::mem::transmute(&S_T_L[t as usize]) }
+    }
+    fn to_u16(&self, t: TType) -> u16 {
+        t.e() as u16
+    }
+
+    fn name(&self) -> &'static str {
+        std::any::type_name::<Lang>()
+    }
+
+    fn ts_symbol(&self, t: TType) -> u16 {
         id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
@@ -686,14 +661,18 @@ impl Type {
     }
 }
 
-
-impl hyper_ast::types::LLang<hyper_ast::types::TypeU16<Self>> for Cpp {
+impl hyper_ast::types::LLang<TType> for Cpp {
     type I = u16;
 
     type E = Type;
 
     const TE: &[Self::E] = S_T_L;
+
+    fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<TType> {
+        From::<&'static (dyn LangRef<_>)>::from(&Lang)
+    }
 }
+
 pub type TType = TypeU16<Lang>;
 
 impl From<u16> for Type {

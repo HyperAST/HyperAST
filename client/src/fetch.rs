@@ -67,11 +67,11 @@ pub fn fetch(mut state: SharedState, path: Parameters) -> Result<FetchedNodes, S
         .get_config(repo_spec)
         .ok_or_else(|| "missing config for repository".to_string())?;
     let mut repo = repo.fetch();
-    log::warn!("done cloning {}", repo.spec);
+    log::info!("done cloning {}", repo.spec);
 
     let commits = crate::utils::handle_pre_processing(&state, &mut repo, "", &commit, 2)
         .map_err(|e| e.to_string())?;
-    log::warn!("done construction of {commits:?} in {}", repo.spec);
+    log::info!("done construction of {commits:?} in {}", repo.spec);
     let repositories = state.repositories.read().unwrap();
     let commit_src = repositories.get_commit(&repo.config, &commits[0]).unwrap();
     let src_tr = commit_src.ast_root;
@@ -79,7 +79,7 @@ pub fn fetch(mut state: SharedState, path: Parameters) -> Result<FetchedNodes, S
     let stores = &repositories.processor.main_stores;
     let node_store = &stores.node_store;
 
-    log::error!("searching for {path:?}");
+    log::info!("searching for {path:?}");
     let curr = if let Some(path) = path {
         if let Some((path, rest)) = path.split_once(":") {
             resolve_file_path(stores, src_tr, path.split("/"))

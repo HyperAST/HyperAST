@@ -1,6 +1,6 @@
 use crate::BasicDirAcc;
 use crate::{
-    preprocessed::IsSkippedAna, processing::ObjectName, Accumulator, TStore, MAX_REFS,
+    preprocessed::IsSkippedAna, processing::ObjectName, Accumulator, MAX_REFS,
     PROPAGATE_ERROR_ON_BAD_CST_NODE,
 };
 
@@ -8,17 +8,10 @@ use hyper_ast::store::defaults::NodeIdentifier;
 use hyper_ast::{
     hashed::SyntaxNodeHashs, store::defaults::LabelIdentifier, tree_gen::SubTreeMetrics,
 };
+use hyper_ast_gen_ts_java::types::TStore;
 use hyper_ast_gen_ts_java::{impact::partial_analysis::PartialAnalysis, types::Type};
 
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
-
-pub(crate) fn _handle_java_file<'stores, 'cache, 'b: 'stores, More>(
-    tree_gen: &mut java_tree_gen::JavaTreeGen<'stores, 'cache, TStore, More>,
-    name: &ObjectName,
-    text: &'b [u8],
-) -> Result<java_tree_gen::FNode, ()> {
-    todo!("handle type inconsitencies")
-}
 
 pub(crate) fn handle_java_file<'stores, 'cache, 'b: 'stores, More>(
     tree_gen: &mut java_tree_gen::JavaTreeGen<'stores, 'cache, TStore, More>,

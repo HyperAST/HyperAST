@@ -41,7 +41,7 @@ pub fn actions_vec_f<'store, P: TreePath<Item = u16>, HAST>(
 ) where
     HAST:
         HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
-    HAST::TS: TypeStore<HAST::T, Ty = AnyType>,
+    HAST::TS: TypeStore<Ty = AnyType>,
 {
     v.iter().for_each(|a| print_action(ori, stores, a));
 }
@@ -117,7 +117,7 @@ fn print_action<'store, P: TreePath<Item = u16>, HAST>(
     HAST:
         HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
     // <HAST::TS as TypeStore<AnyType>>::Ty: Eq,
-    HAST::TS: TypeStore<HAST::T, Ty = AnyType>,
+    HAST::TS: TypeStore<Ty = AnyType>,
 {
     match &a.action {
         Act::Delete {} => println!(
