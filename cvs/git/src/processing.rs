@@ -2,6 +2,9 @@ use git2::Repository;
 
 use crate::git::Repo;
 
+mod blob_caching;
+
+pub(crate) mod erased;
 pub use erased::ParametrizedCommitProcessorHandle;
 
 pub enum BuildSystem {
@@ -481,8 +484,6 @@ impl crate::preprocessed::RepositoryProcessor {
         self.main_stores.label_store.get_or_insert(s)
     }
 }
-
-pub(crate) mod erased;
 
 macro_rules! make_multi {
     ($($wb:tt)*) => {};
