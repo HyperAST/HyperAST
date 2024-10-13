@@ -158,9 +158,9 @@ impl InteractiveSplitter {
                     && second_rect.y_range().contains(pointer.y)
                     && (line_pos_1.x - pointer.x).abs()
                         <= ui.style().interaction.resize_grab_radius_side;
-
+                let mouse_in_clip_rect = ui.clip_rect().contains(pointer);
                 if ui.input(|i| i.pointer.any_pressed() && i.pointer.any_down())
-                    && mouse_over_resize_line
+                    && mouse_over_resize_line && mouse_in_clip_rect
                 {
                     ui.ctx().set_dragged_id(resize_id);
                 }
@@ -177,7 +177,7 @@ impl InteractiveSplitter {
 
                 let dragging_something_else =
                     ui.input(|i| i.pointer.any_down() || i.pointer.any_pressed());
-                resize_hover = mouse_over_resize_line && !dragging_something_else;
+                resize_hover = mouse_over_resize_line && !dragging_something_else && mouse_in_clip_rect;
 
                 if resize_hover || is_resizing {
                     ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal);
