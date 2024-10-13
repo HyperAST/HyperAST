@@ -1467,7 +1467,7 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                         "{}\n{}",
                         DEFAULT_EXPLAINATIONS_MDS[*md],
                         SelectedConfig::iter()
-                            .map(|x| format!("\n- {}: {}", x.title().as_ref(), x.descriptions()))
+                            .map(|x| format!("\n- **{}**: {}", x.title().as_ref(), x.descriptions()))
                             .collect::<String>()
                     ),
                 );

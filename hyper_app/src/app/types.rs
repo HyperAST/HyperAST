@@ -224,17 +224,17 @@ impl SelectedConfig {
 
     pub(crate) fn descriptions(&self) -> &str {
         match self {
-            SelectedConfig::Single => "TODO",
-            SelectedConfig::Querying => "TODO",
+            SelectedConfig::Single => "Show code metrics over commits of a given repository",
+            SelectedConfig::Querying => r#"Search code evolutions through pattern queries."#,
+            SelectedConfig::Smells => "Search for problematic code patterns, by focussing on code removals (specialization of the querying).",
             SelectedConfig::Tsg => {
-                r#"Compute a graph using the [tree-sitter-graph DSL](https://docs.rs/tree-sitter-graph/latest/tree_sitter_graph/reference/index.html)"#
+                r#"Graph computed using the [tree-sitter-graph DSL](https://docs.rs/tree-sitter-graph/latest/tree_sitter_graph/reference/index.html)."#
             }
-            SelectedConfig::Smells => "Search for problematic code patterns",
-            SelectedConfig::Multi => "TODO",
-            SelectedConfig::Diff => "TODO",
-            SelectedConfig::Tracking => "TODO",
-            SelectedConfig::LongTracking => "TODO",
-            SelectedConfig::Aspects => "TODO",
+            SelectedConfig::Multi => "Show code metrics over commits of a multiple repository.",
+            SelectedConfig::Diff => "Tree diffs between a pair of commits.",
+            SelectedConfig::Tracking => "Code tracking between a pair of commits.",
+            SelectedConfig::LongTracking => "Code tracking through a development history, handles moves and can stop on modifications to the tracked code but also to its parents.",
+            SelectedConfig::Aspects => "Explore how code can be rendered in this GUI. Once you save a render, you can configure other views with it.",
         }
     }
 }
