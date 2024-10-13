@@ -175,8 +175,7 @@ impl<'store, 'cache, TS: TsEnabledTypeStore> ZippedTreeGen for TsTreeGen<'store,
     }
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
-        let type_store = &mut self.stores().type_store;
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
         let parent_indentation = Space::try_format_indentation(&self.line_break)
             .unwrap_or_else(|| vec![Space::Space; self.line_break.len()]);
         let indent = compute_indentation(
@@ -208,12 +207,11 @@ impl<'store, 'cache, TS: TsEnabledTypeStore> ZippedTreeGen for TsTreeGen<'store,
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> hyper_ast::tree_gen::PreResult<<Self as TreeGen>::Acc> {
-        let type_store = &mut self.stores().type_store;
         let node = cursor.node();
         if node.0.is_missing() {
             return PreResult::Skip;
         }
-        let _kind = node.obtain_type(type_store);
+        let _kind = node.obtain_type();
         let acc = self.pre(text, &node, stack, global);
         PreResult::Ok(acc)
     }
@@ -224,9 +222,8 @@ impl<'store, 'cache, TS: TsEnabledTypeStore> ZippedTreeGen for TsTreeGen<'store,
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc {
-        let type_store = &mut self.stores().type_store;
         let parent_indentation = &stack.parent().unwrap().indentation();
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
         let indent = compute_indentation(
             &self.line_break,
             text,
@@ -448,7 +445,7 @@ impl<'stores, 'cache, TS: TsEnabledTypeStore> TreeGen for TsTreeGen<'stores, 'ca
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
-        let interned_kind = TsEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
+        let interned_kind = TS::intern(acc.simple.kind);
         let line_count = acc.metrics.line_count;
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;

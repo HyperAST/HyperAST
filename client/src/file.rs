@@ -43,16 +43,16 @@ pub fn from_hyper_ast(state: SharedState, path: FetchFileParam) -> Result<String
 
     // let size = node_store.resolve(src_tr).size();
     log::debug!("searching for {file}");
-    let file = child_at_path(&repositories.processor.main_stores, src_tr, file.split("/"));
+    let content = child_at_path(&repositories.processor.main_stores, src_tr, file.split("/"));
 
-    let Some(file) = file else {
+    let Some(content) = content else {
         return Err("not found".to_string());
     };
 
-    let file = hyper_ast::nodes::TextSerializer::new(&repositories.processor.main_stores, file);
+    let content = hyper_ast::nodes::TextSerializer::new(&repositories.processor.main_stores, content);
     log::debug!("sending file {file} from {}/{commits:?}", repo.spec);
 
-    Ok(file.to_string())
+    Ok(content.to_string())
 }
 
 #[derive(Default)]

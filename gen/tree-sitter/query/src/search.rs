@@ -291,11 +291,7 @@ impl<IdN, Idx> CaptureRes<IdN, Idx> {
 }
 
 pub fn ts_query_store() -> SimpleStores<crate::types::TStore> {
-    let stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let stores = SimpleStores::default();
     stores
 }
 

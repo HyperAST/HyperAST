@@ -1,4 +1,4 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, marker::PhantomData};
 
 use crate::types::{SimpleHyperAST, TypeStore};
 
@@ -12,24 +12,23 @@ pub mod nodes;
 
 pub struct SimpleStores<TS, NS = nodes::DefaultNodeStore, LS = labels::LabelStore> {
     pub label_store: LS,
-    pub type_store: TS,
     pub node_store: NS,
+    pub type_store: PhantomData<TS>,
 }
 
 impl<TS, NS, LS> SimpleStores<TS, NS, LS> {
-    pub fn change_type_store<TS2>(self, new: TS2) -> SimpleStores<TS2, NS, LS> {
+    pub fn change_type_store<TS2>(self) -> SimpleStores<TS2, NS, LS> {
         SimpleStores {
-            type_store: new,
+            type_store: PhantomData,
             node_store: self.node_store,
             label_store: self.label_store,
         }
     }
 }
 
-/// guaranty we can convert from Self to T,
-/// e.g. using std::mem::transmute
-/// TODO should use a marker for 'TypeStore'....
-pub unsafe trait TyDown<T> {}
+/// Declare we can convert from Self to T,
+/// e.g. from the git::types::TStore to the Java one, but not the contrary
+pub trait TyDown<T> {}
 
 impl<TS, NS, LS> SimpleStores<TS, NS, LS> {
     pub fn mut_with_ts<TS2>(&mut self) -> &mut SimpleStores<TS2, NS, LS>
@@ -59,18 +58,16 @@ where
     type Role = TS::Role;
 
     fn resolve_field(
-        &self,
         lang: crate::types::LangWrapper<Self::Ty>,
         field_id: Self::IdF,
     ) -> Self::Role {
-        self.type_store.resolve_field(lang, field_id)
+        TS::resolve_field(lang, field_id)
     }
     fn intern_role(
-        &self,
         lang: crate::types::LangWrapper<Self::Ty>,
         role: Self::Role,
     ) -> Self::IdF {
-        self.type_store.intern_role(lang, role)
+        TS::intern_role(lang, role)
     }
 }
 
@@ -141,7 +138,6 @@ impl<'store, T, TS, NS, LS> From<&'store SimpleStores<TS, NS, LS>>
 {
     fn from(value: &'store SimpleStores<TS, NS, LS>) -> Self {
         Self {
-            type_store: &value.type_store,
             node_store: &value.node_store,
             label_store: &value.label_store,
             _phantom: std::marker::PhantomData,

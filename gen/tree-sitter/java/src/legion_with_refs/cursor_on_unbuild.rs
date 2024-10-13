@@ -1,16 +1,16 @@
+//! TODO make it language agnostic
+//! TODO more difficult: make it backend agnostic, e.g., no ref to legion stuff
+
 use hyper_ast::position::TreePath;
 use hyper_ast::store::labels::LabelStore;
-use hyper_ast::store::nodes::legion::{HashedNodeRef, NodeIdentifier};
+use hyper_ast::store::nodes::legion::NodeIdentifier;
 use hyper_ast::types::{
-    HyperASTShared, HyperType, LabelStore as _, Labeled, NodeStore, Role, RoleStore, Tree,
-    WithRoles,
+    HyperASTShared, HyperType, LabelStore as _, Labeled, NodeStore, Role, Tree, WithRoles,
 };
 use hyper_ast::{position::TreePathMut, types::TypeStore};
 use hyper_ast_tsquery::{Cursor, Node as _, Status, Symbol, TreeCursorStep};
 use num::ToPrimitive;
 use std::marker::PhantomData;
-
-use crate::types::TIdN;
 
 pub type TreeCursor<'hast, 'acc, HAST> = Node<'hast, 'acc, HAST>;
 
@@ -31,7 +31,6 @@ impl<'hast, 'acc, TS: TypeStore> PartialEq for Node<'hast, 'acc, HAST<'hast, 'ac
 
 type IdN = NodeIdentifier;
 type Idx = u16;
-type T<'a> = HashedNodeRef<'a, TIdN<NodeIdentifier>>;
 
 impl<'hast, 'acc, TS: TypeStore> Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
     pub fn new(
@@ -380,19 +379,11 @@ where
     fn compute_current_role(&self) -> (Option<Role>, IdF) {
         let lang;
         let role = if self.pos.node().is_none() {
-            lang = self
-                .stores
-                .type_store
-                .intern(self.acc.simple.kind)
-                .get_lang();
+            lang = TS::intern(self.acc.simple.kind).get_lang();
             // self.acc.role
             None // actually should not provide role as it is not part of identifying data
         } else if self.pos.parent().is_none() {
-            lang = self
-                .stores
-                .type_store
-                .intern(self.acc.simple.kind)
-                .get_lang();
+            lang = TS::intern(self.acc.simple.kind).get_lang();
             let o = self.pos.o().unwrap();
             self.acc
                 .role
@@ -421,7 +412,7 @@ where
             }
         };
         let field_id = if let Some(role) = role {
-            RoleStore::intern_role(self.stores, lang, role)
+            TS::intern_role(lang, role)
         } else {
             Default::default()
         };
@@ -438,7 +429,7 @@ where
 {
     fn symbol(&self) -> Symbol {
         // TODO make something more efficient
-        let id = TypeStore::type_to_u16(self.stores, self.kind());
+        let id = TS::type_to_u16(self.kind());
         id.into()
     }
 
@@ -481,7 +472,7 @@ where
         if field_id == IdF::default() {
             return false;
         }
-        let role = RoleStore::resolve_field(self.stores, self.kind().get_lang(), field_id);
+        let role = TS::resolve_field(self.kind().get_lang(), field_id);
         let mut slf = self.clone();
         loop {
             if slf.kind().is_supertype() {
@@ -581,7 +572,7 @@ impl<'hast, 'acc, TS: super::JavaEnabledTypeStore> Node<'hast, 'acc, HAST<'hast,
         if let Some(n) = self.pos.node() {
             self.resolve_type(n)
         } else {
-            self.stores.type_store.intern(self.acc.simple.kind)
+            TS::intern(self.acc.simple.kind)
         }
     }
 

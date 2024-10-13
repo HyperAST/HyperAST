@@ -189,8 +189,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
     }
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
-        let type_store = &mut self.stores().type_store;
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
         let parent_indentation = Space::try_format_indentation(&self.line_break)
             .unwrap_or_else(|| vec![Space::Space; self.line_break.len()]);
         let indent = compute_indentation(
@@ -222,12 +221,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
-        let type_store = &mut self.stores().type_store;
-        // let kind = node.kind();
-        // let Some(kind) = type_store.try_cpp(kind) else {
-        //     return None
-        // };
-        let kind = cursor.node().obtain_type(type_store);
+        let kind = cursor.node().obtain_type();
         let mut acc = self.pre(text, &cursor.node(), stack, global);
         if kind == Type::String {
             acc.labeled = true;
@@ -248,9 +242,8 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc {
-        let type_store = &mut self.stores().type_store;
         let parent_indentation = &stack.parent().unwrap().indentation();
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
         let indent = compute_indentation(
             &self.line_break,
             text,
@@ -312,7 +305,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
         spacing: Vec<u8>, //Space>,
     ) -> Local {
         let kind = Type::Spaces;
-        let interned_kind = self.stores.type_store.intern(kind);
+        let interned_kind = TS::intern(kind);
         let bytes_len = spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
         use num::ToPrimitive;
@@ -481,7 +474,7 @@ impl<
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
         let interned_kind =
-            TsQueryEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
+            TS::intern(acc.simple.kind);
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
@@ -628,7 +621,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
         let interned_kind =
-            TsQueryEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
+        crate::types::TStore::intern(acc.simple.kind);
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;

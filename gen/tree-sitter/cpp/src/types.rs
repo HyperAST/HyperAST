@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
 use hyper_ast::{
-    store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
     types::{AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId},
 };
@@ -13,7 +12,7 @@ mod legion_impls {
     use crate::TNode;
 
     impl<'a> TNode<'a> {
-        pub fn obtain_type(&self, _: &mut impl CppEnabledTypeStore) -> Type {
+        pub fn obtain_type(&self) -> Type {
             let t = self.kind_id();
             Type::from_u16(t)
         }
@@ -25,11 +24,11 @@ mod legion_impls {
         type Ty = TypeU16<Cpp>;
     }
     impl<'a> CppEnabledTypeStore for TStore {
-        fn intern(&self, t: Type) -> Self::Ty {
+        fn intern(t: Type) -> Self::Ty {
             t.into()
         }
 
-        fn resolve(&self, t: Self::Ty) -> Type {
+        fn resolve(t: Self::Ty) -> Type {
             t.e()
         }
     }
@@ -39,7 +38,7 @@ mod legion_impls {
 
         type Role = hyper_ast::types::Role;
 
-        fn resolve_field(&self, _lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
+        fn resolve_field( _lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
             let s = tree_sitter_cpp::language()
                 .field_name_for_id(field_id)
                 .ok_or_else(|| format!("{}", field_id))
@@ -47,7 +46,7 @@ mod legion_impls {
             hyper_ast::types::Role::try_from(s).expect(s)
         }
 
-        fn intern_role(&self, _lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
+        fn intern_role( _lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
             let field_name = role.to_string();
             tree_sitter_cpp::language()
                 .field_id_for_name(field_name)
@@ -67,8 +66,8 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
 }
 
 pub trait CppEnabledTypeStore: TypeStore {
-    fn intern(&self, t: Type) -> Self::Ty;
-    fn resolve(&self, t: Self::Ty) -> Type;
+    fn intern(t: Type) -> Self::Ty;
+    fn resolve(t: Self::Ty) -> Type;
 }
 
 #[allow(unused)]

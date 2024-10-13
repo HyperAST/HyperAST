@@ -434,10 +434,6 @@ mod stores_impl {
         }
 
         type TS = TS;
-
-        fn type_store(&self) -> &Self::TS {
-            &self.type_store
-        }
     }
 
     impl<'store, TS> HyperASTAsso for &'store SimpleStores<TS, nodes::DefaultNodeStore>
@@ -468,10 +464,6 @@ mod stores_impl {
             = TS
         where
             Self: 's;
-
-        fn type_store(&self) -> &Self::TS<'_> {
-            &self.type_store
-        }
     }
 
     impl<'store, TS> HyperAST<'store> for SimpleStores<TS, nodes::DefaultNodeStore>
@@ -493,10 +485,6 @@ mod stores_impl {
         }
 
         type TS = TS;
-
-        fn type_store(&self) -> &Self::TS {
-            &self.type_store
-        }
     }
 
     impl<'store, TIdN, TS> TypedHyperAST<'store, TIdN> for SimpleStores<TS, nodes::DefaultNodeStore>

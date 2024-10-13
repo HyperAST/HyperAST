@@ -14,7 +14,7 @@ use hyper_ast::{
     position::Position,
     types::{
         self, Children, HyperAST, HyperType, IterableChildren, LabelStore, NodeId, NodeStore,
-        Stored, Tree, TypeStore, WithChildren, WithSerialization, WithStats,
+        Stored, Tree, WithChildren, WithSerialization, WithStats,
     },
 };
 

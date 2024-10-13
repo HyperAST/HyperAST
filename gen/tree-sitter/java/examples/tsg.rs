@@ -54,11 +54,7 @@ fn tsg_hyperast_stepped_loop(
     codes: impl Iterator<Item = (impl Display, impl AsRef<str>)>,
     queries: &[(impl Display, impl AsRef<str>)],
 ) {
-    let mut stores = hyper_ast::store::SimpleStores {
-        label_store: hyper_ast::store::labels::LabelStore::new(),
-        type_store: hyper_ast_gen_ts_java::types::TStore::default(),
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
     for code in codes {
         for query in queries {

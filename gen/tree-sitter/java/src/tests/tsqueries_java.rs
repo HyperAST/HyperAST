@@ -64,11 +64,7 @@ fn prep_recursive<'store>(
     use crate::legion_with_refs;
     let matcher = hyper_ast_gen_ts_tsquery::prepare_matcher::<crate::types::Type>(query);
 
-    let mut stores = hyper_ast::store::SimpleStores {
-        label_store: hyper_ast::store::labels::LabelStore::new(),
-        type_store: crate::types::TStore::default(),
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = hyper_ast::store::SimpleStores::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
 
@@ -167,11 +163,7 @@ fn prep_stepped<'store>(
     use crate::legion_with_refs;
     let query = hyper_ast_tsquery::Query::new(query, tree_sitter_java::language()).unwrap();
 
-    let mut stores = hyper_ast::store::SimpleStores {
-        label_store: hyper_ast::store::labels::LabelStore::new(),
-        type_store: crate::types::TStore::default(),
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = hyper_ast::store::SimpleStores::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
 
@@ -241,11 +233,7 @@ fn prep_prepro<'store>(
         &subqueries,
     )
     .unwrap();
-    let mut stores = hyper_ast::store::SimpleStores {
-        label_store: hyper_ast::store::labels::LabelStore::new(),
-        type_store: crate::types::TStore::default(),
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = hyper_ast::store::SimpleStores::<crate::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -1180,11 +1168,7 @@ fn test_precomputed() {
     let (precomp, query) =
         hyper_ast_tsquery::Query::with_precomputed(query, tree_sitter_java::language(), &precomp)
             .unwrap();
-    let mut stores = hyper_ast::store::SimpleStores {
-        label_store: hyper_ast::store::labels::LabelStore::new(),
-        type_store: crate::types::TStore::default(),
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = hyper_ast::store::SimpleStores::<crate::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -1714,11 +1698,7 @@ public class TypeAdapterTest {
         hyper_ast_tsquery::Query::with_precomputed(q, tree_sitter_java::language(), p).unwrap();
     // query._check_preprocessed(0, 0);
     log::trace!("\n{}", query);
-    let mut stores = hyper_ast::store::SimpleStores {
-        label_store: hyper_ast::store::labels::LabelStore::new(),
-        type_store: crate::types::TStore::default(),
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = hyper_ast::store::SimpleStores::<crate::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = crate::legion_with_refs::JavaTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -2296,11 +2276,7 @@ fn g(q: &str, p: &[&str], text: &str) -> usize {
         hyper_ast_tsquery::Query::with_precomputed(q, tree_sitter_java::language(), p).unwrap();
     query._check_preprocessed(0, p.len());
     log::trace!("\n{}", query);
-    let mut stores = hyper_ast::store::SimpleStores {
-        label_store: hyper_ast::store::labels::LabelStore::new(),
-        type_store: crate::types::TStore::default(),
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = hyper_ast::store::SimpleStores::<crate::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = crate::legion_with_refs::JavaTreeGen {
         line_break: "\n".as_bytes().to_vec(),

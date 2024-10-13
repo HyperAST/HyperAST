@@ -240,7 +240,7 @@ where
             break n.role_at::<<HAST::TS as RoleStore>::Role>(o);
         };
         let field_id = if let Some(role) = role {
-            self.stores.type_store().intern_role(lang, role)
+            HAST::TS::intern_role(lang, role)
         } else {
             Default::default()
         };
@@ -283,10 +283,7 @@ where
         if field_id == Default::default() {
             return false;
         }
-        let role = self
-            .stores
-            .type_store()
-            .resolve_field(self.kind().get_lang(), field_id);
+        let role = HAST::TS::resolve_field(self.kind().get_lang(), field_id);
         let mut slf = ExtNodeRef {
             stores: self.stores,
             pos: self.pos.ext(),
@@ -358,10 +355,7 @@ where
         if field_id == Default::default() {
             return false;
         }
-        let role = self
-            .stores
-            .type_store()
-            .resolve_field(kind(self.stores, &self.pos).get_lang(), field_id);
+        let role = HAST::TS::resolve_field(kind(self.stores, &self.pos).get_lang(), field_id);
         let mut slf = ExtNodeRef {
             stores: self.stores,
             pos: self.pos.ext(),

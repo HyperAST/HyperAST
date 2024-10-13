@@ -101,7 +101,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                 }
                 // TODO use Make pom.xml to find source_dir  and tests_dir ie. ignore resources, maybe also tests
                 // TODO maybe at some point try to handle Make modules and source dirs that reference parent directory in their path
-                log::debug!("mm tree {:?}", name.try_str());
+                log::debug!("make tree {:?}", name.try_str());
 
                 let parent_acc = &mut self.stack.last_mut().unwrap().2;
                 if true {
@@ -239,7 +239,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
 
 pub(crate) fn make(acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
     let kind = Type::Directory;
-    let interned_kind = stores.type_store.intern(kind);
+    let interned_kind = hyper_ast_gen_ts_xml::types::TStore::intern(kind);
     let label_id = stores.label_store.get_or_insert(acc.primary.name.clone());
 
     let primary = acc

@@ -362,7 +362,7 @@ where
 
 type NoSpaceStore<'a, 'store> = types::SimpleHyperAST<
     NoSpaceWrapper<'store, super::IdN>,
-    &'a TStore,
+    TStore,
     no_space::NoSpaceNodeStoreWrapper<'store>,
     &'a hyper_ast::store::labels::LabelStore,
 >;

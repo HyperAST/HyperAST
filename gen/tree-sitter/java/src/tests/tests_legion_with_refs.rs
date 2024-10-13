@@ -8,7 +8,7 @@ use hyper_ast::{
         PositionConverter, Scout, StructuralPosition, StructuralPositionStore, TypedScout,
         TypedTreePath,
     },
-    store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores},
+    store::SimpleStores,
     types::{NodeId, Typed, WithChildren},
     utils::memusage,
 };
@@ -21,11 +21,7 @@ use crate::{
 };
 
 fn run(text: &[u8]) {
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::<TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
 
@@ -124,11 +120,7 @@ fn test_equals() {
         .is_test(true)
         .init();
     let text = CASE_33.as_bytes();
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::<TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let tree = match legion_with_refs::tree_sitter_parse(text) {
@@ -197,11 +189,7 @@ fn test_equals() {
 #[test]
 fn test_special() {
     // let mut parser: Parser, old_tree: Option<&Tree>
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::<TStore>::default();
 
     let mut md_cache = Default::default();
     let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
@@ -418,11 +406,7 @@ fn test_offset_computation() {
         .is_test(true)
         .init();
     let text = CASE_29.as_bytes();
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::<TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let tree = match legion_with_refs::tree_sitter_parse(text) {
@@ -493,11 +477,7 @@ fn test_offset_computation2() {
         .is_test(true)
         .init();
     let text = CASE_30.as_bytes();
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::<TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let tree = match legion_with_refs::tree_sitter_parse(text) {

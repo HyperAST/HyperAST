@@ -145,7 +145,7 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
     let kind = Type::Directory;
-    let interned_kind = stores.type_store.intern(kind);
+    let interned_kind = hyper_ast_gen_ts_java::types::TStore::intern(kind);
     let label_id = label_store.get_or_insert(acc.primary.name.clone());
 
     let primary = acc

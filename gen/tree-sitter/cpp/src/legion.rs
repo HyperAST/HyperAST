@@ -1,7 +1,7 @@
 ///! fully compress all subtrees from a cpp CST
 use std::{collections::HashMap, fmt::Debug, vec};
 
-use crate::{types::TIdN, TNode};
+use crate::TNode;
 use legion::world::EntryRef;
 use num::ToPrimitive as _;
 use tuples::CombinConcat;
@@ -15,7 +15,7 @@ use hyper_ast::{
         nodes::{
             legion::{
                 compo::{self, NoSpacesCS, CS},
-                eq_node, HashedNodeRef, NodeIdentifier, PendingInsert,
+                eq_node, NodeIdentifier, PendingInsert,
             },
             DefaultNodeStore as NodeStore, EntityBuilder,
         },
@@ -252,8 +252,7 @@ impl<'store, 'cache, TS: CppEnabledTypeStore> ZippedTreeGen for CppTreeGen<'stor
     }
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
-        let type_store = &mut self.stores().type_store;
-        let kind = node.obtain_type(type_store); //type_store.get_cpp(node.kind());
+        let kind = node.obtain_type();
         let parent_indentation = Space::try_format_indentation(&self.line_break)
             .unwrap_or_else(|| vec![Space::Space; self.line_break.len()]);
         let indent = compute_indentation(
@@ -287,9 +286,8 @@ impl<'store, 'cache, TS: CppEnabledTypeStore> ZippedTreeGen for CppTreeGen<'stor
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
-        let type_store = &mut self.stores().type_store;
         let node = cursor.node();
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
         if HIDDEN_NODES {
             if kind == Type::_ExpressionNotBinary
                 || kind == Type::_FunctionDeclaratorSeq
@@ -313,11 +311,8 @@ impl<'store, 'cache, TS: CppEnabledTypeStore> ZippedTreeGen for CppTreeGen<'stor
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc {
-        let type_store = &mut self.stores().type_store;
         let parent_indentation = &stack.parent().unwrap().indentation();
-        // let kind = node.kind();
-        // let kind = type_store.get_cpp(kind);
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
         let indent = compute_indentation(
             &self.line_break,
             text,
@@ -382,9 +377,9 @@ impl<'store, 'cache, TS: CppEnabledTypeStore> CppTreeGen<'store, 'cache, TS> {
         spacing: Vec<u8>, //Space>,
     ) -> Local {
         let kind = Type::Spaces;
-        let interned_kind = self.stores.type_store.intern(kind);
-        debug_assert_eq!(kind, self.stores.type_store.resolve(interned_kind));
-        
+        let interned_kind = TS::intern(kind);
+        debug_assert_eq!(kind, TS::resolve(interned_kind));
+
         let bytes_len = spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
         let line_count = spacing
@@ -533,7 +528,7 @@ impl<'stores, 'cache, TS: CppEnabledTypeStore> TreeGen for CppTreeGen<'stores, '
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
-        let interned_kind = CppEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
+        let interned_kind = TS::intern(acc.simple.kind);
         let own_line_count = label.as_ref().map_or(0, |l| {
             l.matches("\n").count().to_u16().expect("too many newlines")
         });

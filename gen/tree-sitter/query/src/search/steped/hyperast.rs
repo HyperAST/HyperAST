@@ -254,7 +254,7 @@ where
             break n.role_at::<<HAST::TS as RoleStore>::Role>(o - num::one());
         };
         let field_id = if let Some(role) = role {
-            self.stores.type_store().intern_role(lang, role)
+            HAST::TS::intern_role(lang, role)
         } else {
             Default::default()
         };
@@ -270,7 +270,7 @@ where
 {
     fn symbol(&self) -> Symbol {
         // TODO make something more efficient
-        let id = self.stores.type_store().type_to_u16(self.kind());
+        let id = HAST::TS::type_to_u16(self.kind());
         id.into()
     }
 
@@ -293,7 +293,7 @@ where
     //     if field_id == 0 {
     //         return None;
     //     }
-    //     let role = self.stores.type_store().resolve_field(field_id);
+    //     let role = HAST::TS::resolve_field(field_id);
     //     let mut slf = self.clone();
     //     loop {
     //         if slf.kind().is_supertype() {
@@ -313,10 +313,7 @@ where
         if field_id == Default::default() {
             return false;
         }
-        let role = self
-            .stores
-            .type_store()
-            .resolve_field(self.kind().get_lang(), field_id);
+        let role = HAST::TS::resolve_field(self.kind().get_lang(), field_id);
         let mut slf = self.clone();
         loop {
             if slf.kind().is_supertype() {

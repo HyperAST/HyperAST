@@ -41,8 +41,8 @@ where
     HAST::IdN: Clone + Debug + Eq,
     HAST::Label: Clone + Copy + Eq + Debug,
     HAST::Idx: hyper_ast::PrimInt,
-    <HAST::T as types::Typed>::Type: Eq + Debug,
-    HAST::T: 'store + types::Typed + types::WithHashs + types::WithStats,
+    <HAST::TS as types::TypeStore>::Ty: Eq + Debug,
+    HAST::T: 'store + types::WithHashs + types::WithStats,
 {
     let now = Instant::now();
     let mapper: Mapper<_, DS<HAST::T>, DS<HAST::T>, VecStore<_>> =

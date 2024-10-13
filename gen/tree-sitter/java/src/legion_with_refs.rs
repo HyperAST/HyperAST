@@ -457,8 +457,7 @@ where
     }
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> <Self as TreeGen>::Acc {
-        let type_store = &mut self.stores().type_store;
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
         let parent_indentation = Space::try_format_indentation(&self.line_break)
             .unwrap_or_else(|| vec![Space::Space; self.line_break.len()]);
         let indent = compute_indentation(
@@ -497,9 +496,8 @@ where
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
-        let type_store = &mut self.stores().type_store;
         let node = &cursor.node();
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
         if should_get_hidden_nodes() {
             if kind.is_repeat() {
                 return PreResult::Ignore;
@@ -539,7 +537,7 @@ where
     ) -> <Self as TreeGen>::Acc {
         let type_store = &mut self.stores().type_store;
         let parent_indentation = &stack.parent().unwrap().indentation();
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
         assert!(
             global.sum_byte_length() <= node.start_byte(),
             "{}: {} <= {}",
@@ -646,13 +644,10 @@ impl<
         More: for<'a, 'b> self::More<SimpleStores<TS, &'b legion::World, &'a LabelStore>>,
     > JavaTreeGen<'stores, 'cache, TS, More>
 {
-    fn make_spacing(
-        &mut self,
-        spacing: Vec<u8>,
-    ) -> Local {
+    fn make_spacing(&mut self, spacing: Vec<u8>) -> Local {
         let kind = Type::Spaces;
-        let interned_kind = self.stores.type_store.intern(kind);
-        debug_assert_eq!(kind, self.stores.type_store.resolve(interned_kind));
+        let interned_kind = TS::intern(kind);
+        debug_assert_eq!(kind, TS::resolve(interned_kind));
         let bytes_len = spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
         let line_count = spacing
@@ -831,7 +826,7 @@ where
         mut acc: <Self as TreeGen>::Acc,
         label: Option<String>,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
-        let interned_kind = JavaEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
+        let interned_kind = TS::intern(acc.simple.kind);
         let own_line_count = label.as_ref().map_or(0, |l| {
             l.matches("\n").count().to_u16().expect("too many newlines")
         });
@@ -905,7 +900,8 @@ where
             if acc.simple.children.len() != acc.no_space.len() {
                 dyn_builder.add(compo::NoSpacesCS(acc.no_space.into_boxed_slice()));
             }
-            acc.simple.add_primary(&mut dyn_builder, interned_kind, label_id);
+            acc.simple
+                .add_primary(&mut dyn_builder, interned_kind, label_id);
 
             let compressed_node =
                 NodeStore::insert_built_after_prepare(vacant, dyn_builder.build());
@@ -1277,8 +1273,7 @@ where
             let label_id = l;
             let label = label_id.map(|l| label_store.resolve(&l));
 
-            let interned_kind =
-                JavaEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
+            let interned_kind = TS::intern(acc.simple.kind);
             let own_line_count = label.as_ref().map_or(0, |l| {
                 l.matches("\n").count().to_u16().expect("too many newlines")
             });
@@ -1342,7 +1337,8 @@ where
                         dyn_builder.add(compo::NoSpacesCS(acc.no_space.into_boxed_slice()));
                     }
                 }
-                acc.simple.add_primary(&mut dyn_builder, interned_kind, label_id);
+                acc.simple
+                    .add_primary(&mut dyn_builder, interned_kind, label_id);
                 let compressed_node =
                     NodeStore::insert_built_after_prepare(vacant, dyn_builder.build());
 

@@ -73,10 +73,6 @@ where
     }
 
     type TS = TS;
-
-    fn type_store(&self) -> &Self::TS {
-        &self.0.type_store
-    }
 }
 
 pub trait Converter: Default {

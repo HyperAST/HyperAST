@@ -116,10 +116,6 @@ impl<'store, HAST: HyperAST<'store>, Dsrc, Ddst, M> HyperAST<'store>
     }
 
     type TS = HAST::TS;
-
-    fn type_store(&self) -> &Self::TS {
-        todo!()
-    }
 }
 
 // use crate::decompressed_tree_store::Persistable;

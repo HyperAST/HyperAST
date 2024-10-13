@@ -473,8 +473,7 @@ impl SimpleJsonPostProcess {
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Tree>>>
     where
         HAST: HyperAST<'store>
-            + NodeStore<HAST::IdN, R<'store> = HAST::T>
-            + types::TypeStore,
+            + NodeStore<HAST::IdN, R<'store> = HAST::T>,
         HAST::IdN: Clone + Debug + Eq,
         HAST::T: types::Tree + WithSerialization,
         SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>
@@ -510,8 +509,7 @@ impl SimpleJsonPostProcess {
     ) -> ValidityRes<Vec<diff_output::Match<diff_output::Tree>>>
     where
         HAST: HyperAST<'store>
-            + NodeStore<HAST::IdN, R<'store> = HAST::T>
-            + types::TypeStore,
+            + NodeStore<HAST::IdN, R<'store> = HAST::T>,
         HAST::IdN: Clone + Debug,
         HAST::T: WithSerialization,
         SD: ShallowDecompressedTreeStore<'a, HAST::T, u32>

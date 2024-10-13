@@ -12,7 +12,7 @@ use hyper_ast::{
     store::{
         nodes::{
             legion::{
-                compo::{self, NoSpacesCS, CS}, eq_node, HashedNodeRef, NodeIdentifier, PendingInsert
+                compo::{self, NoSpacesCS, CS}, eq_node, NodeIdentifier, PendingInsert
             },
             DefaultNodeStore as NodeStore,
         },
@@ -149,8 +149,7 @@ impl<'stores, TS: XmlEnabledTypeStore> ZippedTreeGen for XmlTreeGen<'stores, TS>
     }
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
-        let type_store = &mut self.stores().type_store;
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
         let parent_indentation = Space::try_format_indentation(&self.line_break)
             .unwrap_or_else(|| vec![Space::Space; self.line_break.len()]);
         let indent = compute_indentation(
@@ -185,12 +184,11 @@ impl<'stores, TS: XmlEnabledTypeStore> ZippedTreeGen for XmlTreeGen<'stores, TS>
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
-        let type_store = &mut self.stores().type_store;
         let node = cursor.node();
         if node.0.is_missing() {
             return PreResult::Skip;
         }
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
         let mut acc = self.pre(text, &node, stack, global);
         if kind == Type::AttValue {
             acc.labeled = true;
@@ -205,9 +203,8 @@ impl<'stores, TS: XmlEnabledTypeStore> ZippedTreeGen for XmlTreeGen<'stores, TS>
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc {
-        let type_store = &mut self.stores().type_store;
         let parent_indentation = &stack.parent().unwrap().indentation();
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
         let indent = compute_indentation(
             &self.line_break,
             text,
@@ -292,10 +289,10 @@ impl<'a, TS> XmlTreeGen<'a, TS> {
 impl<'a, TS: XmlEnabledTypeStore> XmlTreeGen<'a, TS> {
     fn make_spacing(
         &mut self,
-        spacing: Vec<u8>, //Space>,
+        spacing: Vec<u8>,
     ) -> Local {
         let kind = Type::Spaces;
-        let interned_kind = self.stores.type_store.intern(kind);
+        let interned_kind = TS::intern(kind);
         let bytes_len = spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
         use num::ToPrimitive;
@@ -423,8 +420,7 @@ impl<'stores, TS: XmlEnabledTypeStore> TreeGen for XmlTreeGen<'stores, TS> {
         acc: <Self as TreeGen>::Acc,
         label: Option<String>,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
-
-        let interned_kind = self.stores.type_store.intern(acc.simple.kind);
+        let interned_kind = TS::intern(acc.simple.kind);
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
         let line_count = acc.metrics.line_count;

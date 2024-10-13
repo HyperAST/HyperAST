@@ -1,20 +1,20 @@
 use hyper_ast::{
     filter::{Bloom, BloomResult, BF},
     impact::serialize::CachedHasher,
+    impact::BulkHasher,
     nodes::RefContainer,
-    position::{Scout, StructuralPosition, StructuralPositionStore, TreePath, TypedTreePath},
+    position::{Scout, StructuralPosition, StructuralPositionStore, TypedTreePath},
     store::{
         defaults::NodeIdentifier, labels::LabelStore, nodes::DefaultNodeStore as NodeStore,
         SimpleStores,
     },
     types::{LabelStore as _, Typed},
     types::{NodeId, TypedNodeStore, WithChildren},
-    impact::BulkHasher,
 };
 
 use hyper_ast_gen_ts_java::types::{TIdN, Type};
 
-use crate::{java::handle_java_file, TStore};
+use crate::java::handle_java_file;
 
 use hyper_ast_gen_ts_java::impact::{
     element::{IdentifierFormat, LabelPtr},
@@ -996,11 +996,7 @@ fn test_hashing() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
         .is_test(true)
         .init();
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: hyper_ast_gen_ts_java::types::TStore::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
     let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
     macro_rules! scoped {
         ( $o:expr, $i:expr ) => {{

@@ -1,19 +1,16 @@
 use core::panic;
 
 use hyper_ast::types::{AnyType, HyperType, LangRef, LangWrapper, TypeStore};
-#[cfg(feature = "cpp")]
-use hyper_ast_gen_ts_cpp::types::CppEnabledTypeStore;
-#[cfg(feature = "java")]
-use hyper_ast_gen_ts_java::types::JavaEnabledTypeStore;
-#[cfg(feature = "maven")]
-use hyper_ast_gen_ts_xml::types::XmlEnabledTypeStore;
 
 #[derive(Clone)]
 pub struct TStore;
 
-unsafe impl hyper_ast::store::TyDown<hyper_ast_gen_ts_cpp::types::TStore> for TStore {}
-unsafe impl hyper_ast::store::TyDown<hyper_ast_gen_ts_java::types::TStore> for TStore {}
-unsafe impl hyper_ast::store::TyDown<hyper_ast_gen_ts_xml::types::TStore> for TStore {}
+#[cfg(feature = "cpp")]
+impl hyper_ast::store::TyDown<hyper_ast_gen_ts_cpp::types::TStore> for TStore {}
+#[cfg(feature = "java")]
+impl hyper_ast::store::TyDown<hyper_ast_gen_ts_java::types::TStore> for TStore {}
+#[cfg(feature = "maven")]
+impl hyper_ast::store::TyDown<hyper_ast_gen_ts_xml::types::TStore> for TStore {}
 
 impl Default for TStore {
     fn default() -> Self {
@@ -21,8 +18,7 @@ impl Default for TStore {
     }
 }
 
-type TypeInternalSize = u16;
-
+// TODO use/adapt it for decompress_type and roles
 macro_rules! on_multi {
     ($n:expr, [$on0:ident $(, $on:ident)*], ($with:ident, $with1:ident) => $body:expr, $default:expr) => {
         if let Ok($with) = $n.get_component::<$on0::types::Type>() {
@@ -42,58 +38,56 @@ impl<'a> hyper_ast::types::RoleStore for TStore {
 
     type Role = hyper_ast::types::Role;
 
-    fn resolve_field(&self, lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
+    fn resolve_field(lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
         match lang.name() {
+            #[cfg(feature = "java")]
             "hyper_ast_gen_ts_java::types::Lang" => {
                 let t = hyper_ast_gen_ts_java::types::TType::new(
                     hyper_ast_gen_ts_java::types::Type::Spaces,
                 );
-                hyper_ast::types::RoleStore::resolve_field(
-                    &hyper_ast_gen_ts_java::types::TStore,
-                    t.get_lang(),
-                    field_id,
-                )
+                hyper_ast_gen_ts_java::types::TStore::resolve_field(t.get_lang(), field_id)
             }
+            #[cfg(feature = "cpp")]
             "hyper_ast_gen_ts_cpp::types::Lang" => {
                 let t = hyper_ast_gen_ts_cpp::types::TType::new(
                     hyper_ast_gen_ts_cpp::types::Type::Spaces,
                 );
-                hyper_ast_gen_ts_cpp::types::TStore.resolve_field(t.get_lang(), field_id)
+                hyper_ast_gen_ts_cpp::types::TStore::resolve_field(t.get_lang(), field_id)
             }
+            #[cfg(feature = "maven")]
             "hyper_ast_gen_ts_xml::types::Lang" => {
                 let t = hyper_ast_gen_ts_xml::types::TType::new(
                     hyper_ast_gen_ts_xml::types::Type::Spaces,
                 );
-                hyper_ast_gen_ts_xml::types::TStore.resolve_field(t.get_lang(), field_id)
+                hyper_ast_gen_ts_xml::types::TStore::resolve_field(t.get_lang(), field_id)
             }
             x => panic!("{}", x),
         }
     }
 
-    fn intern_role(&self, lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
+    fn intern_role(lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
         // TODO fix that, the lang thing, both parameter and the get_lang() should be respectively extracted and removed
         match lang.name() {
+            #[cfg(feature = "java")]
             "hyper_ast_gen_ts_java::types::Lang" => {
                 let t = hyper_ast_gen_ts_java::types::TType::new(
                     hyper_ast_gen_ts_java::types::Type::Spaces,
                 );
-                hyper_ast::types::RoleStore::intern_role(
-                    &hyper_ast_gen_ts_java::types::TStore,
-                    t.get_lang(),
-                    role,
-                )
+                hyper_ast_gen_ts_java::types::TStore::intern_role(t.get_lang(), role)
             }
+            #[cfg(feature = "cpp")]
             "hyper_ast_gen_ts_cpp::types::Lang" => {
                 let t = hyper_ast_gen_ts_cpp::types::TType::new(
                     hyper_ast_gen_ts_cpp::types::Type::Spaces,
                 );
-                hyper_ast_gen_ts_cpp::types::TStore.intern_role(t.get_lang(), role)
+                hyper_ast_gen_ts_cpp::types::TStore::intern_role(t.get_lang(), role)
             }
+            #[cfg(feature = "maven")]
             "hyper_ast_gen_ts_xml::types::Lang" => {
                 let t = hyper_ast_gen_ts_xml::types::TType::new(
                     hyper_ast_gen_ts_xml::types::Type::Spaces,
                 );
-                hyper_ast_gen_ts_xml::types::TStore.intern_role(t.get_lang(), role)
+                hyper_ast_gen_ts_xml::types::TStore::intern_role(t.get_lang(), role)
             }
             x => panic!("{}", x),
         }
@@ -102,20 +96,8 @@ impl<'a> hyper_ast::types::RoleStore for TStore {
 
 impl TypeStore for TStore {
     type Ty = AnyType;
-    fn decompress_type(
-        &self,
-        erazed: &impl hyper_ast::types::ErasedHolder,
-        tid: std::any::TypeId,
-    ) -> Self::Ty {
-        (&self).decompress_type(erazed, tid)
-    }
-}
-
-impl TypeStore for &TStore {
-    type Ty = AnyType;
 
     fn decompress_type(
-        &self,
         erazed: &impl hyper_ast::types::ErasedHolder,
         tid: std::any::TypeId,
     ) -> Self::Ty {

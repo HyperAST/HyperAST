@@ -21,7 +21,7 @@ use crate::{
     make_processor::MakeProcessor,
     maven::MavenModuleAcc,
     maven_processor::MavenProcessor,
-    processing::{file_sys, CacheHolding, ConfiguredRepo2},
+    processing::{file_sys, ConfiguredRepo2},
     Commit, DefaultMetrics, Processor, SimpleStores,
 };
 // use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
@@ -181,9 +181,7 @@ impl RepositoryProcessor {
     ) -> Result<Vec<Oid>, Vec<Oid>> {
         let mut r = vec![];
         loop {
-            let Some(&oid) = rw.peek() else {
-                break
-            };
+            let Some(&oid) = rw.peek() else { break };
             let commit_processor = self
                 .processing_systems
                 .by_id(&repository.config.0)
@@ -812,7 +810,7 @@ pub fn child_by_name_with_idx(
     name: &str,
 ) -> Option<(NodeIdentifier, u16)> {
     let n = stores.node_store.resolve(d);
-    log::info!("{}", name);
+    log::debug!("{}", name);
     let i = n.get_child_idx_by_name(&stores.label_store.get(name)?);
     i.map(|i| (n.child(&i).unwrap(), i))
 }

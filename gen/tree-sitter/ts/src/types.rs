@@ -12,7 +12,7 @@ mod legion_impls {
     use crate::TNode;
 
     impl<'a> TNode<'a> {
-        pub fn obtain_type(&self, _: &mut impl TsEnabledTypeStore) -> Type {
+        pub fn obtain_type(&self) -> Type {
             let t = self.kind_id();
             Type::from_u16(t)
         }
@@ -22,18 +22,18 @@ mod legion_impls {
         type Ty = TypeU16<Ts>;
     }
     impl TsEnabledTypeStore for TStore {
-        fn intern(&self, t: Type) -> Self::Ty {
+        fn intern(t: Type) -> Self::Ty {
             t.into()
         }
-        fn resolve(&self, t: Self::Ty) -> Type {
+        fn resolve(t: Self::Ty) -> Type {
             t.e()
         }
     }
 }
 
 pub trait TsEnabledTypeStore: TypeStore {
-    fn intern(&self, t: Type) -> Self::Ty;
-    fn resolve(&self, t: Self::Ty) -> Type;
+    fn intern(t: Type) -> Self::Ty;
+    fn resolve(t: Self::Ty) -> Type;
 }
 
 impl Type {

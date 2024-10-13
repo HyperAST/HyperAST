@@ -9,7 +9,6 @@ use crate::{
 use hyper_ast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores};
 use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
 // use hyper_ast_gen_ts_java::types::TStore;
-use hyper_ast_cvs_git::TStore;
 use hyper_diff::actions::Actions;
 use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
 
@@ -18,17 +17,12 @@ fn test_simple_1() {
     let buggy = r#"class A{class C{}class B{{while(1){if(1){}else{}};}}}class D{class E{}class F{{while(2){if(2){}else{}};}}}"#;
     let fixed = r#"class A{class C{}}class B{{while(1){if(1){}else{}};}}class D{class E{}}class F{{while(2){if(2){}else{}};}}"#;
     // use hyper_ast_gen_ts_java::types::TStore;
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: Default::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
 
-    let aaa = hyper_ast_gen_ts_java::types::TStore::default();
-    let stores = stores.change_type_store(aaa);
+    let stores = stores.change_type_store::<hyper_ast_gen_ts_java::types::TStore>();
 
     println!(
         "{}",
@@ -319,7 +313,7 @@ mod examples {
 mod test {
     use hyper_ast::{
         nodes::SyntaxWithIdsSerializer,
-        store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores},
+        store::SimpleStores,
         types::{DecompressedSubtree, Typed},
     };
 
@@ -404,11 +398,7 @@ mod test {
         println!("{:?}", std::env::current_dir());
         let buggy = CASE7;
         let fixed = CASE8;
-        let mut stores = SimpleStores {
-            label_store: LabelStore::new(),
-            type_store: TStore::default(),
-            node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-        };
+        let mut stores = SimpleStores::<TStore>::default();
         let mut tree_gen = XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores: &mut stores,
@@ -527,11 +517,7 @@ mod test {
         println!("{:?}", std::env::current_dir());
         let buggy = CASE_SIMPLE;
         let fixed = CASE_SIMPLE;
-        let mut stores = SimpleStores {
-            label_store: LabelStore::new(),
-            type_store: TStore::default(),
-            node_store: NodeStore::new(),
-        };
+        let mut stores = SimpleStores::<TStore>::default();
         let mut tree_gen = XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores: &mut stores,
@@ -644,11 +630,7 @@ mod test {
         println!("{:?}", std::env::current_dir());
         let buggy = CASE_SIMPLE;
         let fixed = CASE_SIMPLE;
-        let mut stores = SimpleStores {
-            label_store: LabelStore::new(),
-            type_store: TStore::default(),
-            node_store: NodeStore::new(),
-        };
+        let mut stores = SimpleStores::<TStore>::default();
         let mut tree_gen = XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores: &mut stores,
@@ -834,11 +816,7 @@ mod test {
         println!("{:?}", std::env::current_dir());
         let buggy = CASE10;
         let fixed = CASE9;
-        let mut stores = SimpleStores {
-            label_store: LabelStore::new(),
-            type_store: TStore::default(),
-            node_store: NodeStore::new(),
-        };
+        let mut stores = SimpleStores::<TStore>::default();
         let mut tree_gen = XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores: &mut stores,
@@ -937,11 +915,7 @@ mod test {
         println!("{:?}", std::env::current_dir());
         let buggy = CASE12;
         let fixed = CASE11;
-        let mut stores = SimpleStores {
-            label_store: LabelStore::new(),
-            type_store: TStore::default(),
-            node_store: NodeStore::new(),
-        };
+        let mut stores = SimpleStores::<TStore>::default();
         let mut tree_gen = XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores: &mut stores,
@@ -1025,11 +999,7 @@ mod test {
         println!("{:?}", std::env::current_dir());
         let buggy = CASE10;
         let fixed = CASE9;
-        let mut stores = SimpleStores {
-            label_store: LabelStore::new(),
-            type_store: TStore::default(),
-            node_store: NodeStore::new(),
-        };
+        let mut stores = SimpleStores::<TStore>::default();
         let mut tree_gen = XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores: &mut stores,

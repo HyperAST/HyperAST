@@ -13,7 +13,7 @@ use num_traits::{cast, PrimInt, ToPrimitive, Zero};
 use hyper_ast::{
     position::Position,
     types::{
-        HyperAST, HyperType, NodeId, NodeStore, Stored, Tree, TypeStore, WithChildren,
+        HyperAST, HyperType, NodeId, NodeStore, Stored, Tree, WithChildren,
         WithSerialization,
     },
 };

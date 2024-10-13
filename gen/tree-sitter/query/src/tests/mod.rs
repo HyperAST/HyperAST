@@ -1,6 +1,6 @@
 use std::io::{stdout, Write};
 
-use hyper_ast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores};
+use hyper_ast::store::SimpleStores;
 
 use crate::{legion::TsQueryTreeGen, types::TStore};
 
@@ -12,11 +12,7 @@ fn simple() {
 }
 
 fn run(text: &[u8]) {
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::<TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = TsQueryTreeGen {
         line_break: "\n".as_bytes().to_vec(),

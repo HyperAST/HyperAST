@@ -171,7 +171,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             }
             return;
         }
-        log::debug!("mm tree {:?}", name.try_str());
+        log::debug!("maven tree {:?}", name.try_str());
         let parent_acc = &mut self.stack.last_mut().unwrap().2;
         if FFWD {
             let (name, (full_node, _)) = self.prepro.help_handle_java_folder(
@@ -233,7 +233,7 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
     let label_store = &mut stores.label_store;
     use hyper_ast::store::nodes::legion::eq_node;
     let kind = Type::MavenDirectory;
-    let interned_kind = stores.type_store.intern(kind);
+    let interned_kind = hyper_ast_gen_ts_xml::types::TStore::intern(kind);
     let label_id = label_store.get_or_insert(acc.primary.name.clone());
 
     let primary = acc

@@ -9,7 +9,7 @@ pub use hyper_ast::store::nodes::fetched::NodeIdentifier;
 use hyper_ast::{
     nodes::IndentedAlt,
     store::nodes::fetched::LabelIdentifier,
-    types::{AnyType, HyperType, Labeled, TypeStore as _, WithChildren, WithStats},
+    types::{AnyType, HyperType, Labeled, WithChildren, WithStats},
 };
 use std::{
     fmt::Debug,
@@ -23,13 +23,9 @@ mod cache;
 pub(crate) mod store {
     pub use hyper_ast::store::nodes::fetched::NodeIdentifier;
     use hyper_ast::store::nodes::fetched::NodeStore;
-    use hyper_ast::types::Lang;
-    use hyper_ast::types::LangRef;
-    use hyper_ast::types::TypeIndex;
-    use hyper_ast::types::TypeStore;
     use hyper_ast::{
         store::nodes::fetched::{FetchedLabels, HashedNodeRef, LabelIdentifier},
-        types::{AnyType, HyperType, TypeStore as _},
+        types::AnyType,
     };
     use std::borrow::Borrow;
     use std::collections::HashSet;
@@ -46,7 +42,6 @@ pub(crate) mod store {
     pub struct FetchedHyperAST {
         pub(crate) label_store: std::sync::RwLock<FetchedLabels>,
         pub(crate) node_store: std::sync::RwLock<NodeStore>,
-        pub(crate) type_store: TStore,
         // /// each set is fetched sequentially, non blocking
         // /// pushed ids are tested against all pending sets because they might not have entered the store
         // /// new set every 100 elements, due to id serialized size in url
@@ -71,7 +66,6 @@ pub(crate) mod store {
             AcessibleFetchedHyperAST {
                 label_store: self.label_store.read().unwrap(),
                 node_store: self.node_store.read().unwrap(),
-                type_store: &self.type_store,
                 nodes_pending: self.nodes_pending.lock().unwrap(),
                 nodes_waiting: std::cell::RefCell::new(self.nodes_waiting.lock().unwrap()),
                 labels_pending: self.labels_pending.lock().unwrap(),
@@ -86,7 +80,6 @@ pub(crate) mod store {
     pub(crate) struct AcessibleFetchedHyperAST<'a> {
         pub(crate) label_store: std::sync::RwLockReadGuard<'a, FetchedLabels>,
         pub(crate) node_store: std::sync::RwLockReadGuard<'a, NodeStore>,
-        pub(crate) type_store: &'a TStore,
         pub(crate) nodes_pending: std::sync::MutexGuard<'a, VecDeque<HashSet<NodeIdentifier>>>,
         pub(crate) nodes_waiting:
             std::cell::RefCell<std::sync::MutexGuard<'a, Option<HashSet<NodeIdentifier>>>>,
@@ -186,10 +179,6 @@ pub(crate) mod store {
             = Self
         where
             Self: 'store;
-
-        fn type_store(&self) -> &Self::TS<'_> {
-            self
-        }
     }
 
     impl<'a, 'b: 'a> hyper_ast::types::HyperAST<'b> for AcessibleFetchedHyperAST<'a>
@@ -211,10 +200,6 @@ pub(crate) mod store {
         }
 
         type TS = Self;
-
-        fn type_store(&self) -> &Self::TS {
-            self
-        }
     }
 
     impl std::hash::Hash for FetchedHyperAST {

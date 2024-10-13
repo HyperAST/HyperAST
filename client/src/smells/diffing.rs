@@ -612,7 +612,7 @@ pub(crate) type _R = hyper_ast::position::structural_pos::StructuralPosition<Nod
 
 pub(crate) type Stores<'a> = hyper_ast::types::SimpleHyperAST<
     NoSpaceWrapper<'a, NodeIdentifier>,
-    &'a hyper_ast_cvs_git::TStore,
+    hyper_ast_cvs_git::TStore,
     hyper_ast_cvs_git::no_space::NoSpaceNodeStoreWrapper<'a>,
     &'a LabelStore,
 >;

@@ -10,7 +10,7 @@ use str_distance::DistanceMetric;
 use crate::decompressed_tree_store::{DecompressedTreeStore, PostOrderKeyRoots};
 use crate::matchers::mapping_store::MonoMappingStore;
 use hyper_ast::types::{
-    DecompressedSubtree, HyperAST, LabelStore, NodeId, NodeStore, Stored, Tree, TypeStore,
+    DecompressedSubtree, HyperAST, LabelStore, NodeId, NodeStore, Stored, Tree,
 };
 
 // TODO use the Mapping struct
@@ -823,10 +823,9 @@ mod tests {
         // assert_eq!(label_store.resolve(&0).to_owned(), b"");
 
         let stores = hyper_ast::types::SimpleHyperAST {
-            type_store: TStore,
             node_store,
             label_store,
-            _phantom: PhantomData,
+            _phantom: PhantomData::<(_,TStore)>,
         };
         let src_arena = {
             let a: ZsTree<_, u16> = ZsTree::<_, _>::decompress(&stores.node_store, &src);

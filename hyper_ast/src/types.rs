@@ -1084,13 +1084,11 @@ pub trait TypeStore {
         + std::marker::Send
         + std::marker::Sync
         + Compo;
-    // fn resolve_type(&self, n: &T) -> Self::Ty;
-    // fn resolve_lang(&self, n: &T) -> LangWrapper<Self::Ty>;
-    // fn type_eq(&self, n: &T, m: &T) -> bool;
-    fn type_to_u16(&self, t: Self::Ty) -> TypeInternalSize {
+
+    fn type_to_u16(t: Self::Ty) -> TypeInternalSize {
         t.get_lang().to_u16(t)
     }
-    fn decompress_type(&self, erazed: &impl ErasedHolder, tid: std::any::TypeId) -> Self::Ty {
+    fn decompress_type(erazed: &impl ErasedHolder, tid: std::any::TypeId) -> Self::Ty {
         *unsafe {
             erazed
                 .unerase_ref::<Self::Ty>(tid)
@@ -1369,8 +1367,8 @@ pub trait SpecializedTypeStore<T: Typed>: TypeStore {}
 pub trait RoleStore: TypeStore {
     type IdF: 'static + Copy + Default + PartialEq;
     type Role: 'static + Copy + PartialEq + std::marker::Sync + std::marker::Send;
-    fn resolve_field(&self, lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role;
-    fn intern_role(&self, lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF;
+    fn resolve_field(lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role;
+    fn intern_role(lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF;
 }
 
 pub trait HyperAST<'store>: HyperASTShared {
@@ -1382,7 +1380,6 @@ pub trait HyperAST<'store>: HyperASTShared {
     fn label_store(&self) -> &Self::LS;
 
     type TS: TypeStore;
-    fn type_store(&self) -> &Self::TS;
 
     fn decompress<D: DecompressedSubtree<'store, Self::T, Out = D>>(
         &'store self,
@@ -1419,21 +1416,16 @@ pub trait HyperAST<'store>: HyperASTShared {
     fn resolve_type(&'store self, id: &Self::IdN) -> <Self::TS as TypeStore>::Ty {
         let ns = self.node_store();
         let n = ns.resolve(id);
-        self.type_store()
-            .decompress_type(&n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+        Self::TS::decompress_type(&n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
     }
-    // fn resolve_type(&self, n: &T) -> Self::Ty {todo!()}
     fn resolve_lang(&self, n: &Self::T) -> LangWrapper<<Self::TS as TypeStore>::Ty> {
-        self.type_store()
-            .decompress_type(n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+        Self::TS::decompress_type(n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
             .get_lang()
     }
     fn type_eq(&self, n: &Self::T, m: &Self::T) -> bool {
-        self.type_store()
-            .decompress_type(n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+        Self::TS::decompress_type(n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
             .generic_eq(
-                self.type_store()
-                    .decompress_type(m, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+                Self::TS::decompress_type(m, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
                     .as_static(),
             )
     }
@@ -1466,7 +1458,6 @@ pub trait HyperASTLean: HyperASTShared {
     fn label_store(&self) -> &Self::LS;
 
     type TS: TypeStore;
-    fn type_store(&self) -> &Self::TS;
 
     fn resolve_type(&self, id: &Self::IdN) -> <Self::TS as TypeStore>::Ty
     where
@@ -1502,7 +1493,6 @@ pub trait HyperASTAsso: HyperASTShared {
     type TS<'store>: TypeStore
     where
         Self: 'store;
-    fn type_store(&self) -> &Self::TS<'_>;
 
     fn resolve_type(&self, id: &Self::IdN) -> <Self::TS<'_> as TypeStore>::Ty {
         let ns = self.node_store();
@@ -1532,9 +1522,6 @@ where
     }
 
     type TS = T::TS;
-    fn type_store(&self) -> &Self::TS {
-        (*self).type_store()
-    }
 
     fn resolve_type(&self, id: &Self::IdN) -> <Self::TS as TypeStore>::Ty
     where
@@ -1567,16 +1554,14 @@ pub trait TypedHyperAST<'store, TIdN: TypedNodeId<IdN = Self::IdN>>: HyperAST<'s
 }
 
 pub struct SimpleHyperAST<T, TS, NS, LS> {
-    pub type_store: TS,
     pub node_store: NS,
     pub label_store: LS,
-    pub _phantom: std::marker::PhantomData<T>,
+    pub _phantom: std::marker::PhantomData<(T, TS)>,
 }
 
 impl<T, TS, NS: Copy, LS> SimpleHyperAST<T, TS, NS, &LS> {
     pub fn change_type_store_ref<TS2>(&self, new: TS2) -> SimpleHyperAST<T, TS2, NS, &LS> {
         SimpleHyperAST {
-            type_store: new,
             node_store: self.node_store,
             label_store: self.label_store,
             _phantom: std::marker::PhantomData,
@@ -1587,7 +1572,6 @@ impl<T, TS, NS: Copy, LS> SimpleHyperAST<T, TS, NS, &LS> {
 impl<T, TS, NS, LS> SimpleHyperAST<T, TS, NS, LS> {
     pub fn change_type_store<TS2>(self, new: TS2) -> SimpleHyperAST<T, TS2, NS, LS> {
         SimpleHyperAST {
-            type_store: new,
             node_store: self.node_store,
             label_store: self.label_store,
             _phantom: std::marker::PhantomData,
@@ -1595,7 +1579,6 @@ impl<T, TS, NS, LS> SimpleHyperAST<T, TS, NS, LS> {
     }
     pub fn change_tree_type<T2>(self) -> SimpleHyperAST<T2, TS, NS, LS> {
         SimpleHyperAST {
-            type_store: self.type_store,
             node_store: self.node_store,
             label_store: self.label_store,
             _phantom: std::marker::PhantomData,
@@ -1606,7 +1589,6 @@ impl<T, TS, NS, LS> SimpleHyperAST<T, TS, NS, LS> {
 impl<T, TS: Default, NS: Default, LS: Default> Default for SimpleHyperAST<T, TS, NS, LS> {
     fn default() -> Self {
         Self {
-            type_store: Default::default(),
             node_store: Default::default(),
             label_store: Default::default(),
             _phantom: Default::default(),
@@ -1716,10 +1698,6 @@ where
     }
 
     type TS = TS;
-
-    fn type_store(&self) -> &Self::TS {
-        &self.type_store
-    }
 }
 
 impl<'store, T, TS, NS, LS> HyperASTShared for SimpleHyperAST<T, TS, NS, LS>
@@ -1765,10 +1743,6 @@ where
         = TS
     where
         Self: 's;
-
-    fn type_store(&self) -> &Self::TS<'_> {
-        &self.type_store
-    }
 }
 
 #[derive(Clone, Copy, Debug)]

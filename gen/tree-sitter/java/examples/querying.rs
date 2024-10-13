@@ -162,11 +162,7 @@ fn prep_stepped<'store>(
     use hyper_ast_gen_ts_tsquery::search::steped;
     let query = steped::Query::new(query, tree_sitter_java::language()).unwrap();
 
-    let mut stores = hyper_ast::store::SimpleStores {
-        label_store: hyper_ast::store::labels::LabelStore::new(),
-        type_store: hyper_ast_gen_ts_java::types::TStore::default(),
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
 

@@ -306,7 +306,7 @@ fn extract_nodes(
     for id in ids {
         let node = store.node_store.resolve(*id);
         // TODO just pass the hyperast and the id...
-        builder.add(&store.type_store, id.clone().into(), node);
+        builder.add::<TStore,_>(id.clone().into(), node);
     }
     // dbg!(&ids);
 

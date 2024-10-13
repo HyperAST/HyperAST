@@ -132,7 +132,7 @@ impl<'repo, 'prepro, 'd, 'c> CppProcessor<'repo, 'prepro, 'd, 'c, CppAcc> {
             hyper_ast::tree_gen::Accumulator::push(w, (name, full_node));
             // w.push(name, full_node, skiped_ana);
         } else {
-            log::info!("tree {:?}", name.try_str());
+            log::debug!("tree {:?}", name.try_str());
             let tree = self.repository.find_tree(oid).unwrap();
             let prepared: Vec<BasicGitObject> = prepare_dir_exploration(tree);
             self.stack
@@ -329,7 +329,7 @@ fn make(acc: CppAcc, stores: &mut SimpleStores) -> cpp_gen::Local {
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
     let kind = Type::Directory;
-    let interned_kind = stores.type_store.intern(kind);
+    let interned_kind = hyper_ast_gen_ts_cpp::types::TStore::intern(kind);
     let label_id = label_store.get_or_insert(acc.primary.name.clone());
 
     let primary = acc

@@ -2020,6 +2020,7 @@ mod tests {
 }
 
 #[allow(unused)]
+#[cfg(test)]
 mod exp {
     use super::*;
 

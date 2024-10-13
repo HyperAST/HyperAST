@@ -11,7 +11,7 @@ use string_interner::Symbol;
 use crate::{
     store::defaults,
     types::{
-        AnyType, Children, IterableChildren, LangRef, MySlice, NodeId, TypeStore, TypeTrait,
+        AnyType, Children, MySlice, NodeId, TypeStore, TypeTrait,
         TypedNodeId,
     },
 };
@@ -622,7 +622,7 @@ impl Default for SimplePackedBuilder {
 }
 
 impl SimplePackedBuilder {
-    pub fn add<TS, T>(&mut self, type_store: &TS, id: NodeIdentifier, node: T)
+    pub fn add<TS, T>(&mut self, id: NodeIdentifier, node: T)
     where
         TS: TypeStore,
         T: crate::types::Tree<Label = defaults::LabelIdentifier> + crate::types::WithStats,

@@ -84,7 +84,7 @@ impl Helper for hecs::EntityRef<'_> {
 }
 
 impl TypeSys {
-    fn it_entities<'a>(&'a self) -> impl Iterator<Item = hecs::EntityRef> + 'a {
+    fn it_entities<'a>(&'a self) -> impl Iterator<Item = hecs::EntityRef<'a>> + 'a {
         self.list.iter().map(|e| self.types.entity(*e).unwrap())
     }
 

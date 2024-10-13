@@ -69,11 +69,7 @@ fn tsg_hyperast_stepped_query() {
     use crate::tsg::stepped_query as impls;
 
     // parsing code into hyperast
-    let mut stores = hyper_ast::store::SimpleStores {
-        label_store: hyper_ast::store::labels::LabelStore::new(),
-        type_store: crate::types::TStore::default(),
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = hyper_ast::store::SimpleStores::<crate::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
     let tree = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
@@ -139,11 +135,7 @@ fn tsg_hyperast_recursive_query() {
     use crate::tsg::recursive_query as impls;
 
     // parsing code into hyperast
-    let mut stores = hyper_ast::store::SimpleStores {
-        label_store: hyper_ast::store::labels::LabelStore::new(),
-        type_store: crate::types::TStore::default(),
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = hyper_ast::store::SimpleStores::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
     let tree = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
