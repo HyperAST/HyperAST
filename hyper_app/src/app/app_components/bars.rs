@@ -50,7 +50,49 @@ impl crate::HyperApp {
 
                     #[cfg(target_os = "macos")]
                     ui.add_space(60.0);
-                    ui.label(egui::RichText::new("HyperAST").heading().size(15.0));
+
+                    let title = egui::RichText::new("HyperAST").heading().size(15.0);
+                    if ui
+                        .add(egui::Label::new(title).sense(egui::Sense::click()))
+                        .clicked()
+                    {
+                        if let Some(tid) = self
+                            .tabs
+                            .iter()
+                            .position(|x| x == &super::Tab::MarkdownStatic(0))
+                        {
+                            let tid = tid as u16;
+                            if let Some(child) = self.tree.tiles.find_pane(&tid) {
+                                if !self.tree.is_visible(child)
+                                    || !self.tree.active_tiles().contains(&child)
+                                {
+                                    self.tree.set_visible(child, true);
+                                    self.tree.move_tile_to_container(
+                                        child,
+                                        self.tree.root.unwrap(),
+                                        0,
+                                        true,
+                                    );
+                                }
+                            } else {
+                                let child = self.tree.tiles.insert_pane(tid);
+                                match self.tree.tiles.get_mut(self.tree.root.unwrap()) {
+                                    Some(egui_tiles::Tile::Container(c)) => c.add_child(child),
+                                    _ => todo!(),
+                                };
+                            }
+                        } else if self.maximized.is_none() {
+                            let tid = self.tabs.len() as u16;
+                            self.tabs.push(super::Tab::MarkdownStatic(0));
+                            if self.maximized.is_none() {
+                                let child = self.tree.tiles.insert_pane(tid);
+                                match self.tree.tiles.get_mut(self.tree.root.unwrap()) {
+                                    Some(egui_tiles::Tile::Container(c)) => c.add_child(child),
+                                    _ => todo!(),
+                                };
+                            }
+                        }
+                    }
                     ui.menu_button("File", |ui| file_menu(ui, &self.data.command_sender));
                     egui::warn_if_debug_build(ui);
 

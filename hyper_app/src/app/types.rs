@@ -219,20 +219,23 @@ impl SelectedConfig {
     }
 
     pub(crate) fn on_hover_show(&self, ui: &mut egui::Ui) {
-        ui.markdown_ui(ui.id().with(self.title().as_ref()),
+        ui.markdown_ui(ui.id().with(self.title().as_ref()), self.descriptions())
+    }
+
+    pub(crate) fn descriptions(&self) -> &str {
         match self {
-            SelectedConfig::Single =>"TODO",
+            SelectedConfig::Single => "TODO",
             SelectedConfig::Querying => "TODO",
-            SelectedConfig::Tsg => 
-                r#"Compute a graph using the [tree-sitter-graph DSL](https://docs.rs/tree-sitter-graph/latest/tree_sitter_graph/reference/index.html)"#,
-            SelectedConfig::Smells => 
-                "Search for problematic code patterns",
+            SelectedConfig::Tsg => {
+                r#"Compute a graph using the [tree-sitter-graph DSL](https://docs.rs/tree-sitter-graph/latest/tree_sitter_graph/reference/index.html)"#
+            }
+            SelectedConfig::Smells => "Search for problematic code patterns",
             SelectedConfig::Multi => "TODO",
             SelectedConfig::Diff => "TODO",
             SelectedConfig::Tracking => "TODO",
             SelectedConfig::LongTracking => "TODO",
             SelectedConfig::Aspects => "TODO",
-        })
+        }
     }
 }
 
@@ -247,9 +250,9 @@ impl Default for Repo {
     }
 }
 
-impl From<[&str;2]> for Repo {
-    fn from(value: [&str;2]) -> Self {
-        let [user, name] = value.map(|s|s.to_string());
+impl From<[&str; 2]> for Repo {
+    fn from(value: [&str; 2]) -> Self {
+        let [user, name] = value.map(|s| s.to_string());
         Self { user, name }
     }
 }

@@ -23,7 +23,9 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+use strum::IntoEnumIterator;
 use tree_view::make_pp_code;
+use types::SelectedConfig;
 use utils_poll::{Buffered3, Buffered4, Buffered5, MultiBuffered2};
 
 mod app_components;
@@ -569,7 +571,7 @@ type RemCodeId = usize;
 type RemTreeId = usize;
 type QResId = u16;
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, PartialEq, Eq)]
 enum Tab {
     RemoteQuery(QueryId),
     LocalQuery(LocalQueryId),
@@ -637,7 +639,7 @@ impl Default for HyperApp {
         let tabs = vec![
             // Tab::MarkdownEdit(DEFAULT_EXPLAINATIONS_MDS[0].to_string()),
             Tab::ProjectSelection(),
-            // // Tab::MarkdownStatic(0),
+            // Tab::MarkdownStatic(0),
             // Tab::LongTracking,
             // // Tab::Smells,
             // Tab::Diff(0),
@@ -681,17 +683,16 @@ impl Default for HyperApp {
 const DEFAULT_EXPLAINATIONS_MDS: &[&str] = &[r#"# Graphical Interface of the HyperAST
 
 You are using the GUI of the HyperAST.
-The HyperAST enable developpers and researchers alike to explore and investigate 
+The HyperAST enables developpers and researchers alike to explore and investigate 
 temporal code evolutions in the repositories of their choice.
+
+Readily supports projects using Java with Maven, and simple C/C++ (Makefile in root and an src/ dir).
+Other codebase structures, languages and build systems could be added, but time is lacking for now.
 
 ## Default Layouts
 
-As a kickstart into using the HyperAST,
-you can use the provided layouts and their associated examples.
-
-- TSG: Compute a graph using the [tree-sitter-graph DSL](https://docs.rs/tree-sitter-graph/latest/tree_sitter_graph/reference/index.html)
-- [ ] Queries: 
-TODO add the other layouts
+To kickstart you HyperAST journey,
+we provide provide a few layouts and their associated examples.
 
 "#];
 
@@ -824,6 +825,7 @@ struct MyTileTreeBehavior<'a> {
     edited: bool,
     selected_commit: &'a mut Option<(ProjectId, String)>,
     selected_baseline: &'a mut Option<String>,
+    to_hide: Vec<egui_tiles::TileId>,
 }
 
 impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
@@ -1461,7 +1463,13 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                 egui_commonmark::CommonMarkViewer::new(id).show_scrollable(
                     ui,
                     &mut commonmark_cache.lock(),
-                    DEFAULT_EXPLAINATIONS_MDS[*md],
+                    &format!(
+                        "{}\n{}",
+                        DEFAULT_EXPLAINATIONS_MDS[*md],
+                        SelectedConfig::iter()
+                            .map(|x| format!("\n- {}: {}", x.title().as_ref(), x.descriptions()))
+                            .collect::<String>()
+                    ),
                 );
                 Default::default()
             }
@@ -1565,6 +1573,14 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                     }
                 }
             };
+        } else if let Tab::MarkdownStatic(0) = space_view {
+            if ui
+                .small_icon_button(&re_ui::icons::CLOSE)
+                .on_hover_text("Close App Description")
+                .clicked()
+            {
+                self.to_hide.push(tile_id);
+            }
         }
     }
 
@@ -1928,10 +1944,14 @@ impl eframe::App for HyperApp {
                     edited,
                     selected_commit: &mut self.selected_commit,
                     selected_baseline: &mut self.selected_baseline,
+                    to_hide: Default::default(),
                 };
                 tree.ui(&mut tile_tree, ui);
                 if tile_tree.edited {
                     self.save_interval = std::time::Duration::ZERO;
+                }
+                for tile_id in tile_tree.to_hide {
+                    tree.set_visible(tile_id, false);
                 }
                 self.maximized = maximized;
             });
