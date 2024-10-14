@@ -177,30 +177,30 @@ impl Default for Commit {
     strum_macros::EnumIter,
 )]
 pub enum SelectedConfig {
-    Single,
     #[default]
     Querying,
+    Aspects,
+    LongTracking,
+    Single,
     Tsg,
     Smells,
-    Multi,
     Diff,
     Tracking,
-    LongTracking,
-    Aspects,
+    Multi,
 }
 
 impl SelectedConfig {
     pub const fn title(&self) -> impl Into<String> + AsRef<str> {
         match self {
-            SelectedConfig::Single => "Single Repository",
+            SelectedConfig::Single => "Stats",
             SelectedConfig::Querying => "Querying",
             SelectedConfig::Tsg => "TSG",
-            SelectedConfig::Smells => "Interactive Finder", //ℹ //🗖
-            SelectedConfig::Multi => "Multi Repo",
+            SelectedConfig::Smells => "Smells", //ℹ //🗖
+            SelectedConfig::Multi => "Multi Repository",
             SelectedConfig::Diff => "Tree Diff",
-            SelectedConfig::Tracking => "Code Tracking",
-            SelectedConfig::LongTracking => "Long Tracking",
-            SelectedConfig::Aspects => "Aspects Views",
+            SelectedConfig::Tracking => "Immediate Tracking",
+            SelectedConfig::LongTracking => "Tracking",
+            SelectedConfig::Aspects => "Aspects",
         }
     }
 
@@ -208,10 +208,10 @@ impl SelectedConfig {
         match self {
             SelectedConfig::Single => true,
             SelectedConfig::Querying => true,
-            SelectedConfig::Tsg => true,
-            SelectedConfig::Smells => true,
+            SelectedConfig::Tsg => false,
+            SelectedConfig::Smells => false,
             SelectedConfig::Multi => false,
-            SelectedConfig::Diff => true,
+            SelectedConfig::Diff => false,
             SelectedConfig::Tracking => false,
             SelectedConfig::LongTracking => true,
             SelectedConfig::Aspects => true,
