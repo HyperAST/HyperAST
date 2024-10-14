@@ -14,6 +14,12 @@ pub trait Transition<O> {
 pub trait SetLen<IdO, O> {
     fn set(self, len: IdO) -> O;
 }
+pub trait ReceiveRows<T, O> {
+    fn push(self, row: T) -> O;
+}
+pub trait ReceiveColumns<T, O> {
+    fn push(self, col: T) -> O;
+}
 pub mod top_down {
     use super::*;
     pub trait CreateBuilder {
@@ -85,6 +91,9 @@ pub mod top_down {
         T: ReceiveParent<IdN, T>
             + SetNode<IdN, O>
             + ReceiveOffset<IdO, T>
+            + ReceiveRows<IdO, T>
+            // TODO should not be possible to add rows after having added columns
+            + ReceiveColumns<IdO, T>
             + ReceiveIdx<Idx, T>
             + SetLen<IdO, T>
             + ReceiveIdxNoSpace<Idx, T>,
@@ -154,7 +163,9 @@ pub mod bottom_up {
     {
         type SA1: ReceiveNode<IdN, Self::SA2> + ReceiveDirName<Self::SB1<O>> + SetRoot<IdN, O>;
         type SA2: ReceiveOffset<IdO, Self::SA3>;
-        type SA3: ReceiveIdx<Idx, Self::SA1>;
+        type SA3: ReceiveRows<IdO, Self::SA4>;
+        type SA4: ReceiveColumns<IdO, Self::SA5>;
+        type SA5: ReceiveIdx<Idx, Self::SA1>;
         type SB1<OO>;
     }
     impl<IdN, Idx, IdO, O, T> ReceiveInFile<IdN, Idx, IdO, O> for T
@@ -163,6 +174,9 @@ pub mod bottom_up {
             + ReceiveNode<IdN, T>
             + SetRoot<IdN, O>
             + ReceiveOffset<IdO, T>
+            + ReceiveColumns<IdO, T>
+            + ReceiveRows<IdO, T>
+            // TODO should not be possible to add rows after having added columns
             + ReceiveIdx<Idx, T>
             + ReceiveDirName<T>
             + SetLen<IdO, T>,
@@ -172,6 +186,8 @@ pub mod bottom_up {
         type SA1 = T;
         type SA2 = T;
         type SA3 = T;
+        type SA4 = T;
+        type SA5 = T;
         type SB1<OO> = T;
     }
     pub trait ReceiveDir<IdN, Idx, O>:
@@ -358,6 +374,23 @@ mod impl_c_p_p_receivers2 {
             )
         }
     }
+
+    impl<T: Copy, A: super::ReceiveRows<T, A>, B: super::ReceiveRows<T, B>>
+        super::ReceiveRows<T, Self> for CompoundPositionPreparer<A, B>
+    {
+        fn push(self, row: T) -> Self {
+            Self(self.0.push(row), self.1.push(row))
+        }
+    }
+
+    impl<T: Copy, A: super::ReceiveColumns<T, A>, B: super::ReceiveColumns<T, B>>
+        super::ReceiveColumns<T, Self> for CompoundPositionPreparer<A, B>
+    {
+        fn push(self, col: T) -> Self {
+            Self(self.0.push(col), self.1.push(col))
+        }
+    }
+
     impl<A: Transition<A>, B: Transition<B>> Transition<Self> for CompoundPositionPreparer<A, B> {
         fn transit(self) -> Self {
             Self(self.0.transit(), self.1.transit())

@@ -2,6 +2,9 @@ use git2::Repository;
 
 use crate::git::Repo;
 
+mod blob_caching;
+
+pub(crate) mod erased;
 pub use erased::ParametrizedCommitProcessorHandle;
 
 pub enum BuildSystem {
@@ -9,13 +12,6 @@ pub enum BuildSystem {
     Make,
     Npm,
     None,
-}
-
-enum Language {
-    Java,
-    Cpp,
-    Ts,
-    Xml,
 }
 
 pub enum ProcessingConfig<P> {
@@ -86,7 +82,8 @@ pub struct ConfiguredRepoHandle {
     pub spec: Repo,
     pub config: RepoConfig,
 }
-// NOTE could have impl deref bug it is a bad idea (see book), related to ownership
+
+// NOTE could have impl deref but it is a bad idea (see rust book, related to ownership)
 impl ConfiguredRepoTrait for ConfiguredRepoHandle {
     fn spec(&self) -> &Repo {
         &self.spec
@@ -113,7 +110,7 @@ pub struct ConfiguredRepoHandle2 {
     pub config: ParametrizedCommitProcessorHandle,
 }
 
-// NOTE could have impl deref bug it is a bad idea (see book), related to ownership
+// NOTE could have impl deref but it is a bad idea (see rust book, related to ownership)
 impl ConfiguredRepoTrait for ConfiguredRepoHandle2 {
     fn spec(&self) -> &Repo {
         &self.spec
@@ -173,15 +170,18 @@ pub trait CachesHolding {
 
     // fn mut_or_default(&mut self) -> &mut Self::Caches;
 }
+
 pub trait CacheHolding<Caches> {
     fn get_caches_mut(&mut self) -> &mut Caches;
     fn get_caches(&self) -> &Caches;
 }
+
 pub trait HoldedCache {
     type Holder: CacheHolding<Self>
     where
         Self: Sized;
 }
+
 pub trait InFiles {
     fn matches(name: &ObjectName) -> bool;
 }
@@ -244,6 +244,7 @@ impl<'a> TryInto<String> for ObjectName {
 }
 
 pub(crate) mod caches {
+
     use hyper_ast::store::defaults::NodeIdentifier;
 
     use crate::preprocessed::IsSkippedAna;
@@ -483,8 +484,6 @@ impl crate::preprocessed::RepositoryProcessor {
         self.main_stores.label_store.get_or_insert(s)
     }
 }
-
-pub(crate) mod erased;
 
 macro_rules! make_multi {
     ($($wb:tt)*) => {};

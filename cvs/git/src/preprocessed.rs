@@ -16,12 +16,12 @@ use hyper_ast_gen_ts_java::impact::partial_analysis::PartialAnalysis;
 use log::info;
 
 use crate::{
-    git::{all_commits_between, retrieve_commit},
+    git::{all_commits_between, all_first_parents_between, retrieve_commit},
     make::MakeModuleAcc,
     make_processor::MakeProcessor,
     maven::MavenModuleAcc,
     maven_processor::MavenProcessor,
-    processing::{file_sys, CacheHolding, ConfiguredRepo2},
+    processing::{file_sys, ConfiguredRepo2},
     Commit, DefaultMetrics, Processor, SimpleStores,
 };
 // use hyper_ast_gen_ts_cpp::legion as cpp_tree_gen;
@@ -67,7 +67,7 @@ impl RepositoryProcessor {
     }
 
     pub fn intern_label(&mut self, name: &str) -> LabelIdentifier {
-        self.main_stores.label_store.get(name).unwrap()
+        self.main_stores.label_store.get_or_insert(name)
     }
 
     pub fn get_or_insert_label(
@@ -151,56 +151,91 @@ impl RepositoryProcessor {
             all_commits_between(&repository.repo, before, after).map(|x| x.count())
         );
         let rw = all_commits_between(&repository.repo, before, after)?;
-        let r = rw
-            .map(|oid| {
-                let oid = oid.unwrap();
-                let builder = crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
-                let get = &self
-                    .processing_systems
-                    .by_id_mut(&repository.config.0)
-                    .unwrap()
-                    .get_mut(repository.config.1);
-                let _id = get
-                    .prepare_processing(&repository.repo, builder)
-                    .process(self);
-                oid
-            })
-            .collect();
+        let mut rw = rw.map(|x| x.unwrap());
+        let r = self.pre_pro(&mut rw, repository);
+        Ok(r)
+    }
+
+    /// If `before` and `after` are unrelated then only one commit will be retrieved.
+    pub fn ensure_pre_processed_with_limit(
+        &self,
+        repository: &ConfiguredRepo2,
+        before: &str,
+        after: &str,
+        limit: usize,
+    ) -> Result<Result<Vec<git2::Oid>, Vec<git2::Oid>>, git2::Error> {
+        log::info!(
+            "commits to retrieve: {:?}",
+            all_commits_between(&repository.repo, before, after).map(|x| x.count())
+        );
+        let rw = all_commits_between(&repository.repo, before, after)?;
+        let mut rw = rw.map(|x| x.unwrap()).take(limit).peekable();
+        let r = self.ensure_prepro(&mut rw, repository);
+        Ok(r)
+    }
+
+    pub fn ensure_prepro(
+        &self,
+        rw: &mut Peekable<impl Iterator<Item = git2::Oid>>,
+        repository: &ConfiguredRepo2,
+    ) -> Result<Vec<Oid>, Vec<Oid>> {
+        let mut r = vec![];
+        loop {
+            let Some(&oid) = rw.peek() else { break };
+            let commit_processor = self
+                .processing_systems
+                .by_id(&repository.config.0)
+                .unwrap()
+                .get(repository.config.1);
+            if let Some(c) = commit_processor.get_commit(oid) {
+                rw.next();
+                r.push(oid);
+            } else {
+                return Err(r);
+            }
+        }
         Ok(r)
     }
 
     /// If `before` and `after` are unrelated then only one commit will be processed.
     pub fn pre_process_with_limit(
         &mut self,
-        repository: &mut ConfiguredRepo2,
+        repository: &ConfiguredRepo2,
         before: &str,
         after: &str,
         limit: usize,
     ) -> Result<Vec<git2::Oid>, git2::Error> {
         log::info!(
-            "commits to process: {:?}",
+            "commits to process {before} {after}: {:?}",
             all_commits_between(&repository.repo, before, after).map(|x| x.count())
         );
         let rw = all_commits_between(&repository.repo, before, after)?;
-        let r = rw
-            .take(limit)
-            .map(|oid| {
-                let oid = oid.unwrap();
-                let builder = crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
-                let commit_processor = self
-                    .processing_systems
-                    .by_id_mut(&repository.config.0)
-                    .unwrap()
-                    .get_mut(repository.config.1);
-                let _id = commit_processor
-                    .prepare_processing(&repository.repo, builder)
-                    .process(self);
-                oid
-            })
-            .collect();
+        let mut rw = rw.take(limit).map(|x| x.unwrap());
+        let r = self.pre_pro(&mut rw, repository);
         Ok(r)
     }
+
+    pub fn pre_pro(
+        &mut self,
+        rw: &mut impl Iterator<Item = git2::Oid>,
+        repository: &ConfiguredRepo2,
+    ) -> Vec<Oid> {
+        rw.map(|oid| {
+            let builder = crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
+            let commit_processor = self
+                .processing_systems
+                .by_id_mut(&repository.config.0)
+                .unwrap()
+                .get_mut(repository.config.1);
+            let _id = commit_processor
+                .prepare_processing(&repository.repo, builder)
+                .process(self);
+            oid
+        })
+        .collect()
+    }
 }
+
 #[cfg(feature = "maven_java")]
 impl PreProcessedRepository {
     /// If `before` and `after` are unrelated then only one commit will be processed.
@@ -340,6 +375,36 @@ impl PreProcessedRepository {
         log::info!("commits to process: {:?}", count);
         let mut processing_ordered_commits = vec![];
         let rw = all_commits_between(&repository, before, after);
+        let Ok(rw) = rw else {
+            dbg!(rw.err());
+            return vec![];
+        };
+        rw.take(limit).for_each(|oid| {
+            let oid = oid.unwrap();
+            let c = CommitProcessor::<file_sys::Maven>::handle_commit::<true>(
+                &mut self.processor,
+                &repository,
+                dir_path,
+                oid,
+            );
+            processing_ordered_commits.push(oid.clone());
+            self.commits.insert(oid.clone(), c);
+        });
+        processing_ordered_commits
+    }
+
+    pub fn pre_process_first_parents_with_limit(
+        &mut self,
+        repository: &mut Repository,
+        before: &str,
+        after: &str,
+        dir_path: &str,
+        limit: usize,
+    ) -> Vec<git2::Oid> {
+        let count = all_first_parents_between(&repository, before, after).map(|x| x.count());
+        log::info!("commits to process: {:?}", count);
+        let mut processing_ordered_commits = vec![];
+        let rw = all_first_parents_between(&repository, before, after);
         let Ok(rw) = rw else {
             dbg!(rw.err());
             return vec![];
@@ -745,10 +810,11 @@ pub fn child_by_name_with_idx(
     name: &str,
 ) -> Option<(NodeIdentifier, u16)> {
     let n = stores.node_store.resolve(d);
-    log::info!("{}", name);
+    log::debug!("{}", name);
     let i = n.get_child_idx_by_name(&stores.label_store.get(name)?);
     i.map(|i| (n.child(&i).unwrap(), i))
 }
+
 pub fn child_by_type(
     stores: &SimpleStores,
     d: NodeIdentifier,
@@ -762,8 +828,8 @@ pub fn child_by_type(
         .enumerate()
         .find(|(_, x)| {
             let n = stores.node_store.resolve(**x);
-            use hyper_ast::types::TypeStore;
-            stores.type_store.resolve_type(&n).eq(t)
+            use hyper_ast::types::HyperAST;
+            stores.resolve_type(x).eq(t)
         })
         .map(|(i, x)| (*x, i as u16));
     s
@@ -794,151 +860,6 @@ pub fn child_at_path_tracked<'a>(
         offsets.push(idx as usize);
     }
     Some((d, offsets))
-}
-
-pub(crate) struct CachingBlobWrapper2<'cache, C> {
-    processors: &'cache mut crate::processing::erased::ProcessorMap,
-    phantom: std::marker::PhantomData<C>,
-}
-
-impl crate::processing::erased::ProcessorMap {
-    pub(crate) fn caching_blob_handler<C>(&mut self) -> CachingBlobWrapper2<'_, C> {
-        CachingBlobWrapper2 {
-            processors: self,
-            phantom: std::marker::PhantomData,
-        }
-    }
-}
-impl<'cache, Sys> CachingBlobWrapper2<'cache, Sys> {
-    pub fn handle<
-        T: crate::processing::erased::CommitProcExt,
-        N,
-        E: From<std::str::Utf8Error>,
-        F: FnOnce(
-            &mut crate::processing::erased::ProcessorMap,
-            &N,
-            &[u8],
-        ) -> Result<<Sys::Caches as crate::processing::ObjectMapper>::V, E>,
-    >(
-        &mut self,
-        oid: Oid,
-        repository: &Repository,
-        name: &N,
-        parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<T>,
-        wrapped: F,
-    ) -> Result<<Sys::Caches as crate::processing::ObjectMapper>::V, E>
-    where
-        for<'a> &'a N: TryInto<&'a str>,
-        // T: crate::processing::erased_processor_collection::CommitProcExt,
-        // T::Holder: 'static + crate::processing::erased_processor_collection::ErasableProcessor + Default + Send + Sync,
-        // T: crate::processing::CachesHolder,
-        // T::Caches: 'static + crate::processing::ObjectMapper<K = Oid> + Send + Sync + Default,
-
-        // Sys::Holder: 'static + crate::processing::erased::ErasableProcessor + Default + Send + Sync,
-        // Sys::Holder: crate::processing::CacheHolding<Sys::Caches>,
-        // Sys: crate::processing::CachesHolding,
-        // Sys::Caches: 'static + crate::processing::ObjectMapper<K = Oid> + Send + Sync + Default,
-        // <Sys::Caches as crate::processing::ObjectMapper>::V: Clone,
-        Sys: crate::processing::CachesHolding,
-        Sys::Caches: 'static + crate::processing::ObjectMapper<K = Oid> + Send + Sync + Default,
-        <Sys::Caches as crate::processing::ObjectMapper>::V: Clone,
-        T::Holder: 'static + crate::processing::erased::ErasableProcessor + Default + Send + Sync,
-        T::Holder: crate::processing::erased::ParametrizedCommitProc2,
-        <T::Holder as crate::processing::erased::ParametrizedCommitProc2>::Proc:
-            crate::processing::CacheHolding<Sys::Caches>,
-    {
-        use crate::processing::erased::ParametrizedCommitProc2;
-        // let caches = self.processors.mut_or_default::<Sys::Holder>().get_caches_mut();
-        let caches = self.processors.mut_or_default::<T::Holder>();
-        let caches = caches.with_parameters_mut(parameters.0);
-        let caches = caches.get_caches_mut();
-        use crate::processing::ObjectMapper;
-        if let Some(already) = caches.get(&oid) {
-            //.object_map_pom.get(&oid) {
-            // TODO reinit already computed node for post order
-            let full_node = already.clone();
-            return Ok(full_node);
-        }
-        log::info!(
-            "blob {:?} {:?}",
-            name.try_into().unwrap_or("'non utf8 name'"),
-            oid
-        );
-        let blob = repository.find_blob(oid).unwrap();
-        std::str::from_utf8(blob.content())?;
-        let text = blob.content();
-        let full_node = wrapped(self.processors, &name, text);
-        if let Ok(x) = &full_node {
-            self.processors
-                // .mut_or_default::<Sys::Holder>().get_caches_mut()
-                .mut_or_default::<T::Holder>()
-                .with_parameters_mut(parameters.0)
-                .get_caches_mut()
-                .insert(oid, x.clone());
-        }
-        full_node
-    }
-    pub fn handle2<
-        T: crate::processing::erased::CommitProcExt,
-        N: Clone,
-        E: From<std::str::Utf8Error>,
-        F: FnOnce(
-            &mut crate::processing::erased::ProcessorMap,
-            &N,
-            &[u8],
-        ) -> Result<<Sys::Caches as crate::processing::ObjectMapper>::V, E>,
-    >(
-        &mut self,
-        oid: Oid,
-        repository: &Repository,
-        name: &N,
-        parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<T>,
-        wrapped: F,
-    ) -> Result<<Sys::Caches as crate::processing::ObjectMapper>::V, E>
-    where
-        for<'a> &'a N: TryInto<&'a str>,
-        // Sys::Holder: 'static + crate::processing::erased_processor_collection::ErasableProcessor + Default + Send + Sync,
-        // Sys::Holder: crate::processing::erased_processor_collection::ParametrizedCommitProc2,
-        // <Sys::Holder as crate::processing::erased_processor_collection::ParametrizedCommitProc2>::Proc: crate::processing::CacheHolding<Sys::Caches>,
-        Sys: crate::processing::CachesHolding,
-        Sys::Caches:
-            'static + crate::processing::ObjectMapper<K = (Oid, N)> + Send + Sync + Default,
-        <Sys::Caches as crate::processing::ObjectMapper>::V: Clone,
-        T::Holder: 'static + crate::processing::erased::ErasableProcessor + Default + Send + Sync,
-        T::Holder: crate::processing::erased::ParametrizedCommitProc2,
-        <T::Holder as crate::processing::erased::ParametrizedCommitProc2>::Proc:
-            crate::processing::CacheHolding<Sys::Caches>,
-    {
-        use crate::processing::erased::ParametrizedCommitProc2;
-        // let caches = self.processors.mut_or_default::<Sys::Holder>();
-        let caches = self.processors.mut_or_default::<T::Holder>();
-        let caches = caches.with_parameters_mut(parameters.0);
-        let caches = caches.get_caches_mut();
-        use crate::processing::ObjectMapper;
-        if let Some(already) = caches.get(&(oid, name.clone())) {
-            //.object_map_pom.get(&oid) {
-            // TODO reinit already computed node for post order
-            let full_node = already.clone();
-            return Ok(full_node);
-        }
-        log::info!(
-            "blob {:?} {:?}",
-            name.try_into().unwrap_or("'non utf8 name'"),
-            oid
-        );
-        let blob = repository.find_blob(oid).unwrap();
-        std::str::from_utf8(blob.content())?;
-        let text = blob.content();
-        let full_node = wrapped(self.processors, &name, text);
-        if let Ok(x) = &full_node {
-            self.processors
-                .mut_or_default::<T::Holder>()
-                .with_parameters_mut(parameters.0)
-                .get_caches_mut()
-                .insert((oid, name.clone()), x.clone());
-        }
-        full_node
-    }
 }
 
 // TODO try to separate processing from caching from git

@@ -107,11 +107,7 @@ fn xml_issue_cdata() {
         Err(t) => t,
     };
     println!("{:#?}", tree.root_node().to_sexp());
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+    let mut stores = SimpleStores::<TStore>::default();
     let mut tree_gen = XmlTreeGen {
         line_break: "\n".as_bytes().to_vec(),
         stores: &mut stores,

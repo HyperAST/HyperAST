@@ -5,7 +5,7 @@ use epaint::text::{cursor::*, Galley, LayoutJob};
 use egui::{output::OutputEvent, *};
 
 use crate::code_editor::generic_text_buffer::AsText;
-use egui::text_edit::{CCursorRange, CursorRange};
+use egui::text_selection::{CCursorRange, CursorRange};
 
 use self::output::TextEditOutput;
 
@@ -351,7 +351,7 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
 
         let margin = self.margin;
         let max_rect = ui.available_rect_before_wrap().shrink2(margin);
-        let mut content_ui = ui.child_ui(max_rect, *ui.layout());
+        let mut content_ui = ui.child_ui(max_rect, *ui.layout(), None);
         let mut output = self.show_content(&mut content_ui);
         let id = output.response.id;
         let frame_rect = output.response.rect.expand2(margin);
@@ -368,31 +368,28 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
             let frame_rect = frame_rect.expand(visuals.expansion);
             let shape = if is_mutable {
                 if output.response.has_focus() {
-                    epaint::RectShape {
-                        rect: frame_rect,
-                        rounding: visuals.rounding,
-                        // fill: ui.visuals().selection.bg_fill,
-                        fill: ui.visuals().extreme_bg_color,
-                        stroke: ui.visuals().selection.stroke,
-                    }
+                    epaint::RectShape::new(
+                        frame_rect,
+                        visuals.rounding,
+                        ui.visuals().extreme_bg_color,
+                        ui.visuals().selection.stroke,
+                    )
                 } else {
-                    epaint::RectShape {
-                        rect: frame_rect,
-                        rounding: visuals.rounding,
-                        fill: ui.visuals().extreme_bg_color,
-                        stroke: visuals.bg_stroke, // TODO(emilk): we want to show something here, or a text-edit field doesn't "pop".
-                    }
+                    epaint::RectShape::new(
+                        frame_rect,
+                        visuals.rounding,
+                        ui.visuals().extreme_bg_color,
+                        visuals.bg_stroke,
+                    )
                 }
             } else {
                 let visuals = &ui.style().visuals.widgets.inactive;
-                epaint::RectShape {
-                    rect: frame_rect,
-                    rounding: visuals.rounding,
-                    // fill: ui.visuals().extreme_bg_color,
-                    // fill: visuals.bg_fill,
-                    fill: Color32::TRANSPARENT,
-                    stroke: visuals.bg_stroke, // TODO(emilk): we want to show something here, or a text-edit field doesn't "pop".
-                }
+                epaint::RectShape::new(
+                    frame_rect,
+                    visuals.rounding,
+                    Color32::TRANSPARENT,
+                    visuals.bg_stroke,
+                )
             };
 
             ui.painter().set(where_to_put_background, shape);
@@ -508,7 +505,7 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
                 let cursor_at_pointer =
                     galley.cursor_from_pos(pointer_pos - response.rect.min + singleline_offset);
 
-                if ui.visuals().text_cursor_preview
+                if ui.visuals().text_cursor.preview
                     && response.hovered()
                     && ui.input(|i| i.pointer.is_moving())
                 {
@@ -572,7 +569,9 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
         let mut cursor_range = None;
         let prev_cursor_range = state.cursor_range(&galley);
         if interactive && ui.memory(|mem| mem.has_focus(id)) {
-            ui.memory_mut(|mem| mem.lock_focus(id, lock_focus));
+            if lock_focus {
+                ui.memory_mut(|mem| mem.request_focus(id));
+            }
 
             let default_cursor_range = if cursor_at_end {
                 CursorRange::one(galley.end())
@@ -642,16 +641,27 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
         };
 
         if ui.is_rect_visible(rect) {
-            painter.galley(text_draw_pos, galley.clone());
+            painter.galley(text_draw_pos, galley.clone(), ui.visuals().text_color());
 
             if text.as_str().is_empty() && !hint_text.is_empty() {
                 let hint_text_color = ui.visuals().weak_text_color();
                 let galley = if multiline {
-                    hint_text.into_galley(ui, Some(true), desired_size.x, font_id)
+                    hint_text.into_galley(
+                        ui,
+                        Some(egui::TextWrapMode::Wrap),
+                        desired_size.x,
+                        font_id,
+                    )
                 } else {
-                    hint_text.into_galley(ui, Some(false), f32::INFINITY, font_id)
+                    hint_text.into_galley(
+                        ui,
+                        Some(egui::TextWrapMode::Extend),
+                        f32::INFINITY,
+                        font_id,
+                    )
                 };
-                galley.paint_with_fallback_color(&painter, response.rect.min, hint_text_color);
+                painter.galley(response.rect.min, galley, hint_text_color)
+                // galley.paint_with_fallback_color(&painter, response.rect.min, hint_text_color);
             }
 
             if ui.memory(|mem| mem.has_focus(id)) {
@@ -670,26 +680,21 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
                             &cursor_range.primary,
                         );
 
+                        let primary_cursor_rect =
+                            cursor_rect(text_draw_pos, &galley, &cursor_range.primary, row_height);
+
                         let is_fully_visible = ui.clip_rect().contains_rect(rect); // TODO: remove this HACK workaround for https://github.com/emilk/egui/issues/1531
                         if (response.changed || selection_changed) && !is_fully_visible {
                             ui.scroll_to_rect(cursor_pos, None); // keep cursor in view
                         }
 
-                        if interactive {
-                            // eframe web uses `text_cursor_pos` when showing IME,
-                            // so only set it when text is editable and visible!
-                            // But `winit` and `egui_web` differs in how to set the
-                            // position of IME.
-                            if cfg!(target_arch = "wasm32") {
-                                ui.ctx().output_mut(|o| {
-                                    o.text_cursor_pos = Some(cursor_pos.left_top());
-                                });
-                            } else {
-                                ui.ctx().output_mut(|o| {
-                                    o.text_cursor_pos = Some(cursor_pos.left_bottom());
-                                });
-                            }
-                        }
+                        // For IME, so only set it when text is editable and visible!
+                        ui.ctx().output_mut(|o| {
+                            o.ime = Some(egui::output::IMEOutput {
+                                rect,
+                                cursor_rect: primary_cursor_rect,
+                            });
+                        });
                     }
                 }
             }
@@ -700,6 +705,7 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
         if response.changed {
             response.widget_info(|| {
                 WidgetInfo::text_edit(
+                    true,
                     mask_if_password(password, prev_text.as_str()),
                     mask_if_password(password, text.as_str()),
                 )
@@ -709,6 +715,7 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
             let char_range =
                 cursor_range.primary.ccursor.index..=cursor_range.secondary.ccursor.index;
             let info = WidgetInfo::text_selection_changed(
+                true,
                 char_range,
                 mask_if_password(password, text.as_str()),
             );
@@ -716,6 +723,7 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
         } else {
             response.widget_info(|| {
                 WidgetInfo::text_edit(
+                    true,
                     mask_if_password(password, prev_text.as_str()),
                     mask_if_password(password, text.as_str()),
                 )
@@ -830,7 +838,7 @@ impl<'t, TB: TextBuffer> TextEdit<'t, TB> {
     }
 }
 
-mod output {
+pub mod output {
     use std::sync::Arc;
 
     /// The output from a [`TextEdit`](crate::TextEdit).
@@ -985,7 +993,7 @@ fn events<TB: TextBuffer>(
                 modifiers,
                 ..
             } => {
-                if multiline && ui.memory(|mem| mem.has_lock_focus(id)) {
+                if multiline && ui.memory(|mem| mem.has_focus(id)) {
                     let mut ccursor = delete_selected(text, &cursor_range);
                     if modifiers.shift {
                         // TODO(emilk): support removing indentation over a selection?
@@ -1039,38 +1047,38 @@ fn events<TB: TextBuffer>(
                 ..
             } => on_key_press(&mut cursor_range, text, galley, *key, modifiers),
 
-            Event::CompositionStart => {
-                state.has_ime = true;
-                None
-            }
+            // Event::CompositionStart => {
+            //     state.has_ime = true;
+            //     None
+            // }
 
-            Event::CompositionUpdate(text_mark) => {
-                // empty prediction can be produced when user press backspace
-                // or escape during ime. We should clear current text.
-                if text_mark != "\n" && text_mark != "\r" && state.has_ime {
-                    let mut ccursor = delete_selected(text, &cursor_range);
-                    let start_cursor = ccursor;
-                    if !text_mark.is_empty() {
-                        insert_text(&mut ccursor, text, text_mark);
-                    }
-                    Some(CCursorRange::two(start_cursor, ccursor))
-                } else {
-                    None
-                }
-            }
+            // Event::CompositionUpdate(text_mark) => {
+            //     // empty prediction can be produced when user press backspace
+            //     // or escape during ime. We should clear current text.
+            //     if text_mark != "\n" && text_mark != "\r" && state.has_ime {
+            //         let mut ccursor = delete_selected(text, &cursor_range);
+            //         let start_cursor = ccursor;
+            //         if !text_mark.is_empty() {
+            //             insert_text(&mut ccursor, text, text_mark);
+            //         }
+            //         Some(CCursorRange::two(start_cursor, ccursor))
+            //     } else {
+            //         None
+            //     }
+            // }
 
-            Event::CompositionEnd(prediction) => {
-                if prediction != "\n" && prediction != "\r" && state.has_ime {
-                    state.has_ime = false;
-                    let mut ccursor = delete_selected(text, &cursor_range);
-                    if !prediction.is_empty() {
-                        insert_text(&mut ccursor, text, prediction);
-                    }
-                    Some(CCursorRange::one(ccursor))
-                } else {
-                    None
-                }
-            }
+            // Event::CompositionEnd(prediction) => {
+            //     if prediction != "\n" && prediction != "\r" && state.has_ime {
+            //         state.has_ime = false;
+            //         let mut ccursor = delete_selected(text, &cursor_range);
+            //         if !prediction.is_empty() {
+            //             insert_text(&mut ccursor, text, prediction);
+            //         }
+            //         Some(CCursorRange::one(ccursor))
+            //     } else {
+            //         None
+            //     }
+            // }
 
             #[cfg(feature = "accesskit")]
             Event::AccessKitActionRequest(accesskit::ActionRequest {
@@ -1183,7 +1191,7 @@ fn paint_cursor_end(
 
     painter.line_segment(
         [top, bottom],
-        (ui.visuals().text_cursor_width, stroke.color),
+        (ui.visuals().text_cursor.stroke.width, stroke.color),
     );
 
     if false {
@@ -1684,4 +1692,16 @@ fn decrease_identation<TB: TextBuffer>(ccursor: &mut CCursor, text: &mut TB) {
             *ccursor -= len;
         }
     }
+}
+
+/// The thin rectangle of one end of the selection, e.g. the primary cursor.
+pub fn cursor_rect(galley_pos: Pos2, galley: &Galley, cursor: &Cursor, row_height: f32) -> Rect {
+    let mut cursor_pos = galley
+        .pos_from_cursor(cursor)
+        .translate(galley_pos.to_vec2());
+    cursor_pos.max.y = cursor_pos.max.y.at_least(cursor_pos.min.y + row_height);
+    // Handle completely empty galleys
+    cursor_pos = cursor_pos.expand(1.5);
+    // slightly above/below row
+    cursor_pos
 }

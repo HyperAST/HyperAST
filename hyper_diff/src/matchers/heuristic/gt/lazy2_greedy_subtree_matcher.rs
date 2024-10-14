@@ -14,7 +14,7 @@ use hyper_ast::types::{
     DecompressedSubtree, HashKind, HyperAST, IterableChildren, Labeled, NodeStore, Stored, Tree,
     TypeStore, WithChildren, WithHashs, WithStats,
 };
-use logging_timer::time;
+
 use num_traits::{PrimInt, ToPrimitive};
 
 pub struct LazyGreedySubtreeMatcher<'a, HAST, Dsrc, Ddst, M, const MIN_HEIGHT: usize = 1> {
@@ -170,7 +170,7 @@ where
     //     matcher
     // }
 
-    #[time("warn")]
+    // #[time("warn")]
     pub fn filter_mappings<MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>>(
         // &mut self,
         mapper: &mut Mapper<'a, HAST, Dsrc, Ddst, M>,
@@ -313,12 +313,12 @@ where
             let (t, l) = {
                 let o = mapper.src_arena.original(a);
                 let n = mapper.hyperast.node_store().resolve(&o);
-                let t = mapper.hyperast.type_store().resolve_type(&n);
+                let t = mapper.hyperast.resolve_type(&o);
                 (t, n.try_get_label().cloned())
             };
             let o = mapper.dst_arena.original(b);
             let n = mapper.hyperast.node_store().resolve(&o);
-            let t2 = mapper.hyperast.type_store().resolve_type(&n);
+            let t2 = mapper.hyperast.resolve_type(&o);
             t == t2 && l.as_ref() == n.try_get_label()
         });
         (2 * common.len()).to_f64().unwrap() / (s1.len() + s2.len()).to_f64().unwrap()
@@ -486,7 +486,7 @@ where
     M::Src: Debug + Copy,
     M::Dst: Debug + Copy,
 {
-    #[time("warn")]
+    // #[time("warn")]
     pub fn compute_multimapping<
         MM: MultiMappingStore<Src = Dsrc::IdD, Dst = Ddst::IdD>,
         const MIN_HEIGHT: usize,
@@ -591,7 +591,7 @@ where
                 return false;
             }
         };
-        if !stores.type_store().type_eq(&src, &dst) {
+        if !stores.type_eq(&src, &dst) {
             return false;
         }
         if dst.has_label() && src.has_label() {

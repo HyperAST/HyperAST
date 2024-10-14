@@ -146,7 +146,7 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
         // let mut len = 0;
         let x = self.node_always(sp);
         let b = stores.node_store().resolve(&x);
-        let t = stores.type_store().resolve_type(&b);
+        let t = stores.resolve_type(&x);
         // println!("t0:{:?}", t);
         let len = if let Some(y) = b.try_bytes_len() {
             if !t.is_file() {
@@ -170,7 +170,7 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
             while i > 0 {
                 let p = self.path.parents[i - 1];
                 let b = stores.node_store().resolve(&p);
-                let t = stores.type_store().resolve_type(&b);
+                let t = stores.resolve_type(&p);
                 // println!("t1:{:?}", t);
                 let o = self.path.offsets[i];
                 let o: <HAST::T as WithChildren>::ChildIdx = num::cast(o).unwrap();
@@ -223,7 +223,7 @@ impl<IdN: Eq + Copy, Idx: PrimInt> Scout<IdN, Idx> {
                 self.path.parents[i - 1]
             };
             let b = stores.node_store().resolve(&p);
-            let t = stores.type_store().resolve_type(&b);
+            let t = stores.resolve_type(&p);
             // println!("t3:{:?}", t);
             let o = self.path.offsets[i];
             let o: <HAST::T as WithChildren>::ChildIdx = num::cast(o).unwrap();

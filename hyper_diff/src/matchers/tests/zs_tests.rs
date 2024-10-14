@@ -7,11 +7,9 @@ use crate::{
         optimal::zs::ZsMatcher,
     },
     tests::examples::{example_gt_java_code, example_gt_slides, example_zs_paper},
-    tree::{
-        simple_tree::{vpair_to_stores, DisplayTree},
-        TStore,
-    },
 };
+
+use hyper_ast::test_utils::simple_tree::{vpair_to_stores, DisplayTree, TStore};
 use hyper_ast::types::{LabelStore, SimpleHyperAST};
 
 #[test]
@@ -34,8 +32,7 @@ fn test_with_custom_example() {
         DisplayTree::new(&label_store, &node_store, dst)
     );
 
-    let stores = SimpleHyperAST {
-        type_store: TStore,
+    let stores = SimpleHyperAST::<_,TStore,_,_> {
         node_store,
         label_store,
         _phantom: PhantomData,
@@ -95,8 +92,7 @@ fn test_with_custom_example2() {
     let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_java_code());
     // assert_eq!(label_store.resolve(&0).to_owned(), b"");
 
-    let stores = SimpleHyperAST {
-        type_store: TStore,
+    let stores = SimpleHyperAST::<_,TStore,_,_> {
         node_store,
         label_store,
         _phantom: PhantomData,
@@ -139,8 +135,7 @@ fn test_with_slide_example() {
     let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_slides());
     // assert_eq!(label_store.resolve(&0).to_owned(), b"");
 
-    let stores = SimpleHyperAST {
-        type_store: TStore,
+    let stores = SimpleHyperAST::<_,TStore,_,_> {
         node_store,
         label_store,
         _phantom: PhantomData,
@@ -181,8 +176,7 @@ fn test_with_slide_example2() {
     let (label_store, node_store, src, dst) = vpair_to_stores(example_gt_slides());
     // assert_eq!(label_store.resolve(&0).to_owned(), b"");
 
-    let stores = SimpleHyperAST {
-        type_store: TStore,
+    let stores = SimpleHyperAST::<_,TStore,_,_> {
         node_store,
         label_store,
         _phantom: PhantomData,

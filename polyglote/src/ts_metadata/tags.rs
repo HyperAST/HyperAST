@@ -161,14 +161,15 @@ impl Tag {
         }
         dbg!(&variables);
         let role = variables
-            .into_iter().rev()
+            .into_iter()
+            .rev()
             .next()
             .ok_or_else(|| "Missing tag variable name variable".into())
             .and_then(|x| {
                 dbg!(&x);
                 if x.1.len() > 1 {
                     Ok(x.0) // should be ok actually
-                    // Err("missplaced tag variable name".into())
+                            // Err("missplaced tag variable name".into())
                 } else {
                     Ok(x.0)
                 }

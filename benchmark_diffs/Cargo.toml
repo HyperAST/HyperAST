@@ -17,15 +17,13 @@ hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
 hyper_ast_gen_ts_xml = { path = "../gen/tree-sitter/xml" }
 serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.79"
-env_logger = "0.9.0"
+env_logger = "0.11.3"
 log = { version = "0.4.6", features = [
     "max_level_debug",
     "release_max_level_warn",
 ] }
 
 cfg-if = "1.0"
-
-comfy-table = "6.0.0"
 
 num-traits = "0.2.14"
 tuples = "=1.4.1"
@@ -45,28 +43,6 @@ jemallocator = "0.5.0"
 
 [dev-dependencies]
 hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
-
-# [profile.release]
-# debug = 1
-
-[profile.release]
-## release optimizations
-# debug = 0
-# lto = "fat"
-# codegen-units = 1
-rustflags = ["-C target-cpu=native"]
-# panic = "abort"
-
-[profile.test]
-opt-level = 3
-debug = 1
-debug-assertions = false
-overflow-checks = false
-lto = "fat"
-panic = 'abort'
-incremental = true
-codegen-units = 1
-rpath = true
 
 # [[bin]]
 # name = "window_combination"

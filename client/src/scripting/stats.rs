@@ -1,7 +1,4 @@
-use rhai::EvalAltResult;
-
 use super::estimate::Estimate;
-use super::finalize::Finalize;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;

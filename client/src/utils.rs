@@ -129,3 +129,63 @@ fn bi_sharding<'a>(
     };
     (shard1, shard2)
 }
+
+/// Ensures the range is preprocessed --doing it if needed-- while avoiding to lock global state
+pub(crate) fn handle_pre_processing(
+    state: &std::sync::Arc<crate::AppState>,
+    repo: &mut hyper_ast_cvs_git::processing::ConfiguredRepo2,
+    before: &str,
+    after: &str,
+    limit: usize,
+) -> Result<Vec<hyper_ast_cvs_git::git::Oid>, Box<dyn std::error::Error>> {
+    let rw = hyper_ast_cvs_git::git::Builder::new(&repo.repo)?
+        .before(before)?
+        .after(after)?
+        .walk()?
+        .take(limit)
+        .map(|x| x.unwrap());
+    // all_commits_between(&repository.repo, before, after)?;
+    // NOTE the read with a fallback on a write ensures that we are not waiting to, in the end, not writing anything
+    // TODO later start processing the commit subset and schedule the remaining range for processing
+    // NOTE a sceduling approach would be much cleaner than the current lock approach
+    Ok(handle_pre_processing_aux(state, repo, rw))
+}
+
+pub(crate) fn walk_commits_multi<'a, R: AsRef<str>>(
+    repo: &'a hyper_ast_cvs_git::processing::ConfiguredRepo2,
+    after: impl Iterator<Item = R>,
+) -> Result<impl Iterator<Item = hyper_ast_cvs_git::git::Oid> + 'a, Box<dyn std::error::Error>> {
+    let mut rw = hyper_ast_cvs_git::git::Builder::new(&repo.repo)?;
+    for after in after {
+        rw = rw.after(after.as_ref())?;
+    }
+    let rw = rw.walk()?.map(|x| x.unwrap());
+    Ok(rw)
+}
+
+/// Ensures the range is preprocessed --doing it if needed-- while avoiding to lock global state
+pub(crate) fn handle_pre_processing_aux(
+    state: &std::sync::Arc<crate::AppState>,
+    repo: &hyper_ast_cvs_git::processing::ConfiguredRepo2,
+    rw: impl Iterator<Item = hyper_ast_cvs_git::git::Oid>,
+) -> Vec<hyper_ast_cvs_git::git::Oid> {
+    let mut rw = rw.peekable();
+    let commits = {
+        state
+            .repositories
+            .read()
+            .unwrap()
+            .processor
+            .ensure_prepro(&mut rw, repo)
+    };
+    match commits {
+        Ok(commits) => commits,
+        Err(mut commits) => {
+            let repository_processor = &mut state.repositories.write().unwrap().processor;
+            commits.extend(repository_processor.pre_pro(&mut rw, repo));
+            commits
+        }
+    }
+}
+
+// rw: impl Iterator<Item = git2::Oid>,

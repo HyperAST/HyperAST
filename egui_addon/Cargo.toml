@@ -5,16 +5,12 @@ edition = "2021"
 rust-version = "1.65"
 
 [dependencies]
-egui = "0.21.0"
-eframe = { version = "0.21.0", default-features = false, features = [
-    # "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
-    "default_fonts", # Embed the default egui fonts.
-    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
-    # "persistence",   # Enable restoring app state when restarting the app.
-] }
-epaint = "0.21.0"
-egui_demo_lib = { version = "0.21.0", features = ["syntect"] }
-egui_extras = "0.21.0"
+egui = { version = "0.28.1", default-features = false }
+eframe = { version = "0.28.1", default-features = false }
+epaint = { version = "0.28.1", default-features = false }
+emath = { version = "0.28.1", default-features = false }
+egui_demo_lib = { version = "0.28.1", default-features = false, features = ["syntect"] }
+egui_extras = { version = "0.28.1", default-features = false }
 
 # You only need serde if you want app persistence:
 serde = { version = "1", optional = true, features = ["derive"] }
@@ -51,7 +47,7 @@ console_error_panic_hook = "0.1.6"
 tracing-wasm = "0.2"
 tree-sitter = { version = "0.9.1", package = "tree-sitter-facade-sg" }
 web-tree-sitter-sg = "1.3"
-wasm-bindgen = { version = "0.2.84", features = ["serde-serialize"] }
+wasm-bindgen = { version = "0.2.84" }
 wasm-bindgen-futures = "0.4.34"
 serde-wasm-bindgen = "0.4"
 js-sys = "0.3"

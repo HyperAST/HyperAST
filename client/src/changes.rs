@@ -11,7 +11,7 @@ use hyper_diff::{decompressed_tree_store::ShallowDecompressedTreeStore, matchers
 
 use crate::{matching, no_space, utils::get_pair_simp};
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct SrcChanges {
     user: String,
     name: String,
@@ -19,7 +19,7 @@ pub struct SrcChanges {
     /// Global position of deleted elements
     deletions: Vec<u32>, // TODO diff encode
 }
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct DstChanges {
     user: String,
     name: String,
@@ -260,13 +260,13 @@ pub fn global_pos_with_spaces<'store, It: Iterator<Item = u32>>(
                 let Some(&id) = ele.children.get(ele.idx) else {
                     for x in ele.children {
                         let b = stores.node_store().resolve(x);
-                        dbg!(stores.type_store().resolve_type(&b));
+                        dbg!(stores.resolve_type(&x));
                         dbg!(b.size_no_spaces());
                     }
                     panic!()
                 };
                 let b = stores.node_store().resolve(id);
-                if stores.type_store().resolve_type(&b).is_spaces() {
+                if stores.resolve_type(&id).is_spaces() {
                     ele.idx += 1;
                     ele.d1_no_s += b.size_no_spaces() as u32;
                     stack.push(ele);
@@ -304,7 +304,7 @@ pub fn global_pos_with_spaces<'store, It: Iterator<Item = u32>>(
                 stack.push(value);
             } else if curr_no_space == ele.i_no_s {
                 let b = stores.node_store().resolve(ele.id);
-                if stores.type_store().resolve_type(&b).is_spaces() {
+                if stores.resolve_type(&ele.id).is_spaces() {
                     panic!();
                 }
                 res.push(index_with_spaces);

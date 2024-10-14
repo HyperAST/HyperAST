@@ -8,31 +8,22 @@ use hyper_ast::{
         PositionConverter, Scout, StructuralPosition, StructuralPositionStore, TypedScout,
         TypedTreePath,
     },
-    store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores},
-    tree_gen::ZippedTreeGen,
+    store::SimpleStores,
     types::{NodeId, Typed, WithChildren},
     utils::memusage,
 };
 use pretty_assertions::assert_eq;
 
+use crate::impact::element::{IdentifierFormat, LabelPtr, RefsEnum};
 use crate::{
-    impact::element::{IdentifierFormat, LabelPtr, RefsEnum},
     legion_with_refs::{self, JavaTreeGen, NodeIdentifier},
     types::{TIdN, TStore},
 };
 
 fn run(text: &[u8]) {
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::<TStore>::default();
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
 
     let tree = match legion_with_refs::tree_sitter_parse(text) {
         Ok(t) => t,
@@ -57,15 +48,6 @@ fn run(text: &[u8]) {
         )
     );
     stdout().flush().unwrap();
-
-    // let mut out = IoOut { stream: stdout() };
-    // serialize(
-    //     &java_tree_gen.stores.node_store,
-    //     &java_tree_gen.stores.label_store,
-    //     &full_node.local.compressed_node,
-    //     &mut out,
-    //     &std::str::from_utf8(&java_tree_gen.line_break).unwrap(),
-    // );
     println!(
         "{}",
         hyper_ast::nodes::TextSerializer::new(
@@ -138,17 +120,9 @@ fn test_equals() {
         .is_test(true)
         .init();
     let text = CASE_33.as_bytes();
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::<TStore>::default();
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let tree = match legion_with_refs::tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
@@ -215,18 +189,10 @@ fn test_equals() {
 #[test]
 fn test_special() {
     // let mut parser: Parser, old_tree: Option<&Tree>
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::<TStore>::default();
 
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
 
     let text = {
         let source_code1 = "package p.y;
@@ -399,7 +365,8 @@ public class A {
             &*java_tree_gen.stores,
             full_node.local.compressed_node
         )
-    );
+    )
+    .unwrap();
     assert_eq!(std::str::from_utf8(text).unwrap(), out.buff);
 
     println!("{:?}", java_tree_gen.stores.node_store);
@@ -439,17 +406,9 @@ fn test_offset_computation() {
         .is_test(true)
         .init();
     let text = CASE_29.as_bytes();
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::<TStore>::default();
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let tree = match legion_with_refs::tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
@@ -518,17 +477,9 @@ fn test_offset_computation2() {
         .is_test(true)
         .init();
     let text = CASE_30.as_bytes();
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::<TStore>::default();
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let tree = match legion_with_refs::tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,

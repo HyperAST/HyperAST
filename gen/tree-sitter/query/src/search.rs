@@ -1,20 +1,28 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use tree_sitter::CaptureQuantifier as Quant;
+
+use crate::auto::tsq_ser_meta::Conv;
 use crate::legion::TsQueryTreeGen;
 use crate::types::TStore;
 
 use hyper_ast::store::labels::LabelStore;
-use hyper_ast::types::{
-    HyperAST, IterableChildren, Labeled, Typed, TypedHyperAST, TypedNodeStore, WithChildren,
-};
-
 use hyper_ast::store::nodes::legion::NodeIdentifier;
-
-// use hyper_ast_gen_ts_cpp::types::TStore;
-
-// use crate::types::TStore;
-
 use hyper_ast::store::SimpleStores;
+use hyper_ast::types::{HyperAST, Labeled};
 
-use std::sync::Arc;
+mod preprocess;
+
+mod recursive;
+pub mod recursive2;
+
+mod iterative;
+
+pub mod steped;
+
+#[doc(hidden)]
+pub mod utils;
 
 // for now just uses the root types
 // TODO implement approaches based on probabilitic sets
@@ -22,661 +30,278 @@ pub(crate) struct QuickTrigger<T> {
     pub(crate) root_types: Arc<[T]>,
 }
 
-pub struct PreparedMatcher<Ty> {
+pub struct PreparedMatcher<Ty, C = Conv<Ty>> {
     pub(crate) quick_trigger: QuickTrigger<Ty>,
     pub(crate) patterns: Arc<[Pattern<Ty>]>,
+    pub captures: Arc<[Capture]>,
+    pub(crate) quantifiers: Arc<[HashMap<usize, tree_sitter::CaptureQuantifier>]>,
+    converter: C,
 }
 
-impl<'a, Ty: for<'b> TryFrom<&'b str>>
-    PreparedMatcher<Ty>
-where
-    for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
-{
-    pub fn is_matching<'store, HAST, TIdN>(&self, code_store: &'store HAST, id: HAST::IdN) -> bool
-    where
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::NodeId<IdN = HAST::IdN>
-            + hyper_ast::types::TypedNodeId<Ty = Ty>
-            + 'static,
-        Ty: std::fmt::Debug + Eq + Copy,
-    {
-        let Some((n, _)) = code_store.typed_node_store().try_resolve(&id) else {
-            return false;
-        };
-        let t = n.get_type();
-        for i in 0..self.quick_trigger.root_types.len() {
-            let tt = self.quick_trigger.root_types[i];
-            let pat = &self.patterns[i];
-            if t == tt {
-                let res: MatchingRes = pat.is_matching(code_store, id.clone());
-                if res.matched {
-                    return true;
-                }
-            }
-        }
-        false
+#[derive(Debug)]
+pub struct Capture {
+    pub name: String,
+}
+
+impl<Ty: std::fmt::Debug, C> std::fmt::Debug for PreparedMatcher<Ty, C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PreparedMatcher")
+            .field("quick_trigger", &self.quick_trigger.root_types)
+            .field("patterns", &self.patterns)
+            .finish()
     }
-    pub fn is_matching_and_capture<'store, HAST, TIdN>(
+}
+impl<Ty, C> PreparedMatcher<Ty, C> {
+    pub fn pattern_count(&self) -> usize {
+        self.patterns.len()
+    }
+
+    pub fn capture_index_for_name(&self, name: &str) -> Option<u32> {
+        dbg!(self.captures.len());
+        dbg!(&self.captures[..10.min(self.captures.len())]);
+        dbg!(name);
+        self.captures
+            .iter()
+            .position(|x| x.name == name)
+            .map(|x| x as u32)
+    }
+
+    pub fn capture_quantifiers(
         &self,
-        code_store: &'store HAST,
-        id: HAST::IdN,
-    ) -> Option<std::collections::HashMap<String, CaptureRes>>
-    where
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::NodeId<IdN = HAST::IdN>
-            + hyper_ast::types::TypedNodeId<Ty = Ty>
-            + 'static,
-        Ty: std::fmt::Debug + Eq + Copy,
-    {
-        let Some((n, _)) = code_store.typed_node_store().try_resolve(&id) else {
-            return None;
-        };
-        let t = n.get_type();
-        for i in 0..self.quick_trigger.root_types.len() {
-            let tt = self.quick_trigger.root_types[i];
-            let pat = &self.patterns[i];
-            if t == tt {
-                let res: MatchingRes = pat.is_matching(code_store, id.clone());
-                if res.matched {
-                    return Some(res.captures);
-                }
-            }
-        }
-        None
-    }
-}
+        index: usize,
+    ) -> (impl std::ops::Index<usize, Output = tree_sitter::CaptureQuantifier> + '_) {
+        // struct A([tree_sitter::CaptureQuantifier]);
+        // impl std::ops::Index<usize> for &A {
+        //     type Output = tree_sitter::CaptureQuantifier;
 
-impl<Ty> PreparedMatcher<Ty>
-where
-    Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
-    for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
-{
-    pub(crate) fn with_patterns(
-        root_types: Vec<Ty>,
-        patterns: Vec<Pattern<Ty>>,
-    ) -> PreparedMatcher<Ty> {
-        Self {
-            quick_trigger: QuickTrigger {
-                root_types: root_types.into(),
-            },
-            patterns: patterns.into(),
-        }
-    }
-}
-
-impl<'a, Ty> PreparedMatcher<Ty>
-where
-    Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
-    for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
-{
-    pub fn new(query_store: &'a SimpleStores<crate::types::TStore>, query: NodeIdentifier) -> Self {
-        let (root_types, patterns) = Self::new_aux(query_store, query);
-
-        Self::with_patterns(root_types, patterns)
-    }
-
-    pub(crate) fn new_aux(
-        query_store: &'a SimpleStores<TStore>,
-        query: legion::Entity,
-    ) -> (Vec<Ty>, Vec<Pattern<Ty>>)
-    where
-        Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
-    {
-        use crate::types::TIdN;
-        use crate::types::Type;
-        use hyper_ast::types::LabelStore;
-        let mut root_types = vec![];
-        let mut patterns = vec![];
-        let n = query_store
-            .node_store
-            .try_resolve_typed::<TIdN<NodeIdentifier>>(&query)
-            .unwrap()
-            .0;
-        let t = n.get_type();
-        assert_eq!(t, Type::Program);
-        for rule_id in n.children().unwrap().iter_children() {
-            let rule = query_store
-                .node_store
-                .try_resolve_typed::<TIdN<NodeIdentifier>>(&rule_id)
-                .unwrap()
-                .0;
-            let t = rule.get_type();
-            if t == Type::NamedNode {
-                let ty = rule.child(&1).unwrap();
-                let ty = query_store
-                    .node_store
-                    .try_resolve_typed::<TIdN<NodeIdentifier>>(&ty)
-                    .unwrap()
-                    .0;
-                assert_eq!(ty.get_type(), Type::Identifier);
-                let l = ty.try_get_label();
-                let l = query_store.label_store.resolve(&l.unwrap());
-                let l = Ty::try_from(l).expect("the node type does not exist");
-                root_types.push(l);
-                patterns.push(Self::process_named_node(query_store, *rule_id).into());
-            } else if t == Type::AnonymousNode {
-                todo!()
-            } else if t == Type::Spaces {
-            } else if t == Type::Predicate {
-                let prev = patterns
-                    .pop()
-                    .expect("a predicate should be preceded by a pattern");
-
-                let predicate = Self::preprocess_predicate(query_store, *rule_id);
-
-                let predicated = Pattern::Predicated {
-                    predicate,
-                    pat: Arc::new(prev),
-                };
-                patterns.push(predicated);
-            } else {
-                todo!("{}", t)
-            }
-        }
-        (root_types, patterns)
-    }
-    pub(crate) fn process_named_node(
-        query_store: &'a SimpleStores<crate::types::TStore>,
-        rule: NodeIdentifier,
-    ) -> Pattern<Ty> {
-        use crate::types::TIdN;
-        use crate::types::Type;
-        use hyper_ast::types::LabelStore;
-        let mut patterns = vec![];
-        let n = query_store
-            .node_store
-            .try_resolve_typed::<TIdN<NodeIdentifier>>(&rule)
-            .unwrap()
-            .0;
-        let t = n.get_type();
-        assert_eq!(t, Type::NamedNode);
-        let mut cs = n.children().unwrap().iter_children().peekable();
-        cs.next().unwrap();
-        let ty = cs.next().unwrap();
-        let ty = query_store
-            .node_store
-            .try_resolve_typed::<TIdN<NodeIdentifier>>(&ty)
-            .unwrap()
-            .0;
-        assert_eq!(ty.get_type(), Type::Identifier);
-        let l = ty.try_get_label();
-        let l = query_store.label_store.resolve(&l.unwrap());
-        let l = Ty::try_from(l).expect("the node type does not exist");
-        loop {
-            let Some(rule_id) = cs.peek() else { break };
-            let rule = query_store
-                .node_store
-                .try_resolve_typed::<TIdN<NodeIdentifier>>(rule_id)
-                .unwrap()
-                .0;
-            let t = rule.get_type();
-            if t == Type::NamedNode {
-                patterns.push(Self::process_named_node(query_store, **rule_id).into())
-            } else if t == Type::Spaces {
-            } else if t == Type::RParen {
-            } else if t == Type::AnonymousNode {
-                patterns.push(Self::process_anonymous_node(query_store, **rule_id).into())
-            } else if t == Type::Capture {
-                break;
-            } else if t == Type::Predicate {
-                let prev = patterns.pop().expect("predicate must be preceded by node");
-                let predicate = Self::preprocess_predicate(query_store, **rule_id);
-                patterns.push(Pattern::Predicated {
-                    predicate,
-                    pat: Arc::new(prev),
-                });
-            } else {
-                todo!("{}", t)
-            }
-            cs.next();
-        }
-        let mut res = Pattern::NamedNode {
-            ty: l,
-            children: patterns.into(),
-        };
-        loop {
-            let Some(rule_id) = cs.peek() else {
-                return res;
-            };
-            let n = query_store
-                .node_store
-                .try_resolve_typed::<TIdN<NodeIdentifier>>(rule_id)
-                .unwrap()
-                .0;
-            let t = n.get_type();
-            if t == Type::Capture {
-                let mut cs = n.children().unwrap().iter_children();
-                let n = query_store
-                    .node_store
-                    .try_resolve_typed::<TIdN<NodeIdentifier>>(cs.next().unwrap())
-                    .unwrap()
-                    .0;
-                let t = n.get_type();
-                assert_eq!(t, Type::At);
-                let name = cs.next().unwrap();
-                let ty = query_store
-                    .node_store
-                    .try_resolve_typed::<TIdN<NodeIdentifier>>(name)
-                    .unwrap()
-                    .0;
-                assert_eq!(ty.get_type(), Type::Identifier);
-                let name = ty.try_get_label().unwrap();
-                let name = query_store.label_store.resolve(&name);
-                let name = name.to_string();
-                match &res {
-                    Pattern::NamedNode { .. } | Pattern::Capture { .. } => (),
-                    Pattern::Predicated { .. } => panic!(),
-                    Pattern::AnonymousNode { .. } => todo!("not sure if it works properly"),
-                }
-                res = Pattern::Capture {
-                    name,
-                    pat: Arc::new(res),
-                };
-            } else if t == Type::Quantifier {
-                break;
-            } else {
-                todo!("{}", t)
-            }
-            cs.next().unwrap();
-        }
-        loop {
-            let Some(rule_id) = cs.next() else {
-                break res;
-            };
-            let n = query_store
-                .node_store
-                .try_resolve_typed::<TIdN<NodeIdentifier>>(rule_id)
-                .unwrap()
-                .0;
-            let t = n.get_type();
-            if t == Type::Capture {
-                panic!("captures after predicated are not allowed");
-            } else if t == Type::Quantifier {
-                todo!()
-            } else {
-                todo!("{}", t)
-            }
-        }
-    }
-
-    pub(crate) fn process_anonymous_node(
-        query_store: &SimpleStores<TStore>,
-        rule: NodeIdentifier,
-    ) -> Pattern<Ty> {
-        use crate::types::TIdN;
-        use crate::types::Type;
-        use hyper_ast::types::LabelStore;
-        let n = query_store
-            .node_store()
-            .try_resolve_typed::<TIdN<NodeIdentifier>>(&rule)
-            .unwrap()
-            .0;
-        let t = n.get_type();
-        assert_eq!(t, Type::AnonymousNode);
-        // let mut cs = n.children().unwrap().iter_children();
-        // cs.next().unwrap();
-        // let ty = cs.next().unwrap();
-        // let ty = query_store
-        //     .node_store
-        //     .try_resolve_typed::<TIdN<NodeIdentifier>>(&ty)
-        //     .unwrap()
-        //     .0;
-        // let t = ty.get_type();
-        let l = n.try_get_label();
-        let l = query_store.label_store().resolve(&l.unwrap());
-        let l = &l[1..l.len() - 1];
-        let l = Ty::try_from(l).unwrap();
-        // for rule_id in cs {
-        //     let rule = query_store
-        //         .node_store
-        //         .try_resolve_typed::<TIdN<NodeIdentifier>>(&rule_id)
-        //         .unwrap()
-        //         .0;
-        //     let t = rule.get_type();
-        //     dbg!(t);
-        //     if t == Type::NamedNode {
-        //         unreachable!()
-        //     } else if t == Type::Spaces {
-        //     } else {
-        //         todo!()
+        //     fn index(&self, index: usize) -> &Self::Output {
+        //         self.0.get(index).unwrap_or(&Quant::Zero)
         //     }
         // }
-        Pattern::AnonymousNode(l)
-    }
+        // let left = self.quantifiers_skips[index];
+        // let right = self.quantifiers_skips.get(index + 1).copied().unwrap();
+        // let s = &self.quantifiers[left..right];
+        // let s: &A = unsafe { std::mem::transmute(s) };
+        // s
+        struct A(HashMap<usize, tree_sitter::CaptureQuantifier>);
+        impl std::ops::Index<usize> for &A {
+            type Output = tree_sitter::CaptureQuantifier;
 
-    pub(crate) fn preprocess_predicate(
-        query_store: &SimpleStores<TStore>,
-        rule: NodeIdentifier,
-    ) -> Predicate {
-        use crate::types::TIdN;
-        use crate::types::Type;
-        use hyper_ast::types::LabelStore;
-        let n = query_store
-            .node_store()
-            .try_resolve_typed::<TIdN<NodeIdentifier>>(&rule)
-            .unwrap()
-            .0;
-        let t = n.get_type();
-        assert_eq!(t, Type::Predicate);
-        let mut cs = n.children().unwrap().iter_children();
-        cs.next().unwrap();
-        let sharp = cs.next().unwrap();
-        let sharp = query_store
-            .node_store
-            .try_resolve_typed::<TIdN<NodeIdentifier>>(&sharp)
-            .unwrap()
-            .0;
-        let t = sharp.get_type();
-        assert_eq!(t, Type::Sharp);
-
-        let pred = cs.next().unwrap();
-        let pred = query_store
-            .node_store
-            .try_resolve_typed::<TIdN<NodeIdentifier>>(&pred)
-            .unwrap()
-            .0;
-        let t = pred.get_type();
-        assert_eq!(t, Type::Identifier);
-
-        let l = pred.try_get_label();
-        let l = query_store.label_store().resolve(&l.unwrap());
-        match l {
-            "eq" => {
-                let pred = cs.next().unwrap();
-                let pred = query_store
-                    .node_store
-                    .try_resolve_typed::<TIdN<NodeIdentifier>>(&pred)
-                    .unwrap()
-                    .0;
-                let t = pred.get_type();
-                assert_eq!(t, Type::PredicateType);
-                let l = pred.try_get_label();
-                let l = query_store.label_store().resolve(&l.unwrap());
-                assert_eq!(l, "?");
-                for rule_id in cs {
-                    let rule = query_store
-                        .node_store
-                        .try_resolve_typed::<TIdN<NodeIdentifier>>(&rule_id)
-                        .unwrap()
-                        .0;
-                    let t = rule.get_type();
-                    if t == Type::Parameters {
-                        let mut cs = rule.children().unwrap().iter_children();
-                        let left = cs.next().unwrap();
-                        let left = query_store
-                            .node_store
-                            .try_resolve_typed::<TIdN<NodeIdentifier>>(left)
-                            .unwrap()
-                            .0;
-                        let left = match left.get_type() {
-                            Type::Capture => preprocess_capture_pred_arg(left, query_store),
-                            t => todo!("{}", t),
-                        };
-                        {
-                            let center = cs.next().unwrap();
-                            let center = query_store
-                                .node_store
-                                .try_resolve_typed::<TIdN<NodeIdentifier>>(center)
-                                .unwrap()
-                                .0;
-                            let t = center.get_type();
-                            assert_eq!(t, Type::Spaces);
-                        }
-                        let right = cs.next().unwrap();
-                        let right = query_store
-                            .node_store
-                            .try_resolve_typed::<TIdN<NodeIdentifier>>(right)
-                            .unwrap()
-                            .0;
-                        return match right.get_type() {
-                            Type::Capture => {
-                                let right = preprocess_capture_pred_arg(right, query_store);
-                                Predicate::Eq { left, right }
-                            }
-                            Type::String => {
-                                let right = preprocess_capture_pred_arg(right, query_store);
-                                Predicate::EqString { left, right }
-                            }
-                            t => todo!("{}", t),
-                        };
-                    } else if t == Type::Spaces {
-                    } else {
-                        todo!()
-                    }
-                }
-                panic!()
+            fn index(&self, index: usize) -> &Self::Output {
+                self.0.get(&index).unwrap_or(&Quant::Zero)
             }
-            l => todo!("{}", l),
         }
-    }
-}
-
-fn preprocess_capture_pred_arg(
-    arg: hyper_ast::store::nodes::legion::HashedNodeRef<'_, crate::types::TIdN<legion::Entity>>,
-    query_store: &SimpleStores<TStore>,
-) -> String {
-    use crate::types::TIdN;
-    use crate::types::Type;
-    use hyper_ast::types::LabelStore;
-    if let Type::Capture = arg.get_type() {
-        let mut cs = arg.children().unwrap().iter_children();
-        assert_eq!(2, cs.len());
-        let at = cs.next().unwrap();
-        let at = query_store
-            .node_store
-            .try_resolve_typed::<TIdN<NodeIdentifier>>(&at)
-            .unwrap()
-            .0;
-        let t = at.get_type();
-        assert_eq!(t, Type::At);
-        let id = cs.next().unwrap();
-        let id = query_store
-            .node_store
-            .try_resolve_typed::<TIdN<NodeIdentifier>>(&id)
-            .unwrap()
-            .0;
-        let t = id.get_type();
-        assert_eq!(t, Type::Identifier);
-        let l = id.try_get_label();
-        let l = query_store.label_store().resolve(&l.unwrap());
-        l.to_string()
-    } else if let Type::String = arg.get_type() {
-        let l = arg.try_get_label();
-        let l = query_store.label_store().resolve(&l.unwrap());
-        l[1..l.len() - 1].to_string()
-    } else {
-        unreachable!()
+        let s = &self.quantifiers[index];
+        let s: &A = unsafe { std::mem::transmute(s) };
+        s
     }
 }
 
 #[derive(Debug)]
+pub struct Captured<IdN, Idx>(pub Vec<CaptureRes<IdN, Idx>>, usize);
+impl<IdN, Idx> Captured<IdN, Idx> {
+    pub fn by_capture_id(&self, id: CaptureId) -> Option<&CaptureRes<IdN, Idx>> {
+        captures(&self.0, id).next()
+    }
+    pub fn pattern_index(&self) -> usize {
+        self.1
+    }
+}
+
+#[derive(Debug, Clone)]
 pub(crate) enum Pattern<Ty> {
     NamedNode {
         ty: Ty,
         children: Arc<[Pattern<Ty>]>,
     },
+    SupNamedNode {
+        sup: Ty,
+        ty: Ty,
+        children: Arc<[Pattern<Ty>]>,
+    },
     AnonymousNode(Ty),
     Capture {
-        name: String,
+        name: CaptureId,
         pat: Arc<Pattern<Ty>>,
     },
     Predicated {
         predicate: Predicate,
         pat: Arc<Pattern<Ty>>,
     },
-}
-#[derive(Debug)]
-pub(crate) enum Predicate {
-    Eq { left: String, right: String },
-    EqString { left: String, right: String },
-}
-#[derive(Debug)]
-pub(crate) struct MatchingRes {
-    matched: bool,
-    captures: std::collections::HashMap<String, CaptureRes>,
-}
-
-impl MatchingRes {
-    fn fals() -> Self {
-        Self {
-            matched: false,
-            captures: Default::default(),
-        }
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub enum CaptureRes {
-    Label(String),
-    Node,
-}
-
-impl CaptureRes {
-    pub fn try_label(self) -> Option<String> {
-        match self {
-            CaptureRes::Label(l) => Some(l),
-            CaptureRes::Node => None,
-        }
-    }
+    AnyNode {
+        children: Arc<[Pattern<Ty>]>,
+    },
+    List(Arc<[Pattern<Ty>]>),
+    FieldDefinition {
+        name: Field,
+        pat: Arc<Pattern<Ty>>,
+    },
+    Dot,
+    Quantified {
+        quantifier: tree_sitter::CaptureQuantifier,
+        pat: Arc<Pattern<Ty>>,
+    },
+    NegatedField(Field),
 }
 
 impl<Ty> Pattern<Ty> {
-    fn is_matching<'store, HAST, TIdN>(
-        &self,
-        code_store: &'store HAST,
-        id: HAST::IdN,
-    ) -> MatchingRes
-    where
-        HAST: TypedHyperAST<'store, TIdN>,
-        TIdN: hyper_ast::types::NodeId<IdN = HAST::IdN>
-            + hyper_ast::types::TypedNodeId<Ty = Ty>
-            + 'static,
-        Ty: std::fmt::Debug + Eq + Copy,
-    {
-        let Some((n, _)) = code_store.typed_node_store().try_resolve(&id) else {
-            dbg!();
-            return MatchingRes::fals();
-        };
-        let t = n.get_type();
-
+    pub(crate) fn unwrap_captures(&self) -> &Self {
         match self {
-            Pattern::NamedNode { ty, children } => {
-                if *ty != t {
-                    return MatchingRes::fals();
-                }
-                let Some(cs) = n.children() else {
-                    return MatchingRes {
-                        matched: children.is_empty(),
-                        captures: Default::default(),
-                    };
-                };
-                let mut cs = cs.iter_children();
-                let mut pats = children.iter().peekable();
-                let mut captures = Default::default();
-                if pats.peek().is_none() {
-                    return MatchingRes {
-                        matched: true,
-                        captures,
-                    };
-                }
-                let mut matched = false;
-                loop {
-                    let Some(curr_p) = pats.peek() else {
-                        return MatchingRes { matched, captures };
-                    };
-                    let Some(child) = cs.next() else {
-                        return MatchingRes::fals();
-                    };
-                    match curr_p.is_matching(code_store, child.clone()) {
-                        MatchingRes {
-                            matched: true,
-                            captures: capt,
-                        } => {
-                            pats.next();
-                            matched = true;
-                            captures.extend(capt);
-                        }
-                        MatchingRes { matched: false, .. } => {}
-                    }
-                }
+            Pattern::Capture { name: _, pat } => pat.unwrap_captures(),
+            x => x,
+        }
+    }
+    pub(crate) fn is_any_node(&self) -> bool {
+        match self {
+            Pattern::AnyNode { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn is_anonymous(&self) -> bool {
+        match self {
+            Pattern::AnonymousNode { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn is_optional_match(&self) -> bool {
+        match self {
+            Pattern::NamedNode { .. }
+            | Pattern::SupNamedNode { .. }
+            | Pattern::AnyNode { .. }
+            | Pattern::Dot
+            | Pattern::NegatedField(_)
+            | Pattern::List(_)
+            | Pattern::AnonymousNode(_) => false,
+            Pattern::FieldDefinition { pat, .. } | Pattern::Capture { pat, .. } => {
+                pat.is_optional_match()
             }
-            Pattern::AnonymousNode(ty) => MatchingRes {
-                matched: *ty == t,
-                captures: Default::default(),
-            },
-            Pattern::Capture { name, pat } => match pat.is_matching(code_store, id.clone()) {
-                MatchingRes {
-                    matched: true,
-                    mut captures,
-                } => {
-                    let name = name.clone();
-                    let n = code_store.typed_node_store().try_resolve(&id).unwrap().0;
-                    let v = if n.children().map_or(true, |x| x.is_empty()) {
-                        let l = n.try_get_label().unwrap();
-                        use hyper_ast::types::LabelStore;
-                        let l = code_store.label_store().resolve(l);
-                        CaptureRes::Label(l.to_owned())
-                    } else {
-                        todo!()
-                    };
-                    captures.insert(name, v);
-                    MatchingRes {
-                        matched: true,
-                        captures,
-                    }
-                }
-                MatchingRes { matched: false, .. } => MatchingRes::fals(),
-            },
-            Pattern::Predicated { predicate, pat } => match predicate {
-                Predicate::Eq { left, right } => {
-                    let MatchingRes { matched, captures } = pat.is_matching(code_store, id);
-                    if matched {
-                        let matched = captures
-                            .get(left)
-                            .map_or(false, |x| Some(x) == captures.get(right));
-                        let captures = if matched {
-                            captures
-                        } else {
-                            Default::default()
-                        };
-                        MatchingRes { matched, captures }
-                    } else {
-                        MatchingRes::fals()
-                    }
-                }
-                Predicate::EqString { left, right } => {
-                    let MatchingRes { matched, captures } = pat.is_matching(code_store, id);
-                    if matched {
-                        let Some(CaptureRes::Label(left)) = captures.get(left) else {
-                            return MatchingRes::fals();
-                        };
-                        let matched = left == right;
-                        let captures = if matched {
-                            captures
-                        } else {
-                            Default::default()
-                        };
-                        MatchingRes { matched, captures }
-                    } else {
-                        MatchingRes::fals()
-                    }
-                }
-            },
+            Pattern::Predicated { .. } => todo!(),
+            Pattern::Quantified { quantifier: q, .. } => {
+                *q == Quant::Zero || *q == Quant::ZeroOrMore || *q == Quant::ZeroOrOne
+            }
         }
     }
 }
 
-pub(crate) fn ts_query(text: &[u8]) -> (SimpleStores<crate::types::TStore>, legion::Entity) {
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-    };
+type Field = String;
+
+type CaptureId = u32;
+
+#[derive(Debug, Clone)]
+pub(crate) enum Predicate<I = CaptureId> {
+    Eq { left: I, right: I },
+    EqString { left: I, right: String },
+}
+
+impl Predicate<String> {
+    fn resolve_name(self, captures: &[Capture]) -> Predicate<CaptureId> {
+        match self {
+            Predicate::Eq { left, right } => {
+                for i in 0..captures.len() {
+                    if captures[i].name == left {
+                        let left = i as u32;
+                        for i in i..captures.len() {
+                            if captures[i].name == right {
+                                let right = i as u32;
+                                return Predicate::Eq { left, right };
+                            }
+                        }
+                    } else if captures[i].name == right {
+                        let right = i as u32;
+                        for i in i..captures.len() {
+                            if captures[i].name == left {
+                                let left = i as u32;
+                                return Predicate::Eq { left, right };
+                            }
+                        }
+                    }
+                }
+                panic!(
+                    "{} and {} cannot be resolved in {:?}",
+                    left, right, captures
+                );
+            }
+            Predicate::EqString { left, right } => {
+                for i in 0..captures.len() {
+                    if captures[i].name == left {
+                        let left = i as u32;
+                        return Predicate::EqString { left, right };
+                    }
+                }
+                panic!("{} cannot be resolved in {:?}", left, captures);
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct MatchingRes<IdN = NodeIdentifier, Idx = u16> {
+    matched: tree_sitter::CaptureQuantifier,
+    pub(crate) captures: Vec<CaptureRes<IdN, Idx>>,
+}
+
+impl<IdN, Idx> MatchingRes<IdN, Idx> {
+    fn zero() -> Self {
+        Self {
+            matched: Quant::Zero,
+            captures: Default::default(),
+        }
+    }
+
+    fn capture(&self, id: CaptureId) -> Option<&CaptureRes<IdN, Idx>> {
+        captures(&self.captures, id).next()
+    }
+}
+
+fn captures<IdN, Idx>(
+    c: &[CaptureRes<IdN, Idx>],
+    id: CaptureId,
+) -> impl Iterator<Item = &CaptureRes<IdN, Idx>> {
+    c.iter().filter(move |x| x.id == id)
+}
+
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+pub struct CaptureRes<IdN = NodeIdentifier, Idx = u16> {
+    pub id: CaptureId,
+    pub match_node: IdN,
+    pub path: Vec<Idx>,
+}
+
+impl CaptureRes {
+    #[deprecated]
+    pub fn try_label_old(self) -> Option<String> {
+        unimplemented!("refactor code using that")
+    }
+}
+
+impl<IdN, Idx> CaptureRes<IdN, Idx> {
+    pub fn try_label<'store, HAST>(&self, store: &'store HAST) -> Option<&'store str>
+    where
+        HAST: HyperAST<'store, IdN = IdN, Idx = Idx>,
+    {
+        use hyper_ast::types::LabelStore;
+        use hyper_ast::types::NodeStore;
+        let n = store.node_store().resolve(&self.match_node);
+        let l = n.try_get_label()?;
+        let l = store.label_store().resolve(l);
+        Some(l)
+    }
+}
+
+pub fn ts_query_store() -> SimpleStores<crate::types::TStore> {
+    let stores = SimpleStores::default();
+    stores
+}
+
+pub fn ts_query(text: &[u8]) -> (SimpleStores<crate::types::TStore>, legion::Entity) {
+    let mut stores = ts_query_store();
     let query = ts_query2(&mut stores, text);
     (stores, query)
 }
 
-pub(crate) fn ts_query2(stores: &mut SimpleStores<TStore>, text: &[u8]) -> legion::Entity {
+pub fn ts_query2(stores: &mut SimpleStores<TStore>, text: &[u8]) -> legion::Entity {
     let mut md_cache = Default::default();
     let mut query_tree_gen = TsQueryTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -691,6 +316,42 @@ pub(crate) fn ts_query2(stores: &mut SimpleStores<TStore>, text: &[u8]) -> legio
             t
         }
     };
+    dbg!(tree.root_node().to_sexp());
     let full_node = query_tree_gen.generate_file(b"", text, tree.walk());
+    eprintln!(
+        "{}",
+        hyper_ast::nodes::SyntaxSerializer::new(stores, full_node.local.compressed_node)
+    );
     full_node.local.compressed_node
+}
+
+pub fn ts_query2_with_label_hash(
+    stores: &mut SimpleStores<TStore>,
+    text: &[u8],
+) -> Option<(legion::Entity, u32)> {
+    let mut md_cache = Default::default();
+    let mut query_tree_gen = TsQueryTreeGen {
+        line_break: "\n".as_bytes().to_vec(),
+        stores,
+        md_cache: &mut md_cache,
+    };
+
+    let tree = match crate::legion::tree_sitter_parse(text) {
+        Ok(t) => t,
+        Err(t) => {
+            dbg!(t.root_node().to_sexp());
+            return None;
+        }
+    };
+    // dbg!(tree.root_node().to_sexp());
+    let full_node = query_tree_gen.generate_file(b"", text, tree.walk());
+    // eprintln!(
+    //     "{}",
+    //     hyper_ast::nodes::SyntaxSerializer::new(stores, full_node.local.compressed_node)
+    // );
+    let r = (
+        full_node.local.compressed_node,
+        full_node.local.metrics.hashs.label,
+    );
+    Some(r)
 }

@@ -15,15 +15,16 @@ use hyper_ast::{
                 compo::{self, NoSpacesCS, CS},
                 HashedNodeRef, NodeIdentifier,
             },
-            DefaultNodeStore as NodeStore,
+            DefaultNodeStore as NodeStore, EntityBuilder,
         },
         SimpleStores,
     },
     tree_gen::{
-        compute_indentation, get_spacing, has_final_space, parser::Node as _, AccIndentation,
-        Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
-        SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
-        ZippedTreeGen,
+        compute_indentation, get_spacing, has_final_space,
+        parser::{Node as _, TreeCursor},
+        AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
+        PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen,
+        WithByteRange, ZippedTreeGen,
     },
     types::LabelStore as _,
 };
@@ -188,8 +189,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
     }
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
-        let type_store = &mut self.stores().type_store;
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
         let parent_indentation = Space::try_format_indentation(&self.line_break)
             .unwrap_or_else(|| vec![Space::Space; self.line_break.len()]);
         let indent = compute_indentation(
@@ -217,19 +217,19 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
     fn pre_skippable(
         &mut self,
         text: &Self::Text,
-        node: &Self::Node<'_>,
+        cursor: &Self::TreeCursor<'_>,
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
-        let type_store = &mut self.stores().type_store;
-        // let kind = node.kind();
-        // let Some(kind) = type_store.try_cpp(kind) else {
-        //     return None
-        // };
-        let kind = node.obtain_type(type_store);
-        // TODO remove this mitigations as it breaks captures on anonymous nodes
-        let mut acc = self.pre(text, node, stack, global);
-        if kind == Type::Quote || kind == Type::AnonymousNode || kind == Type::String {
+        let kind = cursor.node().obtain_type();
+        let mut acc = self.pre(text, &cursor.node(), stack, global);
+        if kind == Type::String {
+            acc.labeled = true;
+            return PreResult::SkipChildren(acc);
+        }
+        // TODO find better condition, for now using the alias
+        // NOTE this targets _string in rule anonymous_node
+        else if kind == Type::Identifier {
             acc.labeled = true;
             return PreResult::SkipChildren(acc);
         }
@@ -242,9 +242,8 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc {
-        let type_store = &mut self.stores().type_store;
         let parent_indentation = &stack.parent().unwrap().indentation();
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
         let indent = compute_indentation(
             &self.line_break,
             text,
@@ -305,17 +304,25 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
         &mut self,
         spacing: Vec<u8>, //Space>,
     ) -> Local {
+        let kind = Type::Spaces;
+        let interned_kind = TS::intern(kind);
         let bytes_len = spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
+        use num::ToPrimitive;
+        let line_count = spacing
+            .matches("\n")
+            .count()
+            .to_u16()
+            .expect("too many newlines");
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
-        let hbuilder: hashed::Builder<SyntaxNodeHashs<u32>> =
-            hashed::Builder::new(Default::default(), &Type::Spaces, &spacing, 1);
+        let hbuilder: hashed::HashesBuilder<SyntaxNodeHashs<u32>> =
+            hashed::HashesBuilder::new(Default::default(), &interned_kind, &spacing, 1);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
         let eq = |x: EntryRef| {
-            let t = x.get_component::<Type>();
-            if t != Ok(&Type::Spaces) {
+            let t = x.get_component::<TS::Ty>();
+            if t != Ok(&interned_kind) {
                 return false;
             }
             let l = x.get_component::<LabelIdentifier>();
@@ -336,10 +343,14 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
         } else {
             let vacant = insertion.vacant();
             let bytes_len = compo::BytesLen(bytes_len.try_into().unwrap());
-            NodeStore::insert_after_prepare(
-                vacant,
-                (Type::Spaces, spacing_id, bytes_len, hashs, BloomSize::None),
-            )
+            let a = (interned_kind, spacing_id, bytes_len, hashs, BloomSize::None);
+            if line_count == 0 {
+                NodeStore::insert_after_prepare(vacant, a)
+            } else {
+                use tuples::CombinRight;
+                let a = a.push(compo::LineCount(line_count));
+                NodeStore::insert_after_prepare(vacant, a)
+            }
         };
         Local {
             compressed_node,
@@ -348,6 +359,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
                 height: 1,
                 hashs,
                 size_no_spaces: 0,
+                line_count,
             },
         }
     }
@@ -462,12 +474,13 @@ impl<
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
         let interned_kind =
-            TsQueryEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
+            TS::intern(acc.simple.kind);
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
+        let line_count = acc.metrics.line_count;
         let size_no_spaces = acc.metrics.size_no_spaces + 1;
-        let hbuilder = hashed::Builder::new(hashs, &interned_kind, &label, size_no_spaces);
+        let hbuilder = hashed::HashesBuilder::new(hashs, &interned_kind, &label, size_no_spaces);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
@@ -485,6 +498,7 @@ impl<
                 height,
                 hashs,
                 size_no_spaces,
+                line_count,
             };
             Local {
                 compressed_node,
@@ -524,6 +538,7 @@ impl<
                 height,
                 hashs,
                 size_no_spaces,
+                line_count,
             };
             Local {
                 compressed_node,
@@ -590,6 +605,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
                         height: node.height().to_u32().unwrap(),
                         size_no_spaces: node.size_no_spaces().to_u32().unwrap(),
                         hashs,
+                        line_count: node.line_count().to_u16().unwrap(),
                     };
                     metrics
                 };
@@ -605,14 +621,15 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
         let interned_kind =
-            TsQueryEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
+        crate::types::TStore::intern(acc.simple.kind);
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
+        let line_count = acc.metrics.line_count;
         let size_no_spaces = acc.metrics.size_no_spaces + 1;
 
         let label = l.map(|l| label_store.resolve(&l));
-        let hbuilder = hashed::Builder::new(hashs, &interned_kind, &label, size_no_spaces);
+        let hbuilder = hashed::HashesBuilder::new(hashs, &interned_kind, &label, size_no_spaces);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
@@ -628,6 +645,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
                 height,
                 hashs,
                 size_no_spaces,
+                line_count,
             };
             Local {
                 compressed_node,
@@ -667,6 +685,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
                 height,
                 hashs,
                 size_no_spaces,
+                line_count,
             };
             Local {
                 compressed_node,

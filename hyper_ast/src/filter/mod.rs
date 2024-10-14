@@ -7,8 +7,6 @@ use std::marker::PhantomData;
 use bitvec::{order::Lsb0, view::BitViewSized};
 
 use self::default::{Pearson, VaryHasher};
-#[cfg(feature = "native")]
-use self::default::MyDefaultHasher;
 
 #[derive(PartialEq, Eq)]
 pub enum BloomSize {
@@ -152,150 +150,152 @@ impl BF<[u8]> for Bloom<&'static [u8], u32> {
     }
 }
 
-#[cfg(target_pointer_width = "64")]
-impl BF<[u8]> for Bloom<&'static [u8], u64> {
-    type Result = BloomResult;
-    type S = u8;
-    type H = Pearson<64>;
-    const SIZE: BloomSize = BloomSize::B64;
+#[cfg(all(target_pointer_width = "64", feature = "native"))]
+mod bloom_64 {
+    use super::default::MyDefaultHasher;
+    use super::Bloom;
+    use super::BloomResult;
+    use super::BloomSize;
+    use super::Pearson;
+    use super::BF;
 
-    fn bulk_insert<It: Iterator<Item = Self::S>>(&mut self, it: It) {
-        it.for_each(|b| self.bits.set(b as usize, true));
-    }
+    impl BF<[u8]> for Bloom<&'static [u8], u64> {
+        type Result = BloomResult;
+        type S = u8;
+        type H = Pearson<64>;
+        const SIZE: BloomSize = BloomSize::B64;
 
-    fn check_raw(&self, b: Self::S) -> Self::Result {
-        log::trace!("{}", self.bits);
-        if self.bits[b as usize] {
-            BloomResult::MaybeContain
-        } else {
-            BloomResult::DoNotContain
+        fn bulk_insert<It: Iterator<Item = Self::S>>(&mut self, it: It) {
+            it.for_each(|b| self.bits.set(b as usize, true));
+        }
+
+        fn check_raw(&self, b: Self::S) -> Self::Result {
+            log::trace!("{}", self.bits);
+            if self.bits[b as usize] {
+                BloomResult::MaybeContain
+            } else {
+                BloomResult::DoNotContain
+            }
         }
     }
-}
 
-#[cfg(target_pointer_width = "64")]
-impl BF<[u8]> for Bloom<&'static [u8], [u64; 2]> {
-    type Result = BloomResult;
-    type S = u8;
-    type H = Pearson<128>;
-    const SIZE: BloomSize = BloomSize::B128;
+    impl BF<[u8]> for Bloom<&'static [u8], [u64; 2]> {
+        type Result = BloomResult;
+        type S = u8;
+        type H = Pearson<128>;
+        const SIZE: BloomSize = BloomSize::B128;
 
-    fn bulk_insert<It: Iterator<Item = Self::S>>(&mut self, it: It) {
-        it.for_each(|b| self.bits.set(b as usize, true));
-    }
+        fn bulk_insert<It: Iterator<Item = Self::S>>(&mut self, it: It) {
+            it.for_each(|b| self.bits.set(b as usize, true));
+        }
 
-    fn check_raw(&self, b: Self::S) -> Self::Result {
-        log::trace!("{}", self.bits);
-        if self.bits[b as usize] {
-            BloomResult::MaybeContain
-        } else {
-            BloomResult::DoNotContain
+        fn check_raw(&self, b: Self::S) -> Self::Result {
+            log::trace!("{}", self.bits);
+            if self.bits[b as usize] {
+                BloomResult::MaybeContain
+            } else {
+                BloomResult::DoNotContain
+            }
         }
     }
-}
 
-#[cfg(target_pointer_width = "64")]
-impl BF<[u8]> for Bloom<&'static [u8], [u64; 4]> {
-    type Result = BloomResult;
-    type S = u8;
-    type H = Pearson<256>;
-    const SIZE: BloomSize = BloomSize::B256;
+    impl BF<[u8]> for Bloom<&'static [u8], [u64; 4]> {
+        type Result = BloomResult;
+        type S = u8;
+        type H = Pearson<256>;
+        const SIZE: BloomSize = BloomSize::B256;
 
-    fn bulk_insert<It: Iterator<Item = Self::S>>(&mut self, it: It) {
-        it.for_each(|b| self.bits.set(b as usize, true));
-    }
+        fn bulk_insert<It: Iterator<Item = Self::S>>(&mut self, it: It) {
+            it.for_each(|b| self.bits.set(b as usize, true));
+        }
 
-    fn check_raw(&self, b: Self::S) -> Self::Result {
-        log::trace!("{}", self.bits);
-        if self.bits[b as usize] {
-            BloomResult::MaybeContain
-        } else {
-            BloomResult::DoNotContain
+        fn check_raw(&self, b: Self::S) -> Self::Result {
+            log::trace!("{}", self.bits);
+            if self.bits[b as usize] {
+                BloomResult::MaybeContain
+            } else {
+                BloomResult::DoNotContain
+            }
         }
     }
-}
+    //TODO
+    impl BF<[u8]> for Bloom<&'static [u8], [u64; 8]> {
+        type Result = BloomResult;
+        type S = u16;
+        type H = MyDefaultHasher<512>;
+        const SIZE: BloomSize = BloomSize::B512;
 
-//TODO
-#[cfg(target_pointer_width = "64")]
-impl BF<[u8]> for Bloom<&'static [u8], [u64; 8]> {
-    type Result = BloomResult;
-    type S = u16;
-    type H = MyDefaultHasher<512>;
-    const SIZE: BloomSize = BloomSize::B512;
+        fn bulk_insert<It: Iterator<Item = Self::S>>(&mut self, it: It) {
+            it.for_each(|b| self.bits.set(b as usize, true));
+        }
 
-    fn bulk_insert<It: Iterator<Item = Self::S>>(&mut self, it: It) {
-        it.for_each(|b| self.bits.set(b as usize, true));
-    }
-
-    fn check_raw(&self, b: Self::S) -> Self::Result {
-        log::trace!("{}", self.bits);
-        if self.bits[b as usize] {
-            BloomResult::MaybeContain
-        } else {
-            BloomResult::DoNotContain
+        fn check_raw(&self, b: Self::S) -> Self::Result {
+            log::trace!("{}", self.bits);
+            if self.bits[b as usize] {
+                BloomResult::MaybeContain
+            } else {
+                BloomResult::DoNotContain
+            }
         }
     }
-}
 
-#[cfg(target_pointer_width = "64")]
-impl BF<[u8]> for Bloom<&'static [u8], [u64; 16]> {
-    type Result = BloomResult;
-    type S = u16;
-    type H = MyDefaultHasher<1024>;
-    const SIZE: BloomSize = BloomSize::B1024;
+    impl BF<[u8]> for Bloom<&'static [u8], [u64; 16]> {
+        type Result = BloomResult;
+        type S = u16;
+        type H = MyDefaultHasher<1024>;
+        const SIZE: BloomSize = BloomSize::B1024;
 
-    fn bulk_insert<It: Iterator<Item = Self::S>>(&mut self, it: It) {
-        it.for_each(|b| self.bits.set(b as usize, true));
-    }
+        fn bulk_insert<It: Iterator<Item = Self::S>>(&mut self, it: It) {
+            it.for_each(|b| self.bits.set(b as usize, true));
+        }
 
-    fn check_raw(&self, b: Self::S) -> Self::Result {
-        log::trace!("{}", self.bits);
-        if self.bits[b as usize] {
-            BloomResult::MaybeContain
-        } else {
-            BloomResult::DoNotContain
+        fn check_raw(&self, b: Self::S) -> Self::Result {
+            log::trace!("{}", self.bits);
+            if self.bits[b as usize] {
+                BloomResult::MaybeContain
+            } else {
+                BloomResult::DoNotContain
+            }
         }
     }
-}
 
-#[cfg(target_pointer_width = "64")]
-impl BF<[u8]> for Bloom<&'static [u8], [u64; 32]> {
-    type Result = BloomResult;
-    type S = u16;
-    type H = MyDefaultHasher<2048>;
-    const SIZE: BloomSize = BloomSize::B2048;
+    impl BF<[u8]> for Bloom<&'static [u8], [u64; 32]> {
+        type Result = BloomResult;
+        type S = u16;
+        type H = MyDefaultHasher<2048>;
+        const SIZE: BloomSize = BloomSize::B2048;
 
-    fn bulk_insert<It: Iterator<Item = Self::S>>(&mut self, it: It) {
-        it.for_each(|b| self.bits.set(b as usize, true));
-    }
+        fn bulk_insert<It: Iterator<Item = Self::S>>(&mut self, it: It) {
+            it.for_each(|b| self.bits.set(b as usize, true));
+        }
 
-    fn check_raw(&self, b: Self::S) -> Self::Result {
-        log::trace!("{}", self.bits);
-        if self.bits[b as usize] {
-            BloomResult::MaybeContain
-        } else {
-            BloomResult::DoNotContain
+        fn check_raw(&self, b: Self::S) -> Self::Result {
+            log::trace!("{}", self.bits);
+            if self.bits[b as usize] {
+                BloomResult::MaybeContain
+            } else {
+                BloomResult::DoNotContain
+            }
         }
     }
-}
 
-#[cfg(target_pointer_width = "64")]
-impl BF<[u8]> for Bloom<&'static [u8], [u64; 64]> {
-    type Result = BloomResult;
-    type S = u16;
-    type H = MyDefaultHasher<4096>;
-    const SIZE: BloomSize = BloomSize::B4096;
+    impl BF<[u8]> for Bloom<&'static [u8], [u64; 64]> {
+        type Result = BloomResult;
+        type S = u16;
+        type H = MyDefaultHasher<4096>;
+        const SIZE: BloomSize = BloomSize::B4096;
 
-    fn bulk_insert<It: Iterator<Item = Self::S>>(&mut self, it: It) {
-        it.for_each(|b| self.bits.set(b as usize, true));
-    }
+        fn bulk_insert<It: Iterator<Item = Self::S>>(&mut self, it: It) {
+            it.for_each(|b| self.bits.set(b as usize, true));
+        }
 
-    fn check_raw(&self, b: Self::S) -> Self::Result {
-        log::trace!("{}", self.bits);
-        if self.bits[b as usize] {
-            BloomResult::MaybeContain
-        } else {
-            BloomResult::DoNotContain
+        fn check_raw(&self, b: Self::S) -> Self::Result {
+            log::trace!("{}", self.bits);
+            if self.bits[b as usize] {
+                BloomResult::MaybeContain
+            } else {
+                BloomResult::DoNotContain
+            }
         }
     }
 }

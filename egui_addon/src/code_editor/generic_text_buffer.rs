@@ -21,7 +21,7 @@ impl AsText for str {
 ///
 /// Most likely you will use a [`String`] which implements [`TextBuffer`].
 pub trait TextBuffer {
-    /// Main difference wrt. egui's [`egui::TextBufer`]
+    /// Main difference wrt. egui's [`egui::TextBuffer`]
     type Ref: ?Sized + AsText;
 
     /// Can this text be edited?

@@ -31,7 +31,7 @@ impl SimilarityMeasure {
         mappings: &Store,
     ) -> Self {
         Self {
-            ncd: number_of_common_descendants_ranges(src, dst, mappings),
+            ncd: mappings.number_of_common_descendants_ranges(src, dst),
             src_l: (src.end - src.start).to_usize().unwrap(),
             dst_l: (dst.end - dst.start).to_usize().unwrap(),
         }

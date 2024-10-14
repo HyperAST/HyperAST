@@ -100,7 +100,7 @@ impl CodeTheme {
 
 // ----------------------------------------------------------------------------
 
-struct Highlighter {
+pub struct Highlighter {
     ps: syntect::parsing::SyntaxSet,
     ts: syntect::highlighting::ThemeSet,
 }
@@ -116,7 +116,7 @@ impl Default for Highlighter {
 
 impl Highlighter {
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
-    fn highlight(&self, theme: &CodeTheme, code: &str, lang: &str) -> LayoutJob {
+    pub fn highlight(&self, theme: &CodeTheme, code: &str, lang: &str) -> LayoutJob {
         self.highlight_impl(theme, code, lang).unwrap_or_else(|| {
             // Fallback:
             LayoutJob::simple(
@@ -157,7 +157,7 @@ impl Highlighter {
                 let fg = style.foreground;
                 let text_color = egui::Color32::from_rgb(fg.r, fg.g, fg.b);
                 let italics = style.font_style.contains(FontStyle::ITALIC);
-                let underline = style.font_style.contains(FontStyle::ITALIC);
+                let underline = style.font_style.contains(FontStyle::UNDERLINE);
                 let underline = if underline {
                     egui::Stroke::new(1.0, text_color)
                 } else {

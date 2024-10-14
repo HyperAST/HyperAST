@@ -14,8 +14,10 @@ pub mod types;
 #[cfg(feature = "impl")]
 pub mod types_exp;
 
-#[cfg(feature = "impl")]
+#[cfg(all(feature = "impl", feature = "impact"))]
 pub mod impact;
+#[cfg(all(feature = "impl", feature = "tsg"))]
+pub mod tsg;
 #[cfg(feature = "impl")]
 pub mod usage;
 
@@ -65,3 +67,18 @@ mod tnode {
 
 #[cfg(feature = "legion")]
 pub use tnode::TNode;
+
+#[cfg(feature = "legion")]
+pub mod iter;
+
+#[cfg(feature = "impl")]
+pub fn language() -> tree_sitter::Language {
+    tree_sitter_java::language()
+}
+
+#[cfg(feature = "impl")]
+pub fn node_types() -> &'static str {
+    tree_sitter_java::NODE_TYPES
+}
+
+

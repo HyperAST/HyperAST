@@ -9,7 +9,6 @@ use crate::{
 use hyper_ast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores};
 use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
 // use hyper_ast_gen_ts_java::types::TStore;
-use hyper_ast_cvs_git::TStore;
 use hyper_diff::actions::Actions;
 use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
 
@@ -18,21 +17,12 @@ fn test_simple_1() {
     let buggy = r#"class A{class C{}class B{{while(1){if(1){}else{}};}}}class D{class E{}class F{{while(2){if(2){}else{}};}}}"#;
     let fixed = r#"class A{class C{}}class B{{while(1){if(1){}else{}};}}class D{class E{}}class F{{while(2){if(2){}else{}};}}"#;
     // use hyper_ast_gen_ts_java::types::TStore;
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
 
-    let aaa = hyper_ast_gen_ts_java::types::TStore::default();
-    let stores = stores.change_type_store(aaa);
+    let stores = stores.change_type_store::<hyper_ast_gen_ts_java::types::TStore>();
 
     println!(
         "{}",
@@ -61,15 +51,11 @@ fn test_crash1() {
     let fixed = std::fs::read_to_string(fixed_path).expect("the fixed code");
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     print!("{:?} len={}: ", buggy_path, buggy.len());
     let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
     let len = algorithms::gumtree::diff(
@@ -100,15 +86,11 @@ mod examples {
         let fixed = CASE2;
         let mut stores = SimpleStores {
             label_store: LabelStore::new(),
-            type_store: TStore::default(),
+            type_store: Default::default(),
             node_store: NodeStore::new(),
         };
         let mut md_cache = Default::default();
-        let mut java_tree_gen = JavaTreeGen {
-            line_break: "\n".as_bytes().to_vec(),
-            stores: &mut stores,
-            md_cache: &mut md_cache,
-        };
+        let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
         print!("len={}: ", buggy.len());
         let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
         let len = algorithms::gumtree::diff(
@@ -151,15 +133,11 @@ mod examples {
         let fixed = CASE4;
         let mut stores = SimpleStores {
             label_store: LabelStore::new(),
-            type_store: TStore::default(),
+            type_store: Default::default(),
             node_store: NodeStore::new(),
         };
         let mut md_cache = Default::default();
-        let mut java_tree_gen = JavaTreeGen {
-            line_break: "\n".as_bytes().to_vec(),
-            stores: &mut stores,
-            md_cache: &mut md_cache,
-        };
+        let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
         print!("len={}: ", buggy.len());
         let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
         let len = algorithms::gumtree::diff(
@@ -239,15 +217,11 @@ mod examples {
 
         let mut stores = SimpleStores {
             label_store: LabelStore::new(),
-            type_store: TStore::default(),
+            type_store: Default::default(),
             node_store: NodeStore::new(),
         };
         let mut md_cache = Default::default();
-        let mut java_tree_gen = JavaTreeGen {
-            line_break: "\n".as_bytes().to_vec(),
-            stores: &mut stores,
-            md_cache: &mut md_cache,
-        };
+        let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
         let now = Instant::now();
 
         println!("{} len={}", "buggy", buggy.len());
@@ -339,14 +313,13 @@ mod examples {
 mod test {
     use hyper_ast::{
         nodes::SyntaxWithIdsSerializer,
-        store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores},
+        store::SimpleStores,
         types::{DecompressedSubtree, Typed},
     };
 
     use hyper_ast_cvs_git::no_space::NoSpaceNodeStoreWrapper;
-    use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
-    // use hyper_ast_gen_ts_xml::types::TStore;
-    use hyper_ast_cvs_git::TStore;
+    use hyper_ast_gen_ts_xml::legion::tree_sitter_parse_xml as parse_xml;
+    use hyper_ast_gen_ts_xml::{legion::XmlTreeGen, types::TStore};
 
     use hyper_diff::{
         decompressed_tree_store::lazy_post_order::LazyPostOrder,
@@ -425,11 +398,7 @@ mod test {
         println!("{:?}", std::env::current_dir());
         let buggy = CASE7;
         let fixed = CASE8;
-        let mut stores = SimpleStores {
-            label_store: LabelStore::new(),
-            type_store: TStore::default(),
-            node_store: hyper_ast::store::nodes::legion::NodeStore::new(),
-        };
+        let mut stores = SimpleStores::<TStore>::default();
         let mut tree_gen = XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores: &mut stores,
@@ -438,7 +407,7 @@ mod test {
         let (src_tr, dst_tr) = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
-                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(buggy.as_bytes()) {
+                let tree = match parse_xml(buggy.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -447,7 +416,7 @@ mod test {
                 full_node1
             };
             let full_node2 = {
-                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(fixed.as_bytes()) {
+                let tree = match parse_xml(fixed.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -548,11 +517,7 @@ mod test {
         println!("{:?}", std::env::current_dir());
         let buggy = CASE_SIMPLE;
         let fixed = CASE_SIMPLE;
-        let mut stores = SimpleStores {
-            label_store: LabelStore::new(),
-            type_store: TStore::default(),
-            node_store: NodeStore::new(),
-        };
+        let mut stores = SimpleStores::<TStore>::default();
         let mut tree_gen = XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores: &mut stores,
@@ -561,7 +526,7 @@ mod test {
         let (src_tr, dst_tr) = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
-                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(buggy.as_bytes()) {
+                let tree = match parse_xml(buggy.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -570,7 +535,7 @@ mod test {
                 full_node1
             };
             let full_node2 = {
-                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(fixed.as_bytes()) {
+                let tree = match parse_xml(fixed.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -665,11 +630,7 @@ mod test {
         println!("{:?}", std::env::current_dir());
         let buggy = CASE_SIMPLE;
         let fixed = CASE_SIMPLE;
-        let mut stores = SimpleStores {
-            label_store: LabelStore::new(),
-            type_store: TStore::default(),
-            node_store: NodeStore::new(),
-        };
+        let mut stores = SimpleStores::<TStore>::default();
         let mut tree_gen = XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores: &mut stores,
@@ -678,7 +639,7 @@ mod test {
         let (src_tr, dst_tr) = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
-                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(buggy.as_bytes()) {
+                let tree = match parse_xml(buggy.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -687,7 +648,7 @@ mod test {
                 full_node1
             };
             let full_node2 = {
-                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(fixed.as_bytes()) {
+                let tree = match parse_xml(fixed.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -855,11 +816,7 @@ mod test {
         println!("{:?}", std::env::current_dir());
         let buggy = CASE10;
         let fixed = CASE9;
-        let mut stores = SimpleStores {
-            label_store: LabelStore::new(),
-            type_store: TStore::default(),
-            node_store: NodeStore::new(),
-        };
+        let mut stores = SimpleStores::<TStore>::default();
         let mut tree_gen = XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores: &mut stores,
@@ -867,14 +824,14 @@ mod test {
         println!("len={}: ", buggy.len());
         let (src_tr, dst_tr) = {
             let full_node1 = {
-                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(buggy.as_bytes()) {
+                let tree = match parse_xml(buggy.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
                 tree_gen.generate_file("pom.xml".as_bytes(), buggy.as_bytes(), tree.walk())
             };
             let full_node2 = {
-                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(fixed.as_bytes()) {
+                let tree = match parse_xml(fixed.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -958,11 +915,7 @@ mod test {
         println!("{:?}", std::env::current_dir());
         let buggy = CASE12;
         let fixed = CASE11;
-        let mut stores = SimpleStores {
-            label_store: LabelStore::new(),
-            type_store: TStore::default(),
-            node_store: NodeStore::new(),
-        };
+        let mut stores = SimpleStores::<TStore>::default();
         let mut tree_gen = XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores: &mut stores,
@@ -971,7 +924,7 @@ mod test {
         let (src_tr, dst_tr) = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
-                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(buggy.as_bytes()) {
+                let tree = match parse_xml(buggy.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -980,7 +933,7 @@ mod test {
                 full_node1
             };
             let full_node2 = {
-                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(fixed.as_bytes()) {
+                let tree = match parse_xml(fixed.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -1046,11 +999,7 @@ mod test {
         println!("{:?}", std::env::current_dir());
         let buggy = CASE10;
         let fixed = CASE9;
-        let mut stores = SimpleStores {
-            label_store: LabelStore::new(),
-            type_store: TStore::default(),
-            node_store: NodeStore::new(),
-        };
+        let mut stores = SimpleStores::<TStore>::default();
         let mut tree_gen = XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores: &mut stores,
@@ -1059,7 +1008,7 @@ mod test {
         let (src_tr, dst_tr) = {
             let tree_gen = &mut tree_gen;
             let full_node1 = {
-                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(buggy.as_bytes()) {
+                let tree = match parse_xml(buggy.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -1068,7 +1017,7 @@ mod test {
                 full_node1
             };
             let full_node2 = {
-                let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(fixed.as_bytes()) {
+                let tree = match parse_xml(fixed.as_bytes()) {
                     Ok(t) => t,
                     Err(t) => t,
                 };
@@ -1162,15 +1111,11 @@ fn compare_perfs() {
     let fixed = std::fs::read_to_string(fixed_path).expect("the fixed code");
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let now = Instant::now();
 
     println!("{:?} len={}", buggy_path, buggy.len());
@@ -1245,15 +1190,11 @@ pub fn bad_perfs() {
     let fixed = std::fs::read_to_string(fixed_path).expect("the fixed code");
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let now = Instant::now();
 
     println!("{:?} len={}", buggy_path, buggy.len());
@@ -1307,15 +1248,11 @@ pub fn bad_perfs2() {
     let fixed = std::fs::read_to_string(fixed_path).expect("the fixed code");
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let now = Instant::now();
 
     println!("{:?} len={}", buggy_path, buggy.len());
@@ -1459,15 +1396,11 @@ fn bad_perfs_helper(buggy_path: std::path::PathBuf, fixed_path: std::path::PathB
     let fixed = std::fs::read_to_string(fixed_path).expect("the fixed code");
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
     let buggy_s = src_tr.local.metrics.size;
     let fixed_s = dst_tr.local.metrics.size;
@@ -1575,15 +1508,11 @@ fn test_all() {
             let fixed = std::fs::read_to_string(fixed_path).expect("the fixed code");
             let mut stores = SimpleStores {
                 label_store: LabelStore::new(),
-                type_store: TStore::default(),
+                type_store: Default::default(),
                 node_store: NodeStore::new(),
             };
             let mut md_cache = Default::default();
-            let mut java_tree_gen = JavaTreeGen {
-                line_break: "\n".as_bytes().to_vec(),
-                stores: &mut stores,
-                md_cache: &mut md_cache,
-            };
+            let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
             let now = Instant::now();
 
             println!("{:?} len={}", buggy_path, buggy.len());
@@ -1707,15 +1636,11 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
     let fixed = std::fs::read_to_string(fixed_path).expect("the fixed code");
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     println!("{:?} len={}", name, buggy.len());
     let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
     let buggy_s = src_tr.local.metrics.size;
@@ -1787,7 +1712,7 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
 pub fn run_dir(src: &Path, dst: &Path) -> Option<String> {
     let stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let md_cache = Default::default();

@@ -6,15 +6,18 @@ use hyper_ast::{
 
 use crate::types::TIdN;
 
-pub enum Action<Idx> {
+#[derive(Debug)]
+pub enum Action<Idx, IdN = NodeIdentifier> {
     Delete { path: Vec<Idx> },
+    Replace { path: Vec<Idx>, new: IdN },
 }
 type Idx = u16;
+type IdN = NodeIdentifier;
 pub fn regen_query(
     ast: &mut SimpleStores<crate::types::TStore>,
     root: NodeIdentifier,
-    actions: Vec<Action<Idx>>,
-) -> NodeIdentifier {
+    actions: Vec<Action<Idx, IdN>>,
+) -> Option<NodeIdentifier> {
     let mut md_cache = Default::default();
     let mut query_tree_gen = crate::legion::TsQueryTreeGen {
         line_break: "\n".as_bytes().to_vec(),
@@ -22,12 +25,13 @@ pub fn regen_query(
         md_cache: &mut md_cache,
     };
     #[derive(PartialEq, Debug)]
-    enum ActionTree<Idx> {
+    enum ActionTree<Idx, IdN = NodeIdentifier> {
         Delete,
-        Children(Vec<(Idx, ActionTree<Idx>)>),
+        New(IdN),
+        Children(Vec<(Idx, ActionTree<Idx, IdN>)>),
     }
-    impl<Idx: std::cmp::PartialOrd + Clone + PrimInt> From<Vec<Action<Idx>>> for ActionTree<Idx> {
-        fn from(value: Vec<Action<Idx>>) -> Self {
+    impl<Idx: std::cmp::PartialOrd + Clone + PrimInt> From<Vec<Action<Idx, IdN>>> for ActionTree<Idx> {
+        fn from(value: Vec<Action<Idx, IdN>>) -> Self {
             let mut res = ActionTree::Children(vec![]);
             fn insert<Idx: std::cmp::PartialOrd + Clone + PrimInt>(
                 s: &mut ActionTree<Idx>,
@@ -63,6 +67,44 @@ pub fn regen_query(
                             }
                         }
                     }
+                    Action::Replace { mut path, new } => {
+                        let ActionTree::Children(cs) = s else {
+                            panic!()
+                        };
+                        // dbg!(&cs);
+                        let p = path.pop().unwrap();
+                        let mut low = 0;
+                        let mut high = cs.len();
+                        loop {
+                            if low == high {
+                                if path.is_empty() {
+                                    // dbg!(cs.len());
+                                    let c = ActionTree::New(new);
+                                    cs.push((p, c));
+                                    break;
+                                }
+                                let mut c = ActionTree::Children(vec![]);
+                                insert(&mut c, Action::Replace { path, new });
+                                cs.insert(low, (p, c));
+                                break;
+                            }
+                            let mid = low + (high - low) / 2;
+                            if cs[mid].0 == p {
+                                if path.is_empty() {
+                                    let c = ActionTree::New(new);
+                                    todo!();
+                                    cs[mid] = (p, c);
+                                    break;
+                                }
+                                insert(&mut cs[mid].1, Action::Replace { path, new });
+                                break;
+                            } else if p < cs[mid].0 {
+                                high = mid.saturating_sub(1);
+                            } else {
+                                low = mid + 1;
+                            }
+                        }
+                    }
                 }
             }
             for a in value {
@@ -70,6 +112,10 @@ pub fn regen_query(
                     Action::Delete { mut path } => {
                         path.reverse();
                         Action::Delete { path }
+                    }
+                    Action::Replace { mut path, new } => {
+                        path.reverse();
+                        Action::Replace { path, new }
                     }
                 };
                 insert(&mut res, a);
@@ -95,27 +141,22 @@ pub fn regen_query(
         ast: &mut crate::legion::TsQueryTreeGen<'_, '_, crate::types::TStore>,
         a: ActionTree<Idx>,
         c: NodeIdentifier,
-    ) -> NodeIdentifier {
+    ) -> Option<NodeIdentifier> {
         // dbg!(c);
         let (t, n) = ast
             .stores
             .node_store
             .resolve_with_type::<TIdN<NodeIdentifier>>(&c);
-        dbg!(t);
-        println!(
-            "{}",
-            hyper_ast::nodes::SyntaxSerializer::<_, _, false>::new(ast.stores, c) // hyper_ast::nodes::TextSerializer::new(ast.stores, c)
-        );
+        // dbg!(t);
+        // println!(
+        //     "{}",
+        //     hyper_ast::nodes::SyntaxSerializer::<_, _, false>::new(ast.stores, c) // hyper_ast::nodes::TextSerializer::new(ast.stores, c)
+        // );
         let l = n.try_get_label().copied();
         let mut cs: Vec<NodeIdentifier> = vec![];
         use hyper_ast::types::WithChildren;
 
-        let cs_nodes = n
-            .children()
-            .unwrap()
-            .iter_children()
-            .copied()
-            .collect::<Vec<_>>();
+        let cs_nodes = n.children()?.iter_children().copied().collect::<Vec<_>>();
         let mut cs_nodes = cs_nodes.iter();
         drop(n);
 
@@ -132,17 +173,21 @@ pub fn regen_query(
                 ActionTree::Delete => {
                     cs_nodes.next().unwrap();
                 }
-                a => cs.push(apply(ast, a, *cs_nodes.next().unwrap())),
+                ActionTree::New(new) => {
+                    cs_nodes.next().unwrap();
+                    cs.push(new);
+                }
+                a => cs.push(apply(ast, a, *cs_nodes.next().unwrap())?),
             }
         }
         cs.extend(cs_nodes);
-        ast.build_then_insert(c, t, l, cs)
+        Some(ast.build_then_insert(c, t, l, cs))
     }
     assert_ne!(
         actions,
         ActionTree::Delete,
         "it makes no sense to remove the entire tree"
     );
-    dbg!(&actions);
+    // dbg!(&actions);
     apply(&mut query_tree_gen, actions, root)
 }

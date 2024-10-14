@@ -456,7 +456,7 @@ impl Highlighter {
         // eframe::web_sys::console::log_1(&matches.len().into());
 
         let mut curr_index = 0;
-        for matche in matches.into_iter() {
+        for matche in matches.iter() {
             // eframe::web_sys::console::log_1(matche);
             let m: &web_tree_sitter_sg::QueryMatch = unsafe { std::mem::transmute(matche) };
             // eframe::web_sys::console::log_1(&m.captures().len().into());

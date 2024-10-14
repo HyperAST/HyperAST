@@ -30,6 +30,18 @@ pub trait MonoMappingStore: MappingStore {
     fn get_dst(&self, src: &Self::Src) -> Option<Self::Dst>;
     fn link_if_both_unmapped(&mut self, t1: Self::Src, t2: Self::Dst) -> bool;
     fn iter(&self) -> Self::Iter<'_>;
+    fn number_of_common_descendants_ranges(
+        &self,
+        src: &std::ops::Range<Self::Src>,
+        dst: &std::ops::Range<Self::Dst>,
+    ) -> u32
+    where
+        Self::Src: num_traits::PrimInt,
+        Self::Dst: num_traits::PrimInt,
+        Self: Sized,
+    {
+        super::similarity_metrics::number_of_common_descendants_ranges(src, dst, self)
+    }
 }
 
 pub trait MultiMappingStore: MappingStore {

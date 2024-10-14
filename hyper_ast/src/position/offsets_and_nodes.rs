@@ -1,21 +1,87 @@
+use std::fmt::Debug;
+
 use super::{tags, TreePath, TreePathMut};
 use crate::types::{HyperAST, NodeId, NodeStore, Tree, WithChildren};
 use crate::PrimInt;
 
 /// BottomUp content
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct StructuralPosition<IdN, Idx, Config = tags::TopDownFull> {
     pub(super) parents: Vec<IdN>, //parents? // most likely parents
     pub(super) offsets: Vec<Idx>,
     _phantom: std::marker::PhantomData<Config>,
 }
+
+impl<IdN, C, Idx> super::node_filter_traits::Full for StructuralPosition<IdN, Idx, C> {}
+
+impl<IdN: Debug, Idx: Debug> std::fmt::Debug for StructuralPosition<IdN, Idx, tags::TopDownFull> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SP{{{:?} {:?} TopDown}}", &self.parents, &self.offsets)
+    }
+}
+
+impl<IdN: Debug, Idx: Debug> std::fmt::Debug for StructuralPosition<IdN, Idx, tags::BottomUpFull> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SP{{{:?} {:?} BottomUp}}", &self.parents, &self.offsets)
+    }
+}
+
+impl<IdN: std::hash::Hash, C, Idx: std::hash::Hash> std::hash::Hash
+    for StructuralPosition<IdN, Idx, C>
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.parents.last().hash(state);
+        self.parents.first().hash(state);
+        self.offsets.hash(state);
+    }
+}
+impl<IdN: std::cmp::PartialEq, C, Idx: std::cmp::PartialEq> PartialEq
+    for StructuralPosition<IdN, Idx, C>
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.parents.last() == other.parents.last()
+            && self.parents.first() == other.parents.first()
+            && self.offsets == other.offsets
+    }
+}
+impl<IdN: std::cmp::Eq, C, Idx: std::cmp::Eq> Eq for StructuralPosition<IdN, Idx, C> {}
+impl<IdN: std::cmp::Eq, Idx: PrimInt> PartialOrd for StructuralPosition<IdN, Idx> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl<IdN: std::cmp::Eq, Idx: PrimInt> Ord for StructuralPosition<IdN, Idx> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use crate::position::position_accessors::SharedPath;
+        use std::cmp::Ordering::*;
+        match crate::position::position_accessors::WithPreOrderOffsets::shared_ancestors(
+            self, other,
+        ) {
+            SharedPath::Exact(_) => unreachable!(),
+            SharedPath::Remain(_) => Less,
+            SharedPath::Submatch(_) => Greater,
+            SharedPath::Different(a) => {
+                let c = self.offsets[a.len() + 1].cmp(&other.offsets[a.len() + 1]);
+                assert_ne!(c, std::cmp::Ordering::Equal);
+                c
+            }
+        }
+    }
+}
+
 impl<IdN, Idx, C> StructuralPosition<IdN, Idx, C> {
-    pub(crate) fn empty() -> Self {
+    pub fn empty() -> Self {
         Self {
             parents: vec![],
             offsets: vec![],
             _phantom: Default::default(),
         }
+    }
+    pub fn _set_first_node(&mut self, n: IdN, o: Idx) {
+        assert!(self.parents.is_empty());
+        assert!(self.offsets.len() == 1);
+        self.parents.push(n);
+        self.offsets[0] = o;
     }
     pub(crate) fn solved(self, node: IdN) -> SolvedStructuralPosition<IdN, Idx, C> {
         SolvedStructuralPosition {
@@ -25,9 +91,16 @@ impl<IdN, Idx, C> StructuralPosition<IdN, Idx, C> {
             _phantom: Default::default(),
         }
     }
+
+    pub fn parent(&self) -> Option<&IdN> {
+        let i = self.parents.len().checked_sub(2)?;
+        self.parents.get(i)
+    }
 }
 
-impl<IdN, Idx: PrimInt> super::position_accessors::WithOffsets for StructuralPosition<IdN, Idx> {
+impl<IdN, Idx: PrimInt, C> super::position_accessors::WithOffsets
+    for StructuralPosition<IdN, Idx, C>
+{
     type Idx = Idx;
 }
 
@@ -42,6 +115,52 @@ impl<IdN, Idx: PrimInt> super::position_accessors::WithPreOrderOffsets
         let mut iter = self.offsets.iter();
         iter.next().unwrap();
         SPIter(iter)
+    }
+}
+
+impl<IdN, Idx: PrimInt> super::position_accessors::WithPostOrderOffsets
+    for StructuralPosition<IdN, Idx>
+{
+    fn iter(&self) -> impl Iterator<Item = Self::Idx> {
+        self.offsets[1..]
+            .iter()
+            .rev()
+            .cloned()
+            .map(|o| o - num::one())
+    }
+}
+
+impl<IdN: Copy, Idx: PrimInt> super::position_accessors::WithPostOrderPath<IdN>
+    for StructuralPosition<IdN, Idx>
+{
+    fn iter_offsets_and_parents(&self) -> impl Iterator<Item = (Self::Idx, IdN)> {
+        super::position_accessors::WithPostOrderOffsets::iter(self)
+            .zip(self.parents.iter().rev().skip(1).cloned())
+    }
+}
+
+impl<IdN: Copy, Idx: PrimInt> super::position_accessors::RootedPosition<IdN>
+    for StructuralPosition<IdN, Idx>
+{
+    fn root(&self) -> IdN {
+        self.parents.first().unwrap().clone()
+    }
+}
+
+impl<IdN: Copy, Idx: PrimInt> super::position_accessors::WithFullPostOrderPath<IdN>
+    for StructuralPosition<IdN, Idx>
+{
+    fn iter_with_nodes(&self) -> (IdN, impl Iterator<Item = (Self::Idx, IdN)>) {
+        use crate::position::position_accessors::WithPostOrderPath;
+        (*self.node().unwrap(), self.iter_offsets_and_parents())
+    }
+}
+
+impl<IdN: Copy, Idx: PrimInt> super::position_accessors::SolvedPosition<IdN>
+    for StructuralPosition<IdN, Idx>
+{
+    fn node(&self) -> IdN {
+        *TreePath::node(self).unwrap()
     }
 }
 
@@ -160,6 +279,14 @@ impl<IdN, Idx: num::Zero, C> StructuralPosition<IdN, Idx, C> {
             offsets: vec![num::zero()],
             _phantom: Default::default(),
         }
+    }
+}
+
+impl<IdN, Idx: PrimInt, C> StructuralPosition<IdN, Idx, C> {
+    pub fn o(&self) -> Option<Idx> {
+        self.offsets
+            .last()
+            .and_then(|&x| x.checked_sub(&num::one()))
     }
 }
 
@@ -294,6 +421,20 @@ mod impl_c_p_p_receivers {
     }
     impl<IdN, Idx: PrimInt, C> top_down::SetFileName<Self> for StructuralPosition<IdN, Idx, C> {
         fn set_file_name(self, _file_name: &str) -> Self {
+            self
+        }
+    }
+    impl<IdN, Idx: PrimInt, IdO, C> building::ReceiveRows<IdO, Self>
+        for StructuralPosition<IdN, Idx, C>
+    {
+        fn push(self, _row: IdO) -> Self {
+            self
+        }
+    }
+    impl<IdN, Idx: PrimInt, IdO, C> building::ReceiveColumns<IdO, Self>
+        for StructuralPosition<IdN, Idx, C>
+    {
+        fn push(self, _col: IdO) -> Self {
             self
         }
     }

@@ -1,7 +1,7 @@
 pub use hyper_ast::store::nodes::fetched::{FetchedLabels, NodeIdentifier, NodeStore};
 use hyper_ast::{
     store::nodes::fetched::{HashedNodeRef, LabelIdentifier},
-    types::{AnyType, HyperType, Lang, LangRef, TypeIndex, TypeStore as _},
+    types::AnyType,
 };
 use std::{
     borrow::Borrow,
@@ -12,91 +12,8 @@ use std::{
 #[derive(Default)]
 pub(crate) struct TStore;
 
-impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
+impl<'a> hyper_ast::types::TypeStore for TStore {
     type Ty = AnyType;
-
-    const MASK: u16 = 42;
-
-    fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-        let lang = n.get_lang();
-        let t: &'static (dyn HyperType + 'static) = match lang {
-            "hyper_ast_gen_ts_ts::types::ts" => {
-                let raw = n.get_raw_type();
-                let t: &'static (dyn HyperType + 'static) =
-                    <hyper_ast_gen_ts_ts::types::Ts as Lang<_>>::make(raw);
-                t
-            }
-            "hyper_ast_gen_ts_cpp::types::Cpp" => {
-                let raw = n.get_raw_type();
-                let t: &'static (dyn HyperType + 'static) =
-                    <hyper_ast_gen_ts_cpp::types::Cpp as Lang<_>>::make(raw);
-                t
-            }
-            "hyper_ast_gen_ts_java::types::Java" => {
-                let raw = n.get_raw_type();
-                let t: &'static (dyn HyperType + 'static) =
-                    <hyper_ast_gen_ts_java::types::Java as Lang<_>>::make(raw);
-                t
-            }
-            "hyper_ast_gen_ts_xml::types::Xml" => {
-                let raw = n.get_raw_type();
-                let t: &'static (dyn HyperType + 'static) =
-                    <hyper_ast_gen_ts_xml::types::Xml as Lang<_>>::make(raw);
-                t
-            }
-            "" => {
-                let t: &'static (dyn HyperType + 'static) =
-                    <hyper_ast_gen_ts_java::types::Java as Lang<_>>::make(
-                        hyper_ast_gen_ts_java::types::Type::Dot as u16,
-                    );
-                t
-            }
-            // "xml" => LangRef::<AnyType>::make(&hyper_ast_gen_ts_xml::types::Xml, raw),
-            x => panic!("{}", x),
-        };
-        t.into()
-    }
-
-    fn resolve_lang(
-        &self,
-        n: &HashedNodeRef<'a, NodeIdentifier>,
-    ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        let lang = n.get_lang();
-        let t = match lang {
-            "hyper_ast_gen_ts_ts::types::Ts" => {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_ts::types::Ts)
-            }
-            "hyper_ast_gen_ts_cpp::types::Cpp" => {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_cpp::types::Lang)
-            }
-            "hyper_ast_gen_ts_java::types::Java" => {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_java::types::Lang)
-            }
-            "hyper_ast_gen_ts_xml::types::Xml" => {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_xml::types::Lang)
-            }
-            "" => {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_java::types::Lang)
-            }
-            // "xml" => From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_xml::types::Xml),
-            x => panic!("{}", x),
-        };
-        t
-    }
-
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(&self, _n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-        todo!()
-    }
-
-    fn type_eq(
-        &self,
-        _n: &HashedNodeRef<'a, NodeIdentifier>,
-        _m: &HashedNodeRef<'a, NodeIdentifier>,
-    ) -> bool {
-        todo!()
-    }
 }
 
 #[derive(Default)]
@@ -156,7 +73,8 @@ struct AcessibleFetchedHyperAST<'a> {
 }
 
 impl<'b> hyper_ast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
-    type R<'a> = HashedNodeRef<'a, NodeIdentifier>
+    type R<'a>
+        = HashedNodeRef<'a, NodeIdentifier>
     where
         Self: 'a;
 
@@ -205,37 +123,8 @@ impl<'b> hyper_ast::types::LabelStore<str> for AcessibleFetchedHyperAST<'b> {
     }
 }
 
-impl<'a, 'b> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>>
-    for AcessibleFetchedHyperAST<'b>
-{
+impl<'a, 'b> hyper_ast::types::TypeStore for AcessibleFetchedHyperAST<'b> {
     type Ty = AnyType;
-
-    const MASK: u16 = 42;
-
-    fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-        self.type_store.resolve_type(n)
-    }
-
-    fn resolve_lang(
-        &self,
-        n: &HashedNodeRef<'a, NodeIdentifier>,
-    ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        self.type_store.resolve_lang(n)
-    }
-
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-        self.type_store.marshal_type(n)
-    }
-
-    fn type_eq(
-        &self,
-        _n: &HashedNodeRef<'a, NodeIdentifier>,
-        _m: &HashedNodeRef<'a, NodeIdentifier>,
-    ) -> bool {
-        todo!()
-    }
 }
 
 impl Hash for FetchedHyperAST {

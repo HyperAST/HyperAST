@@ -83,7 +83,7 @@ impl<
         M: MonoMappingStore<Src = IdD, Dst = IdD>,
     > SimpleBottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>
 where
-    HAST::TS: hyper_ast::types::TypeStore<T, Ty = T::Type>,
+    HAST::TS: hyper_ast::types::TypeStore<Ty = T::Type>,
     T: hyper_ast::types::Typed,
     T::Type: Hash + Copy + Eq + Send + Sync,
 {

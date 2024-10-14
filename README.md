@@ -46,17 +46,17 @@ nix run .#hyperast-webapi // similar to the prev. mentioned cargo run
 nix run github:HyperAST/HyperAST#hyperast-webapi // here nix handles everything, no need to clone!
 ```
 This will download all dependencies and build locally. 
-This will work on any *NIX system (Linux, WSL, MACOSX, ...).
+It can work on any *NIX system (Linux, WSL, MACOSX, ...), but the CPU architecture can be a problem e.g. I could not make it work on an M1.
 
-There is also a devShell provided with all the necessary dependencies installed in a healthy environment to develop and build the project. You can enter the environement with:
+There is also a development shell provided with all the necessary dependencies installed in a healthy environment to develop and build the project. You can enter the environment with:
 ```sh
 nix develop # from the project root dir
 ```
-### Launch server with Cargo (You have to handle depencies such as rustc, openssl, ... yourself)
+### Launch server with Cargo (You have to handle system dependencies yourself, such as, `rustc`, `openssl` )
 ```sh
 cargo run -p client --release # from the project root dir, after having cloned the repository
 ```
-Note: Currently HyperAST uses features from the nightly channel, so you should definetly use [rustup](https://rust-lang.github.io/rustup/overrides.html#the-toolchain-file), the Rust version manager.
+Note: Currently HyperAST uses features from the nightly channel, so you should definitely use [rustup](https://rust-lang.github.io/rustup/overrides.html#the-toolchain-file), the Rust version manager.
 
 ## How to Cite
 

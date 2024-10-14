@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Debug, Display};
+use std::ops::Deref;
 
 use derive_deref::Deref;
 use hecs::{CommandBuffer, EntityBuilder, World};
@@ -12,9 +13,133 @@ type NodeIdentifier = hecs::Entity;
 
 #[derive(Default)]
 pub struct TypeSys {
-    pub(crate) list: Vec<hecs::Entity>,
-    pub(crate) index: BTreeMap<String, hecs::Entity>,
+    pub(crate) list: Vec<NodeIdentifier>,
+    pub(crate) index: BTreeMap<String, NodeIdentifier>,
     pub(crate) types: World,
+}
+
+trait Helper {
+    fn t(&self) -> String;
+    fn r(&self) -> String;
+    fn is_leaf(&self) -> bool;
+    fn is_concrete(&self) -> bool;
+    fn is_abstract(&self) -> bool;
+    fn get_flat<'a, T: hecs::Component, U>(&self, f: impl Fn(&NodeIdentifier) -> Vec<U>) -> Vec<U>
+    where
+        T: AsRef<Vec<NodeIdentifier>>;
+    fn get_map<'a, T: hecs::Component, U>(&self, f: impl Fn(&NodeIdentifier) -> U) -> Vec<U>
+    where
+        T: AsRef<Vec<NodeIdentifier>>;
+}
+
+impl Helper for hecs::EntityRef<'_> {
+    fn t(&self) -> String {
+        self.get::<&T>().unwrap().0.to_string()
+    }
+    fn r(&self) -> String {
+        self.get::<&Role>().unwrap().0.to_string()
+    }
+    fn is_leaf(&self) -> bool {
+        !self.has::<Hidden>()
+            && !self.has::<SubTypes>()
+            && !self.has::<DChildren>()
+            && !self.has::<Fields>()
+    }
+    fn is_concrete(&self) -> bool {
+        !self.has::<Hidden>() && !self.has::<SubTypes>() && self.has::<DChildren>()
+    }
+    fn is_abstract(&self) -> bool {
+        !self.has::<Hidden>()
+            && self.has::<SubTypes>()
+            && !self.has::<Fields>()
+            && !self.has::<DChildren>()
+    }
+
+    fn get_flat<'a, T: hecs::Component, U>(&self, f: impl Fn(&NodeIdentifier) -> Vec<U>) -> Vec<U>
+    where
+        T: AsRef<Vec<NodeIdentifier>>,
+    {
+        self.get::<&T>()
+            .unwrap()
+            .deref()
+            .as_ref()
+            .iter()
+            .map(f)
+            .flatten()
+            .collect()
+    }
+
+    fn get_map<'a, T: hecs::Component, U>(&self, f: impl Fn(&NodeIdentifier) -> U) -> Vec<U>
+    where
+        T: AsRef<Vec<NodeIdentifier>>,
+    {
+        self.get::<&T>()
+            .unwrap()
+            .deref()
+            .as_ref()
+            .iter()
+            .map(f)
+            .collect()
+    }
+}
+
+impl TypeSys {
+    fn it_entities<'a>(&'a self) -> impl Iterator<Item = hecs::EntityRef<'a>> + 'a {
+        self.list.iter().map(|e| self.types.entity(*e).unwrap())
+    }
+
+    pub fn leafs(&self) -> impl Iterator<Item = (String, bool)> + '_ {
+        self.it_entities()
+            .filter(Helper::is_leaf)
+            .map(|v| (v.t(), v.has::<Named>()))
+    }
+
+    pub fn concrete(&self) -> impl Iterator<Item = (String, bool)> + '_ {
+        self.it_entities()
+            .filter(Helper::is_concrete)
+            .map(|v| (v.t(), v.has::<Fields>()))
+    }
+
+    pub fn concrete_fields(&self) -> impl Iterator<Item = (String, Vec<(String, String)>)> + '_ {
+        let f = |e: &NodeIdentifier| {
+            self.types
+                .entity(*e)
+                .unwrap()
+                .get_map::<DChildren, _>(|ee| {
+                    (
+                        self.types.entity(*e).unwrap().r(),
+                        self.types.entity(*ee).unwrap().t(),
+                    )
+                })
+        };
+        self.it_entities()
+            .filter(|v| v.is_concrete() && v.has::<Fields>())
+            .map(move |v| (v.t(), v.get_flat::<Fields, _>(f)))
+    }
+
+    pub fn concrete_children(&self) -> impl Iterator<Item = (String, Vec<String>)> + '_ {
+        self.it_entities().filter(Helper::is_concrete).map(|v| {
+            (
+                v.t(),
+                v.get_map::<DChildren, _>(|e| self.types.entity(*e).unwrap().t()),
+            )
+        })
+    }
+
+    pub fn r#abstract(&self) -> impl Iterator<Item = String> + '_ {
+        self.it_entities()
+            .filter(Helper::is_abstract)
+            .map(|v| v.t())
+    }
+
+    pub fn r#abstract_subtypes(&self) -> impl Iterator<Item = (String, Vec<String>)> + '_ {
+        self.it_entities().filter(Helper::is_abstract).map(|v| {
+            (
+                v.t(),
+                v.get_map::<SubTypes, _>(|e| self.types.entity(*e).unwrap().t()),
+            )
+        })
+    }
 }
 
 impl Debug for TypeSys {
@@ -58,6 +183,16 @@ impl Display for TypeSys {
     }
 }
 
+macro_rules! as_ref {
+    ($t:ty) => {
+        impl AsRef<Vec<NodeIdentifier>> for $t {
+            fn as_ref(&self) -> &Vec<NodeIdentifier> {
+                &self.0
+            }
+        }
+    };
+}
+
 #[derive(Debug, Deref)]
 pub(crate) struct T(pub(crate) String);
 #[derive(Debug)]
@@ -76,12 +211,15 @@ pub(crate) struct MultipleChildren;
 pub(crate) struct RequiredChildren;
 #[derive(Debug, Deref)]
 pub(crate) struct SubTypes(pub(crate) Vec<NodeIdentifier>);
+as_ref!(SubTypes);
 #[derive(Debug, Deref)]
 pub(crate) struct Fields(pub(crate) Vec<NodeIdentifier>);
+as_ref!(Fields);
 #[derive(Debug, Deref)]
 pub(crate) struct Role(pub(crate) String);
 #[derive(Debug, Deref)]
 pub(crate) struct DChildren(pub(crate) Vec<NodeIdentifier>);
+as_ref!(DChildren);
 
 impl Display for T {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

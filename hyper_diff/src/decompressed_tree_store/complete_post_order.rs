@@ -26,8 +26,6 @@ use super::{
     PostOrderKeyRoots, ShallowDecompressedTreeStore,
 };
 
-use logging_timer::time;
-
 /// made for TODO
 /// - post order
 /// - key roots
@@ -65,7 +63,7 @@ impl<T: WithChildren, IdD: PrimInt> From<SimplePostOrder<T, IdD>> for CompletePo
 where
     T::TreeId: Clone,
 {
-    #[time("warn")]
+    // #[time("warn")]
     fn from(simple: SimplePostOrder<T, IdD>) -> Self {
         let kr = simple.compute_kr_bitset();
         Self { simple, kr }
@@ -405,8 +403,9 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
         if self.cache.contains_key(&c) {
             return self.cache.get(&c).unwrap();
         } else if let Some(p) = self.ds.parent(c) {
-            let p_r = stores.node_store().resolve(&self.ds.original(&p));
-            let p_t = stores.type_store().resolve_type(&p_r);
+            let id = self.ds.original(&p);
+            let p_r = stores.node_store().resolve(&id);
+            let p_t = stores.resolve_type(&id);
             if p_t.is_directory() {
                 let ori = self.ds.original(&c);
                 if self.root == ori {
@@ -462,7 +461,7 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
                 let r = stores.node_store().resolve(&ori);
                 pos.set_len(
                     r.try_bytes_len()
-                        .unwrap_or_else(|| panic!("{:?}", stores.type_store().resolve_type(&r))),
+                        .unwrap_or_else(|| panic!("{:?}", stores.resolve_type(&ori))),
                 );
                 self.cache.entry(*c).or_insert(pos)
             }
@@ -470,7 +469,7 @@ impl<'a, T: Tree, IdD: PrimInt + Hash + Eq> RecCachedPositionProcessor<'a, T, Id
             let ori = self.ds.original(&c);
             assert_eq!(self.root, ori);
             let r = stores.node_store().resolve(&ori);
-            let t = stores.type_store().resolve_type(&r);
+            let t = stores.resolve_type(&ori);
             let pos = if t.is_directory() || t.is_file() {
                 let file = stores.label_store().resolve(r.get_label_unchecked()).into();
                 let offset = 0;
@@ -519,15 +518,16 @@ where
 {
     pub fn position<'b, S>(&mut self, store: &'b S, c: &IdD) -> &U
     where
-        S: NodeStore<T::TreeId, R<'b> = T> + TypeStore<T>,
+        S: HyperAST<'b, T=T, IdN = T::TreeId>,
         T::TreeId: Clone + Debug,
         T: Tree + WithSerialization,
     {
         if self.cache.contains_key(&c) {
             return self.cache.get(&c).unwrap();
         } else if let Some(p) = self.ds.parent(c) {
-            let p_r = store.resolve(&self.ds.original(&p));
-            let p_t = store.resolve_type(&p_r);
+            let id = self.ds.original(&p);
+            let p_r = store.node_store().resolve(&id);
+            let p_t = store.resolve_type(&id);
             if p_t.is_directory() {
                 let ori = self.ds.original(&c);
                 if self.root == ori {

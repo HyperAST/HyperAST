@@ -164,6 +164,12 @@ impl From<&str> for CodeEditor {
     }
 }
 
+impl AsRef<str> for CodeEditor {
+    fn as_ref(&self) -> &str {
+        self.code()
+    }
+}
+
 // impl super::Demo for CodeEditor {
 //     fn name(&self) -> &'static str {
 //         "🖮 Code Editor"
@@ -282,13 +288,13 @@ impl CodeEditor {
                     } else {
                         let language = "rs";
                         let theme =
-                            egui_demo_lib::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+                            egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
 
                         let mut layouter =
                             |ui: &egui::Ui,
                              string: &super::crdt_over_ws::Quote,
                              _wrap_width: f32| {
-                                let layout_job = egui_demo_lib::syntax_highlighting::highlight(
+                                let layout_job = egui_extras::syntax_highlighting::highlight(
                                     ui.ctx(),
                                     &theme,
                                     string.text.as_str(),
@@ -355,6 +361,7 @@ fn checkbox_heading(
         response.widget_info(|| {
             egui::WidgetInfo::selected(
                 egui::WidgetType::Checkbox,
+                true,
                 *checked,
                 text.as_ref().map_or("", |x| x.text()),
             )
@@ -364,12 +371,12 @@ fn checkbox_heading(
             // let visuals = ui.style().interact_selectable(&response, *checked); // too colorful
             let visuals = ui.style().interact(&response);
             let (small_icon_rect, big_icon_rect) = ui.spacing().icon_rectangles(rect);
-            ui.painter().add(epaint::RectShape {
-                rect: big_icon_rect.expand(visuals.expansion),
-                rounding: visuals.rounding,
-                fill: visuals.bg_fill,
-                stroke: visuals.bg_stroke,
-            });
+            ui.painter().add(epaint::RectShape::new(
+                big_icon_rect.expand(visuals.expansion),
+                visuals.rounding,
+                visuals.bg_fill,
+                visuals.bg_stroke,
+            ));
 
             if *checked {
                 // Check mark:
@@ -387,7 +394,7 @@ fn checkbox_heading(
                     rect.min.x + icon_width + icon_spacing,
                     rect.center().y - 0.5 * text.size().y,
                 );
-                text.paint_with_visuals(ui.painter(), text_pos, visuals);
+                ui.painter().galley(text_pos, text, visuals.bg_fill);
             }
         }
 

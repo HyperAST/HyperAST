@@ -1,29 +1,23 @@
+use crate::{
+    git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
+    make::{MakeModuleAcc, MakePartialAnalysis, MD},
+    preprocessed::RepositoryProcessor,
+    processing::{erased::ParametrizedCommitProc2, CacheHolding, InFiles, ObjectName},
+    Processor,
+};
+use git2::{Oid, Repository};
+use hyper_ast::{
+    hashed::{IndexingHashBuilder, MetaDataHashsBuilder},
+    store::{defaults::NodeIdentifier, nodes::legion::eq_node},
+    types::LabelStore,
+};
+use hyper_ast_gen_ts_xml::types::Type;
 use std::{
     iter::Peekable,
     path::{Components, PathBuf},
 };
 
-use git2::{Oid, Repository};
-use hyper_ast::{
-    filter::BloomSize,
-    hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder},
-    store::{
-        defaults::NodeIdentifier,
-        nodes::legion::{compo, compo::CS, NodeStore},
-    },
-    tree_gen::SubTreeMetrics,
-    types::LabelStore,
-};
-use hyper_ast_gen_ts_cpp::types::Type;
-use hyper_ast_gen_ts_java::legion_with_refs::{eq_node, hash32};
-
-use crate::{
-    git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
-    make::{MakeModuleAcc, MD},
-    preprocessed::RepositoryProcessor,
-    processing::{erased::ParametrizedCommitProc2, CacheHolding, InFiles, ObjectName},
-    Processor, SimpleStores,
-};
+pub type SimpleStores = hyper_ast::store::SimpleStores<hyper_ast_gen_ts_xml::types::TStore>;
 
 pub struct MakeProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
     prepro: &'b mut RepositoryProcessor,
@@ -61,7 +55,6 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
         }
     }
 }
-type Caches = <crate::processing::file_sys::Make as crate::processing::CachesHolding>::Caches;
 
 impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
     for MakeProcessor<'a, 'b, 'c, RMS, FFWD, MakeModuleAcc>
@@ -102,13 +95,13 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
 
                     let w = &mut self.stack.last_mut().unwrap().2;
                     let name = self.prepro.intern_object_name(name);
-                    assert!(!w.children_names.contains(&name));
+                    assert!(!w.primary.children_names.contains(&name));
                     w.push_submodule(name, full_node);
                     return;
                 }
                 // TODO use Make pom.xml to find source_dir  and tests_dir ie. ignore resources, maybe also tests
                 // TODO maybe at some point try to handle Make modules and source dirs that reference parent directory in their path
-                log::debug!("mm tree {:?}", name.try_str());
+                log::debug!("make tree {:?}", name.try_str());
 
                 let parent_acc = &mut self.stack.last_mut().unwrap().2;
                 if true {
@@ -119,7 +112,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                         oid,
                         &name,
                     );
-                    assert!(!parent_acc.children_names.contains(&name));
+                    assert!(!parent_acc.primary.children_names.contains(&name));
                     parent_acc.push_source_directory(name, full_node);
                     return;
                 }
@@ -134,7 +127,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                         &name,
                     );
                     let parent_acc = &mut self.stack.last_mut().unwrap().2;
-                    assert!(!parent_acc.children_names.contains(&name));
+                    assert!(!parent_acc.primary.children_names.contains(&name));
                     if helper.source_directories.0 {
                         parent_acc.push_source_directory(name, full_node);
                     } else {
@@ -206,8 +199,8 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
         }
     }
     fn post(&mut self, oid: Oid, acc: MakeModuleAcc) -> Option<(NodeIdentifier, MD)> {
-        let name = acc.name.clone();
-        let full_node = Self::make(acc, self.prepro.main_stores_mut());
+        let name = acc.primary.name.clone();
+        let full_node = Self::make(acc, self.prepro.main_stores_mut().mut_with_ts());
         self.prepro
             .processing_systems
             .mut_or_default::<MakeProcessorHolder>()
@@ -221,9 +214,9 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
         } else {
             let w = &mut self.stack.last_mut().unwrap().2;
             assert!(
-                !w.children_names.contains(&name),
+                !w.primary.children_names.contains(&name),
                 "{:?} {:?}",
-                w.children_names,
+                w.primary.children_names,
                 name
             );
             w.push_submodule(name, full_node);
@@ -244,75 +237,52 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
     }
 }
 
-pub(crate) fn make(mut acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
-    let dir_hash: u32 = hash32(&Type::Directory); // FIXME should be MakeDirectory ?
-    let hashs = acc.metrics.hashs;
-    let size = acc.metrics.size + 1;
-    let height = acc.metrics.height + 1;
-    let size_no_spaces = acc.metrics.size_no_spaces + 1;
-    let hbuilder = hashed::Builder::new(hashs, &dir_hash, &acc.name, size_no_spaces);
-    let hashable = hbuilder.most_discriminating();
-    let label = stores.label_store.get_or_insert(acc.name.clone());
+pub(crate) fn make(acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
+    let kind = Type::Directory;
+    let interned_kind = hyper_ast_gen_ts_xml::types::TStore::intern(kind);
+    let label_id = stores.label_store.get_or_insert(acc.primary.name.clone());
 
-    let eq = eq_node(&Type::Directory, Some(&label), &acc.children);
-    let ana = {
-        // let new_sub_modules = drain_filter_strip(&mut acc.sub_modules, b"..");
-        // let new_main_dirs = drain_filter_strip(&mut acc.main_dirs, b"..");
-        // let new_test_dirs = drain_filter_strip(&mut acc.test_dirs, b"..");
-        let ana = acc.ana;
-        // if !new_sub_modules.is_empty() || !new_main_dirs.is_empty() || !new_test_dirs.is_empty()
-        // {
-        //     log::error!(
-        //         "'{:?} {:?} {:?}'",
-        //         new_sub_modules,
-        //         new_main_dirs,
-        //         new_test_dirs
-        //     );
-        //     dbg!(
-        //         new_sub_modules,
-        //         new_main_dirs,
-        //         new_test_dirs
-        //     );
-        //     todo!("also prepare search for modules and sources in parent, should also tell from which module it is required");
-        // }
-        ana.resolve()
-    };
+    let primary = acc
+        .primary
+        .map_metrics(|m| m.finalize(&interned_kind, &label_id, 0));
+
+    let hashable = primary.metrics.hashs.most_discriminating();
+
+    let eq = eq_node(&interned_kind, Some(&label_id), &primary.children);
+
+    assert_eq!(primary.children_names.len(), primary.children.len());
+    let ana = MakePartialAnalysis::new();
+
     let insertion = stores.node_store.prepare_insertion(&hashable, eq);
-    let hashs = hbuilder.build();
-    let node_id = if let Some(id) = insertion.occupied_id() {
-        id
-    } else {
-        log::info!("make mm {} {}", &acc.name, acc.children.len());
-        let vacant = insertion.vacant();
-        assert_eq!(acc.children_names.len(), acc.children.len());
-        NodeStore::insert_after_prepare(
-            vacant,
-            (
-                Type::Directory,
-                label,
-                hashs,
-                compo::Size(size),
-                compo::Height(height),
-                compo::SizeNoSpaces(size_no_spaces),
-                CS(acc.children_names.into_boxed_slice()), // TODO extract dir names
-                CS(acc.children.into_boxed_slice()),
-                BloomSize::Much,
-            ),
-        )
-    };
+    if let Some(id) = insertion.occupied_id() {
+        let metrics = primary
+            .metrics
+            .map_hashs(|h| MetaDataHashsBuilder::build(h));
+        return (id, MD { metrics, ana });
+    }
 
-    let metrics = SubTreeMetrics {
-        size,
-        height,
-        hashs,
-        size_no_spaces,
-    };
+    log::info!("make mm {} {}", &primary.name, primary.children.len());
+
+    let mut dyn_builder = hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+
+    let children_is_empty = primary.children.is_empty();
+
+    let metrics = primary.persist(&mut dyn_builder, interned_kind, label_id);
+    let metrics = metrics.map_hashs(|h| h.build());
+    let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
+    hashs.persist(&mut dyn_builder);
+
+    let vacant = insertion.vacant();
+    let node_id = hyper_ast::store::nodes::legion::NodeStore::insert_built_after_prepare(
+        vacant,
+        dyn_builder.build(),
+    );
 
     let full_node = (node_id.clone(), MD { metrics, ana });
     full_node
 }
 
-use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
+use hyper_ast_gen_ts_xml::{legion::XmlTreeGen, types::XmlEnabledTypeStore as _};
 impl RepositoryProcessor {
     fn help_handle_makefile(
         &mut self,
@@ -329,7 +299,7 @@ impl RepositoryProcessor {
                 crate::make::handle_makefile_file(
                     &mut XmlTreeGen {
                         line_break: "\n".as_bytes().to_vec(),
-                        stores: &mut self.main_stores,
+                        stores: self.main_stores.mut_with_ts(),
                     },
                     n,
                     t,
@@ -337,7 +307,7 @@ impl RepositoryProcessor {
                 .map_err(|_| crate::ParseErr::IllFormed)
             })?;
         let name = self.intern_object_name(&name);
-        assert!(!parent_acc.children_names.contains(&name));
+        assert!(!parent_acc.primary.children_names.contains(&name));
         parent_acc.push_makefile(name, x);
         Ok(())
     }
@@ -471,7 +441,9 @@ impl Default for MakefileProcessorHolder {
         Self(Some(MakefileProc(Parameter, Default::default())))
     }
 }
+
 struct MakefileProc(Parameter, crate::processing::caches::Makefile);
+
 impl crate::processing::erased::Parametrized for MakefileProcessorHolder {
     type T = Parameter;
     fn register_param(
@@ -490,32 +462,26 @@ impl crate::processing::erased::Parametrized for MakefileProcessorHolder {
         ParametrizedCommitProcessorHandle(self.erased_handle(), ConfigParametersHandle(l))
     }
 }
+
 // TODO should not have to impl this trait
 impl crate::processing::erased::CommitProc for MakefileProc {
-    fn process_root_tree(
-        &mut self,
-        repository: &git2::Repository,
-        tree_oid: &git2::Oid,
-    ) -> hyper_ast::store::defaults::NodeIdentifier {
-        unimplemented!()
-    }
-
     fn prepare_processing(
         &self,
         repository: &git2::Repository,
         commit_builder: crate::preprocessed::CommitBuilder,
     ) -> Box<dyn crate::processing::erased::PreparedCommitProc> {
-        unimplemented!()
+        unimplemented!("required for processing at the root of a project")
     }
 
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
-        unimplemented!()
+        unimplemented!("required for processing at the root of a project")
     }
 }
 
 impl crate::processing::erased::CommitProcExt for MakefileProc {
     type Holder = MakefileProcessorHolder;
 }
+
 impl crate::processing::erased::ParametrizedCommitProc2 for MakefileProcessorHolder {
     type Proc = MakefileProc;
 
@@ -620,15 +586,8 @@ impl<'repo> crate::processing::erased::PreparedCommitProc for PreparedMakeCommit
         root_full_node.0
     }
 }
-impl crate::processing::erased::CommitProc for MakeProc {
-    fn process_root_tree(
-        &mut self,
-        repository: &git2::Repository,
-        tree_oid: &git2::Oid,
-    ) -> hyper_ast::store::defaults::NodeIdentifier {
-        unimplemented!("see reason in the java proc")
-    }
 
+impl crate::processing::erased::CommitProc for MakeProc {
     fn prepare_processing<'repo>(
         &self,
         repository: &'repo git2::Repository,
@@ -648,6 +607,7 @@ impl crate::processing::erased::CommitProc for MakeProc {
 impl crate::processing::erased::CommitProcExt for MakeProc {
     type Holder = MakeProcessorHolder;
 }
+
 impl crate::processing::erased::ParametrizedCommitProc2 for MakeProcessorHolder {
     type Proc = MakeProc;
 
@@ -667,6 +627,7 @@ impl crate::processing::erased::ParametrizedCommitProc2 for MakeProcessorHolder 
         self.0.as_ref().unwrap()
     }
 }
+
 impl CacheHolding<crate::processing::caches::Make> for MakeProc {
     fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Make {
         &mut self.cache
@@ -675,6 +636,7 @@ impl CacheHolding<crate::processing::caches::Make> for MakeProc {
         &self.cache
     }
 }
+
 impl CacheHolding<crate::processing::caches::Make> for MakeProcessorHolder {
     fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Make {
         &mut self.0.as_mut().unwrap().cache

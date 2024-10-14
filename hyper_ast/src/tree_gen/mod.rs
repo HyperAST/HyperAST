@@ -23,7 +23,7 @@ use std::fmt::Debug;
 
 use crate::{hashed::NodeHashs, nodes::Space};
 
-use self::parser::{Node as _, TreeCursor as _, Visibility};
+use self::parser::Visibility;
 
 pub type Spaces = Vec<Space>;
 
@@ -53,6 +53,33 @@ impl<T, Id> BasicAccumulator<T, Id> {
             children: vec![],
         }
     }
+
+    #[cfg(feature = "legion")]
+    pub fn add_primary<L, K>(
+        self,
+        dyn_builder: &mut impl crate::store::nodes::EntityBuilder,
+        interned_kind: K,
+        label_id: Option<L>,
+    ) where
+        K: 'static + std::marker::Send + std::marker::Sync,
+        L: 'static + std::marker::Send + std::marker::Sync,
+        Id: 'static + std::marker::Send + std::marker::Sync,
+    {
+        // TODO better handle the interneds
+        // TODO the "staatic" interning should be hanled more specifically
+        dyn_builder.add(interned_kind);
+        if let Some(label_id) = label_id {
+            dyn_builder.add(label_id);
+        }
+
+        let children = self.children;
+        if !children.is_empty() {
+            // TODO make global components, at least for primaries.
+            dyn_builder.add(crate::store::nodes::legion::compo::CS(
+                children.into_boxed_slice(),
+            ));
+        }
+    }
 }
 impl<T: Debug, Id> Debug for BasicAccumulator<T, Id> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -75,14 +102,14 @@ pub trait AccIndentation: Accumulator {
 }
 
 #[derive(Default, Debug, Clone, Copy)]
-pub struct SubTreeMetrics<U: NodeHashs> {
+pub struct SubTreeMetrics<U> {
     pub hashs: U,
-    /// WIP make it space independent
     pub size: u32,
-    /// WIP make it space independent, I believe is already is
     pub height: u32,
-
     pub size_no_spaces: u32,
+    /// should include lines inside labels
+    pub line_count: u16, // TODO u16 is definitely not enough at the directory level e.g. 1.6MLoCs for Hadoop
+                         // pub byte_len: u32,
 }
 
 impl<U: NodeHashs> SubTreeMetrics<U> {
@@ -91,6 +118,60 @@ impl<U: NodeHashs> SubTreeMetrics<U> {
         self.size += other.size;
         self.size_no_spaces += other.size_no_spaces;
         self.hashs.acc(&other.hashs);
+        self.line_count += other.line_count;
+    }
+}
+
+impl<U> SubTreeMetrics<U> {
+    pub fn map_hashs<V>(self, f: impl Fn(U) -> V) -> SubTreeMetrics<V> {
+        SubTreeMetrics {
+            hashs: f(self.hashs),
+            size: self.size,
+            height: self.height,
+            size_no_spaces: self.size_no_spaces,
+            line_count: self.line_count,
+        }
+    }
+
+    #[must_use]
+    #[cfg(feature = "legion")]
+    pub fn add_md_metrics(
+        self,
+        dyn_builder: &mut impl crate::store::nodes::EntityBuilder,
+        children_is_empty: bool,
+    ) -> U {
+        use crate::store::nodes::legion::compo;
+        if !children_is_empty {
+            dyn_builder.add(compo::Size(self.size));
+            dyn_builder.add(compo::SizeNoSpaces(self.size_no_spaces));
+            dyn_builder.add(compo::Height(self.height));
+        }
+
+        if self.line_count > 0 {
+            dyn_builder.add(compo::LineCount(self.line_count));
+        }
+
+        self.hashs
+    }
+}
+
+impl<U: crate::hashed::ComputableNodeHashs> SubTreeMetrics<U> {
+    pub fn finalize<K: ?Sized + std::hash::Hash, L: ?Sized + std::hash::Hash>(
+        self,
+        k: &K,
+        l: &L,
+        line_count: u16,
+    ) -> SubTreeMetrics<crate::hashed::HashesBuilder<U>> {
+        let size_no_spaces = self.size_no_spaces + 1;
+        use crate::hashed::IndexingHashBuilder;
+        let hashs = crate::hashed::HashesBuilder::new(self.hashs, k, l, size_no_spaces);
+        SubTreeMetrics {
+            hashs,
+            size: self.size + 1,
+            height: self.height + 1,
+            size_no_spaces,
+            line_count: self.line_count + line_count,
+        }
     }
 }
 
@@ -260,6 +341,7 @@ enum P<Acc> {
     Hidden(Acc),
     Visible(Acc),
 }
+
 impl<Acc> P<Acc> {
     fn is_both_hidden(&self) -> bool {
         match self {
@@ -292,6 +374,7 @@ impl<Acc> P<Acc> {
         }
     }
 }
+
 impl<Acc> P<Acc> {
     fn ok(self) -> Option<Acc> {
         match self {
@@ -339,268 +422,9 @@ impl<Acc> Parents<Acc> {
     }
 }
 
-pub enum PreResult<Acc> {
-    /// Do not process node and its children
-    Skip,
-    /// Do not process node (but process children)
-    Ignore,
-    /// Do not process children
-    SkipChildren(Acc),
-    Ok(Acc),
-}
-
-/// Define a zipped visitor, where you mostly have to implement,
-/// [`ZippedTreeGen::pre`] going down,
-/// and [`ZippedTreeGen::post`] going up in the traversal.
-pub trait ZippedTreeGen: TreeGen
-where
-    Self::Global: TotalBytesGlobalData,
-{
-    // # results
-    // type Node1;
-    type Stores;
-    // # source
-    type Text: ?Sized;
-    type Node<'a>: parser::Node<'a>;
-    type TreeCursor<'a>: parser::TreeCursor<'a, Self::Node<'a>> + Debug;
-
-    fn init_val(&mut self, text: &Self::Text, node: &Self::Node<'_>) -> Self::Acc;
-
-    /// Can be implemented if you want to skip certain nodes,
-    /// note that skipping only act on the "overlay" tree structure,
-    /// meaning that the content of a skipped node is fed to its parents
-    ///
-    /// The default implementation skips nothing.
-    ///
-    ///  see also also the following example use:
-    /// [`hyper_ast_gen_ts_cpp::legion::CppTreeGen::pre_skippable`](../../hyper_ast_gen_ts_cpp/legion/struct.CppTreeGen.html#method.pre_skippable)
-    fn pre_skippable(
-        &mut self,
-        text: &Self::Text,
-        node: &Self::Node<'_>,
-        stack: &Parents<Self::Acc>,
-        global: &mut Self::Global,
-    ) -> PreResult<<Self as TreeGen>::Acc> {
-        PreResult::Ok(self.pre(text, node, stack, global))
-    }
-
-    /// Called when going up
-    fn pre(
-        &mut self,
-        text: &Self::Text,
-        node: &Self::Node<'_>,
-        // TODO make a special wrapper for the Vec<Option<_>>
-        stack: &Parents<Self::Acc>,
-        global: &mut Self::Global,
-    ) -> <Self as TreeGen>::Acc;
-
-    /// Called when going up
-    fn post(
-        &mut self,
-        parent: &mut <Self as TreeGen>::Acc,
-        global: &mut Self::Global,
-        text: &Self::Text,
-        acc: <Self as TreeGen>::Acc,
-    ) -> <<Self as TreeGen>::Acc as Accumulator>::Node;
-
-    fn stores(&mut self) -> &mut Self::Stores;
-
-    fn gen(
-        &mut self,
-        text: &Self::Text,
-        stack: &mut Parents<Self::Acc>,
-        cursor: &mut Self::TreeCursor<'_>,
-        global: &mut Self::Global,
-    ) {
-        let mut has = Has::Down;
-        loop {
-            if has != Has::Up
-                && let Some(visibility) = cursor.goto_first_child_extended()
-            {
-                has = Has::Down;
-                global.down();
-                let n = self.pre_skippable(text, &cursor.node(), &stack, global);
-                match n {
-                    PreResult::Skip => {
-                        has = Has::Up;
-                        global.up();
-                    }
-                    PreResult::Ignore => {
-                        if let Visibility::Visible = visibility {
-                            stack.push(P::ManualyHidden);
-                        } else {
-                            stack.push(P::BothHidden);
-                        }
-                    }
-                    PreResult::SkipChildren(acc) => {
-                        has = Has::Up;
-                        if let Visibility::Visible = visibility {
-                            stack.push(P::Visible(acc));
-                        } else {
-                            unimplemented!("Only concrete nodes should be leafs")
-                        }
-                    }
-                    PreResult::Ok(acc) => {
-                        global.set_sum_byte_length(acc.begin_byte());
-                        if let Visibility::Visible = visibility {
-                            stack.push(P::Visible(acc));
-                        } else {
-                            stack.push(P::Hidden(acc));
-                        }
-                    }
-                }
-            } else {
-                let is_visible;
-                let is_parent_hidden;
-                let full_node: Option<_> = match (stack.pop().unwrap(), stack.parent_mut_with_vis())
-                {
-                    (P::Visible(acc), None) => {
-                        global.up();
-                        is_visible = true;
-                        is_parent_hidden = false;
-                        global.set_sum_byte_length(acc.end_byte());
-                        stack.push(P::Visible(acc));
-                        None
-                    }
-                    (_, None) => {
-                        panic!();
-                    }
-                    (P::ManualyHidden, Some((v, _))) => {
-                        is_visible = false;
-                        is_parent_hidden = v == Visibility::Hidden;
-                        None
-                    }
-                    (P::BothHidden, Some((v, _))) => {
-                        is_visible = false;
-                        is_parent_hidden = v == Visibility::Hidden;
-                        None
-                    }
-                    (P::Visible(acc), Some((v, parent))) => {
-                        is_visible = true;
-                        is_parent_hidden = v == Visibility::Hidden;
-                        if !acc.has_children() {
-                            global.set_sum_byte_length(acc.end_byte());
-                        }
-                        if is_parent_hidden && parent.end_byte() <= acc.begin_byte() {
-                            panic!()
-                        }
-                        global.up();
-                        let full_node = self.post(parent, global, text, acc);
-                        Some(full_node)
-                    }
-                    (P::Hidden(acc), Some((v, parent))) => {
-                        is_visible = false;
-                        is_parent_hidden = v == Visibility::Hidden;
-                        if !acc.has_children() {
-                            global.set_sum_byte_length(acc.end_byte());
-                        }
-                        if is_parent_hidden && parent.end_byte() <= acc.begin_byte() {
-                            panic!()
-                        }
-                        global.up();
-                        let full_node = self.post(parent, global, text, acc);
-                        Some(full_node)
-                    }
-                };
-
-                // TODO opt out of using end_byte other than on leafs,
-                // it should help with trailing spaces,
-                // something like `cursor.node().child_count().ne(0).then(||cursor.node().end_byte())` then just call set_sum_byte_length if some
-                if let Some(visibility) = cursor.goto_next_sibling_extended() {
-                    has = Has::Right;
-                    let parent = stack.parent_mut().unwrap();
-                    if let Some(full_node) = full_node {
-                        parent.push(full_node);
-                    }
-                    loop {
-                        let parent = stack.parent_mut().unwrap();
-                        if parent.end_byte() <= cursor.node().start_byte() {
-                            loop {
-                                let p = stack.pop().unwrap();
-                                match p {
-                                    P::ManualyHidden => (),
-                                    P::BothHidden => (),
-                                    P::Hidden(acc) => {
-                                        let parent = stack.parent_mut().unwrap();
-                                        let full_node = self.post(parent, global, text, acc);
-                                        parent.push(full_node);
-                                        break;
-                                    }
-                                    P::Visible(acc) => {
-                                        let parent = stack.parent_mut().unwrap();
-                                        let full_node = self.post(parent, global, text, acc);
-                                        parent.push(full_node);
-                                        break;
-                                    }
-                                }
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                    global.down();
-                    let n = self.pre_skippable(text, &cursor.node(), &stack, global);
-                    match n {
-                        PreResult::Skip => {
-                            has = Has::Up;
-                            global.up();
-                        }
-                        PreResult::Ignore => {
-                            if let Visibility::Visible = visibility {
-                                stack.push(P::ManualyHidden);
-                            } else {
-                                stack.push(P::BothHidden);
-                            }
-                        }
-                        PreResult::SkipChildren(acc) => {
-                            has = Has::Up;
-                            if let Visibility::Visible = visibility {
-                                stack.push(P::Visible(acc));
-                            } else {
-                                unimplemented!("Only concrete nodes should be leafs")
-                            }
-                        }
-                        PreResult::Ok(acc) => {
-                            global.set_sum_byte_length(acc.begin_byte());
-                            if let Visibility::Visible = visibility {
-                                stack.push(P::Visible(acc));
-                            } else {
-                                stack.push(P::Hidden(acc));
-                            }
-                        }
-                    }
-                } else {
-                    has = Has::Up;
-                    if is_parent_hidden || stack.0.last().map_or(false, P::is_both_hidden) {
-                        if let Some(full_node) = full_node {
-                            let parent = stack.parent_mut().unwrap();
-                            parent.push(full_node);
-                        }
-                    } else if cursor.goto_parent() {
-                        if let Some(full_node) = full_node {
-                            let parent = stack.parent_mut().unwrap();
-                            parent.push(full_node);
-                        } else if is_visible {
-                            if has == Has::Down {}
-                            return;
-                        }
-                    } else {
-                        assert!(full_node.is_none());
-                        if has == Has::Down {}
-                        return;
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[derive(PartialEq, Eq)]
-enum Has {
-    Down,
-    Up,
-    Right,
-}
+pub mod zipped;
+pub use zipped::PreResult;
+pub use zipped::ZippedTreeGen;
 
 pub(crate) fn things_after_last_lb<'b>(lb: &[u8], spaces: &'b [u8]) -> Option<&'b [u8]> {
     spaces
@@ -609,20 +433,6 @@ pub(crate) fn things_after_last_lb<'b>(lb: &[u8], spaces: &'b [u8]) -> Option<&'
         .position(|window| window == lb)
         .and_then(|i| Some(&spaces[spaces.len() - i - 1..]))
 }
-
-// pub fn hash_for_node<T: Hash, U>(
-//     hashs: &SyntaxNodeHashs<u32>,
-//     size: u32,
-//     node: &SimpleNode1<U, T>,
-// ) -> SyntaxNodeHashs<u32> {
-//     let hashed_kind = clamp_u64_to_u32(&utils::hash(&node.kind));
-//     let hashed_label = clamp_u64_to_u32(&utils::hash(&node.label));
-//     SyntaxNodeHashs {
-//         structt: inner_node_hash(hashed_kind, 0, size, hashs.structt),
-//         label: inner_node_hash(hashed_kind, hashed_label, size, hashs.label),
-//         syntax: inner_node_hash(hashed_kind, hashed_label, size, hashs.syntax),
-//     }
-// }
 
 pub fn compute_indentation<'a>(
     line_break: &Vec<u8>,
@@ -653,46 +463,6 @@ pub fn try_compute_indentation<'a>(
         None => parent_indentation.to_vec(),
     }
 }
-
-// pub fn handle_spacing<
-//     NS: NodeStore<HashedCompressedNode<SyntaxNodeHashs<u32>>>,
-//     Acc: AccIndentation<Node = FullNode<Global, Local>>,
-// >(
-//     padding_start: usize,
-//     pos: usize,
-//     text: &[u8],
-//     node_store: &mut NS,
-//     depth: &usize,
-//     position: usize,
-//     parent: &mut Acc,
-// ) {
-//     let tmp = get_spacing(padding_start, pos, text, parent.indentation());
-//     if let Some(relativized) = tmp {
-//         let hashs = SyntaxNodeHashs {
-//             structt: 0,
-//             label: 0,
-//             syntax: clamp_u64_to_u32(&utils::hash(&relativized)),
-//         };
-//         let node = CompressedNode::Spaces(relativized.into_boxed_slice());
-//         let spaces_leaf = HashedCompressedNode::new(hashs, node);
-//         let compressed_node = node_store.get_id_or_insert_node(spaces_leaf);
-//         let full_spaces_node = FullNode {
-//             global: Global {
-//                 depth: *depth,
-//                 position,
-//             },
-//             local: Local {
-//                 compressed_node,
-//                 metrics: SubTreeMetrics {
-//                     size: 1,
-//                     height: 1,
-//                     hashs,
-//                 },
-//             },
-//         };
-//         parent.push(full_spaces_node);
-//     };
-// }
 
 pub fn get_spacing(
     padding_start: usize,
@@ -768,28 +538,9 @@ pub fn has_final_space(depth: &usize, sum_byte_length: usize, text: &[u8]) -> bo
     *depth == 0 && sum_byte_length < text.len()
 }
 
-// /// end of tree but not end of file,
-// /// thus to be a bijection, we need to get the last spaces
-// pub fn handle_final_space<
-//     NS: NodeStore<HashedCompressedNode<SyntaxNodeHashs<u32>>>,
-//     Acc: AccIndentation<Node = FullNode<Global, Local>>,
-// >(
-//     depth: &usize,
-//     sum_byte_length: usize,
-//     text: &[u8],
-//     node_store: &mut NS,
-//     position: usize,
-//     parent: &mut Acc,
-// ) {
-//     if has_final_space(depth, sum_byte_length, text) {
-//         handle_spacing(
-//             sum_byte_length,
-//             text.len(),
-//             text,
-//             node_store,
-//             depth,
-//             position,
-//             parent,
-//         )
-//     }
-// }
+
+pub fn hash32<T: ?Sized + std::hash::Hash>(t: &T) -> u32 {
+    crate::utils::clamp_u64_to_u32(&crate::utils::hash(t))
+}
+
+

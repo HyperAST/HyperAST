@@ -238,6 +238,29 @@ where
         //     _phantom: std::marker::PhantomData,
         // }
     }
+
+    fn number_of_common_descendants_ranges(
+        &self,
+        src: &std::ops::Range<Self::Src>,
+        dst: &std::ops::Range<Self::Dst>,
+    ) -> u32
+    where
+        Self::Src: num_traits::PrimInt,
+        Self::Dst: num_traits::PrimInt,
+        Self: Sized,
+    {
+        crate::matchers::similarity_metrics::number_of_common_descendants_ranges(
+            src, dst, self.back,
+        )
+
+        // (src.start.to_usize().unwrap()..src.end.to_usize().unwrap())
+        //         .into_iter()
+        //         .filter(|t| src.is_src(&cast(*t).unwrap()))
+        //         .filter(|t| dst.contains(&src.get_dst_unchecked(&cast(*t).unwrap())))
+        //         .count()
+        //         .try_into()
+        //         .unwrap()
+    }
 }
 
 pub struct MonoIter<'a, T: 'a + PrimInt, U: 'a> {
@@ -600,27 +623,28 @@ where
     fn descendants_range(&self, x: &IdD) -> std::ops::Range<IdD> {
         let conv = self.map.borrow()[self.map.borrow().len() - 1 - x.to_usize().unwrap()]; //self.back.borrow_mut().lld(aaa);
         let lld = self.back.borrow().lld(&conv);
-        let mut y = *x;
-        // dbg!(self.map.borrow());
-        loop {
-            if y.is_zero() {
-                break;
-            }
-            // dbg!(y, lld);
-            let Some(conv) = self
-                .map
-                .borrow()
-                .get(self.map.borrow().len() - 1 - y.to_usize().unwrap())
-            else {
-                break;
-            };
-            if lld < *conv {
-                y = y - num_traits::one();
-            } else {
-                break;
-            }
-        }
-        y..*x
+        return lld..conv;
+        // let mut y = *x;
+        // // dbg!(self.map.borrow());
+        // loop {
+        //     if y.is_zero() {
+        //         break;
+        //     }
+        //     // dbg!(y, lld);
+        //     let Some(conv) = self
+        //         .map
+        //         .borrow()
+        //         .get(self.map.borrow().len() - 1 - y.to_usize().unwrap())
+        //     else {
+        //         break;
+        //     };
+        //     if lld < *conv {
+        //         y = y - num_traits::one();
+        //     } else {
+        //         break;
+        //     }
+        // }
+        // y..*x
     }
 
     type Slice<'b> = SimplePOSlice<'b,T,IdD> where Self: 'b;
@@ -916,12 +940,13 @@ where
 }
 
 pub struct CompleteWHPO<'a, T: Stored, IdD, Kr: Borrow<BitSlice>> {
-
-    #[allow(unused)] // TODO continue implementing traits, but after so long I would need test to avoid writting garbage.
+    #[allow(unused)]
+    // TODO continue implementing traits, but after so long I would need test to avoid writting garbage.
     pub(crate) map: &'a [IdD],
     pub(crate) id_compressed: Vec<T::TreeId>,
     pub(crate) llds: Vec<IdD>,
-    #[allow(unused)] // TODO continue implementing traits, but after so long I would need test to avoid writting garbage.
+    #[allow(unused)]
+    // TODO continue implementing traits, but after so long I would need test to avoid writting garbage.
     pub(crate) id_parent: Vec<IdD>,
     pub(super) kr: Kr,
 }

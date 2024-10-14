@@ -279,9 +279,7 @@ impl<'a, 'b> PatternParser<'a, 'b> {
                     patt: Box::new(patt.expect("a pattern")),
                 })
             }
-            "program" => {
-                Err("nothing to do".into())
-            }
+            "program" => Err("nothing to do".into()),
             x => {
                 dbg!(self.cursor.node().utf8_text(self.input).unwrap());
                 panic!("{} not handled", x)

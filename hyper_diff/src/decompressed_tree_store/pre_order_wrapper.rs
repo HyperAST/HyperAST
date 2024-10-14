@@ -127,7 +127,7 @@ where
                 "{:>3}:{} {:?}    [{},{}]",
                 o.to_usize().unwrap(),
                 "  ".repeat(self.inner.depth[i].to_usize().unwrap()),
-                self.stores.type_store().resolve_type(&node),
+                self.stores.resolve_type(&ori),
                 pos,
                 pos + len,
             )?;
@@ -164,7 +164,7 @@ where
                     "{:>3}:{} {:?}; {}",
                     o.to_usize().unwrap(),
                     "  ".repeat(self.inner.depth[i].to_usize().unwrap()),
-                    self.stores.type_store().resolve_type(&node),
+                    self.stores.resolve_type(&ori),
                     s.escape_debug()
                 )?;
             }
@@ -179,7 +179,7 @@ where
                 "{:>3}:{} {:?}",
                 o.to_usize().unwrap(),
                 "  ".repeat(self.inner.depth[i].to_usize().unwrap()),
-                self.stores.type_store().resolve_type(&node),
+                self.stores.resolve_type(&ori),
             )?;
         }
         Ok(())

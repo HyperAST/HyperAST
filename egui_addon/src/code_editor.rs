@@ -1,10 +1,11 @@
-
 use crate::Languages;
 
-use self::{editor_content::EditAwareString, generic_text_buffer::TextBuffer};
+use self::generic_text_buffer::TextBuffer;
 use super::Lang;
+pub use editor_content::EditAwareString;
 use egui::{Response, WidgetText};
 use egui_demo_lib::easy_mark::easy_mark;
+use generic_text_edit::TextEdit;
 use serde::Deserialize;
 use std::fmt::Debug;
 
@@ -64,8 +65,21 @@ impl<C: Clone> Clone for CodeEditor<C> {
     }
 }
 
-impl<L: Default + Languages, C: From<String>> From<(EditorInfo<String>, String)> for CodeEditor<L, C> {
+impl<L: Default + Languages, C: From<String>> From<(EditorInfo<String>, String)>
+    for CodeEditor<L, C>
+{
     fn from((info, code): (EditorInfo<String>, String)) -> Self {
+        let code = code.into();
+        Self {
+            info,
+            code,
+            ..Default::default()
+        }
+    }
+}
+
+impl<L: Default + Languages, C: From<String>> CodeEditor<L, C> {
+    pub fn new(info: EditorInfo<String>, code: String) -> Self {
         let code = code.into();
         Self {
             info,
@@ -108,7 +122,7 @@ pub(crate) fn default_parser() -> tree_sitter::Parser {
     tree_sitter::Parser::new().unwrap()
 }
 
-impl<L:Default + Languages, C: From<String>> Default for CodeEditor<L, C> {
+impl<L: Default + Languages, C: From<String>> Default for CodeEditor<L, C> {
     fn default() -> Self {
         let languages = L::default();
         let lang = languages.get("JavaScript");
@@ -134,7 +148,7 @@ function f() { return 2; }
     }
 }
 
-impl<L:Default + Languages> From<&str> for CodeEditor<L> {
+impl<L: Default + Languages> From<&str> for CodeEditor<L> {
     fn from(value: &str) -> Self {
         Self {
             code: value.to_string().into(),
@@ -143,7 +157,13 @@ impl<L:Default + Languages> From<&str> for CodeEditor<L> {
     }
 }
 
-impl<L:Default> CodeEditor<L> {
+impl<L: Default + Languages> AsRef<str> for CodeEditor<L> {
+    fn as_ref(&self) -> &str {
+        self.code()
+    }
+}
+
+impl<L: Default> CodeEditor<L> {
     pub fn code(&self) -> &str {
         self.code.as_str()
     }
@@ -183,32 +203,35 @@ impl<L:Default> CodeEditor<L> {
                         ui.fonts(|f| f.layout_job(layout_job))
                     };
                 } else {
-                    let language = "rs";
-                    let theme =
-                        egui_demo_lib::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
-
-                    let mut layouter = |ui: &egui::Ui, string: &str, _wrap_width: f32| {
-                        let layout_job = egui_demo_lib::syntax_highlighting::highlight(
-                            ui.ctx(),
-                            &theme,
-                            string,
-                            language,
-                        );
-                        ui.fonts(|f| f.layout_job(layout_job))
-                    };
-
-                    ui.add(
-                        egui::TextEdit::multiline(&mut code.string)
-                            .font(egui::TextStyle::Monospace) // for cursor height
-                            .code_editor()
-                            .desired_rows(1)
-                            .lock_focus(true)
-                            .layouter(&mut layouter),
-                    );
+                    show_edit_syntect(ui, code);
                 }
             });
         });
     }
+}
+
+pub fn show_edit_syntect(ui: &mut egui::Ui, code: &mut EditAwareString) {
+    let language = "rs";
+    let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+
+    let mut layouter = |ui: &egui::Ui, string: &EditAwareString, _wrap_width: f32| {
+        let layout_job = egui_extras::syntax_highlighting::highlight(
+            ui.ctx(),
+            &theme,
+            string.as_str(),
+            language,
+        );
+        ui.fonts(|f| f.layout_job(layout_job))
+    };
+
+    ui.add(
+        TextEdit::multiline(code)
+            .font(egui::TextStyle::Monospace) // for cursor height
+            .code_editor()
+            .desired_rows(1)
+            .lock_focus(true)
+            .layouter(&mut layouter),
+    );
 }
 
 fn checkbox_heading(
@@ -221,7 +244,7 @@ fn checkbox_heading(
         let spacing = &ui.spacing();
         let icon_width = spacing.icon_width;
         let icon_spacing = spacing.icon_spacing;
-        let text = text.into();
+        let text: WidgetText = text.into();
 
         let (text, mut desired_size) = if text.is_empty() {
             (None, epaint::vec2(icon_width, 0.0))
@@ -247,6 +270,7 @@ fn checkbox_heading(
         response.widget_info(|| {
             egui::WidgetInfo::selected(
                 egui::WidgetType::Checkbox,
+                true,
                 *checked,
                 text.as_ref().map_or("", |x| x.text()),
             )
@@ -255,12 +279,12 @@ fn checkbox_heading(
         if ui.is_rect_visible(rect) {
             let visuals = ui.style().interact(&response);
             let (small_icon_rect, big_icon_rect) = ui.spacing().icon_rectangles(rect);
-            ui.painter().add(epaint::RectShape {
-                rect: big_icon_rect.expand(visuals.expansion),
-                rounding: visuals.rounding,
-                fill: visuals.bg_fill,
-                stroke: visuals.bg_stroke,
-            });
+            ui.painter().add(epaint::RectShape::new(
+                big_icon_rect.expand(visuals.expansion),
+                visuals.rounding,
+                visuals.bg_fill,
+                visuals.bg_stroke,
+            ));
 
             if *checked {
                 ui.painter().add(egui::Shape::line(
@@ -277,7 +301,8 @@ fn checkbox_heading(
                     rect.min.x + icon_width + icon_spacing,
                     rect.center().y - 0.5 * text.size().y,
                 );
-                text.paint_with_visuals(ui.painter(), text_pos, visuals);
+                ui.painter().galley(text_pos, text, visuals.text_color());
+                // text.paint_with_visuals(ui.painter(), text_pos, visuals);
             }
         }
     }

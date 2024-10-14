@@ -18,6 +18,65 @@ pub trait HashKind {
     fn label() -> Self;
 }
 
+/// TODO handle roles in a polyglote way
+macro_rules! role_impl {
+    (
+        $( $t:ident => $s:expr, )+
+    ) => {
+        #[derive(PartialEq, Eq, Clone, Copy, Debug)]
+        pub enum Role {
+            $( $t, )+
+        }
+
+        impl<'a> TryFrom<&'a str> for Role {
+            type Error = ();
+            fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+                match value {
+                    $( $s => Ok(Self::$t), )*
+                    _ => Err(()),
+                }
+            }
+        }
+
+        impl Display for Role {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str(match self {
+                    $( Self::$t => $s, )*
+                })
+            }
+        }
+    };
+}
+
+role_impl!(
+    Name => "name",
+    Scope => "scope",
+    Body => "body",
+    SuperType => "super_type",
+    Interfaces => "interfaces",
+    Constructor => "constructor",
+    Object => "object",
+    Arguments => "arguments",
+    TypeArguments => "type_arguments",
+    Type => "type",
+    Declarator => "declarator",
+    Value => "value",
+    TypeParameters => "type_parameters",
+    Parameters => "parameters",
+    Condition => "condition",
+    Init => "init",
+    Update => "update",
+    Alternative => "alternative",
+    Resources => "resources",
+    Field => "field",
+    Left => "left",
+    Right => "right",
+    Superclass => "superclass",
+    Element => "element",
+    Consequence => "consequence",
+    Key => "key",
+);
+
 #[allow(unused)]
 mod exp {
     use super::*;
@@ -361,16 +420,18 @@ pub enum Shared {
 }
 
 pub trait Lang<T>: LangRef<T> {
-    fn make(t: u16) -> &'static T;
-    fn to_u16(t: T) -> u16;
+    fn make(t: TypeInternalSize) -> &'static T;
+    fn to_u16(t: T) -> TypeInternalSize;
 }
 
 pub trait LangRef<T> {
     fn name(&self) -> &'static str;
-    fn make(&self, t: u16) -> &'static T;
-    fn to_u16(&self, t: T) -> u16;
+    fn make(&self, t: TypeInternalSize) -> &'static T;
+    fn to_u16(&self, t: T) -> TypeInternalSize;
+    fn ts_symbol(&self, t: T) -> u16;
 }
-pub struct LangWrapper<T: 'static>(&'static dyn LangRef<T>);
+
+pub struct LangWrapper<T: 'static + ?Sized>(&'static dyn LangRef<T>);
 
 impl<T> From<&'static (dyn LangRef<T> + 'static)> for LangWrapper<T> {
     fn from(value: &'static (dyn LangRef<T> + 'static)) -> Self {
@@ -379,16 +440,20 @@ impl<T> From<&'static (dyn LangRef<T> + 'static)> for LangWrapper<T> {
 }
 
 impl<T> LangRef<T> for LangWrapper<T> {
-    fn make(&self, t: u16) -> &'static T {
+    fn make(&self, t: TypeInternalSize) -> &'static T {
         self.0.make(t)
     }
 
-    fn to_u16(&self, t: T) -> u16 {
+    fn to_u16(&self, t: T) -> TypeInternalSize {
         self.0.to_u16(t)
     }
 
     fn name(&self) -> &'static str {
         self.0.name()
+    }
+
+    fn ts_symbol(&self, t: T) -> u16 {
+        self.0.ts_symbol(t)
     }
 }
 
@@ -398,6 +463,7 @@ pub trait HyperType: Display + Debug {
     fn as_any(&self) -> &dyn std::any::Any;
     // returns the same address for the same type
     fn as_static(&self) -> &'static dyn HyperType;
+    fn as_static_str(&self) -> &'static str;
     fn generic_eq(&self, other: &dyn HyperType) -> bool
     where
         Self: 'static + Sized;
@@ -405,9 +471,13 @@ pub trait HyperType: Display + Debug {
     fn is_directory(&self) -> bool;
     fn is_spaces(&self) -> bool;
     fn is_syntax(&self) -> bool;
+    fn is_hidden(&self) -> bool;
+    fn is_named(&self) -> bool;
+    fn is_supertype(&self) -> bool;
     fn get_lang(&self) -> LangWrapper<Self>
     where
         Self: Sized;
+    fn lang_ref(&self) -> LangWrapper<AnyType>;
 }
 
 // experiment
@@ -441,6 +511,10 @@ impl HyperType for u8 {
         todo!()
     }
 
+    fn as_static_str(&self) -> &'static str {
+        todo!()
+    }
+
     fn is_file(&self) -> bool {
         todo!()
     }
@@ -457,13 +531,42 @@ impl HyperType for u8 {
         todo!()
     }
 
+    fn is_hidden(&self) -> bool {
+        todo!()
+    }
+
+    fn is_supertype(&self) -> bool {
+        todo!()
+    }
+
+    fn is_named(&self) -> bool {
+        todo!()
+    }
+
     fn get_lang(&self) -> LangWrapper<Self>
     where
         Self: Sized,
     {
         todo!()
     }
+    fn lang_ref(&self) -> LangWrapper<AnyType> {
+        todo!()
+    }
 }
+
+// blanket impl for all TStore such that TypeTrait can be implemented on TypeU16
+// impl<L> Lang<TypeU16<L>> for L
+// where
+//     L: LangRef<TypeU16<L>>, //for L
+//     L: LLang<TypeU16<L>, I = u16>
+// {
+//     fn make(t: u16) -> &'static TypeU16<L> {
+//         <L as Lang<L::E>>::make(t)
+//     }
+//     fn to_u16(t: TypeU16<L>) -> u16 {
+//         <L as Lang<L::E>>::to_u16(t)
+//     }
+// }
 
 pub trait TypeTrait: HyperType + Hash + Copy + Eq + Send + Sync {
     type Lang: Lang<Self>;
@@ -533,6 +636,17 @@ pub trait WithChildren: Node + Stored {
     fn children(&self) -> Option<&Self::Children<'_>>;
 }
 
+pub trait WithRoles: WithChildren {
+    fn role_at<Role: 'static + Copy + std::marker::Sync + std::marker::Send>(
+        &self,
+        at: Self::ChildIdx,
+    ) -> Option<Role>;
+}
+
+pub trait WithPrecompQueries {
+    fn wont_match_given_precomputed_queries(&self, needed: u16) -> bool;
+}
+
 pub trait WithChildrenSameLang: WithChildren {
     type TChildren<'a>: Children<Self::ChildIdx, Self::TreeId> + ?Sized
     where
@@ -545,7 +659,7 @@ pub trait WithChildrenSameLang: WithChildren {
 }
 
 pub trait IterableChildren<T> {
-    type ChildrenIter<'a>: Iterator<Item = &'a T>
+    type ChildrenIter<'a>: Iterator<Item = &'a T> + Clone
     where
         T: 'a,
         Self: 'a;
@@ -570,7 +684,10 @@ pub trait Children<IdX, T>: std::ops::Index<IdX, Output = T> + IterableChildren<
 // }
 
 impl<T> IterableChildren<T> for [T] {
-    type ChildrenIter<'a> = core::slice::Iter<'a, T> where T: 'a;
+    type ChildrenIter<'a>
+        = core::slice::Iter<'a, T>
+    where
+        T: 'a;
 
     fn iter_children(&self) -> Self::ChildrenIter<'_> {
         <[T]>::iter(&self)
@@ -617,12 +734,15 @@ where
     }
 }
 
+#[derive(ref_cast::RefCast)]
 #[repr(transparent)]
 pub struct MySlice<T>(pub [T]);
 
 impl<'a, T> From<&'a [T]> for &'a MySlice<T> {
     fn from(value: &'a [T]) -> Self {
-        unsafe { std::mem::transmute(value) }
+        use ref_cast::RefCast;
+        // NOTE it makes compile time layout assertions
+        MySlice::ref_cast(value)
     }
 }
 
@@ -670,7 +790,10 @@ impl<T: Debug> Default for &MySlice<T> {
 }
 
 impl<T> IterableChildren<T> for MySlice<T> {
-    type ChildrenIter<'a> = core::slice::Iter<'a, T> where T: 'a;
+    type ChildrenIter<'a>
+        = core::slice::Iter<'a, T>
+    where
+        T: 'a;
 
     fn iter_children(&self) -> Self::ChildrenIter<'_> {
         <[T]>::iter(&self.0)
@@ -768,6 +891,7 @@ mod owned {
 pub trait WithStats {
     fn size(&self) -> usize;
     fn height(&self) -> usize;
+    fn line_count(&self) -> usize;
 }
 pub trait WithMetaData<C> {
     fn get_metadata(&self) -> Option<&C>;
@@ -788,7 +912,7 @@ pub trait Labeled {
     fn get_label_unchecked<'a>(&'a self) -> &'a Self::Label;
     fn try_get_label<'a>(&'a self) -> Option<&'a Self::Label>;
 }
-pub trait Tree: Labeled + WithChildren {
+pub trait Tree: Labeled + WithChildren + ErasedHolder {
     fn has_children(&self) -> bool;
     fn has_label(&self) -> bool;
 }
@@ -950,28 +1074,304 @@ pub trait LabelStore<L: ?Sized> {
 }
 
 type TypeInternalSize = u16;
-pub trait TypeStore<T> {
+
+pub trait TypeStore {
     type Ty: 'static
         + HyperType
         + Eq
         + std::hash::Hash
         + Copy
         + std::marker::Send
-        + std::marker::Sync;
-    const MASK: TypeInternalSize;
-    fn resolve_type(&self, n: &T) -> Self::Ty;
-    fn resolve_lang(&self, n: &T) -> LangWrapper<Self::Ty>;
-    type Marshaled;
-    fn marshal_type(&self, n: &T) -> Self::Marshaled;
-    fn type_eq(&self, n: &T, m: &T) -> bool;
+        + std::marker::Sync
+        + Compo;
+
+    fn type_to_u16(t: Self::Ty) -> TypeInternalSize {
+        t.get_lang().to_u16(t)
+    }
+    fn decompress_type(erazed: &impl ErasedHolder, tid: std::any::TypeId) -> Self::Ty {
+        *unsafe {
+            erazed
+                .unerase_ref::<Self::Ty>(tid)
+                .unwrap_or_else(|| unimplemented!("override 'decompress_type'"))
+        }
+    }
 }
 
-pub trait SpecializedTypeStore<T: Typed>: TypeStore<T> {}
+pub trait LLang<T>: Lang<Self::E> {
+    type I;
+    type E: 'static + Copy + Display;
+    const TE: &[Self::E];
 
-pub trait HyperAST<'store> {
-    type IdN: NodeId<IdN = Self::IdN>;
-    type Idx: PrimInt;
-    type Label;
+    fn as_lang_wrapper() -> LangWrapper<T>;
+}
+
+struct LLangTest;
+
+#[derive(Clone, Copy, Display, strum_macros::EnumCount)]
+#[repr(u8)]
+enum TyTest {
+    A,
+    B,
+    C,
+}
+
+impl Lang<TyTest> for LLangTest {
+    fn make(t: TypeInternalSize) -> &'static TyTest {
+        todo!()
+    }
+
+    fn to_u16(t: TyTest) -> TypeInternalSize {
+        todo!()
+    }
+}
+
+impl LangRef<TyTest> for LLangTest {
+    fn name(&self) -> &'static str {
+        todo!()
+    }
+
+    fn make(&self, t: TypeInternalSize) -> &'static TyTest {
+        todo!()
+    }
+
+    fn to_u16(&self, t: TyTest) -> TypeInternalSize {
+        todo!()
+    }
+
+    fn ts_symbol(&self, t: TyTest) -> u16 {
+        todo!()
+    }
+}
+
+impl LLang<TypeU16<Self>> for LLangTest {
+    type I = u16;
+
+    type E = TyTest;
+
+    const TE: &[Self::E] = &[TyTest::A, TyTest::B, TyTest::C];
+
+    fn as_lang_wrapper() -> LangWrapper<TypeU16<Self>> {
+        unimplemented!("not important here")
+    }
+}
+
+pub trait SizedIndex<I> {
+    fn len(&self) -> I;
+}
+
+impl<T> SizedIndex<u16> for [T] {
+    fn len(&self) -> u16 {
+        self.len().to_u16().unwrap()
+    }
+}
+
+#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
+pub struct TypeU16<L: LLang<Self, I = u16>>(u16, std::marker::PhantomData<L>);
+
+unsafe impl<L: LLang<Self, I = u16>> Send for TypeU16<L> {}
+unsafe impl<L: LLang<Self, I = u16>> Sync for TypeU16<L> {}
+
+impl<L: LLang<Self, I = u16>> Debug for TypeU16<L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("TypeU16")
+            .field(&self.0)
+            .field(&self.1)
+            .finish()
+    }
+}
+
+impl<L: LLang<Self, I = u16>> PartialEq for TypeU16<L> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<L: LLang<Self, I = u16>> Eq for TypeU16<L> {}
+
+impl<L: LLang<Self, I = u16>> Copy for TypeU16<L> {}
+
+impl<L: LLang<Self, I = u16>> Clone for TypeU16<L> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), self.1.clone())
+    }
+}
+
+impl<L: LLang<Self, I = u16>> Hash for TypeU16<L> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+        self.1.hash(state);
+    }
+}
+impl<L: LLang<Self, I = u16>> Display for TypeU16<L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.e())
+    }
+}
+
+impl<L: LLang<Self, I = u16>> TypeU16<L> {
+    pub fn e(&self) -> L::E {
+        debug_assert!(L::TE.len() <= u16::MAX as usize);
+        L::TE[self.0 as usize]
+    }
+    fn s(&self) -> &'static L::E {
+        debug_assert!(L::TE.len() <= u16::MAX as usize);
+        &L::TE[self.0 as usize]
+    }
+    pub fn new(e: L::E) -> Self {
+        Self(<L as Lang<L::E>>::to_u16(e), std::marker::PhantomData)
+    }
+}
+
+impl<L: LLang<Self, I = u16> + std::fmt::Debug> HyperType for TypeU16<L>
+where
+    L::E: HyperType,
+{
+    fn as_shared(&self) -> Shared {
+        self.e().as_shared()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self.s().as_any()
+    }
+
+    fn as_static(&self) -> &'static dyn HyperType {
+        self.e().as_static()
+    }
+
+    fn as_static_str(&self) -> &'static str {
+        self.e().as_static_str()
+    }
+
+    fn generic_eq(&self, other: &dyn HyperType) -> bool
+    where
+        Self: 'static + Sized,
+    {
+        self.e().generic_eq(other)
+    }
+
+    fn is_file(&self) -> bool {
+        self.e().is_file()
+    }
+
+    fn is_directory(&self) -> bool {
+        self.e().is_directory()
+    }
+
+    fn is_spaces(&self) -> bool {
+        self.e().is_spaces()
+    }
+
+    fn is_syntax(&self) -> bool {
+        self.e().is_syntax()
+    }
+
+    fn is_hidden(&self) -> bool {
+        self.e().is_hidden()
+    }
+
+    fn is_named(&self) -> bool {
+        self.e().is_named()
+    }
+
+    fn is_supertype(&self) -> bool {
+        self.e().is_supertype()
+    }
+
+    fn get_lang(&self) -> LangWrapper<Self>
+    where
+        Self: Sized,
+    {
+        L::as_lang_wrapper()
+    }
+
+    fn lang_ref(&self) -> LangWrapper<AnyType> {
+        self.e().lang_ref()
+    }
+}
+
+// impl<L: LLang<Self, I = u16> + std::fmt::Debug> TypeTrait for TypeU16<L>
+// where
+//     L::E: TypeTrait<Lang = L>,
+//     L: Lang<Self>,
+// {
+//     type Lang = L;
+
+// }
+
+#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
+pub struct TypeU8<L: LLang<Self>>(u8, std::marker::PhantomData<L>);
+
+#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
+pub enum TypeEnumCommon<J: Lang<Self>, X: Lang<Self>, C: Lang<Self>, M: Lang<Self>> {
+    Java(u16, std::marker::PhantomData<J>),
+    Xml(u16, std::marker::PhantomData<X>),
+    C(u16, std::marker::PhantomData<C>),
+    Make(u16, std::marker::PhantomData<M>),
+}
+
+pub trait CompressedCompo<E: ErasedHolder> {
+    fn decomp(ptr: E, tid: std::any::TypeId) -> Self
+    where
+        Self: Sized;
+
+    // fn compressed_insert(self, e: &mut EntityWorldMut<'_>);
+    // fn components(world: &mut World) -> Vec<ComponentId>;
+}
+
+pub trait ErasedHolder {
+    /// made unsafe because mixed-up args could return corrupted memory for certain impls
+    unsafe fn unerase_ref<T: 'static + Compo>(&self, tid: std::any::TypeId) -> Option<&T>;
+}
+
+impl ErasedHolder for &dyn std::any::Any {
+    /// NOTE this impl is totaly safe, Any is checked internally
+    /// TODO make a separate trait to extract the unsafe
+    unsafe fn unerase_ref<T: 'static + Compo>(&self, tid: std::any::TypeId) -> Option<&T> {
+        if tid == std::any::TypeId::of::<T>() {
+            self.downcast_ref()
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(all(feature = "bevy_ecs", feature = "legion"))]
+pub trait Compo: bevy_ecs::component::Component + legion::storage::Component {}
+
+#[cfg(all(feature = "bevy_ecs", feature = "legion"))]
+impl<T> Compo for T where T: bevy_ecs::component::Component + legion::storage::Component {}
+
+#[cfg(all(not(feature = "bevy_ecs"), feature = "legion"))]
+pub trait Compo: legion::storage::Component {}
+
+#[cfg(all(not(feature = "bevy_ecs"), feature = "legion"))]
+impl<T> Compo for T where T: legion::storage::Component {}
+
+#[cfg(all(not(feature = "bevy_ecs"), not(feature = "legion")))]
+pub trait Compo {}
+
+#[cfg(all(not(feature = "bevy_ecs"), not(feature = "legion")))]
+impl<T> Compo for T {}
+
+pub trait ErasedInserter {
+    fn insert<T: 'static + Compo>(&mut self, t: T);
+}
+
+pub trait CompoRegister {
+    type Id;
+    fn register_compo<T: 'static + Compo>(&mut self) -> Self::Id;
+}
+
+pub trait SpecializedTypeStore<T: Typed>: TypeStore {}
+
+pub trait RoleStore: TypeStore {
+    type IdF: 'static + Copy + Default + PartialEq;
+    type Role: 'static + Copy + PartialEq + std::marker::Sync + std::marker::Send;
+    fn resolve_field(lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role;
+    fn intern_role(lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF;
+}
+
+pub trait HyperAST<'store>: HyperASTShared {
     type T: Tree<Label = Self::Label, TreeId = Self::IdN, ChildIdx = Self::Idx>;
     type NS: 'store + NodeStore<Self::IdN, R<'store> = Self::T>;
     fn node_store(&self) -> &Self::NS;
@@ -979,8 +1379,7 @@ pub trait HyperAST<'store> {
     type LS: LabelStore<str, I = Self::Label>;
     fn label_store(&self) -> &Self::LS;
 
-    type TS: TypeStore<Self::T>;
-    fn type_store(&self) -> &Self::TS;
+    type TS: TypeStore;
 
     fn decompress<D: DecompressedSubtree<'store, Self::T, Out = D>>(
         &'store self,
@@ -1014,15 +1413,26 @@ pub trait HyperAST<'store> {
             )
         }
     }
-    fn resolve_type(&'store self, id: &Self::IdN) -> <Self::TS as TypeStore<Self::T>>::Ty {
+    fn resolve_type(&'store self, id: &Self::IdN) -> <Self::TS as TypeStore>::Ty {
         let ns = self.node_store();
         let n = ns.resolve(id);
-        self.type_store().resolve_type(&n).clone()
+        Self::TS::decompress_type(&n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+    }
+    fn resolve_lang(&self, n: &Self::T) -> LangWrapper<<Self::TS as TypeStore>::Ty> {
+        Self::TS::decompress_type(n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+            .get_lang()
+    }
+    fn type_eq(&self, n: &Self::T, m: &Self::T) -> bool {
+        Self::TS::decompress_type(n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+            .generic_eq(
+                Self::TS::decompress_type(m, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+                    .as_static(),
+            )
     }
 }
 
 pub trait HyperASTShared {
-    type IdN: NodeId;
+    type IdN: NodeId<IdN = Self::IdN>;
     type Idx: PrimInt;
     type Label;
 }
@@ -1047,16 +1457,16 @@ pub trait HyperASTLean: HyperASTShared {
     type LS: LabelStore<str, I = Self::Label>;
     fn label_store(&self) -> &Self::LS;
 
-    type TS: TypeStore<Self::T>;
-    fn type_store(&self) -> &Self::TS;
+    type TS: TypeStore;
 
-    fn resolve_type(&self, id: &Self::IdN) -> <Self::TS as TypeStore<Self::T>>::Ty
+    fn resolve_type(&self, id: &Self::IdN) -> <Self::TS as TypeStore>::Ty
     where
         for<'a> &'a Self::NS: NodeStoreLean<Self::IdN, R = Self::T>,
     {
         let ns = self.node_store();
         let n = ns.resolve(id);
-        self.type_store().resolve_type(&n).clone()
+        todo!()
+        // self.type_store().resolve_type(&n).clone()
     }
 }
 
@@ -1080,15 +1490,18 @@ pub trait HyperASTAsso: HyperASTShared {
     type LS: LabelStore<str, I = Self::Label>;
     fn label_store(&self) -> &Self::LS;
 
-    type TS<'store>: TypeStore<Self::T<'store>>
+    type TS<'store>: TypeStore
     where
         Self: 'store;
-    fn type_store(&self) -> &Self::TS<'_>;
 
-    fn resolve_type(&self, id: &Self::IdN) -> <Self::TS<'_> as TypeStore<Self::T<'_>>>::Ty {
+    fn resolve_type(&self, id: &Self::IdN) -> <Self::TS<'_> as TypeStore>::Ty {
         let ns = self.node_store();
         let n = ns.resolve(id);
-        self.type_store().resolve_type(&n).clone()
+        Self::TS::decompress_type(&n, std::any::TypeId::of::<<Self::TS<'_> as TypeStore>::Ty>())
+        // let ns = self.node_store();
+        // let n = ns.resolve(id);
+        // todo!()
+        // self.type_store().resolve_type(&n).clone()
     }
 }
 
@@ -1112,11 +1525,8 @@ where
     }
 
     type TS = T::TS;
-    fn type_store(&self) -> &Self::TS {
-        (*self).type_store()
-    }
 
-    fn resolve_type(&self, id: &Self::IdN) -> <Self::TS as TypeStore<Self::T>>::Ty
+    fn resolve_type(&self, id: &Self::IdN) -> <Self::TS as TypeStore>::Ty
     where
         for<'a> &'a Self::NS: NodeStoreLean<Self::IdN, R = Self::T>,
     {
@@ -1147,16 +1557,14 @@ pub trait TypedHyperAST<'store, TIdN: TypedNodeId<IdN = Self::IdN>>: HyperAST<'s
 }
 
 pub struct SimpleHyperAST<T, TS, NS, LS> {
-    pub type_store: TS,
     pub node_store: NS,
     pub label_store: LS,
-    pub _phantom: std::marker::PhantomData<T>,
+    pub _phantom: std::marker::PhantomData<(T, TS)>,
 }
 
 impl<T, TS, NS: Copy, LS> SimpleHyperAST<T, TS, NS, &LS> {
     pub fn change_type_store_ref<TS2>(&self, new: TS2) -> SimpleHyperAST<T, TS2, NS, &LS> {
         SimpleHyperAST {
-            type_store: new,
             node_store: self.node_store,
             label_store: self.label_store,
             _phantom: std::marker::PhantomData,
@@ -1167,7 +1575,6 @@ impl<T, TS, NS: Copy, LS> SimpleHyperAST<T, TS, NS, &LS> {
 impl<T, TS, NS, LS> SimpleHyperAST<T, TS, NS, LS> {
     pub fn change_type_store<TS2>(self, new: TS2) -> SimpleHyperAST<T, TS2, NS, LS> {
         SimpleHyperAST {
-            type_store: new,
             node_store: self.node_store,
             label_store: self.label_store,
             _phantom: std::marker::PhantomData,
@@ -1175,7 +1582,6 @@ impl<T, TS, NS, LS> SimpleHyperAST<T, TS, NS, LS> {
     }
     pub fn change_tree_type<T2>(self) -> SimpleHyperAST<T2, TS, NS, LS> {
         SimpleHyperAST {
-            type_store: self.type_store,
             node_store: self.node_store,
             label_store: self.label_store,
             _phantom: std::marker::PhantomData,
@@ -1186,7 +1592,6 @@ impl<T, TS, NS, LS> SimpleHyperAST<T, TS, NS, LS> {
 impl<T, TS: Default, NS: Default, LS: Default> Default for SimpleHyperAST<T, TS, NS, LS> {
     fn default() -> Self {
         Self {
-            type_store: Default::default(),
             node_store: Default::default(),
             label_store: Default::default(),
             _phantom: Default::default(),
@@ -1200,7 +1605,8 @@ where
     T::TreeId: NodeId<IdN = T::TreeId>,
     NS: NodeStore<T::TreeId>,
 {
-    type R<'a> = NS::R<'a>
+    type R<'a>
+        = NS::R<'a>
     where
         Self: 'a;
 
@@ -1244,54 +1650,42 @@ where
     }
 }
 
-impl<'store, T, TS, NS, LS> TypeStore<T> for SimpleHyperAST<T, TS, NS, LS>
+impl<'store, T, TS, NS, LS> TypeStore for SimpleHyperAST<T, TS, NS, LS>
 where
-    T: TypedTree,
+    T: TypedTree<Type = TS::Ty>,
     T::TreeId: NodeId<IdN = T::TreeId>,
-    T::Type: 'static + std::hash::Hash,
-    TS: TypeStore<T, Ty = T::Type>,
+    TS::Ty: 'static + std::hash::Hash,
+    TS: TypeStore,
+    // TS::Ty:CompressedCompo,
 {
     type Ty = TS::Ty;
 
-    const MASK: u16 = TS::MASK;
+    // fn resolve_lang(&self, n: &T) -> LangWrapper<Self::Ty> {
+    //     self.type_store.resolve_lang(n)
+    // }
 
-    fn resolve_type(&self, n: &T) -> Self::Ty {
-        self.type_store.resolve_type(n)
-    }
+    // fn type_eq(&self, n: &T, m: &T) -> bool {
+    //     self.type_store.type_eq(n, m)
+    // }
 
-    fn resolve_lang(&self, n: &T) -> LangWrapper<Self::Ty> {
-        self.type_store.resolve_lang(n)
-    }
-
-    type Marshaled = TS::Marshaled;
-
-    fn marshal_type(&self, n: &T) -> Self::Marshaled {
-        self.type_store.marshal_type(n)
-    }
-    fn type_eq(&self, n: &T, m: &T) -> bool {
-        self.type_store.type_eq(n, m)
-    }
+    // fn resolve_type(&self, n: &T) -> Self::Ty {
+    //     self.type_store.resolve_type(n)
+    // }
 }
 
 pub struct TypeIndex {
     pub lang: &'static str,
-    pub ty: u16,
+    pub ty: TypeInternalSize,
 }
 
 impl<'store, T, TS, NS, LS> HyperAST<'store> for SimpleHyperAST<T, TS, NS, LS>
 where
     T: Tree,
     T::TreeId: NodeId<IdN = T::TreeId>,
-    TS: TypeStore<T>,
+    TS: TypeStore,
     NS: 'store + NodeStore<T::TreeId, R<'store> = T>,
     LS: LabelStore<str, I = T::Label>,
 {
-    type IdN = T::TreeId;
-
-    type Idx = T::ChildIdx;
-
-    type Label = T::Label;
-
     type T = T;
 
     type NS = NS;
@@ -1307,15 +1701,12 @@ where
     }
 
     type TS = TS;
-
-    fn type_store(&self) -> &Self::TS {
-        &self.type_store
-    }
 }
 
 impl<'store, T, TS, NS, LS> HyperASTShared for SimpleHyperAST<T, TS, NS, LS>
 where
     T: Tree,
+    T::TreeId: NodeId<IdN = T::TreeId>,
 {
     type IdN = T::TreeId;
 
@@ -1326,14 +1717,20 @@ where
 impl<T, TS, NS, LS> HyperASTAsso for SimpleHyperAST<T, TS, NS, LS>
 where
     T: Tree,
-    T::TreeId: NodeId,
-    TS: TypeStore<T>,
+    T::TreeId: NodeId<IdN = T::TreeId>,
+    TS: TypeStore,
     for<'s> NS: 's + NodeStore<T::TreeId, R<'s> = T>,
     LS: LabelStore<str, I = T::Label>,
 {
-    type T<'s> = T where Self:'s;
+    type T<'s>
+        = T
+    where
+        Self: 's;
 
-    type NS<'s> = NS where Self:'s;
+    type NS<'s>
+        = NS
+    where
+        Self: 's;
 
     fn node_store(&self) -> &Self::NS<'_> {
         &self.node_store
@@ -1345,14 +1742,14 @@ where
         &self.label_store
     }
 
-    type TS<'s> = TS where Self:'s;
-
-    fn type_store(&self) -> &Self::TS<'_> {
-        &self.type_store
-    }
+    type TS<'s>
+        = TS
+    where
+        Self: 's;
 }
 
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
 pub struct AnyType(&'static dyn HyperType);
 
 unsafe impl Send for AnyType {}
@@ -1417,11 +1814,34 @@ impl HyperType for AnyType {
         self.0.as_static()
     }
 
+    fn as_static_str(&self) -> &'static str {
+        self.0.as_static_str()
+    }
+
+    fn is_hidden(&self) -> bool {
+        self.0.is_hidden()
+    }
+
+    fn is_supertype(&self) -> bool {
+        self.0.is_supertype()
+    }
+
+    fn is_named(&self) -> bool {
+        self.0.is_named()
+    }
+
     fn get_lang(&self) -> LangWrapper<Self>
     where
         Self: Sized,
     {
         // self.0.get_lang()
-        panic!()
+        // NOTE quite surprising Oo
+        // the type inference is working in our favour
+        // TODO post on https://users.rust-lang.org/t/understanding-trait-object-safety-return-types/73425 or https://stackoverflow.com/questions/54465400/why-does-returning-self-in-trait-work-but-returning-optionself-requires or https://www.reddit.com/r/rust/comments/lbbobv/3_things_to_try_when_you_cant_make_a_trait_object/
+        self.0.lang_ref()
+    }
+
+    fn lang_ref(&self) -> LangWrapper<AnyType> {
+        self.0.lang_ref()
     }
 }

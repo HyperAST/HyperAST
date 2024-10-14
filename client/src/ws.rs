@@ -1,5 +1,5 @@
 use automerge::sync::SyncDoc;
-use axum::TypedHeader;
+use axum_extra::TypedHeader;
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     response::IntoResponse,

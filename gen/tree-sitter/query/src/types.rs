@@ -3,7 +3,10 @@ use std::fmt::Display;
 use hyper_ast::{
     store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
-    types::{AnyType, HyperType, Lang, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
+    types::{
+        AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypeU16,
+        TypedNodeId,
+    },
 };
 
 #[cfg(feature = "legion")]
@@ -13,105 +16,64 @@ mod legion_impls {
     use crate::TNode;
 
     impl<'a> TNode<'a> {
-        pub fn obtain_type<T>(&self, _: &mut impl TsQueryEnabledTypeStore<T>) -> Type {
+        pub fn obtain_type(&self) -> Type {
             let t = self.kind_id();
             Type::from_u16(t)
         }
     }
 
-    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::TypeIndex};
+    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::LangWrapper};
 
-    impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        type Ty = Type;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-        fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
-            n.get_component::<Type>().unwrap().clone()
+    impl TypeStore for TStore {
+        type Ty = TypeU16<TsQuery>;
+      
+    }
+
+    impl RoleStore for TStore {
+        type IdF = u16;
+
+        type Role = hyper_ast::types::Role;
+
+        fn resolve_field(_lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
+            let s = tree_sitter_query::language()
+                .field_name_for_id(field_id)
+                .ok_or_else(|| format!("{}", field_id))
+                .unwrap();
+            hyper_ast::types::Role::try_from(s).expect(s)
         }
 
-        fn resolve_lang(
-            &self,
-            _n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            From::<&'static (dyn LangRef<Type>)>::from(&TsQuery)
-        }
-
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&TsQuery),
-                ty: *n.get_component::<Type>().unwrap() as u16,
-            }
-        }
-        fn type_eq(
-            &self,
-            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-            m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        ) -> bool {
-            n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
+        fn intern_role(_lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
+            let field_name = role.to_string();
+            tree_sitter_query::language()
+                .field_id_for_name(field_name)
+                .unwrap()
+                .into()
         }
     }
+
     impl<'a> TsQueryEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        const LANG: TypeInternalSize = Self::Ts as u16;
-
-        fn _intern(l: u16, t: u16) -> Self::Ty {
-            // T((u16::MAX - l as u16) | t)
-            todo!("{} {}", l, t)
-        }
-        fn intern(&self, t: Type) -> Self::Ty {
-            t
+        fn intern(t: Type) -> Self::Ty {
+            t.into()
         }
 
-        fn resolve(&self, t: Self::Ty) -> Type {
-            t
-            // let t = t.0 as u16;
-            // let t = t & !TStore::MASK;
-            // Type::resolve(t)
-        }
-    }
-    impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
-        type Ty = AnyType;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-        fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-            From::<&'static (dyn HyperType)>::from(LangRef::<Type>::make(
-                &TsQuery,
-                *n.get_component::<Type>().unwrap() as u16,
-            ))
-        }
-
-        fn resolve_lang(
-            &self,
-            _n: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            From::<&'static (dyn LangRef<AnyType>)>::from(&TsQuery)
-        }
-
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&TsQuery),
-                ty: *n.get_component::<Type>().unwrap() as u16,
-            }
-        }
-        fn type_eq(
-            &self,
-            n: &HashedNodeRef<'a, NodeIdentifier>,
-            m: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> bool {
-            todo!("{:?} {:?}", n, m)
+        fn resolve(t: Self::Ty) -> Type {
+            t.e()
         }
     }
 }
 
-pub trait TsQueryEnabledTypeStore<T>: TypeStore<T> {
-    const LANG: u16;
-    fn intern(&self, t: Type) -> Self::Ty {
-        let t = t as u16;
-        Self::_intern(Self::LANG, t)
-    }
-    fn _intern(l: u16, t: u16) -> Self::Ty;
-    fn resolve(&self, t: Self::Ty) -> Type;
+#[cfg(feature = "impl")]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    tree_sitter_query::language().id_for_node_kind(kind, named)
+}
+#[cfg(not(feature = "impl"))]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    unimplemented!("need treesitter grammar")
+}
+
+pub trait TsQueryEnabledTypeStore<T>: TypeStore {
+    fn intern(t: Type) -> Self::Ty;
+    fn resolve(t: Self::Ty) -> Type;
 }
 
 impl Type {
@@ -144,14 +106,11 @@ impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
     type Ty = Type;
 }
 
-#[repr(u8)]
-pub enum TStore {
-    Ts = 0,
-}
+pub struct TStore;
 
 impl Default for TStore {
     fn default() -> Self {
-        Self::Ts
+        Self
     }
 }
 
@@ -160,7 +119,9 @@ type TypeInternalSize = u16;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct T(TypeInternalSize);
 
-pub struct TsQuery;
+#[derive(Debug)]
+pub struct Lang;
+pub type TsQuery = Lang;
 
 impl LangRef<AnyType> for TsQuery {
     fn make(&self, t: u16) -> &'static AnyType {
@@ -176,6 +137,10 @@ impl LangRef<AnyType> for TsQuery {
     fn name(&self) -> &'static str {
         std::any::type_name::<TsQuery>()
     }
+
+    fn ts_symbol(&self, t: AnyType) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
 }
 
 impl LangRef<Type> for TsQuery {
@@ -189,14 +154,38 @@ impl LangRef<Type> for TsQuery {
     fn name(&self) -> &'static str {
         std::any::type_name::<TsQuery>()
     }
+
+    fn ts_symbol(&self, t: Type) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
 }
 
-impl Lang<Type> for TsQuery {
+type TType = hyper_ast::types::TypeU16<Lang>;
+
+impl LangRef<TType> for TsQuery {
+    fn make(&self, t: u16) -> &'static TType {
+        // TODO could make one safe, but not priority
+        unsafe { std::mem::transmute(&S_T_L[t as usize]) }
+    }
+    fn to_u16(&self, t: TType) -> u16 {
+        t.e() as u16
+    }
+
+    fn name(&self) -> &'static str {
+        std::any::type_name::<TsQuery>()
+    }
+
+    fn ts_symbol(&self, t: TType) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
+}
+
+impl hyper_ast::types::Lang<Type> for TsQuery {
     fn make(t: u16) -> &'static Type {
-        TsQuery.make(t)
+        Lang.make(t)
     }
     fn to_u16(t: Type) -> u16 {
-        TsQuery.to_u16(t)
+        Lang.to_u16(t)
     }
 }
 
@@ -248,16 +237,35 @@ impl HyperType for Type {
     }
 
     fn as_static(&self) -> &'static dyn HyperType {
-        let t = <TsQuery as Lang<Type>>::to_u16(*self);
-        let t = <TsQuery as Lang<Type>>::make(t);
+        let t = <TsQuery as hyper_ast::types::Lang<Type>>::to_u16(*self);
+        let t = <TsQuery as hyper_ast::types::Lang<Type>>::make(t);
         t
+    }
+
+    fn as_static_str(&self) -> &'static str {
+        self.to_str()
+    }
+
+    fn is_hidden(&self) -> bool {
+        self.is_hidden()
+    }
+
+    fn is_supertype(&self) -> bool {
+        self.is_supertype()
+    }
+
+    fn is_named(&self) -> bool {
+        self.is_named()
     }
 
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,
     {
-        From::<&'static (dyn LangRef<Self>)>::from(&TsQuery)
+        From::<&'static (dyn LangRef<Self>)>::from(&Lang)
+    }
+    fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
+        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<AnyType> + 'static))
     }
 }
 
@@ -362,12 +370,42 @@ impl TryFrom<&str> for Type {
     }
 }
 
+impl hyper_ast::types::LLang<hyper_ast::types::TypeU16<Self>> for TsQuery {
+    type I = u16;
+
+    type E = Type;
+
+    const TE: &[Self::E] = S_T_L;
+    
+    fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<hyper_ast::types::TypeU16<Self>> {
+        From::<&'static (dyn LangRef<_>)>::from(&Lang)
+    }
+}
+
+impl From<u16> for Type {
+    fn from(value: u16) -> Self {
+        debug_assert_eq!(Self::from_u16(value), S_T_L[value as usize]);
+        S_T_L[value as usize]
+    }
+}
+impl Into<TypeU16<TsQuery>> for Type {
+    fn into(self) -> TypeU16<TsQuery> {
+        TypeU16::new(self)
+    }
+}
+
+impl Into<u16> for Type {
+    fn into(self) -> u16 {
+        self as u8 as u16
+    }
+}
+
 #[repr(u16)]
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Type {
     End,
     Dot,
-    Quote,
+    DQuote,
     _StringToken1,
     EscapeSequence,
     Star,
@@ -381,6 +419,7 @@ pub enum Type {
     RBracket,
     LParen,
     RParen,
+    Slash,
     Colon,
     Bang,
     Sharp,
@@ -419,7 +458,7 @@ impl Type {
         match t {
             0u16 => Type::End,
             1u16 => Type::Dot,
-            2u16 => Type::Quote,
+            2u16 => Type::DQuote,
             3u16 => Type::_StringToken1,
             4u16 => Type::EscapeSequence,
             5u16 => Type::Star,
@@ -434,45 +473,45 @@ impl Type {
             14u16 => Type::RBracket,
             15u16 => Type::LParen,
             16u16 => Type::RParen,
-            17u16 => Type::Colon,
-            18u16 => Type::Bang,
-            19u16 => Type::Sharp,
-            20u16 => Type::PredicateType,
-            21u16 => Type::Program,
-            22u16 => Type::_Definition,
-            23u16 => Type::_GroupExpression,
-            24u16 => Type::_NamedNodeExpression,
-            25u16 => Type::_String,
-            26u16 => Type::Quantifier,
-            27u16 => Type::_ImmediateIdentifier,
-            28u16 => Type::_NodeIdentifier,
-            29u16 => Type::Capture,
-            30u16 => Type::String,
-            31u16 => Type::Parameters,
-            32u16 => Type::List,
-            33u16 => Type::Grouping,
-            34u16 => Type::AnonymousNode,
-            35u16 => Type::NamedNode,
-            36u16 => Type::_FieldName,
-            37u16 => Type::FieldDefinition,
-            38u16 => Type::NegatedField,
-            39u16 => Type::Predicate,
-            40u16 => Type::ProgramRepeat1,
-            41u16 => Type::_StringRepeat1,
-            42u16 => Type::ParametersRepeat1,
-            43u16 => Type::ListRepeat1,
-            44u16 => Type::GroupingRepeat1,
-            45u16 => Type::NamedNodeRepeat1,
-            46u16 => Type::ERROR,
+            17u16 => Type::Slash,
+            18u16 => Type::Colon,
+            19u16 => Type::Bang,
+            20u16 => Type::Sharp,
+            21u16 => Type::PredicateType,
+            22u16 => Type::Program,
+            23u16 => Type::_Definition,
+            24u16 => Type::_GroupExpression,
+            25u16 => Type::_NamedNodeExpression,
+            26u16 => Type::_String,
+            27u16 => Type::Quantifier,
+            28u16 => Type::_ImmediateIdentifier,
+            29u16 => Type::_NodeIdentifier,
+            30u16 => Type::Capture,
+            31u16 => Type::String,
+            32u16 => Type::Parameters,
+            33u16 => Type::List,
+            34u16 => Type::Grouping,
+            35u16 => Type::AnonymousNode,
+            36u16 => Type::NamedNode,
+            37u16 => Type::_FieldName,
+            38u16 => Type::FieldDefinition,
+            39u16 => Type::NegatedField,
+            40u16 => Type::Predicate,
+            41u16 => Type::ProgramRepeat1,
+            42u16 => Type::_StringRepeat1,
+            43u16 => Type::ParametersRepeat1,
+            44u16 => Type::ListRepeat1,
+            45u16 => Type::GroupingRepeat1,
+            46u16 => Type::NamedNodeRepeat1,
             u16::MAX => Type::ERROR,
             x => panic!("{}", x),
         }
     }
-    pub fn from_str(s: &str) -> Option<Type> {
-        Some(match s {
+    pub fn from_str(t: &str) -> Option<Type> {
+        Some(match t {
             "end" => Type::End,
             "." => Type::Dot,
-            "\"" => Type::Quote,
+            "\"" => Type::DQuote,
             "_string_token1" => Type::_StringToken1,
             "escape_sequence" => Type::EscapeSequence,
             "*" => Type::Star,
@@ -486,6 +525,7 @@ impl Type {
             "]" => Type::RBracket,
             "(" => Type::LParen,
             ")" => Type::RParen,
+            "/" => Type::Slash,
             ":" => Type::Colon,
             "!" => Type::Bang,
             "#" => Type::Sharp,
@@ -525,7 +565,7 @@ impl Type {
         match self {
             Type::End => "end",
             Type::Dot => ".",
-            Type::Quote => "\"",
+            Type::DQuote => "\"",
             Type::_StringToken1 => "_string_token1",
             Type::EscapeSequence => "escape_sequence",
             Type::Star => "*",
@@ -539,6 +579,7 @@ impl Type {
             Type::RBracket => "]",
             Type::LParen => "(",
             Type::RParen => ")",
+            Type::Slash => "/",
             Type::Colon => ":",
             Type::Bang => "!",
             Type::Sharp => "#",
@@ -573,60 +614,59 @@ impl Type {
             Type::ERROR => "ERROR",
         }
     }
+
+    pub fn is_hidden(&self) -> bool {
+        match self {
+            Type::End => true,
+            Type::_StringToken1 => true,
+            Type::_Definition => true,
+            Type::_GroupExpression => true,
+            Type::_NamedNodeExpression => true,
+            Type::_String => true,
+            Type::_ImmediateIdentifier => true,
+            Type::_NodeIdentifier => true,
+            Type::_FieldName => true,
+            Type::ProgramRepeat1 => true,
+            Type::_StringRepeat1 => true,
+            Type::ParametersRepeat1 => true,
+            Type::ListRepeat1 => true,
+            Type::GroupingRepeat1 => true,
+            Type::NamedNodeRepeat1 => true,
+            _ => false,
+        }
+    }
+    pub fn is_supertype(&self) -> bool {
+        match self {
+            _ => false,
+        }
+    }
+    pub fn is_named(&self) -> bool {
+        match self {
+            Type::EscapeSequence => true,
+            Type::Identifier => true,
+            Type::Comment => true,
+            Type::PredicateType => true,
+            Type::Program => true,
+            Type::Quantifier => true,
+            Type::Capture => true,
+            Type::String => true,
+            Type::Parameters => true,
+            Type::List => true,
+            Type::Grouping => true,
+            Type::AnonymousNode => true,
+            Type::NamedNode => true,
+            Type::FieldDefinition => true,
+            Type::NegatedField => true,
+            Type::Predicate => true,
+            _ => false,
+        }
+    }
 }
-// Type::End => "end",
-// Type::Dot => ".",
-// Type::TS0 => "\"",
-// Type::TS1 => "_string_token1",
-// Type::EscapeSequence => "escape_sequence",
-// Type::Star => "*",
-// Type::Plus => "+",
-// Type::QMark => "?",
-// Type::Identifier => "identifier",
-// Type::TS2 => "_",
-// Type::At => "@",
-// Type::Comment => "comment",
-// Type::LBracket => "[",
-// Type::RBracket => "]",
-// Type::LParen => "(",
-// Type::RParen => ")",
-// Type::Colon => ":",
-// Type::Bang => "!",
-// Type::TS3 => "#",
-// Type::PredicateType => "predicate_type",
-// Type::Program => "program",
-// Type::TS4 => "_definition",
-// Type::TS5 => "_group_expression",
-// Type::TS6 => "_named_node_expression",
-// Type::TS7 => "_string",
-// Type::Quantifier => "quantifier",
-// Type::TS8 => "_immediate_identifier",
-// Type::TS9 => "_node_identifier",
-// Type::Capture => "capture",
-// Type::String => "string",
-// Type::Parameters => "parameters",
-// Type::List => "list",
-// Type::Grouping => "grouping",
-// Type::AnonymousNode => "anonymous_node",
-// Type::NamedNode => "named_node",
-// Type::TS10 => "_field_name",
-// Type::FieldDefinition => "field_definition",
-// Type::NegatedField => "negated_field",
-// Type::Predicate => "predicate",
-// Type::ProgramRepeat1 => "program_repeat1",
-// Type::TS11 => "_string_repeat1",
-// Type::ParametersRepeat1 => "parameters_repeat1",
-// Type::ListRepeat1 => "list_repeat1",
-// Type::GroupingRepeat1 => "grouping_repeat1",
-// Type::NamedNodeRepeat1 => "named_node_repeat1",
-// Type::Spaces => "Spaces",
-// Type::Directory => "Directory",
-// Type::ERROR => "ERROR",
 
 const S_T_L: &'static [Type] = &[
     Type::End,
     Type::Dot,
-    Type::Quote,
+    Type::DQuote,
     Type::_StringToken1,
     Type::EscapeSequence,
     Type::Star,
@@ -640,6 +680,7 @@ const S_T_L: &'static [Type] = &[
     Type::RBracket,
     Type::LParen,
     Type::RParen,
+    Type::Slash,
     Type::Colon,
     Type::Bang,
     Type::Sharp,

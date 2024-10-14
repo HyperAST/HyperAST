@@ -1,9 +1,7 @@
-use std::{
-    fmt::{self, Debug},
-    ops::AddAssign,
-    path::PathBuf,
+use crate::{
+    processing::ObjectName, Accumulator, BasicDirAcc, DefaultMetrics, ParseErr, SimpleStores,
+    PROPAGATE_ERROR_ON_BAD_CST_NODE,
 };
-
 use enumset::EnumSet;
 use hyper_ast::{
     position::{StructuralPosition, TreePath, TreePathMut},
@@ -12,12 +10,15 @@ use hyper_ast::{
     types::{IterableChildren, LabelStore as _, Labeled, Tree, Typed, WithChildren},
 };
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
-use hyper_ast_gen_ts_xml::{legion::XmlTreeGen, types::Type};
+use hyper_ast_gen_ts_xml::{
+    legion::XmlTreeGen,
+    types::{TStore, Type},
+};
 use num::ToPrimitive;
-
-use crate::{
-    processing::ObjectName, Accumulator, DefaultMetrics, ParseErr, SimpleStores, TStore,
-    PROPAGATE_ERROR_ON_BAD_CST_NODE,
+use std::{
+    fmt::{self, Debug},
+    ops::AddAssign,
+    path::PathBuf,
 };
 
 pub(crate) fn handle_pom_file<'a>(
@@ -201,10 +202,7 @@ pub struct MD {
 }
 
 pub struct MavenModuleAcc {
-    pub(crate) name: String,
-    pub(crate) children_names: Vec<LabelIdentifier>,
-    pub(crate) children: Vec<NodeIdentifier>,
-    pub(crate) metrics: DefaultMetrics, //java_tree_gen::SubTreeMetrics<SyntaxNodeHashs<u32>>,
+    pub(crate) primary: BasicDirAcc<NodeIdentifier, LabelIdentifier, DefaultMetrics>,
     pub(crate) ana: MavenPartialAnalysis,
     pub(crate) sub_modules: Option<Vec<PathBuf>>,
     pub(crate) main_dirs: Option<Vec<PathBuf>>,
@@ -215,11 +213,7 @@ pub struct MavenModuleAcc {
 impl From<String> for MavenModuleAcc {
     fn from(name: String) -> Self {
         Self {
-            name,
-            children_names: Default::default(),
-            children: Default::default(),
-            // simple: BasicAccumulator::new(kind),
-            metrics: Default::default(),
+            primary: BasicDirAcc::new(name),
             ana: MavenPartialAnalysis::new(),
             sub_modules: None,
             main_dirs: None,
@@ -232,11 +226,7 @@ impl From<String> for MavenModuleAcc {
 impl MavenModuleAcc {
     pub(crate) fn new(name: String) -> Self {
         Self {
-            name,
-            children_names: Default::default(),
-            children: Default::default(),
-            // simple: BasicAccumulator::new(kind),
-            metrics: Default::default(),
+            primary: BasicDirAcc::new(name),
             ana: MavenPartialAnalysis::new(),
             sub_modules: None,
             main_dirs: None,
@@ -251,11 +241,7 @@ impl MavenModuleAcc {
         test_dirs: Vec<PathBuf>,
     ) -> Self {
         Self {
-            name,
-            children_names: Default::default(),
-            children: Default::default(),
-            // simple: BasicAccumulator::new(kind),
-            metrics: Default::default(),
+            primary: BasicDirAcc::new(name),
             ana: MavenPartialAnalysis::new(),
             sub_modules: if sub_modules.is_empty() {
                 None
@@ -288,9 +274,9 @@ pub enum SemFlags {
 impl MavenModuleAcc {
     pub(crate) fn push_pom(&mut self, name: LabelIdentifier, full_node: POM) {
         self.status |= SemFlags::IsMavenModule;
-        assert!(!self.children_names.contains(&name));
-        self.children.push(full_node.compressed_node);
-        self.children_names.push(name);
+        assert!(!self.primary.children_names.contains(&name));
+        self.primary.children.push(full_node.compressed_node);
+        self.primary.children_names.push(name);
         self.main_dirs = Some(full_node.source_dirs.iter().map(|x| x.into()).collect());
         self.test_dirs = Some(
             full_node
@@ -300,9 +286,7 @@ impl MavenModuleAcc {
                 .collect(),
         );
         self.sub_modules = Some(full_node.submodules.iter().map(|x| x.into()).collect());
-        self.metrics.acc(full_node.metrics);
-        // TODO
-        // full_node.2.acc(&Type::Directory, &mut self.ana);
+        self.primary.metrics.acc(full_node.metrics);
     }
     pub fn push_submodule(&mut self, name: LabelIdentifier, full_node: (NodeIdentifier, MD)) {
         if full_node.1.status.contains(SemFlags::HoldMavenSubModule)
@@ -310,11 +294,9 @@ impl MavenModuleAcc {
         {
             self.status |= SemFlags::HoldMavenSubModule;
         }
-        self.children.push(full_node.0);
-        self.children_names.push(name);
-        self.metrics.acc(full_node.1.metrics);
-        // TODO ana
-        // full_node.2.acc(&Type::Directory, &mut self.ana);
+        self.primary.children.push(full_node.0);
+        self.primary.children_names.push(name);
+        self.primary.metrics.acc(full_node.1.metrics);
     }
     pub(crate) fn push_source_directory(
         &mut self,
@@ -322,13 +304,14 @@ impl MavenModuleAcc {
         full_node: java_tree_gen::Local,
     ) {
         self.status |= SemFlags::HoldMainFolder;
-        self.children.push(full_node.compressed_node);
-        self.children_names.push(name);
-        self.metrics.acc(SubTreeMetrics {
+        self.primary.children.push(full_node.compressed_node);
+        self.primary.children_names.push(name);
+        self.primary.metrics.acc(SubTreeMetrics {
             hashs: full_node.metrics.hashs,
             size: full_node.metrics.size,
             height: full_node.metrics.height,
             size_no_spaces: full_node.metrics.size_no_spaces,
+            line_count: 0,
         });
         // TODO ana
         // full_node.2.acc(&Type::Directory, &mut self.ana);
@@ -339,13 +322,14 @@ impl MavenModuleAcc {
         full_node: java_tree_gen::Local,
     ) {
         self.status |= SemFlags::HoldTestFolder;
-        self.children.push(full_node.compressed_node);
-        self.children_names.push(name);
-        self.metrics.acc(SubTreeMetrics {
+        self.primary.children.push(full_node.compressed_node);
+        self.primary.children_names.push(name);
+        self.primary.metrics.acc(SubTreeMetrics {
             hashs: full_node.metrics.hashs,
             size: full_node.metrics.size,
             height: full_node.metrics.height,
             size_no_spaces: full_node.metrics.size_no_spaces,
+            line_count: 0,
         });
         // TODO ana
         // full_node.2.acc(&Type::Directory, &mut self.ana);
@@ -382,12 +366,6 @@ pub struct IterMavenModules<'a, T: TreePath<NodeIdentifier>> {
     path: T,
     stack: Vec<(NodeIdentifier, u16, Option<Vec<NodeIdentifier>>)>,
 }
-
-// impl<'a, T: TreePath<NodeIdentifier>> Debug for IterMavenModules<'a, T> {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         todo!()
-//     }
-// }
 
 impl<'a, T: TreePathMut<NodeIdentifier, u16> + Debug + Clone> Iterator for IterMavenModules<'a, T> {
     type Item = T;
@@ -537,32 +515,12 @@ impl hyper_ast::tree_gen::Accumulator for MavenModuleAcc {
         let s = full_node.1.status - SemFlags::IsMavenModule;
         assert!(!s.contains(SemFlags::IsMavenModule));
         self.status |= s;
-        self.children.push(full_node.0);
-        self.children_names.push(name);
-        self.metrics.acc(full_node.1.metrics);
-        // TODO ana
-        // full_node.2.acc(&Type::Directory, &mut self.ana);
+        self.primary.children.push(full_node.0);
+        self.primary.children_names.push(name);
+        self.primary.metrics.acc(full_node.1.metrics);
     }
-
-    // fn push(
-    //     &mut self,
-    //     _full_node: (NodeIdentifier, MD),
-    // ) {
-    //     panic!()
-    // }
 }
 
 impl Accumulator for MavenModuleAcc {
     type Unlabeled = (NodeIdentifier, MD);
-    // fn push(
-    //     &mut self,
-    //     name: LabelIdentifier,
-    //     full_node: (NodeIdentifier, MD),
-    // ) {
-    //     self.children.push(full_node.0);
-    //     self.children_names.push(name);
-    //     self.metrics.acc(full_node.1.metrics);
-    //     // TODO ana
-    //     // full_node.2.acc(&Type::Directory, &mut self.ana);
-    // }
 }
