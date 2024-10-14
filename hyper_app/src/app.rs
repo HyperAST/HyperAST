@@ -67,6 +67,8 @@ pub struct HyperApp {
 
     data: AppData,
 
+    layouts: HashMap<String, (Vec<Tab>, egui_tiles::Tree<TabId>)>,
+
     tree: egui_tiles::Tree<TabId>,
     tabs: Vec<Tab>,
     maximized: Option<TabId>,
@@ -634,31 +636,49 @@ pub(crate) struct Sharing<T> {
     doc_db: Option<crdt_over_ws::WsDocsDb>,
 }
 
+impl SelectedConfig {
+    fn default_layout(&self) -> Vec<Tab> {
+        match self {
+            SelectedConfig::Single => vec![Tab::Commits],
+            SelectedConfig::Querying => vec![
+                // Tab::MarkdownEdit(DEFAULT_EXPLAINATIONS_MDS[0].to_string()),
+                Tab::ProjectSelection(),
+                // Tab::MarkdownStatic(0),
+                // Tab::LongTracking,
+                // // Tab::Smells,
+                // Tab::Diff(0),
+                // Tab::TreeAspect,
+                // Tab::CodeTree(0),
+                // Tab::CodeFile(1),
+                // Tab::Commits,
+                Tab::LocalQuery(0),
+                // Tab::QueryResults {
+                //     id: 0,
+                //     format: ResultFormat::Json,
+                // },
+            ],
+            SelectedConfig::Tsg => vec![Tab::CodeFile(1)],
+            SelectedConfig::Smells => vec![Tab::Smells],
+            SelectedConfig::Multi => vec![Tab::Commits],
+            SelectedConfig::Diff => vec![Tab::Diff(0)],
+            SelectedConfig::Tracking => vec![Tab::CodeTree(0)],
+            SelectedConfig::LongTracking => vec![Tab::LongTracking],
+            SelectedConfig::Aspects => vec![Tab::TreeAspect],
+        }
+    }
+}
+
 impl Default for HyperApp {
     fn default() -> Self {
-        let tabs = vec![
-            // Tab::MarkdownEdit(DEFAULT_EXPLAINATIONS_MDS[0].to_string()),
-            Tab::ProjectSelection(),
-            // Tab::MarkdownStatic(0),
-            // Tab::LongTracking,
-            // // Tab::Smells,
-            // Tab::Diff(0),
-            // Tab::TreeAspect,
-            // Tab::CodeTree(0),
-            // Tab::CodeFile(1),
-            // Tab::Commits,
-            Tab::LocalQuery(0),
-            // Tab::QueryResults {
-            //     id: 0,
-            //     format: ResultFormat::Json,
-            // },
-        ];
+        let selected = SelectedConfig::default();
+        let tabs = selected.default_layout();
         Self {
             // Example stuff:
-            selected: Default::default(),
+            selected,
             persistance: false,
             save_interval: std::time::Duration::from_secs(20),
             data: Default::default(),
+            layouts: HashMap::default(),
             tree: egui_tiles::Tree::new_grid("my_tree", (0..tabs.len() as u16).collect()),
             tabs,
             maximized: Default::default(),
@@ -1467,7 +1487,11 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                         "{}\n{}",
                         DEFAULT_EXPLAINATIONS_MDS[*md],
                         SelectedConfig::iter()
-                            .map(|x| format!("\n- **{}**: {}", x.title().as_ref(), x.descriptions()))
+                            .map(|x| format!(
+                                "\n- **{}**: {}",
+                                x.title().as_ref(),
+                                x.descriptions()
+                            ))
                             .collect::<String>()
                     ),
                 );

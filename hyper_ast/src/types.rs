@@ -1497,7 +1497,10 @@ pub trait HyperASTAsso: HyperASTShared {
     fn resolve_type(&self, id: &Self::IdN) -> <Self::TS<'_> as TypeStore>::Ty {
         let ns = self.node_store();
         let n = ns.resolve(id);
-        todo!()
+        Self::TS::decompress_type(&n, std::any::TypeId::of::<<Self::TS<'_> as TypeStore>::Ty>())
+        // let ns = self.node_store();
+        // let n = ns.resolve(id);
+        // todo!()
         // self.type_store().resolve_type(&n).clone()
     }
 }

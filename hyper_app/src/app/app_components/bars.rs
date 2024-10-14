@@ -96,7 +96,7 @@ impl crate::HyperApp {
                     ui.menu_button("File", |ui| file_menu(ui, &self.data.command_sender));
                     egui::warn_if_debug_build(ui);
 
-                    let desired_size = egui::Vec2::new(rect.width() / 3.0, rect.height());
+                    let desired_size = egui::Vec2::new(rect.width() / 3.0, rect.height() * 1.6);
                     let max_rect = egui::Rect::from_center_size(rect.center(), desired_size);
                     let add_contents = |ui: &mut egui::Ui, _rect: egui::Rect| {
                         ui.add_space(50.0);
@@ -114,7 +114,24 @@ impl crate::HyperApp {
                                 .on_hover_ui(|ui| s.on_hover_show(ui))
                                 .clicked()
                             {
-                                self.selected = s;
+                                if self.selected != s {
+                                    let (tabs, tree) = self
+                                        .layouts
+                                        .remove(s.title().as_ref())
+                                        .unwrap_or_else(|| {
+                                            let tabs = s.default_layout();
+                                            let tree = egui_tiles::Tree::new_grid(
+                                                "my_tree",
+                                                (0..tabs.len() as u16).collect(),
+                                            );
+                                            (tabs, tree)
+                                        });
+                                    let tabs = std::mem::replace(&mut self.tabs, tabs);
+                                    let tree = std::mem::replace(&mut self.tree, tree);
+                                    self.layouts
+                                        .insert(self.selected.title().into(), (tabs, tree));
+                                    self.selected = s;
+                                }
                             }
                         }
                         ui.add_space(50.0);

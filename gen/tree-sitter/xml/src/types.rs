@@ -157,8 +157,9 @@ impl LangRef<AnyType> for Xml {
         todo!()
     }
 
-    fn to_u16(&self, _t: AnyType) -> u16 {
-        todo!()
+    fn to_u16(&self, t: AnyType) -> u16 {
+        let t: &Type = t.as_any().downcast_ref().unwrap();
+        Lang.to_u16(*t)
     }
 
     fn ts_symbol(&self, t: AnyType) -> u16 {

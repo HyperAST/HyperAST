@@ -8,13 +8,9 @@ use std::{
 use string_interner::DefaultHashBuilder;
 use string_interner::Symbol;
 
-use crate::{
-    store::defaults,
-    types::{
-        AnyType, Children, MySlice, NodeId, TypeStore, TypeTrait,
-        TypedNodeId,
-    },
-};
+use crate::types::{
+        AnyType, Children, HyperType, MySlice, NodeId, TypeTrait, TypedNodeId
+    };
 
 use strum_macros::*;
 #[cfg(feature = "native")]
@@ -281,7 +277,29 @@ impl<'a, Id> crate::types::ErasedHolder
         &self,
         tid: std::any::TypeId,
     ) -> Option<&T> {
-        todo!()
+        if std::any::TypeId::of::<T>() == tid {
+            todo!("{:?}", std::any::type_name::<T>())
+            // if std::any::TypeId::of::<T>() == std::any::TypeId::of::<AnyType>() {
+            // let lang = self.get_lang();
+            // let raw = self.get_raw_type();
+            // match lang {
+            //     "hyper_ast_gen_ts_java::types::Lang" => {
+            //         let t: &'static dyn hyper_ast::types::HyperType = hyper_ast_gen_ts_java::types::Lang::make(raw);
+            //         t.into()
+            //     },
+            //     "hyper_ast_gen_ts_cpp::types::Lang" => {
+            //         let t: &'static dyn hyper_ast::types::HyperType = hyper_ast_gen_ts_cpp::types::Lang::make(raw);
+            //         t.into()
+            //     },
+            //     "hyper_ast_gen_ts_xml::types::Lang" => {
+            //         let t: &'static dyn hyper_ast::types::HyperType = hyper_ast_gen_ts_xml::types::Lang::make(raw);
+            //         t.into()
+            //     },
+            //     l => unreachable!("{}", l)
+            // }
+        } else {
+            None
+        }
     }
 }
 
@@ -622,95 +640,106 @@ impl Default for SimplePackedBuilder {
 }
 
 impl SimplePackedBuilder {
-    pub fn add<TS, T>(&mut self, id: NodeIdentifier, node: T)
+    pub fn add<'store, HAST: crate::types::HyperAST<'store>>(&mut self, 
+        store: &'store HAST,
+        id: &HAST::IdN)
     where
-        TS: TypeStore,
-        T: crate::types::Tree<Label = defaults::LabelIdentifier> + crate::types::WithStats,
-        <T::TreeId as NodeId>::IdN: Copy + Into<NodeIdentifier>,
+        HAST::T: crate::types::WithStats,
+        HAST::IdN: Into<NodeIdentifier> + Copy,
+        HAST::Label: Into<LabelIdentifier> + Clone,
     {
-        // let lang = type_store.resolve_lang(&node);
-        // let lang_name = lang.name();
-        // let type_id = lang.to_u16(type_store.resolve_type(&node));
-        todo!("TODO just get the hyperast and the id...")
-        // if let Some(children) = node.children() {
-        //     let children = children.iter_children().map(|x| (*x).into()).collect();
-        //     if node.has_label() {
-        //         match self
-        //             .stockages
-        //             .entry(Arch(lang_name, RawVariantDiscriminants::Both))
-        //             .or_insert_with(|| RawVariant::Both {
-        //                 entities: variants::Both::lang(lang_name),
-        //             }) {
-        //             RawVariant::Both {
-        //                 entities: a @ variants::Both { .. },
-        //             } => {
-        //                 a.rev.push(id);
-        //                 a.kind.push(type_id);
+        use crate::types::NodeStore;
+        let node = store.node_store().resolve(id);
+        let ty = store.resolve_type(id);
+        let id = id.clone().into();
+        let lang = ty.get_lang();
+        use crate::types::LangRef;
+        let lang_name = lang.name();
+        let type_id = lang.to_u16(ty);
+        use crate::types::WithChildren;
+        use crate::types::IterableChildren;
+        use crate::types::Tree;
+        use crate::types::Labeled;
+        use crate::types::WithStats;
+        if let Some(children) = node.children() {
+            let children = children.iter_children().map(|x| (*x).into()).collect();
+            if node.has_label() {
+                match self
+                    .stockages
+                    .entry(Arch(lang_name, RawVariantDiscriminants::Both))
+                    .or_insert_with(|| RawVariant::Both {
+                        entities: variants::Both::lang(lang_name),
+                    }) {
+                    RawVariant::Both {
+                        entities: a @ variants::Both { .. },
+                    } => {
+                        a.rev.push(id);
+                        a.kind.push(type_id);
 
-        //                 a.children.push(children);
-        //                 a.label.push(node.get_label_unchecked().into());
+                        a.children.push(children);
+                        a.label.push((node.get_label_unchecked().clone()).into());
 
-        //                 a.size.push(node.size());
-        //             }
-        //             _ => unreachable!("SimplePackedBuilder::add variant Both"),
-        //         }
-        //     } else {
-        //         match self
-        //             .stockages
-        //             .entry(Arch(lang_name, RawVariantDiscriminants::Children))
-        //             .or_insert_with(|| RawVariant::Children {
-        //                 entities: variants::Children::lang(lang_name),
-        //             }) {
-        //             RawVariant::Children {
-        //                 entities: a @ variants::Children { .. },
-        //             } => {
-        //                 a.rev.push(id);
-        //                 a.kind.push(type_id);
+                        a.size.push(node.size());
+                    }
+                    _ => unreachable!("SimplePackedBuilder::add variant Both"),
+                }
+            } else {
+                match self
+                    .stockages
+                    .entry(Arch(lang_name, RawVariantDiscriminants::Children))
+                    .or_insert_with(|| RawVariant::Children {
+                        entities: variants::Children::lang(lang_name),
+                    }) {
+                    RawVariant::Children {
+                        entities: a @ variants::Children { .. },
+                    } => {
+                        a.rev.push(id);
+                        a.kind.push(type_id);
 
-        //                 a.children.push(children);
+                        a.children.push(children);
 
-        //                 a.size.push(node.size());
-        //             }
-        //             _ => unreachable!("SimplePackedBuilder::add variant Children"),
-        //         }
-        //     }
-        // } else if node.has_label() {
-        //     match self
-        //         .stockages
-        //         .entry(Arch(lang_name, RawVariantDiscriminants::Labeled))
-        //         .or_insert_with(|| RawVariant::Labeled {
-        //             entities: variants::Labeled::lang(lang_name),
-        //         }) {
-        //         RawVariant::Labeled {
-        //             entities: a @ variants::Labeled { .. },
-        //         } => {
-        //             a.rev.push(id);
-        //             a.kind.push(type_id);
+                        a.size.push(node.size());
+                    }
+                    _ => unreachable!("SimplePackedBuilder::add variant Children"),
+                }
+            }
+        } else if node.has_label() {
+            match self
+                .stockages
+                .entry(Arch(lang_name, RawVariantDiscriminants::Labeled))
+                .or_insert_with(|| RawVariant::Labeled {
+                    entities: variants::Labeled::lang(lang_name),
+                }) {
+                RawVariant::Labeled {
+                    entities: a @ variants::Labeled { .. },
+                } => {
+                    a.rev.push(id);
+                    a.kind.push(type_id);
 
-        //             a.label.push(node.get_label_unchecked().into());
+                    a.label.push((node.get_label_unchecked().clone()).into());
 
-        //             a.size.push(node.size());
-        //         }
-        //         _ => unreachable!("SimplePackedBuilder::add variant Labeled"),
-        //     }
-        // } else {
-        //     match self
-        //         .stockages
-        //         .entry(Arch(lang_name, RawVariantDiscriminants::Typed))
-        //         .or_insert_with(|| RawVariant::Typed {
-        //             entities: variants::Typed::lang(lang_name),
-        //         }) {
-        //         RawVariant::Typed {
-        //             entities: a @ variants::Typed { .. },
-        //         } => {
-        //             a.rev.push(id);
-        //             a.kind.push(type_id);
+                    a.size.push(node.size());
+                }
+                _ => unreachable!("SimplePackedBuilder::add variant Labeled"),
+            }
+        } else {
+            match self
+                .stockages
+                .entry(Arch(lang_name, RawVariantDiscriminants::Typed))
+                .or_insert_with(|| RawVariant::Typed {
+                    entities: variants::Typed::lang(lang_name),
+                }) {
+                RawVariant::Typed {
+                    entities: a @ variants::Typed { .. },
+                } => {
+                    a.rev.push(id);
+                    a.kind.push(type_id);
 
-        //             a.size.push(node.size());
-        //         }
-        //         _ => unreachable!("SimplePackedBuilder::add variant Typed"),
-        //     }
-        // };
+                    a.size.push(node.size());
+                }
+                _ => unreachable!("SimplePackedBuilder::add variant Typed"),
+            }
+        };
     }
     #[cfg(feature = "single-indirection")]
     pub fn add<T>(&mut self, id: NodeIdentifier, node: T)

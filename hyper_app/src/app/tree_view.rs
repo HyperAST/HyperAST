@@ -23,6 +23,7 @@ mod cache;
 pub(crate) mod store {
     pub use hyper_ast::store::nodes::fetched::NodeIdentifier;
     use hyper_ast::store::nodes::fetched::NodeStore;
+    use hyper_ast::types::Lang;
     use hyper_ast::{
         store::nodes::fetched::{FetchedLabels, HashedNodeRef, LabelIdentifier},
         types::AnyType,
@@ -73,7 +74,28 @@ pub(crate) mod store {
             }
         }
         pub fn resolve_type(&self, n: &NodeIdentifier) -> AnyType {
-            todo!()
+            let ns = self.node_store.read().unwrap();
+            let n: HashedNodeRef<'_, NodeIdentifier> = ns.try_resolve(*n).unwrap();
+            let lang = n.get_lang();
+            let raw = n.get_raw_type();
+            match lang {
+                "hyper_ast_gen_ts_java::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_java::types::Lang::make(raw);
+                    t.into()
+                }
+                "hyper_ast_gen_ts_cpp::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_cpp::types::Lang::make(raw);
+                    t.into()
+                }
+                "hyper_ast_gen_ts_xml::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_xml::types::Lang::make(raw);
+                    t.into()
+                }
+                l => unreachable!("{}", l),
+            }
         }
     }
 
@@ -179,6 +201,34 @@ pub(crate) mod store {
             = Self
         where
             Self: 'store;
+
+        fn resolve_type(&self, id: &Self::IdN) -> <Self::TS<'_> as hyper_ast::types::TypeStore>::Ty {
+            let ns = &self.node_store;
+            let Some(n) = ns.try_resolve::<NodeIdentifier>(*id) else {
+                use hyper_ast::types::HyperType;
+                return hyper_ast_gen_ts_java::types::Type::Dot.as_static().into();
+            };
+            let lang = n.get_lang();
+            let raw = n.get_raw_type();
+            match lang {
+                "hyper_ast_gen_ts_java::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_java::types::Lang::make(raw);
+                    t.into()
+                }
+                "hyper_ast_gen_ts_cpp::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_cpp::types::Lang::make(raw);
+                    t.into()
+                }
+                "hyper_ast_gen_ts_xml::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_xml::types::Lang::make(raw);
+                    t.into()
+                }
+                l => unreachable!("{}", l),
+            }
+        }
     }
 
     impl<'a, 'b: 'a> hyper_ast::types::HyperAST<'b> for AcessibleFetchedHyperAST<'a>
@@ -200,6 +250,38 @@ pub(crate) mod store {
         }
 
         type TS = Self;
+
+        fn resolve_type(&'a self, id: &Self::IdN) -> <Self::TS as hyper_ast::types::TypeStore>::Ty {
+            let ns = &self.node_store;
+            let Some(n) = ns.try_resolve::<NodeIdentifier>(*id) else {
+                use hyper_ast::types::HyperType;
+                return hyper_ast_gen_ts_java::types::Type::Dot.as_static().into();
+            };
+            let lang = n.get_lang();
+            let raw = n.get_raw_type();
+            match lang {
+                "hyper_ast_gen_ts_java::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_java::types::Lang::make(raw);
+                    t.into()
+                }
+                "hyper_ast_gen_ts_cpp::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_cpp::types::Lang::make(raw);
+                    t.into()
+                }
+                "hyper_ast_gen_ts_xml::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_xml::types::Lang::make(raw);
+                    t.into()
+                }
+                l => unreachable!("{}", l),
+            }
+            // self.resolve_type(id)
+            // let ns = self.node_store();
+            // let n = ns.resolve(id);
+            // Self::TS::decompress_type(&n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+        }
     }
 
     impl std::hash::Hash for FetchedHyperAST {
