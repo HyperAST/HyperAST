@@ -76,9 +76,11 @@ pub(crate) fn all_commits_between<'a>(
 ) -> Result<Revwalk<'a>, git2::Error> {
     use git2::*;
     let mut rw = repository.revwalk()?;
-    let c = retrieve_commit(repository, before)?;
-    for c in c.parents() {
-        rw.hide(c.id())?;
+    if !before.is_empty() {
+        let c = retrieve_commit(repository, before)?;
+        for c in c.parents() {
+            rw.hide(c.id())?;
+        }
     }
     if after.is_empty() {
         rw.push_head()?;

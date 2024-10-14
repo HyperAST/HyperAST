@@ -206,7 +206,7 @@ impl RepositoryProcessor {
         limit: usize,
     ) -> Result<Vec<git2::Oid>, git2::Error> {
         log::info!(
-            "commits to process: {:?}",
+            "commits to process {before} {after}: {:?}",
             all_commits_between(&repository.repo, before, after).map(|x| x.count())
         );
         let rw = all_commits_between(&repository.repo, before, after)?;
