@@ -35,6 +35,11 @@ impl NodeId for NodeIdentifier {
 
 impl TypedNodeId for NodeIdentifier {
     type Ty = AnyType;
+    type TyErazed = crate::types::AnyType;
+    
+    fn unerase(ty: Self::TyErazed) -> Self::Ty {
+        ty
+    }
 }
 
 impl<'a, T> HashedNodeRef<'a, T> {
@@ -268,7 +273,7 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithHashs for Hash
 impl<'a, Id> crate::types::ErasedHolder
     for HashedNodeRef<'a, Id>
 {
-    unsafe fn unerase_ref<T: 'static + crate::types::Compo>(
+    fn unerase_ref<T: 'static + Send + Sync>(
         &self,
         tid: std::any::TypeId,
     ) -> Option<&T> {

@@ -407,7 +407,7 @@ where
 
 impl<'a, 'b, 'c, TS> More<MoreStore<'a, 'b, 'c, TS>> for hyper_ast_tsquery::Query
 where
-    TS: JavaEnabledTypeStore<Ty = Type> + hyper_ast::types::RoleStore<IdF = u16, Role = Role>,
+    TS: JavaEnabledTypeStore<> + hyper_ast::types::RoleStore<IdF = u16, Role = Role>,
 {
     const ENABLED: bool = true;
     fn match_precomp_queries(

@@ -37,6 +37,12 @@ impl<TS, NS, LS> SimpleStores<TS, NS, LS> {
     {
         unsafe { std::mem::transmute(self) }
     }
+    pub fn with_ts<TS2>(&self) -> &SimpleStores<TS2, NS, LS>
+    where
+        TS: TyDown<TS2>,
+    {
+        unsafe { std::mem::transmute(self) }
+    }
 }
 
 impl<TS: Default, NS: Default, LS: Default> Default for SimpleStores<TS, NS, LS> {

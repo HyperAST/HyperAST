@@ -66,7 +66,7 @@ where
     for<'a> <Ty as TryFrom<&'a str>>::Error: std::fmt::Debug,
 {
     let (query_store, query) = crate::search::ts_query(query.as_bytes());
-    let prepared_matcher = crate::search::PreparedMatcher::<Ty, Conv<Ty>>::new(&query_store, query);
+    let prepared_matcher = crate::search::PreparedMatcher::<Ty, Conv<Ty>>::new(query_store.with_ts(), query);
     prepared_matcher
 }
 

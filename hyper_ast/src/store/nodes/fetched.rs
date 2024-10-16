@@ -116,6 +116,11 @@ impl NodeId for NodeIdentifier {
 
 impl TypedNodeId for NodeIdentifier {
     type Ty = crate::types::AnyType;
+    type TyErazed = crate::types::AnyType;
+    
+    fn unerase(ty: Self::TyErazed) -> Self::Ty {
+        ty
+    }
 }
 
 #[cfg(feature = "legion")]
@@ -273,7 +278,7 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
 impl<'a, Id> crate::types::ErasedHolder
     for HashedNodeRef<'a, Id>
 {
-    unsafe fn unerase_ref<T: 'static + crate::types::Compo>(
+    fn unerase_ref<T: 'static + Send + Sync>(
         &self,
         tid: std::any::TypeId,
     ) -> Option<&T> {

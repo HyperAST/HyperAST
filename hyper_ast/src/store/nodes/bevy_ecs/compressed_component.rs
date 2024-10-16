@@ -19,12 +19,15 @@ trait CompressedCompo {
 }
 
 impl ErasedHolder for Ptr<'_> {
-    unsafe fn unerase_ref<T: 'static + Compo>(&self, tid: std::any::TypeId) -> Option<&T> {
+    unsafe fn unerase_ref_unchecked<T: 'static + Compo>(&self, tid: std::any::TypeId) -> Option<&T> {
         if tid == std::any::TypeId::of::<T>() {
             Some(unsafe { self.deref() })
         } else {
             None
         }
+    }
+    fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
+        todo!("{}", std::any::type_name::<T>())
     }
 }
 
@@ -150,11 +153,11 @@ impl CompressedCompo for ByteLen {
     where
         Self: Sized,
     {
-        unsafe { ptr.unerase_ref::<ByteLen>(tid) }
+        unsafe { ptr.unerase_ref_unchecked::<ByteLen>(tid) }
             .cloned()
-            .or_else(|| unsafe { ptr.unerase_ref::<ByteLenU8>(tid) }.map(ByteLenU8::decompresses))
-            .or_else(|| unsafe { ptr.unerase_ref::<ByteLenU32>(tid) }.map(ByteLenU32::decompresses))
-            .or_else(|| unsafe { ptr.unerase_ref::<ByteLenU16>(tid) }.map(ByteLenU16::decompresses))
+            .or_else(|| unsafe { ptr.unerase_ref_unchecked::<ByteLenU8>(tid) }.map(ByteLenU8::decompresses))
+            .or_else(|| unsafe { ptr.unerase_ref_unchecked::<ByteLenU32>(tid) }.map(ByteLenU32::decompresses))
+            .or_else(|| unsafe { ptr.unerase_ref_unchecked::<ByteLenU16>(tid) }.map(ByteLenU16::decompresses))
             .unwrap_or_else(|| unreachable!())
         // if tid == TypeId::of::<ByteLenU8>() {
         //     unsafe { ptr.deref::<ByteLenU8>() }.decompresses()

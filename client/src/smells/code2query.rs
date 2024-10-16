@@ -295,7 +295,7 @@ fn generate_query(
     let path = hyper_ast::position::structural_pos::StructuralPosition::new(query);
     let prepared_matcher = hyper_ast_gen_ts_tsquery::search::PreparedMatcher::<
         hyper_ast_gen_ts_tsquery::types::Type,
-    >::new(&query_store1, query1);
+    >::new(query_store1.with_ts(), query1);
     let mut per_label = std::collections::HashMap::<
         String,
         Vec<(

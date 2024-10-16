@@ -102,24 +102,24 @@ impl TypeStore for TStore {
         tid: std::any::TypeId,
     ) -> Self::Ty {
         unsafe {
-            erazed.unerase_ref::<hyper_ast_gen_ts_java::types::TType>(std::any::TypeId::of::<
-                hyper_ast_gen_ts_java::types::TType,
-            >())
+            erazed.unerase_ref_unchecked::<hyper_ast_gen_ts_java::types::TType>(
+                std::any::TypeId::of::<hyper_ast_gen_ts_java::types::TType>(),
+            )
         }
         .map(|t| t.as_static().into())
         .or_else(|| {
             unsafe {
-                erazed.unerase_ref::<hyper_ast_gen_ts_cpp::types::TType>(std::any::TypeId::of::<
-                    hyper_ast_gen_ts_cpp::types::TType,
-                >())
+                erazed.unerase_ref_unchecked::<hyper_ast_gen_ts_cpp::types::TType>(
+                    std::any::TypeId::of::<hyper_ast_gen_ts_cpp::types::TType>(),
+                )
             }
             .map(|t| t.as_static().into())
         })
         .or_else(|| {
             unsafe {
-                erazed.unerase_ref::<hyper_ast_gen_ts_xml::types::TType>(std::any::TypeId::of::<
-                    hyper_ast_gen_ts_xml::types::TType,
-                >())
+                erazed.unerase_ref_unchecked::<hyper_ast_gen_ts_xml::types::TType>(
+                    std::any::TypeId::of::<hyper_ast_gen_ts_xml::types::TType>(),
+                )
             }
             .map(|t| t.as_static().into())
         })

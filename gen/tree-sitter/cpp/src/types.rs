@@ -190,6 +190,10 @@ impl<IdN: Clone + Eq + NodeId> NodeId for TIdN<IdN> {
 
 impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
     type Ty = Type;
+    type TyErazed = TType;
+    fn unerase(ty: Self::TyErazed) -> Self::Ty {
+        ty.e()
+    }
 }
 
 pub struct TStore;

@@ -4,8 +4,7 @@ use hyper_ast::{
     store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
     types::{
-        AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypeU16,
-        TypedNodeId,
+        AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypeU16, TypedNodeId,
     },
 };
 
@@ -26,7 +25,16 @@ mod legion_impls {
 
     impl TypeStore for TStore {
         type Ty = TypeU16<TsQuery>;
-      
+    }
+    impl TypeStore for _TStore {
+        type Ty = Type;
+        fn decompress_type(
+            erazed: &impl hyper_ast::types::ErasedHolder,
+            tid: std::any::TypeId,
+        ) -> Self::Ty {
+            erazed
+                .unerase_ref::<TypeU16<TsQuery>>(std::any::TypeId::of::<TypeU16<TsQuery>>()).unwrap().e()
+        }
     }
 
     impl RoleStore for TStore {
@@ -51,7 +59,17 @@ mod legion_impls {
         }
     }
 
-    impl<'a> TsQueryEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
+    // impl<'a> TsQueryEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
+    //     fn intern(t: Type) -> Self::Ty {
+    //         t.into()
+    //     }
+
+    //     fn resolve(t: Self::Ty) -> Type {
+    //         t.e()
+    //     }
+    // }
+
+    impl<'a> TsQueryEnabledTypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
         fn intern(t: Type) -> Self::Ty {
             t.into()
         }
@@ -104,9 +122,17 @@ impl<IdN: Clone + Eq + NodeId> NodeId for TIdN<IdN> {
 
 impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
     type Ty = Type;
+    type TyErazed = TType;
+    fn unerase(ty: Self::TyErazed) -> Self::Ty {
+        ty.e()
+    }
 }
 
 pub struct TStore;
+
+pub struct _TStore;
+
+impl hyper_ast::store::TyDown<_TStore> for TStore {}
 
 impl Default for TStore {
     fn default() -> Self {
@@ -376,7 +402,7 @@ impl hyper_ast::types::LLang<hyper_ast::types::TypeU16<Self>> for TsQuery {
     type E = Type;
 
     const TE: &[Self::E] = S_T_L;
-    
+
     fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<hyper_ast::types::TypeU16<Self>> {
         From::<&'static (dyn LangRef<_>)>::from(&Lang)
     }

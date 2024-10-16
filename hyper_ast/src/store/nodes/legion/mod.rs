@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash};
+use std::{fmt::Debug, hash::Hash, ops::Deref};
 
 use hashbrown::hash_map::DefaultHashBuilder;
 use legion::{
@@ -211,6 +211,48 @@ impl NodeStore {
         let x = self.internal.entry_ref(id.clone()).unwrap();
         x.get_component::<TIdN::Ty>().ok()?;
         Some((HashedNodeRef::new(x), unsafe { TIdN::from_id(id.clone()) }))
+    }
+
+    pub fn try_resolve_typed2<
+        L: crate::types::LLang<crate::types::TypeU16<L>, I = u16> + 'static,
+    >(
+        &self,
+        id: &NodeIdentifier,
+    ) -> Option<(HashedNodeRef<NodeIdentifier>, L::E)> {
+        let x = self.internal.entry_ref(id.clone()).unwrap();
+        let ty = x.get_component::<crate::types::TypeU16<L>>().ok()?;
+        let ty = ty.e();
+        Some((HashedNodeRef::new(x), ty))
+    }
+
+    pub fn try_resolve_typed3<
+        L: crate::types::LLang<crate::types::TypeU16<L>, I = u16> + 'static,
+    >(
+        &self,
+        id: &NodeIdentifier,
+    ) -> Option<TypedNode<HashedNodeRef<NodeIdentifier>, L::E>> {
+        let x = self.internal.entry_ref(id.clone()).unwrap();
+        let ty = x.get_component::<crate::types::TypeU16<L>>().ok()?;
+        let ty = ty.e();
+        Some(TypedNode(HashedNodeRef::new(x), ty))
+    }
+}
+
+pub struct TypedNode<T, Ty>(T, Ty);
+
+impl<T, Ty: Copy> TypedNode<T, Ty> {
+    pub fn get_type(&self) -> Ty {
+        self.1
+    }
+    pub fn into(self) -> T {
+        self.0
+    }
+}
+impl<T, Ty> Deref for TypedNode<T, Ty> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -535,7 +577,7 @@ where
 }
 
 impl ErasedHolder for legion::world::Entry<'_> {
-    unsafe fn unerase_ref<T: 'static + Compo>(&self, tid: std::any::TypeId) -> Option<&T> {
+    fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
         if tid == std::any::TypeId::of::<T>() {
             self.get_component().ok()
         } else {

@@ -73,6 +73,10 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
 
 impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
     type Ty = Type;
+    type TyErazed = TType;
+    fn unerase(ty: Self::TyErazed) -> Self::Ty {
+        ty.e()
+    }
 }
 
 pub(crate) struct TStore;

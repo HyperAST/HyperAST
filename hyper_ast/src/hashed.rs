@@ -278,11 +278,8 @@ where
 impl<H: Hash + PrimInt, U: NodeHashs<Hash = H>, N, L, T> crate::types::ErasedHolder
     for HashedCompressedNode<U, N, L, T>
 {
-    unsafe fn unerase_ref<TT: 'static + crate::types::Compo>(
-        &self,
-        tid: std::any::TypeId,
-    ) -> Option<&TT> {
-        todo!("should also be depr")
+    fn unerase_ref<TT: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&TT> {
+        unimplemented!("CompressedNode should be deprecated anyway")
     }
 }
 

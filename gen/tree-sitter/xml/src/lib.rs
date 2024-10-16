@@ -52,3 +52,13 @@ pub use tnode::TNode;
 
 #[cfg(feature = "legion")]
 pub mod iter;
+
+#[cfg(feature = "impl")]
+pub fn language() -> tree_sitter::Language {
+    tree_sitter_xml::language_xml()
+}
+
+#[cfg(feature = "impl")]
+pub fn node_types() -> &'static str {
+    tree_sitter_xml::XML_NODE_TYPES
+}

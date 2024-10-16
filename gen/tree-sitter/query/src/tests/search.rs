@@ -1,5 +1,5 @@
 use crate::tests::cpp_tree;
-use hyper_ast::{position::TreePath, store::defaults::NodeIdentifier, types::Typed};
+use hyper_ast::{position::{structural_pos::AAA, TreePath}, store::defaults::NodeIdentifier, types::Typed};
 
 use hyper_ast_gen_ts_cpp::iter::IterAll as CppIter;
 
@@ -41,7 +41,7 @@ fn simple() {
     let (code_store, code) = cpp_tree(C0.as_bytes());
     let (query_store, query) = crate::search::ts_query(Q0.as_bytes());
     let path = hyper_ast::position::StructuralPosition::new(code);
-    let prepared_matcher = crate::search::PreparedMatcher::<Cpp>::new(&query_store, query);
+    let prepared_matcher = crate::search::PreparedMatcher::<Cpp>::new(query_store.with_ts(), query);
     let mut matched = false;
     for e in CppIter::new(&code_store, path, code) {
         if prepared_matcher.is_matching::<_, CppTIdN>(&code_store, *e.node().unwrap()) {
@@ -58,7 +58,7 @@ fn simple() {
     assert!(matched);
     let (code_store1, code1) = cpp_tree(C1.as_bytes());
     let path = hyper_ast::position::StructuralPosition::new(code1);
-    let prepared_matcher = crate::search::PreparedMatcher::<Cpp>::new(&query_store, query);
+    let prepared_matcher = crate::search::PreparedMatcher::<Cpp>::new(query_store.with_ts(), query);
     for e in CppIter::new(&code_store1, path, code1) {
         if prepared_matcher.is_matching::<_, CppTIdN>(&code_store1, *e.node().unwrap()) {
             panic!("should not match")
@@ -71,7 +71,7 @@ fn named() {
     let (code_store, code) = cpp_tree(C2.as_bytes());
     let (query_store, query) = crate::search::ts_query(Q1.as_bytes());
     let path = hyper_ast::position::StructuralPosition::new(code);
-    let prepared_matcher = crate::search::PreparedMatcher::<Cpp>::new(&query_store, query);
+    let prepared_matcher = crate::search::PreparedMatcher::<Cpp>::new(query_store.with_ts(), query);
     let mut matched = false;
     for e in CppIter::new(&code_store, path, code) {
         if let Some(c) =
@@ -82,4 +82,216 @@ fn named() {
         }
     }
     assert!(matched);
+}
+
+#[test]
+fn match_xml() {
+    use crate::tests::xml_tree;
+    use hyper_ast::nodes::TextSerializer;
+    use hyper_ast::types::WithChildren;
+    let path: std::path::PathBuf =
+        std::path::Path::new("../../../gen/tree-sitter/xml/src/tests/pom.xml.test").to_path_buf();
+
+    let text = std::fs::read(path).unwrap();
+    let (code_store, code) = xml_tree(&text);
+    let pat = code;
+    let pat = code_store.node_store.resolve(pat).child(&2).unwrap();
+    let pat = code_store.node_store.resolve(pat).child(&1).unwrap();
+    let deps = code_store.node_store.resolve(pat).child(&19).unwrap();
+    let pat = code_store.node_store.resolve(deps).child(&1).unwrap();
+    let pat = code_store.node_store.resolve(pat).child(&1).unwrap();
+    let pat = code_store.node_store.resolve(pat).child(&1).unwrap();
+    let pat = code_store.node_store.resolve(pat).child(&3).unwrap();
+    println!(
+        "{}",
+        &hyper_ast::nodes::SyntaxSerializer::<_, _, true>::new(&code_store, pat).to_string()[..70]
+    );
+    println!();
+    println!("{}", TextSerializer::new(&code_store, pat));
+    let q0 = format!("(element (STag (Name) @id (#eq? @id \"artifactId\")))");
+    let (query_store, query) = crate::search::ts_query(q0.as_bytes());
+    use hyper_ast_gen_ts_xml::types::Type as Xml;
+    type XmlTIdN = hyper_ast_gen_ts_xml::types::TIdN<NodeIdentifier>;
+    use hyper_ast_gen_ts_xml::iter::IterAll as XmlIter;
+    let path = hyper_ast::position::StructuralPosition::new(code);
+    let prepared_matcher = crate::search::PreparedMatcher::<Xml>::new(query_store.with_ts(), query);
+    for e in XmlIter::new(&code_store, path, code) {
+        if prepared_matcher.is_matching::<_, XmlTIdN>(&code_store, *e.node().unwrap()) {
+            eprintln!("{}", TextSerializer::new(&code_store, *e.node().unwrap()));
+        }
+    }
+}
+
+#[test]
+fn test_new_matcher_for_xml_element() -> Result<(), Box<dyn std::error::Error>> {
+    let path: std::path::PathBuf =
+        std::path::Path::new("../../../gen/tree-sitter/xml/src/tests/pom.xml.test").to_path_buf();
+
+    let text = std::fs::read(&path).unwrap();
+    eprintln!("{}", std::fs::read_to_string(&path).unwrap());
+    let (code_store, code) = crate::tests::xml_tree(&text);
+    eprintln!("{}", hyper_ast::nodes::SyntaxSerializer::new(&code_store, code));
+
+    let query = r#"(element) @root"#;
+    let qqq = hyper_ast_tsquery::Query::new(query, hyper_ast_gen_ts_xml::language())
+        .map_err(|e| e.to_string())?;
+    let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
+    let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(
+        &code_store,
+        pos,
+    );
+    let root_cap = qqq.capture_index_for_name("root").unwrap();
+    let qcursor = qqq.matches(cursor);
+    for m in qcursor {
+        let pid = m.pattern_index;
+        let i = qqq.enabled_pattern_index(pid).unwrap();
+        assert_eq!(i, 0);
+        dbg!(pid, i);
+        let mut root_cap = m.nodes_for_capture_index(root_cap);
+        let root_cap = root_cap.next().unwrap().pos.node();
+        eprintln!("{}", hyper_ast::nodes::SyntaxSerializer::new(&code_store, root_cap));
+        eprintln!("{}", hyper_ast::nodes::TextSerializer::new(&code_store, root_cap));
+    }
+    Ok(())
+}
+
+
+#[test]
+fn test_new_matcher_for_xml_eq() -> Result<(), Box<dyn std::error::Error>> {
+    let path: std::path::PathBuf =
+        std::path::Path::new("../../../gen/tree-sitter/xml/src/tests/pom.xml.test").to_path_buf();
+
+    let text = std::fs::read(&path).unwrap();
+    eprintln!("{}", std::fs::read_to_string(&path).unwrap());
+    let (code_store, code) = crate::tests::xml_tree(&text);
+    eprintln!("{}", hyper_ast::nodes::SyntaxSerializer::new(&code_store, code));
+
+    let query = r#"(element (STag (Name) @id (#eq? @id "artifactId"))) @root"#;
+    let qqq = hyper_ast_tsquery::Query::new(query, hyper_ast_gen_ts_xml::language())
+        .map_err(|e| e.to_string())?;
+    let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
+    let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(
+        &code_store,
+        pos,
+    );
+    let root_cap = qqq.capture_index_for_name("root").unwrap();
+    let qcursor = qqq.matches(cursor);
+    for m in qcursor {
+        let pid = m.pattern_index;
+        let i = qqq.enabled_pattern_index(pid).unwrap();
+        assert_eq!(i, 0);
+        dbg!(pid, i);
+        let mut root_cap = m.nodes_for_capture_index(root_cap);
+        let root_cap = root_cap.next().unwrap().pos.node();
+        eprintln!("{}", hyper_ast::nodes::SyntaxSerializer::new(&code_store, root_cap));
+        eprintln!("{}", hyper_ast::nodes::TextSerializer::new(&code_store, root_cap));
+    }
+    Ok(())
+}
+
+
+#[test]
+fn test_new_matcher_for_xml_imm_eq() -> Result<(), Box<dyn std::error::Error>> {
+    let path: std::path::PathBuf =
+        std::path::Path::new("../../../gen/tree-sitter/xml/src/tests/pom.xml.test").to_path_buf();
+
+    let text = std::fs::read(&path).unwrap();
+    eprintln!("{}", std::fs::read_to_string(&path).unwrap());
+    let (code_store, code) = crate::tests::xml_tree(&text);
+    eprintln!("{}", hyper_ast::nodes::SyntaxSerializer::new(&code_store, code));
+
+    let query = r#"(element (STag (Name) (#EQ? "artifactId"))) @root"#;
+    // let query = r#"(element) @root"#;
+    let qqq = hyper_ast_tsquery::Query::new(query, hyper_ast_gen_ts_xml::language())
+        .map_err(|e| e.to_string())?;
+    let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
+    let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(
+        &code_store,
+        pos,
+    );
+    let root_cap = qqq.capture_index_for_name("root").unwrap();
+    let qcursor = qqq.matches(cursor);
+    for m in qcursor {
+        let pid = m.pattern_index;
+        let i = qqq.enabled_pattern_index(pid).unwrap();
+        assert_eq!(i, 0);
+        dbg!(pid, i);
+        let mut root_cap = m.nodes_for_capture_index(root_cap);
+        let root_cap = root_cap.next().unwrap().pos.node();
+        eprintln!("{}", hyper_ast::nodes::SyntaxSerializer::new(&code_store, root_cap));
+        eprintln!("{}", hyper_ast::nodes::TextSerializer::new(&code_store, root_cap));
+    }
+    Ok(())
+}
+
+
+#[test]
+fn test_new_matcher_for_xml_proj_artid() -> Result<(), Box<dyn std::error::Error>> {
+    let path: std::path::PathBuf =
+        std::path::Path::new("../../../gen/tree-sitter/xml/src/tests/pom.xml.test").to_path_buf();
+
+    let text = std::fs::read(&path).unwrap();
+    eprintln!("{}", std::fs::read_to_string(&path).unwrap());
+    let (code_store, code) = crate::tests::xml_tree(&text);
+    eprintln!("{}", hyper_ast::nodes::SyntaxSerializer::new(&code_store, code));
+
+    let query = r#"(document (_ (_
+    (element (STag (Name) (#EQ? "artifactId"))) @root
+)))"#;
+    let qqq = hyper_ast_tsquery::Query::new(query, hyper_ast_gen_ts_xml::language())
+        .map_err(|e| e.to_string())?;
+    let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
+    let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(
+        &code_store,
+        pos,
+    );
+    let root_cap = qqq.capture_index_for_name("root").unwrap();
+    let qcursor = qqq.matches(cursor);
+    for m in qcursor {
+        let pid = m.pattern_index;
+        let i = qqq.enabled_pattern_index(pid).unwrap();
+        assert_eq!(i, 0);
+        dbg!(pid, i);
+        let mut root_cap = m.nodes_for_capture_index(root_cap);
+        let root_cap = root_cap.next().unwrap().pos.node();
+        eprintln!("{}", hyper_ast::nodes::SyntaxSerializer::new(&code_store, root_cap));
+        eprintln!("{}", hyper_ast::nodes::TextSerializer::new(&code_store, root_cap));
+    }
+    Ok(())
+}
+
+
+#[test]
+fn test_new_matcher_for_xml_deps_artid() -> Result<(), Box<dyn std::error::Error>> {
+    let path: std::path::PathBuf =
+        std::path::Path::new("../../../gen/tree-sitter/xml/src/tests/pom.xml.test").to_path_buf();
+
+    let text = std::fs::read(&path).unwrap();
+    eprintln!("{}", std::fs::read_to_string(&path).unwrap());
+    let (code_store, code) = crate::tests::xml_tree(&text);
+    eprintln!("{}", hyper_ast::nodes::SyntaxSerializer::new(&code_store, code));
+
+    let query = r#"(element (STag (Name) (#EQ? "dependency")) (_
+    (element (STag (Name) (#EQ? "artifactId"))) @root
+))"#;
+    let qqq = hyper_ast_tsquery::Query::new(query, hyper_ast_gen_ts_xml::language())
+        .map_err(|e| e.to_string())?;
+    let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
+    let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(
+        &code_store,
+        pos,
+    );
+    let root_cap = qqq.capture_index_for_name("root").unwrap();
+    let qcursor = qqq.matches(cursor);
+    for m in qcursor {
+        let pid = m.pattern_index;
+        let i = qqq.enabled_pattern_index(pid).unwrap();
+        assert_eq!(i, 0);
+        dbg!(pid, i);
+        let mut root_cap = m.nodes_for_capture_index(root_cap);
+        let root_cap = root_cap.next().unwrap().pos.node();
+        eprintln!("{}", hyper_ast::nodes::SyntaxSerializer::new(&code_store, root_cap));
+        eprintln!("{}", hyper_ast::nodes::TextSerializer::new(&code_store, root_cap));
+    }
+    Ok(())
 }

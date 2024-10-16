@@ -62,6 +62,11 @@ impl NodeId for NodeIdentifier {
 
 impl TypedNodeId for NodeIdentifier {
     type Ty = crate::types::AnyType;
+    type TyErazed = crate::types::AnyType;
+
+    fn unerase(ty: Self::TyErazed) -> Self::Ty {
+        ty
+    }
 }
 
 pub struct HashedNode<Id: TypedNodeId<IdN = NodeIdentifier>> {
@@ -400,9 +405,9 @@ impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Typed
     where
         Id::Ty: Copy + Send + Sync,
     {
-        match self.0.get_component::<Id::Ty>() {
-            Ok(t) => *t,
-            e => *e.unwrap(),
+        match self.0.get_component::<Id::TyErazed>() {
+            Ok(t) => Id::unerase(t.clone()),
+            e => Id::unerase(e.unwrap().clone()),
             // Err(ComponentError::NotFound {..}) => {
             //     let type_type = self.0.archetype().layout().component_types()[0];
             //     self.0.
@@ -554,7 +559,10 @@ impl<'a, T> HashedNodeRef<'a, T> {
 
 impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     type ChildIdx = u16;
-    type Children<'b> = MySlice<Self::TreeId> where Self: 'b;
+    type Children<'b>
+        = MySlice<Self::TreeId>
+    where
+        Self: 'b;
 
     fn child_count(&self) -> u16 {
         self.cs()
@@ -658,10 +666,8 @@ impl<'a, T> crate::types::WithHashs for HashedNodeRef<'a, T> {
     }
 }
 
-impl<'a, Id> crate::types::ErasedHolder
-    for HashedNodeRef<'a, Id>
-{
-    unsafe fn unerase_ref<T: 'static + crate::types::Compo>(
+impl<'a, Id> crate::types::ErasedHolder for HashedNodeRef<'a, Id> {
+    fn unerase_ref<T: 'static + Send + Sync>(
         &self,
         tid: std::any::TypeId,
     ) -> Option<&T> {

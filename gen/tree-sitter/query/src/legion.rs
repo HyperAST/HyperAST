@@ -176,7 +176,7 @@ pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::
     }
 }
 
-impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>>
+impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdentifier>>>
     ZippedTreeGen for TsQueryTreeGen<'store, 'cache, TS>
 {
     type Stores = SimpleStores<TS>;
@@ -297,7 +297,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<Node
     }
 }
 
-impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, TIdN<NodeIdentifier>>>>
+impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdentifier>>>
     TsQueryTreeGen<'store, 'cache, TS>
 {
     fn make_spacing(
@@ -460,7 +460,7 @@ where
 impl<
         'stores,
         'cache,
-        TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>,
+        TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, NodeIdentifier>>,
     > TreeGen for TsQueryTreeGen<'stores, 'cache, TS>
 {
     type Acc = Acc;
@@ -473,8 +473,7 @@ impl<
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
-        let interned_kind =
-            TS::intern(acc.simple.kind);
+        let interned_kind = TS::intern(acc.simple.kind);
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;
@@ -620,8 +619,7 @@ impl<'stores, 'cache> TsQueryTreeGen<'stores, 'cache, crate::types::TStore> {
         }
         let node_store = &mut self.stores.node_store;
         let label_store = &mut self.stores.label_store;
-        let interned_kind =
-        crate::types::TStore::intern(acc.simple.kind);
+        let interned_kind = crate::types::TStore::intern(acc.simple.kind);
         let hashs = acc.metrics.hashs;
         let size = acc.metrics.size + 1;
         let height = acc.metrics.height + 1;

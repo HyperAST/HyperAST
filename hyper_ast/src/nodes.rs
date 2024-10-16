@@ -248,10 +248,7 @@ impl<N: NodeId + Eq, L, T> crate::types::Stored for CompressedNode<N, L, T> {
 }
 
 impl<N, L, T> crate::types::ErasedHolder for CompressedNode<N, L, T> {
-    unsafe fn unerase_ref<U: 'static + crate::types::Compo>(
-        &self,
-        tid: std::any::TypeId,
-    ) -> Option<&U> {
+    fn unerase_ref<U: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&U> {
         unimplemented!("CompressedNode should be deprecated anyway")
     }
 }

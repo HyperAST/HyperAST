@@ -1182,42 +1182,41 @@ fn test_precomputed() {
         Err(t) => t,
     };
     log::trace!("sexp:\n{}", tree.root_node().to_sexp());
-    todo!("handle type inconsistences")
-    // let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
-    // log::trace!(
-    //     "syntax ser:\n{}",
-    //     hyper_ast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
-    // );
-    // let pre_processing = now.elapsed();
-    // let now = Instant::now();
-    // let (query, stores, code) = (query, stores, full_node.local.compressed_node);
-    // let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
-    // let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
-    // // let pos = hyper_ast::position::StructuralPosition::new(code);
-    // // let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(&stores, pos);
-    // let qcursor = query.matches(cursor);
-    // let mut count = 0;
-    // for m in qcursor {
-    //     count += 1;
-    //     dbg!(m.pattern_index);
-    //     dbg!(m.captures.len());
-    //     for c in &m.captures {
-    //         let i = c.index;
-    //         dbg!(i);
-    //         let name = query.capture_name(i);
-    //         dbg!(name);
-    //         use hyper_ast::position::structural_pos::AAA;
-    //         use hyper_ast::position::TreePath;
-    //         let n = c.node.pos.node();
-    //         let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, n);
-    //         // let n = c.node.pos.node().unwrap();
-    //         // let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, *n);
-    //         dbg!(n.to_string());
-    //     }
-    // }
-    // dbg!(count);
-    // let post_processing = now.elapsed();
-    // dbg!(pre_processing, post_processing);
+    let full_node = java_tree_gen.generate_file(b"", text, tree.walk());
+    log::trace!(
+        "syntax ser:\n{}",
+        hyper_ast::nodes::SyntaxSerializer::new(&stores, full_node.local.compressed_node)
+    );
+    let pre_processing = now.elapsed();
+    let now = Instant::now();
+    let (query, stores, code) = (query, stores, full_node.local.compressed_node);
+    let pos = hyper_ast::position::structural_pos::CursorWithPersistance::new(code);
+    let cursor = hyper_ast_tsquery::hyperast_opt::TreeCursor::new(&stores, pos);
+    // let pos = hyper_ast::position::StructuralPosition::new(code);
+    // let cursor = hyper_ast_tsquery::hyperast::TreeCursor::new(&stores, pos);
+    let qcursor = query.matches(cursor);
+    let mut count = 0;
+    for m in qcursor {
+        count += 1;
+        dbg!(m.pattern_index);
+        dbg!(m.captures.len());
+        for c in &m.captures {
+            let i = c.index;
+            dbg!(i);
+            let name = query.capture_name(i);
+            dbg!(name);
+            use hyper_ast::position::structural_pos::AAA;
+            use hyper_ast::position::TreePath;
+            let n = c.node.pos.node();
+            let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, n);
+            // let n = c.node.pos.node().unwrap();
+            // let n = hyper_ast::nodes::SyntaxSerializer::new(c.node.stores, *n);
+            dbg!(n.to_string());
+        }
+    }
+    dbg!(count);
+    let post_processing = now.elapsed();
+    dbg!(pre_processing, post_processing);
 }
 
 #[test]

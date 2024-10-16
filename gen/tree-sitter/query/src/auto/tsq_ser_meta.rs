@@ -138,7 +138,7 @@ impl<
             crate::search::ts_query2(&mut query_store.0.write().unwrap(), matcher.as_bytes());
         let matcher = {
             let preparing = crate::search::PreparedMatcher::<TIdN::Ty, C>::new_aux(
-                &query_store.0.read().unwrap(),
+                query_store.0.read().unwrap().with_ts(),
                 query,
             );
             preparing.into()

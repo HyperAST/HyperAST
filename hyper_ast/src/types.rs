@@ -975,6 +975,8 @@ impl NodeId for u16 {
 
 pub trait TypedNodeId: NodeId {
     type Ty: HyperType + Hash + Copy + Eq + Send + Sync;
+    type TyErazed: Compo + Clone;
+    fn unerase(ty: Self::TyErazed) -> Self::Ty;
 }
 
 pub trait TypedNodeStore<IdN: TypedNodeId> {
@@ -1082,16 +1084,33 @@ pub trait TypeStore {
         + std::hash::Hash
         + Copy
         + std::marker::Send
-        + std::marker::Sync
-        + Compo;
+        + std::marker::Sync;
 
     fn type_to_u16(t: Self::Ty) -> TypeInternalSize {
         t.get_lang().to_u16(t)
     }
     fn decompress_type(erazed: &impl ErasedHolder, tid: std::any::TypeId) -> Self::Ty {
+        *erazed
+            .unerase_ref::<Self::Ty>(tid)
+            .unwrap_or_else(|| unimplemented!("override 'decompress_type'"))
+    }
+}
+
+pub trait TTypeStore: TypeStore {
+    type TTy: Compo + Copy;
+    fn decompress_ttype(erazed: &impl ErasedHolder, tid: std::any::TypeId) -> Self::TTy;
+}
+
+impl<T> TTypeStore for T
+where
+    T: TypeStore,
+    T::Ty: Compo,
+{
+    type TTy = Self::Ty;
+    fn decompress_ttype(erazed: &impl ErasedHolder, tid: std::any::TypeId) -> Self::TTy {
         *unsafe {
             erazed
-                .unerase_ref::<Self::Ty>(tid)
+                .unerase_ref_unchecked::<Self::TTy>(tid)
                 .unwrap_or_else(|| unimplemented!("override 'decompress_type'"))
         }
     }
@@ -1320,13 +1339,17 @@ pub trait CompressedCompo<E: ErasedHolder> {
 
 pub trait ErasedHolder {
     /// made unsafe because mixed-up args could return corrupted memory for certain impls
-    unsafe fn unerase_ref<T: 'static + Compo>(&self, tid: std::any::TypeId) -> Option<&T>;
+    unsafe fn unerase_ref_unchecked<T: 'static + Compo>(
+        &self,
+        tid: std::any::TypeId,
+    ) -> Option<&T> {
+        self.unerase_ref(tid)
+    }
+    fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T>;
 }
 
 impl ErasedHolder for &dyn std::any::Any {
-    /// NOTE this impl is totaly safe, Any is checked internally
-    /// TODO make a separate trait to extract the unsafe
-    unsafe fn unerase_ref<T: 'static + Compo>(&self, tid: std::any::TypeId) -> Option<&T> {
+    fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
         if tid == std::any::TypeId::of::<T>() {
             self.downcast_ref()
         } else {
@@ -1418,7 +1441,21 @@ pub trait HyperAST<'store>: HyperASTShared {
         let n = ns.resolve(id);
         Self::TS::decompress_type(&n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
     }
-    fn resolve_lang(&self, n: &Self::T) -> LangWrapper<<Self::TS as TypeStore>::Ty> {
+    fn resolve_ttype(&'store self, id: &Self::IdN) -> <Self::TS as TypeStore>::Ty
+    where
+        Self::TS: TypeStore<Ty = AnyType>,
+    {
+        let ns = self.node_store();
+        let n = ns.resolve(id);
+        Self::TS::decompress_ttype(&n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+    }
+    // fn resolve_ttype(&'store self, id: &Self::IdN) -> <Self::TS as TypeStore>::Ty {
+    //     let ns = self.node_store();
+    //     let n = ns.resolve(id);
+    //     Self::TS::decompress_ttype(&n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+    // }
+    fn resolve_lang(&self, n: &Self::T) -> LangWrapper<<Self::TS as TypeStore>::Ty>
+    {
         Self::TS::decompress_type(n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
             .get_lang()
     }
@@ -1495,13 +1532,17 @@ pub trait HyperASTAsso: HyperASTShared {
         Self: 'store;
 
     fn resolve_type(&self, id: &Self::IdN) -> <Self::TS<'_> as TypeStore>::Ty {
-        let ns = self.node_store();
-        let n = ns.resolve(id);
-        Self::TS::decompress_type(&n, std::any::TypeId::of::<<Self::TS<'_> as TypeStore>::Ty>())
+        todo!()
         // let ns = self.node_store();
         // let n = ns.resolve(id);
-        // todo!()
-        // self.type_store().resolve_type(&n).clone()
+        // Self::TS::decompress_ttype(
+        //     &n,
+        //     std::any::TypeId::of::<<Self::TS<'_> as TypeStore>::Ty>(),
+        // )
+        // // let ns = self.node_store();
+        // // let n = ns.resolve(id);
+        // // todo!()
+        // // self.type_store().resolve_type(&n).clone()
     }
 }
 
@@ -1650,28 +1691,36 @@ where
     }
 }
 
-impl<'store, T, TS, NS, LS> TypeStore for SimpleHyperAST<T, TS, NS, LS>
-where
-    T: TypedTree<Type = TS::Ty>,
-    T::TreeId: NodeId<IdN = T::TreeId>,
-    TS::Ty: 'static + std::hash::Hash,
-    TS: TypeStore,
-    // TS::Ty:CompressedCompo,
-{
-    type Ty = TS::Ty;
+// impl<'store, T, TS, NS, LS> TypeStore for SimpleHyperAST<T, TS, NS, LS>
+// where
+//     T: TypedTree<Type = TS::Ty>,
+//     T::TreeId: NodeId<IdN = T::TreeId>,
+//     TS::Ty: 'static + std::hash::Hash,
+//     TS: TypeStore,
+//     // TS::Ty:CompressedCompo,
+// {
+//     type Ty = TS::Ty;
 
-    // fn resolve_lang(&self, n: &T) -> LangWrapper<Self::Ty> {
-    //     self.type_store.resolve_lang(n)
-    // }
+//     // fn resolve_lang(&self, n: &T) -> LangWrapper<Self::Ty> {
+//     //     self.type_store.resolve_lang(n)
+//     // }
 
-    // fn type_eq(&self, n: &T, m: &T) -> bool {
-    //     self.type_store.type_eq(n, m)
-    // }
+//     // fn type_eq(&self, n: &T, m: &T) -> bool {
+//     //     self.type_store.type_eq(n, m)
+//     // }
 
-    // fn resolve_type(&self, n: &T) -> Self::Ty {
-    //     self.type_store.resolve_type(n)
-    // }
-}
+//     // fn resolve_type(&self, n: &T) -> Self::Ty {
+//     //     self.type_store.resolve_type(n)
+//     // }
+
+//     fn decompress_type(erazed: &impl ErasedHolder, tid: std::any::TypeId) -> Self::Ty where <TS as TypeStore>::Ty: Compo {
+//         *unsafe {
+//             erazed
+//                 .unerase_ref::<Self::Ty>(tid)
+//                 .unwrap_or_else(|| unimplemented!("override 'decompress_type'"))
+//         }
+//     }
+// }
 
 pub struct TypeIndex {
     pub lang: &'static str,

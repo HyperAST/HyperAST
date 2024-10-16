@@ -293,19 +293,13 @@ impl crate::types::Tree for Tree {
 }
 
 impl crate::types::ErasedHolder for Tree {
-    unsafe fn unerase_ref<T: 'static + crate::types::Compo>(
-        &self,
-        tid: std::any::TypeId,
-    ) -> Option<&T> {
+    fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
         todo!()
     }
 }
 
 impl<'a, T> crate::types::ErasedHolder for TreeRef<'_, T> {
-    unsafe fn unerase_ref<TT: 'static + crate::types::Compo>(
-        &self,
-        tid: std::any::TypeId,
-    ) -> Option<&TT> {
+    fn unerase_ref<TT: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&TT> {
         todo!()
     }
 }

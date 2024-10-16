@@ -124,7 +124,10 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithChildren
     for HashedNodeRef<'a, Id>
 {
     type ChildIdx = u16;
-    type Children<'b> = MySlice<<Self::TreeId as NodeId>::IdN> where Self: 'b;
+    type Children<'b>
+        = MySlice<<Self::TreeId as NodeId>::IdN>
+    where
+        Self: 'b;
 
     fn child_count(&self) -> Self::ChildIdx {
         self.cs()
@@ -171,13 +174,8 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithHashs for Hash
     }
 }
 
-impl<'a, Id> crate::types::ErasedHolder
-    for HashedNodeRef<'a, Id>
-{
-    unsafe fn unerase_ref<T: 'static + crate::types::Compo>(
-        &self,
-        tid: std::any::TypeId,
-    ) -> Option<&T> {
+impl<'a, Id> crate::types::ErasedHolder for HashedNodeRef<'a, Id> {
+    fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
         todo!()
     }
 }
