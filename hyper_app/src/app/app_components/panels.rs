@@ -57,7 +57,22 @@ impl crate::HyperApp {
                             });
                     } else if let super::Tab::LocalQuery(id) = self.tabs[pane as usize] {
                         self.show_local_query_left_panel(ui, id);
+                    } else if let super::Tab::TreeAspect = self.tabs[pane as usize] {
+                        crate::app::code_aspects::show_config(
+                            ui,
+                            &mut self.data.aspects,
+                            &mut self.data.aspects_result,
+                            &self.data.api_addr,
+                            self.data.store.clone(),
+                        );
+                    } else if let super::Tab::TSG = self.tabs[pane as usize] {
+                        crate::app::tsg::show_config(ui, &mut self.data.tsg);
+                    } else if let super::Tab::Smells = self.tabs[pane as usize] {
+                        crate::app::smells::show_config(ui, &mut self.data.smells);
+                    } else if let super::Tab::LongTracking = self.tabs[pane as usize] {
+                        crate::app::long_tracking::show_config(ui, &mut self.data.long_tracking);
                     }
+
                     match &self.tabs[pane as usize] {
                         _ => (),
                     };

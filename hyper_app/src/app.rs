@@ -585,6 +585,7 @@ enum Tab {
     ProjectSelection(),
     LongTracking,
     Smells,
+    TSG,
     TreeAspect,
     CodeAspect,
     Empty,
@@ -616,6 +617,7 @@ impl Tab {
             Tab::MarkdownEdit(_) => "Markdown Edit".into(),
             Tab::Smells => "Smells".into(),
             Tab::LongTracking => "Tracking".into(),
+            Tab::TSG => "TSG".into(),
             Tab::Querying => "Querying".into(),
             Tab::TreeAspect => "Tree Aspect".into(),
             Tab::CodeAspect => "Code Aspect".into(),
@@ -657,7 +659,7 @@ impl SelectedConfig {
                 //     format: ResultFormat::Json,
                 // },
             ],
-            SelectedConfig::Tsg => vec![Tab::CodeFile(1)],
+            SelectedConfig::Tsg => vec![Tab::TSG],
             SelectedConfig::Smells => vec![Tab::Smells],
             SelectedConfig::Multi => vec![Tab::Commits],
             SelectedConfig::Diff => vec![Tab::Diff(0)],
@@ -1392,15 +1394,6 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                 Default::default()
             }
             Tab::TreeAspect => {
-                egui::panel::SidePanel::left(ui.id().with("tree aspect")).show_inside(ui, |ui| {
-                    code_aspects::show_config(
-                        ui,
-                        &mut self.data.aspects,
-                        &mut self.data.aspects_result,
-                        &self.data.api_addr,
-                        self.data.store.clone(),
-                    )
-                });
                 if let Some(aspects_result) = &mut self.data.aspects_result {
                     code_aspects::show(
                         aspects_result,
@@ -1435,6 +1428,27 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                     &mut self.data.smells_diffs_result,
                     &mut self.data.fetched_files,
                 );
+                Default::default()
+            }
+            Tab::TSG => {
+                ui.set_clip_rect(ui.available_rect_before_wrap());
+                let mut trigger = false;
+                tsg::show_querying(
+                    ui,
+                    &self.data.api_addr,
+                    &mut self.data.tsg,
+                    &mut self.data.tsg_context,
+                    &mut trigger,
+                    &mut self.data.tsg_result,
+                );
+                if trigger {
+                    self.data.tsg_result = Some(tsg::remote_compute_query(
+                        ui.ctx(),
+                        &self.data.api_addr,
+                        &mut self.data.tsg,
+                        &mut self.data.tsg_context,
+                    ));
+                }
                 Default::default()
             }
             Tab::LongTracking => {

@@ -232,7 +232,7 @@ pub enum DiffsError {
 
 pub(crate) const WANTED: SelectedConfig = SelectedConfig::Smells;
 
-pub(crate) fn show_config(smells: &mut Config, ui: &mut egui::Ui) {
+pub(crate) fn show_config(ui: &mut egui::Ui, smells: &mut Config) {
     match &mut smells.commits {
         Some(conf) => {
             ui.label("Source of inital Examples:");
@@ -622,22 +622,23 @@ fn show_query_with_example(
                     show_query(bad_query, ui);
                 },
             );
+            let bad_ex_cont =  &bad_query.examples[..bad_query.examples.len().min(20)];
             MultiSplitter::with_orientation(MultiSplitterOrientation::Horizontal)
-                .ratios(if bad_query.examples.len() <= 8 {
-                    vec![1.0 / bad_query.examples.len() as f32; bad_query.examples.len() - 1]
+                .ratios(if bad_ex_cont.len() <= 8 {
+                    vec![1.0 / bad_ex_cont.len() as f32; bad_ex_cont.len() - 1]
                 } else {
                     [0.2, 0.2]
                         .into_iter()
                         .chain(
-                            (0..bad_query.examples.len() - 3)
+                            (0..bad_ex_cont.len() - 3)
                                 .into_iter()
-                                .map(|_| 0.6 / (bad_query.examples.len() - 2) as f32),
+                                .map(|_| 0.6 / (bad_ex_cont.len() - 2) as f32),
                         )
                         .collect()
                 })
                 .show(ui2, |uis| {
                     for (i, ui) in uis.iter_mut().enumerate() {
-                        let example = &examples.examples[bad_query.examples[i]];
+                        let example = &examples.examples[bad_ex_cont[i]];
                         ui.push_id(ui1.id().with(i), |ui| {
                             show_diff(ui, api_addr, example, fetched_files)
                         });

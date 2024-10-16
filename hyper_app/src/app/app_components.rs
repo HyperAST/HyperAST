@@ -572,7 +572,7 @@ impl super::HyperApp {
                         show_menu(ui, selected, &tsg::WANTED, |ui| tsg::show_config(ui, tsg));
                         ui.separator();
                         show_menu(ui, selected, &smells::WANTED, |ui| {
-                            smells::show_config(smells, ui)
+                            smells::show_config(ui, smells)
                         });
 
                         ui.separator();

@@ -208,8 +208,8 @@ impl SelectedConfig {
         match self {
             SelectedConfig::Single => true,
             SelectedConfig::Querying => true,
-            SelectedConfig::Tsg => false,
-            SelectedConfig::Smells => false,
+            SelectedConfig::Tsg => true,
+            SelectedConfig::Smells => true,
             SelectedConfig::Multi => false,
             SelectedConfig::Diff => false,
             SelectedConfig::Tracking => false,
