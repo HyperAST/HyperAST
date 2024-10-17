@@ -14,7 +14,7 @@ pub(crate) fn show_nat_menu(ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui.button("Quit").clicked() {
-                    _frame.close();
+                    ctx.send_viewport_cmd(ViewportCommand::Close);
                 }
             });
         });
