@@ -74,6 +74,8 @@ impl InteractiveSplitter {
             resizable,
         } = self;
 
+        let outer_clip = ui.clip_rect();
+
         debug_assert!((0.0..=1.0).contains(&ratio));
 
         let (rect, splitter_response) =
@@ -203,8 +205,8 @@ impl InteractiveSplitter {
             let inner_response = frame.show(&mut second_ui, |second_ui| {
                 // ui2.set__height(ui2.max_rect().height()); // Make sure the frame fills the full height
                 // ui2.set_min_width(*width_range.start());
-                first_ui.set_clip_rect(first_rect);
-                second_ui.set_clip_rect(second_rect);
+                first_ui.set_clip_rect(first_rect.intersect(outer_clip));
+                second_ui.set_clip_rect(second_rect.intersect(outer_clip));
                 add_contents(first_ui, second_ui)
             });
             inner_response.inner
