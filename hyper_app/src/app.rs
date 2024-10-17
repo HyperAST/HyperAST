@@ -1611,14 +1611,23 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                     }
                 }
             };
-        } else if let Tab::MarkdownStatic(0) = space_view {
-            if ui
-                .small_icon_button(&re_ui::icons::CLOSE)
-                .on_hover_text("Close App Description")
-                .clicked()
-            {
-                self.to_hide.push(tile_id);
-            }
+        }
+    }
+
+    fn is_tab_closable(&self, tiles: &egui_tiles::Tiles<TabId>, tile_id: egui_tiles::TileId) -> bool {
+        let Some(tile) = tiles.get(tile_id) else {
+            return false;
+        };
+        let egui_tiles::Tile::Pane(tid) = tile else {
+            return false;
+        };
+        let Some(space_view) = self.tabs.get(*tid as usize) else {
+            return false;
+        };
+        if let Tab::MarkdownStatic(0) = space_view {
+            true
+        } else {
+            false
         }
     }
 
