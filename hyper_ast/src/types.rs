@@ -1371,10 +1371,10 @@ pub trait Compo: legion::storage::Component {}
 impl<T> Compo for T where T: legion::storage::Component {}
 
 #[cfg(all(not(feature = "bevy_ecs"), not(feature = "legion")))]
-pub trait Compo {}
+pub trait Compo: Send + Sync {}
 
 #[cfg(all(not(feature = "bevy_ecs"), not(feature = "legion")))]
-impl<T> Compo for T {}
+impl<T: Send + Sync> Compo for T {}
 
 pub trait ErasedInserter {
     fn insert<T: 'static + Compo>(&mut self, t: T);
