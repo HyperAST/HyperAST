@@ -35,8 +35,7 @@
 //! about fixingtry carches in tests
 
 use std::{
-    collections::HashMap,
-    ops::{Range, SubAssign},
+    collections::HashMap, hash::Hash, ops::{Range, SubAssign}
 };
 
 use egui_addon::{
@@ -423,19 +422,19 @@ pub(super) fn show_central_panel(
                         .scroll_bar_visibility(
                             egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
                         )
-                        .show_rows(ui, H, len, |ui, cols| {
+                        .show_rows(ui, H, len, |ui, rows| {
                             let (mut rect, _) = ui.allocate_exact_size(
                                 egui::Vec2::new(
                                     ui.available_width(),
-                                    H * (cols.end - cols.start) as f32,
+                                    H// * (rows.end - rows.start) as f32,
                                 ),
                                 egui::Sense::hover(),
                             );
                             let top = rect.top();
-                            for i in cols.clone() {
+                            for i in rows.start..rows.end - 1 {
                                 let mut rect = {
                                     let (t, b) = rect.split_top_bottom_at_y(
-                                        top + H * (i - cols.start + 1) as f32,
+                                        top + H * (i - rows.start + 1) as f32,
                                     );
                                     rect = b;
                                     t
@@ -455,7 +454,7 @@ pub(super) fn show_central_panel(
                                     egui::Layout::top_down(egui::Align::Min),
                                     None,
                                 );
-                                ui.set_clip_rect(rect);
+                                ui.set_clip_rect(rect.intersect(ui.clip_rect()));
                                 ui.push_id(
                                     id.with(i)
                                         .with("query_with_example")
@@ -622,7 +621,8 @@ fn show_query_with_example(
                     show_query(bad_query, ui);
                 },
             );
-            let bad_ex_cont =  &bad_query.examples[..bad_query.examples.len().min(20)];
+            let clip_rect = ui2.clip_rect();
+            let bad_ex_cont =  &bad_query.examples[..bad_query.examples.len().min(12)];
             MultiSplitter::with_orientation(MultiSplitterOrientation::Horizontal)
                 .ratios(if bad_ex_cont.len() <= 8 {
                     vec![1.0 / bad_ex_cont.len() as f32; bad_ex_cont.len() - 1]
@@ -638,6 +638,9 @@ fn show_query_with_example(
                 })
                 .show(ui2, |uis| {
                     for (i, ui) in uis.iter_mut().enumerate() {
+                        if !clip_rect.contains_rect(ui.clip_rect()) {
+                            continue;
+                        }
                         let example = &examples.examples[bad_ex_cont[i]];
                         ui.push_id(ui1.id().with(i), |ui| {
                             show_diff(ui, api_addr, example, fetched_files)
@@ -721,6 +724,7 @@ pub(crate) fn show_diff(
                 col: color,
                 moves: &example.moves,
                 mov_col,
+                hash: hash(&example.before.file)
             };
             show_either_side(ui, fetched_files, api_addr, &example.after, color, ma);
             ui.separator();
@@ -732,11 +736,19 @@ pub(crate) fn show_diff(
                 col: color,
                 moves: &example.moves,
                 mov_col,
+                hash: hash(&example.before.file)
             };
             show_either_side(ui, fetched_files, api_addr, &example.before, color, ma);
             ui.separator();
         });
     });
+}
+
+pub fn hash<T: ?Sized + Hash>(x: &T) -> u64 {
+    let mut state = std::hash::DefaultHasher::default();
+    x.hash(&mut state);
+    use std::hash::Hasher;
+    state.finish()
 }
 
 fn delete_color(ui: &mut egui::Ui) -> egui::Rgba {
@@ -766,12 +778,20 @@ fn move_color(ui: &mut egui::Ui) -> egui::Rgba {
     .into()
 }
 
-#[derive(Clone, Copy, Hash)]
+#[derive(Clone, Copy)]
 struct MH<'a, const LEFT: bool> {
     main: &'a Vec<Range<usize>>,
     col: egui::Rgba,
     moves: &'a Vec<(Range<usize>, Range<usize>)>,
     mov_col: egui::Rgba,
+    hash: u64,
+}
+
+impl<'a, const LEFT: bool> std::hash::Hash for MH<'a, LEFT> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        LEFT.hash(state);
+        self.hash.hash(state);
+    }
 }
 
 impl<'a, const LEFT: bool> MakeHighlights for MH<'a, LEFT> {
@@ -811,17 +831,17 @@ fn show_either_side<MH: MakeHighlights>(
     let file_result = fetched_files.entry(code.file.clone());
     let id_scroll = ui.id().with("off_scrolled");
     let r = super::utils_poll::try_fetch_remote_file(&file_result, |file| {
-        let mut code: &str = &file.content;
+        let mut content: &str = &file.content;
         let language = "java";
         use egui::text::LayoutJob;
         use egui_addon::syntax_highlighting::syntect::CodeTheme;
         let theme = CodeTheme::from_memory(ui.ctx());
-        let mut layouter = |ui: &egui::Ui, code: &str, _wrap_width: f32| {
+        let mut layouter = |ui: &egui::Ui, content: &str, _wrap_width: f32| {
             type HighlightCache = egui::util::cache::FrameCache<LayoutJob, HiHighlighter>;
             let layout_job = ui.ctx().memory_mut(|mem| {
                 mem.caches
                     .cache::<HighlightCache>()
-                    .get((&theme, code, language, highlights))
+                    .get((&theme, crate::app::utils_edition::FileContainer(&code.file, content), language, highlights))
             });
             ui.fonts(|f| {
                 let galley = f.layout_job(layout_job);
@@ -835,7 +855,7 @@ fn show_either_side<MH: MakeHighlights>(
         };
         let noop = ui.painter().add(egui::Shape::Noop);
         let scroll = egui::scroll_area::ScrollArea::both().show(ui, |ui| {
-            egui_addon::code_editor::generic_text_edit::TextEdit::multiline(&mut code)
+            egui_addon::code_editor::generic_text_edit::TextEdit::multiline(&mut content)
                 .layouter(&mut layouter)
                 .desired_width(f32::MAX)
                 .show(ui)

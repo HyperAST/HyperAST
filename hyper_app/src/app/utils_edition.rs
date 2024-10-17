@@ -583,17 +583,28 @@ impl MakeHighlights for () {
     }
 }
 
+/// Helps egui::util::cache::ComputerMut, i.e., avoids computing the hash of the whole file.
+/// Otherwise, it can tank fps in non-release builds :/
+#[derive(Clone, Copy)]
+pub struct FileContainer<'a, T>(pub &'a super::types::FileIdentifier, pub T);
+
+impl<'a, T> std::hash::Hash for FileContainer<'a, T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
 /// Wrap a highlighter to also do custom background highlights given a set of ranges with colors (see [`MakeHighlights`]),
 /// e.g. visualizing deleted, moved and inserted ranges of code
 /// WARN apparently doesn't work well with transparency... the background rectangles are slighlty expanded for looks... so it makes ugly border looking things
 #[derive(Default)]
 pub(crate) struct HiHighlighter(egui_addon::syntax_highlighting::syntect::Highlighter);
 impl<MH: MakeHighlights>
-    egui::util::cache::ComputerMut<(&CodeTheme, &str, &str, MH), egui::text::LayoutJob>
+    egui::util::cache::ComputerMut<(&CodeTheme, FileContainer<'_, &str>, &str, MH), egui::text::LayoutJob>
     for HiHighlighter
 {
-    fn compute(&mut self, (theme, code, lang, mh): (&CodeTheme, &str, &str, MH)) -> LayoutJob {
-        let mut layout_job = self.0.highlight(theme, code, lang);
+    fn compute(&mut self, (theme, code, lang, mh): (&CodeTheme, FileContainer<'_, &str>, &str, MH)) -> LayoutJob {
+        let mut layout_job = self.0.highlight(theme, code.1, lang); // TODO cache it separatly it takes too much time
         let sections = std::mem::take(&mut layout_job.sections);
         let mut starts = vec![];
         let mut ends = vec![];
