@@ -9,8 +9,8 @@ egui = { version = "0.28.1", default-features = false }
 eframe = { version = "0.28.1", default-features = false, features = [
     # "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
-    "wgpu",          # Use the glow rendering backend. Alternative: "wgpu".
-    # "glow",          # Use the glow rendering backend. Alternative: "wgpu".
+    # "wgpu",          # Use the wgpu rendering backend. Alternative: "glow".
+    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
     "persistence",   # Enable restoring app state when restarting the app.
 ] }
 epaint = { version = "0.28.1", default-features = false }
