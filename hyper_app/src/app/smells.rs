@@ -753,7 +753,7 @@ pub fn hash<T: ?Sized + Hash>(x: &T) -> u64 {
 
 fn delete_color(ui: &mut egui::Ui) -> egui::Rgba {
     if ui.visuals().dark_mode {
-        egui::Color32::from_rgb(255, 50, 50).gamma_multiply(0.03)
+        egui::Color32::from_rgb(255, 50, 50).gamma_multiply(0.01)
     } else {
         egui::Color32::from_rgb(240, 20, 20).gamma_multiply(0.03)
     }
@@ -762,7 +762,7 @@ fn delete_color(ui: &mut egui::Ui) -> egui::Rgba {
 
 fn insert_color(ui: &mut egui::Ui) -> egui::Rgba {
     if ui.visuals().dark_mode {
-        egui::Color32::from_rgb(40, 235, 40).gamma_multiply(0.03)
+        egui::Color32::from_rgb(40, 235, 40).gamma_multiply(0.01)
     } else {
         egui::Color32::from_rgb(20, 235, 20).gamma_multiply(0.03)
     }
@@ -771,7 +771,7 @@ fn insert_color(ui: &mut egui::Ui) -> egui::Rgba {
 
 fn move_color(ui: &mut egui::Ui) -> egui::Rgba {
     if ui.visuals().dark_mode {
-        egui::Color32::from_rgb(50, 50, 255).gamma_multiply(0.3)
+        egui::Color32::from_rgb(50, 50, 255).gamma_multiply(0.4)
     } else {
         egui::Color32::BLUE.gamma_multiply(0.1)
     }
@@ -837,11 +837,11 @@ fn show_either_side<MH: MakeHighlights>(
         use egui_addon::syntax_highlighting::syntect::CodeTheme;
         let theme = CodeTheme::from_memory(ui.ctx());
         let mut layouter = |ui: &egui::Ui, content: &str, _wrap_width: f32| {
-            type HighlightCache = egui::util::cache::FrameCache<LayoutJob, HiHighlighter>;
+            type HighlightCache = egui::util::cache::FrameCache<LayoutJob, crate::app::utils_edition::Highlighter0>;
             let layout_job = ui.ctx().memory_mut(|mem| {
                 mem.caches
                     .cache::<HighlightCache>()
-                    .get((&theme, crate::app::utils_edition::FileContainer(&code.file, content), language, highlights))
+                    .get((&theme, crate::app::utils_edition::FileContainer(&code.file, content), language))
             });
             ui.fonts(|f| {
                 let galley = f.layout_job(layout_job);

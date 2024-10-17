@@ -594,6 +594,22 @@ impl<'a, T> std::hash::Hash for FileContainer<'a, T> {
     }
 }
 
+#[derive(Default)]
+pub(crate) struct Highlighter0(egui_addon::syntax_highlighting::syntect::Highlighter);
+impl
+    egui::util::cache::ComputerMut<
+        (&CodeTheme, FileContainer<'_, &str>, &str),
+        egui::text::LayoutJob,
+    > for Highlighter0
+{
+    fn compute(
+        &mut self,
+        (theme, code, lang): (&CodeTheme, FileContainer<'_, &str>, &str),
+    ) -> LayoutJob {
+        self.0.highlight(theme, code.1, lang)
+    }
+}
+
 /// Wrap a highlighter to also do custom background highlights given a set of ranges with colors (see [`MakeHighlights`]),
 /// e.g. visualizing deleted, moved and inserted ranges of code
 /// WARN apparently doesn't work well with transparency... the background rectangles are slighlty expanded for looks... so it makes ugly border looking things
