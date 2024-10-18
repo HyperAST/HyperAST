@@ -32,10 +32,12 @@
 //! https://github.com/google/gson/commit/99cc4cb11f73a6d672aa6381013d651b7921e00f
 //! more specifically:
 //! https://github.com/Marcono1234/gson/commit/3d241ca0a6435cbf1fa1cdaed2af8480b99fecde
-//! about fixingtry carches in tests
+//! about fixing try catches in tests
 
 use std::{
-    collections::HashMap, hash::Hash, ops::{Range, SubAssign}
+    collections::HashMap,
+    hash::Hash,
+    ops::{Range, SubAssign},
 };
 
 use egui_addon::{
@@ -46,7 +48,7 @@ use egui_addon::{
 };
 use wasm_rs_dbg::dbg;
 
-use crate::app::utils_edition::{HiHighlighter, MakeHighlights};
+use crate::app::utils_edition::MakeHighlights;
 
 use super::{
     code_tracking::RemoteFile,
@@ -69,6 +71,9 @@ pub(super) struct ComputeConfigQuery {
     len: usize,
     simple_matching: bool,
     prepro_matching: bool,
+
+    // filterings
+    wanted_matches: std::ops::Range<usize>,
 
     // just ui stuff, might do better
     advanced_open: bool,
@@ -119,8 +124,9 @@ impl Default for ComputeConfigQuery {
             .into(),
             config: Config::MavenJava,
             len: 1,
-            simple_matching: false,
+            simple_matching: true,
             prepro_matching: true,
+            wanted_matches: Default::default(),
             advanced_open: false,
         }
     }
@@ -133,29 +139,20 @@ pub(crate) struct Config {
     pub(crate) diffs: Option<ExamplesValues>,
     pub(crate) queries: Option<SearchResults>,
     pub(crate) stats: Option<Vec<(types::CodeRange, types::CodeRange)>>,
+    pub(crate) bad_matches_bounds: std::ops::RangeInclusive<usize>,
+    pub(crate) bads: Option<Vec<usize>>,
 }
 impl Default for Config {
     fn default() -> Self {
         let compute_config_query: ComputeConfigQuery = Default::default();
-        // let file = FileIdentifier {
-        //     commit: compute_config_query.commit.clone(),
-        //     // file_path: "src/main/java/spoon/Launcher.java".to_string(),
-        //     file_path: "gson/src/test/java/com/google/gson/functional/UncategorizedTest.java"
-        //         .to_string(),
-        // };
         Self {
             commits: Some(compute_config_query),
             diffs: None,
             queries: None,
             stats: None,
+            bad_matches_bounds: std::ops::RangeInclusive::new(0, 0),
+            bads: Default::default(),
         }
-        // let r = CodeRange {
-        //     file,
-        //     range: Some(50..100),
-        //     path: vec![],
-        //     path_ids: vec![],
-        // };
-        // Self::Patches(compute_config_query, vec![(r.clone(), r); 10])
     }
 }
 
@@ -207,6 +204,7 @@ pub struct SearchResult {
     //stats
     pub matches: usize,
 }
+
 pub struct SearchResults2 {
     pub prepare_time: f64,
     pub search_time: f64,
@@ -232,6 +230,7 @@ pub enum DiffsError {
 pub(crate) const WANTED: SelectedConfig = SelectedConfig::Smells;
 
 pub(crate) fn show_config(ui: &mut egui::Ui, smells: &mut Config) {
+    use super::utils_egui::MyUiExt;
     match &mut smells.commits {
         Some(conf) => {
             ui.label("Source of inital Examples:");
@@ -295,6 +294,19 @@ pub(crate) fn show_config(ui: &mut egui::Ui, smells: &mut Config) {
 
             ui.checkbox(&mut conf.simple_matching, "Simple Matching");
             ui.checkbox(&mut conf.prepro_matching, "Incr. Matching");
+
+            ui.label("#matches on entire commit:");
+            if ui
+                .double_ended_slider(
+                    &mut conf.wanted_matches.start,
+                    &mut conf.wanted_matches.end,
+                    smells.bad_matches_bounds.clone(),
+                )
+                .on_hover_text("displays only queries in the given range")
+                .changed()
+            {
+                smells.bads = None
+            };
         }
         None => (),
     }
@@ -397,6 +409,7 @@ pub(super) fn show_central_panel(
                     }
                     ui.spinner();
                 });
+            smells.bad_matches_bounds = std::ops::RangeInclusive::new(0, 0);
             return;
         };
         match result {
@@ -406,16 +419,44 @@ pub(super) fn show_central_panel(
                     let examples = smells.diffs.as_mut().unwrap();
                     let center = ui.available_rect_before_wrap().center();
                     let id = ui.id();
-                    let len = queries.bad.len();
-                    // if examples.examples.len() != len {
-                    //     assert!(queries.bad.len() < len);
-                    //     todo!("handle merged queries")
-                    // }
+                    let tot_len = queries.bad.len();
+                    if smells.bads.is_none() {
+                        smells.bads = Some(
+                            (0..tot_len)
+                                .filter(|i| conf.wanted_matches.contains(&queries.bad[*i].matches))
+                                .collect(),
+                        )
+                    }
+                    let bads = smells.bads.as_ref().unwrap();
+                    let len = bads.len();
                     if !queries.good.is_empty() {
                         todo!("handle the queries matching the fixes")
                     }
+
+                    if *smells.bad_matches_bounds.end() == 0 {
+                        let start = queries
+                            .bad
+                            .iter()
+                            .map(|x| x.matches)
+                            .min()
+                            .unwrap_or_default();
+                        let end = queries
+                            .bad
+                            .iter()
+                            .map(|x| x.matches)
+                            .max()
+                            .unwrap_or_default();
+                        smells.bad_matches_bounds = std::ops::RangeInclusive::new(start, end);
+                    }
+                    if tot_len == 0 {
+                        ui.colored_label(ui.visuals().error_fg_color, "No queries found");
+                        return;
+                    }
                     if len == 0 {
-                        ui.colored_label(ui.visuals().error_fg_color, "No changes found");
+                        ui.colored_label(
+                            ui.visuals().error_fg_color,
+                            "No queries selected, change the hyperparameters",
+                        );
                         return;
                     }
                     egui::ScrollArea::vertical()
@@ -426,7 +467,7 @@ pub(super) fn show_central_panel(
                             let (mut rect, _) = ui.allocate_exact_size(
                                 egui::Vec2::new(
                                     ui.available_width(),
-                                    H// * (rows.end - rows.start) as f32,
+                                    H, // * (rows.end - rows.start) as f32,
                                 ),
                                 egui::Sense::hover(),
                             );
@@ -456,11 +497,11 @@ pub(super) fn show_central_panel(
                                 );
                                 ui.set_clip_rect(rect.intersect(ui.clip_rect()));
                                 ui.push_id(
-                                    id.with(i)
+                                    id.with(bads[i])
                                         .with("query_with_example")
                                         .with(&resource.response.bytes),
                                     |ui| {
-                                        let bad_query = &queries.bad[i];
+                                        let bad_query = &queries.bad[bads[i]];
                                         // let example = &mut examples.examples[bad_query.examples];
                                         show_query_with_example(
                                             ui,
@@ -622,7 +663,7 @@ fn show_query_with_example(
                 },
             );
             let clip_rect = ui2.clip_rect();
-            let bad_ex_cont =  &bad_query.examples[..bad_query.examples.len().min(12)];
+            let bad_ex_cont = &bad_query.examples[..bad_query.examples.len().min(12)];
             MultiSplitter::with_orientation(MultiSplitterOrientation::Horizontal)
                 .ratios(if bad_ex_cont.len() <= 8 {
                     vec![1.0 / bad_ex_cont.len() as f32; bad_ex_cont.len() - 1]
@@ -724,7 +765,7 @@ pub(crate) fn show_diff(
                 col: color,
                 moves: &example.moves,
                 mov_col,
-                hash: hash(&example.before.file)
+                hash: hash(&example.before.file),
             };
             show_either_side(ui, fetched_files, api_addr, &example.after, color, ma);
             ui.separator();
@@ -736,7 +777,7 @@ pub(crate) fn show_diff(
                 col: color,
                 moves: &example.moves,
                 mov_col,
-                hash: hash(&example.before.file)
+                hash: hash(&example.before.file),
             };
             show_either_side(ui, fetched_files, api_addr, &example.before, color, ma);
             ui.separator();
@@ -837,12 +878,16 @@ fn show_either_side<MH: MakeHighlights>(
         use egui_addon::syntax_highlighting::syntect::CodeTheme;
         let theme = CodeTheme::from_memory(ui.ctx());
         let mut layouter = |ui: &egui::Ui, content: &str, _wrap_width: f32| {
-            type HighlightCache = egui::util::cache::FrameCache<LayoutJob, crate::app::utils_edition::Highlighter0>;
+            type HighlightCache =
+                egui::util::cache::FrameCache<LayoutJob, crate::app::utils_edition::Highlighter0>;
             let layout_job = ui.ctx().memory_mut(|mem| {
-                mem.caches
-                    .cache::<HighlightCache>()
-                    .get((&theme, crate::app::utils_edition::FileContainer(&code.file, content), language))
+                mem.caches.cache::<HighlightCache>().get((
+                    &theme,
+                    crate::app::utils_edition::FileContainer(&code.file, content),
+                    language,
+                ))
             });
+
             ui.fonts(|f| {
                 let galley = f.layout_job(layout_job);
                 let mut galley = galley.as_ref().clone();
