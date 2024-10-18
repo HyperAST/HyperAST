@@ -570,23 +570,19 @@ impl crate::HyperApp {
                             ui.add(egui::Label::new("-o----------".repeat(50)).extend());
                         });
                     });
-                }
-                if *view == super::BottomPanelConfig::CommitsTime {
-                    ui.painter().rect_filled(
-                        ui.available_rect_before_wrap(),
-                        ui.visuals().window_rounding,
-                        ui.visuals().widgets.open.bg_fill,
-                    );
+                } else if *view == super::BottomPanelConfig::CommitsTime {
                     egui::ScrollArea::both()
                         .auto_shrink([false; 2])
                         .show(ui, |ui| {
-                            let timed = true;
+                            egui::Frame::menu(ui.style()).show(ui, |ui| {
+                                let timed = true;
                             if timed {
                                 self.print_commit_graph_timed(ui);
                             } else {
                                 self.print_commit_graph(ui, ctx);
                             }
                         });
+                    });
                 }
             });
     }
