@@ -677,7 +677,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
                                             plot_ui.transform().position_from_point(&position);
                                         let dist_sq = point.distance_sq(pos);
                                         if dist_sq < 100.0 {
-                                            log::error!("clicked");
+                                            log::debug!("clicked");
                                             ouput = GraphInteration::ClickChange(i, i - 1);
                                         }
                                     }
