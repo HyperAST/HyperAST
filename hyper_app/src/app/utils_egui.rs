@@ -308,6 +308,24 @@ pub trait MyUiExt: UiExt {
             })
         })
     }
+    fn double_ended_slider<Num: egui::emath::Numeric>(
+        &mut self,
+        low: &mut Num,
+        high: &mut Num,
+        range: std::ops::RangeInclusive<Num>,
+    ) -> egui::Response {
+        // TODO use a double ended slider
+        use egui::Widget;
+        let resp_low = egui::Slider::new(low, range.clone()).ui(self.ui_mut());
+        let resp_high = egui::Slider::new(high, range.clone()).ui(self.ui_mut());
+        if resp_low.changed() && low > high {
+            *low = *high;
+        }
+        if resp_high.changed() && high < low {
+            *high = *low;
+        }
+        resp_low.union(resp_high)
+    }
 }
 
 impl MyUiExt for egui::Ui {}

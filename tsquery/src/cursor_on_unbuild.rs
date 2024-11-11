@@ -1,41 +1,44 @@
-//! TODO make it language agnostic
 //! TODO more difficult: make it backend agnostic, e.g., no ref to legion stuff
 
+use crate::{Cursor, Node as _, Status, Symbol, TreeCursorStep};
 use hyper_ast::position::TreePath;
-use hyper_ast::store::labels::LabelStore;
-use hyper_ast::store::nodes::legion::NodeIdentifier;
+use hyper_ast::tree_gen;
 use hyper_ast::types::{
-    HyperASTShared, HyperType, LabelStore as _, Labeled, NodeStore, Role, Tree, WithRoles,
+    self, HyperASTShared, HyperType as _, LabelStore as _, Labeled, NodeStore, Role, Tree,
+    WithRoles,
 };
 use hyper_ast::{position::TreePathMut, types::TypeStore};
-use hyper_ast_tsquery::{Cursor, Node as _, Status, Symbol, TreeCursorStep};
-use num::ToPrimitive;
 use std::marker::PhantomData;
 
-pub type TreeCursor<'hast, 'acc, HAST> = Node<'hast, 'acc, HAST>;
+// NOTE cannot currently use HyperAST trait
+// TODO use HyperAST trait
+use hyper_ast::store::nodes::legion::RawHAST as HAST;
+type IdN = hyper_ast::store::nodes::legion::NodeIdentifier;
+type Idx = u16;
 
-pub struct Node<'hast, 'acc, HAST: HyperASTShared + TypeStore> {
+use types::ETypeStore as EnabledTypeStore;
+
+pub type TreeCursor<'hast, 'acc, HAST, Acc> = Node<'hast, 'acc, HAST, Acc>;
+
+pub struct Node<'hast, 'acc, HAST: HyperASTShared + TypeStore, Acc> {
     pub stores: &'acc HAST,
-    acc: &'acc super::Acc,
+    acc: &'acc Acc,
     label: Option<&'acc str>,
     offset: Idx,
     pub pos: hyper_ast::position::StructuralPosition<HAST::IdN, HAST::Idx>,
     _p: PhantomData<&'hast ()>,
 }
 
-impl<'hast, 'acc, TS: TypeStore> PartialEq for Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
+impl<'hast, 'acc, TS: TypeStore, Acc> PartialEq for Node<'hast, 'acc, HAST<'hast, 'acc, TS>, Acc> {
     fn eq(&self, other: &Self) -> bool {
         self.pos == other.pos
     }
 }
 
-type IdN = NodeIdentifier;
-type Idx = u16;
-
-impl<'hast, 'acc, TS: TypeStore> Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
+impl<'hast, 'acc, TS: TypeStore, Acc> Node<'hast, 'acc, HAST<'hast, 'acc, TS>, Acc> {
     pub fn new(
         stores: &'acc HAST<'hast, 'acc, TS>,
-        acc: &'acc super::Acc,
+        acc: &'acc Acc,
         label: Option<&'acc str>,
         pos: hyper_ast::position::StructuralPosition<IdN, Idx>,
     ) -> Self {
@@ -50,7 +53,7 @@ impl<'hast, 'acc, TS: TypeStore> Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
     }
 }
 
-impl<'hast, 'acc, TS: TypeStore> Clone for Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
+impl<'hast, 'acc, TS: TypeStore, Acc> Clone for Node<'hast, 'acc, HAST<'hast, 'acc, TS>, Acc> {
     fn clone(&self) -> Self {
         Self {
             stores: self.stores,
@@ -99,16 +102,15 @@ impl<IdF: Copy> Status for CursorStatus<IdF> {
     }
 }
 
-type HAST<'hast, 'acc, TS> = super::SimpleStores<TS, &'hast legion::World, &'acc LabelStore>;
-
-impl<'hast, 'acc, TS> hyper_ast_tsquery::Cursor
-    for self::TreeCursor<'hast, 'acc, HAST<'hast, 'acc, TS>>
+impl<'hast, 'acc, TS, Acc> crate::Cursor
+    for self::TreeCursor<'hast, 'acc, HAST<'hast, 'acc, TS>, Acc>
 where
-    TS: super::JavaEnabledTypeStore + hyper_ast::types::RoleStore<IdF = IdF, Role = Role>,
+    TS: EnabledTypeStore<Ty2 = Acc::Type> + hyper_ast::types::RoleStore<IdF = IdF, Role = Role>,
+    Acc: tree_gen::WithChildren<IdN> + tree_gen::WithRole<Role> + types::Typed,
 {
-    type Node = self::Node<'hast, 'acc, HAST<'hast, 'acc, TS>>;
+    type Node = self::Node<'hast, 'acc, HAST<'hast, 'acc, TS>, Acc>;
     type NodeRef<'a>
-        = &'a self::Node<'hast, 'acc, HAST<'hast, 'acc, TS>>
+        = &'a self::Node<'hast, 'acc, HAST<'hast, 'acc, TS>, Acc>
     where
         Self: 'a;
 
@@ -141,7 +143,7 @@ where
                         // }
                     };
                     if self.pos.node().is_none() {
-                        if *o as usize + 1 < self.acc.simple.children.len() {
+                        if *o as usize + 1 < self.acc.child_count() {
                             self.offset = o + 1;
                         } else {
                             return TreeCursorStep::TreeCursorStepNone;
@@ -156,18 +158,18 @@ where
             self.pos.inc(*node);
         } else if let Some(o) = self.pos.offset() {
             //dbg!();
-            let Some(node) = self.acc.simple.children.get(o.to_usize().unwrap()) else {
+            let Some(node) = self.acc.child((*o).into()) else {
                 return TreeCursorStep::TreeCursorStepNone;
             };
-            self.pos.inc(*node);
+            self.pos.inc(node);
         } else {
             //dbg!();
             self.offset += 1;
             let o = self.offset;
-            let Some(node) = self.acc.simple.children.get(o.to_usize().unwrap()) else {
+            let Some(node) = self.acc.child(o.into()) else {
                 return TreeCursorStep::TreeCursorStepNone;
             }; //dbg!(node);
-            self.pos.goto(*node, o);
+            self.pos.goto(node, o);
         }
         if self.kind().is_spaces() {
             //dbg!();
@@ -199,16 +201,16 @@ where
             self.pos.goto(*node, num::zero());
         } else if let Some(o) = self.pos.offset() {
             // dbg!();
-            let Some(node) = self.acc.simple.children.get(o.to_usize().unwrap()) else {
+            let Some(node) = self.acc.child((*o).into()) else {
                 return TreeCursorStep::TreeCursorStepNone;
             };
-            self.pos.inc(*node);
+            self.pos.inc(node);
         } else {
             // dbg!();
-            let Some(node) = self.acc.simple.children.get(self.offset as usize) else {
+            let Some(node) = self.acc.child(self.offset.into()) else {
                 return TreeCursorStep::TreeCursorStepNone;
             };
-            self.pos.goto(*node, self.offset);
+            self.pos.goto(node, self.offset);
         }
         if self.kind().is_spaces() {
             return self.goto_next_sibling_internal();
@@ -229,7 +231,7 @@ where
                 // at root of subtree
                 self.offset = *o + 1;
                 // let o = self.pos.offset().unwrap();
-                let Some(_) = self.acc.simple.children.get(o.to_usize().unwrap() + 1) else {
+                let Some(_) = self.acc.child((*o + 1).into()) else {
                     return false;
                 };
                 if self.is_visible() {
@@ -294,7 +296,7 @@ where
             }
             if s.is_visible() {
                 has_later_siblings = true;
-                use hyper_ast_tsquery::Node;
+                use crate::Node;
                 if s.is_named() {
                     has_later_named_siblings = true;
                     break;
@@ -310,7 +312,7 @@ where
         }
     }
 
-    fn text_provider(&self) -> <Self::Node as hyper_ast_tsquery::Node>::TP<'_> {
+    fn text_provider(&self) -> <Self::Node as crate::Node>::TP<'_> {
         ()
     }
 
@@ -320,28 +322,18 @@ where
     }
 }
 
-impl<'hast, 'acc, TS> self::TreeCursor<'hast, 'acc, HAST<'hast, 'acc, TS>>
+impl<'hast, 'acc, TS, Acc> self::TreeCursor<'hast, 'acc, HAST<'hast, 'acc, TS>, Acc>
 where
-    TS: super::JavaEnabledTypeStore + hyper_ast::types::RoleStore<IdF = IdF, Role = Role>,
+    TS: EnabledTypeStore<Ty2 = Acc::Type> + hyper_ast::types::RoleStore<IdF = IdF, Role = Role>,
+    Acc: tree_gen::WithChildren<IdN> + tree_gen::WithRole<Role> + types::Typed,
 {
     fn role(&self) -> Option<Role> {
         if let Some(p) = self.pos.parent() {
             let n = self.stores.node_store.resolve(p);
             n.role_at::<Role>(self.pos.o().unwrap())
         } else {
-            let at = self.pos.o().unwrap();
-            let ro = &self.acc.role.offsets;
-            let r = &self.acc.role.roles;
-            let mut i = 0;
-            for &ro in ro {
-                if ro as u16 > at {
-                    return None;
-                } else if ro as u16 == at {
-                    return Some(r[i]);
-                }
-                i += 1;
-            }
-            None
+            let idx = self.pos.o().unwrap();
+            self.acc.role_at(idx.into())
         }
     }
 
@@ -349,7 +341,7 @@ where
         // TODO Might create efficiency issues, is it compiling well ?
         let mut result = vec![];
         loop {
-            use hyper_ast_tsquery::Node;
+            use crate::Node;
             if self.pos.pop().is_none() {
                 return result;
             }
@@ -359,7 +351,7 @@ where
             if self.pos.node().is_none() {
                 // at root of subtree
                 self.offset = *o + 1;
-                let Some(_) = self.acc.simple.children.get(o.to_usize().unwrap() + 1) else {
+                let Some(_) = self.acc.child((*o + 1).into()) else {
                     return result;
                 };
                 if self.is_visible() {
@@ -379,19 +371,13 @@ where
     fn compute_current_role(&self) -> (Option<Role>, IdF) {
         let lang;
         let role = if self.pos.node().is_none() {
-            lang = TS::intern(self.acc.simple.kind).get_lang();
+            lang = TS::intern(self.acc.get_type()).get_lang();
             // self.acc.role
             None // actually should not provide role as it is not part of identifying data
         } else if self.pos.parent().is_none() {
-            lang = TS::intern(self.acc.simple.kind).get_lang();
+            lang = TS::intern(self.acc.get_type()).get_lang();
             let o = self.pos.o().unwrap();
-            self.acc
-                .role
-                .offsets
-                .iter()
-                .position(|x| *x as u16 == o)
-                .and_then(|x| self.acc.role.roles.get(x))
-                .cloned()
+            self.acc.role_at(o.into())
         } else {
             let mut p = self.clone();
             loop {
@@ -422,10 +408,11 @@ where
 
 type IdF = u16;
 
-impl<'hast, 'acc, TS: TypeStore> hyper_ast_tsquery::Node
-    for self::Node<'hast, 'acc, HAST<'hast, 'acc, TS>>
+impl<'hast, 'acc, TS: TypeStore, Acc> crate::Node
+    for self::Node<'hast, 'acc, HAST<'hast, 'acc, TS>, Acc>
 where
-    TS: super::JavaEnabledTypeStore + hyper_ast::types::RoleStore<IdF = IdF, Role = Role>,
+    TS: EnabledTypeStore<Ty2 = Acc::Type> + hyper_ast::types::RoleStore<IdF = IdF, Role = Role>,
+    Acc: tree_gen::WithChildren<IdN> + tree_gen::WithRole<Role> + types::Typed,
 {
     fn symbol(&self) -> Symbol {
         // TODO make something more efficient
@@ -516,7 +503,7 @@ where
                 return l.into();
             }
             "".into()
-        } else if !self.acc.simple.children.is_empty() {
+        } else if !self.acc.child_count() == 0 {
             todo!()
         } else if let Some(label) = self.label {
             label.into()
@@ -526,9 +513,10 @@ where
     }
 }
 
-impl<'hast, 'acc, TS> Node<'hast, 'acc, HAST<'hast, 'acc, TS>>
+impl<'hast, 'acc, TS, Acc> Node<'hast, 'acc, HAST<'hast, 'acc, TS>, Acc>
 where
-    TS: super::JavaEnabledTypeStore + hyper_ast::types::RoleStore<IdF = IdF, Role = Role>,
+    TS: EnabledTypeStore<Ty2 = Acc::Type> + hyper_ast::types::RoleStore<IdF = IdF, Role = Role>,
+    Acc: tree_gen::WithChildren<IdN> + tree_gen::WithRole<Role> + types::Typed,
 {
     fn child_by_role(&mut self, role: Role) -> Option<()> {
         // TODO what about multiple children with same role?
@@ -567,20 +555,24 @@ where
     }
 }
 
-impl<'hast, 'acc, TS: super::JavaEnabledTypeStore> Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
+impl<'hast, 'acc, TS: EnabledTypeStore<Ty2 = Acc::Type>, Acc>
+    Node<'hast, 'acc, HAST<'hast, 'acc, TS>, Acc>
+where
+    Acc: tree_gen::WithChildren<IdN> + tree_gen::WithRole<Role> + types::Typed,
+{
     fn kind(&self) -> TS::Ty {
         if let Some(n) = self.pos.node() {
             self.resolve_type(n)
         } else {
-            TS::intern(self.acc.simple.kind)
+            TS::intern(self.acc.get_type())
         }
     }
 
-    fn resolve_type(&self, n: &legion::Entity) -> TS::Ty {
+    fn resolve_type(&self, n: &IdN) -> TS::Ty {
         // TODO une a more generic accessor
         // TODO do not use the raw world, wrap it with the max fields, dissalowing just insertion
         // WARN migth have issues if using compressed components
-        // dbg!(self.stores.node_store.resolve(n).get_component::<crate::types::Type>());
+        // dbg!(self.stores.node_store.resolve(n).get_component::<hyper_ast::types::Type>());
         *self
             .stores
             .node_store
@@ -590,7 +582,11 @@ impl<'hast, 'acc, TS: super::JavaEnabledTypeStore> Node<'hast, 'acc, HAST<'hast,
     }
 }
 
-impl<'hast, 'acc, TS: super::JavaEnabledTypeStore> Node<'hast, 'acc, HAST<'hast, 'acc, TS>> {
+impl<'hast, 'acc, TS: EnabledTypeStore<Ty2 = Acc::Type>, Acc>
+    Node<'hast, 'acc, HAST<'hast, 'acc, TS>, Acc>
+where
+    Acc: tree_gen::WithChildren<IdN> + tree_gen::WithRole<Role> + types::Typed,
+{
     fn is_visible(&self) -> bool {
         !self.kind().is_hidden()
     }

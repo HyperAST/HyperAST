@@ -5,6 +5,7 @@ use crate::{
 };
 
 use hyper_ast::store::defaults::NodeIdentifier;
+use hyper_ast::tree_gen;
 use hyper_ast::{
     hashed::SyntaxNodeHashs, store::defaults::LabelIdentifier, tree_gen::SubTreeMetrics,
 };
@@ -19,8 +20,9 @@ pub(crate) fn handle_java_file<'stores, 'cache, 'b: 'stores, More>(
     text: &'b [u8],
 ) -> Result<java_tree_gen::FNode, ()>
 where
-    More: for<'a, 'c> hyper_ast_gen_ts_java::legion_with_refs::More<
-        hyper_ast_gen_ts_java::legion_with_refs::MoreStore<'a, 'c, 'a, TStore>,
+    More: for<'a, 'c> tree_gen::More<
+        hyper_ast::store::nodes::legion::RawHAST<'a, 'c, TStore>,
+        java_tree_gen::Acc,
     >,
 {
     let tree = match java_tree_gen::JavaTreeGen::<TStore>::tree_sitter_parse(text) {

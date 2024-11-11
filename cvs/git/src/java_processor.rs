@@ -3,7 +3,6 @@ use std::{iter::Peekable, path::Components};
 use git2::{Oid, Repository};
 use hyper_ast::hashed::{IndexingHashBuilder, MetaDataHashsBuilder};
 use hyper_ast_gen_ts_java::legion_with_refs::{self, add_md_ref_ana};
-use hyper_ast_gen_ts_java::types::JavaEnabledTypeStore;
 use hyper_ast_gen_ts_java::{legion_with_refs::add_md_precomp_queries, types::Type};
 
 use crate::{
@@ -145,6 +144,7 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
     let kind = Type::Directory;
+    use hyper_ast::types::ETypeStore;
     let interned_kind = hyper_ast_gen_ts_java::types::TStore::intern(kind);
     let label_id = label_store.get_or_insert(acc.primary.name.clone());
 
@@ -278,7 +278,8 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
                 let query = if let Some(q) = &t.query {
                     Query::new(q.iter().map(|x| x.as_str()))
                 } else {
-                    Query::default()
+                    let precomputeds = unsafe { crate::java_processor::SUB_QUERIES };
+                    Query::new(precomputeds.into_iter().map(|x| x.as_ref()))
                 };
                 self.0 = Some(JavaProc {
                     parameter: t,
@@ -297,12 +298,10 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
 
 #[derive(Clone)]
 pub(crate) struct Query(
-    pub(crate) std::sync::Arc<hyper_ast_tsquery::Query>,
-    std::sync::Arc<String>,
+    pub(crate) hyper_ast_tsquery::Query,
+    String,
 );
 
-unsafe impl Send for Query {}
-unsafe impl Sync for Query {}
 impl PartialEq for Query {
     fn eq(&self, other: &Self) -> bool {
         self.1 == other.1
@@ -310,12 +309,12 @@ impl PartialEq for Query {
 }
 impl Eq for Query {}
 
-impl Default for Query {
-    fn default() -> Self {
-        let precomputeds = unsafe { crate::java_processor::SUB_QUERIES };
-        Query::new(precomputeds.into_iter().map(|x| x.as_ref()))
-    }
-}
+// impl Default for Query {
+//     fn default() -> Self {
+//         let precomputeds = unsafe { crate::java_processor::SUB_QUERIES };
+//         Query::new(precomputeds.into_iter().map(|x| x.as_ref()))
+//     }
+// }
 
 impl Query {
     fn new<'a>(precomputeds: impl Iterator<Item = &'a str>) -> Self {
@@ -494,8 +493,9 @@ impl RepositoryProcessor {
                 };
 
                 let holder = c.mut_or_default::<JavaProcessorHolder>();
-                let precomp = holder.0.as_ref().unwrap().query.0.clone();
-                let caches = holder.get_caches_mut();
+                let java_proc = holder.0.as_mut().unwrap();
+                let precomp = &java_proc.query.0;
+                let caches = &mut java_proc.cache;
                 let mut java_tree_gen = java_tree_gen::JavaTreeGen {
                     line_break,
                     stores: self

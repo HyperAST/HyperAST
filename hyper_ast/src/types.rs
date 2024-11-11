@@ -630,9 +630,22 @@ pub trait WithChildren: Node + Stored {
     where
         Self: 'a;
 
-    fn child_count(&self) -> Self::ChildIdx;
-    fn child(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN>;
-    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN>;
+    fn child_count(&self) -> Self::ChildIdx {
+        self.children().map_or(num::zero(), |cs| {
+            num::cast(cs.iter_children().count()).unwrap()
+        })
+    }
+    fn child(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN> {
+        let cs = self.children()?;
+        cs.iter_children().nth(idx.to_usize().unwrap()).cloned()
+    }
+    fn child_rev(&self, idx: &Self::ChildIdx) -> Option<<Self::TreeId as NodeId>::IdN> {
+        let cs = self.children()?;
+        let cs: Vec<_> = cs.iter_children().collect();
+        cs.get(cs.len() - idx.to_usize().unwrap())
+            .cloned()
+            .map(|x| x.clone())
+    }
     fn children(&self) -> Option<&Self::Children<'_>>;
 }
 
@@ -1099,6 +1112,11 @@ pub trait TypeStore {
 pub trait TTypeStore: TypeStore {
     type TTy: Compo + Copy;
     fn decompress_ttype(erazed: &impl ErasedHolder, tid: std::any::TypeId) -> Self::TTy;
+}
+
+pub trait ETypeStore: TypeStore {
+    type Ty2;
+    fn intern(ty: Self::Ty2) -> Self::Ty;
 }
 
 impl<T> TTypeStore for T

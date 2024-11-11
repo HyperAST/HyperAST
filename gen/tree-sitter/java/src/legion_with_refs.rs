@@ -1,6 +1,10 @@
 ///! fully compress all subtrees from a Java CST
+
+#[cfg(feature = "impact")]
+use crate::impact::partial_analysis::PartialAnalysis;
+use crate::types::JavaEnabledTypeStore;
 use crate::{
-    types::{TIdN, TStore, Type},
+    types::{TStore, Type},
     TNode,
 };
 use hyper_ast::{
@@ -11,25 +15,20 @@ use hyper_ast::{
         defaults::LabelIdentifier,
         labels::LabelStore,
         nodes::{
-            legion::{dyn_builder, eq_node, HashedNodeRef, PendingInsert},
+            legion::{dyn_builder, eq_node, HashedNodeRef},
             EntityBuilder,
         },
     },
     tree_gen::{
+        self,
         parser::{Node, TreeCursor, Visibility},
         BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics,
         TextedGlobalData, TotalBytesGlobalData, TreeGen, WithByteRange,
     },
     types::{self, AnyType, NodeStoreExt, Role, TypeStore, TypeTrait, WithHashs, WithStats},
 };
-use legion::world::EntryRef;
-use num::ToPrimitive;
-use std::{collections::HashMap, fmt::Debug, vec};
-use tuples::CombinConcat;
-
 use hyper_ast::{
-    filter::BF,
-    filter::{Bloom, BloomSize},
+    filter::BloomSize,
     hashed::{self, SyntaxNodeHashs, SyntaxNodeHashsKinds},
     nodes::Space,
     store::{nodes::legion::compo, nodes::DefaultNodeStore as NodeStore, SimpleStores},
@@ -37,22 +36,15 @@ use hyper_ast::{
         compute_indentation, get_spacing, has_final_space, AccIndentation, Accumulator,
         BasicAccumulator, Spaces, ZippedTreeGen,
     },
-    types::{
-        LabelStore as LabelStoreTrait,
-        Tree,
-        // NodeStore as NodeStoreTrait,
-        Typed,
-    },
+    types::LabelStore as LabelStoreTrait,
 };
-// use hyper_ast::nodes::SimpleNode1;
-
-use crate::types::JavaEnabledTypeStore;
-// type Type = TypeU16<Java>;
-
-#[cfg(feature = "impact")]
-use crate::impact::partial_analysis::PartialAnalysis;
-#[cfg(feature = "impact")]
-use hyper_ast::impact::BulkHasher;
+use legion::world::EntryRef;
+use num::ToPrimitive;
+use reference_analysis::build_ana;
+use std::{collections::HashMap, fmt::Debug, vec};
+use tuples::CombinConcat;
+mod reference_analysis;
+pub use reference_analysis::add_md_ref_ana;
 
 pub type EntryR<'a> = EntryRef<'a>;
 
@@ -183,6 +175,31 @@ impl WithByteRange for Acc {
 
     fn end_byte(&self) -> usize {
         self.end_byte
+    }
+}
+
+impl types::Typed for Acc {
+    type Type = Type;
+
+    fn get_type(&self) -> Self::Type {
+        self.simple.kind
+    }
+}
+
+impl hyper_ast::tree_gen::WithChildren<NodeIdentifier> for Acc {
+    fn children(&self) -> &[NodeIdentifier] {
+        &self.simple.children
+    }
+}
+
+impl hyper_ast::tree_gen::WithRole<Role> for Acc {
+    fn role_at(&self, o: usize) -> Option<Role> {
+        self.role
+            .offsets
+            .iter()
+            .position(|x| *x as usize == o)
+            .and_then(|x| self.role.roles.get(x))
+            .cloned()
     }
 }
 
@@ -348,103 +365,23 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
         }
     }
 }
-pub trait More<HAST: TypeStore> {
-    const ENABLED: bool;
-    fn match_precomp_queries(
-        &self,
-        stores: &HAST,
-        acc: &Acc,
-        label: Option<&str>,
-    ) -> PrecompQueries;
-}
 
-impl<HAST: TypeStore> More<HAST> for () {
-    const ENABLED: bool = false;
-    fn match_precomp_queries(
-        &self,
-        _stores: &HAST,
-        _acc: &Acc,
-        _label: Option<&str>,
-    ) -> PrecompQueries {
-        Default::default()
+pub fn add_md_precomp_queries(
+    dyn_builder: &mut impl EntityBuilder,
+    precomp_queries: PrecompQueries,
+) {
+    if precomp_queries > 0 {
+        dyn_builder.add(compo::Precomp(precomp_queries));
+    } else {
+        dyn_builder.add(compo::PrecompFlag);
     }
 }
-
-pub type MoreStore<'a, 'b, 'c, TS> = SimpleStores<TS, &'b legion::World, &'c LabelStore>;
-
-impl<'a, 'b, 'c, TS> More<MoreStore<'a, 'b, 'c, TS>> for std::sync::Arc<hyper_ast_tsquery::Query>
-where
-    TS: JavaEnabledTypeStore + hyper_ast::types::RoleStore<IdF = u16, Role = Role>,
-{
-    const ENABLED: bool = true;
-    fn match_precomp_queries(
-        &self,
-        stores: &SimpleStores<TS, &'b legion::World, &'c LabelStore>,
-        acc: &Acc,
-        label: Option<&str>,
-    ) -> PrecompQueries {
-        let cursor = cursor_on_unbuild::TreeCursor::new(
-            stores,
-            acc,
-            label,
-            hyper_ast::position::StructuralPosition::empty(),
-        );
-        // dbg!(acc.simple.kind);
-        // let cursor = aaa::TreeCursor::new(
-        //     stores,
-        //     hyper_ast::position::StructuralPosition::new(todo!()),
-        // );
-        let qcursor = self.matches_immediate(cursor); // TODO filter on height (and visibility?)
-        let mut r = Default::default();
-        for m in qcursor {
-            assert!(m.pattern_index.to_usize() < 16);
-            r |= 1 << m.pattern_index.to_usize() as u16;
-            // dbg!(m.pattern_index.to_usize());
-        }
-        r
-    }
-}
-
-impl<'a, 'b, 'c, TS> More<MoreStore<'a, 'b, 'c, TS>> for hyper_ast_tsquery::Query
-where
-    TS: JavaEnabledTypeStore<> + hyper_ast::types::RoleStore<IdF = u16, Role = Role>,
-{
-    const ENABLED: bool = true;
-    fn match_precomp_queries(
-        &self,
-        stores: &SimpleStores<TS, &'b legion::World, &'c LabelStore>,
-        acc: &Acc,
-        label: Option<&str>,
-    ) -> PrecompQueries {
-        let cursor = cursor_on_unbuild::TreeCursor::new(
-            stores,
-            acc,
-            label,
-            hyper_ast::position::StructuralPosition::empty(),
-        );
-        // dbg!(acc.simple.kind);
-        // let cursor = aaa::TreeCursor::new(
-        //     stores,
-        //     hyper_ast::position::StructuralPosition::new(todo!()),
-        // );
-        let qcursor = self.matches_immediate(cursor); // TODO filter on height (and visibility?)
-        let mut r = Default::default();
-        for m in qcursor {
-            assert!(m.pattern_index.to_usize() < 7);
-            r |= 1 << m.pattern_index.to_usize() as u8;
-            // dbg!(m.pattern_index.to_usize());
-        }
-        r
-    }
-}
-
-mod cursor_on_unbuild;
 
 /// Implements [ZippedTreeGen] to offer a visitor for Java generation
 impl<'stores, 'cache, TS, More> ZippedTreeGen for JavaTreeGen<'stores, 'cache, TS, More>
 where
     TS: JavaEnabledTypeStore,
-    More: for<'a, 'b> self::More<SimpleStores<TS, &'b legion::World, &'a LabelStore>>,
+    More: for<'a, 'b> tree_gen::More<SimpleStores<TS, &'b legion::World, &'a LabelStore>, Acc>,
 {
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores<TS>;
@@ -535,7 +472,6 @@ where
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc {
-        let type_store = &mut self.stores().type_store;
         let parent_indentation = &stack.parent().unwrap().indentation();
         let kind = node.obtain_type();
         assert!(
@@ -627,21 +563,11 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore> JavaTreeGen<'stores, 'cache, TS,
     }
 }
 
-impl<'stores, 'cache, TS, More> JavaTreeGen<'stores, 'cache, TS, More> {
-    pub fn _generate_file<'b: 'stores>(
-        &mut self,
-        name: &[u8],
-        text: &'b [u8],
-        cursor: tree_sitter::TreeCursor,
-    ) -> FullNode<BasicGlobalData, Local> {
-        todo!("handle Type inconsistences")
-    }
-}
 impl<
         'stores,
         'cache,
         TS: JavaEnabledTypeStore,
-        More: for<'a, 'b> self::More<SimpleStores<TS, &'b legion::World, &'a LabelStore>>,
+        More: for<'a, 'b> tree_gen::More<SimpleStores<TS, &'b legion::World, &'a LabelStore>, Acc>,
     > JavaTreeGen<'stores, 'cache, TS, More>
 {
     fn make_spacing(&mut self, spacing: Vec<u8>) -> Local {
@@ -738,7 +664,6 @@ impl<
         );
         if let Some(spacing) = spacing {
             global.down();
-            // init.start_byte = 0;
             global.set_sum_byte_length(init.start_byte);
             init.push(FullNode {
                 global: global.into(),
@@ -792,31 +717,14 @@ impl<
             return None;
         }
         let label_store = &mut self.stores.label_store;
-        if kind == &Type::ClassBody
-            || kind == &Type::PackageDeclaration
-            || kind == &Type::ClassDeclaration
-            || kind == &Type::EnumDeclaration
-            || kind == &Type::InterfaceDeclaration
-            || kind == &Type::AnnotationTypeDeclaration
-            || kind == &Type::Program
-        {
-            Some(PartialAnalysis::init(kind, None, |x| {
-                label_store.get_or_insert(x)
-            }))
-        } else if kind == &Type::TypeParameter {
-            Some(PartialAnalysis::init(kind, None, |x| {
-                label_store.get_or_insert(x)
-            }))
-        } else {
-            None
-        }
+        build_ana(kind, label_store)
     }
 }
 
 impl<'stores, 'cache, TS, More> TreeGen for JavaTreeGen<'stores, 'cache, TS, More>
 where
     TS: JavaEnabledTypeStore,
-    More: for<'a, 'b> self::More<SimpleStores<TS, &'b legion::World, &'a LabelStore>>,
+    More: for<'a, 'b> tree_gen::More<SimpleStores<TS, &'b legion::World, &'a LabelStore>, Acc>,
 {
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;
@@ -859,7 +767,7 @@ where
                 precomp_queries,
             }
         } else {
-            make_partial_ana(
+            reference_analysis::make_partial_ana(
                 acc.simple.kind,
                 &mut acc.ana,
                 &label,
@@ -893,7 +801,11 @@ where
             if More::ENABLED {
                 add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
             }
-            add_md_ref_ana(&mut dyn_builder, children_is_empty, acc.ana.as_ref());
+            reference_analysis::add_md_ref_ana(
+                &mut dyn_builder,
+                children_is_empty,
+                acc.ana.as_ref(),
+            );
             let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
             hashs.persist(&mut dyn_builder);
 
@@ -934,249 +846,11 @@ where
     }
 }
 
-pub fn add_md_precomp_queries(
-    dyn_builder: &mut impl EntityBuilder,
-    precomp_queries: PrecompQueries,
-) {
-    if precomp_queries > 0 {
-        dyn_builder.add(compo::Precomp(precomp_queries));
-    } else {
-        dyn_builder.add(compo::PrecompFlag);
-    }
-}
-
-pub fn add_md_ref_ana(
-    dyn_builder: &mut impl EntityBuilder,
-    children_is_empty: bool,
-    ana: Option<&PartialAnalysis>,
-) {
-    if children_is_empty {
-        dyn_builder.add(BloomSize::None);
-    } else {
-        macro_rules! bloom_aux {
-            ( $t:ty ) => {{
-                type B = $t;
-                let it = ana.as_ref().unwrap().solver.iter_refs();
-                let it = BulkHasher::<_, <B as BF<[u8]>>::S, <B as BF<[u8]>>::H>::from(it);
-                let bloom = B::from(it);
-                dyn_builder.add(B::SIZE);
-                dyn_builder.add(bloom);
-            }};
-        }
-        macro_rules! bloom {
-            ( $t:ty ) => {{
-                bloom_aux!(Bloom::<&'static [u8], $t>);
-            }};
-        }
-        match ana.as_ref().map(|x| x.estimated_refs_count()).unwrap_or(0) {
-            x if x > 2048 => {
-                dyn_builder.add(BloomSize::Much);
-            }
-            x if x > 1024 => bloom!([u64; 64]),
-            x if x > 512 => bloom!([u64; 32]),
-            x if x > 256 => bloom!([u64; 16]),
-            x if x > 150 => bloom!([u64; 8]),
-            x if x > 100 => bloom!([u64; 4]),
-            x if x > 30 => bloom!([u64; 2]),
-            x if x > 15 => bloom!(u64),
-            x if x > 8 => bloom!(u32),
-            x if x > 0 => bloom!(u16),
-            _ => {
-                dyn_builder.add(BloomSize::None);
-            } // TODO use the following after having tested the previous, already enough changes for now
-              // 2048.. => {
-              //     dyn_builder.add(BloomSize::Much);
-              // }
-              // 1024.. => bloom!([u64; 64]),
-              // 512.. => bloom!([u64; 32]),
-              // 256.. => bloom!([u64; 16]),
-              // 150.. => bloom!([u64; 8]),
-              // 100.. => bloom!([u64; 4]),
-              // 32.. => bloom!([u64; 2]),
-              // 16.. => bloom!(u64),
-              // 8.. => bloom!(u32),
-              // 1.. => bloom!(u16),
-              // 0 => {
-              //     dyn_builder.add(BloomSize::None);
-              // }
-        }
-    }
-}
-
-fn make_partial_ana(
-    kind: Type,
-    ana: &mut Option<PartialAnalysis>,
-    label: &Option<String>,
-    children: &[legion::Entity],
-    label_store: &mut LabelStore,
-    insertion: &PendingInsert,
-) {
-    if !ANA {
-        *ana = None;
-        return;
-    }
-    *ana = partial_ana_extraction(kind, ana.take(), &label, children, label_store, insertion)
-        .map(|ana| ana_resolve(kind, ana, label_store));
-}
-
-fn ana_resolve(kind: Type, ana: PartialAnalysis, label_store: &LabelStore) -> PartialAnalysis {
-    if kind == Type::ClassBody
-        || kind.is_type_declaration()
-        || kind == Type::MethodDeclaration
-        || kind == Type::ConstructorDeclaration
-    {
-        log::trace!("refs in {kind:?}");
-        for x in ana.display_refs(label_store) {
-            log::trace!("    {}", x);
-        }
-        log::trace!("decls in {kind:?}");
-        for x in ana.display_decls(label_store) {
-            log::trace!("    {}", x);
-        }
-        let ana = ana.resolve();
-        log::trace!("refs in {kind:?} after resolution");
-
-        for x in ana.display_refs(label_store) {
-            log::trace!("    {}", x);
-        }
-        ana
-    } else if kind == Type::Program {
-        log::debug!("refs in {kind:?}");
-        for x in ana.display_refs(label_store) {
-            log::debug!("    {}", x);
-        }
-        log::debug!("decls in {kind:?}");
-        for x in ana.display_decls(label_store) {
-            log::debug!("    {}", x);
-        }
-        let ana = ana.resolve();
-        log::debug!("refs in {kind:?} after resolve");
-        for x in ana.display_refs(label_store) {
-            log::debug!("    {}", x);
-        }
-        // TODO assert that ana.solver.refs does not contains mentions to ?.this
-        ana
-    } else {
-        ana
-    }
-}
-
-fn partial_ana_extraction(
-    kind: Type,
-    ana: Option<PartialAnalysis>,
-    label: &Option<String>,
-    children: &[legion::Entity],
-    label_store: &mut LabelStore,
-    insertion: &PendingInsert,
-) -> Option<PartialAnalysis> {
-    let is_possibly_empty = |kind| {
-        kind == Type::ArgumentList
-            || kind == Type::FormalParameters
-            || kind == Type::AnnotationArgumentList
-            || kind == Type::SwitchLabel
-            || kind == Type::Modifiers
-            || kind == Type::BreakStatement
-            || kind == Type::ContinueStatement
-            || kind == Type::Wildcard
-            || kind == Type::ConstructorBody
-            || kind == Type::InterfaceBody
-            || kind == Type::SwitchBlock
-            || kind == Type::ClassBody
-            || kind == Type::EnumBody
-            || kind == Type::ModuleBody
-            || kind == Type::AnnotationTypeBody
-            || kind == Type::TypeArguments
-            || kind == Type::ArrayInitializer
-            || kind == Type::ReturnStatement
-            || kind == Type::ForStatement
-            || kind == Type::RequiresModifier
-            || kind == Type::ERROR
-    };
-    let mut make = |label| {
-        Some(PartialAnalysis::init(&kind, label, |x| {
-            label_store.get_or_insert(x)
-        }))
-    };
-    if kind == Type::Program {
-        ana
-    } else if kind.is_comment() {
-        None
-    } else if let Some(label) = label.as_ref() {
-        let label = if kind.is_literal() {
-            kind.literal_type()
-        } else {
-            label.as_str()
-        };
-        make(Some(label))
-    } else if kind.is_primitive() {
-        let node = insertion.resolve::<TIdN<NodeIdentifier>>(children[0]);
-        let ty = node.get_type();
-        let label = ty.to_str();
-        make(Some(label))
-    } else if let Some(ana) = ana {
-        // nothing to do, resolutions at the end of post ?
-        Some(ana)
-    } else if kind == Type::Static
-        || kind == Type::Public
-        || kind == Type::Asterisk
-        || kind == Type::Dimensions
-        || kind == Type::Block
-        || kind == Type::ElementValueArrayInitializer
-        || kind == Type::PackageDeclaration
-        || kind == Type::TypeParameter
-    {
-        make(None)
-    } else if is_possibly_empty(kind) {
-        if kind == Type::ArgumentList
-            || kind == Type::FormalParameters
-            || kind == Type::AnnotationArgumentList
-        {
-            if !children
-                .iter()
-                .all(|x| !insertion.resolve::<TIdN<NodeIdentifier>>(*x).has_children())
-            {
-                // eg. an empty body/block/paramlist/...
-                log::error!("{:?} should only contains leafs", &kind);
-            }
-            make(None)
-        // } else if kind == Type::SwitchLabel || kind == Type::Modifiers {
-        //     // TODO decls or refs ?
-        //     None
-        } else {
-            None
-        }
-    } else {
-        if !children.is_empty()
-            && children
-                .iter()
-                .all(|x| !insertion.resolve::<TIdN<NodeIdentifier>>(*x).has_children())
-        {
-            // eg. an empty body/block/paramlist/...
-            log::error!("{:?} should only contains leafs", kind);
-        }
-        None
-    }
-}
-
-impl<'stores, 'cache, TS: JavaEnabledTypeStore, More> hyper_ast::types::NodeStore<NodeIdentifier>
-    for JavaTreeGen<'stores, 'cache, TS, More>
-{
-    type R<'a>
-        = HashedNodeRef<'a, NodeIdentifier>
-    where
-        Self: 'a,
-        'stores: 'a;
-
-    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
-        self.stores.node_store.resolve(*id)
-    }
-}
-
 impl<
         'stores,
         'cache,
         TS: JavaEnabledTypeStore,
-        More: for<'a, 'b> self::More<SimpleStores<TS, &'b legion::World, &'a LabelStore>>,
+        More: for<'a, 'b> tree_gen::More<SimpleStores<TS, &'b legion::World, &'a LabelStore>, Acc>,
     > NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache, TS, More>
 where
     TS::Ty: TypeTrait,
@@ -1329,7 +1003,11 @@ where
                 if More::ENABLED {
                     add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
                 }
-                add_md_ref_ana(&mut dyn_builder, children_is_empty, acc.ana.as_ref());
+                reference_analysis::add_md_ref_ana(
+                    &mut dyn_builder,
+                    children_is_empty,
+                    acc.ana.as_ref(),
+                );
                 let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
                 hashs.persist(&mut dyn_builder);
                 if !children_is_empty {

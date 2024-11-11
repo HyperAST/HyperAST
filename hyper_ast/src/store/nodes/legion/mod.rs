@@ -599,3 +599,5 @@ impl CompoRegister for World {
         legion::storage::ComponentTypeId::of::<T>()
     }
 }
+
+pub type RawHAST<'hast, 'acc, TS> = crate::store::SimpleStores<TS, &'hast legion::World, &'acc crate::store::labels::LabelStore>;

@@ -26,6 +26,8 @@ pub mod hyperast_opt;
 pub mod stepped_query;
 pub mod tsg;
 
+pub mod cursor_on_unbuild;
+
 pub use tree_sitter::CaptureQuantifier;
 pub use tree_sitter::Language;
 pub use tree_sitter::Point;
@@ -50,7 +52,7 @@ pub struct Query {
     // capture_quantifiers: utils::Array<CaptureQuantifiers>,
     steps: indexed::Steps,
     pattern_map: Vec<query::PatternEntry>,
-    pattern_map2: Vec<query::PatternEntry>,
+    pattern_map2: Vec<query::PatternEntry>, // Note: unused for now, planed to use it for preprocessed queries but not sur in the end
     // predicate_steps: utils::Array<ffi::TSQueryPredicateStep>,
     patterns: indexed::Patterns,
     step_offsets: Vec<query::StepOffset>,
@@ -380,3 +382,92 @@ impl<Node: self::Node> QueryMatch<Node> {
         self.captures.nodes_for_capture_index(index)
     }
 }
+
+use hyper_ast::store::nodes::legion::RawHAST;
+
+impl<'a, 'b, TS, Acc>
+    hyper_ast::tree_gen::More<RawHAST<'a, 'b, TS>, Acc>
+    for crate::Query
+where
+    TS: hyper_ast::types::ETypeStore<Ty2 = Acc::Type>
+        + hyper_ast::types::RoleStore<IdF = u16, Role = hyper_ast::types::Role>,
+    Acc: hyper_ast::types::Typed
+        + hyper_ast::tree_gen::WithRole<hyper_ast::types::Role>
+        + hyper_ast::tree_gen::WithChildren<hyper_ast::store::nodes::legion::NodeIdentifier>,
+{
+    const ENABLED: bool = true;
+    fn match_precomp_queries(
+        &self,
+        stores: &RawHAST<'a, 'b, TS>,
+        acc: &Acc,
+        label: Option<&str>,
+    ) -> hyper_ast::tree_gen::PrecompQueries {
+        let pos = hyper_ast::position::StructuralPosition::empty();
+        let cursor = crate::cursor_on_unbuild::TreeCursor::new(stores, acc, label, pos);
+        let qcursor = self.matches_immediate(cursor); // TODO filter on height (and visibility?)
+        let mut r = Default::default();
+        for m in qcursor {
+            assert!(m.pattern_index.to_usize() < 16);
+            r |= 1 << m.pattern_index.to_usize() as u16;
+        }
+        r
+    }
+}
+
+impl<'a, 'b, TS, Acc>
+    hyper_ast::tree_gen::More<RawHAST<'a, 'b, TS>, Acc>
+    for &crate::Query
+where
+    TS: hyper_ast::types::ETypeStore<Ty2 = Acc::Type>
+        + hyper_ast::types::RoleStore<IdF = u16, Role = hyper_ast::types::Role>,
+    Acc: hyper_ast::types::Typed
+        + hyper_ast::tree_gen::WithRole<hyper_ast::types::Role>
+        + hyper_ast::tree_gen::WithChildren<hyper_ast::store::nodes::legion::NodeIdentifier>,
+{
+    const ENABLED: bool = true;
+    fn match_precomp_queries(
+        &self,
+        stores: &RawHAST<'a, 'b, TS>,
+        acc: &Acc,
+        label: Option<&str>,
+    ) -> hyper_ast::tree_gen::PrecompQueries {
+        (*self).match_precomp_queries(stores, acc, label)
+    }
+}
+
+// arc is messing with orphan rule stuff...
+// impl<
+//         'a,
+//         'b,
+//         TS,
+//         Acc: hyper_ast::types::Typed
+//             + hyper_ast::tree_gen::WithRole<hyper_ast::types::Role>
+//             + hyper_ast::tree_gen::WithChildren<hyper_ast::store::nodes::legion::NodeIdentifier>,
+//     > hyper_ast::tree_gen::More<RawHAST<'a, 'b, TS>, Acc>
+//     for std::sync::Arc<crate::Query>
+// where
+//     TS: hyper_ast::types::ETypeStore<Ty2 = Acc::Type>
+//         + hyper_ast::types::RoleStore<IdF = u16, Role = hyper_ast::types::Role>,
+// {
+//     const ENABLED: bool = true;
+//     fn match_precomp_queries(
+//         &self,
+//         stores: &RawHAST<'a, 'b, TS>,
+//         acc: &Acc,
+//         label: Option<&str>,
+//     ) -> hyper_ast::tree_gen::PrecompQueries {
+//         let cursor = crate::cursor_on_unbuild::TreeCursor::new(
+//             stores,
+//             acc,
+//             label,
+//             hyper_ast::position::StructuralPosition::empty(),
+//         );
+//         let qcursor = self.matches_immediate(cursor); // TODO filter on height (and visibility?)
+//         let mut r = Default::default();
+//         for m in qcursor {
+//             assert!(m.pattern_index.to_usize() < 16);
+//             r |= 1 << m.pattern_index.to_usize() as u16;
+//         }
+//         r
+//     }
+// }

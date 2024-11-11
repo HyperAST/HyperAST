@@ -41,6 +41,23 @@ pub trait WithByteRange {
     fn end_byte(&self) -> usize;
 }
 
+// TODO merge with other node traits?
+pub trait WithChildren<Id: Clone> {
+    fn children(&self) -> &[Id];
+    fn child_count(&self) -> usize {
+        let cs = self.children();
+        cs.len()
+    }
+    fn child(&self, idx: usize) -> Option<Id> {
+        let cs = self.children();
+        cs.get(idx).cloned()
+    }
+}
+// TODO merge with other node traits?
+pub trait WithRole<R> {
+    fn role_at(&self, idx: usize) -> Option<R>;
+}
+
 pub struct BasicAccumulator<T, Id> {
     pub kind: T,
     pub children: Vec<Id>,
@@ -543,4 +560,26 @@ pub fn hash32<T: ?Sized + std::hash::Hash>(t: &T) -> u32 {
     crate::utils::clamp_u64_to_u32(&crate::utils::hash(t))
 }
 
+pub type PrecompQueries = u16;
 
+pub trait More<HAST: crate::types::TypeStore, Acc> {
+    const ENABLED: bool;
+    fn match_precomp_queries(
+        &self,
+        stores: &HAST,
+        acc: &Acc,
+        label: Option<&str>,
+    ) -> PrecompQueries;
+}
+
+impl<HAST: crate::types::TypeStore, Acc> More<HAST, Acc> for () {
+    const ENABLED: bool = false;
+    fn match_precomp_queries(
+        &self,
+        _stores: &HAST,
+        _acc: &Acc,
+        _label: Option<&str>,
+    ) -> PrecompQueries {
+        Default::default()
+    }
+}

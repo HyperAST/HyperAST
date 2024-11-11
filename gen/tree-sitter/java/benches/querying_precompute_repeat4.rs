@@ -245,7 +245,7 @@ fn preps_precomputed(
                 };
             log::trace!("preprocess file: {}", name);
             let full_node =
-                java_tree_gen._generate_file(name.as_bytes(), text.as_bytes(), tree.walk());
+                java_tree_gen.generate_file(name.as_bytes(), text.as_bytes(), tree.walk());
             full_node.local.compressed_node
         })
         .collect();

@@ -48,11 +48,14 @@ mod legion_impls {
                 .into()
         }
     }
-    impl<'a> JavaEnabledTypeStore for TStore {
-        fn intern(t: Type) -> Self::Ty {
-            TType::new(t)
+    impl<'a> hyper_ast::types::ETypeStore for TStore {
+        type Ty2 = Type;
+    
+        fn intern(ty: Self::Ty2) -> Self::Ty {
+            TType::new(ty)
         }
-
+    }
+    impl<'a> JavaEnabledTypeStore for TStore {
         fn resolve(t: Self::Ty) -> Type {
             t.e()
         }
@@ -66,8 +69,7 @@ mod legion_impls {
 }
 #[cfg(feature = "legion")]
 pub use legion_impls::as_any;
-pub trait JavaEnabledTypeStore: TypeStore + Clone {
-    fn intern(t: Type) -> Self::Ty;
+pub trait JavaEnabledTypeStore: hyper_ast::types::ETypeStore<Ty2 = Type> + Clone {
     fn resolve(t: Self::Ty) -> Type;
 }
 
