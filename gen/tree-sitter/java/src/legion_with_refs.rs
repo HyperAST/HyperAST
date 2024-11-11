@@ -7,13 +7,13 @@ use crate::{
     types::{TStore, Type},
     TNode,
 };
+use hyper_ast::store::nodes::legion::RawHAST;
 use hyper_ast::{
     cyclomatic::Mcc,
     full::FullNode,
     hashed::{HashedNode, IndexingHashBuilder, MetaDataHashsBuilder},
     store::{
         defaults::LabelIdentifier,
-        labels::LabelStore,
         nodes::{
             legion::{dyn_builder, eq_node, HashedNodeRef},
             EntityBuilder,
@@ -25,7 +25,7 @@ use hyper_ast::{
         BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics,
         TextedGlobalData, TotalBytesGlobalData, TreeGen, WithByteRange,
     },
-    types::{self, AnyType, NodeStoreExt, Role, TypeStore, TypeTrait, WithHashs, WithStats},
+    types::{self, AnyType, NodeStoreExt, Role, TypeTrait, WithHashs, WithStats},
 };
 use hyper_ast::{
     filter::BloomSize,
@@ -381,7 +381,7 @@ pub fn add_md_precomp_queries(
 impl<'stores, 'cache, TS, More> ZippedTreeGen for JavaTreeGen<'stores, 'cache, TS, More>
 where
     TS: JavaEnabledTypeStore,
-    More: for<'a, 'b> tree_gen::More<SimpleStores<TS, &'b legion::World, &'a LabelStore>, Acc>,
+    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
 {
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores<TS>;
@@ -567,7 +567,7 @@ impl<
         'stores,
         'cache,
         TS: JavaEnabledTypeStore,
-        More: for<'a, 'b> tree_gen::More<SimpleStores<TS, &'b legion::World, &'a LabelStore>, Acc>,
+        More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
     > JavaTreeGen<'stores, 'cache, TS, More>
 {
     fn make_spacing(&mut self, spacing: Vec<u8>) -> Local {
@@ -724,7 +724,7 @@ impl<
 impl<'stores, 'cache, TS, More> TreeGen for JavaTreeGen<'stores, 'cache, TS, More>
 where
     TS: JavaEnabledTypeStore,
-    More: for<'a, 'b> tree_gen::More<SimpleStores<TS, &'b legion::World, &'a LabelStore>, Acc>,
+    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
 {
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;
@@ -850,7 +850,7 @@ impl<
         'stores,
         'cache,
         TS: JavaEnabledTypeStore,
-        More: for<'a, 'b> tree_gen::More<SimpleStores<TS, &'b legion::World, &'a LabelStore>, Acc>,
+        More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
     > NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache, TS, More>
 where
     TS::Ty: TypeTrait,
