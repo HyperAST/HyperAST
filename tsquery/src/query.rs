@@ -178,7 +178,9 @@ impl QueryStep {
             if self.capture_ids[1] == super::indexed::CaptureId::NONE {
                 self.capture_ids[2].0
             } else {
-                unreachable!()
+                log::error!("{:?}", self);
+                return None;
+                // unreachable!()
             },
         )
     }
@@ -1214,8 +1216,7 @@ impl Query {
             enabled_pattern_count,
         };
         for (s, i) in immediate_pred_steps {
-            if query.steps.set_immediate_pred(s, i as u32) {
-            }
+            if query.steps.set_immediate_pred(s, i as u32) {}
         }
         std::mem::forget(ptr);
         log::info!("\n{}", query);
@@ -1419,6 +1420,26 @@ impl Query {
     pub fn enabled_pattern_index(&self, pid: PatternId) -> Option<u16> {
         let i = self.enabled_pattern_map[pid.to_usize()];
         (i != u16::MAX).then_some(i)
+    }
+    pub fn with_one_pattern_enabled(mut self, i: u16) -> Result<Self, Self> {
+        if i == u16::MAX
+            || self.enabled_pattern_count() == 0
+            || self.enabled_pattern_count() <= i as usize
+        {
+            return Err(self);
+        }
+        self.wildcard_root_pattern_count = if i < self.wildcard_root_pattern_count {
+            1
+        } else {
+            0
+        };
+        let pattern = self.pattern_map.swap_remove(i as usize);
+        self.enabled_pattern_map[pattern.pattern_index.to_usize()] = 0;
+        for pattern in self.pattern_map.drain(..) {
+            self.enabled_pattern_map[pattern.pattern_index.to_usize()] = u16::MAX;
+        }
+        self.pattern_map = vec![pattern];
+        Ok(self)
     }
     pub fn get_each_pat_start_byte(&self) -> Vec<usize> {
         let mut r = vec![];
@@ -1741,7 +1762,11 @@ fn find_precomputed_uses(query: &mut Query, precomputeds: &[&str]) {
                 assert!(r < 16);
                 m_pat.precomputed |= 1 << r as Precomps;
             }
-            log::debug!("found subpatts [{:0>16b}] for pattern {}", m_pat.precomputed, i);
+            log::debug!(
+                "found subpatts [{:0>16b}] for pattern {}",
+                m_pat.precomputed,
+                i
+            );
             query.used_precomputed &= m_pat.precomputed;
         }
     }

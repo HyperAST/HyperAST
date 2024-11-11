@@ -544,7 +544,11 @@ pub fn differential(
     } else {
         hyper_ast_tsquery::Query::new(&query, language)
     }
-    .map_err(|e| QueryingError::ParsingError(e.to_string()))?;
+    .map_err(|e| QueryingError::ParsingError(e.to_string()))?
+    .with_one_pattern_enabled(0)
+    .map_err(|_| {
+        QueryingError::ParsingError("exactly one enabled pattern is expected".to_string())
+    })?;
 
     log::info!("done query construction");
     let prepare_time = now.elapsed().as_secs_f64();
