@@ -253,7 +253,8 @@ pub(crate) fn remote_compute_query_aux(
                     if let Some(e) = s.headers.get("error_query") {
                         header_sender.send(Err(serde_json::from_str(e).unwrap()));
                     } else if let Some(e) = s.headers.get("error_parsing") {
-                        header_sender.send(Err(serde_json::from_str(e).unwrap()));
+                        header_sender.send(Err(serde_json::from_str(e)
+                            .unwrap_or(QueryingError::NetworkError(e.to_string()))));
                     } else {
                         header_sender.send(Err(QueryingError::NetworkError("Unknown".into())));
                     }
