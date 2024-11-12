@@ -28,8 +28,6 @@ stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev=
 # tree-sitter-graph = { path = "../../../../tree-sitter-graph", optional = true }
 # tree-sitter-stack-graphs = { path = "../../../../stack-graphs/tree-sitter-stack-graphs", optional = true }
 # stack-graphs = { path = "../../../../stack-graphs/stack-graphs", optional = true}
-hyper_ast_gen_ts_tsquery = { path = "../query", optional = true }
-hyper_ast_tsquery = { path = "../../../tsquery", optional = true }
 
 libc = "0.2"
 
@@ -50,6 +48,8 @@ cc = "*"
 pretty_assertions = "1.0.0"
 env_logger = "0.11.3"
 criterion = { version = "0.5.1", features = ["rayon", "plotters", "cargo_bench_support", "html_reports", "real_blackbox"] }
+hyper_ast_tsquery = { path = "../../../tsquery" }
+hyper_ast_gen_ts_tsquery = { path = "../query" }
 
 [[example]]
 name = "querying"
@@ -88,7 +88,7 @@ name = "querying_precompute_repeat4"
 harness = false
 
 [features]
-default = ["impl", "tsg"]
+default = ["impl"]
 legion = ["hyper_ast/legion", "dep:legion"]
 impact = ["dep:string-interner"] # TODO cleanly separate feature, for now impl needs it
 impl = [
@@ -105,7 +105,5 @@ tsg = [
     "dep:tree-sitter-graph",
     "dep:stack-graphs",
     "dep:tree-sitter-stack-graphs",
-    "dep:hyper_ast_gen_ts_tsquery",
-    "dep:hyper_ast_tsquery",
 ]
 all_examples=[]
