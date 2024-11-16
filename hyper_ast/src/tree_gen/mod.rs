@@ -135,7 +135,7 @@ impl<U: NodeHashs> SubTreeMetrics<U> {
         self.size += other.size;
         self.size_no_spaces += other.size_no_spaces;
         self.hashs.acc(&other.hashs);
-        self.line_count += other.line_count;
+        self.line_count = self.line_count.saturating_add(other.line_count);
     }
 }
 
