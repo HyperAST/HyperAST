@@ -1288,7 +1288,7 @@ impl Query {
             // dbg!(i);
             query.disable_pattern(PatternId::new(i));
         }
-        for i in query
+        for i in precomp
             .enabled_pattern_map
             .iter()
             .copied()
@@ -1737,7 +1737,7 @@ fn find_precomputed_uses(query: &mut Query, precomputeds: &[&str]) {
         .skip(precomputeds.len())
     {
         let i = i as usize;
-        dbg!(i);
+        log::trace!("[{}:{}:{}] {}", file!(), line!(), column!(), i);
         let patid = PatternId::new(i);
         let slice = &query.patterns[patid].steps;
         let mut j = slice.offset;

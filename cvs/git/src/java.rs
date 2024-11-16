@@ -136,6 +136,7 @@ impl hyper_ast::tree_gen::Accumulator for JavaAcc {
                 self.skiped_ana = true;
             }
         }
+        self.precomp_queries |= full_node.precomp_queries;
     }
 }
 
