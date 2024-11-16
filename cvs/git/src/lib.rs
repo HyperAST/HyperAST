@@ -1,5 +1,6 @@
 #![feature(test)]
 #![feature(extract_if)]
+#[cfg(feature = "impact")]
 pub mod allrefs;
 pub mod cpp;
 pub mod git;

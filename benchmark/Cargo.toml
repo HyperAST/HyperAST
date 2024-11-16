@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 tree-sitter = "0.22.2"
 hyper_diff = { path = "../hyper_diff" }
-hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
+hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java", features = ["impl"] }
 hyper_ast_cvs_git = { path = "../cvs/git" }
 env_logger = "0.9.0"
 log = { version = "0.4.6", features = [
@@ -46,3 +46,6 @@ path = "src/reserializing.rs"
 # codegen-units = 1
 # rustflags = ["-C target-cpu=native"]
 # panic = "abort"
+
+[features]
+impact = ["hyper_ast_gen_ts_java/impact"]

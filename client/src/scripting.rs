@@ -6,6 +6,7 @@ mod mean;
 mod min;
 mod named_container;
 mod quantile;
+#[cfg(feature = "impact")]
 mod refs;
 mod stats;
 
@@ -531,29 +532,32 @@ fn simple_aux(
                 x.contains(SemFlags::HoldMainFolder) || x.contains(SemFlags::HoldTestFolder)
             })
         });
-        let s = state.clone();
-        acc_engine.register_fn("references", move |sig: String, p_ref: String| {
-            let stores = &stores!(s);
-            refs::find_refs(stores, current, &p_ref, &sig).map_or(0, |x| x as i64)
-        });
+        #[cfg(feature = "impact")]
+        {
+            let s = state.clone();
+            acc_engine.register_fn("references", move |sig: String, p_ref: String| {
+                let stores = &stores!(s);
+                refs::find_refs(stores, current, &p_ref, &sig).map_or(0, |x| x as i64)
+            });
 
-        let s = state.clone();
-        acc_engine.register_fn(
-            "pp",
-            |s: refs::QPath,
-             node: NodeIdentifier,
-             i: i64|
-             -> Result<refs::Pos, Box<rhai::EvalAltResult>> {
-                // let stores = &stores!(s);
-                // let it = s.0;
-                // let position_converter =
-                //     &hyper_ast::position::PositionConverter::new(&it).with_stores(stores);
-                // let p = position_converter
-                //     .compute_pos_post_order::<_, hyper_ast::position::Position, _>();
-                // Ok(refs::Pos::from(p))
-                todo!("need to choose a convenient path, try to exploit param overloading")
-            },
-        );
+            let s = state.clone();
+            acc_engine.register_fn(
+                "pp",
+                |s: refs::QPath,
+                 node: NodeIdentifier,
+                 i: i64|
+                 -> Result<refs::Pos, Box<rhai::EvalAltResult>> {
+                    // let stores = &stores!(s);
+                    // let it = s.0;
+                    // let position_converter =
+                    //     &hyper_ast::position::PositionConverter::new(&it).with_stores(stores);
+                    // let p = position_converter
+                    //     .compute_pos_post_order::<_, hyper_ast::position::Position, _>();
+                    // Ok(refs::Pos::from(p))
+                    todo!("need to choose a convenient path, try to exploit param overloading")
+                },
+            );
+        }
         add_utils(&mut acc_engine);
         acc_engine
             .eval_ast_with_scope(&mut scope, &accumulate_script)
@@ -672,13 +676,16 @@ fn add_utils(engine: &mut Engine) {
                     .map(|r| r)
             },
         );
-    use refs::QPath;
+    #[cfg(feature = "impact")]
     engine
-        .register_type_with_name::<QPath>("Path")
-        .register_fn("Path", QPath::new)
+        .register_type_with_name::<refs::QPath>("Path")
+        .register_fn("Path", refs::QPath::new)
         .register_fn(
             "goto",
-            |s: &mut QPath, node: NodeIdentifier, i: i64| -> Result<(), Box<rhai::EvalAltResult>> {
+            |s: &mut refs::QPath,
+             node: NodeIdentifier,
+             i: i64|
+             -> Result<(), Box<rhai::EvalAltResult>> {
                 let i = i.to_u16().ok_or(concat!(
                     "given child offset is too big,",
                     "you most likely made an error,",

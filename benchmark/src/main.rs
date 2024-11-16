@@ -10,11 +10,10 @@ use std::{
 };
 
 use hyper_ast_cvs_git::{
-    allrefs::write_referencial_relations,
     git::{fetch_github_repository, retrieve_commit},
     preprocessed::PreProcessedRepository,
 };
-use hyper_ast_gen_ts_java::utils::memusage_linux;
+use hyper_ast_gen_ts_java::utils::memusage_linux; // TODO move that to a more code crate
 use serde::{Deserialize, Serialize};
 
 use crate::write_serializer::{WriteJson, WritePartialJson};
@@ -65,8 +64,13 @@ fn benchmark_main() {
         }
     });
 
-    // single_commit_ref_ana(repo_name, after, dir_path, out);
-    multi_commit_ref_ana::<50>(repo_name, before, after, dir_path, out);
+    if cfg!(feature = "impact") {
+        #[cfg(feature = "impact")]
+        multi_commit_ref_ana::<50>(repo_name, before, after, dir_path, out);
+        // single_commit_ref_ana(repo_name, after, dir_path, out);
+} else {
+        panic!("no ref ana backend enabled");
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -92,6 +96,7 @@ pub struct Instance {
     info: Info,
 }
 
+#[cfg(feature = "impact")]
 fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
     repo_name: &String,
     before: &str,
@@ -99,6 +104,7 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
     dir_path: &str,
     out: Option<PathBuf>,
 ) {
+    use hyper_ast_cvs_git::allrefs::write_referencial_relations;
     let batch_id = format!("{}:({},{})", repo_name, before, after);
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
     let processing_ordered_commits = preprocessed.pre_process_with_limit(
@@ -199,12 +205,14 @@ fn multi_commit_ref_ana<const SEARCH_SKIP_SIZE: usize>(
     log::warn!("hyperAST size: {}", mu - memusage_linux());
 }
 
+#[cfg(feature = "impact")]
 pub fn single_commit_ref_ana(
     repo_name: &String,
     after: &str,
     dir_path: &str,
     out: Option<PathBuf>,
 ) {
+    use hyper_ast_cvs_git::allrefs::write_referencial_relations;
     let mut preprocessed = PreProcessedRepository::new(&repo_name);
     preprocessed.pre_process_single(&mut fetch_github_repository(&repo_name), after, dir_path);
     let mu = memusage_linux();

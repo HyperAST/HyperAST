@@ -1,7 +1,4 @@
 ///! fully compress all subtrees from a Java CST
-
-#[cfg(feature = "impact")]
-use crate::impact::partial_analysis::PartialAnalysis;
 use crate::types::JavaEnabledTypeStore;
 use crate::{
     types::{TStore, Type},
@@ -40,11 +37,29 @@ use hyper_ast::{
 };
 use legion::world::EntryRef;
 use num::ToPrimitive;
-use reference_analysis::build_ana;
 use std::{collections::HashMap, fmt::Debug, vec};
 use tuples::CombinConcat;
+
+#[cfg(feature = "impact")]
 mod reference_analysis;
+// use reference_analysis::build_ana;
+#[cfg(feature = "impact")]
 pub use reference_analysis::add_md_ref_ana;
+
+#[cfg(feature = "impact")]
+pub use crate::impact::partial_analysis::PartialAnalysis;
+#[cfg(not(feature = "impact"))]
+#[derive(Debug, Clone)]
+pub struct PartialAnalysis;
+impl PartialAnalysis {
+    pub fn init<F: FnMut(&str) -> LabelIdentifier>(
+        kind: &Type,
+        label: Option<&str>,
+        mut intern_label: F,
+    ) -> Self {
+        Self
+    }
+}
 
 pub type EntryR<'a> = EntryRef<'a>;
 
@@ -121,6 +136,7 @@ impl Local {
         acc.metrics.acc(self.metrics);
         acc.precomp_queries |= self.precomp_queries;
 
+        #[cfg(feature = "impact")]
         if let Some(s) = self.ana {
             // TODO use to simplify when stabilized
             // s.acc(&acc.simple.kind,acc.ana.get_or_insert_default());
@@ -695,6 +711,7 @@ impl<
         let label = Some(std::str::from_utf8(name).unwrap().to_owned());
         let full_node = self.make(&mut global, acc, label);
 
+        #[cfg(feature = "impact")]
         match full_node.local.ana.as_ref() {
             Some(x) => {
                 log::debug!("refs in file:",);
@@ -717,7 +734,14 @@ impl<
             return None;
         }
         let label_store = &mut self.stores.label_store;
-        build_ana(kind, label_store)
+        #[cfg(feature = "impact")]
+        {
+            build_ana(kind, label_store)
+        }
+        #[cfg(not(feature = "impact"))]
+        {
+            None
+        }
     }
 }
 
@@ -767,6 +791,7 @@ where
                 precomp_queries,
             }
         } else {
+            #[cfg(feature = "impact")]
             reference_analysis::make_partial_ana(
                 acc.simple.kind,
                 &mut acc.ana,
@@ -801,6 +826,7 @@ where
             if More::ENABLED {
                 add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
             }
+            #[cfg(feature = "impact")]
             reference_analysis::add_md_ref_ana(
                 &mut dyn_builder,
                 children_is_empty,
@@ -1003,6 +1029,7 @@ where
                 if More::ENABLED {
                     add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
                 }
+                #[cfg(feature = "impact")]
                 reference_analysis::add_md_ref_ana(
                     &mut dyn_builder,
                     children_is_empty,

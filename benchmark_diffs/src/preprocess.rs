@@ -355,6 +355,7 @@ fn make(
     let children_is_empty = primary.children.is_empty();
 
     // TODO move add_md_ref_ana to better place
+    #[cfg(feature = "impact")]
     hyper_ast_gen_ts_java::legion_with_refs::add_md_ref_ana(
         &mut dyn_builder,
         children_is_empty,

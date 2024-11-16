@@ -99,7 +99,6 @@ impl = [
     "hashbrown?/ahash",
     "dep:tree-sitter",
     "dep:tree-sitter-java",
-    "impact",
 ]
 tsg = [
     "dep:tree-sitter-graph",

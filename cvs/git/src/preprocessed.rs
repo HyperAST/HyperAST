@@ -12,7 +12,7 @@ use hyper_ast::{
     types::{AnyType, IterableChildren, LabelStore as _, WithChildren},
     utils::memusage,
 };
-use hyper_ast_gen_ts_java::impact::partial_analysis::PartialAnalysis;
+use hyper_ast_gen_ts_java::legion_with_refs::PartialAnalysis;
 use log::info;
 
 use crate::{
@@ -79,6 +79,7 @@ impl RepositoryProcessor {
     }
 
     pub fn print_refs(&self, ana: &PartialAnalysis) {
+        #[cfg(feature = "impact")]
         ana.print_refs(&self.main_stores.label_store);
     }
 

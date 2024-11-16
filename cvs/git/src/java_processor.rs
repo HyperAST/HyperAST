@@ -2,7 +2,7 @@ use std::{iter::Peekable, path::Components};
 
 use git2::{Oid, Repository};
 use hyper_ast::hashed::{IndexingHashBuilder, MetaDataHashsBuilder};
-use hyper_ast_gen_ts_java::legion_with_refs::{self, add_md_ref_ana};
+use hyper_ast_gen_ts_java::legion_with_refs;
 use hyper_ast_gen_ts_java::{legion_with_refs::add_md_precomp_queries, types::Type};
 
 use crate::{
@@ -159,42 +159,49 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
     let insertion = node_store.prepare_insertion(&hashable, eq);
 
     let compute_ana = || {
-        let ana = acc.ana;
-        let ana = if acc.skiped_ana {
-            log::info!(
-                "show ana with at least {} refs",
-                ana.lower_estimate_refs_count()
-            );
-            None
-        } else {
-            log::info!(
-                "ref count lower estimate in dir {}",
-                ana.lower_estimate_refs_count()
-            );
-            log::debug!("refs in directory");
-            for x in ana.display_refs(label_store) {
-                log::debug!("    {}", x);
-            }
-            log::debug!("decls in directory");
-            for x in ana.display_decls(label_store) {
-                log::debug!("    {}", x);
-            }
-            let c = ana.estimated_refs_count();
-            if c < crate::MAX_REFS {
-                Some(ana.resolve())
+        #[cfg(feature = "impact")]
+        {
+            let ana = acc.ana;
+            let ana = if acc.skiped_ana {
+                log::info!(
+                    "show ana with at least {} refs",
+                    ana.lower_estimate_refs_count()
+                );
+                None
             } else {
-                Some(ana)
-            }
-        };
-        // log::info!(
-        //     "ref count in dir after resolver {}",
-        //     ana.lower_estimate_refs_count()
-        // );
-        // log::debug!("refs in directory after resolve: ");
-        // for x in ana.display_refs(label_store) {
-        //     log::debug!("    {}", x);
-        // }
-        ana
+                log::info!(
+                    "ref count lower estimate in dir {}",
+                    ana.lower_estimate_refs_count()
+                );
+                log::debug!("refs in directory");
+                for x in ana.display_refs(label_store) {
+                    log::debug!("    {}", x);
+                }
+                log::debug!("decls in directory");
+                for x in ana.display_decls(label_store) {
+                    log::debug!("    {}", x);
+                }
+                let c = ana.estimated_refs_count();
+                if c < crate::MAX_REFS {
+                    Some(ana.resolve())
+                } else {
+                    Some(ana)
+                }
+            };
+            // log::info!(
+            //     "ref count in dir after resolver {}",
+            //     ana.lower_estimate_refs_count()
+            // );
+            // log::debug!("refs in directory after resolve: ");
+            // for x in ana.display_refs(label_store) {
+            //     log::debug!("    {}", x);
+            // }
+            ana
+        }
+        #[cfg(not(feature = "impact"))]
+        {
+            None
+        }
     };
 
     // Guard to avoid computing metadata for an already present subtree
@@ -226,7 +233,12 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
         use hyper_ast::store::nodes::EntityBuilder;
         dyn_builder.add(hyper_ast::filter::BloomSize::None);
     } else {
-        add_md_ref_ana(&mut dyn_builder, children_is_empty, ana.as_ref());
+        #[cfg(feature = "impact")]
+        hyper_ast_gen_ts_java::legion_with_refs::add_md_ref_ana(
+            &mut dyn_builder,
+            children_is_empty,
+            ana.as_ref(),
+        );
     }
     let metrics = primary.persist(&mut dyn_builder, interned_kind, label_id);
     let metrics = metrics.map_hashs(|h| h.build());

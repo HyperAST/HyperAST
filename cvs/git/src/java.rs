@@ -1,6 +1,6 @@
 use crate::BasicDirAcc;
 use crate::{
-    preprocessed::IsSkippedAna, processing::ObjectName, Accumulator, MAX_REFS,
+    preprocessed::IsSkippedAna, processing::ObjectName, Accumulator,
     PROPAGATE_ERROR_ON_BAD_CST_NODE,
 };
 
@@ -10,7 +10,7 @@ use hyper_ast::{
     hashed::SyntaxNodeHashs, store::defaults::LabelIdentifier, tree_gen::SubTreeMetrics,
 };
 use hyper_ast_gen_ts_java::types::TStore;
-use hyper_ast_gen_ts_java::{impact::partial_analysis::PartialAnalysis, types::Type};
+use hyper_ast_gen_ts_java::{legion_with_refs::PartialAnalysis, types::Type};
 
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
 
@@ -106,8 +106,9 @@ impl JavaAcc {
         self.primary
             .push(name, full_node.compressed_node, full_node.metrics);
 
+        #[cfg(feature = "impact")]
         if let Some(ana) = full_node.ana {
-            if ana.estimated_refs_count() < MAX_REFS
+            if ana.estimated_refs_count() < crate::MAX_REFS
                 && skiped_ana == false
                 && self.skiped_ana == false
             {
@@ -126,8 +127,9 @@ impl hyper_ast::tree_gen::Accumulator for JavaAcc {
         self.primary
             .push(name, full_node.compressed_node, full_node.metrics);
 
+        #[cfg(feature = "impact")]
         if let Some(ana) = full_node.ana {
-            if ana.estimated_refs_count() < MAX_REFS
+            if ana.estimated_refs_count() < crate::MAX_REFS
                 && skiped_ana == false
                 && self.skiped_ana == false
             {
