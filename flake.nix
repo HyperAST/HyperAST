@@ -2,13 +2,12 @@
   description = "HyperAST";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
     flake-utils.url = "github:numtide/flake-utils";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs = {
         nixpkgs.follows = "nixpkgs";
-        flake-utils.follows = "flake-utils";
       };
     };
   };
@@ -39,36 +38,53 @@
             release = true;
             doCheck = false;
             buildInputs = with pkgs; [
+              # misc libraries
               openssl
             ];
             nativeBuildInputs = with pkgs; [
+              # misc libraries
               cmake
               pkg-config
+              
+              # Rust
               (rust-bin.fromRustupToolchainFile ./rust-toolchain)
             ];
             cargoLock = {
               lockFile = ./Cargo.lock;
-              outputHashes = {
-                "tree-sitter-cpp-0.20.0" = "sha256-bRHI/zQgBKiaHD+erO8gCCxLAX+qePRZOkTlva/Dcx0=";
-                "tree-sitter-java-0.20.9" = "sha256-lb3dJJs9QEu1qkuhbJn7ssy6wg0lxhDI9KGcYWOD0FM=";
-                "tree-sitter-typescript-0.20.3" = "sha256-q8vJnJZdWzsiHHJSPGoM938U5AxuOIuGrx1r6F+cdK4=";
-                "tree-sitter-xml-0.20.9" = "sha256-fG5tdBzOigZkRjdR2WLCBWM3pQYTLoNIxLd0B4G+2cM=";
-              };
+              allowBuiltinFetchGit = true;
             };
           };
         };
 
         devShell = pkgs.mkShell rec {
           buildInputs = with pkgs; [
+            # Rust 
             (rust-bin.fromRustupToolchainFile ./rust-toolchain)
-            pkg-config
-            nixfmt
-            cmake
             trunk
+            
+            # misc
+            pkg-config
+
+            # Nix
+            nixfmt
           ];
           libraries = with pkgs; [
+            # x11 libraries
+            xorg.libXcursor
+            xorg.libXrandr
+            xorg.libXi
+            xorg.libX11
+
+            # wayland libraries
+            wayland
+            
+            # GUI libraries
+            libxkbcommon
+            libGL
+            fontconfig
+
+            # misc libraries
             openssl
-            glibc
           ];
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath libraries;
         };
