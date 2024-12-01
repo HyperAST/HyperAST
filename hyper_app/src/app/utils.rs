@@ -11,11 +11,13 @@ pub(crate) fn file_save(name: &str, ext: &str, content: &str) -> bool {
         fn download(data: &str, filename: &str, ext: &str, r#type: &str);
     }
     download(content, name, ext, "text/plain");
-    
+
     // need to handle it async on JS side
     if false {
         eframe::web_sys::console::log_1(&content.into());
-        alert("(WIP) download failed, the content was logged in the debug console as a fallback :)");
+        alert(
+            "(WIP) download failed, the content was logged in the debug console as a fallback :)",
+        );
     }
     true
 }
@@ -173,18 +175,11 @@ pub(crate) fn prepare_paste(
         let _task = spawn_local(async move {
             let window = web_sys::window().expect("window");
             let nav = window.navigator().clipboard();
-            match nav {
-                Some(a) => {
-                    let p = a.read_text();
-                    let result = wasm_bindgen_futures::JsFuture::from(p)
-                        .await
-                        .expect("clipboard read");
-                    unsafe { B = Some(result.as_string().unwrap()) };
-                }
-                None => {
-                    log::warn!("failed to copy clipboard");
-                }
-            };
+            let p = nav.read_text();
+            let result = wasm_bindgen_futures::JsFuture::from(p)
+                .await
+                .expect("clipboard read");
+            unsafe { B = Some(result.as_string().unwrap()) };
         });
         *await_response = true;
     }

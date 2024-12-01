@@ -219,7 +219,7 @@ impl SelectedConfig {
     }
 
     pub(crate) fn on_hover_show(&self, ui: &mut egui::Ui) {
-        ui.markdown_ui(ui.id().with(self.title().as_ref()), self.descriptions())
+        ui.markdown_ui(self.descriptions())
     }
 
     pub(crate) fn descriptions(&self) -> &str {

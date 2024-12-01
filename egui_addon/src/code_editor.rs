@@ -212,11 +212,12 @@ impl<L: Default> CodeEditor<L> {
 
 pub fn show_edit_syntect(ui: &mut egui::Ui, code: &mut EditAwareString) {
     let language = "rs";
-    let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+    let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
 
     let mut layouter = |ui: &egui::Ui, string: &EditAwareString, _wrap_width: f32| {
         let layout_job = egui_extras::syntax_highlighting::highlight(
             ui.ctx(),
+            ui.style(),
             &theme,
             string.as_str(),
             language,

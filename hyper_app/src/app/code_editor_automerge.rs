@@ -287,8 +287,10 @@ impl CodeEditor {
                         panic!()
                     } else {
                         let language = "rs";
-                        let theme =
-                            egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+                        let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(
+                            ui.ctx(),
+                            ui.style(),
+                        );
 
                         let mut layouter =
                             |ui: &egui::Ui,
@@ -296,6 +298,7 @@ impl CodeEditor {
                              _wrap_width: f32| {
                                 let layout_job = egui_extras::syntax_highlighting::highlight(
                                     ui.ctx(),
+                                    ui.style(),
                                     &theme,
                                     string.text.as_str(),
                                     language,

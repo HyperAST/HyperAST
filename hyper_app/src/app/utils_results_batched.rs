@@ -195,10 +195,12 @@ pub(crate) fn show_long_result_list(ui: &mut egui::Ui, content: &ComputeResults)
             Ok(cont) => {
                 let mut code: &str = &serde_json::to_string_pretty(&cont.inner.result).unwrap();
                 let language = "json";
-                let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+                let theme =
+                    egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
                 let mut layouter = |ui: &egui::Ui, string: &str, _wrap_width: f32| {
                     let layout_job = egui_extras::syntax_highlighting::highlight(
                         ui.ctx(),
+                        ui.style(),
                         &theme,
                         string,
                         language,

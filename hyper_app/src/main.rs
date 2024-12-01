@@ -30,8 +30,6 @@ fn main() -> eframe::Result<()> {
             .with_titlebar_shown(!re_ui::FULLSIZE_CONTENT)
             .with_transparent(re_ui::CUSTOM_WINDOW_DECORATIONS), // To have rounded corners without decorations we need transparency
 
-        follow_system_theme: false,
-        default_theme: eframe::Theme::Dark,
 
         ..Default::default()
     };
@@ -39,6 +37,9 @@ fn main() -> eframe::Result<()> {
         "HyperAST",
         native_options,
         Box::new(move |cc| {
+            cc.egui_ctx.options_mut(|opt| {
+                opt.theme_preference = egui::ThemePreference::Dark
+            });
             re_ui::apply_style_and_install_loaders(&cc.egui_ctx);
             Ok(Box::new(hyper_app::HyperApp::new(cc, languages, api_addr)))
         }),
@@ -72,9 +73,20 @@ fn main() {
             .map_err(JsValue::from)
             .unwrap();
         let mut languages: hyper_app::Languages = Default::default();
+        let document = web_sys::window()
+            .expect("No window")
+            .document()
+            .expect("No document");
+
+        let canvas = document
+            .get_element_by_id("the_canvas_id")
+            .expect("Failed to find the_canvas_id")
+            .dyn_into::<web_sys::HtmlCanvasElement>()
+            .expect("the_canvas_id was not a HtmlCanvasElement");
+        
         let start_result = eframe::WebRunner::new()
             .start(
-                "the_canvas_id", // hardcode it
+                canvas, // hardcode it
                 web_options,
                 Box::new(move |cc| {
                     re_ui::apply_style_and_install_loaders(&cc.egui_ctx);

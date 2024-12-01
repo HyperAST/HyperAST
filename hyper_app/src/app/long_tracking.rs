@@ -668,11 +668,13 @@ pub(crate) fn show_results(
                 ui.ctx().clone(),
                 ui.layer_id(),
                 w_id.with(col as isize - long_tracking.origin_index as isize),
-                // w_id.with(col),
-                max_rect,
-                clip_rect,
-                ui.stack().info.clone(),
+                egui::UiBuilder {
+                    ui_stack_info: ui.stack().info.clone(),
+                    max_rect: Some(max_rect),
+                    ..Default::default()
+                },
             );
+            ui.set_clip_rect(clip_rect);
             // let ui = &mut ui.child_ui_with_id_source(
             //     rect,
             //     egui::Layout::top_down(egui::Align::Min),
@@ -1677,7 +1679,12 @@ fn show_detached_element(
                             if value.is_some() && name.is_some() {
                                 break;
                             }
-                            if let Some(r) = store.node_store.read().unwrap().try_resolve::<AnyType>(r_id) {
+                            if let Some(r) = store
+                                .node_store
+                                .read()
+                                .unwrap()
+                                .try_resolve::<AnyType>(r_id)
+                            {
                                 let t = store.resolve_type(&r_id);
                                 // wasm_rs_dbg::dbg!(t);
                                 if t.generic_eq(&hyper_ast_gen_ts_cpp::types::Type::NumberLiteral) {
@@ -1797,12 +1804,16 @@ fn show_detached_element(
                     epaint::pos2(bot.x, bot.y),
                     epaint::pos2(bot.x - s, bot.y + s),
                 ]);
-                path.fill(10.0, egui::Color32::RED, &mut out);
+                path.fill(
+                    10.0,
+                    egui::Color32::RED,
+                    &epaint::PathStroke::NONE,
+                    &mut out,
+                );
                 ui.painter().set(past, out);
                 // path.stroke_closed(self.feathering, stroke, &mut out);
-                past_resp = Some(ui.interact_with_hovered(
+                past_resp = Some(ui.interact(
                     egui::Rect::NOTHING,
-                    false,
                     id.with("past_interact"),
                     egui::Sense::click(),
                 ));

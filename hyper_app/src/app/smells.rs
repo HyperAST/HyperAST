@@ -706,11 +706,11 @@ pub(crate) fn show_query(
     let language = "clojure";
     // use super::syntax_highlighting::syntax_highlighting_async as syntax_highlighter;
     // let theme = super::syntax_highlighting::syntect::CodeTheme::from_memory(ui.ctx());
-    let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+    let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
 
     let mut layouter = |ui: &egui::Ui, code: &str, wrap_width: f32| {
         let mut layout_job =
-            egui_extras::syntax_highlighting::highlight(ui.ctx(), &theme, code, language);
+            egui_extras::syntax_highlighting::highlight(ui.ctx(), ui.style(), &theme, code, language);
         // syntax_highlighter::highlight(ui.ctx(), &theme, code, language);
         if false {
             layout_job.wrap.max_width = wrap_width;
@@ -894,7 +894,7 @@ fn show_either_side<MH: MakeHighlights>(
                 galley
                     .rows
                     .iter_mut()
-                    .for_each(|row| row.glyphs.iter_mut().for_each(|g| g.size.y = 100.0));
+                    .for_each(|row| row.glyphs.iter_mut().for_each(|g| g.line_height = 100.0));
                 galley.into()
             })
         };

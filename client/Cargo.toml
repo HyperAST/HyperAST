@@ -94,7 +94,7 @@ tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-gr
 tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d" }
 stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d" }
 
-rerun = { version = "0.17.0", default-features = false, features = [
+rerun = { version = "0.20.2", default-features = false, features = [
     "log",
     "sdk",
 ], optional = true }

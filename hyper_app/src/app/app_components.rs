@@ -152,7 +152,7 @@ impl super::HyperApp {
             .always_show_buttons(true);
 
         let force_background = if ui.visuals().dark_mode {
-            DesignTokens::section_collapsing_header_color()
+            DesignTokens::load().section_collapsing_header_color()
         } else {
             ui.visuals().widgets.active.bg_fill
         };
@@ -367,19 +367,17 @@ impl super::HyperApp {
         let content = list_item::LabelContent::new(label)
             .with_buttons(|ui| {
                 ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
-
-                let image_button = egui::ImageButton::new(
+                let button = egui::Button::image(
                     re_ui::icons::ADD
                         .as_image()
                         .fit_to_exact_size(egui::Vec2::splat(12.0)),
-                )
-                .tint(ui.visuals().widgets.inactive.fg_stroke.color);
-                egui::menu::menu_image_button(ui, image_button, button_menu).response
+                );
+                egui::menu::menu_custom_button(ui, button, button_menu).response
             })
             .always_show_buttons(true);
 
         let force_background = if ui.visuals().dark_mode {
-            DesignTokens::section_collapsing_header_color()
+            DesignTokens::load().section_collapsing_header_color()
         } else {
             ui.visuals().widgets.active.weak_bg_fill
         }
@@ -557,7 +555,7 @@ impl super::HyperApp {
                                 .size(25.0),
                         );
                     });
-                    egui::widgets::global_dark_light_mode_switch(ui);
+                    egui::widgets::global_theme_preference_switch(ui);
 
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         ui.add_space(20.0);

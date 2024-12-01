@@ -247,10 +247,16 @@ pub trait MyUiExt: UiExt {
         desired_width: f32,
     ) -> Option<egui::scroll_area::ScrollAreaOutput<(SkipedBytes, egui::text_edit::TextEditOutput)>>
     {
-        let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(self.ui().ctx());
+        let theme =
+            egui_extras::syntax_highlighting::CodeTheme::from_memory(self.ui().ctx(), self.ui().style());
         let mut layouter = |ui: &egui::Ui, code: &str, _wrap_width: f32| {
-            let layout_job =
-                egui_extras::syntax_highlighting::highlight(ui.ctx(), &theme, code, language);
+            let layout_job = egui_extras::syntax_highlighting::highlight(
+                ui.ctx(),
+                ui.style(),
+                &theme,
+                code,
+                language,
+            );
             if wrap {
                 panic!();
                 // layout_job.wrap.max_width = wrap_width;

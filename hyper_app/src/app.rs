@@ -881,7 +881,8 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                 let query = &mut self.data.queries[*id as usize];
                 let code = &mut query.query.code;
                 let language = "rs";
-                let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx());
+                let theme =
+                    egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
 
                 const EDIT_AWARE: bool = false;
                 egui::ScrollArea::both()
@@ -900,6 +901,7 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                                         let layout_job =
                                             egui_extras::syntax_highlighting::highlight(
                                                 ui.ctx(),
+                                                ui.style(),
                                                 &theme,
                                                 string.as_str(),
                                                 language,
@@ -918,6 +920,7 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                                         let layout_job =
                                             egui_extras::syntax_highlighting::highlight(
                                                 ui.ctx(),
+                                                ui.style(),
                                                 &theme,
                                                 string.as_str(),
                                                 language,
@@ -986,7 +989,7 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
             }
             Tab::CodeFile(id) => {
                 let code_view = &mut self.data.code_views[*id];
-                code_view.generation = ui.ctx().frame_nr();
+                code_view.generation = ui.ctx().cumulative_pass_nr();
                 let commit = &code_view.commit;
                 let Some(file_path) = &code_view.file_path else {
                     ui.error_label("no file path");
@@ -1042,7 +1045,7 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
             }
             Tab::CodeTree(id) => {
                 let code_view = &mut self.data.code_views[*id];
-                code_view.generation = ui.ctx().frame_nr();
+                code_view.generation = ui.ctx().cumulative_pass_nr();
                 let commit = &code_view.commit;
                 let path = &code_view.path;
 
@@ -1483,7 +1486,6 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                 Default::default()
             }
             Tab::MarkdownStatic(md) => {
-                let id = ui.id().with(tile_id);
                 use epaint::mutex::Mutex;
 
                 let ui = (&mut *ui).ui_mut();
@@ -1494,7 +1496,8 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                     .clone()
                 });
 
-                egui_commonmark::CommonMarkViewer::new(id).show_scrollable(
+                egui_commonmark::CommonMarkViewer::new().show_scrollable(
+                    tile_id,
                     ui,
                     &mut commonmark_cache.lock(),
                     &format!(
@@ -1513,7 +1516,6 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
             }
             Tab::MarkdownEdit(md) => {
                 {
-                    let id = ui.id().with(tile_id);
                     // use parking_lot::Mutex;
                     use epaint::mutex::Mutex;
                     let commonmark_cache = ui.data_mut(|data| {
@@ -1523,7 +1525,7 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                         .clone()
                     });
 
-                    egui_commonmark::CommonMarkViewer::new(id).show_mut(
+                    egui_commonmark::CommonMarkViewer::new().show_mut(
                         ui,
                         &mut commonmark_cache.lock(),
                         md,
@@ -1591,7 +1593,7 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
         //     .help_markdown(self.ctx.egui_ctx);
         let help_markdown = "TODO Help text";
         ui.help_hover_button().on_hover_ui(|ui| {
-            ui.markdown_ui(ui.id().with(tile_id), &help_markdown);
+            ui.markdown_ui(&help_markdown);
         });
 
         if let Tab::QueryResults { id, .. } = space_view {
@@ -1614,7 +1616,11 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
         }
     }
 
-    fn is_tab_closable(&self, tiles: &egui_tiles::Tiles<TabId>, tile_id: egui_tiles::TileId) -> bool {
+    fn is_tab_closable(
+        &self,
+        tiles: &egui_tiles::Tiles<TabId>,
+        tile_id: egui_tiles::TileId,
+    ) -> bool {
         let Some(tile) = tiles.get(tile_id) else {
             return false;
         };

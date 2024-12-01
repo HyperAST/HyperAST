@@ -56,7 +56,7 @@ impl<'a> SectionCollapsingHeader<'a> {
     #[inline]
     pub fn help_markdown(mut self, help: &'a str) -> Self {
         self.help = Some(Box::new(move |ui| {
-            ui.markdown_ui(egui::Id::new(help), help);
+            ui.markdown_ui(help);
         }));
         self
     }
@@ -103,7 +103,7 @@ impl<'a> SectionCollapsingHeader<'a> {
         }
 
         let force_background = if ui.visuals().dark_mode {
-            DesignTokens::section_collapsing_header_color()
+            DesignTokens::load().section_collapsing_header_color()
         } else {
             ui.visuals().widgets.active.weak_bg_fill
         };
@@ -170,7 +170,7 @@ impl<'a> SectionCollapsingHeader<'a> {
         }
 
         let force_background = if ui.visuals().dark_mode {
-            DesignTokens::section_collapsing_header_color()
+            DesignTokens::load().section_collapsing_header_color()
         } else {
             ui.visuals().widgets.active.bg_fill
         };
