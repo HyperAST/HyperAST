@@ -4,7 +4,7 @@ use clap::Parser;
 
 #[derive(Parser)]
 #[clap(version, about, long_about = None)]
-pub(super) struct Options {
+pub struct Options {
     /// Increase verbosity, and can be used multiple times
     #[clap(short, long, action = clap::ArgAction::Count)]
     pub verbose: u8,
@@ -26,9 +26,9 @@ pub(super) struct Options {
     pub repository: Vec<RepoConfig>,
 }
 
-pub(super) struct RepoConfig {
-    pub(super) repo: hyper_ast_cvs_git::git::Repo,
-    pub(super) config: hyper_ast_cvs_git::processing::RepoConfig,
+pub struct RepoConfig {
+    pub repo: hyper_ast_cvs_git::git::Repo,
+    pub config: hyper_ast_cvs_git::processing::RepoConfig,
 }
 
 impl std::str::FromStr for RepoConfig {
@@ -43,7 +43,7 @@ impl std::str::FromStr for RepoConfig {
     }
 }
 
-pub(super) fn parse() -> Options {
+pub fn parse() -> Options {
     let opts = Options::parse();
 
     let debug_level = match opts.verbose {
