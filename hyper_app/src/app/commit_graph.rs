@@ -456,6 +456,11 @@ fn show_commit_graph_timed_egui_plot<'a>(
     const DIFF_VALS: bool = true;
     const LEFT_VALS: bool = false;
     const RIGHT_VALS: bool = false;
+    let diff_val_col = if ui.visuals().dark_mode {
+        egui::Color32::YELLOW
+    } else {
+        egui::Color32::RED
+    };
     egui::Frame::none()
         .inner_margin(egui::vec2(50.0, 10.0))
         .show(ui, |ui| {
@@ -642,7 +647,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
                                     plot_ui.text(
                                         Text::new(corner.into(), text)
                                             .anchor(egui::Align2::RIGHT_BOTTOM)
-                                            .color(egui::Color32::YELLOW),
+                                            .color(diff_val_col),
                                     );
 
                                     if plot_ui.response().clicked {
@@ -661,7 +666,6 @@ fn show_commit_graph_timed_egui_plot<'a>(
                                 if t > cached.times[i - 1] {
                                     p[1] += 100;
                                 }
-                                let color = egui::Color32::YELLOW;
                                 let a = line.last().unwrap().clone();
                                 let b = p.map(|x| x as f64);
                                 let position = with_egui_plot::center(a, b);
@@ -669,7 +673,7 @@ fn show_commit_graph_timed_egui_plot<'a>(
                                     plot_ui.text(
                                         Text::new(position, text)
                                             .anchor(egui::Align2::RIGHT_BOTTOM)
-                                            .color(color),
+                                            .color(diff_val_col),
                                     );
                                     if plot_ui.response().clicked {
                                         let point = plot_ui.response().hover_pos().unwrap();
@@ -895,6 +899,11 @@ fn show_commit_graph_timed_custom<'a>(
     } else {
         egui::Color32::BLACK
     };
+    let diff_val_col = if ui.visuals().dark_mode {
+        egui::Color32::YELLOW
+    } else {
+        egui::Color32::RED
+    };
     let max_time = cached.min_time.max(cached.max_time - offset_fetch);
     let min_time = cached.min_time.max(max_time - max_fetch);
     let cached = cached;
@@ -1019,22 +1028,18 @@ fn show_commit_graph_timed_custom<'a>(
                 ui.painter().line_segment([corner_p, center], stroke);
                 if let Some(text) = diff {
                     let pos = corner_p;
-                    // let text_color = ui.style().visuals.text_color();
-                    let text_color = egui::Color32::YELLOW;
                     let font_id = egui::TextStyle::Body.resolve(ui.style());
                     let anchor = egui::Align2::RIGHT_BOTTOM;
-                    ui.painter().text(pos, anchor, text, font_id, text_color);
+                    ui.painter().text(pos, anchor, text, font_id, diff_val_col);
                 }
             } else {
                 ui.painter()
                     .line_segment([prev_p, center], egui::Stroke::new(2.0, parent_rel_color));
                 if let Some(text) = diff {
                     let pos = egui::Rect::from_min_max(prev_p, center).center();
-                    // let text_color = ui.style().visuals.text_color();
-                    let text_color = egui::Color32::YELLOW;
                     let font_id = egui::TextStyle::Body.resolve(ui.style());
                     let anchor = egui::Align2::RIGHT_BOTTOM;
-                    ui.painter().text(pos, anchor, text, font_id, text_color);
+                    ui.painter().text(pos, anchor, text, font_id, diff_val_col);
                 }
             }
 
