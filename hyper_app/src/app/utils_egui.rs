@@ -247,8 +247,10 @@ pub trait MyUiExt: UiExt {
         desired_width: f32,
     ) -> Option<egui::scroll_area::ScrollAreaOutput<(SkipedBytes, egui::text_edit::TextEditOutput)>>
     {
-        let theme =
-            egui_extras::syntax_highlighting::CodeTheme::from_memory(self.ui().ctx(), self.ui().style());
+        let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(
+            self.ui().ctx(),
+            self.ui().style(),
+        );
         let mut layouter = |ui: &egui::Ui, code: &str, _wrap_width: f32| {
             let layout_job = egui_extras::syntax_highlighting::highlight(
                 ui.ctx(),
@@ -314,23 +316,32 @@ pub trait MyUiExt: UiExt {
             })
         })
     }
-    fn double_ended_slider<Num: egui::emath::Numeric>(
+    fn double_ended_slider(
         &mut self,
-        low: &mut Num,
-        high: &mut Num,
-        range: std::ops::RangeInclusive<Num>,
+        low: &mut usize,
+        high: &mut usize,
+        range: std::ops::RangeInclusive<usize>,
     ) -> egui::Response {
-        // TODO use a double ended slider
-        use egui::Widget;
-        let resp_low = egui::Slider::new(low, range.clone()).ui(self.ui_mut());
-        let resp_high = egui::Slider::new(high, range.clone()).ui(self.ui_mut());
-        if resp_low.changed() && low > high {
-            *low = *high;
-        }
-        if resp_high.changed() && high < low {
-            *high = *low;
-        }
-        resp_low.union(resp_high)
+        self.ui_mut()
+            .horizontal(|ui| {
+                let mut lower_value = *low as f32;
+                let mut upper_value = *high as f32;
+                let range = std::ops::RangeInclusive::new(
+                    *range.start() as f32,
+                    *range.end() as f32,
+                );
+                let slider = egui_double_slider::DoubleSlider::new(
+                    &mut lower_value,
+                    &mut upper_value,
+                    range,
+                ).separation_distance(1f32);
+                let resp = ui.add(slider);
+                *low = lower_value as usize;
+                *high = upper_value as usize;
+                ui.label(format!("{}..{}", low,high));
+                resp
+            })
+            .inner
     }
 }
 
