@@ -72,7 +72,7 @@ where
         let Range { start, end } = pos.range();
         let file = pos.file().to_string_lossy().to_string();
         let r = stores.node_store().resolve(&x);
-        let t = stores.type_store().resolve_type(&r);
+        let t = stores.resolve_type(&x);
         Tree {
             r#type: t.to_string(),
             label: r

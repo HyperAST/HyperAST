@@ -1,4 +1,4 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, marker::PhantomData};
 
 use crate::types::{SimpleHyperAST, TypeStore};
 
@@ -12,17 +12,36 @@ pub mod nodes;
 
 pub struct SimpleStores<TS, NS = nodes::DefaultNodeStore, LS = labels::LabelStore> {
     pub label_store: LS,
-    pub type_store: TS,
     pub node_store: NS,
+    pub type_store: PhantomData<TS>,
 }
 
 impl<TS, NS, LS> SimpleStores<TS, NS, LS> {
-    pub fn change_type_store<TS2>(self, new: TS2) -> SimpleStores<TS2, NS, LS> {
+    pub fn change_type_store<TS2>(self) -> SimpleStores<TS2, NS, LS> {
         SimpleStores {
-            type_store: new,
+            type_store: PhantomData,
             node_store: self.node_store,
             label_store: self.label_store,
         }
+    }
+}
+
+/// Declare we can convert from Self to T,
+/// e.g. from the git::types::TStore to the Java one, but not the contrary
+pub trait TyDown<T> {}
+
+impl<TS, NS, LS> SimpleStores<TS, NS, LS> {
+    pub fn mut_with_ts<TS2>(&mut self) -> &mut SimpleStores<TS2, NS, LS>
+    where
+        TS: TyDown<TS2>,
+    {
+        unsafe { std::mem::transmute(self) }
+    }
+    pub fn with_ts<TS2>(&self) -> &SimpleStores<TS2, NS, LS>
+    where
+        TS: TyDown<TS2>,
+    {
+        unsafe { std::mem::transmute(self) }
     }
 }
 
@@ -36,13 +55,36 @@ impl<TS: Default, NS: Default, LS: Default> Default for SimpleStores<TS, NS, LS>
     }
 }
 
+impl<'store, TS, NS, LS> crate::types::RoleStore for SimpleStores<TS, NS, LS>
+where
+    TS: crate::types::RoleStore,
+{
+    type IdF = TS::IdF;
+
+    type Role = TS::Role;
+
+    fn resolve_field(
+        lang: crate::types::LangWrapper<Self::Ty>,
+        field_id: Self::IdF,
+    ) -> Self::Role {
+        TS::resolve_field(lang, field_id)
+    }
+    fn intern_role(
+        lang: crate::types::LangWrapper<Self::Ty>,
+        role: Self::Role,
+    ) -> Self::IdF {
+        TS::intern_role(lang, role)
+    }
+}
+
 impl<IdN, TS, NS, LS> crate::types::NodeStore<IdN> for SimpleStores<TS, NS, LS>
 where
     for<'a> NS::R<'a>: crate::types::Tree<TreeId = IdN>,
     IdN: crate::types::NodeId<IdN = IdN>,
     NS: crate::types::NodeStore<IdN>,
 {
-    type R<'a> = NS::R<'a>
+    type R<'a>
+        = NS::R<'a>
     where
         Self: 'a;
 
@@ -83,33 +125,12 @@ where
     }
 }
 
-impl<'store, T, TS, NS, LS> crate::types::TypeStore<T> for SimpleStores<TS, NS, LS>
+impl<'store, TS, NS, LS> crate::types::TypeStore for SimpleStores<TS, NS, LS>
 where
-    T: crate::types::TypedTree,
-    T::TreeId: crate::types::NodeId<IdN = T::TreeId>,
-    T::Type: 'static + std::hash::Hash,
-    TS: TypeStore<T, Ty = T::Type>,
-    NS: crate::types::NodeStore<T::TreeId>,
+    TS::Ty: 'static + std::hash::Hash,
+    TS: TypeStore,
 {
     type Ty = TS::Ty;
-
-    const MASK: u16 = TS::MASK;
-
-    fn resolve_type(&self, n: &T) -> Self::Ty {
-        self.type_store.resolve_type(n)
-    }
-    fn resolve_lang(&self, n: &T) -> crate::types::LangWrapper<Self::Ty> {
-        self.type_store.resolve_lang(n)
-    }
-
-    type Marshaled = TS::Marshaled;
-
-    fn marshal_type(&self, n: &T) -> Self::Marshaled {
-        self.type_store.marshal_type(n)
-    }
-    fn type_eq(&self, n: &T, m: &T) -> bool {
-        self.type_store.type_eq(n, m)
-    }
 }
 
 pub mod defaults {
@@ -123,7 +144,6 @@ impl<'store, T, TS, NS, LS> From<&'store SimpleStores<TS, NS, LS>>
 {
     fn from(value: &'store SimpleStores<TS, NS, LS>) -> Self {
         Self {
-            type_store: &value.type_store,
             node_store: &value.node_store,
             label_store: &value.label_store,
             _phantom: std::marker::PhantomData,

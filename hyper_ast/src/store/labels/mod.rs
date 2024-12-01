@@ -10,7 +10,7 @@ use crate::types::LabelStore as _;
 #[derive(Default)]
 pub struct LabelStore {
     count: usize,
-    internal: StringInterner, //VecMapStore<OwnedLabel, LabelIdentifier>,
+    internal: StringInterner<string_interner::DefaultBackend>, //VecMapStore<OwnedLabel, LabelIdentifier>,
 }
 
 impl Debug for LabelStore {

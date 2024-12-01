@@ -1,9 +1,8 @@
 use std::fmt::Display;
 
 use hyper_ast::{
-    store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
-    types::{AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
+    types::{AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId},
 };
 
 #[cfg(feature = "legion")]
@@ -13,128 +12,62 @@ mod legion_impls {
     use crate::TNode;
 
     impl<'a> TNode<'a> {
-        pub fn obtain_type<T>(&self, _: &mut impl CppEnabledTypeStore<T>) -> Type {
+        pub fn obtain_type(&self) -> Type {
             let t = self.kind_id();
             Type::from_u16(t)
         }
     }
 
-    // pub trait CppEnabledTypeStore<T>: TypeStore<T> {
-    //     const LANG: u16;
-    //     fn obtain(&self, n: &TNode) -> Type {
-    //         let t = n.kind_id();
-    //         Type::from_u16(t)
-    //     }
-    //     fn intern(&self, t: Type) -> Self::Ty {
-    //         let t = t as u16;
-    //         Self::_intern(Self::LANG, t)
-    //     }
-    //     fn _intern(l: u16, t: u16) -> Self::Ty;
-    //     fn resolve(&self, t: Self::Ty) -> Type;
-    //     //  {
-    //     //     todo!()
-    //     //     // let t = t.0 as u16;
-    //     //     // let t = t & !TStore::MASK;
-    //     //     // Type::resolve(t)
-    //     // }
-    // }
+    use hyper_ast::types::{LangWrapper, RoleStore};
 
-    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::TypeIndex};
-
-    impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        type Ty = Type;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-        fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
-            n.get_component::<Type>().unwrap().clone()
+    impl TypeStore for TStore {
+        type Ty = TypeU16<Cpp>;
+    }
+    impl<'a> CppEnabledTypeStore for TStore {
+        fn intern(t: Type) -> Self::Ty {
+            t.into()
         }
 
-        fn resolve_lang(
-            &self,
-            _n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            From::<&'static (dyn LangRef<Type>)>::from(&Lang)
-        }
-
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&Lang),
-                ty: *n.get_component::<Type>().unwrap() as u16,
-            }
-        }
-        fn type_eq(
-            &self,
-            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-            m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        ) -> bool {
-            n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
+        fn resolve(t: Self::Ty) -> Type {
+            t.e()
         }
     }
-    impl<'a> CppEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        const LANG: TypeInternalSize = Self::Cpp as u16;
 
-        fn _intern(_l: u16, _t: u16) -> Self::Ty {
-            // T((u16::MAX - l as u16) | t)
-            todo!()
-        }
-        fn intern(&self, t: Type) -> Self::Ty {
-            t
-        }
+    impl RoleStore for TStore {
+        type IdF = u16;
 
-        fn resolve(&self, t: Self::Ty) -> Type {
-            t
-            // let t = t.0 as u16;
-            // let t = t & !TStore::MASK;
-            // Type::resolve(t)
-        }
-    }
-    impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
-        type Ty = AnyType;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-        fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-            as_any(n.get_component::<Type>().unwrap())
+        type Role = hyper_ast::types::Role;
+
+        fn resolve_field( _lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
+            let s = tree_sitter_cpp::language()
+                .field_name_for_id(field_id)
+                .ok_or_else(|| format!("{}", field_id))
+                .unwrap();
+            hyper_ast::types::Role::try_from(s).expect(s)
         }
 
-        fn resolve_lang(
-            &self,
-            _n: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            From::<&'static (dyn LangRef<AnyType>)>::from(&Lang)
-        }
-
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&Lang),
-                ty: *n.get_component::<Type>().unwrap() as u16,
-            }
-        }
-        fn type_eq(
-            &self,
-            _n: &HashedNodeRef<'a, NodeIdentifier>,
-            _m: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> bool {
-            todo!()
+        fn intern_role( _lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
+            let field_name = role.to_string();
+            tree_sitter_cpp::language()
+                .field_id_for_name(field_name)
+                .unwrap()
+                .into()
         }
     }
 }
 
-pub trait CppEnabledTypeStore<T>: TypeStore<T> {
-    const LANG: u16;
-    fn intern(&self, t: Type) -> Self::Ty {
-        let t = t as u16;
-        Self::_intern(Self::LANG, t)
-    }
-    fn _intern(l: u16, t: u16) -> Self::Ty;
-    fn resolve(&self, t: Self::Ty) -> Type;
-    //  {
-    //     todo!()
-    //     // let t = t.0 as u16;
-    //     // let t = t & !TStore::MASK;
-    //     // Type::resolve(t)
-    // }
+#[cfg(feature = "impl")]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    tree_sitter_cpp::language().id_for_node_kind(kind, named)
+}
+#[cfg(not(feature = "impl"))]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    unimplemented!("need treesitter grammar")
+}
+
+pub trait CppEnabledTypeStore: TypeStore {
+    fn intern(t: Type) -> Self::Ty;
+    fn resolve(t: Self::Ty) -> Type;
 }
 
 #[allow(unused)]
@@ -169,23 +102,23 @@ mod exp {
     }
 
     impl TStore {
-        pub fn intern_cpp(&self, n: TNode) -> T {
-            let t = n.kind_id();
-            let t = Type::from_u16(t);
-            let t = t as u16;
-            Self::_intern(TStore::Cpp, t)
-        }
-        pub fn intern_java(&self, n: TNode) -> T {
-            let t = n.kind_id();
-            Self::_intern(TStore::Java, t)
-        }
-        pub fn intern_xml(&self, n: TNode) -> T {
-            let t = n.kind_id();
-            Self::_intern(TStore::Xml, t)
-        }
-        fn _intern(l: TStore, t: u16) -> T {
-            T((u16::MAX - l as u16) | t)
-        }
+        // pub fn intern_cpp(&self, n: TNode) -> T {
+        //     let t = n.kind_id();
+        //     let t = Type::from_u16(t);
+        //     let t = t as u16;
+        //     Self::_intern(TStore::Cpp, t)
+        // }
+        // pub fn intern_java(&self, n: TNode) -> T {
+        //     let t = n.kind_id();
+        //     Self::_intern(TStore::Java, t)
+        // }
+        // pub fn intern_xml(&self, n: TNode) -> T {
+        //     let t = n.kind_id();
+        //     Self::_intern(TStore::Xml, t)
+        // }
+        // fn _intern(l: TStore, t: u16) -> T {
+        //     T((u16::MAX - l as u16) | t)
+        // }
         fn resolve_cpp_unchecked(&self, t: T) -> Type {
             let t = t.0 as u16;
             let t = t & !TStore::MASK;
@@ -216,15 +149,17 @@ mod exp {
         lang: TypeInternalSize,
     }
 
-    #[cfg(feature = "legion")]
-    impl<'a, TS: CppEnabledTypeStore<hyper_ast::store::nodes::legion::HashedNodeRef<'a, Type>>> From<TS> for Single {
-        fn from(_value: TS) -> Self {
-            Self {
-                mask: TS::MASK,
-                lang: TS::LANG,
-            }
-        }
-    }
+    // #[cfg(feature = "legion")]
+    // impl<'a, TS: CppEnabledTypeStore<hyper_ast::store::nodes::legion::HashedNodeRef<'a, Type>>>
+    //     From<TS> for Single
+    // {
+    //     fn from(_value: TS) -> Self {
+    //         Self {
+    //             mask: TS::MASK,
+    //             lang: TS::LANG,
+    //         }
+    //     }
+    // }
 }
 
 impl Type {
@@ -255,16 +190,17 @@ impl<IdN: Clone + Eq + NodeId> NodeId for TIdN<IdN> {
 
 impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
     type Ty = Type;
+    type TyErazed = TType;
+    fn unerase(ty: Self::TyErazed) -> Self::Ty {
+        ty.e()
+    }
 }
 
-#[repr(u8)]
-pub enum TStore {
-    Cpp = 0,
-}
+pub struct TStore;
 
 impl Default for TStore {
     fn default() -> Self {
-        Self::Cpp
+        Self
     }
 }
 
@@ -273,6 +209,7 @@ type TypeInternalSize = u16;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct T(TypeInternalSize);
 
+#[derive(Debug)]
 pub struct Lang;
 pub type Cpp = Lang;
 
@@ -301,6 +238,10 @@ impl LangRef<AnyType> for Cpp {
     fn name(&self) -> &'static str {
         std::any::type_name::<Cpp>()
     }
+
+    fn ts_symbol(&self, t: AnyType) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
 }
 
 impl LangRef<Type> for Cpp {
@@ -313,6 +254,28 @@ impl LangRef<Type> for Cpp {
 
     fn name(&self) -> &'static str {
         std::any::type_name::<Cpp>()
+    }
+
+    fn ts_symbol(&self, t: Type) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
+}
+
+impl LangRef<TType> for Lang {
+    fn make(&self, t: u16) -> &'static TType {
+        // TODO could make one safe, but not priority
+        unsafe { std::mem::transmute(&S_T_L[t as usize]) }
+    }
+    fn to_u16(&self, t: TType) -> u16 {
+        t.e() as u16
+    }
+
+    fn name(&self) -> &'static str {
+        std::any::type_name::<Lang>()
+    }
+
+    fn ts_symbol(&self, t: TType) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 
@@ -525,11 +488,30 @@ impl HyperType for Type {
         t
     }
 
+    fn as_static_str(&self) -> &'static str {
+        self.to_str()
+    }
+
+    fn is_hidden(&self) -> bool {
+        self.is_hidden()
+    }
+
+    fn is_supertype(&self) -> bool {
+        self.is_supertype()
+    }
+
+    fn is_named(&self) -> bool {
+        todo!()
+    }
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,
     {
-        From::<&'static (dyn LangRef<Self>)>::from(&Lang)
+        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<Self> + 'static))
+    }
+
+    fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
+        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<AnyType> + 'static))
     }
 }
 impl TypeTrait for Type {
@@ -681,6 +663,39 @@ impl Type {
             || *self == Type::LambdaCaptureSpecifierRepeat1
     }
 }
+
+impl hyper_ast::types::LLang<TType> for Cpp {
+    type I = u16;
+
+    type E = Type;
+
+    const TE: &[Self::E] = S_T_L;
+
+    fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<TType> {
+        From::<&'static (dyn LangRef<_>)>::from(&Lang)
+    }
+}
+
+pub type TType = TypeU16<Lang>;
+
+impl From<u16> for Type {
+    fn from(value: u16) -> Self {
+        debug_assert_eq!(Self::from_u16(value), S_T_L[value as usize]);
+        S_T_L[value as usize]
+    }
+}
+impl Into<TypeU16<Cpp>> for Type {
+    fn into(self) -> TypeU16<Cpp> {
+        TypeU16::new(self)
+    }
+}
+
+impl Into<u16> for Type {
+    fn into(self) -> u16 {
+        self as u8 as u16
+    }
+}
+
 #[repr(u16)]
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Type {
@@ -1710,522 +1725,497 @@ impl Type {
             540u16 => Type::StatementIdentifier,
             541u16 => Type::TypeIdentifier,
             542u16 => Type::ERROR,
+            u16::MAX => Type::ERROR,
             x => panic!("{}", x),
         }
     }
     pub fn from_str(t: &str) -> Option<Type> {
-        Some(
-            match t {
-                "end" => Type::End,
-                "identifier" => Type::Identifier,
-                "#include" => Type::HashInclude,
-                "preproc_include_token2" => Type::PreprocIncludeToken2,
-                "#define" => Type::HashDefine,
-                "(" => Type::LParen,
-                "..." => Type::DotDotDot,
-                "," => Type::Comma,
-                ")" => Type::RParen,
-                "#if" => Type::HashIf,
-                "\n" => Type::NewLine,
-                "#endif" => Type::HashEndif,
-                "#ifdef" => Type::HashIfdef,
-                "#ifndef" => Type::HashIfndef,
-                "#else" => Type::HashElse,
-                "#elif" => Type::HashElif,
-                "#elifdef" => Type::HashElifdef,
-                "#elifndef" => Type::HashElifndef,
-                "preproc_arg" => Type::PreprocArg,
-                "preproc_directive" => Type::PreprocDirective,
-                "defined" => Type::Defined,
-                "!" => Type::Bang,
-                "~" => Type::Tilde,
-                "-" => Type::Dash,
-                "+" => Type::Plus,
-                "*" => Type::Star,
-                "/" => Type::Slash,
-                "%" => Type::Percent,
-                "||" => Type::PipePipe,
-                "&&" => Type::AmpAmp,
-                "|" => Type::Pipe,
-                "^" => Type::Caret,
-                "&" => Type::Amp,
-                "==" => Type::EqEq,
-                "!=" => Type::BangEq,
-                ">" => Type::GT,
-                ">=" => Type::GTEq,
-                "<=" => Type::LTEq,
-                "<" => Type::LT,
-                "<<" => Type::LtLt,
-                ">>" => Type::GtGt,
-                ";" => Type::SemiColon,
-                "__extension__" => Type::TS1,
-                "typedef" => Type::Typedef,
-                "extern" => Type::Extern,
-                "__attribute__" => Type::TS2,
-                "::" => Type::ColonColon,
-                "[[" => Type::TS3,
-                "]]" => Type::TS4,
-                "__declspec" => Type::__Declspec,
-                "__based" => Type::__Based,
-                "__cdecl" => Type::__Cdecl,
-                "__clrcall" => Type::__Clrcall,
-                "__stdcall" => Type::__Stdcall,
-                "__fastcall" => Type::__Fastcall,
-                "__thiscall" => Type::__Thiscall,
-                "__vectorcall" => Type::__Vectorcall,
-                "ms_restrict_modifier" => Type::MsRestrictModifier,
-                "ms_unsigned_ptr_modifier" => Type::MsUnsignedPtrModifier,
-                "ms_signed_ptr_modifier" => Type::MsSignedPtrModifier,
-                "_unaligned" => Type::_Unaligned,
-                "__unaligned" => Type::__Unaligned,
-                "{" => Type::LBrace,
-                "}" => Type::RBrace,
-                "signed" => Type::Signed,
-                "unsigned" => Type::Unsigned,
-                "long" => Type::Long,
-                "short" => Type::Short,
-                "[" => Type::LBracket,
-                "]" => Type::RBracket,
-                "=" => Type::Eq,
-                "static" => Type::Static,
-                "register" => Type::Register,
-                "inline" => Type::Inline,
-                "__inline" => Type::__Inline,
-                "__inline__" => Type::TS5,
-                "__forceinline" => Type::__Forceinline,
-                "thread_local" => Type::ThreadLocal,
-                "__thread" => Type::__Thread,
-                "const" => Type::Const,
-                "constexpr" => Type::Constexpr,
-                "volatile" => Type::Volatile,
-                "restrict" => Type::Restrict,
-                "__restrict__" => Type::TS6,
-                "_Atomic" => Type::TS7,
-                "_Noreturn" => Type::TS8,
-                "noreturn" => Type::Noreturn,
-                "mutable" => Type::Mutable,
-                "constinit" => Type::Constinit,
-                "consteval" => Type::Consteval,
-                "primitive_type" => Type::PrimitiveType,
-                "enum" => Type::Enum,
-                "class" => Type::Class,
-                "struct" => Type::Struct,
-                "union" => Type::Union,
-                ":" => Type::Colon,
-                "if" => Type::If,
-                "else" => Type::Else,
-                "switch" => Type::Switch,
-                "case" => Type::Case,
-                "default" => Type::Default,
-                "while" => Type::While,
-                "do" => Type::Do,
-                "for" => Type::For,
-                "return" => Type::Return,
-                "break" => Type::Break,
-                "continue" => Type::Continue,
-                "goto" => Type::Goto,
-                "__try" => Type::__Try,
-                "__except" => Type::__Except,
-                "__finally" => Type::__Finally,
-                "__leave" => Type::__Leave,
-                "?" => Type::QMark,
-                "*=" => Type::StarEq,
-                "/=" => Type::SlashEq,
-                "%=" => Type::PercentEq,
-                "+=" => Type::PlusEq,
-                "-=" => Type::DashEq,
-                "<<=" => Type::LtLtEq,
-                ">>=" => Type::GtGtEq,
-                "&=" => Type::AmpEq,
-                "^=" => Type::CaretEq,
-                "|=" => Type::PipeEq,
-                "and_eq" => Type::AndEq,
-                "or_eq" => Type::OrEq,
-                "xor_eq" => Type::XorEq,
-                "not" => Type::Not,
-                "compl" => Type::Compl,
-                "<=>" => Type::TS9,
-                "or" => Type::Or,
-                "and" => Type::And,
-                "bitor" => Type::Bitor,
-                "xor" => Type::Xor,
-                "bitand" => Type::Bitand,
-                "not_eq" => Type::NotEq,
-                "--" => Type::DashDash,
-                "++" => Type::PlusPlus,
-                "sizeof" => Type::Sizeof,
-                "__alignof__" => Type::TS10,
-                "__alignof" => Type::__Alignof,
-                "_alignof" => Type::_Alignof,
-                "alignof" => Type::Alignof,
-                "_Alignof" => Type::TS11,
-                "offsetof" => Type::Offsetof,
-                "_Generic" => Type::TS12,
-                "asm" => Type::Asm,
-                "__asm__" => Type::TS13,
-                "." => Type::Dot,
-                ".*" => Type::TS14,
-                "->" => Type::DashGt,
-                "number_literal" => Type::NumberLiteral,
-                "L'" => Type::TS15,
-                "u'" => Type::TS16,
-                "U'" => Type::TS17,
-                "u8'" => Type::TS18,
-                "'" => Type::SQuote,
-                "character" => Type::Character,
-                "L\"" => Type::TS19,
-                "u\"" => Type::TS20,
-                "U\"" => Type::TS21,
-                "u8\"" => Type::TS22,
-                "\"" => Type::DQuote,
-                "string_content" => Type::StringContent,
-                "escape_sequence" => Type::EscapeSequence,
-                "system_lib_string" => Type::SystemLibString,
-                "true" => Type::True,
-                "false" => Type::False,
-                "NULL" => Type::TS23,
-                "nullptr" => Type::Nullptr,
-                "comment" => Type::Comment,
-                "auto" => Type::Auto,
-                "decltype" => Type::Decltype,
-                "final" => Type::Final,
-                "override" => Type::Override,
-                "virtual" => Type::Virtual,
-                "alignas" => Type::Alignas,
-                "explicit" => Type::Explicit,
-                "typename" => Type::Typename,
-                "template" => Type::Template,
-                "operator" => Type::Operator,
-                "try" => Type::Try,
-                "delete" => Type::Delete,
-                "0" => Type::TS24,
-                "friend" => Type::Friend,
-                "public" => Type::Public,
-                "private" => Type::Private,
-                "protected" => Type::Protected,
-                "noexcept" => Type::Noexcept,
-                "throw" => Type::Throw,
-                "namespace" => Type::Namespace,
-                "using" => Type::Using,
-                "static_assert" => Type::StaticAssert,
-                "concept" => Type::Concept,
-                "co_return" => Type::CoReturn,
-                "co_yield" => Type::CoYield,
-                "catch" => Type::Catch,
-                "R\"" => Type::TS25,
-                "LR\"" => Type::TS26,
-                "uR\"" => Type::TS27,
-                "UR\"" => Type::TS28,
-                "u8R\"" => Type::TS29,
-                "co_await" => Type::CoAwait,
-                "new" => Type::New,
-                "requires" => Type::Requires,
-                "->*" => Type::DashGtStar,
-                "()" => Type::TS30,
-                "[]" => Type::TS31,
-                "\"\"" => Type::TS32,
-                "this" => Type::This,
-                "literal_suffix" => Type::LiteralSuffix,
-                "raw_string_delimiter" => Type::RawStringDelimiter,
-                "raw_string_content" => Type::RawStringContent,
-                "translation_unit" => Type::TranslationUnit,
-                "preproc_include" => Type::PreprocInclude,
-                "preproc_def" => Type::PreprocDef,
-                "preproc_function_def" => Type::PreprocFunctionDef,
-                "preproc_params" => Type::PreprocParams,
-                "preproc_call" => Type::PreprocCall,
-                "preproc_if" => Type::PreprocIf,
-                "preproc_ifdef" => Type::PreprocIfdef,
-                "preproc_else" => Type::PreprocElse,
-                "preproc_elif" => Type::PreprocElif,
-                "preproc_elifdef" => Type::PreprocElifdef,
-                "_preproc_expression" => Type::_PreprocExpression,
-                "parenthesized_expression" => Type::ParenthesizedExpression,
-                "preproc_defined" => Type::PreprocDefined,
-                "unary_expression" => Type::UnaryExpression,
-                "call_expression" => Type::CallExpression,
-                "argument_list" => Type::ArgumentList,
-                "binary_expression" => Type::BinaryExpression,
-                "function_definition" => Type::FunctionDefinition,
-                "declaration" => Type::Declaration,
-                "type_definition" => Type::TypeDefinition,
-                "_type_definition_type" => Type::_TypeDefinitionType,
-                "_type_definition_declarators" => Type::_TypeDefinitionDeclarators,
-                "_declaration_modifiers" => Type::_DeclarationModifiers,
-                "_declaration_specifiers" => Type::_DeclarationSpecifiers,
-                "linkage_specification" => Type::LinkageSpecification,
-                "attribute_specifier" => Type::AttributeSpecifier,
-                "attribute" => Type::Attribute,
-                "attribute_declaration" => Type::AttributeDeclaration,
-                "ms_declspec_modifier" => Type::MsDeclspecModifier,
-                "ms_based_modifier" => Type::MsBasedModifier,
-                "ms_call_modifier" => Type::MsCallModifier,
-                "ms_unaligned_ptr_modifier" => Type::MsUnalignedPtrModifier,
-                "ms_pointer_modifier" => Type::MsPointerModifier,
-                "declaration_list" => Type::DeclarationList,
-                "_declarator" => Type::_Declarator,
-                "_field_declarator" => Type::_FieldDeclarator,
-                "_type_declarator" => Type::_TypeDeclarator,
-                "_abstract_declarator" => Type::_AbstractDeclarator,
-                "parenthesized_declarator" => Type::ParenthesizedDeclarator,
-                "abstract_parenthesized_declarator" => {
-                    Type::AbstractParenthesizedDeclarator
-                }
-                "attributed_declarator" => Type::AttributedDeclarator,
-                "pointer_declarator" => Type::PointerDeclarator,
-                "pointer_type_declarator" => Type::PointerTypeDeclarator,
-                "abstract_pointer_declarator" => Type::AbstractPointerDeclarator,
-                "function_declarator" => Type::FunctionDeclarator,
-                "abstract_function_declarator" => Type::AbstractFunctionDeclarator,
-                "array_declarator" => Type::ArrayDeclarator,
-                "abstract_array_declarator" => Type::AbstractArrayDeclarator,
-                "init_declarator" => Type::InitDeclarator,
-                "compound_statement" => Type::CompoundStatement,
-                "storage_class_specifier" => Type::StorageClassSpecifier,
-                "type_qualifier" => Type::TypeQualifier,
-                "_type_specifier" => Type::_TypeSpecifier,
-                "sized_type_specifier" => Type::SizedTypeSpecifier,
-                "enum_specifier" => Type::EnumSpecifier,
-                "enumerator_list" => Type::EnumeratorList,
-                "struct_specifier" => Type::StructSpecifier,
-                "union_specifier" => Type::UnionSpecifier,
-                "field_declaration_list" => Type::FieldDeclarationList,
-                "_field_declaration_list_item" => Type::_FieldDeclarationListItem,
-                "field_declaration" => Type::FieldDeclaration,
-                "bitfield_clause" => Type::BitfieldClause,
-                "enumerator" => Type::Enumerator,
-                "parameter_list" => Type::ParameterList,
-                "parameter_declaration" => Type::ParameterDeclaration,
-                "attributed_statement" => Type::AttributedStatement,
-                "labeled_statement" => Type::LabeledStatement,
-                "expression_statement" => Type::ExpressionStatement,
-                "if_statement" => Type::IfStatement,
-                "else_clause" => Type::ElseClause,
-                "switch_statement" => Type::SwitchStatement,
-                "case_statement" => Type::CaseStatement,
-                "while_statement" => Type::WhileStatement,
-                "do_statement" => Type::DoStatement,
-                "for_statement" => Type::ForStatement,
-                "_for_statement_body" => Type::_ForStatementBody,
-                "return_statement" => Type::ReturnStatement,
-                "break_statement" => Type::BreakStatement,
-                "continue_statement" => Type::ContinueStatement,
-                "goto_statement" => Type::GotoStatement,
-                "seh_try_statement" => Type::SehTryStatement,
-                "seh_except_clause" => Type::SehExceptClause,
-                "seh_finally_clause" => Type::SehFinallyClause,
-                "seh_leave_statement" => Type::SehLeaveStatement,
-                "_expression" => Type::_Expression,
-                "_expression_not_binary" => Type::_ExpressionNotBinary,
-                "_string" => Type::_String,
-                "comma_expression" => Type::CommaExpression,
-                "conditional_expression" => Type::ConditionalExpression,
-                "assignment_expression" => Type::AssignmentExpression,
-                "pointer_expression" => Type::PointerExpression,
-                "update_expression" => Type::UpdateExpression,
-                "cast_expression" => Type::CastExpression,
-                "type_descriptor" => Type::TypeDescriptor,
-                "sizeof_expression" => Type::SizeofExpression,
-                "alignof_expression" => Type::AlignofExpression,
-                "offsetof_expression" => Type::OffsetofExpression,
-                "generic_expression" => Type::GenericExpression,
-                "subscript_expression" => Type::SubscriptExpression,
-                "gnu_asm_expression" => Type::GnuAsmExpression,
-                "gnu_asm_qualifier" => Type::GnuAsmQualifier,
-                "gnu_asm_output_operand_list" => Type::GnuAsmOutputOperandList,
-                "gnu_asm_output_operand" => Type::GnuAsmOutputOperand,
-                "gnu_asm_input_operand_list" => Type::GnuAsmInputOperandList,
-                "gnu_asm_input_operand" => Type::GnuAsmInputOperand,
-                "gnu_asm_clobber_list" => Type::GnuAsmClobberList,
-                "gnu_asm_goto_list" => Type::GnuAsmGotoList,
-                "field_expression" => Type::FieldExpression,
-                "compound_literal_expression" => Type::CompoundLiteralExpression,
-                "initializer_list" => Type::InitializerList,
-                "initializer_pair" => Type::InitializerPair,
-                "subscript_designator" => Type::SubscriptDesignator,
-                "subscript_range_designator" => Type::SubscriptRangeDesignator,
-                "field_designator" => Type::FieldDesignator,
-                "char_literal" => Type::CharLiteral,
-                "concatenated_string" => Type::ConcatenatedString,
-                "string_literal" => Type::StringLiteral,
-                "null" => Type::Null,
-                "_empty_declaration" => Type::_EmptyDeclaration,
-                "placeholder_type_specifier" => Type::PlaceholderTypeSpecifier,
-                "_class_declaration" => Type::_ClassDeclaration,
-                "_class_declaration_item" => Type::_ClassDeclarationItem,
-                "class_specifier" => Type::ClassSpecifier,
-                "_class_name" => Type::_ClassName,
-                "virtual_specifier" => Type::VirtualSpecifier,
-                "alignas_specifier" => Type::AlignasSpecifier,
-                "explicit_function_specifier" => Type::ExplicitFunctionSpecifier,
-                "base_class_clause" => Type::BaseClassClause,
-                "_enum_base_clause" => Type::_EnumBaseClause,
-                "dependent_type" => Type::DependentType,
-                "template_declaration" => Type::TemplateDeclaration,
-                "template_instantiation" => Type::TemplateInstantiation,
-                "template_parameter_list" => Type::TemplateParameterList,
-                "type_parameter_declaration" => Type::TypeParameterDeclaration,
-                "variadic_type_parameter_declaration" => {
-                    Type::VariadicTypeParameterDeclaration
-                }
-                "optional_type_parameter_declaration" => {
-                    Type::OptionalTypeParameterDeclaration
-                }
-                "template_template_parameter_declaration" => {
-                    Type::TemplateTemplateParameterDeclaration
-                }
-                "optional_parameter_declaration" => Type::OptionalParameterDeclaration,
-                "variadic_parameter_declaration" => Type::VariadicParameterDeclaration,
-                "variadic_declarator" => Type::VariadicDeclarator,
-                "reference_declarator" => Type::ReferenceDeclarator,
-                "operator_cast" => Type::OperatorCast,
-                "field_initializer_list" => Type::FieldInitializerList,
-                "field_initializer" => Type::FieldInitializer,
-                "_constructor_specifiers" => Type::_ConstructorSpecifiers,
-                "try_statement" => Type::TryStatement,
-                "default_method_clause" => Type::DefaultMethodClause,
-                "delete_method_clause" => Type::DeleteMethodClause,
-                "pure_virtual_clause" => Type::PureVirtualClause,
-                "friend_declaration" => Type::FriendDeclaration,
-                "access_specifier" => Type::AccessSpecifier,
-                "abstract_reference_declarator" => Type::AbstractReferenceDeclarator,
-                "structured_binding_declarator" => Type::StructuredBindingDeclarator,
-                "ref_qualifier" => Type::RefQualifier,
-                "_function_declarator_seq" => Type::_FunctionDeclaratorSeq,
-                "_function_attributes_start" => Type::_FunctionAttributesStart,
-                "_function_exception_specification" => {
-                    Type::_FunctionExceptionSpecification
-                }
-                "_function_attributes_end" => Type::_FunctionAttributesEnd,
-                "_function_postfix" => Type::_FunctionPostfix,
-                "trailing_return_type" => Type::TrailingReturnType,
-                "throw_specifier" => Type::ThrowSpecifier,
-                "template_type" => Type::TemplateType,
-                "template_method" => Type::TemplateMethod,
-                "template_function" => Type::TemplateFunction,
-                "template_argument_list" => Type::TemplateArgumentList,
-                "namespace_definition" => Type::NamespaceDefinition,
-                "namespace_alias_definition" => Type::NamespaceAliasDefinition,
-                "_namespace_specifier" => Type::_NamespaceSpecifier,
-                "nested_namespace_specifier" => Type::NestedNamespaceSpecifier,
-                "using_declaration" => Type::UsingDeclaration,
-                "alias_declaration" => Type::AliasDeclaration,
-                "static_assert_declaration" => Type::StaticAssertDeclaration,
-                "concept_definition" => Type::ConceptDefinition,
-                "for_range_loop" => Type::ForRangeLoop,
-                "_for_range_loop_body" => Type::_ForRangeLoopBody,
-                "init_statement" => Type::InitStatement,
-                "condition_clause" => Type::ConditionClause,
-                "co_return_statement" => Type::CoReturnStatement,
-                "co_yield_statement" => Type::CoYieldStatement,
-                "throw_statement" => Type::ThrowStatement,
-                "catch_clause" => Type::CatchClause,
-                "raw_string_literal" => Type::RawStringLiteral,
-                "subscript_argument_list" => Type::SubscriptArgumentList,
-                "co_await_expression" => Type::CoAwaitExpression,
-                "new_expression" => Type::NewExpression,
-                "new_declarator" => Type::NewDeclarator,
-                "delete_expression" => Type::DeleteExpression,
-                "type_requirement" => Type::TypeRequirement,
-                "compound_requirement" => Type::CompoundRequirement,
-                "_requirement" => Type::_Requirement,
-                "requirement_seq" => Type::RequirementSeq,
-                "constraint_conjunction" => Type::ConstraintConjunction,
-                "constraint_disjunction" => Type::ConstraintDisjunction,
-                "_requirement_clause_constraint" => Type::_RequirementClauseConstraint,
-                "requires_clause" => Type::RequiresClause,
-                "requires_expression" => Type::RequiresExpression,
-                "lambda_expression" => Type::LambdaExpression,
-                "lambda_capture_specifier" => Type::LambdaCaptureSpecifier,
-                "lambda_default_capture" => Type::LambdaDefaultCapture,
-                "_fold_operator" => Type::_FoldOperator,
-                "_binary_fold_operator" => Type::_BinaryFoldOperator,
-                "_unary_left_fold" => Type::_UnaryLeftFold,
-                "_unary_right_fold" => Type::_UnaryRightFold,
-                "_binary_fold" => Type::_BinaryFold,
-                "fold_expression" => Type::FoldExpression,
-                "parameter_pack_expansion" => Type::ParameterPackExpansion,
-                "destructor_name" => Type::DestructorName,
-                "dependent_name" => Type::DependentName,
-                "_scope_resolution" => Type::_ScopeResolution,
-                "qualified_identifier" => Type::QualifiedIdentifier,
-                "operator_name" => Type::OperatorName,
-                "user_defined_literal" => Type::UserDefinedLiteral,
-                "translation_unit_repeat1" => Type::TranslationUnitRepeat1,
-                "preproc_params_repeat1" => Type::PreprocParamsRepeat1,
-                "preproc_if_repeat1" => Type::PreprocIfRepeat1,
-                "preproc_if_in_field_declaration_list_repeat1" => {
-                    Type::PreprocIfInFieldDeclarationListRepeat1
-                }
-                "preproc_if_in_enumerator_list_repeat1" => {
-                    Type::PreprocIfInEnumeratorListRepeat1
-                }
-                "preproc_if_in_enumerator_list_no_comma_repeat1" => {
-                    Type::PreprocIfInEnumeratorListNoCommaRepeat1
-                }
-                "preproc_if_attribute_specifier_repeat1" => {
-                    Type::PreprocIfAttributeSpecifierRepeat1
-                }
-                "preproc_argument_list_repeat1" => Type::PreprocArgumentListRepeat1,
-                "declaration_repeat1" => Type::DeclarationRepeat1,
-                "_type_definition_type_repeat1" => Type::_TypeDefinitionTypeRepeat1,
-                "_type_definition_declarators_repeat1" => {
-                    Type::_TypeDefinitionDeclaratorsRepeat1
-                }
-                "_declaration_specifiers_repeat1" => Type::_DeclarationSpecifiersRepeat1,
-                "attribute_declaration_repeat1" => Type::AttributeDeclarationRepeat1,
-                "attributed_declarator_repeat1" => Type::AttributedDeclaratorRepeat1,
-                "pointer_declarator_repeat1" => Type::PointerDeclaratorRepeat1,
-                "sized_type_specifier_repeat1" => Type::SizedTypeSpecifierRepeat1,
-                "enumerator_list_repeat1" => Type::EnumeratorListRepeat1,
-                "field_declaration_repeat1" => Type::FieldDeclarationRepeat1,
-                "parameter_list_repeat1" => Type::ParameterListRepeat1,
-                "case_statement_repeat1" => Type::CaseStatementRepeat1,
-                "generic_expression_repeat1" => Type::GenericExpressionRepeat1,
-                "gnu_asm_expression_repeat1" => Type::GnuAsmExpressionRepeat1,
-                "gnu_asm_output_operand_list_repeat1" => {
-                    Type::GnuAsmOutputOperandListRepeat1
-                }
-                "gnu_asm_input_operand_list_repeat1" => {
-                    Type::GnuAsmInputOperandListRepeat1
-                }
-                "gnu_asm_clobber_list_repeat1" => Type::GnuAsmClobberListRepeat1,
-                "gnu_asm_goto_list_repeat1" => Type::GnuAsmGotoListRepeat1,
-                "argument_list_repeat1" => Type::ArgumentListRepeat1,
-                "initializer_list_repeat1" => Type::InitializerListRepeat1,
-                "initializer_pair_repeat1" => Type::InitializerPairRepeat1,
-                "char_literal_repeat1" => Type::CharLiteralRepeat1,
-                "concatenated_string_repeat1" => Type::ConcatenatedStringRepeat1,
-                "string_literal_repeat1" => Type::StringLiteralRepeat1,
-                "_class_declaration_repeat1" => Type::_ClassDeclarationRepeat1,
-                "base_class_clause_repeat1" => Type::BaseClassClauseRepeat1,
-                "template_parameter_list_repeat1" => Type::TemplateParameterListRepeat1,
-                "field_initializer_list_repeat1" => Type::FieldInitializerListRepeat1,
-                "operator_cast_definition_repeat1" => Type::OperatorCastDefinitionRepeat1,
-                "constructor_try_statement_repeat1" => {
-                    Type::ConstructorTryStatementRepeat1
-                }
-                "structured_binding_declarator_repeat1" => {
-                    Type::StructuredBindingDeclaratorRepeat1
-                }
-                "_function_postfix_repeat1" => Type::_FunctionPostfixRepeat1,
-                "throw_specifier_repeat1" => Type::ThrowSpecifierRepeat1,
-                "template_argument_list_repeat1" => Type::TemplateArgumentListRepeat1,
-                "subscript_argument_list_repeat1" => Type::SubscriptArgumentListRepeat1,
-                "requirement_seq_repeat1" => Type::RequirementSeqRepeat1,
-                "requires_parameter_list_repeat1" => Type::RequiresParameterListRepeat1,
-                "lambda_capture_specifier_repeat1" => Type::LambdaCaptureSpecifierRepeat1,
-                "field_identifier" => Type::FieldIdentifier,
-                "namespace_identifier" => Type::NamespaceIdentifier,
-                "simple_requirement" => Type::SimpleRequirement,
-                "statement_identifier" => Type::StatementIdentifier,
-                "type_identifier" => Type::TypeIdentifier,
-                "Spaces" => Type::Spaces,
-                "Directory" => Type::Directory,
-                "ERROR" => Type::ERROR,
-                _ => return None,
-            },
-        )
+        Some(match t {
+            "end" => Type::End,
+            "identifier" => Type::Identifier,
+            "#include" => Type::HashInclude,
+            "preproc_include_token2" => Type::PreprocIncludeToken2,
+            "#define" => Type::HashDefine,
+            "(" => Type::LParen,
+            "..." => Type::DotDotDot,
+            "," => Type::Comma,
+            ")" => Type::RParen,
+            "#if" => Type::HashIf,
+            "\n" => Type::NewLine,
+            "#endif" => Type::HashEndif,
+            "#ifdef" => Type::HashIfdef,
+            "#ifndef" => Type::HashIfndef,
+            "#else" => Type::HashElse,
+            "#elif" => Type::HashElif,
+            "#elifdef" => Type::HashElifdef,
+            "#elifndef" => Type::HashElifndef,
+            "preproc_arg" => Type::PreprocArg,
+            "preproc_directive" => Type::PreprocDirective,
+            "defined" => Type::Defined,
+            "!" => Type::Bang,
+            "~" => Type::Tilde,
+            "-" => Type::Dash,
+            "+" => Type::Plus,
+            "*" => Type::Star,
+            "/" => Type::Slash,
+            "%" => Type::Percent,
+            "||" => Type::PipePipe,
+            "&&" => Type::AmpAmp,
+            "|" => Type::Pipe,
+            "^" => Type::Caret,
+            "&" => Type::Amp,
+            "==" => Type::EqEq,
+            "!=" => Type::BangEq,
+            ">" => Type::GT,
+            ">=" => Type::GTEq,
+            "<=" => Type::LTEq,
+            "<" => Type::LT,
+            "<<" => Type::LtLt,
+            ">>" => Type::GtGt,
+            ";" => Type::SemiColon,
+            "__extension__" => Type::TS1,
+            "typedef" => Type::Typedef,
+            "extern" => Type::Extern,
+            "__attribute__" => Type::TS2,
+            "::" => Type::ColonColon,
+            "[[" => Type::TS3,
+            "]]" => Type::TS4,
+            "__declspec" => Type::__Declspec,
+            "__based" => Type::__Based,
+            "__cdecl" => Type::__Cdecl,
+            "__clrcall" => Type::__Clrcall,
+            "__stdcall" => Type::__Stdcall,
+            "__fastcall" => Type::__Fastcall,
+            "__thiscall" => Type::__Thiscall,
+            "__vectorcall" => Type::__Vectorcall,
+            "ms_restrict_modifier" => Type::MsRestrictModifier,
+            "ms_unsigned_ptr_modifier" => Type::MsUnsignedPtrModifier,
+            "ms_signed_ptr_modifier" => Type::MsSignedPtrModifier,
+            "_unaligned" => Type::_Unaligned,
+            "__unaligned" => Type::__Unaligned,
+            "{" => Type::LBrace,
+            "}" => Type::RBrace,
+            "signed" => Type::Signed,
+            "unsigned" => Type::Unsigned,
+            "long" => Type::Long,
+            "short" => Type::Short,
+            "[" => Type::LBracket,
+            "]" => Type::RBracket,
+            "=" => Type::Eq,
+            "static" => Type::Static,
+            "register" => Type::Register,
+            "inline" => Type::Inline,
+            "__inline" => Type::__Inline,
+            "__inline__" => Type::TS5,
+            "__forceinline" => Type::__Forceinline,
+            "thread_local" => Type::ThreadLocal,
+            "__thread" => Type::__Thread,
+            "const" => Type::Const,
+            "constexpr" => Type::Constexpr,
+            "volatile" => Type::Volatile,
+            "restrict" => Type::Restrict,
+            "__restrict__" => Type::TS6,
+            "_Atomic" => Type::TS7,
+            "_Noreturn" => Type::TS8,
+            "noreturn" => Type::Noreturn,
+            "mutable" => Type::Mutable,
+            "constinit" => Type::Constinit,
+            "consteval" => Type::Consteval,
+            "primitive_type" => Type::PrimitiveType,
+            "enum" => Type::Enum,
+            "class" => Type::Class,
+            "struct" => Type::Struct,
+            "union" => Type::Union,
+            ":" => Type::Colon,
+            "if" => Type::If,
+            "else" => Type::Else,
+            "switch" => Type::Switch,
+            "case" => Type::Case,
+            "default" => Type::Default,
+            "while" => Type::While,
+            "do" => Type::Do,
+            "for" => Type::For,
+            "return" => Type::Return,
+            "break" => Type::Break,
+            "continue" => Type::Continue,
+            "goto" => Type::Goto,
+            "__try" => Type::__Try,
+            "__except" => Type::__Except,
+            "__finally" => Type::__Finally,
+            "__leave" => Type::__Leave,
+            "?" => Type::QMark,
+            "*=" => Type::StarEq,
+            "/=" => Type::SlashEq,
+            "%=" => Type::PercentEq,
+            "+=" => Type::PlusEq,
+            "-=" => Type::DashEq,
+            "<<=" => Type::LtLtEq,
+            ">>=" => Type::GtGtEq,
+            "&=" => Type::AmpEq,
+            "^=" => Type::CaretEq,
+            "|=" => Type::PipeEq,
+            "and_eq" => Type::AndEq,
+            "or_eq" => Type::OrEq,
+            "xor_eq" => Type::XorEq,
+            "not" => Type::Not,
+            "compl" => Type::Compl,
+            "<=>" => Type::TS9,
+            "or" => Type::Or,
+            "and" => Type::And,
+            "bitor" => Type::Bitor,
+            "xor" => Type::Xor,
+            "bitand" => Type::Bitand,
+            "not_eq" => Type::NotEq,
+            "--" => Type::DashDash,
+            "++" => Type::PlusPlus,
+            "sizeof" => Type::Sizeof,
+            "__alignof__" => Type::TS10,
+            "__alignof" => Type::__Alignof,
+            "_alignof" => Type::_Alignof,
+            "alignof" => Type::Alignof,
+            "_Alignof" => Type::TS11,
+            "offsetof" => Type::Offsetof,
+            "_Generic" => Type::TS12,
+            "asm" => Type::Asm,
+            "__asm__" => Type::TS13,
+            "." => Type::Dot,
+            ".*" => Type::TS14,
+            "->" => Type::DashGt,
+            "number_literal" => Type::NumberLiteral,
+            "L'" => Type::TS15,
+            "u'" => Type::TS16,
+            "U'" => Type::TS17,
+            "u8'" => Type::TS18,
+            "'" => Type::SQuote,
+            "character" => Type::Character,
+            "L\"" => Type::TS19,
+            "u\"" => Type::TS20,
+            "U\"" => Type::TS21,
+            "u8\"" => Type::TS22,
+            "\"" => Type::DQuote,
+            "string_content" => Type::StringContent,
+            "escape_sequence" => Type::EscapeSequence,
+            "system_lib_string" => Type::SystemLibString,
+            "true" => Type::True,
+            "false" => Type::False,
+            "NULL" => Type::TS23,
+            "nullptr" => Type::Nullptr,
+            "comment" => Type::Comment,
+            "auto" => Type::Auto,
+            "decltype" => Type::Decltype,
+            "final" => Type::Final,
+            "override" => Type::Override,
+            "virtual" => Type::Virtual,
+            "alignas" => Type::Alignas,
+            "explicit" => Type::Explicit,
+            "typename" => Type::Typename,
+            "template" => Type::Template,
+            "operator" => Type::Operator,
+            "try" => Type::Try,
+            "delete" => Type::Delete,
+            "0" => Type::TS24,
+            "friend" => Type::Friend,
+            "public" => Type::Public,
+            "private" => Type::Private,
+            "protected" => Type::Protected,
+            "noexcept" => Type::Noexcept,
+            "throw" => Type::Throw,
+            "namespace" => Type::Namespace,
+            "using" => Type::Using,
+            "static_assert" => Type::StaticAssert,
+            "concept" => Type::Concept,
+            "co_return" => Type::CoReturn,
+            "co_yield" => Type::CoYield,
+            "catch" => Type::Catch,
+            "R\"" => Type::TS25,
+            "LR\"" => Type::TS26,
+            "uR\"" => Type::TS27,
+            "UR\"" => Type::TS28,
+            "u8R\"" => Type::TS29,
+            "co_await" => Type::CoAwait,
+            "new" => Type::New,
+            "requires" => Type::Requires,
+            "->*" => Type::DashGtStar,
+            "()" => Type::TS30,
+            "[]" => Type::TS31,
+            "\"\"" => Type::TS32,
+            "this" => Type::This,
+            "literal_suffix" => Type::LiteralSuffix,
+            "raw_string_delimiter" => Type::RawStringDelimiter,
+            "raw_string_content" => Type::RawStringContent,
+            "translation_unit" => Type::TranslationUnit,
+            "preproc_include" => Type::PreprocInclude,
+            "preproc_def" => Type::PreprocDef,
+            "preproc_function_def" => Type::PreprocFunctionDef,
+            "preproc_params" => Type::PreprocParams,
+            "preproc_call" => Type::PreprocCall,
+            "preproc_if" => Type::PreprocIf,
+            "preproc_ifdef" => Type::PreprocIfdef,
+            "preproc_else" => Type::PreprocElse,
+            "preproc_elif" => Type::PreprocElif,
+            "preproc_elifdef" => Type::PreprocElifdef,
+            "_preproc_expression" => Type::_PreprocExpression,
+            "parenthesized_expression" => Type::ParenthesizedExpression,
+            "preproc_defined" => Type::PreprocDefined,
+            "unary_expression" => Type::UnaryExpression,
+            "call_expression" => Type::CallExpression,
+            "argument_list" => Type::ArgumentList,
+            "binary_expression" => Type::BinaryExpression,
+            "function_definition" => Type::FunctionDefinition,
+            "declaration" => Type::Declaration,
+            "type_definition" => Type::TypeDefinition,
+            "_type_definition_type" => Type::_TypeDefinitionType,
+            "_type_definition_declarators" => Type::_TypeDefinitionDeclarators,
+            "_declaration_modifiers" => Type::_DeclarationModifiers,
+            "_declaration_specifiers" => Type::_DeclarationSpecifiers,
+            "linkage_specification" => Type::LinkageSpecification,
+            "attribute_specifier" => Type::AttributeSpecifier,
+            "attribute" => Type::Attribute,
+            "attribute_declaration" => Type::AttributeDeclaration,
+            "ms_declspec_modifier" => Type::MsDeclspecModifier,
+            "ms_based_modifier" => Type::MsBasedModifier,
+            "ms_call_modifier" => Type::MsCallModifier,
+            "ms_unaligned_ptr_modifier" => Type::MsUnalignedPtrModifier,
+            "ms_pointer_modifier" => Type::MsPointerModifier,
+            "declaration_list" => Type::DeclarationList,
+            "_declarator" => Type::_Declarator,
+            "_field_declarator" => Type::_FieldDeclarator,
+            "_type_declarator" => Type::_TypeDeclarator,
+            "_abstract_declarator" => Type::_AbstractDeclarator,
+            "parenthesized_declarator" => Type::ParenthesizedDeclarator,
+            "abstract_parenthesized_declarator" => Type::AbstractParenthesizedDeclarator,
+            "attributed_declarator" => Type::AttributedDeclarator,
+            "pointer_declarator" => Type::PointerDeclarator,
+            "pointer_type_declarator" => Type::PointerTypeDeclarator,
+            "abstract_pointer_declarator" => Type::AbstractPointerDeclarator,
+            "function_declarator" => Type::FunctionDeclarator,
+            "abstract_function_declarator" => Type::AbstractFunctionDeclarator,
+            "array_declarator" => Type::ArrayDeclarator,
+            "abstract_array_declarator" => Type::AbstractArrayDeclarator,
+            "init_declarator" => Type::InitDeclarator,
+            "compound_statement" => Type::CompoundStatement,
+            "storage_class_specifier" => Type::StorageClassSpecifier,
+            "type_qualifier" => Type::TypeQualifier,
+            "_type_specifier" => Type::_TypeSpecifier,
+            "sized_type_specifier" => Type::SizedTypeSpecifier,
+            "enum_specifier" => Type::EnumSpecifier,
+            "enumerator_list" => Type::EnumeratorList,
+            "struct_specifier" => Type::StructSpecifier,
+            "union_specifier" => Type::UnionSpecifier,
+            "field_declaration_list" => Type::FieldDeclarationList,
+            "_field_declaration_list_item" => Type::_FieldDeclarationListItem,
+            "field_declaration" => Type::FieldDeclaration,
+            "bitfield_clause" => Type::BitfieldClause,
+            "enumerator" => Type::Enumerator,
+            "parameter_list" => Type::ParameterList,
+            "parameter_declaration" => Type::ParameterDeclaration,
+            "attributed_statement" => Type::AttributedStatement,
+            "labeled_statement" => Type::LabeledStatement,
+            "expression_statement" => Type::ExpressionStatement,
+            "if_statement" => Type::IfStatement,
+            "else_clause" => Type::ElseClause,
+            "switch_statement" => Type::SwitchStatement,
+            "case_statement" => Type::CaseStatement,
+            "while_statement" => Type::WhileStatement,
+            "do_statement" => Type::DoStatement,
+            "for_statement" => Type::ForStatement,
+            "_for_statement_body" => Type::_ForStatementBody,
+            "return_statement" => Type::ReturnStatement,
+            "break_statement" => Type::BreakStatement,
+            "continue_statement" => Type::ContinueStatement,
+            "goto_statement" => Type::GotoStatement,
+            "seh_try_statement" => Type::SehTryStatement,
+            "seh_except_clause" => Type::SehExceptClause,
+            "seh_finally_clause" => Type::SehFinallyClause,
+            "seh_leave_statement" => Type::SehLeaveStatement,
+            "_expression" => Type::_Expression,
+            "_expression_not_binary" => Type::_ExpressionNotBinary,
+            "_string" => Type::_String,
+            "comma_expression" => Type::CommaExpression,
+            "conditional_expression" => Type::ConditionalExpression,
+            "assignment_expression" => Type::AssignmentExpression,
+            "pointer_expression" => Type::PointerExpression,
+            "update_expression" => Type::UpdateExpression,
+            "cast_expression" => Type::CastExpression,
+            "type_descriptor" => Type::TypeDescriptor,
+            "sizeof_expression" => Type::SizeofExpression,
+            "alignof_expression" => Type::AlignofExpression,
+            "offsetof_expression" => Type::OffsetofExpression,
+            "generic_expression" => Type::GenericExpression,
+            "subscript_expression" => Type::SubscriptExpression,
+            "gnu_asm_expression" => Type::GnuAsmExpression,
+            "gnu_asm_qualifier" => Type::GnuAsmQualifier,
+            "gnu_asm_output_operand_list" => Type::GnuAsmOutputOperandList,
+            "gnu_asm_output_operand" => Type::GnuAsmOutputOperand,
+            "gnu_asm_input_operand_list" => Type::GnuAsmInputOperandList,
+            "gnu_asm_input_operand" => Type::GnuAsmInputOperand,
+            "gnu_asm_clobber_list" => Type::GnuAsmClobberList,
+            "gnu_asm_goto_list" => Type::GnuAsmGotoList,
+            "field_expression" => Type::FieldExpression,
+            "compound_literal_expression" => Type::CompoundLiteralExpression,
+            "initializer_list" => Type::InitializerList,
+            "initializer_pair" => Type::InitializerPair,
+            "subscript_designator" => Type::SubscriptDesignator,
+            "subscript_range_designator" => Type::SubscriptRangeDesignator,
+            "field_designator" => Type::FieldDesignator,
+            "char_literal" => Type::CharLiteral,
+            "concatenated_string" => Type::ConcatenatedString,
+            "string_literal" => Type::StringLiteral,
+            "null" => Type::Null,
+            "_empty_declaration" => Type::_EmptyDeclaration,
+            "placeholder_type_specifier" => Type::PlaceholderTypeSpecifier,
+            "_class_declaration" => Type::_ClassDeclaration,
+            "_class_declaration_item" => Type::_ClassDeclarationItem,
+            "class_specifier" => Type::ClassSpecifier,
+            "_class_name" => Type::_ClassName,
+            "virtual_specifier" => Type::VirtualSpecifier,
+            "alignas_specifier" => Type::AlignasSpecifier,
+            "explicit_function_specifier" => Type::ExplicitFunctionSpecifier,
+            "base_class_clause" => Type::BaseClassClause,
+            "_enum_base_clause" => Type::_EnumBaseClause,
+            "dependent_type" => Type::DependentType,
+            "template_declaration" => Type::TemplateDeclaration,
+            "template_instantiation" => Type::TemplateInstantiation,
+            "template_parameter_list" => Type::TemplateParameterList,
+            "type_parameter_declaration" => Type::TypeParameterDeclaration,
+            "variadic_type_parameter_declaration" => Type::VariadicTypeParameterDeclaration,
+            "optional_type_parameter_declaration" => Type::OptionalTypeParameterDeclaration,
+            "template_template_parameter_declaration" => Type::TemplateTemplateParameterDeclaration,
+            "optional_parameter_declaration" => Type::OptionalParameterDeclaration,
+            "variadic_parameter_declaration" => Type::VariadicParameterDeclaration,
+            "variadic_declarator" => Type::VariadicDeclarator,
+            "reference_declarator" => Type::ReferenceDeclarator,
+            "operator_cast" => Type::OperatorCast,
+            "field_initializer_list" => Type::FieldInitializerList,
+            "field_initializer" => Type::FieldInitializer,
+            "_constructor_specifiers" => Type::_ConstructorSpecifiers,
+            "try_statement" => Type::TryStatement,
+            "default_method_clause" => Type::DefaultMethodClause,
+            "delete_method_clause" => Type::DeleteMethodClause,
+            "pure_virtual_clause" => Type::PureVirtualClause,
+            "friend_declaration" => Type::FriendDeclaration,
+            "access_specifier" => Type::AccessSpecifier,
+            "abstract_reference_declarator" => Type::AbstractReferenceDeclarator,
+            "structured_binding_declarator" => Type::StructuredBindingDeclarator,
+            "ref_qualifier" => Type::RefQualifier,
+            "_function_declarator_seq" => Type::_FunctionDeclaratorSeq,
+            "_function_attributes_start" => Type::_FunctionAttributesStart,
+            "_function_exception_specification" => Type::_FunctionExceptionSpecification,
+            "_function_attributes_end" => Type::_FunctionAttributesEnd,
+            "_function_postfix" => Type::_FunctionPostfix,
+            "trailing_return_type" => Type::TrailingReturnType,
+            "throw_specifier" => Type::ThrowSpecifier,
+            "template_type" => Type::TemplateType,
+            "template_method" => Type::TemplateMethod,
+            "template_function" => Type::TemplateFunction,
+            "template_argument_list" => Type::TemplateArgumentList,
+            "namespace_definition" => Type::NamespaceDefinition,
+            "namespace_alias_definition" => Type::NamespaceAliasDefinition,
+            "_namespace_specifier" => Type::_NamespaceSpecifier,
+            "nested_namespace_specifier" => Type::NestedNamespaceSpecifier,
+            "using_declaration" => Type::UsingDeclaration,
+            "alias_declaration" => Type::AliasDeclaration,
+            "static_assert_declaration" => Type::StaticAssertDeclaration,
+            "concept_definition" => Type::ConceptDefinition,
+            "for_range_loop" => Type::ForRangeLoop,
+            "_for_range_loop_body" => Type::_ForRangeLoopBody,
+            "init_statement" => Type::InitStatement,
+            "condition_clause" => Type::ConditionClause,
+            "co_return_statement" => Type::CoReturnStatement,
+            "co_yield_statement" => Type::CoYieldStatement,
+            "throw_statement" => Type::ThrowStatement,
+            "catch_clause" => Type::CatchClause,
+            "raw_string_literal" => Type::RawStringLiteral,
+            "subscript_argument_list" => Type::SubscriptArgumentList,
+            "co_await_expression" => Type::CoAwaitExpression,
+            "new_expression" => Type::NewExpression,
+            "new_declarator" => Type::NewDeclarator,
+            "delete_expression" => Type::DeleteExpression,
+            "type_requirement" => Type::TypeRequirement,
+            "compound_requirement" => Type::CompoundRequirement,
+            "_requirement" => Type::_Requirement,
+            "requirement_seq" => Type::RequirementSeq,
+            "constraint_conjunction" => Type::ConstraintConjunction,
+            "constraint_disjunction" => Type::ConstraintDisjunction,
+            "_requirement_clause_constraint" => Type::_RequirementClauseConstraint,
+            "requires_clause" => Type::RequiresClause,
+            "requires_expression" => Type::RequiresExpression,
+            "lambda_expression" => Type::LambdaExpression,
+            "lambda_capture_specifier" => Type::LambdaCaptureSpecifier,
+            "lambda_default_capture" => Type::LambdaDefaultCapture,
+            "_fold_operator" => Type::_FoldOperator,
+            "_binary_fold_operator" => Type::_BinaryFoldOperator,
+            "_unary_left_fold" => Type::_UnaryLeftFold,
+            "_unary_right_fold" => Type::_UnaryRightFold,
+            "_binary_fold" => Type::_BinaryFold,
+            "fold_expression" => Type::FoldExpression,
+            "parameter_pack_expansion" => Type::ParameterPackExpansion,
+            "destructor_name" => Type::DestructorName,
+            "dependent_name" => Type::DependentName,
+            "_scope_resolution" => Type::_ScopeResolution,
+            "qualified_identifier" => Type::QualifiedIdentifier,
+            "operator_name" => Type::OperatorName,
+            "user_defined_literal" => Type::UserDefinedLiteral,
+            "translation_unit_repeat1" => Type::TranslationUnitRepeat1,
+            "preproc_params_repeat1" => Type::PreprocParamsRepeat1,
+            "preproc_if_repeat1" => Type::PreprocIfRepeat1,
+            "preproc_if_in_field_declaration_list_repeat1" => {
+                Type::PreprocIfInFieldDeclarationListRepeat1
+            }
+            "preproc_if_in_enumerator_list_repeat1" => Type::PreprocIfInEnumeratorListRepeat1,
+            "preproc_if_in_enumerator_list_no_comma_repeat1" => {
+                Type::PreprocIfInEnumeratorListNoCommaRepeat1
+            }
+            "preproc_if_attribute_specifier_repeat1" => Type::PreprocIfAttributeSpecifierRepeat1,
+            "preproc_argument_list_repeat1" => Type::PreprocArgumentListRepeat1,
+            "declaration_repeat1" => Type::DeclarationRepeat1,
+            "_type_definition_type_repeat1" => Type::_TypeDefinitionTypeRepeat1,
+            "_type_definition_declarators_repeat1" => Type::_TypeDefinitionDeclaratorsRepeat1,
+            "_declaration_specifiers_repeat1" => Type::_DeclarationSpecifiersRepeat1,
+            "attribute_declaration_repeat1" => Type::AttributeDeclarationRepeat1,
+            "attributed_declarator_repeat1" => Type::AttributedDeclaratorRepeat1,
+            "pointer_declarator_repeat1" => Type::PointerDeclaratorRepeat1,
+            "sized_type_specifier_repeat1" => Type::SizedTypeSpecifierRepeat1,
+            "enumerator_list_repeat1" => Type::EnumeratorListRepeat1,
+            "field_declaration_repeat1" => Type::FieldDeclarationRepeat1,
+            "parameter_list_repeat1" => Type::ParameterListRepeat1,
+            "case_statement_repeat1" => Type::CaseStatementRepeat1,
+            "generic_expression_repeat1" => Type::GenericExpressionRepeat1,
+            "gnu_asm_expression_repeat1" => Type::GnuAsmExpressionRepeat1,
+            "gnu_asm_output_operand_list_repeat1" => Type::GnuAsmOutputOperandListRepeat1,
+            "gnu_asm_input_operand_list_repeat1" => Type::GnuAsmInputOperandListRepeat1,
+            "gnu_asm_clobber_list_repeat1" => Type::GnuAsmClobberListRepeat1,
+            "gnu_asm_goto_list_repeat1" => Type::GnuAsmGotoListRepeat1,
+            "argument_list_repeat1" => Type::ArgumentListRepeat1,
+            "initializer_list_repeat1" => Type::InitializerListRepeat1,
+            "initializer_pair_repeat1" => Type::InitializerPairRepeat1,
+            "char_literal_repeat1" => Type::CharLiteralRepeat1,
+            "concatenated_string_repeat1" => Type::ConcatenatedStringRepeat1,
+            "string_literal_repeat1" => Type::StringLiteralRepeat1,
+            "_class_declaration_repeat1" => Type::_ClassDeclarationRepeat1,
+            "base_class_clause_repeat1" => Type::BaseClassClauseRepeat1,
+            "template_parameter_list_repeat1" => Type::TemplateParameterListRepeat1,
+            "field_initializer_list_repeat1" => Type::FieldInitializerListRepeat1,
+            "operator_cast_definition_repeat1" => Type::OperatorCastDefinitionRepeat1,
+            "constructor_try_statement_repeat1" => Type::ConstructorTryStatementRepeat1,
+            "structured_binding_declarator_repeat1" => Type::StructuredBindingDeclaratorRepeat1,
+            "_function_postfix_repeat1" => Type::_FunctionPostfixRepeat1,
+            "throw_specifier_repeat1" => Type::ThrowSpecifierRepeat1,
+            "template_argument_list_repeat1" => Type::TemplateArgumentListRepeat1,
+            "subscript_argument_list_repeat1" => Type::SubscriptArgumentListRepeat1,
+            "requirement_seq_repeat1" => Type::RequirementSeqRepeat1,
+            "requires_parameter_list_repeat1" => Type::RequiresParameterListRepeat1,
+            "lambda_capture_specifier_repeat1" => Type::LambdaCaptureSpecifierRepeat1,
+            "field_identifier" => Type::FieldIdentifier,
+            "namespace_identifier" => Type::NamespaceIdentifier,
+            "simple_requirement" => Type::SimpleRequirement,
+            "statement_identifier" => Type::StatementIdentifier,
+            "type_identifier" => Type::TypeIdentifier,
+            "Spaces" => Type::Spaces,
+            "Directory" => Type::Directory,
+            "ERROR" => Type::ERROR,
+            _ => return None,
+        })
     }
     pub fn to_str(&self) -> &'static str {
         match self {
@@ -2576,15 +2566,9 @@ impl Type {
             Type::TemplateInstantiation => "template_instantiation",
             Type::TemplateParameterList => "template_parameter_list",
             Type::TypeParameterDeclaration => "type_parameter_declaration",
-            Type::VariadicTypeParameterDeclaration => {
-                "variadic_type_parameter_declaration"
-            }
-            Type::OptionalTypeParameterDeclaration => {
-                "optional_type_parameter_declaration"
-            }
-            Type::TemplateTemplateParameterDeclaration => {
-                "template_template_parameter_declaration"
-            }
+            Type::VariadicTypeParameterDeclaration => "variadic_type_parameter_declaration",
+            Type::OptionalTypeParameterDeclaration => "optional_type_parameter_declaration",
+            Type::TemplateTemplateParameterDeclaration => "template_template_parameter_declaration",
             Type::OptionalParameterDeclaration => "optional_parameter_declaration",
             Type::VariadicParameterDeclaration => "variadic_parameter_declaration",
             Type::VariadicDeclarator => "variadic_declarator",
@@ -2666,21 +2650,15 @@ impl Type {
             Type::PreprocIfInFieldDeclarationListRepeat1 => {
                 "preproc_if_in_field_declaration_list_repeat1"
             }
-            Type::PreprocIfInEnumeratorListRepeat1 => {
-                "preproc_if_in_enumerator_list_repeat1"
-            }
+            Type::PreprocIfInEnumeratorListRepeat1 => "preproc_if_in_enumerator_list_repeat1",
             Type::PreprocIfInEnumeratorListNoCommaRepeat1 => {
                 "preproc_if_in_enumerator_list_no_comma_repeat1"
             }
-            Type::PreprocIfAttributeSpecifierRepeat1 => {
-                "preproc_if_attribute_specifier_repeat1"
-            }
+            Type::PreprocIfAttributeSpecifierRepeat1 => "preproc_if_attribute_specifier_repeat1",
             Type::PreprocArgumentListRepeat1 => "preproc_argument_list_repeat1",
             Type::DeclarationRepeat1 => "declaration_repeat1",
             Type::_TypeDefinitionTypeRepeat1 => "_type_definition_type_repeat1",
-            Type::_TypeDefinitionDeclaratorsRepeat1 => {
-                "_type_definition_declarators_repeat1"
-            }
+            Type::_TypeDefinitionDeclaratorsRepeat1 => "_type_definition_declarators_repeat1",
             Type::_DeclarationSpecifiersRepeat1 => "_declaration_specifiers_repeat1",
             Type::AttributeDeclarationRepeat1 => "attribute_declaration_repeat1",
             Type::AttributedDeclaratorRepeat1 => "attributed_declarator_repeat1",
@@ -2708,9 +2686,7 @@ impl Type {
             Type::FieldInitializerListRepeat1 => "field_initializer_list_repeat1",
             Type::OperatorCastDefinitionRepeat1 => "operator_cast_definition_repeat1",
             Type::ConstructorTryStatementRepeat1 => "constructor_try_statement_repeat1",
-            Type::StructuredBindingDeclaratorRepeat1 => {
-                "structured_binding_declarator_repeat1"
-            }
+            Type::StructuredBindingDeclaratorRepeat1 => "structured_binding_declarator_repeat1",
             Type::_FunctionPostfixRepeat1 => "_function_postfix_repeat1",
             Type::ThrowSpecifierRepeat1 => "throw_specifier_repeat1",
             Type::TemplateArgumentListRepeat1 => "template_argument_list_repeat1",
@@ -2726,6 +2702,105 @@ impl Type {
             Type::Spaces => "Spaces",
             Type::Directory => "Directory",
             Type::ERROR => "ERROR",
+        }
+    }
+    pub fn is_hidden(&self) -> bool {
+        match self {
+            Type::End => true,
+            Type::PreprocIncludeToken2 => true,
+            Type::_PreprocExpression => true,
+            Type::_TypeDefinitionType => true,
+            Type::_TypeDefinitionDeclarators => true,
+            Type::_DeclarationModifiers => true,
+            Type::_DeclarationSpecifiers => true,
+            Type::_Declarator => true,
+            Type::_FieldDeclarator => true,
+            Type::_TypeDeclarator => true,
+            Type::_AbstractDeclarator => true,
+            Type::_TypeSpecifier => true,
+            Type::_FieldDeclarationListItem => true,
+            Type::_ForStatementBody => true,
+            Type::_Expression => true,
+            Type::_ExpressionNotBinary => true,
+            Type::_String => true,
+            Type::_EmptyDeclaration => true,
+            Type::_ClassDeclaration => true,
+            Type::_ClassDeclarationItem => true,
+            Type::_ClassName => true,
+            Type::_EnumBaseClause => true,
+            Type::_ConstructorSpecifiers => true,
+            Type::_FunctionDeclaratorSeq => true,
+            Type::_FunctionAttributesStart => true,
+            Type::_FunctionExceptionSpecification => true,
+            Type::_FunctionAttributesEnd => true,
+            Type::_FunctionPostfix => true,
+            Type::_NamespaceSpecifier => true,
+            Type::_ForRangeLoopBody => true,
+            Type::_Requirement => true,
+            Type::_RequirementClauseConstraint => true,
+            Type::_FoldOperator => true,
+            Type::_BinaryFoldOperator => true,
+            Type::_UnaryLeftFold => true,
+            Type::_UnaryRightFold => true,
+            Type::_BinaryFold => true,
+            Type::TranslationUnitRepeat1 => true,
+            Type::PreprocParamsRepeat1 => true,
+            Type::PreprocIfRepeat1 => true,
+            Type::PreprocIfInFieldDeclarationListRepeat1 => true,
+            Type::PreprocIfInEnumeratorListRepeat1 => true,
+            Type::PreprocIfInEnumeratorListNoCommaRepeat1 => true,
+            Type::PreprocIfAttributeSpecifierRepeat1 => true,
+            Type::PreprocArgumentListRepeat1 => true,
+            Type::DeclarationRepeat1 => true,
+            Type::_TypeDefinitionTypeRepeat1 => true,
+            Type::_TypeDefinitionDeclaratorsRepeat1 => true,
+            Type::_DeclarationSpecifiersRepeat1 => true,
+            Type::AttributeDeclarationRepeat1 => true,
+            Type::AttributedDeclaratorRepeat1 => true,
+            Type::PointerDeclaratorRepeat1 => true,
+            Type::SizedTypeSpecifierRepeat1 => true,
+            Type::EnumeratorListRepeat1 => true,
+            Type::FieldDeclarationRepeat1 => true,
+            Type::ParameterListRepeat1 => true,
+            Type::CaseStatementRepeat1 => true,
+            Type::GenericExpressionRepeat1 => true,
+            Type::GnuAsmExpressionRepeat1 => true,
+            Type::GnuAsmOutputOperandListRepeat1 => true,
+            Type::GnuAsmInputOperandListRepeat1 => true,
+            Type::GnuAsmClobberListRepeat1 => true,
+            Type::GnuAsmGotoListRepeat1 => true,
+            Type::ArgumentListRepeat1 => true,
+            Type::InitializerListRepeat1 => true,
+            Type::InitializerPairRepeat1 => true,
+            Type::CharLiteralRepeat1 => true,
+            Type::ConcatenatedStringRepeat1 => true,
+            Type::StringLiteralRepeat1 => true,
+            Type::_ClassDeclarationRepeat1 => true,
+            Type::BaseClassClauseRepeat1 => true,
+            Type::TemplateParameterListRepeat1 => true,
+            Type::FieldInitializerListRepeat1 => true,
+            Type::OperatorCastDefinitionRepeat1 => true,
+            Type::ConstructorTryStatementRepeat1 => true,
+            Type::StructuredBindingDeclaratorRepeat1 => true,
+            Type::_FunctionPostfixRepeat1 => true,
+            Type::ThrowSpecifierRepeat1 => true,
+            Type::TemplateArgumentListRepeat1 => true,
+            Type::SubscriptArgumentListRepeat1 => true,
+            Type::RequirementSeqRepeat1 => true,
+            Type::RequiresParameterListRepeat1 => true,
+            Type::LambdaCaptureSpecifierRepeat1 => true,
+            _ => false,
+        }
+    }
+    pub fn is_supertype(&self) -> bool {
+        match self {
+            Type::_Declarator => true,
+            Type::_FieldDeclarator => true,
+            Type::_TypeDeclarator => true,
+            Type::_AbstractDeclarator => true,
+            Type::_TypeSpecifier => true,
+            Type::_Expression => true,
+            _ => false,
         }
     }
 }

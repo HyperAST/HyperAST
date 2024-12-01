@@ -21,5 +21,9 @@ pub mod utils;
 pub trait PrimInt: num::PrimInt + num::traits::NumAssign + std::fmt::Debug {}
 impl<T> PrimInt for T where T: num::PrimInt + num::traits::NumAssign + std::fmt::Debug {}
 
+mod slice_interning;
+
+pub mod test_utils;
+
 #[cfg(test)]
 mod tests;

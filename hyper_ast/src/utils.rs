@@ -2,6 +2,7 @@ use core::fmt;
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{BuildHasher, Hash, Hasher},
+    str::FromStr,
 };
 
 pub fn hash<T: ?Sized + Hash>(x: &T) -> u64 {
@@ -229,5 +230,52 @@ impl std::ops::Add for Bytes {
     type Output = Bytes;
     fn add(self, rhs: Bytes) -> Bytes {
         Bytes(self.0 + rhs.0)
+    }
+}
+
+pub struct Url {
+    pub protocol: String,
+    pub domain: String,
+    pub path: String,
+}
+
+impl TryFrom<&str> for Url {
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Url::from_str(value)
+    }
+}
+
+impl TryFrom<String> for Url {
+    type Error = ();
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Url::from_str(&value)
+    }
+}
+
+impl FromStr for Url {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (protocol, rest) = match s.split_once("://") {
+            Some((protocol, rest)) => (protocol, rest),
+            None => ("https", s.as_ref()),
+        };
+
+        let (domain, path) = rest.split_once("/").ok_or(())?;
+
+        Ok(Self {
+            protocol: protocol.to_string(),
+            domain: domain.to_string(),
+            path: path.to_string(),
+        })
+    }
+}
+
+impl std::fmt::Display for Url {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}://{}/{}", self.protocol, self.domain, self.path)
     }
 }

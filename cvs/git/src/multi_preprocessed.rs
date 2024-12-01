@@ -101,18 +101,6 @@ impl<'prepro, 'repo, Sys, CP: CommitProcessor<Sys>> CommitBuilder<'prepro, 'repo
 }
 
 impl PreProcessedRepositories {
-    // pub fn commit_builder<'prepro, 'repo, Sys, CP:CommitProcessor<Sys>>(
-    //     &'prepro mut self,
-    //     repository: &'repo mut ConfiguredRepo,
-    // ) -> CommitBuilder<'prepro, 'repo, Sys, CP> {
-    //     todo!()
-    //     // CommitBuilder {
-    //     //     commits: self.commits.get_mut(&repository.config).unwrap(),
-    //     //     processor: &mut self.processor,
-    //     //     repository: repository,
-    //     //     phantom: PhantomData,
-    //     // }
-    // }
 
     pub fn purge_caches(&mut self) {
         self.processor.purge_caches()
@@ -162,14 +150,7 @@ impl PreProcessedRepositories {
         r
     }
 
-    pub fn get_config(&mut self, repo: Repo) -> Option<ConfiguredRepoHandle2> {
-        // let proc = self
-        //     .processor.processing_systems
-        //     .by_id(&repository.config.0)
-        //     .unwrap()
-        //     .get(repository.config.1);
-        // proc.get_commit(*commit_oid)
-        // self
+    pub fn get_config(&self, repo: Repo) -> Option<ConfiguredRepoHandle2> {
         self.configs
             .get(&repo)
             .map(|&config| ConfiguredRepoHandle2 { config, spec: repo })
@@ -177,7 +158,7 @@ impl PreProcessedRepositories {
 
     pub fn pre_process_with_limit(
         &mut self,
-        repository: &mut ConfiguredRepo2,
+        repository: &ConfiguredRepo2,
         before: &str,
         after: &str,
         // dir_path: &str,
@@ -185,6 +166,18 @@ impl PreProcessedRepositories {
     ) -> Result<Vec<git2::Oid>, git2::Error> {
         self.processor
             .pre_process_with_limit(repository, before, after, limit)
+    }
+
+    pub fn ensure_pre_processed_with_limit(
+        &self,
+        repository: &ConfiguredRepo2,
+        before: &str,
+        after: &str,
+        // dir_path: &str,
+        limit: usize,
+    ) -> Result<Result<Vec<git2::Oid>, Vec<git2::Oid>>, git2::Error> {
+        self.processor
+            .ensure_pre_processed_with_limit(repository, before, after, limit)
     }
 
     pub fn pre_process_with_config2(
@@ -290,6 +283,6 @@ impl PreProcessedRepositories {
         acc: MavenModuleAcc,
         stores: &mut SimpleStores,
     ) -> (NodeIdentifier, crate::maven::MD) {
-        make(acc, stores)
+        make(acc, stores.mut_with_ts())
     }
 }

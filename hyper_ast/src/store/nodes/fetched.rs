@@ -4,17 +4,13 @@ use std::{
     marker::PhantomData,
 };
 
-use string_interner::{Symbol};
 #[cfg(feature = "native")]
 use string_interner::DefaultHashBuilder;
+use string_interner::Symbol;
 
-use crate::{
-    store::defaults,
-    types::{
-        AnyType, Children, IterableChildren, MySlice, NodeId, TypeIndex, TypeStore, TypeTrait,
-        TypedNodeId,
-    },
-};
+use crate::types::{
+        AnyType, Children, HyperType, MySlice, NodeId, TypeTrait, TypedNodeId
+    };
 
 use strum_macros::*;
 #[cfg(feature = "native")]
@@ -120,6 +116,11 @@ impl NodeId for NodeIdentifier {
 
 impl TypedNodeId for NodeIdentifier {
     type Ty = crate::types::AnyType;
+    type TyErazed = crate::types::AnyType;
+    
+    fn unerase(ty: Self::TyErazed) -> Self::Ty {
+        ty
+    }
 }
 
 #[cfg(feature = "legion")]
@@ -252,7 +253,10 @@ impl<'a, T> HashedNodeRef<'a, T> {
 
 impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     type ChildIdx = u16;
-    type Children<'b> = MySlice<<Self::TreeId as NodeId>::IdN> where Self: 'b;
+    type Children<'b>
+        = MySlice<<Self::TreeId as NodeId>::IdN>
+    where
+        Self: 'b;
 
     fn child_count(&self) -> Self::ChildIdx {
         self.children().map_or(0, |x| x.child_count())
@@ -271,10 +275,40 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     }
 }
 
-impl<'a, T: TypedNodeId> crate::types::Tree for HashedNodeRef<'a, T>
-where
-    T::Ty: TypeTrait,
+impl<'a, Id> crate::types::ErasedHolder
+    for HashedNodeRef<'a, Id>
 {
+    fn unerase_ref<T: 'static + Send + Sync>(
+        &self,
+        tid: std::any::TypeId,
+    ) -> Option<&T> {
+        if std::any::TypeId::of::<T>() == tid {
+            todo!("{:?}", std::any::type_name::<T>())
+            // if std::any::TypeId::of::<T>() == std::any::TypeId::of::<AnyType>() {
+            // let lang = self.get_lang();
+            // let raw = self.get_raw_type();
+            // match lang {
+            //     "hyper_ast_gen_ts_java::types::Lang" => {
+            //         let t: &'static dyn hyper_ast::types::HyperType = hyper_ast_gen_ts_java::types::Lang::make(raw);
+            //         t.into()
+            //     },
+            //     "hyper_ast_gen_ts_cpp::types::Lang" => {
+            //         let t: &'static dyn hyper_ast::types::HyperType = hyper_ast_gen_ts_cpp::types::Lang::make(raw);
+            //         t.into()
+            //     },
+            //     "hyper_ast_gen_ts_xml::types::Lang" => {
+            //         let t: &'static dyn hyper_ast::types::HyperType = hyper_ast_gen_ts_xml::types::Lang::make(raw);
+            //         t.into()
+            //     },
+            //     l => unreachable!("{}", l)
+            // }
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a, T: TypedNodeId> crate::types::Tree for HashedNodeRef<'a, T> {
     fn has_children(&self) -> bool {
         match self.s_ref {
             VariantRef::Typed { .. } => false,
@@ -544,6 +578,10 @@ macro_rules! variant_store {
             fn height(&self) -> usize {
                 todo!()
             }
+
+            fn line_count(&self) -> usize {
+                todo!()
+            }
         }
         impl From<RawVariant> for Variant {
             fn from(value: RawVariant) -> Self {
@@ -607,16 +645,27 @@ impl Default for SimplePackedBuilder {
 }
 
 impl SimplePackedBuilder {
-    pub fn add<TS, T>(&mut self, type_store: &TS, id: NodeIdentifier, node: T)
+    pub fn add<'store, HAST: crate::types::HyperAST<'store>>(&mut self, 
+        store: &'store HAST,
+        id: &HAST::IdN)
     where
-        TS: TypeStore<T, Marshaled = TypeIndex>,
-        T: crate::types::Tree<Label = defaults::LabelIdentifier> + crate::types::WithStats,
-        <T::TreeId as NodeId>::IdN: Copy + Into<NodeIdentifier>,
+        HAST::T: crate::types::WithStats,
+        HAST::IdN: Into<NodeIdentifier> + Copy,
+        HAST::Label: Into<LabelIdentifier> + Clone,
     {
-        let TypeIndex {
-            lang: lang_name,
-            ty: type_id,
-        } = type_store.marshal_type(&node);
+        use crate::types::NodeStore;
+        let node = store.node_store().resolve(id);
+        let ty = store.resolve_type(id);
+        let id = id.clone().into();
+        let lang = ty.get_lang();
+        use crate::types::LangRef;
+        let lang_name = lang.name();
+        let type_id = lang.to_u16(ty);
+        use crate::types::WithChildren;
+        use crate::types::IterableChildren;
+        use crate::types::Tree;
+        use crate::types::Labeled;
+        use crate::types::WithStats;
         if let Some(children) = node.children() {
             let children = children.iter_children().map(|x| (*x).into()).collect();
             if node.has_label() {
@@ -633,7 +682,7 @@ impl SimplePackedBuilder {
                         a.kind.push(type_id);
 
                         a.children.push(children);
-                        a.label.push(node.get_label_unchecked().into());
+                        a.label.push((node.get_label_unchecked().clone()).into());
 
                         a.size.push(node.size());
                     }
@@ -672,7 +721,7 @@ impl SimplePackedBuilder {
                     a.rev.push(id);
                     a.kind.push(type_id);
 
-                    a.label.push(node.get_label_unchecked().into());
+                    a.label.push((node.get_label_unchecked().clone()).into());
 
                     a.size.push(node.size());
                 }

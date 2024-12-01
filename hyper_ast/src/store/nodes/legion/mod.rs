@@ -1,13 +1,13 @@
-use std::{fmt::Debug, hash::Hash};
+use std::{fmt::Debug, hash::Hash, ops::Deref};
 
 use hashbrown::hash_map::DefaultHashBuilder;
 use legion::{
     storage::{Component, IntoComponentSource},
-    EntityStore,
+    EntityStore, World,
 };
 
 use crate::{
-    types::{NodeId, Typed, TypedNodeId},
+    types::{Compo, CompoRegister, ErasedHolder, ErasedInserter, NodeId, Typed, TypedNodeId},
     utils::make_hash,
 };
 
@@ -25,6 +25,7 @@ pub struct NodeStore {
     // roots: HashMap<(u8, u8, u8), NodeIdentifier>,
     dedup: hashbrown::HashMap<NodeIdentifier, (), ()>,
     internal: legion::World,
+    // TODO intern lists of [`NodeIdentifier`]s, e.g. children, no space children, ...
     hasher: DefaultHashBuilder, //fasthash::city::Hash64,//fasthash::RandomState<fasthash::>,
                                 // internal: VecMapStore<HashedNode, NodeIdentifier, legion::World>,
 }
@@ -42,6 +43,15 @@ impl<'a> PendingInsert<'a> {
             hashbrown::hash_map::RawEntryMut::Occupied(occupied) => Some(occupied.key().clone()),
             _ => None,
         }
+    }
+    pub fn stash(
+        self,
+    ) -> (
+        crate::compat::hash_map::RawVacantEntryMut<'a, legion::Entity, (), ()>,
+        (u64,),
+    ) {
+        let vacant = self.vacant();
+        (vacant.0, (vacant.1 .0,))
     }
     pub fn resolve<T>(&self, id: NodeIdentifier) -> HashedNodeRef<T> {
         self.1
@@ -91,9 +101,9 @@ impl<'a> PendingInsert<'a> {
 impl NodeStore {
     pub fn prepare_insertion<'a, Eq: Fn(EntryRef) -> bool, V: Hash>(
         &'a mut self,
-        hashable: &'a V,
+        hashable: &V,
         eq: Eq,
-    ) -> PendingInsert {
+    ) -> PendingInsert<'a> {
         let Self {
             dedup,
             internal: backend,
@@ -202,6 +212,48 @@ impl NodeStore {
         x.get_component::<TIdN::Ty>().ok()?;
         Some((HashedNodeRef::new(x), unsafe { TIdN::from_id(id.clone()) }))
     }
+
+    pub fn try_resolve_typed2<
+        L: crate::types::LLang<crate::types::TypeU16<L>, I = u16> + 'static,
+    >(
+        &self,
+        id: &NodeIdentifier,
+    ) -> Option<(HashedNodeRef<NodeIdentifier>, L::E)> {
+        let x = self.internal.entry_ref(id.clone()).unwrap();
+        let ty = x.get_component::<crate::types::TypeU16<L>>().ok()?;
+        let ty = ty.e();
+        Some((HashedNodeRef::new(x), ty))
+    }
+
+    pub fn try_resolve_typed3<
+        L: crate::types::LLang<crate::types::TypeU16<L>, I = u16> + 'static,
+    >(
+        &self,
+        id: &NodeIdentifier,
+    ) -> Option<TypedNode<HashedNodeRef<NodeIdentifier>, L::E>> {
+        let x = self.internal.entry_ref(id.clone()).unwrap();
+        let ty = x.get_component::<crate::types::TypeU16<L>>().ok()?;
+        let ty = ty.e();
+        Some(TypedNode(HashedNodeRef::new(x), ty))
+    }
+}
+
+pub struct TypedNode<T, Ty>(T, Ty);
+
+impl<T, Ty: Copy> TypedNode<T, Ty> {
+    pub fn get_type(&self) -> Ty {
+        self.1
+    }
+    pub fn into(self) -> T {
+        self.0
+    }
+}
+impl<T, Ty> Deref for TypedNode<T, Ty> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl Debug for NodeStore {
@@ -223,6 +275,25 @@ impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
             .map(|x| HashedNodeRef::new(x))
             .unwrap()
     }
+}
+
+impl crate::types::NodeStore<NodeIdentifier> for legion::World {
+    type R<'a>
+        = HashedNodeRef<'a, NodeIdentifier>
+    where
+        Self: 'a;
+    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+        self.entry_ref(id.clone())
+            .map(|x| HashedNodeRef::new(x))
+            .unwrap()
+    }
+}
+
+pub fn _resolve<'a, T>(
+    slf: &'a legion::World,
+    id: &NodeIdentifier,
+) -> Result<HashedNodeRef<'a, T>, legion::world::EntityAccessError> {
+    slf.entry_ref(*id).map(|x| HashedNodeRef::new(x))
 }
 
 impl<'a> crate::types::NodeStoreLean<NodeIdentifier> for &'a NodeStore {
@@ -367,8 +438,8 @@ mod stores_impl {
     use crate::{
         store::{labels, nodes, SimpleStores},
         types::{
-            AnyType, HyperAST, HyperASTAsso, HyperASTLean, HyperASTShared, TypeStore,
-            TypedHyperAST, TypedNodeId,
+            HyperAST, HyperASTAsso, HyperASTLean, HyperASTShared, TypeStore, TypedHyperAST,
+            TypedNodeId,
         },
     };
 
@@ -379,9 +450,16 @@ mod stores_impl {
         type Label = labels::DefaultLabelIdentifier;
     }
 
+    impl<TS, LS> HyperASTShared for SimpleStores<TS, &legion::World, &LS> {
+        type IdN = nodes::DefaultNodeIdentifier;
+
+        type Idx = u16;
+        type Label = labels::DefaultLabelIdentifier;
+    }
+
     impl<'store, TS> HyperASTLean for &'store SimpleStores<TS, nodes::DefaultNodeStore>
     where
-        TS: TypeStore<self::nodes::legion::HashedNodeRef<'store>>,
+        TS: TypeStore,
     {
         type T = self::nodes::legion::HashedNodeRef<'store, Self::IdN>;
 
@@ -398,19 +476,21 @@ mod stores_impl {
         }
 
         type TS = TS;
-
-        fn type_store(&self) -> &Self::TS {
-            &self.type_store
-        }
     }
 
     impl<'store, TS> HyperASTAsso for &'store SimpleStores<TS, nodes::DefaultNodeStore>
     where
-        TS: for<'s> TypeStore<self::nodes::legion::HashedNodeRef<'s>>,
+        TS: for<'s> TypeStore,
     {
-        type T<'s> = self::nodes::legion::HashedNodeRef<'s, Self::IdN> where Self: 's;
+        type T<'s>
+            = self::nodes::legion::HashedNodeRef<'s, Self::IdN>
+        where
+            Self: 's;
 
-        type NS<'s> = nodes::legion::NodeStore where Self: 's;
+        type NS<'s>
+            = nodes::legion::NodeStore
+        where
+            Self: 's;
 
         fn node_store(&self) -> &Self::NS<'_> {
             &self.node_store
@@ -422,51 +502,16 @@ mod stores_impl {
             &self.label_store
         }
 
-        type TS<'s> = TS where Self: 's;
-
-        fn type_store(&self) -> &Self::TS<'_> {
-            &self.type_store
-        }
+        type TS<'s>
+            = TS
+        where
+            Self: 's;
     }
-
-    // impl<TS> HyperASTAsso for SimpleStores<TS, nodes::DefaultNodeStore>
-    // where
-    //     TS: for<'s> TypeStore<self::nodes::legion::elem::HashedNodeRef<'s, Self::IdN>>,
-    // {
-    //     type T<'s> = self::nodes::legion::HashedNodeRef<'s, Self::IdN> where TS: 's;
-
-    //     type NS<'s> = nodes::legion::NodeStore where Self: 's;
-
-    //     fn node_store(&self) -> &Self::NS<'_> {
-    //         &self.node_store
-    //     }
-
-    //     type LS = labels::LabelStore;
-
-    //     fn label_store(&self) -> &Self::LS {
-    //         &self.label_store
-    //     }
-
-    //     type TS<'s> = TS where TS: 's;
-
-    //     fn type_store(&self) -> &Self::TS<'_> {
-    //         &self.type_store
-    //     }
-    // }
 
     impl<'store, TS> HyperAST<'store> for SimpleStores<TS, nodes::DefaultNodeStore>
     where
-        // <TS as TypeStore>::Ty: HyperType + Send + Sync,
-        TS: TypeStore<
-            self::nodes::legion::HashedNodeRef<'store, nodes::DefaultNodeIdentifier>,
-            Ty = AnyType,
-        >,
+        TS: TypeStore,
     {
-        type IdN = nodes::DefaultNodeIdentifier;
-
-        type Idx = u16;
-        type Label = labels::DefaultLabelIdentifier;
-
         type T = self::nodes::legion::HashedNodeRef<'store, Self::IdN>;
 
         type NS = nodes::legion::NodeStore;
@@ -482,19 +527,12 @@ mod stores_impl {
         }
 
         type TS = TS;
-
-        fn type_store(&self) -> &Self::TS {
-            &self.type_store
-        }
     }
 
     impl<'store, TIdN, TS> TypedHyperAST<'store, TIdN> for SimpleStores<TS, nodes::DefaultNodeStore>
     where
         TIdN: 'static + TypedNodeId<IdN = Self::IdN>,
-        TS: TypeStore<
-            self::nodes::legion::HashedNodeRef<'store, nodes::DefaultNodeIdentifier>,
-            Ty = AnyType,
-        >,
+        TS: TypeStore,
     {
         type TT = self::nodes::legion::HashedNodeRef<'store, TIdN>;
         type TNS = nodes::legion::NodeStore;
@@ -504,3 +542,62 @@ mod stores_impl {
         }
     }
 }
+
+pub fn eq_node<'a, K, L, I>(
+    kind: &'a K,
+    label_id: Option<&'a L>,
+    children: &'a [I],
+) -> impl Fn(EntryRef) -> bool + 'a
+where
+    K: 'static + Eq + Copy + std::marker::Send + std::marker::Sync,
+    L: 'static + Eq + Copy + std::marker::Send + std::marker::Sync,
+    I: 'static + Eq + Copy + std::marker::Send + std::marker::Sync,
+{
+    move |x: EntryRef| {
+        let t = x.get_component::<K>();
+        if t != Ok(kind) {
+            return false;
+        }
+        let l = x.get_component::<L>().ok();
+        if l != label_id {
+            return false;
+        } else {
+            use crate::store::nodes::legion::compo::CS; // FIXME not
+            let cs = x.get_component::<CS<I>>();
+            let r = match cs {
+                Ok(CS(cs)) => cs.as_ref() == children,
+                Err(_) => children.is_empty(),
+            };
+            if !r {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+impl ErasedHolder for legion::world::Entry<'_> {
+    fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
+        if tid == std::any::TypeId::of::<T>() {
+            self.get_component().ok()
+        } else {
+            None
+        }
+    }
+}
+
+impl ErasedInserter for legion::world::Entry<'_> {
+    fn insert<T: 'static + Compo>(&mut self, t: T) {
+        self.add_component(t);
+    }
+}
+
+impl CompoRegister for World {
+    type Id = legion::storage::ComponentTypeId;
+
+    fn register_compo<T: 'static + Compo>(&mut self) -> Self::Id {
+        legion::storage::ComponentTypeId::of::<T>()
+    }
+}
+
+pub type RawHAST<'hast, 'acc, TS> = crate::store::SimpleStores<TS, &'hast legion::World, &'acc crate::store::labels::LabelStore>;

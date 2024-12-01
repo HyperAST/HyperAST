@@ -4,8 +4,6 @@ version = "0.1.0"
 edition = "2021"
 include = ["/src", "tree-sitter-java/"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 tree-sitter = { version = "0.22.2", optional = true }
 # tree-sitter-java = {path="tree-sitter-java", version="0.20.0"}
@@ -17,18 +15,21 @@ num = "0.4.0"
 bitvec = "1.0.1"
 # stack-graphs = "=0.3.0"
 controlled-option = "0.4.1"
-string-interner = "0.14.0"
+string-interner = { version = "0.17.0", optional = true}
 cfg-if = "1.0"
-hashbrown = { version = "0.13.2", default-features = false, optional = true }
+hashbrown = { version = "0.14.5", default-features = false, optional = true }
 # fasthash = "0.4.0"
 log = { version = "0.4.6" } #, features = ["max_level_debug", "release_max_level_warn"] }
 
 hyper_ast = { path = "../../../hyper_ast", default-features = false }
+tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "f09e4a7bd49893b3859fd35446a81314968d665b", version = "0.12", optional = true }
+tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev="d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true }
+stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev="d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true}
+# tree-sitter-graph = { path = "../../../../tree-sitter-graph", optional = true }
+# tree-sitter-stack-graphs = { path = "../../../../stack-graphs/tree-sitter-stack-graphs", optional = true }
+# stack-graphs = { path = "../../../../stack-graphs/stack-graphs", optional = true}
 
 libc = "0.2"
-
-# promizing to store subtrees efficiently
-zerocopy = "0.6.1"
 
 legion = { version = "0.4.0", optional = true }
 tuples = "=1.4.1"
@@ -45,12 +46,51 @@ cc = "*"
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"
-env_logger = "0.9.0"
+env_logger = "0.11.3"
+criterion = { version = "0.5.1", features = ["rayon", "plotters", "cargo_bench_support", "html_reports", "real_blackbox"] }
+hyper_ast_tsquery = { path = "../../../tsquery" }
+hyper_ast_gen_ts_tsquery = { path = "../query" }
 
+[[example]]
+name = "querying"
+required-features = ["impl", "tsg", "all_examples"]
+
+[[example]]
+name = "tsg"
+required-features = ["impl", "tsg", "all_examples"]
+
+[[example]]
+name = "querying_immediate_pred"
+required-features = ["impl", "tsg", "all_examples"]
+
+[[example]]
+name = "querying_precompute"
+required-features = ["impl", "tsg", "all_examples"]
+
+[[bench]]
+name = "querying_precompute"
+harness = false
+
+[[bench]]
+name = "querying_precompute_repeat"
+harness = false
+
+[[bench]]
+name = "querying_precompute_repeat2"
+harness = false
+
+[[bench]]
+name = "querying_precompute_repeat3"
+harness = false
+
+[[bench]]
+name = "querying_precompute_repeat4"
+harness = false
 
 [features]
 default = ["impl"]
 legion = ["hyper_ast/legion", "dep:legion"]
+impact = ["dep:string-interner"] # TODO cleanly separate feature, for now impl needs it
 impl = [
     "hyper_ast/jemalloc",
     "legion",
@@ -60,3 +100,9 @@ impl = [
     "dep:tree-sitter",
     "dep:tree-sitter-java",
 ]
+tsg = [
+    "dep:tree-sitter-graph",
+    "dep:stack-graphs",
+    "dep:tree-sitter-stack-graphs",
+]
+all_examples=[]

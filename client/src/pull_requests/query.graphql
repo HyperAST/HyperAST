@@ -1,0 +1,51 @@
+query RepoView($query: String!, $after: String!) {
+  search(query:$query, 
+         type:ISSUE, first: 1, after: $after) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    issueCount
+    __typename
+    nodes {
+      __typename
+      ... on PullRequest {
+        title
+        number
+        repository {
+          name
+          owner {
+            __typename
+            login
+          }
+        }
+        headRepository {
+          __typename
+          name
+          owner {
+            __typename
+            login
+          }
+        }
+        headRefOid
+        headRef {
+          __typename
+          name
+        }
+        headRefName
+        merged
+        mergeCommit {
+          oid
+        }
+        # commits(first: 10) {
+        #   nodes {
+        #     __typename
+        #     commit {
+        #       oid
+        #     }
+        #   }
+        # }
+      }
+    }
+  }
+}

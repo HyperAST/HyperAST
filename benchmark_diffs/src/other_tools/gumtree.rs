@@ -9,22 +9,23 @@ use hyper_ast::{nodes::JsonSerializer, types};
 
 use crate::tempfile;
 
-pub fn subprocess<'a, IdN, HAST>(
+pub fn subprocess<'a, HAST>(
     stores: &'a HAST,
-    src_root: IdN,
-    dst_root: IdN,
+    src_root: HAST::IdN,
+    dst_root: HAST::IdN,
     mapping_algo: &str,
     diff_algo: &str,
     timeout: u64,
     out_format: &str,
 ) -> Option<PathBuf>
 where
-    HAST: types::LabelStore<str>,
-    IdN: types::NodeId<IdN = IdN>,
-    HAST: types::NodeStore<IdN>,
-    HAST: types::LabelStore<str>,
-    HAST: types::TypeStore<HAST::R<'a>>,
-    HAST::R<'a>: types::Labeled<Label = HAST::I> + types::WithChildren<TreeId = IdN>,
+    HAST: types::HyperAST<'a>,
+    // HAST: types::LabelStore<str>,
+    // IdN: types::NodeId<IdN = IdN>,
+    // HAST: types::NodeStore<IdN>,
+    // HAST: types::LabelStore<str>,
+    // HAST: types::TypeStore<HAST::R<'a>>,
+    // HAST::R<'a>: types::Labeled<Label = HAST::I> + types::WithChildren<TreeId = IdN>,
 {
     let (src, mut src_f) = tempfile().unwrap();
     dbg!(&src);

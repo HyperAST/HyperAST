@@ -1,20 +1,25 @@
-use std::{
-    iter::Peekable,
-    marker::PhantomData,
-    path::{Components, PathBuf},
-};
-
-use git2::{Oid, Repository};
-use hyper_ast::{store::defaults::NodeIdentifier, tree_gen::Accumulator, types::LabelStore};
-use hyper_ast_gen_ts_xml::types::Type;
-
+use crate::processing::erased::ParametrizedCommitProcessor2Handle as PCP2Handle;
 use crate::{
     git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
     maven::{MavenModuleAcc, MD},
     preprocessed::RepositoryProcessor,
     processing::{erased::ParametrizedCommitProc2, CacheHolding, InFiles, ObjectName},
-    Processor, SimpleStores,
+    Processor,
 };
+use git2::{Oid, Repository};
+use hyper_ast::{
+    hashed::MetaDataHashsBuilder,
+    store::{defaults::NodeIdentifier, nodes::EntityBuilder},
+    tree_gen::Accumulator,
+    types::LabelStore,
+};
+use hyper_ast_gen_ts_xml::types::{Type, XmlEnabledTypeStore as _};
+use std::{
+    iter::Peekable,
+    marker::PhantomData,
+    path::{Components, PathBuf},
+};
+pub type SimpleStores = hyper_ast::store::SimpleStores<hyper_ast_gen_ts_xml::types::TStore>;
 
 /// RMS: Resursive Module Search
 /// FFWD: Fast ForWarD to java directories without looking at maven stuff
@@ -23,7 +28,7 @@ pub struct MavenProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
     repository: &'a Repository,
     stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
     dir_path: &'c mut Peekable<Components<'c>>,
-    handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<MavenProc>,
+    handle: PCP2Handle<MavenProc>,
 }
 
 impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
@@ -55,8 +60,6 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
     }
 }
 
-type Caches = <crate::processing::file_sys::Maven as crate::processing::CachesHolding>::Caches;
-
 impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
     for MavenProcessor<'a, 'b, 'c, RMS, FFWD, MavenModuleAcc>
 {
@@ -65,48 +68,41 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
             BasicGitObject::Tree(oid, name) => {
                 self.handle_tree_cached(name, oid);
             }
-            BasicGitObject::Blob(oid, name) => {
-                if FFWD {
-                    return;
-                }
-                if self.dir_path.peek().is_some() {
-                    return;
-                }
-                if crate::processing::file_sys::Pom::matches(&name) {
+            BasicGitObject::Blob(oid, name)
+                if !FFWD
+                    && !self.dir_path.peek().is_some()
+                    && crate::processing::file_sys::Pom::matches(&name) =>
+            {
+                let parent_acc = &mut self.stack.last_mut().unwrap().2;
+                let parameters = self.handle.into();
+                if let Err(err) =
                     self.prepro
-                        .handle_pom(
-                            oid,
-                            &mut self.stack.last_mut().unwrap().2,
-                            name,
-                            &self.repository,
-                            self.handle.into(),
-                        )
-                        .unwrap()
+                        .handle_pom(oid, parent_acc, name, &self.repository, parameters)
+                {
+                    log::debug!("{:?}", err);
                 }
             }
+            _ => {}
         }
     }
     fn post(&mut self, oid: Oid, acc: MavenModuleAcc) -> Option<(NodeIdentifier, MD)> {
-        let name = acc.name.clone();
-        let full_node = Self::make(acc, self.prepro.main_stores_mut());
+        let name = acc.primary.name.clone();
+        let full_node = Self::make(acc, self.prepro.main_stores_mut().mut_with_ts());
         self.prepro
             .processing_systems
             .mut_or_default::<MavenProcessorHolder>()
             .get_caches_mut()
             .object_map
             .insert(oid, full_node.clone());
-        if name == "pac4j-kerberos" {
-            dbg!(full_node.1.status);
-        }
         let name = self.prepro.intern_label(&name);
         if self.stack.is_empty() {
             Some(full_node)
         } else {
             let w = &mut self.stack.last_mut().unwrap().2;
             assert!(
-                !w.children_names.contains(&name),
+                !w.primary.children_names.contains(&name),
                 "{:?} {:?}",
-                w.children_names,
+                w.primary.children_names,
                 name
             );
             if full_node
@@ -161,12 +157,9 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
         {
             // reinit already computed node for post order
             let full_node = already.clone();
-            if name.try_str().unwrap() == "pac4j-kerberos" {
-                dbg!(full_node.1.status);
-            }
             let w = &mut self.stack.last_mut().unwrap().2;
             let name = self.prepro.intern_object_name(&name);
-            assert!(!w.children_names.contains(&name));
+            assert!(!w.primary.children_names.contains(&name));
             if full_node
                 .1
                 .status
@@ -178,7 +171,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             }
             return;
         }
-        log::debug!("mm tree {:?}", name.try_str());
+        log::debug!("maven tree {:?}", name.try_str());
         let parent_acc = &mut self.stack.last_mut().unwrap().2;
         if FFWD {
             let (name, (full_node, _)) = self.prepro.help_handle_java_folder(
@@ -187,7 +180,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 oid,
                 &name,
             );
-            assert!(!parent_acc.children_names.contains(&name));
+            assert!(!parent_acc.primary.children_names.contains(&name));
             parent_acc.push_source_directory(name, full_node);
             return;
         }
@@ -198,7 +191,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 self.prepro
                     .help_handle_java_folder(&self.repository, self.dir_path, oid, &name);
             let parent_acc = &mut self.stack.last_mut().unwrap().2;
-            assert!(!parent_acc.children_names.contains(&name));
+            assert!(!parent_acc.primary.children_names.contains(&name));
             if helper.source_directories.0 {
                 parent_acc.push_source_directory(name, full_node);
             } else {
@@ -235,23 +228,22 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
 }
 
 pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
-    use hyper_ast::{
-        filter::BloomSize,
-        hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder},
-        store::nodes::legion::{compo, compo::CS, NodeStore},
-        tree_gen::SubTreeMetrics,
-    };
-    use hyper_ast_gen_ts_java::legion_with_refs::{eq_node, hash32};
-    let dir_hash: u32 = hash32(&Type::MavenDirectory); // FIXME should be MavenDirectory ?
-    let hashs = acc.metrics.hashs;
-    let size = acc.metrics.size + 1;
-    let height = acc.metrics.height + 1;
-    let size_no_spaces = acc.metrics.size_no_spaces + 1;
-    let hbuilder = hashed::Builder::new(hashs, &dir_hash, &acc.name, size_no_spaces);
-    let hashable = hbuilder.most_discriminating();
-    let label = stores.label_store.get_or_insert(acc.name.clone());
+    use hyper_ast::hashed::IndexingHashBuilder;
+    let node_store = &mut stores.node_store;
+    let label_store = &mut stores.label_store;
+    use hyper_ast::store::nodes::legion::eq_node;
+    let kind = Type::MavenDirectory;
+    let interned_kind = hyper_ast_gen_ts_xml::types::TStore::intern(kind);
+    let label_id = label_store.get_or_insert(acc.primary.name.clone());
 
-    let eq = eq_node(&Type::MavenDirectory, Some(&label), &acc.children);
+    let primary = acc
+        .primary
+        .map_metrics(|m| m.finalize(&interned_kind, &label_id, 0));
+
+    let hashable = primary.metrics.hashs.most_discriminating();
+
+    let eq = eq_node(&interned_kind, Some(&label_id), &primary.children);
+
     let ana = {
         let new_sub_modules = drain_filter_strip(&mut acc.sub_modules, b"..");
         let new_main_dirs = drain_filter_strip(&mut acc.main_dirs, b"..");
@@ -268,73 +260,43 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
         }
         ana.resolve()
     };
-    let insertion = stores.node_store.prepare_insertion(&hashable, eq);
-    let hashs = hbuilder.build();
-    let node_id = if let Some(id) = insertion.occupied_id() {
-        id
-    } else {
-        log::info!("make mm {} {}", &acc.name, acc.children.len());
-        let vacant = insertion.vacant();
-        assert_eq!(acc.children_names.len(), acc.children.len());
-        if false {
-            NodeStore::insert_after_prepare(
-                vacant,
-                (
-                    Type::MavenDirectory,
-                    label,
-                    hashs,
-                    compo::Size(size),
-                    compo::Height(height),
-                    compo::SizeNoSpaces(size_no_spaces),
-                    CS(acc.children_names.into_boxed_slice()), // TODO extract dir names
-                    CS(acc.children.into_boxed_slice()),
-                    BloomSize::Much,
-                ),
-            )
-        } else {
-            // NOTE use of dyn_builder
-            // TODO make it available through cargo feature or runtime config
-            // - should most likely not change the behavior of the HyperAST, need tests
-            // TODO make an even better API
-            // - wrapping the builder,
-            // - modularising computation and storage of metadata,
-            // - checking some invariants when adding metadata,
-            // - checking some invariants for indentifying data on debug builds
-            // - tying up parts of accumulator (hyper_ast::tree_genBasicAccumulator) and builder (EntityBuilder).
-            let mut dyn_builder =
-                hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
-            dyn_builder.add(Type::MavenDirectory);
-            dyn_builder.add(hashs.clone());
-            dyn_builder.add(label);
-            dyn_builder.add(BloomSize::Much);
-            dyn_builder.add(compo::Size(size));
-            dyn_builder.add(compo::SizeNoSpaces(size_no_spaces));
-            dyn_builder.add(compo::Height(height));
-            dyn_builder.add(CS(acc.children_names.into_boxed_slice()));
-            dyn_builder.add(CS(acc.children.into_boxed_slice()));
-            if !acc.status.is_empty() {
-                dyn_builder.add(acc.status);
-            }
-            NodeStore::insert_built_after_prepare(vacant, dyn_builder.build())
-        }
-    };
-    let status = acc.status;
-    let metrics = SubTreeMetrics {
-        size,
-        height,
-        hashs,
-        size_no_spaces,
-    };
+    let insertion = node_store.prepare_insertion(&hashable, eq);
 
-    let full_node = (
-        node_id.clone(),
-        MD {
+    if let Some(id) = insertion.occupied_id() {
+        let metrics = primary.metrics.map_hashs(|h| h.build());
+        let status = acc.status;
+        let md = MD {
             metrics,
             ana,
             status,
-        },
-    );
-    full_node
+        };
+        return (id, md);
+    }
+    use hyper_ast::store::nodes::legion::NodeStore;
+
+    log::info!("make mm {} {}", &primary.name, primary.children.len());
+    assert_eq!(primary.children_names.len(), primary.children.len());
+    let mut dyn_builder = hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+    let children_is_empty = primary.children.is_empty();
+    if !acc.status.is_empty() {
+        dyn_builder.add(acc.status);
+    }
+    let metrics = primary.persist(&mut dyn_builder, interned_kind, label_id);
+    let metrics = metrics.map_hashs(|h| h.build());
+    let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
+    hashs.persist(&mut dyn_builder);
+
+    let vacant = insertion.vacant();
+    let node_id = NodeStore::insert_built_after_prepare(vacant, dyn_builder.build());
+
+    let status = acc.status;
+
+    let md = MD {
+        metrics,
+        ana,
+        status,
+    };
+    (node_id.clone(), md)
 }
 
 use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
@@ -345,49 +307,24 @@ impl RepositoryProcessor {
         parent_acc: &mut MavenModuleAcc,
         name: ObjectName,
         repository: &Repository,
-        parameters: crate::processing::erased::ParametrizedCommitProcessor2Handle<PomProc>,
+        parameters: PCP2Handle<PomProc>,
     ) -> Result<(), crate::ParseErr> {
         let x = self
             .processing_systems
             .caching_blob_handler::<crate::processing::file_sys::Pom>()
             .handle(oid, repository, &name, parameters, |c, n, t| {
+                // let caches = c.mut_or_default::<PomProcessorHolder>().get_caches_mut();
                 crate::maven::handle_pom_file(
                     &mut XmlTreeGen {
                         line_break: "\n".as_bytes().to_vec(),
-                        stores: &mut self.main_stores,
+                        stores: self.main_stores.mut_with_ts(),
                     },
                     n,
                     t,
                 )
             })?;
-        // type Caches = <crate::processing::file_sys::Pom as crate::processing::CachesHolder>::Caches;
-        // if let Some(already) = self
-        //     .processing_systems
-        //     .get::<Caches>()
-        //     .and_then(|c| c.object_map.get(&oid))
-        // {
-        //     //.object_map_pom.get(&oid) {
-        //     // TODO reinit already computed node for post order
-        //     let full_node = already.clone();
-        //     let name = self.intern_label(std::str::from_utf8(&name).unwrap());
-        //     assert!(!parent_acc.children_names.contains(&name));
-        //     parent_acc.push_pom(name, full_node);
-        //     return;
-        // }
-        // log::info!("blob {:?}", std::str::from_utf8(&name));
-        // let blob = repository.find_blob(oid).unwrap();
-        // if std::str::from_utf8(blob.content()).is_err() {
-        //     return;
-        // }
-        // let text = blob.content();
-        // let full_node = self.handle_pom_file(&name, text);
-        // let x = full_node.unwrap();
-        // self.processing_systems
-        //     .mut_or_default::<Caches>()
-        //     .object_map
-        //     .insert(oid, x.clone());
         let name = self.intern_object_name(&name);
-        assert!(!parent_acc.children_names.contains(&name));
+        assert!(!parent_acc.primary.children_names.contains(&name));
         parent_acc.push_pom(name, x);
         Ok(())
     }
@@ -400,10 +337,10 @@ impl RepositoryProcessor {
         crate::maven::handle_pom_file(&mut self.xml_generator(), name, text)
     }
 
-    pub(crate) fn xml_generator(&mut self) -> XmlTreeGen<crate::TStore> {
+    pub(crate) fn xml_generator(&mut self) -> XmlTreeGen<hyper_ast_gen_ts_xml::types::TStore> {
         XmlTreeGen {
             line_break: "\n".as_bytes().to_vec(),
-            stores: &mut self.main_stores,
+            stores: self.main_stores.mut_with_ts(),
         }
     }
 }
@@ -505,13 +442,10 @@ pub(crate) fn prepare_dir_exploration(
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Parameter;
-impl From<crate::processing::erased::ParametrizedCommitProcessor2Handle<MavenProc>>
-    for crate::processing::erased::ParametrizedCommitProcessor2Handle<PomProc>
-{
-    fn from(
-        value: crate::processing::erased::ParametrizedCommitProcessor2Handle<MavenProc>,
-    ) -> Self {
-        crate::processing::erased::ParametrizedCommitProcessor2Handle(value.0, PhantomData)
+
+impl From<PCP2Handle<MavenProc>> for PCP2Handle<PomProc> {
+    fn from(value: PCP2Handle<MavenProc>) -> Self {
+        PCP2Handle(value.0, PhantomData)
     }
 }
 // #[derive(Default)]
@@ -554,24 +488,16 @@ impl crate::processing::erased::Parametrized for PomProcessorHolder {
     }
 }
 impl crate::processing::erased::CommitProc for PomProc {
-    fn process_root_tree(
-        &mut self,
-        repository: &git2::Repository,
-        tree_oid: &git2::Oid,
-    ) -> hyper_ast::store::defaults::NodeIdentifier {
-        unimplemented!()
-    }
-
     fn prepare_processing(
         &self,
-        repository: &git2::Repository,
-        commit_builder: crate::preprocessed::CommitBuilder,
+        _repository: &git2::Repository,
+        _commit_builder: crate::preprocessed::CommitBuilder,
     ) -> Box<dyn crate::processing::erased::PreparedCommitProc> {
-        unimplemented!()
+        unimplemented!("required for processing at the root of a project")
     }
 
-    fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
-        unimplemented!()
+    fn get_commit(&self, _commit_oid: git2::Oid) -> Option<&crate::Commit> {
+        unimplemented!("required for processing at the root of a project")
     }
 }
 
@@ -655,6 +581,7 @@ struct PreparedMavenCommitProc<'repo> {
     repository: &'repo git2::Repository,
     commit_builder: crate::preprocessed::CommitBuilder,
 }
+
 impl<'repo> crate::processing::erased::PreparedCommitProc for PreparedMavenCommitProc<'repo> {
     fn process(
         self: Box<PreparedMavenCommitProc<'repo>>,
@@ -685,28 +612,8 @@ impl<'repo> crate::processing::erased::PreparedCommitProc for PreparedMavenCommi
         root_full_node.0
     }
 }
-impl crate::processing::erased::CommitProc for MavenProc {
-    fn process_root_tree(
-        &mut self,
-        repository: &git2::Repository,
-        tree_oid: &git2::Oid,
-    ) -> hyper_ast::store::defaults::NodeIdentifier {
-        let dir_path = PathBuf::from("");
-        let mut dir_path = dir_path.components().peekable();
-        let name = b"";
-        // TODO check parameter in self to know it is a recusive module search
-        // let root_full_node = MavenProcessor::<true, false, MavenModuleAcc>::new(
-        //     repository,
-        //     self.prepro,
-        //     &mut dir_path,
-        //     name,
-        //     tree_oid,
-        // )
-        // .process();
-        // root_full_node.0
-        unimplemented!("cannot access retrieve RepositoryProcessor as a CommitProc is likely part of it, double mutable borrow RIP")
-    }
 
+impl crate::processing::erased::CommitProc for MavenProc {
     fn prepare_processing<'repo>(
         &self,
         repository: &'repo git2::Repository,

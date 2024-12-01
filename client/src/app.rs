@@ -11,12 +11,28 @@ use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 
 use crate::{
-    commit, fetch, file,
+    commit, fetch, file, pull_requests, querying,
     scripting::{self, ScriptContent, ScriptContentDepth, ScriptingError, ScriptingParam},
-    track, view, SharedState,
+    smells, track, tsg, view, SharedState,
 };
 
 impl IntoResponse for ScriptingError {
+    fn into_response(self) -> Response {
+        let mut resp = Json(self).into_response();
+        *resp.status_mut() = StatusCode::BAD_REQUEST;
+        resp
+    }
+}
+
+impl IntoResponse for querying::QueryingError {
+    fn into_response(self) -> Response {
+        let mut resp = Json(self).into_response();
+        *resp.status_mut() = StatusCode::BAD_REQUEST;
+        resp
+    }
+}
+
+impl IntoResponse for tsg::QueryingError {
     fn into_response(self) -> Response {
         let mut resp = Json(self).into_response();
         *resp.status_mut() = StatusCode::BAD_REQUEST;
@@ -61,24 +77,196 @@ pub fn scripting_app(_st: SharedState) -> Router<SharedState> {
     Router::new()
         .route(
             "/script/github/:user/:name/:commit",
-            post(scripting).layer(scripting_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+            post(scripting).layer(scripting_service_config.clone()),
         )
         .route(
             "/script-depth/github/:user/:name/:commit",
-            post(scripting_depth).layer(scripting_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+            post(scripting_depth).layer(scripting_service_config.clone()),
         )
+        .route("/sharing-scripts/shared-db", get(crate::ws::connect_db))
         .route(
-            "/shared-scripts-db",
-            get(crate::ws::connect_db), // .with_state(Arc::clone(&shared_state)),
-        )
-        .route(
-            "/shared-script/:session",
-            get(crate::ws::connect_doc), // .with_state(Arc::clone(&shared_state)),
+            "/sharing-scripts/shared/:session",
+            get(crate::ws::connect_doc),
         )
     // .route(
     //     "/script/gitlab/:user/:name/:commit",
-    //     post(scripting).layer(scripting_service_config), // .with_state(Arc::clone(&shared_state)),
+    //     post(scripting).layer(scripting_service_config),
     // )
+}
+
+async fn querying(
+    headers: http::HeaderMap,
+    axum::extract::Path(path): axum::extract::Path<querying::Param>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+    axum::extract::Json(script): axum::extract::Json<querying::Content>,
+) -> axum::response::Response {
+    let accept = headers
+        .get(http::header::ACCEPT)
+        .map_or("", |x| x.to_str().unwrap_or_default());
+
+    let r = querying::simple(script, state, path);
+    if accept.contains("csv") {
+        match r {
+            Ok(x) => {
+                let r = x.results.into_iter().filter_map(|x| x.ok()).map(|x| {
+                    format!(
+                        "{},{},{}\n",
+                        &x.commit[..8],
+                        x.inner.result[0],
+                        x.inner.compute_time
+                    )
+                });
+                let mut r = Some("id,result0,compute_time\n".to_string())
+                    .into_iter()
+                    .chain(r)
+                    .collect::<String>()
+                    .into_response();
+                r.headers_mut()
+                    .insert("prepare_time", x.prepare_time.to_string().parse().unwrap());
+                r.headers_mut().insert(
+                    "matching_error_count",
+                    x.matching_error_count.to_string().parse().unwrap(),
+                );
+                r
+            }
+            Err(err) => {
+                let mut r = err.into_response();
+                *r.status_mut() = http::StatusCode::BAD_REQUEST;
+                r
+            }
+        }
+    } else {
+        Json(r).into_response()
+    }
+}
+
+#[axum_macros::debug_handler]
+async fn querying_streamed(
+    axum::extract::Path(path): axum::extract::Path<querying::Param>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+    axum::extract::Json(script): axum::extract::Json<querying::Content>,
+) -> axum::response::Response {
+    querying::streamed(state, path, script)
+}
+
+async fn querying_differential(
+    axum::extract::Path(path): axum::extract::Path<querying::ParamDifferential>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+    axum::extract::Json(script): axum::extract::Json<querying::Content>,
+) -> axum::response::Result<Json<querying::ComputeResultsDifferential>> {
+    let r = querying::differential(script, state, path)?;
+    Ok(r)
+}
+
+pub fn querying_app(_st: SharedState) -> Router<SharedState> {
+    let querying_service_config = ServiceBuilder::new()
+        .layer(HandleErrorLayer::new(|e: BoxError| async move {
+            dbg!(e);
+        }))
+        .load_shed()
+        .concurrency_limit(16)
+        .buffer(200)
+        .rate_limit(10, Duration::from_secs(5))
+        // .request_body_limit(1024 * 5_000 /* ~5mb */)
+        .timeout(Duration::from_secs(10))
+        .layer(TraceLayer::new_for_http());
+    Router::new()
+        .route(
+            "/query/github/:user/:name/*commit",
+            post(querying).layer(querying_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/query-st/github/:user/:name/*commit",
+            post(querying_streamed).layer(querying_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/query-differential/github/:user/:name/:commit/:baseline",
+            post(querying_differential).layer(querying_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/sharing-queries/shared-db",
+            get(crate::ws::connect_db), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/sharing-queries/shared/:session",
+            get(crate::ws::connect_doc), // .with_state(Arc::clone(&shared_state)),
+        )
+}
+
+async fn tsg(
+    axum::extract::Path(path): axum::extract::Path<tsg::Param>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+    axum::extract::Json(script): axum::extract::Json<tsg::Content>,
+) -> axum::response::Result<Json<tsg::ComputeResults>> {
+    let r = tsg::simple(script, state, path)?;
+    Ok(r)
+}
+
+pub fn tsg_app(_st: SharedState) -> Router<SharedState> {
+    let tsg_service_config = ServiceBuilder::new()
+        .layer(HandleErrorLayer::new(|e: BoxError| async move {
+            dbg!(e);
+        }))
+        .load_shed()
+        .concurrency_limit(16)
+        .buffer(200)
+        .rate_limit(10, Duration::from_secs(5))
+        // .request_body_limit(1024 * 5_000 /* ~5mb */)
+        .timeout(Duration::from_secs(10))
+        .layer(TraceLayer::new_for_http());
+    Router::new()
+        .route(
+            "/tsg/github/:user/:name/:commit",
+            post(tsg).layer(tsg_service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/sharing-tsg/shared-db",
+            get(crate::ws::connect_db), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/sharing-tsg/shared/:session",
+            get(crate::ws::connect_doc), // .with_state(Arc::clone(&shared_state)),
+        )
+}
+
+async fn smells(
+    axum::extract::Path(path): axum::extract::Path<smells::Param>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+    axum::extract::Json(examples): axum::extract::Json<smells::Examples>,
+) -> axum::response::Result<Json<smells::SearchResults>> {
+    let r = smells::smells(examples, state, path)?;
+    Ok(r)
+}
+
+async fn smells_ex_from_diffs(
+    axum::extract::Path(path): axum::extract::Path<smells::Diffs>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+) -> axum::response::Result<Json<smells::ExamplesResults>> {
+    let r = smells::smells_ex_from_diffs(state, path)?;
+    Ok(r)
+}
+
+pub fn smells_app(_st: SharedState) -> Router<SharedState> {
+    let smells_service_config = ServiceBuilder::new()
+        .layer(HandleErrorLayer::new(|e: BoxError| async move {
+            dbg!(e);
+        }))
+        .load_shed()
+        .concurrency_limit(16)
+        .buffer(200)
+        .rate_limit(10, Duration::from_secs(5))
+        // .request_body_limit(1024 * 5_000 /* ~5mb */)
+        .timeout(Duration::from_secs(10))
+        .layer(TraceLayer::new_for_http());
+    Router::new()
+        .route(
+            "/smells/github/:user/:name/:commit/:len",
+            post(smells).layer(smells_service_config.clone()),
+        )
+        .route(
+            "/smells_ex_from_diffs/github/:user/:name/:commit/:len",
+            post(smells_ex_from_diffs).layer(smells_service_config.clone()),
+        )
 }
 
 pub fn fetch_git_file(_st: SharedState) -> Router<SharedState> {
@@ -285,17 +473,26 @@ pub fn commit_metadata_route(_st: SharedState) -> Router<SharedState> {
         .layer(HandleErrorLayer::new(|e: BoxError| async move {
             dbg!(e);
         }))
-        .load_shed()
-        .concurrency_limit(8)
-        .buffer(20)
-        .rate_limit(2, Duration::from_secs(5))
+        // .load_shed()
+        .concurrency_limit(16)
+        .buffer(64)
+        .rate_limit(60, Duration::from_secs(1))
         // .request_body_limit(1024 * 5_000 /* ~5mb */)
         .timeout(Duration::from_secs(10))
         .layer(TraceLayer::new_for_http());
-    Router::new().route(
-        "/commit/github/:user/:name/:version",
-        get(commit_metadata).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
-    )
+    Router::new()
+        .route(
+            "/commit/github/:user/:name/:version",
+            get(commit_metadata).layer(service_config.clone()), // .with_state(Arc::clone(&shared_state)),
+        )
+        .route(
+            "/pr/github/:user/:name/:version",
+            get(pull_requests::pr_commits).layer(service_config.clone()),
+        )
+        .route(
+            "/fork/github/:user/:name/:other_user/:other_name/:head",
+            post(add_remote).layer(service_config.clone()),
+        )
 }
 
 #[axum_macros::debug_handler]
@@ -307,6 +504,14 @@ async fn commit_metadata(
     commit::commit_metadata(state, path).map_err(|err| err.into())
 }
 
+#[axum_macros::debug_handler]
+async fn add_remote(
+    axum::extract::Path(path): axum::extract::Path<commit::ParamRemote>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+) -> axum::response::Result<()> {
+    dbg!(&path);
+    commit::add_remote(state, path).map_err(|err| err.into())
+}
 pub struct Timed<T> {
     pub(crate) time: f64,
     pub(crate) content: T,

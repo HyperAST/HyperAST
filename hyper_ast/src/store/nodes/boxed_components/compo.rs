@@ -1,6 +1,7 @@
 pub struct Size(pub u32);
 pub struct SizeNoSpaces(pub u32);
 pub struct Height(pub u32);
+pub struct LineCount(pub u16);
 pub struct BytesLen(pub u32);
 
 #[derive(PartialEq, Eq)]

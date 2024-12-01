@@ -1,61 +1,64 @@
+///! fully compress all subtrees from a Java CST
+use crate::types::JavaEnabledTypeStore;
 use crate::{
-    types::TIdN,
+    types::{TStore, Type},
     TNode,
 };
+use hyper_ast::store::nodes::legion::RawHAST;
 use hyper_ast::{
     cyclomatic::Mcc,
     full::FullNode,
     hashed::{HashedNode, IndexingHashBuilder, MetaDataHashsBuilder},
     store::{
-        labels::LabelStore,
-        nodes::legion::{compo::NoSpacesCS, HashedNodeRef, PendingInsert},
+        defaults::LabelIdentifier,
+        nodes::{
+            legion::{dyn_builder, eq_node, HashedNodeRef},
+            EntityBuilder,
+        },
     },
     tree_gen::{
-        parser::Visibility, BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange
+        self,
+        parser::{Node, TreeCursor, Visibility},
+        BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics,
+        TextedGlobalData, TotalBytesGlobalData, TreeGen, WithByteRange,
     },
-    types::{self, AnyType, NodeStoreExt, TypeStore, TypeTrait, WithHashs, WithStats},
-    utils,
+    types::{self, AnyType, NodeStoreExt, Role, TypeTrait, WithHashs, WithStats},
 };
-use legion::world::EntryRef;
-use num::ToPrimitive;
-///! fully compress all subtrees from a Java CST
-use std::{collections::HashMap, fmt::Debug, hash::Hash, vec};
-use string_interner::DefaultSymbol;
-use tuples::CombinConcat;
-
 use hyper_ast::{
-    filter::BF,
-    filter::{Bloom, BloomSize},
+    filter::BloomSize,
     hashed::{self, SyntaxNodeHashs, SyntaxNodeHashsKinds},
     nodes::Space,
-    store::{
-        nodes::legion::{compo, compo::CS},
-        nodes::DefaultNodeStore as NodeStore,
-        SimpleStores,
-    },
-    tree_gen::parser::Node as _,
+    store::{nodes::legion::compo, nodes::DefaultNodeStore as NodeStore, SimpleStores},
     tree_gen::{
         compute_indentation, get_spacing, has_final_space, AccIndentation, Accumulator,
         BasicAccumulator, Spaces, ZippedTreeGen,
     },
-    types::{
-        LabelStore as LabelStoreTrait,
-        Tree,
-        // NodeStore as NodeStoreTrait,
-        Typed,
-    },
+    types::LabelStore as LabelStoreTrait,
 };
-// use hyper_ast::nodes::SimpleNode1;
+use legion::world::EntryRef;
+use num::ToPrimitive;
+use std::{collections::HashMap, fmt::Debug, vec};
+use tuples::CombinConcat;
 
-use crate::{
-    impact::partial_analysis::PartialAnalysis,
-    types::{JavaEnabledTypeStore, Type},
-};
+#[cfg(feature = "impact")]
+mod reference_analysis;
+// use reference_analysis::build_ana;
+#[cfg(feature = "impact")]
+pub use reference_analysis::add_md_ref_ana;
 
-pub use crate::impact::element::BulkHasher;
-
-pub fn hash32<T: ?Sized + Hash>(t: &T) -> u32 {
-    utils::clamp_u64_to_u32(&utils::hash(t))
+#[cfg(feature = "impact")]
+pub use crate::impact::partial_analysis::PartialAnalysis;
+#[cfg(not(feature = "impact"))]
+#[derive(Debug, Clone)]
+pub struct PartialAnalysis;
+impl PartialAnalysis {
+    pub fn init<F: FnMut(&str) -> LabelIdentifier>(
+        kind: &Type,
+        label: Option<&str>,
+        mut intern_label: F,
+    ) -> Self {
+        Self
+    }
 }
 
 pub type EntryR<'a> = EntryRef<'a>;
@@ -66,16 +69,15 @@ pub type NodeIdentifier = legion::Entity;
 
 pub type FNode = FullNode<BasicGlobalData, Local>;
 
-pub type LabelIdentifier = DefaultSymbol;
-
 // TODO try to use a const generic for space less generation ?
 // SPC: consider spaces ie. add them to the HyperAST,
 // NOTE there is a big issue with the byteLen of subtree then.
 // just provide a view abstracting spaces (see attempt in hyper_diff)
-pub struct JavaTreeGen<'stores, 'cache, TS> {
+pub struct JavaTreeGen<'stores, 'cache, TS = TStore, More = ()> {
     pub line_break: Vec<u8>,
     pub stores: &'stores mut SimpleStores<TS>,
     pub md_cache: &'cache mut MDCache,
+    pub more: More,
 }
 
 pub type MDCache = HashMap<NodeIdentifier, MD>;
@@ -88,6 +90,7 @@ pub struct MD {
     metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
     ana: Option<PartialAnalysis>,
     mcc: Mcc,
+    precomp_queries: PrecompQueries,
 }
 
 // Enables static reference analysis
@@ -99,20 +102,25 @@ impl From<Local> for MD {
             metrics: x.metrics,
             ana: x.ana,
             mcc: x.mcc,
+            precomp_queries: x.precomp_queries,
         }
     }
 }
 
 pub type Global<'a> = SpacedGlobalData<'a>;
 
+type PrecompQueries = u16;
+
 #[derive(Debug, Clone)]
 pub struct Local {
     pub compressed_node: NodeIdentifier,
     // * metadata: computation results from concrete code of node and its children
-    // they can be qualitative metadata .eg a hash or they can be quantitative .eg lines of code
+    // they can be qualitative metadata, e.g. a hash or they can be quantitative e.g. lines of code
     pub metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
     pub ana: Option<PartialAnalysis>,
     pub mcc: Mcc,
+    pub role: Option<Role>,
+    pub precomp_queries: PrecompQueries,
 }
 
 impl Local {
@@ -120,9 +128,15 @@ impl Local {
         if self.metrics.size_no_spaces > 0 {
             acc.no_space.push(self.compressed_node)
         }
+        if let Some(role) = self.role {
+            let o = acc.simple.children.len();
+            acc.role.acc(role, o);
+        }
         acc.simple.push(self.compressed_node);
         acc.metrics.acc(self.metrics);
+        acc.precomp_queries |= self.precomp_queries;
 
+        #[cfg(feature = "impact")]
         if let Some(s) = self.ana {
             // TODO use to simplify when stabilized
             // s.acc(&acc.simple.kind,acc.ana.get_or_insert_default());
@@ -149,6 +163,8 @@ pub struct Acc {
     mcc: Mcc,
     padding_start: usize,
     indentation: Spaces,
+    role: RoleAcc<crate::types::Role>,
+    precomp_queries: PrecompQueries,
 }
 
 impl Accumulator for Acc {
@@ -163,6 +179,7 @@ impl AccIndentation for Acc {
         &self.indentation
     }
 }
+
 impl WithByteRange for Acc {
     fn has_children(&self) -> bool {
         !self.simple.children.is_empty()
@@ -176,6 +193,32 @@ impl WithByteRange for Acc {
         self.end_byte
     }
 }
+
+impl types::Typed for Acc {
+    type Type = Type;
+
+    fn get_type(&self) -> Self::Type {
+        self.simple.kind
+    }
+}
+
+impl hyper_ast::tree_gen::WithChildren<NodeIdentifier> for Acc {
+    fn children(&self) -> &[NodeIdentifier] {
+        &self.simple.children
+    }
+}
+
+impl hyper_ast::tree_gen::WithRole<Role> for Acc {
+    fn role_at(&self, o: usize) -> Option<Role> {
+        self.role
+            .offsets
+            .iter()
+            .position(|x| *x as usize == o)
+            .and_then(|x| self.role.roles.get(x))
+            .cloned()
+    }
+}
+
 impl Debug for Acc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Acc")
@@ -193,11 +236,56 @@ impl Debug for Acc {
     }
 }
 
+struct RoleAcc<R> {
+    pub current: Option<R>,
+    pub roles: Vec<R>,
+    pub offsets: Vec<u8>,
+}
+
+impl<R> Default for RoleAcc<R> {
+    fn default() -> Self {
+        Self {
+            current: None,
+            roles: Default::default(),
+            offsets: Default::default(),
+        }
+    }
+}
+
+impl<R> RoleAcc<R> {
+    fn acc(&mut self, role: R, o: usize) {
+        self.roles.push(role);
+        self.offsets.push(o.to_u8().unwrap());
+    }
+
+    fn add_md(self, dyn_builder: &mut impl EntityBuilder)
+    where
+        R: 'static + std::marker::Send + std::marker::Sync,
+    {
+        debug_assert!(self.current.is_none());
+        if self.roles.len() > 0 {
+            dyn_builder.add(self.roles.into_boxed_slice());
+            dyn_builder.add(compo::RoleOffsets(self.offsets.into_boxed_slice()));
+        }
+    }
+}
+
 /// enables recovering of hidden nodes from tree-sitter
 #[cfg(not(debug_assertions))]
 const HIDDEN_NODES: bool = true;
+/// enables recovering of hidden nodes from tree-sitter
+// NOTE static mut allows me to change it in unit tests
 #[cfg(debug_assertions)]
-static HIDDEN_NODES: bool = true;
+pub static mut HIDDEN_NODES: bool = true;
+
+#[cfg(not(debug_assertions))]
+const fn should_get_hidden_nodes() -> bool {
+    HIDDEN_NODES
+}
+#[cfg(debug_assertions)]
+pub(crate) fn should_get_hidden_nodes() -> bool {
+    unsafe { HIDDEN_NODES }
+}
 
 #[repr(transparent)]
 pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
@@ -212,6 +300,7 @@ impl<'a> Debug for TTreeCursor<'a> {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+#[allow(unused)]
 enum TreeCursorStep {
     TreeCursorStepNone,
     TreeCursorStepHidden,
@@ -259,7 +348,7 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 
     fn goto_first_child_extended(&mut self) -> Option<Visibility> {
-        if HIDDEN_NODES {
+        if should_get_hidden_nodes() {
             unsafe {
                 let s = &mut self.0;
                 let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
@@ -276,7 +365,7 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 
     fn goto_next_sibling_extended(&mut self) -> Option<Visibility> {
-        if HIDDEN_NODES {
+        if should_get_hidden_nodes() {
             unsafe {
                 let s = &mut self.0;
                 let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
@@ -293,9 +382,22 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
     }
 }
 
+pub fn add_md_precomp_queries(
+    dyn_builder: &mut impl EntityBuilder,
+    precomp_queries: PrecompQueries,
+) {
+    if precomp_queries > 0 {
+        dyn_builder.add(compo::Precomp(precomp_queries));
+    } else {
+        dyn_builder.add(compo::PrecompFlag);
+    }
+}
+
 /// Implements [ZippedTreeGen] to offer a visitor for Java generation
-impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>>
-    ZippedTreeGen for JavaTreeGen<'stores, 'cache, TS>
+impl<'stores, 'cache, TS, More> ZippedTreeGen for JavaTreeGen<'stores, 'cache, TS, More>
+where
+    TS: JavaEnabledTypeStore,
+    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
 {
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores<TS>;
@@ -308,8 +410,7 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
     }
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> <Self as TreeGen>::Acc {
-        let type_store = &mut self.stores().type_store;
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
         let parent_indentation = Space::try_format_indentation(&self.line_break)
             .unwrap_or_else(|| vec![Space::Space; self.line_break.len()]);
         let indent = compute_indentation(
@@ -336,19 +437,43 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
             mcc,
             padding_start: 0,
             indentation: indent,
+            role: Default::default(),
+            precomp_queries: Default::default(),
         }
     }
 
     fn pre_skippable(
         &mut self,
         text: &Self::Text,
-        node: &Self::Node<'_>,
+        cursor: &Self::TreeCursor<'_>,
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
-        let type_store = &mut self.stores().type_store;
-        let kind = node.obtain_type(type_store);
+        let node = &cursor.node();
+        let kind = node.obtain_type();
+        if should_get_hidden_nodes() {
+            if kind.is_repeat() {
+                return PreResult::Ignore;
+            } else if kind == Type::_UnannotatedType
+                || kind == Type::_VariableDeclaratorList
+                || kind == Type::_VariableDeclaratorId
+            {
+                return PreResult::Ignore;
+            }
+        }
+        if node.0.is_missing() {
+            return PreResult::Skip;
+        }
         let mut acc = self.pre(text, node, stack, global);
+        // TODO replace with wrapper
+        if !stack
+            .parent()
+            .map_or(false, |a| a.simple.kind.is_supertype())
+        {
+            if let Some(r) = cursor.0.field_name() {
+                acc.role.current = r.try_into().ok();
+            }
+        }
         if kind == Type::StringLiteral {
             acc.labeled = true;
             return PreResult::SkipChildren(acc);
@@ -363,9 +488,15 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc {
-        let type_store = &mut self.stores().type_store;
         let parent_indentation = &stack.parent().unwrap().indentation();
-        let kind = node.obtain_type(type_store);
+        let kind = node.obtain_type();
+        assert!(
+            global.sum_byte_length() <= node.start_byte(),
+            "{}: {} <= {}",
+            kind,
+            global.sum_byte_length(),
+            node.start_byte()
+        );
         let indent = compute_indentation(
             &self.line_break,
             text,
@@ -387,6 +518,8 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
                 children: vec![],
             },
             no_space: vec![],
+            role: Default::default(),
+            precomp_queries: Default::default(),
         }
     }
 
@@ -432,24 +565,47 @@ pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::
     }
 }
 
-impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>>
-    JavaTreeGen<'stores, 'cache, TS>
+impl<'stores, 'cache, TS: JavaEnabledTypeStore> JavaTreeGen<'stores, 'cache, TS, ()> {
+    pub fn new<'a, 'b>(
+        stores: &'a mut SimpleStores<TS>,
+        md_cache: &'b mut MDCache,
+    ) -> JavaTreeGen<'a, 'b, TS, ()> {
+        JavaTreeGen {
+            line_break: "\n".as_bytes().to_vec(),
+            stores,
+            md_cache,
+            more: (),
+        }
+    }
+}
+
+impl<
+        'stores,
+        'cache,
+        TS: JavaEnabledTypeStore,
+        More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
+    > JavaTreeGen<'stores, 'cache, TS, More>
 {
-    fn make_spacing(
-        &mut self,
-        spacing: Vec<u8>, //Space>,
-    ) -> Local {
+    fn make_spacing(&mut self, spacing: Vec<u8>) -> Local {
+        let kind = Type::Spaces;
+        let interned_kind = TS::intern(kind);
+        debug_assert_eq!(kind, TS::resolve(interned_kind));
         let bytes_len = spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
+        let line_count = spacing
+            .matches("\n")
+            .count()
+            .to_u16()
+            .expect("too many newlines");
         let spacing_id = self.stores.label_store.get_or_insert(spacing.clone());
-        let hbuilder: hashed::Builder<SyntaxNodeHashs<u32>> =
-            hashed::Builder::new(Default::default(), &Type::Spaces, &spacing, 1);
+        let hbuilder: hashed::HashesBuilder<SyntaxNodeHashs<u32>> =
+            hashed::HashesBuilder::new(Default::default(), &interned_kind, &spacing, 1);
         let hsyntax = hbuilder.most_discriminating();
         let hashable = &hsyntax;
 
         let eq = |x: EntryRef| {
-            let t = x.get_component::<Type>();
-            if t != Ok(&Type::Spaces) {
+            let t = x.get_component::<TS::Ty>();
+            if t != Ok(&interned_kind) {
                 return false;
             }
             let l = x.get_component::<LabelIdentifier>();
@@ -470,10 +626,13 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
         } else {
             let vacant = insertion.vacant();
             let bytes_len = compo::BytesLen(bytes_len.try_into().unwrap());
-            NodeStore::insert_after_prepare(
-                vacant,
-                (Type::Spaces, spacing_id, bytes_len, hashs, BloomSize::None),
-            )
+            let a = (interned_kind, spacing_id, bytes_len, hashs, BloomSize::None);
+            if line_count == 0 {
+                NodeStore::insert_after_prepare(vacant, a)
+            } else {
+                let a = a.concat((compo::LineCount(line_count),));
+                NodeStore::insert_after_prepare(vacant, a)
+            }
         };
         Local {
             compressed_node,
@@ -482,20 +641,12 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
                 height: 0,
                 size_no_spaces: 0,
                 hashs,
+                line_count,
             },
             ana: Default::default(),
             mcc: Mcc::new(&Type::Spaces),
-        }
-    }
-
-    pub fn new<'a, 'b>(
-        stores: &'a mut SimpleStores<TS>,
-        md_cache: &'b mut MDCache,
-    ) -> JavaTreeGen<'a, 'b, TS> {
-        JavaTreeGen {
-            line_break: "\n".as_bytes().to_vec(),
-            stores,
-            md_cache,
+            role: None,
+            precomp_queries: Default::default(),
         }
     }
 
@@ -529,7 +680,7 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
         );
         if let Some(spacing) = spacing {
             global.down();
-            init.start_byte = 0;
+            global.set_sum_byte_length(init.start_byte);
             init.push(FullNode {
                 global: global.into(),
                 local: self.make_spacing(spacing),
@@ -560,6 +711,7 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
         let label = Some(std::str::from_utf8(name).unwrap().to_owned());
         let full_node = self.make(&mut global, acc, label);
 
+        #[cfg(feature = "impact")]
         match full_node.local.ana.as_ref() {
             Some(x) => {
                 log::debug!("refs in file:",);
@@ -582,242 +734,133 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
             return None;
         }
         let label_store = &mut self.stores.label_store;
-        if kind == &Type::ClassBody
-            || kind == &Type::PackageDeclaration
-            || kind == &Type::ClassDeclaration
-            || kind == &Type::EnumDeclaration
-            || kind == &Type::InterfaceDeclaration
-            || kind == &Type::AnnotationTypeDeclaration
-            || kind == &Type::Program
+        #[cfg(feature = "impact")]
         {
-            Some(PartialAnalysis::init(kind, None, |x| {
-                label_store.get_or_insert(x)
-            }))
-        } else if kind == &Type::TypeParameter {
-            Some(PartialAnalysis::init(kind, None, |x| {
-                label_store.get_or_insert(x)
-            }))
-        } else {
+            build_ana(kind, label_store)
+        }
+        #[cfg(not(feature = "impact"))]
+        {
             None
         }
     }
 }
 
-pub fn eq_node<'a, K>(
-    kind: &'a K,
-    label_id: Option<&'a LabelIdentifier>,
-    children: &'a [NodeIdentifier],
-) -> impl Fn(EntryRef) -> bool + 'a
+impl<'stores, 'cache, TS, More> TreeGen for JavaTreeGen<'stores, 'cache, TS, More>
 where
-    K: 'static + Eq + std::hash::Hash + Copy + std::marker::Send + std::marker::Sync,
-{
-    move |x: EntryRef| {
-        let t = x.get_component::<K>();
-        if t != Ok(kind) {
-            return false;
-        }
-        let l = x.get_component::<LabelIdentifier>().ok();
-        if l != label_id {
-            return false;
-        } else {
-            let cs = x.get_component::<CS<legion::Entity>>();
-            let r = match cs {
-                Ok(CS(cs)) => cs.as_ref() == children,
-                Err(_) => children.is_empty(),
-            };
-            if !r {
-                return false;
-            }
-        }
-        true
-    }
-}
-
-impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeIdentifier>>>>
-    TreeGen for JavaTreeGen<'stores, 'cache, TS>
+    TS: JavaEnabledTypeStore,
+    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
 {
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;
     fn make(
         &mut self,
         global: &mut <Self as TreeGen>::Global,
-        acc: <Self as TreeGen>::Acc,
+        mut acc: <Self as TreeGen>::Acc,
         label: Option<String>,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
-        let node_store = &mut self.stores.node_store;
-        let label_store = &mut self.stores.label_store;
-        let interned_kind = acc.simple.kind;
-        // let interned_kind = JavaEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
-        let hashs = acc.metrics.hashs;
-        let size = acc.metrics.size + 1;
-        let height = acc.metrics.height + 1;
-        let size_no_spaces = acc.metrics.size_no_spaces + 1;
-        let hbuilder = hashed::Builder::new(hashs, &interned_kind, &label, size_no_spaces);
-        let hsyntax = hbuilder.most_discriminating();
-        let hashable = &hsyntax;
+        let interned_kind = TS::intern(acc.simple.kind);
+        let own_line_count = label.as_ref().map_or(0, |l| {
+            l.matches("\n").count().to_u16().expect("too many newlines")
+        });
+        let metrics = acc.metrics.finalize(&interned_kind, &label, own_line_count);
+
+        let hashable = &metrics.hashs.most_discriminating();
 
         let label_id = label.as_ref().map(|label| {
             // Some notable type can contain very different labels,
             // they might benefit from a particular storing (like a blob storage, even using git's object database )
             // eg. acc.simple.kind == Type::Comment and acc.simple.kind.is_literal()
-            label_store.get_or_insert(label.as_str())
+            self.stores.label_store.get_or_insert(label.as_str())
         });
         let eq = eq_node(&interned_kind, label_id.as_ref(), &acc.simple.children);
 
-        let insertion = node_store.prepare_insertion(&hashable, eq);
+        let insertion = self.stores.node_store.prepare_insertion(hashable, eq);
 
         let local = if let Some(compressed_node) = insertion.occupied_id() {
             let md = self.md_cache.get(&compressed_node).unwrap();
             let ana = md.ana.clone();
             let metrics = md.metrics;
+            let precomp_queries = md.precomp_queries;
             let mcc = md.mcc.clone();
             Local {
                 compressed_node,
                 metrics,
                 ana,
                 mcc,
+                role: acc.role.current,
+                precomp_queries,
             }
         } else {
-            let ana = make_partial_ana(
+            #[cfg(feature = "impact")]
+            reference_analysis::make_partial_ana(
                 acc.simple.kind,
-                acc.ana,
-                label,
+                &mut acc.ana,
+                &label,
                 &acc.simple.children,
-                label_store,
+                &mut self.stores.label_store,
                 &insertion,
             );
-            let hashs = hbuilder.build();
-            let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte).try_into().unwrap());
-            let mcc = acc.mcc;
-            let compressed_node = if false {
-                let base = (interned_kind, hashs, bytes_len);
-                compress(
-                    label_id,
-                    &ana,
-                    acc.simple,
-                    acc.no_space,
-                    size,
-                    height,
-                    size_no_spaces,
-                    insertion,
-                    mcc.clone(),
-                    base,
-                )
-            } else {
-                // NOTE use of dyn_builder
-                // TODO make it available through cargo feature or runtime config
-                // - should most likely not change the behavior of the HyperAST, need tests
-                // TODO make an even better API
-                // - wrapping the builder,
-                // - modularising computation and storage of metadata,
-                // - checking some invariants when adding metadata,
-                // - checking some invariants for indentifying data on debug builds
-                // - tying up parts of accumulator (hyper_ast::tree_genBasicAccumulator) and builder (EntityBuilder).
-                let mut dyn_builder =
-                    hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
-                dyn_builder.add(interned_kind);
-                dyn_builder.add(hashs.clone());
-                dyn_builder.add(compo::BytesLen(
-                    (acc.end_byte - acc.start_byte).try_into().unwrap(),
-                ));
-
-                if Mcc::persist(&acc.simple.kind) {
-                    dyn_builder.add(mcc.clone());
-                }
-                if let Some(label_id) = label_id {
-                    dyn_builder.add(label_id);
-                }
-                if !acc.simple.children.is_empty() {
-                    macro_rules! bloom_aux {
-                        ( $t:ty ) => {{
-                            type B = $t;
-                            let it = ana.as_ref().unwrap().solver.iter_refs();
-                            let it =
-                                BulkHasher::<_, <B as BF<[u8]>>::S, <B as BF<[u8]>>::H>::from(it);
-                            let bloom = B::from(it);
-                            dyn_builder.add(B::SIZE);
-                            dyn_builder.add(bloom);
-                        }};
-                    }
-                    macro_rules! bloom {
-                        ( $t:ty ) => {{
-                            bloom_aux!(Bloom::<&'static [u8], $t>);
-                        }};
-                    }
-                    match ana.as_ref().map(|x| x.estimated_refs_count()).unwrap_or(0) {
-                        x if x > 2048 => {
-                            dyn_builder.add(BloomSize::Much);
-                        }
-                        x if x > 1024 => bloom!([u64; 64]),
-                        x if x > 512 => bloom!([u64; 32]),
-                        x if x > 256 => bloom!([u64; 16]),
-                        x if x > 150 => bloom!([u64; 8]),
-                        x if x > 100 => bloom!([u64; 4]),
-                        x if x > 30 => bloom!([u64; 2]),
-                        x if x > 15 => bloom!(u64),
-                        x if x > 8 => bloom!(u32),
-                        x if x > 0 => bloom!(u16),
-                        _ => {
-                            dyn_builder.add(BloomSize::None);
-                        } // TODO use the following after having tested the previous, already enough changes for now
-                          // 2048.. => {
-                          //     dyn_builder.add(BloomSize::Much);
-                          // }
-                          // 1024.. => bloom!([u64; 64]),
-                          // 512.. => bloom!([u64; 32]),
-                          // 256.. => bloom!([u64; 16]),
-                          // 150.. => bloom!([u64; 8]),
-                          // 100.. => bloom!([u64; 4]),
-                          // 32.. => bloom!([u64; 2]),
-                          // 16.. => bloom!(u64),
-                          // 8.. => bloom!(u32),
-                          // 1.. => bloom!(u16),
-                          // 0 => {
-                          //     dyn_builder.add(BloomSize::None);
-                          // }
-                    }
-                }
-
-                match acc.simple.children.len() {
-                    0 => {
-                        dyn_builder.add(BloomSize::None);
-                    }
-                    x => {
-                        let a = acc.simple.children.into_boxed_slice();
-                        dyn_builder.add(compo::Size(size));
-                        dyn_builder.add(compo::SizeNoSpaces(size_no_spaces));
-                        dyn_builder.add(compo::Height(height));
-                        dyn_builder.add(CS(a));
-                        if x != acc.no_space.len() {
-                            dyn_builder.add(NoSpacesCS(acc.no_space.into_boxed_slice()));
-                        }
-                    }
-                }
-
-                NodeStore::insert_built_after_prepare(insertion.vacant(), dyn_builder.build())
+            let metrics = metrics.map_hashs(|h| h.build());
+            let byte_len = (acc.end_byte - acc.start_byte).try_into().unwrap();
+            let bytes_len = compo::BytesLen(byte_len);
+            let vacant = insertion.vacant();
+            let node_store: &legion::World = vacant.1 .1;
+            let stores = SimpleStores {
+                type_store: self.stores.type_store.clone(),
+                label_store: &self.stores.label_store,
+                node_store,
             };
+            acc.precomp_queries |= self
+                .more
+                .match_precomp_queries(&stores, &acc, label.as_deref());
+            let children_is_empty = acc.simple.children.is_empty();
 
-            let metrics = SubTreeMetrics {
-                size,
-                height,
-                size_no_spaces,
-                hashs,
-            };
+            let mut dyn_builder = dyn_builder::EntityBuilder::new();
+            dyn_builder.add(bytes_len);
+
+            let current_role = Option::take(&mut acc.role.current);
+            acc.role.add_md(&mut dyn_builder);
+            if Mcc::persist(&acc.simple.kind) {
+                dyn_builder.add(acc.mcc.clone());
+            }
+            if More::ENABLED {
+                add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
+            }
+            #[cfg(feature = "impact")]
+            reference_analysis::add_md_ref_ana(
+                &mut dyn_builder,
+                children_is_empty,
+                acc.ana.as_ref(),
+            );
+            let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
+            hashs.persist(&mut dyn_builder);
+
+            if acc.simple.children.len() != acc.no_space.len() {
+                dyn_builder.add(compo::NoSpacesCS(acc.no_space.into_boxed_slice()));
+            }
+            acc.simple
+                .add_primary(&mut dyn_builder, interned_kind, label_id);
+
+            let compressed_node =
+                NodeStore::insert_built_after_prepare(vacant, dyn_builder.build());
 
             // TODO see if possible to only keep md in md_cache, but would need a generational cache I think
             self.md_cache.insert(
                 compressed_node,
                 MD {
                     metrics: metrics.clone(),
-                    ana: ana.clone(),
-                    mcc: mcc.clone(),
+                    ana: acc.ana.clone(),
+                    mcc: acc.mcc.clone(),
+                    precomp_queries: acc.precomp_queries.clone(),
                 },
             );
             Local {
                 compressed_node,
                 metrics,
-                ana,
-                mcc,
+                ana: acc.ana,
+                mcc: acc.mcc,
+                role: current_role,
+                precomp_queries: acc.precomp_queries,
             }
         };
 
@@ -829,313 +872,16 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, TIdN<NodeI
     }
 }
 
-fn compress<T: 'static + std::marker::Send + std::marker::Sync>(
-    label_id: Option<LabelIdentifier>,
-    ana: &Option<PartialAnalysis>,
-    simple: BasicAccumulator<Type, NodeIdentifier>,
-    no_space: Vec<NodeIdentifier>,
-    // bytes_len: compo::BytesLen,
-    size: u32,
-    height: u32,
-    size_no_spaces: u32,
-    insertion: PendingInsert,
-    // hashs: SyntaxNodeHashs<u32>,
-    mcc: Mcc,
-    base: (T, SyntaxNodeHashs<u32>, compo::BytesLen),
-) -> legion::Entity {
-    let vacant = insertion.vacant();
-    macro_rules! insert {
-        ( $c0:expr, $($c:expr),* $(,)? ) => {{
-            let c = $c0;
-            $(
-                let c = c.concat($c);
-            )*
-            NodeStore::insert_after_prepare(vacant, c)
-        }};
-    }
-    // NOTE needed as macro because I only implemented BulkHasher and Bloom for u8 and u16
-    // TODO use, compare and bench alternatives to macro here,
-    // ie. try an entity builder (see `hyper_ast::**::legion::dyn_builder`) or legion's `CommandBuffer`
-    macro_rules! bloom {
-        ( $t:ty ) => {{
-            type B = $t;
-            let it = ana.as_ref().unwrap().solver.iter_refs();
-            let it = BulkHasher::<_, <B as BF<[u8]>>::S, <B as BF<[u8]>>::H>::from(it);
-            let bloom = B::from(it);
-            (B::SIZE, bloom)
-        }};
-    }
-    macro_rules! bloom_dipatch {
-        ( $($c:expr),+ $(,)? ) => {{
-            // dbg!(ana.as_ref().map(|x| x.estimated_refs_count()));
-            match ana.as_ref().map(|x| x.estimated_refs_count()).unwrap_or(0) {
-                x if x > 2048 => {
-                    insert!($($c),+, (BloomSize::Much,),)
-                }
-                x if x > 1024 => {
-                    insert!($($c),+, bloom!(Bloom::<&'static [u8], [u64; 64]>))
-                }
-                x if x > 512 => {
-                    insert!($($c),+, bloom!(Bloom::<&'static [u8], [u64; 32]>))
-                }
-                x if x > 256 => {
-                    insert!($($c),+, bloom!(Bloom::<&'static [u8], [u64; 16]>))
-                }
-                x if x > 150 => {
-                    insert!($($c),+, bloom!(Bloom::<&'static [u8], [u64; 8]>))
-                }
-                x if x > 100 => {
-                    insert!($($c),+, bloom!(Bloom::<&'static [u8], [u64; 4]>))
-                }
-                x if x > 30 => {
-                    insert!($($c),+, bloom!(Bloom::<&'static [u8], [u64; 2]>))
-                }
-                x if x > 15 => {
-                    insert!($($c),+, bloom!(Bloom::<&'static [u8], u64>))
-                }
-                x if x > 8 => {
-                    insert!($($c),+, bloom!(Bloom::<&'static [u8], u32>))
-                }
-                x if x > 0 => {
-                    insert!($($c),+, bloom!(Bloom::<&'static [u8], u16>))
-                }
-                _ => {
-                    insert!($($c),+, (BloomSize::None,))
-                },
-            }
-        }};
-    }
-    macro_rules! children_dipatch {
-        ( $c0:expr, $($c:expr),* $(,)? ) => {{
-            let c = $c0;
-            $(
-                let c = c.concat($c);
-            )*
-            match simple.children.len() {
-                0 => {
-                    assert_eq!(1, size);
-                    assert_eq!(1, height);
-                    insert!(c, (BloomSize::None,))
-                }
-                // TODO try to reduce indirections
-                // might need more data inline in child pointer to be worth the added contruction cost
-                // might also benefit from using more data to choose between inlining childs or not
-                // // WARN if you dont want to use the inlining you can comment then change children accessors
-                // 1 => {
-                //     let a = simple.children;
-                //     bloom_dipatch!(
-                //         $($c),+,
-                //         (compo::Size(size), compo::Height(height),),
-                //         (CSStaticCount(1), CS0([a[0]]),)
-                //     )
-                // }
-                // 2 => {
-                //     let a = simple.children;
-                //     bloom_dipatch!(
-                //         $($c),+,
-                //         (compo::Size(size), compo::Height(height),),
-                //         (CSStaticCount(2), CS0([a[0],a[1]]),)
-                //     )
-                // }
-                // 3 => {
-                //     let a = simple.children;
-                //     let c = c.concat((compo::Size(size), compo::Height(height),));
-                //     let c = c.concat((CSStaticCount(3), CS0([a[0],a[1],a[2]]),));
-                //     bloom_dipatch!(
-                //         c,
-                //     )
-                // }
-                x => {
-                    let a = simple.children.into_boxed_slice();
-                    let c = c.concat((compo::Size(size), compo::SizeNoSpaces(size_no_spaces), compo::Height(height),));
-                    let c = c.concat((CS(a),));
-                    if x == no_space.len() {
-                        bloom_dipatch!(c)
-                    } else {
-                        let b = no_space.into_boxed_slice();
-                        bloom_dipatch!(c, (NoSpacesCS(b),))
-                    }
-                }
-            }}
-        };
-    }
-    // let base = (interned_kind, hashs, bytes_len);
-    match (label_id, mcc) {
-        (None, mcc) if Mcc::persist(&simple.kind) => children_dipatch!(base, (mcc,),),
-        (None, _) => children_dipatch!(base,),
-        (Some(label), mcc) if Mcc::persist(&simple.kind) => children_dipatch!(base, (label, mcc,),),
-        (Some(label), _) => children_dipatch!(base, (label,),),
-    }
-}
-fn make_partial_ana(
-    kind: Type,
-    ana: Option<PartialAnalysis>,
-    label: Option<String>,
-    children: &[legion::Entity],
-    label_store: &mut LabelStore,
-    insertion: &PendingInsert,
-) -> Option<PartialAnalysis> {
-    if !ANA {
-        return None;
-    }
-    partial_ana_extraction(kind, ana, label, children, label_store, insertion)
-        .map(|ana| ana_resolve(kind, ana, label_store))
-}
-
-fn ana_resolve(kind: Type, ana: PartialAnalysis, label_store: &LabelStore) -> PartialAnalysis {
-    if kind == Type::ClassBody
-        || kind.is_type_declaration()
-        || kind == Type::MethodDeclaration
-        || kind == Type::ConstructorDeclaration
-    {
-        log::trace!("refs in {kind:?}");
-        for x in ana.display_refs(label_store) {
-            log::trace!("    {}", x);
-        }
-        log::trace!("decls in {kind:?}");
-        for x in ana.display_decls(label_store) {
-            log::trace!("    {}", x);
-        }
-        let ana = ana.resolve();
-        log::trace!("refs in {kind:?} after resolution");
-
-        for x in ana.display_refs(label_store) {
-            log::trace!("    {}", x);
-        }
-        ana
-    } else if kind == Type::Program {
-        log::debug!("refs in {kind:?}");
-        for x in ana.display_refs(label_store) {
-            log::debug!("    {}", x);
-        }
-        log::debug!("decls in {kind:?}");
-        for x in ana.display_decls(label_store) {
-            log::debug!("    {}", x);
-        }
-        let ana = ana.resolve();
-        log::debug!("refs in {kind:?} after resolve");
-        for x in ana.display_refs(label_store) {
-            log::debug!("    {}", x);
-        }
-        // TODO assert that ana.solver.refs does not contains mentions to ?.this
-        ana
-    } else {
-        ana
-    }
-}
-
-fn partial_ana_extraction(
-    kind: Type,
-    ana: Option<PartialAnalysis>,
-    label: Option<String>,
-    children: &[legion::Entity],
-    label_store: &mut LabelStore,
-    insertion: &PendingInsert,
-) -> Option<PartialAnalysis> {
-    let is_possibly_empty = |kind| {
-        kind == Type::ArgumentList
-            || kind == Type::FormalParameters
-            || kind == Type::AnnotationArgumentList
-            || kind == Type::SwitchLabel
-            || kind == Type::Modifiers
-            || kind == Type::BreakStatement
-            || kind == Type::ContinueStatement
-            || kind == Type::Wildcard
-            || kind == Type::ConstructorBody
-            || kind == Type::InterfaceBody
-            || kind == Type::SwitchBlock
-            || kind == Type::ClassBody
-            || kind == Type::EnumBody
-            || kind == Type::ModuleBody
-            || kind == Type::AnnotationTypeBody
-            || kind == Type::TypeArguments
-            || kind == Type::ArrayInitializer
-            || kind == Type::ReturnStatement
-            || kind == Type::ForStatement
-            || kind == Type::RequiresModifier
-            || kind == Type::ERROR
-    };
-    let mut make = |label| {
-        Some(PartialAnalysis::init(&kind, label, |x| {
-            label_store.get_or_insert(x)
-        }))
-    };
-    if kind == Type::Program {
-        ana
-    } else if kind.is_comment() {
-        None
-    } else if let Some(label) = label.as_ref() {
-        let label = if kind.is_literal() {
-            kind.literal_type()
-        } else {
-            label.as_str()
-        };
-        make(Some(label))
-    } else if kind.is_primitive() {
-        let node = insertion.resolve::<TIdN<NodeIdentifier>>(children[0]);
-        let ty = node.get_type();
-        let label = ty.to_str();
-        make(Some(label))
-    } else if let Some(ana) = ana {
-        // nothing to do, resolutions at the end of post ?
-        Some(ana)
-    } else if kind == Type::Static
-        || kind == Type::Public
-        || kind == Type::Asterisk
-        || kind == Type::Dimensions
-        || kind == Type::Block
-        || kind == Type::ElementValueArrayInitializer
-        || kind == Type::PackageDeclaration
-        || kind == Type::TypeParameter
-    {
-        make(None)
-    } else if is_possibly_empty(kind) {
-        if kind == Type::ArgumentList
-            || kind == Type::FormalParameters
-            || kind == Type::AnnotationArgumentList
-        {
-            if !children
-                .iter()
-                .all(|x| !insertion.resolve::<TIdN<NodeIdentifier>>(*x).has_children())
-            {
-                // eg. an empty body/block/paramlist/...
-                log::error!("{:?} should only contains leafs", &kind);
-            }
-            make(None)
-        // } else if kind == Type::SwitchLabel || kind == Type::Modifiers {
-        //     // TODO decls or refs ?
-        //     None
-        } else {
-            None
-        }
-    } else {
-        if !children.is_empty()
-            && children
-                .iter()
-                .all(|x| !insertion.resolve::<TIdN<NodeIdentifier>>(*x).has_children())
-        {
-            // eg. an empty body/block/paramlist/...
-            log::error!("{:?} should only contains leafs", kind);
-        }
-        None
-    }
-}
-
-impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, AnyType>>>
-    hyper_ast::types::NodeStore<NodeIdentifier> for JavaTreeGen<'stores, 'cache, TS>
-{
-    type R<'a> = HashedNodeRef<'a,NodeIdentifier> where Self: 'a, 'stores:'a;
-
-    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
-        self.stores.node_store.resolve(*id)
-    }
-}
-
-impl<'stores, 'cache, TS: JavaEnabledTypeStore<HashedNodeRef<'stores, AnyType>>>
-    NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache, TS>
+impl<
+        'stores,
+        'cache,
+        TS: JavaEnabledTypeStore,
+        More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
+    > NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache, TS, More>
 where
-    <TS as TypeStore<HashedNodeRef<'stores, AnyType>>>::Ty: TypeTrait,
+    TS::Ty: TypeTrait,
 {
+    #[allow(unused)]
     fn build_then_insert(
         &mut self,
         i: <HashedNode as hyper_ast::types::Stored>::TreeId,
@@ -1174,6 +920,8 @@ where
                     children: vec![],
                 },
                 no_space: vec![],
+                role: Default::default(),
+                precomp_queries: Default::default(),
             }
         };
         for c in cs {
@@ -1199,6 +947,7 @@ where
                         height: node.height().to_u32().unwrap(),
                         size_no_spaces: node.size_no_spaces().to_u32().unwrap(),
                         hashs,
+                        line_count: node.line_count().to_u16().unwrap(),
                     };
                     let mcc = node
                         .get_component::<Mcc>()
@@ -1210,6 +959,8 @@ where
                     metrics,
                     ana,
                     mcc,
+                    role: acc.role.current,
+                    precomp_queries: todo!(),
                 }
             };
             let global = BasicGlobalData::default();
@@ -1219,19 +970,18 @@ where
         let post = {
             let node_store = &mut self.stores.node_store;
             let label_store = &mut self.stores.label_store;
-            let interned_kind = acc.simple.kind;
-            // JavaEnabledTypeStore::intern(&self.stores.type_store, acc.simple.kind);
+            let label_id = l;
+            let label = label_id.map(|l| label_store.resolve(&l));
 
-            let hashs = acc.metrics.hashs;
-            let size = acc.metrics.size + 1;
-            let height = acc.metrics.height + 1;
-            let size_no_spaces = acc.metrics.size_no_spaces + 1;
-            let label = l.map(|l| label_store.resolve(&l));
-            let hbuilder = hashed::Builder::new(hashs, &interned_kind, &label, size_no_spaces);
-            let hsyntax = hbuilder.most_discriminating();
+            let interned_kind = TS::intern(acc.simple.kind);
+            let own_line_count = label.as_ref().map_or(0, |l| {
+                l.matches("\n").count().to_u16().expect("too many newlines")
+            });
+            let metrics = acc.metrics.finalize(&interned_kind, &label, own_line_count);
+
+            let hsyntax = metrics.hashs.most_discriminating();
             let hashable = &hsyntax;
 
-            let label_id = l;
             let eq = eq_node(&interned_kind, label_id.as_ref(), &acc.simple.children);
 
             let insertion = node_store.prepare_insertion(&hashable, eq);
@@ -1240,55 +990,80 @@ where
                 let md = self.md_cache.get(&id).unwrap();
                 let ana = md.ana.clone();
                 let metrics = md.metrics;
+                let precomp_queries = md.precomp_queries;
                 let mcc = md.mcc.clone();
                 Local {
                     compressed_node: id,
                     metrics,
                     ana,
                     mcc,
+                    role: acc.role.current,
+                    precomp_queries,
                 }
             } else {
-                let ana = None;
-                let hashs = hbuilder.build();
+                let metrics = metrics.map_hashs(|h| h.build());
                 let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte) as u32);
-                let base = (interned_kind, hashs, bytes_len);
 
-                let mcc = Mcc::new(&acc.simple.kind);
-
-                let compressed_node = compress(
-                    label_id,
-                    &ana,
-                    acc.simple,
-                    acc.no_space,
-                    size,
-                    height,
-                    size_no_spaces,
-                    insertion,
-                    mcc.clone(),
-                    base,
-                );
-
-                let metrics = SubTreeMetrics {
-                    size,
-                    height,
-                    size_no_spaces,
-                    hashs,
+                let vacant = insertion.vacant();
+                let node_store: &legion::World = vacant.1 .1;
+                let stores = SimpleStores {
+                    type_store: self.stores.type_store.clone(),
+                    node_store,
+                    label_store: &self.stores.label_store,
                 };
+
+                acc.precomp_queries |= self.more.match_precomp_queries(&stores, &acc, label);
+                let children_is_empty = acc.simple.children.is_empty();
+
+                let mut dyn_builder = dyn_builder::EntityBuilder::new();
+                dyn_builder.add(bytes_len);
+
+                let current_role = Option::take(&mut acc.role.current);
+                acc.role.add_md(&mut dyn_builder);
+                if Mcc::persist(&acc.simple.kind) {
+                    dyn_builder.add(acc.mcc.clone());
+                }
+                if let Some(label_id) = label_id {
+                    dyn_builder.add(label_id);
+                }
+                if More::ENABLED {
+                    add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
+                }
+                #[cfg(feature = "impact")]
+                reference_analysis::add_md_ref_ana(
+                    &mut dyn_builder,
+                    children_is_empty,
+                    acc.ana.as_ref(),
+                );
+                let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
+                hashs.persist(&mut dyn_builder);
+                if !children_is_empty {
+                    if acc.simple.children.len() != acc.no_space.len() {
+                        dyn_builder.add(compo::NoSpacesCS(acc.no_space.into_boxed_slice()));
+                    }
+                }
+                acc.simple
+                    .add_primary(&mut dyn_builder, interned_kind, label_id);
+                let compressed_node =
+                    NodeStore::insert_built_after_prepare(vacant, dyn_builder.build());
 
                 // TODO see if possible to only keep md in md_cache, but would need a generational cache I think
                 self.md_cache.insert(
                     compressed_node,
                     MD {
                         metrics: metrics.clone(),
-                        ana: ana.clone(),
-                        mcc: mcc.clone(),
+                        ana: acc.ana.clone(),
+                        mcc: acc.mcc.clone(),
+                        precomp_queries: acc.precomp_queries.clone(),
                     },
                 );
                 Local {
                     compressed_node,
                     metrics,
-                    ana,
-                    mcc,
+                    ana: acc.ana,
+                    mcc: acc.mcc,
+                    role: current_role,
+                    precomp_queries: todo!(),
                 }
             };
             local
@@ -1296,217 +1071,3 @@ where
         post.compressed_node
     }
 }
-
-// pub fn print_tree_ids(node_store: &NodeStore, id: &NodeIdentifier) {
-//     nodes::print_tree_ids(
-//         |id| -> _ {
-//             node_store
-//                 .resolve::<Type>(id.clone())
-//                 .into_compressed_node()
-//                 .unwrap()
-//         },
-//         id,
-//     )
-// }
-
-// pub fn print_tree_structure(node_store: &NodeStore, id: &NodeIdentifier) {
-//     nodes::print_tree_structure(
-//         |id| -> _ {
-//             node_store
-//                 .resolve::<Type>(id.clone())
-//                 .into_compressed_node()
-//                 .unwrap()
-//         },
-//         id,
-//     )
-// }
-
-// pub fn print_tree_labels(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
-//     nodes::print_tree_labels(
-//         |id| -> _ {
-//             node_store
-//                 .resolve::<Type>(id.clone())
-//                 .into_compressed_node()
-//                 .unwrap()
-//         },
-//         |id| -> _ { label_store.resolve(id).to_owned() },
-//         id,
-//     )
-// }
-
-// pub fn print_tree_syntax(node_store: &NodeStore, label_store: &LabelStore, id: &NodeIdentifier) {
-//     nodes::print_tree_syntax(
-//         |id| -> _ {
-//             node_store
-//                 .resolve::<Type>(id.clone())
-//                 .into_compressed_node()
-//                 .unwrap()
-//         },
-//         |id| -> _ { label_store.resolve(id).to_owned() },
-//         id,
-//         &mut Into::<IoOut<_>>::into(stdout()),
-//     )
-// }
-
-// pub fn print_tree_syntax_with_ids(
-//     node_store: &NodeStore,
-//     label_store: &LabelStore,
-//     id: &NodeIdentifier,
-// ) {
-//     nodes::print_tree_syntax_with_ids(
-//         |id| -> _ {
-//             node_store
-//                 .resolve::<Type>(id.clone())
-//                 .into_compressed_node()
-//                 .unwrap()
-//         },
-//         |id| -> _ { label_store.resolve(id).to_owned() },
-//         id,
-//         &mut Into::<IoOut<_>>::into(stdout()),
-//     )
-// }
-
-// pub fn serialize<W: std::fmt::Write>(
-//     node_store: &NodeStore,
-//     label_store: &LabelStore,
-//     id: &NodeIdentifier,
-//     out: &mut W,
-//     parent_indent: &str,
-// ) -> Option<String> {
-//     todo!()
-//     // nodes::serialize(
-//     //     |id| -> _ {
-//     //         node_store
-//     //             .resolve::<Type>(id.clone())
-//     //             .into_compressed_node()
-//     //             .unwrap()
-//     //     },
-//     //     |id| -> _ { label_store.resolve(id).to_owned() },
-//     //     id,
-//     //     out,
-//     //     parent_indent,
-//     // )
-// }
-
-// pub fn json_serialize<'a, W: std::fmt::Write, HAST, const SPC: bool>(
-//     stores: &'a HAST,
-//     id: &HAST::IdN,
-//     out: &mut W,
-//     parent_indent: &str,
-// ) -> Option<String>
-// where
-//     HAST: HyperAST<'a>,
-// {
-//     hyper_ast::nodes::Serializer::serialize(stores, id, out, parent_indent)
-//     // nodes::json_serialize::<_, _, _, _, _, _, SPC>(
-//     //     |id| -> _ { node_store.resolve::<Type>(id.clone()) },
-//     //     |id| -> _ { label_store.resolve(id).to_owned() },
-//     //     id,
-//     //     out,
-//     //     parent_indent,
-//     // )
-// }
-
-// pub struct TreeSerializer<'a> {
-//     node_store: &'a NodeStore,
-//     label_store: &'a LabelStore,
-//     id: NodeIdentifier,
-// }
-// impl<'a> TreeSerializer<'a> {
-//     pub fn new(node_store: &'a NodeStore, label_store: &'a LabelStore, id: NodeIdentifier) -> Self {
-//         Self {
-//             node_store,
-//             label_store,
-//             id,
-//         }
-//     }
-// }
-// impl<'a> Display for TreeSerializer<'a> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-//         serialize(self.node_store, self.label_store, &self.id, f, "\n");
-//         Ok(())
-//     }
-// }
-
-// pub struct TreeJsonSerializer<'a, IdN, NS, LS, const SPC: bool = true> {
-//     node_store: &'a NS,
-//     label_store: &'a LS,
-//     id: IdN,
-// }
-// impl<'a, IdN, NS, LS, const SPC: bool> TreeJsonSerializer<'a, IdN, NS, LS, SPC> {
-//     pub fn new(node_store: &'a NS, label_store: &'a LS, id: IdN) -> Self {
-//         Self {
-//             node_store,
-//             label_store,
-//             id,
-//         }
-//     }
-// }
-// impl<'a, IdN, NS, LS, const SPC: bool> Display for TreeJsonSerializer<'a, IdN, NS, LS, SPC>
-// where
-//     NS: hyper_ast::types::NodeStore<IdN>,
-//     <NS as hyper_ast::types::NodeStore<IdN>>::R<'a>:
-//         hyper_ast::types::Tree<TreeId = IdN, Label = LS::I>,
-//     LS: hyper_ast::types::LabelStore<String>,
-//     <<NS as hyper_ast::types::NodeStore<IdN>>::R<'a> as hyper_ast::types::Typed>::Type:
-//         TypeTrait + Display,
-// {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-//         let id = &self.id;
-//         nodes::json_serialize::<_, _, _, _, _, _, SPC>(
-//             |id| -> _ { self.node_store.resolve(id.clone()) },
-//             |id| -> _ { self.label_store.resolve(id).to_owned() },
-//             id,
-//             f,
-//             "\n",
-//         );
-//         Ok(())
-//     }
-// }
-
-// pub struct TreeSyntax<'a, IdN, NS, LS> {
-//     node_store: &'a NS,
-//     label_store: &'a LS,
-//     id: IdN,
-// }
-// impl<'a, IdN, NS, LS> TreeSyntax<'a, IdN, NS, LS> {
-//     pub fn new(node_store: &'a NS, label_store: &'a LS, id: IdN) -> Self {
-//         Self {
-//             node_store,
-//             label_store,
-//             id,
-//         }
-//     }
-// }
-
-// impl<'a, IdN: TypedNodeId<Ty = Type>, NS, LS> Display for TreeSyntax<'a, IdN, NS, LS>
-// where
-//     LS: hyper_ast::types::LabelStore<DefaultLabelValue, I = LabelIdentifier>,
-//     NS: hyper_ast::types::TypedNodeStore<IdN>,
-//     NS::R<'a>: Tree<TreeId = IdN::IdN, Label = LabelIdentifier>,
-// {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-//         nodes::print_tree_syntax(
-//             |id| -> _ {
-//                 let b = self.node_store.resolve(id);
-//                 use hyper_ast::types::{IterableChildren, WithChildren};
-//                 let r = CompressedNode::<IdN, _, _>::new(
-//                     b.get_type(),
-//                     b.try_get_label().copied(),
-//                     b.children()
-//                         .map(|x| {
-//                             x.iter_children()
-//                                 .map(|id| unsafe { IdN::from_id(*id) })
-//                                 .collect()
-//                         })
-//                         .unwrap_or_default(),
-//                 );
-//                 r
-//             },
-//             |id| -> _ { self.label_store.resolve(id).to_owned() },
-//             &self.id,
-//             f,
-//         );
-//         Ok(())
-//     }
-// }

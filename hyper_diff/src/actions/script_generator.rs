@@ -56,6 +56,20 @@ pub enum SimpleAction<Src, Dst, T: Stored + Labeled + WithChildren> {
     },
 }
 
+impl<Src, Dst, T> ActionsVec<SimpleAction<Src, Dst, T>>
+where
+    T: Stored + Labeled + WithChildren,
+{
+    pub fn conv<U>(self) -> ActionsVec<SimpleAction<Src, Dst, U>>
+    where
+        U: Stored<TreeId = T::TreeId>
+            + Labeled<Label = T::Label>
+            + WithChildren<ChildIdx = T::ChildIdx>,
+    {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
 impl<Src: Debug, Dst: Debug, T: Stored + Labeled + WithChildren> Debug for SimpleAction<Src, Dst, T>
 where
     T::TreeId: Debug,
@@ -280,11 +294,11 @@ where
                 };
                 let w_l = {
                     let c = &self.mid_arena[cast::<_, usize>(w).unwrap()].compressed;
-                    *self.store.resolve(c).get_label_unchecked()
+                    self.store.resolve(c).try_get_label().copied()
                 };
                 let x_l = {
                     let c = &self.dst_arena.original(&x);
-                    *self.store.resolve(c).get_label_unchecked()
+                    self.store.resolve(c).try_get_label().copied()
                 };
 
                 if w_l != x_l && z != v {
@@ -298,8 +312,8 @@ where
                         sub: x,
                         parent: y,
                         idx: k,
-                        old: w_l,
-                        new: x_l,
+                        old: w_l.unwrap(),
+                        new: x_l.unwrap(),
                     };
 
                     if let Some(v) = v {
@@ -324,8 +338,8 @@ where
                     let action = SimpleAction::Update {
                         src: w,
                         dst: x,
-                        old: w_l,
-                        new: x_l,
+                        old: w_l.unwrap(),
+                        new: x_l.unwrap(),
                     };
                     self.apply_update(&action, &w, &x);
                     self.actions.push(action);
@@ -400,13 +414,13 @@ where
     }
 
     pub(crate) fn align_children(&mut self, w: &IdD, x: &IdD) {
-        let d = vec![];
-        let w_c = self.mid_arena[cast::<_, usize>(*w).unwrap()]
+        let d: Vec<IdD> = vec![];
+        let w_c: &Vec<IdD> = self.mid_arena[cast::<_, usize>(*w).unwrap()]
             .children
             .as_ref()
             .unwrap_or(&d); //self.src_arena.children(self.store, w);
         self.src_in_order.remove_all(&w_c);
-        let x_c = self.dst_arena.children(self.store, x);
+        let x_c: Vec<IdD> = self.dst_arena.children(self.store, x);
         self.dst_in_order.remove_all(&x_c);
 
         // todo use iter filter collect

@@ -16,16 +16,33 @@ fn main() -> eframe::Result<()> {
     tracing_subscriber::fmt::init();
 
     let languages = hyper_app::Languages::default();
-    // let mut parser = tree_sitter::Parser::new().unwrap();
-    // parser.set_language(&lang.into()).expect("Error loading Java grammar");
-    // let parsed = parser.parse("function f() {}", None).unwrap().unwrap();
-    // parsed.walk().node().kind();
-    dbg!();
-    let native_options = eframe::NativeOptions::default();
+    static ICON: &[u8] = include_bytes!("coevolution.png");
+    let native_options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_app_id("hyperast")
+            // .with_maximized(true)
+            .with_icon(eframe::icon_data::from_png_bytes(ICON).unwrap())
+            .with_decorations(!re_ui::CUSTOM_WINDOW_DECORATIONS) // Maybe hide the OS-specific "chrome" around the window
+            .with_fullsize_content_view(re_ui::FULLSIZE_CONTENT)
+            .with_inner_size([1200.0, 800.0])
+            .with_title_shown(!re_ui::FULLSIZE_CONTENT)
+            .with_titlebar_buttons_shown(!re_ui::CUSTOM_WINDOW_DECORATIONS)
+            .with_titlebar_shown(!re_ui::FULLSIZE_CONTENT)
+            .with_transparent(re_ui::CUSTOM_WINDOW_DECORATIONS), // To have rounded corners without decorations we need transparency
+
+
+        ..Default::default()
+    };
     eframe::run_native(
         "HyperAST",
         native_options,
-        Box::new(move |cc| Box::new(hyper_app::HyperApp::new(cc, languages, api_addr))),
+        Box::new(move |cc| {
+            cc.egui_ctx.options_mut(|opt| {
+                opt.theme_preference = egui::ThemePreference::Dark
+            });
+            re_ui::apply_style_and_install_loaders(&cc.egui_ctx);
+            Ok(Box::new(hyper_app::HyperApp::new(cc, languages, api_addr)))
+        }),
     )
 }
 
@@ -45,35 +62,55 @@ fn main() {
     // Redirect tracing to console.log and friends:
     tracing_wasm::set_as_global_default();
 
+    // Redirect `log` message to `console.log` and friends:
+    eframe::WebLogger::init(log::LevelFilter::Debug).ok();
+
     let web_options = eframe::WebOptions::default();
 
     wasm_bindgen_futures::spawn_local(async {
-        // use eframe::web_sys::console;
         tree_sitter::TreeSitter::init()
             .await
             .map_err(JsValue::from)
             .unwrap();
-        // let mut parser = tree_sitter::Parser::new().unwrap();
-        let lang = web_tree_sitter_sg::Language::load_path("./tree-sitter-javascript.wasm")
-            .await
-            .unwrap()
-            .into();
-        let name = "JavaScript".to_string();
         let mut languages: hyper_app::Languages = Default::default();
-        languages.insert(name.clone(), Lang { name, lang });
-        // panic!("lang");
-        // parser.set_language(&lang.into()).expect("Error loading Java grammar");
-        // let parsed = parser.parse("function f() {}", None).unwrap().unwrap();
-        // console::log_1(&"42".into());
-        // console::log_1(&parsed.walk().node().kind().as_ref().into());
-        // dbg!("{:?}", parsed);
+        let document = web_sys::window()
+            .expect("No window")
+            .document()
+            .expect("No document");
 
-        eframe::start_web(
-            "the_canvas_id", // hardcode it
-            web_options,
-            Box::new(move |cc| Box::new(hyper_app::HyperApp::new(cc, languages, api_addr, ADDR))),
-        )
-        .await
-        .expect("failed to start eframe");
+        let canvas = document
+            .get_element_by_id("the_canvas_id")
+            .expect("Failed to find the_canvas_id")
+            .dyn_into::<web_sys::HtmlCanvasElement>()
+            .expect("the_canvas_id was not a HtmlCanvasElement");
+        
+        let start_result = eframe::WebRunner::new()
+            .start(
+                canvas, // hardcode it
+                web_options,
+                Box::new(move |cc| {
+                    re_ui::apply_style_and_install_loaders(&cc.egui_ctx);
+                    Ok(Box::new(hyper_app::HyperApp::new(
+                        cc, languages, api_addr, ADDR,
+                    )))
+                }),
+            )
+            .await;
+        let loading_text = eframe::web_sys::window()
+            .and_then(|w| w.document())
+            .and_then(|d| d.get_element_by_id("loading_text"));
+        match start_result {
+            Ok(_) => {
+                loading_text.map(|e| e.remove());
+            }
+            Err(e) => {
+                loading_text.map(|e| {
+                    e.set_inner_html(
+                        "<p> The app has crashed. See the developer console for details. </p>",
+                    )
+                });
+                panic!("failed to start eframe: {e:?}");
+            }
+        }
     });
 }

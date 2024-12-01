@@ -21,30 +21,7 @@ impl<Idx: PartialEq> PartialEq for CompressedTreePath<Idx> {
 }
 impl<Idx: Eq> Eq for CompressedTreePath<Idx> {}
 
-fn shared_ancestors<Idx: PartialEq>(
-    curr: impl Iterator<Item = Idx>,
-    mut other: impl Iterator<Item = Idx>,
-) -> SharedPath<Vec<Idx>> {
-    let mut r = vec![];
-    for s in curr {
-        if let Some(other) = other.next() {
-            if s != other {
-                return SharedPath::Different(r);
-            }
-            r.push(s);
-        } else {
-            return SharedPath::Submatch(r);
-        }
-    }
-    if other.next().is_some() {
-        SharedPath::Remain(r)
-    } else {
-        SharedPath::Exact(r)
-    }
-}
-
 impl<Idx: PrimInt> CompressedTreePath<Idx> {
-    #[allow(unused)] // will be needed for applying actions
     pub(crate) fn shared_ancestors(&self, other: &Self) -> SharedPath<Vec<Idx>> {
         shared_ancestors(self.iter(), other.iter())
     }
@@ -64,7 +41,7 @@ impl<Idx: PrimInt> Debug for CompressedTreePath<Idx> {
 }
 
 impl<Idx: PrimInt> CompressedTreePath<Idx> {
-    pub fn iter(&self) -> impl Iterator<Item = Idx> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = Idx> + Clone + '_ {
         Iter {
             is_even: (self.bits[0] & 1) == 1,
             side: true,
@@ -149,6 +126,7 @@ impl<Idx: ToPrimitive> From<&[Idx]> for CompressedTreePath<Idx> {
         }
     }
 }
+
 impl<Idx: PrimInt> From<Vec<Idx>> for CompressedTreePath<Idx> {
     fn from(x: Vec<Idx>) -> Self {
         x.as_slice().into()
@@ -208,5 +186,74 @@ impl<'a, Idx: 'a + PrimInt> Iterator for Iter<'a, Idx> {
             }
         }
         Some(c)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_exact() {
+        let a = CompressedTreePath::from(vec![0, 1, 2, 3]);
+        let b = CompressedTreePath::from(vec![0, 1, 2, 3]);
+        let sh = a.shared_ancestors(&b);
+        dbg!(&sh);
+        match sh {
+            SharedPath::Exact(_) => (),
+            x => panic!("{:?}", x),
+        }
+    }
+
+    #[test]
+    fn test_different() {
+        let a = CompressedTreePath::from(vec![0, 1, 2, 3]);
+        let b = CompressedTreePath::from(vec![0, 1, 2, 4]);
+        let sh = a.shared_ancestors(&b);
+        dbg!(&sh);
+        match sh {
+            SharedPath::Different(_) => (),
+            x => panic!("{:?}", x),
+        }
+    }
+
+    #[test]
+    fn test_remain() {
+        let a = CompressedTreePath::from(vec![0, 1, 2, 3]);
+        let b = CompressedTreePath::from(vec![0, 1, 2, 3, 4]);
+        let sh = a.shared_ancestors(&b);
+        dbg!(&sh);
+        match sh {
+            SharedPath::Remain(_) => (),
+            x => panic!("{:?}", x),
+        }
+    }
+
+    #[test]
+    fn test_sub() {
+        let a = CompressedTreePath::from(vec![0, 1, 2, 3, 4]);
+        let b = CompressedTreePath::from(vec![0, 1, 2, 3]);
+        let sh = a.shared_ancestors(&b);
+        dbg!(&sh);
+        match sh {
+            SharedPath::Submatch(_) => (),
+            x => panic!("{:?}", x),
+        }
+    }
+
+    #[test]
+    fn int_test_sub() {
+        let a = CompressedTreePath::from(vec![0, 1, 2, 3, 4]);
+        let b = CompressedTreePath::from(vec![0, 1, 2, 3]);
+        let a1 = SimpleTreePath::from(vec![0, 1, 2, 3, 4]);
+        let b1 = SimpleTreePath::from(vec![0, 1, 2, 3]);
+        let sh = a.shared_ancestors(&b);
+        let _sh1 = a1.shared_ancestors(&b1);
+        dbg!(&sh);
+        match sh {
+            SharedPath::Submatch(_) => (),
+            x => panic!("{:?}", x),
+        }
     }
 }

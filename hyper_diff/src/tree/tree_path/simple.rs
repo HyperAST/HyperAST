@@ -60,3 +60,9 @@ impl<'a, Idx: 'a + Copy> Iterator for IterSimple<'a, Idx> {
         self.internal.next().and_then(|x| Some(*x))
     }
 }
+
+impl<Idx: PrimInt> SimpleTreePath<Idx> {
+    pub(crate) fn shared_ancestors(&self, other: &Self) -> SharedPath<Vec<Idx>> {
+        super::shared_ancestors(self.iter(), other.iter())
+    }
+}

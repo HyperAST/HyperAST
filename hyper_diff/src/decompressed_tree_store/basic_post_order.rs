@@ -120,8 +120,7 @@ where
     <T as WithChildren>::ChildIdx: PrimInt,
 {
     /// WARN oposite order than id_compressed
-    pub fn compute_kr(&self) -> Box<[IdD]>
-where {
+    pub fn compute_kr(&self) -> Box<[IdD]> {
         let node_count = self.id_compressed.len();
         let mut kr = Vec::with_capacity(node_count);
         let mut visited = bitvec::bitvec![0; node_count];
@@ -137,8 +136,7 @@ where {
     /// use a bitset to mark key roots
     ///
     /// should be easier to split and maybe more efficient
-    pub fn compute_kr_bitset(&self) -> bitvec::boxed::BitBox
-where {
+    pub fn compute_kr_bitset(&self) -> bitvec::boxed::BitBox {
         // use bitvec::prelude::Lsb0;
         let node_count = self.id_compressed.len();
         let mut kr = bitvec::bitbox!(0;node_count);

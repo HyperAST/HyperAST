@@ -111,7 +111,7 @@ pub struct BuiltEntity {
 
 #[derive(Default)]
 pub struct EntityBuilder {
-    pub inner: Common<fn() -> Box<dyn UnknownComponentStorage>>,
+    inner: Common<fn() -> Box<dyn UnknownComponentStorage>>,
 }
 
 impl EntityBuilder {
@@ -121,12 +121,14 @@ impl EntityBuilder {
     pub fn build(self) -> BuiltEntity {
         BuiltEntity { inner: self.inner }
     }
+}
 
+impl super::super::EntityBuilder for EntityBuilder {
     /// Add `component` to the entity.
     ///
     /// If the bundle already contains a component of type `T`, it will be dropped and replaced with
     /// the most recently added one.
-    pub fn add<T: Component>(&mut self, mut component: T) -> &mut Self {
+    fn add<T: Component>(&mut self, mut component: T) -> &mut Self {
         unsafe {
             self.inner.add(
                 (&mut component as *mut T).cast(),
@@ -139,40 +141,21 @@ impl EntityBuilder {
     }
 }
 
-// impl Iterator for BuiltEntity {
-//     type Item = Self;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         let r = todo!();
-
-//         self.i += 1;
-//         Some(r)
-//     }
-// }
-
 impl IntoComponentSource for BuiltEntity
-// where
-//     I: IntoIterator,
-//     DynBuiltEntity<I::Item, I::IntoIter>: ComponentSource,
 {
     type Source = BuiltEntity;
 
     fn into(self) -> Self::Source {
         self
-        // <Self::Source>::new(self.into_iter())
     }
 }
 
 impl IntoComponentSource for EntityBuilder
-// where
-//     I: IntoIterator,
-//     DynBuiltEntity<I::Item, I::IntoIter>: ComponentSource,
 {
     type Source = BuiltEntity;
 
     fn into(self) -> Self::Source {
         self.build()
-        // <Self::Source>::new(self.into_iter())
     }
 }
 
@@ -200,14 +183,14 @@ impl ArchetypeSource for BuiltEntity {
     type Filter = ComponentSourceFilter;
 
     fn filter(&self) -> Self::Filter {
-        let v = self.inner.info.iter().map(|x| x.0.id()).collect();
+        let v = self.inner.inner.info.iter().map(|x| x.0.id()).collect();
         ComponentSourceFilter(v)
     }
 
     fn layout(&mut self) -> EntityLayout {
         let mut layout = EntityLayout::default();
 
-        for (tid, _offset, meta) in &self.inner.info {
+        for (tid, _offset, meta) in &self.inner.inner.info {
             unsafe {
                 layout.register_component_raw(tid.id(), meta.clone());
             }
@@ -230,9 +213,9 @@ impl ComponentSource for BuiltEntity {
         // dbg!(&v);
         // std::mem::forget(v);
 
-        for (ty, offset, _) in &mut self.inner.info {
+        for (ty, offset, _) in &mut self.inner.inner.info {
             let mut target = writer.claim_components_unknown(ty.id());
-            let ptr = unsafe { self.inner.storage.as_ptr().add(*offset) };
+            let ptr = unsafe { self.inner.inner.storage.as_ptr().add(*offset) };
             // let len = ty.layout().size();
 
             // eprintln!();
@@ -392,12 +375,16 @@ impl TypeInfo {
 }
 
 pub struct Common<M> {
+    inner: CommonInner<M>,
+    indices: TypeIdMap<usize>,
+}
+
+pub struct CommonInner<M> {
     storage: NonNull<u8>,
     layout: Layout,
     cursor: usize,
     info: Vec<(TypeInfo, usize, M)>,
     ids: Vec<TypeId>,
-    indices: TypeIdMap<usize>,
 }
 
 #[allow(unused)] // I might use it later
@@ -408,9 +395,9 @@ impl<M> Common<M> {
 
     fn get_by_tid<'a, T>(&'a self, tid: &TypeId) -> Option<T> {
         let index = self.indices.get(tid)?;
-        let (_, offset, _) = self.info[*index];
+        let (_, offset, _) = self.inner.info[*index];
         unsafe {
-            let storage = self.storage.as_ptr().add(offset).cast::<T>();
+            let storage = self.inner.storage.as_ptr().add(offset).cast::<T>();
             // Some(T::from_raw(storage))
             Some(todo!())
         }
@@ -435,9 +422,43 @@ impl<M> Common<M> {
     // }
 
     fn component_types(&self) -> impl Iterator<Item = ComponentTypeId> + '_ {
-        self.info.iter().map(|(info, _, _)| info.id())
+        self.inner.info.iter().map(|(info, _, _)| info.id())
     }
 
+    fn clear(&mut self) {
+        self.inner.ids.clear();
+        self.indices.clear();
+        self.inner.cursor = 0;
+        // NOTE we do not clone stuff and use everything, thus we do not need to drop things pointed by structures in storage
+        // unsafe {
+        //     for (ty, offset, _) in self.info.drain(..) {
+        //         ty.drop(self.storage.as_ptr().add(offset));
+        //     }
+        // }
+    }
+
+    unsafe fn add(&mut self, ptr: *mut u8, ty: TypeInfo, meta: M) {
+        use std::collections::hash_map::Entry;
+        match self.indices.entry(ty.id().type_id()) {
+            Entry::Occupied(occupied) => {
+                let index = *occupied.get();
+                let (ty, offset, _) = self.inner.info[index];
+                let storage = self.inner.storage.as_ptr().add(offset);
+
+                // Drop the existing value
+                ty.drop(storage);
+
+                // Overwrite the old value with our new one.
+                std::ptr::copy_nonoverlapping(ptr, storage, ty.layout().size());
+            }
+            Entry::Vacant(vacant) => {
+                self.inner.fun_name(ty, ptr, vacant, meta);
+            }
+        }
+    }
+}
+
+impl<M> CommonInner<M> {
     unsafe fn grow(
         min_size: usize,
         cursor: usize,
@@ -450,78 +471,54 @@ impl<M> Common<M> {
         (new_storage, layout)
     }
 
-    fn clear(&mut self) {
-        self.ids.clear();
-        self.indices.clear();
-        self.cursor = 0;
-        // NOTE we do not clone stuff and use everything, thus we do not need to drop things pointed by structures in storage
-        // unsafe {
-        //     for (ty, offset, _) in self.info.drain(..) {
-        //         ty.drop(self.storage.as_ptr().add(offset));
-        //     }
-        // }
-    }
-
-    unsafe fn add(&mut self, ptr: *mut u8, ty: TypeInfo, meta: M) {
-        use std::collections::hash_map::Entry;
-        use std::ptr;
-        match self.indices.entry(ty.id().type_id()) {
-            Entry::Occupied(occupied) => {
-                let index = *occupied.get();
-                let (ty, offset, _) = self.info[index];
-                let storage = self.storage.as_ptr().add(offset);
-
-                // Drop the existing value
-                ty.drop(storage);
-
-                // Overwrite the old value with our new one.
-                ptr::copy_nonoverlapping(ptr, storage, ty.layout().size());
+    unsafe fn fun_name(
+        &mut self,
+        ty: TypeInfo,
+        ptr: *mut u8,
+        vacant: std::collections::hash_map::VacantEntry<'_, TypeId, usize>,
+        meta: M,
+    ) {
+        let offset = align(self.cursor, ty.layout().align());
+        let end = offset + ty.layout().size();
+        if end > self.layout.size() || ty.layout().align() > self.layout.align() {
+            let new_align = self.layout.align().max(ty.layout().align());
+            let (new_storage, new_layout) = Self::grow(end, self.cursor, new_align, self.storage);
+            if self.layout.size() != 0 {
+                dealloc(self.storage.as_ptr(), self.layout);
             }
-            Entry::Vacant(vacant) => {
-                let offset = align(self.cursor, ty.layout().align());
-                let end = offset + ty.layout().size();
-                if end > self.layout.size() || ty.layout().align() > self.layout.align() {
-                    let new_align = self.layout.align().max(ty.layout().align());
-                    let (new_storage, new_layout) =
-                        Self::grow(end, self.cursor, new_align, self.storage);
-                    if self.layout.size() != 0 {
-                        dealloc(self.storage.as_ptr(), self.layout);
-                    }
-                    self.storage = new_storage;
-                    self.layout = new_layout;
-                }
+            self.storage = new_storage;
+            self.layout = new_layout;
+        }
 
-                if ty.id().type_id() == TypeId::of::<(Vec<usize>,)>() {
-                    let aaa = ptr as *mut (Vec<usize>,);
-                    dbg!(aaa.as_ref());
-                    // let v = unsafe { Vec::<usize>::from_raw_parts(ptr as *mut usize, 4, 4) };
-                    // dbg!(&v);
-                    // std::mem::forget(v);
-                }
+        if ty.id().type_id() == TypeId::of::<(Vec<usize>,)>() {
+            let aaa = ptr as *mut (Vec<usize>,);
+            dbg!(aaa.as_ref());
+            // let v = unsafe { Vec::<usize>::from_raw_parts(ptr as *mut usize, 4, 4) };
+            // dbg!(&v);
+            // std::mem::forget(v);
+        }
 
-                if ty.id().type_id() == TypeId::of::<(Box<[u32]>,)>() {
-                    let aaa = ptr as *mut (Box<[u32]>,);
-                    dbg!(aaa.as_ref());
-                    // let v = unsafe { Vec::<usize>::from_raw_parts(ptr as *mut usize, 4, 4) };
-                    // dbg!(&v);
-                    // std::mem::forget(v);
-                }
+        if ty.id().type_id() == TypeId::of::<(Box<[u32]>,)>() {
+            let aaa = ptr as *mut (Box<[u32]>,);
+            dbg!(aaa.as_ref());
+            // let v = unsafe { Vec::<usize>::from_raw_parts(ptr as *mut usize, 4, 4) };
+            // dbg!(&v);
+            // std::mem::forget(v);
+        }
 
-                let addr = self.storage.as_ptr().add(offset);
-                ptr::copy_nonoverlapping(ptr, addr, ty.layout().size());
+        let addr = self.storage.as_ptr().add(offset);
+        std::ptr::copy_nonoverlapping(ptr, addr, ty.layout().size());
 
-                vacant.insert(self.info.len());
-                self.info.push((ty, offset, meta));
-                self.cursor = end;
+        vacant.insert(self.info.len());
+        self.info.push((ty, offset, meta));
+        self.cursor = end;
 
-                if ty.id().type_id() == TypeId::of::<(Box<[u32]>,)>() {
-                    let aaa = ptr as *mut (Box<[u32]>,);
-                    dbg!(aaa.as_ref());
-                    // let v = unsafe { Vec::<usize>::from_raw_parts(ptr as *mut usize, 4, 4) };
-                    // dbg!(&v);
-                    // std::mem::forget(v);
-                }
-            }
+        if ty.id().type_id() == TypeId::of::<(Box<[u32]>,)>() {
+            let aaa = ptr as *mut (Box<[u32]>,);
+            dbg!(aaa.as_ref());
+            // let v = unsafe { Vec::<usize>::from_raw_parts(ptr as *mut usize, 4, 4) };
+            // dbg!(&v);
+            // std::mem::forget(v);
         }
     }
 }
@@ -536,9 +533,9 @@ impl<M> Drop for Common<M> {
     fn drop(&mut self) {
         // Ensure buffered components aren't leaked
         self.clear();
-        if self.layout.size() != 0 {
+        if self.inner.layout.size() != 0 {
             unsafe {
-                dealloc(self.storage.as_ptr(), self.layout);
+                dealloc(self.inner.storage.as_ptr(), self.inner.layout);
             }
         }
     }
@@ -548,11 +545,13 @@ impl<M> Default for Common<M> {
     /// Create a builder representing an entity with no components
     fn default() -> Self {
         Self {
-            storage: NonNull::dangling(),
-            layout: Layout::from_size_align(0, 8).unwrap(),
-            cursor: 0,
-            info: Vec::new(),
-            ids: Vec::new(),
+            inner: CommonInner {
+                storage: NonNull::dangling(),
+                layout: Layout::from_size_align(0, 8).unwrap(),
+                cursor: 0,
+                info: Vec::new(),
+                ids: Vec::new(),
+            },
             indices: Default::default(),
         }
     }
@@ -560,6 +559,7 @@ impl<M> Default for Common<M> {
 
 #[test]
 fn example() {
+    use crate::store::nodes::EntityBuilder as _;
     let mut world = legion::World::new(Default::default());
     let mut components = EntityBuilder::new();
     components.add(42i32);
@@ -578,6 +578,7 @@ fn example() {
 
 #[test]
 fn simple() {
+    use crate::store::nodes::EntityBuilder as _;
     let mut world = legion::World::new(Default::default());
     let mut components = EntityBuilder::new();
     let mut comp0: (Box<[u32]>,) = (vec![0, 0, 0, 0, 0, 1, 4100177920].into_boxed_slice(),); //0, 14, 43, 10, 876, 7, 1065, 35

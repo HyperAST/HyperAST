@@ -1,7 +1,5 @@
 //! This example stores a Rhai closure for later use as a callback.
 
-use std::path::{Path, PathBuf};
-
 use rhai::{Engine, EvalAltResult, FnPtr};
 
 // To call a Rhai closure at a later time, you'd need three things:

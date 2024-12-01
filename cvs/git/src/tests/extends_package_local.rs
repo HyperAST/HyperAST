@@ -1,8 +1,9 @@
 use hyper_ast::{
     filter::{Bloom, BloomResult, BF},
     impact::serialize::CachedHasher,
+    impact::BulkHasher,
     nodes::RefContainer,
-    position::{Scout, StructuralPosition, StructuralPositionStore, TreePath, TypedTreePath},
+    position::{Scout, StructuralPosition, StructuralPositionStore, TypedTreePath},
     store::{
         defaults::NodeIdentifier, labels::LabelStore, nodes::DefaultNodeStore as NodeStore,
         SimpleStores,
@@ -11,12 +12,9 @@ use hyper_ast::{
     types::{NodeId, TypedNodeStore, WithChildren},
 };
 
-use hyper_ast_gen_ts_java::{
-    legion_with_refs::BulkHasher,
-    types::{TIdN, Type},
-};
+use hyper_ast_gen_ts_java::types::{TIdN, Type};
 
-use crate::{java::handle_java_file, TStore};
+use crate::java::handle_java_file;
 
 use hyper_ast_gen_ts_java::impact::{
     element::{IdentifierFormat, LabelPtr},
@@ -30,30 +28,22 @@ use hyper_ast_gen_ts_java::{
 fn run(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 }
 
 fn run1(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
@@ -240,15 +230,11 @@ interface I {
 fn run2(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
@@ -472,15 +458,11 @@ static AA: &'static str = r#"
 fn run3(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
@@ -646,15 +628,11 @@ public class SpoonFile<T extends SpoonFile<T>> implements SpoonResource {
 fn run3_1(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
@@ -806,15 +784,11 @@ fn test_case5() {
 fn run6(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
@@ -913,15 +887,11 @@ public class PatternBuiler {
 fn run7(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
@@ -1026,11 +996,7 @@ fn test_hashing() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace"))
         .is_test(true)
         .init();
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
     let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
     macro_rules! scoped {
         ( $o:expr, $i:expr ) => {{
@@ -1089,15 +1055,11 @@ fn test_hashing() {
 fn run8(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
@@ -1226,15 +1188,11 @@ fn test_case9() {
 fn run10(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
@@ -1439,15 +1397,11 @@ public class Tacos<K, V extends String> implements ITacos<V> {
 fn run11(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
     let java_root: TIdN<_> = java_tree_gen
         .stores
@@ -1835,15 +1789,11 @@ fn test_case_11_bis() {
 fn run12(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);
@@ -1898,15 +1848,11 @@ public class A {
 fn run13(text: &[u8]) {
     let mut stores = SimpleStores {
         label_store: LabelStore::new(),
-        type_store: TStore::default(),
+        type_store: Default::default(),
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut java_tree_gen = java_tree_gen::JavaTreeGen::new(&mut stores, &mut md_cache);
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 
     // let b = java_tree_gen.stores.node_store.resolve(a.local.compressed_node);

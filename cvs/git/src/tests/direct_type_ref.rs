@@ -1,6 +1,6 @@
 use hyper_ast::{
     position::{Scout, StructuralPosition, StructuralPositionStore},
-    store::{labels::LabelStore, nodes::DefaultNodeStore as NodeStore, SimpleStores},
+    store::SimpleStores,
     types::{LabelStore as _, NodeId},
 };
 
@@ -16,16 +16,13 @@ use hyper_ast_gen_ts_java::{
 };
 
 fn run(text: &[u8]) {
-    let mut stores = SimpleStores {
-        label_store: LabelStore::new(),
-        type_store: TStore::default(),
-        node_store: NodeStore::new(),
-    };
+    let mut stores = SimpleStores::<TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = java_tree_gen::JavaTreeGen {
         line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
+        stores: stores.mut_with_ts(),
         md_cache: &mut md_cache,
+        more: (),
     };
     let a = handle_java_file(&mut java_tree_gen, &b"A.java".into(), text).unwrap();
 

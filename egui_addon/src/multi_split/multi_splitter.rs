@@ -1,4 +1,4 @@
-use egui::{egui_assert, Align, Layout, Sense, Ui};
+use egui::{Align, Layout, Sense, Ui};
 
 use super::multi_splitter_orientation::{MultiSplitterOrientation, MultiSplitterResponse};
 
@@ -70,11 +70,11 @@ impl MultiSplitter {
         } = self;
 
         {
-            egui_assert!((0.0..=1.0).contains(
+            debug_assert!((0.0..=1.0).contains(
                 &ratios
                     .iter()
                     .map(|ratio| {
-                        egui_assert!((0.0..=1.0).contains(ratio));
+                        debug_assert!((0.0..=1.0).contains(ratio));
                         *ratio
                     })
                     .sum::<f32>()
@@ -132,12 +132,12 @@ impl MultiSplitter {
                 *orientation.m(&mut remaining_rect.min) = *orientation.m(&mut patition_rect.max);
                 let line_pos_1 = ui.painter().round_pos_to_pixels(line_pos_1);
                 let line_pos_2 = ui.painter().round_pos_to_pixels(line_pos_2);
-                let cui = ui.child_ui(patition_rect, Layout::top_down(Align::Min));
+                let cui = ui.child_ui(patition_rect, Layout::top_down(Align::Min), None);
                 (cui, [line_pos_1, line_pos_2])
             })
             .unzip();
 
-        uis.push(ui.child_ui(remaining_rect, Layout::top_down(Align::Min)));
+        uis.push(ui.child_ui(remaining_rect, Layout::top_down(Align::Min), None));
 
         let body_returned = add_contents(&mut uis);
 

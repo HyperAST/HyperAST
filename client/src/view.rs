@@ -5,11 +5,10 @@ use hyper_ast::{
     compat::HashMap,
     store::defaults::{LabelIdentifier, NodeIdentifier},
     types::{
-        self, Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeStore, Tree,
-        TypeStore, WithChildren,
+        self, Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeStore, TypeStore,
+        WithChildren,
     },
 };
-use hyper_ast_cvs_git::{git::fetch_github_repository, processing::ConfiguredRepoTrait};
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
@@ -94,14 +93,14 @@ pub fn view(state: SharedState, path: Parameters) -> Result<Json<ViewRes>, Strin
         .get_config(repo_spec)
         .ok_or_else(|| "missing config for repository".to_string())?;
     let mut repo = repo.fetch();
-    log::warn!("done cloning {}", repo.spec);
+    log::info!("done cloning {}", repo.spec);
     let commits = state
         .repositories
         .write()
         .unwrap()
         .pre_process_with_limit(&mut repo, "", &commit, 2)
         .map_err(|e| e.to_string())?;
-    log::warn!("done construction of {commits:?} in {}", repo.spec);
+    log::info!("done construction of {commits:?} in {}", repo.spec);
     let repositories = state.repositories.read().unwrap();
     let commit_src = repositories.get_commit(&repo.config, &commits[0]).unwrap();
     let src_tr = commit_src.ast_root;
@@ -109,7 +108,7 @@ pub fn view(state: SharedState, path: Parameters) -> Result<Json<ViewRes>, Strin
     let node_store = &repositories.processor.main_stores.node_store;
     let label_store = &repositories.processor.main_stores.label_store;
 
-    log::error!("searching for {path:?}");
+    log::info!("searching for {path:?}");
     let curr = resolve_path(src_tr, path, node_store);
     todo!("should deprecate or accomodate changes in type repr ie. lang + type btw. could allow paking as u16 like before");
     // let type_sys = TypeSys(types::Type::it().map(|x| x.to_string()).collect());
@@ -169,7 +168,7 @@ fn make_view<'a, HAST>(
 ) -> View
 where
     HAST::IdN: Hash,
-    <HAST::TS as types::TypeStore<HAST::T>>::Ty: Into<u16>,
+    <HAST::TS as types::TypeStore>::Ty: Into<u16>,
     HAST: NodeStore<HAST::IdN, R<'a> = HAST::T> + LabelStore<str, I = HAST::Label>,
     HAST: 'a + HyperAST<'a, Label = LabelIdentifier>,
 {
@@ -207,13 +206,11 @@ where
     };
 
     while let Some((curr, advance)) = queue.pop() {
-        // dbg!(curr);
-        use hyper_ast::types::Typed;
         let mut id = EntityHasher::default();
         curr.hash(&mut id);
         let nid = id.finish();
         let n = stores.node_store().resolve(&curr); //hyper_ast::types::NodeStore::resolve(stores, &curr);
-        let k = stores.type_store().resolve_type(&n);
+        let k = stores.resolve_type(&curr);
         if let Some(l) = n.try_get_label() {
             let l = label_map.entry(*l).or_insert_with(|| {
                 let i = label_list.len() as u32;

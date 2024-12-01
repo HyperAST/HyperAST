@@ -1,18 +1,16 @@
+#[cfg(feature = "impact")]
 pub mod direct_type_ref;
+#[cfg(feature = "impact")]
 #[cfg(test)]
 pub mod extends_package_local;
 pub mod obj_creation;
 
 use crate::{git::fetch_github_repository, preprocessed::PreProcessedRepository};
-use hyper_ast_gen_ts_java::impact::element::RefsEnum;
 use std::env;
 
 use hyper_ast::utils::memusage;
-use hyper_ast_gen_ts_java::impact::{
-    element::{IdentifierFormat, LabelPtr},
-    partial_analysis::PartialAnalysis,
-};
 
+#[cfg(feature = "impact")]
 #[test]
 fn example_main() {
     let args: Vec<String> = env::args().collect();
@@ -35,12 +33,17 @@ fn example_main() {
     find_refs_from_canonical_type(&mut preprocessed, before, after, dir_path);
 }
 
+#[cfg(feature = "impact")]
 pub fn find_refs_from_canonical_type(
     preprocessed: &mut PreProcessedRepository,
     _before: &str,
     _after: &str,
     _dir_path: &str,
 ) {
+    use hyper_ast_gen_ts_java::impact::{
+        element::{IdentifierFormat, LabelPtr, RefsEnum},
+        partial_analysis::PartialAnalysis,
+    };
     {
         let mut ana = PartialAnalysis::default(); //&mut commits[0].meta_data.0;
 

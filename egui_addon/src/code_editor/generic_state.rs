@@ -4,7 +4,7 @@ use egui::mutex::Mutex;
 
 use egui::*;
 
-use egui::text_edit::{CCursorRange, CursorRange};
+use egui::text_selection::{CCursorRange, CursorRange};
 
 type Undoer = egui::util::undoer::Undoer<(CCursorRange, String)>;
 

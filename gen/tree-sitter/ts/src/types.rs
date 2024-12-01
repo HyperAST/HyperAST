@@ -1,9 +1,8 @@
 use std::fmt::Display;
 
 use hyper_ast::{
-    store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
-    types::{AnyType, HyperType, Lang, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
+    types::{AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId},
 };
 
 #[cfg(feature = "legion")]
@@ -13,105 +12,28 @@ mod legion_impls {
     use crate::TNode;
 
     impl<'a> TNode<'a> {
-        pub fn obtain_type<T>(&self, _: &mut impl TsEnabledTypeStore<T>) -> Type {
+        pub fn obtain_type(&self) -> Type {
             let t = self.kind_id();
             Type::from_u16(t)
         }
     }
 
-    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::TypeIndex};
-
-    impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        type Ty = Type;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-        fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
-            n.get_component::<Type>().unwrap().clone()
-        }
-
-        fn resolve_lang(
-            &self,
-            _n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            From::<&'static (dyn LangRef<Type>)>::from(&Ts)
-        }
-
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&Ts),
-                ty: *n.get_component::<Type>().unwrap() as u16,
-            }
-        }
-        fn type_eq(
-            &self,
-            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-            m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        ) -> bool {
-            n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
-        }
+    impl TypeStore for TStore {
+        type Ty = TypeU16<Ts>;
     }
-    impl<'a> TsEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        const LANG: TypeInternalSize = Self::Ts as u16;
-
-        fn _intern(_l: u16, _t: u16) -> Self::Ty {
-            // T((u16::MAX - l as u16) | t)
-            todo!()
+    impl TsEnabledTypeStore for TStore {
+        fn intern(t: Type) -> Self::Ty {
+            t.into()
         }
-        fn intern(&self, t: Type) -> Self::Ty {
-            t
-        }
-
-        fn resolve(&self, t: Self::Ty) -> Type {
-            t
-            // let t = t.0 as u16;
-            // let t = t & !TStore::MASK;
-            // Type::resolve(t)
-        }
-    }
-    impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
-        type Ty = AnyType;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-        fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-            From::<&'static (dyn HyperType)>::from(LangRef::<Type>::make(
-                &Ts,
-                *n.get_component::<Type>().unwrap() as u16,
-            ))
-        }
-
-        fn resolve_lang(
-            &self,
-            _n: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            From::<&'static (dyn LangRef<AnyType>)>::from(&Ts)
-        }
-
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&Ts),
-                ty: *n.get_component::<Type>().unwrap() as u16,
-            }
-        }
-        fn type_eq(
-            &self,
-            _n: &HashedNodeRef<'a, NodeIdentifier>,
-            _m: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> bool {
-            todo!()
+        fn resolve(t: Self::Ty) -> Type {
+            t.e()
         }
     }
 }
 
-pub trait TsEnabledTypeStore<T>: TypeStore<T> {
-    const LANG: u16;
-    fn intern(&self, t: Type) -> Self::Ty {
-        let t = t as u16;
-        Self::_intern(Self::LANG, t)
-    }
-    fn _intern(l: u16, t: u16) -> Self::Ty;
-    fn resolve(&self, t: Self::Ty) -> Type;
+pub trait TsEnabledTypeStore: TypeStore {
+    fn intern(t: Type) -> Self::Ty;
+    fn resolve(t: Self::Ty) -> Type;
 }
 
 impl Type {
@@ -140,18 +62,28 @@ impl<IdN: Clone + Eq + NodeId> NodeId for TIdN<IdN> {
     }
 }
 
-impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
-    type Ty = Type;
+#[cfg(feature = "impl")]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    tree_sitter_typescript::language_typescript().id_for_node_kind(kind, named)
+}
+#[cfg(not(feature = "impl"))]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    unimplemented!("need treesitter grammar")
 }
 
-#[repr(u8)]
-pub(crate) enum TStore {
-    Ts = 0,
+impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
+    type Ty = Type;
+    type TyErazed = TType;
+    fn unerase(ty: Self::TyErazed) -> Self::Ty {
+        ty.e()
+    }
 }
+
+pub(crate) struct TStore;
 
 impl Default for TStore {
     fn default() -> Self {
-        Self::Ts
+        Self
     }
 }
 
@@ -160,7 +92,9 @@ type TypeInternalSize = u16;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct T(TypeInternalSize);
 
-pub struct Ts;
+#[derive(Debug)]
+pub struct Lang;
+pub type Ts = Lang;
 
 impl LangRef<AnyType> for Ts {
     fn make(&self, _t: u16) -> &'static AnyType {
@@ -176,6 +110,10 @@ impl LangRef<AnyType> for Ts {
     fn name(&self) -> &'static str {
         std::any::type_name::<Ts>()
     }
+
+    fn ts_symbol(&self, t: AnyType) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
 }
 
 impl LangRef<Type> for Ts {
@@ -189,14 +127,36 @@ impl LangRef<Type> for Ts {
     fn name(&self) -> &'static str {
         std::any::type_name::<Ts>()
     }
+
+    fn ts_symbol(&self, t: Type) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
 }
 
-impl Lang<Type> for Ts {
+impl LangRef<TType> for Lang {
+    fn make(&self, t: u16) -> &'static TType {
+        // TODO could make one safe, but not priority
+        unsafe { std::mem::transmute(&S_T_L[t as usize]) }
+    }
+    fn to_u16(&self, t: TType) -> u16 {
+        t.e() as u16
+    }
+
+    fn name(&self) -> &'static str {
+        std::any::type_name::<Lang>()
+    }
+
+    fn ts_symbol(&self, t: TType) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
+}
+
+impl hyper_ast::types::Lang<Type> for Ts {
     fn make(t: u16) -> &'static Type {
-        Ts.make(t)
+        Lang.make(t)
     }
     fn to_u16(t: Type) -> u16 {
-        Ts.to_u16(t)
+        Lang.to_u16(t)
     }
 }
 
@@ -255,16 +215,35 @@ impl HyperType for Type {
     }
 
     fn as_static(&self) -> &'static dyn HyperType {
-        let t = <Ts as Lang<Type>>::to_u16(*self);
-        let t = <Ts as Lang<Type>>::make(t);
+        let t = <Ts as hyper_ast::types::Lang<Type>>::to_u16(*self);
+        let t = <Ts as hyper_ast::types::Lang<Type>>::make(t);
         t
+    }
+
+    fn as_static_str(&self) -> &'static str {
+        self.to_str()
+    }
+
+    fn is_hidden(&self) -> bool {
+        todo!()
+    }
+
+    fn is_supertype(&self) -> bool {
+        todo!()
+    }
+
+    fn is_named(&self) -> bool {
+        todo!()
     }
 
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,
     {
-        From::<&'static (dyn LangRef<Self>)>::from(&Ts)
+        From::<&'static (dyn LangRef<Self>)>::from(&Lang)
+    }
+    fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
+        todo!()
     }
 }
 impl TypeTrait for Type {
@@ -357,6 +336,38 @@ const COUNT: u16 = 358;
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.to_str())
+    }
+}
+
+type TType = hyper_ast::types::TypeU16<Lang>;
+
+impl hyper_ast::types::LLang<TType> for Ts {
+    type I = u16;
+
+    type E = Type;
+
+    const TE: &[Self::E] = S_T_L;
+
+    fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<TType> {
+        From::<&'static (dyn LangRef<_>)>::from(&Lang)
+    }
+}
+
+impl From<u16> for Type {
+    fn from(value: u16) -> Self {
+        debug_assert_eq!(Self::from_u16(value), S_T_L[value as usize]);
+        S_T_L[value as usize]
+    }
+}
+impl Into<TypeU16<Ts>> for Type {
+    fn into(self) -> TypeU16<Ts> {
+        TypeU16::new(self)
+    }
+}
+
+impl Into<u16> for Type {
+    fn into(self) -> u16 {
+        self as u8 as u16
     }
 }
 

@@ -1,5 +1,6 @@
 use egui_addon::code_editor;
 use hyper_ast::store::nodes::fetched::NodeIdentifier;
+use re_ui::UiExt;
 
 use std::{collections::HashSet, hash::Hash, ops::Range};
 
@@ -8,7 +9,7 @@ pub(crate) struct Repo {
     pub(crate) user: String,
     pub(crate) name: String,
 }
-
+// TODO uuse [u8;20]
 pub(crate) type CommitId = String;
 
 #[derive(serde::Deserialize, serde::Serialize, Default)]
@@ -121,7 +122,7 @@ impl Default for ComputeConfigAspectViews {
 pub(crate) struct FileIdentifier {
     #[serde(flatten)]
     pub(crate) commit: Commit,
-    #[serde(alias = "file")]
+    #[serde(rename = "file")]
     pub(crate) file_path: String,
 }
 
@@ -139,33 +140,103 @@ impl Default for FileIdentifier {
 pub(crate) struct Commit {
     #[serde(flatten)]
     pub(crate) repo: Repo,
-    #[serde(alias = "commit")]
+    #[serde(rename = "commit")]
+    #[serde(alias = "id")]
     pub(crate) id: CommitId,
 }
 
-impl Default for Commit {
-    fn default() -> Self {
-        Self {
-            repo: Default::default(),
-            // id: "cd339e2c5f0e5c1e42c66b890f02bc282c3a0ea1".into(), // 61074989324d20e7d9cd387cee830a31a7e68aca // 4acedc53a13a727be3640fe234f7e261d2609d58
-            id: "7f2eb10e93879bc569c7ddf6fb51d6f812cc477c".into(),
-            // # stockfish
-            // * long 7f2eb10e93879bc569c7ddf6fb51d6f812cc477c
-            // * more in past "587bc647d7d14b53d8625c4446006e23a4acd82a".into()
-            // * close to first b8e487ff9caffb5061f680b1919ab2fe442bc0a1
+impl Repo {
+    pub fn with(self, id: impl Into<String>) -> Commit {
+        Commit {
+            repo: self,
+            id: id.into(),
         }
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Default, PartialEq, Eq, Clone, Copy)]
+impl Default for Commit {
+    fn default() -> Self {
+        Repo::default().with("7f2eb10e93879bc569c7ddf6fb51d6f812cc477c")
+        // id: "cd339e2c5f0e5c1e42c66b890f02bc282c3a0ea1".into(), // 61074989324d20e7d9cd387cee830a31a7e68aca // 4acedc53a13a727be3640fe234f7e261d2609d58
+        // id: "7f2eb10e93879bc569c7ddf6fb51d6f812cc477c".into(),
+        // # stockfish
+        // * long 7f2eb10e93879bc569c7ddf6fb51d6f812cc477c
+        // * more in past "587bc647d7d14b53d8625c4446006e23a4acd82a".into()
+        // * close to first b8e487ff9caffb5061f680b1919ab2fe442bc0a1
+    }
+}
+
+#[derive(
+    serde::Deserialize,
+    serde::Serialize,
+    Default,
+    PartialEq,
+    Eq,
+    Clone,
+    Copy,
+    strum_macros::EnumIter,
+)]
 pub enum SelectedConfig {
+    #[default]
+    Querying,
+    Aspects,
+    LongTracking,
     Single,
-    Multi,
+    Tsg,
+    Smells,
     Diff,
     Tracking,
-    #[default]
-    LongTracking,
-    Aspects,
+    Multi,
+}
+
+impl SelectedConfig {
+    pub const fn title(&self) -> impl Into<String> + AsRef<str> {
+        match self {
+            SelectedConfig::Single => "Stats",
+            SelectedConfig::Querying => "Querying",
+            SelectedConfig::Tsg => "TSG",
+            SelectedConfig::Smells => "Smells", //ℹ //🗖
+            SelectedConfig::Multi => "Multi Repository",
+            SelectedConfig::Diff => "Tree Diff",
+            SelectedConfig::Tracking => "Immediate Tracking",
+            SelectedConfig::LongTracking => "Tracking",
+            SelectedConfig::Aspects => "Aspects",
+        }
+    }
+
+    pub(crate) const fn enabled(&self) -> bool {
+        match self {
+            SelectedConfig::Single => true,
+            SelectedConfig::Querying => true,
+            SelectedConfig::Tsg => true,
+            SelectedConfig::Smells => true,
+            SelectedConfig::Multi => false,
+            SelectedConfig::Diff => false,
+            SelectedConfig::Tracking => false,
+            SelectedConfig::LongTracking => true,
+            SelectedConfig::Aspects => true,
+        }
+    }
+
+    pub(crate) fn on_hover_show(&self, ui: &mut egui::Ui) {
+        ui.markdown_ui(self.descriptions())
+    }
+
+    pub(crate) fn descriptions(&self) -> &str {
+        match self {
+            SelectedConfig::Single => "Show code metrics over commits of a given repository",
+            SelectedConfig::Querying => r#"Search code evolutions through pattern queries."#,
+            SelectedConfig::Smells => "Search for problematic code patterns, by focussing on code removals (specialization of the querying).",
+            SelectedConfig::Tsg => {
+                r#"Graph computed using the [tree-sitter-graph DSL](https://docs.rs/tree-sitter-graph/latest/tree_sitter_graph/reference/index.html)."#
+            }
+            SelectedConfig::Multi => "Show code metrics over commits of a multiple repository.",
+            SelectedConfig::Diff => "Tree diffs between a pair of commits.",
+            SelectedConfig::Tracking => "Code tracking between a pair of commits.",
+            SelectedConfig::LongTracking => "Code tracking through a development history, handles moves and can stop on modifications to the tracked code but also to its parents.",
+            SelectedConfig::Aspects => "Explore how code can be rendered in this GUI. Once you save a render, you can configure other views with it.",
+        }
+    }
 }
 
 impl Default for Repo {
@@ -176,6 +247,13 @@ impl Default for Repo {
             user: "official-stockfish".to_string(),
             name: "Stockfish".to_string(),
         }
+    }
+}
+
+impl From<[&str; 2]> for Repo {
+    fn from(value: [&str; 2]) -> Self {
+        let [user, name] = value.map(|s| s.to_string());
+        Self { user, name }
     }
 }
 
@@ -201,6 +279,10 @@ impl egui_addon::Languages for Languages {
     }
 }
 
+pub(crate) trait WithDesc<T> {
+    fn desc(&self) -> &T;
+}
+
 #[derive(
     serde::Deserialize, serde::Serialize, autosurgeon::Hydrate, autosurgeon::Reconcile, Clone, Debug,
 )]
@@ -212,18 +294,27 @@ pub(crate) struct CodeEditors<T = code_editor::CodeEditor<Languages>> {
     pub(crate) accumulate: T,
 }
 
-impl<T> CodeEditors<T> {
-    pub(crate) fn to_shared<U>(self) -> CodeEditors<U>
-    where
-        T: Into<U>,
-    {
-        CodeEditors {
-            description: self.description.into(),
-            init: self.init.into(),
-            filter: self.filter.into(),
-            accumulate: self.accumulate.into(),
-        }
-    }
+#[derive(
+    serde::Deserialize, serde::Serialize, autosurgeon::Hydrate, autosurgeon::Reconcile, Clone, Debug,
+)]
+#[serde(default)]
+pub(crate) struct QueryEditor<T = code_editor::CodeEditor<Languages>> {
+    pub(crate) description: T,
+    pub(crate) query: T,
+}
+
+pub trait EditorHolder {
+    type Item;
+    fn iter_editors_mut(&mut self) -> impl Iterator<Item = &mut Self::Item>;
+}
+
+#[derive(
+    serde::Deserialize, serde::Serialize, autosurgeon::Hydrate, autosurgeon::Reconcile, Clone, Debug,
+)]
+#[serde(default)]
+pub(crate) struct TsgEditor<T = code_editor::CodeEditor<Languages>> {
+    pub(crate) description: T,
+    pub(crate) query: T,
 }
 
 #[derive(Debug)]
@@ -242,5 +333,37 @@ impl<T> Resource<T> {
             response: self.response,
             content: self.content.map(f),
         }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Config {
+    Any,
+    MavenJava,
+    MakeCpp,
+}
+
+impl Config {
+    pub fn language(&self) -> &'static str {
+        match self {
+            Config::Any => "",
+            Config::MavenJava => "Java",
+            Config::MakeCpp => "Cpp",
+        }
+    }
+}
+impl Config {
+    pub(crate) fn show_combo_box(
+        &mut self,
+        ui: &mut egui::Ui,
+        label: impl Into<egui::WidgetText>,
+    ) -> egui::InnerResponse<std::option::Option<()>> {
+        egui::ComboBox::from_label(label)
+            .selected_text(format!("{:?}", self))
+            .show_ui(ui, |ui| {
+                ui.selectable_value(self, super::types::Config::Any, "Any");
+                ui.selectable_value(self, super::types::Config::MavenJava, "Java");
+                ui.selectable_value(self, super::types::Config::MakeCpp, "Cpp");
+            })
     }
 }

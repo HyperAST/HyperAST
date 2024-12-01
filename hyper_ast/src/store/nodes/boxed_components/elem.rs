@@ -75,6 +75,13 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithStats for Hash
             .and_then(|x| x.0.to_usize())
             .unwrap_or(1)
     }
+
+    fn line_count(&self) -> usize {
+        self.0
+            .get::<compo::LineCount>()
+            .and_then(|x| x.0.to_usize())
+            .unwrap_or(1)
+    }
 }
 impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithSerialization
     for HashedNodeRef<'a, Id>
@@ -117,7 +124,10 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithChildren
     for HashedNodeRef<'a, Id>
 {
     type ChildIdx = u16;
-    type Children<'b> = MySlice<<Self::TreeId as NodeId>::IdN> where Self: 'b;
+    type Children<'b>
+        = MySlice<<Self::TreeId as NodeId>::IdN>
+    where
+        Self: 'b;
 
     fn child_count(&self) -> Self::ChildIdx {
         self.cs()
@@ -161,6 +171,12 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithHashs for Hash
             .get::<SyntaxNodeHashs<Self::HP>>()
             .unwrap()
             .hash(kind)
+    }
+}
+
+impl<'a, Id> crate::types::ErasedHolder for HashedNodeRef<'a, Id> {
+    fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
+        todo!()
     }
 }
 

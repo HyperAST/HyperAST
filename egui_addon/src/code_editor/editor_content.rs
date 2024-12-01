@@ -14,7 +14,8 @@ use super::generic_text_buffer::{AsText, TextBuffer};
 pub struct EditAwareString {
     pub(crate) id: u64,
     pub(crate) generation: u64,
-    pub(crate) string: String,
+    #[doc(hidden)]
+    pub string: String,
     #[serde(skip)]
     #[serde(default = "default_bool")]
     pub(crate) reset: AtomicBool,
@@ -39,6 +40,12 @@ impl Into<String> for EditAwareString {
 fn default_bool() -> AtomicBool {
     AtomicBool::new(false)
 }
+
+// impl AsMut for EditAwareString {
+//     fn as_mut(&mut self) -> &mut T {
+//         self.string
+//     }
+// }
 
 impl Clone for EditAwareString {
     fn clone(&self) -> Self {
@@ -164,7 +171,7 @@ impl TextBuffer for EditAwareString {
             inserted_text: &[],
         };
 
-        assert!(self.edit.get_mut().is_none());
+        // assert!(self.edit.get_mut().is_none(), "{:?}", self.edit);
         self.edit = Some(process_edit(unsafe { self.string.as_mut_vec() }, &edit)).into();
 
         // // Then drain all characters within this range

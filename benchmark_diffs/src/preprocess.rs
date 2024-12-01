@@ -1,25 +1,17 @@
-use std::path::{Path, PathBuf};
-
 use hyper_ast::{
     cyclomatic::Mcc,
-    filter::{Bloom, BloomSize, BF},
     full::FullNode,
-    hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
-    store::{
-        defaults::{LabelIdentifier, NodeIdentifier},
-        nodes::legion::{compo, compo::CS, EntryRef, NodeStore, PendingInsert},
-        SimpleStores,
-    },
-    tree_gen::{BasicGlobalData, SubTreeMetrics},
+    hashed::{IndexingHashBuilder, MetaDataHashsBuilder},
+    store::{defaults::LabelIdentifier, SimpleStores},
+    tree_gen::BasicGlobalData,
     types::LabelStore as _,
 };
+use hyper_ast_cvs_git::java::JavaAcc;
 use hyper_ast_gen_ts_java::{
-    impact::partial_analysis::PartialAnalysis,
-    legion_with_refs::{BulkHasher, JavaTreeGen, Local, MDCache, MD},
-    types::Type,
+    legion_with_refs::{JavaTreeGen, Local, MDCache, MD},
+    types::{JavaEnabledTypeStore as _, TStore, Type},
 };
-// use hyper_ast_gen_ts_java::types::TStore;
-use hyper_ast_cvs_git::TStore;
+use std::path::{Path, PathBuf};
 
 pub fn iter_dirs(root_buggy: &std::path::Path) -> impl Iterator<Item = std::fs::DirEntry> {
     std::fs::read_dir(root_buggy)
@@ -54,6 +46,7 @@ fn parse_unchecked<'b: 'stores, 'stores>(
     let full_node1 = java_tree_gen.generate_file(name.as_bytes(), content.as_bytes(), tree.walk());
     full_node1
 }
+
 fn parse<'b: 'stores, 'stores>(
     content: &'b str,
     name: &str,
@@ -69,6 +62,7 @@ fn parse<'b: 'stores, 'stores>(
     }
 }
 
+// TODO make it cvs/files or a module of hyper_ast (it will also serve as an example)
 pub struct JavaPreprocessFileSys {
     pub main_stores: SimpleStores<TStore>,
     pub java_md_cache: MDCache,
@@ -85,6 +79,7 @@ impl JavaPreprocessFileSys {
             line_break,
             stores: &mut self.main_stores,
             md_cache: &mut self.java_md_cache,
+            more: (),
         }
     }
 
@@ -106,7 +101,7 @@ impl JavaPreprocessFileSys {
             self.java_md_cache
                 .insert(full_node.compressed_node, MD::from(full_node.clone()));
             let name = self.main_stores.label_store.get_or_insert(name);
-            assert!(!w.children_names.contains(&name));
+            assert!(!w.primary.children_names.contains(&name));
             w.push(name, full_node, skiped_ana);
         }
     }
@@ -121,71 +116,8 @@ impl JavaPreprocessFileSys {
     }
 }
 
-pub struct JavaAcc {
-    pub(crate) name: String,
-    pub(crate) children: Vec<NodeIdentifier>,
-    pub(crate) children_names: Vec<LabelIdentifier>,
-    pub(crate) metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
-    pub(crate) skiped_ana: bool,
-    pub(crate) ana: PartialAnalysis,
-}
-
-pub(crate) const MAX_REFS: u32 = 10000; //4096;
-impl JavaAcc {
-    pub(crate) fn new(name: String) -> Self {
-        Self {
-            name,
-            children_names: Default::default(),
-            children: Default::default(),
-            // simple: BasicAccumulator::new(kind),
-            metrics: Default::default(),
-            ana: PartialAnalysis::init(&Type::Directory, None, |_| panic!()),
-            skiped_ana: false,
-        }
-    }
-    pub(crate) fn push(&mut self, name: LabelIdentifier, full_node: Local, skiped_ana: bool) {
-        self.children.push(full_node.compressed_node);
-        self.children_names.push(name);
-        self.metrics.acc(full_node.metrics);
-
-        if let Some(ana) = full_node.ana {
-            if ana.estimated_refs_count() < MAX_REFS
-                && skiped_ana == false
-                && self.skiped_ana == false
-            {
-                ana.acc(&Type::Directory, &mut self.ana);
-            } else {
-                self.skiped_ana = true;
-            }
-        }
-    }
-}
-
 pub(crate) type IsSkippedAna = bool;
 
-impl hyper_ast::tree_gen::Accumulator for JavaAcc {
-    type Node = (LabelIdentifier, (Local, IsSkippedAna));
-    fn push(&mut self, (name, (full_node, skiped_ana)): Self::Node) {
-        self.children.push(full_node.compressed_node);
-        self.children_names.push(name);
-        self.metrics.acc(full_node.metrics);
-
-        if let Some(ana) = full_node.ana {
-            if ana.estimated_refs_count() < MAX_REFS
-                && skiped_ana == false
-                && self.skiped_ana == false
-            {
-                ana.acc(&Type::Directory, &mut self.ana);
-            } else {
-                self.skiped_ana = true;
-            }
-        }
-    }
-}
-
-// impl Accumulator for JavaAcc {
-//     type Unlabeled = (Local, IsSkippedAna);
-// }
 pub fn parse_filesys(java_gen: &mut JavaPreprocessFileSys, path: &Path) -> Local {
     let a = std::fs::read_dir(path)
         .expect(&format!("{:?} should be a dir", path))
@@ -354,7 +286,7 @@ impl<'fs, 'prepro> Processor<JavaAcc> for JavaProcessor<'fs, 'prepro, JavaAcc> {
     }
     fn post(&mut self, acc: JavaAcc) -> Option<(Local, IsSkippedAna)> {
         let skiped_ana = acc.skiped_ana;
-        let name = acc.name.clone();
+        let name = acc.primary.name.clone();
         let full_node = make(acc, &mut self.prepro.main_stores);
         let key = full_node.compressed_node.clone();
         self.prepro
@@ -366,9 +298,9 @@ impl<'fs, 'prepro> Processor<JavaAcc> for JavaProcessor<'fs, 'prepro, JavaAcc> {
         } else {
             let w = &mut self.stack.last_mut().unwrap().1;
             assert!(
-                !w.children_names.contains(&name),
+                !w.primary.children_names.contains(&name),
                 "{:?} {:?}",
-                w.children_names,
+                w.primary.children_names,
                 name
             );
             w.push(name, full_node.clone(), skiped_ana);
@@ -387,212 +319,69 @@ fn make(
 ) -> hyper_ast_gen_ts_java::legion_with_refs::Local {
     let node_store = &mut stores.node_store;
     let label_store = &mut stores.label_store;
+    let kind = Type::Directory;
+    use hyper_ast::types::ETypeStore;
+    let interned_kind = TStore::intern(kind);
+    let label_id = label_store.get_or_insert(acc.primary.name.clone());
 
-    let hashs = acc.metrics.hashs;
-    let size = acc.metrics.size + 1;
-    let height = acc.metrics.height + 1;
-    let size_no_spaces = acc.metrics.size_no_spaces + 1;
-    let hbuilder = hashed::Builder::new(hashs, &Type::Directory, &acc.name, size_no_spaces);
-    let hashable = &hbuilder.most_discriminating();
-    let label_id = label_store.get_or_insert(acc.name.clone());
-
-    let eq = eq_node(&Type::Directory, Some(&label_id), &acc.children);
-
+    let primary = acc
+        .primary
+        .map_metrics(|m| m.finalize(&interned_kind, &label_id, 0));
+    let hashable = primary.metrics.hashs.most_discriminating();
+    let eq = hyper_ast::store::nodes::legion::eq_node(
+        &interned_kind,
+        Some(&label_id),
+        &primary.children,
+    );
     let insertion = node_store.prepare_insertion(&hashable, eq);
 
-    let compute_md = || {
-        let ana = {
-            let ana = acc.ana;
-            let ana = if acc.skiped_ana {
-                log::info!(
-                    "shop ana with at least {} refs",
-                    ana.lower_estimate_refs_count()
-                );
-                ana
-            } else {
-                log::info!(
-                    "ref count lower estimate in dir {}",
-                    ana.lower_estimate_refs_count()
-                );
-                log::debug!("refs in directory");
-                for x in ana.display_refs(label_store) {
-                    log::debug!("    {}", x);
-                }
-                log::debug!("decls in directory");
-                for x in ana.display_decls(label_store) {
-                    log::debug!("    {}", x);
-                }
-                let c = ana.estimated_refs_count();
-                if c < MAX_REFS {
-                    ana.resolve()
-                } else {
-                    ana
-                }
-            };
-            log::info!(
-                "ref count in dir after resolver {}",
-                ana.lower_estimate_refs_count()
-            );
-            log::debug!("refs in directory after resolve: ");
-            for x in ana.display_refs(label_store) {
-                log::debug!("    {}", x);
-            }
-            ana
-        };
-
-        let hashs = hbuilder.build();
-
-        let metrics = SubTreeMetrics {
-            size,
-            height,
-            size_no_spaces,
-            hashs,
-        };
-
-        (ana, metrics)
-    };
-
     if let Some(id) = insertion.occupied_id() {
-        let (ana, metrics) = compute_md();
+        let ana = None;
+        let metrics = primary.metrics.map_hashs(|h| h.build());
         return Local {
             compressed_node: id,
             metrics,
-            ana: Some(ana),
-            mcc: Mcc::new(&Type::Directory),
+            ana,
+            mcc: Mcc::new(&kind),
+            role: None,
+            precomp_queries: Default::default(),
         };
     }
 
-    let (ana, metrics) = compute_md();
-    let hashs = hbuilder.build();
-    let node_id = compress(
-        insertion,
-        label_id,
-        acc.children,
-        acc.children_names,
-        size,
-        height,
-        size_no_spaces,
-        hashs,
-        acc.skiped_ana,
-        &ana,
+    let mut dyn_builder = hyper_ast::store::nodes::legion::dyn_builder::EntityBuilder::new();
+
+    let ana = None;
+
+    let children_is_empty = primary.children.is_empty();
+
+    // TODO move add_md_ref_ana to better place
+    #[cfg(feature = "impact")]
+    hyper_ast_gen_ts_java::legion_with_refs::add_md_ref_ana(
+        &mut dyn_builder,
+        children_is_empty,
+        None,
+    );
+    // }
+    let metrics = primary.persist(&mut dyn_builder, interned_kind, label_id);
+    let metrics = metrics.map_hashs(|h| h.build());
+    let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
+    hashs.persist(&mut dyn_builder);
+
+    let vacant = insertion.vacant();
+    let node_id = hyper_ast::store::nodes::legion::NodeStore::insert_built_after_prepare(
+        vacant,
+        dyn_builder.build(),
     );
 
     let full_node = Local {
         compressed_node: node_id.clone(),
         metrics,
-        ana: Some(ana.clone()),
-        mcc: Mcc::new(&Type::Directory),
+        ana,
+        mcc: Mcc::new(&kind),
+        role: None,
+        precomp_queries: Default::default(),
     };
     full_node
-}
-fn compress(
-    insertion: PendingInsert,
-    label_id: LabelIdentifier,
-    children: Vec<NodeIdentifier>,
-    children_names: Vec<LabelIdentifier>,
-    size: u32,
-    height: u32,
-    size_no_spaces: u32,
-    hashs: SyntaxNodeHashs<u32>,
-    skiped_ana: bool,
-    ana: &PartialAnalysis,
-) -> NodeIdentifier {
-    let vacant = insertion.vacant();
-    use tuples::combin::CombinConcat;
-    macro_rules! insert {
-        ( $c0:expr, $($c:expr),* $(,)? ) => {{
-            let c = $c0;
-            $(
-                let c = c.concat($c);
-            )*
-            NodeStore::insert_after_prepare(vacant, c)
-        }};
-    }
-    // NOTE needed as macro because I only implemented BulkHasher and Bloom for u8 and u16
-    macro_rules! bloom {
-        ( $t:ty ) => {{
-            type B = $t;
-            let it = ana.solver.iter_refs();
-            let it = BulkHasher::<_, <B as BF<[u8]>>::S, <B as BF<[u8]>>::H>::from(it);
-            let bloom = B::from(it);
-            (B::SIZE, bloom)
-        }};
-    }
-    match children.len() {
-        0 => insert!((Type::Directory, label_id, hashs, BloomSize::None),),
-        _ => {
-            assert_eq!(children_names.len(), children.len());
-            let c = (
-                Type::Directory,
-                label_id,
-                compo::Size(size),
-                compo::Height(height),
-                compo::SizeNoSpaces(size_no_spaces),
-                hashs,
-                CS(children_names.into_boxed_slice()),
-                CS(children.into_boxed_slice()),
-            );
-            match ana.estimated_refs_count() {
-                x if x > 2048 || skiped_ana => {
-                    insert!(c, (BloomSize::Much,))
-                }
-                x if x > 1024 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], [u64; 64]>))
-                }
-                x if x > 512 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], [u64; 32]>))
-                }
-                x if x > 256 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], [u64; 16]>))
-                }
-                x if x > 150 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], [u64; 8]>))
-                }
-                x if x > 100 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], [u64; 4]>))
-                }
-                x if x > 30 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], [u64; 2]>))
-                }
-                x if x > 15 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], u64>))
-                }
-                x if x > 8 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], u32>))
-                }
-                x if x > 0 => {
-                    insert!(c, bloom!(Bloom::<&'static [u8], u16>))
-                }
-                _ => insert!(c, (BloomSize::None,)),
-            }
-        }
-    }
-}
-pub fn eq_node<'a>(
-    kind: &'a Type,
-    label_id: Option<&'a LabelIdentifier>,
-    children: &'a [NodeIdentifier],
-) -> impl Fn(EntryRef) -> bool + 'a {
-    return move |x: EntryRef| {
-        let t = x.get_component::<Type>();
-        if t != Ok(kind) {
-            return false;
-        }
-        let l = x.get_component::<LabelIdentifier>().ok();
-        if l != label_id {
-            return false;
-        } else {
-            let cs = x.get_component::<CS<NodeIdentifier>>();
-            let r = match cs {
-                Ok(CS(cs)) => cs.as_ref() == children,
-                Err(_) => children.is_empty(),
-            };
-            if !r {
-                return false;
-            }
-        }
-        true
-    };
 }
 
 pub fn parse_dir_pair(

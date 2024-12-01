@@ -1,9 +1,8 @@
-use std::fmt::Display;
+use std::{fmt::Display, u16};
 
 use hyper_ast::{
-    store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
-    types::{AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
+    types::{AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId},
 };
 
 #[cfg(feature = "legion")]
@@ -13,122 +12,80 @@ mod legion_impls {
     use crate::TNode;
 
     impl<'a> TNode<'a> {
-        pub fn obtain_type<T>(&self, _: &mut impl XmlEnabledTypeStore<T>) -> Type {
+        pub fn obtain_type(&self) -> Type {
             let t = self.kind_id();
             Type::from_u16(t)
         }
     }
 
-    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::TypeIndex};
+    use hyper_ast::types::{LangWrapper, RoleStore};
 
-    impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        type Ty = Type;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-        fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
-            n.get_component::<Type>().unwrap().clone()
+    impl TypeStore for TStore {
+        type Ty = TypeU16<Xml>;
+    }
+    impl TypeStore for &TStore {
+        type Ty = TypeU16<Xml>;
+    }
+
+    impl XmlEnabledTypeStore for TStore {
+        fn intern(t: Type) -> Self::Ty {
+            t.into()
         }
 
-        fn resolve_lang(
-            &self,
-            _n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            From::<&'static (dyn LangRef<Type>)>::from(&Lang)
-        }
-
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&Lang),
-                ty: self.resolve_type(n) as u16,
-            }
-        }
-        fn type_eq(
-            &self,
-            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-            m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        ) -> bool {
-            n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
+        fn resolve(t: Self::Ty) -> Type {
+            t.e()
         }
     }
-    impl<'a> XmlEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        const LANG: TypeInternalSize = Self::Xml as u16;
 
-        fn _intern(_l: u16, _t: u16) -> Self::Ty {
-            // T((u16::MAX - l as u16) | t)
-            todo!()
-        }
-        fn intern(&self, t: Type) -> Self::Ty {
-            t
-        }
+    impl RoleStore for TStore {
+        type IdF = u16;
 
-        fn resolve(&self, t: Self::Ty) -> Type {
-            t
-            // let t = t.0 as u16;
-            // let t = t & !TStore::MASK;
-            // Type::resolve(t)
-        }
-    }
-    impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
-        type Ty = AnyType;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
+        type Role = hyper_ast::types::Role;
 
-        fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-            as_any(n.get_component::<Type>().unwrap())
+        fn resolve_field(_lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
+            let s = tree_sitter_xml::language_xml()
+                .field_name_for_id(field_id)
+                .ok_or_else(|| format!("{}", field_id))
+                .unwrap();
+            hyper_ast::types::Role::try_from(s).expect(s)
         }
 
-        fn resolve_lang(
-            &self,
-            _n: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            todo!()
-        }
-
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&Lang),
-                ty: *n.get_component::<Type>().unwrap() as u16,
-            }
-        }
-        fn type_eq(
-            &self,
-            _n: &HashedNodeRef<'a, NodeIdentifier>,
-            _m: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> bool {
-            todo!()
+        fn intern_role(_lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
+            let field_name = role.to_string();
+            tree_sitter_xml::language_xml()
+                .field_id_for_name(field_name)
+                .unwrap()
+                .into()
         }
     }
 }
+
+#[cfg(feature = "impl")]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    tree_sitter_xml::language_xml().id_for_node_kind(kind, named)
+}
+#[cfg(not(feature = "impl"))]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    unimplemented!("need treesitter grammar")
+}
+
 pub fn as_any(t: &Type) -> AnyType {
     let t = <Xml as hyper_ast::types::Lang<Type>>::to_u16(*t);
     let t = <Xml as hyper_ast::types::Lang<Type>>::make(t);
     let t: &'static dyn HyperType = t;
     t.into()
 }
-pub trait XmlEnabledTypeStore<T>: TypeStore<T> {
-    const LANG: u16;
-    // fn obtain(&self, n: &TNode) -> Type {
-    //     let t = n.kind_id();
-    //     Type::from_u16(t)
-    // }
-    fn intern(&self, t: Type) -> Self::Ty {
-        let t = t as u16;
-        Self::_intern(Self::LANG, t)
-    }
-    fn _intern(l: u16, t: u16) -> Self::Ty;
-    fn resolve(&self, t: Self::Ty) -> Type;
+
+pub trait XmlEnabledTypeStore: TypeStore {
+    fn intern(t: Type) -> Self::Ty;
+    fn resolve(t: Self::Ty) -> Type;
 }
 
-#[repr(u8)]
-pub enum TStore {
-    Xml = 0,
-}
+pub struct TStore;
 
 impl Default for TStore {
     fn default() -> Self {
-        Self::Xml
+        Self
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -152,6 +109,10 @@ impl<IdN: Clone + Eq + NodeId> NodeId for TIdN<IdN> {
 
 impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
     type Ty = Type;
+    type TyErazed = TType;
+    fn unerase(ty: Self::TyErazed) -> Self::Ty {
+        ty.e()
+    }
 }
 
 type TypeInternalSize = u16;
@@ -159,7 +120,9 @@ type TypeInternalSize = u16;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct T(TypeInternalSize);
 
+#[derive(Debug)]
 pub struct Lang;
+
 pub type Xml = Lang;
 
 impl hyper_ast::types::Lang<Type> for Xml {
@@ -183,6 +146,10 @@ impl LangRef<Type> for Xml {
     fn to_u16(&self, t: Type) -> u16 {
         t as u16
     }
+
+    fn ts_symbol(&self, t: Type) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
 }
 
 impl LangRef<AnyType> for Xml {
@@ -194,10 +161,34 @@ impl LangRef<AnyType> for Xml {
         todo!()
     }
 
-    fn to_u16(&self, _t: AnyType) -> u16 {
-        todo!()
+    fn to_u16(&self, t: AnyType) -> u16 {
+        let t: &Type = t.as_any().downcast_ref().unwrap();
+        Lang.to_u16(*t)
+    }
+
+    fn ts_symbol(&self, t: AnyType) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
+
+impl LangRef<hyper_ast::types::TypeU16<Self>> for Lang {
+    fn make(&self, t: u16) -> &'static TType {
+        // TODO could make one safe, but not priority
+        unsafe { std::mem::transmute(&S_T_L[t as usize]) }
+    }
+    fn to_u16(&self, t: TType) -> u16 {
+        t.e() as u16
+    }
+
+    fn name(&self) -> &'static str {
+        std::any::type_name::<Lang>()
+    }
+
+    fn ts_symbol(&self, t: TType) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
+}
+
 impl HyperType for Type {
     fn generic_eq(&self, other: &dyn HyperType) -> bool
     where
@@ -226,6 +217,10 @@ impl HyperType for Type {
         let t = <Xml as hyper_ast::types::Lang<Type>>::to_u16(*self);
         let t = <Xml as hyper_ast::types::Lang<Type>>::make(t);
         t
+    }
+
+    fn as_static_str(&self) -> &'static str {
+        self.to_str()
     }
 
     fn is_file(&self) -> bool {
@@ -300,11 +295,27 @@ impl HyperType for Type {
         || self == &Type::Percent // "%",
     }
 
+    fn is_hidden(&self) -> bool {
+        self.is_hidden()
+    }
+
+    fn is_supertype(&self) -> bool {
+        self.is_supertype()
+    }
+
+    fn is_named(&self) -> bool {
+        self.is_named()
+    }
+
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,
     {
-        todo!()
+        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<Self> + 'static))
+    }
+
+    fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
+        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<AnyType> + 'static))
     }
 }
 
@@ -406,34 +417,43 @@ impl Display for Type {
     }
 }
 
-// #[repr(u16)]
-// #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-// pub enum Type {
-//     Spaces,
-//     SourceFile,
-//     MavenDirectory,
-//     Directory,
-//     ERROR,
-// }
-// impl Type {
-//     pub fn from_u16(t: u16) -> Type {
-//         todo!()
-//     }
-// }
-
-// const S_T_L: &'static [Type] = &[
-//     Type::Spaces,
-//     Type::SourceFile,
-//     Type::MavenDirectory,
-//     Type::Directory,
-//     Type::ERROR,
-// ];
-
 impl TryFrom<&str> for Type {
     type Error = String;
 
     fn try_from(value: &str) -> Result<Self, <Self as TryFrom<&str>>::Error> {
         Type::from_str(value).ok_or_else(|| value.to_owned())
+    }
+}
+
+impl hyper_ast::types::LLang<hyper_ast::types::TypeU16<Self>> for Xml {
+    type I = u16;
+
+    type E = Type;
+
+    const TE: &[Self::E] = S_T_L;
+
+    fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<hyper_ast::types::TypeU16<Self>> {
+        From::<&'static (dyn LangRef<_>)>::from(&Lang)
+    }
+}
+
+pub type TType = TypeU16<Lang>;
+
+impl From<u16> for Type {
+    fn from(value: u16) -> Self {
+        debug_assert_eq!(Self::from_u16(value), S_T_L[value as usize]);
+        S_T_L[value as usize]
+    }
+}
+impl Into<TypeU16<Xml>> for Type {
+    fn into(self) -> TypeU16<Xml> {
+        TypeU16::new(self)
+    }
+}
+
+impl Into<u16> for Type {
+    fn into(self) -> u16 {
+        self as u8 as u16
     }
 }
 
@@ -515,7 +535,7 @@ pub enum Type {
     Error,
     Document,
     _Markupdecl,
-    TS38,
+    TS37,
     Elementdecl,
     Contentspec,
     Mixed,
@@ -546,15 +566,15 @@ pub enum Type {
     SystemLiteral,
     PubidLiteral,
     XmlDecl,
+    TS38,
+    TS39,
+    Pi,
+    TS40,
+    Prolog,
     TS41,
     TS42,
-    Pi,
-    TS43,
-    Prolog,
-    TS44,
-    TS45,
     Doctypedecl,
-    TS46,
+    TS43,
     Element,
     EmptyElemTag,
     Attribute,
@@ -568,22 +588,22 @@ pub enum Type {
     PseudoAtt,
     PseudoAttValue,
     DocumentRepeat1,
-    TS48,
-    TS49,
+    TS44,
+    TS45,
     _ChoiceRepeat1,
     _ChoiceRepeat2,
+    TS46,
+    TS47,
+    TS48,
+    TS49,
+    TS50,
+    TS51,
     TS52,
     TS53,
-    TS54,
-    TS55,
-    TS56,
-    TS57,
-    TS58,
-    TS59,
     ContentRepeat1,
-    TS61,
+    TS54,
     Spaces,
-    MavenDirectory, // NOTE maven specific
+    MavenDirectory,
     Directory,
     ERROR,
 }
@@ -668,7 +688,7 @@ impl Type {
             75u16 => Type::Error,
             76u16 => Type::Document,
             77u16 => Type::_Markupdecl,
-            78u16 => Type::TS38,
+            78u16 => Type::TS37,
             79u16 => Type::Elementdecl,
             80u16 => Type::Contentspec,
             81u16 => Type::Mixed,
@@ -699,15 +719,15 @@ impl Type {
             106u16 => Type::SystemLiteral,
             107u16 => Type::PubidLiteral,
             108u16 => Type::XmlDecl,
-            109u16 => Type::TS41,
-            110u16 => Type::TS42,
+            109u16 => Type::TS38,
+            110u16 => Type::TS39,
             111u16 => Type::Pi,
-            112u16 => Type::TS43,
+            112u16 => Type::TS40,
             113u16 => Type::Prolog,
-            114u16 => Type::TS44,
-            115u16 => Type::TS45,
+            114u16 => Type::TS41,
+            115u16 => Type::TS42,
             116u16 => Type::Doctypedecl,
-            117u16 => Type::TS46,
+            117u16 => Type::TS43,
             118u16 => Type::Element,
             119u16 => Type::EmptyElemTag,
             120u16 => Type::Attribute,
@@ -721,174 +741,176 @@ impl Type {
             128u16 => Type::PseudoAtt,
             129u16 => Type::PseudoAttValue,
             130u16 => Type::DocumentRepeat1,
-            131u16 => Type::TS48,
-            132u16 => Type::TS49,
+            131u16 => Type::TS44,
+            132u16 => Type::TS45,
             133u16 => Type::_ChoiceRepeat1,
             134u16 => Type::_ChoiceRepeat2,
-            135u16 => Type::TS52,
-            136u16 => Type::TS53,
-            137u16 => Type::TS54,
-            138u16 => Type::TS55,
-            139u16 => Type::TS56,
-            140u16 => Type::TS57,
-            141u16 => Type::TS58,
-            142u16 => Type::TS59,
+            135u16 => Type::TS46,
+            136u16 => Type::TS47,
+            137u16 => Type::TS48,
+            138u16 => Type::TS49,
+            139u16 => Type::TS50,
+            140u16 => Type::TS51,
+            141u16 => Type::TS52,
+            142u16 => Type::TS53,
             143u16 => Type::ContentRepeat1,
-            144u16 => Type::TS61,
-            145u16 => Type::ERROR,
+            144u16 => Type::TS54,
+            u16::MAX => Type::ERROR,
             x => panic!("{}", x),
         }
     }
     pub fn from_str(t: &str) -> Option<Type> {
-        Some(match t {
-            "end" => Type::End,
-            "Name" => Type::Name,
-            "<![" => Type::TS0,
-            "IGNORE" => Type::TS1,
-            "INCLUDE" => Type::TS2,
-            "[" => Type::LBracket,
-            "]]>" => Type::TS3,
-            "<!" => Type::TS4,
-            "ELEMENT" => Type::TS5,
-            ">" => Type::GT,
-            "EMPTY" => Type::TS6,
-            "ANY" => Type::TS7,
-            "(" => Type::LParen,
-            "#PCDATA" => Type::TS8,
-            "|" => Type::Pipe,
-            ")" => Type::RParen,
-            "*" => Type::Star,
-            "?" => Type::QMark,
-            "+" => Type::Plus,
-            "," => Type::Comma,
-            "ATTLIST" => Type::TS9,
-            "CDATA" => Type::TS10,
-            "TokenizedType" => Type::TokenizedType,
-            "NOTATION" => Type::TS11,
-            "#REQUIRED" => Type::TS12,
-            "#IMPLIED" => Type::TS13,
-            "#FIXED" => Type::TS14,
-            "ENTITY" => Type::TS15,
-            "%" => Type::Percent,
-            "\"" => Type::DQuote,
-            "EntityValue_token1" => Type::TS16,
-            "'" => Type::SQuote,
-            "EntityValue_token2" => Type::TS17,
-            "NDATA" => Type::TS18,
-            ";" => Type::SemiColon,
-            "_S" => Type::TS19,
-            "Nmtoken" => Type::Nmtoken,
-            "&" => Type::Amp,
-            "&#" => Type::TS20,
-            "CharRef_token1" => Type::TS21,
-            "&#x" => Type::TS22,
-            "CharRef_token2" => Type::TS23,
-            "AttValue_token1" => Type::TS24,
-            "AttValue_token2" => Type::TS25,
-            "SYSTEM" => Type::TS26,
-            "PUBLIC" => Type::TS27,
-            "URI" => Type::Uri,
-            "PubidLiteral_token1" => Type::TS28,
-            "PubidLiteral_token2" => Type::TS29,
-            "<?" => Type::TS30,
-            "xml" => Type::Xml,
-            "?>" => Type::TS31,
-            "version" => Type::Version,
-            "VersionNum" => Type::VersionNum,
-            "encoding" => Type::Encoding,
-            "EncName" => Type::EncName,
-            "=" => Type::Eq,
-            "standalone" => Type::Standalone,
-            "yes" => Type::Yes,
-            "no" => Type::No,
-            "DOCTYPE" => Type::TS32,
-            "]" => Type::RBracket,
-            "<" => Type::LT,
-            "/>" => Type::TS33,
-            "</" => Type::TS34,
-            "xml-stylesheet" => Type::TS35,
-            "xml-model" => Type::TS36,
-            "PITarget" => Type::PiTarget,
-            "_pi_content" => Type::_PiContent,
-            "Comment" => Type::Comment,
-            "CharData" => Type::CharData,
-            "CData" => Type::CData,
-            "ERROR" => Type::Error,
-            "document" => Type::Document,
-            "_markupdecl" => Type::_Markupdecl,
-            "_DeclSep" => Type::TS38,
-            "elementdecl" => Type::Elementdecl,
-            "contentspec" => Type::Contentspec,
-            "Mixed" => Type::Mixed,
-            "children" => Type::Children,
-            "_cp" => Type::_Cp,
-            "_choice" => Type::_Choice,
-            "AttlistDecl" => Type::AttlistDecl,
-            "AttDef" => Type::AttDef,
-            "_AttType" => Type::AttType,
-            "StringType" => Type::StringType,
-            "_EnumeratedType" => Type::EnumeratedType,
-            "NotationType" => Type::NotationType,
-            "Enumeration" => Type::Enumeration,
-            "DefaultDecl" => Type::DefaultDecl,
-            "_EntityDecl" => Type::EntityDecl,
-            "GEDecl" => Type::GeDecl,
-            "PEDecl" => Type::PeDecl,
-            "EntityValue" => Type::EntityValue,
-            "NDataDecl" => Type::NDataDecl,
-            "NotationDecl" => Type::NotationDecl,
-            "PEReference" => Type::PeReference,
-            "_Reference" => Type::Reference,
-            "EntityRef" => Type::EntityRef,
-            "CharRef" => Type::CharRef,
-            "AttValue" => Type::AttValue,
-            "ExternalID" => Type::ExternalId,
-            "PublicID" => Type::PublicId,
-            "SystemLiteral" => Type::SystemLiteral,
-            "PubidLiteral" => Type::PubidLiteral,
-            "XMLDecl" => Type::XmlDecl,
-            "_VersionInfo" => Type::TS41,
-            "_EncodingDecl" => Type::TS42,
-            "PI" => Type::Pi,
-            "_Eq" => Type::TS43,
-            "prolog" => Type::Prolog,
-            "_Misc" => Type::TS44,
-            "_SDDecl" => Type::TS45,
-            "doctypedecl" => Type::Doctypedecl,
-            "_intSubset" => Type::TS46,
-            "element" => Type::Element,
-            "EmptyElemTag" => Type::EmptyElemTag,
-            "Attribute" => Type::Attribute,
-            "STag" => Type::STag,
-            "ETag" => Type::ETag,
-            "content" => Type::Content,
-            "CDSect" => Type::CdSect,
-            "CDStart" => Type::CdStart,
-            "StyleSheetPI" => Type::StyleSheetPi,
-            "XmlModelPI" => Type::XmlModelPi,
-            "PseudoAtt" => Type::PseudoAtt,
-            "PseudoAttValue" => Type::PseudoAttValue,
-            "document_repeat1" => Type::DocumentRepeat1,
-            "Mixed_repeat1" => Type::TS48,
-            "Mixed_repeat2" => Type::TS49,
-            "_choice_repeat1" => Type::_ChoiceRepeat1,
-            "_choice_repeat2" => Type::_ChoiceRepeat2,
-            "AttlistDecl_repeat1" => Type::TS52,
-            "NotationType_repeat1" => Type::TS53,
-            "Enumeration_repeat1" => Type::TS54,
-            "EntityValue_repeat1" => Type::TS55,
-            "EntityValue_repeat2" => Type::TS56,
-            "AttValue_repeat1" => Type::TS57,
-            "AttValue_repeat2" => Type::TS58,
-            "EmptyElemTag_repeat1" => Type::TS59,
-            "content_repeat1" => Type::ContentRepeat1,
-            "StyleSheetPI_repeat1" => Type::TS61,
-            "Spaces" => Type::Spaces,
-            "Directory" => Type::Directory,
-            "MavenDirectory" => Type::MavenDirectory,
-            "ERROR" => Type::ERROR,
-            _x => return None,
-        })
+        Some(
+            match t {
+                "end" => Type::End,
+                "Name" => Type::Name,
+                "<![" => Type::TS0,
+                "IGNORE" => Type::TS1,
+                "INCLUDE" => Type::TS2,
+                "[" => Type::LBracket,
+                "]]>" => Type::TS3,
+                "<!" => Type::TS4,
+                "ELEMENT" => Type::TS5,
+                ">" => Type::GT,
+                "EMPTY" => Type::TS6,
+                "ANY" => Type::TS7,
+                "(" => Type::LParen,
+                "#PCDATA" => Type::TS8,
+                "|" => Type::Pipe,
+                ")" => Type::RParen,
+                "*" => Type::Star,
+                "?" => Type::QMark,
+                "+" => Type::Plus,
+                "," => Type::Comma,
+                "ATTLIST" => Type::TS9,
+                "CDATA" => Type::TS10,
+                "TokenizedType" => Type::TokenizedType,
+                "NOTATION" => Type::TS11,
+                "#REQUIRED" => Type::TS12,
+                "#IMPLIED" => Type::TS13,
+                "#FIXED" => Type::TS14,
+                "ENTITY" => Type::TS15,
+                "%" => Type::Percent,
+                "\"" => Type::DQuote,
+                "EntityValue_token1" => Type::TS16,
+                "'" => Type::SQuote,
+                "EntityValue_token2" => Type::TS17,
+                "NDATA" => Type::TS18,
+                ";" => Type::SemiColon,
+                "_S" => Type::TS19,
+                "Nmtoken" => Type::Nmtoken,
+                "&" => Type::Amp,
+                "&#" => Type::TS20,
+                "CharRef_token1" => Type::TS21,
+                "&#x" => Type::TS22,
+                "CharRef_token2" => Type::TS23,
+                "AttValue_token1" => Type::TS24,
+                "AttValue_token2" => Type::TS25,
+                "SYSTEM" => Type::TS26,
+                "PUBLIC" => Type::TS27,
+                "URI" => Type::Uri,
+                "PubidLiteral_token1" => Type::TS28,
+                "PubidLiteral_token2" => Type::TS29,
+                "<?" => Type::TS30,
+                "xml" => Type::Xml,
+                "?>" => Type::TS31,
+                "version" => Type::Version,
+                "VersionNum" => Type::VersionNum,
+                "encoding" => Type::Encoding,
+                "EncName" => Type::EncName,
+                "=" => Type::Eq,
+                "standalone" => Type::Standalone,
+                "yes" => Type::Yes,
+                "no" => Type::No,
+                "DOCTYPE" => Type::TS32,
+                "]" => Type::RBracket,
+                "<" => Type::LT,
+                "/>" => Type::TS33,
+                "</" => Type::TS34,
+                "xml-stylesheet" => Type::TS35,
+                "xml-model" => Type::TS36,
+                "PITarget" => Type::PiTarget,
+                "_pi_content" => Type::_PiContent,
+                "Comment" => Type::Comment,
+                "CharData" => Type::CharData,
+                "CData" => Type::CData,
+                "ERROR" => Type::Error,
+                "document" => Type::Document,
+                "_markupdecl" => Type::_Markupdecl,
+                "_DeclSep" => Type::TS37,
+                "elementdecl" => Type::Elementdecl,
+                "contentspec" => Type::Contentspec,
+                "Mixed" => Type::Mixed,
+                "children" => Type::Children,
+                "_cp" => Type::_Cp,
+                "_choice" => Type::_Choice,
+                "AttlistDecl" => Type::AttlistDecl,
+                "AttDef" => Type::AttDef,
+                "_AttType" => Type::AttType,
+                "StringType" => Type::StringType,
+                "_EnumeratedType" => Type::EnumeratedType,
+                "NotationType" => Type::NotationType,
+                "Enumeration" => Type::Enumeration,
+                "DefaultDecl" => Type::DefaultDecl,
+                "_EntityDecl" => Type::EntityDecl,
+                "GEDecl" => Type::GeDecl,
+                "PEDecl" => Type::PeDecl,
+                "EntityValue" => Type::EntityValue,
+                "NDataDecl" => Type::NDataDecl,
+                "NotationDecl" => Type::NotationDecl,
+                "PEReference" => Type::PeReference,
+                "_Reference" => Type::Reference,
+                "EntityRef" => Type::EntityRef,
+                "CharRef" => Type::CharRef,
+                "AttValue" => Type::AttValue,
+                "ExternalID" => Type::ExternalId,
+                "PublicID" => Type::PublicId,
+                "SystemLiteral" => Type::SystemLiteral,
+                "PubidLiteral" => Type::PubidLiteral,
+                "XMLDecl" => Type::XmlDecl,
+                "_VersionInfo" => Type::TS38,
+                "_EncodingDecl" => Type::TS39,
+                "PI" => Type::Pi,
+                "_Eq" => Type::TS40,
+                "prolog" => Type::Prolog,
+                "_Misc" => Type::TS41,
+                "_SDDecl" => Type::TS42,
+                "doctypedecl" => Type::Doctypedecl,
+                "_intSubset" => Type::TS43,
+                "element" => Type::Element,
+                "EmptyElemTag" => Type::EmptyElemTag,
+                "Attribute" => Type::Attribute,
+                "STag" => Type::STag,
+                "ETag" => Type::ETag,
+                "content" => Type::Content,
+                "CDSect" => Type::CdSect,
+                "CDStart" => Type::CdStart,
+                "StyleSheetPI" => Type::StyleSheetPi,
+                "XmlModelPI" => Type::XmlModelPi,
+                "PseudoAtt" => Type::PseudoAtt,
+                "PseudoAttValue" => Type::PseudoAttValue,
+                "document_repeat1" => Type::DocumentRepeat1,
+                "Mixed_repeat1" => Type::TS44,
+                "Mixed_repeat2" => Type::TS45,
+                "_choice_repeat1" => Type::_ChoiceRepeat1,
+                "_choice_repeat2" => Type::_ChoiceRepeat2,
+                "AttlistDecl_repeat1" => Type::TS46,
+                "NotationType_repeat1" => Type::TS47,
+                "Enumeration_repeat1" => Type::TS48,
+                "EntityValue_repeat1" => Type::TS49,
+                "EntityValue_repeat2" => Type::TS50,
+                "AttValue_repeat1" => Type::TS51,
+                "AttValue_repeat2" => Type::TS52,
+                "EmptyElemTag_repeat1" => Type::TS53,
+                "content_repeat1" => Type::ContentRepeat1,
+                "StyleSheetPI_repeat1" => Type::TS54,
+                "Spaces" => Type::Spaces,
+                "Directory" => Type::Directory,
+                "MavenDirectory" => Type::MavenDirectory,
+                "ERROR" => Type::ERROR,
+                _ => return None,
+            },
+        )
     }
     pub fn to_str(&self) -> &'static str {
         match self {
@@ -967,7 +989,7 @@ impl Type {
             Type::Error => "ERROR",
             Type::Document => "document",
             Type::_Markupdecl => "_markupdecl",
-            Type::TS38 => "_DeclSep",
+            Type::TS37 => "_DeclSep",
             Type::Elementdecl => "elementdecl",
             Type::Contentspec => "contentspec",
             Type::Mixed => "Mixed",
@@ -998,15 +1020,15 @@ impl Type {
             Type::SystemLiteral => "SystemLiteral",
             Type::PubidLiteral => "PubidLiteral",
             Type::XmlDecl => "XMLDecl",
-            Type::TS41 => "_VersionInfo",
-            Type::TS42 => "_EncodingDecl",
+            Type::TS38 => "_VersionInfo",
+            Type::TS39 => "_EncodingDecl",
             Type::Pi => "PI",
-            Type::TS43 => "_Eq",
+            Type::TS40 => "_Eq",
             Type::Prolog => "prolog",
-            Type::TS44 => "_Misc",
-            Type::TS45 => "_SDDecl",
+            Type::TS41 => "_Misc",
+            Type::TS42 => "_SDDecl",
             Type::Doctypedecl => "doctypedecl",
-            Type::TS46 => "_intSubset",
+            Type::TS43 => "_intSubset",
             Type::Element => "element",
             Type::EmptyElemTag => "EmptyElemTag",
             Type::Attribute => "Attribute",
@@ -1020,24 +1042,140 @@ impl Type {
             Type::PseudoAtt => "PseudoAtt",
             Type::PseudoAttValue => "PseudoAttValue",
             Type::DocumentRepeat1 => "document_repeat1",
-            Type::TS48 => "Mixed_repeat1",
-            Type::TS49 => "Mixed_repeat2",
+            Type::TS44 => "Mixed_repeat1",
+            Type::TS45 => "Mixed_repeat2",
             Type::_ChoiceRepeat1 => "_choice_repeat1",
             Type::_ChoiceRepeat2 => "_choice_repeat2",
-            Type::TS52 => "AttlistDecl_repeat1",
-            Type::TS53 => "NotationType_repeat1",
-            Type::TS54 => "Enumeration_repeat1",
-            Type::TS55 => "EntityValue_repeat1",
-            Type::TS56 => "EntityValue_repeat2",
-            Type::TS57 => "AttValue_repeat1",
-            Type::TS58 => "AttValue_repeat2",
-            Type::TS59 => "EmptyElemTag_repeat1",
+            Type::TS46 => "AttlistDecl_repeat1",
+            Type::TS47 => "NotationType_repeat1",
+            Type::TS48 => "Enumeration_repeat1",
+            Type::TS49 => "EntityValue_repeat1",
+            Type::TS50 => "EntityValue_repeat2",
+            Type::TS51 => "AttValue_repeat1",
+            Type::TS52 => "AttValue_repeat2",
+            Type::TS53 => "EmptyElemTag_repeat1",
             Type::ContentRepeat1 => "content_repeat1",
-            Type::TS61 => "StyleSheetPI_repeat1",
+            Type::TS54 => "StyleSheetPI_repeat1",
             Type::Spaces => "Spaces",
             Type::Directory => "Directory",
             Type::MavenDirectory => "MavenDirectory",
             Type::ERROR => "ERROR",
+        }
+    }
+    pub fn is_hidden(&self) -> bool {
+        match self {
+            Type::End => true,
+            Type::TS16 => true,
+            Type::TS17 => true,
+            Type::TS19 => true,
+            Type::TS21 => true,
+            Type::TS23 => true,
+            Type::TS24 => true,
+            Type::TS25 => true,
+            Type::TS28 => true,
+            Type::TS29 => true,
+            Type::_PiContent => true,
+            Type::_Markupdecl => true,
+            Type::TS37 => true,
+            Type::_Cp => true,
+            Type::_Choice => true,
+            Type::AttType => true,
+            Type::EnumeratedType => true,
+            Type::EntityDecl => true,
+            Type::Reference => true,
+            Type::TS38 => true,
+            Type::TS39 => true,
+            Type::TS40 => true,
+            Type::TS41 => true,
+            Type::TS42 => true,
+            Type::TS43 => true,
+            Type::DocumentRepeat1 => true,
+            Type::TS44 => true,
+            Type::TS45 => true,
+            Type::_ChoiceRepeat1 => true,
+            Type::_ChoiceRepeat2 => true,
+            Type::TS46 => true,
+            Type::TS47 => true,
+            Type::TS48 => true,
+            Type::TS49 => true,
+            Type::TS50 => true,
+            Type::TS51 => true,
+            Type::TS52 => true,
+            Type::TS53 => true,
+            Type::ContentRepeat1 => true,
+            Type::TS54 => true,
+            _ => false,
+        }
+    }
+    pub fn is_supertype(&self) -> bool {
+        match self {
+            Type::_Markupdecl => true,
+            Type::AttType => true,
+            Type::EnumeratedType => true,
+            Type::EntityDecl => true,
+            Type::Reference => true,
+            _ => false,
+        }
+    }
+    pub fn is_named(&self) -> bool {
+        match self {
+            Type::Name => true,
+            Type::TokenizedType => true,
+            Type::Nmtoken => true,
+            Type::Uri => true,
+            Type::VersionNum => true,
+            Type::EncName => true,
+            Type::PiTarget => true,
+            Type::Comment => true,
+            Type::CharData => true,
+            Type::CData => true,
+            Type::Error => true,
+            Type::Document => true,
+            Type::_Markupdecl => true,
+            Type::Elementdecl => true,
+            Type::Contentspec => true,
+            Type::Mixed => true,
+            Type::Children => true,
+            Type::AttlistDecl => true,
+            Type::AttDef => true,
+            Type::AttType => true,
+            Type::StringType => true,
+            Type::EnumeratedType => true,
+            Type::NotationType => true,
+            Type::Enumeration => true,
+            Type::DefaultDecl => true,
+            Type::EntityDecl => true,
+            Type::GeDecl => true,
+            Type::PeDecl => true,
+            Type::EntityValue => true,
+            Type::NDataDecl => true,
+            Type::NotationDecl => true,
+            Type::PeReference => true,
+            Type::Reference => true,
+            Type::EntityRef => true,
+            Type::CharRef => true,
+            Type::AttValue => true,
+            Type::ExternalId => true,
+            Type::PublicId => true,
+            Type::SystemLiteral => true,
+            Type::PubidLiteral => true,
+            Type::XmlDecl => true,
+            Type::Pi => true,
+            Type::Prolog => true,
+            Type::Doctypedecl => true,
+            Type::Element => true,
+            Type::EmptyElemTag => true,
+            Type::Attribute => true,
+            Type::STag => true,
+            Type::ETag => true,
+            Type::Content => true,
+            Type::CdSect => true,
+            Type::CdStart => true,
+            Type::StyleSheetPi => true,
+            Type::XmlModelPi => true,
+            Type::PseudoAtt => true,
+            Type::PseudoAttValue => true,
+            _ => false,
         }
     }
 }
@@ -1118,7 +1256,7 @@ const S_T_L: &'static [Type] = &[
     Type::Error,
     Type::Document,
     Type::_Markupdecl,
-    Type::TS38,
+    Type::TS37,
     Type::Elementdecl,
     Type::Contentspec,
     Type::Mixed,
@@ -1149,15 +1287,15 @@ const S_T_L: &'static [Type] = &[
     Type::SystemLiteral,
     Type::PubidLiteral,
     Type::XmlDecl,
+    Type::TS38,
+    Type::TS39,
+    Type::Pi,
+    Type::TS40,
+    Type::Prolog,
     Type::TS41,
     Type::TS42,
-    Type::Pi,
-    Type::TS43,
-    Type::Prolog,
-    Type::TS44,
-    Type::TS45,
     Type::Doctypedecl,
-    Type::TS46,
+    Type::TS43,
     Type::Element,
     Type::EmptyElemTag,
     Type::Attribute,
@@ -1171,21 +1309,22 @@ const S_T_L: &'static [Type] = &[
     Type::PseudoAtt,
     Type::PseudoAttValue,
     Type::DocumentRepeat1,
-    Type::TS48,
-    Type::TS49,
+    Type::TS44,
+    Type::TS45,
     Type::_ChoiceRepeat1,
     Type::_ChoiceRepeat2,
+    Type::TS46,
+    Type::TS47,
+    Type::TS48,
+    Type::TS49,
+    Type::TS50,
+    Type::TS51,
     Type::TS52,
     Type::TS53,
-    Type::TS54,
-    Type::TS55,
-    Type::TS56,
-    Type::TS57,
-    Type::TS58,
-    Type::TS59,
     Type::ContentRepeat1,
-    Type::TS61,
+    Type::TS54,
     Type::Spaces,
+    Type::MavenDirectory,
     Type::Directory,
     Type::ERROR,
 ];

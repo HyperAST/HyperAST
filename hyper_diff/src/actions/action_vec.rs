@@ -41,7 +41,7 @@ pub fn actions_vec_f<'store, P: TreePath<Item = u16>, HAST>(
 ) where
     HAST:
         HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
-    HAST::TS: TypeStore<HAST::T, Ty = AnyType>,
+    HAST::TS: TypeStore<Ty = AnyType>,
 {
     v.iter().for_each(|a| print_action(ori, stores, a));
 }
@@ -117,7 +117,7 @@ fn print_action<'store, P: TreePath<Item = u16>, HAST>(
     HAST:
         HyperAST<'store, T = HashedNodeRef<'store>, IdN = NodeIdentifier, Label = LabelIdentifier>,
     // <HAST::TS as TypeStore<AnyType>>::Ty: Eq,
-    HAST::TS: TypeStore<HAST::T, Ty = AnyType>,
+    HAST::TS: TypeStore<Ty = AnyType>,
 {
     match &a.action {
         Act::Delete {} => println!(
@@ -131,22 +131,19 @@ fn print_action<'store, P: TreePath<Item = u16>, HAST>(
         ),
         Act::Insert { sub } => println!(
             "Ins {:?} {}",
-            {
-                let node = stores.node_store().resolve(sub);
-                // hyper_ast::store::TypeStore::resolve_type(stores.type_store(), &node)
-                stores.type_store().resolve_type(&node).to_string()
-            },
+            { stores.resolve_type(sub).to_string() },
             format_action_pos(ori, stores, a)
         ),
         Act::Move { from } => println!(
             "Mov {:?} {:?} {}",
             {
+                let mut e = ori;
                 let mut node = stores.node_store().resolve(&ori);
                 for x in from.ori.iter() {
-                    let e = node.child(&x).unwrap();
+                    e = node.child(&x).unwrap();
                     node = stores.node_store().resolve(&e);
                 }
-                stores.type_store().resolve_type(&node)
+                stores.resolve_type(&e)
             },
             compute_range(ori, &mut from.ori.iter(), stores),
             format_action_pos(ori, stores, a)
@@ -154,12 +151,13 @@ fn print_action<'store, P: TreePath<Item = u16>, HAST>(
         Act::MovUpd { from, new } => println!(
             "MovUpd {:?} {:?} {:?} {}",
             {
+                let mut e = ori;
                 let mut node = stores.node_store().resolve(&ori);
                 for x in from.ori.iter() {
-                    let e = node.child(&x).unwrap();
+                    e = node.child(&x).unwrap();
                     node = stores.node_store().resolve(&e);
                 }
-                stores.type_store().resolve_type(&node)
+                stores.resolve_type(&e)
             },
             stores.label_store().resolve(new),
             compute_range(ori, &mut from.ori.iter(), stores),
@@ -199,6 +197,9 @@ impl<L: Debug, P: TreePath, I: Debug> ActionsVec<SimpleAction<L, P, I>> {
 
     pub(crate) fn new() -> Self {
         Self(Default::default())
+    }
+    pub(crate) fn extend<II: IntoIterator<Item = SimpleAction<L, P, I>>>(&mut self, action: II) {
+        self.0.extend(action)
     }
 }
 

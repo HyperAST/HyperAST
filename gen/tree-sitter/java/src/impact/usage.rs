@@ -8,8 +8,8 @@ use hyper_ast::{
     },
     store::defaults::LabelIdentifier,
     types::{
-        Children, HyperAST, IterableChildren, LabelStore, Labeled, NodeId, Tree, TypeStore,
-        TypeTrait, Typed, TypedHyperAST, TypedNodeStore, TypedTree, WithChildren,
+        Children, HyperAST, HyperASTShared, IterableChildren, LabelStore, Labeled, NodeId, Tree,
+        TypeStore, TypeTrait, Typed, TypedHyperAST, TypedNodeStore, TypedTree, WithChildren,
         WithSerialization,
     },
 };
@@ -47,7 +47,6 @@ impl<'a, IdN, HAST: HyperAST<'a>> Debug for RefsFinder<'a, IdN, HAST> {
             .field("refs", &self.refs.len())
             .finish()
     }
-
 }
 
 impl<'a, IdN, HAST: HyperAST<'a>> RefsFinder<'a, IdN, HAST> {
@@ -88,7 +87,7 @@ where
     >,
     IdN: 'a + Copy + Eq + Debug + NodeId<IdN = IdN>,
     HAST::Idx: num::PrimInt + num::traits::NumAssign + Debug,
-    HAST: hyper_ast::types::TypeStore<<HAST as hyper_ast::types::HyperAST<'a>>::T>,
+    HAST: hyper_ast::types::TypeStore,
     HAST: hyper_ast::types::LabelStore<str, I = LabelIdentifier>,
     HAST: hyper_ast::types::NodeStore<IdN, R<'a> = <HAST as hyper_ast::types::HyperAST<'a>>::T>,
     <HAST as hyper_ast::types::HyperAST<'a>>::T:
@@ -205,7 +204,12 @@ where
     ) -> Vec<SpHandle> {
         // let mm = self.ana.solver.intern(RefsEnum::MaybeMissing);
         // let this = self.ana.solver.intern(RefsEnum::This(mm));
-        todo!("need a TypedScout for find constructors {:?} {} {:?}", self, package, scout);
+        todo!(
+            "need a TypedScout for find constructors {:?} {} {:?}",
+            self,
+            package,
+            scout
+        );
         // self.find_constructors(scout.clone());
         // self.sp_store.check_with(self.stores, &scout).expect("find_all_is_this before");
         // self.find_refs_with_this(package, this, &mut scout);
@@ -238,7 +242,7 @@ where
             return self.find_refs2::<IM>(package, target, current, b, scout);
         }
         let b = hyper_ast::types::NodeStore::resolve(self.stores.node_store(), &current);
-        let t = self.stores.type_store().resolve_type(&b);
+        let t = self.stores.resolve_type(&current);
         if !IM && !has_children {
             log::debug!("d=1 {:?}", "'Not Java'");
             return vec![];
@@ -822,7 +826,7 @@ where
     >,
     IdN: Copy + Eq + Debug + NodeId<IdN = IdN>,
     HAST::Idx: num::PrimInt + num::traits::NumAssign + Debug,
-    HAST: hyper_ast::types::TypeStore<<HAST as hyper_ast::types::HyperAST<'a>>::T>,
+    HAST: hyper_ast::types::TypeStore,
     HAST: hyper_ast::types::LabelStore<str, I = LabelIdentifier>,
     HAST: hyper_ast::types::NodeStore<IdN, R<'a> = <HAST as hyper_ast::types::HyperAST<'a>>::T>,
     <HAST as hyper_ast::types::HyperAST<'a>>::T: Tree<ChildIdx = HAST::Idx> + WithSerialization,
@@ -1524,8 +1528,8 @@ where
             let (r, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
             let t = r.get_type();
             if t == Type::Modifiers {
-                let two: <HAST as HyperAST>::Idx =
-                    <<HAST as HyperAST>::Idx as num::One>::one() + one();
+                let two: <HAST as HyperASTShared>::Idx =
+                    <<HAST as HyperASTShared>::Idx as num::One>::one() + one();
                 let x = b.child(&(two)).unwrap();
                 let (r, x) = self.stores.typed_node_store().try_resolve(&x).unwrap();
                 let t = r.get_type();
@@ -2947,7 +2951,7 @@ where
         // T = HashedNodeRef<'a,Type>,
         Label = LabelIdentifier,
     >,
-    HAST: hyper_ast::types::TypeStore<<HAST as hyper_ast::types::HyperAST<'a>>::T>,
+    HAST: hyper_ast::types::TypeStore,
     HAST: hyper_ast::types::LabelStore<str, I = LabelIdentifier>,
     HAST: hyper_ast::types::NodeStore<IdN, R<'a> = <HAST as hyper_ast::types::HyperAST<'a>>::T>,
     HAST::Idx: num::PrimInt + num::traits::NumAssign + Debug,

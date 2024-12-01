@@ -6,15 +6,17 @@ mod mean;
 mod min;
 mod named_container;
 mod quantile;
+#[cfg(feature = "impact")]
 mod refs;
 mod stats;
 
-use crate::{scripting::max::Max, SharedState};
+use crate::SharedState;
 use average::Merge;
 use axum::Json;
+use hyper_ast::types::HyperAST;
 use hyper_ast::{
     store::defaults::NodeIdentifier,
-    types::{HyperType, LabelStore, Labeled, TypeStore, WithChildren, WithStats},
+    types::{HyperType, LabelStore, Labeled, WithChildren, WithStats},
 };
 use num::ToPrimitive;
 use rhai::{
@@ -102,7 +104,7 @@ pub fn simple(
     let commit_oid = &commits[0];
     simple_aux(
         state,
-        &mut repo,
+        &repo,
         commit_oid,
         &engine,
         &init_script,
@@ -169,7 +171,7 @@ pub fn simple_depth(
         let now = Instant::now();
         let r = simple_aux(
             state.clone(),
-            &mut repo,
+            &repo,
             commit_oid,
             &engine,
             &init_script,
@@ -242,7 +244,7 @@ fn simple_prepare(
 
 fn simple_aux(
     state: rhai::Shared<crate::AppState>,
-    repo: &mut hyper_ast_cvs_git::processing::ConfiguredRepo2,
+    repo: &hyper_ast_cvs_git::processing::ConfiguredRepo2,
     commit_oid: &hyper_ast_cvs_git::git::Oid,
     engine: &Engine,
     init_script: &rhai::AST,
@@ -316,38 +318,26 @@ fn simple_aux(
             let s = state.clone();
             filter_engine.register_fn("type", move || {
                 let stores = &stores!(s);
-                let node_store = &stores.node_store;
-                let type_store = &stores.type_store;
-                let n = node_store.resolve(current);
-                let t = type_store.resolve_type(&n);
+                let t = stores.resolve_type(&current);
                 t.to_string()
             });
             let s = state.clone();
             filter_engine.register_fn("is_directory", move || {
                 let stores = &stores!(s);
-                let node_store = &stores.node_store;
-                let type_store = &stores.type_store;
-                let n = node_store.resolve(current);
-                let t = type_store.resolve_type(&n);
+                let t = stores.resolve_type(&current);
                 t.is_directory()
             });
             let s = state.clone();
             filter_engine.register_fn("is_type_decl", move || {
                 let stores = &stores!(s);
-                let node_store = &stores.node_store;
-                let type_store = &stores.type_store;
-                let n = node_store.resolve(current);
-                let t = type_store.resolve_type(&n);
+                let t = stores.resolve_type(&current);
                 let s = t.as_shared();
                 s == hyper_ast::types::Shared::TypeDeclaration
             });
             let s = state.clone();
             filter_engine.register_fn("is_file", move || {
                 let stores = &stores!(s);
-                let node_store = &stores.node_store;
-                let type_store = &stores.type_store;
-                let n = node_store.resolve(current);
-                let t = type_store.resolve_type(&n);
+                let t = stores.resolve_type(&current);
                 t.is_file()
             });
             let s = state.clone();
@@ -364,9 +354,8 @@ fn simple_aux(
             filter_engine.register_fn("is_java_file", move || {
                 let stores = &stores!(s);
                 let node_store = &stores.node_store;
-                let type_store = &stores.type_store;
                 let n = node_store.resolve(current);
-                let t = type_store.resolve_type(&n);
+                let t = stores.resolve_type(&current);
                 t.is_file()
                     && stores
                         .label_store
@@ -377,9 +366,8 @@ fn simple_aux(
             filter_engine.register_fn("file_name", move || {
                 let stores = &stores!(s);
                 let node_store = &stores.node_store;
-                let type_store = &stores.type_store;
                 let n = node_store.resolve(current);
-                let t = type_store.resolve_type(&n);
+                let t = stores.resolve_type(&current);
                 if t.is_file() || t.is_directory() {
                     Ok(stores
                         .label_store
@@ -462,47 +450,34 @@ fn simple_aux(
         let s = state.clone();
         acc_engine.register_fn("type", move || {
             let stores = &stores!(s);
-            let node_store = &stores.node_store;
-            let type_store = &stores.type_store;
-            let n = node_store.resolve(current);
-            let t = type_store.resolve_type(&n);
+            let t = stores.resolve_type(&current);
             t.to_string()
         });
         let s = state.clone();
         acc_engine.register_fn("is_type_decl", move || {
             let stores = &stores!(s);
-            let node_store = &stores.node_store;
-            let type_store = &stores.type_store;
-            let n = node_store.resolve(current);
-            let t = type_store.resolve_type(&n);
+            let t = stores.resolve_type(&current);
             let s = t.as_shared();
             s == hyper_ast::types::Shared::TypeDeclaration
         });
         let s = state.clone();
         acc_engine.register_fn("is_directory", move || {
             let stores = &stores!(s);
-            let node_store = &stores.node_store;
-            let type_store = &stores.type_store;
-            let n = node_store.resolve(current);
-            let t = type_store.resolve_type(&n);
+            let t = stores.resolve_type(&current);
             t.is_directory()
         });
         let s = state.clone();
         acc_engine.register_fn("is_file", move || {
             let stores = &stores!(s);
-            let node_store = &stores.node_store;
-            let type_store = &stores.type_store;
-            let n = node_store.resolve(current);
-            let t = type_store.resolve_type(&n);
+            let t = stores.resolve_type(&current);
             t.is_file()
         });
         let s = state.clone();
         acc_engine.register_fn("is_java_file", move || {
             let stores = &stores!(s);
             let node_store = &stores.node_store;
-            let type_store = &stores.type_store;
             let n = node_store.resolve(current);
-            let t = type_store.resolve_type(&n);
+            let t = stores.resolve_type(&current);
             t.is_file()
                 && stores
                     .label_store
@@ -513,9 +488,8 @@ fn simple_aux(
         acc_engine.register_fn("file_name", move || {
             let stores = &stores!(s);
             let node_store = &stores.node_store;
-            let type_store = &stores.type_store;
             let n = node_store.resolve(current);
-            let t = type_store.resolve_type(&n);
+            let t = stores.resolve_type(&current);
             if t.is_file() || t.is_directory() {
                 Ok(stores
                     .label_store
@@ -558,29 +532,32 @@ fn simple_aux(
                 x.contains(SemFlags::HoldMainFolder) || x.contains(SemFlags::HoldTestFolder)
             })
         });
-        let s = state.clone();
-        acc_engine.register_fn("references", move |sig: String, p_ref: String| {
-            let stores = &stores!(s);
-            refs::find_refs(stores, current, &p_ref, &sig).map_or(0, |x| x as i64)
-        });
+        #[cfg(feature = "impact")]
+        {
+            let s = state.clone();
+            acc_engine.register_fn("references", move |sig: String, p_ref: String| {
+                let stores = &stores!(s);
+                refs::find_refs(stores, current, &p_ref, &sig).map_or(0, |x| x as i64)
+            });
 
-        let s = state.clone();
-        acc_engine.register_fn(
-            "pp",
-            |s: refs::QPath,
-             node: NodeIdentifier,
-             i: i64|
-             -> Result<refs::Pos, Box<rhai::EvalAltResult>> {
-                // let stores = &stores!(s);
-                // let it = s.0;
-                // let position_converter =
-                //     &hyper_ast::position::PositionConverter::new(&it).with_stores(stores);
-                // let p = position_converter
-                //     .compute_pos_post_order::<_, hyper_ast::position::Position, _>();
-                // Ok(refs::Pos::from(p))
-                todo!("need to choose a convenient path, try to exploit param overloading")
-            },
-        );
+            let s = state.clone();
+            acc_engine.register_fn(
+                "pp",
+                |s: refs::QPath,
+                 node: NodeIdentifier,
+                 i: i64|
+                 -> Result<refs::Pos, Box<rhai::EvalAltResult>> {
+                    // let stores = &stores!(s);
+                    // let it = s.0;
+                    // let position_converter =
+                    //     &hyper_ast::position::PositionConverter::new(&it).with_stores(stores);
+                    // let p = position_converter
+                    //     .compute_pos_post_order::<_, hyper_ast::position::Position, _>();
+                    // Ok(refs::Pos::from(p))
+                    todo!("need to choose a convenient path, try to exploit param overloading")
+                },
+            );
+        }
         add_utils(&mut acc_engine);
         acc_engine
             .eval_ast_with_scope(&mut scope, &accumulate_script)
@@ -596,7 +573,7 @@ fn simple_aux(
     Ok(r)
 }
 
-use self::{mean::Mean, min::Min, quantile::Quantile, stats::Stats};
+use self::{max::Max, mean::Mean, min::Min, quantile::Quantile, stats::Stats};
 use finalize::Finalize;
 
 fn add_utils(engine: &mut Engine) {
@@ -699,13 +676,16 @@ fn add_utils(engine: &mut Engine) {
                     .map(|r| r)
             },
         );
-    use refs::QPath;
+    #[cfg(feature = "impact")]
     engine
-        .register_type_with_name::<QPath>("Path")
-        .register_fn("Path", QPath::new)
+        .register_type_with_name::<refs::QPath>("Path")
+        .register_fn("Path", refs::QPath::new)
         .register_fn(
             "goto",
-            |s: &mut QPath, node: NodeIdentifier, i: i64| -> Result<(), Box<rhai::EvalAltResult>> {
+            |s: &mut refs::QPath,
+             node: NodeIdentifier,
+             i: i64|
+             -> Result<(), Box<rhai::EvalAltResult>> {
                 let i = i.to_u16().ok_or(concat!(
                     "given child offset is too big,",
                     "you most likely made an error,",

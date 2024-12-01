@@ -51,23 +51,6 @@ pub trait CommitProc {
         commit_builder: crate::preprocessed::CommitBuilder,
     ) -> Box<dyn PreparedCommitProc + 'repo>;
 
-    // fn process_commit(
-    //     &mut self,
-    //     repository: &git2::Repository,
-    //     commit_oid: git2::Oid,
-    // ) -> crate::Commit {
-    //     let builder =
-    //         crate::preprocessed::CommitMonitoringBuilder::start(repository, commit_oid);
-    //     let id = self.process_root_tree(repository, builder.tree_oid());
-    //     builder.finish(id)
-    // }
-
-    fn process_root_tree(
-        &mut self,
-        repository: &git2::Repository,
-        commit_oid: &git2::Oid,
-    ) -> hyper_ast::store::defaults::NodeIdentifier;
-
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit>;
 }
 pub trait PreparedCommitProc {
@@ -137,24 +120,17 @@ fn t() {
         }
     }
     impl CommitProc for P {
-        fn process_root_tree(
-            &mut self,
-            repository: &git2::Repository,
-            tree_oid: &git2::Oid,
-        ) -> hyper_ast::store::defaults::NodeIdentifier {
-            todo!()
-        }
 
         fn prepare_processing(
             &self,
             repository: &git2::Repository,
             tree_oid: crate::preprocessed::CommitBuilder,
         ) -> Box<dyn PreparedCommitProc> {
-            todo!()
+            unimplemented!("required for processing at the root of a project")
         }
 
         fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
-            todo!()
+            unimplemented!("required for processing at the root of a project")
         }
     }
     impl ParametrizedCommitProc for P0 {
@@ -331,14 +307,6 @@ mod spreaded {
             }
         }
         impl CommitProc for P {
-            fn process_root_tree(
-                &mut self,
-                repository: &git2::Repository,
-                tree_oid: &git2::Oid,
-            ) -> hyper_ast::store::defaults::NodeIdentifier {
-                todo!()
-            }
-
             fn prepare_processing(
                 &self,
                 repository: &git2::Repository,

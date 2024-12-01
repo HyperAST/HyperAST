@@ -2,7 +2,6 @@ use std::{marker::PhantomData, num::NonZeroU64};
 
 use crate::types::{NodeId, TypedNodeId};
 
-
 mod boxing;
 mod compo;
 mod elem;
@@ -15,7 +14,7 @@ impl NodeId for NodeIdentifier {
     fn as_id(&self) -> &Self::IdN {
         self
     }
-    
+
     unsafe fn from_id(id: Self::IdN) -> Self {
         id
     }
@@ -27,6 +26,11 @@ impl NodeId for NodeIdentifier {
 
 impl TypedNodeId for NodeIdentifier {
     type Ty = crate::types::AnyType;
+    type TyErazed = crate::types::AnyType;
+    
+    fn unerase(ty: Self::TyErazed) -> Self::Ty {
+        ty
+    }
 }
 
 pub struct NodeStore {
@@ -37,7 +41,6 @@ impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
     type R<'a> = HashedNodeRef<'a, NodeIdentifier>; // TODO
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
         HashedNodeRef(self.nodes.get(id).unwrap(), PhantomData)
-        
     }
 }
 

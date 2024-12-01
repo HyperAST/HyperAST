@@ -1,5 +1,3 @@
-use std::{any::Any, marker::PhantomData};
-
 pub struct TypeMap<V: std::any::Any = Box<dyn std::any::Any>>(
     std::collections::HashMap<std::any::TypeId, V>,
 );

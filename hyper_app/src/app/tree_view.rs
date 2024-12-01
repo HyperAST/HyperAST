@@ -1,256 +1,296 @@
+use super::{
+    code_aspects::{remote_fetch_labels, remote_fetch_nodes_by_ids, HightLightHandle},
+    long_tracking::TARGET_COLOR,
+};
+use crate::app::syntax_highlighting::{self as syntax_highlighter, syntax_highlighting_async};
 use egui::TextFormat;
 use epaint::text::LayoutSection;
-pub use hyper_ast::store::nodes::fetched::{FetchedLabels, NodeIdentifier, NodeStore};
+pub use hyper_ast::store::nodes::fetched::NodeIdentifier;
 use hyper_ast::{
     nodes::IndentedAlt,
-    store::nodes::fetched::{HashedNodeRef, LabelIdentifier},
-    types::{
-        AnyType, HyperType, Labeled, Lang, LangRef, TypeIndex, TypeStore as _, WithChildren,
-        WithStats,
-    },
+    store::nodes::fetched::LabelIdentifier,
+    types::{AnyType, HyperType, Labeled, WithChildren, WithStats},
 };
 use std::{
-    borrow::Borrow,
-    collections::{HashSet, VecDeque},
     fmt::Debug,
-    hash::Hash,
     num::NonZeroU32,
     ops::ControlFlow,
     sync::{atomic::AtomicUsize, Arc},
     time::Duration,
 };
-
-use crate::app::syntax_highlighting::{self as syntax_highlighter, syntax_highlighting_async};
-
-use super::{
-    code_aspects::{remote_fetch_labels, remote_fetch_nodes_by_ids, HightLightHandle},
-    long_tracking::TARGET_COLOR,
-};
-
-#[derive(Default)]
-pub(crate) struct TStore;
-
-impl<'a> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
-    type Ty = AnyType;
-
-    const MASK: u16 = 42;
-
-    fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-        let lang = n.get_lang();
-        let t: &'static (dyn HyperType + 'static) = match lang {
-            "hyper_ast_gen_ts_cpp::types::Lang" => {
-                let raw = n.get_raw_type();
-                let t: &'static (dyn HyperType + 'static) =
-                    <hyper_ast_gen_ts_cpp::types::Cpp as Lang<_>>::make(raw);
-                t
-            }
-            "hyper_ast_gen_ts_java::types::Lang" => {
-                let raw = n.get_raw_type();
-                let t: &'static (dyn HyperType + 'static) =
-                    <hyper_ast_gen_ts_java::types::Java as Lang<_>>::make(raw);
-                t
-            }
-            "hyper_ast_gen_ts_xml::types::Lang" => {
-                let raw = n.get_raw_type();
-                let t: &'static (dyn HyperType + 'static) =
-                    <hyper_ast_gen_ts_xml::types::Xml as Lang<_>>::make(raw);
-                t
-            }
-            "" => {
-                let t: &'static (dyn HyperType + 'static) =
-                    <hyper_ast_gen_ts_java::types::Java as Lang<_>>::make(
-                        hyper_ast_gen_ts_java::types::Type::Dot as u16,
-                    );
-                t
-            }
-            // "xml" => LangRef::<AnyType>::make(&hyper_ast_gen_ts_xml::types::Xml, raw),
-            x => panic!("{}", x),
-        };
-        t.into()
-    }
-
-    fn resolve_lang(
-        &self,
-        n: &HashedNodeRef<'a, NodeIdentifier>,
-    ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        let lang = n.get_lang();
-        let t = match lang {
-            "hyper_ast_gen_ts_cpp::types::Lang" => {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_cpp::types::Lang)
-            }
-            "hyper_ast_gen_ts_java::types::Lang" => {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_java::types::Lang)
-            }
-            "hyper_ast_gen_ts_xml::types::Lang" => {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_xml::types::Lang)
-            }
-            "" => {
-                From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_java::types::Lang)
-            }
-            // "xml" => From::<&'static (dyn LangRef<AnyType>)>::from(&hyper_ast_gen_ts_xml::types::Xml),
-            x => panic!("{}", x),
-        };
-        t
-    }
-
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(&self, _n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-        todo!()
-    }
-
-    fn type_eq(
-        &self,
-        _n: &HashedNodeRef<'a, NodeIdentifier>,
-        _m: &HashedNodeRef<'a, NodeIdentifier>,
-    ) -> bool {
-        todo!()
-    }
-}
-
-#[derive(Default)]
-pub struct FetchedHyperAST {
-    pub(crate) label_store: std::sync::RwLock<FetchedLabels>,
-    pub(crate) node_store: std::sync::RwLock<NodeStore>,
-    pub(crate) type_store: TStore,
-    // /// each set is fetched sequentially, non blocking
-    // /// pushed ids are tested against all pending sets because they might not have entered the store
-    // /// new set every 100 elements, due to id serialized size in url
-    // /// TODO split by arch
-    // /// TODO maybe use a crossbeam queue while putting a dummy value in nodestore or use dashmap
-    // nodes_waiting: std::sync::Mutex<VecDeque<HashSet<NodeIdentifier>>>,
-    // /// each set is fetched sequentially, non blocking
-    // /// pushed ids are tested against all pending sets because they might not have entered the store
-    // /// new set every 200 elements, due to id serialized size in url
-    // labels_waiting: std::sync::Mutex<VecDeque<HashSet<LabelIdentifier>>>,
-    /// pending ie. nodes in flight
-    pub(crate) nodes_pending: std::sync::Mutex<VecDeque<HashSet<NodeIdentifier>>>,
-    pub(crate) nodes_waiting: std::sync::Mutex<Option<HashSet<NodeIdentifier>>>,
-    pub(crate) labels_pending: std::sync::Mutex<VecDeque<HashSet<LabelIdentifier>>>,
-    pub(crate) labels_waiting: std::sync::Mutex<Option<HashSet<LabelIdentifier>>>,
-    /// timer to avoid flooding
-    pub(crate) timer: std::sync::Mutex<Option<f32>>,
-}
-
-impl FetchedHyperAST {
-    fn read(&self) -> AcessibleFetchedHyperAST<'_> {
-        AcessibleFetchedHyperAST {
-            label_store: self.label_store.read().unwrap(),
-            node_store: self.node_store.read().unwrap(),
-            type_store: &self.type_store,
-            nodes_pending: self.nodes_pending.lock().unwrap(),
-            nodes_waiting: std::cell::RefCell::new(self.nodes_waiting.lock().unwrap()),
-            labels_pending: self.labels_pending.lock().unwrap(),
-            labels_waiting: std::cell::RefCell::new(self.labels_waiting.lock().unwrap()),
-        }
-    }
-}
-
-struct AcessibleFetchedHyperAST<'a> {
-    pub(crate) label_store: std::sync::RwLockReadGuard<'a, FetchedLabels>,
-    pub(crate) node_store: std::sync::RwLockReadGuard<'a, NodeStore>,
-    pub(crate) type_store: &'a TStore,
-    pub(crate) nodes_pending: std::sync::MutexGuard<'a, VecDeque<HashSet<NodeIdentifier>>>,
-    pub(crate) nodes_waiting:
-        std::cell::RefCell<std::sync::MutexGuard<'a, Option<HashSet<NodeIdentifier>>>>,
-    pub(crate) labels_pending: std::sync::MutexGuard<'a, VecDeque<HashSet<LabelIdentifier>>>,
-    pub(crate) labels_waiting:
-        std::cell::RefCell<std::sync::MutexGuard<'a, Option<HashSet<LabelIdentifier>>>>,
-}
-
-impl<'b> hyper_ast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
-    type R<'a> = HashedNodeRef<'a, NodeIdentifier>
-    where
-        Self: 'a;
-
-    fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
-        if let Some(r) = self.node_store.try_resolve(*id) {
-            r
-        } else {
-            // TODO use a recursive fetch
-            // TODO need an additional queue for such recursive fetch
-            // TODO use additional nodes that are not fetched but where fetched to avoid transfering more than necessary
-            if !self.nodes_pending.iter().any(|x| x.contains(id)) {
-                self.nodes_waiting
-                    .borrow_mut()
-                    .get_or_insert(Default::default())
-                    .insert(*id);
-            }
-            // unimplemented!()
-            self.node_store.unavailable_node()
-        }
-    }
-}
-
-impl<'b> hyper_ast::types::LabelStore<str> for AcessibleFetchedHyperAST<'b> {
-    type I = LabelIdentifier;
-
-    fn get_or_insert<U: Borrow<str>>(&mut self, _node: U) -> Self::I {
-        todo!("TODO remove this method from trait as it cannot be implemented on immutable/append_only label stores")
-    }
-
-    fn get<U: Borrow<str>>(&self, _node: U) -> Option<Self::I> {
-        todo!("TODO remove this method from trait as it cannot be implemented efficiently for all stores")
-    }
-
-    fn resolve(&self, id: &Self::I) -> &str {
-        if let Some(get) = self.label_store.try_resolve(id) {
-            get
-        } else {
-            if !self.labels_pending.iter().any(|x| x.contains(id)) {
-                self.labels_waiting
-                    .borrow_mut()
-                    .get_or_insert(Default::default())
-                    .insert(*id);
-            }
-            "."
-        }
-    }
-}
-
-impl<'a, 'b> hyper_ast::types::TypeStore<HashedNodeRef<'a, NodeIdentifier>>
-    for AcessibleFetchedHyperAST<'b>
-{
-    type Ty = AnyType;
-
-    const MASK: u16 = 42;
-
-    fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-        self.type_store.resolve_type(n)
-    }
-
-    fn resolve_lang(
-        &self,
-        n: &HashedNodeRef<'a, NodeIdentifier>,
-    ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-        self.type_store.resolve_lang(n)
-    }
-
-    type Marshaled = TypeIndex;
-
-    fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-        self.type_store.marshal_type(n)
-    }
-
-    fn type_eq(
-        &self,
-        n: &HashedNodeRef<'a, NodeIdentifier>,
-        m: &HashedNodeRef<'a, NodeIdentifier>,
-    ) -> bool {
-        self.type_store.type_eq(n, m)
-    }
-}
-
-impl Hash for FetchedHyperAST {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.label_store.read().unwrap().len().hash(state);
-        self.node_store.read().unwrap().len().hash(state);
-    }
-}
-
-// mod store;
-// pub use self::store::{FetchedHyperAST, NodeId};
 mod cache;
+
+pub(crate) mod store {
+    pub use hyper_ast::store::nodes::fetched::NodeIdentifier;
+    use hyper_ast::store::nodes::fetched::NodeStore;
+    use hyper_ast::types::Lang;
+    use hyper_ast::{
+        store::nodes::fetched::{FetchedLabels, HashedNodeRef, LabelIdentifier},
+        types::AnyType,
+    };
+    use std::borrow::Borrow;
+    use std::collections::HashSet;
+    use std::collections::VecDeque;
+
+    #[derive(Default)]
+    pub(crate) struct TStore;
+
+    impl<'a> hyper_ast::types::TypeStore for TStore {
+        type Ty = AnyType;
+    }
+
+    #[derive(Default)]
+    pub struct FetchedHyperAST {
+        pub(crate) label_store: std::sync::RwLock<FetchedLabels>,
+        pub(crate) node_store: std::sync::RwLock<NodeStore>,
+        // /// each set is fetched sequentially, non blocking
+        // /// pushed ids are tested against all pending sets because they might not have entered the store
+        // /// new set every 100 elements, due to id serialized size in url
+        // /// TODO split by arch
+        // /// TODO maybe use a crossbeam queue while putting a dummy value in nodestore or use dashmap
+        // nodes_waiting: std::sync::Mutex<VecDeque<HashSet<NodeIdentifier>>>,
+        // /// each set is fetched sequentially, non blocking
+        // /// pushed ids are tested against all pending sets because they might not have entered the store
+        // /// new set every 200 elements, due to id serialized size in url
+        // labels_waiting: std::sync::Mutex<VecDeque<HashSet<LabelIdentifier>>>,
+        /// pending ie. nodes in flight
+        pub(crate) nodes_pending: std::sync::Mutex<VecDeque<HashSet<NodeIdentifier>>>,
+        pub(crate) nodes_waiting: std::sync::Mutex<Option<HashSet<NodeIdentifier>>>,
+        pub(crate) labels_pending: std::sync::Mutex<VecDeque<HashSet<LabelIdentifier>>>,
+        pub(crate) labels_waiting: std::sync::Mutex<Option<HashSet<LabelIdentifier>>>,
+        /// timer to avoid flooding
+        pub(crate) timer: std::sync::Mutex<Option<f32>>,
+    }
+
+    impl FetchedHyperAST {
+        pub(crate) fn read(&self) -> AcessibleFetchedHyperAST<'_> {
+            AcessibleFetchedHyperAST {
+                label_store: self.label_store.read().unwrap(),
+                node_store: self.node_store.read().unwrap(),
+                nodes_pending: self.nodes_pending.lock().unwrap(),
+                nodes_waiting: std::cell::RefCell::new(self.nodes_waiting.lock().unwrap()),
+                labels_pending: self.labels_pending.lock().unwrap(),
+                labels_waiting: std::cell::RefCell::new(self.labels_waiting.lock().unwrap()),
+            }
+        }
+        pub fn resolve_type(&self, n: &NodeIdentifier) -> AnyType {
+            let ns = self.node_store.read().unwrap();
+            let n: HashedNodeRef<'_, NodeIdentifier> = ns.try_resolve(*n).unwrap();
+            let lang = n.get_lang();
+            let raw = n.get_raw_type();
+            match lang {
+                "hyper_ast_gen_ts_java::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_java::types::Lang::make(raw);
+                    t.into()
+                }
+                "hyper_ast_gen_ts_cpp::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_cpp::types::Lang::make(raw);
+                    t.into()
+                }
+                "hyper_ast_gen_ts_xml::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_xml::types::Lang::make(raw);
+                    t.into()
+                }
+                l => unreachable!("{}", l),
+            }
+        }
+    }
+
+    pub(crate) struct AcessibleFetchedHyperAST<'a> {
+        pub(crate) label_store: std::sync::RwLockReadGuard<'a, FetchedLabels>,
+        pub(crate) node_store: std::sync::RwLockReadGuard<'a, NodeStore>,
+        pub(crate) nodes_pending: std::sync::MutexGuard<'a, VecDeque<HashSet<NodeIdentifier>>>,
+        pub(crate) nodes_waiting:
+            std::cell::RefCell<std::sync::MutexGuard<'a, Option<HashSet<NodeIdentifier>>>>,
+        pub(crate) labels_pending: std::sync::MutexGuard<'a, VecDeque<HashSet<LabelIdentifier>>>,
+        pub(crate) labels_waiting:
+            std::cell::RefCell<std::sync::MutexGuard<'a, Option<HashSet<LabelIdentifier>>>>,
+    }
+
+    impl<'b> hyper_ast::types::NodeStore<NodeIdentifier> for AcessibleFetchedHyperAST<'b> {
+        type R<'a>
+            = HashedNodeRef<'a, NodeIdentifier>
+        where
+            Self: 'a;
+
+        fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
+            if let Some(r) = self.node_store.try_resolve(*id) {
+                r
+            } else {
+                // TODO use a recursive fetch
+                // TODO need an additional queue for such recursive fetch
+                // TODO use additional nodes that are not fetched but where fetched to avoid transfering more than necessary
+                if !self.nodes_pending.iter().any(|x| x.contains(id)) {
+                    self.nodes_waiting
+                        .borrow_mut()
+                        .get_or_insert(Default::default())
+                        .insert(*id);
+                }
+                // unimplemented!()
+                self.node_store.unavailable_node()
+            }
+        }
+    }
+
+    impl<'b> hyper_ast::types::LabelStore<str> for AcessibleFetchedHyperAST<'b> {
+        type I = LabelIdentifier;
+
+        fn get_or_insert<U: Borrow<str>>(&mut self, _node: U) -> Self::I {
+            todo!("TODO remove this method from trait as it cannot be implemented on immutable/append_only label stores")
+        }
+
+        fn get<U: Borrow<str>>(&self, _node: U) -> Option<Self::I> {
+            todo!("TODO remove this method from trait as it cannot be implemented efficiently for all stores")
+        }
+
+        fn resolve(&self, id: &Self::I) -> &str {
+            if let Some(get) = self.label_store.try_resolve(id) {
+                get
+            } else {
+                if !self.labels_pending.iter().any(|x| x.contains(id)) {
+                    self.labels_waiting
+                        .borrow_mut()
+                        .get_or_insert(Default::default())
+                        .insert(*id);
+                }
+                "."
+            }
+        }
+    }
+
+    impl<'a, 'b> hyper_ast::types::TypeStore for AcessibleFetchedHyperAST<'b> {
+        type Ty = AnyType;
+    }
+
+    impl<'a, 'b: 'a> hyper_ast::types::HyperASTShared for AcessibleFetchedHyperAST<'a>
+    where
+        Self: 'b,
+    {
+        type IdN = NodeIdentifier;
+
+        type Idx = u16;
+
+        type Label = LabelIdentifier;
+    }
+
+    impl<'a> hyper_ast::types::HyperASTAsso for AcessibleFetchedHyperAST<'a> {
+        type T<'store>
+            = HashedNodeRef<'store, NodeIdentifier>
+        where
+            Self: 'store;
+
+        type NS<'store>
+            = Self
+        where
+            Self: 'store;
+
+        fn node_store<'c>(&'c self) -> &'c Self::NS<'c> {
+            self
+        }
+
+        type LS = Self;
+
+        fn label_store(&self) -> &Self::LS {
+            self
+        }
+
+        type TS<'store>
+            = Self
+        where
+            Self: 'store;
+
+        fn resolve_type(&self, id: &Self::IdN) -> <Self::TS<'_> as hyper_ast::types::TypeStore>::Ty {
+            let ns = &self.node_store;
+            let Some(n) = ns.try_resolve::<NodeIdentifier>(*id) else {
+                use hyper_ast::types::HyperType;
+                return hyper_ast_gen_ts_java::types::Type::Dot.as_static().into();
+            };
+            let lang = n.get_lang();
+            let raw = n.get_raw_type();
+            match lang {
+                "hyper_ast_gen_ts_java::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_java::types::Lang::make(raw);
+                    t.into()
+                }
+                "hyper_ast_gen_ts_cpp::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_cpp::types::Lang::make(raw);
+                    t.into()
+                }
+                "hyper_ast_gen_ts_xml::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_xml::types::Lang::make(raw);
+                    t.into()
+                }
+                l => unreachable!("{}", l),
+            }
+        }
+    }
+
+    impl<'a, 'b: 'a> hyper_ast::types::HyperAST<'b> for AcessibleFetchedHyperAST<'a>
+    where
+        Self: 'b,
+    {
+        type T = HashedNodeRef<'b, NodeIdentifier>;
+
+        type NS = Self;
+
+        fn node_store(&self) -> &Self::NS {
+            self
+        }
+
+        type LS = Self;
+
+        fn label_store(&self) -> &Self::LS {
+            self
+        }
+
+        type TS = Self;
+
+        fn resolve_type(&'a self, id: &Self::IdN) -> <Self::TS as hyper_ast::types::TypeStore>::Ty {
+            let ns = &self.node_store;
+            let Some(n) = ns.try_resolve::<NodeIdentifier>(*id) else {
+                use hyper_ast::types::HyperType;
+                return hyper_ast_gen_ts_java::types::Type::Dot.as_static().into();
+            };
+            let lang = n.get_lang();
+            let raw = n.get_raw_type();
+            match lang {
+                "hyper_ast_gen_ts_java::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_java::types::Lang::make(raw);
+                    t.into()
+                }
+                "hyper_ast_gen_ts_cpp::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_cpp::types::Lang::make(raw);
+                    t.into()
+                }
+                "hyper_ast_gen_ts_xml::types::Lang" => {
+                    let t: &'static dyn hyper_ast::types::HyperType =
+                        hyper_ast_gen_ts_xml::types::Lang::make(raw);
+                    t.into()
+                }
+                l => unreachable!("{}", l),
+            }
+            // self.resolve_type(id)
+            // let ns = self.node_store();
+            // let n = ns.resolve(id);
+            // Self::TS::decompress_type(&n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
+        }
+    }
+
+    impl std::hash::Hash for FetchedHyperAST {
+        fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+            self.label_store.read().unwrap().len().hash(state);
+            self.node_store.read().unwrap().len().hash(state);
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct PrefillCache {
@@ -277,8 +317,9 @@ pub(crate) enum Action {
     Focused(f32),
     Clicked(Vec<usize>),
 }
+
 pub(crate) struct FetchedViewImpl<'a> {
-    store: Arc<FetchedHyperAST>,
+    store: Arc<store::FetchedHyperAST>,
     aspects: &'a super::types::ComputeConfigAspectViews,
     pub(super) prefill_cache: Option<PrefillCache>,
     min_before_count: usize,
@@ -340,7 +381,7 @@ impl<U, V>
 
 impl<'a> FetchedViewImpl<'a> {
     pub(crate) fn new(
-        store: Arc<FetchedHyperAST>,
+        store: Arc<store::FetchedHyperAST>,
         aspects: &'a super::types::ComputeConfigAspectViews,
         take: Option<PrefillCache>,
         hightlights: Vec<HightLightHandle<'a>>,
@@ -371,23 +412,23 @@ impl<'a> FetchedViewImpl<'a> {
         ui.style_mut().spacing.item_spacing.y = 0.0;
 
         let node_store = self.store.node_store.read().unwrap();
-        wasm_rs_dbg::dbg!(root);
+        // wasm_rs_dbg::dbg!(root);
         let action = if let Some(r) = node_store.try_resolve::<NodeIdentifier>(*root) {
             // let lang = r.get_lang();
             // gen::types::Type::Lang;
-            let kind = self.store.type_store.resolve_type(&r);
+            let kind = self.store.resolve_type(&root);
             let l = r.try_get_label().copied();
             let cs = r.children();
             let size = r.size();
             self.global_pos = Some(size as u32);
             if let (Some(label), Some(cs)) = (l, cs) {
                 let cs = cs.0.to_vec();
-                wasm_rs_dbg::dbg!(&cs);
-                if let Some(label) = self.store.label_store.read().unwrap().try_resolve(&label) {
-                    assert_eq!("", label, "{:?} {:?} {:?}", root, cs.len(), node_store);
-                }
+                // NOTE: Why would it be an issue ?
+                // if let Some(label) = self.store.label_store.read().unwrap().try_resolve(&label) {
+                //     assert_eq!("", label, "{:?} {:?} {:?}", root, cs.len(), node_store);
+                // }
                 drop(node_store);
-                self.ui_both_impl2(ui, kind, size as u32, label, cs.as_ref())
+                self.ui_both_impl(ui, kind, size as u32, label, cs.as_ref())
             } else if let Some(cs) = cs {
                 let cs = cs.0.to_vec();
                 drop(node_store);
@@ -470,51 +511,7 @@ impl<'a> FetchedViewImpl<'a> {
         action
     }
 
-    // pub(crate) fn ui_both_impl(&mut self, ui: &mut egui::Ui, depth: usize, nid: usize) -> Action {
-    //     let kind = &self.store.type_sys.0[self.store.both.kinds[nid] as usize];
-    //     let label = self.store.both.labels[nid];
-    //     let label = &self.store.label_list[label as usize];
-    //     let o = self.store.both.cs_ofs[nid] as usize;
-    //     let cs = &self.store.both.children[o..o + self.store.both.cs_lens[nid] as usize]
-    //         .to_vec();
-    //     self.ui_both_impl2(ui, depth, cs)
-    // }
-    // pub(crate) fn ui_children_impl(
-    //     &mut self,
-    //     ui: &mut egui::Ui,
-    //     depth: usize,
-    //     nid: usize,
-    // ) -> Action {
-    //     let kind = &self.store.type_sys.0[self.store.children.kinds[nid] as usize];
-    //     let o = self.store.children.cs_ofs[nid] as usize;
-    //     let cs = &self.store.children.children
-    //         [o..o + self.store.children.cs_lens[nid] as usize]
-    //         .to_vec();
-    //     match self.ui_children_impl2(ui, kind, nid, depth, cs) {
-    //         Ok(value) => value,
-    //         Err(value) => return value,
-    //     }
-    // }
-    // pub(crate) fn ui_labeled_impl(
-    //     &mut self,
-    //     ui: &mut egui::Ui,
-    //     _depth: usize,
-    //     nid: usize,
-    // ) -> Action {
-    //     let min = ui.available_rect_before_wrap().min;
-    //     let kind = &self.store.type_sys.0[self.store.labeled.kinds[nid] as usize];
-    //     let label = self.store.labeled.labels[nid];
-    //     let label = &self.store.label_list[label as usize];
-    //     self.ui_labeled_impl2(label, ui, kind, min)
-    // }
-    // pub(crate) fn ui_typed_impl(&mut self, ui: &mut egui::Ui, _depth: usize, nid: usize) -> Action {
-    //     let min = ui.available_rect_before_wrap().min;
-    //     let kind = &self.store.type_sys.0[self.store.typed.kinds[nid] as usize];
-    //     // ui.label(format!("k {}\t{}", kind, nid));
-    //     self.ui_typed_impl2(ui, kind, min)
-    // }
-
-    fn ui_both_impl2(
+    fn ui_both_impl(
         &mut self,
         ui: &mut egui::Ui,
         kind: AnyType,
@@ -560,10 +557,32 @@ impl<'a> FetchedViewImpl<'a> {
         }
 
         self.additions_deletions_compute(size);
-
+        ui.spacing_mut().icon_spacing /= 2.0;
         let show: FoldRet<_, _> = load_with_default_open
             .show_header(ui, |ui| {
                 // ui.label(format!("{}: {}", kind, label));
+                let label_store = self.store.label_store.read().unwrap();
+                let label = if let Some(label) = label_store.try_resolve(&label) {
+                    label
+                } else {
+                    if !self
+                        .store
+                        .labels_pending
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .any(|x| x.contains(&label))
+                    {
+                        self.store
+                            .labels_waiting
+                            .lock()
+                            .unwrap()
+                            .get_or_insert(Default::default())
+                            .insert(label);
+                    }
+                    "..."
+                };
+                let mut label = egui::RichText::new(label);
                 let ret = {
                     let text = format!("{}: ", kind);
                     let mut rt = egui::RichText::new(text).monospace();
@@ -574,6 +593,9 @@ impl<'a> FetchedViewImpl<'a> {
                             let del = self.deletions.unwrap_or_default();
                             // wasm_rs_dbg::dbg!(add, del);
                             if add.is_empty() && del.is_empty() {
+                                label = label.size(8.0);
+                                label = label.color(egui::Color32::GRAY);
+                                rt = rt.size(8.0);
                                 rt = rt.color(egui::Color32::GRAY);
                             } else if add.last() == Some(gp) {
                                 if del.last() == Some(gp) {
@@ -613,27 +635,7 @@ impl<'a> FetchedViewImpl<'a> {
                 //     ui.label(format!("{:?}", self.path));
                 // })
                 ;
-                let label_store = self.store.label_store.read().unwrap();
-                if let Some(label) = label_store.try_resolve(&label) {
-                    ui.label(format!("{}", label));
-                } else {
-                    ui.label("...");
-                    if !self
-                        .store
-                        .labels_pending
-                        .lock()
-                        .unwrap()
-                        .iter()
-                        .any(|x| x.contains(&label))
-                    {
-                        self.store
-                            .labels_waiting
-                            .lock()
-                            .unwrap()
-                            .get_or_insert(Default::default())
-                            .insert(label);
-                    }
-                };
+                ui.label(label);
                 ret
             })
             .body(|ui| self.children_ui(ui, cs, self.global_pos.map(|x| x - size)))
@@ -761,6 +763,7 @@ impl<'a> FetchedViewImpl<'a> {
                             let del = self.deletions.unwrap_or_default();
                             // wasm_rs_dbg::dbg!(add, del);
                             if add.is_empty() && del.is_empty() {
+                                rt = rt.size(8.0);
                                 rt = rt.color(egui::Color32::GRAY);
                             } else if add.last() == Some(gp) {
                                 if del.last() == Some(gp) {
@@ -1146,6 +1149,7 @@ impl<'a> FetchedViewImpl<'a> {
                 let rect2 = ui.label(format!("{}", label)).rect;
                 rect1.union(rect2)
             } else {
+                let mut label = egui::RichText::new(label);
                 let monospace = {
                     let text = format!("{}: ", kind);
                     let mut rt = egui::RichText::new(text).monospace();
@@ -1154,17 +1158,20 @@ impl<'a> FetchedViewImpl<'a> {
                             let add = self.additions.unwrap_or_default();
                             let del = self.deletions.unwrap_or_default();
                             // wasm_rs_dbg::dbg!(add, del);
-                            if add.is_empty() && del.is_empty() {
-                                rt = rt.color(egui::Color32::GRAY);
-                            } else if add.last() == Some(gp) {
+                            if add.binary_search(gp).is_ok() {
                                 if del.last() == Some(gp) {
                                     rt = rt.color(egui::Color32::BLUE);
                                 } else {
                                     rt = rt.color(egui::Color32::GREEN);
                                 }
-                            } else if del.last() == Some(gp) {
+                            } else if del.binary_search(gp).is_ok() {
                                 rt = rt.underline();
                                 rt = rt.color(egui::Color32::RED);
+                            } else {
+                                label = label.size(8.0);
+                                label = label.color(egui::Color32::GRAY);
+                                rt = rt.size(8.0);
+                                rt = rt.color(egui::Color32::GRAY);
                             }
                         }
                     }
@@ -1176,8 +1183,7 @@ impl<'a> FetchedViewImpl<'a> {
                 ;
                 let rect1 = monospace.rect;
                 let indent = ui.indent(id, |ui| {
-                    ui.label(format!("{}", label))
-                        .interact(egui::Sense::click())
+                    ui.label(label).interact(egui::Sense::click())
                     // .context_menu(|ui| {
                     //     ui.label(format!("{:?}", self.path));
                     // })
@@ -1201,28 +1207,33 @@ impl<'a> FetchedViewImpl<'a> {
             let add_contents = |ui: &mut egui::Ui| {
                 let action = {
                     let text = format!("{}: ", kind);
+                    let mut label = egui::RichText::new(label);
                     let mut rt = egui::RichText::new(text).monospace();
                     if let Some(gp) = &self.global_pos {
                         if self.additions.is_some() || self.deletions.is_some() {
                             let add = self.additions.unwrap_or_default();
                             let del = self.deletions.unwrap_or_default();
                             // wasm_rs_dbg::dbg!(add, del);
-                            if add.is_empty() && del.is_empty() {
-                                rt = rt.color(egui::Color32::GRAY);
-                            } else if add.last() == Some(gp) {
+                            if add.binary_search(gp).is_ok() {
                                 if del.last() == Some(gp) {
                                     rt = rt.color(egui::Color32::BLUE);
                                 } else {
                                     rt = rt.color(egui::Color32::GREEN);
                                 }
-                            } else if del.last() == Some(gp) {
+                            } else if del.binary_search(gp).is_ok() {
                                 rt = rt.underline();
                                 rt = rt.color(egui::Color32::RED);
+                            } else {
+                                label = label.size(8.0);
+                                label = label.color(egui::Color32::GRAY);
+                                rt = rt.size(8.0);
+                                rt = rt.color(egui::Color32::GRAY);
                             }
                         }
                     }
                     let interact =
                         ui.add(egui::Label::new(rt).sense(egui::Sense::click_and_drag()));
+                    ui.label(label);
                     if interact.drag_released() {
                         node_menu(ui, interact, kind).unwrap_or_default()
                     } else if interact.clicked() {
@@ -1231,7 +1242,6 @@ impl<'a> FetchedViewImpl<'a> {
                         node_menu(ui, interact, kind).unwrap_or_default()
                     }
                 };
-                ui.label(format!("{}", label));
                 action
             };
             if kind.is_spaces() {
@@ -1343,7 +1353,8 @@ impl<'a> FetchedViewImpl<'a> {
         }
         let rect = rect;
         //.expand(3.0);
-        ui.painter_at(rect.expand(1.0)).galley(min, galley);
+        ui.painter_at(rect.expand(1.0))
+            .galley(min, galley, egui::Color32::RED);
         // rect.max.x += 10.0;
 
         prefill.head = ui.available_rect_before_wrap().min.y - min.y;
@@ -1634,7 +1645,7 @@ impl<'a> FetchedViewImpl<'a> {
             .unwrap()
             .try_resolve::<NodeIdentifier>(*c)
         {
-            let kind = self.store.type_store.resolve_type(&r); //r.get_type();
+            let kind = self.store.resolve_type(c); //r.get_type();
             let l = r.try_get_label().copied();
             let cs = r.children();
             let size = r.size();
@@ -1646,7 +1657,7 @@ impl<'a> FetchedViewImpl<'a> {
             imp.global_pos = *global_pos;
 
             if let (Some(label), Some(cs)) = (l, cs) {
-                imp.ui_both_impl2(ui, kind, size as u32, label, cs.0.to_vec().as_ref())
+                imp.ui_both_impl(ui, kind, size as u32, label, cs.0.to_vec().as_ref())
             } else if let Some(cs) = cs {
                 imp.ui_children_impl2(ui, kind, size as u32, *c, cs.0.to_vec().as_ref())
             } else if let Some(label) = l {
@@ -1812,33 +1823,24 @@ fn node_menu(ui: &mut egui::Ui, interact: egui::Response, kind: AnyType) -> Opti
     if interact.secondary_clicked() || interact.double_clicked() || interact.drag_released() {
         ui.memory_mut(|mem| mem.open_popup(popup_id));
     }
-    egui::popup_below_widget(ui, popup_id, &interact, |ui| {
-        if ui.button("hide kind").clicked() {
-            act = Some(Action::HideKind(kind));
-            ui.memory_mut(|mem| mem.close_popup());
-        } else if ui.button("serialize kind").clicked() {
-            act = Some(Action::SerializeKind(kind));
-            ui.memory_mut(|mem| mem.close_popup());
-        } else if ui.button("close menu").clicked() {
-            ui.memory_mut(|mem| mem.close_popup());
-            // ui.close_menu();
-        }
-    });
-    // interact.context_menu(|ui: &mut egui::Ui| {
-    //     if ui
-    //         .button("hide kind")
-    //         .clicked()
-    //     {
-    //         act = Some(Action::HideKind(kind));
-    //     } else if ui.button("serialize kind").clicked() {
-    //         act = Some(Action::SerializeKind(kind));
-    //     } else if ui
-    //         .button("close menu")
-    //         .clicked()
-    //     {
-    //         ui.close_menu();
-    //     }
-    // });
+    egui::popup_below_widget(
+        ui,
+        popup_id,
+        &interact,
+        egui::PopupCloseBehavior::CloseOnClick,
+        |ui| {
+            if ui.button("hide kind").clicked() {
+                act = Some(Action::HideKind(kind));
+                ui.memory_mut(|mem| mem.close_popup());
+            } else if ui.button("serialize kind").clicked() {
+                act = Some(Action::SerializeKind(kind));
+                ui.memory_mut(|mem| mem.close_popup());
+            } else if ui.button("close menu").clicked() {
+                ui.memory_mut(|mem| mem.close_popup());
+                // ui.close_menu();
+            }
+        },
+    );
     act
 }
 
@@ -1857,10 +1859,11 @@ const DEBUG_LAYOUT: bool = false;
 const CLIP_LEN: f32 = 0.0; //250.0;
 
 fn subtree_to_layout(
-    store: &FetchedHyperAST,
+    store: &store::FetchedHyperAST,
     theme: &syntax_highlighter::simple::CodeTheme,
     nid: NodeIdentifier,
 ) -> (usize, Vec<LayoutSection>) {
+    // let read = store.read();
     match hyper_ast_layouter::Layouter::<_, _>::new(&store.read(), nid, theme).compute() {
         Err(IndentedAlt::FmtError) => panic!(),
         Err(IndentedAlt::NoIndent) => panic!(),
@@ -1911,14 +1914,16 @@ mod hyper_ast_layouter {
         });
     }
 
-    use hyper_ast::types::{self, HyperType, IterableChildren};
+    use hyper_ast::types::{
+        self, HyperAST, HyperASTAsso, HyperASTShared, HyperType, IterableChildren,
+    };
     impl<'store, 'b, IdN, HAST, const SPC: bool> Layouter<'store, 'b, IdN, HAST, SPC>
     where
+        HAST: HyperASTAsso<IdN = IdN>,
         IdN: NodeId<IdN = IdN>,
         HAST: types::NodeStore<IdN>,
         HAST: types::LabelStore<str>,
-        HAST: types::TypeStore<HAST::R<'store>>,
-        HAST::R<'store>: types::Labeled<Label = HAST::I> + types::WithChildren<TreeId = IdN>,
+        HAST: types::TypeStore,
     {
         pub fn compute(&self) -> Result<(usize, Vec<LayoutSection>), IndentedAlt> {
             let mut layout = vec![];
@@ -1930,7 +1935,7 @@ mod hyper_ast_layouter {
         }
         fn _compute(
             &self,
-            id: &IdN,
+            id: &HAST::IdN,
             parent_indent: &str,
             out: &mut Vec<LayoutSection>,
             offset: &mut usize,
@@ -1939,15 +1944,15 @@ mod hyper_ast_layouter {
             use types::Labeled;
             use types::NodeStore;
             use types::WithChildren;
-            let b = NodeStore::resolve(self.stores, id);
+            let b = self.stores.node_store().resolve(id);
             // let kind = (self.stores.type_store(), b);
-            let kind = self.stores.resolve_type(&b);
+            let kind = self.stores.resolve_type(id);
             let label = b.try_get_label();
             let children = b.children();
 
             if kind.is_spaces() {
                 let indent = if let Some(label) = label {
-                    let s = LabelStore::resolve(self.stores, label);
+                    let s = self.stores.label_store().resolve(label);
                     let b: String = Space::format_indentation(s.as_bytes())
                         .iter()
                         .map(|x| x.to_string())
@@ -1981,7 +1986,7 @@ mod hyper_ast_layouter {
                 }
                 (label, Some(children)) => {
                     if let Some(label) = label {
-                        let s = LabelStore::resolve(self.stores, label);
+                        let s = self.stores.label_store().resolve(label);
                         dbg!(s);
                     }
                     if !children.is_empty() {
@@ -2004,7 +2009,7 @@ mod hyper_ast_layouter {
                     Err(IndentedAlt::NoIndent)
                 }
                 (Some(label), None) => {
-                    let s = LabelStore::resolve(self.stores, label);
+                    let s = self.stores.label_store().resolve(label);
                     // out.write_str(&s).unwrap();
                     let len = s.len();
                     let end = *offset + len;
@@ -2018,23 +2023,28 @@ mod hyper_ast_layouter {
     }
 }
 
-fn subtree_to_string(store: &FetchedHyperAST, nid: NodeIdentifier) -> String {
-    ToString::to_string(&hyper_ast::nodes::TextSerializer::<_, _>::new(
-        &store.read(),
-        nid,
-    ))
+fn subtree_to_string(store: &store::FetchedHyperAST, nid: NodeIdentifier) -> String {
+    let read = store.read();
+    let s = {
+        // SAFETY: the transmuted value does not escape the function scope
+        // NOTE issue with the usual widening to 'static ...
+        let read: &store::AcessibleFetchedHyperAST<'_> = unsafe { std::mem::transmute(&read) };
+        ToString::to_string(&hyper_ast::nodes::TextSerializer::<_, _>::new(read, nid))
+    };
+    drop(read);
+    s
 }
 
-fn make_pp_code(
-    store: Arc<FetchedHyperAST>,
+pub(crate) fn make_pp_code(
+    store: Arc<store::FetchedHyperAST>,
     ctx: &egui::Context,
     nid: NodeIdentifier,
     theme: syntax_highlighter::simple::CodeTheme,
 ) -> epaint::text::LayoutJob {
     #[derive(Default)]
     struct PrettyPrinter {}
-    impl cache::ComputerMut<(&FetchedHyperAST, NodeIdentifier), String> for PrettyPrinter {
-        fn compute(&mut self, (store, id): (&FetchedHyperAST, NodeIdentifier)) -> String {
+    impl cache::ComputerMut<(&store::FetchedHyperAST, NodeIdentifier), String> for PrettyPrinter {
+        fn compute(&mut self, (store, id): (&store::FetchedHyperAST, NodeIdentifier)) -> String {
             subtree_to_string(store, id)
         }
     }
@@ -2047,7 +2057,7 @@ fn make_pp_code(
     impl
         syntax_highlighting_async::cache::Spawner<
             (
-                Arc<FetchedHyperAST>,
+                Arc<store::FetchedHyperAST>,
                 &syntax_highlighter::simple::CodeTheme,
                 NodeIdentifier,
                 usize,
@@ -2059,7 +2069,7 @@ fn make_pp_code(
             &self,
             ctx: &egui::Context,
             (_store, _theme, _id, len): (
-                Arc<FetchedHyperAST>,
+                Arc<store::FetchedHyperAST>,
                 &syntax_highlighter::simple::CodeTheme,
                 NodeIdentifier,
                 usize,
@@ -2088,7 +2098,7 @@ fn make_pp_code(
         syntax_highlighting_async::cache::IncrementalComputer<
             Spawner,
             (
-                Arc<FetchedHyperAST>,
+                Arc<store::FetchedHyperAST>,
                 &syntax_highlighter::simple::CodeTheme,
                 NodeIdentifier,
                 usize,
@@ -2100,7 +2110,7 @@ fn make_pp_code(
             &mut self,
             _spawner: &Spawner,
             (store, theme, id, len): (
-                Arc<FetchedHyperAST>,
+                Arc<store::FetchedHyperAST>,
                 &syntax_highlighter::simple::CodeTheme,
                 NodeIdentifier,
                 usize,

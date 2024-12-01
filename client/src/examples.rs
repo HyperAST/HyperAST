@@ -1,10 +1,13 @@
 use axum::{
     body::Bytes,
-    error_handling::HandleErrorLayer,
+    // error_handling::HandleErrorLayer,
     extract::DefaultBodyLimit,
     handler::Handler,
-    response::{IntoResponse, Response},
-    routing::{get, post},
+    // response::{IntoResponse, Response},
+    routing::{
+        get,
+        // post
+    },
     Router,
 };
 use tower::limit::ConcurrencyLimitLayer;
@@ -18,7 +21,7 @@ pub async fn hello() -> String {
     "Hello, World!".into()
 }
 
-pub(super) fn example_app() -> Router<SharedState> {
+pub fn example_app() -> Router<SharedState> {
     Router::new().route("/", get(hello))
     // .route("/demo.html", get(get_demo_html))
     // .route("/hello.html", get(hello_html))
@@ -68,7 +71,7 @@ async fn list_keys(axum::extract::State(state): axum::extract::State<SharedState
         .join("\n")
 }
 
-pub(super) fn kv_store_app(st: SharedState) -> Router<SharedState> {
+pub fn kv_store_app(st: SharedState) -> Router<SharedState> {
     Router::new()
         .route(
             "/:key",

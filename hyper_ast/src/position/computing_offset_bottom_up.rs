@@ -45,7 +45,7 @@ pub fn extract_position<'store, HAST>(
 ) -> Position
 where
     HAST: HyperAST<'store, IdN = NodeIdentifier, T = HashedNodeRef<'store>>,
-    HAST::TS: TypeStore<HashedNodeRef<'store>, Ty = AnyType>,
+    HAST::TS: TypeStore<Ty = AnyType>,
 {
     if parents.is_empty() {
         return Position::default();
@@ -66,7 +66,7 @@ where
             })
             .sum()
     };
-    if stores.type_store().resolve_type(&b).is_file() {
+    if stores.resolve_type(&p).is_file() {
         let mut r = extract_file_postion(stores, parents);
         r.inc_offset(c);
         r
@@ -104,13 +104,10 @@ where
     r
 }
 
-pub fn extract_position_it_rec<'store, HAST, It, It2>(
-    stores: &'store HAST,
-    mut it: It,
-) -> Position
+pub fn extract_position_it_rec<'store, HAST, It, It2>(stores: &'store HAST, mut it: It) -> Position
 where
     HAST: HyperAST<'store, IdN = NodeIdentifier, Idx = u16>,
-    HAST::TS: TypeStore<HAST::T, Ty = AnyType>,
+    HAST::TS: TypeStore<Ty = AnyType>,
     HAST::T: WithSerialization,
     It: Iterator<Item = (HAST::IdN, usize)> + Into<It2>, //Iterator<Item = ParentWithChildOffset<HAST::IdN>>,
     It2: Iterator<Item = HAST::IdN>,
@@ -137,7 +134,7 @@ where
             })
             .sum()
     };
-    if stores.type_store().resolve_type(&b).is_file() {
+    if stores.resolve_type(&p).is_file() {
         let mut r = extract_file_postion_it_rec(stores, it.into());
         {
             let l = stores.label_store().resolve(b.get_label_unchecked());
@@ -171,15 +168,11 @@ where
     r
 }
 
-pub fn extract_position_it<'store, HAST, It, It2>(
-    stores: &'store HAST,
-    mut it: It,
-) -> Position
+pub fn extract_position_it<'store, HAST, It, It2>(stores: &'store HAST, mut it: It) -> Position
 where
-    HAST: HyperAST<'store, IdN = NodeIdentifier, Idx = u16>,
-    HAST::TS: TypeStore<HAST::T, Ty = AnyType>,
+    HAST: HyperAST<'store, IdN = NodeIdentifier>,
     HAST::T: WithSerialization,
-    It: Iterator<Item = (HAST::IdN, usize)> + Into<It2>, //Iterator<Item = ParentWithChildOffset<HAST::IdN>>,
+    It: Iterator<Item = (HAST::IdN, HAST::Idx)> + Into<It2>, //Iterator<Item = ParentWithChildOffset<HAST::IdN>>,
     It2: Iterator<Item = HAST::IdN>,
 {
     let mut offset: usize = num::zero();
@@ -189,7 +182,7 @@ where
             let v: Vec<&HAST::IdN> = b
                 .children()
                 .unwrap()
-                .before(o.to_u16().unwrap() - 1)
+                .before(o - num::one())
                 .iter_children()
                 .collect();
             v.into_iter()
@@ -202,7 +195,7 @@ where
                 .sum()
         };
         offset += c;
-        if stores.type_store().resolve_type(&b).is_file() {
+        if stores.resolve_type(&p).is_file() {
             let mut r = extract_file_postion_it(stores, it.into());
             {
                 let l = stores.label_store().resolve(b.get_label_unchecked());

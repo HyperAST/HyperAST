@@ -1,157 +1,63 @@
 use std::fmt::Display;
 
 use hyper_ast::{
-    store::defaults::NodeIdentifier,
     tree_gen::parser::NodeWithU16TypeId,
-    types::{AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypedNodeId},
+    types::{AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypedNodeId},
 };
+
 
 #[cfg(feature = "legion")]
 mod legion_impls {
+    use hyper_ast::types::LangWrapper;
+
     use super::*;
 
     use crate::TNode;
 
     impl<'a> TNode<'a> {
-        pub fn obtain_type<T>(&self, _: &mut impl JavaEnabledTypeStore<T>) -> Type {
+        pub fn obtain_type(&self) -> Type {
             let t = self.kind_id();
             Type::from_u16(t)
         }
     }
 
-    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::TypeIndex};
+    impl TypeStore for TStore {
+        type Ty = TType;
+    }
+    impl TypeStore for &TStore {
+        type Ty = TType;
+    }
+    impl RoleStore for TStore {
+        type IdF = u16;
 
-    // impl<'a> TypeStore<HashedNodeRef<'a, AnyType>> for Single {
-    //     type Ty = Type;
-    //     const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
+        type Role = hyper_ast::types::Role;
 
-    //     fn resolve_type(&self, n: &HashedNodeRef<'a, AnyType>) -> Self::Ty {
-    //         n.get_component::<Type>().unwrap().clone()
-    //     }
-
-    //     fn resolve_lang(&self, n: &HashedNodeRef<'a, AnyType>) -> hyper_ast::types::LangWrapper<Self::Ty> {
-    //         From::<&'static (dyn LangRef<Type>)>::from(&Java)
-    //     }
-
-    //     type Marshaled = TypeIndex;
-
-    //     fn marshal(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Marshaled {
-    //         TypeIndex {
-    //             lang: LangRef::<Type>::name(&Java),
-    //             ty: *n.get_component::<Type>().unwrap() as u16,
-    //         }
-    //     }
-    // }
-    // impl<'a> JavaEnabledTypeStore<HashedNodeRef<'a, AnyType>> for Single {
-    //     // fn intern(&self, t: Type) -> Self::Ty {
-    //     //     // T((u16::MAX - self.lang) | t as u16)
-    //     //     t
-    //     // }
-
-    //     // fn resolve(&self, t: Self::Ty) -> Type {
-    //     //     t
-    //     //     // let t = t.0 as u16;
-    //     //     // let t = t & !self.mask;
-    //     //     // Type::resolve(t)
-    //     // }
-    // }
-
-    impl<'a> TypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        type Ty = Type;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
-        fn resolve_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Ty {
-            todo!("{:?}", n)
+        fn resolve_field(_lang: LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
+            let s = tree_sitter_java::language()
+                .field_name_for_id(field_id)
+                .ok_or_else(|| format!("{}", field_id))
+                .unwrap();
+            hyper_ast::types::Role::try_from(s).expect(s)
         }
 
-        fn resolve_lang(
-            &self,
-            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            todo!("{:?}", n)
-        }
-
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&Lang),
-                ty: *n.get_component::<Type>().unwrap() as u16,
-            }
-        }
-        fn type_eq(
-            &self,
-            n: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-            m: &HashedNodeRef<'a, TIdN<NodeIdentifier>>,
-        ) -> bool {
-            n.get_component::<Type>().unwrap() == m.get_component::<Type>().unwrap()
+        fn intern_role(_lang: LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
+            let field_name = role.to_string();
+            tree_sitter_java::language()
+                .field_id_for_name(field_name)
+                .unwrap()
+                .into()
         }
     }
-    impl<'a, R> TypeStore<R> for &TStore {
-        type Ty = Type;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
-        fn resolve_type(&self, _n: &R) -> Self::Ty {
-            todo!()
-        }
-
-        fn resolve_lang(&self, _n: &R) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            todo!()
-        }
-
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, _n: &R) -> Self::Marshaled {
-            todo!()
-        }
-        fn type_eq(&self, _n: &R, _m: &R) -> bool {
-            todo!()
+    impl<'a> hyper_ast::types::ETypeStore for TStore {
+        type Ty2 = Type;
+    
+        fn intern(ty: Self::Ty2) -> Self::Ty {
+            TType::new(ty)
         }
     }
-    impl<'a> JavaEnabledTypeStore<HashedNodeRef<'a, TIdN<NodeIdentifier>>> for TStore {
-        // fn intern(&self, t: Type) -> Self::Ty {
-        //     // T((u16::MAX - Self::Cpp as u16) | t as u16)
-        //     t
-        // }
-
-        // fn resolve(&self, t: Self::Ty) -> Type {
-        //     // let t = t.0 as u16;
-        //     // let t = t & !TStore::MASK;
-        //     // Type::resolve(t)
-        //     t
-        // }
-    }
-
-    impl<'a> TypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
-        type Ty = AnyType;
-        const MASK: TypeInternalSize = 0b1000_0000_0000_0000;
-
-        fn resolve_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Ty {
-            let t = n.get_component::<Type>().unwrap();
-            as_any(t)
-        }
-
-        fn resolve_lang(
-            &self,
-            n: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> hyper_ast::types::LangWrapper<Self::Ty> {
-            todo!("{:?}", n)
-        }
-
-        type Marshaled = TypeIndex;
-
-        fn marshal_type(&self, n: &HashedNodeRef<'a, NodeIdentifier>) -> Self::Marshaled {
-            TypeIndex {
-                lang: LangRef::<Type>::name(&Lang),
-                ty: *n.get_component::<Type>().unwrap() as u16,
-            }
-        }
-        fn type_eq(
-            &self,
-            n: &HashedNodeRef<'a, NodeIdentifier>,
-            m: &HashedNodeRef<'a, NodeIdentifier>,
-        ) -> bool {
-            todo!("{:?} {:?}", n, m)
+    impl<'a> JavaEnabledTypeStore for TStore {
+        fn resolve(t: Self::Ty) -> Type {
+            t.e()
         }
     }
     pub fn as_any(t: &Type) -> AnyType {
@@ -163,17 +69,25 @@ mod legion_impls {
 }
 #[cfg(feature = "legion")]
 pub use legion_impls::as_any;
-pub trait JavaEnabledTypeStore<T>: TypeStore<T> {}
-
-
-#[repr(u8)]
-pub enum TStore {
-    Java = 0,
+pub trait JavaEnabledTypeStore: hyper_ast::types::ETypeStore<Ty2 = Type> + Clone {
+    fn resolve(t: Self::Ty) -> Type;
 }
+
+#[cfg(feature = "impl")]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    tree_sitter_java::language().id_for_node_kind(kind, named)
+}
+#[cfg(not(feature = "impl"))]
+fn id_for_node_kind(kind: &str, named: bool) -> u16 {
+    unimplemented!("need treesitter grammar")
+}
+
+#[derive(Clone, Copy)]
+pub struct TStore;
 
 impl Default for TStore {
     fn default() -> Self {
-        Self::Java
+        Self
     }
 }
 
@@ -198,12 +112,18 @@ impl<IdN: Clone + Eq + NodeId> NodeId for TIdN<IdN> {
 
 impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
     type Ty = Type;
+    type TyErazed = TType;
+    fn unerase(ty: Self::TyErazed) -> Self::Ty {
+        ty.e()
+    }
 }
 
 type TypeInternalSize = u16;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct T(TypeInternalSize);
+
+#[derive(Debug)]
 pub struct Lang;
 pub type Java = Lang;
 
@@ -215,6 +135,7 @@ impl hyper_ast::types::Lang<Type> for Java {
         Lang.to_u16(t)
     }
 }
+
 impl LangRef<Type> for Java {
     fn make(&self, t: u16) -> &'static Type {
         // unsafe { std::mem::transmute(t) }
@@ -226,6 +147,10 @@ impl LangRef<Type> for Java {
 
     fn name(&self) -> &'static str {
         std::any::type_name::<Java>()
+    }
+
+    fn ts_symbol(&self, t: Type) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
     }
 }
 impl LangRef<AnyType> for Java {
@@ -239,7 +164,32 @@ impl LangRef<AnyType> for Java {
     fn name(&self) -> &'static str {
         std::any::type_name::<Java>()
     }
+
+    fn ts_symbol(&self, t: AnyType) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
 }
+
+impl LangRef<TType> for Lang {
+    fn make(&self, t: u16) -> &'static TType {
+        // TODO could make one safe, but not priority
+        unsafe { std::mem::transmute(&S_T_L[t as usize]) }
+    }
+    fn to_u16(&self, t: TType) -> u16 {
+        t.e() as u16
+    }
+
+    fn name(&self) -> &'static str {
+        std::any::type_name::<Lang>()
+    }
+
+    fn ts_symbol(&self, t: TType) -> u16 {
+        id_for_node_kind(t.as_static_str(), t.is_named())
+    }
+}
+
+pub use hyper_ast::types::Role;
+
 impl HyperType for Type {
     fn generic_eq(&self, other: &dyn HyperType) -> bool
     where
@@ -262,6 +212,12 @@ impl HyperType for Type {
     }
     fn is_spaces(&self) -> bool {
         self == &Type::Spaces
+    }
+    fn is_hidden(&self) -> bool {
+        self.is_hidden()
+    }
+    fn is_supertype(&self) -> bool {
+        self.is_supertype()
     }
     fn is_syntax(&self) -> bool {
         self == &Type::LParen // "(",
@@ -396,14 +352,26 @@ impl HyperType for Type {
     }
 
     fn as_static(&self) -> &'static dyn HyperType {
-        todo!()
+        LangRef::<Type>::make(&Lang, *self as u16)
+    }
+
+    fn as_static_str(&self) -> &'static str {
+        self.to_str()
+    }
+
+    fn is_named(&self) -> bool {
+        self.is_named()
     }
 
     fn get_lang(&self) -> hyper_ast::types::LangWrapper<Self>
     where
         Self: Sized,
     {
-        todo!()
+        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<Self> + 'static))
+    }
+
+    fn lang_ref(&self) -> hyper_ast::types::LangWrapper<AnyType> {
+        hyper_ast::types::LangWrapper::from(&Lang as &(dyn LangRef<AnyType> + 'static))
     }
 }
 
@@ -623,6 +591,50 @@ impl Type {
             _ => panic!(),
         }
     }
+
+    pub(crate) fn is_repeat(&self) -> bool {
+        self == &Type::ProgramRepeat1
+            || self == &Type::_StringLiteralRepeat1
+            || self == &Type::_MultilineStringLiteralRepeat1
+            || self == &Type::CastExpressionRepeat1
+            || self == &Type::InferredParametersRepeat1
+            || self == &Type::ArrayCreationExpressionRepeat1
+            || self == &Type::ArgumentListRepeat1
+            || self == &Type::TypeArgumentsRepeat1
+            || self == &Type::DimensionsRepeat1
+            || self == &Type::SwitchBlockRepeat1
+            || self == &Type::SwitchBlockStatementGroupRepeat1
+            || self == &Type::RecordPatternBodyRepeat1
+            || self == &Type::TryStatementRepeat1
+            || self == &Type::CatchTypeRepeat1
+            || self == &Type::ResourceSpecificationRepeat1
+            || self == &Type::ForStatementRepeat1
+            || self == &Type::AnnotationArgumentListRepeat1
+            || self == &Type::ElementValueArrayInitializerRepeat1
+            || self == &Type::ModuleBodyRepeat1
+            || self == &Type::RequiresModuleDirectiveRepeat1
+            || self == &Type::ExportsModuleDirectiveRepeat1
+            || self == &Type::ProvidesModuleDirectiveRepeat1
+            || self == &Type::EnumBodyRepeat1
+            || self == &Type::EnumBodyDeclarationsRepeat1
+            || self == &Type::ModifiersRepeat1
+            || self == &Type::TypeParametersRepeat1
+            || self == &Type::TypeBoundRepeat1
+            || self == &Type::TypeListRepeat1
+            || self == &Type::AnnotationTypeBodyRepeat1
+            || self == &Type::InterfaceBodyRepeat1
+            || self == &Type::_VariableDeclaratorListRepeat1
+            || self == &Type::ArrayInitializerRepeat1
+            || self == &Type::FormalParametersRepeat1
+            || self == &Type::ReceiverParameterRepeat1
+            || self == &Type::ArrayCreationExpressionRepeat2
+            || self == &Type::SwitchBlockRepeat2
+            || self == &Type::SwitchBlockStatementGroupRepeat2
+            || self == &Type::ForStatementRepeat2
+            || self == &Type::_MultilineStringFragmentToken1
+            || self == &Type::_MultilineStringFragmentToken2
+            || self == &Type::_EscapeSequenceToken1
+    }
 }
 
 impl Display for Type {
@@ -631,7 +643,36 @@ impl Display for Type {
     }
 }
 
+// impl<'a> TryFrom<&'a str> for Type {
+//     type Error = ();
+
+//     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+//         Type::from_str(value).ok_or_else(|| ())
+//     }
+// }
+
+impl<'a> From<&'a str> for Type {
+    fn from(value: &'a str) -> Self {
+        Type::from_str(value).unwrap()
+    }
+}
+
+pub type TType = hyper_ast::types::TypeU16<Lang>;
+
+impl hyper_ast::types::LLang<TType> for Java {
+    type I = u16;
+
+    type E = Type;
+
+    const TE: &[Self::E] = S_T_L;
+
+    fn as_lang_wrapper() -> hyper_ast::types::LangWrapper<TType> {
+        From::<&'static (dyn LangRef<_>)>::from(&Lang)
+    }
+}
+
 const COUNT: u16 = 326 + 1 + 2;
+
 #[repr(u16)]
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Type {
@@ -1626,7 +1667,7 @@ impl Type {
             "Spaces" => Type::Spaces,
             "Directory" => Type::Directory,
             "ERROR" => Type::ERROR,
-            x => return None,
+            _x => return None,
         })
     }
     pub fn to_str(&self) -> &'static str {
@@ -1958,6 +1999,249 @@ impl Type {
             Type::Spaces => "Spaces",
             Type::Directory => "Directory",
             Type::ERROR => "ERROR",
+        }
+    }
+    pub fn is_hidden(&self) -> bool {
+        match self {
+            Type::End => true,
+            Type::_MultilineStringFragmentToken1 => true,
+            Type::_MultilineStringFragmentToken2 => true,
+            Type::_EscapeSequenceToken1 => true,
+            Type::_ToplevelStatement => true,
+            Type::_Literal => true,
+            Type::_StringLiteral => true,
+            Type::_MultilineStringLiteral => true,
+            Type::_EscapeSequence => true,
+            Type::Expression => true,
+            Type::PrimaryExpression => true,
+            Type::_UnqualifiedObjectCreationExpression => true,
+            Type::_WildcardBounds => true,
+            Type::Statement => true,
+            Type::EnhancedForVariable => true,
+            Type::_Annotation => true,
+            Type::_ElementValue => true,
+            Type::Declaration => true,
+            Type::ModuleDirective => true,
+            Type::_ConstructorDeclarator => true,
+            Type::_AbsoluteName => true,
+            Type::_DefaultValue => true,
+            Type::_VariableDeclaratorList => true,
+            Type::_VariableDeclaratorId => true,
+            Type::_Type => true,
+            Type::_UnannotatedType => true,
+            Type::_MethodHeader => true,
+            Type::_MethodDeclarator => true,
+            Type::_ReservedIdentifier => true,
+            Type::ProgramRepeat1 => true,
+            Type::_StringLiteralRepeat1 => true,
+            Type::_MultilineStringLiteralRepeat1 => true,
+            Type::CastExpressionRepeat1 => true,
+            Type::InferredParametersRepeat1 => true,
+            Type::ArrayCreationExpressionRepeat1 => true,
+            Type::ArrayCreationExpressionRepeat2 => true,
+            Type::ArgumentListRepeat1 => true,
+            Type::TypeArgumentsRepeat1 => true,
+            Type::DimensionsRepeat1 => true,
+            Type::SwitchBlockRepeat1 => true,
+            Type::SwitchBlockRepeat2 => true,
+            Type::SwitchBlockStatementGroupRepeat1 => true,
+            Type::SwitchBlockStatementGroupRepeat2 => true,
+            Type::RecordPatternBodyRepeat1 => true,
+            Type::TryStatementRepeat1 => true,
+            Type::CatchTypeRepeat1 => true,
+            Type::ResourceSpecificationRepeat1 => true,
+            Type::ForStatementRepeat1 => true,
+            Type::ForStatementRepeat2 => true,
+            Type::AnnotationArgumentListRepeat1 => true,
+            Type::ElementValueArrayInitializerRepeat1 => true,
+            Type::ModuleBodyRepeat1 => true,
+            Type::RequiresModuleDirectiveRepeat1 => true,
+            Type::ExportsModuleDirectiveRepeat1 => true,
+            Type::ProvidesModuleDirectiveRepeat1 => true,
+            Type::EnumBodyRepeat1 => true,
+            Type::EnumBodyDeclarationsRepeat1 => true,
+            Type::ModifiersRepeat1 => true,
+            Type::TypeParametersRepeat1 => true,
+            Type::TypeBoundRepeat1 => true,
+            Type::TypeListRepeat1 => true,
+            Type::AnnotationTypeBodyRepeat1 => true,
+            Type::InterfaceBodyRepeat1 => true,
+            Type::_VariableDeclaratorListRepeat1 => true,
+            Type::ArrayInitializerRepeat1 => true,
+            Type::FormalParametersRepeat1 => true,
+            Type::ReceiverParameterRepeat1 => true,
+            _ => false,
+        }
+    }
+    pub fn is_supertype(&self) -> bool {
+        match self {
+            Type::_Literal => true,
+            Type::Expression => true,
+            Type::PrimaryExpression => true,
+            Type::Statement => true,
+            Type::Declaration => true,
+            Type::ModuleDirective => true,
+            Type::_Type => true,
+            Type::_UnannotatedType => true,
+            // maybe just ignore
+            Type::_ElementValue => true,
+            _ => false,
+        }
+    }
+    pub fn is_named(&self) -> bool {
+        match self {
+            Type::Identifier => true,
+            Type::DecimalIntegerLiteral => true,
+            Type::HexIntegerLiteral => true,
+            Type::OctalIntegerLiteral => true,
+            Type::BinaryIntegerLiteral => true,
+            Type::DecimalFloatingPointLiteral => true,
+            Type::HexFloatingPointLiteral => true,
+            Type::True => true,
+            Type::False => true,
+            Type::CharacterLiteral => true,
+            Type::StringFragment => true,
+            Type::EscapeSequence => true,
+            Type::NullLiteral => true,
+            Type::UnderscorePattern => true,
+            Type::BooleanType => true,
+            Type::VoidType => true,
+            Type::This => true,
+            Type::Super => true,
+            Type::LineComment => true,
+            Type::BlockComment => true,
+            Type::Program => true,
+            Type::_Literal => true,
+            Type::StringLiteral => true,
+            Type::MultilineStringFragment => true,
+            Type::StringInterpolation => true,
+            Type::Expression => true,
+            Type::CastExpression => true,
+            Type::AssignmentExpression => true,
+            Type::BinaryExpression => true,
+            Type::InstanceofExpression => true,
+            Type::LambdaExpression => true,
+            Type::InferredParameters => true,
+            Type::TernaryExpression => true,
+            Type::UnaryExpression => true,
+            Type::UpdateExpression => true,
+            Type::PrimaryExpression => true,
+            Type::ArrayCreationExpression => true,
+            Type::DimensionsExpr => true,
+            Type::ParenthesizedExpression => true,
+            Type::ClassLiteral => true,
+            Type::ObjectCreationExpression => true,
+            Type::FieldAccess => true,
+            Type::TemplateExpression => true,
+            Type::ArrayAccess => true,
+            Type::MethodInvocation => true,
+            Type::ArgumentList => true,
+            Type::MethodReference => true,
+            Type::TypeArguments => true,
+            Type::Wildcard => true,
+            Type::WildcardExtends => true,
+            Type::WildcardSuper => true,
+            Type::Dimensions => true,
+            Type::SwitchExpression => true,
+            Type::SwitchBlock => true,
+            Type::SwitchBlockStatementGroup => true,
+            Type::SwitchRule => true,
+            Type::SwitchLabel => true,
+            Type::Pattern => true,
+            Type::TypePattern => true,
+            Type::RecordPattern => true,
+            Type::RecordPatternBody => true,
+            Type::RecordPatternComponent => true,
+            Type::Guard => true,
+            Type::Statement => true,
+            Type::Block => true,
+            Type::ExpressionStatement => true,
+            Type::LabeledStatement => true,
+            Type::AssertStatement => true,
+            Type::DoStatement => true,
+            Type::BreakStatement => true,
+            Type::ContinueStatement => true,
+            Type::ReturnStatement => true,
+            Type::YieldStatement => true,
+            Type::SynchronizedStatement => true,
+            Type::ThrowStatement => true,
+            Type::TryStatement => true,
+            Type::CatchClause => true,
+            Type::CatchFormalParameter => true,
+            Type::CatchType => true,
+            Type::FinallyClause => true,
+            Type::TryWithResourcesStatement => true,
+            Type::ResourceSpecification => true,
+            Type::Resource => true,
+            Type::IfStatement => true,
+            Type::WhileStatement => true,
+            Type::ForStatement => true,
+            Type::EnhancedForStatement => true,
+            Type::MarkerAnnotation => true,
+            Type::Annotation => true,
+            Type::AnnotationArgumentList => true,
+            Type::ElementValuePair => true,
+            Type::ElementValueArrayInitializer => true,
+            Type::Declaration => true,
+            Type::ModuleDeclaration => true,
+            Type::ModuleBody => true,
+            Type::ModuleDirective => true,
+            Type::RequiresModuleDirective => true,
+            Type::RequiresModifier => true,
+            Type::ExportsModuleDirective => true,
+            Type::OpensModuleDirective => true,
+            Type::UsesModuleDirective => true,
+            Type::ProvidesModuleDirective => true,
+            Type::PackageDeclaration => true,
+            Type::ImportDeclaration => true,
+            Type::Asterisk => true,
+            Type::EnumDeclaration => true,
+            Type::EnumBody => true,
+            Type::EnumBodyDeclarations => true,
+            Type::EnumConstant => true,
+            Type::ClassDeclaration => true,
+            Type::Modifiers => true,
+            Type::TypeParameters => true,
+            Type::TypeParameter => true,
+            Type::TypeBound => true,
+            Type::Superclass => true,
+            Type::SuperInterfaces => true,
+            Type::TypeList => true,
+            Type::ClassBody => true,
+            Type::StaticInitializer => true,
+            Type::ConstructorDeclaration => true,
+            Type::ConstructorBody => true,
+            Type::ExplicitConstructorInvocation => true,
+            Type::ScopedIdentifier => true,
+            Type::ScopedAbsoluteIdentifier => true,
+            Type::FieldDeclaration => true,
+            Type::RecordDeclaration => true,
+            Type::AnnotationTypeDeclaration => true,
+            Type::AnnotationTypeBody => true,
+            Type::AnnotationTypeElementDeclaration => true,
+            Type::InterfaceDeclaration => true,
+            Type::ExtendsInterfaces => true,
+            Type::InterfaceBody => true,
+            Type::ConstantDeclaration => true,
+            Type::VariableDeclarator => true,
+            Type::ArrayInitializer => true,
+            Type::_Type => true,
+            Type::_UnannotatedType => true,
+            Type::AnnotatedType => true,
+            Type::ScopedTypeIdentifier => true,
+            Type::GenericType => true,
+            Type::ArrayType => true,
+            Type::IntegralType => true,
+            Type::FloatingPointType => true,
+            Type::FormalParameters => true,
+            Type::FormalParameter => true,
+            Type::ReceiverParameter => true,
+            Type::SpreadParameter => true,
+            Type::LocalVariableDeclaration => true,
+            Type::MethodDeclaration => true,
+            Type::CompactConstructorDeclaration => true,
+            Type::TypeIdentifier => true,
+            _ => false,
         }
     }
 }

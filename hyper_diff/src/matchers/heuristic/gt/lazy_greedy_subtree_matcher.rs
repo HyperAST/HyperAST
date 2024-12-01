@@ -303,14 +303,13 @@ where
                 let o = self.internal.src_arena.original(a);
                 let n = self.internal.stores.node_store().resolve(&o);
                 (
-                    self.internal.stores.type_store().resolve_type(&n),
+                    self.internal.stores.resolve_type(&o),
                     n.try_get_label().cloned(),
                 )
             };
             let o = self.internal.dst_arena.original(b);
             let n = self.internal.stores.node_store().resolve(&o);
-            t == self.internal.stores.type_store().resolve_type(&n)
-                && l.as_ref() == n.try_get_label()
+            t == self.internal.stores.resolve_type(&o) && l.as_ref() == n.try_get_label()
         });
         (2 * common.len()).to_f64().unwrap() / (s1.len() + s2.len()).to_f64().unwrap()
     }
@@ -558,39 +557,39 @@ where
         if src == dst {
             return true;
         }
-        let src = stores.node_store().resolve(src);
+        let _src = stores.node_store().resolve(src);
         let src_h = if H {
-            Some(src.hash(&mut &T::HK::label()))
+            Some(_src.hash(&mut &T::HK::label()))
         } else {
             None
         };
-        let src_t = stores.type_store().resolve_type(&src);
-        let src_l = if src.has_label() {
-            Some(src.get_label_unchecked())
+        let src_t = stores.resolve_type(&src);
+        let src_l = if _src.has_label() {
+            Some(_src.get_label_unchecked())
         } else {
             None
         };
-        let src_c: Option<Vec<_>> = src.children().map(|x| x.iter_children().collect());
+        let src_c: Option<Vec<_>> = _src.children().map(|x| x.iter_children().collect());
 
-        let dst = stores.node_store().resolve(dst);
+        let _dst = stores.node_store().resolve(dst);
 
         if let Some(src_h) = src_h {
-            let dst_h = dst.hash(&mut &T::HK::label());
+            let dst_h = _dst.hash(&mut &T::HK::label());
             if src_h != dst_h {
                 return false;
             }
         }
-        let dst_t = stores.type_store().resolve_type(&dst);
+        let dst_t = stores.resolve_type(&dst);
         if src_t != dst_t {
             return false;
         }
-        if dst.has_label() {
-            if src_l.is_none() || src_l.unwrap() != dst.get_label_unchecked() {
+        if _dst.has_label() {
+            if src_l.is_none() || src_l.unwrap() != _dst.get_label_unchecked() {
                 return false;
             }
         };
 
-        let dst_c: Option<Vec<_>> = dst.children().map(|x| x.iter_children().collect());
+        let dst_c: Option<Vec<_>> = _dst.children().map(|x| x.iter_children().collect());
 
         match (src_c, dst_c) {
             (None, None) => true,

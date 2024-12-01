@@ -16,32 +16,114 @@
     </script>
     <script src="/tree-sitter.js"></script>
     <script>TreeSitter.init();</script>
+    <script>
+        // Function to download data to a file
+        function download(data, name, ext, type) {
+            async function getNewFileHandle() {
+                const opts = {
+                    suggestedName: name,
+                    types: [
+                        {
+                            description: "Save as plain text",
+                            accept: { [type]: [ext] },
+                        },
+                    ],
+                };
+                console.log(opts);
+                return await window.showSaveFilePicker(opts);
+            }
+            async function writeFile(fileHandle, contents) {
+                // TODO change content formating depending on file extension
+                console.log(fileHandle);
+
+                // Create a FileSystemWritableFileStream to write to.
+                const writable = await fileHandle.createWritable();
+
+                // Write the contents of the file to the stream.
+                await writable.write(contents);
+
+                // Close the file and write the contents to disk.
+                await writable.close();
+            }
+            getNewFileHandle().then(fileHandle => writeFile(fileHandle, data))
+
+            // // Get handle to draft file
+            // const root = await navigator.storage.getDirectory();
+            // const draftHandle = await root.getFileHandle("draft.txt", { create: true });
+            // // Get sync access handle
+            // const accessHandle = await draftHandle.createSyncAccessHandle();
+
+            // // Get size of the file.
+            // const fileSize = accessHandle.getSize();
+            // // Read file content to a buffer.
+            // const buffer = new DataView(new ArrayBuffer(fileSize));
+            // const readBuffer = accessHandle.read(buffer, { at: 0 });
+
+            // // Write the message to the end of the file.
+            // const encoder = new TextEncoder();
+            // const encodedMessage = encoder.encode(message);
+            // const writeBuffer = accessHandle.write(encodedMessage, { at: readBuffer });
+
+            // // Persist changes to disk.
+            // accessHandle.flush();
+
+            // // Always close FileSystemSyncAccessHandle if done.
+            // accessHandle.close();
+
+            function fallback() {
+                var file = new Blob([data], { type: type });
+                if (window.navigator.msSaveOrOpenBlob) // IE10+
+                    window.navigator.msSaveOrOpenBlob(file, filename);
+                else { // Others
+                    var a = document.createElement("a"),
+                        url = URL.createObjectURL(file);
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(function () {
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                    }, 0);
+                }
+            }
+        }
+        window.download = download;
+    </script>
+
+
     <!-- config for our rust wasm binary. go to https://trunkrs.dev/assets/#rust for more customization -->
-    <script type="module">import init from '/hyper_app.js';init('/hyper_app_bg.wasm');</script>
+    
+<script type="module">
+import init, * as bindings from '/hyper_app.js';
+init('/hyper_app_bg.wasm');
+window.wasmBindings = bindings;
+
+</script>
     <!-- this is the base url relative to which other urls will be constructed. trunk will insert this from the public-url option -->
     <base href="/">
 
-    <link rel="icon" href="/favicon.ico">
+    <link rel="icon" href="/favicon.ico" integrity="sha384-XNHQuB_0AGfRcWFGdZX1LHYh4D4hHdY3RvR4ewnOSXR2FdDe2-3qQLMc2_WnQMOE">
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    <!-- <link data-trunk rel="copy-file" href="../../tree-sitter/lib/binding_web/tree-sitter.js"/>
+    <link data-trunk rel="copy-file" href="../../tree-sitter/lib/binding_web/tree-sitter.wasm"/> -->
+    
 
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    <!-- <link data-trunk rel="copy-file" href="../../tree-sitter/lib/binding_web/tree-sitter.js" />
-    <link data-trunk rel="copy-file" href="../../tree-sitter/lib/binding_web/tree-sitter.wasm" /> -->
-    
-
-
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icon_ios_touch_192.png">
+    <link rel="manifest" href="assets/manifest.json">
+    <link rel="apple-touch-icon" href="assets/icon_ios_touch_192.png">
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="white">
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#404040">
+
     <style>
         html {
             /* Remove touch delay: */
@@ -72,15 +154,16 @@
             width: 100%;
         }
 
-        /* Position canvas in center-top: */
+        /* Make canvas fill entire document: */
         canvas {
             margin-right: auto;
             margin-left: auto;
             display: block;
             position: absolute;
-            top: 0%;
-            left: 50%;
-            transform: translate(-50%, 0%);
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
         }
 
         .centered {
@@ -128,13 +211,21 @@
         }
     </style>
 
-<link rel="preload" href="/hyper_app_bg.wasm" as="fetch" type="application/wasm" crossorigin="">
-<link rel="modulepreload" href="/hyper_app.js"></head>
+<link rel="preload" href="/hyper_app_bg.wasm" as="fetch" type="application/wasm" crossorigin="anonymous" integrity="sha384-_8cPO7neVkdlMUx2F0lWzXInXW-FXaWg-JFiUsOyhqChP44kK7raVh09PiArV03u">
+<link rel="modulepreload" href="/hyper_app.js" crossorigin="anonymous" integrity="sha384-H6MqpTv4vO14GLbCDOfTngZ6RQldHXd6FUxdtB7jUuGqhFu9DgkF_T2Q-b8FvpVx"></head>
 
 <body>
     <!-- The WASM code will resize the canvas dynamically -->
     <!-- the id is hardcoded in main.rs . so, make sure both match. -->
     <canvas id="the_canvas_id"></canvas>
+
+    <!-- the loading spinner will be removed in main.rs -->
+    <div class="centered" id="loading_text">
+        <p style="font-size:16px">
+            Loading…
+        </p>
+        <div class="lds-dual-ring"></div>
+    </div>
 
     <!--Register Service Worker. this will cache the wasm / js scripts for offline use (for PWA functionality). -->
     <!-- Force refresh (Ctrl + F5) to load the latest files instead of cached files  -->
@@ -150,31 +241,132 @@
 
 
 
-<script>(function () {
-    var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    var url = protocol + '//' + window.location.host + '/_trunk/ws';
-    var poll_interval = 5000;
-    var reload_upon_connect = () => {
-        window.setTimeout(
-            () => {
-                // when we successfully reconnect, we'll force a
-                // reload (since we presumably lost connection to
-                // trunk due to it being killed, so it will have
-                // rebuilt on restart)
-                var ws = new WebSocket(url);
-                ws.onopen = () => window.location.reload();
-                ws.onclose = reload_upon_connect;
-            },
-            poll_interval);
-    };
+<script>"use strict";
 
-    var ws = new WebSocket(url);
-    ws.onmessage = (ev) => {
-        const msg = JSON.parse(ev.data);
-        if (msg.reload) {
+(function () {
+
+    const address = '{{__TRUNK_ADDRESS__}}';
+    let protocol = '';
+    protocol =
+        protocol
+            ? protocol
+            : window.location.protocol === 'https:'
+                ? 'wss'
+                : 'ws';
+    const url = protocol + '://' + address + '/_trunk/ws';
+
+    class Overlay {
+        constructor() {
+            // create an overlay
+            this._overlay = document.createElement("div");
+            const style = this._overlay.style;
+            style.height = "100vh";
+            style.width = "100vw";
+            style.position = "fixed";
+            style.top = "0";
+            style.left = "0";
+            style.backgroundColor = "rgba(222, 222, 222, 0.5)";
+            style.fontFamily = "sans-serif";
+            // not sure that's the right approach
+            style.zIndex = "1000000";
+            style.backdropFilter = "blur(1rem)";
+
+            const container = document.createElement("div");
+            // center it
+            container.style.position = "absolute";
+            container.style.top = "30%";
+            container.style.left = "15%";
+            container.style.maxWidth = "85%";
+
+            this._title = document.createElement("div");
+            this._title.innerText = "Build failure";
+            this._title.style.paddingBottom = "2rem";
+            this._title.style.fontSize = "2.5rem";
+
+            this._message = document.createElement("div");
+            this._message.style.whiteSpace = "pre-wrap";
+
+            const icon= document.createElement("div");
+            icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="#dc3545" viewBox="0 0 16 16"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>';
+            this._title.prepend(icon);
+
+            container.append(this._title, this._message);
+            this._overlay.append(container);
+
+            this._inject();
+            window.setInterval(() => {
+                this._inject();
+            }, 250);
+        }
+
+        set reason(reason) {
+            this._message.textContent = reason;
+        }
+
+        _inject() {
+            if (!this._overlay.isConnected) {
+                // prepend it
+                document.body?.prepend(this._overlay);
+            }
+        }
+
+    }
+
+    class Client {
+        constructor(url) {
+            this.url = url;
+            this.poll_interval = 5000;
+            this._overlay = null;
+        }
+
+        start() {
+            const ws = new WebSocket(this.url);
+            ws.onmessage = (ev) => {
+                const msg = JSON.parse(ev.data);
+                switch (msg.type) {
+                    case "reload":
+                        this.reload();
+                        break;
+                    case "buildFailure":
+                        this.buildFailure(msg.data)
+                        break;
+                }
+            };
+            ws.onclose = this.onclose;
+        }
+
+        onclose() {
+            window.setTimeout(
+                () => {
+                    // when we successfully reconnect, we'll force a
+                    // reload (since we presumably lost connection to
+                    // trunk due to it being killed, so it will have
+                    // rebuilt on restart)
+                    const ws = new WebSocket(this.url);
+                    ws.onopen = () => window.location.reload();
+                    ws.onclose = this.onclose;
+                },
+                this.poll_interval);
+        }
+
+        reload() {
             window.location.reload();
         }
-    };
-    ws.onclose = reload_upon_connect;
+
+        buildFailure({reason}) {
+            // also log the console
+            console.error("Build failed:", reason);
+
+            console.debug("Overlay", this._overlay);
+
+            if (!this._overlay) {
+                this._overlay = new Overlay();
+            }
+            this._overlay.reason = reason;
+        }
+    }
+
+    new Client(url).start();
+
 })()
 </script></body></html><!-- Powered by egui: https://github.com/emilk/egui/ -->

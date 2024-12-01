@@ -8,11 +8,13 @@ pub struct TreeToQuery<
     'a,
     HAST: types::HyperAST<'a>,
     TIdN: hyper_ast::types::TypedNodeId,
+    C: Converter,
     const PP: bool = true,
 > {
     stores: &'a HAST,
     root: HAST::IdN,
-    matcher: crate::search::PreparedMatcher<TIdN::Ty>,
+    matcher: crate::search::PreparedMatcher<TIdN::Ty, C>,
+    converter: C,
     phantom: PhantomData<TIdN>,
 }
 
@@ -45,19 +47,17 @@ impl<'a, TS, NS, LS> std::ops::Deref for QStoreRef<'a, TS, NS, LS> {
     }
 }
 
-impl<'store, 'a, TS> types::HyperAST<'store> for QStoreRef<'a, TS, store::nodes::DefaultNodeStore>
-where
-    // <TS as TypeStore>::Ty: HyperType + Send + Sync,
-    TS: types::TypeStore<
-        store::nodes::legion::HashedNodeRef<'store, store::nodes::DefaultNodeIdentifier>,
-        Ty = types::AnyType,
-    >,
-{
+impl<'a, TS> types::HyperASTShared for QStoreRef<'a, TS, store::nodes::DefaultNodeStore> {
     type IdN = store::nodes::DefaultNodeIdentifier;
 
     type Idx = u16;
     type Label = store::labels::DefaultLabelIdentifier;
+}
 
+impl<'store, 'a, TS> types::HyperAST<'store> for QStoreRef<'a, TS, store::nodes::DefaultNodeStore>
+where
+    TS: types::TypeStore<Ty = types::AnyType>,
+{
     type T = store::nodes::legion::HashedNodeRef<'store, Self::IdN>;
 
     type NS = store::nodes::legion::NodeStore;
@@ -73,9 +73,30 @@ where
     }
 
     type TS = TS;
+}
 
-    fn type_store(&self) -> &Self::TS {
-        &self.0.type_store
+pub trait Converter: Default {
+    type Ty;
+    fn conv(s: &str) -> Option<Self::Ty>;
+}
+
+pub struct Conv<Ty>(PhantomData<Ty>);
+
+impl<Ty> Default for Conv<Ty> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
+impl<Ty> Converter for Conv<Ty>
+where
+    Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
+    for<'b> <Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
+{
+    type Ty = Ty;
+
+    fn conv(s: &str) -> Option<Self::Ty> {
+        s.try_into().ok()
     }
 }
 
@@ -84,35 +105,49 @@ impl<
         'a,
         HAST: types::TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN>,
-    > TreeToQuery<'store, HAST, TIdN>
+    > TreeToQuery<'store, HAST, TIdN, Conv<TIdN::Ty>>
 where
     TIdN::Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
     for<'b> <TIdN::Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
 {
-    pub fn new(stores: &'store HAST, root: HAST::IdN) -> TreeToQuery<'store, HAST, TIdN> {
+    pub fn new(
+        stores: &'store HAST,
+        root: HAST::IdN,
+    ) -> TreeToQuery<'store, HAST, TIdN, Conv<TIdN::Ty>> {
         Self::with_pred(stores, root, "")
     }
+}
+
+impl<
+        'store,
+        'a,
+        HAST: types::TypedHyperAST<'store, TIdN>,
+        TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN>,
+        C: Converter<Ty = TIdN::Ty>,
+    > TreeToQuery<'store, HAST, TIdN, C>
+{
     pub fn with_pred(
         stores: &'store HAST,
         root: HAST::IdN,
         matcher: &str,
-    ) -> TreeToQuery<'store, HAST, TIdN> {
+    ) -> TreeToQuery<'store, HAST, TIdN, C> {
         use std::ops::Deref;
         let query_store = Q_STORE.deref();
 
         let query =
             crate::search::ts_query2(&mut query_store.0.write().unwrap(), matcher.as_bytes());
         let matcher = {
-            let (root_types, patterns) = crate::search::PreparedMatcher::<TIdN::Ty>::new_aux(
-                &query_store.0.read().unwrap(),
+            let preparing = crate::search::PreparedMatcher::<TIdN::Ty, C>::new_aux(
+                query_store.0.read().unwrap().with_ts(),
                 query,
             );
-            crate::search::PreparedMatcher::<TIdN::Ty>::with_patterns(root_types, patterns)
+            preparing.into()
         };
         Self {
             stores,
             root,
             matcher,
+            converter: Default::default(),
             phantom: PhantomData,
         }
     }
@@ -122,12 +157,11 @@ impl<
         'store,
         HAST: types::TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
+        F: Converter<Ty = TIdN::Ty>,
         const PP: bool,
-    > Display for TreeToQuery<'store, HAST, TIdN, PP>
+    > Display for TreeToQuery<'store, HAST, TIdN, F, PP>
 where
     HAST::IdN: Debug + Copy,
-    TIdN::Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug,
-    for<'b> <TIdN::Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.serialize(&self.root, &mut 0, 0, f).map(|_| ())
@@ -138,12 +172,11 @@ impl<
         'store,
         HAST: types::TypedHyperAST<'store, TIdN>,
         TIdN: hyper_ast::types::TypedNodeId<IdN = HAST::IdN> + 'static,
+        F: Converter<Ty = TIdN::Ty>,
         const PP: bool,
-    > TreeToQuery<'store, HAST, TIdN, PP>
+    > TreeToQuery<'store, HAST, TIdN, F, PP>
 where
     HAST::IdN: Debug + Copy,
-    TIdN::Ty: for<'b> TryFrom<&'b str> + std::fmt::Debug + Eq + Copy,
-    for<'b> <TIdN::Ty as TryFrom<&'b str>>::Error: std::fmt::Debug,
 {
     // pub fn tree_syntax_with_ids(
     fn serialize(
@@ -153,10 +186,10 @@ where
         ind: usize,
         out: &mut std::fmt::Formatter<'_>,
     ) -> Result<(), std::fmt::Error> {
-        use types::{LabelStore, Labeled, NodeStore, TypeStore, WithChildren};
-        let b = NodeStore::resolve(self.stores.node_store(), id);
+        use types::{LabelStore, Labeled, NodeStore, WithChildren};
+        let b = self.stores.node_store().resolve(id);
         // let kind = (self.stores.type_store(), b);
-        let kind = self.stores.type_store().resolve_type(&b);
+        let kind = self.stores.resolve_type(id);
         let label = b.try_get_label();
         let children = b.children();
 
@@ -174,8 +207,7 @@ where
                     write!(out, "(")?;
                     write!(out, "{}", kind.to_string())?;
                     for id in it {
-                        let b = self.stores.node_store().resolve(id);
-                        let kind = self.stores.type_store().resolve_type(&b);
+                        let kind = self.stores.resolve_type(id);
                         if !kind.is_spaces() {
                             if PP {
                                 write!(out, "\n{}", "  ".repeat(ind + 1))?;

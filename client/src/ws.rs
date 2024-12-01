@@ -1,5 +1,5 @@
 use automerge::sync::SyncDoc;
-use axum::TypedHeader;
+use axum_extra::TypedHeader;
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     response::IntoResponse,
@@ -510,7 +510,7 @@ async fn handle_socket(socket: WebSocket, who: SocketAddr, state: SharedState, s
 /// This is the last point where we can extract TCP/IP metadata such as IP address of the client
 /// as well as things from HTTP headers such as user-agent of the browser etc.
 #[debug_handler]
-pub(crate) async fn ws_handler(
+pub async fn ws_handler(
     ws: WebSocketUpgrade,
     user_agent: Option<TypedHeader<headers::UserAgent>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,

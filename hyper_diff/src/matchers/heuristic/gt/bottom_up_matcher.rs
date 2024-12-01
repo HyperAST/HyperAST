@@ -74,7 +74,7 @@ impl<
         M: MonoMappingStore,
     > BottomUpMatcher<'a, Dsrc, Ddst, T, HAST, M>
 where
-    <HAST::TS as TypeStore<T>>::Ty: Copy + Send + Sync + Eq + Hash,
+    <HAST::TS as TypeStore>::Ty: Copy + Send + Sync + Eq + Hash,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
 {
@@ -177,22 +177,17 @@ where
     }
 
     pub(super) fn histogram_matching(&mut self, src: &M::Src, dst: &M::Dst) {
-        let mut src_histogram: HashMap<<HAST::TS as TypeStore<T>>::Ty, Vec<M::Src>> =
+        let mut src_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Src>> =
             HashMap::new(); //Map<Type, List<ITree>>
         for c in self.src_arena.children(self.stores.node_store(), src) {
-            let t = &self.stores.type_store().resolve_type(
-                &self
-                    .stores
-                    .node_store()
-                    .resolve(&self.src_arena.original(&c)),
-            );
+            let t = &self.stores.resolve_type(&self.src_arena.original(&c));
             if !src_histogram.contains_key(t) {
                 src_histogram.insert(*t, vec![]);
             }
             src_histogram.get_mut(t).unwrap().push(c);
         }
 
-        let mut dst_histogram: HashMap<<HAST::TS as TypeStore<T>>::Ty, Vec<M::Dst>> =
+        let mut dst_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Dst>> =
             HashMap::new(); //Map<Type, List<ITree>>
         for c in self.dst_arena.children(self.stores.node_store(), dst) {
             let t = &self.stores.resolve_type(&self.dst_arena.original(&c));
@@ -279,7 +274,7 @@ impl<
     > crate::matchers::Mapper<'a, HAST, Dsrc, Ddst, M>
 where
     HAST::T: 'a + Tree + WithHashs,
-    <HAST::TS as TypeStore<HAST::T>>::Ty: Copy + Send + Sync + Eq + Hash,
+    <HAST::TS as TypeStore>::Ty: Copy + Send + Sync + Eq + Hash,
     M::Src: PrimInt + std::ops::SubAssign + Debug,
     M::Dst: PrimInt + std::ops::SubAssign + Debug,
     M::Src: Shallow<M::Src>,
@@ -380,7 +375,7 @@ where
     }
 
     pub(super) fn histogram_matching(&mut self, src: &M::Src, dst: &M::Dst) {
-        let mut src_histogram: HashMap<<HAST::TS as TypeStore<HAST::T>>::Ty, Vec<M::Src>> =
+        let mut src_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Src>> =
             HashMap::new(); //Map<Type, List<ITree>>
         for c in self.src_arena.children(self.hyperast.node_store(), src) {
             let t = &self.hyperast.resolve_type(&self.src_arena.original(&c));
@@ -390,7 +385,7 @@ where
             src_histogram.get_mut(t).unwrap().push(c);
         }
 
-        let mut dst_histogram: HashMap<<HAST::TS as TypeStore<HAST::T>>::Ty, Vec<M::Dst>> =
+        let mut dst_histogram: HashMap<<HAST::TS as TypeStore>::Ty, Vec<M::Dst>> =
             HashMap::new(); //Map<Type, List<ITree>>
         for c in self.dst_arena.children(self.hyperast.node_store(), dst) {
             let t = &self.hyperast.resolve_type(&self.dst_arena.original(&c));

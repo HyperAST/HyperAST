@@ -5,17 +5,17 @@ edition = "2021"
 
 [dependencies]
 tree-sitter = { version = "0.22.2", optional = true }
-tree-sitter-query = { git = "https://github.com/tree-sitter-grammars/tree-sitter-query", rev = "2e31ca2771f6042b0e4e0c41a6290014a9e1face", version = "0.2.1", optional = true }
+tree-sitter-query = { git = "https://github.com/tree-sitter-grammars/tree-sitter-query", rev = "d25e8d183f319497b8b22a2a1585975b020da722", version = "0.3.0", optional = true }
 atomic-counter = "1.0.1"
 num = "0.4.0"
 bitvec = "1.0.1"
 controlled-option = "0.4.1"
-string-interner = "0.14.0"
 cfg-if = "1.0"
-hashbrown = { version = "0.13.2", default-features = false, optional = true }
+hashbrown = { version = "0.14.5", default-features = false, optional = true }
 log = { version = "0.4.6" }                                                                                                                                                     #, features = ["max_level_debug", "release_max_level_warn"] }
 
 hyper_ast = { path = "../../../hyper_ast", default-features = false }
+hyper_ast_tsquery = { path = "../../../tsquery", optional = true }
 
 libc = "0.2"
 
@@ -26,14 +26,20 @@ enumset = "1.0.8"
 
 serde = { version = "1.0.130" }
 
-# [build-dependencies]
-# cc = "*"
-
 [dev-dependencies]
 pretty_assertions = "1.0.0"
-env_logger = "0.9.0"
+env_logger = "0.11.3"
 hyper_ast_gen_ts_cpp = { path = "../cpp", version = "0.1.0" }
+tree-sitter-java = { git = "https://github.com/quentinLeDilavrec/tree-sitter-java", version = "0.21.0", rev = "7699d4a296ca27fc14511bc75a1a899327f483fc" }
 hyper_ast_gen_ts_xml = { path = "../xml", version = "0.1.0" }
+criterion = { version = "0.4", features = ["rayon", "plotters", "cargo_bench_support", "html_reports", "real_blackbox"] }
+
+[lib]
+bench = false
+
+[[bench]]
+name = "capture_names"
+harness = false
 
 
 [features]
@@ -47,4 +53,5 @@ impl = [
     "hashbrown?/ahash",
     "dep:tree-sitter",
     "dep:tree-sitter-query",
+    "dep:hyper_ast_tsquery",
 ]

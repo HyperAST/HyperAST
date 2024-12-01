@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::BuildHasher, thread::sleep, time::Duration};
+use std::{fmt::Debug, thread::sleep, time::Duration};
 
 use axum::{response::IntoResponse, Json};
 use enumset::{EnumSet, EnumSetType};
@@ -6,13 +6,11 @@ use hyper_ast::{
     position::{
         compute_position, compute_position_and_nodes, compute_position_with_no_spaces,
         compute_range, path_with_spaces,
-        position_accessors::{self, SolvedPosition, WithOffsets, WithPreOrderPath},
+        position_accessors::{self, WithOffsets, WithPreOrderPath},
         resolve_range,
     },
     store::{defaults::NodeIdentifier, nodes::legion::HashedNodeRef, SimpleStores},
-    types::{
-        self, HyperAST, IterableChildren, NodeStore, Typed, WithChildren, WithHashs, WithStats,
-    },
+    types::{self, HyperAST, IterableChildren, NodeStore, WithChildren, WithHashs, WithStats},
     PrimInt,
 };
 use hyper_ast_cvs_git::{
@@ -21,8 +19,7 @@ use hyper_ast_cvs_git::{
 };
 use hyper_diff::{
     decompressed_tree_store::{
-        DecompressedWithParent, LazyDecompressedTreeStore, PersistedNode,
-        ShallowDecompressedTreeStore,
+        DecompressedWithParent, LazyDecompressedTreeStore, ShallowDecompressedTreeStore,
     },
     matchers::{
         mapping_store::{self, MonoMappingStore, MultiMappingStore},
@@ -40,10 +37,10 @@ use crate::{
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct TrackingParam {
-    user: String,
-    name: String,
-    commit: String,
-    file: String,
+    pub user: String,
+    pub name: String,
+    pub commit: String,
+    pub file: String,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -56,22 +53,22 @@ pub struct TrackingAtPathParam {
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct TrackingQuery {
-    start: Option<usize>,
-    end: Option<usize>,
-    before: Option<String>,
+    pub start: Option<usize>,
+    pub end: Option<usize>,
+    pub before: Option<String>,
     #[serde(flatten)]
-    flags: Flags,
+    pub flags: Flags,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Default, Clone, Debug)]
 #[serde(default)]
-pub(crate) struct Flags {
+pub struct Flags {
     #[serde(deserialize_with = "deserialize_bool_from_anything")]
-    pub(crate) upd: bool,
+    pub upd: bool,
     #[serde(deserialize_with = "deserialize_bool_from_anything")]
-    pub(crate) child: bool,
+    pub child: bool,
     #[serde(deserialize_with = "deserialize_bool_from_anything")]
-    pub(crate) parent: bool,
+    pub parent: bool,
     #[serde(deserialize_with = "deserialize_bool_from_anything")]
     pub(crate) exact_child: bool,
     #[serde(deserialize_with = "deserialize_bool_from_anything")]
@@ -242,7 +239,7 @@ pub struct TrackingError {
     pub compute_time: f64,
     commits_processed: usize,
     node_processed: usize,
-    message: String,
+    pub message: String,
 }
 
 impl IntoResponse for TrackingError {
@@ -284,9 +281,7 @@ pub fn track_code(
             message: "missing config for repository".to_string(),
         })?;
     let mut repository = repo_handle.fetch();
-    log::warn!("done cloning {}", repository.spec);
-    // let mut get_mut = state.write().unwrap();
-    // let state = get_mut.deref_mut();
+    log::debug!("done cloning {}", repository.spec);
     let mut commit = commit.clone();
     let mut node_processed = 0;
     let mut commits_processed = 1;
@@ -307,7 +302,7 @@ pub fn track_code(
                 node_processed: 0,
                 message: e.to_string(),
             })?;
-        log::warn!("done construction of {commits:?} in {}", repository.spec);
+        log::debug!("done construction of {commits:?} in {}", repository.spec);
         let src_oid = commits[0];
         let dst_oid = commits[1];
         match track_aux(
@@ -327,6 +322,7 @@ pub fn track_code(
                 } else {
                     (aaa, None)
                 };
+                log::debug!("tracked {commits:?}");
                 return Ok(TrackingResult {
                     compute_time: now.elapsed().as_secs_f64(),
                     commits_processed,
@@ -344,6 +340,7 @@ pub fn track_code(
                 } else {
                     (aaa, None)
                 };
+                log::debug!("tracking miss {commits:?}");
                 return Ok(TrackingResult {
                     compute_time: now.elapsed().as_secs_f64(),
                     commits_processed,
@@ -363,6 +360,24 @@ pub fn track_code(
             MappingResult::Skipped { nodes, src, next } => {
                 node_processed += nodes;
                 dbg!(src_oid, dst_oid);
+                if before.as_ref() == Some(&dst_oid.to_string()) {
+                    let aaa = src.globalize(repository.spec, commit);
+                    let (src, intermediary) = if let Some(src) = source {
+                        (src, Some(aaa))
+                    } else {
+                        (aaa, None)
+                    };
+                    log::debug!("tracking skip {commits:?}");
+                    return Ok(TrackingResult {
+                        compute_time: now.elapsed().as_secs_f64(),
+                        commits_processed,
+                        src,
+                        intermediary,
+                        fallback: None,
+                        matched: next,
+                    }
+                    .into());
+                }
                 if source.is_none() {
                     source = Some(src.globalize(repository.spec.clone(), commit));
                 }
@@ -421,7 +436,7 @@ pub(crate) fn track_code_at_path(
             message: "missing config for repository".to_string(),
         })?;
     let mut repository = repository.fetch();
-    log::warn!("done cloning {}", repository.spec);
+    log::debug!("done cloning {}", repository.spec);
     // let mut get_mut = state.write().unwrap();
     // let state = get_mut.deref_mut();
     let mut commit = commit.clone();
@@ -442,7 +457,7 @@ pub(crate) fn track_code_at_path(
                 node_processed: 0,
                 message: e.to_string(),
             })?;
-        log::warn!("done construction of {commits:?} in {}", repository.spec);
+        log::debug!("done construction of {commits:?} in {}", repository.spec);
         let src_oid = commits[0];
         let dst_oid = if let Some(before) = &before {
             let commits = state
@@ -579,7 +594,7 @@ pub(crate) fn track_code_at_path_with_changes(
             message: "missing config for repository".to_string(),
         })?;
     let mut repository = repo_handle.fetch();
-    log::warn!("done cloning {}", repository.spec);
+    log::debug!("done cloning {}", repository.spec);
     let mut ori_oid = None;
     let mut commit = commit.clone();
     let mut node_processed = 0;
@@ -882,7 +897,11 @@ impl<IdN: Clone, Idx> position_accessors::RootedPosition<IdN> for TargetCodeElem
 impl<IdN, Idx: PrimInt> position_accessors::WithPath<IdN> for TargetCodeElement<IdN, Idx> {}
 
 impl<IdN, Idx: PrimInt> position_accessors::WithPreOrderOffsets for TargetCodeElement<IdN, Idx> {
-    type It<'a> = std::iter::Copied<std::slice::Iter<'a, Idx>> where Idx: 'a, Self: 'a;
+    type It<'a>
+        = std::iter::Copied<std::slice::Iter<'a, Idx>>
+    where
+        Idx: 'a,
+        Self: 'a;
 
     fn iter_offsets(&self) -> Self::It<'_> {
         self.path.iter().copied()
@@ -922,7 +941,11 @@ impl<IdN, Idx> position_accessors::OffsetPostionT<IdN> for TargetCodeElement<IdN
 }
 
 impl<IdN, Idx: PrimInt> compute::WithPreOrderOffsetsNoSpaces for TargetCodeElement<IdN, Idx> {
-    type It<'a> = std::slice::Iter<'a, Idx> where Idx: 'a, Self: 'a;
+    type It<'a>
+        = std::slice::Iter<'a, Idx>
+    where
+        Idx: 'a,
+        Self: 'a;
 
     fn iter_offsets_nospaces(&self) -> Self::It<'_> {
         self.path_no_spaces.iter()
@@ -954,7 +977,7 @@ fn track_aux(
     let node_store = &stores.node_store;
 
     // let size = node_store.resolve(src_tr).size();
-    log::error!("tracking {file}");
+    log::debug!("tracking {file}");
     let file_node =
         child_at_path_tracked(&repositories.processor.main_stores, src_tr, file.split("/"));
 
@@ -968,8 +991,6 @@ fn track_aux(
     path_to_target.extend(offsets_to_file.iter().map(|x| *x as Idx));
     dbg!(&node);
     dbg!(&offsets_in_file);
-    let aaa = node_store.resolve(file_node);
-    dbg!(aaa.try_get_bytes_len(0));
     path_to_target.extend(offsets_in_file.iter().map(|x| *x as Idx));
 
     let computed_range = compute_range(file_node, &mut offsets_in_file.into_iter(), stores);
@@ -1040,7 +1061,6 @@ fn track_aux2(
         // NOTE trying stuff
         // TODO use this version
         use hyper_ast::position;
-        use position::file_and_offset;
         use position::offsets;
         use position::offsets_and_nodes;
         let src = offsets::OffsetsRef::from(path_to_target.as_slice());
@@ -1086,4 +1106,5 @@ fn track_aux2(
 
 mod compute;
 mod more;
+#[cfg(feature = "experimental")]
 mod my_dash;

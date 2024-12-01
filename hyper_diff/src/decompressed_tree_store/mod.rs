@@ -13,6 +13,7 @@ pub mod basic_post_order;
 pub mod bfs_wrapper;
 pub mod breadth_first;
 pub mod complete_post_order;
+pub mod complete_post_order_ref;
 pub mod hidding_wrapper;
 pub mod lazy_post_order;
 pub mod pre_order_wrapper;

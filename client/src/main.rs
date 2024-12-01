@@ -1,96 +1,27 @@
 #![feature(array_chunks)]
-#![feature(core_intrinsics)]
-#![feature(build_hasher_simple_hash_one)]
 #![feature(map_many_mut)]
 #![feature(iter_collect_into)]
 use std::{
-    collections::HashMap,
     net::SocketAddr,
     sync::{Arc, RwLock},
 };
 
-use dashmap::DashMap;
-use hyper_ast_cvs_git::{
-    git::Forge, multi_preprocessed::PreProcessedRepositories, processing::ConfiguredRepoHandle,
-};
-use hyper_diff::{decompressed_tree_store::PersistedNode, matchers::mapping_store::VecStore};
-use tower_http::cors::CorsLayer;
+use client::*;
 
-use crate::{
+use axum::{body::Bytes, Router};
+use client::{
     app::{
-        commit_metadata_route, fetch_code_route, fetch_git_file, scripting_app, track_code_route,
-        view_code_route,
+        commit_metadata_route, fetch_code_route, fetch_git_file, querying_app, scripting_app,
+        smells_app, track_code_route, tsg_app, view_code_route,
     },
     examples::{example_app, kv_store_app},
 };
-use axum::{body::Bytes, Router};
+use dashmap::DashMap;
 use hyper_ast::store::nodes::legion::NodeIdentifier;
+use hyper_ast_cvs_git::{git::Forge, multi_preprocessed::PreProcessedRepositories};
+use hyper_diff::{decompressed_tree_store::PersistedNode, matchers::mapping_store::VecStore};
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
-mod app;
-mod changes;
-mod cli;
-mod commit;
-mod examples;
-mod fetch;
-mod file;
-mod matching;
-mod scripting;
-mod track;
-mod utils;
-mod view;
-mod ws;
-
-// #[derive(Default)]
-pub struct AppState {
-    db: DashMap<String, Bytes>,
-    repositories: RwLock<PreProcessedRepositories>,
-    // configs: RwLock<RepoConfigs>,
-    mappings: MappingCache,
-    mappings_alone: MappingAloneCache,
-    partial_decomps: PartialDecompCache,
-    // Single shared doc
-    doc: Arc<(
-        RwLock<automerge::AutoCommit>,
-        (
-            tokio::sync::broadcast::Sender<(SocketAddr, Vec<automerge::Change>)>,
-            tokio::sync::broadcast::Receiver<(SocketAddr, Vec<automerge::Change>)>,
-        ),
-        RwLock<Vec<tokio::sync::mpsc::Sender<Option<Vec<u8>>>>>,
-    )>,
-    // Multiple shared docs
-    doc2: ws::SharedDocs,
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            db: Default::default(),
-            repositories: Default::default(),
-            mappings: Default::default(),
-            mappings_alone: Default::default(),
-            partial_decomps: Default::default(),
-            doc: Arc::new((
-                RwLock::new(automerge::AutoCommit::new()),
-                tokio::sync::broadcast::channel(50),
-                Default::default(),
-            )),
-            doc2: Default::default(),
-        }
-    }
-}
-
-// #[derive(Default)]
-// struct RepoConfigs(HashMap<hyper_ast_cvs_git::git::Repo, hyper_ast_cvs_git::processing::RepoConfig2>);
-// impl RepoConfigs {
-//     pub(crate) fn resolve(&self, specifier: hyper_ast_cvs_git::git::Repo) -> Option<ConfiguredRepoHandle> {
-//         let config = self.0
-//             .get(&specifier)?;
-//         Some(ConfiguredRepoHandle {
-//             spec: specifier,
-//             config: *config,
-//         })
-//     }
-// }
 
 pub(crate) type PartialDecompCache = DashMap<NodeIdentifier, DS<PersistedNode<NodeIdentifier>>>;
 pub(crate) type MappingAloneCache =
@@ -101,6 +32,7 @@ pub(crate) type MappingAloneCacheRef<'a> =
 pub(crate) enum MappingStage {
     Subtree,
     Bottomup,
+    Decls,
 }
 
 type DS<T> = hyper_diff::decompressed_tree_store::lazy_post_order::LazyPostOrder<T, u32>;
@@ -112,13 +44,23 @@ type SharedState = Arc<AppState>;
 
 #[tokio::main]
 async fn main() {
-    let opts = crate::cli::parse();
-
+    let opts = client::cli::parse();
+    #[cfg(feature = "rerun")]
+    {
+        if let Err(e) = client::log_languages::log_languages() {
+            log::error!("error logging languages: {}", e)
+        };
+    }
     let shared_state = SharedState::default();
     {
         use hyper_ast_cvs_git::processing::RepoConfig;
         let mut repos = shared_state.repositories.write().unwrap();
         repos.register_config(Forge::Github.repo("INRIA", "spoon"), RepoConfig::JavaMaven);
+        repos.register_config(Forge::Github.repo("google", "gson"), RepoConfig::JavaMaven);
+        repos.register_config(
+            Forge::Github.repo("Marcono1234", "gson"),
+            RepoConfig::JavaMaven,
+        );
         repos.register_config(
             Forge::Github.repo("official-stockfish", "Stockfish"),
             RepoConfig::CppMake,
@@ -130,9 +72,12 @@ async fn main() {
     }
     let app = Router::new()
         .fallback(fallback)
-        .route("/ws", axum::routing::get(ws::ws_handler))
+        .route("/ws", axum::routing::get(client::ws_handler))
         .merge(kv_store_app(Arc::clone(&shared_state)))
         .merge(scripting_app(Arc::clone(&shared_state)))
+        .merge(querying_app(Arc::clone(&shared_state)))
+        .merge(tsg_app(Arc::clone(&shared_state)))
+        .merge(smells_app(Arc::clone(&shared_state)))
         .merge(fetch_git_file(Arc::clone(&shared_state)))
         .merge(track_code_route(Arc::clone(&shared_state)))
         .merge(view_code_route(Arc::clone(&shared_state)))
@@ -140,6 +85,7 @@ async fn main() {
         .merge(commit_metadata_route(Arc::clone(&shared_state)))
         .merge(example_app())
         .layer(CorsLayer::permissive()) // WARN unwanted for deployment
+        .layer(TraceLayer::new_for_http())
         .with_state(Arc::clone(&shared_state));
     // TODOs auth admin to list pending constructions,
     // all repositories are blacklised by default
@@ -147,11 +93,14 @@ async fn main() {
     // to whitelist repositories either for all past commits or also all future commits
     // manage users and quota
     tracing::debug!("listening on {}", opts.address);
-    axum::Server::bind(&opts.address)
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind(&opts.address).await.unwrap();
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .unwrap();
 }
 pub(crate) use hyper_ast_cvs_git::no_space;
 /// axum handler for any request that fails to match the router routes.

@@ -22,6 +22,7 @@ use super::compo::{self, NoSpacesCS, CS};
 
 pub type NodeIdentifier = legion::Entity;
 pub type EntryRef<'a> = legion::world::EntryRef<'a>;
+#[derive(ref_cast::RefCast)]
 #[repr(transparent)]
 pub struct HashedNodeRef<'a, T = NodeIdentifier>(pub(super) EntryRef<'a>, PhantomData<T>);
 
@@ -35,6 +36,13 @@ impl<'a, T> HashedNodeRef<'a, T> {
     }
     pub(super) fn new(e: EntryRef<'a>) -> Self {
         Self(e, PhantomData)
+    }
+}
+impl<'a, T> From<&'a EntryRef<'a>> for &'a HashedNodeRef<'a, T> {
+    fn from(value: &'a EntryRef<'a>) -> Self {
+        use ref_cast::RefCast;
+        // NOTE it makes compile time layout assertions
+        HashedNodeRef::ref_cast(value)
     }
 }
 
@@ -54,6 +62,11 @@ impl NodeId for NodeIdentifier {
 
 impl TypedNodeId for NodeIdentifier {
     type Ty = crate::types::AnyType;
+    type TyErazed = crate::types::AnyType;
+
+    fn unerase(ty: Self::TyErazed) -> Self::Ty {
+        ty
+    }
 }
 
 pub struct HashedNode<Id: TypedNodeId<IdN = NodeIdentifier>> {
@@ -392,9 +405,9 @@ impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Typed
     where
         Id::Ty: Copy + Send + Sync,
     {
-        match self.0.get_component::<Id::Ty>() {
-            Ok(t) => *t,
-            e => *e.unwrap(),
+        match self.0.get_component::<Id::TyErazed>() {
+            Ok(t) => Id::unerase(t.clone()),
+            e => Id::unerase(e.unwrap().clone()),
             // Err(ComponentError::NotFound {..}) => {
             //     let type_type = self.0.archetype().layout().component_types()[0];
             //     self.0.
@@ -417,7 +430,7 @@ impl<'a, Id: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::Typed
                 let t: &'static dyn HyperType = t.as_static();
                 t.into()
             }
-            Err(e@ComponentError::NotFound { .. }) => {
+            Err(e @ ComponentError::NotFound { .. }) => {
                 todo!("{:?}", e)
             }
             e => {
@@ -442,6 +455,14 @@ impl<'a, T> crate::types::WithStats for HashedNodeRef<'a, T> {
             .ok()
             .and_then(|x| x.0.to_usize())
             .unwrap_or(1)
+    }
+
+    fn line_count(&self) -> usize {
+        self.0
+            .get_component::<compo::LineCount>()
+            .ok()
+            .and_then(|x| x.0.to_usize())
+            .unwrap_or(0)
     }
 }
 
@@ -538,7 +559,10 @@ impl<'a, T> HashedNodeRef<'a, T> {
 
 impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     type ChildIdx = u16;
-    type Children<'b> = MySlice<Self::TreeId> where Self: 'b;
+    type Children<'b>
+        = MySlice<Self::TreeId>
+    where
+        Self: 'b;
 
     fn child_count(&self) -> u16 {
         self.cs()
@@ -598,6 +622,38 @@ impl<'a, T> crate::types::WithChildren for HashedNodeRef<'a, T> {
     }
 }
 
+impl<'a, T> crate::types::WithRoles for HashedNodeRef<'a, T> {
+    fn role_at<Role: 'static + Copy + std::marker::Sync + std::marker::Send>(
+        &self,
+        at: Self::ChildIdx,
+    ) -> Option<Role> {
+        let ro = self.0.get_component::<compo::RoleOffsets>().ok()?;
+        let r = self.0.get_component::<Box<[Role]>>().ok()?;
+        let mut i = 0;
+        for &ro in ro.0.as_ref() {
+            if ro as u16 > at {
+                return None;
+            } else if ro as u16 == at {
+                return Some(r[i]);
+            }
+            i += 1;
+        }
+        None
+    }
+}
+
+impl<'a, T> crate::types::WithPrecompQueries for HashedNodeRef<'a, T> {
+    fn wont_match_given_precomputed_queries(&self, needed: u16) -> bool {
+        if needed == num::zero() {
+            return false;
+        }
+        let Ok(v) = self.get_component::<compo::Precomp<u16>>() else {
+            return self.get_component::<compo::PrecompFlag>().is_ok();
+        };
+        v.0 & needed != needed
+    }
+}
+
 impl<'a, T> crate::types::WithHashs for HashedNodeRef<'a, T> {
     type HK = SyntaxNodeHashsKinds;
     type HP = HashSize;
@@ -607,6 +663,19 @@ impl<'a, T> crate::types::WithHashs for HashedNodeRef<'a, T> {
             .get_component::<SyntaxNodeHashs<Self::HP>>()
             .unwrap()
             .hash(kind)
+    }
+}
+
+impl<'a, Id> crate::types::ErasedHolder for HashedNodeRef<'a, Id> {
+    fn unerase_ref<T: 'static + Send + Sync>(
+        &self,
+        tid: std::any::TypeId,
+    ) -> Option<&T> {
+        if tid == std::any::TypeId::of::<T>() {
+            self.get_component().ok()
+        } else {
+            None
+        }
     }
 }
 

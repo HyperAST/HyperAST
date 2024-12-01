@@ -35,6 +35,11 @@ impl NodeId for NodeIdentifier {
 
 impl TypedNodeId for NodeIdentifier {
     type Ty = AnyType;
+    type TyErazed = crate::types::AnyType;
+    
+    fn unerase(ty: Self::TyErazed) -> Self::Ty {
+        ty
+    }
 }
 
 impl<'a, T> HashedNodeRef<'a, T> {
@@ -81,6 +86,13 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithStats for Hash
             .and_then(|x| x.0.to_usize())
             .unwrap_or(1)
     }
+
+    fn line_count(&self) -> usize {
+        self.0
+            .get::<&compo::LineCount>()
+            .and_then(|x| x.0.to_usize())
+            .unwrap_or(1)
+    }
 }
 impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithSerialization
     for HashedNodeRef<'a, Id>
@@ -122,8 +134,10 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> HashedNodeRef<'a, Id> {
     // }
 }
 
+#[derive(Clone)]
 pub struct ChildrenSlice<'a, IdN: Send + Sync + Eq + 'static>(hecs::Ref<'a, compo::CS<IdN>>);
 
+#[derive(Clone)]
 pub struct ChildIter<'a, 'b, IdN: Send + Sync + Eq + 'static> {
     index: usize,
     children: &'b ChildrenSlice<'a, IdN>,
@@ -143,7 +157,7 @@ impl<'a, 'b, IdN: Send + Sync + Eq + 'static> Iterator for ChildIter<'a, 'b, IdN
     }
 }
 
-impl<'b, T: Send + Sync + Eq + 'static> IterableChildren<T> for ChildrenSlice<'b, T> {
+impl<'b, T: Send + Sync + Eq + Clone + 'static> IterableChildren<T> for ChildrenSlice<'b, T> {
     type ChildrenIter<'a> = ChildIter<'b, 'a, T> where T: 'a, Self: 'a;
 
     fn iter_children(&self) -> Self::ChildrenIter<'_> {
@@ -166,7 +180,7 @@ impl<'b, T: Send + Sync + Eq + 'static> std::ops::Index<u16> for ChildrenSlice<'
     }
 }
 
-impl<'b, T: Send + Sync + Eq + 'static> Children<u16, T> for ChildrenSlice<'b, T> {
+impl<'b, T: Send + Sync + Eq + Clone + 'static> Children<u16, T> for ChildrenSlice<'b, T> {
     fn child_count(&self) -> u16 {
         self.0 .0.deref().len().to_u16().unwrap()
     }
@@ -253,6 +267,17 @@ impl<'a, Id: TypedNodeId<IdN = NodeIdentifier>> crate::types::WithHashs for Hash
             .unwrap()
             .deref()
             .hash(kind)
+    }
+}
+
+impl<'a, Id> crate::types::ErasedHolder
+    for HashedNodeRef<'a, Id>
+{
+    fn unerase_ref<T: 'static + Send + Sync>(
+        &self,
+        tid: std::any::TypeId,
+    ) -> Option<&T> {
+        todo!()
     }
 }
 
