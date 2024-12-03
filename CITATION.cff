@@ -1,5 +1,9 @@
 cff-version: 1.2.0
-message: "If you use the HyperAST, please cite this paper."
+message: "If you use this software, please cite it using the metadata from this file."
+title: "HyperAST"
+authors:
+    - family-names: Le Dilavrec
+      given-names: Quentin
 preferred-citation:
   title: "HyperAST: Enabling Efficient Analysis of Software Histories at Scale"
   url: "https://hal.inria.fr/hal-03764541v1/document"
