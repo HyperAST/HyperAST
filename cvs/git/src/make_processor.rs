@@ -469,6 +469,7 @@ impl crate::processing::erased::CommitProc for MakefileProc {
         &self,
         repository: &git2::Repository,
         commit_builder: crate::preprocessed::CommitBuilder,
+        param_handle: crate::processing::ParametrizedCommitProcessorHandle,
     ) -> Box<dyn crate::processing::erased::PreparedCommitProc> {
         unimplemented!("required for processing at the root of a project")
     }
@@ -592,6 +593,7 @@ impl crate::processing::erased::CommitProc for MakeProc {
         &self,
         repository: &'repo git2::Repository,
         commit_builder: crate::preprocessed::CommitBuilder,
+        param_handle: crate::processing::ParametrizedCommitProcessorHandle,
     ) -> Box<dyn crate::processing::erased::PreparedCommitProc + 'repo> {
         Box::new(PreparedMakeCommitProc {
             repository,

@@ -1133,7 +1133,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "shlex",
  "syn 2.0.90",
  "which",
@@ -4117,8 +4117,10 @@ dependencies = [
  "legion",
  "libc",
  "log",
+ "mlua",
  "num",
  "ref-cast",
+ "rhai",
  "serde",
  "string-interner 0.17.0",
  "strum 0.25.0",
@@ -4263,6 +4265,7 @@ dependencies = [
  "num",
  "paste",
  "pretty_assertions",
+ "ref-cast",
  "serde",
  "stack-graphs",
  "string-interner 0.17.0",
@@ -5094,6 +5097,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "luau0-src"
+version = "0.10.2+luau635"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8bd6bc70c84fdd4e89b71b528f7ab7db7b97adf759faa8dbe15c5011468e290"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "lz4_flex"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5279,6 +5291,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "mlua"
+version = "0.9.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d111deb18a9c9bd33e1541309f4742523bfab01d276bfa9a27519f6de9c11dc7"
+dependencies = [
+ "bstr",
+ "libloading",
+ "mlua-sys",
+ "num-traits",
+ "once_cell",
+ "rustc-hash 2.1.0",
+]
+
+[[package]]
+name = "mlua-sys"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebe026d6bd1583a9cf9080e189030ddaea7e6f5f0deb366a8e26f8a26c4135b8"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "luau0-src",
+ "pkg-config",
+]
+
+[[package]]
 name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5298,7 +5336,7 @@ dependencies = [
  "hexf-parse",
  "indexmap 2.7.0",
  "log",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "spirv",
  "termcolor",
  "thiserror",
@@ -7539,6 +7577,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
+name = "rustc-hash"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7fb8039b3032c191086b10f11f319a6e99e1e82889c5cc6046f515c9db1d497"
+
+[[package]]
 name = "rustc_version"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9038,7 +9082,7 @@ dependencies = [
  "memchr",
  "regex",
  "regex-syntax 0.8.5",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "semver",
  "serde",
  "serde_derive",
@@ -9351,7 +9395,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "deb68604048ff8fa93347f02441e4487594adc20bb8a084f9e564d2b827a0a9f"
 dependencies = [
- "rustc-hash",
+ "rustc-hash 1.1.0",
 ]
 
 [[package]]
@@ -9935,7 +9979,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "profiling",
  "raw-window-handle",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "smallvec",
  "thiserror",
  "wgpu-hal",
@@ -9975,7 +10019,7 @@ dependencies = [
  "profiling",
  "raw-window-handle",
  "renderdoc-sys",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "smallvec",
  "thiserror",
  "wasm-bindgen",

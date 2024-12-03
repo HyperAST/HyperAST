@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, usize};
 
 use dashmap::{RwLock, SharedValue};
 use hyper_ast::{
@@ -182,7 +182,7 @@ pub(crate) fn handle_pre_processing_aux(
         Ok(commits) => commits,
         Err(mut commits) => {
             let repository_processor = &mut state.repositories.write().unwrap().processor;
-            commits.extend(repository_processor.pre_pro(&mut rw, repo));
+            commits.extend(repository_processor.pre_pro(&mut rw, repo, usize::MAX));
             commits
         }
     }

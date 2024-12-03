@@ -12,7 +12,7 @@ use tower_http::trace::TraceLayer;
 
 use crate::{
     commit, fetch, file, pull_requests, querying,
-    scripting::{self, ScriptContent, ScriptContentDepth, ScriptingError, ScriptingParam},
+    scriptingv1::{self, ScriptContent, ScriptContentDepth, ScriptingError, ScriptingParam},
     smells, track, tsg, view, SharedState,
 };
 
@@ -49,16 +49,16 @@ async fn scripting(
     axum::extract::Path(path): axum::extract::Path<ScriptingParam>,
     axum::extract::State(state): axum::extract::State<SharedState>,
     axum::extract::Json(script): axum::extract::Json<ScriptContent>,
-) -> axum::response::Result<Json<scripting::ComputeResult>> {
-    let r = scripting::simple(script, state, path)?;
+) -> axum::response::Result<Json<scriptingv1::ComputeResult>> {
+    let r = scriptingv1::simple(script, state, path)?;
     Ok(r)
 }
 async fn scripting_depth(
     axum::extract::Path(path): axum::extract::Path<ScriptingParam>,
     axum::extract::State(state): axum::extract::State<SharedState>,
     axum::extract::Json(script): axum::extract::Json<ScriptContentDepth>,
-) -> axum::response::Result<Json<scripting::ComputeResults>> {
-    let r = scripting::simple_depth(script, state, path)?;
+) -> axum::response::Result<Json<scriptingv1::ComputeResults>> {
+    let r = scriptingv1::simple_depth(script, state, path)?;
     Ok(r)
 }
 

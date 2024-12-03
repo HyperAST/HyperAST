@@ -216,17 +216,24 @@ impl Default for BasicGlobalData {
 
 impl GlobalData for BasicGlobalData {
     fn up(&mut self) {
-        self.depth -= 0;
+        self.depth -= 1;
+        log::warn!("up {}", self.depth);
     }
 
     fn right(&mut self) {
         self.position += 1;
+        // self.depth -= 1;
+        log::warn!("right {}", self.depth);
     }
 
     /// goto the first children
     fn down(&mut self) {
         self.position += 1;
         self.depth += 1;
+        log::warn!("down {}", self.depth);
+        // if self.depth > 500 {
+        //     panic!()
+        // }
     }
 }
 pub trait TotalBytesGlobalData {
@@ -560,6 +567,25 @@ pub fn hash32<T: ?Sized + std::hash::Hash>(t: &T) -> u32 {
     crate::utils::clamp_u64_to_u32(&crate::utils::hash(t))
 }
 
+pub trait Prepro<T> {
+    const USING: bool;
+    fn preprocessing(
+        &self,
+        ty: T,
+    ) -> Result<crate::scripting::lua_scripting::Acc, String>;
+}
+
+impl<T> Prepro<T> for () {
+    const USING: bool = false;
+    fn preprocessing(
+        &self,
+        _t: T,
+    ) -> Result<crate::scripting::lua_scripting::Acc, String> {
+        Ok(todo!())
+    }
+}
+
+
 pub type PrecompQueries = u16;
 
 pub trait More<HAST: crate::types::TypeStore, Acc> {
@@ -583,3 +609,5 @@ impl<HAST: crate::types::TypeStore, Acc> More<HAST, Acc> for () {
         Default::default()
     }
 }
+
+pub mod metric_definition;

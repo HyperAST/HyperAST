@@ -16,6 +16,7 @@ pub mod store;
 pub mod tree_gen;
 pub mod types;
 pub mod usage;
+pub mod scripting;
 pub mod utils;
 
 pub trait PrimInt: num::PrimInt + num::traits::NumAssign + std::fmt::Debug {}

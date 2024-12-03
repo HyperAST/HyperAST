@@ -6,6 +6,7 @@ use hyper_ast::{
 };
 use hyper_ast_cvs_git::{
     maven::MavenModuleAcc,
+    maven_processor::MavenProcessorHolder,
     multi_preprocessed::PreProcessedRepositories,
     no_space::as_nospaces,
     processing::{CacheHolding, ConfiguredRepoHandle2, ConfiguredRepoTrait},
@@ -133,11 +134,10 @@ pub fn windowed_commits_compare(
                     preprocessed
                         .processor
                         .processing_systems
-                        .get::<hyper_ast_cvs_git::maven_processor::MavenProcessorHolder>()
+                        .get::<MavenProcessorHolder>()
                         .unwrap()
                         .get_caches()
                         .object_map
-                        //.get::<Caches>().unwrap().object_map//object_map_maven
                         .get(&oid)
                         .unwrap()
                         .clone(),
@@ -162,7 +162,7 @@ pub fn windowed_commits_compare(
                     preprocessed
                         .processor
                         .processing_systems
-                        .get::<hyper_ast_cvs_git::maven_processor::MavenProcessorHolder>()
+                        .get::<MavenProcessorHolder>()
                         .unwrap()
                         .get_caches()
                         .object_map

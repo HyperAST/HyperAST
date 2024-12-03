@@ -412,7 +412,7 @@ impl Query {
                 _ => {
                     message = line_containing_error.map_or_else(
                         || "Unexpected EOF".to_string(),
-                        |line| line.to_string() + "\n" + &" ".repeat(offset - line_start) + "^",
+                        |line| line.to_string() + "\n" + " ".repeat(offset - line_start).as_str() + "^",
                     );
                     kind = match error_type {
                         ffi::TSQueryErrorStructure => QueryErrorKind::Structure,

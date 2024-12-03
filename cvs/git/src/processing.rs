@@ -4,7 +4,7 @@ use crate::git::Repo;
 
 mod blob_caching;
 
-pub(crate) mod erased;
+pub mod erased;
 pub use erased::ParametrizedCommitProcessorHandle;
 
 pub enum BuildSystem {

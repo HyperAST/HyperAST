@@ -8,9 +8,9 @@ use super::P;
 
 use super::parser::Node as _;
 use super::parser::TreeCursor as _;
-use super::WithByteRange as _;
-use super::GlobalData as _;
 use super::Accumulator as _;
+use super::GlobalData as _;
+use super::WithByteRange as _;
 
 /// Define a zipped visitor, where you mostly have to implement,
 /// [`ZippedTreeGen::pre`] going down,
@@ -55,6 +55,14 @@ where
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc;
+
+    fn acc(
+        &mut self,
+        parent: &mut <Self as TreeGen>::Acc,
+        full_node: <<Self as TreeGen>::Acc as Accumulator>::Node,
+    ) {
+        parent.push(full_node);
+    }
 
     /// Called when going up
     fn post(
@@ -178,7 +186,7 @@ where
                     has = Has::Right;
                     let parent = stack.parent_mut().unwrap();
                     if let Some(full_node) = full_node {
-                        parent.push(full_node);
+                        self.acc(parent, full_node);
                     }
                     loop {
                         let parent = stack.parent_mut().unwrap();
@@ -191,13 +199,13 @@ where
                                     P::Hidden(acc) => {
                                         let parent = stack.parent_mut().unwrap();
                                         let full_node = self.post(parent, global, text, acc);
-                                        parent.push(full_node);
+                                        self.acc(parent, full_node);
                                         break;
                                     }
                                     P::Visible(acc) => {
                                         let parent = stack.parent_mut().unwrap();
                                         let full_node = self.post(parent, global, text, acc);
-                                        parent.push(full_node);
+                                        self.acc(parent, full_node);
                                         break;
                                     }
                                 }
@@ -242,12 +250,12 @@ where
                     if is_parent_hidden || stack.0.last().map_or(false, P::is_both_hidden) {
                         if let Some(full_node) = full_node {
                             let parent = stack.parent_mut().unwrap();
-                            parent.push(full_node);
+                            self.acc(parent, full_node);
                         }
                     } else if cursor.goto_parent() {
                         if let Some(full_node) = full_node {
                             let parent = stack.parent_mut().unwrap();
-                            parent.push(full_node);
+                            self.acc(parent, full_node);
                         } else if is_visible {
                             if has == Has::Down {}
                             return;

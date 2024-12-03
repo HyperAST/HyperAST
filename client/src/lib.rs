@@ -14,8 +14,8 @@ use axum::body::Bytes;
 use hyper_ast::store::nodes::legion::NodeIdentifier;
 
 pub mod app;
-pub mod cli;
 mod changes;
+pub mod cli;
 mod commit;
 pub mod examples;
 mod fetch;
@@ -23,7 +23,7 @@ mod file;
 mod matching;
 mod pull_requests;
 mod querying;
-mod scripting;
+mod scriptingv1;
 mod smells;
 pub mod track;
 mod tsg;
@@ -93,7 +93,6 @@ pub(crate) type MappingCache =
 type SharedState = Arc<AppState>;
 
 pub(crate) use hyper_ast_cvs_git::no_space;
-
 
 #[cfg(feature = "rerun")]
 pub mod log_languages {
@@ -327,4 +326,122 @@ pub mod log_languages {
             )
         }
     }
+}
+
+#[ignore] // ignore (from normal cargo test) for now, later make a feature
+#[test]
+// slow test, more of an integration test, try using release
+fn test_measuring_size() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter("client=debug,hyper_ast_cvs_git=info,hyper_ast=error")
+        .try_init()
+        .unwrap();
+
+    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo("graphhopper", "graphhopper");
+    let config = hyper_ast_cvs_git::processing::RepoConfig::JavaMaven;
+    let commit = "f5f2b7765e6b392c5e8c7855986153af82cc1abe";
+    let language = "Java";
+    let prepro = hyper_ast::scripting::lua_scripting::PREPRO_SIZE_WITH_FINISH.into();
+    run_scripting(repo_spec, config, commit, language, prepro, "size")
+}
+
+#[ignore] // ignore (from normal cargo test) for now, later make a feature
+#[test]
+// slow test, more of an integration test, try using release
+fn test_measuring_mcc() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter("client=debug,hyper_ast_cvs_git=info,hyper_ast=error")
+        .try_init()
+        .unwrap();
+
+    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo("graphhopper", "graphhopper");
+    let config = hyper_ast_cvs_git::processing::RepoConfig::JavaMaven;
+    let commit = "f5f2b7765e6b392c5e8c7855986153af82cc1abe";
+    let language = "Java";
+    let prepro = hyper_ast::scripting::lua_scripting::PREPRO_MCC_WITH_FINISH.into();
+    run_scripting(repo_spec, config, commit, language, prepro, "mcc")
+}
+
+#[ignore] // ignore (from normal cargo test) for now, later make a feature
+#[test]
+// slow test, more of an integration test, try using release
+fn test_measuring_loc() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter("client=debug,hyper_ast_cvs_git=info,hyper_ast=error")
+        .try_init()
+        .unwrap();
+
+    let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo("graphhopper", "graphhopper");
+    let config = hyper_ast_cvs_git::processing::RepoConfig::JavaMaven;
+    let commit = "f5f2b7765e6b392c5e8c7855986153af82cc1abe";
+    let language = "Java";
+    let prepro = hyper_ast::scripting::lua_scripting::PREPRO_LOC.into();
+    run_scripting(repo_spec, config, commit, language, prepro, "LoC")
+}
+
+fn run_scripting(
+    repo_spec: hyper_ast_cvs_git::git::Repo,
+    config: hyper_ast_cvs_git::processing::RepoConfig,
+    commit: &str,
+    language: &str,
+    prepro: &str,
+    show: &str,
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let state = crate::AppState::default();
+    state
+        .repositories
+        .write()
+        .unwrap()
+        .register_config_with_prepro(repo_spec.clone(), config, prepro.into());
+    // state
+    //     .repositories
+    //     .write()
+    //     .unwrap()
+    //     .register_config(repo_spec.clone(), config);
+    let repo = state
+        .repositories
+        .read()
+        .unwrap()
+        .get_config(repo_spec)
+        .ok_or_else(|| "missing config for repository".to_string())?;
+    let mut repository = repo.fetch();
+    log::debug!("done cloning {}", repository.spec);
+    let commits = state.repositories.write().unwrap().pre_process_with_limit(
+        &mut repository,
+        "",
+        &commit,
+        1,
+    )?;
+    {
+        let repositories = state.repositories.read().unwrap();
+        let commit = repositories
+            .get_commit(&repository.config, &commits[0])
+            .unwrap();
+        let store = &state.repositories.read().unwrap().processor.main_stores;
+        let n = store.node_store.resolve(commit.ast_root);
+        let dd = n
+            .get_component::<hyper_ast::scripting::lua_scripting::DerivedData>()
+            .unwrap();
+        let s = dd.0.get("show");
+        log::debug!("{show} ! {:?}", s);
+    }
+    let commits = state.repositories.write().unwrap().pre_process_with_limit(
+        &mut repository,
+        "",
+        &commit,
+        2,
+    )?;
+    let repositories = state.repositories.read().unwrap();
+    let commit = repositories
+        .get_commit(&repository.config, &commits[1])
+        .unwrap();
+    let store = &state.repositories.read().unwrap().processor.main_stores;
+    let n = store.node_store.resolve(commit.ast_root);
+    let dd = n
+        .get_component::<hyper_ast::scripting::lua_scripting::DerivedData>()
+        .unwrap();
+    let s = dd.0.get(show);
+    log::debug!("{:?}", s);
+
+    Ok(())
 }

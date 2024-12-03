@@ -181,6 +181,7 @@ impl crate::processing::erased::CommitProc for CppProc {
         &self,
         _repository: &git2::Repository,
         _builder: crate::preprocessed::CommitBuilder,
+        _handle: crate::processing::ParametrizedCommitProcessorHandle,
     ) -> Box<dyn crate::processing::erased::PreparedCommitProc> {
         unimplemented!("required for processing cpp at the root of a project")
     }

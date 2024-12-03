@@ -20,10 +20,11 @@ pub(crate) fn handle_java_file<'stores, 'cache, 'b: 'stores, More>(
     text: &'b [u8],
 ) -> Result<java_tree_gen::FNode, ()>
 where
-    More: for<'a, 'c> tree_gen::More<
-        hyper_ast::store::nodes::legion::RawHAST<'a, 'c, TStore>,
-        java_tree_gen::Acc,
-    >,
+    More: tree_gen::Prepro<Type>
+        + for<'a, 'c> tree_gen::More<
+            hyper_ast::store::nodes::legion::RawHAST<'a, 'c, TStore>,
+            java_tree_gen::Acc,
+        >,
 {
     let tree = match java_tree_gen::JavaTreeGen::<TStore>::tree_sitter_parse(text) {
         Ok(tree) => tree,
@@ -50,22 +51,24 @@ pub struct JavaAcc {
     pub skiped_ana: bool,
     pub ana: PartialAnalysis,
     pub precomp_queries: PrecompQueries,
+    pub scripting_acc: Option<hyper_ast::scripting::lua_scripting::Acc>,
 }
 
 impl JavaAcc {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: String, prepro: Option<hyper_ast::scripting::lua_scripting::Acc>) -> Self {
         Self {
             primary: BasicDirAcc::new(name),
             ana: PartialAnalysis::init(&Type::Directory, None, |_| panic!()),
             skiped_ana: false,
             precomp_queries: Default::default(),
+            scripting_acc: prepro
         }
     }
 }
 
 impl From<String> for JavaAcc {
     fn from(name: String) -> Self {
-        Self::new(name)
+        Self::new(name, None)
     }
 }
 

@@ -19,6 +19,15 @@ pub struct ParametrizedCommitProcessor2Handle<T: CommitProcExt>(
     pub ConfigParametersHandle,
     pub(crate) PhantomData<T>,
 );
+
+impl<T: CommitProcExt> Eq for ParametrizedCommitProcessor2Handle<T> {}
+
+impl<T: CommitProcExt> PartialEq for ParametrizedCommitProcessor2Handle<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 .0 == other.0 .0 && self.1 == other.1
+    }
+}
+
 impl<T: CommitProcExt> Clone for ParametrizedCommitProcessor2Handle<T> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), self.1.clone())
@@ -49,6 +58,7 @@ pub trait CommitProc {
         &self,
         repository: &'repo git2::Repository,
         commit_builder: crate::preprocessed::CommitBuilder,
+        param_handle: ParametrizedCommitProcessorHandle,
     ) -> Box<dyn PreparedCommitProc + 'repo>;
 
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit>;
@@ -120,11 +130,11 @@ fn t() {
         }
     }
     impl CommitProc for P {
-
         fn prepare_processing(
             &self,
             repository: &git2::Repository,
             tree_oid: crate::preprocessed::CommitBuilder,
+            param_handle: ParametrizedCommitProcessorHandle,
         ) -> Box<dyn PreparedCommitProc> {
             unimplemented!("required for processing at the root of a project")
         }
@@ -311,6 +321,7 @@ mod spreaded {
                 &self,
                 repository: &git2::Repository,
                 tree_oid: crate::preprocessed::CommitBuilder,
+                param_handle: ParametrizedCommitProcessorHandle,
             ) -> Box<dyn PreparedCommitProc> {
                 todo!()
             }

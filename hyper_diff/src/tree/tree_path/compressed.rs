@@ -35,7 +35,7 @@ impl<Idx: PrimInt> Debug for CompressedTreePath<Idx> {
             self.iter()
                 .map(|x| cast::<_, usize>(x).unwrap().to_string())
                 .fold(String::new(), |a, b| if a.len() == 0 { a } else { a + "." }
-                    + &b)
+                    + b.as_str())
         )
     }
 }

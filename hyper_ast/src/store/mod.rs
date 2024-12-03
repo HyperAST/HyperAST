@@ -16,6 +16,10 @@ pub struct SimpleStores<TS, NS = nodes::DefaultNodeStore, LS = labels::LabelStor
     pub type_store: PhantomData<TS>,
 }
 
+impl<TS> mlua::UserData for SimpleStores<TS> {
+
+}
+
 impl<TS, NS, LS> SimpleStores<TS, NS, LS> {
     pub fn change_type_store<TS2>(self) -> SimpleStores<TS2, NS, LS> {
         SimpleStores {
@@ -40,6 +44,10 @@ impl<TS, NS, LS> SimpleStores<TS, NS, LS> {
     pub fn with_ts<TS2>(&self) -> &SimpleStores<TS2, NS, LS>
     where
         TS: TyDown<TS2>,
+    {
+        unsafe { std::mem::transmute(self) }
+    }
+    pub unsafe fn erase_ts_unchecked(&self) -> &SimpleStores<(), NS, LS>
     {
         unsafe { std::mem::transmute(self) }
     }

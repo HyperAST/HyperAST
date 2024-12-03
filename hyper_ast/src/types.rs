@@ -413,6 +413,7 @@ pub enum Shared {
     // TryStatement,
     Identifier,
     TypeDeclaration,
+    Branch,
     Other,
     // WARN do not include Abtract type/rules (should go in Abstract) ie.
     // Expression,
@@ -479,6 +480,7 @@ pub trait HyperType: Display + Debug {
         Self: Sized;
     fn lang_ref(&self) -> LangWrapper<AnyType>;
 }
+
 
 // experiment
 // NOTE: it might actually be a good way to share types between languages.
@@ -1346,8 +1348,8 @@ pub enum TypeEnumCommon<J: Lang<Self>, X: Lang<Self>, C: Lang<Self>, M: Lang<Sel
     Make(u16, std::marker::PhantomData<M>),
 }
 
-pub trait CompressedCompo<E: ErasedHolder> {
-    fn decomp(ptr: E, tid: std::any::TypeId) -> Self
+pub trait CompressedCompo {
+    fn decomp(ptr: impl ErasedHolder, tid: std::any::TypeId) -> Self
     where
         Self: Sized;
 
@@ -1817,7 +1819,9 @@ where
 
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "bevy_ecs", derive(bevy_ecs::component::Component))]
-pub struct AnyType(&'static dyn HyperType);
+#[derive(ref_cast::RefCast)]
+#[repr(transparent)]
+pub struct AnyType(pub(crate) &'static dyn HyperType);
 
 unsafe impl Send for AnyType {}
 unsafe impl Sync for AnyType {}

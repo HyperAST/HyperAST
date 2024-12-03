@@ -3,7 +3,7 @@ use std::{
     iter::Peekable,
     path::{Components, PathBuf},
     time::Instant,
-    todo,
+    todo, usize,
 };
 
 use git2::{Oid, Repository};
@@ -153,7 +153,7 @@ impl RepositoryProcessor {
         );
         let rw = all_commits_between(&repository.repo, before, after)?;
         let mut rw = rw.map(|x| x.unwrap());
-        let r = self.pre_pro(&mut rw, repository);
+        let r = self.pre_pro(&mut rw, repository, usize::MAX);
         Ok(r)
     }
 
@@ -212,7 +212,7 @@ impl RepositoryProcessor {
         );
         let rw = all_commits_between(&repository.repo, before, after)?;
         let mut rw = rw.take(limit).map(|x| x.unwrap());
-        let r = self.pre_pro(&mut rw, repository);
+        let r = self.pre_pro(&mut rw, repository, usize::MAX);
         Ok(r)
     }
 
@@ -220,8 +220,11 @@ impl RepositoryProcessor {
         &mut self,
         rw: &mut impl Iterator<Item = git2::Oid>,
         repository: &ConfiguredRepo2,
+        size: usize,
     ) -> Vec<Oid> {
-        rw.map(|oid| {
+        let mut r = Vec::with_capacity(size);
+        for _ in 0..size {
+            let Some(oid) = rw.next() else { break };
             let builder = crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
             let commit_processor = self
                 .processing_systems
@@ -229,11 +232,11 @@ impl RepositoryProcessor {
                 .unwrap()
                 .get_mut(repository.config.1);
             let _id = commit_processor
-                .prepare_processing(&repository.repo, builder)
+                .prepare_processing(&repository.repo, builder, repository.config)
                 .process(self);
-            oid
-        })
-        .collect()
+            r.push(oid);
+        }
+        r
     }
 }
 
@@ -694,7 +697,12 @@ impl CommitProcessor<file_sys::Maven> for RepositoryProcessor {
         oid: git2::Oid,
     ) -> Self::Module {
         let root_full_node = MavenProcessor::<RMS, false, MavenModuleAcc>::new(
-            repository, self, dir_path, name, oid,
+            repository,
+            self,
+            dir_path,
+            name,
+            oid,
+            todo!("para"),
         )
         .process();
         // self.object_map_maven
@@ -712,9 +720,15 @@ impl CommitProcessor<file_sys::Java> for RepositoryProcessor {
         name: &[u8],
         oid: git2::Oid,
     ) -> Self::Module {
-        let root_full_node =
-            MavenProcessor::<RMS, true, MavenModuleAcc>::new(repository, self, dir_path, name, oid)
-                .process();
+        let root_full_node = MavenProcessor::<RMS, true, MavenModuleAcc>::new(
+            repository,
+            self,
+            dir_path,
+            name,
+            oid,
+            todo!("para"),
+        )
+        .process();
         root_full_node
     }
 }
