@@ -385,9 +385,31 @@ impl<Node: self::Node> QueryMatch<Node> {
 
 use hyper_ast::store::nodes::legion::RawHAST;
 
-impl<'a, 'b, TS, Acc>
-    hyper_ast::tree_gen::More<RawHAST<'a, 'b, TS>, Acc>
+impl<T> hyper_ast::tree_gen::Prepro<T>
     for crate::Query
+{
+    const USING: bool = false;
+    
+    fn preprocessing(
+        &self,
+        ty: T,
+    ) -> Result<hyper_ast::scripting::lua_scripting::Acc, String> {
+        unimplemented!()
+    }
+}
+impl<T> hyper_ast::tree_gen::Prepro<T>
+    for &crate::Query
+{
+    const USING: bool = false;
+    fn preprocessing(
+        &self,
+        ty: T,
+    ) -> Result<hyper_ast::scripting::lua_scripting::Acc, String> {
+        unimplemented!()
+    }
+}
+
+impl<'a, 'b, TS, Acc> hyper_ast::tree_gen::More<RawHAST<'a, 'b, TS>, Acc> for crate::Query
 where
     TS: hyper_ast::types::ETypeStore<Ty2 = Acc::Type>
         + hyper_ast::types::RoleStore<IdF = u16, Role = hyper_ast::types::Role>,
@@ -414,9 +436,7 @@ where
     }
 }
 
-impl<'a, 'b, TS, Acc>
-    hyper_ast::tree_gen::More<RawHAST<'a, 'b, TS>, Acc>
-    for &crate::Query
+impl<'a, 'b, TS, Acc> hyper_ast::tree_gen::More<RawHAST<'a, 'b, TS>, Acc> for &crate::Query
 where
     TS: hyper_ast::types::ETypeStore<Ty2 = Acc::Type>
         + hyper_ast::types::RoleStore<IdF = u16, Role = hyper_ast::types::Role>,

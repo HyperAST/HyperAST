@@ -208,18 +208,12 @@ pub struct MavenModuleAcc {
     pub(crate) main_dirs: Option<Vec<PathBuf>>,
     pub(crate) test_dirs: Option<Vec<PathBuf>>,
     pub(crate) status: EnumSet<SemFlags>,
+    pub(crate) scripting_acc: std::option::Option<hyper_ast::scripting::lua_scripting::Acc>,
 }
 
 impl From<String> for MavenModuleAcc {
     fn from(name: String) -> Self {
-        Self {
-            primary: BasicDirAcc::new(name),
-            ana: MavenPartialAnalysis::new(),
-            sub_modules: None,
-            main_dirs: None,
-            test_dirs: None,
-            status: Default::default(),
-        }
+        Self::new(name)
     }
 }
 
@@ -232,6 +226,7 @@ impl MavenModuleAcc {
             main_dirs: None,
             test_dirs: None,
             status: Default::default(),
+            scripting_acc: None,
         }
     }
     pub(crate) fn with_content(
@@ -259,6 +254,7 @@ impl MavenModuleAcc {
                 Some(test_dirs)
             },
             status: Default::default(),
+            scripting_acc: None,
         }
     }
 }

@@ -114,6 +114,7 @@ pub struct EntityBuilder {
     inner: Common<fn() -> Box<dyn UnknownComponentStorage>>,
 }
 
+
 impl EntityBuilder {
     pub fn new() -> Self {
         Self::default()

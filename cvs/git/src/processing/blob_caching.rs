@@ -38,10 +38,11 @@ impl<'cache, Sys> CachingBlobWrapper2<'cache, Sys> {
         Sys: crate::processing::CachesHolding,
         Sys::Caches: 'static + crate::processing::ObjectMapper<K = Oid> + Send + Sync + Default,
         <Sys::Caches as crate::processing::ObjectMapper>::V: Clone,
-        T::Holder: 'static + crate::processing::erased::ErasableProcessor + Default + Send + Sync,
+        T::Holder: 'static + crate::processing::erased::ErasableProcessor + Send + Sync,
         T::Holder: crate::processing::erased::ParametrizedCommitProc2,
         <T::Holder as crate::processing::erased::ParametrizedCommitProc2>::Proc:
             crate::processing::CacheHolding<Sys::Caches>,
+        T::Holder: std::default::Default
     {
         use crate::processing::erased::ParametrizedCommitProc2;
         let caches = self.processors.mut_or_default::<T::Holder>();

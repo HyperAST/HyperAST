@@ -9,8 +9,8 @@ use crate::{
     maven_processor::make,
     preprocessed::{CommitProcessor, RepositoryProcessor},
     processing::{
-        erased::ParametrizedCommitProcessorHandle, ConfiguredRepo, ConfiguredRepo2,
-        ConfiguredRepoHandle2, RepoConfig,
+        erased::{CommitProcExt, ParametrizedCommitProcessorHandle},
+        ConfiguredRepo, ConfiguredRepo2, ConfiguredRepoHandle2, RepoConfig,
     },
     Commit, SimpleStores,
 };
@@ -101,7 +101,6 @@ impl<'prepro, 'repo, Sys, CP: CommitProcessor<Sys>> CommitBuilder<'prepro, 'repo
 }
 
 impl PreProcessedRepositories {
-
     pub fn purge_caches(&mut self) {
         self.processor.purge_caches()
     }
@@ -124,13 +123,65 @@ impl PreProcessedRepositories {
         use crate::processing::erased::Parametrized;
         let r = match config {
             RepoConfig::JavaMaven => {
+                let t = crate::java_processor::Parameter {
+                    query: None,
+                    prepo: None,
+                };
+                let h_java = self
+                    .processor
+                    .processing_systems
+                    .mut_or_default::<crate::java_processor::JavaProcessorHolder>();
+                let java_handle =
+                    crate::processing::erased::CommitProcExt::register_param(h_java, t);
+                let h = self
+                    .processor
+                    .processing_systems
+                    .mut_or_default::<crate::maven_processor::MavenProcessorHolder>();
+                let config = h.register_param(crate::maven_processor::Parameter { java_handle });
+                ConfiguredRepoHandle2 { spec: repo, config }
+            }
+            RepoConfig::CppMake => {
+                let h = self
+                    .processor
+                    .processing_systems
+                    .mut_or_default::<crate::make_processor::MakeProcessorHolder>();
+                ConfiguredRepoHandle2 {
+                    spec: repo,
+                    config: h.register_param(crate::make_processor::Parameter),
+                }
+            }
+            _ => todo!(),
+        };
+
+        self.configs.insert(r.spec.clone(), r.config);
+        r
+    }
+
+    pub fn register_config_with_prepro(
+        &mut self,
+        repo: Repo,
+        config: RepoConfig,
+        prepro: hyper_ast::scripting::Prepro,
+    ) -> ConfiguredRepoHandle2 {
+        use crate::processing::erased::Parametrized;
+        let r = match config {
+            RepoConfig::JavaMaven => {
+                let h_java = self
+                    .processor
+                    .processing_systems
+                    .mut_or_default::<crate::java_processor::JavaProcessorHolder>();
+                let t = crate::java_processor::Parameter {
+                    prepo: Some(prepro),
+                    query: None,
+                };
+                let java_handle = CommitProcExt::register_param(h_java, t);
                 let h = self
                     .processor
                     .processing_systems
                     .mut_or_default::<crate::maven_processor::MavenProcessorHolder>();
                 ConfiguredRepoHandle2 {
                     spec: repo,
-                    config: h.register_param(crate::maven_processor::Parameter),
+                    config: h.register_param(crate::maven_processor::Parameter { java_handle }),
                 }
             }
             RepoConfig::CppMake => {
@@ -154,6 +205,15 @@ impl PreProcessedRepositories {
         self.configs
             .get(&repo)
             .map(|&config| ConfiguredRepoHandle2 { config, spec: repo })
+    }
+    pub fn pre_process_chunk(
+        &mut self,
+        rw: &mut impl Iterator<Item = git2::Oid>,
+        repository: &ConfiguredRepo2,
+        size: usize
+    ) -> Vec<git2::Oid> {
+        self.processor
+            .pre_pro(rw, repository, size)
     }
 
     pub fn pre_process_with_limit(
@@ -189,6 +249,7 @@ impl PreProcessedRepositories {
         assert!(!before.is_empty());
         self.processor.pre_process(repository, before, after)
     }
+
 
     fn pre_process_with_config(
         &mut self,

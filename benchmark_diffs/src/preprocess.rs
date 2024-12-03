@@ -124,7 +124,7 @@ pub fn parse_filesys(java_gen: &mut JavaPreprocessFileSys, path: &Path) -> Local
         .into_iter()
         .filter_map(|x| x.ok())
         .map(|x| x);
-    let mut w = JavaAcc::new("".to_string());
+    let mut w = JavaAcc::new("".to_string(), None);
     for x in a {
         match x.file_type() {
             Ok(t) => {
@@ -214,7 +214,7 @@ impl<'fs, 'prepro> JavaProcessor<'fs, 'prepro, JavaAcc> {
         let dir = filesys.find_file(&path);
         let name = dir.name();
         let prepared = prepare_dir_exploration(dir);
-        let stack = vec![(prepared, JavaAcc::new(name))];
+        let stack = vec![(prepared, JavaAcc::new(name, None))];
         Self {
             filesys,
             prepro,
@@ -267,7 +267,7 @@ impl<'fs, 'prepro> Processor<JavaAcc> for JavaProcessor<'fs, 'prepro, JavaAcc> {
         let file = self.filesys.find_file(&path);
         let name = file.name();
         if file.is_dir() {
-            let acc = JavaAcc::new(name);
+            let acc = JavaAcc::new(name, None);
             let prepared: Vec<PathBuf> = prepare_dir_exploration(file);
             self.stack.push((prepared, acc));
         } else if file.is_file() {

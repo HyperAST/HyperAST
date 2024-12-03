@@ -452,7 +452,12 @@ fn text<'a, 'hast, HAST: HyperAST<'hast>>(
         let l = stores.label_store().resolve(l);
         return l.into();
     }
-    "".into()
+    let ty = stores.resolve_type(&id);
+    if !ty.is_named() {
+        ty.to_string().into()
+    }else {
+        "".into()
+    }
 }
 
 fn role<'hast, HAST: HyperAST<'hast>>(

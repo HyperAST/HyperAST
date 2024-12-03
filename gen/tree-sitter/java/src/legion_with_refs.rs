@@ -37,6 +37,7 @@ use hyper_ast::{
 };
 use legion::world::EntryRef;
 use num::ToPrimitive;
+use std::marker::PhantomData;
 use std::{collections::HashMap, fmt::Debug, vec};
 use tuples::CombinConcat;
 
@@ -165,6 +166,7 @@ pub struct Acc {
     indentation: Spaces,
     role: RoleAcc<crate::types::Role>,
     precomp_queries: PrecompQueries,
+    prepro: Option<hyper_ast::scripting::lua_scripting::Acc>,
 }
 
 impl Accumulator for Acc {
@@ -396,8 +398,8 @@ pub fn add_md_precomp_queries(
 /// Implements [ZippedTreeGen] to offer a visitor for Java generation
 impl<'stores, 'cache, TS, More> ZippedTreeGen for JavaTreeGen<'stores, 'cache, TS, More>
 where
-    TS: JavaEnabledTypeStore,
-    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
+    TS: JavaEnabledTypeStore + 'static,
+    More: tree_gen::Prepro<Type> + for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
 {
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores<TS>;
@@ -423,6 +425,11 @@ where
         let labeled = node.has_label();
         let ana = self.build_ana(&kind);
         let mcc = Mcc::new(&kind);
+        let prepro = if More::USING {
+            Some(self.more.preprocessing(kind).unwrap())
+        } else {
+            None
+        };
         Acc {
             simple: BasicAccumulator {
                 kind,
@@ -439,6 +446,7 @@ where
             indentation: indent,
             role: Default::default(),
             precomp_queries: Default::default(),
+            prepro,
         }
     }
 
@@ -504,6 +512,11 @@ where
             global.sum_byte_length(),
             &parent_indentation,
         );
+        let prepro = if More::USING {
+            Some(self.more.preprocessing(kind).unwrap())
+        } else {
+            None
+        };
         Acc {
             labeled: node.has_label(),
             start_byte: node.start_byte(),
@@ -520,6 +533,24 @@ where
             no_space: vec![],
             role: Default::default(),
             precomp_queries: Default::default(),
+            prepro,
+        }
+    }
+
+    fn acc(
+        &mut self,
+        parent: &mut <Self as TreeGen>::Acc,
+        full_node: <<Self as TreeGen>::Acc as Accumulator>::Node,
+    ) {
+        let id = full_node.local.compressed_node;
+        let ty = parent.simple.kind;
+        parent.push(full_node);
+        if let Some(p) = &mut parent.prepro {
+            // SAFETY: this side should be fine, issue when unerasing
+            let store = unsafe { self.stores.erase_ts_unchecked() };
+            let child: hyper_ast::scripting::lua_scripting::SubtreeHandle<crate::types::TType> =
+                id.into();
+            p.acc(store, ty, child).unwrap();
         }
     }
 
@@ -537,10 +568,20 @@ where
             parent.indentation(),
         );
         if let Some(spacing) = spacing {
+            let local = self.make_spacing(spacing);
+            let id = local.compressed_node;
             parent.push(FullNode {
                 global: global.into(),
-                local: self.make_spacing(spacing),
+                local,
             });
+
+            if let Some(p) = &mut parent.prepro {
+                // SAFETY: this side should be fine, issue when unerasing
+                let store = unsafe { self.stores.erase_ts_unchecked() };
+                let child: hyper_ast::scripting::lua_scripting::SubtreeHandle<crate::types::TType> =
+                    id.into();
+                p.acc(store, parent.simple.kind, child).unwrap();
+            }
         }
         let label = if acc.labeled {
             std::str::from_utf8(&text[acc.start_byte..acc.end_byte])
@@ -582,8 +623,8 @@ impl<'stores, 'cache, TS: JavaEnabledTypeStore> JavaTreeGen<'stores, 'cache, TS,
 impl<
         'stores,
         'cache,
-        TS: JavaEnabledTypeStore,
-        More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
+        TS: JavaEnabledTypeStore + 'static,
+        More: tree_gen::Prepro<Type> + for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
     > JavaTreeGen<'stores, 'cache, TS, More>
 {
     fn make_spacing(&mut self, spacing: Vec<u8>) -> Local {
@@ -625,14 +666,23 @@ impl<
             id
         } else {
             let vacant = insertion.vacant();
-            let bytes_len = compo::BytesLen(bytes_len.try_into().unwrap());
-            let a = (interned_kind, spacing_id, bytes_len, hashs, BloomSize::None);
-            if line_count == 0 {
-                NodeStore::insert_after_prepare(vacant, a)
-            } else {
-                let a = a.concat((compo::LineCount(line_count),));
-                NodeStore::insert_after_prepare(vacant, a)
+            let mut dyn_builder = dyn_builder::EntityBuilder::new();
+            dyn_builder.add(interned_kind);
+            dyn_builder.add(compo::BytesLen(bytes_len.try_into().unwrap()));
+            dyn_builder.add(spacing_id);
+            dyn_builder.add(hashs);
+            dyn_builder.add(BloomSize::None);
+            if line_count != 0 {
+                dyn_builder.add(compo::LineCount(line_count));
             }
+            if More::USING {
+                let prepro = self.more.preprocessing(Type::Spaces).unwrap();
+                let subtr = hyper_ast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
+                let ss = prepro.finish_with_label(&subtr, spacing).unwrap();
+                dyn_builder.add(ss);
+            };
+
+            NodeStore::insert_built_after_prepare(vacant, dyn_builder.build())
         };
         Local {
             compressed_node,
@@ -681,10 +731,19 @@ impl<
         if let Some(spacing) = spacing {
             global.down();
             global.set_sum_byte_length(init.start_byte);
+            let local = self.make_spacing(spacing);
+            let id = local.compressed_node;
             init.push(FullNode {
                 global: global.into(),
-                local: self.make_spacing(spacing),
+                local,
             });
+            if let Some(p) = &mut init.prepro {
+                // SAFETY: this side should be fine, issue when unerasing
+                let store = unsafe { self.stores.erase_ts_unchecked() };
+                let child: hyper_ast::scripting::lua_scripting::SubtreeHandle<crate::types::TType> =
+                    id.into();
+                p.acc(store, init.simple.kind, child).unwrap();
+            }
             global.right();
         }
         let mut stack = init.into();
@@ -702,10 +761,20 @@ impl<
             );
             if let Some(spacing) = spacing {
                 global.right();
+                let local = self.make_spacing(spacing);
+                let id = local.compressed_node;
                 acc.push(FullNode {
                     global: global.into(),
-                    local: self.make_spacing(spacing),
+                    local,
                 });
+                if let Some(p) = &mut acc.prepro {
+                    // SAFETY: this side should be fine, issue when unerasing
+                    let store = unsafe { self.stores.erase_ts_unchecked() };
+                    let child: hyper_ast::scripting::lua_scripting::SubtreeHandle<
+                        crate::types::TType,
+                    > = id.into();
+                    p.acc(store, acc.simple.kind, child).unwrap();
+                }
             }
         }
         let label = Some(std::str::from_utf8(name).unwrap().to_owned());
@@ -748,7 +817,7 @@ impl<
 impl<'stores, 'cache, TS, More> TreeGen for JavaTreeGen<'stores, 'cache, TS, More>
 where
     TS: JavaEnabledTypeStore,
-    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
+    More: tree_gen::Prepro<Type> + for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
 {
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;
@@ -758,7 +827,8 @@ where
         mut acc: <Self as TreeGen>::Acc,
         label: Option<String>,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
-        let interned_kind = TS::intern(acc.simple.kind);
+        let kind = acc.simple.kind;
+        let interned_kind = TS::intern(kind);
         let own_line_count = label.as_ref().map_or(0, |l| {
             l.matches("\n").count().to_u16().expect("too many newlines")
         });
@@ -841,6 +911,16 @@ where
             acc.simple
                 .add_primary(&mut dyn_builder, interned_kind, label_id);
 
+            if More::USING {
+                let subtr = hyper_ast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
+                let ss = if let Some(label) = label {
+                    acc.prepro.unwrap().finish_with_label(&subtr, label).unwrap()
+                } else {
+                    acc.prepro.unwrap().finish(&subtr).unwrap()
+                };
+                dyn_builder.add(ss);
+            };
+
             let compressed_node =
                 NodeStore::insert_built_after_prepare(vacant, dyn_builder.build());
 
@@ -876,7 +956,7 @@ impl<
         'stores,
         'cache,
         TS: JavaEnabledTypeStore,
-        More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
+        More: tree_gen::Prepro<Type> + for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
     > NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache, TS, More>
 where
     TS::Ty: TypeTrait,
@@ -906,6 +986,7 @@ where
         let mut acc: Acc = {
             let kind = t;
             let kind = todo!();
+            let prepro = todo!(); //self.more.preprocessing(&*self.stores,kind).unwrap();
             Acc {
                 labeled: l.is_some(),
                 start_byte: 0,
@@ -922,6 +1003,7 @@ where
                 no_space: vec![],
                 role: Default::default(),
                 precomp_queries: Default::default(),
+                prepro,
             }
         };
         for c in cs {
@@ -1057,6 +1139,7 @@ where
                         precomp_queries: acc.precomp_queries.clone(),
                     },
                 );
+                acc.prepro;
                 Local {
                     compressed_node,
                     metrics,

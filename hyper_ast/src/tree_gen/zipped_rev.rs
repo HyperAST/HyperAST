@@ -1,24 +1,27 @@
 use super::parser;
 use super::parser::Visibility;
+use super::AccIndentation;
 use super::Accumulator;
+use super::GlobalData;
 use super::Parents;
 use super::TotalBytesGlobalData;
-use super::TreeGen;
+use super::WithByteRange;
 use super::P;
 
 use super::parser::Node as _;
 use super::parser::TreeCursor as _;
 use super::Accumulator as _;
 use super::GlobalData as _;
-use super::WithByteRange as _;
 
 /// Define a zipped visitor, where you mostly have to implement,
-/// [`ZippedTreeGen::pre`] going down,
-/// and [`ZippedTreeGen::post`] going up in the traversal.
-pub trait ZippedTreeGen: TreeGen
+/// [`ZippedTraversal::pre`] going down,
+/// and [`ZippedTraversal::post`] going up in the traversal.
+pub trait ZippedTraversal
 where
     Self::Global: TotalBytesGlobalData,
 {
+    type Global: TotalBytesGlobalData + GlobalData;
+    type Acc: AccIndentation + WithByteRange;
     // # results
     // type Node1;
     type Stores;
@@ -43,7 +46,7 @@ where
         cursor: &Self::TreeCursor<'_>,
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
-    ) -> PreResult<<Self as TreeGen>::Acc> {
+    ) -> PreResult<Self::Acc> {
         PreResult::Ok(self.pre(text, &cursor.node(), stack, global))
     }
 
@@ -54,24 +57,16 @@ where
         node: &Self::Node<'_>,
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
-    ) -> <Self as TreeGen>::Acc;
-
-    fn acc(
-        &mut self,
-        parent: &mut <Self as TreeGen>::Acc,
-        full_node: <<Self as TreeGen>::Acc as Accumulator>::Node,
-    ) {
-        parent.push(full_node);
-    }
+    ) -> Self::Acc;
 
     /// Called when going up
     fn post(
         &mut self,
-        parent: &mut <Self as TreeGen>::Acc,
+        parent: &mut Self::Acc,
         global: &mut Self::Global,
         text: &Self::Text,
-        acc: <Self as TreeGen>::Acc,
-    ) -> <<Self as TreeGen>::Acc as Accumulator>::Node;
+        acc: Self::Acc,
+    ) -> <Self::Acc as Accumulator>::Node;
 
     fn stores(&mut self) -> &mut Self::Stores;
 
@@ -186,7 +181,7 @@ where
                     has = Has::Right;
                     let parent = stack.parent_mut().unwrap();
                     if let Some(full_node) = full_node {
-                        self.acc(parent, full_node);
+                        parent.push(full_node);
                     }
                     loop {
                         let parent = stack.parent_mut().unwrap();
@@ -199,13 +194,13 @@ where
                                     P::Hidden(acc) => {
                                         let parent = stack.parent_mut().unwrap();
                                         let full_node = self.post(parent, global, text, acc);
-                                        self.acc(parent, full_node);
+                                        parent.push(full_node);
                                         break;
                                     }
                                     P::Visible(acc) => {
                                         let parent = stack.parent_mut().unwrap();
                                         let full_node = self.post(parent, global, text, acc);
-                                        self.acc(parent, full_node);
+                                        parent.push(full_node);
                                         break;
                                     }
                                 }
@@ -250,12 +245,12 @@ where
                     if is_parent_hidden || stack.0.last().map_or(false, P::is_both_hidden) {
                         if let Some(full_node) = full_node {
                             let parent = stack.parent_mut().unwrap();
-                            self.acc(parent, full_node);
+                            parent.push(full_node);
                         }
                     } else if cursor.goto_parent() {
                         if let Some(full_node) = full_node {
                             let parent = stack.parent_mut().unwrap();
-                            self.acc(parent, full_node);
+                            parent.push(full_node);
                         } else if is_visible {
                             if has == Has::Down {}
                             return;

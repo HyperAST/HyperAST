@@ -5,6 +5,7 @@ use hyper_ast::hashed::{IndexingHashBuilder, MetaDataHashsBuilder};
 use hyper_ast_gen_ts_java::legion_with_refs;
 use hyper_ast_gen_ts_java::{legion_with_refs::add_md_precomp_queries, types::Type};
 
+use crate::processing::erased::ParametrizedCommitProc2;
 use crate::{
     git::BasicGitObject,
     java::JavaAcc,
@@ -31,7 +32,7 @@ pub struct JavaProcessor<'repo, 'prepro, 'd, 'c, Acc> {
     handle: &'d crate::processing::erased::ParametrizedCommitProcessor2Handle<JavaProc>,
 }
 
-impl<'repo, 'b, 'd, 'c, Acc: From<String>> JavaProcessor<'repo, 'b, 'd, 'c, Acc> {
+impl<'repo, 'b, 'd, 'c> JavaProcessor<'repo, 'b, 'd, 'c, JavaAcc> {
     pub(crate) fn new(
         repository: &'repo Repository,
         prepro: &'b mut RepositoryProcessor,
@@ -43,7 +44,11 @@ impl<'repo, 'b, 'd, 'c, Acc: From<String>> JavaProcessor<'repo, 'b, 'd, 'c, Acc>
         let tree = repository.find_tree(oid).unwrap();
         let prepared = prepare_dir_exploration(tree);
         let name = name.try_into().unwrap();
-        let stack = vec![(oid, prepared, Acc::from(name))];
+        let prep_scripting = prep_scripting(prepro, handle.0);
+        use hyper_ast::tree_gen::Prepro;
+        let scripting_acc = prep_scripting.map(|x| x.preprocessing(Type::Directory).unwrap());
+        let acc = JavaAcc::new(name, scripting_acc);
+        let stack = vec![(oid, prepared, acc)];
         Self {
             stack,
             repository,
@@ -72,18 +77,31 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
                     // reinit already computed node for post order
                     let full_node = already.clone();
                     // let skiped_ana = *skiped_ana;
+                    let id = full_node.0.compressed_node;
                     let w = &mut self.stack.last_mut().unwrap().2;
                     let name = self.prepro.intern_object_name(&name);
                     assert!(!w.primary.children_names.contains(&name));
                     hyper_ast::tree_gen::Accumulator::push(w, (name, full_node));
                     // w.push(name, full_node, skiped_ana);
+                    if let Some(acc) = &mut w.scripting_acc {
+                        // SAFETY: this side should be fine, issue when unerasing
+                        let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
+                        acc.acc::<_,hyper_ast_gen_ts_java::types::TType,_>(store, Type::Directory, id.into()).unwrap();
+                    }
                     return;
                 }
                 log::info!("tree {:?}", name.try_str());
                 let tree = self.repository.find_tree(oid).unwrap();
                 let prepared: Vec<BasicGitObject> = prepare_dir_exploration(tree);
-                self.stack
-                    .push((oid, prepared, JavaAcc::new(name.try_into().unwrap())));
+
+                let prepro_acc = if let Some(more) = prep_scripting(&self.prepro, self.handle.0) {
+                    use hyper_ast::tree_gen::Prepro;
+                    Some(more.preprocessing(Type::Directory).unwrap())
+                } else {
+                    None
+                };
+                let acc = JavaAcc::new(name.try_into().unwrap(), prepro_acc);
+                self.stack.push((oid, prepared, acc));
             }
             BasicGitObject::Blob(oid, name) => {
                 if crate::processing::file_sys::Java::matches(&name) {
@@ -125,7 +143,14 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
                 w.primary.children_names,
                 name
             );
+            let id = full_node.compressed_node;
             w.push(name, full_node.clone(), skiped_ana);
+
+            if let Some(acc) = &mut w.scripting_acc {
+                // SAFETY: this side should be fine, issue when unerasing
+                let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
+                acc.acc::<_,hyper_ast_gen_ts_java::types::TType,_>(store, Type::Directory, id.into()).unwrap();
+            }
             None
         }
     }
@@ -133,6 +158,22 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
     fn stack(&mut self) -> &mut Vec<(Oid, Vec<BasicGitObject>, JavaAcc)> {
         &mut self.stack
     }
+}
+
+// TODO generalize and factor similar preps
+// and use the type in ParametrizedCommitProcessor2Handle to get the Holder
+fn prep_scripting(
+    prepro: &RepositoryProcessor,
+    handle: crate::processing::erased::ConfigParametersHandle,
+) -> Option<&hyper_ast::scripting::Prepro> {
+    prepro
+        .processing_systems
+        .get::<JavaProcessorHolder>()
+        .as_ref()?
+        .with_parameters(handle)
+        .parameter
+        .prepo
+        .as_ref()
 }
 
 fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legion_with_refs::Local {
@@ -245,6 +286,14 @@ fn make(acc: JavaAcc, stores: &mut SimpleStores) -> hyper_ast_gen_ts_java::legio
     let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
     hashs.persist(&mut dyn_builder);
 
+    if let Some(acc) = acc.scripting_acc {
+        let subtr = hyper_ast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
+        let ss = acc.finish(&subtr).unwrap();
+        log::error!("dir {:?}", ss.0);
+        use hyper_ast::store::nodes::EntityBuilder;
+        dyn_builder.add(ss);
+    };
+
     let vacant = insertion.vacant();
     let node_id = NodeStore::insert_built_after_prepare(vacant, dyn_builder.build());
 
@@ -264,16 +313,26 @@ use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
 #[derive(Clone, PartialEq, Eq)]
 pub struct Parameter {
     pub(crate) query: Option<std::sync::Arc<[String]>>,
+    pub(crate) prepo: Option<hyper_ast::scripting::Prepro>,
+}
+
+struct Scripted {}
+
+impl Scripted {
+    fn script(&self) -> hyper_ast::scripting::Prepro {
+        todo!()
+    }
 }
 
 #[derive(Default)]
 pub(crate) struct JavaProcessorHolder(Option<JavaProc>);
 pub(crate) struct JavaProc {
-    parameter: Parameter,
+    pub(crate) parameter: Parameter,
     query: Query,
     cache: crate::processing::caches::Java,
     commits: std::collections::HashMap<git2::Oid, crate::Commit>,
 }
+
 impl crate::processing::erased::Parametrized for JavaProcessorHolder {
     type T = Parameter;
     fn register_param(
@@ -309,10 +368,7 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
 }
 
 #[derive(Clone)]
-pub(crate) struct Query(
-    pub(crate) hyper_ast_tsquery::Query,
-    String,
-);
+pub(crate) struct Query(pub(crate) hyper_ast_tsquery::Query, String);
 
 impl PartialEq for Query {
     fn eq(&self, other: &Self) -> bool {
@@ -350,6 +406,7 @@ impl crate::processing::erased::CommitProc for JavaProc {
         &self,
         _repository: &'repo git2::Repository,
         _commit_builder: crate::preprocessed::CommitBuilder,
+        _handle: crate::processing::ParametrizedCommitProcessorHandle,
     ) -> Box<dyn crate::processing::erased::PreparedCommitProc + 'repo> {
         unimplemented!("required for processing java at the root of project")
     }
@@ -482,8 +539,9 @@ impl RepositoryProcessor {
         dir_path: &'c mut Peekable<Components<'d>>,
         oid: Oid,
         name: &ObjectName,
+        handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<JavaProc>,
     ) -> <JavaAcc as hyper_ast::tree_gen::Accumulator>::Node {
-        let full_node = self.handle_java_directory(repository, dir_path, name, oid);
+        let full_node = self.handle_java_directory(repository, dir_path, name, oid, handle);
         let name = self.intern_object_name(name);
         (name, full_node)
     }
@@ -506,20 +564,32 @@ impl RepositoryProcessor {
 
                 let holder = c.mut_or_default::<JavaProcessorHolder>();
                 let java_proc = holder.0.as_mut().unwrap();
-                let precomp = &java_proc.query.0;
                 let caches = &mut java_proc.cache;
-                let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-                    line_break,
-                    stores: self
-                        .main_stores
-                        .mut_with_ts::<hyper_ast_gen_ts_java::types::TStore>(),
-                    md_cache: &mut caches.md_cache,
-                    more: precomp,
-                };
-
-                crate::java::handle_java_file(&mut java_tree_gen, n, t)
-                    .map_err(|_| crate::ParseErr::IllFormed)
-                    .map(|x| (x.local.clone(), false))
+                let stores = self
+                    .main_stores
+                    .mut_with_ts::<hyper_ast_gen_ts_java::types::TStore>();
+                let md_cache = &mut caches.md_cache;
+                if let Some(precomp) = &java_proc.parameter.prepo {
+                    let more = precomp.clone();
+                    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
+                        line_break,
+                        stores,
+                        md_cache,
+                        more,
+                    };
+                    crate::java::handle_java_file(&mut java_tree_gen, n, t)
+                } else {
+                    let more = &java_proc.query.0;
+                    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
+                        line_break,
+                        stores,
+                        md_cache,
+                        more,
+                    };
+                    crate::java::handle_java_file(&mut java_tree_gen, n, t)
+                }
+                .map_err(|_| crate::ParseErr::IllFormed)
+                .map(|x| (x.local.clone(), false))
             })
     }
 
@@ -534,7 +604,19 @@ impl RepositoryProcessor {
         let (full_node, skiped_ana) = self.handle_java_blob(oid, name, repository, parameters)?;
         let name = self.intern_object_name(name);
         assert!(!w.primary.children_names.contains(&name));
+        let id = full_node.compressed_node;
         w.push(name, full_node, skiped_ana);
+        if let Some(acc) = &mut w.scripting_acc {
+            // SAFETY: this side should be fine, issue when unerasing
+            let store = unsafe { self.main_stores.erase_ts_unchecked() };
+            acc.acc::<_,hyper_ast_gen_ts_java::types::TType,_>(store, Type::Directory, id.into()).unwrap();
+            // prepro_acc(
+            //     acc,
+            //     self.main_stores
+            //         .mut_with_ts::<hyper_ast_gen_ts_java::types::TStore>(),
+            //     &full_node,
+            // );
+        }
         Ok(())
     }
 
@@ -545,11 +627,8 @@ impl RepositoryProcessor {
         dir_path: &'b mut Peekable<Components<'d>>,
         name: &ObjectName,
         oid: git2::Oid,
+        handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<JavaProc>,
     ) -> (java_tree_gen::Local, IsSkippedAna) {
-        let h = self
-            .processing_systems
-            .mut_or_default::<JavaProcessorHolder>();
-        let handle = JavaProc::register_param(h, Parameter { query: None });
         JavaProcessor::<JavaAcc>::new(repository, self, dir_path, name, oid, &handle).process()
     }
 }
@@ -617,7 +696,7 @@ mod experiments {
                     log::info!("tree {:?}", current_object.name().try_str());
                     let prepared: Vec<BasicGitObject> =
                         self.prepare_dir_exploration(&current_object);
-                    let acc = JavaAcc::new(current_object.name().try_into().unwrap());
+                    let acc = JavaAcc::new(current_object.name().try_into().unwrap(), todo!());
                     self.stack(current_object, prepared, acc);
                     None
                 }

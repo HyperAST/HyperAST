@@ -1,4 +1,5 @@
 use crate::processing::erased::ParametrizedCommitProcessor2Handle as PCP2Handle;
+use crate::processing::ParametrizedCommitProcessorHandle;
 use crate::{
     git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
     maven::{MavenModuleAcc, MD},
@@ -28,11 +29,11 @@ pub struct MavenProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
     repository: &'a Repository,
     stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
     dir_path: &'c mut Peekable<Components<'c>>,
-    handle: PCP2Handle<MavenProc>,
+    handle: ParametrizedCommitProcessorHandle,
 }
 
-impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
-    MavenProcessor<'a, 'b, 'c, RMS, FFWD, Acc>
+impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
+    MavenProcessor<'a, 'b, 'c, RMS, FFWD, MavenModuleAcc>
 {
     pub fn new(
         repository: &'a Repository,
@@ -40,16 +41,15 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
         mut dir_path: &'c mut Peekable<Components<'c>>,
         name: &[u8],
         oid: git2::Oid,
+        handle: ParametrizedCommitProcessorHandle,
     ) -> Self {
-        let h = prepro
-            .processing_systems
-            .mut_or_default::<MavenProcessorHolder>();
-        let handle =
-            <MavenProc as crate::processing::erased::CommitProcExt>::register_param(h, Parameter);
         let tree = repository.find_tree(oid).unwrap();
         let prepared = prepare_dir_exploration(tree, &mut dir_path);
         let name = std::str::from_utf8(&name).unwrap().to_string();
-        let stack = vec![(oid, prepared, Acc::from(name))];
+        let acc = MavenModuleAcc::new(name);
+        let prep_scripting = prep_scripting(prepro, handle.1);
+        let acc = acc.init_scripting(prep_scripting);
+        let stack = vec![(oid, prepared, acc)];
         Self {
             stack,
             repository,
@@ -74,7 +74,8 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                     && crate::processing::file_sys::Pom::matches(&name) =>
             {
                 let parent_acc = &mut self.stack.last_mut().unwrap().2;
-                let parameters = self.handle.into();
+                // TODO find a better conversion, ie. first safe conv to MavenProc handle then into()
+                let parameters = PCP2Handle(self.handle.1, PhantomData);
                 if let Err(err) =
                     self.prepro
                         .handle_pom(oid, parent_acc, name, &self.repository, parameters)
@@ -91,6 +92,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
         self.prepro
             .processing_systems
             .mut_or_default::<MavenProcessorHolder>()
+            .with_parameters_mut(self.handle.1)
             .get_caches_mut()
             .object_map
             .insert(oid, full_node.clone());
@@ -105,6 +107,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                 w.primary.children_names,
                 name
             );
+            let id = full_node.0;
             if full_node
                 .1
                 .status
@@ -113,6 +116,17 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                 w.push_submodule(name, full_node);
             } else {
                 w.push((name, full_node));
+            }
+
+            if let Some(acc) = &mut w.scripting_acc {
+                // SAFETY: this side should be fine, issue when unerasing
+                let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
+                let child: hyper_ast::scripting::lua_scripting::SubtreeHandle<
+                    hyper_ast_gen_ts_xml::types::TType,
+                > = id.into();
+                acc.acc(store, Type::Directory, child).unwrap();
+            } else {
+                panic!()
             }
             None
         }
@@ -140,26 +154,28 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 self.stack.last_mut().expect("never empty").1.clear();
                 let tree = self.repository.find_tree(oid).unwrap();
                 let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
-                self.stack
-                    .push((oid, prepared, MavenModuleAcc::new(name.try_into().unwrap())));
+                let acc = MavenModuleAcc::new(name.try_into().unwrap());
+                let prep_scripting = prep_scripting(&self.prepro, self.handle.1);
+                let acc = acc.init_scripting(prep_scripting);
+                self.stack.push((oid, prepared, acc));
                 return;
             } else {
                 return;
             }
         }
-        if let Some(already) = self
+        let maven_proc = self
             .prepro
             .processing_systems
             .mut_or_default::<MavenProcessorHolder>()
-            .get_caches_mut()
-            .object_map
-            .get(&oid)
-        {
+            .with_parameters_mut(self.handle.1);
+        let java_handle = maven_proc.parameter.java_handle;
+        if let Some(already) = maven_proc.get_caches_mut().object_map.get(&oid) {
             // reinit already computed node for post order
             let full_node = already.clone();
             let w = &mut self.stack.last_mut().unwrap().2;
             let name = self.prepro.intern_object_name(&name);
             assert!(!w.primary.children_names.contains(&name));
+            let id = full_node.0;
             if full_node
                 .1
                 .status
@@ -169,8 +185,16 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             } else {
                 w.push((name, full_node));
             }
+            if let Some(acc) = &mut w.scripting_acc {
+                // SAFETY: this side should be fine, issue when unerasing
+                let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
+                acc.acc::<_,hyper_ast_gen_ts_xml::types::TType,_>(store, Type::Directory, id.into()).unwrap();
+            } else {
+                panic!()
+            }
             return;
         }
+
         log::debug!("maven tree {:?}", name.try_str());
         let parent_acc = &mut self.stack.last_mut().unwrap().2;
         if FFWD {
@@ -179,17 +203,31 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 &mut self.dir_path,
                 oid,
                 &name,
+                java_handle,
             );
+            let id = full_node.compressed_node;
             assert!(!parent_acc.primary.children_names.contains(&name));
             parent_acc.push_source_directory(name, full_node);
+            if let Some(acc) = &mut parent_acc.scripting_acc {
+                // SAFETY: this side should be fine, issue when unerasing
+                let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
+                acc.acc::<_,hyper_ast_gen_ts_java::types::TType,_>(store, Type::Directory, id.into()).unwrap();
+            } else {
+                panic!()
+            }
             return;
         }
         let helper = MavenModuleHelper::from((parent_acc, &name));
         if helper.source_directories.0 || helper.test_source_directories.0 {
             // handle as source dir
-            let (name, (full_node, _)) =
-                self.prepro
-                    .help_handle_java_folder(&self.repository, self.dir_path, oid, &name);
+            let (name, (full_node, _)) = self.prepro.help_handle_java_folder(
+                &self.repository,
+                self.dir_path,
+                oid,
+                &name,
+                java_handle,
+            );
+            let id = full_node.compressed_node;
             let parent_acc = &mut self.stack.last_mut().unwrap().2;
             assert!(!parent_acc.primary.children_names.contains(&name));
             if helper.source_directories.0 {
@@ -197,6 +235,15 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             } else {
                 // test_source_folders.0
                 parent_acc.push_test_source_directory(name, full_node);
+            }
+
+            if let Some(acc) = &mut parent_acc.scripting_acc {
+                // SAFETY: this side should be fine, issue when unerasing
+                let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
+
+                acc.acc::<_,hyper_ast_gen_ts_java::types::TType,_>(store, Type::Directory, id.into()).unwrap();
+            } else {
+                panic!()
             }
         }
         // check if module or src/main/java or src/test/java
@@ -211,20 +258,60 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
         {
             let tree = self.repository.find_tree(oid).unwrap();
             let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
+            let prep_scripting = prep_scripting(&self.prepro, self.handle.1);
             if helper.submodules.0 {
                 // handle as maven module
-                self.stack.push((oid, prepared, helper.into()));
+                let acc = helper.into_acc().init_scripting(prep_scripting);
+                self.stack.push((oid, prepared, acc));
             } else {
                 // search further inside
-                self.stack.push((oid, prepared, helper.into()));
+                let acc = helper.into_acc().init_scripting(prep_scripting);
+                self.stack.push((oid, prepared, acc));
             };
         } else if RMS && !(helper.source_directories.0 || helper.test_source_directories.0) {
             let tree = self.repository.find_tree(oid).unwrap();
             // anyway try to find maven modules, but maybe can do better
             let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
-            self.stack.push((oid, prepared, helper.into()));
+
+            let prep_scripting = prep_scripting(&self.prepro, self.handle.1);
+            let acc = helper.into_acc().init_scripting(prep_scripting);
+            self.stack.push((oid, prepared, acc));
         }
     }
+}
+
+impl MavenModuleAcc {
+    fn init_scripting(mut self, prep_scripting: Option<&hyper_ast::scripting::Prepro>) -> Self {
+        if let Some(more) = prep_scripting {
+            use hyper_ast::tree_gen::Prepro;
+            match more.preprocessing(Type::MavenDirectory) {
+                Ok(acc) => self.scripting_acc = Some(acc),
+                Err(err) => {
+                    log::error!("error when handling maven modules {}", err);
+                }
+            }
+        } else {
+            log::error!("no prep_scripting");
+        };
+        self
+    }
+}
+
+// TODO generalize and factor similar preps
+// and use the type in ParametrizedCommitProcessor2Handle to get the Holder
+fn prep_scripting(
+    prepro: &RepositoryProcessor,
+    handle: crate::processing::erased::ConfigParametersHandle,
+) -> Option<&hyper_ast::scripting::Prepro> {
+    prepro
+        .processing_systems
+        // it is fine but could do better and kind of use MavenHolder
+        .get::<crate::java_processor::JavaProcessorHolder>()
+        .as_ref()?
+        .with_parameters(handle)
+        .parameter
+        .prepo
+        .as_ref()
 }
 
 pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
@@ -285,6 +372,14 @@ pub(crate) fn make(mut acc: MavenModuleAcc, stores: &mut SimpleStores) -> (NodeI
     let metrics = metrics.map_hashs(|h| h.build());
     let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
     hashs.persist(&mut dyn_builder);
+
+    if let Some(acc) = acc.scripting_acc {
+        let subtr = hyper_ast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
+        let ss = acc.finish(&subtr).unwrap();
+        log::error!("mm {:?}", ss.0);
+        use hyper_ast::store::nodes::EntityBuilder;
+        dyn_builder.add(ss);
+    };
 
     let vacant = insertion.vacant();
     let node_id = NodeStore::insert_built_after_prepare(vacant, dyn_builder.build());
@@ -368,14 +463,27 @@ impl From<(&mut MavenModuleAcc, &ObjectName)> for MavenModuleHelper {
     }
 }
 
-impl From<MavenModuleHelper> for MavenModuleAcc {
-    fn from(helper: MavenModuleHelper) -> Self {
+impl MavenModuleHelper {
+    pub fn into_acc(self) -> MavenModuleAcc {
         MavenModuleAcc::with_content(
-            helper.name,
-            helper.submodules.1,
-            helper.source_directories.1,
-            helper.test_source_directories.1,
+            self.name,
+            self.submodules.1,
+            self.source_directories.1,
+            self.test_source_directories.1,
         )
+    }
+    pub fn into_acc_with_scripting(
+        self,
+        prepro_acc: hyper_ast::scripting::lua_scripting::Acc,
+    ) -> MavenModuleAcc {
+        let mut r = MavenModuleAcc::with_content(
+            self.name,
+            self.submodules.1,
+            self.source_directories.1,
+            self.test_source_directories.1,
+        );
+        r.scripting_acc = Some(prepro_acc);
+        r
     }
 }
 
@@ -441,25 +549,30 @@ pub(crate) fn prepare_dir_exploration(
 // # Pom
 
 #[derive(Clone, PartialEq, Eq)]
-pub struct Parameter;
+pub struct Parameter {
+    // pub(crate) query: Option<std::sync::Arc<[String]>>,
+    // pub(crate) prepo: Option<hyper_ast_scripting::Prepro>,
+    pub(crate) java_handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<
+        crate::java_processor::JavaProc,
+    >,
+}
 
 impl From<PCP2Handle<MavenProc>> for PCP2Handle<PomProc> {
     fn from(value: PCP2Handle<MavenProc>) -> Self {
         PCP2Handle(value.0, PhantomData)
     }
 }
-// #[derive(Default)]
 struct PomProcessorHolder(Option<PomProc>);
 impl Default for PomProcessorHolder {
     fn default() -> Self {
         Self(Some(PomProc {
-            parameter: Parameter,
+            parameter: None,
             cache: Default::default(),
         }))
     }
 }
 struct PomProc {
-    parameter: Parameter,
+    parameter: Option<Parameter>,
     cache: crate::processing::caches::Pom,
 }
 impl crate::processing::erased::Parametrized for PomProcessorHolder {
@@ -471,12 +584,12 @@ impl crate::processing::erased::Parametrized for PomProcessorHolder {
         let l = self
             .0
             .iter()
-            .position(|x| &x.parameter == &t)
+            .position(|x| x.parameter.as_ref() == Some(&t))
             .unwrap_or_else(|| {
                 let l = 0; //self.0.len();
                            // self.0.push(PomProc(t));
                 self.0 = Some(PomProc {
-                    parameter: t,
+                    parameter: Some(t),
                     cache: Default::default(),
                 });
                 l
@@ -492,6 +605,7 @@ impl crate::processing::erased::CommitProc for PomProc {
         &self,
         _repository: &git2::Repository,
         _commit_builder: crate::preprocessed::CommitBuilder,
+        _param_handle: crate::processing::erased::ParametrizedCommitProcessorHandle,
     ) -> Box<dyn crate::processing::erased::PreparedCommitProc> {
         unimplemented!("required for processing at the root of a project")
     }
@@ -544,7 +658,7 @@ impl CacheHolding<crate::processing::caches::Pom> for PomProcessorHolder {
 
 // # Maven
 #[derive(Default)]
-pub struct MavenProcessorHolder(Option<MavenProc>);
+pub struct MavenProcessorHolder(Vec<MavenProc>);
 pub struct MavenProc {
     parameter: Parameter,
     cache: crate::processing::caches::Maven,
@@ -561,18 +675,17 @@ impl crate::processing::erased::Parametrized for MavenProcessorHolder {
             .iter()
             .position(|x| &x.parameter == &t)
             .unwrap_or_else(|| {
-                let l = 0; //self.0.len();
-                           // self.0.push(MavenProc(t));
-                self.0 = Some(MavenProc {
+                let l = self.0.len();
+                self.0.push(MavenProc {
                     parameter: t,
                     cache: Default::default(),
                     commits: Default::default(),
                 });
                 l
             });
+
         use crate::processing::erased::ConfigParametersHandle;
         use crate::processing::erased::ParametrizedCommitProc;
-        use crate::processing::erased::ParametrizedCommitProcessorHandle;
         ParametrizedCommitProcessorHandle(self.erased_handle(), ConfigParametersHandle(l))
     }
 }
@@ -580,6 +693,7 @@ impl crate::processing::erased::Parametrized for MavenProcessorHolder {
 struct PreparedMavenCommitProc<'repo> {
     repository: &'repo git2::Repository,
     commit_builder: crate::preprocessed::CommitBuilder,
+    pub(crate) handle: ParametrizedCommitProcessorHandle,
 }
 
 impl<'repo> crate::processing::erased::PreparedCommitProc for PreparedMavenCommitProc<'repo> {
@@ -597,16 +711,16 @@ impl<'repo> crate::processing::erased::PreparedCommitProc for PreparedMavenCommi
             &mut dir_path,
             name,
             self.commit_builder.tree_oid(),
+            self.handle,
         )
         .process();
         let h = prepro
             .processing_systems
             .mut_or_default::<MavenProcessorHolder>();
-        let handle =
-            <MavenProc as crate::processing::erased::CommitProcExt>::register_param(h, Parameter);
+        let handle = self.handle;
         let commit_oid = self.commit_builder.commit_oid();
         let commit = self.commit_builder.finish(root_full_node.0);
-        h.with_parameters_mut(handle.0)
+        h.with_parameters_mut(handle.1)
             .commits
             .insert(commit_oid, commit);
         root_full_node.0
@@ -618,10 +732,12 @@ impl crate::processing::erased::CommitProc for MavenProc {
         &self,
         repository: &'repo git2::Repository,
         oids: crate::preprocessed::CommitBuilder,
+        handle: crate::processing::ParametrizedCommitProcessorHandle,
     ) -> Box<dyn crate::processing::erased::PreparedCommitProc + 'repo> {
         Box::new(PreparedMavenCommitProc {
             repository,
             commit_builder: oids,
+            handle,
         })
     }
 
@@ -640,16 +756,14 @@ impl crate::processing::erased::ParametrizedCommitProc2 for MavenProcessorHolder
         &mut self,
         parameters: crate::processing::erased::ConfigParametersHandle,
     ) -> &mut Self::Proc {
-        assert_eq!(0, parameters.0);
-        self.0.as_mut().unwrap()
+        &mut self.0[parameters.0]
     }
 
     fn with_parameters(
         &self,
         parameters: crate::processing::erased::ConfigParametersHandle,
     ) -> &Self::Proc {
-        assert_eq!(0, parameters.0);
-        self.0.as_ref().unwrap()
+        &self.0[parameters.0]
     }
 }
 impl CacheHolding<crate::processing::caches::Maven> for MavenProc {
@@ -660,11 +774,12 @@ impl CacheHolding<crate::processing::caches::Maven> for MavenProc {
         &self.cache
     }
 }
+
 impl CacheHolding<crate::processing::caches::Maven> for MavenProcessorHolder {
     fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Maven {
-        &mut self.0.as_mut().unwrap().cache
+        &mut self.0[0].cache
     }
     fn get_caches(&self) -> &crate::processing::caches::Maven {
-        &self.0.as_ref().unwrap().cache
+        &self.0[0].cache
     }
 }
