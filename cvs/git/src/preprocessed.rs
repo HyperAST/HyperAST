@@ -222,7 +222,7 @@ impl RepositoryProcessor {
         repository: &ConfiguredRepo2,
         size: usize,
     ) -> Vec<Oid> {
-        let mut r = Vec::with_capacity(size);
+        let mut r = Vec::with_capacity(rw.size_hint().0);
         for _ in 0..size {
             let Some(oid) = rw.next() else { break };
             let builder = crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
