@@ -217,23 +217,18 @@ impl Default for BasicGlobalData {
 impl GlobalData for BasicGlobalData {
     fn up(&mut self) {
         self.depth -= 1;
-        log::warn!("up {}", self.depth);
+        // TODO fix, there are issues the depth count is too big, I am probably missing a up somewhere 
     }
 
     fn right(&mut self) {
         self.position += 1;
         // self.depth -= 1;
-        log::warn!("right {}", self.depth);
     }
 
     /// goto the first children
     fn down(&mut self) {
         self.position += 1;
         self.depth += 1;
-        log::warn!("down {}", self.depth);
-        // if self.depth > 500 {
-        //     panic!()
-        // }
     }
 }
 pub trait TotalBytesGlobalData {
@@ -572,7 +567,7 @@ pub trait Prepro<T> {
     fn preprocessing(
         &self,
         ty: T,
-    ) -> Result<crate::scripting::lua_scripting::Acc, String>;
+    ) -> Result<crate::scripting::Acc, String>;
 }
 
 impl<T> Prepro<T> for () {
@@ -580,7 +575,7 @@ impl<T> Prepro<T> for () {
     fn preprocessing(
         &self,
         _t: T,
-    ) -> Result<crate::scripting::lua_scripting::Acc, String> {
+    ) -> Result<crate::scripting::Acc, String> {
         Ok(todo!())
     }
 }

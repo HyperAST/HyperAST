@@ -532,7 +532,7 @@ version = "0.38.0+1.3.281"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bb44936d800fea8f016d7f2311c6a4f97aebd5dc86f09906139ec848cf3a46f"
 dependencies = [
- "libloading",
+ "libloading 0.8.6",
 ]
 
 [[package]]
@@ -1414,13 +1414,13 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
-version = "1.0.106"
+version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "066fce287b1d4eafef758e89e09d724a24808a9196fe9756b8ca90e86d0719a2"
+checksum = "f34d93e62b03caf570cccc334cbc6c2fceca82f39211051345108adcba3eebdc"
 dependencies = [
  "jobserver",
  "libc",
- "once_cell",
+ "shlex",
 ]
 
 [[package]]
@@ -1540,7 +1540,7 @@ checksum = "0b023947811758c97c59bf9d1c188fd619ad4718dcaa767947df1cadb14f39f4"
 dependencies = [
  "glob",
  "libc",
- "libloading",
+ "libloading 0.8.6",
 ]
 
 [[package]]
@@ -1646,7 +1646,7 @@ checksum = "aaa6b4b263a5d737e9bf6b7c09b72c41a5480aec4d7219af827f6564e950b6a5"
 
 [[package]]
 name = "client"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "automerge",
  "autosurgeon",
@@ -1695,9 +1695,9 @@ dependencies = [
  "tower-layer",
  "tracing",
  "tracing-subscriber",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.23.2",
  "tree-sitter-cli",
- "tree-sitter-graph 0.12.2",
+ "tree-sitter-graph",
  "tree-sitter-stack-graphs",
 ]
 
@@ -2209,6 +2209,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32a2785755761f3ddc1492979ce1e48d2c00d09311c39e4466429188f3dd6501"
+dependencies = [
+ "quote",
+ "syn 2.0.90",
+]
+
+[[package]]
 name = "ctrlc"
 version = "3.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2354,12 +2364,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
 
 [[package]]
-name = "difference"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
-
-[[package]]
 name = "digest"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2380,11 +2384,31 @@ dependencies = [
 
 [[package]]
 name = "dirs"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30baa043103c9d0c2a57cf537cc2f35623889dc0d405e6c3cccfadbc81c71309"
+dependencies = [
+ "dirs-sys 0.3.7",
+]
+
+[[package]]
+name = "dirs"
 version = "5.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "44c45a9d03d6676652bcb5e724c7e988de1acad23a711b5217ab9cbecbec2225"
 dependencies = [
- "dirs-sys",
+ "dirs-sys 0.4.1",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b1d1d91c932ef41c0f2663aa8b0ca0342d444d842c06914aa0a7e352d0bada6"
+dependencies = [
+ "libc",
+ "redox_users",
+ "winapi",
 ]
 
 [[package]]
@@ -2422,7 +2446,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330c60081dcc4c72131f8eb70510f1ac07223e5d4163db481a04a0befcffa412"
 dependencies = [
- "libloading",
+ "libloading 0.8.6",
 ]
 
 [[package]]
@@ -2592,7 +2616,7 @@ dependencies = [
 
 [[package]]
 name = "egui_addon"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "console_error_panic_hook",
  "crossbeam-queue",
@@ -3492,7 +3516,7 @@ dependencies = [
  "glutin_egl_sys",
  "glutin_glx_sys",
  "glutin_wgl_sys",
- "libloading",
+ "libloading 0.8.6",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
@@ -3751,7 +3775,7 @@ dependencies = [
  "bitflags 2.6.0",
  "com",
  "libc",
- "libloading",
+ "libloading 0.8.6",
  "thiserror",
  "widestring",
  "winapi",
@@ -4033,7 +4057,7 @@ dependencies = [
 
 [[package]]
 name = "hyper_app"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async_executors",
  "automerge",
@@ -4129,7 +4153,7 @@ dependencies = [
 
 [[package]]
 name = "hyper_ast_benchmark"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cfg-if",
  "criterion 0.3.6",
@@ -4142,12 +4166,12 @@ dependencies = [
  "pommes",
  "serde",
  "serde-xml-rs 0.5.1",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.23.2",
 ]
 
 [[package]]
 name = "hyper_ast_benchmark_diffs"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bitvec",
  "byteorder",
@@ -4167,13 +4191,13 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.23.2",
  "tuples",
 ]
 
 [[package]]
 name = "hyper_ast_benchmark_smells"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base16ct",
  "bitvec",
@@ -4197,13 +4221,13 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.23.2",
  "tuples",
 ]
 
 [[package]]
 name = "hyper_ast_cvs_git"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "enumset",
  "env_logger 0.11.5",
@@ -4216,13 +4240,13 @@ dependencies = [
  "log",
  "num",
  "serde",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.23.2",
  "tuples",
 ]
 
 [[package]]
 name = "hyper_ast_gen_ts_cpp"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "atomic-counter",
  "bitvec",
@@ -4238,14 +4262,14 @@ dependencies = [
  "num",
  "pretty_assertions",
  "serde",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.23.2",
  "tree-sitter-cpp",
  "tuples",
 ]
 
 [[package]]
 name = "hyper_ast_gen_ts_java"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "atomic-counter",
  "bitvec",
@@ -4269,16 +4293,16 @@ dependencies = [
  "serde",
  "stack-graphs",
  "string-interner 0.17.0",
- "tree-sitter 0.22.6",
- "tree-sitter-graph 0.12.2",
- "tree-sitter-java",
+ "tree-sitter 0.23.2",
+ "tree-sitter-graph",
+ "tree-sitter-java 0.23.4",
  "tree-sitter-stack-graphs",
  "tuples",
 ]
 
 [[package]]
 name = "hyper_ast_gen_ts_ts"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "atomic-counter",
  "bitvec",
@@ -4294,14 +4318,14 @@ dependencies = [
  "num",
  "pretty_assertions",
  "serde",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.23.2",
  "tree-sitter-typescript",
  "tuples",
 ]
 
 [[package]]
 name = "hyper_ast_gen_ts_tsquery"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "atomic-counter",
  "bitvec",
@@ -4321,15 +4345,15 @@ dependencies = [
  "num",
  "pretty_assertions",
  "serde",
- "tree-sitter 0.22.6",
- "tree-sitter-java",
+ "tree-sitter 0.23.2",
+ "tree-sitter-java 0.23.4",
  "tree-sitter-query",
  "tuples",
 ]
 
 [[package]]
 name = "hyper_ast_gen_ts_xml"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "hashbrown 0.14.5",
  "hyper_ast",
@@ -4337,14 +4361,14 @@ dependencies = [
  "libc",
  "num",
  "pretty_assertions",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.23.2",
  "tree-sitter-xml",
  "tuples",
 ]
 
 [[package]]
 name = "hyper_ast_tsquery"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "hyper_ast",
  "log",
@@ -4352,9 +4376,9 @@ dependencies = [
  "ref-cast",
  "regex",
  "stack-graphs",
- "tree-sitter 0.22.6",
- "tree-sitter-graph 0.12.2",
- "tree-sitter-java",
+ "tree-sitter 0.23.2",
+ "tree-sitter-graph",
+ "tree-sitter-java 0.21.0",
  "tree-sitter-stack-graphs",
 ]
 
@@ -4377,7 +4401,7 @@ dependencies = [
 
 [[package]]
 name = "hyperast_wasm"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ehttp 0.2.0",
  "hyper_ast",
@@ -4614,6 +4638,7 @@ checksum = "62f822373a4fe84d4bb149bf54e584a7f4abec90e072ed49cda0edea5b95471f"
 dependencies = [
  "equivalent",
  "hashbrown 0.15.2",
+ "serde",
 ]
 
 [[package]]
@@ -4806,7 +4831,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6aae1df220ece3c0ada96b8153459b67eebe9ae9212258bb0134ae60416fdf76"
 dependencies = [
  "libc",
- "libloading",
+ "libloading 0.8.6",
  "pkg-config",
 ]
 
@@ -4964,6 +4989,16 @@ dependencies = [
 
 [[package]]
 name = "libloading"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b67380fd3b2fbe7527a606e18729d21c6f3951633d0500574c4dc22d2d638b9f"
+dependencies = [
+ "cfg-if",
+ "winapi",
+]
+
+[[package]]
+name = "libloading"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
@@ -5089,10 +5124,11 @@ dependencies = [
 [[package]]
 name = "lsp-positions"
 version = "0.3.3"
-source = "git+https://github.com/quentinLeDilavrec/stack-graphs?rev=d0fa507d4b3892b1db60938f37bf4779f9dae18d#d0fa507d4b3892b1db60938f37bf4779f9dae18d"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa61ce94f83d24eba829bbba054b40e9996d8531c87670799fd0c43dea97be37"
 dependencies = [
  "memchr",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.20.10",
  "unicode-segmentation",
 ]
 
@@ -5297,7 +5333,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d111deb18a9c9bd33e1541309f4742523bfab01d276bfa9a27519f6de9c11dc7"
 dependencies = [
  "bstr",
- "libloading",
+ "libloading 0.8.6",
  "mlua-sys",
  "num-traits",
  "once_cell",
@@ -6095,6 +6131,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
+name = "path-slash"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
+
+[[package]]
 name = "peg"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6302,7 +6344,7 @@ checksum = "22686f4785f02a4fcc856d3b3bb19bf6c8160d103f7a99cc258bddd0251dc7f2"
 
 [[package]]
 name = "polyglote"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "derive_deref",
  "heck 0.5.0",
@@ -6315,12 +6357,12 @@ dependencies = [
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "syn 2.0.90",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.23.2",
  "tree-sitter-cpp",
- "tree-sitter-graph 0.11.3",
- "tree-sitter-java",
+ "tree-sitter-graph",
+ "tree-sitter-java 0.23.4",
  "tree-sitter-kotlin",
- "tree-sitter-loader",
+ "tree-sitter-loader 0.23.2",
  "tree-sitter-python",
  "tree-sitter-query",
  "tree-sitter-typescript",
@@ -7302,7 +7344,7 @@ dependencies = [
 
 [[package]]
 name = "ref-mining-evaluation"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap 3.2.25",
  "hyper_ast",
@@ -8231,8 +8273,9 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "stack-graphs"
-version = "0.13.0"
-source = "git+https://github.com/quentinLeDilavrec/stack-graphs?rev=d0fa507d4b3892b1db60938f37bf4779f9dae18d#d0fa507d4b3892b1db60938f37bf4779f9dae18d"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66214f83ef83f9ac7dd470d03264ba8ab99e296f32fc621d55d12976b4e39225"
 dependencies = [
  "bitvec",
  "controlled-option",
@@ -9050,27 +9093,29 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter"
-version = "0.22.6"
+version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df7cc499ceadd4dcdf7ec6d4cbc34ece92c3fa07821e287aedecd4416c516dca"
+checksum = "0203df02a3b6dd63575cc1d6e609edc2181c9a11867a271b25cfd2abff3ec5ca"
 dependencies = [
  "cc",
  "regex",
+ "regex-syntax 0.8.5",
+ "tree-sitter-language",
 ]
 
 [[package]]
 name = "tree-sitter-cli"
-version = "0.22.6"
+version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7437ac48e37e5014007527ed9281c00c333c9ad0731e1c8489c0eff667b99d5"
+checksum = "0e23850129ac291ec55703b35da1ab36b5ca6fc6ed40b2196dbd5f26017a8346"
 dependencies = [
- "ansi_term",
  "anstyle",
  "anyhow",
+ "bstr",
  "clap 4.5.21",
+ "ctor",
  "ctrlc",
- "difference",
- "dirs",
+ "dirs 5.0.1",
  "filetime",
  "glob",
  "heck 0.5.0",
@@ -9080,6 +9125,7 @@ dependencies = [
  "lazy_static",
  "log",
  "memchr",
+ "rand",
  "regex",
  "regex-syntax 0.8.5",
  "rustc-hash 1.1.0",
@@ -9087,13 +9133,15 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "similar",
  "smallbitvec",
  "tiny_http",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.23.2",
  "tree-sitter-config",
- "tree-sitter-highlight 0.22.6",
- "tree-sitter-loader",
- "tree-sitter-tags",
+ "tree-sitter-highlight 0.23.2",
+ "tree-sitter-loader 0.23.2",
+ "tree-sitter-tags 0.23.2",
+ "url",
  "walkdir",
  "wasmparser",
  "webbrowser",
@@ -9101,23 +9149,24 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-config"
-version = "0.22.6"
+version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d64b4608a1d822f56e3afcecabfa4915a768ea92bc44abad1ae32cd4c607ebd"
+checksum = "25af717df6320cba42c08d3dfc2d950ac839c549ca1787c411212862b55858c1"
 dependencies = [
  "anyhow",
- "dirs",
+ "dirs 5.0.1",
  "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "tree-sitter-cpp"
-version = "0.22.0"
-source = "git+https://github.com/quentinLeDilavrec/tree-sitter-cpp?rev=e0a743cf117b28f1ed86f205b4c722e02f5035e1#e0a743cf117b28f1ed86f205b4c722e02f5035e1"
+version = "0.23.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df2196ea9d47b4ab4a31b9297eaa5a5d19a0b121dceb9f118f6790ad0ab94743"
 dependencies = [
  "cc",
- "tree-sitter 0.22.6",
+ "tree-sitter-language",
 ]
 
 [[package]]
@@ -9150,21 +9199,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tree-sitter-graph"
-version = "0.12.2"
-source = "git+https://github.com/quentinLeDilavrec/tree-sitter-graph?rev=f09e4a7bd49893b3859fd35446a81314968d665b#f09e4a7bd49893b3859fd35446a81314968d665b"
-dependencies = [
- "log",
- "regex",
- "serde",
- "serde_json",
- "smallvec",
- "string-interner 0.12.2",
- "thiserror",
- "tree-sitter 0.22.6",
-]
-
-[[package]]
 name = "tree-sitter-highlight"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9177,14 +9211,14 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-highlight"
-version = "0.22.6"
+version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eaca0fe34fa96eec6aaa8e63308dbe1bafe65a6317487c287f93938959b21907"
+checksum = "380a7706376fa6c52ba7bf71d1e7a93856ee8ab08a7680631dfa664fdd237d66"
 dependencies = [
  "lazy_static",
  "regex",
  "thiserror",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.23.2",
 ]
 
 [[package]]
@@ -9193,14 +9227,24 @@ version = "0.21.0"
 source = "git+https://github.com/quentinLeDilavrec/tree-sitter-java?rev=7699d4a296ca27fc14511bc75a1a899327f483fc#7699d4a296ca27fc14511bc75a1a899327f483fc"
 dependencies = [
  "cc",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.23.2",
+]
+
+[[package]]
+name = "tree-sitter-java"
+version = "0.23.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f9b24494d5f386acb2c086e0541c1b145692e0e012101ddb8257737b83c2803"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
 ]
 
 [[package]]
 name = "tree-sitter-javascript"
-version = "0.20.4"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d015c02ea98b62c806f7329ff71c383286dfc3a7a7da0cc484f6e42922f73c2c"
+checksum = "2490fab08630b2c8943c320f7b63473cbf65511c8d83aec551beb9b4375906ed"
 dependencies = [
  "cc",
  "tree-sitter 0.20.10",
@@ -9208,44 +9252,70 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-kotlin"
-version = "0.3.8"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54ff60aeb036f5762515ceb31404512ea4f9599764bcd3857074bb82867bdd34"
+checksum = "8df217a0e1fec649f3e13157de932439f3d37ea4e265038dd0873971ef56e726"
 dependencies = [
  "cc",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.20.10",
 ]
 
 [[package]]
-name = "tree-sitter-loader"
-version = "0.22.6"
+name = "tree-sitter-language"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73c9b13749644fbe22ec25c79861dc1e637ef4ab9e469fd820fcb30b10091293"
+checksum = "e8ddffe35a0e5eeeadf13ff7350af564c6e73993a24db62caee1822b185c2600"
+
+[[package]]
+name = "tree-sitter-loader"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0b17eef4833c7c139abed66d562dfa23228e97e647597baf246fd56c21bbfaf"
 dependencies = [
  "anyhow",
  "cc",
- "dirs",
- "fs4",
- "indoc",
- "libloading",
+ "dirs 3.0.2",
+ "libloading 0.7.4",
  "once_cell",
  "regex",
  "serde",
  "serde_json",
+ "tree-sitter 0.20.10",
+ "tree-sitter-highlight 0.20.1",
+ "tree-sitter-tags 0.20.2",
+]
+
+[[package]]
+name = "tree-sitter-loader"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae207d06263c49495fe04e41c801e884dfec53e6a487ec6fc51c15e84042e582"
+dependencies = [
+ "anyhow",
+ "cc",
+ "dirs 5.0.1",
+ "fs4",
+ "indoc",
+ "libloading 0.8.6",
+ "once_cell",
+ "path-slash",
+ "regex",
+ "serde",
+ "serde_json",
  "tempfile",
- "tree-sitter 0.22.6",
- "tree-sitter-highlight 0.22.6",
- "tree-sitter-tags",
+ "tree-sitter 0.23.2",
+ "tree-sitter-highlight 0.23.2",
+ "tree-sitter-tags 0.23.2",
 ]
 
 [[package]]
 name = "tree-sitter-python"
-version = "0.21.0"
+version = "0.23.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4066c6cf678f962f8c2c4561f205945c84834cce73d981e71392624fdc390a9"
+checksum = "70beaa47e19e1529e8787fc0a80ebbae5a9fdaefc5fcc8972c885c9abf6ab0f0"
 dependencies = [
  "cc",
- "tree-sitter 0.22.6",
+ "tree-sitter-language",
 ]
 
 [[package]]
@@ -9254,13 +9324,14 @@ version = "0.3.0"
 source = "git+https://github.com/tree-sitter-grammars/tree-sitter-query?rev=d25e8d183f319497b8b22a2a1585975b020da722#d25e8d183f319497b8b22a2a1585975b020da722"
 dependencies = [
  "cc",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.23.2",
 ]
 
 [[package]]
 name = "tree-sitter-stack-graphs"
-version = "0.8.2"
-source = "git+https://github.com/quentinLeDilavrec/stack-graphs?rev=d0fa507d4b3892b1db60938f37bf4779f9dae18d#d0fa507d4b3892b1db60938f37bf4779f9dae18d"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d2a49666ccd3092a368107f5049adf824124fabb21386bde845580a4c136eea"
 dependencies = [
  "anyhow",
  "controlled-option",
@@ -9272,40 +9343,53 @@ dependencies = [
  "rust-ini",
  "stack-graphs",
  "thiserror",
- "tree-sitter 0.22.6",
- "tree-sitter-graph 0.12.2",
- "tree-sitter-loader",
+ "tree-sitter 0.20.10",
+ "tree-sitter-graph",
+ "tree-sitter-loader 0.20.0",
 ]
 
 [[package]]
 name = "tree-sitter-tags"
-version = "0.22.6"
+version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34380416097ab36d1b4cd83f887d9e150ea4feaeb6ee9a5ecfe53d26839acc69"
+checksum = "ccb3f1376219530a37a809751ecf65aa35fd8b9c1c4ab6d4faf5f6a9eeda2c05"
 dependencies = [
  "memchr",
  "regex",
  "thiserror",
- "tree-sitter 0.22.6",
+ "tree-sitter 0.20.10",
+]
+
+[[package]]
+name = "tree-sitter-tags"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3badf626aa7bbe52972da001303088fddf1fee6903084fd83ee24f5ac7104f01"
+dependencies = [
+ "memchr",
+ "regex",
+ "thiserror",
+ "tree-sitter 0.23.2",
 ]
 
 [[package]]
 name = "tree-sitter-typescript"
-version = "0.20.6"
-source = "git+https://github.com/quentinLeDilavrec/tree-sitter-typescript?rev=eee64b9ea005d2641cfce5b0a81404a9c8877740#eee64b9ea005d2641cfce5b0a81404a9c8877740"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c5f76ed8d947a75cc446d5fccd8b602ebf0cde64ccf2ffa434d873d7a575eff"
 dependencies = [
  "cc",
- "tree-sitter 0.22.6",
+ "tree-sitter-language",
 ]
 
 [[package]]
 name = "tree-sitter-xml"
-version = "0.6.4"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65c3a1b08e9842143f84fde1a18ac40ee77ca80a80b14077e4ca67a3b4808b8b"
+checksum = "e670041f591d994f54d597ddcd8f4ebc930e282c4c76a42268743b71f0c8b6b3"
 dependencies = [
  "cc",
- "tree-sitter 0.22.6",
+ "tree-sitter-language",
 ]
 
 [[package]]
@@ -9758,15 +9842,16 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.206.0"
+version = "0.215.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39192edb55d55b41963db40fd49b0b542156f04447b5b512744a91d38567bdbc"
+checksum = "53fbde0881f24199b81cf49b6ff8f9c145ac8eb1b7fc439adb5c099734f7d90e"
 dependencies = [
  "ahash 0.8.11",
  "bitflags 2.6.0",
  "hashbrown 0.14.5",
  "indexmap 2.7.0",
  "semver",
+ "serde",
 ]
 
 [[package]]
@@ -10008,7 +10093,7 @@ dependencies = [
  "js-sys",
  "khronos-egl",
  "libc",
- "libloading",
+ "libloading 0.8.6",
  "log",
  "metal",
  "naga",
@@ -10498,7 +10583,7 @@ dependencies = [
  "as-raw-xcb-connection",
  "gethostname",
  "libc",
- "libloading",
+ "libloading 0.8.6",
  "once_cell",
  "rustix",
  "x11rb-protocol",

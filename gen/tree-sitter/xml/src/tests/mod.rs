@@ -14,7 +14,7 @@ fn xml_tree_sitter_simple() {
 
     {
         parser
-            .set_language(&tree_sitter_xml::language_xml())
+            .set_language(&crate::language())
             .unwrap();
     }
 

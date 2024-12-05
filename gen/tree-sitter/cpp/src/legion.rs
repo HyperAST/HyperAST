@@ -289,10 +289,11 @@ impl<'store, 'cache, TS: CppEnabledTypeStore> ZippedTreeGen for CppTreeGen<'stor
         let node = cursor.node();
         let kind = node.obtain_type();
         if HIDDEN_NODES {
-            if kind == Type::_ExpressionNotBinary
-                || kind == Type::_FunctionDeclaratorSeq
+            if kind == Type::_FunctionDeclaratorSeq
                 || kind == Type::ParameterListRepeat1
                 || kind == Type::TranslationUnitRepeat1
+                || kind == Type::_Declarator
+                || kind.is_hidden()
                 || kind.is_repeat()
             {
                 return PreResult::Ignore;
@@ -447,7 +448,7 @@ impl<'store, 'cache, TS: CppEnabledTypeStore> CppTreeGen<'store, 'cache, TS> {
 
     pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
         let mut parser = tree_sitter::Parser::new();
-        let language = tree_sitter_cpp::language();
+        let language = crate::language();
         parser.set_language(&language).unwrap();
         let tree = parser.parse(text, None).unwrap();
         if tree.root_node().has_error() {

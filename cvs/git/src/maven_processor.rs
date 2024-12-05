@@ -465,7 +465,7 @@ impl MavenModuleHelper {
     }
     pub fn into_acc_with_scripting(
         self,
-        prepro_acc: hyper_ast::scripting::lua_scripting::Acc,
+        prepro_acc: hyper_ast::scripting::Acc,
     ) -> MavenModuleAcc {
         let mut r = MavenModuleAcc::with_content(
             self.name,

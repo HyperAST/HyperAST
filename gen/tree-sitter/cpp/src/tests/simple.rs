@@ -9,7 +9,7 @@ pub(crate) fn cpp_tree_sitter_simple() {
     let mut parser = Parser::new();
 
     {
-        parser.set_language(&tree_sitter_cpp::language()).unwrap();
+        parser.set_language(&crate::language()).unwrap();
     }
 
     let text = {

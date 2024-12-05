@@ -37,9 +37,7 @@ use hyper_ast::{
 };
 use legion::world::EntryRef;
 use num::ToPrimitive;
-use std::marker::PhantomData;
 use std::{collections::HashMap, fmt::Debug, vec};
-use tuples::CombinConcat;
 
 #[cfg(feature = "impact")]
 mod reference_analysis;
@@ -166,7 +164,7 @@ pub struct Acc {
     indentation: Spaces,
     role: RoleAcc<crate::types::Role>,
     precomp_queries: PrecompQueries,
-    prepro: Option<hyper_ast::scripting::lua_scripting::Acc>,
+    prepro: Option<hyper_ast::scripting::Acc>,
 }
 
 impl Accumulator for Acc {
@@ -596,7 +594,7 @@ where
 
 pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
     let mut parser = tree_sitter::Parser::new();
-    let language = tree_sitter_java::language();
+    let language = crate::language();
     parser.set_language(&language).unwrap();
     let tree = parser.parse(text, None).unwrap();
     if tree.root_node().has_error() {
@@ -702,7 +700,7 @@ impl<
 
     pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
         let mut parser = tree_sitter::Parser::new();
-        let language = tree_sitter_java::language();
+        let language = crate::language();
         parser.set_language(&language).unwrap();
         let tree = parser.parse(text, None).unwrap();
         if tree.root_node().has_error() {

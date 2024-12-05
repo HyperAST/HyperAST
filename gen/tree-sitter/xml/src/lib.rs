@@ -55,7 +55,7 @@ pub mod iter;
 
 #[cfg(feature = "impl")]
 pub fn language() -> tree_sitter::Language {
-    tree_sitter_xml::language_xml()
+    tree_sitter::Language::new(tree_sitter_xml::LANGUAGE_XML)
 }
 
 #[cfg(feature = "impl")]

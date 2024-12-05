@@ -10,6 +10,7 @@ pub(crate) struct QueryPattern {
     pub(crate) steps: super::utils::Slice,
     pub(crate) predicate_steps: super::utils::Slice,
     pub(crate) start_byte: u32,
+    pub(crate) end_byte: u32,
     pub(crate) is_non_local: bool,
 }
 

@@ -922,7 +922,7 @@ impl<'a> egui_tiles::Behavior<TabId> for MyTileTreeBehavior<'a> {
                                                 ui.ctx(),
                                                 ui.style(),
                                                 &theme,
-                                                string.as_str(),
+                                                string.as_ref(),
                                                 language,
                                             );
                                         ui.fonts(|f| f.layout_job(layout_job))

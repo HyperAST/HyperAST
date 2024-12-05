@@ -30,7 +30,7 @@ fn prep_default<'store>(
     hyper_ast::store::defaults::NodeIdentifier,
 ) {
     use hyper_ast_gen_ts_java::legion_with_refs;
-    let query = hyper_ast_tsquery::Query::new(query, tree_sitter_java::language()).unwrap();
+    let query = hyper_ast_tsquery::Query::new(query, hyper_ast_gen_ts_java::language()).unwrap();
 
     let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
@@ -57,7 +57,7 @@ fn prep_precomputed<'store>(
 ) {
     use hyper_ast_gen_ts_java::legion_with_refs;
     let (precomp, query) =
-        hyper_ast_tsquery::Query::with_precomputed(query, tree_sitter_java::language(), precomp)
+        hyper_ast_tsquery::Query::with_precomputed(query, hyper_ast_gen_ts_java::language(), precomp)
             .unwrap();
 
     let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
@@ -164,7 +164,7 @@ fn compare_querying_group(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("sharing_default", i), &p, |b, (q, f)| {
             b.iter(|| {
                 let query =
-                    hyper_ast_tsquery::Query::new(q.1, tree_sitter_java::language()).unwrap();
+                    hyper_ast_tsquery::Query::new(q.1, hyper_ast_gen_ts_java::language()).unwrap();
                 let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
                 let mut md_cache = Default::default();
                 let mut java_tree_gen = hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen::new(
@@ -203,7 +203,7 @@ fn compare_querying_group(c: &mut Criterion) {
                 b.iter(|| {
                     let (precomp, query) = hyper_ast_tsquery::Query::with_precomputed(
                         q.1,
-                        tree_sitter_java::language(),
+                        hyper_ast_gen_ts_java::language(),
                         q.0,
                     )
                     .unwrap();

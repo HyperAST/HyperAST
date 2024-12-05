@@ -43,3 +43,15 @@ mod tnode {
 
 #[cfg(feature = "legion")]
 pub use tnode::TNode;
+
+
+
+#[cfg(feature = "impl")]
+pub fn language() -> tree_sitter::Language {
+    tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TYPESCRIPT)
+}
+
+#[cfg(feature = "impl")]
+pub fn node_types() -> &'static str {
+    tree_sitter_typescript::TYPESCRIPT_NODE_TYPES
+}

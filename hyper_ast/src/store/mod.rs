@@ -16,6 +16,7 @@ pub struct SimpleStores<TS, NS = nodes::DefaultNodeStore, LS = labels::LabelStor
     pub type_store: PhantomData<TS>,
 }
 
+#[cfg(feature = "scripting")]
 impl<TS> mlua::UserData for SimpleStores<TS> {
 
 }

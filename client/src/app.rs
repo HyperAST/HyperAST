@@ -13,7 +13,7 @@ use tower_http::trace::TraceLayer;
 use crate::{
     commit, fetch, file, pull_requests, querying,
     scriptingv1::{self, ScriptContent, ScriptContentDepth, ScriptingError, ScriptingParam},
-    smells, track, tsg, view, SharedState,
+    smells, track, view, SharedState,
 };
 
 impl IntoResponse for ScriptingError {
@@ -32,13 +32,26 @@ impl IntoResponse for querying::QueryingError {
     }
 }
 
-impl IntoResponse for tsg::QueryingError {
+    #[cfg(feature = "tsg")]
+    impl IntoResponse for tsg::QueryingError {
     fn into_response(self) -> Response {
         let mut resp = Json(self).into_response();
         *resp.status_mut() = StatusCode::BAD_REQUEST;
         resp
     }
 }
+#[cfg(not(feature = "tsg"))]
+mod tsg {
+    #[derive(serde::Deserialize)]
+    pub struct Param {
+        user: String,
+        name: String,
+        commit: String,
+    }
+    #[derive(serde::Deserialize)]
+    pub struct Content;
+}
+
 
 // TODO try to use the extractor pattern more, specifically for the shared state,
 // I think it would help inadvertently holding resources longer than necessary,
@@ -197,9 +210,15 @@ async fn tsg(
     axum::extract::Path(path): axum::extract::Path<tsg::Param>,
     axum::extract::State(state): axum::extract::State<SharedState>,
     axum::extract::Json(script): axum::extract::Json<tsg::Content>,
-) -> axum::response::Result<Json<tsg::ComputeResults>> {
-    let r = tsg::simple(script, state, path)?;
-    Ok(r)
+) -> impl IntoResponse {
+    #[cfg(not(feature = "tsg"))]
+    {
+        Result::<(),_>::Err(r#"{"error": "tsg comptime-feature is disabled on backend"}"#)
+    }
+    #[cfg(feature = "tsg")]
+    {
+        Ok(tsg::simple(script, state, path)?)
+    }
 }
 
 pub fn tsg_app(_st: SharedState) -> Router<SharedState> {

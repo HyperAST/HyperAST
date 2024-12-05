@@ -1,6 +1,6 @@
 [package]
 name = "polyglote"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -8,25 +8,26 @@ edition = "2021"
 [dependencies]
 # enums = { git = "https://github.com/mozilla/rust-code-analysis", branch = "master", package = "enums", version = "0.0.1" }
 # tree-sitter = "0.20.9"
-tree-sitter = "0.22.2"
-tree-sitter-loader = "0.22.2"
+tree-sitter = "0.23.0"
+tree-sitter-loader = "0.23.0"
 tree-sitter-query = { git = "https://github.com/tree-sitter-grammars/tree-sitter-query.git", rev = "d25e8d183f319497b8b22a2a1585975b020da722", version = "0.3.0" }
 # tree-sitter-tsq = "0.19.0"
 tree-sitter-graph = "0.11.2"        # { path = "../tree-sitter-graph" } 
-tree-sitter-typescript = { git = "https://github.com/quentinLeDilavrec/tree-sitter-typescript", rev = "eee64b9ea005d2641cfce5b0a81404a9c8877740", version = "0.20.5" }
+# tree-sitter-typescript = { git = "https://github.com/quentinLeDilavrec/tree-sitter-typescript", rev = "eee64b9ea005d2641cfce5b0a81404a9c8877740", version = "0.20.5" }
+tree-sitter-typescript = "0.23.0"
 
-# tree-sitter-java = "0.21.0"
-tree-sitter-java = { git = "https://github.com/quentinLeDilavrec/tree-sitter-java", version = "0.21.0", rev = "7699d4a296ca27fc14511bc75a1a899327f483fc" }
+tree-sitter-java = "0.23.0"
+# tree-sitter-java = { git = "https://github.com/quentinLeDilavrec/tree-sitter-java", version = "0.21.0", rev = "7699d4a296ca27fc14511bc75a1a899327f483fc" }
 # tree-sitter-java = { path="../../tree-sitter-java", version = "0.21.0" }
 
-tree-sitter-python = "0.21.0"
+tree-sitter-python = "0.23.0"
 # tree-sitter-rust = "=0.20.3"
 # tree-sitter-mozcpp = "0.20.2"
-# tree-sitter-cpp = "0.22.0"
+tree-sitter-cpp = "0.23.0"
 # tree-sitter-cpp = { path="../../tree-sitter-cpp", version="0.22" }
-tree-sitter-cpp = { git = "https://github.com/quentinLeDilavrec/tree-sitter-cpp", version = "0.22", rev = "e0a743cf117b28f1ed86f205b4c722e02f5035e1"}
+# tree-sitter-cpp = { git = "https://github.com/quentinLeDilavrec/tree-sitter-cpp", version = "0.22", rev = "e0a743cf117b28f1ed86f205b4c722e02f5035e1"}
 tree-sitter-kotlin = "0.3.5"
-tree-sitter-xml = "0.6.2"
+tree-sitter-xml = "0.7.0"
 # tree-sitter-xml = { git = "https://github.com/quentinLeDilavrec/tree-sitter-xml", version = "0.20" }
 
 serde = { version = "1.0.130", features = ["derive"] }
