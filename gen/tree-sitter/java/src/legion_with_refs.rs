@@ -5,6 +5,7 @@ use crate::{
     TNode,
 };
 use hyper_ast::store::nodes::legion::RawHAST;
+use hyper_ast::tree_gen::{add_md_precomp_queries, RoleAcc};
 use hyper_ast::{
     cyclomatic::Mcc,
     full::FullNode,
@@ -236,40 +237,6 @@ impl Debug for Acc {
     }
 }
 
-struct RoleAcc<R> {
-    pub current: Option<R>,
-    pub roles: Vec<R>,
-    pub offsets: Vec<u8>,
-}
-
-impl<R> Default for RoleAcc<R> {
-    fn default() -> Self {
-        Self {
-            current: None,
-            roles: Default::default(),
-            offsets: Default::default(),
-        }
-    }
-}
-
-impl<R> RoleAcc<R> {
-    fn acc(&mut self, role: R, o: usize) {
-        self.roles.push(role);
-        self.offsets.push(o.to_u8().unwrap());
-    }
-
-    fn add_md(self, dyn_builder: &mut impl EntityBuilder)
-    where
-        R: 'static + std::marker::Send + std::marker::Sync,
-    {
-        debug_assert!(self.current.is_none());
-        if self.roles.len() > 0 {
-            dyn_builder.add(self.roles.into_boxed_slice());
-            dyn_builder.add(compo::RoleOffsets(self.offsets.into_boxed_slice()));
-        }
-    }
-}
-
 /// enables recovering of hidden nodes from tree-sitter
 #[cfg(not(debug_assertions))]
 const HIDDEN_NODES: bool = true;
@@ -379,17 +346,6 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
                 None
             }
         }
-    }
-}
-
-pub fn add_md_precomp_queries(
-    dyn_builder: &mut impl EntityBuilder,
-    precomp_queries: PrecompQueries,
-) {
-    if precomp_queries > 0 {
-        dyn_builder.add(compo::Precomp(precomp_queries));
-    } else {
-        dyn_builder.add(compo::PrecompFlag);
     }
 }
 
@@ -892,7 +848,7 @@ where
                 dyn_builder.add(acc.mcc.clone());
             }
             if More::ENABLED {
-                add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
+                tree_gen::add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
             }
             #[cfg(feature = "impact")]
             reference_analysis::add_md_ref_ana(
@@ -912,7 +868,10 @@ where
             if More::USING {
                 let subtr = hyper_ast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
                 let ss = if let Some(label) = label {
-                    acc.prepro.unwrap().finish_with_label(&subtr, label).unwrap()
+                    acc.prepro
+                        .unwrap()
+                        .finish_with_label(&subtr, label)
+                        .unwrap()
                 } else {
                     acc.prepro.unwrap().finish(&subtr).unwrap()
                 };

@@ -141,14 +141,18 @@ impl PreProcessedRepositories {
                 ConfiguredRepoHandle2 { spec: repo, config }
             }
             RepoConfig::CppMake => {
+                let t = crate::cpp_processor::Parameter { query: None };
+                let h_cpp = self
+                    .processor
+                    .processing_systems
+                    .mut_or_default::<crate::cpp_processor::CppProcessorHolder>();
+                let cpp_handle = crate::processing::erased::CommitProcExt::register_param(h_cpp, t);
                 let h = self
                     .processor
                     .processing_systems
                     .mut_or_default::<crate::make_processor::MakeProcessorHolder>();
-                ConfiguredRepoHandle2 {
-                    spec: repo,
-                    config: h.register_param(crate::make_processor::Parameter),
-                }
+                let config = h.register_param(crate::make_processor::Parameter { cpp_handle });
+                ConfiguredRepoHandle2 { spec: repo, config }
             }
             _ => todo!(),
         };
@@ -185,18 +189,21 @@ impl PreProcessedRepositories {
                 }
             }
             RepoConfig::CppMake => {
+                let t = crate::cpp_processor::Parameter { query: None };
+                let h_cpp = self
+                    .processor
+                    .processing_systems
+                    .mut_or_default::<crate::cpp_processor::CppProcessorHolder>();
+                let cpp_handle = crate::processing::erased::CommitProcExt::register_param(h_cpp, t);
                 let h = self
                     .processor
                     .processing_systems
                     .mut_or_default::<crate::make_processor::MakeProcessorHolder>();
-                ConfiguredRepoHandle2 {
-                    spec: repo,
-                    config: h.register_param(crate::make_processor::Parameter),
-                }
+                let config = h.register_param(crate::make_processor::Parameter { cpp_handle });
+                ConfiguredRepoHandle2 { spec: repo, config }
             }
             _ => todo!(),
         };
-
         self.configs.insert(r.spec.clone(), r.config);
         r
     }
@@ -210,10 +217,9 @@ impl PreProcessedRepositories {
         &mut self,
         rw: &mut impl Iterator<Item = git2::Oid>,
         repository: &ConfiguredRepo2,
-        size: usize
+        size: usize,
     ) -> Vec<git2::Oid> {
-        self.processor
-            .pre_pro(rw, repository, size)
+        self.processor.pre_pro(rw, repository, size)
     }
 
     pub fn pre_process_with_limit(
@@ -249,7 +255,6 @@ impl PreProcessedRepositories {
         assert!(!before.is_empty());
         self.processor.pre_process(repository, before, after)
     }
-
 
     fn pre_process_with_config(
         &mut self,

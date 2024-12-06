@@ -77,11 +77,7 @@ int main(int argl, int* argv) {
     println!("{:#?}", tree.root_node().to_sexp());
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
     // println!("{}", tree.root_node().to_sexp());
@@ -115,11 +111,7 @@ f.value < s;
     println!("{:#?}", tree.root_node().to_sexp());
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
     // println!("{}", tree.root_node().to_sexp());
@@ -154,11 +146,7 @@ void f() {
     println!("{:#?}", tree.root_node().to_sexp());
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
     // println!("{}", tree.root_node().to_sexp());
@@ -193,11 +181,7 @@ void f() {
     println!("{:#?}", tree.root_node().to_sexp());
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
     // println!("{}", tree.root_node().to_sexp());
@@ -235,11 +219,7 @@ ScaleFactor ScalingFunction<KNPK>::apply() const {
     println!("{:#?}", tree.root_node().to_sexp());
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
     // println!("{}", tree.root_node().to_sexp());
@@ -290,11 +270,7 @@ void f() {}
     println!("{:#?}", tree.root_node().to_sexp());
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
     // println!("{}", tree.root_node().to_sexp());
@@ -346,11 +322,7 @@ __attribute__((__may_alias__))
     println!("{:#?}", tree.root_node().to_sexp());
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
     // println!("{}", tree.root_node().to_sexp());
@@ -389,11 +361,7 @@ struct TBEntry {};
     println!("{:#?}", tree.root_node().to_sexp());
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     // print_tree_syntax(&stores.node_store, &stores.label_store, &x.compressed_node);
     // println!("{}", tree.root_node().to_sexp());
@@ -424,11 +392,7 @@ pub(crate) fn cpp_def_bl_test() {
     println!("{:#?}", tree.root_node().to_sexp());
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     println!(
         "{}",
@@ -457,11 +421,7 @@ pub(crate) fn cpp_char_literal_test() {
     println!("{:#?}", tree.root_node().to_sexp());
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     let entity = x.compressed_node;
     println!(
@@ -515,11 +475,7 @@ pub(crate) fn cpp_asm_test() {
     println!("{:#?}", tree.root_node().to_sexp());
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     println!(
         "{}",
@@ -554,11 +510,7 @@ pub(crate) fn cpp_op_test() {
     println!("{:#?}", tree.root_node().to_sexp());
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     println!(
         "{}",
@@ -605,11 +557,7 @@ pub(crate) fn cpp_3_test() {
     println!("{:#?}", tree.root_node().to_sexp());
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     println!(
         "{}",

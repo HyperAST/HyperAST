@@ -722,12 +722,12 @@ impl crate::processing::erased::CommitProc for MavenProc {
     fn prepare_processing<'repo>(
         &self,
         repository: &'repo git2::Repository,
-        oids: crate::preprocessed::CommitBuilder,
+        commit_builder: crate::preprocessed::CommitBuilder,
         handle: crate::processing::ParametrizedCommitProcessorHandle,
     ) -> Box<dyn crate::processing::erased::PreparedCommitProc + 'repo> {
         Box::new(PreparedMavenCommitProc {
             repository,
-            commit_builder: oids,
+            commit_builder,
             handle,
         })
     }

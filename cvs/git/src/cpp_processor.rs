@@ -12,9 +12,7 @@ use hyper_ast_gen_ts_cpp::{
     legion as cpp_gen,
     types::{CppEnabledTypeStore as _, Type},
 };
-use std::{iter::Peekable, path::Components};
-
-pub type SimpleStores = hyper_ast::store::SimpleStores<hyper_ast_gen_ts_cpp::types::TStore>;
+use std::{iter::Peekable, path::Components, sync::Arc};
 
 pub(crate) fn prepare_dir_exploration(tree: git2::Tree) -> Vec<BasicGitObject> {
     tree.iter()
@@ -23,6 +21,8 @@ pub(crate) fn prepare_dir_exploration(tree: git2::Tree) -> Vec<BasicGitObject> {
         .filter_map(|x| x.ok())
         .collect()
 }
+
+pub type SimpleStores = hyper_ast::store::SimpleStores<hyper_ast_gen_ts_cpp::types::TStore>;
 
 pub struct CppProcessor<'repo, 'prepro, 'd, 'c, Acc> {
     repository: &'repo Repository,
@@ -54,6 +54,13 @@ impl<'repo, 'b, 'd, 'c, Acc: From<String>> CppProcessor<'repo, 'b, 'd, 'c, Acc> 
         }
     }
 }
+
+pub static SUB_QUERIES: &[&str] = &[
+//     r#"(declaration
+//     type: (primitive_type) (#EQ? "char")
+// )"#,
+    // r#"(preproc_if)"#,
+];
 
 impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, CppAcc> {
     fn pre(&mut self, current_object: BasicGitObject) {
@@ -142,11 +149,14 @@ impl<'repo, 'prepro, 'd, 'c> CppProcessor<'repo, 'prepro, 'd, 'c, CppAcc> {
 }
 
 #[derive(Clone, PartialEq, Eq)]
-pub struct Parameter;
+pub struct Parameter {
+    pub(crate) query: Option<std::sync::Arc<[String]>>,
+}
 #[derive(Default)]
 pub(crate) struct CppProcessorHolder(Option<CppProc>);
 pub(crate) struct CppProc {
     parameter: Parameter,
+    query: Query,
     cache: crate::processing::caches::Cpp,
     commits: std::collections::HashMap<git2::Oid, crate::Commit>,
 }
@@ -163,8 +173,15 @@ impl crate::processing::erased::Parametrized for CppProcessorHolder {
             .unwrap_or_else(|| {
                 let l = 0; //self.0.len();
                            // self.0.push(CppProc(t));
+                let query = if let Some(q) = &t.query {
+                    Query::new(q.iter().map(|x| x.as_str()))
+                } else {
+                    let precomputeds = unsafe { crate::cpp_processor::SUB_QUERIES };
+                    Query::new(precomputeds.into_iter().map(|x| x.as_ref()))
+                };
                 self.0 = Some(CppProc {
                     parameter: t,
+                    query,
                     cache: Default::default(),
                     commits: Default::default(),
                 });
@@ -176,6 +193,31 @@ impl crate::processing::erased::Parametrized for CppProcessorHolder {
         ParametrizedCommitProcessorHandle(self.erased_handle(), ConfigParametersHandle(l))
     }
 }
+
+#[derive(Clone)]
+pub(crate) struct Query(pub(crate) hyper_ast_tsquery::Query, Arc<str>);
+
+impl PartialEq for Query {
+    fn eq(&self, other: &Self) -> bool {
+        self.1 == other.1
+    }
+}
+impl Eq for Query {}
+
+impl Query {
+    fn new<'a>(precomputeds: impl Iterator<Item = &'a str>) -> Self {
+        static DQ: &str = "(_)";
+        let precomputeds = precomputeds.collect::<Vec<_>>();
+        let (precomp, _) = hyper_ast_tsquery::Query::with_precomputed(
+            DQ,
+            hyper_ast_gen_ts_cpp::language(),
+            precomputeds.as_slice(),
+        )
+        .unwrap();
+        Self(precomp.into(), precomputeds.join("\n").into())
+    }
+}
+
 impl crate::processing::erased::CommitProc for CppProc {
     fn prepare_processing(
         &self,
@@ -221,6 +263,7 @@ impl CacheHolding<crate::processing::caches::Cpp> for CppProc {
         &self.cache
     }
 }
+
 impl CacheHolding<crate::processing::caches::Cpp> for CppProcessorHolder {
     fn get_caches_mut(&mut self) -> &mut crate::processing::caches::Cpp {
         &mut self.0.as_mut().unwrap().cache
@@ -247,14 +290,19 @@ impl RepositoryProcessor {
                 } else {
                     "\n".as_bytes().to_vec()
                 };
+                let holder = c.mut_or_default::<CppProcessorHolder>();
+                let cpp_proc = holder.0.as_mut().unwrap();
+                let md_cache = &mut cpp_proc.cache.md_cache;
+                let stores = self
+                    .main_stores
+                    .mut_with_ts::<hyper_ast_gen_ts_cpp::types::TStore>();
+                let more = &cpp_proc.query.0;
                 crate::cpp::handle_cpp_file(
                     &mut cpp_gen::CppTreeGen {
                         line_break,
-                        stores: self.main_stores.mut_with_ts(),
-                        md_cache: &mut c
-                            .mut_or_default::<CppProcessorHolder>()
-                            .get_caches_mut()
-                            .md_cache, //cpp_md_cache,
+                        stores,
+                        md_cache,
+                        more,
                     },
                     n,
                     t,
@@ -303,12 +351,8 @@ impl RepositoryProcessor {
         dir_path: &'b mut Peekable<Components<'d>>,
         name: &ObjectName,
         oid: git2::Oid,
+        handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<CppProc>,
     ) -> (cpp_gen::Local, IsSkippedAna) {
-        let h = self
-            .processing_systems
-            .mut_or_default::<CppProcessorHolder>();
-
-        let handle = CppProc::register_param(h, Parameter);
         CppProcessor::<CppAcc>::new(repository, self, dir_path, name, oid, &handle).process()
     }
 
@@ -318,8 +362,9 @@ impl RepositoryProcessor {
         dir_path: &'c mut Peekable<Components<'d>>,
         oid: Oid,
         name: &ObjectName,
+        handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<CppProc>,
     ) -> <CppAcc as hyper_ast::tree_gen::Accumulator>::Node {
-        let full_node = self.handle_cpp_directory(repository, dir_path, name, oid);
+        let full_node = self.handle_cpp_directory(repository, dir_path, name, oid, handle);
         let name = self.intern_object_name(name);
         (name, full_node)
     }
@@ -352,6 +397,8 @@ fn make(acc: CppAcc, stores: &mut SimpleStores) -> cpp_gen::Local {
             compressed_node: id,
             metrics,
             ana,
+            role: None,
+            precomp_queries: Default::default(),
         };
     }
 
@@ -376,6 +423,8 @@ fn make(acc: CppAcc, stores: &mut SimpleStores) -> cpp_gen::Local {
         compressed_node: node_id.clone(),
         metrics,
         ana,
+        role: None,
+        precomp_queries: Default::default(),
     };
     full_node
 }

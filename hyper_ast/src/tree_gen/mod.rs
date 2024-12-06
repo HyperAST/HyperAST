@@ -441,6 +441,56 @@ impl<Acc> Parents<Acc> {
     }
 }
 
+pub struct RoleAcc<R> {
+    pub current: Option<R>,
+    pub roles: Vec<R>,
+    pub offsets: Vec<u8>,
+}
+
+impl<R> Default for RoleAcc<R> {
+    fn default() -> Self {
+        Self {
+            current: None,
+            roles: Default::default(),
+            offsets: Default::default(),
+        }
+    }
+}
+
+impl<R> RoleAcc<R> {
+    pub fn acc(&mut self, role: R, o: usize) {
+        self.roles.push(role);
+        use num::ToPrimitive;
+        self.offsets.push(o.to_u8().unwrap());
+    }
+
+    pub fn add_md(self, dyn_builder: &mut impl crate::store::nodes::EntityBuilder)
+    where
+        R: 'static + std::marker::Send + std::marker::Sync,
+    {
+        debug_assert!(self.current.is_none());
+        if self.roles.len() > 0 {
+            dyn_builder.add(self.roles.into_boxed_slice());
+            use crate::store::nodes::legion::compo;
+            dyn_builder.add(compo::RoleOffsets(self.offsets.into_boxed_slice()));
+        }
+    }
+}
+
+
+pub fn add_md_precomp_queries(
+    dyn_builder: &mut impl crate::store::nodes::EntityBuilder,
+    precomp_queries: PrecompQueries,
+) {
+    use crate::store::nodes::legion::compo;
+    if precomp_queries > 0 {
+        dyn_builder.add(compo::Precomp(precomp_queries));
+    } else {
+        dyn_builder.add(compo::PrecompFlag);
+    }
+}
+
+
 pub mod zipped;
 pub use zipped::PreResult;
 pub use zipped::ZippedTreeGen;

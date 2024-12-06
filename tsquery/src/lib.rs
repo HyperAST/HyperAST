@@ -424,6 +424,9 @@ where
         acc: &Acc,
         label: Option<&str>,
     ) -> hyper_ast::tree_gen::PrecompQueries {
+        if self.enabled_pattern_count() == 0 {
+            return Default::default();
+        }
         let pos = hyper_ast::position::StructuralPosition::empty();
         let cursor = crate::cursor_on_unbuild::TreeCursor::new(stores, acc, label, pos);
         let qcursor = self.matches_immediate(cursor); // TODO filter on height (and visibility?)

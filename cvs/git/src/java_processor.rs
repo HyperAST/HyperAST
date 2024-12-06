@@ -1,16 +1,18 @@
+use std::sync::Arc;
 use std::{iter::Peekable, path::Components};
 
 use git2::{Oid, Repository};
 use hyper_ast::hashed::{IndexingHashBuilder, MetaDataHashsBuilder};
+use hyper_ast::tree_gen::add_md_precomp_queries;
 use hyper_ast_gen_ts_java::legion_with_refs;
-use hyper_ast_gen_ts_java::{legion_with_refs::add_md_precomp_queries, types::Type};
+use hyper_ast_gen_ts_java::types::Type;
 
 use crate::processing::erased::ParametrizedCommitProc2;
 use crate::{
     git::BasicGitObject,
     java::JavaAcc,
     preprocessed::{IsSkippedAna, RepositoryProcessor},
-    processing::{erased::CommitProcExt, CacheHolding, InFiles, ObjectName},
+    processing::{CacheHolding, InFiles, ObjectName},
     Processor,
 };
 
@@ -86,7 +88,12 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
                     if let Some(acc) = &mut w.scripting_acc {
                         // SAFETY: this side should be fine, issue when unerasing
                         let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
-                        acc.acc::<_,hyper_ast_gen_ts_java::types::TType,_>(store, Type::Directory, id.into()).unwrap();
+                        acc.acc::<_, hyper_ast_gen_ts_java::types::TType, _>(
+                            store,
+                            Type::Directory,
+                            id.into(),
+                        )
+                        .unwrap();
                     }
                     return;
                 }
@@ -149,7 +156,12 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
             if let Some(acc) = &mut w.scripting_acc {
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
-                acc.acc::<_,hyper_ast_gen_ts_java::types::TType,_>(store, Type::Directory, id.into()).unwrap();
+                acc.acc::<_, hyper_ast_gen_ts_java::types::TType, _>(
+                    store,
+                    Type::Directory,
+                    id.into(),
+                )
+                .unwrap();
             }
             None
         }
@@ -368,7 +380,7 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
 }
 
 #[derive(Clone)]
-pub(crate) struct Query(pub(crate) hyper_ast_tsquery::Query, String);
+pub(crate) struct Query(pub(crate) hyper_ast_tsquery::Query, Arc<str>);
 
 impl PartialEq for Query {
     fn eq(&self, other: &Self) -> bool {
@@ -386,9 +398,10 @@ impl Eq for Query {}
 
 impl Query {
     fn new<'a>(precomputeds: impl Iterator<Item = &'a str>) -> Self {
+        static DQ: &str= "(_)";
         let precomputeds = precomputeds.collect::<Vec<_>>();
         let (precomp, _) = hyper_ast_tsquery::Query::with_precomputed(
-            "(_)",
+            DQ,
             hyper_ast_gen_ts_java::language(),
             precomputeds.as_slice(),
         )
@@ -564,11 +577,10 @@ impl RepositoryProcessor {
 
                 let holder = c.mut_or_default::<JavaProcessorHolder>();
                 let java_proc = holder.0.as_mut().unwrap();
-                let caches = &mut java_proc.cache;
+                let md_cache = &mut java_proc.cache.md_cache;
                 let stores = self
                     .main_stores
                     .mut_with_ts::<hyper_ast_gen_ts_java::types::TStore>();
-                let md_cache = &mut caches.md_cache;
                 if let Some(precomp) = &java_proc.parameter.prepo {
                     let more = precomp.clone();
                     let mut java_tree_gen = java_tree_gen::JavaTreeGen {
@@ -609,7 +621,8 @@ impl RepositoryProcessor {
         if let Some(acc) = &mut w.scripting_acc {
             // SAFETY: this side should be fine, issue when unerasing
             let store = unsafe { self.main_stores.erase_ts_unchecked() };
-            acc.acc::<_,hyper_ast_gen_ts_java::types::TType,_>(store, Type::Directory, id.into()).unwrap();
+            acc.acc::<_, hyper_ast_gen_ts_java::types::TType, _>(store, Type::Directory, id.into())
+                .unwrap();
             // prepro_acc(
             //     acc,
             //     self.main_stores

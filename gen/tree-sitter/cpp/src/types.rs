@@ -32,6 +32,14 @@ mod legion_impls {
             t.e()
         }
     }
+    
+    impl<'a> hyper_ast::types::ETypeStore for TStore {
+        type Ty2 = Type;
+    
+        fn intern(ty: Self::Ty2) -> Self::Ty {
+            TType::new(ty)
+        }
+    }
 
     impl RoleStore for TStore {
         type IdF = u16;
@@ -287,6 +295,8 @@ impl hyper_ast::types::Lang<Type> for Cpp {
         Lang.to_u16(t)
     }
 }
+
+pub use hyper_ast::types::Role;
 
 impl HyperType for Type {
     fn generic_eq(&self, other: &dyn HyperType) -> bool

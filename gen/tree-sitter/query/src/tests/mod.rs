@@ -63,11 +63,7 @@ fn cpp_tree(
     // println!("{:#?}", tree.root_node().to_sexp());
     let mut stores: SimpleStores<TStore> = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut tree_gen = CppTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-    };
+    let mut tree_gen = CppTreeGen::new(&mut stores, &mut md_cache);
     let x = tree_gen.generate_file(b"", text, tree.walk()).local;
     let entity = x.compressed_node;
     // println!(
