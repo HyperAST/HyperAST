@@ -205,12 +205,16 @@ where
                 }
             }
         }
+        let mut supertypes = self.clone().super_types();
+        if self.kind().is_supertype() {
+            supertypes.push(self.symbol());
+        }
         CursorStatus {
             has_later_siblings,
             has_later_named_siblings,
             can_have_later_siblings_with_this_field,
             field_id,
-            supertypes: self.clone().super_types(),
+            supertypes,
         }
     }
 
