@@ -56,10 +56,10 @@ impl<'repo, 'b, 'd, 'c, Acc: From<String>> CppProcessor<'repo, 'b, 'd, 'c, Acc> 
 }
 
 pub static SUB_QUERIES: &[&str] = &[
-//     r#"(declaration
-//     type: (primitive_type) (#EQ? "char")
-// )"#,
-    // r#"(preproc_if)"#,
+    r#"(declaration
+    type: (primitive_type) (#EQ? "char")
+)"#,
+    r#"(preproc_if)"#,
 ];
 
 impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, CppAcc> {

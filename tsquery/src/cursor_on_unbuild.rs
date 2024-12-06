@@ -415,8 +415,7 @@ where
     Acc: tree_gen::WithChildren<IdN> + tree_gen::WithRole<Role> + types::Typed,
 {
     fn symbol(&self) -> Symbol {
-        // TODO make something more efficient
-        let id = TS::type_to_u16(self.kind());
+        let id = TS::ts_symbol(self.kind());
         id.into()
     }
 

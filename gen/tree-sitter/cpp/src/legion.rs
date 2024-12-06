@@ -449,6 +449,18 @@ impl<'store, 'cache, TS> CppTreeGen<'store, 'cache, TS, ()> {
     }
 }
 
+pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
+    let mut parser = tree_sitter::Parser::new();
+    let language = crate::language();
+    parser.set_language(&language).unwrap();
+    let tree = parser.parse(text, None).unwrap();
+    if tree.root_node().has_error() {
+        Err(tree)
+    } else {
+        Ok(tree)
+    }
+}
+
 impl<'store, 'cache, TS, More> CppTreeGen<'store, 'cache, TS, More>
 where
     TS: CppEnabledTypeStore,

@@ -1104,6 +1104,9 @@ pub trait TypeStore {
     fn type_to_u16(t: Self::Ty) -> TypeInternalSize {
         t.get_lang().to_u16(t)
     }
+    fn ts_symbol(t: Self::Ty) -> TypeInternalSize {
+        t.get_lang().ts_symbol(t)
+    }
     fn decompress_type(erazed: &impl ErasedHolder, tid: std::any::TypeId) -> Self::Ty {
         *erazed
             .unerase_ref::<Self::Ty>(tid)
