@@ -463,12 +463,15 @@ pub mod file_sys {
         type Caches = super::caches::Cpp;
     }
 
-    const ONLY_SWITCHES: bool = false;
+    /// CAUTION about when you change this value,
+    /// advice: change it only at the very begining
+    #[doc(hidden)]
+    pub static mut ONLY_SWITCHES: bool = true;
 
     impl super::InFiles for Cpp {
         fn matches(name: &ObjectName) -> bool {
-            if ONLY_SWITCHES {
-                name.0.ends_with(b"switches.cpp") || name.0.ends_with(b"switches.cc")
+            if unsafe { ONLY_SWITCHES } {
+                name.0.ends_with(b"switches.h") || name.0.ends_with(b"switches.cc")
             } else {
                 name.0.ends_with(b".cpp")
                     || name.0.ends_with(b".c")
