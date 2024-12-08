@@ -466,7 +466,7 @@ pub mod file_sys {
     /// CAUTION about when you change this value,
     /// advice: change it only at the very begining
     #[doc(hidden)]
-    pub static mut ONLY_SWITCHES: bool = true;
+    pub static mut ONLY_SWITCHES: bool = false;
 
     impl super::InFiles for Cpp {
         fn matches(name: &ObjectName) -> bool {
