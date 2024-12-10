@@ -26,6 +26,7 @@ mod querying;
 mod scriptingv1;
 mod smells;
 pub mod track;
+#[cfg(feature = "tsg")]
 mod tsg;
 mod utils;
 mod view;

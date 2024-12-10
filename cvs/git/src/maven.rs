@@ -208,7 +208,7 @@ pub struct MavenModuleAcc {
     pub(crate) main_dirs: Option<Vec<PathBuf>>,
     pub(crate) test_dirs: Option<Vec<PathBuf>>,
     pub(crate) status: EnumSet<SemFlags>,
-    pub(crate) scripting_acc: std::option::Option<hyper_ast::scripting::lua_scripting::Acc>,
+    pub(crate) scripting_acc: std::option::Option<hyper_ast::scripting::Acc>,
 }
 
 impl From<String> for MavenModuleAcc {

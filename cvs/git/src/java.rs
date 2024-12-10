@@ -51,11 +51,11 @@ pub struct JavaAcc {
     pub skiped_ana: bool,
     pub ana: PartialAnalysis,
     pub precomp_queries: PrecompQueries,
-    pub scripting_acc: Option<hyper_ast::scripting::lua_scripting::Acc>,
+    pub scripting_acc: Option<hyper_ast::scripting::Acc>,
 }
 
 impl JavaAcc {
-    pub fn new(name: String, prepro: Option<hyper_ast::scripting::lua_scripting::Acc>) -> Self {
+    pub fn new(name: String, prepro: Option<hyper_ast::scripting::Acc>) -> Self {
         Self {
             primary: BasicDirAcc::new(name),
             ana: PartialAnalysis::init(&Type::Directory, None, |_| panic!()),

@@ -129,6 +129,13 @@ impl ConfiguredRepoHandle2 {
             config: self.config,
         }
     }
+    pub fn nofetch(self) -> ConfiguredRepo2 {
+        ConfiguredRepo2 {
+            repo: self.spec.nofetch(),
+            spec: self.spec,
+            config: self.config,
+        }
+    }
 }
 
 pub struct ConfiguredRepo {
@@ -456,13 +463,23 @@ pub mod file_sys {
         type Caches = super::caches::Cpp;
     }
 
+    /// CAUTION about when you change this value,
+    /// advice: change it only at the very begining
+    #[doc(hidden)]
+    pub static mut ONLY_SWITCHES: bool = false;
+
     impl super::InFiles for Cpp {
         fn matches(name: &ObjectName) -> bool {
-            name.0.ends_with(b".cpp")
-                || name.0.ends_with(b".c")
-                || name.0.ends_with(b".cxx")
-                || name.0.ends_with(b".h")
-                || name.0.ends_with(b".hpp")
+            if unsafe { ONLY_SWITCHES } {
+                name.0.ends_with(b"switches.h") || name.0.ends_with(b"switches.cc")
+            } else {
+                name.0.ends_with(b".cpp")
+                    || name.0.ends_with(b".c")
+                    || name.0.ends_with(b".cc")
+                    || name.0.ends_with(b".cxx")
+                    || name.0.ends_with(b".h")
+                    || name.0.ends_with(b".hpp")
+            }
         }
     }
 

@@ -1,11 +1,11 @@
 [package]
 name = "client"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
-tree-sitter = "0.22.2"
-tree-sitter-cli = "0.22.6"
+tree-sitter = "0.23.0"
+tree-sitter-cli = "0.23.0"
 hyper_ast = { path = "../hyper_ast", default-features = false, features = [
     "serialize",
 ] }
@@ -59,7 +59,7 @@ tracing-subscriber = { version = "0.3.9", features = [
     "env-filter",
 ] } # Utilities for implementing and composing `tracing` subscribers.
 axum-extra = { version = "=0.9.2", features = [
-    "typed-header"
+    "typed-header",
 ] } # fallbacks for access levels, use typed-routing feature if needed
 
 tower-http = { version = "0.5.2", features = [
@@ -93,9 +93,12 @@ clap = { version = "3.0", features = ["derive"] }
 
 hashbrown = "0.14.5"
 
-tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "f09e4a7bd49893b3859fd35446a81314968d665b", version = "0.12" }
-tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d" }
-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d" }
+# tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "f09e4a7bd49893b3859fd35446a81314968d665b", version = "0.12" }
+# tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d" }
+# stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d" }
+tree-sitter-graph = { version = "0.11.3", optional = true }
+tree-sitter-stack-graphs = { version = "0.9.0", optional = true }
+stack-graphs = { version = "0.14.0", optional = true }
 
 rerun = { version = "0.20.2", default-features = false, features = [
     "log",
@@ -105,8 +108,11 @@ rerun = { version = "0.20.2", default-features = false, features = [
 
 graphql_client = { version = "0.14.0" }
 hyper-rustls = "0.27.2"
-hyper-util = { version = "0.1", default-features = false, features = ["client-legacy", "tokio"] }
-rustls = { version = "0.23"}
+hyper-util = { version = "0.1", default-features = false, features = [
+    "client-legacy",
+    "tokio",
+] }
+rustls = { version = "0.23" }
 http-body-util = "0.1.2"
 [dev-dependencies]
 reqwest = { version = "0.12.5", features = ["blocking"] }
@@ -114,4 +120,9 @@ reqwest = { version = "0.12.5", features = ["blocking"] }
 
 [features]
 default = ["rerun"]
+tsg = [
+    "dep:tree-sitter-graph",
+    "dep:stack-graphs",
+    "dep:tree-sitter-stack-graphs",
+]
 rerun = ["dep:rerun", "dep:polyglote"]

@@ -18,6 +18,9 @@ static MP: OnceLock<MacPlatform> = OnceLock::new();
 
 pub(crate) struct MacPlatform(std::sync::Mutex<MacPlatformState>);
 
+unsafe impl Send for MacPlatform {}
+unsafe impl Sync for MacPlatform {}
+
 pub(crate) struct MacPlatformState {
     menu_command: Option<Box<dyn FnMut(&dyn Action)>>,
     menu_actions: Vec<Box<dyn Action>>,
@@ -81,6 +84,7 @@ pub(crate) fn show_nat_menu(_ctx: &egui::Context, _frame: &mut eframe::Frame) {
 }
 
 pub(crate) fn init_nat_menu() {
+    return; // TODO issue with NSApplication. Start by trying: https://github.com/rust-windowing/winit/issues/4015
     let action_export = Box::new(Act::<1>);
     let action_alert = Box::new(Act::<0>);
     let mac_platform_state = MacPlatformState {
@@ -92,8 +96,6 @@ pub(crate) fn init_nat_menu() {
 
     let mac_platform = MacPlatform(std::sync::Mutex::new(mac_platform_state));
     assert!(MP.set(mac_platform).is_ok());
-    unsafe impl Send for MacPlatform {}
-    unsafe impl Sync for MacPlatform {}
     unsafe {
         let app = NSApp();
         static mut APP_DELEGATE_CLASS: *const Class = ptr::null();

@@ -188,7 +188,7 @@ where
                     self.path.check(self.stores).unwrap();
                     return Some(self.path.clone());
                 } else if t == Type::LocalVariableDeclaration
-                    || t == Type::EnhancedForVariable
+                    // || t == Type::EnhancedForVariable // TODO trick to group nodes semantically
                     || t == Type::CatchFormalParameter
                 {
                     assert!(b.has_children(), "{:?}", t);

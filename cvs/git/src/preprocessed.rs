@@ -222,7 +222,7 @@ impl RepositoryProcessor {
         repository: &ConfiguredRepo2,
         size: usize,
     ) -> Vec<Oid> {
-        let mut r = Vec::with_capacity(size);
+        let mut r = Vec::with_capacity(rw.size_hint().0);
         for _ in 0..size {
             let Some(oid) = rw.next() else { break };
             let builder = crate::preprocessed::CommitBuilder::start(&repository.repo, oid);
@@ -744,7 +744,7 @@ impl CommitProcessor<file_sys::Make> for RepositoryProcessor {
         oid: git2::Oid,
     ) -> Self::Module {
         let root_full_node =
-            MakeProcessor::<RMS, false, MakeModuleAcc>::new(repository, self, dir_path, name, oid)
+            MakeProcessor::<RMS, false, MakeModuleAcc>::new(repository, self, dir_path, name, oid, todo!("para"))
                 .process();
         // self.object_map_make
         //     .insert(commit_oid, root_full_node.clone());

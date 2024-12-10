@@ -79,11 +79,6 @@ function finish()
 end
 "#;
 
-pub struct Acc {
-    id: usize,
-    // lua: Lua,
-}
-
 static mut MAX_COUNT: usize = 0;
 
 impl Drop for Acc {
@@ -109,7 +104,7 @@ impl Drop for Acc {
     }
 }
 
-use super::Prepro;
+use super::{Acc, Prepro};
 
 static mut LUA_POOL: Vec<Lua> = vec![];
 

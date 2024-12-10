@@ -187,7 +187,7 @@ fn preps_default(
     Vec<legion::Entity>,
 ) {
     let (q, f) = p;
-    let query = hyper_ast_tsquery::Query::new(q.1, tree_sitter_java::language()).unwrap();
+    let query = hyper_ast_tsquery::Query::new(q.1, hyper_ast_gen_ts_java::language()).unwrap();
     let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen =
@@ -221,7 +221,7 @@ fn preps_precomputed(
 ) {
     let (precomp, query) = hyper_ast_tsquery::Query::with_precomputed(
         bench_param.1,
-        tree_sitter_java::language(),
+        hyper_ast_gen_ts_java::language(),
         bench_param.0,
     )
     .unwrap();

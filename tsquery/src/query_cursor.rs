@@ -336,8 +336,15 @@ where
                         parent_intersects_range && !parent_is_error
                     } && step.constrained(status.field_id().into())
                         && (start_depth <= self.max_start_depth);
-                    if can_start && !Self::wont_match(pattern, &self.cursor, pat) {
-                        self.add_state(pattern);
+                    if can_start {
+                        if Self::wont_match(pattern, &self.cursor, pat) {
+                            log::trace!(
+                                "don't start. type:{}",
+                                self.cursor.current_node().str_symbol()
+                            );
+                        } else {
+                            self.add_state(pattern);
+                        }
                     }
 
                     // Advance to the next pattern whose root node matches this node.

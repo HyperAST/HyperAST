@@ -125,8 +125,6 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MavenModuleAcc>
                     hyper_ast_gen_ts_xml::types::TType,
                 > = id.into();
                 acc.acc(store, Type::Directory, child).unwrap();
-            } else {
-                panic!()
             }
             None
         }
@@ -189,8 +187,6 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
                 acc.acc::<_,hyper_ast_gen_ts_xml::types::TType,_>(store, Type::Directory, id.into()).unwrap();
-            } else {
-                panic!()
             }
             return;
         }
@@ -212,8 +208,6 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
                 acc.acc::<_,hyper_ast_gen_ts_java::types::TType,_>(store, Type::Directory, id.into()).unwrap();
-            } else {
-                panic!()
             }
             return;
         }
@@ -240,10 +234,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             if let Some(acc) = &mut parent_acc.scripting_acc {
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
-
                 acc.acc::<_,hyper_ast_gen_ts_java::types::TType,_>(store, Type::Directory, id.into()).unwrap();
-            } else {
-                panic!()
             }
         }
         // check if module or src/main/java or src/test/java
@@ -474,7 +465,7 @@ impl MavenModuleHelper {
     }
     pub fn into_acc_with_scripting(
         self,
-        prepro_acc: hyper_ast::scripting::lua_scripting::Acc,
+        prepro_acc: hyper_ast::scripting::Acc,
     ) -> MavenModuleAcc {
         let mut r = MavenModuleAcc::with_content(
             self.name,
@@ -731,12 +722,12 @@ impl crate::processing::erased::CommitProc for MavenProc {
     fn prepare_processing<'repo>(
         &self,
         repository: &'repo git2::Repository,
-        oids: crate::preprocessed::CommitBuilder,
+        commit_builder: crate::preprocessed::CommitBuilder,
         handle: crate::processing::ParametrizedCommitProcessorHandle,
     ) -> Box<dyn crate::processing::erased::PreparedCommitProc + 'repo> {
         Box::new(PreparedMavenCommitProc {
             repository,
-            commit_builder: oids,
+            commit_builder,
             handle,
         })
     }

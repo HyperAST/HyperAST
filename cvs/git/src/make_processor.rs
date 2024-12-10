@@ -1,8 +1,12 @@
+use crate::processing::erased::ParametrizedCommitProcessor2Handle as PCP2Handle;
 use crate::{
     git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
     make::{MakeModuleAcc, MakePartialAnalysis, MD},
     preprocessed::RepositoryProcessor,
-    processing::{erased::ParametrizedCommitProc2, CacheHolding, InFiles, ObjectName},
+    processing::{
+        erased::ParametrizedCommitProc2, CacheHolding, InFiles, ObjectName,
+        ParametrizedCommitProcessorHandle,
+    },
     Processor,
 };
 use git2::{Oid, Repository};
@@ -24,7 +28,7 @@ pub struct MakeProcessor<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc> {
     repository: &'a Repository,
     stack: Vec<(Oid, Vec<BasicGitObject>, Acc)>,
     dir_path: &'c mut Peekable<Components<'c>>,
-    handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<MakeProc>,
+    handle: ParametrizedCommitProcessorHandle,
 }
 
 impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
@@ -36,12 +40,8 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool, Acc: From<String>>
         mut dir_path: &'c mut Peekable<Components<'c>>,
         name: &[u8],
         oid: git2::Oid,
+        handle: ParametrizedCommitProcessorHandle,
     ) -> Self {
-        let h = prepro
-            .processing_systems
-            .mut_or_default::<MakeProcessorHolder>();
-        let handle =
-            <MakeProc as crate::processing::erased::CommitProcExt>::register_param(h, Parameter);
         let tree = repository.find_tree(oid).unwrap();
         let prepared = prepare_dir_exploration(tree, &mut dir_path);
         let name = std::str::from_utf8(&name).unwrap().to_string();
@@ -62,101 +62,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
     fn pre(&mut self, current_dir: BasicGitObject) {
         match current_dir {
             BasicGitObject::Tree(oid, name) => {
-                if let Some(s) = self.dir_path.peek() {
-                    if name
-                        .as_bytes()
-                        .eq(std::ffi::OsStr::as_encoded_bytes(s.as_os_str()))
-                    {
-                        self.dir_path.next();
-                        self.stack.last_mut().expect("never empty").1.clear();
-                        let tree = self.repository.find_tree(oid).unwrap();
-                        let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
-                        self.stack.push((
-                            oid,
-                            prepared,
-                            MakeModuleAcc::new(name.try_into().unwrap()),
-                        ));
-                        return;
-                    } else {
-                        return;
-                    }
-                }
-                // check if module or src/main/java or src/test/java
-                if let Some(already) = self
-                    .prepro
-                    .processing_systems
-                    .mut_or_default::<MakeProcessorHolder>()
-                    .get_caches_mut()
-                    .object_map
-                    .get(&oid)
-                {
-                    // reinit already computed node for post order
-                    let full_node = already.clone();
-
-                    let w = &mut self.stack.last_mut().unwrap().2;
-                    let name = self.prepro.intern_object_name(name);
-                    assert!(!w.primary.children_names.contains(&name));
-                    w.push_submodule(name, full_node);
-                    return;
-                }
-                // TODO use Make pom.xml to find source_dir  and tests_dir ie. ignore resources, maybe also tests
-                // TODO maybe at some point try to handle Make modules and source dirs that reference parent directory in their path
-                log::debug!("make tree {:?}", name.try_str());
-
-                let parent_acc = &mut self.stack.last_mut().unwrap().2;
-                if true {
-                    // TODO also try to handle nested Makefiles
-                    let (name, (full_node, _)) = self.prepro.help_handle_cpp_folder(
-                        &self.repository,
-                        &mut self.dir_path,
-                        oid,
-                        &name,
-                    );
-                    assert!(!parent_acc.primary.children_names.contains(&name));
-                    parent_acc.push_source_directory(name, full_node);
-                    return;
-                }
-
-                let helper = MakeModuleHelper::from((parent_acc, &name));
-                if helper.source_directories.0 || helper.test_source_directories.0 {
-                    // handle as source dir
-                    let (name, (full_node, _)) = self.prepro.help_handle_cpp_folder(
-                        &self.repository,
-                        self.dir_path,
-                        oid,
-                        &name,
-                    );
-                    let parent_acc = &mut self.stack.last_mut().unwrap().2;
-                    assert!(!parent_acc.primary.children_names.contains(&name));
-                    if helper.source_directories.0 {
-                        parent_acc.push_source_directory(name, full_node);
-                    } else {
-                        // test_source_folders.0
-                        parent_acc.push_test_source_directory(name, full_node);
-                    }
-                }
-                // TODO check it we can use more info from context and prepare analysis more specifically
-                if helper.submodules.0
-                    || !helper.submodules.1.is_empty()
-                    || !helper.source_directories.1.is_empty()
-                    || !helper.test_source_directories.1.is_empty()
-                {
-                    let tree = self.repository.find_tree(oid).unwrap();
-                    let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
-                    if helper.submodules.0 {
-                        // handle as Make module
-                        self.stack.push((oid, prepared, helper.into()));
-                    } else {
-                        // search further inside
-                        self.stack.push((oid, prepared, helper.into()));
-                    };
-                } else if RMS && !(helper.source_directories.0 || helper.test_source_directories.0)
-                {
-                    let tree = self.repository.find_tree(oid).unwrap();
-                    // anyway try to find Make modules, but maybe can do better
-                    let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
-                    self.stack.push((oid, prepared, helper.into()));
-                }
+                self.handle_tree_cached(name, oid);
             }
             BasicGitObject::Blob(oid, name) => {
                 if FFWD {
@@ -172,7 +78,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                             &mut self.stack.last_mut().unwrap().2,
                             name,
                             &self.repository,
-                            self.handle.into(),
+                            PCP2Handle(self.handle.1, std::marker::PhantomData),
                         )
                         .unwrap();
                 } else if crate::processing::file_sys::Cpp::matches(&name) {
@@ -182,7 +88,7 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool> Processor<MakeModuleAcc>
                             &mut self.stack.last_mut().unwrap().2,
                             &name,
                             self.repository,
-                            self.handle.into(),
+                            PCP2Handle(self.handle.1, std::marker::PhantomData),
                         )
                         .unwrap();
                 // } else if name.ends_with(b".h") || name.ends_with(b".hpp") {
@@ -234,6 +140,95 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
 {
     fn make(acc: MakeModuleAcc, stores: &mut SimpleStores) -> (NodeIdentifier, MD) {
         make(acc, stores)
+    }
+
+    fn handle_tree_cached(&mut self, name: ObjectName, oid: Oid) {
+        if let Some(s) = self.dir_path.peek() {
+            if name
+                .as_bytes()
+                .eq(std::ffi::OsStr::as_encoded_bytes(s.as_os_str()))
+            {
+                self.dir_path.next();
+                self.stack.last_mut().expect("never empty").1.clear();
+                let tree = self.repository.find_tree(oid).unwrap();
+                let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
+                self.stack
+                    .push((oid, prepared, MakeModuleAcc::new(name.try_into().unwrap())));
+                return;
+            } else {
+                return;
+            }
+        }
+        let mut make_proc = self
+            .prepro
+            .processing_systems
+            .mut_or_default::<MakeProcessorHolder>()
+            .with_parameters_mut(self.handle.1);
+        let cpp_handle = make_proc.parameter.cpp_handle;
+        if let Some(already) = make_proc.get_caches_mut().object_map.get(&oid) {
+            // reinit already computed node for post order
+            let full_node = already.clone();
+            let w = &mut self.stack.last_mut().unwrap().2;
+            let name = self.prepro.intern_object_name(name);
+            assert!(!w.primary.children_names.contains(&name));
+            w.push_submodule(name, full_node);
+            return;
+        }
+        log::debug!("make tree {:?}", name.try_str());
+        let parent_acc = &mut self.stack.last_mut().unwrap().2;
+        if true {
+            // TODO also try to handle nested Makefiles
+            let (name, (full_node, _)) = self.prepro.help_handle_cpp_folder(
+                &self.repository,
+                &mut self.dir_path,
+                oid,
+                &name,
+                cpp_handle,
+            );
+            assert!(!parent_acc.primary.children_names.contains(&name));
+            parent_acc.push_source_directory(name, full_node);
+            return;
+        }
+        let helper = MakeModuleHelper::from((parent_acc, &name));
+        if helper.source_directories.0 || helper.test_source_directories.0 {
+            // handle as source dir
+            let (name, (full_node, _)) =
+                self.prepro
+                    .help_handle_cpp_folder(&self.repository, self.dir_path, oid, &name, cpp_handle);
+            let parent_acc = &mut self.stack.last_mut().unwrap().2;
+            assert!(!parent_acc.primary.children_names.contains(&name));
+            if helper.source_directories.0 {
+                parent_acc.push_source_directory(name, full_node);
+            } else {
+                // test_source_folders.0
+                parent_acc.push_test_source_directory(name, full_node);
+            }
+        }
+        // check if module or src/main/java or src/test/java
+        // TODO use Make pom.xml to find source_dir  and tests_dir ie. ignore resources, maybe also tests
+        // TODO maybe at some point try to handle Make modules and source dirs that reference parent directory in their path
+
+        // TODO check it we can use more info from context and prepare analysis more specifically
+        if helper.submodules.0
+            || !helper.submodules.1.is_empty()
+            || !helper.source_directories.1.is_empty()
+            || !helper.test_source_directories.1.is_empty()
+        {
+            let tree = self.repository.find_tree(oid).unwrap();
+            let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
+            if helper.submodules.0 {
+                // handle as Make module
+                self.stack.push((oid, prepared, helper.into()));
+            } else {
+                // search further inside
+                self.stack.push((oid, prepared, helper.into()));
+            };
+        } else if RMS && !(helper.source_directories.0 || helper.test_source_directories.0) {
+            let tree = self.repository.find_tree(oid).unwrap();
+            // anyway try to find Make modules, but maybe can do better
+            let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
+            self.stack.push((oid, prepared, helper.into()));
+        }
     }
 }
 
@@ -409,7 +404,11 @@ pub(crate) fn prepare_dir_exploration(
 // # Pom
 
 #[derive(Clone, PartialEq, Eq)]
-pub struct Parameter;
+pub struct Parameter {
+    pub(crate) cpp_handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<
+        crate::cpp_processor::CppProc,
+    >,
+}
 impl From<crate::processing::erased::ParametrizedCommitProcessor2Handle<MakeProc>>
     for crate::processing::erased::ParametrizedCommitProcessor2Handle<MakefileProc>
 {
@@ -438,11 +437,11 @@ impl From<crate::processing::erased::ParametrizedCommitProcessor2Handle<MakeProc
 struct MakefileProcessorHolder(Option<MakefileProc>);
 impl Default for MakefileProcessorHolder {
     fn default() -> Self {
-        Self(Some(MakefileProc(Parameter, Default::default())))
+        Self(Some(MakefileProc(None, Default::default())))
     }
 }
 
-struct MakefileProc(Parameter, crate::processing::caches::Makefile);
+struct MakefileProc(Option<Parameter>, crate::processing::caches::Makefile);
 
 impl crate::processing::erased::Parametrized for MakefileProcessorHolder {
     type T = Parameter;
@@ -450,12 +449,16 @@ impl crate::processing::erased::Parametrized for MakefileProcessorHolder {
         &mut self,
         t: Self::T,
     ) -> crate::processing::erased::ParametrizedCommitProcessorHandle {
-        let l = self.0.iter().position(|x| &x.0 == &t).unwrap_or_else(|| {
-            let l = 0; //self.0.len();
-                       // self.0.push(MakefileProc(t));
-            self.0 = Some(MakefileProc(t, Default::default()));
-            l
-        });
+        let l = self
+            .0
+            .iter()
+            .position(|x| x.0.as_ref() == Some(&t))
+            .unwrap_or_else(|| {
+                let l = 0; //self.0.len();
+                           // self.0.push(MakefileProc(t));
+                self.0 = Some(MakefileProc(Some(t), Default::default()));
+                l
+            });
         use crate::processing::erased::ConfigParametersHandle;
         use crate::processing::erased::ParametrizedCommitProc;
         use crate::processing::erased::ParametrizedCommitProcessorHandle;
@@ -556,6 +559,7 @@ impl crate::processing::erased::Parametrized for MakeProcessorHolder {
 struct PreparedMakeCommitProc<'repo> {
     repository: &'repo git2::Repository,
     commit_builder: crate::preprocessed::CommitBuilder,
+    pub(crate) handle: ParametrizedCommitProcessorHandle,
 }
 impl<'repo> crate::processing::erased::PreparedCommitProc for PreparedMakeCommitProc<'repo> {
     fn process(
@@ -572,16 +576,16 @@ impl<'repo> crate::processing::erased::PreparedCommitProc for PreparedMakeCommit
             &mut dir_path,
             name,
             self.commit_builder.tree_oid(),
+            self.handle
         )
         .process();
         let h = prepro
             .processing_systems
             .mut_or_default::<MakeProcessorHolder>();
-        let handle =
-            <MakeProc as crate::processing::erased::CommitProcExt>::register_param(h, Parameter);
+        let handle = self.handle;
         let commit_oid = self.commit_builder.commit_oid();
         let commit = self.commit_builder.finish(root_full_node.0);
-        h.with_parameters_mut(handle.0)
+        h.with_parameters_mut(handle.1)
             .commits
             .insert(commit_oid, commit);
         root_full_node.0
@@ -593,11 +597,12 @@ impl crate::processing::erased::CommitProc for MakeProc {
         &self,
         repository: &'repo git2::Repository,
         commit_builder: crate::preprocessed::CommitBuilder,
-        param_handle: crate::processing::ParametrizedCommitProcessorHandle,
+        handle: crate::processing::ParametrizedCommitProcessorHandle,
     ) -> Box<dyn crate::processing::erased::PreparedCommitProc + 'repo> {
         Box::new(PreparedMakeCommitProc {
             repository,
             commit_builder,
+            handle,
         })
     }
 

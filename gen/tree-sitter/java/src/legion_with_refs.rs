@@ -5,6 +5,7 @@ use crate::{
     TNode,
 };
 use hyper_ast::store::nodes::legion::RawHAST;
+use hyper_ast::tree_gen::{add_md_precomp_queries, RoleAcc};
 use hyper_ast::{
     cyclomatic::Mcc,
     full::FullNode,
@@ -37,9 +38,7 @@ use hyper_ast::{
 };
 use legion::world::EntryRef;
 use num::ToPrimitive;
-use std::marker::PhantomData;
 use std::{collections::HashMap, fmt::Debug, vec};
-use tuples::CombinConcat;
 
 #[cfg(feature = "impact")]
 mod reference_analysis;
@@ -166,7 +165,7 @@ pub struct Acc {
     indentation: Spaces,
     role: RoleAcc<crate::types::Role>,
     precomp_queries: PrecompQueries,
-    prepro: Option<hyper_ast::scripting::lua_scripting::Acc>,
+    prepro: Option<hyper_ast::scripting::Acc>,
 }
 
 impl Accumulator for Acc {
@@ -235,40 +234,6 @@ impl Debug for Acc {
             .field("padding_start", &self.padding_start)
             .field("indentation", &self.indentation)
             .finish()
-    }
-}
-
-struct RoleAcc<R> {
-    pub current: Option<R>,
-    pub roles: Vec<R>,
-    pub offsets: Vec<u8>,
-}
-
-impl<R> Default for RoleAcc<R> {
-    fn default() -> Self {
-        Self {
-            current: None,
-            roles: Default::default(),
-            offsets: Default::default(),
-        }
-    }
-}
-
-impl<R> RoleAcc<R> {
-    fn acc(&mut self, role: R, o: usize) {
-        self.roles.push(role);
-        self.offsets.push(o.to_u8().unwrap());
-    }
-
-    fn add_md(self, dyn_builder: &mut impl EntityBuilder)
-    where
-        R: 'static + std::marker::Send + std::marker::Sync,
-    {
-        debug_assert!(self.current.is_none());
-        if self.roles.len() > 0 {
-            dyn_builder.add(self.roles.into_boxed_slice());
-            dyn_builder.add(compo::RoleOffsets(self.offsets.into_boxed_slice()));
-        }
     }
 }
 
@@ -381,17 +346,6 @@ impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<
                 None
             }
         }
-    }
-}
-
-pub fn add_md_precomp_queries(
-    dyn_builder: &mut impl EntityBuilder,
-    precomp_queries: PrecompQueries,
-) {
-    if precomp_queries > 0 {
-        dyn_builder.add(compo::Precomp(precomp_queries));
-    } else {
-        dyn_builder.add(compo::PrecompFlag);
     }
 }
 
@@ -596,7 +550,7 @@ where
 
 pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
     let mut parser = tree_sitter::Parser::new();
-    let language = tree_sitter_java::language();
+    let language = crate::language();
     parser.set_language(&language).unwrap();
     let tree = parser.parse(text, None).unwrap();
     if tree.root_node().has_error() {
@@ -702,7 +656,7 @@ impl<
 
     pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
         let mut parser = tree_sitter::Parser::new();
-        let language = tree_sitter_java::language();
+        let language = crate::language();
         parser.set_language(&language).unwrap();
         let tree = parser.parse(text, None).unwrap();
         if tree.root_node().has_error() {
@@ -894,7 +848,7 @@ where
                 dyn_builder.add(acc.mcc.clone());
             }
             if More::ENABLED {
-                add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
+                tree_gen::add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
             }
             #[cfg(feature = "impact")]
             reference_analysis::add_md_ref_ana(
@@ -914,7 +868,10 @@ where
             if More::USING {
                 let subtr = hyper_ast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
                 let ss = if let Some(label) = label {
-                    acc.prepro.unwrap().finish_with_label(&subtr, label).unwrap()
+                    acc.prepro
+                        .unwrap()
+                        .finish_with_label(&subtr, label)
+                        .unwrap()
                 } else {
                     acc.prepro.unwrap().finish(&subtr).unwrap()
                 };

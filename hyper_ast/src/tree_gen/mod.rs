@@ -217,23 +217,18 @@ impl Default for BasicGlobalData {
 impl GlobalData for BasicGlobalData {
     fn up(&mut self) {
         self.depth -= 1;
-        log::warn!("up {}", self.depth);
+        // TODO fix, there are issues the depth count is too big, I am probably missing a up somewhere 
     }
 
     fn right(&mut self) {
         self.position += 1;
         // self.depth -= 1;
-        log::warn!("right {}", self.depth);
     }
 
     /// goto the first children
     fn down(&mut self) {
         self.position += 1;
         self.depth += 1;
-        log::warn!("down {}", self.depth);
-        // if self.depth > 500 {
-        //     panic!()
-        // }
     }
 }
 pub trait TotalBytesGlobalData {
@@ -446,6 +441,56 @@ impl<Acc> Parents<Acc> {
     }
 }
 
+pub struct RoleAcc<R> {
+    pub current: Option<R>,
+    pub roles: Vec<R>,
+    pub offsets: Vec<u8>,
+}
+
+impl<R> Default for RoleAcc<R> {
+    fn default() -> Self {
+        Self {
+            current: None,
+            roles: Default::default(),
+            offsets: Default::default(),
+        }
+    }
+}
+
+impl<R> RoleAcc<R> {
+    pub fn acc(&mut self, role: R, o: usize) {
+        self.roles.push(role);
+        use num::ToPrimitive;
+        self.offsets.push(o.to_u8().unwrap());
+    }
+
+    pub fn add_md(self, dyn_builder: &mut impl crate::store::nodes::EntityBuilder)
+    where
+        R: 'static + std::marker::Send + std::marker::Sync,
+    {
+        debug_assert!(self.current.is_none());
+        if self.roles.len() > 0 {
+            dyn_builder.add(self.roles.into_boxed_slice());
+            use crate::store::nodes::legion::compo;
+            dyn_builder.add(compo::RoleOffsets(self.offsets.into_boxed_slice()));
+        }
+    }
+}
+
+
+pub fn add_md_precomp_queries(
+    dyn_builder: &mut impl crate::store::nodes::EntityBuilder,
+    precomp_queries: PrecompQueries,
+) {
+    use crate::store::nodes::legion::compo;
+    if precomp_queries > 0 {
+        dyn_builder.add(compo::Precomp(precomp_queries));
+    } else {
+        dyn_builder.add(compo::PrecompFlag);
+    }
+}
+
+
 pub mod zipped;
 pub use zipped::PreResult;
 pub use zipped::ZippedTreeGen;
@@ -572,7 +617,7 @@ pub trait Prepro<T> {
     fn preprocessing(
         &self,
         ty: T,
-    ) -> Result<crate::scripting::lua_scripting::Acc, String>;
+    ) -> Result<crate::scripting::Acc, String>;
 }
 
 impl<T> Prepro<T> for () {
@@ -580,7 +625,7 @@ impl<T> Prepro<T> for () {
     fn preprocessing(
         &self,
         _t: T,
-    ) -> Result<crate::scripting::lua_scripting::Acc, String> {
+    ) -> Result<crate::scripting::Acc, String> {
         Ok(todo!())
     }
 }

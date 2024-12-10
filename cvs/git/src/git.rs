@@ -196,8 +196,20 @@ where
 
     fo.remote_callbacks(callbacks);
 
-    let repository = up_to_date_repo(&path, fo, url);
-    repository
+    let repository = up_to_date_repo(&path, Some(fo), url);
+    repository.unwrap()
+}
+
+pub fn nofetch_repository<'a, T: TryInto<Url>, U: Into<PathBuf>>(url: T, path: U) -> Repository
+where
+    <T as TryInto<Url>>::Error: std::fmt::Debug,
+{
+    let url: Url = url.try_into().unwrap();
+    let mut path: PathBuf = path.into();
+    path.push(url.path.clone());
+
+    let repository = up_to_date_repo(&path, None, url);
+    repository.unwrap()
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
@@ -252,6 +264,11 @@ impl Repo {
         let url = self.url();
         let path = format!("{}", "/tmp/hyperastgitresources/repo/");
         fetch_repository(url, path)
+    }
+    pub fn nofetch(&self) -> Repository {
+        let url = self.url();
+        let path = format!("{}", "/tmp/hyperastgitresources/repo/");
+        nofetch_repository(url, path)
     }
 }
 
@@ -309,7 +326,7 @@ pub fn fetch_fork(mut x: git2::Remote, head: &str) -> Result<(), git2::Error> {
 }
 
 /// avoid mixing providers
-pub fn up_to_date_repo(path: &Path, mut fo: git2::FetchOptions, url: Url) -> Repository {
+pub fn up_to_date_repo(path: &Path, fo: Option<git2::FetchOptions>, url: Url) -> Result<Repository,git2::Error> {
     if path.join(".git").exists() {
         let repository = match Repository::open(path) {
             Ok(repo) => repo,
@@ -318,7 +335,11 @@ pub fn up_to_date_repo(path: &Path, mut fo: git2::FetchOptions, url: Url) -> Rep
                     if let Err(e) = fs::remove_dir_all(path.join(".git")) {
                         panic!("failed to remove currupted clone: {}", e)
                     } else {
-                        return clone_helper(url, path, fo);
+                        return if let Some(fo) = fo {
+                            clone_helper(url, path, fo)
+                        } else {
+                            Err(e)
+                        };
                     }
                 } else {
                     panic!("failed to open: {}", e)
@@ -326,22 +347,27 @@ pub fn up_to_date_repo(path: &Path, mut fo: git2::FetchOptions, url: Url) -> Rep
             }
             Err(e) => panic!("failed to open: {}", e),
         };
-        log::info!("fetch: {:?}", path);
-        repository
-            .find_remote("origin")
-            .unwrap()
-            .fetch(&["main"], Some(&mut fo), None)
-            .unwrap_or_else(|e| log::error!("{}", e));
 
-        repository
+        if let Some(mut fo) = fo {
+            log::info!("fetch: {:?}", path);
+            repository
+                .find_remote("origin")
+                .unwrap()
+                .fetch(&["main"], Some(&mut fo), None)
+                .unwrap_or_else(|e| log::error!("{}", e));
+        }
+
+        Ok(repository)
     } else if path.exists() && path.read_dir().map_or(true, |mut x| x.next().is_some()) {
         todo!()
-    } else {
+    } else if let Some(fo) = fo {
         clone_helper(url, path, fo)
+    } else {
+        panic!("there is no repo there, you can enable the cloning by provinding a fetch callback.")
     }
 }
 
-fn clone_helper(url: Url, path: &Path, fo: git2::FetchOptions) -> Repository {
+fn clone_helper(url: Url, path: &Path, fo: git2::FetchOptions) -> Result<Repository,git2::Error> {
     let mut builder = git2::build::RepoBuilder::new();
 
     builder.bare(true);
@@ -354,13 +380,13 @@ fn clone_helper(url: Url, path: &Path, fo: git2::FetchOptions) -> Repository {
         Err(e) if e.code() == git2::ErrorCode::Locked => {
             match builder.clone(&url.to_string(), path.join(".git").as_path()) {
                 Ok(repo) => repo,
-                Err(e) if e.code() == git2::ErrorCode::Locked => panic!("failed to clone: {}", e),
-                Err(e) => panic!("failed to clone: {}", e),
+                Err(e) if e.code() == git2::ErrorCode::Locked => return Err(e),
+                Err(e) => return Err(e),
             }
         }
-        Err(e) => panic!("failed to clone: {}", e),
+        Err(e) => return Err(e),
     };
-    repository
+    Ok(repository)
 }
 
 pub(crate) enum BasicGitObject {

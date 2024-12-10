@@ -29,13 +29,25 @@ macro_rules! mk_get_language {
             $crat::$lang()
         }
     };
+    (@default $camel:ident { $crat:ident, lang_fn: $lang:ident } ) => {
+        fn name(&self) -> &str {
+            stringify!($camel)
+        }
+        fn language(&self) -> Language {
+            Language::new($crat::$lang)
+        }
+    };
     (@each $camel:ident { $crat:ident, lang: $lang:ident, $($attrs:tt)* } ) => {
         mk_get_language!{ @default $camel { $crat, lang: $lang } }
         mk_get_language!{ @others $crat, $($attrs)* }
     };
+    (@each $camel:ident { $crat:ident, lang_fn: $lang:ident, $($attrs:tt)* } ) => {
+        mk_get_language!{ @default $camel { $crat, lang_fn: $lang } }
+        mk_get_language!{ @others $crat, $($attrs)* }
+    };
     (@each $camel:ident { $crat:ident, $($attrs:tt)* } ) => {
-        mk_get_language!{ @default $camel { $crat, lang: language } }
-        mk_get_language!{@others $crat, $($attrs)* }
+        mk_get_language!{ @default $camel { $crat, lang_fn: LANGUAGE } }
+        mk_get_language!{ @others $crat, $($attrs)* }
     };
     (@each $camel:ident { $crat:ident } ) => {
         mk_get_language!{ @default $camel { $crat, lang: language } }
@@ -127,6 +139,7 @@ mk_langs!(
     // 1) Name for enum 2) tree-sitter function to call to get a Language
     Query {
         tree_sitter_query,
+        lang: language,
         injects: INJECTIONS_QUERY,
         hi: HIGHLIGHTS_QUERY,
         n_types: NODE_TYPES,
@@ -156,15 +169,15 @@ mk_langs!(
     // Javascript { tree_sitter_javascript},
     Xml {
         tree_sitter_xml,
-        lang: language_xml,
+        lang_fn: LANGUAGE_XML,
         hi: XML_HIGHLIGHT_QUERY,
         n_types: XML_NODE_TYPES,
     },
     Typescript {
         tree_sitter_typescript,
-        lang: language_typescript,
-        tags: TAGGING_QUERY,
-        hi: HIGHLIGHT_QUERY,
+        lang_fn: LANGUAGE_TYPESCRIPT,
+        tags: TAGS_QUERY,
+        hi: HIGHLIGHTS_QUERY,
         n_types: TYPESCRIPT_NODE_TYPES,
     },
     Python {
@@ -180,6 +193,7 @@ mk_langs!(
     // },
     TsQuery {
         tree_sitter_query,
+        lang: language,
         hi: HIGHLIGHTS_QUERY,
         injects: INJECTIONS_QUERY,
         n_types: NODE_TYPES,

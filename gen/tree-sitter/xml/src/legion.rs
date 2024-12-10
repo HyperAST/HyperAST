@@ -263,7 +263,7 @@ impl<'stores, TS: XmlEnabledTypeStore> ZippedTreeGen for XmlTreeGen<'stores, TS>
 
 pub fn tree_sitter_parse_xml(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
     let mut parser = tree_sitter::Parser::new();
-    let language = tree_sitter_xml::language_xml();
+    let language = crate::language();
     parser.set_language(&language).unwrap();
     let tree = parser.parse(text, None).unwrap();
     if tree.root_node().has_error() {
@@ -276,7 +276,7 @@ pub fn tree_sitter_parse_xml(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitt
 impl<'a, TS> XmlTreeGen<'a, TS> {
     pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
         let mut parser = tree_sitter::Parser::new();
-        let language = tree_sitter_xml::language_xml();
+        let language = crate::language();
         parser.set_language(&language).unwrap();
         let tree = parser.parse(text, None).unwrap();
         if tree.root_node().has_error() {

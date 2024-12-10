@@ -90,7 +90,7 @@ fn compare_querying_group(c: &mut Criterion) {
             |b, (q, f)| {
                 b.iter(|| {
                     let query =
-                        hyper_ast_tsquery::Query::new(q.1, tree_sitter_java::language()).unwrap();
+                        hyper_ast_tsquery::Query::new(q.1, hyper_ast_gen_ts_java::language()).unwrap();
                     let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
                     let mut md_cache = Default::default();
                     let mut java_tree_gen =
@@ -134,7 +134,7 @@ fn compare_querying_group(c: &mut Criterion) {
                 b.iter(|| {
                     let (precomp, query) = hyper_ast_tsquery::Query::with_precomputed(
                         q.1,
-                        tree_sitter_java::language(),
+                        hyper_ast_gen_ts_java::language(),
                         q.0,
                     )
                     .unwrap();

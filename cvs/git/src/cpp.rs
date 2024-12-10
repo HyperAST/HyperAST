@@ -6,21 +6,31 @@ use crate::{
 use hyper_ast::{
     hashed::SyntaxNodeHashs,
     store::defaults::{LabelIdentifier, NodeIdentifier},
-    tree_gen::SubTreeMetrics,
+    tree_gen::{self, SubTreeMetrics},
 };
 
-use hyper_ast_gen_ts_cpp::{legion as cpp_tree_gen, types::TStore};
+use hyper_ast_gen_ts_cpp::{
+    legion as cpp_tree_gen,
+    types::{TStore, Type},
+};
 
-pub(crate) fn handle_cpp_file<'stores, 'cache, 'b: 'stores>(
-    tree_gen: &mut cpp_tree_gen::CppTreeGen<'stores, 'cache, TStore>,
+pub(crate) fn handle_cpp_file<'stores, 'cache, 'b: 'stores, More>(
+    tree_gen: &mut cpp_tree_gen::CppTreeGen<'stores, 'cache, TStore, More>,
     name: &ObjectName,
     text: &'b [u8],
-) -> Result<cpp_tree_gen::FNode, ()> {
+) -> Result<cpp_tree_gen::FNode, ()>
+where
+    More: tree_gen::Prepro<Type>
+        + for<'a, 'c> tree_gen::More<
+            hyper_ast::store::nodes::legion::RawHAST<'a, 'c, TStore>,
+            cpp_tree_gen::Acc,
+        >,
+{
     let tree = match cpp_tree_gen::CppTreeGen::<TStore>::tree_sitter_parse(text) {
         Ok(tree) => tree,
         Err(tree) => {
             log::warn!("bad CST: {:?}", name.try_str());
-            log::debug!("{}", tree.root_node().to_sexp());
+            // log::debug!("{}", tree.root_node().to_sexp());
             if PROPAGATE_ERROR_ON_BAD_CST_NODE {
                 return Err(());
             } else {

@@ -27,7 +27,7 @@ fn convert() {
     log::set_logger(&LOGGER)
         .map(|()| log::set_max_level(log::LevelFilter::Trace))
         .unwrap();
-    let language = tree_sitter_java::language();
+    let language = tree_sitter::Language::new(tree_sitter_java::LANGUAGE);
     let source = r#"(class_declaration
         name: (identifier) @name
         body: (class_body) @class_body)"#;
@@ -41,7 +41,7 @@ fn convert() {
     ) @a";
     // Compile the query.
     let query = Query::new(source, language).unwrap();
-    let language = tree_sitter_java::language();
+    let language = tree_sitter::Language::new(tree_sitter_java::LANGUAGE);
 
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&language).unwrap();

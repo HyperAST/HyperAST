@@ -6,7 +6,6 @@ use hyper_ast::types::{
     WithStats,
 };
 use std::fmt::Debug;
-use tree_sitter_graph::GenQuery;
 
 use crate::CaptureId;
 
@@ -151,12 +150,14 @@ impl<'hast, HAST> Default for MyNodeErazing<'hast, HAST> {
     }
 }
 
+#[cfg(feature = "tsg")]
 impl<'hast, HAST: 'static + hyper_ast::types::HyperAST<'hast>> tree_sitter_graph::graph::Erzd
     for MyNodeErazing<'hast, HAST>
 {
     type Original<'tree> = Node<'tree, HAST>;
 }
 
+#[cfg(feature = "tsg")]
 impl<'tree, HAST: 'static + HyperAST<'tree>> tree_sitter_graph::graph::LErazng
     for Node<'tree, HAST>
 {
@@ -188,7 +189,8 @@ impl<HAST> Debug for QueryMatcher<HAST> {
     }
 }
 
-impl<HAST> GenQuery for QueryMatcher<HAST>
+#[cfg(feature = "tsg")]
+impl<HAST> tree_sitter_graph::GenQuery for QueryMatcher<HAST>
 where
     HAST: 'static + hyper_ast::types::HyperASTShared + for<'tree> hyper_ast::types::HyperAST<'tree>,
     for<'tree> <HAST as HyperAST<'tree>>::TS: hyper_ast::types::RoleStore,
@@ -290,6 +292,7 @@ impl<Q, L> Default for ExtendingStringQuery<Q, L> {
     }
 }
 
+#[cfg(feature = "tsg")]
 impl<HAST> tree_sitter_graph::ExtendedableQuery
     for ExtendingStringQuery<QueryMatcher<HAST>, tree_sitter::Language>
 where
@@ -333,6 +336,7 @@ where
     }
 }
 
+#[cfg(feature = "tsg")]
 impl<'tree, HAST: hyper_ast::types::HyperAST<'tree>> tree_sitter_graph::graph::SyntaxNode
     for Node<'tree, HAST>
 where
@@ -404,6 +408,7 @@ where
     }
 }
 
+#[cfg(feature = "tsg")]
 impl<'tree, HAST: HyperAST<'tree>> tree_sitter_graph::graph::SyntaxNodeExt for Node<'tree, HAST>
 where
     <HAST as HyperASTShared>::IdN: Copy + std::hash::Hash + Debug,
@@ -443,6 +448,7 @@ pub struct MyQMatch<'cursor, 'tree, HAST: HyperAST<'tree>> {
     qm: crate::QueryMatch<Node<'tree, HAST>>,
 }
 
+#[cfg(feature = "tsg")]
 impl<'cursor, 'tree, HAST: hyper_ast::types::HyperAST<'tree>> tree_sitter_graph::graph::QMatch
     for MyQMatch<'cursor, 'tree, HAST>
 where

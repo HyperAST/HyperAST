@@ -348,7 +348,7 @@ pub(crate) fn field_name<'a>(
 /// It is compiler (and architecture?) dependant so lets be cautious !
 #[test]
 fn check_querystep_bitset_regresion() {
-    let language = tree_sitter_java::language();
+    let language = tree_sitter::Language::new(tree_sitter_java::LANGUAGE);
     let source = r#"(method_declaration
         .
         (modifiers "static"?@is_static)?

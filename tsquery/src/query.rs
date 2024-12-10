@@ -35,12 +35,14 @@ pub(crate) struct QueryPattern {
     steps: crate::Slice<StepId>,
     predicate_steps: crate::Slice<indexed::PredStepId>,
     start_byte: u32,
+    end_byte: u32,
     is_non_local: bool,
 }
 impl QueryPattern {
     pub(crate) fn adapt(mut self, offset: StepId, byte_offset: u32) -> QueryPattern {
         self.steps.offset += offset;
         self.start_byte += byte_offset;
+        self.end_byte += byte_offset;
         if self.predicate_steps.length != PredStepId::new(0) {
             todo!() // Not even sure if predicate_steps matter at this point
         }
@@ -65,6 +67,7 @@ impl From<&crate::ffi_extra::QueryPattern> for QueryPattern {
                 g(value.predicate_steps.length),
             ),
             start_byte: value.start_byte,
+            end_byte: value.end_byte,
             is_non_local: value.is_non_local,
         }
     }
