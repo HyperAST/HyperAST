@@ -250,7 +250,7 @@ impl StructuralPosition<NodeIdentifier, u16> {
         let t = stores.resolve_type(&x);
         // println!("t0:{:?}", t);
         let len = if let Some(y) = b.try_bytes_len() {
-            if !t.is_file() {
+            if !(t.is_file() || t.is_directory()) {
                 from_file = true;
             }
             y as usize
@@ -354,7 +354,7 @@ impl StructuralPosition<NodeIdentifier, u16> {
         let t = stores.resolve_type(&x);
         // println!("t0:{:?}", t);
 
-        if !t.is_file() {
+        if !(t.is_file() || t.is_directory()) {
             from_file = true;
         }
 
