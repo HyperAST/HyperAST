@@ -1,4 +1,4 @@
-pub trait Node<'a> {
+pub trait Node {
     fn kind(&self) -> &str;
     fn start_byte(&self) -> usize;
     fn end_byte(&self) -> usize;
@@ -8,6 +8,8 @@ pub trait Node<'a> {
     where
         Self: Sized;
     fn is_named(&self) -> bool;
+    fn is_missing(&self) -> bool;
+    fn is_error(&self) -> bool;
 
     fn extract_label(&self, text: &[u8]) -> Option<Vec<u8>> {
         let pos = self.start_byte();
@@ -30,18 +32,19 @@ pub trait Node<'a> {
     }
 }
 
-pub trait NodeWithU16TypeId<'a>: Node<'a> {
+pub trait NodeWithU16TypeId: Node {
     fn kind_id(&self) -> u16;
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum Visibility {
     Visible,
     Hidden,
 }
 
-pub trait TreeCursor<'a, N: Node<'a>> {
-    fn node(&self) -> N;
+pub trait TreeCursor {
+    type N: Node;
+    fn node(&self) -> Self::N;
     fn role(&self) -> Option<std::num::NonZeroU16>;
     fn goto_parent(&mut self) -> bool;
 

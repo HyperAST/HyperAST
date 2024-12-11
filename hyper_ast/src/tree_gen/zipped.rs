@@ -24,8 +24,8 @@ where
     type Stores;
     // # source
     type Text: ?Sized;
-    type Node<'a>: parser::Node<'a>;
-    type TreeCursor<'a>: parser::TreeCursor<'a, Self::Node<'a>> + std::fmt::Debug;
+    type Node<'a>: parser::Node;
+    type TreeCursor<'a>: parser::TreeCursor<N=Self::Node<'a>> + std::fmt::Debug + Clone;
 
     fn init_val(&mut self, text: &Self::Text, node: &Self::Node<'_>) -> Self::Acc;
 
@@ -73,6 +73,8 @@ where
         acc: <Self as TreeGen>::Acc,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node;
 
+    fn acc_s(acc: &<Self as TreeGen>::Acc) -> String {"".to_string()}
+
     fn stores(&mut self) -> &mut Self::Stores;
 
     fn gen(
@@ -82,51 +84,20 @@ where
         cursor: &mut Self::TreeCursor<'_>,
         global: &mut Self::Global,
     ) {
-        let mut has = Has::Down;
-        loop {
-            if has != Has::Up
-                && let Some(visibility) = cursor.goto_first_child_extended()
-            {
-                has = Has::Down;
-                global.down();
-                let n = self.pre_skippable(text, cursor, &stack, global);
-                match n {
-                    PreResult::Skip => {
-                        has = Has::Up;
-                        global.up();
-                    }
-                    PreResult::Ignore => {
-                        if let Visibility::Visible = visibility {
-                            stack.push(P::ManualyHidden);
-                        } else {
-                            stack.push(P::BothHidden);
-                        }
-                    }
-                    PreResult::SkipChildren(acc) => {
-                        has = Has::Up;
-                        if let Visibility::Visible = visibility {
-                            stack.push(P::Visible(acc));
-                        } else {
-                            unimplemented!("Only concrete nodes should be leafs")
-                        }
-                    }
-                    PreResult::Ok(acc) => {
-                        global.set_sum_byte_length(acc.begin_byte());
-                        if let Visibility::Visible = visibility {
-                            stack.push(P::Visible(acc));
-                        } else {
-                            stack.push(P::Hidden(acc));
-                        }
-                    }
+        let mut pre_post = super::utils_ts::PrePost::new(cursor);
+        while let Some(visibility) = pre_post.next() {
+            let (cursor, has) = pre_post.current().unwrap();
+            if *has == Has::Up || *has == Has::Right {
+                // #post
+                if stack.len() == 0 {
+                    return;
                 }
-            } else {
-                let is_visible;
+                // self._post(stack, global, text);
                 let is_parent_hidden;
                 let full_node: Option<_> = match (stack.pop().unwrap(), stack.parent_mut_with_vis())
                 {
                     (P::Visible(acc), None) => {
                         global.up();
-                        is_visible = true;
                         is_parent_hidden = false;
                         //global.set_sum_byte_length(acc.end_byte());
                         stack.push(P::Visible(acc));
@@ -136,17 +107,14 @@ where
                         panic!();
                     }
                     (P::ManualyHidden, Some((v, _))) => {
-                        is_visible = false;
                         is_parent_hidden = v == Visibility::Hidden;
                         None
                     }
                     (P::BothHidden, Some((v, _))) => {
-                        is_visible = false;
                         is_parent_hidden = v == Visibility::Hidden;
                         None
                     }
                     (P::Visible(acc), Some((v, parent))) => {
-                        is_visible = true;
                         is_parent_hidden = v == Visibility::Hidden;
                         if !acc.has_children() {
                             global.set_sum_byte_length(acc.end_byte());
@@ -159,7 +127,6 @@ where
                         Some(full_node)
                     }
                     (P::Hidden(acc), Some((v, parent))) => {
-                        is_visible = false;
                         is_parent_hidden = v == Visibility::Hidden;
                         if !acc.has_children() {
                             global.set_sum_byte_length(acc.end_byte());
@@ -179,100 +146,54 @@ where
                     }
                 };
 
-                // TODO opt out of using end_byte other than on leafs,
-                // it should help with trailing spaces,
-                // something like `cursor.node().child_count().ne(0).then(||cursor.node().end_byte())` then just call set_sum_byte_length if some
-                if let Some(visibility) = cursor.goto_next_sibling_extended() {
-                    has = Has::Right;
-                    let parent = stack.parent_mut().unwrap();
-                    if let Some(full_node) = full_node {
-                        self.acc(parent, full_node);
+                let parent = stack.parent_mut().unwrap();
+                if let Some(full_node) = full_node {
+                    self.acc(parent, full_node);
+                }
+            }
+            if *has == Has::Down || *has == Has::Right {
+                // #pre
+                // self._pre(global, text, cursor, stack, has, vis);
+                global.down();
+                let n = self.pre_skippable(text, cursor, &stack, global);
+                match n {
+                    PreResult::Skip => {
+                        stack.push(P::BothHidden);
+                        *has = Has::Up;
+                        global.up();
                     }
-                    loop {
-                        let parent = stack.parent_mut().unwrap();
-                        if parent.end_byte() <= cursor.node().start_byte() {
-                            loop {
-                                let p = stack.pop().unwrap();
-                                match p {
-                                    P::ManualyHidden => (),
-                                    P::BothHidden => (),
-                                    P::Hidden(acc) => {
-                                        let parent = stack.parent_mut().unwrap();
-                                        let full_node = self.post(parent, global, text, acc);
-                                        self.acc(parent, full_node);
-                                        break;
-                                    }
-                                    P::Visible(acc) => {
-                                        let parent = stack.parent_mut().unwrap();
-                                        let full_node = self.post(parent, global, text, acc);
-                                        self.acc(parent, full_node);
-                                        break;
-                                    }
-                                }
-                            }
+                    PreResult::Ignore => {
+                        if let Visibility::Visible = visibility {
+                            stack.push(P::ManualyHidden);
                         } else {
-                            break;
+                            stack.push(P::BothHidden);
                         }
                     }
-                    global.down();
-                    let n = self.pre_skippable(text, cursor, &stack, global);
-                    match n {
-                        PreResult::Skip => {
-                            has = Has::Up;
-                            global.up();
-                        }
-                        PreResult::Ignore => {
-                            if let Visibility::Visible = visibility {
-                                stack.push(P::ManualyHidden);
-                            } else {
-                                stack.push(P::BothHidden);
-                            }
-                        }
-                        PreResult::SkipChildren(acc) => {
-                            has = Has::Up;
-                            if let Visibility::Visible = visibility {
-                                stack.push(P::Visible(acc));
-                            } else {
-                                unimplemented!("Only concrete nodes should be leafs")
-                            }
-                        }
-                        PreResult::Ok(acc) => {
-                            global.set_sum_byte_length(acc.begin_byte());
-                            if let Visibility::Visible = visibility {
-                                stack.push(P::Visible(acc));
-                            } else {
-                                stack.push(P::Hidden(acc));
-                            }
+                    PreResult::SkipChildren(acc) => {
+                        *has = Has::Up;
+                        if let Visibility::Visible = visibility {
+                            stack.push(P::Visible(acc));
+                        } else {
+                            unimplemented!("Only concrete nodes should be leafs")
                         }
                     }
-                } else {
-                    has = Has::Up;
-                    if is_parent_hidden || stack.0.last().map_or(false, P::is_both_hidden) {
-                        if let Some(full_node) = full_node {
-                            let parent = stack.parent_mut().unwrap();
-                            self.acc(parent, full_node);
+                    PreResult::Ok(acc) => {
+                        global.set_sum_byte_length(acc.begin_byte());
+                        if let Visibility::Visible = visibility {
+                            stack.push(P::Visible(acc));
+                        } else {
+                            stack.push(P::Hidden(acc));
                         }
-                    } else if cursor.goto_parent() {
-                        if let Some(full_node) = full_node {
-                            let parent = stack.parent_mut().unwrap();
-                            self.acc(parent, full_node);
-                        } else if is_visible {
-                            if has == Has::Down {}
-                            return;
-                        }
-                    } else {
-                        assert!(full_node.is_none());
-                        if has == Has::Down {}
-                        return;
                     }
                 }
             }
         }
+        return;
     }
 }
 
 #[derive(PartialEq, Eq)]
-pub(crate) enum Has {
+pub enum Has {
     Down,
     Up,
     Right,

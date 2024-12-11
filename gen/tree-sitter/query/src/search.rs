@@ -7,7 +7,6 @@ use crate::auto::tsq_ser_meta::Conv;
 use crate::legion::TsQueryTreeGen;
 use crate::types::TStore;
 
-use hyper_ast::store::labels::LabelStore;
 use hyper_ast::store::nodes::legion::NodeIdentifier;
 use hyper_ast::store::SimpleStores;
 use hyper_ast::types::{HyperAST, Labeled};

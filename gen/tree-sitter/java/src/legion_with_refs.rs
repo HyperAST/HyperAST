@@ -5,24 +5,25 @@ use crate::{
     TNode,
 };
 use hyper_ast::store::nodes::legion::RawHAST;
+use hyper_ast::store::{
+    defaults::LabelIdentifier,
+    nodes::{
+        legion::{dyn_builder, eq_node, HashedNodeRef},
+        EntityBuilder,
+    },
+};
+use hyper_ast::tree_gen::utils_ts::TTreeCursor;
+use hyper_ast::tree_gen::{
+    self,
+    parser::{Node, TreeCursor},
+    BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics,
+    TextedGlobalData, TotalBytesGlobalData, TreeGen, WithByteRange,
+};
 use hyper_ast::tree_gen::{add_md_precomp_queries, RoleAcc};
 use hyper_ast::{
     cyclomatic::Mcc,
     full::FullNode,
     hashed::{HashedNode, IndexingHashBuilder, MetaDataHashsBuilder},
-    store::{
-        defaults::LabelIdentifier,
-        nodes::{
-            legion::{dyn_builder, eq_node, HashedNodeRef},
-            EntityBuilder,
-        },
-    },
-    tree_gen::{
-        self,
-        parser::{Node, TreeCursor, Visibility},
-        BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics,
-        TextedGlobalData, TotalBytesGlobalData, TreeGen, WithByteRange,
-    },
     types::{self, AnyType, NodeStoreExt, Role, TypeTrait, WithHashs, WithStats},
 };
 use hyper_ast::{
@@ -73,7 +74,7 @@ pub type FNode = FullNode<BasicGlobalData, Local>;
 // SPC: consider spaces ie. add them to the HyperAST,
 // NOTE there is a big issue with the byteLen of subtree then.
 // just provide a view abstracting spaces (see attempt in hyper_diff)
-pub struct JavaTreeGen<'stores, 'cache, TS = TStore, More = ()> {
+pub struct JavaTreeGen<'stores, 'cache, TS = TStore, More = (), const HIDDEN_NODES: bool = true> {
     pub line_break: Vec<u8>,
     pub stores: &'stores mut SimpleStores<TS>,
     pub md_cache: &'cache mut MDCache,
@@ -254,103 +255,9 @@ pub(crate) fn should_get_hidden_nodes() -> bool {
     unsafe { HIDDEN_NODES }
 }
 
-#[repr(transparent)]
-pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
-
-impl<'a> Debug for TTreeCursor<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("TTreeCursor")
-            .field(&self.0.node().kind())
-            .finish()
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-#[allow(unused)]
-enum TreeCursorStep {
-    TreeCursorStepNone,
-    TreeCursorStepHidden,
-    TreeCursorStepVisible,
-}
-
-impl TreeCursorStep {
-    fn ok(&self) -> Option<Visibility> {
-        match self {
-            TreeCursorStep::TreeCursorStepNone => None,
-            TreeCursorStep::TreeCursorStepHidden => Some(Visibility::Hidden),
-            TreeCursorStep::TreeCursorStepVisible => Some(Visibility::Visible),
-        }
-    }
-}
-
-extern "C" {
-    fn ts_tree_cursor_goto_first_child_internal(
-        self_: *mut tree_sitter::ffi::TSTreeCursor,
-    ) -> TreeCursorStep;
-    fn ts_tree_cursor_goto_next_sibling_internal(
-        self_: *mut tree_sitter::ffi::TSTreeCursor,
-    ) -> TreeCursorStep;
-}
-
-impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<'a> {
-    fn node(&self) -> TNode<'a> {
-        TNode(self.0.node())
-    }
-
-    fn role(&self) -> Option<std::num::NonZeroU16> {
-        self.0.field_id()
-    }
-
-    fn goto_parent(&mut self) -> bool {
-        self.0.goto_parent()
-    }
-
-    fn goto_first_child(&mut self) -> bool {
-        self.goto_first_child_extended().is_some()
-    }
-
-    fn goto_next_sibling(&mut self) -> bool {
-        self.goto_next_sibling_extended().is_some()
-    }
-
-    fn goto_first_child_extended(&mut self) -> Option<Visibility> {
-        if should_get_hidden_nodes() {
-            unsafe {
-                let s = &mut self.0;
-                let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
-                ts_tree_cursor_goto_first_child_internal(s)
-            }
-            .ok()
-        } else {
-            if self.0.goto_first_child() {
-                Some(Visibility::Visible)
-            } else {
-                None
-            }
-        }
-    }
-
-    fn goto_next_sibling_extended(&mut self) -> Option<Visibility> {
-        if should_get_hidden_nodes() {
-            unsafe {
-                let s = &mut self.0;
-                let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
-                ts_tree_cursor_goto_next_sibling_internal(s)
-            }
-            .ok()
-        } else {
-            if self.0.goto_next_sibling() {
-                Some(Visibility::Visible)
-            } else {
-                None
-            }
-        }
-    }
-}
-
 /// Implements [ZippedTreeGen] to offer a visitor for Java generation
-impl<'stores, 'cache, TS, More> ZippedTreeGen for JavaTreeGen<'stores, 'cache, TS, More>
+impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
+    for JavaTreeGen<'stores, 'cache, TS, More, HIDDEN_NODES>
 where
     TS: JavaEnabledTypeStore + 'static,
     More: tree_gen::Prepro<Type> + for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
@@ -359,14 +266,14 @@ where
     type Stores = SimpleStores<TS>;
     type Text = [u8];
     type Node<'b> = TNode<'b>;
-    type TreeCursor<'b> = TTreeCursor<'b>;
+    type TreeCursor<'b> = TTreeCursor<'b, HIDDEN_NODES>;
 
     fn stores(&mut self) -> &mut Self::Stores {
         &mut self.stores
     }
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> <Self as TreeGen>::Acc {
-        let kind = node.obtain_type();
+        let kind = TS::obtain_type(node);
         let parent_indentation = Space::try_format_indentation(&self.line_break)
             .unwrap_or_else(|| vec![Space::Space; self.line_break.len()]);
         let indent = compute_indentation(
@@ -412,7 +319,7 @@ where
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
         let node = &cursor.node();
-        let kind = node.obtain_type();
+        let kind = TS::obtain_type(node);
         if should_get_hidden_nodes() {
             if kind.is_repeat() {
                 return PreResult::Ignore;
@@ -451,7 +358,7 @@ where
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc {
         let parent_indentation = &stack.parent().unwrap().indentation();
-        let kind = node.obtain_type();
+        let kind = TS::obtain_type(node);
         assert!(
             global.sum_byte_length() <= node.start_byte(),
             "{}: {} <= {}",
@@ -549,27 +456,27 @@ where
 }
 
 pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
-    let mut parser = tree_sitter::Parser::new();
-    let language = crate::language();
-    parser.set_language(&language).unwrap();
-    let tree = parser.parse(text, None).unwrap();
-    if tree.root_node().has_error() {
-        Err(tree)
-    } else {
-        Ok(tree)
-    }
+    hyper_ast::tree_gen::utils_ts::tree_sitter_parse(text, &crate::language())
 }
 
-impl<'stores, 'cache, TS: JavaEnabledTypeStore> JavaTreeGen<'stores, 'cache, TS, ()> {
+impl<'stores, 'cache, TS: JavaEnabledTypeStore> JavaTreeGen<'stores, 'cache, TS, (), true> {
     pub fn new<'a, 'b>(
         stores: &'a mut SimpleStores<TS>,
         md_cache: &'b mut MDCache,
-    ) -> JavaTreeGen<'a, 'b, TS, ()> {
+    ) -> JavaTreeGen<'a, 'b, TS, (), true> {
         JavaTreeGen {
             line_break: "\n".as_bytes().to_vec(),
             stores,
             md_cache,
             more: (),
+        }
+    }
+    pub fn without_hidden_nodes(self) -> JavaTreeGen<'stores, 'cache, TS, (), false> {
+        JavaTreeGen {
+            line_break: self.line_break,
+            stores: self.stores,
+            md_cache: self.md_cache,
+            more: self.more,
         }
     }
 }
@@ -579,8 +486,17 @@ impl<
         'cache,
         TS: JavaEnabledTypeStore + 'static,
         More: tree_gen::Prepro<Type> + for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
-    > JavaTreeGen<'stores, 'cache, TS, More>
+        const HIDDEN_NODES: bool,
+    > JavaTreeGen<'stores, 'cache, TS, More, HIDDEN_NODES>
 {
+    pub fn with_more<M>(self, more: M) -> JavaTreeGen<'stores, 'cache, TS, M, HIDDEN_NODES> {
+        JavaTreeGen {
+            line_break: self.line_break,
+            stores: self.stores,
+            md_cache: self.md_cache,
+            more: more,
+        }
+    }
     fn make_spacing(&mut self, spacing: Vec<u8>) -> Local {
         let kind = Type::Spaces;
         let interned_kind = TS::intern(kind);
@@ -768,7 +684,8 @@ impl<
     }
 }
 
-impl<'stores, 'cache, TS, More> TreeGen for JavaTreeGen<'stores, 'cache, TS, More>
+impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
+    for JavaTreeGen<'stores, 'cache, TS, More, HIDDEN_NODES>
 where
     TS: JavaEnabledTypeStore,
     More: tree_gen::Prepro<Type> + for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
@@ -914,7 +831,8 @@ impl<
         'cache,
         TS: JavaEnabledTypeStore,
         More: tree_gen::Prepro<Type> + for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
-    > NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache, TS, More>
+        const HIDDEN_NODES: bool,
+    > NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache, TS, More, HIDDEN_NODES>
 where
     TS::Ty: TypeTrait,
 {

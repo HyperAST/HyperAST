@@ -133,6 +133,7 @@ impl Debug for Acc {
 }
 
 #[repr(transparent)]
+#[derive(Clone)]
 pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
 
 impl<'a> Debug for TTreeCursor<'a> {
@@ -142,7 +143,9 @@ impl<'a> Debug for TTreeCursor<'a> {
             .finish()
     }
 }
-impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<'a> {
+
+impl<'a> hyper_ast::tree_gen::parser::TreeCursor for TTreeCursor<'a> {
+    type N = TNode<'a>;
     fn node(&self) -> TNode<'a> {
         TNode(self.0.node())
     }
@@ -175,7 +178,7 @@ impl<'store, 'cache, TS: TsEnabledTypeStore> ZippedTreeGen for TsTreeGen<'store,
     }
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
-        let kind = node.obtain_type();
+        let kind = TS::obtain_type(node);
         let parent_indentation = Space::try_format_indentation(&self.line_break)
             .unwrap_or_else(|| vec![Space::Space; self.line_break.len()]);
         let indent = compute_indentation(
@@ -211,7 +214,7 @@ impl<'store, 'cache, TS: TsEnabledTypeStore> ZippedTreeGen for TsTreeGen<'store,
         if node.0.is_missing() {
             return PreResult::Skip;
         }
-        let _kind = node.obtain_type();
+        let _kind = TS::obtain_type(&node);
         let acc = self.pre(text, &node, stack, global);
         PreResult::Ok(acc)
     }
@@ -223,7 +226,7 @@ impl<'store, 'cache, TS: TsEnabledTypeStore> ZippedTreeGen for TsTreeGen<'store,
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc {
         let parent_indentation = &stack.parent().unwrap().indentation();
-        let kind = node.obtain_type();
+        let kind = TS::obtain_type(node);
         let indent = compute_indentation(
             &self.line_break,
             text,

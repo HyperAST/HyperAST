@@ -22,11 +22,12 @@ use hyper_ast::{
     tree_gen::{
         compute_indentation, get_spacing, has_final_space,
         parser::{Node as _, TreeCursor},
+        utils_ts::TTreeCursor,
         AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents,
         PreResult, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen,
         WithByteRange, ZippedTreeGen,
     },
-    types::LabelStore as _,
+    types::{ETypeStore as _, LabelStore as _},
 };
 
 use crate::types::{TsQueryEnabledTypeStore, Type};
@@ -65,6 +66,10 @@ pub struct PartialAnalysis {}
 pub struct Local {
     pub compressed_node: NodeIdentifier,
     pub metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
+}
+
+pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
+    hyper_ast::tree_gen::utils_ts::tree_sitter_parse(text, &crate::language())
 }
 
 impl Local {
@@ -132,50 +137,6 @@ impl Debug for Acc {
     }
 }
 
-#[repr(transparent)]
-pub struct TTreeCursor<'a>(tree_sitter::TreeCursor<'a>);
-
-impl<'a> Debug for TTreeCursor<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("TTreeCursor")
-            .field(&self.0.node().kind())
-            .finish()
-    }
-}
-impl<'a> hyper_ast::tree_gen::parser::TreeCursor<'a, TNode<'a>> for TTreeCursor<'a> {
-    fn node(&self) -> TNode<'a> {
-        TNode(self.0.node())
-    }
-
-    fn role(&self) -> Option<std::num::NonZeroU16> {
-        self.0.field_id()
-    }
-
-    fn goto_first_child(&mut self) -> bool {
-        self.0.goto_first_child()
-    }
-
-    fn goto_parent(&mut self) -> bool {
-        self.0.goto_parent()
-    }
-
-    fn goto_next_sibling(&mut self) -> bool {
-        self.0.goto_next_sibling()
-    }
-}
-
-pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
-    let mut parser = tree_sitter::Parser::new();
-    let language = tree_sitter_query::language();
-    parser.set_language(&language).unwrap();
-    let tree = parser.parse(text, None).unwrap();
-    if tree.root_node().has_error() {
-        Err(tree)
-    } else {
-        Ok(tree)
-    }
-}
-
 impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdentifier>>>
     ZippedTreeGen for TsQueryTreeGen<'store, 'cache, TS>
 {
@@ -189,7 +150,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
     }
 
     fn init_val(&mut self, text: &[u8], node: &Self::Node<'_>) -> Self::Acc {
-        let kind = node.obtain_type();
+        let kind = TS::obtain_type(node);
         let parent_indentation = Space::try_format_indentation(&self.line_break)
             .unwrap_or_else(|| vec![Space::Space; self.line_break.len()]);
         let indent = compute_indentation(
@@ -221,8 +182,9 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
         stack: &Parents<Self::Acc>,
         global: &mut Self::Global,
     ) -> PreResult<<Self as TreeGen>::Acc> {
-        let kind = cursor.node().obtain_type();
-        let mut acc = self.pre(text, &cursor.node(), stack, global);
+        let node = cursor.node();
+        let kind = TS::obtain_type(&node);
+        let mut acc = self.pre(text, &node, stack, global);
         if kind == Type::String {
             acc.labeled = true;
             return PreResult::SkipChildren(acc);
@@ -243,7 +205,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
         global: &mut Self::Global,
     ) -> <Self as TreeGen>::Acc {
         let parent_indentation = &stack.parent().unwrap().indentation();
-        let kind = node.obtain_type();
+        let kind = TS::obtain_type(node);
         let indent = compute_indentation(
             &self.line_break,
             text,
@@ -457,11 +419,8 @@ where
     }
 }
 
-impl<
-        'stores,
-        'cache,
-        TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, NodeIdentifier>>,
-    > TreeGen for TsQueryTreeGen<'stores, 'cache, TS>
+impl<'stores, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, NodeIdentifier>>> TreeGen
+    for TsQueryTreeGen<'stores, 'cache, TS>
 {
     type Acc = Acc;
     type Global = SpacedGlobalData<'stores>;

@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use hyper_ast::{
     store::defaults::NodeIdentifier,
-    tree_gen::parser::NodeWithU16TypeId,
+    tree_gen::utils_ts::TsEnableTS,
     types::{
         AnyType, HyperType, LangRef, NodeId, RoleStore, TypeStore, TypeTrait, TypeU16, TypedNodeId,
     },
@@ -12,16 +12,38 @@ use hyper_ast::{
 mod legion_impls {
     use super::*;
 
-    use crate::TNode;
+    impl<'a> hyper_ast::types::ETypeStore for TStore {
+        type Ty2 = Type;
 
-    impl<'a> TNode<'a> {
-        pub fn obtain_type(&self) -> Type {
-            let t = self.kind_id();
-            Type::from_u16(t)
+        fn intern(ty: Self::Ty2) -> Self::Ty {
+            TType::new(ty)
         }
     }
 
-    use hyper_ast::{store::nodes::legion::HashedNodeRef, types::LangWrapper};
+    impl TsEnableTS for TStore {
+        fn obtain_type<'a, N: hyper_ast::tree_gen::parser::NodeWithU16TypeId>(
+            n: &N,
+        ) -> <Self as hyper_ast::types::ETypeStore>::Ty2 {
+            let k = n.kind_id();
+            Type::from_u16(k)
+        }
+    }
+
+    impl TsType for Type {
+        fn spaces() -> Self {
+            Self::Spaces
+        }
+
+        fn is_repeat(&self) -> bool {
+            self.is_repeat()
+        }
+    }
+
+    use hyper_ast::{
+        store::nodes::legion::HashedNodeRef,
+        tree_gen::utils_ts::{TsEnableTS, TsType},
+        types::LangWrapper,
+    };
 
     impl TypeStore for TStore {
         type Ty = TypeU16<TsQuery>;
@@ -33,7 +55,9 @@ mod legion_impls {
             tid: std::any::TypeId,
         ) -> Self::Ty {
             erazed
-                .unerase_ref::<TypeU16<TsQuery>>(std::any::TypeId::of::<TypeU16<TsQuery>>()).unwrap().e()
+                .unerase_ref::<TypeU16<TsQuery>>(std::any::TypeId::of::<TypeU16<TsQuery>>())
+                .unwrap()
+                .e()
         }
     }
 
@@ -70,10 +94,6 @@ mod legion_impls {
     // }
 
     impl<'a> TsQueryEnabledTypeStore<HashedNodeRef<'a, NodeIdentifier>> for TStore {
-        fn intern(t: Type) -> Self::Ty {
-            t.into()
-        }
-
         fn resolve(t: Self::Ty) -> Type {
             t.e()
         }
@@ -89,8 +109,9 @@ fn id_for_node_kind(kind: &str, named: bool) -> u16 {
     unimplemented!("need treesitter grammar")
 }
 
-pub trait TsQueryEnabledTypeStore<T>: TypeStore {
-    fn intern(t: Type) -> Self::Ty;
+pub trait TsQueryEnabledTypeStore<T>:
+    hyper_ast::types::ETypeStore<Ty2 = Type> + Clone + TsEnableTS
+{
     fn resolve(t: Self::Ty) -> Type;
 }
 
@@ -128,6 +149,7 @@ impl<IdN: Clone + Eq + NodeId> TypedNodeId for TIdN<IdN> {
     }
 }
 
+#[derive(Clone)]
 pub struct TStore;
 
 pub struct _TStore;
@@ -665,6 +687,9 @@ impl Type {
         match self {
             _ => false,
         }
+    }
+    pub fn is_repeat(&self) -> bool {
+        todo!("generate this with polyglote")
     }
     pub fn is_named(&self) -> bool {
         match self {

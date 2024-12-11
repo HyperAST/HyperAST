@@ -9,6 +9,7 @@ use criterion::{
 };
 
 mod shared;
+use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
 use shared::*;
 
 pub const QUERIES: &[BenchQuery] = &[
@@ -228,12 +229,7 @@ fn preps_precomputed(
     query._check_preprocessed(0, bench_param.0.len());
     let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
-    let mut java_tree_gen = hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-        more: precomp,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache).with_more(precomp);
     let roots: Vec<_> = f
         .into_iter()
         .map(|(name, text)| {

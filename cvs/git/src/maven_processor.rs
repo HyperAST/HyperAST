@@ -8,6 +8,7 @@ use crate::{
     Processor,
 };
 use git2::{Oid, Repository};
+use hyper_ast::types::ETypeStore as _;
 use hyper_ast::{
     hashed::MetaDataHashsBuilder,
     store::{defaults::NodeIdentifier, nodes::EntityBuilder},

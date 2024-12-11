@@ -150,7 +150,7 @@ where
                     TreeCursorStep::TreeCursorStepNone => {
                         if self.cursor.goto_parent() {
                             if self.depth == 0 {
-                                todo!()
+                                return did_match;
                             }
                             self.depth -= 1;
                         } else {

@@ -7,7 +7,7 @@ use crate::{
     Processor,
 };
 use git2::{Oid, Repository};
-use hyper_ast::{store::nodes::legion::eq_node, types::LabelStore};
+use hyper_ast::{store::nodes::legion::eq_node, types::{ETypeStore as _, LabelStore}};
 use hyper_ast_gen_ts_cpp::{
     legion as cpp_gen,
     types::{CppEnabledTypeStore as _, Type},

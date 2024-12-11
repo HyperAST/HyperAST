@@ -102,6 +102,7 @@ impl<T: Debug, Id> Debug for BasicAccumulator<T, Id> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BasicAccumulator")
             .field("kind", &self.kind)
+            .field("children", &self.children.len())
             .finish()
     }
 }
@@ -217,7 +218,7 @@ impl Default for BasicGlobalData {
 impl GlobalData for BasicGlobalData {
     fn up(&mut self) {
         self.depth -= 1;
-        // TODO fix, there are issues the depth count is too big, I am probably missing a up somewhere 
+        // TODO fix, there are issues the depth count is too big, I am probably missing a up somewhere
     }
 
     fn right(&mut self) {
@@ -305,7 +306,13 @@ impl<'a> SpacedGlobalData<'a> {
 }
 impl<'a> TotalBytesGlobalData for SpacedGlobalData<'a> {
     fn set_sum_byte_length(&mut self, sum_byte_length: usize) {
-        assert!(self.sum_byte_length <= sum_byte_length);
+        // assert!(self.sum_byte_length <= sum_byte_length);
+        assert!(
+            self.sum_byte_length <= sum_byte_length,
+            "new byte offset is smaller: {} > {}",
+            self.sum_byte_length,
+            sum_byte_length
+        );
         self.sum_byte_length = sum_byte_length;
     }
 }
@@ -362,6 +369,14 @@ enum P<Acc> {
 }
 
 impl<Acc> P<Acc> {
+    fn s(&self) -> &str {
+        match self {
+            P::ManualyHidden => "ManualyHidden",
+            P::BothHidden => "BothHidden",
+            P::Hidden(_) => "Hidden",
+            P::Visible(_) => "Visible",
+        }
+    }
     fn is_both_hidden(&self) -> bool {
         match self {
             P::BothHidden => true,
@@ -439,6 +454,10 @@ impl<Acc> Parents<Acc> {
             .rev()
             .find_map(|x| x.as_mut().visibility())
     }
+
+    fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 pub struct RoleAcc<R> {
@@ -459,11 +478,20 @@ impl<R> Default for RoleAcc<R> {
 
 impl<R> RoleAcc<R> {
     pub fn acc(&mut self, role: R, o: usize) {
-        self.roles.push(role);
         use num::ToPrimitive;
-        self.offsets.push(o.to_u8().unwrap());
+        if let Some(o) = o.to_u8() {
+            self.roles.push(role);
+            self.offsets.push(o);
+        } else {
+            log::warn!("overflowed 255 offseted role...");
+            debug_assert!(false);
+            // TODO could increase to u16,
+            // at least on some variants.
+            // TODO could also use the repeat nodes to break down nodes with way to many children... 
+        }
     }
 
+    #[cfg(feature = "legion")]
     pub fn add_md(self, dyn_builder: &mut impl crate::store::nodes::EntityBuilder)
     where
         R: 'static + std::marker::Send + std::marker::Sync,
@@ -477,7 +505,7 @@ impl<R> RoleAcc<R> {
     }
 }
 
-
+#[cfg(feature = "legion")]
 pub fn add_md_precomp_queries(
     dyn_builder: &mut impl crate::store::nodes::EntityBuilder,
     precomp_queries: PrecompQueries,
@@ -490,10 +518,296 @@ pub fn add_md_precomp_queries(
     }
 }
 
-
 pub mod zipped;
 pub use zipped::PreResult;
 pub use zipped::ZippedTreeGen;
+
+/// utils for generating code with tree-sitter
+#[cfg(feature = "ts")]
+pub mod utils_ts {
+
+    pub trait TsEnableTS: crate::types::ETypeStore
+    where
+        Self::Ty2: TsType,
+    {
+        fn obtain_type<N: crate::tree_gen::parser::NodeWithU16TypeId>(n: &N) -> Self::Ty2;
+    }
+
+    pub trait TsType: crate::types::HyperType + Copy {
+        fn spaces() -> Self;
+        fn is_repeat(&self) -> bool;
+    }
+
+    pub fn tree_sitter_parse(
+        text: &[u8],
+        language: &tree_sitter::Language,
+    ) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
+        let mut parser = tree_sitter::Parser::new();
+        // TODO see if a timeout of a cancellation flag could be useful
+        // const MINUTE: u64 = 60 * 1000 * 1000;
+        // parser.set_timeout_micros(timeout_micros);
+        // parser.set_cancellation_flag(flag);
+        parser.set_language(language).unwrap();
+        let tree = parser.parse(text, None).unwrap();
+        if tree.root_node().has_error() {
+            Err(tree)
+        } else {
+            Ok(tree)
+        }
+    }
+
+    use super::parser::Visibility;
+
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone)]
+    #[allow(dead_code)] // NOTE: created by tree sitter
+    pub(crate) enum TreeCursorStep {
+        TreeCursorStepNone,
+        TreeCursorStepHidden,
+        TreeCursorStepVisible,
+    }
+
+    impl TreeCursorStep {
+        pub(crate) fn ok(&self) -> Option<Visibility> {
+            match self {
+                TreeCursorStep::TreeCursorStepNone => None,
+                TreeCursorStep::TreeCursorStepHidden => Some(Visibility::Hidden),
+                TreeCursorStep::TreeCursorStepVisible => Some(Visibility::Visible),
+            }
+        }
+    }
+
+    extern "C" {
+        fn ts_tree_cursor_goto_first_child_internal(
+            self_: *mut tree_sitter::ffi::TSTreeCursor,
+        ) -> TreeCursorStep;
+        fn ts_tree_cursor_goto_next_sibling_internal(
+            self_: *mut tree_sitter::ffi::TSTreeCursor,
+        ) -> TreeCursorStep;
+    }
+
+    #[repr(transparent)]
+    pub struct TNode<'a>(pub tree_sitter::Node<'a>);
+
+    impl<'a> crate::tree_gen::parser::Node for TNode<'a> {
+        fn kind(&self) -> &str {
+            self.0.kind()
+        }
+
+        fn start_byte(&self) -> usize {
+            self.0.start_byte()
+        }
+
+        fn end_byte(&self) -> usize {
+            self.0.end_byte()
+        }
+
+        fn child_count(&self) -> usize {
+            self.0.child_count()
+        }
+
+        fn child(&self, i: usize) -> Option<Self> {
+            self.0.child(i).map(TNode)
+        }
+
+        fn is_named(&self) -> bool {
+            self.0.is_named()
+        }
+
+        fn is_missing(&self) -> bool {
+            self.0.is_missing()
+        }
+
+        fn is_error(&self) -> bool {
+            self.0.is_error()
+        }
+    }
+
+    impl<'a> crate::tree_gen::parser::NodeWithU16TypeId for TNode<'a> {
+        fn kind_id(&self) -> u16 {
+            self.0.kind_id()
+        }
+    }
+
+    #[repr(transparent)]
+    #[derive(Clone)]
+    pub struct TTreeCursor<'a, const HIDDEN_NODES: bool = false>(pub tree_sitter::TreeCursor<'a>);
+
+    impl<'a, const HIDDEN_NODES: bool> std::fmt::Debug for TTreeCursor<'a, HIDDEN_NODES> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_tuple("TTreeCursor")
+                .field(&self.0.node().kind())
+                .finish()
+        }
+    }
+
+    impl<'a, const HIDDEN_NODES: bool> crate::tree_gen::parser::TreeCursor
+        for TTreeCursor<'a, HIDDEN_NODES>
+    {
+        type N = TNode<'a>;
+        fn node(&self) -> TNode<'a> {
+            TNode(self.0.node())
+        }
+
+        fn role(&self) -> Option<std::num::NonZeroU16> {
+            self.0.field_id()
+        }
+
+        fn goto_parent(&mut self) -> bool {
+            self.0.goto_parent()
+        }
+
+        fn goto_first_child(&mut self) -> bool {
+            self.goto_first_child_extended().is_some()
+        }
+
+        fn goto_next_sibling(&mut self) -> bool {
+            self.goto_next_sibling_extended().is_some()
+        }
+
+        fn goto_first_child_extended(&mut self) -> Option<Visibility> {
+            if HIDDEN_NODES {
+                unsafe {
+                    let s = &mut self.0;
+                    let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
+                    ts_tree_cursor_goto_first_child_internal(s)
+                }
+                .ok()
+            } else {
+                if self.0.goto_first_child() {
+                    Some(Visibility::Visible)
+                } else {
+                    None
+                }
+            }
+        }
+
+        fn goto_next_sibling_extended(&mut self) -> Option<Visibility> {
+            if HIDDEN_NODES {
+                let r = unsafe {
+                    let s = &mut self.0;
+                    let s: *mut tree_sitter::ffi::TSTreeCursor = std::mem::transmute(s);
+                    ts_tree_cursor_goto_next_sibling_internal(s)
+                }
+                .ok();
+                r
+            } else {
+                if self.0.goto_next_sibling() {
+                    Some(Visibility::Visible)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    /// Guaranteed to work even when considering hidden nodes,
+    /// i.e., goto_next_cchildren() skips hidden parents...
+    pub struct PrePost<C> {
+        has: super::zipped::Has,
+        stack: Vec<C>,
+        vis: bitvec::vec::BitVec,
+    }
+
+    impl<'a, C: super::parser::TreeCursor + Clone> PrePost<C> {
+        pub fn new(cursor: &C) -> Self {
+            use bitvec::prelude::Lsb0;
+            let mut vis = bitvec::bitvec![];
+            vis.push(Visibility::Hidden == Visibility::Hidden);
+            let pre_post = Self {
+                has: super::zipped::Has::Down,
+                stack: vec![cursor.clone()],
+                vis,
+            };
+            pre_post
+        }
+
+        pub fn current(&mut self) -> Option<(&C, &mut super::zipped::Has)> {
+            self.stack.last().map(|c| (c, &mut self.has))
+        }
+
+        pub fn next(&mut self) -> Option<Visibility> {
+            use super::zipped::Has;
+            use crate::tree_gen::parser::Node;
+            if self.vis.is_empty() {
+                return None;
+            };
+            let Some(cursor) = self.stack.last_mut() else {
+                return None;
+            };
+            let mut cursor = cursor.clone();
+            if self.has != Has::Up
+                && let Some(visibility) = cursor.goto_first_child_extended()
+            {
+                self.stack.push(cursor);
+                self.has = Has::Down;
+                self.vis.push(visibility == Visibility::Hidden);
+                Some(visibility)
+            } else {
+                use std::ops::Deref;
+                if let Some(visibility) = cursor.goto_next_sibling_extended() {
+                    let _ = self.stack.pop().unwrap();
+                    let c = self.stack.last_mut().unwrap();
+                    if c.node().end_byte() <= cursor.node().start_byte() {
+                        self.has = Has::Up;
+                        let vis = if *self.vis.last().unwrap().deref() {
+                            Visibility::Hidden
+                        } else {
+                            Visibility::Visible
+                        };
+                        return Some(vis);
+                    }
+                    self.stack.push(cursor);
+                    self.vis.push(visibility == Visibility::Hidden);
+                    self.has = Has::Right;
+                    Some(visibility)
+                } else if let Some(c) = self.stack.pop() {
+                    self.has = Has::Up;
+                    if self.stack.is_empty() {
+                        self.stack.push(c);
+                        None
+                        // depends on usage
+                        // let vis = if self.vis.pop().unwrap() {
+                        //     Visibility::Hidden
+                        // } else {
+                        //     Visibility::Visible
+                        // };
+                        // Some(vis)
+                    } else {
+                        let vis = if *self.vis.last().unwrap().deref() {
+                            Visibility::Hidden
+                        } else {
+                            Visibility::Visible
+                        };
+                        Some(vis)
+                    }
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "ts")]
+mod zipped_ts;
+#[cfg(feature = "ts")]
+mod zipped_ts0;
+#[doc(hidden)]
+#[cfg(feature = "ts")]
+pub mod zipped_ts_no_goto_parent;
+#[doc(hidden)]
+#[cfg(feature = "ts")]
+pub mod zipped_ts_no_goto_parent_a;
+#[doc(hidden)]
+#[cfg(feature = "ts")]
+pub mod zipped_ts_simp;
+#[doc(hidden)]
+#[cfg(feature = "ts")]
+pub mod zipped_ts_simp0;
+#[doc(hidden)]
+#[cfg(feature = "ts")]
+pub mod zipped_ts_simp1;
 
 pub(crate) fn things_after_last_lb<'b>(lb: &[u8], spaces: &'b [u8]) -> Option<&'b [u8]> {
     spaces
@@ -511,6 +825,10 @@ pub fn compute_indentation<'a>(
     parent_indentation: &'a [Space],
 ) -> Vec<Space> {
     let spaces = { &text[padding_start..pos] };
+    // let spaces = text.get(padding_start.min(text.len()-1)..pos.min(text.len()));
+    // let Some(spaces) = spaces else {
+    //     return parent_indentation.to_vec()
+    // };
     let spaces_after_lb = things_after_last_lb(&*line_break, spaces);
     match spaces_after_lb {
         Some(s) => Space::format_indentation(s),
@@ -607,29 +925,21 @@ pub fn has_final_space(depth: &usize, sum_byte_length: usize, text: &[u8]) -> bo
     *depth == 0 && sum_byte_length < text.len()
 }
 
-
 pub fn hash32<T: ?Sized + std::hash::Hash>(t: &T) -> u32 {
     crate::utils::clamp_u64_to_u32(&crate::utils::hash(t))
 }
 
 pub trait Prepro<T> {
     const USING: bool;
-    fn preprocessing(
-        &self,
-        ty: T,
-    ) -> Result<crate::scripting::Acc, String>;
+    fn preprocessing(&self, ty: T) -> Result<crate::scripting::Acc, String>;
 }
 
 impl<T> Prepro<T> for () {
     const USING: bool = false;
-    fn preprocessing(
-        &self,
-        _t: T,
-    ) -> Result<crate::scripting::Acc, String> {
+    fn preprocessing(&self, _t: T) -> Result<crate::scripting::Acc, String> {
         Ok(todo!())
     }
 }
-
 
 pub type PrecompQueries = u16;
 
