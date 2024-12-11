@@ -478,9 +478,17 @@ impl<R> Default for RoleAcc<R> {
 
 impl<R> RoleAcc<R> {
     pub fn acc(&mut self, role: R, o: usize) {
-        self.roles.push(role);
         use num::ToPrimitive;
-        self.offsets.push(o.to_u8().unwrap());
+        if let Some(o) = o.to_u8() {
+            self.roles.push(role);
+            self.offsets.push(o);
+        } else {
+            log::warn!("overflowed 255 offseted role...");
+            debug_assert!(false);
+            // TODO could increase to u16,
+            // at least on some variants.
+            // TODO could also use the repeat nodes to break down nodes with way to many children... 
+        }
     }
 
     #[cfg(feature = "legion")]
@@ -535,6 +543,10 @@ pub mod utils_ts {
         language: &tree_sitter::Language,
     ) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
         let mut parser = tree_sitter::Parser::new();
+        // TODO see if a timeout of a cancellation flag could be useful
+        // const MINUTE: u64 = 60 * 1000 * 1000;
+        // parser.set_timeout_micros(timeout_micros);
+        // parser.set_cancellation_flag(flag);
         parser.set_language(language).unwrap();
         let tree = parser.parse(text, None).unwrap();
         if tree.root_node().has_error() {
