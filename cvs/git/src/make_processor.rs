@@ -10,6 +10,7 @@ use crate::{
     Processor,
 };
 use git2::{Oid, Repository};
+use hyper_ast::types::ETypeStore as _;
 use hyper_ast::{
     hashed::{IndexingHashBuilder, MetaDataHashsBuilder},
     store::{defaults::NodeIdentifier, nodes::legion::eq_node},
@@ -192,9 +193,13 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
         let helper = MakeModuleHelper::from((parent_acc, &name));
         if helper.source_directories.0 || helper.test_source_directories.0 {
             // handle as source dir
-            let (name, (full_node, _)) =
-                self.prepro
-                    .help_handle_cpp_folder(&self.repository, self.dir_path, oid, &name, cpp_handle);
+            let (name, (full_node, _)) = self.prepro.help_handle_cpp_folder(
+                &self.repository,
+                self.dir_path,
+                oid,
+                &name,
+                cpp_handle,
+            );
             let parent_acc = &mut self.stack.last_mut().unwrap().2;
             assert!(!parent_acc.primary.children_names.contains(&name));
             if helper.source_directories.0 {
@@ -576,7 +581,7 @@ impl<'repo> crate::processing::erased::PreparedCommitProc for PreparedMakeCommit
             &mut dir_path,
             name,
             self.commit_builder.tree_oid(),
-            self.handle
+            self.handle,
         )
         .process();
         let h = prepro

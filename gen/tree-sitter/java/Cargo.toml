@@ -101,6 +101,7 @@ impl = [
     "hashbrown?/ahash",
     "dep:tree-sitter",
     "dep:tree-sitter-java",
+    "hyper_ast/ts",
 ]
 tsg = [
     "dep:tree-sitter-graph",

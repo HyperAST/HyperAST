@@ -8,6 +8,7 @@ use criterion::{
 };
 
 mod shared;
+use hyper_ast_gen_ts_java::legion_with_refs::{self, JavaTreeGen};
 use shared::*;
 
 pub const QUERIES: &[BenchQuery] = &[
@@ -103,18 +104,17 @@ fn preps_default(
 ) {
     let (q, f) = p;
     let query = hyper_ast_tsquery::Query::new(q.1, hyper_ast_gen_ts_java::language()).unwrap();
-    let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
+    let mut stores =
+        hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
-    let mut java_tree_gen =
-        hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let roots: Vec<_> = f
         .into_iter()
         .map(|(name, text)| {
-            let tree =
-                match hyper_ast_gen_ts_java::legion_with_refs::tree_sitter_parse(text.as_bytes()) {
-                    Ok(t) => t,
-                    Err(t) => t,
-                };
+            let tree = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
+                Ok(t) => t,
+                Err(t) => t,
+            };
             let full_node = java_tree_gen.generate_file(
                 name.to_str().unwrap().as_bytes(),
                 text.as_bytes(),
@@ -140,23 +140,18 @@ fn preps_precomputed(
     )
     .unwrap();
     query._check_preprocessed(0, bench_param.0.len());
-    let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
+    let mut stores =
+        hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
-    let mut java_tree_gen = hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-        more: precomp,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache).with_more(precomp);
     let roots: Vec<_> = f
         .into_iter()
         .map(|(name, text)| {
             let name = &name.to_str().unwrap();
-            let tree =
-                match hyper_ast_gen_ts_java::legion_with_refs::tree_sitter_parse(text.as_bytes()) {
-                    Ok(t) => t,
-                    Err(t) => t,
-                };
+            let tree = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
+                Ok(t) => t,
+                Err(t) => t,
+            };
             log::trace!("preprocess file: {}", name);
             let full_node =
                 java_tree_gen.generate_file(name.as_bytes(), text.as_bytes(), tree.walk());

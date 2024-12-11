@@ -1,20 +1,38 @@
 use std::{fmt::Display, u16};
 
-use hyper_ast::{
-    tree_gen::parser::NodeWithU16TypeId,
-    types::{AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId},
+use hyper_ast::types::{
+    AnyType, HyperType, LangRef, NodeId, TypeStore, TypeTrait, TypeU16, TypedNodeId,
 };
 
-#[cfg(feature = "legion")]
-mod legion_impls {
+#[cfg(feature = "impl")]
+mod impls {
     use super::*;
+    use hyper_ast::tree_gen::utils_ts::{TsEnableTS, TsType};
 
-    use crate::TNode;
+    impl<'a> hyper_ast::types::ETypeStore for TStore {
+        type Ty2 = Type;
 
-    impl<'a> TNode<'a> {
-        pub fn obtain_type(&self) -> Type {
-            let t = self.kind_id();
-            Type::from_u16(t)
+        fn intern(ty: Self::Ty2) -> Self::Ty {
+            TType::new(ty)
+        }
+    }
+
+    impl TsEnableTS for TStore {
+        fn obtain_type<'a, N: hyper_ast::tree_gen::parser::NodeWithU16TypeId>(
+            n: &N,
+        ) -> <Self as hyper_ast::types::ETypeStore>::Ty2 {
+            let k = n.kind_id();
+            Type::from_u16(k)
+        }
+    }
+
+    impl TsType for Type {
+        fn spaces() -> Self {
+            Self::Spaces
+        }
+
+        fn is_repeat(&self) -> bool {
+            self.is_repeat()
         }
     }
 
@@ -28,10 +46,6 @@ mod legion_impls {
     }
 
     impl XmlEnabledTypeStore for TStore {
-        fn intern(t: Type) -> Self::Ty {
-            t.into()
-        }
-
         fn resolve(t: Self::Ty) -> Type {
             t.e()
         }
@@ -64,6 +78,7 @@ mod legion_impls {
 fn id_for_node_kind(kind: &str, named: bool) -> u16 {
     crate::language().id_for_node_kind(kind, named)
 }
+
 #[cfg(not(feature = "impl"))]
 fn id_for_node_kind(kind: &str, named: bool) -> u16 {
     unimplemented!("need treesitter grammar")
@@ -76,11 +91,19 @@ pub fn as_any(t: &Type) -> AnyType {
     t.into()
 }
 
-pub trait XmlEnabledTypeStore: TypeStore {
-    fn intern(t: Type) -> Self::Ty;
+#[cfg(not(feature = "impl"))]
+pub trait XmlEnabledTypeStore: hyper_ast::types::ETypeStore<Ty2 = Type> {
     fn resolve(t: Self::Ty) -> Type;
 }
 
+#[cfg(feature = "impl")]
+pub trait XmlEnabledTypeStore:
+    hyper_ast::types::ETypeStore<Ty2 = Type> + hyper_ast::tree_gen::utils_ts::TsEnableTS
+{
+    fn resolve(t: Self::Ty) -> Type;
+}
+
+#[derive(Clone)]
 pub struct TStore;
 
 impl Default for TStore {
@@ -1167,6 +1190,9 @@ impl Type {
             Type::Pi => true,
             _ => false,
         }
+    }
+    pub fn is_repeat(&self) -> bool {
+        todo!("need to generate with the polyglote crate")
     }
 }
 

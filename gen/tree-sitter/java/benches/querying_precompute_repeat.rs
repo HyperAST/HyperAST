@@ -3,6 +3,7 @@ use std::path::Path;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
 mod shared;
+use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
 use shared::*;
 
 pub const QUERIES: &[(&[&str], &str, &str, &str, usize)] = &[
@@ -140,12 +141,7 @@ fn compare_querying_group(c: &mut Criterion) {
                     .unwrap();
                     let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
                     let mut md_cache = Default::default();
-                    let mut java_tree_gen = hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen {
-                        line_break: "\n".as_bytes().to_vec(),
-                        stores: &mut stores,
-                        md_cache: &mut md_cache,
-                        more: precomp,
-                    };
+                    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache).with_more(precomp);
                     let roots: Vec<_> = f
                         .into_iter()
                         .map(|(name, text)| {

@@ -3,6 +3,7 @@ use std::path::Path;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
 mod shared;
+use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
 use shared::*;
 
 pub const QUERIES: &[(&[&str], &str, &str, &str)] = &[
@@ -32,7 +33,8 @@ fn prep_default<'store>(
     use hyper_ast_gen_ts_java::legion_with_refs;
     let query = hyper_ast_tsquery::Query::new(query, hyper_ast_gen_ts_java::language()).unwrap();
 
-    let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
+    let mut stores =
+        hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
     let mut java_tree_gen = legion_with_refs::JavaTreeGen::new(&mut stores, &mut md_cache);
 
@@ -56,18 +58,17 @@ fn prep_precomputed<'store>(
     hyper_ast::store::defaults::NodeIdentifier,
 ) {
     use hyper_ast_gen_ts_java::legion_with_refs;
-    let (precomp, query) =
-        hyper_ast_tsquery::Query::with_precomputed(query, hyper_ast_gen_ts_java::language(), precomp)
-            .unwrap();
+    let (precomp, query) = hyper_ast_tsquery::Query::with_precomputed(
+        query,
+        hyper_ast_gen_ts_java::language(),
+        precomp,
+    )
+    .unwrap();
 
-    let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
+    let mut stores =
+        hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
     let mut md_cache = Default::default();
-    let mut java_tree_gen = legion_with_refs::JavaTreeGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-        more: precomp,
-    };
+    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache).with_more(precomp);
 
     let tree = match legion_with_refs::tree_sitter_parse(text) {
         Ok(t) => t,
@@ -165,7 +166,9 @@ fn compare_querying_group(c: &mut Criterion) {
             b.iter(|| {
                 let query =
                     hyper_ast_tsquery::Query::new(q.1, hyper_ast_gen_ts_java::language()).unwrap();
-                let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
+                let mut stores = hyper_ast::store::SimpleStores::<
+                    hyper_ast_gen_ts_java::types::TStore,
+                >::default();
                 let mut md_cache = Default::default();
                 let mut java_tree_gen = hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen::new(
                     &mut stores,
@@ -207,14 +210,12 @@ fn compare_querying_group(c: &mut Criterion) {
                         q.0,
                     )
                     .unwrap();
-                    let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
+                    let mut stores = hyper_ast::store::SimpleStores::<
+                        hyper_ast_gen_ts_java::types::TStore,
+                    >::default();
                     let mut md_cache = Default::default();
-                    let mut java_tree_gen = hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen {
-                        line_break: "\n".as_bytes().to_vec(),
-                        stores: &mut stores,
-                        md_cache: &mut md_cache,
-                        more: precomp,
-                    };
+                    let mut java_tree_gen =
+                        JavaTreeGen::new(&mut stores, &mut md_cache).with_more(precomp);
                     let roots: Vec<_> = f
                         .into_iter()
                         .map(|(name, text)| {

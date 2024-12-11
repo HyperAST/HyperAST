@@ -1,133 +1,107 @@
-use crate::types::{CppEnabledTypeStore, Type};
-use crate::TNode;
-use hyper_ast::store::nodes::legion::{dyn_builder, RawHAST};
-use hyper_ast::tree_gen::utils_ts::TTreeCursor;
-use hyper_ast::tree_gen::{self, add_md_precomp_queries, RoleAcc, TotalBytesGlobalData as _};
-use hyper_ast::tree_gen::{
-    compute_indentation, get_spacing, has_final_space,
+use super::utils_ts::*;
+use crate::store::{
+    nodes::{
+        legion::{compo, dyn_builder, eq_node, NodeIdentifier, RawHAST},
+        DefaultNodeStore as NodeStore,
+    },
+    SimpleStores,
+};
+use crate::tree_gen::{
+    self, compute_indentation, get_spacing, has_final_space,
     parser::{Node as _, TreeCursor},
     AccIndentation, Accumulator, BasicAccumulator, BasicGlobalData, GlobalData, Parents, PreResult,
-    SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TreeGen, WithByteRange,
-    ZippedTreeGen,
+    RoleAcc, SpacedGlobalData, Spaces, SubTreeMetrics, TextedGlobalData, TotalBytesGlobalData as _,
+    TreeGen, WithByteRange, ZippedTreeGen,
 };
-use hyper_ast::types;
-use hyper_ast::{
+use crate::{
     filter::BloomSize,
     full::FullNode,
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
     nodes::Space,
-    store::{
-        nodes::{
-            legion::{compo, eq_node, NodeIdentifier},
-            DefaultNodeStore as NodeStore, EntityBuilder,
-        },
-        SimpleStores,
-    },
-    types::{LabelStore as _, Role},
+    types::{HyperType, LabelStore as _},
 };
 use legion::world::EntryRef;
 use num::ToPrimitive as _;
+
 ///! fully compress all subtrees from a cpp CST
 use std::{collections::HashMap, fmt::Debug, vec};
 
-pub type LabelIdentifier = hyper_ast::store::labels::DefaultLabelIdentifier;
+pub type LabelIdentifier = crate::store::labels::DefaultLabelIdentifier;
 
-/// HIDDEN_NODES: enables recovering of hidden nodes from tree-sitter.
-///   You should start without filtering out hidden nodes when intergrating/updating a grammar,
-///   filtering hidden nodes adds complexity, thus might cause additional bugs
-pub struct CppTreeGen<'store, 'cache, TS, More = (), const HIDDEN_NODES: bool = true> {
+pub struct TsTreeGen<'store, 'cache, TS, More = (), const HIDDEN_NODES: bool = false> {
     pub line_break: Vec<u8>,
     pub stores: &'store mut SimpleStores<TS>,
     pub md_cache: &'cache mut MDCache,
     pub more: More,
 }
 
-pub type MDCache = HashMap<NodeIdentifier, MD>;
+pub type MDCache = HashMap<NodeIdentifier, DD>;
 
 // NOTE only keep compute intensive metadata (where space/time tradeoff is worth storing)
 // eg. decls refs, maybe hashes but not size and height
-// * metadata: computation results from concrete code of node and its children
-// they can be qualitative metadata .eg a hash or they can be quantitative .eg lines of code
-pub struct MD {
+// * derived data: computation results from concrete code of node and its children
+// they can be qualitative data .eg a hash or they can be quantitative .eg lines of code
+pub struct DD {
     metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
-    ana: Option<PartialAnalysis>,
-    precomp_queries: PrecompQueries,
 }
 
-impl From<Local> for MD {
-    fn from(x: Local) -> Self {
-        MD {
-            metrics: x.metrics,
-            ana: x.ana,
-            precomp_queries: x.precomp_queries,
-        }
+impl<T> From<Local<T>> for DD {
+    fn from(x: Local<T>) -> Self {
+        DD { metrics: x.metrics }
     }
 }
 
 pub type Global<'a> = SpacedGlobalData<'a>;
 
-/// TODO temporary placeholder
-#[derive(Debug, Clone, Default)]
-pub struct PartialAnalysis {}
-
-type PrecompQueries = u16;
-
 #[derive(Debug, Clone)]
-pub struct Local {
+pub struct Local<T> {
     pub compressed_node: NodeIdentifier,
+
+    // # debug
+    pub _ty: T,
+
+    // # directly bubbling derived data
     pub metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
-    pub ana: Option<PartialAnalysis>,
-    pub role: Option<Role>,
-    pub precomp_queries: PrecompQueries,
+    // # by providing store could also fetch the ones not there
 }
 
-impl Local {
-    fn acc(self, acc: &mut Acc) {
+impl<T> Local<T> {
+    fn acc(self, acc: &mut Acc<T>) {
         if self.metrics.size_no_spaces > 0 {
             acc.no_space.push(self.compressed_node)
         }
-        if let Some(role) = self.role {
-            let o = acc.simple.children.len();
-            acc.role.acc(role, o);
-        }
         acc.simple.push(self.compressed_node);
         acc.metrics.acc(self.metrics);
-        acc.precomp_queries |= self.precomp_queries;
-
-        // TODO things with this.ana
     }
 }
 
-pub struct Acc {
-    simple: BasicAccumulator<Type, NodeIdentifier>,
+pub struct Acc<T> {
+    simple: BasicAccumulator<T, NodeIdentifier>,
     no_space: Vec<NodeIdentifier>,
     labeled: bool,
     start_byte: usize,
     end_byte: usize,
     metrics: SubTreeMetrics<SyntaxNodeHashs<u32>>,
-    ana: Option<PartialAnalysis>,
     padding_start: usize,
     indentation: Spaces,
     role: RoleAcc<crate::types::Role>,
-    precomp_queries: PrecompQueries,
 }
 
-pub type FNode = FullNode<BasicGlobalData, Local>;
-impl Accumulator for Acc {
-    type Node = FNode;
+pub type FNode<T> = FullNode<BasicGlobalData, Local<T>>;
+impl<T> Accumulator for Acc<T> {
+    type Node = FNode<T>;
     fn push(&mut self, full_node: Self::Node) {
-        // dbg!(self.simple.kind);
         full_node.local.acc(self);
     }
 }
 
-impl AccIndentation for Acc {
+impl<T> AccIndentation for Acc<T> {
     fn indentation<'a>(&'a self) -> &'a Spaces {
         &self.indentation
     }
 }
 
-impl WithByteRange for Acc {
+impl<T> WithByteRange for Acc<T> {
     fn has_children(&self) -> bool {
         !self.simple.children.is_empty()
     }
@@ -141,32 +115,7 @@ impl WithByteRange for Acc {
     }
 }
 
-impl types::Typed for Acc {
-    type Type = Type;
-
-    fn get_type(&self) -> Self::Type {
-        self.simple.kind
-    }
-}
-
-impl hyper_ast::tree_gen::WithChildren<NodeIdentifier> for Acc {
-    fn children(&self) -> &[NodeIdentifier] {
-        &self.simple.children
-    }
-}
-
-impl hyper_ast::tree_gen::WithRole<Role> for Acc {
-    fn role_at(&self, o: usize) -> Option<Role> {
-        self.role
-            .offsets
-            .iter()
-            .position(|x| *x as usize == o)
-            .and_then(|x| self.role.roles.get(x))
-            .cloned()
-    }
-}
-
-impl Debug for Acc {
+impl<T: Debug> Debug for Acc<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Acc")
             .field("simple", &self.simple)
@@ -175,23 +124,43 @@ impl Debug for Acc {
             .field("start_byte", &self.start_byte)
             .field("end_byte", &self.end_byte)
             .field("metrics", &self.metrics)
-            .field("ana", &self.ana)
             .field("padding_start", &self.padding_start)
             .field("indentation", &self.indentation)
             .finish()
     }
 }
 
-impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
-    for CppTreeGen<'store, 'cache, TS, More, HIDDEN_NODES>
+pub trait TsEnableTS: crate::types::ETypeStore
 where
-    TS: CppEnabledTypeStore<Ty2 = Type>,
-    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
+    Self::Ty2: TsType,
+{
+    fn obtain_type<'a, N: crate::tree_gen::parser::NodeWithU16TypeId>(n: &N) -> Self::Ty2;
+}
+
+pub trait TsType: HyperType + Copy {
+    fn spaces() -> Self;
+    fn is_repeat(&self) -> bool;
+}
+
+impl<'store, 'cache, TS, More> TsTreeGen<'store, 'cache, TS, More>
+where
+    TS: TsEnableTS,
+    TS::Ty2: TsType,
+    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc<TS::Ty2>>,
+{
+}
+
+impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
+    for TsTreeGen<'store, 'cache, TS, More, HIDDEN_NODES>
+where
+    TS: TsEnableTS,
+    TS::Ty2: TsType,
+    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc<TS::Ty2>>,
 {
     type Stores = SimpleStores<TS>;
     type Text = [u8];
     type Node<'b> = TNode<'b>;
-    type TreeCursor<'b> = TTreeCursor<'b, HIDDEN_NODES>;
+    type TreeCursor<'b> = TTreeCursor<'b>;
 
     fn stores(&mut self) -> &mut Self::Stores {
         &mut self.stores
@@ -209,7 +178,6 @@ where
             &parent_indentation,
         );
         let labeled = node.has_label();
-        let ana = self.build_ana(&kind);
         Acc {
             simple: BasicAccumulator {
                 kind,
@@ -220,11 +188,9 @@ where
             start_byte: node.start_byte(),
             end_byte: node.end_byte(),
             metrics: Default::default(),
-            ana,
             padding_start: 0,
             indentation: indent,
             role: Default::default(),
-            precomp_queries: Default::default(),
         }
     }
 
@@ -243,17 +209,10 @@ where
         let kind = TS::obtain_type(&node);
         if HIDDEN_NODES {
             if kind.is_hidden() || kind.is_repeat() {
-                // dbg!(kind);
                 // return PreResult::Ignore;
             }
         }
         if node.0.is_missing() {
-            // dbg!(kind);
-            // dbg!(node.0.start_byte());
-            // dbg!(node.0.end_byte());
-            // must skip missing nodes, i.e., leafs added by tree-sitter to fix CST,
-            // needed to avoid breaking invarient, as the node has no span:
-            // `is_parent_hidden && parent.end_byte() <= acc.begin_byte()`
             return PreResult::Skip;
         }
         let mut acc = self.pre(text, &node, stack, global);
@@ -284,15 +243,11 @@ where
             global.sum_byte_length(),
             &parent_indentation,
         );
-        // if global.sum_byte_length() < 400 {
-        //     dbg!((kind,node.start_byte(),node.end_byte(),global.sum_byte_length(),indent.len()));
-        // }
         Acc {
             labeled: node.has_label(),
             start_byte: node.start_byte(),
             end_byte: node.end_byte(),
             metrics: Default::default(),
-            ana: self.build_ana(&kind),
             padding_start: global.sum_byte_length(),
             indentation: indent,
             simple: BasicAccumulator {
@@ -301,7 +256,6 @@ where
             },
             no_space: vec![],
             role: Default::default(),
-            precomp_queries: Default::default(),
         }
     }
 
@@ -318,14 +272,9 @@ where
             text,
             parent.indentation(),
         );
-        // dbg!(parent.simple.kind, parent.end_byte);
-        // dbg!(acc.simple.kind, acc.end_byte);
-        // if acc.simple.kind == Type::ExpressionStatement {
-        //     dbg!();
-        // }
         if let Some(spacing) = spacing {
             let local = self.make_spacing(spacing);
-            // debug_assert_ne!(parent.simple.children.len(), 0, "{:?}", parent.simple);
+            debug_assert_ne!(parent.simple.children.len(), 0, "{:?}", parent.simple);
             parent.push(FullNode {
                 global: global.into(),
                 local,
@@ -342,46 +291,16 @@ where
     }
 }
 
-impl<'store, 'cache, TS> CppTreeGen<'store, 'cache, TS, (), true> {
-    pub fn new<'a, 'b>(
-        stores: &'a mut SimpleStores<TS>,
-        md_cache: &'b mut MDCache,
-    ) -> CppTreeGen<'a, 'b, TS, (), true> {
-        CppTreeGen {
-            line_break: "\n".as_bytes().to_vec(),
-            stores,
-            md_cache,
-            more: (),
-        }
-    }
-}
-
-pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
-    hyper_ast::tree_gen::utils_ts::tree_sitter_parse(text, &crate::language())
-}
-
 impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool>
-    CppTreeGen<'store, 'cache, TS, More, HIDDEN_NODES>
+    TsTreeGen<'store, 'cache, TS, More, HIDDEN_NODES>
 where
-    TS: CppEnabledTypeStore<Ty2 = Type>,
-    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
-    TS::Ty2: hyper_ast::tree_gen::utils_ts::TsType,
+    TS: TsEnableTS,
+    TS::Ty2: TsType,
+    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc<TS::Ty2>>,
 {
-    pub fn with_more<M>(self, more: M) -> CppTreeGen<'store, 'cache, TS, M, HIDDEN_NODES> {
-        CppTreeGen {
-            line_break: self.line_break,
-            stores: self.stores,
-            md_cache: self.md_cache,
-            more: more,
-        }
-    }
-    fn make_spacing(
-        &mut self,
-        spacing: Vec<u8>, //Space>,
-    ) -> Local {
-        let kind = Type::Spaces;
+    fn make_spacing(&mut self, spacing: Vec<u8>) -> Local<TS::Ty2> {
+        let kind = TS::Ty2::spaces();
         let interned_kind = TS::intern(kind);
-        debug_assert_eq!(kind, TS::resolve(interned_kind));
         let bytes_len = spacing.len();
         let spacing = std::str::from_utf8(&spacing).unwrap().to_string();
         let line_count = spacing
@@ -432,14 +351,8 @@ where
                 hashs,
                 line_count,
             },
-            ana: Default::default(),
-            role: None,
-            precomp_queries: Default::default(),
+            _ty: kind,
         }
-    }
-
-    pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
-        tree_sitter_parse(text)
     }
 
     pub fn generate_file(
@@ -447,7 +360,7 @@ where
         name: &[u8],
         text: &'store [u8],
         cursor: tree_sitter::TreeCursor,
-    ) -> FullNode<BasicGlobalData, Local> {
+    ) -> FullNode<BasicGlobalData, Local<TS::Ty2>> {
         let mut global = Global::from(TextedGlobalData::new(Default::default(), text));
         let mut init = self.init_val(text, &TNode(cursor.node()));
         let mut xx = TTreeCursor(cursor);
@@ -492,29 +405,21 @@ where
         let full_node = self.make(&mut global, acc, label);
         full_node
     }
-
-    fn build_ana(&mut self, kind: &Type) -> Option<PartialAnalysis> {
-        if kind == &Type::TranslationUnit {
-            Some(PartialAnalysis {})
-        } else {
-            None
-        }
-    }
 }
 
 impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
-    for CppTreeGen<'stores, 'cache, TS, More, HIDDEN_NODES>
+    for TsTreeGen<'stores, 'cache, TS, More, HIDDEN_NODES>
 where
-    TS: CppEnabledTypeStore<Ty2 = Type>,
-    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
-    TS::Ty2: hyper_ast::tree_gen::utils_ts::TsType,
+    TS: TsEnableTS,
+    TS::Ty2: TsType,
+    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc<TS::Ty2>>,
 {
-    type Acc = Acc;
+    type Acc = Acc<TS::Ty2>;
     type Global = SpacedGlobalData<'stores>;
     fn make(
         &mut self,
         global: &mut <Self as TreeGen>::Global,
-        mut acc: <Self as TreeGen>::Acc,
+        acc: <Self as TreeGen>::Acc,
         label: Option<String>,
     ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let kind = acc.simple.kind;
@@ -535,45 +440,29 @@ where
 
         let local = if let Some(compressed_node) = insertion.occupied_id() {
             let md = self.md_cache.get(&compressed_node).unwrap();
-            let ana = md.ana.clone();
             debug_assert_eq!(metrics.height, md.metrics.height);
             debug_assert_eq!(metrics.size, md.metrics.size);
             debug_assert_eq!(metrics.size_no_spaces, md.metrics.size_no_spaces);
             debug_assert_eq!(metrics.line_count, md.metrics.line_count);
             debug_assert_eq!(metrics.hashs.build(), md.metrics.hashs);
             let metrics = md.metrics;
-            let precomp_queries = md.precomp_queries;
             Local {
                 compressed_node,
                 metrics,
-                ana,
-                role: acc.role.current,
-                precomp_queries,
+                _ty: kind,
             }
         } else {
             let metrics = metrics.map_hashs(|h| h.build());
             let byte_len = (acc.end_byte - acc.start_byte).try_into().unwrap();
             let bytes_len = compo::BytesLen(byte_len);
             let vacant = insertion.vacant();
-            let node_store: &legion::World = vacant.1 .1;
-            let stores = SimpleStores {
-                type_store: self.stores.type_store.clone(),
-                label_store: &self.stores.label_store,
-                node_store,
-            };
-            acc.precomp_queries |= self
-                .more
-                .match_precomp_queries(&stores, &acc, label.as_deref());
-            let children_is_empty = acc.simple.children.is_empty();
-
             let mut dyn_builder = dyn_builder::EntityBuilder::new();
+
+            let children_is_empty = acc.simple.children.is_empty();
+            use crate::store::nodes::EntityBuilder;
             dyn_builder.add(bytes_len);
 
-            let current_role = Option::take(&mut acc.role.current);
             acc.role.add_md(&mut dyn_builder);
-            if More::ENABLED {
-                add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
-            }
 
             let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
             hashs.persist(&mut dyn_builder);
@@ -589,18 +478,14 @@ where
 
             self.md_cache.insert(
                 compressed_node,
-                MD {
+                DD {
                     metrics: metrics.clone(),
-                    ana: acc.ana.clone(),
-                    precomp_queries: acc.precomp_queries.clone(),
                 },
             );
             Local {
                 compressed_node,
                 metrics,
-                ana: acc.ana,
-                role: current_role,
-                precomp_queries: acc.precomp_queries,
+                _ty: kind,
             }
         };
 
@@ -609,15 +494,5 @@ where
             local,
         };
         full_node
-    }
-}
-
-/// TODO partialana
-impl PartialAnalysis {
-    pub(crate) fn refs_count(&self) -> usize {
-        0 //TODO
-    }
-    pub(crate) fn refs(&self) -> impl Iterator<Item = Vec<u8>> {
-        vec![vec![0_u8]].into_iter() //TODO
     }
 }

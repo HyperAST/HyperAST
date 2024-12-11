@@ -27,9 +27,10 @@ legion = ["hyper_ast/legion", "dep:legion"]
 impl = [
     "hyper_ast/jemalloc",
     "legion",
-    "hyper_ast/native", 
+    "hyper_ast/native",
     "dep:hashbrown",
     "hashbrown?/ahash",
     "dep:tree-sitter",
     "dep:tree-sitter-xml",
+    "hyper_ast/ts",
 ]
