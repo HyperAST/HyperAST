@@ -7,7 +7,10 @@ use crate::{
     Processor,
 };
 use git2::{Oid, Repository};
-use hyper_ast::{store::nodes::legion::eq_node, types::{ETypeStore as _, LabelStore}};
+use hyper_ast::{
+    store::nodes::legion::eq_node,
+    types::{ETypeStore as _, LabelStore},
+};
 use hyper_ast_gen_ts_cpp::{
     legion as cpp_gen,
     types::{CppEnabledTypeStore as _, Type},
@@ -297,7 +300,7 @@ impl RepositoryProcessor {
                     .main_stores
                     .mut_with_ts::<hyper_ast_gen_ts_cpp::types::TStore>();
                 let more = &cpp_proc.query.0;
-                crate::cpp::handle_cpp_file(
+                let x = crate::cpp::handle_cpp_file(
                     &mut cpp_gen::CppTreeGen {
                         line_break,
                         stores,
@@ -307,8 +310,11 @@ impl RepositoryProcessor {
                     n,
                     t,
                 )
-                .map_err(|_| crate::ParseErr::IllFormed)
-                .map(|x| (x.local.clone(), false))
+                .map_err(|_| crate::ParseErr::IllFormed)?;
+                let local = x.local.clone();
+                self.parsing_time += x.parsing_time;
+                self.processing_time += x.processing_time;
+                Ok((local, false))
             })
     }
 
