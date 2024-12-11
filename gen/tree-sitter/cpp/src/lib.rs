@@ -1,9 +1,9 @@
 #[cfg(all(feature = "impl", feature = "legion"))]
 pub mod legion;
 
-#[doc(hidden)]
+#[cfg(test)]
 #[cfg(all(feature = "impl", feature = "legion"))]
-pub mod legion_ts_simp;
+mod legion_ts_simp;
 
 
 
