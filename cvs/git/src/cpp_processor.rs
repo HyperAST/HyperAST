@@ -288,11 +288,9 @@ impl RepositoryProcessor {
         self.processing_systems
             .caching_blob_handler::<crate::processing::file_sys::Cpp>()
             .handle2(oid, repository, &name, parameters, |c, n, t| {
-                let line_break = if t.contains(&b'\r') {
-                    "\r\n".as_bytes().to_vec()
-                } else {
-                    "\n".as_bytes().to_vec()
-                };
+                let line_break = if t.contains(&b'\r') { "\r\n" } else { "\n" }
+                    .as_bytes()
+                    .to_vec();
                 let holder = c.mut_or_default::<CppProcessorHolder>();
                 let cpp_proc = holder.0.as_mut().unwrap();
                 let md_cache = &mut cpp_proc.cache.md_cache;
@@ -300,21 +298,20 @@ impl RepositoryProcessor {
                     .main_stores
                     .mut_with_ts::<hyper_ast_gen_ts_cpp::types::TStore>();
                 let more = &cpp_proc.query.0;
-                let x = crate::cpp::handle_cpp_file(
-                    &mut cpp_gen::CppTreeGen {
-                        line_break,
-                        stores,
-                        md_cache,
-                        more,
-                    },
-                    n,
-                    t,
-                )
-                .map_err(|_| crate::ParseErr::IllFormed)?;
-                let local = x.local.clone();
-                self.parsing_time += x.parsing_time;
-                self.processing_time += x.processing_time;
-                Ok((local, false))
+                let mut cpp_tree_gen = cpp_gen::CppTreeGen {
+                    line_break,
+                    stores,
+                    md_cache,
+                    more,
+                };
+                crate::cpp::handle_cpp_file(&mut cpp_tree_gen, n, t)
+                    .map(|x| {
+                        let local = x.node.local.clone();
+                        self.parsing_time += x.parsing_time;
+                        self.processing_time += x.processing_time;
+                        (local, false)
+                    })
+                    .map_err(|_| crate::ParseErr::IllFormed)
             })
     }
 
