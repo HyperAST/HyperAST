@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     iter::Peekable,
     path::{Components, PathBuf},
-    time::Instant,
+    time::{Duration, Instant},
     todo, usize,
 };
 
@@ -42,6 +42,8 @@ pub struct PreProcessedRepository {
 pub struct RepositoryProcessor {
     pub main_stores: SimpleStores,
     pub processing_systems: crate::processing::erased::ProcessorMap,
+    pub parsing_time: Duration,
+    pub processing_time: Duration,
 }
 // NOTE what about making a constraints between sys processors
 // it should be a 1..n relation so it must be impl on the target

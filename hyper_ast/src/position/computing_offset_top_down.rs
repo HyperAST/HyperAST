@@ -411,6 +411,9 @@ impl StructuralPosition<NodeIdentifier, u16> {
                 }
             }
         } else {
+            if i == 0 {
+                i += 1;
+            }
             let p = self.parents[i - 1];
             let b = stores.node_store().resolve(&p);
             let o = self.offsets[i];
