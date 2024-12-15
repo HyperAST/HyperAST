@@ -1,3 +1,14 @@
+//! Matchers associate nodes in pairs of tree.
+//! 
+//! Originally, the matching was a phase in a tree-diff algorithm,
+//! where interpreting the matchings would allow to produce a set of actions to transform a given tree into another.
+//! In this context, the objective is to minimise the transformation cost, e.g., the number and types of actions.
+//! 
+//! Later the notion of matchings was extended,
+//! leading to many different matching approaches.
+//! Certain matching approaches also consider more semantic interpretations.
+//! Moreover, matchers can also be composed.
+ 
 pub mod heuristic;
 pub mod mapping_store;
 pub mod matcher;
