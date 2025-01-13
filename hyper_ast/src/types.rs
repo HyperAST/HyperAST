@@ -761,6 +761,15 @@ impl<'a, T> From<&'a [T]> for &'a MySlice<T> {
     }
 }
 
+impl<'a, T, const N: usize> From<&'a [T; N]> for &'a MySlice<T> {
+    fn from(value: &'a [T; N]) -> Self {
+        use ref_cast::RefCast;
+        let value: &'a [T] = value;
+        // NOTE it makes compile time layout assertions
+        MySlice::ref_cast(value)
+    }
+}
+
 impl<T> std::ops::Index<u16> for MySlice<T> {
     type Output = T;
 

@@ -1678,7 +1678,6 @@ dependencies = [
  "serde",
  "serde-aux",
  "serde_json",
- "stack-graphs",
  "syn 2.0.90",
  "tokio",
  "tower 0.5.1",
@@ -1688,8 +1687,7 @@ dependencies = [
  "tracing-subscriber",
  "tree-sitter 0.23.2",
  "tree-sitter-cli",
- "tree-sitter-graph",
- "tree-sitter-stack-graphs",
+ "tree-sitter-graph 0.12.2",
 ]
 
 [[package]]
@@ -4277,7 +4275,7 @@ dependencies = [
  "stack-graphs",
  "string-interner 0.17.0",
  "tree-sitter 0.23.2",
- "tree-sitter-graph",
+ "tree-sitter-graph 0.11.3",
  "tree-sitter-java 0.23.4",
  "tree-sitter-stack-graphs",
  "tuples",
@@ -4360,7 +4358,7 @@ dependencies = [
  "regex",
  "stack-graphs",
  "tree-sitter 0.23.2",
- "tree-sitter-graph",
+ "tree-sitter-graph 0.12.2",
  "tree-sitter-java 0.21.0",
  "tree-sitter-stack-graphs",
 ]
@@ -6336,7 +6334,7 @@ dependencies = [
  "syn 2.0.90",
  "tree-sitter 0.23.2",
  "tree-sitter-cpp",
- "tree-sitter-graph",
+ "tree-sitter-graph 0.11.3",
  "tree-sitter-java 0.23.4",
  "tree-sitter-kotlin",
  "tree-sitter-loader 0.23.2",
@@ -9150,6 +9148,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-graph"
+version = "0.12.2"
+source = "git+https://github.com/quentinLeDilavrec/tree-sitter-graph?rev=080387760a41cb31e0350e91e44bb27253dc94ef#080387760a41cb31e0350e91e44bb27253dc94ef"
+dependencies = [
+ "log",
+ "regex",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "string-interner 0.12.2",
+ "thiserror",
+ "tree-sitter 0.23.2",
+]
+
+[[package]]
 name = "tree-sitter-highlight"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9295,7 +9308,7 @@ dependencies = [
  "stack-graphs",
  "thiserror",
  "tree-sitter 0.20.10",
- "tree-sitter-graph",
+ "tree-sitter-graph 0.11.3",
  "tree-sitter-loader 0.20.0",
 ]
 

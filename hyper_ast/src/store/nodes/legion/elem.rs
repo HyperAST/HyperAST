@@ -542,7 +542,17 @@ impl<'a, T> HashedNodeRef<'a, T> {
         let r = self
             .0
             .get_component::<CS<legion::Entity>>()
-            .map(|x| (*x.0).into());
+            .map(|x| (*x.0).into())
+            .or_else(|_| {
+                self.0
+                    .get_component::<compo::CS0<legion::Entity, 1>>()
+                    .map(|x| (&x.0).into())
+            })
+            .or_else(|_| {
+                self.0
+                    .get_component::<compo::CS0<legion::Entity, 2>>()
+                    .map(|x| (&x.0).into())
+            });
         r
         // }
     }
@@ -667,10 +677,7 @@ impl<'a, T> crate::types::WithHashs for HashedNodeRef<'a, T> {
 }
 
 impl<'a, Id> crate::types::ErasedHolder for HashedNodeRef<'a, Id> {
-    fn unerase_ref<T: 'static + Send + Sync>(
-        &self,
-        tid: std::any::TypeId,
-    ) -> Option<&T> {
+    fn unerase_ref<T: 'static + Send + Sync>(&self, tid: std::any::TypeId) -> Option<&T> {
         if tid == std::any::TypeId::of::<T>() {
             self.get_component().ok()
         } else {

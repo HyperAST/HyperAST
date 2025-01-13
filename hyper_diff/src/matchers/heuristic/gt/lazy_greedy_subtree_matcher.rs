@@ -610,11 +610,11 @@ where
     }
 }
 
-struct PriorityTreeList<'a, 'b, D, IdS, IdD, T: Tree, S, const MIN_HEIGHT: usize> {
+pub(super) struct PriorityTreeList<'a, 'b, D, IdS, IdD, T: Tree, S, const MIN_HEIGHT: usize> {
     trees: Vec<Option<Vec<IdD>>>,
 
     store: &'a S,
-    arena: &'b mut D,
+    pub(super) arena: &'b mut D,
 
     max_height: usize,
 

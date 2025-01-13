@@ -80,17 +80,27 @@ impl<T, Id> BasicAccumulator<T, Id> {
     ) where
         K: 'static + std::marker::Send + std::marker::Sync,
         L: 'static + std::marker::Send + std::marker::Sync,
-        Id: 'static + std::marker::Send + std::marker::Sync,
+        Id: 'static + std::marker::Send + std::marker::Sync + Eq,
     {
         // TODO better handle the interneds
-        // TODO the "staatic" interning should be hanled more specifically
+        // TODO the "static" interning should be hanled more specifically
         dyn_builder.add(interned_kind);
         if let Some(label_id) = label_id {
             dyn_builder.add(label_id);
         }
 
         let children = self.children;
-        if !children.is_empty() {
+        if children.len() == 1 {
+            let Ok(cs) = children.try_into() else {
+                unreachable!();
+            };
+            dyn_builder.add(crate::store::nodes::legion::compo::CS0::<_, 1>(cs));
+        } else if children.len() == 2 {
+            let Ok(cs) = children.try_into() else {
+                unreachable!();
+            };
+            dyn_builder.add(crate::store::nodes::legion::compo::CS0::<_, 2>(cs));
+        } else if !children.is_empty() {
             // TODO make global components, at least for primaries.
             dyn_builder.add(crate::store::nodes::legion::compo::CS(
                 children.into_boxed_slice(),
@@ -98,6 +108,7 @@ impl<T, Id> BasicAccumulator<T, Id> {
         }
     }
 }
+
 impl<T: Debug, Id> Debug for BasicAccumulator<T, Id> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BasicAccumulator")
@@ -487,7 +498,7 @@ impl<R> RoleAcc<R> {
             debug_assert!(false);
             // TODO could increase to u16,
             // at least on some variants.
-            // TODO could also use the repeat nodes to break down nodes with way to many children... 
+            // TODO could also use the repeat nodes to break down nodes with way to many children...
         }
     }
 
@@ -518,8 +529,11 @@ pub fn add_md_precomp_queries(
     }
 }
 
+#[cfg(feature = "ts")]
 pub mod zipped;
+#[cfg(feature = "ts")]
 pub use zipped::PreResult;
+#[cfg(feature = "ts")]
 pub use zipped::ZippedTreeGen;
 
 /// utils for generating code with tree-sitter

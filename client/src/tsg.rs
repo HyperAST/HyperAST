@@ -124,7 +124,7 @@ fn simple_aux(
     let mut graph = Graph::default();
     init_globals(&mut globals, &mut graph);
     let mut functions = Functions::stdlib();
-    tree_sitter_stack_graphs::functions::add_path_functions(&mut functions);
+    // tree_sitter_stack_graphs::functions::add_path_functions(&mut functions);
     let mut config = configure(&globals, &functions);
     let cancellation_flag = tree_sitter_graph::NoCancellation;
 
