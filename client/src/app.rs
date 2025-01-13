@@ -32,8 +32,8 @@ impl IntoResponse for querying::QueryingError {
     }
 }
 
-    #[cfg(feature = "tsg")]
-    impl IntoResponse for tsg::QueryingError {
+#[cfg(feature = "tsg")]
+impl IntoResponse for crate::tsg::QueryingError {
     fn into_response(self) -> Response {
         let mut resp = Json(self).into_response();
         *resp.status_mut() = StatusCode::BAD_REQUEST;
@@ -48,10 +48,7 @@ mod tsg {
         name: String,
         commit: String,
     }
-    #[derive(serde::Deserialize)]
-    pub struct Content;
 }
-
 
 // TODO try to use the extractor pattern more, specifically for the shared state,
 // I think it would help inadvertently holding resources longer than necessary,
@@ -206,19 +203,21 @@ pub fn querying_app(_st: SharedState) -> Router<SharedState> {
         )
 }
 
+#[cfg(not(feature = "tsg"))]
 async fn tsg(
-    axum::extract::Path(path): axum::extract::Path<tsg::Param>,
-    axum::extract::State(state): axum::extract::State<SharedState>,
-    axum::extract::Json(script): axum::extract::Json<tsg::Content>,
+    axum::extract::Path(_): axum::extract::Path<tsg::Param>,
 ) -> impl IntoResponse {
-    #[cfg(not(feature = "tsg"))]
-    {
-        Result::<(),_>::Err(r#"{"error": "tsg comptime-feature is disabled on backend"}"#)
-    }
-    #[cfg(feature = "tsg")]
-    {
-        Ok(tsg::simple(script, state, path)?)
-    }
+    log::warn!("trying to use disabled tsg feature");
+    Result::<(), _>::Err(r#""tsg comptime-feature is disabled on backend""#)
+}
+
+#[cfg(feature = "tsg")]
+async fn tsg(
+    axum::extract::Path(path): axum::extract::Path<crate::tsg::Param>,
+    axum::extract::State(state): axum::extract::State<SharedState>,
+    axum::extract::Json(script): axum::extract::Json<crate::tsg::Content>,
+) -> impl IntoResponse {
+    crate::tsg::simple(script, state, path)
 }
 
 pub fn tsg_app(_st: SharedState) -> Router<SharedState> {

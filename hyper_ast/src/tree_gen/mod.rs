@@ -529,8 +529,11 @@ pub fn add_md_precomp_queries(
     }
 }
 
+#[cfg(feature = "ts")]
 pub mod zipped;
+#[cfg(feature = "ts")]
 pub use zipped::PreResult;
+#[cfg(feature = "ts")]
 pub use zipped::ZippedTreeGen;
 
 /// utils for generating code with tree-sitter
