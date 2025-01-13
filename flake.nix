@@ -63,6 +63,7 @@
             trunk
             
             # misc
+            cmake
             pkg-config
 
             # Nix
