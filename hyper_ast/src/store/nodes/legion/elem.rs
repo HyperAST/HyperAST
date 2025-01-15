@@ -561,9 +561,8 @@ impl<'a, T> HashedNodeRef<'a, T> {
     ) -> Result<&<Self as crate::types::WithChildren>::Children<'_>, ComponentError> {
         self.0
             .get_component::<NoSpacesCS<legion::Entity>>()
-            .map(|x| &*x.0)
-            .or_else(|_| self.0.get_component::<CS<legion::Entity>>().map(|x| &*x.0))
-            .map(|x| (*x).into())
+            .map(|x| (*x.0).into())
+            .or_else(|_| self.cs())
     }
 }
 
