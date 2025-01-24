@@ -216,6 +216,7 @@ where
 pub enum Forge {
     Github,
     Gitlab,
+    GitlabInria,
 }
 
 impl std::str::FromStr for Forge {
@@ -225,6 +226,7 @@ impl std::str::FromStr for Forge {
         Ok(match s {
             "github.com" => Self::Github,
             "gitlab.com" => Self::Gitlab,
+            "gitlab.inria.fr" => Self::GitlabInria,
             x => return Err(format!("'{}' is not an authorize forge", x)),
         })
     }
@@ -235,6 +237,7 @@ impl Forge {
         match self {
             Forge::Github => "https://github.com/",
             Forge::Gitlab => "https://gitlab.com/",
+            Forge::GitlabInria => "https://gitlab.inria.fr/",
         }
     }
     pub fn repo(self, user: impl Into<String>, name: impl Into<String>) -> Repo {
@@ -244,6 +247,7 @@ impl Forge {
             forge: self,
             user,
             name,
+            path : None
         }
     }
 }
@@ -254,6 +258,7 @@ pub struct Repo {
     pub forge: Forge,
     pub user: String,
     pub name: String,
+    pub path : Option<String>
 }
 
 impl Repo {
@@ -262,13 +267,18 @@ impl Repo {
     }
     pub fn fetch(&self) -> Repository {
         let url = self.url();
-        let path = format!("{}", "/tmp/hyperastgitresources/repo/");
+        let path = self.path.clone().unwrap_or_else(|| "/tmp/hyperastgitresources/repo/".into());
         fetch_repository(url, path)
     }
     pub fn nofetch(&self) -> Repository {
         let url = self.url();
-        let path = format!("{}", "/tmp/hyperastgitresources/repo/");
+        let path = self.path.clone().unwrap_or_else(|| "/tmp/hyperastgitresources/repo/".into());
         nofetch_repository(url, path)
+    }
+
+    pub fn set_path<P : AsRef<Path>>(mut self, path : P) -> Self {
+        self.path = Some(path.as_ref().to_str().unwrap().into());
+        self
     }
 }
 
@@ -297,7 +307,7 @@ impl std::str::FromStr for Repo {
         }
         let user = user.into();
         let name = name.into();
-        Ok(Self { forge, user, name })
+        Ok(Self { forge, user, name, path: None })
     }
 }
 
