@@ -247,7 +247,6 @@ impl Forge {
             forge: self,
             user,
             name,
-            path : None
         }
     }
 }
@@ -258,7 +257,6 @@ pub struct Repo {
     pub forge: Forge,
     pub user: String,
     pub name: String,
-    pub path : Option<String>
 }
 
 impl Repo {
@@ -267,18 +265,25 @@ impl Repo {
     }
     pub fn fetch(&self) -> Repository {
         let url = self.url();
-        let path = self.path.clone().unwrap_or_else(|| "/tmp/hyperastgitresources/repo/".into());
+        let path = format!("{}", "/tmp/hyperastgitresources/repo/");
         fetch_repository(url, path)
     }
     pub fn nofetch(&self) -> Repository {
         let url = self.url();
-        let path = self.path.clone().unwrap_or_else(|| "/tmp/hyperastgitresources/repo/".into());
+        let path = format!("{}", "/tmp/hyperastgitresources/repo/");
         nofetch_repository(url, path)
     }
 
-    pub fn set_path<P : AsRef<Path>>(mut self, path : P) -> Self {
-        self.path = Some(path.as_ref().to_str().unwrap().into());
-        self
+    pub fn fetch_to(&self, path: impl Into<PathBuf>) -> Repository {
+        let url = self.url();
+        let path = path.into();
+        fetch_repository(url, path)
+    }
+
+    pub fn nofetch_to(&self, path: impl Into<PathBuf>) -> Repository {
+        let url = self.url();
+        let path = path.into();
+        nofetch_repository(url, path)
     }
 }
 
@@ -307,7 +312,7 @@ impl std::str::FromStr for Repo {
         }
         let user = user.into();
         let name = name.into();
-        Ok(Self { forge, user, name, path: None })
+        Ok(Self { forge, user, name })
     }
 }
 
