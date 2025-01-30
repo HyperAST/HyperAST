@@ -91,8 +91,11 @@ fn compare_querying_group(c: &mut Criterion) {
             |b, (q, f)| {
                 b.iter(|| {
                     let query =
-                        hyper_ast_tsquery::Query::new(q.1, hyper_ast_gen_ts_java::language()).unwrap();
-                    let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
+                        hyper_ast_tsquery::Query::new(q.1, hyper_ast_gen_ts_java::language())
+                            .unwrap();
+                    let mut stores = hyper_ast::store::SimpleStores::<
+                        hyper_ast_gen_ts_java::types::TStore,
+                    >::default();
                     let mut md_cache = Default::default();
                     let mut java_tree_gen =
                         hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen::new(
@@ -139,9 +142,13 @@ fn compare_querying_group(c: &mut Criterion) {
                         q.0,
                     )
                     .unwrap();
-                    let mut stores = hyper_ast::store::SimpleStores::<hyper_ast_gen_ts_java::types::TStore>::default();
+                    let mut stores = hyper_ast::store::SimpleStores::<
+                        hyper_ast_gen_ts_java::types::TStore,
+                    >::default();
                     let mut md_cache = Default::default();
-                    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache).with_more(precomp);
+                    let more = hyper_ast_tsquery::PreparedQuerying::from(&precomp);
+                    let mut java_tree_gen =
+                        JavaTreeGen::with_preprocessing(&mut stores, &mut md_cache, more);
                     let roots: Vec<_> = f
                         .into_iter()
                         .map(|(name, text)| {

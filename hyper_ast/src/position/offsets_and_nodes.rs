@@ -109,7 +109,11 @@ impl<IdN, Idx: PrimInt> super::position_accessors::WithPath<IdN> for StructuralP
 impl<IdN, Idx: PrimInt> super::position_accessors::WithPreOrderOffsets
     for StructuralPosition<IdN, Idx>
 {
-    type It<'a> = SPIter<'a, Idx> where Idx: 'a, Self: 'a;
+    type It<'a>
+        = SPIter<'a, Idx>
+    where
+        Idx: 'a,
+        Self: 'a;
 
     fn iter_offsets(&self) -> Self::It<'_> {
         let mut iter = self.offsets.iter();

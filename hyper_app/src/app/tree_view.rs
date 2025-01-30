@@ -251,7 +251,7 @@ pub(crate) mod store {
 
         type TS = Self;
 
-        fn resolve_type(&'a self, id: &Self::IdN) -> <Self::TS as hyper_ast::types::TypeStore>::Ty {
+        fn resolve_type(&self, id: &Self::IdN) -> <Self::TS as hyper_ast::types::TypeStore>::Ty {
             let ns = &self.node_store;
             let Some(n) = ns.try_resolve::<NodeIdentifier>(*id) else {
                 use hyper_ast::types::HyperType;

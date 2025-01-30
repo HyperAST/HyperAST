@@ -1,8 +1,9 @@
+use hyper_ast::tree_gen::NoOpMore;
 use tree_sitter::Parser;
 
-use crate::types::TStore;
+use crate::{legion::tree_sitter_parse, types::TStore};
 
-type CppTreeGen<'store, 'cache> = crate::legion::CppTreeGen<'store, 'cache, TStore>;
+type CppTreeGen<'store, 'cache, HAST, Acc> = crate::legion::CppTreeGen<'store, 'cache, TStore, NoOpMore<HAST, Acc>, true>;
 type SimpleStores = hyper_ast::store::SimpleStores<TStore>;
 #[test]
 pub(crate) fn cpp_tree_sitter_simple() {
@@ -70,7 +71,7 @@ int main(int argl, int* argv) {
 }"#;
         source_code1.as_bytes()
     };
-    let tree = match CppTreeGen::tree_sitter_parse(text) {
+    let tree = match tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -104,7 +105,7 @@ f.value < s;
 "#;
         source_code1.as_bytes()
     };
-    let tree = match CppTreeGen::tree_sitter_parse(text) {
+    let tree = match tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -139,7 +140,7 @@ void f() {
 "#;
         source_code1.as_bytes()
     };
-    let tree = match CppTreeGen::tree_sitter_parse(text) {
+    let tree = match tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -174,7 +175,7 @@ void f() {
 "#;
         source_code1.as_bytes()
     };
-    let tree = match CppTreeGen::tree_sitter_parse(text) {
+    let tree = match tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -212,7 +213,7 @@ ScaleFactor ScalingFunction<KNPK>::apply() const {
 "#;
         source_code1.as_bytes()
     };
-    let tree = match CppTreeGen::tree_sitter_parse(text) {
+    let tree = match tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -263,7 +264,7 @@ void f() {}
 "#;
         source_code1.as_bytes()
     };
-    let tree = match CppTreeGen::tree_sitter_parse(text) {
+    let tree = match tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -315,7 +316,7 @@ __attribute__((__may_alias__))
 "#;
         source_code1.as_bytes()
     };
-    let tree = match CppTreeGen::tree_sitter_parse(text) {
+    let tree = match tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -354,7 +355,7 @@ struct TBEntry {};
 "#;
         source_code1.as_bytes()
     };
-    let tree = match CppTreeGen::tree_sitter_parse(text) {
+    let tree = match tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -385,7 +386,7 @@ pub(crate) fn cpp_def_bl_test() {
         let source_code1 = CODE_DEF_BL_SHRINK;
         source_code1.as_bytes()
     };
-    let tree = match CppTreeGen::tree_sitter_parse(text) {
+    let tree = match tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -414,7 +415,7 @@ pub(crate) fn cpp_char_literal_test() {
         let source_code1 = CODE_CHAR_LIT;
         source_code1.as_bytes()
     };
-    let tree = match CppTreeGen::tree_sitter_parse(text) {
+    let tree = match tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -468,7 +469,7 @@ pub(crate) fn cpp_asm_test() {
         let source_code1 = CODE_ASM;
         source_code1.as_bytes()
     };
-    let tree = match CppTreeGen::tree_sitter_parse(text) {
+    let tree = match tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -503,7 +504,7 @@ pub(crate) fn cpp_op_test() {
         let source_code1 = CODE_OP;
         source_code1.as_bytes()
     };
-    let tree = match CppTreeGen::tree_sitter_parse(text) {
+    let tree = match tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -550,7 +551,7 @@ pub(crate) fn cpp_3_test() {
         let source_code1 = CODE_MACRO_SEMICOLON;
         source_code1.as_bytes()
     };
-    let tree = match CppTreeGen::tree_sitter_parse(text) {
+    let tree = match tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
     };

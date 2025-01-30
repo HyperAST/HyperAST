@@ -1,4 +1,6 @@
-use crate::processing::erased::ParametrizedCommitProcessor2Handle as PCP2Handle;
+use crate::processing::erased::{
+    CommitProcessorHandle, ParametrizedCommitProcessor2Handle as PCP2Handle,
+};
 use crate::processing::ParametrizedCommitProcessorHandle;
 use crate::{
     git::{BasicGitObject, NamedObject, ObjectType, TypedObject},
@@ -8,6 +10,7 @@ use crate::{
     Processor,
 };
 use git2::{Oid, Repository};
+use hyper_ast::store::nodes::legion::RawHAST;
 use hyper_ast::types::ETypeStore as _;
 use hyper_ast::{
     hashed::MetaDataHashsBuilder,
@@ -49,7 +52,16 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
         let name = std::str::from_utf8(&name).unwrap().to_string();
         let acc = MavenModuleAcc::new(name);
         let prep_scripting = prep_scripting(prepro, handle.1);
-        let acc = acc.init_scripting(prep_scripting);
+        let acc = acc.init_scripting(
+            prep_scripting
+                .map(|x| {
+                    hyper_ast::scripting::Prepro::<
+                        RawHAST<hyper_ast_gen_ts_java::types::TStore>,
+                        &hyper_ast_gen_ts_java::legion_with_refs::Acc,
+                    >::from(x.clone())
+                })
+                .as_ref(),
+        );
         let stack = vec![(oid, prepared, acc)];
         Self {
             stack,
@@ -155,7 +167,16 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
                 let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
                 let acc = MavenModuleAcc::new(name.try_into().unwrap());
                 let prep_scripting = prep_scripting(&self.prepro, self.handle.1);
-                let acc = acc.init_scripting(prep_scripting);
+                let acc = acc.init_scripting(
+                    prep_scripting
+                        .map(|x| {
+                            hyper_ast::scripting::Prepro::<
+                                RawHAST<hyper_ast_gen_ts_java::types::TStore>,
+                                &hyper_ast_gen_ts_java::legion_with_refs::Acc,
+                            >::from(x.clone())
+                        })
+                        .as_ref(),
+                );
                 self.stack.push((oid, prepared, acc));
                 return;
             } else {
@@ -187,7 +208,12 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             if let Some(acc) = &mut w.scripting_acc {
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
-                acc.acc::<_,hyper_ast_gen_ts_xml::types::TType,_>(store, Type::Directory, id.into()).unwrap();
+                acc.acc::<_, hyper_ast_gen_ts_xml::types::TType, _>(
+                    store,
+                    Type::Directory,
+                    id.into(),
+                )
+                .unwrap();
             }
             return;
         }
@@ -208,7 +234,12 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             if let Some(acc) = &mut parent_acc.scripting_acc {
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
-                acc.acc::<_,hyper_ast_gen_ts_java::types::TType,_>(store, Type::Directory, id.into()).unwrap();
+                acc.acc::<_, hyper_ast_gen_ts_java::types::TType, _>(
+                    store,
+                    Type::Directory,
+                    id.into(),
+                )
+                .unwrap();
             }
             return;
         }
@@ -235,7 +266,12 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             if let Some(acc) = &mut parent_acc.scripting_acc {
                 // SAFETY: this side should be fine, issue when unerasing
                 let store = unsafe { self.prepro.main_stores.erase_ts_unchecked() };
-                acc.acc::<_,hyper_ast_gen_ts_java::types::TType,_>(store, Type::Directory, id.into()).unwrap();
+                acc.acc::<_, hyper_ast_gen_ts_java::types::TType, _>(
+                    store,
+                    Type::Directory,
+                    id.into(),
+                )
+                .unwrap();
             }
         }
         // check if module or src/main/java or src/test/java
@@ -253,11 +289,19 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             let prep_scripting = prep_scripting(&self.prepro, self.handle.1);
             if helper.submodules.0 {
                 // handle as maven module
-                let acc = helper.into_acc().init_scripting(prep_scripting);
+                let acc = helper.into_acc().init_scripting(
+                    prep_scripting
+                        .map(|x| hyper_ast::scripting::Prepro::from(x.clone()))
+                        .as_ref(),
+                );
                 self.stack.push((oid, prepared, acc));
             } else {
                 // search further inside
-                let acc = helper.into_acc().init_scripting(prep_scripting);
+                let acc = helper.into_acc().init_scripting(
+                    prep_scripting
+                        .map(|x| hyper_ast::scripting::Prepro::from(x.clone()))
+                        .as_ref(),
+                );
                 self.stack.push((oid, prepared, acc));
             };
         } else if RMS && !(helper.source_directories.0 || helper.test_source_directories.0) {
@@ -266,14 +310,26 @@ impl<'a, 'b, 'c, const RMS: bool, const FFWD: bool>
             let prepared = prepare_dir_exploration(tree, &mut self.dir_path);
 
             let prep_scripting = prep_scripting(&self.prepro, self.handle.1);
-            let acc = helper.into_acc().init_scripting(prep_scripting);
+            let acc = helper.into_acc().init_scripting(
+                prep_scripting
+                    .map(|x| hyper_ast::scripting::Prepro::from(x.clone()))
+                    .as_ref(),
+            );
             self.stack.push((oid, prepared, acc));
         }
     }
 }
 
 impl MavenModuleAcc {
-    fn init_scripting(mut self, prep_scripting: Option<&hyper_ast::scripting::Prepro>) -> Self {
+    fn init_scripting(
+        mut self,
+        prep_scripting: Option<
+            &hyper_ast::scripting::Prepro<
+                RawHAST<hyper_ast_gen_ts_java::types::TStore>,
+                &hyper_ast_gen_ts_java::legion_with_refs::Acc,
+            >,
+        >,
+    ) -> Self {
         if let Some(more) = prep_scripting {
             use hyper_ast::tree_gen::Prepro;
             match more.preprocessing(Type::MavenDirectory) {
@@ -283,7 +339,7 @@ impl MavenModuleAcc {
                 }
             }
         } else {
-            log::error!("no prep_scripting");
+            log::warn!("no prep_scripting");
         };
         self
     }
@@ -294,7 +350,7 @@ impl MavenModuleAcc {
 fn prep_scripting(
     prepro: &RepositoryProcessor,
     handle: crate::processing::erased::ConfigParametersHandle,
-) -> Option<&hyper_ast::scripting::Prepro> {
+) -> Option<&std::sync::Arc<str>> {
     prepro
         .processing_systems
         // it is fine but could do better and kind of use MavenHolder
@@ -464,10 +520,7 @@ impl MavenModuleHelper {
             self.test_source_directories.1,
         )
     }
-    pub fn into_acc_with_scripting(
-        self,
-        prepro_acc: hyper_ast::scripting::Acc,
-    ) -> MavenModuleAcc {
+    pub fn into_acc_with_scripting(self, prepro_acc: hyper_ast::scripting::Acc) -> MavenModuleAcc {
         let mut r = MavenModuleAcc::with_content(
             self.name,
             self.submodules.1,
@@ -527,7 +580,7 @@ pub(crate) fn prepare_dir_exploration(
         .collect();
     if dir_path.peek().is_none() {
         let p = children_objects.iter().position(|x| match x {
-            BasicGitObject::Blob(_, n) => crate::processing::file_sys::Pom::matches(n),
+            BasicGitObject::Blob(_, n) => crate::processing::file_sys::Pom::matches(&n),
             _ => false,
         });
         if let Some(p) = p {
@@ -544,7 +597,7 @@ pub(crate) fn prepare_dir_exploration(
 pub struct Parameter {
     // pub(crate) query: Option<std::sync::Arc<[String]>>,
     // pub(crate) prepo: Option<hyper_ast_scripting::Prepro>,
-    pub(crate) java_handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<
+    pub java_handle: crate::processing::erased::ParametrizedCommitProcessor2Handle<
         crate::java_processor::JavaProc,
     >,
 }
@@ -735,6 +788,24 @@ impl crate::processing::erased::CommitProc for MavenProc {
 
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
         self.commits.get(&commit_oid)
+    }
+
+    fn get_lang_handle(&self, lang: &str) -> Option<ParametrizedCommitProcessorHandle> {
+        if lang.eq_ignore_ascii_case("java") {
+            Some(ParametrizedCommitProcessorHandle(
+                CommitProcessorHandle(std::any::TypeId::of::<
+                    crate::java_processor::JavaProcessorHolder,
+                >()),
+                self.parameter.java_handle.0,
+            ))
+        } else if lang.eq_ignore_ascii_case("cpp") {
+            if cfg!(debug_assertions) {
+                unimplemented!()
+            }
+            None
+        } else {
+            None
+        }
     }
 }
 

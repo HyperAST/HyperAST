@@ -63,6 +63,26 @@ pub static SUB_QUERIES: &[&str] = &[
     type: (primitive_type) (#EQ? "char")
 )"#,
     r#"(preproc_if)"#,
+    r#"(call_expression
+    (field_expression
+        (call_expression
+            (qualified_identifier
+                (namespace_identifier) (#EQ? "base")
+                (qualified_identifier
+                    (namespace_identifier) (#EQ? "CommandLine")
+                    (identifier) (#EQ? "ForCurrentProcess")
+                )
+            )
+            (argument_list)
+        )
+        "->"
+        (field_identifier) (#EQ? "HasSwitch")
+    )
+)"#,
+    r#"(qualified_identifier
+    (namespace_identifier) (#EQ? "switches")
+    (identifier)
+)"#,
 ];
 
 impl<'repo, 'b, 'd, 'c> Processor<CppAcc> for CppProcessor<'repo, 'b, 'd, 'c, CppAcc> {
@@ -179,7 +199,7 @@ impl crate::processing::erased::Parametrized for CppProcessorHolder {
                 let query = if let Some(q) = &t.query {
                     Query::new(q.iter().map(|x| x.as_str()))
                 } else {
-                    let precomputeds = unsafe { crate::cpp_processor::SUB_QUERIES };
+                    let precomputeds = crate::cpp_processor::SUB_QUERIES;
                     Query::new(precomputeds.into_iter().map(|x| x.as_ref()))
                 };
                 self.0 = Some(CppProc {
@@ -297,7 +317,9 @@ impl RepositoryProcessor {
                 let stores = self
                     .main_stores
                     .mut_with_ts::<hyper_ast_gen_ts_cpp::types::TStore>();
-                let more = &cpp_proc.query.0;
+                let more = hyper_ast_tsquery::PreparedQuerying::<_, _, cpp_gen::Acc>::from(
+                    &cpp_proc.query.0,
+                );
                 let mut cpp_tree_gen = cpp_gen::CppTreeGen {
                     line_break,
                     stores,

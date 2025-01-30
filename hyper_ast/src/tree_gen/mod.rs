@@ -58,6 +58,10 @@ pub trait WithRole<R> {
     fn role_at(&self, idx: usize) -> Option<R>;
 }
 
+pub trait WithLabel {
+    type L: Clone + AsRef<str>;
+}
+
 pub struct BasicAccumulator<T, Id> {
     pub kind: T,
     pub children: Vec<Id>,
@@ -106,6 +110,28 @@ impl<T, Id> BasicAccumulator<T, Id> {
                 children.into_boxed_slice(),
             ));
         }
+    }
+}
+
+#[cfg(feature = "legion")]
+pub fn add_cs_no_spaces(
+    dyn_builder: &mut impl crate::store::nodes::EntityBuilder,
+    children: Vec<crate::store::nodes::legion::NodeIdentifier>,
+) {
+    use crate::store::nodes::legion::compo;
+    if children.len() == 1 {
+        let Ok(cs) = children.try_into() else {
+            unreachable!();
+        };
+        dyn_builder.add(compo::NoSpacesCS0::<_, 1>(cs));
+    } else if children.len() == 2 {
+        let Ok(cs) = children.try_into() else {
+            unreachable!();
+        };
+        dyn_builder.add(compo::NoSpacesCS0::<_, 2>(cs));
+    } else if !children.is_empty() {
+        // TODO make global components, at least for primaries.
+        dyn_builder.add(compo::NoSpacesCS(children.into_boxed_slice()));
     }
 }
 
@@ -248,13 +274,13 @@ pub trait TotalBytesGlobalData {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct TextedGlobalData<'a> {
+pub struct TextedGlobalData<'a, GD = BasicGlobalData> {
     text: &'a [u8],
-    inner: BasicGlobalData,
+    inner: GD,
 }
 
-impl<'a> TextedGlobalData<'a> {
-    pub fn new(inner: BasicGlobalData, text: &'a [u8]) -> Self {
+impl<'a, GD> TextedGlobalData<'a, GD> {
+    pub fn new(inner: GD, text: &'a [u8]) -> Self {
         Self { text, inner }
     }
     pub fn text(self) -> &'a [u8] {
@@ -262,7 +288,7 @@ impl<'a> TextedGlobalData<'a> {
     }
 }
 
-impl<'a> GlobalData for TextedGlobalData<'a> {
+impl<'a, GD: GlobalData> GlobalData for TextedGlobalData<'a, GD> {
     fn up(&mut self) {
         self.inner.up();
     }
@@ -278,44 +304,37 @@ impl<'a> GlobalData for TextedGlobalData<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct SpacedGlobalData<'a> {
+pub struct SpacedGlobalData<'a, GD = BasicGlobalData> {
     sum_byte_length: usize,
-    inner: TextedGlobalData<'a>,
+    inner: TextedGlobalData<'a, GD>,
 }
-impl<'a> From<TextedGlobalData<'a>> for SpacedGlobalData<'a> {
-    fn from(inner: TextedGlobalData<'a>) -> Self {
+impl<'a, GD> From<TextedGlobalData<'a, GD>> for SpacedGlobalData<'a, GD> {
+    fn from(inner: TextedGlobalData<'a, GD>) -> Self {
         Self {
             sum_byte_length: 0,
             inner,
         }
     }
 }
-impl<'a> From<SpacedGlobalData<'a>> for BasicGlobalData {
-    fn from(x: SpacedGlobalData<'a>) -> Self {
-        BasicGlobalData::from(x.inner)
+impl<'a, GD: Clone> SpacedGlobalData<'a, GD> {
+    pub fn simple(&self) -> GD {
+        self.inner.inner.clone()
     }
 }
-impl<'a> From<TextedGlobalData<'a>> for BasicGlobalData {
-    fn from(x: TextedGlobalData<'a>) -> Self {
-        BasicGlobalData::from(x.inner)
+
+impl<'a, GD: Clone> TextedGlobalData<'a, GD> {
+    pub fn simple(&self) -> GD {
+        self.inner.clone()
     }
 }
-impl<'a> From<&mut SpacedGlobalData<'a>> for BasicGlobalData {
-    fn from(x: &mut SpacedGlobalData<'a>) -> Self {
-        BasicGlobalData::from(x.inner)
-    }
-}
-impl<'a> From<&mut TextedGlobalData<'a>> for BasicGlobalData {
-    fn from(x: &mut TextedGlobalData<'a>) -> Self {
-        BasicGlobalData::from(x.inner)
-    }
-}
-impl<'a> SpacedGlobalData<'a> {
-    pub fn sum_byte_length(self) -> usize {
+
+impl<'a, GD> SpacedGlobalData<'a, GD> {
+    pub fn sum_byte_length(&self) -> usize {
         self.sum_byte_length
     }
 }
-impl<'a> TotalBytesGlobalData for SpacedGlobalData<'a> {
+
+impl<'a, GD> TotalBytesGlobalData for SpacedGlobalData<'a, GD> {
     fn set_sum_byte_length(&mut self, sum_byte_length: usize) {
         // assert!(self.sum_byte_length <= sum_byte_length);
         assert!(
@@ -328,7 +347,7 @@ impl<'a> TotalBytesGlobalData for SpacedGlobalData<'a> {
     }
 }
 
-impl<'a> GlobalData for SpacedGlobalData<'a> {
+impl<'a, GD: GlobalData> GlobalData for SpacedGlobalData<'a, GD> {
     fn up(&mut self) {
         self.inner.up();
     }
@@ -342,6 +361,58 @@ impl<'a> GlobalData for SpacedGlobalData<'a> {
         self.inner.down();
     }
 }
+
+mod global_stats {
+    use super::*;
+    #[derive(Debug, Clone)]
+    pub struct StatsGlobalData<GD = BasicGlobalData> {
+        height_count: Vec<u32>,
+        inner: GD,
+    }
+
+    impl<GD: Default> Default for StatsGlobalData<GD> {
+        fn default() -> Self {
+            Self::new(Default::default())
+        }
+    }
+
+    impl<GD: TotalBytesGlobalData> TotalBytesGlobalData for StatsGlobalData<GD> {
+        fn set_sum_byte_length(&mut self, sum_byte_length: usize) {
+            self.inner.set_sum_byte_length(sum_byte_length)
+        }
+    }
+
+    impl<GD: GlobalData> GlobalData for StatsGlobalData<GD> {
+        fn up(&mut self) {
+            self.inner.up();
+        }
+
+        fn right(&mut self) {
+            self.inner.right();
+        }
+
+        fn down(&mut self) {
+            self.inner.down();
+        }
+    }
+
+    impl<GD> StatsGlobalData<GD> {
+        fn new(inner: GD) -> Self {
+            Self {
+                height_count: Vec::with_capacity(30),
+                inner,
+            }
+        }
+    }
+
+    impl StatsGlobalData<SpacedGlobalData<'_>> {
+        pub fn sum_byte_length(&self) -> usize {
+            self.inner.sum_byte_length()
+        }
+    }
+}
+
+pub use global_stats::StatsGlobalData;
 
 /// Primary trait to implement to generate AST.
 pub trait TreeGen {
@@ -948,7 +1019,7 @@ pub trait Prepro<T> {
     fn preprocessing(&self, ty: T) -> Result<crate::scripting::Acc, String>;
 }
 
-impl<T> Prepro<T> for () {
+impl<HAST, Acc, T> Prepro<T> for NoOpMore<HAST, Acc> {
     const USING: bool = false;
     fn preprocessing(&self, _t: T) -> Result<crate::scripting::Acc, String> {
         Ok(todo!())
@@ -957,26 +1028,108 @@ impl<T> Prepro<T> for () {
 
 pub type PrecompQueries = u16;
 
-pub trait More<HAST: crate::types::TypeStore, Acc> {
+pub trait More {
+    type TS;
+    type T: crate::types::Tree;
+    type Acc: WithChildren<<Self::T as crate::types::Stored>::TreeId>;
     const ENABLED: bool;
-    fn match_precomp_queries(
+    fn match_precomp_queries<
+        'a,
+        HAST: crate::types::HyperAST<
+                'a,
+                IdN = <Self::T as crate::types::Stored>::TreeId,
+                TS = Self::TS,
+                T = Self::T,
+            > + std::clone::Clone,
+    >(
         &self,
-        stores: &HAST,
-        acc: &Acc,
+        stores: HAST,
+        acc: &Self::Acc,
         label: Option<&str>,
-    ) -> PrecompQueries;
+    ) -> crate::tree_gen::PrecompQueries
+    where
+        HAST::IdN: Copy;
 }
 
-impl<HAST: crate::types::TypeStore, Acc> More<HAST, Acc> for () {
+pub struct NoOpMore<T, Acc>(std::marker::PhantomData<(T, Acc)>);
+
+impl<T, Acc> Default for NoOpMore<T, Acc> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
+impl<TS, T, Acc> More for NoOpMore<(TS, T), Acc>
+where
+    T: crate::types::Tree,
+    Acc: WithChildren<<T as crate::types::Stored>::TreeId>,
+{
+    type TS = TS;
+    type T = T;
+    type Acc = Acc;
     const ENABLED: bool = false;
-    fn match_precomp_queries(
+    fn match_precomp_queries<
+        'a,
+        HAST: crate::types::HyperAST<
+                'a,
+                IdN = <Self::T as crate::types::Stored>::TreeId,
+                TS = Self::TS,
+                T = Self::T,
+            > + std::clone::Clone,
+    >(
         &self,
-        _stores: &HAST,
+        _stores: HAST,
         _acc: &Acc,
         _label: Option<&str>,
     ) -> PrecompQueries {
         Default::default()
     }
+}
+
+impl<'a, TS, T, Acc> PreproTSG<'a> for NoOpMore<(TS, T), Acc>
+where
+    T: crate::types::Tree,
+    Acc: WithChildren<<T as crate::types::Stored>::TreeId>,
+{
+    const GRAPHING: bool = false;
+    fn compute_tsg<
+        HAST: 'static
+            + crate::types::HyperAST<
+                'a,
+                IdN = <Self::T as crate::types::Stored>::TreeId,
+                Idx = <Self::T as crate::types::WithChildren>::ChildIdx,
+                TS = Self::TS,
+                T = Self::T,
+            >
+            + std::clone::Clone,
+    >(
+        &self,
+        stores: HAST,
+        acc: &<Self as More>::Acc,
+        label: Option<&str>,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+pub trait PreproTSG<'a>: More {
+    const GRAPHING: bool;
+    fn compute_tsg<
+        HAST: 'static
+            + crate::types::HyperAST<
+                'a,
+                IdN = <Self::T as crate::types::Stored>::TreeId,
+                Idx = <Self::T as crate::types::WithChildren>::ChildIdx,
+                TS = Self::TS,
+                T = Self::T,
+            >
+            + std::clone::Clone,
+    >(
+        &self,
+        stores: HAST,
+        acc: &Self::Acc,
+        label: Option<&str>,
+    ) -> Result<(), String>;
 }
 
 pub mod metric_definition;

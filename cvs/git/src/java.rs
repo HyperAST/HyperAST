@@ -15,18 +15,25 @@ use hyper_ast_gen_ts_java::{legion_with_refs::PartialAnalysis, types::Type};
 use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
 
 pub(crate) fn handle_java_file<'stores, 'cache, 'b: 'stores, More>(
-    tree_gen: &mut java_tree_gen::JavaTreeGen<'stores, 'cache, TStore, More>,
+    tree_gen: &mut java_tree_gen::JavaTreeGen<
+        'stores,
+        'cache,
+        TStore,
+        hyper_ast::store::SimpleStores<TStore>,
+        More,
+    >,
     name: &ObjectName,
     text: &'b [u8],
 ) -> Result<java_tree_gen::FNode, ()>
 where
-    More: tree_gen::Prepro<Type>
-        + for<'a, 'c> tree_gen::More<
-            hyper_ast::store::nodes::legion::RawHAST<'a, 'c, TStore>,
-            java_tree_gen::Acc,
+    More: tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores>
+        + tree_gen::More<
+            TS = TStore,
+            T = hyper_ast::store::nodes::legion::HashedNodeRef<'stores, NodeIdentifier>,
+            Acc = java_tree_gen::Acc,
         >,
 {
-    let tree = match java_tree_gen::JavaTreeGen::<TStore>::tree_sitter_parse(text) {
+    let tree = match java_tree_gen::tree_sitter_parse(text) {
         Ok(tree) => tree,
         Err(tree) => {
             log::warn!("bad CST: {:?}", name.try_str());
@@ -61,7 +68,7 @@ impl JavaAcc {
             ana: PartialAnalysis::init(&Type::Directory, None, |_| panic!()),
             skiped_ana: false,
             precomp_queries: Default::default(),
-            scripting_acc: prepro
+            scripting_acc: prepro,
         }
     }
 }

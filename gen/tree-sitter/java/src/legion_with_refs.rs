@@ -4,7 +4,6 @@ use crate::{
     types::{TStore, Type},
     TNode,
 };
-use hyper_ast::store::nodes::legion::RawHAST;
 use hyper_ast::store::{
     defaults::LabelIdentifier,
     nodes::{
@@ -16,10 +15,12 @@ use hyper_ast::tree_gen::utils_ts::TTreeCursor;
 use hyper_ast::tree_gen::{
     self,
     parser::{Node, TreeCursor},
-    BasicGlobalData, GlobalData, Parents, PreResult, SpacedGlobalData, SubTreeMetrics,
-    TextedGlobalData, TotalBytesGlobalData, TreeGen, WithByteRange,
+    Parents, PreResult, SubTreeMetrics, TreeGen, WithByteRange,
 };
-use hyper_ast::tree_gen::{add_md_precomp_queries, RoleAcc};
+use hyper_ast::tree_gen::{
+    GlobalData as _, StatsGlobalData, TextedGlobalData, TotalBytesGlobalData as _
+};
+use hyper_ast::tree_gen::{add_md_precomp_queries, NoOpMore, RoleAcc};
 use hyper_ast::{
     cyclomatic::Mcc,
     full::FullNode,
@@ -39,6 +40,7 @@ use hyper_ast::{
 };
 use legion::world::EntryRef;
 use num::ToPrimitive;
+use std::marker::PhantomData;
 use std::{collections::HashMap, fmt::Debug, vec};
 
 #[cfg(feature = "impact")]
@@ -68,17 +70,26 @@ pub type NodeIdentifier = legion::Entity;
 
 // pub struct HashedNodeRef<'a>(EntryRef<'a>);
 
-pub type FNode = FullNode<BasicGlobalData, Local>;
+pub type FNode = FullNode<StatsGlobalData, Local>;
 
-// TODO try to use a const generic for space less generation ?
+// TODO try to use a const generic for spaceless generation ?
 // SPC: consider spaces ie. add them to the HyperAST,
 // NOTE there is a big issue with the byteLen of subtree then.
 // just provide a view abstracting spaces (see attempt in hyper_diff)
-pub struct JavaTreeGen<'stores, 'cache, TS = TStore, More = (), const HIDDEN_NODES: bool = true> {
+pub struct JavaTreeGen<
+    'stores,
+    'cache,
+    TS = TStore,
+    S = SimpleStores<TS>,
+    More = (),
+    const HIDDEN_NODES: bool = true,
+> {
+    // TODO replace with Arc<[u8]>
     pub line_break: Vec<u8>,
-    pub stores: &'stores mut SimpleStores<TS>,
+    pub stores: &'stores mut S,
     pub md_cache: &'cache mut MDCache,
     pub more: More,
+    pub _p: PhantomData<TS>,
 }
 
 pub type MDCache = HashMap<NodeIdentifier, MD>;
@@ -108,7 +119,7 @@ impl From<Local> for MD {
     }
 }
 
-pub type Global<'a> = SpacedGlobalData<'a>;
+pub type Global<'a> = hyper_ast::tree_gen::SpacedGlobalData<'a, StatsGlobalData>;
 
 type PrecompQueries = u16;
 
@@ -170,7 +181,7 @@ pub struct Acc {
 }
 
 impl Accumulator for Acc {
-    type Node = FullNode<BasicGlobalData, Local>;
+    type Node = FNode;
     fn push(&mut self, full_node: Self::Node) {
         full_node.local.acc(self);
     }
@@ -221,6 +232,10 @@ impl hyper_ast::tree_gen::WithRole<Role> for Acc {
     }
 }
 
+impl<'acc> hyper_ast::tree_gen::WithLabel for &'acc Acc {
+    type L = &'acc str;
+}
+
 impl Debug for Acc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Acc")
@@ -257,10 +272,11 @@ pub(crate) fn should_get_hidden_nodes() -> bool {
 
 /// Implements [ZippedTreeGen] to offer a visitor for Java generation
 impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
-    for JavaTreeGen<'stores, 'cache, TS, More, HIDDEN_NODES>
+    for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
     TS: JavaEnabledTypeStore + 'static,
-    More: tree_gen::Prepro<Type> + for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
+    More: tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores>
+        + tree_gen::More<TS = TS, T = HashedNodeRef<'stores, NodeIdentifier>, Acc = Acc>,
 {
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
     type Stores = SimpleStores<TS>;
@@ -432,7 +448,7 @@ where
             let local = self.make_spacing(spacing);
             let id = local.compressed_node;
             parent.push(FullNode {
-                global: global.into(),
+                global: global.simple(),
                 local,
             });
 
@@ -459,44 +475,108 @@ pub fn tree_sitter_parse(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::
     hyper_ast::tree_gen::utils_ts::tree_sitter_parse(text, &crate::language())
 }
 
-impl<'stores, 'cache, TS: JavaEnabledTypeStore> JavaTreeGen<'stores, 'cache, TS, (), true> {
-    pub fn new<'a, 'b>(
-        stores: &'a mut SimpleStores<TS>,
-        md_cache: &'b mut MDCache,
-    ) -> JavaTreeGen<'a, 'b, TS, (), true> {
-        JavaTreeGen {
+impl<'stores, 'cache, 's, T, TS: JavaEnabledTypeStore>
+    JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, NoOpMore<(TS, T), Acc>, true>
+{
+    pub fn new(stores: &'stores mut SimpleStores<TS>, md_cache: &'cache mut MDCache) -> Self {
+        Self {
             line_break: "\n".as_bytes().to_vec(),
             stores,
             md_cache,
-            more: (),
+            more: Default::default(),
+            _p: Default::default(),
         }
     }
-    pub fn without_hidden_nodes(self) -> JavaTreeGen<'stores, 'cache, TS, (), false> {
+}
+
+impl<'stores, 'cache, 'acc, TS, More>
+    JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, true>
+{
+    pub fn without_hidden_nodes(
+        self,
+    ) -> JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, false> {
         JavaTreeGen {
             line_break: self.line_break,
             stores: self.stores,
             md_cache: self.md_cache,
             more: self.more,
+            _p: self._p,
         }
     }
 }
 
-impl<
-        'stores,
-        'cache,
-        TS: JavaEnabledTypeStore + 'static,
-        More: tree_gen::Prepro<Type> + for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
-        const HIDDEN_NODES: bool,
-    > JavaTreeGen<'stores, 'cache, TS, More, HIDDEN_NODES>
+impl<'stores, 'cache, 'acc, TS: JavaEnabledTypeStore + 'static, More, const HIDDEN_NODES: bool>
+    JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 {
-    pub fn with_more<M>(self, more: M) -> JavaTreeGen<'stores, 'cache, TS, M, HIDDEN_NODES> {
+    pub fn _generate_file<'b: 'stores>(
+        &mut self,
+        name: &[u8],
+        text: &'b [u8],
+        cursor: tree_sitter::TreeCursor,
+    ) -> FullNode<StatsGlobalData, Local>
+    where
+        for<'s> More: tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores> + tree_gen::More<Acc = Acc>,
+    {
+        todo!()
+    }
+}
+
+impl<'stores, 'cache, 'acc, TS: JavaEnabledTypeStore + 'static, More>
+    JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, true>
+{
+    pub fn with_preprocessing(
+        stores: &'stores mut SimpleStores<TS>,
+        md_cache: &'cache mut MDCache,
+        more: More,
+    ) -> Self {
+        Self {
+            line_break: "\n".as_bytes().to_vec(),
+            stores,
+            md_cache,
+            more: more.into(),
+            _p: Default::default(),
+        }
+    }
+}
+
+impl<'stores, 'cache, 'acc, TS: JavaEnabledTypeStore + 'static, More, const HIDDEN_NODES: bool>
+    JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
+{
+    pub fn with_more<M>(
+        self,
+        more: M,
+    ) -> JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, M, HIDDEN_NODES> {
         JavaTreeGen {
             line_break: self.line_break,
             stores: self.stores,
             md_cache: self.md_cache,
             more: more,
+            _p: self._p,
         }
     }
+
+    pub fn with_line_break(self, line_break: Vec<u8>) -> Self {
+        JavaTreeGen {
+            line_break: self.line_break,
+            stores: self.stores,
+            md_cache: self.md_cache,
+            more: self.more,
+            _p: self._p,
+        }
+    }
+}
+
+impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool>
+    JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
+where
+    TS: JavaEnabledTypeStore<Ty2 = Type> + 'static,
+    More: tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores>
+        + tree_gen::More<
+            TS = TS,
+            T = hyper_ast::store::nodes::legion::HashedNodeRef<'stores, NodeIdentifier>,
+            Acc = Acc,
+        >,
+{
     fn make_spacing(&mut self, spacing: Vec<u8>) -> Local {
         let kind = Type::Spaces;
         let interned_kind = TS::intern(kind);
@@ -582,12 +662,12 @@ impl<
         }
     }
 
-    pub fn generate_file<'b: 'stores>(
+    pub fn generate_file(
         &mut self,
         name: &[u8],
-        text: &'b [u8],
+        text: &'stores [u8],
         cursor: tree_sitter::TreeCursor,
-    ) -> FullNode<BasicGlobalData, Local> {
+    ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let mut global = Global::from(TextedGlobalData::new(Default::default(), text));
         let mut init = self.init_val(text, &TNode(cursor.node()));
         let mut xx = TTreeCursor(cursor);
@@ -604,7 +684,7 @@ impl<
             let local = self.make_spacing(spacing);
             let id = local.compressed_node;
             init.push(FullNode {
-                global: global.into(),
+                global: global.simple(),
                 local,
             });
             if let Some(p) = &mut init.prepro {
@@ -634,7 +714,7 @@ impl<
                 let local = self.make_spacing(spacing);
                 let id = local.compressed_node;
                 acc.push(FullNode {
-                    global: global.into(),
+                    global: global.simple(),
                     local,
                 });
                 if let Some(p) = &mut acc.prepro {
@@ -685,13 +765,14 @@ impl<
 }
 
 impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
-    for JavaTreeGen<'stores, 'cache, TS, More, HIDDEN_NODES>
+    for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
-    TS: JavaEnabledTypeStore,
-    More: tree_gen::Prepro<Type> + for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
+    TS: JavaEnabledTypeStore + 'static,
+    More: tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores>
+        + tree_gen::More<TS = TS, T = HashedNodeRef<'stores, NodeIdentifier>, Acc = Acc>,
 {
     type Acc = Acc;
-    type Global = SpacedGlobalData<'stores>;
+    type Global = Global<'stores>;
     fn make(
         &mut self,
         global: &mut <Self as TreeGen>::Global,
@@ -745,27 +826,40 @@ where
             let byte_len = (acc.end_byte - acc.start_byte).try_into().unwrap();
             let bytes_len = compo::BytesLen(byte_len);
             let vacant = insertion.vacant();
-            let node_store: &legion::World = vacant.1 .1;
+            let node_store: &_ = vacant.1 .1;
             let stores = SimpleStores {
                 type_store: self.stores.type_store.clone(),
                 label_store: &self.stores.label_store,
                 node_store,
             };
-            acc.precomp_queries |= self
+            if More::ENABLED {
+                acc.precomp_queries |= self
                 .more
-                .match_precomp_queries(&stores, &acc, label.as_deref());
+                .match_precomp_queries(stores.clone(), &acc, label.as_deref());
+            }
             let children_is_empty = acc.simple.children.is_empty();
 
             let mut dyn_builder = dyn_builder::EntityBuilder::new();
             dyn_builder.add(bytes_len);
 
+            if More::ENABLED {
+                tree_gen::add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
+            }
+            if More::GRAPHING {
+                let stores: SimpleStores<TS, &'static hyper_ast::store::nodes::legion::NodeStoreInner, &'static hyper_ast::store::labels::LabelStore> = unsafe {
+                    std::mem::transmute(stores)
+                };
+                self
+                .more
+                .compute_tsg(stores, &acc, label.as_deref()).unwrap();
+            } else {
+                panic!()
+            }
+
             let current_role = Option::take(&mut acc.role.current);
             acc.role.add_md(&mut dyn_builder);
             if Mcc::persist(&acc.simple.kind) {
                 dyn_builder.add(acc.mcc.clone());
-            }
-            if More::ENABLED {
-                tree_gen::add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
             }
             #[cfg(feature = "impact")]
             reference_analysis::add_md_ref_ana(
@@ -777,23 +871,25 @@ where
             hashs.persist(&mut dyn_builder);
 
             if acc.simple.children.len() != acc.no_space.len() {
-                dyn_builder.add(compo::NoSpacesCS(acc.no_space.into_boxed_slice()));
+                let children = acc.no_space;
+                tree_gen::add_cs_no_spaces(&mut dyn_builder, children);
             }
+
             acc.simple
                 .add_primary(&mut dyn_builder, interned_kind, label_id);
 
-            if More::USING {
-                let subtr = hyper_ast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
-                let ss = if let Some(label) = label {
-                    acc.prepro
-                        .unwrap()
-                        .finish_with_label(&subtr, label)
-                        .unwrap()
-                } else {
-                    acc.prepro.unwrap().finish(&subtr).unwrap()
-                };
-                dyn_builder.add(ss);
-            };
+                if More::USING {
+                    let subtr = hyper_ast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
+                    let ss = if let Some(label) = label {
+                        acc.prepro
+                            .unwrap()
+                            .finish_with_label(&subtr, label)
+                            .unwrap()
+                    } else {
+                        acc.prepro.unwrap().finish(&subtr).unwrap()
+                    };
+                    dyn_builder.add(ss);
+                }
 
             let compressed_node =
                 NodeStore::insert_built_after_prepare(vacant, dyn_builder.build());
@@ -819,7 +915,7 @@ where
         };
 
         let full_node = FullNode {
-            global: global.into(),
+            global: global.simple(),
             local,
         };
         full_node
@@ -829,10 +925,12 @@ where
 impl<
         'stores,
         'cache,
-        TS: JavaEnabledTypeStore,
-        More: tree_gen::Prepro<Type> + for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc>,
+        TS: JavaEnabledTypeStore + 'static,
+        More: tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores>
+            + tree_gen::More<TS = TS, T = HashedNodeRef<'stores, NodeIdentifier>, Acc = Acc>,
         const HIDDEN_NODES: bool,
-    > NodeStoreExt<HashedNode> for JavaTreeGen<'stores, 'cache, TS, More, HIDDEN_NODES>
+    > NodeStoreExt<HashedNode>
+    for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
     TS::Ty: TypeTrait,
 {
@@ -920,7 +1018,7 @@ where
                     precomp_queries: todo!(),
                 }
             };
-            let global = BasicGlobalData::default();
+            let global = StatsGlobalData::default();
             let full_node = FullNode { global, local };
             acc.push(full_node);
         }
@@ -962,14 +1060,14 @@ where
                 let bytes_len = compo::BytesLen((acc.end_byte - acc.start_byte) as u32);
 
                 let vacant = insertion.vacant();
-                let node_store: &legion::World = vacant.1 .1;
+                let node_store: &_ = vacant.1 .1;
                 let stores = SimpleStores {
                     type_store: self.stores.type_store.clone(),
                     node_store,
                     label_store: &self.stores.label_store,
                 };
 
-                acc.precomp_queries |= self.more.match_precomp_queries(&stores, &acc, label);
+                acc.precomp_queries |= self.more.match_precomp_queries(stores, &acc, label);
                 let children_is_empty = acc.simple.children.is_empty();
 
                 let mut dyn_builder = dyn_builder::EntityBuilder::new();
@@ -996,7 +1094,8 @@ where
                 hashs.persist(&mut dyn_builder);
                 if !children_is_empty {
                     if acc.simple.children.len() != acc.no_space.len() {
-                        dyn_builder.add(compo::NoSpacesCS(acc.no_space.into_boxed_slice()));
+                        let children = acc.no_space;
+                        tree_gen::add_cs_no_spaces(&mut dyn_builder, children);
                     }
                 }
                 acc.simple

@@ -248,7 +248,7 @@ impl<'stores, TS: XmlEnabledTypeStore> ZippedTreeGen for XmlTreeGen<'stores, TS>
         );
         if let Some(spacing) = spacing {
             parent.push(FullNode {
-                global: global.into(),
+                global: global.simple(),
                 local: self.make_spacing(spacing),
             });
         }
@@ -264,15 +264,7 @@ impl<'stores, TS: XmlEnabledTypeStore> ZippedTreeGen for XmlTreeGen<'stores, TS>
 }
 
 pub fn tree_sitter_parse_xml(text: &[u8]) -> Result<tree_sitter::Tree, tree_sitter::Tree> {
-    let mut parser = tree_sitter::Parser::new();
-    let language = crate::language();
-    parser.set_language(&language).unwrap();
-    let tree = parser.parse(text, None).unwrap();
-    if tree.root_node().has_error() {
-        Err(tree)
-    } else {
-        Ok(tree)
-    }
+    hyper_ast::tree_gen::utils_ts::tree_sitter_parse(text, &crate::language())
 }
 
 impl<'a, TS> XmlTreeGen<'a, TS> {
@@ -362,7 +354,7 @@ impl<'a, TS: XmlEnabledTypeStore> XmlTreeGen<'a, TS> {
         name: &[u8],
         text: &'a [u8],
         cursor: tree_sitter::TreeCursor,
-    ) -> FullNode<BasicGlobalData, Local> {
+    ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let mut global = Global::from(TextedGlobalData::new(Default::default(), text));
         let mut init = self.init_val(text, &TNode(cursor.node()));
         let mut xx = TTreeCursor(cursor);
@@ -377,7 +369,7 @@ impl<'a, TS: XmlEnabledTypeStore> XmlTreeGen<'a, TS> {
             global.down();
             init.start_byte = 0;
             init.push(FullNode {
-                global: global.into(),
+                global: global.simple(),
                 local: self.make_spacing(spacing),
             });
             global.right();
@@ -398,7 +390,7 @@ impl<'a, TS: XmlEnabledTypeStore> XmlTreeGen<'a, TS> {
             if let Some(spacing) = spacing {
                 global.right();
                 acc.push(FullNode {
-                    global: global.into(),
+                    global: global.simple(),
                     local: self.make_spacing(spacing),
                 });
             }
@@ -496,7 +488,7 @@ impl<'stores, TS: XmlEnabledTypeStore> TreeGen for XmlTreeGen<'stores, TS> {
         };
 
         let full_node = FullNode {
-            global: global.into(),
+            global: global.simple(),
             local,
         };
         full_node

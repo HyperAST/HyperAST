@@ -108,7 +108,7 @@ use super::{Acc, Prepro};
 
 static mut LUA_POOL: Vec<Lua> = vec![];
 
-impl Prepro {
+impl<HAST, Acc> Prepro<HAST, &Acc> {
     fn gen_lua() -> Result<Lua> {
         let lua = Lua::new();
         // lua.set_memory_limit(260000)?; // fatal runtime error: Rust cannot catch foreign exceptions
@@ -160,13 +160,20 @@ impl Prepro {
         Ok(lua)
     }
 
-    fn new(chunk: impl AsRef<str>) -> Self {
+    pub fn new(chunk: impl AsRef<str>) -> Self {
         Self {
             txt: chunk.as_ref().into(),
+            _ph: Default::default(),
+        }
+    }
+    pub fn from_arc(chunk: std::sync::Arc<str>) -> Self {
+        Self {
+            txt: chunk,
+            _ph: Default::default(),
         }
     }
 
-    fn init<T: HyperType + 'static>(self, ty: T) -> Result<Acc> {
+    fn init<T: HyperType + 'static>(self, ty: T) -> Result<self::Acc> {
         let now = Instant::now();
         let id;
         let lua: &mut Lua = unsafe {
@@ -198,7 +205,7 @@ impl Prepro {
         let prepare_time = now.elapsed().as_secs_f64();
         unsafe { TIME_INIT += prepare_time };
         log::warn!("{} {prepare_time}", &lua.used_memory());
-        Ok(Acc { id })
+        Ok(self::Acc { id })
     }
 }
 #[derive(Clone, ref_cast::RefCast)]
@@ -292,7 +299,12 @@ impl<T: HyperType + Send + Sync + 'static> mlua::UserData for SubtreeHandle<T> {
 }
 
 impl Acc {
-    pub fn acc<'a, T: HyperType + 'static, T2: HyperType + Send + Sync + 'static, HAST: UserData + 'static>(
+    pub fn acc<
+        'a,
+        T: HyperType + 'static,
+        T2: HyperType + Send + Sync + 'static,
+        HAST: UserData + 'static,
+    >(
         &mut self,
         store: &'a HAST,
         ty: T,
@@ -350,7 +362,11 @@ impl Acc {
         // log::error!("{:?}", map.0.get("size"));
         Ok(map)
     }
-    pub fn finish_with_label<T: HyperType>(mut self, subtree: &Subtr<T>, label: String) -> Result<DerivedData> {
+    pub fn finish_with_label<T: HyperType>(
+        mut self,
+        subtree: &Subtr<T>,
+        label: String,
+    ) -> Result<DerivedData> {
         let now = Instant::now();
         let ptr = format!("{:p}", &self);
         let lua = unsafe { &mut LUA_POOL[self.id] };
@@ -546,25 +562,41 @@ fn d_to_lua<'a>(lua: &'a Lua, d: &Dynamic) -> Result<Value<'a>> {
     }
 }
 
-impl<T: HyperType + 'static> crate::tree_gen::Prepro<T> for Prepro {
+impl<T: HyperType + 'static, HAST, Acc> crate::tree_gen::Prepro<T> for Prepro<HAST, &Acc> {
     const USING: bool = true;
-    fn preprocessing(&self, ty: T) -> std::result::Result<Acc, String> {
+    fn preprocessing(&self, ty: T) -> std::result::Result<self::Acc, String> {
         self.clone().init(ty).map_err(|x| x.to_string())
     }
 }
 
-impl<T: HyperType + 'static> crate::tree_gen::Prepro<T> for &Prepro {
+impl<T: HyperType + 'static, HAST, Acc> crate::tree_gen::Prepro<T> for &Prepro<HAST, &Acc> {
     const USING: bool = true;
-    fn preprocessing(&self, ty: T) -> std::result::Result<Acc, String> {
+    fn preprocessing(&self, ty: T) -> std::result::Result<self::Acc, String> {
         (*self).preprocessing(ty)
     }
 }
 
-impl<HAST: crate::types::TypeStore, Acc> crate::tree_gen::More<HAST, Acc> for Prepro {
+impl<
+        TS,
+        T: crate::types::Tree,
+        Acc: crate::tree_gen::WithChildren<<T as crate::types::Stored>::TreeId>,
+    > crate::tree_gen::More for Prepro<(TS, T), &Acc>
+{
+    type TS = TS;
+    type T = T;
+    type Acc = Acc;
     const ENABLED: bool = false;
-    fn match_precomp_queries(
+    fn match_precomp_queries<
+        'a,
+        HAST: crate::types::HyperAST<
+                'a,
+                IdN = <Self::T as crate::types::Stored>::TreeId,
+                TS = Self::TS,
+                T = Self::T,
+            > + std::clone::Clone,
+    >(
         &self,
-        _stores: &HAST,
+        _stores: HAST,
         _acc: &Acc,
         _label: Option<&str>,
     ) -> crate::tree_gen::PrecompQueries {
@@ -572,17 +604,47 @@ impl<HAST: crate::types::TypeStore, Acc> crate::tree_gen::More<HAST, Acc> for Pr
     }
 }
 
-impl<HAST: crate::types::TypeStore, Acc> crate::tree_gen::More<HAST, Acc> for &Prepro {
-    const ENABLED: bool = false;
-    fn match_precomp_queries(
+impl<'a,
+        TS,
+        T: crate::types::Tree,
+        Acc: crate::tree_gen::WithChildren<<T as crate::types::Stored>::TreeId>,
+    > crate::tree_gen::PreproTSG<'a> for Prepro<(TS, T), &Acc>
+{
+    const GRAPHING: bool = false;
+    fn compute_tsg<
+        HAST: crate::types::HyperAST<
+                'a,
+                IdN = <Self::T as crate::types::Stored>::TreeId,
+                TS = Self::TS,
+                T = Self::T,
+            > + std::clone::Clone,
+    >(
         &self,
-        _stores: &HAST,
+        _stores: HAST,
         _acc: &Acc,
         _label: Option<&str>,
-    ) -> crate::tree_gen::PrecompQueries {
-        Default::default()
+    ) -> std::result::Result<(), std::string::String>
+    where
+        // <HAST as crate::types::HyperASTShared>::IdN: Copy,
+        // HAST: 'static,
+    {
+        Ok(())
     }
 }
+
+// impl<S: crate::tree_gen::DerefStore, Acc> crate::tree_gen::More for &Prepro<&S, &Acc> {
+//     type T = ();
+//     type Acc = Acc;
+//     const ENABLED: bool = false;
+//     fn match_precomp_queries(
+//         &self,
+//         _stores: <Self::S as crate::tree_gen::DerefStore>::Raw,
+//         _acc: &Acc,
+//         _label: Option<&str>,
+//     ) -> crate::tree_gen::PrecompQueries {
+//         Default::default()
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

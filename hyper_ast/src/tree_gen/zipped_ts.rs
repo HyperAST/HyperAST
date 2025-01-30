@@ -176,6 +176,37 @@ impl<T: Debug> Debug for Acc<T> {
     }
 }
 
+impl<'acc, T> tree_gen::WithLabel for &'acc Acc<T> {
+    type L = &'acc str;
+}
+
+impl<'store, 'cache, 's, TS: TsEnableTS>
+    TsTreeGen<
+        'store,
+        'cache,
+        TS,
+        tree_gen::NoOpMore<
+            (
+                TS,
+                crate::store::nodes::legion::HashedNodeRef<'store, NodeIdentifier>,
+            ),
+            Acc<TS::Ty2>,
+        >,
+        true,
+    >
+where
+    TS::Ty2: TsType,
+{
+    pub fn new(stores: &'store mut SimpleStores<TS>, md_cache: &'cache mut MDCache) -> Self {
+        Self {
+            line_break: "\n".as_bytes().to_vec(),
+            stores,
+            md_cache,
+            more: Default::default(),
+        }
+    }
+}
+
 pub trait TsEnableTS: crate::types::ETypeStore
 where
     Self::Ty2: TsType,
@@ -192,7 +223,7 @@ impl<'store, 'cache, TS, More> TsTreeGen<'store, 'cache, TS, More>
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc<TS::Ty2>>,
+    More: tree_gen::More<Acc=Acc<TS::Ty2>>
 {
 }
 
@@ -201,7 +232,7 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc<TS::Ty2>>,
+    More: tree_gen::More<Acc=Acc<TS::Ty2>>
 {
     type Stores = SimpleStores<TS>;
     type Text = [u8];
@@ -331,7 +362,7 @@ where
             let local = self.make_spacing(spacing);
             debug_assert_ne!(parent.simple.children.len(), 0, "{:?}", parent.simple);
             parent.push(FullNode {
-                global: global.into(),
+                global: global.simple(),
                 local,
             });
         }
@@ -351,7 +382,7 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool>
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc<TS::Ty2>>,
+    More: tree_gen::More<Acc=Acc<TS::Ty2>>
 {
     fn make_spacing(
         &mut self,
@@ -420,7 +451,7 @@ where
         name: &[u8],
         text: &'store [u8],
         cursor: tree_sitter::TreeCursor,
-    ) -> FullNode<BasicGlobalData, Local<TS::Ty2>> {
+    ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let mut global = Global::from(TextedGlobalData::new(Default::default(), text));
         let mut init = self.init_val(text, &TNode(cursor.node()));
         let mut xx = TTreeCursor(cursor);
@@ -435,7 +466,7 @@ where
             global.down();
             global.set_sum_byte_length(init.start_byte);
             init.push(FullNode {
-                global: global.into(),
+                global: global.simple(),
                 local: self.make_spacing(spacing),
             });
             global.right();
@@ -456,7 +487,7 @@ where
             if let Some(spacing) = spacing {
                 global.right();
                 acc.push(FullNode {
-                    global: global.into(),
+                    global: global.simple(),
                     local: self.make_spacing(spacing),
                 });
             }
@@ -467,15 +498,15 @@ where
     }
 }
 
-impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
-    for TsTreeGen<'stores, 'cache, TS, More, HIDDEN_NODES>
+impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
+    for TsTreeGen<'store, 'cache, TS, More, HIDDEN_NODES>
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc<TS::Ty2>>,
+    More: tree_gen::More<Acc=Acc<TS::Ty2>>
 {
     type Acc = Acc<TS::Ty2>;
-    type Global = SpacedGlobalData<'stores>;
+    type Global = SpacedGlobalData<'store>;
     fn make(
         &mut self,
         global: &mut <Self as TreeGen>::Global,
@@ -519,15 +550,22 @@ where
             let byte_len = (acc.end_byte - acc.start_byte).try_into().unwrap();
             let bytes_len = compo::BytesLen(byte_len);
             let vacant = insertion.vacant();
-            let node_store = &*vacant.1 .1;
-            let stores = SimpleStores {
-                type_store: self.stores.type_store.clone(),
-                label_store: &self.stores.label_store,
-                node_store,
-            };
-            let more = &self.more;
             let mut dyn_builder = dyn_builder::EntityBuilder::new();
-            Self::custom_dd(stores, more, &mut dyn_builder, &mut acc, label);
+            {
+                let node_store = &*vacant.1 .1;
+                let stores = SimpleStores {
+                    type_store: self.stores.type_store.clone(),
+                    label_store: &self.stores.label_store,
+                    node_store,
+                };
+                let more = &self.more;
+                // TsTreeGen::<_, _, HIDDEN_NODES>::custom_dd(stores, more, &mut dyn_builder, &mut acc, label);
+
+                todo!("AAA");//acc.precomp_queries |= more.match_precomp_queries(stores, &acc, label.as_deref());
+                if More::ENABLED {
+                    add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
+                }
+            }
 
             let children_is_empty = acc.simple.children.is_empty();
             use crate::store::nodes::EntityBuilder;
@@ -540,7 +578,8 @@ where
             hashs.persist(&mut dyn_builder);
 
             if acc.simple.children.len() != acc.no_space.len() {
-                dyn_builder.add(compo::NoSpacesCS(acc.no_space.into_boxed_slice()));
+                let children = acc.no_space;
+                tree_gen::add_cs_no_spaces(&mut dyn_builder, children);
             }
             acc.simple
                 .add_primary(&mut dyn_builder, interned_kind, label_id);
@@ -565,7 +604,7 @@ where
         };
 
         let full_node = FullNode {
-            global: global.into(),
+            global: global.simple(),
             local,
         };
         full_node
@@ -578,18 +617,18 @@ where
 // and can add derived data to subtree
 
 impl<'store, 'cache, TS: types::ETypeStore, More, const HIDDEN_NODES: bool>
-    TsTreeGen<'store, 'cache, TS, More, HIDDEN_NODES>
+    TsTreeGen<'store, 'cache, TS, More, HIDDEN_NODES> where 
+    More: tree_gen::More<Acc=Acc<TS::Ty2>>
 {
     fn custom_dd(
-        stores: RawHAST<'_, '_, TS>,
+        stores: RawHAST<TS>,
         more: &More,
         dyn_builder: &mut dyn_builder::EntityBuilder,
         acc: &mut Acc<TS::Ty2>,
         label: Option<String>,
-    ) where
-        More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc<TS::Ty2>>,
+    )
     {
-        acc.precomp_queries |= more.match_precomp_queries(&stores, &*acc, label.as_deref());
+        todo!("AAA");//acc.precomp_queries |= more.match_precomp_queries(stores, &*acc, label.as_deref());
         if More::ENABLED {
             add_md_precomp_queries(dyn_builder, acc.precomp_queries);
         }

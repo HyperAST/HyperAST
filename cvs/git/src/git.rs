@@ -20,7 +20,7 @@ impl<'a> Builder<'a> {
     }
     pub fn before(mut self, before: &str) -> Result<Self, git2::Error> {
         if before.is_empty() {
-            return Ok(self)
+            return Ok(self);
         }
         let c = retrieve_commit(self.1, before)?;
         for c in c.parents() {
@@ -31,7 +31,7 @@ impl<'a> Builder<'a> {
 
     pub fn after(mut self, after: &str) -> Result<Self, git2::Error> {
         if after.is_empty() {
-            return Ok(self)
+            return Ok(self);
         }
         let c = retrieve_commit(self.1, after)?;
         self.0.push(c.id())?;
@@ -43,8 +43,6 @@ impl<'a> Builder<'a> {
         self.0.simplify_first_parent()?;
         Ok(self)
     }
-
-
 
     pub fn walk(mut self) -> Result<Revwalk<'a>, git2::Error> {
         if !self.2 {
@@ -137,12 +135,14 @@ pub fn retrieve_commit<'a>(
             Ok(c) => Ok(c),
             Err(err) => {
                 log::warn!("{}", err);
-                repository.find_commit(Oid::from_str(s)?)},
+                repository.find_commit(Oid::from_str(s)?)
+            }
         },
         Err(err) => {
             let oid = Oid::from_str(s).map_err(|e| {
                 log::warn!("{}", e);
-                err})?;
+                err
+            })?;
             repository.find_commit(oid)
         }
     }
@@ -240,23 +240,35 @@ impl Forge {
             Forge::GitlabInria => "https://gitlab.inria.fr/",
         }
     }
+
+    /// panics in case `user`` or `name`` contain '/' '#'
     pub fn repo(self, user: impl Into<String>, name: impl Into<String>) -> Repo {
+        self.try_repo(user, name).unwrap()
+    }
+    
+    pub fn try_repo(self, user: impl Into<String>, name: impl Into<String>) -> Result<Repo, String> {
         let user = user.into();
+        if user.contains("#") || user.contains("/") {
+            return Err("attempting to inject stuff!".to_string());
+        }
         let name = name.into();
-        Repo {
+        if name.contains("#") || name.contains("/") {
+            return Err("attempting to inject stuff!".to_string());
+        }
+        Ok(Repo {
             forge: self,
             user,
             name,
-        }
+        })
     }
 }
 
 // TODO use `&'static str`s to derive with Copy
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct Repo {
-    pub forge: Forge,
-    pub user: String,
-    pub name: String,
+    forge: Forge,
+    user: String,
+    name: String,
 }
 
 impl Repo {
@@ -285,6 +297,16 @@ impl Repo {
         let path = path.into();
         nofetch_repository(url, path)
     }
+
+    pub fn forge(&self) -> Forge {
+        self.forge
+    }
+    pub fn user(&self) -> &str {
+        &self.user
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 impl Display for Repo {
@@ -303,16 +325,14 @@ impl std::str::FromStr for Repo {
         let (user, name) = repo
             .split_once("/")
             .ok_or("give a valid repository address without 'https://' and '.git'")?;
-        let forge = forge.parse()?;
+        let forge: Forge = forge.parse()?;
         if name.contains("/") {
             return Err(format!(
                 "{} should not contain anymore '/' give a valid repository address",
                 name
             ));
         }
-        let user = user.into();
-        let name = name.into();
-        Ok(Self { forge, user, name })
+        forge.try_repo(user, name)
     }
 }
 
@@ -341,7 +361,11 @@ pub fn fetch_fork(mut x: git2::Remote, head: &str) -> Result<(), git2::Error> {
 }
 
 /// avoid mixing providers
-pub fn up_to_date_repo(path: &Path, fo: Option<git2::FetchOptions>, url: Url) -> Result<Repository,git2::Error> {
+pub fn up_to_date_repo(
+    path: &Path,
+    fo: Option<git2::FetchOptions>,
+    url: Url,
+) -> Result<Repository, git2::Error> {
     if path.join(".git").exists() {
         let repository = match Repository::open(path) {
             Ok(repo) => repo,
@@ -382,7 +406,7 @@ pub fn up_to_date_repo(path: &Path, fo: Option<git2::FetchOptions>, url: Url) ->
     }
 }
 
-fn clone_helper(url: Url, path: &Path, fo: git2::FetchOptions) -> Result<Repository,git2::Error> {
+fn clone_helper(url: Url, path: &Path, fo: git2::FetchOptions) -> Result<Repository, git2::Error> {
     let mut builder = git2::build::RepoBuilder::new();
 
     builder.bare(true);

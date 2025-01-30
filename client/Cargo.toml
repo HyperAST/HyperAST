@@ -94,7 +94,7 @@ clap = { version = "3.0", features = ["derive"] }
 hashbrown = "0.14.5"
 
 # tree-sitter-graph = { path = "../../tree-sitter-graph", optional = true }
-tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "080387760a41cb31e0350e91e44bb27253dc94ef", version = "0.12", optional = true }
+tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "57527aafe1418d6450cfe810fdbdde0f56c3ec61", version = "0.12", optional = true }
 # tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true }
 # stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true }
 # tree-sitter-graph = { version = "0.11.3", optional = true }
@@ -115,16 +115,23 @@ hyper-util = { version = "0.1", default-features = false, features = [
 ] }
 rustls = { version = "0.23" }
 http-body-util = "0.1.2"
+
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = "0.5.0"
+
 [dev-dependencies]
 reqwest = { version = "0.12.5", features = ["blocking"] }
 
 
 [features]
-default = ["rerun", "tsg"]
+# default = ["rerun", "tsg"]
+default = ["tsg"]
 tsg = [
     "dep:tree-sitter-graph",
     # "dep:stack-graphs",
     # "dep:tree-sitter-stack-graphs",
-    "hyper_ast_tsquery/tsg"
+    "hyper_ast_tsquery/tsg",
+    "hyper_ast_cvs_git/tsg",
 ]
 rerun = ["dep:rerun", "dep:polyglote"]

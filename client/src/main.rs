@@ -23,6 +23,14 @@ use hyper_diff::{decompressed_tree_store::PersistedNode, matchers::mapping_store
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
+
 pub(crate) type PartialDecompCache = DashMap<NodeIdentifier, DS<PersistedNode<NodeIdentifier>>>;
 pub(crate) type MappingAloneCache =
     DashMap<(NodeIdentifier, NodeIdentifier), (MappingStage, VecStore<u32>)>;

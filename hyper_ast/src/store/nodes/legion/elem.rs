@@ -562,6 +562,16 @@ impl<'a, T> HashedNodeRef<'a, T> {
         self.0
             .get_component::<NoSpacesCS<legion::Entity>>()
             .map(|x| (*x.0).into())
+            .or_else(|_| {
+                self.0
+                    .get_component::<compo::NoSpacesCS0<legion::Entity, 1>>()
+                    .map(|x| (&x.0).into())
+            })
+            .or_else(|_| {
+                self.0
+                    .get_component::<compo::NoSpacesCS0<legion::Entity, 2>>()
+                    .map(|x| (&x.0).into())
+            })
             .or_else(|_| self.cs())
     }
 }

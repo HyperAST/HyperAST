@@ -10,16 +10,11 @@ use crate::types::{TStore, Type};
 
 #[test]
 fn simple() {
-    type CppGen<'store, 'b> =
-        tree_gen::zipped_ts_simp::TsTreeGen<'store, 'store, crate::types::TStore>;
+    type CppGen<'store, 'b, More> =
+        tree_gen::zipped_ts_simp::TsTreeGen<'store, 'b, TStore, More, true>;
     let mut stores = Default::default();
     let mut md_cache = Default::default();
-    let mut gen = CppGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-        more: (),
-    };
+    let mut gen = CppGen::new(&mut stores, &mut md_cache);
     let text = EXAMPLE_SPACING;
     let tree = match utils_ts::tree_sitter_parse(text.as_bytes(), &crate::language()) {
         Ok(t) => t,
@@ -33,16 +28,11 @@ fn simple() {
 }
 #[test]
 fn simple0() {
-    type CppGen<'store, 'b> =
-        tree_gen::zipped_ts_simp0::TsTreeGen<'store, 'store, crate::types::TStore>;
+    type CppGen<'store, 'b, More> =
+        tree_gen::zipped_ts_simp::TsTreeGen<'store, 'store, TStore, More, true>;
     let mut stores = Default::default();
     let mut md_cache = Default::default();
-    let mut gen = CppGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-        more: (),
-    };
+    let mut gen =  CppGen::new(&mut stores, &mut md_cache);
     let text = EXAMPLE_SPACING;
     let tree = match utils_ts::tree_sitter_parse(text.as_bytes(), &crate::language()) {
         Ok(t) => t,
@@ -65,12 +55,7 @@ fn simple1() {
     type CppGen<'store, 'b, More> = TsTreeGen<'store, 'store, crate::types::TStore, More, true>;
     let mut stores = Default::default();
     let mut md_cache = Default::default();
-    let mut gen = CppGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-        more: (),
-    };
+    let mut gen = CppGen::new(&mut stores, &mut md_cache);
     let text = EXAMPLE_SPACING;
     let tree = match utils_ts::tree_sitter_parse(text.as_bytes(), &crate::language()) {
         Ok(t) => t,
@@ -93,12 +78,7 @@ fn no_goto_parent() {
     type CppGen<'store, 'b, More> = TsTreeGen<'store, 'store, crate::types::TStore, More, true>;
     let mut stores = Default::default();
     let mut md_cache = Default::default();
-    let mut gen = CppGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-        more: (),
-    };
+    let mut gen = CppGen::new(&mut stores, &mut md_cache);
     let text = EXAMPLE_SPACING;
     let tree = match utils_ts::tree_sitter_parse(text.as_bytes(), &crate::language()) {
         Ok(t) => t,
@@ -121,12 +101,7 @@ fn no_goto_parent_a() {
     type CppGen<'store, 'b, More> = TsTreeGen<'store, 'store, crate::types::TStore, More, true>;
     let mut stores = Default::default();
     let mut md_cache = Default::default();
-    let mut gen = CppGen {
-        line_break: "\n".as_bytes().to_vec(),
-        stores: &mut stores,
-        md_cache: &mut md_cache,
-        more: (),
-    };
+    let mut gen = CppGen::new(&mut stores, &mut md_cache);
     let text = EXAMPLE_SPACING;
     let tree = match utils_ts::tree_sitter_parse(text.as_bytes(), &crate::language()) {
         Ok(t) => t,

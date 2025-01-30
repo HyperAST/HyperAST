@@ -24,10 +24,12 @@ pub mod hyperast;
 #[cfg(feature = "hyper_ast")]
 pub mod hyperast_opt;
 pub mod stepped_query;
+pub mod stepped_query_imm;
 pub mod tsg;
 
 pub mod cursor_on_unbuild;
 
+use hyper_ast::types::HyperAST;
 pub use tree_sitter::CaptureQuantifier;
 pub use tree_sitter::Language;
 pub use tree_sitter::Point;
@@ -39,7 +41,13 @@ pub use indexed::CaptureId;
 pub use indexed::PatternId;
 pub use indexed::Symbol;
 
+use std::fmt::Debug;
+use std::ops::Deref;
 use std::{collections::VecDeque, usize};
+
+pub use stepped_query_imm::ExtendingStringQuery;
+pub use stepped_query_imm::MyNodeErazing;
+pub use stepped_query_imm::QueryMatcher;
 
 type Depth = u32;
 type Precomps = u16;
@@ -165,6 +173,12 @@ pub struct QueryCursor<'query, Cursor, Node> {
 pub struct Capture<Node> {
     pub node: Node,
     pub index: CaptureId,
+}
+
+impl<Node> Debug for Capture<Node> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.index.to_usize())
+    }
 }
 
 pub struct QueryMatch<Node> {
@@ -383,53 +397,70 @@ impl<Node: self::Node> QueryMatch<Node> {
     }
 }
 
-use hyper_ast::store::nodes::legion::RawHAST;
+#[derive(Default)]
+pub struct PreparedQuerying<Q, HAST, Acc>(Q, std::marker::PhantomData<(HAST, Acc)>);
 
-impl<T> hyper_ast::tree_gen::Prepro<T>
-    for crate::Query
-{
-    const USING: bool = false;
-    
-    fn preprocessing(
-        &self,
-        ty: T,
-    ) -> Result<hyper_ast::scripting::Acc, String> {
-        unimplemented!()
-    }
-}
-impl<T> hyper_ast::tree_gen::Prepro<T>
-    for &crate::Query
-{
-    const USING: bool = false;
-    fn preprocessing(
-        &self,
-        ty: T,
-    ) -> Result<hyper_ast::scripting::Acc, String> {
-        unimplemented!()
+impl<'a, HAST, Acc> From<&'a crate::Query> for PreparedQuerying<&'a crate::Query, HAST, Acc> {
+    fn from(value: &'a crate::Query) -> Self {
+        Self(value, Default::default())
     }
 }
 
-impl<'a, 'b, TS, Acc> hyper_ast::tree_gen::More<RawHAST<'a, 'b, TS>, Acc> for crate::Query
+impl<Q, HAST, Acc> Deref for PreparedQuerying<Q, HAST, &Acc> {
+    type Target = Q;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T, HAST, Acc> hyper_ast::tree_gen::Prepro<T> for PreparedQuerying<&crate::Query, HAST, Acc> {
+    const USING: bool = false;
+
+    fn preprocessing(&self, ty: T) -> Result<hyper_ast::scripting::Acc, String> {
+        unimplemented!()
+    }
+}
+
+impl<'s, TS, T, Acc> hyper_ast::tree_gen::More for PreparedQuerying<&crate::Query, (TS, T), Acc>
 where
-    TS: hyper_ast::types::ETypeStore<Ty2 = Acc::Type>
+    TS: 'static
+        + Clone
+        + hyper_ast::types::ETypeStore<Ty2 = Acc::Type>
         + hyper_ast::types::RoleStore<IdF = u16, Role = hyper_ast::types::Role>,
+    T: hyper_ast::types::WithRoles,
+    T: hyper_ast::types::Tree,
+    T::TreeId: Copy,
     Acc: hyper_ast::types::Typed
         + hyper_ast::tree_gen::WithRole<hyper_ast::types::Role>
-        + hyper_ast::tree_gen::WithChildren<hyper_ast::store::nodes::legion::NodeIdentifier>,
+        + hyper_ast::tree_gen::WithChildren<T::TreeId>,
+    for<'c> &'c Acc: hyper_ast::tree_gen::WithLabel<L = &'c str>,
 {
+    type Acc = Acc;
+    type T = T;
+    type TS = TS;
     const ENABLED: bool = true;
-    fn match_precomp_queries(
+    fn match_precomp_queries<
+        'a,
+        HAST: HyperAST<
+                'a,
+                IdN = <Self::T as hyper_ast::types::Stored>::TreeId,
+                TS = Self::TS,
+                T = Self::T,
+            > + std::clone::Clone,
+    >(
         &self,
-        stores: &RawHAST<'a, 'b, TS>,
+        stores: HAST,
         acc: &Acc,
         label: Option<&str>,
     ) -> hyper_ast::tree_gen::PrecompQueries {
-        if self.enabled_pattern_count() == 0 {
+        if self.0.enabled_pattern_count() == 0 {
             return Default::default();
         }
         let pos = hyper_ast::position::StructuralPosition::empty();
+
         let cursor = crate::cursor_on_unbuild::TreeCursor::new(stores, acc, label, pos);
-        let qcursor = self.matches_immediate(cursor); // TODO filter on height (and visibility?)
+        let qcursor = self.0.matches_immediate(cursor); // TODO filter on height (and visibility?)
         let mut r = Default::default();
         for m in qcursor {
             assert!(m.pattern_index.to_usize() < 16);
@@ -439,58 +470,374 @@ where
     }
 }
 
-impl<'a, 'b, TS, Acc> hyper_ast::tree_gen::More<RawHAST<'a, 'b, TS>, Acc> for &crate::Query
+impl<'s, TS, T, Acc> hyper_ast::tree_gen::PreproTSG<'s>
+    for PreparedQuerying<&crate::Query, (TS, T), Acc>
 where
-    TS: hyper_ast::types::ETypeStore<Ty2 = Acc::Type>
+    TS: 'static
+        + Clone
+        + hyper_ast::types::ETypeStore<Ty2 = Acc::Type>
         + hyper_ast::types::RoleStore<IdF = u16, Role = hyper_ast::types::Role>,
+    T: hyper_ast::types::WithRoles,
+    T: hyper_ast::types::Tree,
+    T::TreeId: Copy,
     Acc: hyper_ast::types::Typed
         + hyper_ast::tree_gen::WithRole<hyper_ast::types::Role>
-        + hyper_ast::tree_gen::WithChildren<hyper_ast::store::nodes::legion::NodeIdentifier>,
+        + hyper_ast::tree_gen::WithChildren<T::TreeId>,
+    for<'c> &'c Acc: hyper_ast::tree_gen::WithLabel<L = &'c str>,
 {
-    const ENABLED: bool = true;
-    fn match_precomp_queries(
+    const GRAPHING: bool = false;
+    fn compute_tsg<
+        HAST: HyperAST<
+                's,
+                IdN = <Self::T as hyper_ast::types::Stored>::TreeId,
+                TS = Self::TS,
+                T = Self::T,
+            > + std::clone::Clone,
+    >(
         &self,
-        stores: &RawHAST<'a, 'b, TS>,
-        acc: &Acc,
-        label: Option<&str>,
-    ) -> hyper_ast::tree_gen::PrecompQueries {
-        (*self).match_precomp_queries(stores, acc, label)
+        _stores: HAST,
+        _acc: &Acc,
+        _label: Option<&str>,
+    ) -> Result<(), String> {
+        Ok(())
     }
 }
 
-// arc is messing with orphan rule stuff...
-// impl<
-//         'a,
-//         'b,
-//         TS,
-//         Acc: hyper_ast::types::Typed
-//             + hyper_ast::tree_gen::WithRole<hyper_ast::types::Role>
-//             + hyper_ast::tree_gen::WithChildren<hyper_ast::store::nodes::legion::NodeIdentifier>,
-//     > hyper_ast::tree_gen::More<RawHAST<'a, 'b, TS>, Acc>
-//     for std::sync::Arc<crate::Query>
-// where
-//     TS: hyper_ast::types::ETypeStore<Ty2 = Acc::Type>
-//         + hyper_ast::types::RoleStore<IdF = u16, Role = hyper_ast::types::Role>,
-// {
-//     const ENABLED: bool = true;
-//     fn match_precomp_queries(
-//         &self,
-//         stores: &RawHAST<'a, 'b, TS>,
-//         acc: &Acc,
-//         label: Option<&str>,
-//     ) -> hyper_ast::tree_gen::PrecompQueries {
-//         let cursor = crate::cursor_on_unbuild::TreeCursor::new(
-//             stores,
-//             acc,
-//             label,
-//             hyper_ast::position::StructuralPosition::empty(),
-//         );
-//         let qcursor = self.matches_immediate(cursor); // TODO filter on height (and visibility?)
-//         let mut r = Default::default();
-//         for m in qcursor {
-//             assert!(m.pattern_index.to_usize() < 16);
-//             r |= 1 << m.pattern_index.to_usize() as u16;
-//         }
-//         r
-//     }
-// }
+pub struct PreparedOverlay<Q, O> {
+    pub query: Q,
+    pub overlayer: O,
+    pub functions: std::sync::Arc<dyn std::any::Any>,
+}
+
+#[cfg(feature = "tsg")]
+impl<'aaa, 'hast, 'g, 'q, 'm, HAST, Acc> hyper_ast::tree_gen::More
+    for PreparedOverlay<
+        &'q crate::Query,
+        &'m tree_sitter_graph::ast::File<stepped_query_imm::QueryMatcher<'hast, HAST, &Acc>>,
+    >
+where
+    HAST: 'hast + HyperAST<'hast> + Clone,
+    HAST::IdN: Copy + std::hash::Hash + Debug,
+    HAST::Idx: std::hash::Hash,
+    HAST::T: hyper_ast::types::WithSerialization
+        + hyper_ast::types::WithStats
+        + hyper_ast::types::WithRoles,
+    HAST::TS: 'static
+        + Clone
+        + hyper_ast::types::ETypeStore<Ty2 = Acc::Type>
+        + hyper_ast::types::RoleStore<IdF = u16, Role = hyper_ast::types::Role>,
+    Acc: hyper_ast::tree_gen::WithRole<hyper_ast::types::Role>
+        + hyper_ast::tree_gen::WithChildren<HAST::IdN>
+        + hyper_ast::types::Typed,
+    for<'acc> &'acc Acc: hyper_ast::tree_gen::WithLabel<L = &'acc str>,
+{
+    type TS = HAST::TS;
+    type Acc = Acc;
+    type T = HAST::T;
+
+    const ENABLED: bool = true;
+
+    fn match_precomp_queries<
+        'a,
+        HAST2: HyperAST<
+                'a,
+                IdN = <Self::T as hyper_ast::types::Stored>::TreeId,
+                TS = Self::TS,
+                T = Self::T,
+            > + std::clone::Clone,
+    >(
+        &self,
+        stores: HAST2,
+        acc: &Acc,
+        label: Option<&str>,
+    ) -> hyper_ast::tree_gen::PrecompQueries {
+        // self.query.match_precomp_queries(stores, acc, label)
+        if self.query.enabled_pattern_count() == 0 {
+            return Default::default();
+        }
+        let pos = hyper_ast::position::StructuralPosition::empty();
+        let cursor = crate::cursor_on_unbuild::TreeCursor::new(stores, acc, label, pos);
+        let qcursor = self.query.matches_immediate(cursor); // TODO filter on height (and visibility?)
+        let mut r = Default::default();
+        for m in qcursor {
+            assert!(m.pattern_index.to_usize() < 16);
+            r |= 1 << m.pattern_index.to_usize() as u16;
+        }
+        r
+    }
+}
+
+#[cfg(feature = "tsg")]
+impl<'aaa, 'g, 'q, 'm, 'hast, HAST, Acc>
+    hyper_ast::tree_gen::Prepro<<HAST::TS as hyper_ast::types::ETypeStore>::Ty2>
+    for PreparedOverlay<
+        &'q crate::Query,
+        &'m tree_sitter_graph::ast::File<stepped_query_imm::QueryMatcher<'hast, HAST, &Acc>>,
+    >
+where
+    HAST: 'hast + HyperAST<'hast> + Clone,
+    HAST::IdN: Copy + std::hash::Hash + Debug,
+    HAST::Idx: std::hash::Hash,
+    HAST::T: hyper_ast::types::WithSerialization
+        + hyper_ast::types::WithStats
+        + hyper_ast::types::WithRoles,
+    HAST::TS: 'static
+        + Clone
+        + hyper_ast::types::ETypeStore<Ty2 = Acc::Type>
+        + hyper_ast::types::RoleStore<IdF = u16, Role = hyper_ast::types::Role>
+        + hyper_ast::types::TypeStore,
+    Acc: hyper_ast::types::Typed
+        + hyper_ast::tree_gen::WithRole<hyper_ast::types::Role>
+        + hyper_ast::tree_gen::WithChildren<HAST::IdN>
+        + hyper_ast::types::Typed,
+    for<'acc> &'acc Acc: hyper_ast::tree_gen::WithLabel<L = &'acc str>,
+{
+    const USING: bool = false;
+
+    fn preprocessing(
+        &self,
+        _ty: <HAST::TS as hyper_ast::types::ETypeStore>::Ty2,
+    ) -> Result<hyper_ast::scripting::Acc, String> {
+        unimplemented!()
+    }
+}
+
+#[cfg(feature = "tsg")]
+impl<'aaa, 'g, 'q, 'm, 'hast, HAST, Acc> hyper_ast::tree_gen::PreproTSG<'hast>
+    for PreparedOverlay<
+        &'q crate::Query,
+        &'m tree_sitter_graph::ast::File<stepped_query_imm::QueryMatcher<'hast, HAST, &Acc>>,
+    >
+where
+    HAST: 'hast + HyperAST<'hast> + Clone,
+    HAST::IdN: Copy + std::hash::Hash + Debug,
+    HAST::Idx: std::hash::Hash,
+    HAST::T: hyper_ast::types::WithSerialization
+        + hyper_ast::types::WithStats
+        + hyper_ast::types::WithRoles,
+    HAST::TS: 'static
+        + Clone
+        + hyper_ast::types::ETypeStore<Ty2 = Acc::Type>
+        + hyper_ast::types::RoleStore<IdF = u16, Role = hyper_ast::types::Role>
+        + hyper_ast::types::TypeStore,
+    Acc: hyper_ast::types::Typed
+        + 'static
+        + hyper_ast::tree_gen::WithRole<hyper_ast::types::Role>
+        + hyper_ast::tree_gen::WithChildren<HAST::IdN>
+        + hyper_ast::types::Typed,
+    for<'acc> &'acc Acc: hyper_ast::tree_gen::WithLabel<L = &'acc str>,
+{
+    const GRAPHING: bool = true;
+    fn compute_tsg<
+        HAST2: 'static
+            + HyperAST<
+                'hast,
+                IdN = <Self::T as hyper_ast::types::Stored>::TreeId,
+                Idx = <Self::T as hyper_ast::types::WithChildren>::ChildIdx,
+                TS = Self::TS,
+                T = Self::T,
+            >
+            + std::clone::Clone,
+    >(
+        &self,
+        stores: HAST2,
+        acc: &Acc,
+        label: Option<&str>,
+    ) -> Result<(), String> {
+        // NOTE I had to do a lot of unsafe magic :/
+        // mostly exending lifetime and converting HAST to HAST2 on compatible structures
+
+        use tree_sitter_graph::graph::Graph;
+        let cancellation_flag = tree_sitter_graph::NoCancellation;
+        let mut globals = tree_sitter_graph::Variables::new();
+        let mut graph: Graph<stepped_query_imm::Node<'_, HAST2, &Acc>> =
+            tree_sitter_graph::graph::Graph::default();
+        init_globals(&mut globals, &mut graph);
+
+        // retreive the custom functions
+        // NOTE need the concrete type of the stores to instanciate
+        // WARN cast will fail if the original instance type was not identical
+        type Fcts<HAST, Acc> = tree_sitter_graph::functions::Functions<
+            tree_sitter_graph::graph::GraphErazing<stepped_query_imm::MyNodeErazing<HAST, Acc>>,
+        >;
+        let functions: &Fcts<HAST2, &Acc> = self
+            .functions
+            .deref()
+            .downcast_ref()
+            .expect("identical instance type");
+
+        // tree_sitter_stack_graphs::functions::add_path_functions(&mut functions);
+
+        let mut config = configure(&globals, functions);
+
+        let pos = hyper_ast::position::StructuralPosition::empty();
+        let tree = stepped_query_imm::Node::new(stores, acc, label, pos);
+
+        // NOTE could not use the execute_lazy_into due to limitations with type checks (needed some transmutes)
+        // ORI: self.overlayer.execute_lazy_into2(&mut graph, tree, &config, &cancellation_flag).unwrap();
+        // {
+        let mut ctx = tree_sitter_graph::execution::Ctx::new();
+
+        let mut cursor = vec![];
+        // NOTE could not find a way to make it type check without inlining
+        // ORI: let mut matches = this.query.matches(&mut cursor, tree);
+        let mut matches = {
+            let q: &stepped_query_imm::QueryMatcher<_, &Acc> =
+                unsafe { std::mem::transmute(self.overlayer.query.as_ref().unwrap()) };
+            // log::error!("{:?}",this.query.as_ref().unwrap().query.capture_names);
+            let node = &tree;
+            let cursor = &mut cursor;
+            // log::error!("{:?}",this.query.as_ref().unwrap().query);
+            // log::error!("{}",this.query.as_ref().unwrap().query);
+            let qm = self.overlayer.query.as_ref().unwrap();
+            let matchs = qm.query.matches_immediate(node.clone());
+            let node = node.clone();
+            stepped_query_imm::MyQMatches::<_, HAST2, _> {
+                q,
+                cursor,
+                matchs,
+                node,
+            }
+        };
+        let graph = &mut graph;
+        loop {
+            // NOTE needed to make a transmute to type check
+            // ORI: ... matches.next() ...
+            let mat: stepped_query_imm::MyQMatch<_, &Acc> = {
+                let Some(mat) = matches.next() else { break };
+                let mat = stepped_query_imm::MyQMatch {
+                    stores: tree.0.stores.clone(),
+                    b: mat.b,
+                    c: &(),
+                    qm: unsafe { std::mem::transmute(mat.qm) },
+                    i: mat.i,
+                };
+                mat
+            };
+            use tree_sitter_graph::graph::QMatch;
+            let stanza = &self.overlayer.stanzas[mat.pattern_index()];
+            // NOTE could not type check it either
+            // ORI: stanza.execute_lazy2(
+            {
+                let inherited_variables = &self.overlayer.inherited_variables;
+                let shorthands = &self.overlayer.shorthands;
+                let mat = &mat;
+                let config = &mut config;
+                let cancellation_flag = &cancellation_flag;
+                let current_regex_captures = vec![];
+                ctx.clear();
+                let node = mat
+                    .nodes_for_capture_index(stanza.full_match_file_capture_index)
+                    .next()
+                    .expect("missing capture for full match");
+                log::error!("{:?}", node.0.pos);
+                // debug!("match {:?} at {}", node, self.range.start);
+                // trace!("{{");
+                for statement in &stanza.statements {
+                    // NOTE could not properly get the source location, just use a zeroed location
+                    // ORI: let error_context = StatementContext::new(...
+                    let error_context = {
+                        let stmt: &tree_sitter_graph::ast::Statement = &statement;
+                        let stanza = &stanza;
+                        let source_node = &node;
+                        // use crate::graph::SyntaxNode;
+                        // let source_location: Location::from(source_node.start_position()), // TODO make a better location for hyperast;
+                        let source_location = tree_sitter_graph::Location { row: 0, column: 0 };
+                        tree_sitter_graph::execution::error::StatementContext::raw(
+                            stmt,
+                            stanza.range.start,
+                            source_location,
+                            source_node.0.kind().to_string(),
+                        )
+                    };
+                    if let Err(err) = ctx.exec(
+                        graph,
+                        inherited_variables,
+                        cancellation_flag,
+                        stanza.full_match_file_capture_index,
+                        shorthands,
+                        mat,
+                        config,
+                        &current_regex_captures,
+                        &statement,
+                        error_context,
+                    ) {
+                        log::trace!("{}", graph.pretty_print());
+                        let source_path = std::path::Path::new(&"");
+                        let tsg_path = std::path::Path::new(&"");
+                        log::error!("{}", err.display_pretty(&source_path, "", &tsg_path, ""));
+                    }
+                    // .with_context(|| exec.error_context.into())?
+                }
+            };
+        }
+        if let Err(err) = ctx.eval(
+            graph,
+            functions,
+            &self.overlayer.inherited_variables,
+            &cancellation_flag,
+        ) {
+            log::trace!("{}", graph.pretty_print());
+            let source_path = std::path::Path::new(&"");
+            let tsg_path = std::path::Path::new(&"");
+            log::error!("{}", err.display_pretty(&source_path, "", &tsg_path, ""));
+        }
+        // }
+
+        // TODO properly return and use the graph (also handle the error propagation)
+        if graph.node_count() > 2 {
+            log::error!("curr kind {}", hyper_ast::types::Typed::get_type(acc));
+            let s = graph.to_json().unwrap();
+            log::error!("graph: {}", s);
+        }
+        Ok(())
+    }
+}
+
+pub use tree_sitter_stack_graphs::functions::add_path_functions;
+
+static DEBUG_ATTR_PREFIX: &'static str = "debug_";
+pub static ROOT_NODE_VAR: &'static str = "ROOT_NODE";
+/// The name of the file path global variable
+pub const FILE_PATH_VAR: &str = "FILE_PATH";
+static JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
+static FILE_NAME: &str = "a/b/AAA.java";
+
+#[cfg(feature = "tsg")]
+fn configure<'a, 'g, Node>(
+    globals: &'a tree_sitter_graph::Variables<'g>,
+    functions: &'a tree_sitter_graph::functions::Functions<
+        tree_sitter_graph::graph::GraphErazing<Node>,
+    >,
+) -> tree_sitter_graph::ExecutionConfig<'a, 'g, tree_sitter_graph::graph::GraphErazing<Node>> {
+    let config = tree_sitter_graph::ExecutionConfig::new(functions, globals)
+        .lazy(true);
+    if !cfg!(debug_assertions) {
+        config.debug_attributes(
+            [DEBUG_ATTR_PREFIX, "tsg_location"].concat().as_str().into(),
+            [DEBUG_ATTR_PREFIX, "tsg_variable"].concat().as_str().into(),
+            [DEBUG_ATTR_PREFIX, "tsg_match_node"]
+                .concat()
+                .as_str()
+                .into(),
+        )
+    } else {
+        config
+    }
+}
+
+#[cfg(feature = "tsg")]
+fn init_globals<Node: tree_sitter_graph::graph::SyntaxNodeExt>(
+    _globals: &mut tree_sitter_graph::Variables,
+    _graph: &mut tree_sitter_graph::graph::Graph<Node>,
+) {
+    // globals
+    //     .add(ROOT_NODE_VAR.into(), graph.add_graph_node().into())
+    //     .expect("Failed to set ROOT_NODE");
+    // globals
+    //     .add(FILE_PATH_VAR.into(), FILE_NAME.into())
+    //     .expect("Failed to set FILE_PATH");
+    // globals
+    //     .add(JUMP_TO_SCOPE_NODE_VAR.into(), graph.add_graph_node().into())
+    //     .expect("Failed to set JUMP_TO_SCOPE_NODE");
+}

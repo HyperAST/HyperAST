@@ -7,7 +7,6 @@ use crate::{
     tempfile,
 };
 use hyper_ast::store::{labels::LabelStore, nodes::legion::NodeStore, SimpleStores};
-use hyper_ast_gen_ts_java::legion_with_refs::JavaTreeGen;
 // use hyper_ast_gen_ts_java::types::TStore;
 use hyper_diff::actions::Actions;
 use hyper_diff::algorithms::{self, DiffResult, MappingDurations};
@@ -19,8 +18,7 @@ fn test_simple_1() {
     // use hyper_ast_gen_ts_java::types::TStore;
     let mut stores = SimpleStores::default();
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
-    let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
+    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
 
     let stores = stores.change_type_store::<hyper_ast_gen_ts_java::types::TStore>();
 
@@ -55,9 +53,8 @@ fn test_crash1() {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     print!("{:?} len={}: ", buggy_path, buggy.len());
-    let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
+    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
     let len = algorithms::gumtree::diff(
         &stores,
         &src_tr.local.compressed_node,
@@ -90,9 +87,9 @@ mod examples {
             node_store: NodeStore::new(),
         };
         let mut md_cache = Default::default();
-        let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
+        // let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
         print!("len={}: ", buggy.len());
-        let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
+        let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
         let len = algorithms::gumtree::diff(
             &stores,
             &src_tr.local.compressed_node,
@@ -137,9 +134,8 @@ mod examples {
             node_store: NodeStore::new(),
         };
         let mut md_cache = Default::default();
-        let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
         print!("len={}: ", buggy.len());
-        let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
+        let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
         let len = algorithms::gumtree::diff(
             &stores,
             &src_tr.local.compressed_node,
@@ -221,13 +217,12 @@ mod examples {
             node_store: NodeStore::new(),
         };
         let mut md_cache = Default::default();
-        let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
         let now = Instant::now();
 
         println!("{} len={}", "buggy", buggy.len());
-        let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
+        let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
         let len = algorithms::gumtree::diff(
-            java_tree_gen.stores,
+            &stores,
             &src_tr.local.compressed_node,
             &dst_tr.local.compressed_node,
         )
@@ -255,7 +250,7 @@ mod examples {
         src_f
             .write_all(
                 (JsonSerializer::<_, _, true>::new(
-                    java_tree_gen.stores,
+                    &stores,
                     src_tr.local.compressed_node.clone(),
                 )
                 .to_string())
@@ -268,7 +263,7 @@ mod examples {
         dst_f
             .write_all(
                 (JsonSerializer::<_, _, true>::new(
-                    java_tree_gen.stores,
+                    &stores,
                     dst_tr.local.compressed_node.clone(),
                 )
                 .to_string())
@@ -1115,11 +1110,10 @@ fn compare_perfs() {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let now = Instant::now();
 
     println!("{:?} len={}", buggy_path, buggy.len());
-    let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
+    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
     let len = algorithms::gumtree::diff(
         &stores,
         &src_tr.local.compressed_node,
@@ -1194,11 +1188,10 @@ pub fn bad_perfs() {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let now = Instant::now();
 
     println!("{:?} len={}", buggy_path, buggy.len());
-    let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
+    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
     let len = algorithms::gumtree::diff(
         &stores,
         &src_tr.local.compressed_node,
@@ -1252,11 +1245,10 @@ pub fn bad_perfs2() {
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     let now = Instant::now();
 
     println!("{:?} len={}", buggy_path, buggy.len());
-    let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
+    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
     let len = algorithms::gumtree::diff(
         &stores,
         &src_tr.local.compressed_node,
@@ -1400,8 +1392,7 @@ fn bad_perfs_helper(buggy_path: std::path::PathBuf, fixed_path: std::path::PathB
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
-    let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
+    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
     let buggy_s = src_tr.local.metrics.size;
     let fixed_s = dst_tr.local.metrics.size;
     dbg!(buggy_s, fixed_s);
@@ -1420,7 +1411,7 @@ fn bad_perfs_helper(buggy_path: std::path::PathBuf, fixed_path: std::path::PathB
         prepare_gen_t,
         gen_t,
     } = algorithms::gumtree::diff(
-        java_tree_gen.stores,
+        &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     );
@@ -1441,7 +1432,7 @@ fn bad_perfs_helper(buggy_path: std::path::PathBuf, fixed_path: std::path::PathB
     };
     let hast_timings = [subtree_matcher_t, bottomup_matcher_t, gen_t + prepare_gen_t];
     let gt_out = other_tools::gumtree::subprocess(
-        java_tree_gen.stores,
+        &stores,
         src_tr.local.compressed_node,
         dst_tr.local.compressed_node,
         "gumtree",
@@ -1512,15 +1503,12 @@ fn test_all() {
                 node_store: NodeStore::new(),
             };
             let mut md_cache = Default::default();
-            let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
             let now = Instant::now();
 
             println!("{:?} len={}", buggy_path, buggy.len());
-            let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
+            let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
             let len = algorithms::gumtree::diff(
                 &stores,
-                // &java_tree_gen.stores.node_store,
-                // &java_tree_gen.stores.label_store,
                 &src_tr.local.compressed_node,
                 &dst_tr.local.compressed_node,
             )
@@ -1640,14 +1628,13 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
         node_store: NodeStore::new(),
     };
     let mut md_cache = Default::default();
-    let mut java_tree_gen = JavaTreeGen::new(&mut stores, &mut md_cache);
     println!("{:?} len={}", name, buggy.len());
-    let (src_tr, dst_tr) = parse_string_pair(&mut java_tree_gen, &buggy, &fixed);
+    let (src_tr, dst_tr) = parse_string_pair(&mut stores, &mut md_cache, &buggy, &fixed);
     let buggy_s = src_tr.local.metrics.size;
     let fixed_s = dst_tr.local.metrics.size;
     let gt_out_format = "COMPRESSED"; // JSON
     let gt_out = other_tools::gumtree::subprocess(
-        java_tree_gen.stores,
+        &stores,
         src_tr.local.compressed_node,
         dst_tr.local.compressed_node,
         "gumtree",
@@ -1664,7 +1651,7 @@ pub fn run(buggy_path: &Path, fixed_path: &Path, name: &Path) -> Option<String> 
         prepare_gen_t,
         gen_t,
     } = algorithms::gumtree::diff(
-        java_tree_gen.stores,
+        &stores,
         &src_tr.local.compressed_node,
         &dst_tr.local.compressed_node,
     );

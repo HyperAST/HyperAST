@@ -126,6 +126,7 @@ impl PreProcessedRepositories {
                 let t = crate::java_processor::Parameter {
                     query: None,
                     prepo: None,
+                    tsg: None,
                 };
                 let h_java = self
                     .processor
@@ -165,7 +166,7 @@ impl PreProcessedRepositories {
         &mut self,
         repo: Repo,
         config: RepoConfig,
-        prepro: hyper_ast::scripting::Prepro,
+        prepro: std::sync::Arc<str>,
     ) -> ConfiguredRepoHandle2 {
         use crate::processing::erased::Parametrized;
         let r = match config {
@@ -177,6 +178,7 @@ impl PreProcessedRepositories {
                 let t = crate::java_processor::Parameter {
                     prepo: Some(prepro),
                     query: None,
+                    tsg: None,
                 };
                 let java_handle = CommitProcExt::register_param(h_java, t);
                 let h = self
@@ -213,6 +215,26 @@ impl PreProcessedRepositories {
             .get(&repo)
             .map(|&config| ConfiguredRepoHandle2 { config, spec: repo })
     }
+
+    pub fn get_precomp_query(&self, handle: ParametrizedCommitProcessorHandle, lang: &str) -> Option<std::sync::Arc<[String]>> {
+        let proc = self
+            .processor
+            .processing_systems
+            .by_id(&handle.0)
+            .unwrap()
+            .get(handle.1);
+        dbg!();
+        let handle = proc.get_lang_handle(lang)?;
+        dbg!();
+        let proc = self
+            .processor
+            .processing_systems
+            .by_id(&handle.0)
+            .unwrap()
+            .get(handle.1);
+        proc.get_precomp_query()
+    }
+
     pub fn pre_process_chunk(
         &mut self,
         rw: &mut impl Iterator<Item = git2::Oid>,

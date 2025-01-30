@@ -395,9 +395,9 @@ fn insert2_p2_shard<'a, K: Eq + Hash, V, S: BuildHasher>(
     }
 }
 
-fn insert<'a, K: Eq + Hash, V>(
+fn insert<'a, 'b, K: Eq + Hash, V>(
     key: K,
-    shard: &'a mut RwLockWriteGuard<'a, HashMap<K, SharedValue<V>>>,
+    shard: &'b mut RwLockWriteGuard<'a, HashMap<K, SharedValue<V>>>,
     value: SharedValue<V>,
 ) -> (*const K, *mut V) {
     unsafe {

@@ -189,7 +189,7 @@ impl<'a> super::Node for tree_sitter::Node<'a> {
     }
 
     fn has_child_with_field_id(&self, field_id: ffi::TSFieldId) -> bool {
-        self.has_child_with_field_id(field_id)
+        self.child_by_field_id(field_id).is_some()
     }
 
     fn equal(&self, other: &Self) -> bool {

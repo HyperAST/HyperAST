@@ -56,7 +56,7 @@ fn cpp_tree(
 ) {
     use hyper_ast_gen_ts_cpp::legion::CppTreeGen;
     use hyper_ast_gen_ts_cpp::types::TStore;
-    let tree = match CppTreeGen::<TStore>::tree_sitter_parse(text) {
+    let tree = match hyper_ast_gen_ts_cpp::legion::tree_sitter_parse(text) {
         Ok(t) => t,
         Err(t) => t,
     };
@@ -80,7 +80,7 @@ fn xml_tree(
 ) {
     use hyper_ast_gen_ts_xml::legion::XmlTreeGen;
     use hyper_ast_gen_ts_xml::types::TStore;
-    let tree = match XmlTreeGen::<TStore>::tree_sitter_parse(text) {
+    let tree = match hyper_ast_gen_ts_xml::legion::tree_sitter_parse_xml(text) {
         Ok(t) => t,
         Err(t) => t,
     };

@@ -1666,6 +1666,7 @@ dependencies = [
  "hyper_ast_gen_ts_tsquery",
  "hyper_ast_tsquery",
  "hyper_diff",
+ "jemallocator",
  "log",
  "nohash-hasher",
  "num",
@@ -4222,6 +4223,7 @@ dependencies = [
  "num",
  "serde",
  "tree-sitter 0.23.2",
+ "tree-sitter-graph 0.12.2",
  "tuples",
 ]
 
@@ -4275,7 +4277,7 @@ dependencies = [
  "stack-graphs",
  "string-interner 0.17.0",
  "tree-sitter 0.23.2",
- "tree-sitter-graph 0.11.3",
+ "tree-sitter-graph 0.12.2",
  "tree-sitter-java 0.23.4",
  "tree-sitter-stack-graphs",
  "tuples",
@@ -9150,7 +9152,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-graph"
 version = "0.12.2"
-source = "git+https://github.com/quentinLeDilavrec/tree-sitter-graph?rev=080387760a41cb31e0350e91e44bb27253dc94ef#080387760a41cb31e0350e91e44bb27253dc94ef"
+source = "git+https://github.com/quentinLeDilavrec/tree-sitter-graph?rev=57527aafe1418d6450cfe810fdbdde0f56c3ec61#57527aafe1418d6450cfe810fdbdde0f56c3ec61"
 dependencies = [
  "log",
  "regex",

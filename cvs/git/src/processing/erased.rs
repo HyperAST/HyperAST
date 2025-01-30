@@ -13,7 +13,7 @@ pub struct ConfigParametersHandle(pub usize);
 #[derive(Clone, Copy, Debug)]
 pub struct ParametrizedCommitProcessorHandle(pub CommitProcessorHandle, pub ConfigParametersHandle);
 #[derive(Clone, Copy, Debug)]
-pub struct CommitProcessorHandle(std::any::TypeId);
+pub struct CommitProcessorHandle(pub(crate) std::any::TypeId);
 #[derive(Debug)]
 pub struct ParametrizedCommitProcessor2Handle<T: CommitProcExt>(
     pub ConfigParametersHandle,
@@ -62,6 +62,12 @@ pub trait CommitProc {
     ) -> Box<dyn PreparedCommitProc + 'repo>;
 
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit>;
+    fn get_precomp_query(&self) -> Option<std::sync::Arc<[String]>> {
+        None
+    }
+    fn get_lang_handle(&self, _lang: &str) -> Option<ParametrizedCommitProcessorHandle> {
+        None
+    }
 }
 pub trait PreparedCommitProc {
     fn process(
