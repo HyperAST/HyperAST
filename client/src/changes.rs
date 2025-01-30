@@ -51,14 +51,14 @@ pub(crate) fn added_deleted(
     if src_tr == dst_tr {
         return Ok((
             SrcChanges {
-                user: repo_handle.spec().user.to_string(),
-                name: repo_handle.spec().name.to_string(),
+                user: repo_handle.spec().user().to_string(),
+                name: repo_handle.spec().name().to_string(),
                 commit: src_oid.to_string(),
                 deletions: Default::default(),
             },
             DstChanges {
-                user: repo_handle.spec().user.to_string(),
-                name: repo_handle.spec().name.to_string(),
+                user: repo_handle.spec().user().to_string(),
+                name: repo_handle.spec().name().to_string(),
                 commit: dst_oid.to_string(),
                 additions: Default::default(),
             },
@@ -191,14 +191,14 @@ pub(crate) fn added_deleted(
 
     Ok((
         SrcChanges {
-            user: repo_handle.spec().user.to_string(),
-            name: repo_handle.spec().name.to_string(),
+            user: repo_handle.spec().user().to_string(),
+            name: repo_handle.spec().name().to_string(),
             commit: src_oid.to_string(),
             deletions: unmapped_src,
         },
         DstChanges {
-            user: repo_handle.spec().user.to_string(),
-            name: repo_handle.spec().name.to_string(),
+            user: repo_handle.spec().user().to_string(),
+            name: repo_handle.spec().name().to_string(),
             commit: dst_oid.to_string(),
             additions: unmapped_dst,
         },

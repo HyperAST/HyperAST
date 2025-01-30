@@ -616,7 +616,7 @@ pub(crate) fn track_code_at_path_with_changes(
             })?;
         log::warn!(
             "done construction of {commits:?} in {}",
-            repository.spec.user
+            repository.spec.user()
         );
         let src_oid = commits[0];
         if ori_oid.is_none() {
@@ -656,7 +656,7 @@ pub(crate) fn track_code_at_path_with_changes(
                 return Ok(tracking_result.with_changes(changes));
             }
             MappingResult::Missing { src, fallback } => {
-                dbg!();
+        dbg!();
                 let changes = changes::added_deleted(state, &repository, dst_oid, ori_oid.unwrap())
                     .map_err(|err| TrackingError {
                         compute_time: now.elapsed().as_secs_f64(),
@@ -843,8 +843,8 @@ impl<IdN, Idx> LocalPieceOfCode<IdN, Idx> {
         } = self;
         let commit = commit.to_string();
         PieceOfCode {
-            user: spec.user,
-            name: spec.name,
+            user: spec.user().to_string(),
+            name: spec.name().to_string(),
             commit,
             path,
             path_ids,

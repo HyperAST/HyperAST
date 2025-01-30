@@ -527,7 +527,7 @@ pub(crate) fn prepare_dir_exploration(
         .collect();
     if dir_path.peek().is_none() {
         let p = children_objects.iter().position(|x| match x {
-            BasicGitObject::Blob(_, n) => crate::processing::file_sys::Pom::matches(n),
+            BasicGitObject::Blob(_, n) => crate::processing::file_sys::Pom::matches(&n),
             _ => false,
         });
         if let Some(p) = p {

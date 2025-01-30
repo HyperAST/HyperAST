@@ -164,7 +164,7 @@ pub(crate) fn smells(
         .map_err(|e| e.to_string())?;
     log::warn!(
         "done construction of {commits:?} in {}",
-        repository.spec.user
+        repository.spec.user()
     );
     let prepare_time = now.elapsed().as_secs_f64();
     let now = Instant::now();
@@ -303,7 +303,7 @@ pub(crate) fn smells_ex_from_diffs(
     let now = Instant::now();
     log::warn!(
         "done construction of {commits:?} in {}",
-        repository.spec.user
+        repository.spec.user()
     );
     let src_oid = commits[0];
     let dst_oid = commits[1];
@@ -355,7 +355,7 @@ pub(crate) fn smells_ex_from_diffs(
     let diff_time = now.elapsed().as_secs_f64();
     log::warn!(
         "done computing diff on {commits:?} in {}: found {} focuses, {} moves, {} inserts, and {} deletes",
-        repository.spec.user,
+        repository.spec.user(),
         focuses.len(),
         moves.len(),
         inserts.len(),
@@ -375,8 +375,8 @@ pub(crate) fn globalize(
     p: Pos,
 ) -> CodeRange {
     CodeRange {
-        user: repository.spec.user.clone(),
-        name: repository.spec.name.clone(),
+        user: repository.spec.user().to_string(),
+        name: repository.spec.name().to_string(),
         commit: oid.to_string(),
         file: p.0.file().to_str().unwrap().to_owned(),
         start: p.0.range().start,
