@@ -216,6 +216,7 @@ where
 pub enum Forge {
     Github,
     Gitlab,
+    GitlabInria,
 }
 
 impl std::str::FromStr for Forge {
@@ -225,6 +226,7 @@ impl std::str::FromStr for Forge {
         Ok(match s {
             "github.com" => Self::Github,
             "gitlab.com" => Self::Gitlab,
+            "gitlab.inria.fr" => Self::GitlabInria,
             x => return Err(format!("'{}' is not an authorize forge", x)),
         })
     }
@@ -235,6 +237,7 @@ impl Forge {
         match self {
             Forge::Github => "https://github.com/",
             Forge::Gitlab => "https://gitlab.com/",
+            Forge::GitlabInria => "https://gitlab.inria.fr/",
         }
     }
     pub fn repo(self, user: impl Into<String>, name: impl Into<String>) -> Repo {
@@ -268,6 +271,18 @@ impl Repo {
     pub fn nofetch(&self) -> Repository {
         let url = self.url();
         let path = format!("{}", "/tmp/hyperastgitresources/repo/");
+        nofetch_repository(url, path)
+    }
+
+    pub fn fetch_to(&self, path: impl Into<PathBuf>) -> Repository {
+        let url = self.url();
+        let path = path.into();
+        fetch_repository(url, path)
+    }
+
+    pub fn nofetch_to(&self, path: impl Into<PathBuf>) -> Repository {
+        let url = self.url();
+        let path = path.into();
         nofetch_repository(url, path)
     }
 }
