@@ -481,7 +481,6 @@ pub trait HyperType: Display + Debug {
     fn lang_ref(&self) -> LangWrapper<AnyType>;
 }
 
-
 // experiment
 // NOTE: it might actually be a good way to share types between languages.
 // EX on a u16: lang on 4 bits, supertypes on 4 bits, concrete and hidden on the 8 remaining bits.
@@ -1468,16 +1467,27 @@ pub trait HyperAST<'store>: HyperASTShared {
             )
         }
     }
-    fn resolve_type(&'store self, id: &Self::IdN) -> <Self::TS as TypeStore>::Ty {
-        let ns = self.node_store();
+    fn resolve_type(&self, id: &Self::IdN) -> <Self::TS as TypeStore>::Ty {
+        let _ns = self.node_store();
+        // SAFETY: ns is released at the end of the function
+        let ns: &Self::NS = unsafe { std::mem::transmute(_ns) };
         let n = ns.resolve(id);
         Self::TS::decompress_type(&n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
     }
-    fn resolve_ttype(&'store self, id: &Self::IdN) -> <Self::TS as TypeStore>::Ty
+    fn resolve(&self, id: &Self::IdN) -> Self::T {
+        let _ns = self.node_store();
+        // SAFETY: ns is released at the end of the function
+        let ns: &Self::NS = unsafe { std::mem::transmute(_ns) };
+        let n = ns.resolve(id);
+        n
+    }
+    fn resolve_ttype(&self, id: &Self::IdN) -> <Self::TS as TypeStore>::Ty
     where
         Self::TS: TypeStore<Ty = AnyType>,
     {
-        let ns = self.node_store();
+        let _ns = self.node_store();
+        // SAFETY: ns is released at the end of the function
+        let ns: &Self::NS = unsafe { std::mem::transmute(_ns) };
         let n = ns.resolve(id);
         Self::TS::decompress_ttype(&n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
     }
@@ -1486,8 +1496,7 @@ pub trait HyperAST<'store>: HyperASTShared {
     //     let n = ns.resolve(id);
     //     Self::TS::decompress_ttype(&n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
     // }
-    fn resolve_lang(&self, n: &Self::T) -> LangWrapper<<Self::TS as TypeStore>::Ty>
-    {
+    fn resolve_lang(&self, n: &Self::T) -> LangWrapper<<Self::TS as TypeStore>::Ty> {
         Self::TS::decompress_type(n, std::any::TypeId::of::<<Self::TS as TypeStore>::Ty>())
             .get_lang()
     }

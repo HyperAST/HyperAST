@@ -1,7 +1,7 @@
 use super::{parser::Visibility, utils_ts::*, zipped::Has, P};
 use crate::store::{
     nodes::{
-        legion::{compo, dyn_builder, eq_node, NodeIdentifier, RawHAST},
+        legion::{compo, dyn_builder, eq_node, NodeIdentifier},
         DefaultNodeStore as NodeStore,
     },
     SimpleStores,
@@ -18,12 +18,11 @@ use crate::{
     hashed::{self, IndexingHashBuilder, MetaDataHashsBuilder, SyntaxNodeHashs},
     types::{HyperType, LabelStore as _},
 };
-use bitvec::{bitvec, vec::BitVec};
 use legion::world::EntryRef;
 use num::ToPrimitive as _;
 
 ///! fully compress all subtrees from a cpp CST
-use std::{collections::HashMap, fmt::Debug, ops::Deref, str::from_utf8, vec};
+use std::{collections::HashMap, fmt::Debug, vec};
 
 pub type LabelIdentifier = crate::store::labels::DefaultLabelIdentifier;
 
@@ -117,6 +116,70 @@ impl<T: Debug> Debug for Acc<T> {
     }
 }
 
+impl<T> tree_gen::WithChildren<NodeIdentifier> for Acc<T> {
+    fn children(&self) -> &[NodeIdentifier] {
+        &self.simple.children
+    }
+}
+
+impl<T> tree_gen::WithRole<crate::types::Role> for Acc<T> {
+    fn role_at(&self, o: usize) -> Option<crate::types::Role> {
+        todo!()
+        // self.role
+        //     .offsets
+        //     .iter()
+        //     .position(|x| *x as usize == o)
+        //     .and_then(|x| self.role.roles.get(x))
+        //     .cloned()
+    }
+}
+
+impl<'acc, T> tree_gen::WithLabel for &'acc Acc<T> {
+    type L = &'acc str;
+}
+
+impl<'store, 'cache, 's, TS: TsEnableTS>
+    TsTreeGen<
+        'store,
+        'cache,
+        TS,
+        tree_gen::NoOpMore<
+            (
+                TS,
+                crate::store::nodes::legion::HashedNodeRef<'store, NodeIdentifier>,
+            ),
+            Acc<TS::Ty2>,
+        >,
+        true,
+    >
+where
+    TS::Ty2: TsType,
+{
+    pub fn new(stores: &'store mut SimpleStores<TS>, md_cache: &'cache mut MDCache) -> Self {
+        Self {
+            line_break: "\n".as_bytes().to_vec(),
+            stores,
+            md_cache,
+            more: Default::default(),
+        }
+    }
+}
+
+impl<'stores, 'cache, 'acc, TS, More> TsTreeGen<'stores, 'cache, TS, More, true> {
+    pub fn with_preprocessing(
+        stores: &'stores mut SimpleStores<TS>,
+        md_cache: &'cache mut MDCache,
+        more: More,
+    ) -> Self {
+        Self {
+            line_break: "\n".as_bytes().to_vec(),
+            stores,
+            md_cache,
+            more: more.into(),
+        }
+    }
+}
+
 pub trait ZippedTreeGen: TreeGen
 where
     Self::Global: tree_gen::TotalBytesGlobalData,
@@ -181,7 +244,7 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc<TS::Ty2>>,
+    More: for<'s> tree_gen::More<Acc = Acc<TS::Ty2>>,
 {
     type Stores = SimpleStores<TS>;
     type Text = [u8];
@@ -308,7 +371,7 @@ where
             let local = self.make_spacing(spacing);
             debug_assert_ne!(parent.simple.children.len(), 0, "{:?}", parent.simple);
             parent.push(FullNode {
-                global: global.into(),
+                global: global.simple(),
                 local,
             });
         }
@@ -328,7 +391,7 @@ impl<'store, 'cache, TS, More, const HIDDEN_NODES: bool>
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc<TS::Ty2>>,
+    More: for<'s> tree_gen::More<Acc = Acc<TS::Ty2>>,
 {
     fn make_spacing(&mut self, spacing: Vec<u8>) -> Local<TS::Ty2> {
         let kind = TS::Ty2::spaces();
@@ -392,7 +455,7 @@ where
         name: &[u8],
         text: &'store [u8],
         cursor: tree_sitter::TreeCursor,
-    ) -> FullNode<BasicGlobalData, Local<TS::Ty2>> {
+    ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let mut global = Global::from(TextedGlobalData::new(Default::default(), text));
         let mut init = self.init_val(text, &TNode(cursor.node()));
         let mut xx = TTreeCursor(cursor);
@@ -402,7 +465,7 @@ where
             global.down();
             global.set_sum_byte_length(init.start_byte);
             init.push(FullNode {
-                global: global.into(),
+                global: global.simple(),
                 local: self.make_spacing(spacing),
             });
             global.right();
@@ -418,7 +481,7 @@ where
             if let Some(spacing) = spacing {
                 global.right();
                 acc.push(FullNode {
-                    global: global.into(),
+                    global: global.simple(),
                     local: self.make_spacing(spacing),
                 });
             }
@@ -536,7 +599,7 @@ impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> TreeGen
 where
     TS: TsEnableTS,
     TS::Ty2: TsType,
-    More: for<'a, 'b> tree_gen::More<RawHAST<'a, 'b, TS>, Acc<TS::Ty2>>,
+    More: for<'s> tree_gen::More<Acc = Acc<TS::Ty2>>,
 {
     type Acc = Acc<TS::Ty2>;
     type Global = SpacedGlobalData<'stores>;
@@ -609,7 +672,7 @@ where
         };
 
         let full_node = FullNode {
-            global: global.into(),
+            global: global.simple(),
             local,
         };
         full_node

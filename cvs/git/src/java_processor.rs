@@ -1,11 +1,13 @@
+use std::ops::Deref;
 use std::sync::Arc;
 use std::{iter::Peekable, path::Components};
 
 use git2::{Oid, Repository};
 use hyper_ast::hashed::{IndexingHashBuilder, MetaDataHashsBuilder};
+use hyper_ast::store::nodes::legion::RawHAST;
 use hyper_ast::tree_gen::add_md_precomp_queries;
-use hyper_ast_gen_ts_java::legion_with_refs;
-use hyper_ast_gen_ts_java::types::Type;
+use hyper_ast_gen_ts_java::legion_with_refs::{self, Acc};
+use hyper_ast_gen_ts_java::types::{TStore, Type};
 
 use crate::processing::erased::ParametrizedCommitProc2;
 use crate::{
@@ -48,7 +50,11 @@ impl<'repo, 'b, 'd, 'c> JavaProcessor<'repo, 'b, 'd, 'c, JavaAcc> {
         let name = name.try_into().unwrap();
         let prep_scripting = prep_scripting(prepro, handle.0);
         use hyper_ast::tree_gen::Prepro;
-        let scripting_acc = prep_scripting.map(|x| x.preprocessing(Type::Directory).unwrap());
+        let scripting_acc = prep_scripting.map(|x| {
+            hyper_ast::scripting::Prepro::<SimpleStores, &Acc>::from(x.clone())
+                .preprocessing(Type::Directory)
+                .unwrap()
+        });
         let acc = JavaAcc::new(name, scripting_acc);
         let stack = vec![(oid, prepared, acc)];
         Self {
@@ -103,7 +109,11 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
 
                 let prepro_acc = if let Some(more) = prep_scripting(&self.prepro, self.handle.0) {
                     use hyper_ast::tree_gen::Prepro;
-                    Some(more.preprocessing(Type::Directory).unwrap())
+                    Some(
+                        hyper_ast::scripting::Prepro::<RawHAST<TStore>, &Acc>::from(more.clone())
+                            .preprocessing(Type::Directory)
+                            .unwrap(),
+                    )
                 } else {
                     None
                 };
@@ -177,7 +187,7 @@ impl<'repo, 'b, 'd, 'c> Processor<JavaAcc> for JavaProcessor<'repo, 'b, 'd, 'c, 
 fn prep_scripting(
     prepro: &RepositoryProcessor,
     handle: crate::processing::erased::ConfigParametersHandle,
-) -> Option<&hyper_ast::scripting::Prepro> {
+) -> Option<&std::sync::Arc<str>> {
     prepro
         .processing_systems
         .get::<JavaProcessorHolder>()
@@ -324,26 +334,23 @@ use hyper_ast_gen_ts_java::legion_with_refs as java_tree_gen;
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Parameter {
-    pub(crate) query: Option<std::sync::Arc<[String]>>,
-    pub(crate) prepo: Option<hyper_ast::scripting::Prepro>,
-}
-
-struct Scripted {}
-
-impl Scripted {
-    fn script(&self) -> hyper_ast::scripting::Prepro {
-        todo!()
-    }
+    pub query: Option<std::sync::Arc<[String]>>,
+    pub tsg: Option<std::sync::Arc<str>>,
+    pub prepo: Option<std::sync::Arc<str>>,
 }
 
 #[derive(Default)]
-pub(crate) struct JavaProcessorHolder(Option<JavaProc>);
-pub(crate) struct JavaProc {
+pub struct JavaProcessorHolder(Option<JavaProc>);
+pub struct JavaProc {
     pub(crate) parameter: Parameter,
     query: Query,
+    #[cfg(feature = "tsg")]
+    tsg: Option<ErazedTSG>,
     cache: crate::processing::caches::Java,
     commits: std::collections::HashMap<git2::Oid, crate::Commit>,
 }
+
+type ErazedTSG = Box<dyn std::any::Any + Send + Sync>;
 
 impl crate::processing::erased::Parametrized for JavaProcessorHolder {
     type T = Parameter;
@@ -364,9 +371,55 @@ impl crate::processing::erased::Parametrized for JavaProcessorHolder {
                     let precomputeds = unsafe { crate::java_processor::SUB_QUERIES };
                     Query::new(precomputeds.into_iter().map(|x| x.as_ref()))
                 };
+
+                let tsg = if let Some(q) = &t.tsg {
+                    q.deref()
+                } else {
+                    unsafe { crate::java_processor::TSG }
+                };
+                #[cfg(feature = "tsg")]
+                let tsg = {
+                    type M<'hast, HAST, Acc> = hyper_ast_tsquery::QueryMatcher<'hast, HAST, Acc>;
+                    type ExtQ<'hast, HAST, Acc> = hyper_ast_tsquery::ExtendingStringQuery<
+                        M<'hast, HAST, Acc>,
+                        tree_sitter::Language,
+                    >;
+
+                    let source: &str = tsg;
+                    let language = hyper_ast_gen_ts_java::language();
+
+                    let mut file = tree_sitter_graph::ast::File::<
+                        M<
+                            &hyper_ast::store::SimpleStores<hyper_ast_gen_ts_java::types::TStore>,
+                            &Acc,
+                        >,
+                    >::new(language.clone());
+
+                    // let mty: &[_] = &[];
+                    // let query_source = ExtQ::new(language.clone(), Box::new(mty), source.len());
+                    let query_source = if let Some(p) = &t.query {
+                        ExtQ::new(language.clone(), Box::new(p.clone()), source.len())
+                    } else {
+                        ExtQ::new(
+                            language.clone(),
+                            Box::new(unsafe { crate::java_processor::SUB_QUERIES }),
+                            source.len(),
+                        )
+                    };
+                    tree_sitter_graph::parser::Parser::<ExtQ<_, _>>::with_ext(query_source, source)
+                        .parse_into_file(&mut file)
+                        .unwrap();
+                    use tree_sitter_graph::GenQuery;
+
+                    M::check(&mut file).unwrap();
+
+                    Some(file.as_any())
+                };
                 self.0 = Some(JavaProc {
                     parameter: t,
                     query,
+                    #[cfg(feature = "tsg")]
+                    tsg,
                     cache: Default::default(),
                     commits: Default::default(),
                 });
@@ -398,7 +451,7 @@ impl Eq for Query {}
 
 impl Query {
     fn new<'a>(precomputeds: impl Iterator<Item = &'a str>) -> Self {
-        static DQ: &str= "(_)";
+        static DQ: &str = "(_)";
         let precomputeds = precomputeds.collect::<Vec<_>>();
         let (precomp, _) = hyper_ast_tsquery::Query::with_precomputed(
             DQ,
@@ -413,6 +466,16 @@ impl Query {
 impl crate::processing::erased::CommitProc for JavaProc {
     fn get_commit(&self, commit_oid: git2::Oid) -> Option<&crate::Commit> {
         self.commits.get(&commit_oid)
+    }
+
+    fn get_precomp_query(&self) -> Option<Arc<[String]>> {
+        dbg!(&self.parameter.query);
+        if self.parameter.query.is_none() {
+            let s = unsafe { crate::java_processor::SUB_QUERIES };
+            let s: Vec<_> = s.iter().map(|x| x.to_string()).collect();
+            return Some(s.into());
+        }
+        self.parameter.query.clone()
     }
 
     fn prepare_processing<'repo>(
@@ -479,30 +542,43 @@ pub static mut SUB_QUERIES: &[&str] = &[
     r#"(marker_annotation 
     name: (identifier) (#EQ? "Test")
 )"#,
-    "(constructor_declaration)",
+        "(constructor_declaration)",
     "(class_declaration)",
-    "(interface_declaration)",
-    r#"(method_invocation
-    name: (identifier) (#EQ? "sleep")
-)"#,
-    r#"(marker_annotation
-    name: (identifier) (#EQ? "Ignored")
-)"#,
-    r#"(block
-    "{"
-    .
-    "}"
-)"#,
-    r#"(method_invocation
-    (identifier) (#EQ? "assertEquals")
-)"#,
-    r#"(method_invocation
-    (identifier) (#EQ? "assertSame")
-)"#,
-    r#"(method_invocation
-    (identifier) (#EQ? "assertThat")
-)"#,
+        "(interface_declaration)",
+        r#"(method_invocation
+        name: (identifier) (#EQ? "sleep")
+    )"#,
+        r#"(marker_annotation
+        name: (identifier) (#EQ? "Ignored")
+    )"#,
+        r#"(block
+        "{"
+        .
+        "}"
+    )"#,
+        r#"(method_invocation
+        (identifier) (#EQ? "assertEquals")
+    )"#,
+        r#"(method_invocation
+        (identifier) (#EQ? "assertSame")
+    )"#,
+        r#"(method_invocation
+        (identifier) (#EQ? "assertThat")
+    )"#,
+    r#"(program)"#,
 ];
+
+#[doc(hidden)]
+pub static mut TSG: &str = r#"
+(program)@prog {
+    node @prog.defs
+    node @prog.lexical_scope
+}
+(class_declaration name:(_)@name)@class {
+    node @class.defs
+    attr (@class.defs) name = (source-text @name)
+}
+"#;
 
 pub fn sub_queries() -> &'static [&'static str] {
     unsafe { SUB_QUERIES }
@@ -521,7 +597,7 @@ impl RepositoryProcessor {
     fn java_generator(
         &mut self,
         text: &[u8],
-    ) -> java_tree_gen::JavaTreeGen<crate::TStore, hyper_ast_tsquery::Query> {
+    ) -> java_tree_gen::JavaTreeGen<crate::TStore, SimpleStores, hyper_ast_tsquery::Query> {
         let line_break = if text.contains(&b'\r') {
             "\r\n".as_bytes().to_vec()
         } else {
@@ -536,13 +612,14 @@ impl RepositoryProcessor {
         .unwrap();
         java_tree_gen::JavaTreeGen {
             line_break,
-            stores: &mut self.main_stores,
+            stores: self.main_stores.mut_with_ts(),
             md_cache: &mut self
                 .processing_systems
                 .mut_or_default::<JavaProcessorHolder>()
                 .get_caches_mut()
                 .md_cache, //java_md_cache,
             more: precomp,
+            _p: Default::default(),
         }
     }
 
@@ -578,26 +655,74 @@ impl RepositoryProcessor {
                 let holder = c.mut_or_default::<JavaProcessorHolder>();
                 let java_proc = holder.0.as_mut().unwrap();
                 let md_cache = &mut java_proc.cache.md_cache;
-                let stores = self
-                    .main_stores
-                    .mut_with_ts::<hyper_ast_gen_ts_java::types::TStore>();
-                if let Some(precomp) = &java_proc.parameter.prepo {
-                    let more = precomp.clone();
-                    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-                        line_break,
-                        stores,
-                        md_cache,
-                        more,
-                    };
+                // let java_tree_gen =
+                //     java_tree_gen::JavaTreeGen::new(stores, md_cache).with_line_break(line_break);
+                if java_proc.tsg.is_some() {
+                    #[cfg(not(feature = "tsg"))]
+                    panic!();
+                    #[cfg(feature = "tsg")]
+                    {
+                        let mut functions = tree_sitter_graph::functions::Functions::<
+                            tree_sitter_graph::graph::GraphErazing<
+                                hyper_ast_tsquery::MyNodeErazing<
+                                    hyper_ast::store::SimpleStores<
+                                        TStore,
+                                        &hyper_ast::store::nodes::legion::NodeStoreInner,
+                                        &hyper_ast::store::labels::LabelStore,
+                                    >,
+                                    &Acc,
+                                >,
+                            >,
+                        >::stdlib();
+                        // TODO port those path functions to the generified
+                        // hyper_ast_tsquery::add_path_functions(&mut functions);
+                        let functions = functions.as_any();
+                        let stores = self
+                            .main_stores
+                            .mut_with_ts::<hyper_ast_gen_ts_java::types::TStore>();
+                        let spec: &tree_sitter_graph::ast::File<
+                            hyper_ast_tsquery::QueryMatcher<
+                                &hyper_ast::store::SimpleStores<
+                                    hyper_ast_gen_ts_java::types::TStore,
+                                >,
+                                &Acc,
+                            >,
+                        > = java_proc.tsg.as_ref().unwrap().downcast_ref().unwrap();
+                        let query = &java_proc.query.0;
+                        let more = hyper_ast_tsquery::PreparedOverlay {
+                            query,
+                            overlayer: spec,
+                            functions,
+                        };
+                        let mut java_tree_gen = java_tree_gen::JavaTreeGen::<
+                            hyper_ast_gen_ts_java::types::TStore,
+                            _,
+                            _,
+                        >::with_preprocessing(
+                            stores, md_cache, more
+                        )
+                        .with_line_break(line_break);
+                        crate::java::handle_java_file(&mut java_tree_gen, n, t)
+                    }
+                } else if let Some(precomp) = &java_proc.parameter.prepo {
+                    let stores = self
+                        .main_stores
+                        .mut_with_ts::<hyper_ast_gen_ts_java::types::TStore>();
+                    let more = hyper_ast::scripting::Prepro::<_, _>::from_arc(precomp.clone());
+                    // let mut java_tree_gen = java_tree_gen.with_more(more);
+                    let mut java_tree_gen =
+                        java_tree_gen::JavaTreeGen::with_preprocessing(stores, md_cache, more)
+                            .with_line_break(line_break);
                     crate::java::handle_java_file(&mut java_tree_gen, n, t)
                 } else {
+                    let stores = self
+                        .main_stores
+                        .mut_with_ts::<hyper_ast_gen_ts_java::types::TStore>();
                     let more = &java_proc.query.0;
-                    let mut java_tree_gen = java_tree_gen::JavaTreeGen {
-                        line_break,
-                        stores,
-                        md_cache,
-                        more,
-                    };
+                    let more: hyper_ast_tsquery::PreparedQuerying<_, _, _> = more.into();
+                    let mut java_tree_gen =
+                        java_tree_gen::JavaTreeGen::with_preprocessing(stores, md_cache, more)
+                            .with_line_break(line_break);
                     crate::java::handle_java_file(&mut java_tree_gen, n, t)
                 }
                 .map_err(|_| crate::ParseErr::IllFormed)

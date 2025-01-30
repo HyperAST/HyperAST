@@ -17,9 +17,7 @@ pub struct SimpleStores<TS, NS = nodes::DefaultNodeStore, LS = labels::LabelStor
 }
 
 #[cfg(feature = "scripting")]
-impl<TS> mlua::UserData for SimpleStores<TS> {
-
-}
+impl<TS> mlua::UserData for SimpleStores<TS> {}
 
 impl<TS, NS, LS> SimpleStores<TS, NS, LS> {
     pub fn change_type_store<TS2>(self) -> SimpleStores<TS2, NS, LS> {
@@ -48,8 +46,7 @@ impl<TS, NS, LS> SimpleStores<TS, NS, LS> {
     {
         unsafe { std::mem::transmute(self) }
     }
-    pub unsafe fn erase_ts_unchecked(&self) -> &SimpleStores<(), NS, LS>
-    {
+    pub unsafe fn erase_ts_unchecked(&self) -> &SimpleStores<(), NS, LS> {
         unsafe { std::mem::transmute(self) }
     }
 }
@@ -64,6 +61,17 @@ impl<TS: Default, NS: Default, LS: Default> Default for SimpleStores<TS, NS, LS>
     }
 }
 
+impl<TS: Copy, NS: Copy, LS: Copy> Copy for SimpleStores<TS, NS, LS> {}
+impl<TS: Clone, NS: Clone, LS: Clone> Clone for SimpleStores<TS, NS, LS> {
+    fn clone(&self) -> Self {
+        Self {
+            label_store: self.label_store.clone(),
+            node_store: self.node_store.clone(),
+            type_store: self.type_store.clone(),
+        }
+    }
+}
+
 impl<'store, TS, NS, LS> crate::types::RoleStore for SimpleStores<TS, NS, LS>
 where
     TS: crate::types::RoleStore,
@@ -72,16 +80,10 @@ where
 
     type Role = TS::Role;
 
-    fn resolve_field(
-        lang: crate::types::LangWrapper<Self::Ty>,
-        field_id: Self::IdF,
-    ) -> Self::Role {
+    fn resolve_field(lang: crate::types::LangWrapper<Self::Ty>, field_id: Self::IdF) -> Self::Role {
         TS::resolve_field(lang, field_id)
     }
-    fn intern_role(
-        lang: crate::types::LangWrapper<Self::Ty>,
-        role: Self::Role,
-    ) -> Self::IdF {
+    fn intern_role(lang: crate::types::LangWrapper<Self::Ty>, role: Self::Role) -> Self::IdF {
         TS::intern_role(lang, role)
     }
 }

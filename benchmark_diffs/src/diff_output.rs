@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use hyper_ast::{
     position::{compute_position, Position},
-    types::{self, LabelStore, Labeled, NodeStore, TypeStore, WithSerialization},
+    types::{self, LabelStore, Labeled, NodeStore, WithSerialization},
 };
 use hyper_diff::tree::tree_path::CompressedTreePath;
 use serde::Deserialize;

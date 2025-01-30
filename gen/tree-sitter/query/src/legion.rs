@@ -243,7 +243,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
         );
         if let Some(spacing) = spacing {
             parent.push(FullNode {
-                global: global.into(),
+                global: global.simple(),
                 local: self.make_spacing(spacing),
             });
         }
@@ -342,7 +342,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
         name: &[u8],
         text: &'store [u8],
         cursor: tree_sitter::TreeCursor,
-    ) -> FullNode<BasicGlobalData, Local> {
+    ) -> <<Self as TreeGen>::Acc as Accumulator>::Node {
         let mut global = Global::from(TextedGlobalData::new(Default::default(), text));
         let mut init = self.init_val(text, &TNode(cursor.node()));
         let mut xx = TTreeCursor(cursor);
@@ -357,7 +357,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
             global.down();
             init.start_byte = 0;
             init.push(FullNode {
-                global: global.into(),
+                global: global.simple(),
                 local: self.make_spacing(spacing),
             });
             global.right();
@@ -378,7 +378,7 @@ impl<'store, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'store, NodeIdent
             if let Some(spacing) = spacing {
                 global.right();
                 acc.push(FullNode {
-                    global: global.into(),
+                    global: global.simple(),
                     local: self.make_spacing(spacing),
                 });
             }
@@ -505,7 +505,7 @@ impl<'stores, 'cache, TS: TsQueryEnabledTypeStore<HashedNodeRef<'stores, NodeIde
         };
 
         let full_node = FullNode {
-            global: global.into(),
+            global: global.simple(),
             local,
         };
         full_node

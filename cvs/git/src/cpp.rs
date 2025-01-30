@@ -59,9 +59,10 @@ pub(crate) fn handle_cpp_file<'stores, 'cache, 'b: 'stores, More>(
 ) -> FileProcessingResult<cpp_tree_gen::FNode>
 where
     More: tree_gen::Prepro<Type>
-        + for<'a, 'c> tree_gen::More<
-            hyper_ast::store::nodes::legion::RawHAST<'a, 'c, TStore>,
-            cpp_tree_gen::Acc,
+        + tree_gen::More<
+            TS = TStore,
+            T = hyper_ast::store::nodes::legion::HashedNodeRef<'stores, NodeIdentifier>,
+            Acc = cpp_tree_gen::Acc,
         >,
 {
     // handling the parsing explicitly in this function is a good idea

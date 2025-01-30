@@ -19,6 +19,10 @@ enumset = "1.0.12"
 
 serde = { version = "1.0.130" }
 
+# tree-sitter-graph = { path = "../../../tree-sitter-graph", optional = true }
+tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "57527aafe1418d6450cfe810fdbdde0f56c3ec61", version = "0.12", optional = true }
+
+
 [dev-dependencies]
 env_logger = "0.11.3"
 
@@ -26,6 +30,7 @@ env_logger = "0.11.3"
 
 [features]
 default = ["maven_java", "make_cpp", "npm_ts"]
+tsg = ["dep:tree-sitter-graph"]
 maven_java = ["maven", "java"]
 maven = ["dep:hyper_ast_gen_ts_xml"]
 # gradle = []

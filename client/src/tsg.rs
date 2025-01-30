@@ -56,12 +56,12 @@ pub fn simple(
     let now = Instant::now();
     let Param { user, name, commit } = path.clone();
     let Content {
-        language,
+        language: lang_name,
         query,
         commits,
     } = query;
-    let language: tree_sitter::Language = hyper_ast_cvs_git::resolve_language(&language)
-        .ok_or_else(|| QueryingError::MissingLanguage(language))?;
+    let language: tree_sitter::Language = hyper_ast_cvs_git::resolve_language(&lang_name)
+        .ok_or_else(|| QueryingError::MissingLanguage(lang_name.clone()))?;
     let repo_spec = hyper_ast_cvs_git::git::Forge::Github.repo(user, name);
     let repo = state
         .repositories
@@ -89,8 +89,29 @@ pub fn simple(
         .unwrap()
         .pre_process_with_limit(&mut repo, "", &commit, commits)
         .unwrap();
-    let tsg = QueryMatcher::<SimpleStores>::from_str(language.clone(), &query)
-        .map_err(|e| QueryingError::TsgParsing(e.to_string()))?;
+    let tsg = {
+        type M = QueryMatcher<SimpleStores>;
+        type ExtQ =
+            hyper_ast_tsquery::stepped_query::ExtendingStringQuery<M, tree_sitter::Language>;
+
+        let source: &str = &query;
+
+        let mut file = tree_sitter_graph::ast::File::<M>::new(language.clone());
+
+        let precomputeds = state
+            .repositories
+            .read()
+            .unwrap()
+            .get_precomp_query(repo.config, &lang_name)
+            .unwrap();
+        let query_source = ExtQ::new(language.clone(), precomputeds, source.len());
+        tree_sitter_graph::parser::Parser::<ExtQ>::with_ext(query_source, source)
+            .parse_into_file(&mut file)
+            .map_err(|e| QueryingError::TsgParsing(e.to_string()))?;
+        QueryMatcher::<SimpleStores>::check(&mut file)
+            .map_err(|e| QueryingError::TsgParsing(e.to_string()))?;
+        file
+    };
     let prepare_time = now.elapsed().as_secs_f64();
     log::info!("done construction of {commits:?} in  {}", repo.spec);
     let mut results = vec![];
@@ -133,10 +154,15 @@ fn simple_aux(
     let code = commit.ast_root;
     let stores = &repositories.processor.main_stores;
 
+    let code = hyper_ast_cvs_git::preprocessed::child_by_name(stores, code, "src").unwrap();
+    let code = hyper_ast_cvs_git::preprocessed::child_by_name(stores, code, "main").unwrap();
+    let code = hyper_ast_cvs_git::preprocessed::child_by_name(stores, code, "java").unwrap();
+    let code = hyper_ast_cvs_git::preprocessed::child_by_name(stores, code, "spoon").unwrap();
+    let code = hyper_ast_cvs_git::preprocessed::child_by_name(stores, code, "JLSViolation.java").unwrap();
+
     let tree = Node::new(stores, hyper_ast::position::StructuralPosition::new(code));
     // SAFETY: just circumventing a limitation in the borrow checker, ie. all associated lifetimes considered as being 'static
     let tree = unsafe { std::mem::transmute(tree) };
-
     if let Err(err) = tsg.execute_lazy_into2(&mut graph, tree, &mut config, &cancellation_flag) {
         println!("{}", graph.pretty_print());
         let source_path = std::path::Path::new(&"");

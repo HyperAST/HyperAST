@@ -12,6 +12,7 @@ pub struct HLabel(pub u32);
 pub struct CSStaticCount(pub u8);
 pub struct CS0<T: Eq, const N: usize>(pub [T; N]);
 pub struct CSE<const N: usize>([legion::Entity; N]);
+pub struct NoSpacesCS0<T: Eq, const N: usize>(pub [T; N]);
 #[derive(PartialEq, Eq, Debug)]
 pub struct CS<T>(pub Box<[T]>);
 pub struct NoSpacesCS<T: Eq>(pub Box<[T]>);

@@ -147,3 +147,60 @@ impl SafeUpcast<u32> for u16 {
         self as usize
     }
 }
+
+pub trait ArrayStr {
+    fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_>;
+    fn len(&self) -> usize;
+}
+
+impl ArrayStr for &dyn ArrayStr {
+    fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        (*self).iter()
+    }
+
+    fn len(&self) -> usize {
+        (*self).len()
+    }
+}
+
+impl ArrayStr for [String] {
+    fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        Box::new(self.iter().map(|x| x.as_str()))
+    }
+
+    fn len(&self) -> usize {
+        (*self).len()
+    }
+}
+
+impl ArrayStr for [&str] {
+    fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        Box::new(self.iter().map(|x| *x))
+    }
+
+    fn len(&self) -> usize {
+        (*self).len()
+    }
+}
+
+impl ArrayStr for &[&str] {
+    fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        Box::new((*self).iter().map(|x| *x))
+    }
+
+    fn len(&self) -> usize {
+        (*self).len()
+    }
+}
+
+impl ArrayStr for std::sync::Arc<[String]> {
+    fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        use std::ops::Deref;
+        Box::new(self.deref().iter().map(|x| x.as_str()))
+    }
+
+    fn len(&self) -> usize {
+        use std::ops::Deref;
+        self.deref().len()
+    }
+}

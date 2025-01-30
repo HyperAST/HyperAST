@@ -7,7 +7,10 @@ use legion::{
 };
 
 use crate::{
-    types::{Compo, CompoRegister, ErasedHolder, ErasedInserter, NodeId, Typed, TypedNodeId},
+    types::{
+        Compo, CompoRegister, ErasedHolder, ErasedInserter, NodeId, Typed, TypedNodeId,
+        TypedNodeStore,
+    },
     utils::make_hash,
 };
 
@@ -20,10 +23,15 @@ mod elem;
 pub use elem::{EntryRef, HashedNode, HashedNodeRef, NodeIdentifier};
 
 pub struct NodeStore {
+    dedup: hashbrown::HashMap<NodeIdentifier, (), ()>,
+    inner: NodeStoreInner,
+}
+
+pub struct NodeStoreInner {
     count: usize,
     errors: usize,
     // roots: HashMap<(u8, u8, u8), NodeIdentifier>,
-    dedup: hashbrown::HashMap<NodeIdentifier, (), ()>,
+    // dedup: hashbrown::HashMap<NodeIdentifier, (), ()>,
     internal: legion::World,
     // TODO intern lists of [`NodeIdentifier`]s, e.g. children, no space children, ...
     hasher: DefaultHashBuilder, //fasthash::city::Hash64,//fasthash::RandomState<fasthash::>,
@@ -34,7 +42,7 @@ pub struct NodeStore {
 
 pub struct PendingInsert<'a>(
     crate::compat::hash_map::RawEntryMut<'a, legion::Entity, (), ()>,
-    (u64, &'a mut legion::World, &'a DefaultHashBuilder),
+    (u64, &'a mut NodeStoreInner),
 );
 
 impl<'a> PendingInsert<'a> {
@@ -56,19 +64,15 @@ impl<'a> PendingInsert<'a> {
     pub fn resolve<T>(&self, id: NodeIdentifier) -> HashedNodeRef<T> {
         self.1
              .1
+            .internal
             .entry_ref(id)
             .map(|x| HashedNodeRef::new(x))
             .unwrap()
     }
-    pub fn occupied(
-        &'a self,
-    ) -> Option<(
-        NodeIdentifier,
-        (u64, &'a legion::World, &'a DefaultHashBuilder),
-    )> {
+    pub fn occupied(&'a self) -> Option<(NodeIdentifier, (u64, &'a NodeStoreInner))> {
         match &self.0 {
             hashbrown::hash_map::RawEntryMut::Occupied(occupied) => {
-                Some((occupied.key().clone(), (self.1 .0, self.1 .1, self.1 .2)))
+                Some((occupied.key().clone(), (self.1 .0, self.1 .1)))
             }
             _ => None,
         }
@@ -78,7 +82,7 @@ impl<'a> PendingInsert<'a> {
         self,
     ) -> (
         crate::compat::hash_map::RawVacantEntryMut<'a, legion::Entity, (), ()>,
-        (u64, &'a mut legion::World, &'a DefaultHashBuilder),
+        (u64, &'a mut NodeStoreInner),
     ) {
         match self.0 {
             hashbrown::hash_map::RawEntryMut::Vacant(occupied) => (occupied, self.1),
@@ -106,21 +110,22 @@ impl NodeStore {
     ) -> PendingInsert<'a> {
         let Self {
             dedup,
-            internal: backend,
-            ..
+            inner: NodeStoreInner {
+                internal: backend, ..
+            },
         } = self;
-        let hash = make_hash(&self.hasher, hashable);
+        let hash = make_hash(&self.inner.hasher, hashable);
         let entry = dedup.raw_entry_mut().from_hash(hash, |symbol| {
             let r = eq(backend.entry_ref(*symbol).unwrap());
             r
         });
-        PendingInsert(entry, (hash, &mut self.internal, &self.hasher))
+        PendingInsert(entry, (hash, &mut self.inner))
     }
 
     pub fn insert_after_prepare<T>(
-        (vacant, (hash, internal, hasher)): (
+        (vacant, (hash, inner)): (
             crate::compat::hash_map::RawVacantEntryMut<legion::Entity, (), ()>,
-            (u64, &mut legion::World, &DefaultHashBuilder),
+            (u64, &mut NodeStoreInner),
         ),
         components: T,
     ) -> legion::Entity
@@ -128,14 +133,14 @@ impl NodeStore {
         Option<T>: IntoComponentSource,
     {
         let (&mut symbol, _) = {
-            let symbol = internal.push(components);
+            let symbol = inner.internal.push(components);
             vacant.insert_with_hasher(hash, symbol, (), |id| {
-                let node: elem::HashedNodeRef<'_, NodeIdentifier> = internal
+                let node: elem::HashedNodeRef<'_, NodeIdentifier> = inner.internal
                     .entry_ref(*id)
                     .map(|x| HashedNodeRef::new(x))
                     .unwrap();
 
-                make_hash(hasher, &node)
+                make_hash(&inner.hasher, &node)
             })
         };
         symbol
@@ -143,35 +148,37 @@ impl NodeStore {
 
     /// uses the dyn builder see dyn_builder::EntityBuilder
     pub fn insert_built_after_prepare(
-        (vacant, (hash, internal, hasher)): (
+        (vacant, (hash, inner)): (
             crate::compat::hash_map::RawVacantEntryMut<legion::Entity, (), ()>,
-            (u64, &mut legion::World, &DefaultHashBuilder),
+            (u64, &mut NodeStoreInner),
         ),
         components: dyn_builder::BuiltEntity,
     ) -> legion::Entity {
         let (&mut symbol, _) = {
-            let symbol = internal.extend(components)[0];
+            let symbol = inner.internal.extend(components)[0];
             vacant.insert_with_hasher(hash, symbol, (), |id| {
-                let node: elem::HashedNodeRef<'_, NodeIdentifier> = internal
+                let node: elem::HashedNodeRef<'_, NodeIdentifier> = inner.internal
                     .entry_ref(*id)
                     .map(|x| HashedNodeRef::new(x))
                     .unwrap();
 
-                make_hash(hasher, &node)
+                make_hash(&inner.hasher, &node)
             })
         };
         symbol
     }
 
     pub fn resolve(&self, id: NodeIdentifier) -> HashedNodeRef<NodeIdentifier> {
-        self.internal
+        self.inner
+            .internal
             .entry_ref(id)
             .map(|x| HashedNodeRef::new(x))
             .unwrap()
     }
 
     pub unsafe fn _resolve<T>(&self, id: &NodeIdentifier) -> HashedNodeRef<T> {
-        self.internal
+        self.inner
+            .internal
             .entry_ref(*id)
             .map(|x| HashedNodeRef::new(x))
             .unwrap()
@@ -182,6 +189,7 @@ impl NodeStore {
         id: &T::IdN,
     ) -> (T::Ty, HashedNodeRef<T>) {
         let n = self
+            .inner
             .internal
             .entry_ref(*id)
             .map(|x| HashedNodeRef::new(x))
@@ -190,7 +198,8 @@ impl NodeStore {
     }
 
     pub fn try_resolve(&self, id: NodeIdentifier) -> Option<HashedNodeRef<NodeIdentifier>> {
-        self.internal
+        self.inner
+            .internal
             .entry_ref(id)
             .map(|x| HashedNodeRef::new(x))
             .ok()
@@ -200,7 +209,7 @@ impl NodeStore {
         &self,
         id: &TIdN,
     ) -> HashedNodeRef<TIdN> {
-        let x = self.internal.entry_ref(id.as_id().clone()).unwrap();
+        let x = self.inner.internal.entry_ref(id.as_id().clone()).unwrap();
         HashedNodeRef::new(x)
     }
 
@@ -208,7 +217,7 @@ impl NodeStore {
         &self,
         id: &TIdN::IdN,
     ) -> Option<(HashedNodeRef<TIdN>, TIdN)> {
-        let x = self.internal.entry_ref(id.clone()).unwrap();
+        let x = self.inner.internal.entry_ref(id.clone()).unwrap();
         x.get_component::<TIdN::Ty>().ok()?;
         Some((HashedNodeRef::new(x), unsafe { TIdN::from_id(id.clone()) }))
     }
@@ -219,7 +228,7 @@ impl NodeStore {
         &self,
         id: &NodeIdentifier,
     ) -> Option<(HashedNodeRef<NodeIdentifier>, L::E)> {
-        let x = self.internal.entry_ref(id.clone()).unwrap();
+        let x = self.inner.internal.entry_ref(id.clone()).unwrap();
         let ty = x.get_component::<crate::types::TypeU16<L>>().ok()?;
         let ty = ty.e();
         Some((HashedNodeRef::new(x), ty))
@@ -231,7 +240,7 @@ impl NodeStore {
         &self,
         id: &NodeIdentifier,
     ) -> Option<TypedNode<HashedNodeRef<NodeIdentifier>, L::E>> {
-        let x = self.internal.entry_ref(id.clone()).unwrap();
+        let x = self.inner.internal.entry_ref(id.clone()).unwrap();
         let ty = x.get_component::<crate::types::TypeU16<L>>().ok()?;
         let ty = ty.e();
         Some(TypedNode(HashedNodeRef::new(x), ty))
@@ -259,9 +268,9 @@ impl<T, Ty> Deref for TypedNode<T, Ty> {
 impl Debug for NodeStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("NodeStore")
-            .field("count", &self.count)
-            .field("errors", &self.errors)
-            .field("internal_len", &self.internal.len())
+            .field("count", &self.inner.count)
+            .field("errors", &self.inner.errors)
+            .field("internal_len", &self.inner.internal.len())
             // .field("internal", &self.internal)
             .finish()
     }
@@ -270,20 +279,22 @@ impl Debug for NodeStore {
 impl crate::types::NodeStore<NodeIdentifier> for NodeStore {
     type R<'a> = HashedNodeRef<'a, NodeIdentifier>;
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
-        self.internal
+        self.inner
+            .internal
             .entry_ref(id.clone())
             .map(|x| HashedNodeRef::new(x))
             .unwrap()
     }
 }
 
-impl crate::types::NodeStore<NodeIdentifier> for legion::World {
+impl crate::types::NodeStore<NodeIdentifier> for NodeStoreInner {
     type R<'a>
         = HashedNodeRef<'a, NodeIdentifier>
     where
         Self: 'a;
     fn resolve(&self, id: &NodeIdentifier) -> Self::R<'_> {
-        self.entry_ref(id.clone())
+        self.internal
+            .entry_ref(id.clone())
             .map(|x| HashedNodeRef::new(x))
             .unwrap()
     }
@@ -296,7 +307,7 @@ pub fn _resolve<'a, T>(
     slf.entry_ref(*id).map(|x| HashedNodeRef::new(x))
 }
 
-impl<'a> crate::types::NodeStoreLean<NodeIdentifier> for &'a NodeStore {
+impl<'a> crate::types::NodeStoreLean<NodeIdentifier> for &'a NodeStoreInner {
     type R = HashedNodeRef<'a, NodeIdentifier>;
     fn resolve(&self, id: &NodeIdentifier) -> Self::R {
         self.internal
@@ -306,8 +317,15 @@ impl<'a> crate::types::NodeStoreLean<NodeIdentifier> for &'a NodeStore {
     }
 }
 
+impl<'a> crate::types::NodeStoreLean<NodeIdentifier> for &'a NodeStore {
+    type R = HashedNodeRef<'a, NodeIdentifier>;
+    fn resolve(&self, id: &NodeIdentifier) -> Self::R {
+        self.inner.resolve(id)
+    }
+}
+
 impl<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::TypedNodeStore<TIdN>
-    for NodeStore
+    for NodeStoreInner
 {
     type R<'a> = HashedNodeRef<'a, TIdN>;
     fn resolve(&self, id: &TIdN) -> Self::R<'_> {
@@ -323,27 +341,49 @@ impl<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::TypedNodeS
     }
 }
 
-impl NodeStore {
+impl<TIdN: 'static + TypedNodeId<IdN = NodeIdentifier>> crate::types::TypedNodeStore<TIdN>
+    for NodeStore
+{
+    type R<'a> = HashedNodeRef<'a, TIdN>;
+    fn resolve(&self, id: &TIdN) -> Self::R<'_> {
+        self.inner.resolve(id)
+    }
+
+    fn try_typed(&self, id: &<TIdN as NodeId>::IdN) -> Option<TIdN> {
+        self.inner.try_typed(id)
+    }
+}
+
+impl NodeStoreInner {
     pub fn len(&self) -> usize {
         self.internal.len()
     }
 }
 
 impl NodeStore {
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+}
+
+impl NodeStore {
     pub fn new() -> Self {
         Self {
-            count: 0,
-            errors: 0,
-            // roots: Default::default(),
-            internal: Default::default(),
+            inner: NodeStoreInner {
+                count: 0,
+                errors: 0,
+                // roots: Default::default(),
+                internal: Default::default(),
+                hasher: Default::default(),
+            },
             dedup: hashbrown::HashMap::<_, (), ()>::with_capacity_and_hasher(
                 1 << 10,
                 Default::default(),
             ),
-            hasher: Default::default(),
         }
     }
 }
+
 impl Default for NodeStore {
     fn default() -> Self {
         Self::new()
@@ -443,6 +483,8 @@ mod stores_impl {
         },
     };
 
+    use super::NodeStoreInner;
+
     impl<TS> HyperASTShared for SimpleStores<TS, nodes::DefaultNodeStore> {
         type IdN = nodes::DefaultNodeIdentifier;
 
@@ -450,7 +492,7 @@ mod stores_impl {
         type Label = labels::DefaultLabelIdentifier;
     }
 
-    impl<TS, LS> HyperASTShared for SimpleStores<TS, &legion::World, &LS> {
+    impl<TS, LS> HyperASTShared for SimpleStores<TS, &NodeStoreInner, &LS> {
         type IdN = nodes::DefaultNodeIdentifier;
 
         type Idx = u16;
@@ -529,6 +571,27 @@ mod stores_impl {
         type TS = TS;
     }
 
+    impl<'store, TS> HyperAST<'store> for &SimpleStores<TS, nodes::DefaultNodeStore>
+    where
+        TS: TypeStore,
+    {
+        type T = self::nodes::legion::HashedNodeRef<'store, Self::IdN>;
+
+        type NS = nodes::legion::NodeStore;
+
+        fn node_store(&self) -> &Self::NS {
+            &self.node_store
+        }
+
+        type LS = labels::LabelStore;
+
+        fn label_store(&self) -> &Self::LS {
+            &self.label_store
+        }
+
+        type TS = TS;
+    }
+
     impl<'store, TIdN, TS> TypedHyperAST<'store, TIdN> for SimpleStores<TS, nodes::DefaultNodeStore>
     where
         TIdN: 'static + TypedNodeId<IdN = Self::IdN>,
@@ -536,6 +599,40 @@ mod stores_impl {
     {
         type TT = self::nodes::legion::HashedNodeRef<'store, TIdN>;
         type TNS = nodes::legion::NodeStore;
+
+        fn typed_node_store(&self) -> &Self::TNS {
+            &self.node_store
+        }
+    }
+
+    impl<'store, TS> HyperAST<'store> for SimpleStores<TS, &NodeStoreInner, &labels::LabelStore>
+    where
+        TS: TypeStore,
+    {
+        type T = self::nodes::legion::HashedNodeRef<'store, Self::IdN>;
+
+        type NS = nodes::legion::NodeStoreInner;
+
+        fn node_store(&self) -> &Self::NS {
+            &self.node_store
+        }
+
+        type LS = labels::LabelStore;
+
+        fn label_store(&self) -> &Self::LS {
+            &self.label_store
+        }
+
+        type TS = TS;
+    }
+
+    impl<'store, TIdN, TS> TypedHyperAST<'store, TIdN> for SimpleStores<TS, &NodeStoreInner, &labels::LabelStore>
+    where
+        TIdN: 'static + TypedNodeId<IdN = Self::IdN>,
+        TS: TypeStore,
+    {
+        type TT = self::nodes::legion::HashedNodeRef<'store, TIdN>;
+        type TNS = nodes::legion::NodeStoreInner;
 
         fn typed_node_store(&self) -> &Self::TNS {
             &self.node_store
@@ -600,4 +697,5 @@ impl CompoRegister for World {
     }
 }
 
-pub type RawHAST<'hast, 'acc, TS> = crate::store::SimpleStores<TS, &'hast legion::World, &'acc crate::store::labels::LabelStore>;
+pub type RawHAST<'hast, 'acc, TS> =
+    crate::store::SimpleStores<TS, &'hast NodeStoreInner, &'acc crate::store::labels::LabelStore>;

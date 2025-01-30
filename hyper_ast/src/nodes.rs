@@ -879,7 +879,6 @@ where
             (label, Some(children)) => {
                 if let Some(label) = label {
                     let s = self.stores.label_store().resolve(label);
-                    dbg!(s);
                 }
                 if !children.is_empty() {
                     let mut it = children.iter_children();

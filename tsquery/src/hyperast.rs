@@ -10,9 +10,16 @@ use hyper_ast::{
 };
 pub type TreeCursor<'hast, HAST> = Node<'hast, HAST>;
 
-pub struct Node<'hast, HAST: HyperASTShared> {
+pub struct Node<
+    'hast,
+    HAST: HyperASTShared,
+    P = hyper_ast::position::StructuralPosition<
+        <HAST as HyperASTShared>::IdN,
+        <HAST as HyperASTShared>::Idx,
+    >,
+> {
     pub stores: &'hast HAST,
-    pub pos: hyper_ast::position::StructuralPosition<HAST::IdN, HAST::Idx>,
+    pub pos: P,
 }
 
 impl<'hast, HAST: HyperAST<'hast>> PartialEq for Node<'hast, HAST> {
@@ -83,7 +90,10 @@ where
     HAST::T: WithPrecompQueries,
 {
     type Node = self::Node<'hast, HAST>;
-    type NodeRef<'a> = &'a self::Node<'hast, HAST> where Self: 'a;
+    type NodeRef<'a>
+        = &'a self::Node<'hast, HAST>
+    where
+        Self: 'a;
 
     fn goto_next_sibling_internal(&mut self) -> TreeCursorStep {
         use hyper_ast::types::NodeStore;

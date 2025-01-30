@@ -1,15 +1,13 @@
 use hyper_ast::{
     cyclomatic::Mcc,
-    full::FullNode,
     hashed::{IndexingHashBuilder, MetaDataHashsBuilder},
     store::{defaults::LabelIdentifier, SimpleStores},
-    tree_gen::BasicGlobalData,
     types::LabelStore as _,
 };
 use hyper_ast_cvs_git::java::JavaAcc;
 use hyper_ast_gen_ts_java::{
-    legion_with_refs::{JavaTreeGen, Local, MDCache, MD},
-    types::{JavaEnabledTypeStore as _, TStore, Type},
+    legion_with_refs::{self, FNode, JavaTreeGen, Local, MDCache, MD},
+    types::{TStore, Type},
 };
 use std::path::{Path, PathBuf};
 
@@ -22,44 +20,31 @@ pub fn iter_dirs(root_buggy: &std::path::Path) -> impl Iterator<Item = std::fs::
 }
 
 pub fn parse_string_pair<'a>(
-    java_tree_gen: &mut JavaTreeGen<'a, '_, TStore>,
+    stores: &mut SimpleStores<TStore>,
+    md_cache: &mut MDCache,
+    // java_tree_gen: &mut JavaTreeGen<'a, '_, TStore>,
     buggy: &'a str,
     fixed: &'a str,
-) -> (
-    FullNode<BasicGlobalData, Local>,
-    FullNode<BasicGlobalData, Local>,
-) {
-    let full_node1 = parse_unchecked(buggy, "", java_tree_gen);
-    let full_node2 = parse_unchecked(fixed, "", java_tree_gen);
+) -> (FNode, FNode) {
+    let full_node1 = parse_unchecked(buggy, "", stores, md_cache);
+    let full_node2 = parse_unchecked(fixed, "", stores, md_cache);
     (full_node1, full_node2)
 }
 
 fn parse_unchecked<'b: 'stores, 'stores>(
     content: &'b str,
     name: &str,
-    java_tree_gen: &mut JavaTreeGen<'stores, '_, TStore>,
-) -> FullNode<BasicGlobalData, Local> {
-    let tree = match JavaTreeGen::<TStore>::tree_sitter_parse(content.as_bytes()) {
+    // java_tree_gen: &mut JavaTreeGen<'stores, '_, TStore>,
+    stores: &'stores mut SimpleStores<TStore>,
+    md_cache: &'_ mut MDCache,
+) -> FNode {
+    let tree = match legion_with_refs::tree_sitter_parse(content.as_bytes()) {
         Ok(t) => t,
         Err(t) => t,
     };
+    let mut java_tree_gen = JavaTreeGen::new(stores, md_cache);
     let full_node1 = java_tree_gen.generate_file(name.as_bytes(), content.as_bytes(), tree.walk());
     full_node1
-}
-
-fn parse<'b: 'stores, 'stores>(
-    content: &'b str,
-    name: &str,
-    java_tree_gen: &mut JavaTreeGen<'stores, '_, TStore>,
-) -> Result<FullNode<BasicGlobalData, Local>, FullNode<BasicGlobalData, Local>> {
-    match JavaTreeGen::<TStore>::tree_sitter_parse(content.as_bytes()) {
-        Ok(tree) => {
-            Ok(java_tree_gen.generate_file(name.as_bytes(), content.as_bytes(), tree.walk()))
-        }
-        Err(tree) => {
-            Err(java_tree_gen.generate_file(name.as_bytes(), content.as_bytes(), tree.walk()))
-        }
-    }
 }
 
 // TODO make it cvs/files or a module of hyper_ast (it will also serve as an example)
@@ -69,19 +54,6 @@ pub struct JavaPreprocessFileSys {
 }
 
 impl JavaPreprocessFileSys {
-    fn java_generator(&mut self, text: &[u8]) -> JavaTreeGen<TStore> {
-        let line_break = if text.contains(&b'\r') {
-            "\r\n".as_bytes().to_vec()
-        } else {
-            "\n".as_bytes().to_vec()
-        };
-        JavaTreeGen {
-            line_break,
-            stores: &mut self.main_stores,
-            md_cache: &mut self.java_md_cache,
-            more: (),
-        }
-    }
 
     pub(crate) fn help_handle_java_file(
         &mut self,
@@ -95,7 +67,23 @@ impl JavaPreprocessFileSys {
         }
         let text = file.content();
         let name = file.name();
-        if let Ok(full_node) = parse(&text, &name, &mut self.java_generator(text.as_bytes())) {
+        let line_break = if text.as_bytes().contains(&b'\r') {
+            "\r\n".as_bytes().to_vec()
+        } else {
+            "\n".as_bytes().to_vec()
+        };
+        let mut java_tree_gen = JavaTreeGen::new(&mut self.main_stores, &mut self.java_md_cache)
+            .with_line_break(line_break);
+        let full_node = match legion_with_refs::tree_sitter_parse(text.as_bytes()) {
+            Ok(tree) => {
+                Ok(java_tree_gen.generate_file(name.as_bytes(), text.as_bytes(), tree.walk()))
+            }
+            Err(tree) => {
+                Err(java_tree_gen.generate_file(name.as_bytes(), text.as_bytes(), tree.walk()))
+            }
+        };
+        if let Ok(full_node) = full_node {
+            //parse(&text, &name, &mut java_tree_gen) {
             let full_node = full_node.local;
             let skiped_ana = false; // TODO ez upgrade to handle skipping in files
             self.java_md_cache
@@ -134,11 +122,22 @@ pub fn parse_filesys(java_gen: &mut JavaPreprocessFileSys, path: &Path) -> Local
                     let name = name.to_string_lossy();
                     {
                         let name: &str = &name;
-                        let tree = match JavaTreeGen::<TStore>::tree_sitter_parse(file.as_bytes()) {
+                        let tree = match legion_with_refs::tree_sitter_parse(file.as_bytes()) {
                             Ok(t) => t,
                             Err(t) => t,
                         };
-                        let full_node = java_gen.java_generator(file.as_bytes()).generate_file(
+
+                        let line_break = if file.as_bytes().contains(&b'\r') {
+                            "\r\n".as_bytes().to_vec()
+                        } else {
+                            "\n".as_bytes().to_vec()
+                        };
+                        let mut java_tree_gen = JavaTreeGen::new(
+                            &mut java_gen.main_stores,
+                            &mut java_gen.java_md_cache,
+                        )
+                        .with_line_break(line_break);
+                        let full_node = java_tree_gen.generate_file(
                             name.as_bytes(),
                             file.as_bytes(),
                             tree.walk(),

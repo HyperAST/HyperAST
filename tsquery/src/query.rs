@@ -19,6 +19,8 @@ use crate::indexed;
 use crate::indexed::PredStepId;
 use crate::predicate::PerPatternBuilder;
 use crate::predicate_error;
+use crate::utils::ArrayStr;
+use crate::utils::Array;
 use crate::utils::SafeUpcast;
 use crate::CaptureQuantifier;
 use crate::Language;
@@ -181,7 +183,9 @@ impl QueryStep {
             if self.capture_ids[1] == super::indexed::CaptureId::NONE {
                 self.capture_ids[2].0
             } else {
-                log::error!("{:?}", self);
+                if cfg!(debug_assertions) {
+                    log::error!("{:?}", self);
+                }
                 return None;
                 // unreachable!()
             },
@@ -1229,12 +1233,12 @@ impl Query {
     pub fn with_precomputed(
         query: &str,
         language: Language,
-        precomputeds: &[&str],
+        precomputeds: impl ArrayStr,
     ) -> Result<(Self, Self), QueryError> {
         let source = &(format!(
             "{}\n\n{}",
             precomputeds
-                .into_iter()
+                .iter()
                 .map(|x| format!("{}\n", x))
                 .collect::<String>(),
             query
@@ -1267,6 +1271,7 @@ impl Query {
         //     let r = query.precomputed_patterns.as_ref().unwrap().get(&query, query.patterns[PatternId::new(i)].steps.offset);
         //     dbg!(r);
         // }
+        let precomp_len = precomputeds.len();
         if max_sub_len > 0 {
             log::trace!("started searching for subqueries");
             find_precomputed_uses(&mut query, precomputeds);
@@ -1284,7 +1289,7 @@ impl Query {
             .iter()
             .copied()
             .filter(|x| *x != u16::MAX)
-            .take(precomputeds.len())
+            .take(precomp_len)
             .collect::<Vec<_>>()
         {
             let i = i as usize;
@@ -1296,7 +1301,7 @@ impl Query {
             .iter()
             .copied()
             .filter(|x| *x != u16::MAX)
-            .skip(precomputeds.len())
+            .skip(precomp_len)
             .collect::<Vec<_>>()
         {
             let i = i as usize;
@@ -1336,6 +1341,8 @@ impl Query {
     }
 
     pub fn init_tsquery(source: &str, language: Language) -> Result<*mut ffi::TSQuery, QueryError> {
+        // log::trace!("{:?}", language);
+        // log::trace!("{:?}", source);
         let mut error_offset = 0u32;
         let mut error_type: ffi::TSQueryError = 0;
         let bytes = source.as_bytes();
@@ -1393,7 +1400,9 @@ impl Query {
                 _ => {
                     message = line_containing_error.map_or_else(
                         || "Unexpected EOF".to_string(),
-                        |line| line.to_string() + "\n" + " ".repeat(offset - line_start).as_str() + "^",
+                        |line| {
+                            line.to_string() + "\n" + " ".repeat(offset - line_start).as_str() + "^"
+                        },
                     );
                     kind = match error_type {
                         ffi::TSQueryErrorStructure => QueryErrorKind::Structure,
@@ -1421,6 +1430,8 @@ impl Query {
         self.enabled_pattern_count as usize
     }
     pub fn enabled_pattern_index(&self, pid: PatternId) -> Option<u16> {
+        // log::error!("{:?}", self.enabled_pattern_map);
+        // log::error!("{}", pid.to_usize());
         let i = self.enabled_pattern_map[pid.to_usize()];
         (i != u16::MAX).then_some(i)
     }
@@ -1730,7 +1741,7 @@ impl Query {
     }
 }
 
-fn find_precomputed_uses(query: &mut Query, precomputeds: &[&str]) {
+fn find_precomputed_uses(query: &mut Query, precomputeds: impl ArrayStr) {
     query.used_precomputed = Precomps::MAX;
     for i in query
         .enabled_pattern_map
@@ -1978,13 +1989,13 @@ impl From<&crate::ffi_extra::TSQueryStep> for QueryStep {
     }
 }
 
-impl Into<Vec<PatternEntry>> for &crate::utils::Array<crate::ffi_extra::TSPatternEntry> {
+impl Into<Vec<PatternEntry>> for &Array<crate::ffi_extra::TSPatternEntry> {
     fn into(self) -> Vec<PatternEntry> {
         self.iter().map(|x| x.into()).collect()
     }
 }
 
-impl Into<Vec<StepOffset>> for &crate::utils::Array<crate::ffi_extra::TSStepOffset> {
+impl Into<Vec<StepOffset>> for &Array<crate::ffi_extra::TSStepOffset> {
     fn into(self) -> Vec<StepOffset> {
         self.iter()
             .map(|x| StepOffset {

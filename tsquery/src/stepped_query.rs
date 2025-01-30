@@ -181,6 +181,18 @@ impl<HAST> QueryMatcher<HAST> {
             _phantom: std::marker::PhantomData,
         })
     }
+    fn with_precomputed(
+        source: &str,
+        language: &tree_sitter::Language,
+        precomputeds: &[&str],
+    ) -> Result<Self, tree_sitter::QueryError> {
+        let query = crate::Query::with_precomputed(source, language.clone(), precomputeds)?.1;
+
+        Ok(Self {
+            query,
+            _phantom: std::marker::PhantomData,
+        })
+    }
 }
 
 impl<HAST> Debug for QueryMatcher<HAST> {
@@ -206,7 +218,7 @@ where
     type Ext = ExtendingStringQuery<Self, Self::Lang>;
 
     fn pattern_count(&self) -> usize {
-        self.query.pattern_count()
+        self.query.enabled_pattern_count()
     }
 
     fn capture_index_for_name(&self, name: &str) -> Option<u32> {
@@ -220,6 +232,9 @@ where
         &self,
         index: usize,
     ) -> impl std::ops::Index<usize, Output = tree_sitter::CaptureQuantifier> {
+        // let index = self.query.enabled_pattern_map[index] as usize;
+        // assert_ne!(index, u16::MAX as usize);
+        let index = self.query.enabled_pattern_map.iter().position(|x|*x as usize==index).unwrap();
         self.query.capture_quantifiers(index)
     }
 
@@ -266,6 +281,7 @@ where
         node: &Self::Node<'tree>,
     ) -> Self::Matches<'query, 'cursor, 'tree> {
         let matchs = self.query.matches(node.clone());
+        // let matchs = self.query.matches_immediate(node.clone());
         let node = node.clone();
         self::MyQMatches {
             q: self,
@@ -279,15 +295,25 @@ where
 pub struct ExtendingStringQuery<Q = tree_sitter::Query, L = tree_sitter::Language> {
     pub(crate) query: Option<Q>,
     pub(crate) acc: String,
-    pub(crate) _phantom: std::marker::PhantomData<L>,
+    pub(crate) precomputeds: Option<std::sync::Arc<[String]>>,
+    pub(crate) language: Option<L>,
 }
 
-impl<Q, L> Default for ExtendingStringQuery<Q, L> {
-    fn default() -> Self {
+impl<Q, L> ExtendingStringQuery<Q, L> {
+    fn empty() -> Self {
         Self {
             query: Default::default(),
             acc: Default::default(),
-            _phantom: std::marker::PhantomData,
+            precomputeds: Default::default(),
+            language: None,
+        }
+    }
+    pub fn new(language: L, precomputeds: std::sync::Arc<[String]>, capacity: usize) -> Self {
+        Self {
+            acc: String::with_capacity(capacity),
+            precomputeds: Some(precomputeds),
+            language: Some(language),
+            ..Self::empty()
         }
     }
 }
@@ -316,7 +342,7 @@ where
         let acc = String::with_capacity(capacity);
         Self {
             acc,
-            ..Default::default()
+            ..Self::empty()
         }
     }
 
@@ -325,14 +351,29 @@ where
         language: &Self::Lang,
         source: &str,
     ) -> Result<Self::Query, tree_sitter::QueryError> {
+        if let Some(l) = &self.language {
+            // this impl cannot accept different languages
+            assert_eq!(language, l);
+        }
         self.acc += source;
         self.acc += "\n";
         dbg!(source);
-        QueryMatcher::new(source, language)
+        // QueryMatcher::new(source, language)
+        let precomputeds = self.precomputeds.as_ref().map_or(Default::default(), |x|x.as_ref());
+        let precomputeds: Vec<_> = precomputeds.iter().map(|x|x.as_str()).collect();
+        QueryMatcher::with_precomputed(source, language, &precomputeds)
     }
 
     fn make_main_query(&self, language: &Self::Lang) -> Self::Query {
-        QueryMatcher::new(&self.acc, language).unwrap()
+        if let Some(l) = &self.language {
+            // this impl cannot accept different languages
+            // Moreover, given the existance of a main query, having multiple languages should be impossible.
+            assert_eq!(language, l);
+        }
+        // QueryMatcher::new(&self.acc, language).unwrap()
+        let precomputeds = self.precomputeds.as_ref().map_or(Default::default(), |x|x.as_ref());
+        let precomputeds: Vec<_> = precomputeds.iter().map(|x|x.as_str()).collect();
+        QueryMatcher::with_precomputed(&self.acc, language, &precomputeds).unwrap()
     }
 }
 
@@ -446,6 +487,7 @@ pub struct MyQMatch<'cursor, 'tree, HAST: HyperAST<'tree>> {
     stores: &'tree HAST,
     b: &'cursor (),
     qm: crate::QueryMatch<Node<'tree, HAST>>,
+    i: u16
 }
 
 #[cfg(feature = "tsg")]
@@ -468,7 +510,8 @@ where
     }
 
     fn pattern_index(&self) -> usize {
-        self.qm.pattern_index.to_usize()
+        // self.qm.pattern_index.to_usize()
+        self.i as usize
     }
 }
 
@@ -489,10 +532,12 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         let qm = self.matchs.next()?;
         let stores = self.node.0.stores;
+        let i = self.q.query.enabled_pattern_index(qm.pattern_index).unwrap();
         Some(self::MyQMatch {
             stores,
             b: &&(),
             qm,
+            i,
         })
     }
 }
