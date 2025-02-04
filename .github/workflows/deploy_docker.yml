@@ -1,0 +1,45 @@
+name: Build and Publish Docker Image
+
+on:
+  workflow_dispatch: # allows manual triggering
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Checkout the code
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # Set up Nix
+      - name: Set up Nix
+        uses: cachix/install-nix-action@v15
+
+      # Cache Nix dependencies (optional but can speed up build)
+      - name: Cache Nix dependencies
+        uses: actions/cache@v3
+        with:
+          path: /tmp/nix
+          key: ${{ runner.os }}-nix-${{ hashFiles('**/*.nix') }}
+          restore-keys: |
+            ${{ runner.os }}-nix-
+
+      # Build the Docker image using nix
+      - name: Build Docker image with Nix
+        run: |
+          nix build .#hyperast-webapi-dockerImage
+
+      # Authenticate to GitHub's Docker registry
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Publish the Docker image to GHCR
+      - name: Publish Docker image to GHCR
+        run: |
+          docker load < result
+          docker tag <image_name> ghcr.io/${{ github.repository_owner }}/<image_name>:latest
+          docker push ghcr.io/${{ github.repository_owner }}/<image_name>:latest
