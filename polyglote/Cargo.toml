@@ -7,13 +7,13 @@ edition = "2021"
 
 [dependencies]
 # enums = { git = "https://github.com/mozilla/rust-code-analysis", branch = "master", package = "enums", version = "0.0.1" }
-# tree-sitter = "0.20.9"
-tree-sitter = "0.23.0"
+tree-sitter = { workspace = true }
 tree-sitter-loader = "0.23.0"
 tree-sitter-query = { git = "https://github.com/tree-sitter-grammars/tree-sitter-query.git", rev = "d25e8d183f319497b8b22a2a1585975b020da722", version = "0.3.0" }
 # tree-sitter-tsq = "0.19.0"
-tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "db728a4be63fe9a76eddf3ce7845759a8e209333", version = "0.12" }
-# tree-sitter-graph = "0.12"        # { path = "../tree-sitter-graph" } 
+
+tree-sitter-graph = { workspace = true, optional = true }
+
 # tree-sitter-typescript = { git = "https://github.com/quentinLeDilavrec/tree-sitter-typescript", rev = "eee64b9ea005d2641cfce5b0a81404a9c8877740", version = "0.20.5" }
 tree-sitter-typescript = "0.23.0"
 

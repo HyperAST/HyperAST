@@ -6,10 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tree-sitter = "0.23.0"
-hyper_diff = { path = "../hyper_diff" }
-hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java", features = ["impl"] }
-hyper_ast_cvs_git = { path = "../cvs/git" }
+tree-sitter = { workspace = true }
+hyper_diff = { workspace = true }
+hyper_ast_gen_ts_java = { workspace = true, features = ["impl"] }
+hyper_ast_cvs_git = { workspace = true }
 env_logger = "0.9.0"
 log = { version = "0.4.6", features = [
     "max_level_debug",

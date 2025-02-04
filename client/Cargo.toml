@@ -4,18 +4,19 @@ version = "0.2.0"
 edition = "2021"
 
 [dependencies]
-tree-sitter = "0.23.0"
+tree-sitter = { workspace = true }
 tree-sitter-cli = "0.23.0"
-hyper_ast = { path = "../hyper_ast", default-features = false, features = [
+hyper_ast = { workspace = true, default-features = false, features = [
     "serialize",
 ] }
-hyper_diff = { path = "../hyper_diff" }
-hyper_ast_cvs_git = { path = "../cvs/git" }
-hyper_ast_gen_ts_java = { path = "../gen/tree-sitter/java" }
-hyper_ast_gen_ts_cpp = { path = "../gen/tree-sitter/cpp" }
-hyper_ast_gen_ts_tsquery = { path = "../gen/tree-sitter/query" }
-hyper_ast_tsquery = { path = "../tsquery" }
-polyglote = { path = "../polyglote", optional = true }
+hyper_ast_gen_ts_cpp = { workspace = true }
+hyper_ast_gen_ts_java = { workspace = true }
+hyper_ast_gen_ts_xml = { workspace = true }
+hyper_diff = { workspace = true }
+hyper_ast_cvs_git = { workspace = true }
+hyper_ast_gen_ts_tsquery = { workspace = true }
+hyper_ast_tsquery =  { workspace = true }
+polyglote = { workspace = true, optional = true }
 
 # env_logger = "0.9.0"
 log = { version = "0.4.6" }
@@ -93,11 +94,9 @@ clap = { version = "3.0", features = ["derive"] }
 
 hashbrown = "0.14.5"
 
-# tree-sitter-graph = { path = "../../tree-sitter-graph", optional = true }
-tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-graph", rev = "db728a4be63fe9a76eddf3ce7845759a8e209333", version = "0.12", optional = true }
+tree-sitter-graph = { workspace = true, optional = true }
 # tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true }
 # stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev = "d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true }
-# tree-sitter-graph = { version = "0.11.3", optional = true }
 # tree-sitter-stack-graphs = { version = "0.9.0", optional = true }
 # stack-graphs = { version = "0.14.0", optional = true }
 
