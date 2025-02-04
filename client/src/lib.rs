@@ -456,6 +456,27 @@ fn run_scripting(
     if let Ok(mcc) = n.get_component::<hyper_ast::cyclomatic::Mcc>() {
         log::debug!("Mcc:{:?}", mcc);
     }
+
+    #[cfg(feature = "subtree-stats")]
+    {
+        log::error!(
+            "height_counts_non_dedup : {:3?}",
+            stores.node_store.inner.height_counts_non_dedup
+        );
+        log::error!(
+            "height_counts           : {:3?}",
+            stores.node_store.inner.height_counts
+        );
+        log::error!(
+            "height_counts_label     : {:3?}",
+            stores.node_store.inner.height_counts_label
+        );
+        log::error!(
+            "height_counts_structural: {:3?}",
+            stores.node_store.inner.height_counts_structural
+        );
+    }
+
     Ok(())
 }
 
@@ -509,5 +530,17 @@ fn run_tsg(
         &commit,
         1,
     )?;
+    #[cfg(feature = "subtree-stats")]
+    dbg!(
+        &state
+            .repositories
+            .read()
+            .unwrap()
+            .processor
+            .main_stores
+            .node_store
+            .inner
+            .height_counts
+    );
     Ok(())
 }

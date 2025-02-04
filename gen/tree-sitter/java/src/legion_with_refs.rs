@@ -802,6 +802,13 @@ where
         });
         let eq = eq_node(&interned_kind, label_id.as_ref(), &acc.simple.children);
 
+        #[cfg(feature = "subtree-stats")]
+        self.stores
+            .node_store
+            .inner
+            .add_height_non_dedup(metrics.height);
+        // &metrics.hashs.structt,
+
         let insertion = self.stores.node_store.prepare_insertion(hashable, eq);
 
         let local = if let Some(compressed_node) = insertion.occupied_id() {
@@ -875,6 +882,8 @@ where
                 children_is_empty,
                 acc.ana.as_ref(),
             );
+            #[cfg(feature = "subtree-stats")]
+            vacant.1 .1.add_height_dedup(metrics.height, metrics.hashs);
             let hashs = metrics.add_md_metrics(&mut dyn_builder, children_is_empty);
             hashs.persist(&mut dyn_builder);
 

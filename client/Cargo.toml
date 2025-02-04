@@ -134,3 +134,6 @@ tsg = [
     "hyper_ast_cvs_git/tsg",
 ]
 rerun = ["dep:rerun", "dep:polyglote"]
+subtree-stats = [
+    "hyper_ast_gen_ts_java/subtree-stats"
+]

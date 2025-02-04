@@ -308,6 +308,7 @@ pub struct SpacedGlobalData<'a, GD = BasicGlobalData> {
     sum_byte_length: usize,
     inner: TextedGlobalData<'a, GD>,
 }
+
 impl<'a, GD> std::ops::Deref for SpacedGlobalData<'a, GD> {
     type Target = GD;
 
@@ -380,7 +381,8 @@ mod global_stats {
     use super::*;
     #[derive(Debug, Clone)]
     pub struct StatsGlobalData<GD = BasicGlobalData> {
-        // pub height_counts: Vec<u32>,
+        #[cfg(feature = "subtree-stats")]
+        pub height_counts: Vec<u32>,
         inner: GD,
     }
 
@@ -413,7 +415,8 @@ mod global_stats {
     impl<GD> StatsGlobalData<GD> {
         fn new(inner: GD) -> Self {
             Self {
-                // height_counts: Vec::with_capacity(30),
+                #[cfg(feature = "subtree-stats")]
+                height_counts: Vec::with_capacity(30),
                 inner,
             }
         }
