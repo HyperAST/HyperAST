@@ -9,6 +9,7 @@ pub mod syntax_highlighting;
 #[derive(Debug, Clone)]
 pub struct Lang {
     pub name: String,
+    #[cfg(feature = "ts_highlight")]
     pub lang: tree_sitter::Language,
 }
 

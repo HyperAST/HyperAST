@@ -10,8 +10,8 @@ tree-sitter-graph = { git = "https://github.com/quentinLeDilavrec/tree-sitter-gr
 # tree-sitter-stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev="d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true }
 # stack-graphs = { git = "https://github.com/quentinLeDilavrec/stack-graphs", rev="d0fa507d4b3892b1db60938f37bf4779f9dae18d", optional = true}
 # tree-sitter-graph = { version = "0.11.3", optional = true }
-tree-sitter-stack-graphs = { version = "0.9.0", optional = true }
-stack-graphs = { version = "0.14.0", optional = true}
+# tree-sitter-stack-graphs = { version = "0.10.0", optional = true } # TODO reenable by updating or forking
+# stack-graphs = { version = "0.14.0", optional = true} # TODO reenable by updating or forking
 
 log = { version = "0.4.6" }                                                                                                                                                     #, features = ["max_level_debug", "release_max_level_warn"] }
 
@@ -29,8 +29,8 @@ tree-sitter-java = { git = "https://github.com/quentinLeDilavrec/tree-sitter-jav
 default = ["hyper_ast"]
 tsg = [
     "dep:tree-sitter-graph",
-    "dep:stack-graphs",
-    "dep:tree-sitter-stack-graphs",
+    # "dep:stack-graphs",
+    # "dep:tree-sitter-stack-graphs",
 ]
 hyper_ast = [
     "dep:hyper_ast",

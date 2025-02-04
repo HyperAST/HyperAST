@@ -226,6 +226,23 @@ pub(crate) struct InputEdit {
     new_end_position: Point,
 }
 
+#[cfg(feature = "ts_highlight")]
+#[cfg(not(target_arch = "wasm32"))]
+impl Into<tree_sitter::InputEdit> for InputEdit {
+    fn into(self) -> tree_sitter::InputEdit {
+        tree_sitter::InputEdit {
+            start_byte: self.start_byte as usize,
+            old_end_byte: self.old_end_byte as usize,
+            new_end_byte: self.new_end_byte as usize,
+            start_position: self.start_position.into(),
+            old_end_position: self.old_end_position.into(),
+            new_end_position: self.new_end_position.into(),
+        }
+    }
+}
+
+#[cfg(feature = "ts_highlight")]
+#[cfg(target_arch = "wasm32")]
 impl Into<tree_sitter::InputEdit> for InputEdit {
     fn into(self) -> tree_sitter::InputEdit {
         tree_sitter::InputEdit::new(
@@ -245,6 +262,16 @@ pub(crate) struct Point {
     column: u32,
 }
 
+#[cfg(feature = "ts_highlight")]
+#[cfg(not(target_arch = "wasm32"))]
+impl Into<tree_sitter::Point> for Point {
+    fn into(self) -> tree_sitter::Point {
+        tree_sitter::Point::new(self.row as usize, self.column as usize)
+    }
+}
+
+#[cfg(feature = "ts_highlight")]
+#[cfg(target_arch = "wasm32")]
 impl Into<tree_sitter::Point> for Point {
     fn into(self) -> tree_sitter::Point {
         tree_sitter::Point::new(self.row, self.column)

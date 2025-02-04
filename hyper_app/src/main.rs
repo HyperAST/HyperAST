@@ -68,6 +68,7 @@ fn main() {
     let web_options = eframe::WebOptions::default();
 
     wasm_bindgen_futures::spawn_local(async {
+        #[cfg(feature = "ts_highlight")]
         tree_sitter::TreeSitter::init()
             .await
             .map_err(JsValue::from)

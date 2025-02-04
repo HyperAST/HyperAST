@@ -17,10 +17,10 @@ use hyper_ast::tree_gen::{
     parser::{Node, TreeCursor},
     Parents, PreResult, SubTreeMetrics, TreeGen, WithByteRange,
 };
-use hyper_ast::tree_gen::{
-    GlobalData as _, StatsGlobalData, TextedGlobalData, TotalBytesGlobalData as _
-};
 use hyper_ast::tree_gen::{add_md_precomp_queries, NoOpMore, RoleAcc};
+use hyper_ast::tree_gen::{
+    GlobalData as _, StatsGlobalData, TextedGlobalData, TotalBytesGlobalData as _,
+};
 use hyper_ast::{
     cyclomatic::Mcc,
     full::FullNode,
@@ -274,8 +274,9 @@ pub(crate) fn should_get_hidden_nodes() -> bool {
 impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool> ZippedTreeGen
     for JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
-    TS: JavaEnabledTypeStore + 'static,
-    More: tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores>
+    TS: JavaEnabledTypeStore + 'static + hyper_ast::types::RoleStore<Role = Role, IdF = u16>,
+    More: tree_gen::Prepro<Type>
+        + tree_gen::PreproTSG<'stores>
         + tree_gen::More<TS = TS, T = HashedNodeRef<'stores, NodeIdentifier>, Acc = Acc>,
 {
     // type Node1 = SimpleNode1<NodeIdentifier, String>;
@@ -515,7 +516,8 @@ impl<'stores, 'cache, 'acc, TS: JavaEnabledTypeStore + 'static, More, const HIDD
         cursor: tree_sitter::TreeCursor,
     ) -> FullNode<StatsGlobalData, Local>
     where
-        for<'s> More: tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores> + tree_gen::More<Acc = Acc>,
+        for<'s> More:
+            tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores> + tree_gen::More<Acc = Acc>,
     {
         todo!()
     }
@@ -569,8 +571,11 @@ impl<'stores, 'cache, 'acc, TS: JavaEnabledTypeStore + 'static, More, const HIDD
 impl<'stores, 'cache, TS, More, const HIDDEN_NODES: bool>
     JavaTreeGen<'stores, 'cache, TS, SimpleStores<TS>, More, HIDDEN_NODES>
 where
-    TS: JavaEnabledTypeStore<Ty2 = Type> + 'static,
-    More: tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores>
+    TS: JavaEnabledTypeStore<Ty2 = Type>
+        + 'static
+        + hyper_ast::types::RoleStore<Role = Role, IdF = u16>,
+    More: tree_gen::Prepro<Type>
+        + tree_gen::PreproTSG<'stores>
         + tree_gen::More<
             TS = TS,
             T = hyper_ast::store::nodes::legion::HashedNodeRef<'stores, NodeIdentifier>,
@@ -846,14 +851,16 @@ where
                 tree_gen::add_md_precomp_queries(&mut dyn_builder, acc.precomp_queries);
             }
             if More::GRAPHING {
-                let stores: SimpleStores<TS, &'static hyper_ast::store::nodes::legion::NodeStoreInner, &'static hyper_ast::store::labels::LabelStore> = unsafe {
-                    std::mem::transmute(stores)
-                };
-                self
-                .more
-                .compute_tsg(stores, &acc, label.as_deref()).unwrap();
-            } else {
-                panic!()
+                // TODO find a way of removing those 'static, probably an even lower API would work (the File<G> is really bad in the end)
+                // SAFETY: it is just an issue with associated types and invariants raising everything to 'static... 
+                let stores: SimpleStores<
+                    TS,
+                    &'static hyper_ast::store::nodes::legion::NodeStoreInner,
+                    &'static hyper_ast::store::labels::LabelStore,
+                > = unsafe { std::mem::transmute(stores.clone()) };
+                self.more
+                    .compute_tsg(stores, &acc, label.as_deref())
+                    .unwrap();
             }
 
             let current_role = Option::take(&mut acc.role.current);
@@ -878,18 +885,18 @@ where
             acc.simple
                 .add_primary(&mut dyn_builder, interned_kind, label_id);
 
-                if More::USING {
-                    let subtr = hyper_ast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
-                    let ss = if let Some(label) = label {
-                        acc.prepro
-                            .unwrap()
-                            .finish_with_label(&subtr, label)
-                            .unwrap()
-                    } else {
-                        acc.prepro.unwrap().finish(&subtr).unwrap()
-                    };
-                    dyn_builder.add(ss);
-                }
+            if More::USING {
+                let subtr = hyper_ast::scripting::lua_scripting::Subtr(kind, &dyn_builder);
+                let ss = if let Some(label) = label {
+                    acc.prepro
+                        .unwrap()
+                        .finish_with_label(&subtr, label)
+                        .unwrap()
+                } else {
+                    acc.prepro.unwrap().finish(&subtr).unwrap()
+                };
+                dyn_builder.add(ss);
+            }
 
             let compressed_node =
                 NodeStore::insert_built_after_prepare(vacant, dyn_builder.build());
@@ -925,8 +932,9 @@ where
 impl<
         'stores,
         'cache,
-        TS: JavaEnabledTypeStore + 'static,
-        More: tree_gen::Prepro<Type> + tree_gen::PreproTSG<'stores>
+        TS: JavaEnabledTypeStore + 'static + hyper_ast::types::RoleStore<Role = Role, IdF = u16>,
+        More: tree_gen::Prepro<Type>
+            + tree_gen::PreproTSG<'stores>
             + tree_gen::More<TS = TS, T = HashedNodeRef<'stores, NodeIdentifier>, Acc = Acc>,
         const HIDDEN_NODES: bool,
     > NodeStoreExt<HashedNode>

@@ -1,4 +1,5 @@
 pub mod syntax_highlighting_async;
+#[cfg(feature = "ts_highlight")]
 pub mod syntax_highlighting_ts;
 
 // #[cfg(feature = "syntect")]

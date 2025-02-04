@@ -794,7 +794,7 @@ where
     }
 }
 
-pub use tree_sitter_stack_graphs::functions::add_path_functions;
+// pub use tree_sitter_stack_graphs::functions::add_path_functions;
 
 static DEBUG_ATTR_PREFIX: &'static str = "debug_";
 pub static ROOT_NODE_VAR: &'static str = "ROOT_NODE";

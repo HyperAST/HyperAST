@@ -9,6 +9,9 @@ use generic_text_edit::TextEdit;
 use serde::Deserialize;
 use std::fmt::Debug;
 
+#[cfg(feature = "ts_highlight")]
+const TREE_SITTER: bool = false;
+#[cfg(not(feature = "ts_highlight"))]
 const TREE_SITTER: bool = false;
 
 pub(crate) mod editor_content;
@@ -28,6 +31,7 @@ pub struct CodeEditor<L, C = EditAwareString> {
     pub lang_name: String,
     // code: String,
     pub code: C,
+    #[cfg(feature = "ts_highlight")]
     #[serde(skip)]
     #[serde(default = "default_parser")]
     pub parser: tree_sitter::Parser,
@@ -59,6 +63,7 @@ impl<C: Clone> Clone for CodeEditor<C> {
             lang_name: self.lang_name.clone(),
             code: self.code.clone(),
             lang: self.lang.clone(),
+            #[cfg(feature = "ts_highlight")]
             parser: default_parser(),
             languages: self.languages.clone(),
         }
@@ -114,11 +119,19 @@ impl EditorInfo<&'static str> {
         }
     }
 }
-pub(crate) fn default_info() -> EditorInfo<String> {
+pub fn default_info() -> EditorInfo<String> {
     EditorInfo::default().copied()
 }
 
-pub(crate) fn default_parser() -> tree_sitter::Parser {
+#[cfg(feature = "ts_highlight")]
+#[cfg(not(target_arch = "wasm32"))]
+pub fn default_parser() -> tree_sitter::Parser {
+    tree_sitter::Parser::new()
+}
+
+#[cfg(feature = "ts_highlight")]
+#[cfg(target_arch = "wasm32")]
+pub fn default_parser() -> tree_sitter::Parser {
     tree_sitter::Parser::new().unwrap()
 }
 
@@ -140,6 +153,7 @@ function f() { return 2; }
             "#
             .to_string()
             .into(),
+            #[cfg(feature = "ts_highlight")]
             parser: default_parser(),
             languages: Default::default(),
             lang,
@@ -190,6 +204,7 @@ impl<L: Default> CodeEditor<L> {
         col.show_body_indented(&header_res.response, ui, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 if TREE_SITTER {
+                    #[cfg(feature = "ts_highlight")]
                     let _layouter = |ui: &egui::Ui, code: &EditAwareString, wrap_width: f32| {
                         dbg!(&lang);
                         let mut layout_job =
