@@ -22,6 +22,10 @@ pub struct Node<
     P = hyper_ast::position::StructuralPosition<<HAST as HyperASTShared>::IdN, Idx>,
     L = <Acc as hyper_ast::tree_gen::WithLabel>::L,
 >(
+    // NOTE actually a bad idea to directly wrap cursor_on_unbuild::Node,
+    // the nodes go in tsg Graphs and by holding a reference to HAST it locks down everything
+    // TODO find a way to extract the essentials from Node (to free Graph), the rest could be then part of the execution context.
+    // Doing so will probably contribute to facilitating the staged storage of graph nodes and edges.
     pub crate::cursor_on_unbuild::Node<HAST, Acc, Idx, P, L>,
     /// issue with lifetime bound when associated with trait impl returns
     /// https://play.rust-lang.org/?version=nightly&mode=debug&edition=2024&gist=562bb768901a847e263090e7557e1d93
@@ -450,13 +454,16 @@ where
 }
 
 #[cfg(feature = "tsg")]
-impl<'hast, 'acc, 'l, HAST: 'hast + HyperAST<'hast> + Clone, Acc>
-    tree_sitter_graph::graph::SyntaxNode for Node<'hast, HAST, &'acc Acc>
+impl<'hast, 'acc, 'l, HAST, Acc> tree_sitter_graph::graph::SyntaxNode
+    for Node<'hast, HAST, &'acc Acc>
 where
+    HAST: 'hast + HyperAST<'hast> + Clone,
     HAST::IdN: std::hash::Hash + Copy + Debug,
     HAST::Idx: std::hash::Hash,
-    HAST::T: WithSerialization + types::WithChildren + WithStats,
-    HAST::TS: ETypeStore<Ty2 = Acc::Type>,
+    HAST::T: WithSerialization + types::WithChildren + WithStats + WithRoles,
+    HAST::TS: ETypeStore<Ty2 = Acc::Type>
+        + hyper_ast::types::RoleStore<IdF = IdF, Role = Role>
+        + hyper_ast::types::RoleStore,
     Acc: hyper_ast::tree_gen::WithChildren<HAST::IdN>
         + hyper_ast::tree_gen::WithRole<Role>
         + hyper_ast::types::Typed,
@@ -520,9 +527,21 @@ where
     }
 
     fn text(&self) -> String {
-        use hyper_ast::position::position_accessors::SolvedPosition;
+        use hyper_ast::position::TreePath;
         let stores: &HAST = unsafe { std::mem::transmute(&self.0.stores) };
-        hyper_ast::nodes::TextSerializer::new(stores, self.0.pos.node()).to_string()
+        if let Some(root) = self.0.pos.node() {
+            hyper_ast::nodes::TextSerializer::new(stores, *root).to_string()
+        } else {
+            // log::error!("{}", self.kind());
+            // use crate::Node;
+            // self.0.text(())
+            self.0
+                .label
+                .as_ref()
+                .map_or("aaa", |x| x.as_ref())
+                .to_string()
+            // "".to_string()
+        }
     }
 
     fn named_child_count(&self) -> usize {

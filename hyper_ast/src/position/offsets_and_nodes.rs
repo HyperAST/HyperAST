@@ -57,7 +57,7 @@ impl<IdN: std::cmp::Eq, Idx: PrimInt> Ord for StructuralPosition<IdN, Idx> {
         match crate::position::position_accessors::WithPreOrderOffsets::shared_ancestors(
             self, other,
         ) {
-            SharedPath::Exact(_) => unreachable!(),
+            SharedPath::Exact(_) => std::cmp::Ordering::Equal,
             SharedPath::Remain(_) => Less,
             SharedPath::Submatch(_) => Greater,
             SharedPath::Different(a) => {

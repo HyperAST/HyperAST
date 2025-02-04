@@ -634,6 +634,10 @@ where
     for<'acc> &'acc Acc: hyper_ast::tree_gen::WithLabel<L = &'acc str>,
 {
     const GRAPHING: bool = true;
+    // TODO remove the 'static and other contraints, they add unnecessary unsafes
+    // there is probably something to do with spliting GenQuery and the different execs to avoid both
+    // - holding graph as mutable to often
+    // - bubling the mutability invariant from graph to HAST... (very bad)
     fn compute_tsg<
         HAST2: 'static
             + HyperAST<
@@ -810,14 +814,13 @@ static JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
 static FILE_NAME: &str = "a/b/AAA.java";
 
 #[cfg(feature = "tsg")]
-fn configure<'a, 'g, Node>(
+pub fn configure<'a, 'g, Node>(
     globals: &'a tree_sitter_graph::Variables<'g>,
     functions: &'a tree_sitter_graph::functions::Functions<
         tree_sitter_graph::graph::GraphErazing<Node>,
     >,
 ) -> tree_sitter_graph::ExecutionConfig<'a, 'g, tree_sitter_graph::graph::GraphErazing<Node>> {
-    let config = tree_sitter_graph::ExecutionConfig::new(functions, globals)
-        .lazy(true);
+    let config = tree_sitter_graph::ExecutionConfig::new(functions, globals).lazy(true);
     if !cfg!(debug_assertions) {
         config.debug_attributes(
             [DEBUG_ATTR_PREFIX, "tsg_location"].concat().as_str().into(),
@@ -833,17 +836,17 @@ fn configure<'a, 'g, Node>(
 }
 
 #[cfg(feature = "tsg")]
-fn init_globals<Node: tree_sitter_graph::graph::SyntaxNodeExt>(
-    _globals: &mut tree_sitter_graph::Variables,
-    _graph: &mut tree_sitter_graph::graph::Graph<Node>,
+pub fn init_globals<Node: tree_sitter_graph::graph::SyntaxNodeExt>(
+    globals: &mut tree_sitter_graph::Variables,
+    graph: &mut tree_sitter_graph::graph::Graph<Node>,
 ) {
-    // globals
-    //     .add(ROOT_NODE_VAR.into(), graph.add_graph_node().into())
-    //     .expect("Failed to set ROOT_NODE");
+    globals
+        .add(ROOT_NODE_VAR.into(), graph.add_graph_node().into())
+        .expect("Failed to set ROOT_NODE");
     // globals
     //     .add(FILE_PATH_VAR.into(), FILE_NAME.into())
     //     .expect("Failed to set FILE_PATH");
-    // globals
-    //     .add(JUMP_TO_SCOPE_NODE_VAR.into(), graph.add_graph_node().into())
-    //     .expect("Failed to set JUMP_TO_SCOPE_NODE");
+    globals
+        .add(JUMP_TO_SCOPE_NODE_VAR.into(), graph.add_graph_node().into())
+        .expect("Failed to set JUMP_TO_SCOPE_NODE");
 }

@@ -23,7 +23,7 @@ pub struct Node<
 > {
     pub stores: HAST,
     acc: Acc,
-    label: Option<L>,
+    pub(super) label: Option<L>,
     offset: Idx,
     pub pos: P,
 }
@@ -169,13 +169,7 @@ where
             };
             self.pos.inc(node);
         } else {
-            //dbg!();
-            self.offset += num::one();
-            let o = self.offset;
-            let Some(node) = self.acc.child(o.to_usize().unwrap()) else {
-                return TreeCursorStep::TreeCursorStepNone;
-            }; //dbg!(node);
-            self.pos.goto(node, o);
+            return TreeCursorStep::TreeCursorStepNone;
         }
         if self.kind().is_spaces() {
             //dbg!();
